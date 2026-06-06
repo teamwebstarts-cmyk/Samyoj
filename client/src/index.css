@@ -1,0 +1,235 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply text-neutral-900 antialiased;
+    font-feature-settings: 'cv11', 'ss01';
+    background-color: #f8fafc;
+    background-image:
+      radial-gradient(ellipse 70% 55% at 0% 0%, rgba(37, 211, 102, 0.07), transparent 55%),
+      radial-gradient(ellipse 60% 45% at 100% 100%, rgba(18, 140, 126, 0.06), transparent 50%),
+      linear-gradient(160deg, #fafafa 0%, #f0fdf4 42%, #f8fafc 100%);
+    background-attachment: fixed;
+  }
+}
+
+@layer utilities {
+  .platform-gradient {
+    background-color: #f8fafc;
+    background-image:
+      radial-gradient(ellipse 75% 60% at 100% 0%, rgba(37, 211, 102, 0.08), transparent 52%),
+      radial-gradient(ellipse 65% 50% at 0% 100%, rgba(18, 140, 126, 0.05), transparent 48%),
+      linear-gradient(165deg, #ffffff 0%, #f7fef9 38%, #f1f5f9 100%);
+  }
+
+  .platform-gradient-subtle {
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% -10%, rgba(37, 211, 102, 0.06), transparent 55%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0%, rgba(240, 253, 244, 0.45) 100%);
+  }
+
+  .topbar-glass {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.65);
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92) 0%,
+      rgba(255, 255, 255, 0.78) 100%
+    );
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset, 0 4px 16px rgba(15, 23, 42, 0.04);
+  }
+
+  .showcase-grid {
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+    background-size: 56px 56px;
+  }
+
+  .showcase-gradient-text {
+    background: linear-gradient(135deg, #ecfdf5 0%, #6ee7b7 45%, #34d399 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .showcase-text-body {
+    @apply text-emerald-50/95;
+  }
+
+  .showcase-text-muted {
+    @apply text-emerald-100/85;
+  }
+
+  .showcase-text-subtle {
+    @apply text-emerald-200/80;
+  }
+
+  .showcase-accent {
+    @apply text-emerald-300;
+  }
+
+  .showcase-shimmer {
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.08) 50%,
+      rgba(255, 255, 255, 0) 100%
+    );
+    background-size: 200% 100%;
+  }
+
+  .dashboard-card {
+    border-radius: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.85);
+    background: linear-gradient(165deg, rgba(255, 255, 255, 0.96) 0%, rgba(255, 255, 255, 0.88) 100%);
+    box-shadow:
+      0 0 0 1px rgba(15, 23, 42, 0.03),
+      0 1px 2px rgba(15, 23, 42, 0.04),
+      0 8px 24px rgba(15, 23, 42, 0.05);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .data-table tbody tr {
+    border-bottom: 1px solid rgba(226, 232, 240, 0.85);
+    transition: background-color 0.15s ease;
+  }
+
+  .data-table tbody tr:last-child {
+    border-bottom: none;
+  }
+
+  .data-table tbody tr:nth-child(even) {
+    background: rgba(248, 250, 252, 0.55);
+  }
+
+  .data-table tbody tr:hover {
+    background: rgba(236, 253, 245, 0.55);
+  }
+
+  .data-table tbody td {
+    padding: 1rem 1.25rem;
+    vertical-align: middle;
+  }
+
+  .data-table tbody td.table-serial-cell {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  .data-table tbody td:last-child {
+    position: sticky;
+    right: 0;
+    z-index: 1;
+    text-align: right;
+    white-space: nowrap;
+    background: #ffffff;
+    box-shadow: -8px 0 16px -12px rgba(15, 23, 42, 0.18);
+  }
+
+  .data-table thead th:last-child {
+    position: sticky;
+    right: 0;
+    z-index: 2;
+    background: #f8fafc;
+    box-shadow: -8px 0 16px -12px rgba(15, 23, 42, 0.12);
+  }
+
+  .data-table tbody tr:nth-child(even) td:last-child {
+    background: rgb(248, 250, 252);
+  }
+
+  .data-table tbody tr:hover td:last-child {
+    background: rgb(236, 253, 245);
+  }
+
+  .dashboard-hero {
+    border: 1px solid rgba(167, 243, 208, 0.65);
+    background:
+      radial-gradient(ellipse 75% 55% at 0% 0%, rgba(37, 211, 102, 0.14), transparent 58%),
+      radial-gradient(ellipse 65% 45% at 100% 100%, rgba(18, 140, 126, 0.1), transparent 52%),
+      linear-gradient(155deg, #ffffff 0%, #f0fdf4 42%, #ecfdf5 72%, #f8fafc 100%);
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.9) inset,
+      0 1px 2px rgba(15, 23, 42, 0.04),
+      0 12px 32px rgba(37, 211, 102, 0.1);
+  }
+
+  .page-gutter-x {
+    @apply px-4 sm:px-6 lg:px-8;
+  }
+
+  .page-shell {
+    @apply mx-auto w-full max-w-6xl page-gutter-x py-5 sm:py-6 lg:py-8;
+  }
+
+  .page-shell-bleed {
+    @apply mx-auto flex h-full min-h-[calc(100dvh-60px)] w-full max-w-6xl flex-col page-gutter-x py-4 sm:py-5 lg:py-6;
+  }
+
+  .inbox-shell {
+    border-radius: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.85);
+    background: linear-gradient(165deg, rgba(255, 255, 255, 0.98) 0%, rgba(255, 255, 255, 0.92) 100%);
+    box-shadow:
+      0 0 0 1px rgba(15, 23, 42, 0.03),
+      0 8px 32px rgba(15, 23, 42, 0.06);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  @keyframes slideIn {
+    from {
+      transform: translateX(100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+
+  .inbox-chat-bg {
+    background-color: #f5f3ef;
+    background-image: url('/chat-bg.jpg');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+  }
+
+  .inbox-select__menu-portal .inbox-select__menu {
+    animation: inboxSelectMenuIn 160ms ease-out;
+  }
+
+  @keyframes inboxSelectMenuIn {
+    from {
+      opacity: 0;
+      transform: translateY(-4px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  .context-menu-panel {
+    animation: inboxSelectMenuIn 160ms ease-out;
+  }
+
+  .wa-chat-surface {
+    border-radius: 0.75rem;
+    border: 1px solid rgba(17, 27, 33, 0.06);
+    background-color: #f5f3ef;
+    background-image: url('/chat-bg.jpg');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    padding: 0.75rem;
+  }
+
+  .wa-chat-surface-compact {
+    padding: 0.5rem 0.625rem;
+  }
+}

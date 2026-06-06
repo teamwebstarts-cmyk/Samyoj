@@ -1,0 +1,672 @@
+import { config } from '../../config';
+import { decrypt, encrypt } from '../../utils/crypto';
+
+const META_BASE = `https://graph.facebook.com/${config.meta.apiVersion}`;
+
+export interface SendMessagePayload {
+  to: string;
+  type: 'text' | 'template' | 'image' | 'document';
+  text?: { body: string };
+  template?: {
+    name: string;
+    language: { code: string };
+    components?: unknown[];
+  };
+}
+
+export interface WhatsappConnectionDetails {
+  wabaId: string;
+  phoneNumberId: string;
+  phoneNumber: string;
+  businessId?: string;
+  accessToken: string;
+}
+
+export interface WhatsappPhoneOption {
+  wabaId: string;
+  phoneNumberId: string;
+  phoneNumber: string;
+  verifiedName?: string;
+}
+
+export interface TemplateButton {
+  type: string;
+  text: string;
+  url?: string;
+  phone_number?: string;
+}
+
+export interface MessageTemplate {
+  id: string;
+  name: string;
+  status: string;
+  category: string;
+  language: string;
+  components?: Array<{
+    type: string;
+    text?: string;
+    format?: string;
+    example?: unknown;
+    buttons?: TemplateButton[];
+  }>;
+  rejected_reason?: string;
+}
+
+export interface TemplateLibraryEntry {
+  id: string;
+  name: string;
+  language: string;
+  category: string;
+  topic?: string;
+  usecase?: string;
+  industry?: string[];
+  header?: string;
+  body?: string;
+  footer?: string;
+  body_params?: string[];
+  buttons?: TemplateButton[];
+}
+
+function normalizeRejectedReason(reason?: string): string | undefined {
+  if (!reason) return undefined;
+  const trimmed = reason.trim();
+  if (!trimmed) return undefined;
+  const lower = trimmed.toLowerCase();
+  if (['none', 'n/a', 'na', '-', 'null'].includes(lower)) return undefined;
+  return trimmed;
+}
+
+function normalizeMessageTemplate(template: MessageTemplate): MessageTemplate {
+  return {
+    ...template,
+    rejected_reason: normalizeRejectedReason(template.rejected_reason),
+  };
+}
+
+/** Human-readable preview of what the customer receives (header + body + footer). */
+export function getTemplateDisplayText(
+  template: MessageTemplate | null | undefined,
+  fallbackName?: string
+): string {
+  if (!template?.components?.length) {
+    return fallbackName ? `Template: ${fallbackName}` : '';
+  }
+
+  const lines: string[] = [];
+  for (const component of template.components) {
+    const type = component.type?.toUpperCase();
+    const text = component.text?.trim();
+    if (!text) continue;
+    if (type === 'HEADER' || type === 'BODY' || type === 'FOOTER') {
+      lines.push(text);
+    }
+  }
+
+  return lines.join('\n\n') || (fallbackName ? `Template: ${fallbackName}` : '');
+}
+
+export interface CreateTemplatePayload {
+  name: string;
+  language: string;
+  category: 'MARKETING' | 'UTILITY' | 'AUTHENTICATION';
+  components: Array<{
+    type: 'HEADER' | 'BODY' | 'FOOTER' | 'BUTTONS';
+    format?: 'TEXT' | 'IMAGE' | 'VIDEO' | 'DOCUMENT';
+    text?: string;
+    buttons?: Array<{ type: string; text: string; url?: string; phone_number?: string }>;
+  }>;
+}
+
+interface GraphError {
+  error?: { message?: string; code?: number };
+}
+
+export class MetaWhatsAppService {
+  static getEmbeddedSignupUrl(state: string): string {
+    const params = new URLSearchParams({
+      client_id: config.meta.appId,
+      redirect_uri: config.meta.redirectUri,
+      state,
+      scope: 'whatsapp_business_management,whatsapp_business_messaging',
+      response_type: 'code',
+    });
+    return `https://www.facebook.com/${config.meta.apiVersion}/dialog/oauth?${params}`;
+  }
+
+  static async exchangeCodeForToken(code: string): Promise<string> {
+    if (!config.meta.appSecret) {
+      throw new Error('META_APP_SECRET is not configured');
+    }
+
+    const params = new URLSearchParams({
+      client_id: config.meta.appId,
+      client_secret: config.meta.appSecret,
+      redirect_uri: config.meta.redirectUri,
+      code,
+    });
+
+    const res = await fetch(`${META_BASE}/oauth/access_token?${params}`);
+    const data = (await res.json()) as { access_token?: string } & GraphError;
+    if (!res.ok || !data.access_token) {
+      throw new Error(data.error?.message || 'Token exchange failed');
+    }
+    return data.access_token;
+  }
+
+  static async exchangeForLongLivedToken(shortLivedToken: string): Promise<string> {
+    const params = new URLSearchParams({
+      grant_type: 'fb_exchange_token',
+      client_id: config.meta.appId,
+      client_secret: config.meta.appSecret,
+      fb_exchange_token: shortLivedToken,
+    });
+
+    const res = await fetch(`${META_BASE}/oauth/access_token?${params}`);
+    const data = (await res.json()) as { access_token?: string } & GraphError;
+    if (!res.ok || !data.access_token) {
+      throw new Error(data.error?.message || 'Long-lived token exchange failed');
+    }
+    return data.access_token;
+  }
+
+  static async exchangeCodeForAccessToken(code: string): Promise<string> {
+    const shortLivedToken = await this.exchangeCodeForToken(code);
+    return this.exchangeForLongLivedToken(shortLivedToken);
+  }
+
+  static async completeConnection(code: string): Promise<WhatsappConnectionDetails> {
+    const accessToken = await this.exchangeCodeForAccessToken(code);
+    const phones = await this.listAvailablePhoneNumbers(accessToken);
+    if (phones.length === 0) {
+      throw new Error('No phone number found on your WhatsApp Business Account.');
+    }
+    const selected = phones[0];
+    return this.buildConnectionDetails(accessToken, selected.phoneNumberId, selected.wabaId);
+  }
+
+  static async fetchConnectionDetails(accessToken: string): Promise<WhatsappConnectionDetails> {
+    const phones = await this.listAvailablePhoneNumbers(accessToken);
+    if (phones.length === 0) {
+      throw new Error('No phone number found on your WhatsApp Business Account.');
+    }
+    const selected = phones[0];
+    return this.buildConnectionDetails(accessToken, selected.phoneNumberId, selected.wabaId);
+  }
+
+  static async buildConnectionDetails(
+    accessToken: string,
+    phoneNumberId: string,
+    wabaId: string
+  ): Promise<WhatsappConnectionDetails> {
+    const phones = await this.listPhoneNumbersForWaba(wabaId, accessToken);
+    const phone = phones.find((p) => p.id === phoneNumberId);
+    if (!phone) {
+      throw new Error('Selected phone number is not available on this WhatsApp Business Account.');
+    }
+
+    return {
+      wabaId,
+      phoneNumberId: phone.id,
+      phoneNumber: phone.displayPhoneNumber,
+      accessToken,
+    };
+  }
+
+  static async listAvailablePhoneNumbers(accessToken: string): Promise<WhatsappPhoneOption[]> {
+    const wabaIds = await this.listAccessibleWabaIds(accessToken);
+    const options: WhatsappPhoneOption[] = [];
+    const seen = new Set<string>();
+
+    for (const wabaId of wabaIds) {
+      const phones = await this.listPhoneNumbersForWaba(wabaId, accessToken);
+      for (const phone of phones) {
+        const key = `${wabaId}:${phone.id}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        options.push({
+          wabaId,
+          phoneNumberId: phone.id,
+          phoneNumber: phone.displayPhoneNumber,
+          verifiedName: phone.verifiedName,
+        });
+      }
+    }
+
+    return options;
+  }
+
+  private static async graphGet<T>(path: string, accessToken: string): Promise<T> {
+    const separator = path.includes('?') ? '&' : '?';
+    const res = await fetch(`${META_BASE}${path}${separator}access_token=${accessToken}`);
+    const data = (await res.json()) as T & GraphError;
+    if (!res.ok) {
+      throw new Error((data as GraphError).error?.message || `Graph API request failed: ${path}`);
+    }
+    return data;
+  }
+
+  static async resolveWabaId(accessToken: string): Promise<string> {
+    const wabaIds = await this.listAccessibleWabaIds(accessToken);
+    return wabaIds[0];
+  }
+
+  private static async listAccessibleWabaIds(accessToken: string): Promise<string[]> {
+    const ids = new Set<string>();
+    const appToken = `${config.meta.appId}|${config.meta.appSecret}`;
+    const debugRes = await fetch(
+      `${META_BASE}/debug_token?input_token=${encodeURIComponent(accessToken)}&access_token=${encodeURIComponent(appToken)}`
+    );
+    const debugData = (await debugRes.json()) as {
+      data?: {
+        granular_scopes?: Array<{ scope: string; target_ids?: string[] }>;
+      };
+    } & GraphError;
+
+    if (debugRes.ok && debugData.data?.granular_scopes) {
+      for (const scope of debugData.data.granular_scopes) {
+        if (
+          scope.scope === 'whatsapp_business_management' ||
+          scope.scope === 'whatsapp_business_messaging'
+        ) {
+          for (const id of scope.target_ids || []) {
+            ids.add(id);
+          }
+        }
+      }
+    }
+
+    if (ids.size > 0) {
+      return [...ids];
+    }
+
+    const businesses = await this.graphGet<{ data?: Array<{ id: string }> }>(
+      '/me/businesses?fields=id,name',
+      accessToken
+    );
+
+    for (const business of businesses.data || []) {
+      const wabas = await this.graphGet<{ data?: Array<{ id: string }> }>(
+        `/${business.id}/owned_whatsapp_business_accounts?fields=id`,
+        accessToken
+      );
+      for (const waba of wabas.data || []) {
+        if (waba.id) ids.add(waba.id);
+      }
+
+      const clientWabas = await this.graphGet<{ data?: Array<{ id: string }> }>(
+        `/${business.id}/client_whatsapp_business_accounts?fields=id`,
+        accessToken
+      );
+      for (const waba of clientWabas.data || []) {
+        if (waba.id) ids.add(waba.id);
+      }
+    }
+
+    if (ids.size === 0) {
+      throw new Error(
+        'No WhatsApp Business Account found. Complete Meta Embedded Signup and grant WhatsApp permissions.'
+      );
+    }
+
+    return [...ids];
+  }
+
+  private static async listPhoneNumbersForWaba(
+    wabaId: string,
+    accessToken: string
+  ): Promise<Array<{ id: string; displayPhoneNumber: string; verifiedName?: string }>> {
+    const phones = await this.graphGet<{
+      data?: Array<{ id: string; display_phone_number?: string; verified_name?: string }>;
+    }>(`/${wabaId}/phone_numbers?fields=id,display_phone_number,verified_name`, accessToken);
+
+    const result: Array<{ id: string; displayPhoneNumber: string; verifiedName?: string }> = [];
+
+    for (const phone of phones.data || []) {
+      if (!phone.id) continue;
+      const displayPhoneNumber = (phone.display_phone_number || '').replace(/\D/g, '');
+      if (!displayPhoneNumber) continue;
+      result.push({
+        id: phone.id,
+        displayPhoneNumber,
+        verifiedName: phone.verified_name,
+      });
+    }
+
+    return result;
+  }
+
+  static async listMessageTemplates(
+    wabaId: string,
+    accessToken: string,
+    options?: { status?: string; limit?: number }
+  ): Promise<MessageTemplate[]> {
+    const params = new URLSearchParams({
+      fields: 'id,name,status,category,language,components,rejected_reason',
+      limit: String(options?.limit || 100),
+    });
+    if (options?.status) params.set('status', options.status);
+
+    const data = await this.graphGet<{ data?: MessageTemplate[] }>(
+      `/${wabaId}/message_templates?${params.toString()}`,
+      accessToken
+    );
+    return (data.data || []).map(normalizeMessageTemplate);
+  }
+
+  static async getMessageTemplate(
+    wabaId: string,
+    accessToken: string,
+    templateName: string
+  ): Promise<MessageTemplate | null> {
+    const params = new URLSearchParams({
+      name: templateName,
+      fields: 'id,name,status,category,language,components,rejected_reason',
+    });
+
+    const data = await this.graphGet<{ data?: MessageTemplate[] }>(
+      `/${wabaId}/message_templates?${params.toString()}`,
+      accessToken
+    );
+    const template = data.data?.[0];
+    return template ? normalizeMessageTemplate(template) : null;
+  }
+
+  static async createMessageTemplate(
+    wabaId: string,
+    accessToken: string,
+    payload: CreateTemplatePayload
+  ): Promise<{ id: string; status: string; category: string }> {
+    const res = await fetch(`${META_BASE}/${wabaId}/message_templates`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const data = (await res.json()) as { id?: string; status?: string; category?: string } & GraphError;
+    if (!res.ok) {
+      throw new Error(data.error?.message || 'Failed to create message template');
+    }
+    return { id: data.id!, status: data.status!, category: data.category! };
+  }
+
+  static async listMessageTemplateLibrary(
+    accessToken: string,
+    options?: {
+      search?: string;
+      language?: string;
+      topic?: string;
+      usecase?: string;
+      industry?: string;
+      name?: string;
+      limit?: number;
+    }
+  ): Promise<TemplateLibraryEntry[]> {
+    const params = new URLSearchParams({ limit: String(options?.limit || 100) });
+    if (options?.search) params.set('search', options.search);
+    if (options?.language) params.set('language', options.language);
+    if (options?.topic) params.set('topic', options.topic);
+    if (options?.usecase) params.set('usecase', options.usecase);
+    if (options?.industry) params.set('industry', options.industry);
+    if (options?.name) params.set('name', options.name);
+
+    const data = await this.graphGet<{ data?: TemplateLibraryEntry[] }>(
+      `/message_template_library?${params.toString()}`,
+      accessToken
+    );
+    return data.data || [];
+  }
+
+  static async createMessageTemplateFromLibrary(
+    wabaId: string,
+    accessToken: string,
+    payload: {
+      name: string;
+      language: string;
+      libraryTemplateName: string;
+      libraryTemplateButtonInputs?: Array<Record<string, unknown>>;
+    }
+  ): Promise<{ id: string; status: string; category: string }> {
+    const body: Record<string, unknown> = {
+      name: payload.name,
+      category: 'UTILITY',
+      language: payload.language,
+      library_template_name: payload.libraryTemplateName,
+    };
+
+    if (payload.libraryTemplateButtonInputs?.length) {
+      body.library_template_button_inputs = payload.libraryTemplateButtonInputs;
+    }
+
+    const res = await fetch(`${META_BASE}/${wabaId}/message_templates`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    const data = (await res.json()) as { id?: string; status?: string; category?: string } & GraphError;
+    if (!res.ok) {
+      throw new Error(data.error?.message || 'Failed to create template from library');
+    }
+    return { id: data.id!, status: data.status!, category: data.category! };
+  }
+
+  static async deleteMessageTemplate(
+    wabaId: string,
+    accessToken: string,
+    templateName: string
+  ): Promise<void> {
+    const params = new URLSearchParams({ name: templateName });
+    const res = await fetch(`${META_BASE}/${wabaId}/message_templates?${params.toString()}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    const data = (await res.json()) as { success?: boolean } & GraphError;
+    if (!res.ok) {
+      throw new Error(data.error?.message || 'Failed to delete message template');
+    }
+  }
+
+  static async sendMessage(
+    phoneNumberId: string,
+    accessToken: string,
+    payload: SendMessagePayload
+  ): Promise<{ messages: { id: string }[] }> {
+    const res = await fetch(`${META_BASE}/${phoneNumberId}/messages`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: payload.to,
+        type: payload.type,
+        ...(payload.text && { text: payload.text }),
+        ...(payload.template && { template: payload.template }),
+      }),
+    });
+
+    if (!res.ok) {
+      const errBody = await res.text();
+      let message = `Send message failed: ${errBody}`;
+      try {
+        const parsed = JSON.parse(errBody) as GraphError;
+        if (parsed.error?.message) {
+          message = parsed.error.message;
+          if (parsed.error.message.includes('necessary permissions')) {
+            message +=
+              ' Link your WhatsApp account in Settings (reconnect) so this app can send messages on your behalf.';
+          }
+        }
+      } catch {
+        /* use raw body */
+      }
+      throw new Error(message);
+    }
+    return res.json() as Promise<{ messages: { id: string }[] }>;
+  }
+
+  static async getMediaMetadata(
+    mediaId: string,
+    accessToken: string
+  ): Promise<{ url: string; mime_type?: string; file_size?: number }> {
+    return this.graphGet(`/${mediaId}`, accessToken);
+  }
+
+  static async downloadMedia(mediaId: string, accessToken: string): Promise<Buffer> {
+    const meta = await this.getMediaMetadata(mediaId, accessToken);
+    const res = await fetch(meta.url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) {
+      throw new Error('Failed to download media from Meta');
+    }
+    return Buffer.from(await res.arrayBuffer());
+  }
+
+  static async markAsRead(phoneNumberId: string, accessToken: string, messageId: string) {
+    await fetch(`${META_BASE}/${phoneNumberId}/messages`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        status: 'read',
+        message_id: messageId,
+      }),
+    });
+  }
+
+  static encryptToken(token: string): string {
+    return encrypt(token);
+  }
+
+  static decryptToken(encrypted: string): string {
+    return decrypt(encrypted);
+  }
+
+  static verifyWebhookSignature(signature: string, body: string): boolean {
+    const crypto = require('crypto');
+    const expected = crypto
+      .createHmac('sha256', config.meta.appSecret)
+      .update(body)
+      .digest('hex');
+    const expectedSig = `sha256=${expected}`;
+
+    try {
+      return crypto.timingSafeEqual(
+        Buffer.from(signature),
+        Buffer.from(expectedSig)
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  private static getAppAccessToken(): string {
+    return `${config.meta.appId}|${config.meta.appSecret}`;
+  }
+
+  static async registerAppWebhook(callbackUrl: string): Promise<void> {
+    const params = new URLSearchParams({
+      object: 'whatsapp_business_account',
+      callback_url: callbackUrl,
+      verify_token: config.meta.verifyToken,
+      fields: 'messages,calls',
+      access_token: this.getAppAccessToken(),
+    });
+
+    const res = await fetch(`${META_BASE}/${config.meta.appId}/subscriptions?${params}`, {
+      method: 'POST',
+    });
+    const data = (await res.json()) as { success?: boolean } & GraphError;
+    if (!res.ok && !data.success) {
+      throw new Error(data.error?.message || 'Failed to register app webhook');
+    }
+  }
+
+  private static async postSubscribeWaba(wabaId: string, token: string): Promise<void> {
+    const res = await fetch(`${META_BASE}/${wabaId}/subscribed_apps`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = (await res.json()) as { success?: boolean } & GraphError;
+    if (res.ok || data.success) return;
+
+    const message = data.error?.message || '';
+    if (message.toLowerCase().includes('already') || message.toLowerCase().includes('subscribed')) {
+      return;
+    }
+
+    throw new Error(message || 'Failed to subscribe WABA to app');
+  }
+
+  /** Links the WABA to this Meta app so Cloud API can send messages (required even without webhooks). */
+  static async ensureWabaSubscribed(wabaId: string, accessToken: string): Promise<void> {
+    try {
+      await this.postSubscribeWaba(wabaId, accessToken);
+      return;
+    } catch (userErr) {
+      const userMessage = userErr instanceof Error ? userErr.message : String(userErr);
+      try {
+        await this.postSubscribeWaba(wabaId, this.getAppAccessToken());
+        return;
+      } catch {
+        throw new Error(
+          `Could not link WhatsApp Business Account to this app: ${userMessage}. ` +
+            'Disconnect and reconnect WhatsApp in Settings, and ensure your Meta user is an admin on the WABA.'
+        );
+      }
+    }
+  }
+
+  static async subscribeWabaToApp(wabaId: string, accessToken: string): Promise<void> {
+    await this.ensureWabaSubscribed(wabaId, accessToken);
+  }
+
+  static async configureWebhooks(
+    wabaId: string,
+    accessToken: string
+  ): Promise<{ callbackUrl: string }> {
+    const callbackUrl = config.meta.webhookUrl;
+    if (!callbackUrl) {
+      throw new Error(
+        'META_WEBHOOK_URL is not set. Use an HTTPS tunnel URL ending with /api/whatsapp/webhook'
+      );
+    }
+
+    await this.ensureWabaSubscribed(wabaId, accessToken);
+    await this.registerAppWebhook(callbackUrl);
+    return { callbackUrl };
+  }
+
+  static async getWebhookStatus(
+    wabaId: string,
+    accessToken: string
+  ): Promise<{ subscribed: boolean; apps: string[] }> {
+    const data = await this.graphGet<{ data?: Array<{ whatsapp_business_api_data?: { id?: string } }> }>(
+      `/${wabaId}/subscribed_apps`,
+      accessToken
+    );
+    const apps = (data.data || [])
+      .map((app) => app.whatsapp_business_api_data?.id)
+      .filter(Boolean) as string[];
+    return { subscribed: apps.includes(config.meta.appId), apps };
+  }
+}
+
+export function isWithin24HourWindow(lastInboundAt: Date | null): boolean {
+  if (!lastInboundAt) return false;
+  const hoursSince = (Date.now() - lastInboundAt.getTime()) / (1000 * 60 * 60);
+  return hoursSince < 24;
+}

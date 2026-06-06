@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.env
+.env.local
+.env.*.local
+*.log
+.DS_Store
+client/dist/
+server/dist/
+server/uploads/
+.bin/
+server/.env.updated
+server/key.json
+server/secrets/
+*.tsbuildinfo

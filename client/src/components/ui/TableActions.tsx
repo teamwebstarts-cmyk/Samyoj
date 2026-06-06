@@ -1,0 +1,69 @@
+import type { LucideIcon } from 'lucide-react';
+import type { ReactNode } from 'react';
+
+const iconVariants = {
+  default:
+    'border-neutral-200/90 bg-white text-neutral-600 hover:border-emerald-200 hover:bg-emerald-50 hover:text-whatsapp-700',
+  primary:
+    'border-emerald-200/80 bg-emerald-50 text-whatsapp-700 hover:border-emerald-300 hover:bg-emerald-100',
+  danger:
+    'border-red-100 bg-white text-red-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600',
+} as const;
+
+interface TableIconButtonProps {
+  onClick?: () => void;
+  icon: LucideIcon;
+  label: string;
+  variant?: keyof typeof iconVariants;
+}
+
+export function TableIconButton({
+  onClick,
+  icon: Icon,
+  label,
+  variant = 'default',
+}: TableIconButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={label}
+      aria-label={label}
+      className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border shadow-sm transition ${iconVariants[variant]}`}
+    >
+      <Icon size={15} strokeWidth={2.25} />
+    </button>
+  );
+}
+
+const textVariants = {
+  primary:
+    'border-emerald-200/80 bg-emerald-50 text-whatsapp-700 hover:border-emerald-300 hover:bg-emerald-100',
+  neutral:
+    'border-neutral-200/90 bg-white text-neutral-700 hover:border-neutral-300 hover:bg-neutral-50',
+} as const;
+
+interface TableTextButtonProps {
+  onClick?: () => void;
+  icon?: LucideIcon;
+  children: ReactNode;
+  variant?: keyof typeof textVariants;
+}
+
+export function TableTextButton({
+  onClick,
+  icon: Icon,
+  children,
+  variant = 'primary',
+}: TableTextButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-[11px] font-bold shadow-sm transition ${textVariants[variant]}`}
+    >
+      {Icon && <Icon className="h-3.5 w-3.5" strokeWidth={2.25} />}
+      {children}
+    </button>
+  );
+}

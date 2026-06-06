@@ -1,0 +1,424 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  AGENT
+}
+
+enum OrgRole {
+  OWNER
+  ADMIN
+  AGENT
+}
+
+enum ConversationStatus {
+  OPEN
+  PENDING
+  CLOSED
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  DOCUMENT
+  AUDIO
+  VIDEO
+  TEMPLATE
+  INTERACTIVE
+}
+
+enum MessageStatus {
+  PENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+enum CallDirection {
+  USER_INITIATED
+  BUSINESS_INITIATED
+}
+
+enum CallStatus {
+  RINGING
+  CONNECTING
+  CONNECTED
+  COMPLETED
+  FAILED
+  REJECTED
+  MISSED
+  TERMINATED
+}
+
+enum CallHandler {
+  AI
+  AGENT
+  UNANSWERED
+}
+
+enum TriggerType {
+  KEYWORD
+  WELCOME
+  AWAY
+  BUSINESS_HOURS
+  LEAD_CAPTURE
+  AI_CHATBOT
+}
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         UserRole @default(AGENT)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  organizations     OrganizationUser[]
+  assignedConversations Conversation[] @relation("AssignedAgent")
+  assignedCalls         Call[]         @relation("AssignedCallAgent")
+  internalNotes     InternalNote[]
+  refreshTokens     RefreshToken[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String   @map("user_id")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+model Organization {
+  id          String   @id @default(uuid())
+  companyName String   @map("company_name")
+  plan        String   @default("starter")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  users          OrganizationUser[]
+  whatsappNumbers WhatsappNumber[]
+  contacts       Contact[]
+  conversations  Conversation[]
+  automations    Automation[]
+  campaigns      Campaign[]
+  labels         Label[]
+  aiBots         AiBot[]
+  calls          Call[]
+
+  @@map("organizations")
+}
+
+model OrganizationUser {
+  id             String  @id @default(uuid())
+  organizationId String  @map("organization_id")
+  userId         String  @map("user_id")
+  role           OrgRole @default(AGENT)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@map("organization_users")
+}
+
+model WhatsappNumber {
+  id            String   @id @default(uuid())
+  organizationId String  @map("organization_id")
+  phoneNumber   String   @map("phone_number")
+  phoneNumberId String   @map("phone_number_id")
+  wabaId        String   @map("waba_id")
+  businessId    String?  @map("business_id")
+  accessToken   String   @map("access_token")
+  webhookSecret String?  @map("webhook_secret")
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  conversations Conversation[]
+  calls         Call[]
+
+  @@map("whatsapp_numbers")
+}
+
+model Contact {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  phone          String
+  name           String?
+  tags           String[] @default([])
+  notes          String?
+  optedIn        Boolean  @default(false) @map("opted_in")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  conversations Conversation[]
+  calls         Call[]
+
+  @@unique([organizationId, phone])
+  @@map("contacts")
+}
+
+model Conversation {
+  id              String             @id @default(uuid())
+  organizationId  String             @map("organization_id")
+  contactId       String             @map("contact_id")
+  whatsappNumberId String?           @map("whatsapp_number_id")
+  assignedAgentId String?            @map("assigned_agent_id")
+  activeBotId     String?            @map("active_bot_id")
+  status          ConversationStatus @default(OPEN)
+  botActive       Boolean            @default(true) @map("bot_active")
+  botHandoffAt    DateTime?          @map("bot_handoff_at")
+  botHandoffReason String?           @map("bot_handoff_reason")
+  botState        Json?              @map("bot_state")
+  lastMessageAt   DateTime?          @map("last_message_at")
+  unreadCount     Int                @default(0) @map("unread_count")
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contact        Contact         @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  whatsappNumber WhatsappNumber? @relation(fields: [whatsappNumberId], references: [id])
+  assignedAgent  User?           @relation("AssignedAgent", fields: [assignedAgentId], references: [id])
+  activeBot      AiBot?          @relation("ActiveBot", fields: [activeBotId], references: [id])
+  messages       Message[]
+  internalNotes  InternalNote[]
+  labels         ConversationLabel[]
+  calls          Call[]
+
+  @@index([organizationId, lastMessageAt])
+  @@map("conversations")
+}
+
+model Call {
+  id               String        @id @default(uuid())
+  organizationId   String        @map("organization_id")
+  contactId        String        @map("contact_id")
+  conversationId   String?       @map("conversation_id")
+  whatsappNumberId String        @map("whatsapp_number_id")
+  aiBotId          String?       @map("ai_bot_id")
+  assignedAgentId  String?       @map("assigned_agent_id")
+  metaCallId       String        @unique @map("meta_call_id")
+  direction        CallDirection
+  status           CallStatus    @default(RINGING)
+  handler          CallHandler   @default(AI)
+  fromPhone        String        @map("from_phone")
+  toPhone          String        @map("to_phone")
+  startedAt        DateTime?     @map("started_at")
+  answeredAt       DateTime?     @map("answered_at")
+  endedAt          DateTime?     @map("ended_at")
+  durationSeconds  Int?          @map("duration_seconds")
+  transcript       Json?         @map("transcript")
+  metadata         Json?
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contact        Contact        @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  conversation   Conversation?  @relation(fields: [conversationId], references: [id])
+  whatsappNumber WhatsappNumber @relation(fields: [whatsappNumberId], references: [id])
+  aiBot          AiBot?         @relation(fields: [aiBotId], references: [id])
+  assignedAgent  User?          @relation("AssignedCallAgent", fields: [assignedAgentId], references: [id])
+
+  @@index([organizationId, createdAt])
+  @@index([conversationId])
+  @@map("calls")
+}
+
+model Message {
+  id             String           @id @default(uuid())
+  conversationId String           @map("conversation_id")
+  metaMessageId  String?          @unique @map("meta_message_id")
+  direction      MessageDirection
+  type           MessageType      @default(TEXT)
+  content        String
+  status         MessageStatus    @default(PENDING)
+  metadata       Json?
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@map("messages")
+}
+
+model InternalNote {
+  id             String   @id @default(uuid())
+  conversationId String   @map("conversation_id")
+  userId         String   @map("user_id")
+  content        String
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id])
+
+  @@map("internal_notes")
+}
+
+model Label {
+  id             String @id @default(uuid())
+  organizationId String @map("organization_id")
+  name           String
+  color          String @default("#6366f1")
+
+  organization  Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  conversations ConversationLabel[]
+
+  @@unique([organizationId, name])
+  @@map("labels")
+}
+
+model ConversationLabel {
+  conversationId String @map("conversation_id")
+  labelId        String @map("label_id")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  label        Label        @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([conversationId, labelId])
+  @@map("conversation_labels")
+}
+
+model Automation {
+  id             String      @id @default(uuid())
+  organizationId String      @map("organization_id")
+  name           String
+  triggerType    TriggerType @map("trigger_type")
+  config         Json
+  enabled        Boolean     @default(true)
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("automations")
+}
+
+model AiBot {
+  id              String   @id @default(uuid())
+  organizationId  String   @map("organization_id")
+  name            String
+  enabled         Boolean  @default(true)
+  isDefault       Boolean  @default(false) @map("is_default")
+  instructions    String   @default("")
+  handoffMessage  String   @default("Let me connect you with our team. Someone will reply shortly.") @map("handoff_message")
+  triggerKeywords String[] @default([]) @map("trigger_keywords")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  knowledgeItems KnowledgeBaseItem[]
+  conversations  Conversation[]      @relation("ActiveBot")
+  calls          Call[]
+
+  @@index([organizationId])
+  @@map("ai_bots")
+}
+
+model KnowledgeBaseItem {
+  id        String   @id @default(uuid())
+  botId     String   @map("bot_id")
+  title     String
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  bot AiBot @relation(fields: [botId], references: [id], onDelete: Cascade)
+
+  @@index([botId])
+  @@map("knowledge_base_items")
+}
+
+model AutomationLog {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  conversationId String?  @map("conversation_id")
+  automationId   String?  @map("automation_id")
+  triggerType    String   @map("trigger_type")
+  action         String
+  status         String
+  input          Json?
+  output         Json?
+  error          String?
+  durationMs     Int?     @map("duration_ms")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, createdAt])
+  @@map("automation_logs")
+}
+
+model Campaign {
+  id             String         @id @default(uuid())
+  organizationId String         @map("organization_id")
+  name           String
+  templateName   String         @map("template_name")
+  status         CampaignStatus @default(DRAFT)
+  scheduledAt    DateTime?      @map("scheduled_at")
+  totalContacts  Int            @default(0) @map("total_contacts")
+  sentCount      Int            @default(0) @map("sent_count")
+  deliveredCount Int            @default(0) @map("delivered_count")
+  failedCount    Int            @default(0) @map("failed_count")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  recipients   CampaignRecipient[]
+
+  @@map("campaigns")
+}
+
+model CampaignRecipient {
+  id         String        @id @default(uuid())
+  campaignId String        @map("campaign_id")
+  phone      String
+  name       String?
+  status     MessageStatus @default(PENDING)
+  createdAt  DateTime      @default(now()) @map("created_at")
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@map("campaign_recipients")
+}
+
+model AuditLog {
+  id             String   @id @default(uuid())
+  organizationId String?  @map("organization_id")
+  userId         String?  @map("user_id")
+  action         String
+  resource       String
+  details        Json?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, createdAt])
+  @@map("audit_logs")
+}
