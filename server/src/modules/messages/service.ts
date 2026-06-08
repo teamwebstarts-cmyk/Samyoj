@@ -99,7 +99,7 @@ export async function sendDirectMessage(organizationId: string, input: SendDirec
 
   const contact = await prisma.contact.upsert({
     where: { organizationId_phone: { organizationId, phone } },
-    create: { organizationId, phone, name: input.name, optedIn: true },
+    create: { organizationId, phone, name: input.name, optedIn: true, source: 'OUTBOUND' },
     update: { name: input.name || undefined },
   });
 
@@ -188,32 +188,7 @@ export async function sendDirectMessage(organizationId: string, input: SendDirec
   return { message: sentMessage, conversationId: conversation.id, contact };
 }
 
-export async function finalizeCampaignIfDone(campaignId: string) {
-  const campaign = await prisma.campaign.findUnique({
-    where: { id: campaignId },
-    include: { recipients: true },
-  });
-
-  if (!campaign || campaign.status !== 'RUNNING') return;
-
-  const processed = campaign.recipients.filter((r) => r.status !== 'PENDING').length;
-
-  if (processed < campaign.totalContacts) return;
-
-  const allFailed = campaign.failedCount >= campaign.totalContacts;
-  await prisma.campaign.update({
-    where: { id: campaignId },
-    data: { status: allFailed ? 'FAILED' : 'COMPLETED' },
-  });
-}
-
-export async function syncRunningCampaignStatuses(organizationId: string) {
-  const running = await prisma.campaign.findMany({
-    where: { organizationId, status: 'RUNNING' },
-    select: { id: true },
-  });
-
-  for (const campaign of running) {
-    await finalizeCampaignIfDone(campaign.id);
-  }
-}
+export {
+  finalizeCampaignIfDone,
+  syncRunningCampaignStatuses,
+} from '../campaigns/service';

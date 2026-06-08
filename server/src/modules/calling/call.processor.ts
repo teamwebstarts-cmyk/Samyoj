@@ -1,8 +1,6 @@
 import prisma from '../../config/database';
-import { config } from '../../config';
 import { MetaWhatsAppService } from '../whatsapp/meta.service';
-import { emitToOrg } from '../../realtime';
-import { resolveBotForConversation, ensureDefaultBot } from '../ai/bot.service';
+import { emitToOrg, emitToUsers } from '../../realtime';
 import { createModuleLogger } from '../../utils/logger';
 import { AiVoiceCallSession } from './ai-voice-agent';
 import {
@@ -12,9 +10,20 @@ import {
   removeCallSession,
 } from './call-session.manager';
 import { isCallingConfigured, MetaCallingService } from './meta-calling.service';
+import { decideCallRoute, resolveCallBot } from './routing.service';
+import { getOrgCallingSettings, resolveEffectiveVoiceConfig } from './settings.service';
+import { handleMissedCallFollowUp } from './missed-call.service';
+import {
+  registerActiveCall,
+  removePendingCall,
+  storePendingCall,
+  unregisterActiveCall,
+} from './session-store';
 import type { CallWebhookEntry } from './types';
 
 const log = createModuleLogger('call-processor');
+
+const ringTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
 
 async function ensureContactAndConversation(
   orgId: string,
@@ -27,7 +36,7 @@ async function ensureContactAndConversation(
 
   if (!contact) {
     contact = await prisma.contact.create({
-      data: { organizationId: orgId, phone: contactPhone, optedIn: true },
+      data: { organizationId: orgId, phone: contactPhone, optedIn: true, source: 'INBOUND' },
     });
   }
 
@@ -49,6 +58,212 @@ async function ensureContactAndConversation(
   }
 
   return { contact, conversation };
+}
+
+async function markCallMissed(
+  orgId: string,
+  callId: string,
+  conversationId: string | null,
+  contactId: string,
+  reason: string,
+  customMessage?: string
+): Promise<void> {
+  await prisma.call.update({
+    where: { id: callId },
+    data: { status: 'MISSED', handler: 'UNANSWERED', endedAt: new Date() },
+  });
+
+  emitToOrg(orgId, 'call:updated', { callId, status: 'MISSED', reason });
+
+  void handleMissedCallFollowUp({
+    organizationId: orgId,
+    callId,
+    conversationId,
+    contactId,
+    customMessage,
+  });
+}
+
+async function startAiSession(params: {
+  orgId: string;
+  callRecord: { id: string; metaCallId: string };
+  conversation: { id: string };
+  contact: { id: string };
+  phoneNumberId: string;
+  accessToken: string;
+  fromPhone: string;
+  toPhone: string;
+  direction: string;
+  botId: string;
+  sdpOffer: string;
+  consentMessage?: string;
+  greeting?: string;
+  ttsVoice?: string;
+  ttsLanguage?: string;
+}): Promise<void> {
+  const session = new AiVoiceCallSession({
+    callId: params.callRecord.id,
+    metaCallId: params.callRecord.metaCallId,
+    organizationId: params.orgId,
+    conversationId: params.conversation.id,
+    contactId: params.contact.id,
+    phoneNumberId: params.phoneNumberId,
+    accessToken: params.accessToken,
+    fromPhone: params.fromPhone,
+    toPhone: params.toPhone,
+    direction: params.direction as 'USER_INITIATED' | 'BUSINESS_INITIATED',
+    aiBotId: params.botId,
+    greeting: params.greeting,
+    consentMessage: params.consentMessage,
+    ttsVoice: params.ttsVoice,
+    ttsLanguage: params.ttsLanguage,
+  });
+
+  registerCallSession(params.callRecord.metaCallId, session);
+  await registerActiveCall(params.callRecord.metaCallId, params.orgId);
+
+  try {
+    await session.start(params.sdpOffer);
+    emitToOrg(params.orgId, 'call:updated', {
+      callId: params.callRecord.id,
+      status: 'CONNECTED',
+      handler: 'AI',
+    });
+  } catch (err) {
+    log.error('Failed to start AI voice session', {
+      metaCallId: params.callRecord.metaCallId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    removeCallSession(params.callRecord.metaCallId);
+    await unregisterActiveCall(params.callRecord.metaCallId, params.orgId);
+    session.dispose();
+    await prisma.call.update({
+      where: { id: params.callRecord.id },
+      data: { status: 'FAILED', endedAt: new Date() },
+    });
+    emitToOrg(params.orgId, 'call:updated', {
+      callId: params.callRecord.id,
+      status: 'FAILED',
+    });
+    try {
+      await MetaCallingService.reject(
+        params.phoneNumberId,
+        params.accessToken,
+        params.callRecord.metaCallId
+      );
+    } catch {
+      // ignore
+    }
+  }
+}
+
+function clearRingTimeout(metaCallId: string): void {
+  const timer = ringTimeouts.get(metaCallId);
+  if (timer) {
+    clearTimeout(timer);
+    ringTimeouts.delete(metaCallId);
+  }
+}
+
+async function ringAgentsForCall(params: {
+  orgId: string;
+  callRecord: { id: string; metaCallId: string };
+  conversation: { id: string };
+  contact: { id: string; name?: string | null };
+  phoneNumberId: string;
+  accessToken: string;
+  fromPhone: string;
+  toPhone: string;
+  direction: string;
+  sdpOffer: string;
+  agentIds: string[];
+  timeoutSec: number;
+  botId: string;
+  settings: Awaited<ReturnType<typeof getOrgCallingSettings>>;
+}): Promise<void> {
+  await storePendingCall(params.callRecord.metaCallId, {
+    callId: params.callRecord.id,
+    metaCallId: params.callRecord.metaCallId,
+    organizationId: params.orgId,
+    conversationId: params.conversation.id,
+    contactId: params.contact.id,
+    phoneNumberId: params.phoneNumberId,
+    accessToken: params.accessToken,
+    fromPhone: params.fromPhone,
+    toPhone: params.toPhone,
+    direction: params.direction as 'USER_INITIATED' | 'BUSINESS_INITIATED',
+    sdpOffer: params.sdpOffer,
+    createdAt: new Date().toISOString(),
+  });
+
+  await prisma.call.update({
+    where: { id: params.callRecord.id },
+    data: { status: 'RINGING', handler: 'UNANSWERED' },
+  });
+
+  const ringPayload = {
+    callId: params.callRecord.id,
+    metaCallId: params.callRecord.metaCallId,
+    fromPhone: params.fromPhone,
+    contactName: params.contact.name,
+    conversationId: params.conversation.id,
+    timeoutSec: params.timeoutSec,
+    agentIds: params.agentIds,
+  };
+
+  emitToOrg(params.orgId, 'call:ring', ringPayload);
+  emitToUsers(params.agentIds, 'call:ring', ringPayload);
+
+  clearRingTimeout(params.callRecord.metaCallId);
+
+  const timer = setTimeout(() => {
+    void (async () => {
+      ringTimeouts.delete(params.callRecord.metaCallId);
+      const current = await prisma.call.findUnique({ where: { id: params.callRecord.id } });
+      if (!current || current.status !== 'RINGING') return;
+
+      await removePendingCall(params.callRecord.metaCallId);
+
+      if (params.settings.aiAutoAnswer && isCallingConfigured()) {
+        emitToOrg(params.orgId, 'call:ring_timeout', { callId: params.callRecord.id });
+        await startAiSession({
+          orgId: params.orgId,
+          callRecord: params.callRecord,
+          conversation: params.conversation,
+          contact: params.contact,
+          phoneNumberId: params.phoneNumberId,
+          accessToken: params.accessToken,
+          fromPhone: params.fromPhone,
+          toPhone: params.toPhone,
+          direction: params.direction,
+          botId: params.botId,
+          sdpOffer: params.sdpOffer,
+          consentMessage: params.settings.recordingConsentEnabled
+            ? params.settings.recordingConsentMessage
+            : undefined,
+          greeting: resolveEffectiveVoiceConfig(params.settings).aiGreeting,
+          ttsVoice: resolveEffectiveVoiceConfig(params.settings).ttsVoice,
+          ttsLanguage: resolveEffectiveVoiceConfig(params.settings).ttsLanguage,
+        });
+        return;
+      }
+
+      await markCallMissed(
+        params.orgId,
+        params.callRecord.id,
+        params.conversation.id,
+        params.contact.id,
+        'agent_ring_timeout'
+      );
+    })().catch((err) => {
+      log.error('Ring timeout handler failed', {
+        callId: params.callRecord.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
+  }, params.timeoutSec * 1000);
+
+  ringTimeouts.set(params.callRecord.metaCallId, timer);
 }
 
 async function handleCallConnect(
@@ -76,20 +291,19 @@ async function handleCallConnect(
     normalize(fromPhone) === businessDigits || normalize(fromPhone).endsWith(businessDigits)
       ? toPhone
       : fromPhone;
+
   const { contact, conversation } = await ensureContactAndConversation(
     orgId,
     whatsappNumberId,
     contactPhone
   );
 
-  const bot = (await resolveBotForConversation(orgId, conversation, '')) ?? (await ensureDefaultBot(orgId));
+  const settings = await getOrgCallingSettings(orgId);
+  const bot = await resolveCallBot(orgId, settings, conversation.id);
 
   await prisma.conversation.update({
     where: { id: conversation.id },
-    data: {
-      botActive: true,
-      activeBotId: bot.id,
-    },
+    data: { botActive: true, activeBotId: bot.id },
   });
 
   const callRecord = await prisma.call.upsert({
@@ -99,11 +313,11 @@ async function handleCallConnect(
       contactId: contact.id,
       conversationId: conversation.id,
       whatsappNumberId,
-      aiBotId: bot?.id,
+      aiBotId: bot.id,
       metaCallId,
       direction,
       status: 'CONNECTING',
-      handler: config.calling.aiAutoAnswer && isCallingConfigured() ? 'AI' : 'UNANSWERED',
+      handler: 'UNANSWERED',
       fromPhone,
       toPhone,
     },
@@ -124,71 +338,86 @@ async function handleCallConnect(
     status: 'CONNECTING',
   });
 
-  if (!config.calling.aiAutoAnswer || !isCallingConfigured()) {
-    log.info('AI auto-answer disabled or calling not configured', { metaCallId });
-    await prisma.call.update({
-      where: { id: callRecord.id },
-      data: { status: 'MISSED', handler: 'UNANSWERED', endedAt: new Date() },
-    });
-    emitToOrg(orgId, 'call:updated', { callId: callRecord.id, status: 'MISSED' });
-    return;
-  }
+  const route = await decideCallRoute(orgId);
 
-  const session = new AiVoiceCallSession({
-    callId: callRecord.id,
-    metaCallId,
-    organizationId: orgId,
-    conversationId: conversation.id,
-    contactId: contact.id,
-    phoneNumberId,
-    accessToken,
-    fromPhone,
-    toPhone,
-    direction,
-    aiBotId: bot.id,
-  });
-
-  registerCallSession(metaCallId, session);
-
-  try {
-    await session.start(sdpOffer);
-    emitToOrg(orgId, 'call:updated', {
-      callId: callRecord.id,
-      status: 'CONNECTED',
-      handler: 'AI',
-    });
-  } catch (err) {
-    log.error('Failed to start AI voice session', {
-      metaCallId,
-      error: err instanceof Error ? err.message : String(err),
-    });
-    removeCallSession(metaCallId);
-    session.dispose();
-    await prisma.call.update({
-      where: { id: callRecord.id },
-      data: { status: 'FAILED', endedAt: new Date() },
-    });
-    emitToOrg(orgId, 'call:updated', { callId: callRecord.id, status: 'FAILED' });
+  if (route.mode === 'missed') {
+    log.info('Call routed to missed', { metaCallId, reason: route.reason });
     try {
       await MetaCallingService.reject(phoneNumberId, accessToken, metaCallId);
     } catch {
       // ignore
     }
+    await markCallMissed(
+      orgId,
+      callRecord.id,
+      conversation.id,
+      contact.id,
+      route.reason,
+      route.afterHoursMessage
+    );
+    return;
   }
+
+  if (route.mode === 'ring_agents') {
+    log.info('Ringing agents for call', { metaCallId, agents: route.agentIds.length });
+    await ringAgentsForCall({
+      orgId,
+      callRecord,
+      conversation,
+      contact,
+      phoneNumberId,
+      accessToken,
+      fromPhone,
+      toPhone,
+      direction,
+      sdpOffer,
+      agentIds: route.agentIds,
+      timeoutSec: settings.agentRingTimeoutSec,
+      botId: bot.id,
+      settings,
+    });
+    return;
+  }
+
+  if (!isCallingConfigured()) {
+    log.info('Calling pipeline not configured', { metaCallId });
+    await markCallMissed(orgId, callRecord.id, conversation.id, contact.id, 'not_configured');
+    return;
+  }
+
+  await startAiSession({
+    orgId,
+    callRecord,
+    conversation,
+    contact,
+    phoneNumberId,
+    accessToken,
+    fromPhone,
+    toPhone,
+    direction,
+    botId: bot.id,
+    sdpOffer,
+    consentMessage: settings.recordingConsentEnabled
+      ? settings.recordingConsentMessage
+      : undefined,
+    greeting: settings.aiGreeting,
+  });
 }
 
-async function handleCallTerminate(
-  orgId: string,
-  call: CallWebhookEntry
-): Promise<void> {
+async function handleCallTerminate(orgId: string, call: CallWebhookEntry): Promise<void> {
   const metaCallId = call.id;
   const existing = await prisma.call.findUnique({ where: { metaCallId } });
   if (!existing) return;
+
+  clearRingTimeout(metaCallId);
+  await removePendingCall(metaCallId);
 
   const session = getCallSession(metaCallId);
   if (session) {
     await endCallSession(metaCallId, 'remote_terminate').catch(() => undefined);
   }
+
+  await unregisterActiveCall(metaCallId, orgId);
 
   const duration =
     typeof call.duration === 'number'
@@ -217,6 +446,15 @@ async function handleCallTerminate(
     status,
     durationSeconds: duration,
   });
+
+  if (existing.status === 'RINGING' && status === 'TERMINATED') {
+    void handleMissedCallFollowUp({
+      organizationId: orgId,
+      callId: existing.id,
+      conversationId: existing.conversationId,
+      contactId: existing.contactId,
+    });
+  }
 
   log.info('Call terminated', { metaCallId, status, duration });
 }
@@ -248,7 +486,6 @@ export async function processCallWebhookPayload(payload: Record<string, unknown>
         log.info('Processing call webhook', { event, metaCallId: call.id, orgId });
 
         if (event === 'connect') {
-          // Run outside the webhook job so BullMQ does not mark long voice setup as stalled.
           void handleCallConnect(
             orgId,
             whatsappNumber.id,
@@ -288,3 +525,5 @@ export async function processWebhookFields(payload: Record<string, unknown>): Pr
     await processCallWebhookPayload(payload);
   }
 }
+
+export { clearRingTimeout };

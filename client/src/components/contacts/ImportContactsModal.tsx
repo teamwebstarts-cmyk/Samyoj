@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import AppAlert from '../ui/AppAlert';
 import AppButton from '../ui/AppButton';
+import { toastError, toastSuccess } from '../../utils/toast';
 import SlideOver from '../ui/SlideOver';
 import {
   CONTACT_IMPORT_ACCEPT,
@@ -32,15 +33,10 @@ export default function ImportContactsModal({ open, onClose, onImport }: ImportC
   const [dragging, setDragging] = useState(false);
   const [preview, setPreview] = useState<ContactImportPreview>(emptyPreview);
   const [importing, setImporting] = useState(false);
-  const [importError, setImportError] = useState('');
-  const [importSuccess, setImportSuccess] = useState('');
-
   const resetState = useCallback(() => {
     setPreview(emptyPreview);
     setDragging(false);
     setImporting(false);
-    setImportError('');
-    setImportSuccess('');
     if (inputRef.current) inputRef.current.value = '';
   }, []);
 
@@ -50,9 +46,6 @@ export default function ImportContactsModal({ open, onClose, onImport }: ImportC
   };
 
   const processFile = async (file: File) => {
-    setImportError('');
-    setImportSuccess('');
-
     const lowerName = file.name.toLowerCase();
     if (!lowerName.endsWith('.csv') && !lowerName.endsWith('.json')) {
       setPreview({ rows: [], errors: ['Only CSV or JSON files are supported'], fileName: file.name });
@@ -79,10 +72,9 @@ export default function ImportContactsModal({ open, onClose, onImport }: ImportC
     if (!preview.rows.length || preview.errors.length) return;
 
     setImporting(true);
-    setImportError('');
     try {
       await onImport(preview.rows);
-      setImportSuccess(`Successfully imported ${preview.rows.length} contact(s).`);
+      toastSuccess(`Successfully imported ${preview.rows.length} contact(s).`);
       setTimeout(() => {
         handleClose();
       }, 900);
@@ -90,7 +82,7 @@ export default function ImportContactsModal({ open, onClose, onImport }: ImportC
       const msg =
         (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
           ?.message || 'Import failed. Please try again.';
-      setImportError(msg);
+      toastError(msg);
     } finally {
       setImporting(false);
     }
@@ -111,7 +103,7 @@ export default function ImportContactsModal({ open, onClose, onImport }: ImportC
             type="button"
             onClick={handleClose}
             disabled={importing}
-            className="inline-flex h-10 items-center justify-center rounded-xl border border-neutral-200/80 bg-white px-4 text-[13px] font-semibold text-neutral-800 transition hover:bg-neutral-50 disabled:opacity-50"
+            className="inline-flex h-10 items-center justify-center rounded-xl border border-theme-border bg-theme-surface px-4 text-[13px] font-semibold text-theme-fg transition hover:bg-theme-subtle disabled:opacity-50"
           >
             Cancel
           </button>
@@ -131,6 +123,14 @@ export default function ImportContactsModal({ open, onClose, onImport }: ImportC
       }
     >
       <div className="space-y-5">
+        <AppAlert variant="info">
+          <span>
+            <strong className="font-bold">Opt-in compliance:</strong> Only import contacts who have
+            given consent to receive WhatsApp messages. Manage opt-in status from the contacts list
+            after import.
+          </span>
+        </AppAlert>
+
         <section className="rounded-2xl border border-sky-200/70 bg-gradient-to-r from-sky-500/10 to-blue-500/5 p-4">
           <div className="flex flex-col gap-4">
             <div className="min-w-0">
@@ -223,9 +223,6 @@ export default function ImportContactsModal({ open, onClose, onImport }: ImportC
             </div>
           )}
         </section>
-
-        {importError && <AppAlert variant="error">{importError}</AppAlert>}
-        {importSuccess && <AppAlert variant="success">{importSuccess}</AppAlert>}
 
         {preview.errors.length > 0 && (
           <AppAlert variant="error">

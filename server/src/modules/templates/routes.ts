@@ -1,104 +1,47 @@
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import { authenticate, requireOrg } from '../../middleware/auth';
 import { AppError, sendSuccess, asyncHandler } from '../../utils/response';
 import { MetaWhatsAppService } from '../whatsapp/meta.service';
 import { getOrgWhatsappContext } from '../whatsapp/context';
-import { z } from 'zod';
+import { buildTemplateComponents } from '../campaigns/template-params';
+import { buildTemplateComponents as buildCreateComponents } from './builder';
+import { getTemplateUsage } from './analytics';
+import {
+  createTemplateSchema,
+  createFromLibrarySchema,
+  testSendSchema,
+} from './types';
 
 const router = Router();
 
-const templateButtonSchema = z
-  .object({
-    type: z.enum(['QUICK_REPLY', 'URL', 'PHONE_NUMBER']),
-    text: z.string().min(1).max(25),
-    url: z.string().max(2000).optional(),
-    phone_number: z.string().max(20).optional(),
-  })
-  .superRefine((btn, ctx) => {
-    if (btn.type === 'URL' && !btn.url?.trim()) {
-      ctx.addIssue({ code: 'custom', message: 'URL is required for URL buttons', path: ['url'] });
-    }
-    if (btn.type === 'PHONE_NUMBER' && !btn.phone_number?.trim()) {
-      ctx.addIssue({
-        code: 'custom',
-        message: 'Phone number is required for call buttons',
-        path: ['phone_number'],
-      });
-    }
-  });
-
-const createTemplateSchema = z.object({
-  name: z
-    .string()
-    .min(1)
-    .max(512)
-    .regex(/^[a-z0-9_]+$/, 'Name must be lowercase letters, numbers, and underscores only'),
-  language: z.string().min(2).default('en_US'),
-  category: z.enum(['MARKETING', 'UTILITY', 'AUTHENTICATION']),
-  body: z.string().min(1).max(1024),
-  header: z.string().max(60).optional(),
-  footer: z.string().max(60).optional(),
-  buttons: z.array(templateButtonSchema).max(3).optional(),
+const uploadHeaderSchema = z.object({
+  data: z.string().min(1),
+  mimeType: z.string().min(1),
 });
-
-const createFromLibrarySchema = z.object({
-  name: z
-    .string()
-    .min(1)
-    .max(512)
-    .regex(/^[a-z0-9_]+$/, 'Name must be lowercase letters, numbers, and underscores only'),
-  language: z.string().min(2).default('en_US'),
-  libraryTemplateName: z.string().min(1),
-});
-
-function buildTemplateComponents(data: z.infer<typeof createTemplateSchema>) {
-  const components: Array<{
-    type: 'HEADER' | 'BODY' | 'FOOTER' | 'BUTTONS';
-    format?: 'TEXT';
-    text?: string;
-    buttons?: Array<{ type: string; text: string; url?: string; phone_number?: string }>;
-  }> = [];
-
-  if (data.header) {
-    components.push({ type: 'HEADER', format: 'TEXT', text: data.header });
-  }
-
-  components.push({ type: 'BODY', text: data.body });
-
-  if (data.footer) {
-    components.push({ type: 'FOOTER', text: data.footer });
-  }
-
-  if (data.buttons?.length) {
-    components.push({
-      type: 'BUTTONS',
-      buttons: data.buttons.map((btn) => ({
-        type: btn.type,
-        text: btn.text,
-        ...(btn.type === 'URL' && btn.url ? { url: btn.url } : {}),
-        ...(btn.type === 'PHONE_NUMBER' && btn.phone_number
-          ? { phone_number: btn.phone_number }
-          : {}),
-      })),
-    });
-  }
-
-  return components;
-}
 
 router.get(
   '/',
   authenticate,
   requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
-    const { status } = req.query;
+    const { status, after, all } = req.query;
     const { wabaId, accessToken } = await getOrgWhatsappContext(req.user!.organizationId!);
 
-    const templates = await MetaWhatsAppService.listMessageTemplates(wabaId, accessToken, {
+    if (all === 'true') {
+      const templates = await MetaWhatsAppService.listAllMessageTemplates(wabaId, accessToken, {
+        status: status as string | undefined,
+      });
+      sendSuccess(res, { templates, paging: null });
+      return;
+    }
+
+    const result = await MetaWhatsAppService.listMessageTemplates(wabaId, accessToken, {
       status: status as string | undefined,
+      after: after as string | undefined,
     });
 
-    sendSuccess(res, templates);
+    sendSuccess(res, result);
   })
 );
 
@@ -125,6 +68,17 @@ router.get(
 );
 
 router.get(
+  '/:name/usage',
+  authenticate,
+  requireOrg,
+  asyncHandler(async (req: Request, res: Response) => {
+    const name = req.params.name as string;
+    const usage = await getTemplateUsage(req.user!.organizationId!, name);
+    sendSuccess(res, usage);
+  })
+);
+
+router.get(
   '/:name',
   authenticate,
   requireOrg,
@@ -140,6 +94,24 @@ router.get(
 );
 
 router.post(
+  '/upload-header',
+  authenticate,
+  requireOrg,
+  asyncHandler(async (req: Request, res: Response) => {
+    const { data, mimeType } = uploadHeaderSchema.parse(req.body);
+    const buffer = Buffer.from(data, 'base64');
+    if (buffer.length > 16 * 1024 * 1024) {
+      throw new AppError(400, 'File too large. Maximum size is 16 MB.');
+    }
+
+    const { accessToken } = await getOrgWhatsappContext(req.user!.organizationId!);
+    const handle = await MetaWhatsAppService.uploadTemplateMedia(accessToken, buffer, mimeType);
+
+    sendSuccess(res, { handle, mimeType, size: buffer.length });
+  })
+);
+
+router.post(
   '/',
   authenticate,
   requireOrg,
@@ -151,7 +123,7 @@ router.post(
       name: data.name,
       language: data.language,
       category: data.category,
-      components: buildTemplateComponents(data),
+      components: buildCreateComponents(data),
     });
 
     sendSuccess(res, result, 201);
@@ -170,6 +142,69 @@ router.post(
       name: data.name,
       language: data.language,
       libraryTemplateName: data.libraryTemplateName,
+      libraryTemplateButtonInputs: data.libraryTemplateButtonInputs,
+    });
+
+    sendSuccess(res, result, 201);
+  })
+);
+
+router.post(
+  '/:name/test-send',
+  authenticate,
+  requireOrg,
+  asyncHandler(async (req: Request, res: Response) => {
+    const name = req.params.name as string;
+    const { phone, language, templateParams } = testSendSchema.parse(req.body);
+    const orgId = req.user!.organizationId!;
+
+    const { wabaId, accessToken, whatsappNumber } = await getOrgWhatsappContext(orgId);
+    const phoneNumberId = whatsappNumber.phoneNumberId;
+    const template = await MetaWhatsAppService.getMessageTemplate(wabaId, accessToken, name);
+    if (!template) throw new AppError(404, 'Template not found');
+    if (template.status !== 'APPROVED') {
+      throw new AppError(400, 'Only approved templates can be test-sent');
+    }
+
+    const templateLanguage = language || template.language || 'en_US';
+    const components = buildTemplateComponents(templateParams || null, template);
+
+    const result = await MetaWhatsAppService.sendMessage(phoneNumberId, accessToken, {
+      to: phone,
+      type: 'template',
+      template: {
+        name,
+        language: { code: templateLanguage },
+        ...(components.length ? { components } : {}),
+      },
+    });
+
+    sendSuccess(res, { metaMessageId: result.messages?.[0]?.id });
+  })
+);
+
+router.post(
+  '/:name/resubmit',
+  authenticate,
+  requireOrg,
+  asyncHandler(async (req: Request, res: Response) => {
+    const name = req.params.name as string;
+    const data = createTemplateSchema.parse(req.body);
+    const { wabaId, accessToken } = await getOrgWhatsappContext(req.user!.organizationId!);
+
+    const existing = await MetaWhatsAppService.getMessageTemplate(wabaId, accessToken, name);
+    if (!existing) throw new AppError(404, 'Template not found');
+    if (!['REJECTED', 'PAUSED'].includes(existing.status)) {
+      throw new AppError(400, 'Only rejected or paused templates can be resubmitted');
+    }
+
+    await MetaWhatsAppService.deleteMessageTemplate(wabaId, accessToken, name);
+
+    const result = await MetaWhatsAppService.createMessageTemplate(wabaId, accessToken, {
+      name: data.name,
+      language: data.language,
+      category: data.category,
+      components: buildCreateComponents(data),
     });
 
     sendSuccess(res, result, 201);

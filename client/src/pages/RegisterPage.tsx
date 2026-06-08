@@ -2,11 +2,11 @@ import { Building2, Lock, Mail, User } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import AuthButton from '../components/auth/AuthButton';
-import AuthError from '../components/auth/AuthError';
 import AuthInput from '../components/auth/AuthInput';
 import AuthLayout from '../components/auth/AuthLayout';
 import { useAuth } from '../contexts/AuthContext';
 import { getErrorMessage } from '../utils/errors';
+import { toastError } from '../utils/toast';
 
 function getPasswordStrength(password: string) {
   if (!password) return { label: '', width: '0%', color: 'bg-neutral-200' };
@@ -25,7 +25,6 @@ export default function RegisterPage() {
     password: '',
     companyName: '',
   });
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
@@ -37,13 +36,12 @@ export default function RegisterPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
     setLoading(true);
     try {
       await register(form);
       navigate('/');
     } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Registration failed'));
+      toastError(getErrorMessage(err, 'Registration failed'));
     } finally {
       setLoading(false);
     }
@@ -55,8 +53,6 @@ export default function RegisterPage() {
       subtitle="Start free — no credit card required."
     >
       <form onSubmit={handleSubmit} className="space-y-4">
-        {error && <AuthError message={error} />}
-
         <AuthInput
           id="name"
           label="Full name"
@@ -126,9 +122,12 @@ export default function RegisterPage() {
         </div>
       </form>
 
-      <p className="mt-6 text-center text-[13px] text-neutral-600">
+      <p className="mt-5 text-center text-[13px] text-theme-secondary">
         Already have an account?{' '}
-        <Link to="/login" className="font-semibold text-neutral-900 hover:underline">
+        <Link
+          to="/login"
+          className="font-semibold text-theme-fg underline decoration-whatsapp-500/40 underline-offset-2 transition hover:decoration-whatsapp-500"
+        >
           Sign in
         </Link>
       </p>

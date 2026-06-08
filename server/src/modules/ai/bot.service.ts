@@ -7,10 +7,11 @@ export const DEFAULT_INSTRUCTIONS = `You are a helpful WhatsApp assistant.
 - If you don't know the answer, offer to connect the customer with the team.
 - Keep replies short — suitable for WhatsApp chat.`;
 
-const HANDOFF_KEYWORDS = ['human', 'agent', 'representative', 'talk to someone', 'real person'];
+const DEFAULT_HANDOFF_KEYWORDS = ['human', 'agent', 'representative', 'talk to someone', 'real person'];
 
-export function getHandoffKeywords(): string[] {
-  return HANDOFF_KEYWORDS;
+export function getHandoffKeywords(botKeywords?: string[]): string[] {
+  if (botKeywords && botKeywords.length > 0) return botKeywords;
+  return DEFAULT_HANDOFF_KEYWORDS;
 }
 
 export async function listBots(organizationId: string) {

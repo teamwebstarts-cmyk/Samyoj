@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BookOpen, Building2, Copy, Loader2, Sparkles } from 'lucide-react';
 import AppAlert from '../ui/AppAlert';
+import { toastError, toastSuccess } from '../../utils/toast';
 import AppButton from '../ui/AppButton';
 import AppInput from '../ui/AppInput';
 import AppSelect from '../ui/AppSelect';
@@ -37,6 +38,23 @@ const LANGUAGE_OPTIONS = [
   { value: 'es', label: 'Spanish' },
 ];
 
+const INDUSTRY_OPTIONS = [
+  { value: '', label: 'All industries' },
+  { value: 'E_COMMERCE', label: 'E-commerce' },
+  { value: 'FINANCIAL_SERVICES', label: 'Financial services' },
+  { value: 'HEALTHCARE', label: 'Healthcare' },
+  { value: 'EDUCATION', label: 'Education' },
+  { value: 'TRAVEL', label: 'Travel' },
+];
+
+const USECASE_OPTIONS = [
+  { value: '', label: 'All use cases' },
+  { value: 'CONFIRMATION', label: 'Confirmation' },
+  { value: 'REMINDER', label: 'Reminder' },
+  { value: 'SHIPPING', label: 'Shipping' },
+  { value: 'ACCOUNT_UPDATE', label: 'Account update' },
+];
+
 interface TemplateLibraryPanelProps {
   onUseAsReference: (entry: TemplateLibraryEntry | MessageTemplate) => void;
   onCreated?: () => void;
@@ -56,10 +74,11 @@ export default function TemplateLibraryPanel({
   const [metaEntries, setMetaEntries] = useState<TemplateLibraryEntry[]>([]);
   const [accountEntries, setAccountEntries] = useState<MessageTemplate[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('ALL');
   const [topicFilter, setTopicFilter] = useState('');
+  const [industryFilter, setIndustryFilter] = useState('');
+  const [usecaseFilter, setUsecaseFilter] = useState('');
   const [language, setLanguage] = useState('en_US');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [createName, setCreateName] = useState('');
@@ -72,26 +91,29 @@ export default function TemplateLibraryPanel({
     const params: Record<string, string> = { language, limit: '200' };
     if (debouncedSearch) params.search = debouncedSearch;
     if (topicFilter) params.topic = topicFilter;
+    if (industryFilter) params.industry = industryFilter;
+    if (usecaseFilter) params.usecase = usecaseFilter;
 
     Promise.all([
       templateApi.library(params),
-      templateApi.list(),
+      templateApi.list({ all: 'true' }),
     ])
       .then(([libraryRes, accountRes]) => {
         setMetaEntries(Array.isArray(libraryRes.data.data) ? libraryRes.data.data : []);
-        setAccountEntries(Array.isArray(accountRes.data.data) ? accountRes.data.data : []);
-        setError('');
+        const payload = accountRes.data.data;
+        const list = Array.isArray(payload) ? payload : payload?.templates || [];
+        setAccountEntries(list);
       })
       .catch((err: unknown) => {
         const msg =
           (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
             ?.error?.message || 'Failed to load templates.';
-        setError(msg);
+        toastError(msg);
         setMetaEntries([]);
         setAccountEntries([]);
       })
       .finally(() => setLoading(false));
-  }, [debouncedSearch, language, topicFilter]);
+  }, [debouncedSearch, language, topicFilter, industryFilter, usecaseFilter]);
 
   useEffect(() => {
     load();
@@ -162,12 +184,12 @@ export default function TemplateLibraryPanel({
       });
       setCreateName('');
       onCreated?.();
-      alert('Template submitted to Meta from library. Refresh after approval.');
+      toastSuccess('Template submitted to Meta from library. Refresh after approval.');
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
           ?.error?.message || 'Failed to create from library.';
-      alert(msg);
+      toastError(msg);
     } finally {
       setCreating(false);
     }
@@ -228,22 +250,36 @@ export default function TemplateLibraryPanel({
           onChange={(e) => setCategoryFilter(e.target.value as CategoryFilter)}
         />
         {sourceTab === 'meta' && (
-          <AppSelect
-            label="Topic"
-            value={topicFilter}
-            isSearchable={false}
-            options={TOPIC_OPTIONS}
-            onChange={(e) => setTopicFilter(e.target.value)}
-          />
-        )}
-        {sourceTab === 'meta' && (
-          <AppSelect
-            label="Language"
-            value={language}
-            isSearchable={false}
-            options={LANGUAGE_OPTIONS}
-            onChange={(e) => setLanguage(e.target.value)}
-          />
+          <>
+            <AppSelect
+              label="Topic"
+              value={topicFilter}
+              isSearchable={false}
+              options={TOPIC_OPTIONS}
+              onChange={(e) => setTopicFilter(e.target.value)}
+            />
+            <AppSelect
+              label="Industry"
+              value={industryFilter}
+              isSearchable={false}
+              options={INDUSTRY_OPTIONS}
+              onChange={(e) => setIndustryFilter(e.target.value)}
+            />
+            <AppSelect
+              label="Use case"
+              value={usecaseFilter}
+              isSearchable={false}
+              options={USECASE_OPTIONS}
+              onChange={(e) => setUsecaseFilter(e.target.value)}
+            />
+            <AppSelect
+              label="Language"
+              value={language}
+              isSearchable={false}
+              options={LANGUAGE_OPTIONS}
+              onChange={(e) => setLanguage(e.target.value)}
+            />
+          </>
         )}
         <div className="flex items-end sm:col-span-2 lg:col-span-1">
           <SearchInput
@@ -258,12 +294,6 @@ export default function TemplateLibraryPanel({
         <AppAlert variant="info" className="mt-4">
           Marketing templates are not in Meta&apos;s library. Switch to <strong>Your templates</strong>{' '}
           tab or set category to All / Utility / Authentication.
-        </AppAlert>
-      )}
-
-      {error && (
-        <AppAlert variant="error" className="mt-4">
-          {error}
         </AppAlert>
       )}
 
@@ -331,6 +361,7 @@ export default function TemplateLibraryPanel({
               <div className="min-h-0 flex-1 overflow-y-auto rounded-xl">
                 <WhatsAppTemplatePreview
                   header={preview.header}
+                  headerFormat={preview.headerFormat}
                   body={preview.body}
                   footer={preview.footer}
                   buttons={preview.buttons}

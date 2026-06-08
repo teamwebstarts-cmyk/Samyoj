@@ -44,13 +44,13 @@ export function PlatformBrand({ variant = 'dark', size = 'md', collapsed = false
         <p
           className={`truncate font-bold tracking-[-0.02em] ${
             size === 'sm' ? 'text-[13px]' : 'text-sm'
-          } ${isLight ? 'text-white' : 'text-neutral-900'}`}
+          } ${isLight ? 'text-white' : 'text-theme-fg'}`}
         >
           {PLATFORM_NAME}
         </p>
         <p
           className={`truncate text-[11px] font-medium ${
-            isLight ? 'text-emerald-50' : 'text-neutral-600'
+            isLight ? 'text-emerald-50' : 'text-theme-secondary'
           }`}
         >
           {PLATFORM_TAGLINE}

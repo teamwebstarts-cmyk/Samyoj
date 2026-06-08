@@ -1,0 +1,177 @@
+/* ── React Flow canvas overrides ── */
+
+.flow-canvas .react-flow__background {
+  background-color: #f4f7f5;
+}
+
+.dark .flow-canvas .react-flow__background {
+  background-color: #0f1724;
+}
+
+.flow-canvas .react-flow__pane {
+  cursor: grab;
+}
+
+.flow-canvas .react-flow__pane:active {
+  cursor: grabbing;
+}
+
+/* Handles — large hit area, smooth hover */
+.flow-canvas .react-flow__handle.flow-handle {
+  width: 14px !important;
+  height: 14px !important;
+  min-width: 14px !important;
+  min-height: 14px !important;
+  border: 3px solid #fff !important;
+  border-radius: 50% !important;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.18);
+  transition:
+    transform 0.18s cubic-bezier(0.34, 1.4, 0.64, 1),
+    box-shadow 0.18s ease,
+    background-color 0.18s ease;
+  z-index: 10;
+}
+
+.flow-canvas .react-flow__handle.flow-handle::after {
+  content: '';
+  position: absolute;
+  inset: -14px;
+  border-radius: 50%;
+}
+
+.flow-canvas .react-flow__handle.flow-handle:hover {
+  transform: translate(-50%, -50%) scale(1.4) !important;
+}
+
+.flow-canvas .react-flow__handle.flow-handle--target {
+  background: #8b5cf6 !important;
+  top: -7px !important;
+}
+
+.flow-canvas .react-flow__handle.flow-handle--target:hover {
+  box-shadow: 0 0 0 8px rgba(139, 92, 246, 0.18);
+}
+
+.flow-canvas .react-flow__handle.flow-handle--source {
+  background: #25d366 !important;
+  bottom: -7px !important;
+}
+
+.flow-canvas .react-flow__handle.flow-handle--source:hover {
+  box-shadow: 0 0 0 8px rgba(37, 211, 102, 0.22);
+}
+
+.flow-canvas .react-flow__handle.flow-handle--trigger {
+  background: #7c3aed !important;
+  bottom: -7px !important;
+}
+
+.flow-canvas .react-flow__handle.flow-handle--trigger:hover {
+  box-shadow: 0 0 0 8px rgba(124, 58, 237, 0.2);
+}
+
+.flow-canvas .react-flow__handle.flow-handle--branch {
+  background: #0ea5e9 !important;
+  bottom: -7px !important;
+}
+
+.flow-canvas .react-flow__handle.flow-handle--branch:hover {
+  box-shadow: 0 0 0 8px rgba(14, 165, 233, 0.2);
+}
+
+.flow-canvas .react-flow__handle.connecting,
+.flow-canvas .react-flow__handle.valid {
+  transform: translate(-50%, -50%) scale(1.5) !important;
+  box-shadow: 0 0 0 10px rgba(37, 211, 102, 0.25) !important;
+}
+
+/* Connection line while dragging */
+.flow-canvas .react-flow__connection-path {
+  stroke: #25d366 !important;
+  stroke-width: 2.5px !important;
+  stroke-dasharray: 6 4;
+  animation: flow-dash 0.4s linear infinite;
+}
+
+@keyframes flow-dash {
+  to {
+    stroke-dashoffset: -10;
+  }
+}
+
+/* Edges */
+.flow-canvas .react-flow__edge-path {
+  stroke-linecap: round;
+  transition: stroke 0.15s ease, stroke-width 0.15s ease;
+}
+
+.flow-canvas .react-flow__edge:hover .react-flow__edge-path {
+  stroke-width: 3px !important;
+}
+
+.flow-canvas .react-flow__edge.selected .react-flow__edge-path {
+  stroke: #25d366 !important;
+  stroke-width: 3px !important;
+}
+
+.flow-canvas .react-flow__edge-text {
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  fill: #64748b !important;
+}
+
+/* Controls & minimap */
+.flow-canvas .react-flow__controls {
+  border-radius: 14px !important;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08) !important;
+  border: 1px solid rgba(226, 232, 240, 0.9) !important;
+}
+
+.dark .flow-canvas .react-flow__controls {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35) !important;
+  border: 1px solid rgba(51, 65, 85, 0.7) !important;
+  background: #151d2b !important;
+}
+
+.flow-canvas .react-flow__controls-button {
+  border-bottom: 1px solid #f1f5f9 !important;
+  width: 32px !important;
+  height: 32px !important;
+}
+
+.dark .flow-canvas .react-flow__controls-button {
+  border-bottom: 1px solid #1e293b !important;
+  background: #151d2b !important;
+  color: #94a3b8 !important;
+  fill: #94a3b8 !important;
+}
+
+.flow-canvas .react-flow__controls-button:hover {
+  background: #f0fdf4 !important;
+}
+
+.dark .flow-canvas .react-flow__controls-button:hover {
+  background: #1a2e24 !important;
+}
+
+.flow-canvas .react-flow__minimap {
+  border-radius: 14px !important;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08) !important;
+  border: 1px solid rgba(226, 232, 240, 0.9) !important;
+}
+
+.dark .flow-canvas .react-flow__minimap {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35) !important;
+  border: 1px solid rgba(51, 65, 85, 0.7) !important;
+  background: #151d2b !important;
+}
+
+/* Node selection ring via RF */
+.flow-canvas .react-flow__node.selected .flow-step-card {
+  border-color: #4ade80;
+  box-shadow:
+    0 0 0 3px rgba(74, 222, 128, 0.2),
+    0 12px 32px rgba(37, 211, 102, 0.18);
+}

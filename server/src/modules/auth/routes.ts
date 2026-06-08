@@ -7,6 +7,7 @@ import { authenticate } from '../../middleware/auth';
 import { AppError, sendSuccess, asyncHandler } from '../../utils/response';
 import { config } from '../../config';
 import { z } from 'zod';
+import { verifyTotp } from '../team/totp';
 
 const router = Router();
 
@@ -20,7 +21,31 @@ const registerSchema = z.object({
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string(),
+  totpCode: z.string().length(6).optional(),
 });
+
+async function createSession(
+  userId: string,
+  email: string,
+  organizationId: string | undefined,
+  req: Request
+) {
+  const payload = { userId, email, organizationId };
+  const accessToken = signAccessToken(payload);
+  const refreshToken = signRefreshToken(payload);
+
+  await prisma.refreshToken.create({
+    data: {
+      token: refreshToken,
+      userId,
+      expiresAt: parseExpiry(config.jwt.refreshExpiresIn),
+      userAgent: req.headers['user-agent']?.slice(0, 255) ?? null,
+      ipAddress: (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ?? req.ip ?? null,
+    },
+  });
+
+  return { accessToken, refreshToken };
+}
 
 router.post(
   '/register',
@@ -116,22 +141,41 @@ router.post(
     }
 
     const orgMembership = user.organizations[0];
-    const payload = {
-      userId: user.id,
-      email: user.email,
-      organizationId: orgMembership?.organizationId,
-    };
 
-    const accessToken = signAccessToken(payload);
-    const refreshToken = signRefreshToken(payload);
+    if (orgMembership) {
+      const membership = await prisma.organizationUser.findUnique({
+        where: {
+          organizationId_userId: {
+            organizationId: orgMembership.organizationId,
+            userId: user.id,
+          },
+        },
+      });
 
-    await prisma.refreshToken.create({
-      data: {
-        token: refreshToken,
-        userId: user.id,
-        expiresAt: parseExpiry(config.jwt.refreshExpiresIn),
-      },
-    });
+      if (membership?.twoFactorEnabled) {
+        if (!data.totpCode) {
+          sendSuccess(res, { requires2FA: true, email: user.email });
+          return;
+        }
+        if (!membership.twoFactorSecret || !verifyTotp(membership.twoFactorSecret, data.totpCode)) {
+          throw new AppError(401, 'Invalid two-factor code');
+        }
+      }
+
+      if (membership) {
+        await prisma.organizationUser.update({
+          where: { id: membership.id },
+          data: { lastActiveAt: new Date(), availability: 'ONLINE' },
+        });
+      }
+    }
+
+    const { accessToken, refreshToken } = await createSession(
+      user.id,
+      user.email,
+      orgMembership?.organizationId,
+      req
+    );
 
     sendSuccess(res, {
       user: { id: user.id, name: user.name, email: user.email, role: user.role },
@@ -159,7 +203,7 @@ router.post(
       include: { user: { include: { organizations: { take: 1 } } } },
     });
 
-    if (!stored || stored.expiresAt < new Date()) {
+    if (!stored || stored.expiresAt < new Date() || stored.revokedAt) {
       throw new AppError(401, 'Invalid refresh token');
     }
 
@@ -192,11 +236,25 @@ router.get(
 
     if (!user) throw new AppError(404, 'User not found');
 
+    const orgMembership = user.organizations[0];
+    const membership = orgMembership
+      ? await prisma.organizationUser.findUnique({
+          where: {
+            organizationId_userId: {
+              organizationId: orgMembership.organizationId,
+              userId: user.id,
+            },
+          },
+        })
+      : null;
+
     sendSuccess(res, {
       id: user.id,
       name: user.name,
       email: user.email,
       role: user.role,
+      availability: membership?.availability ?? 'OFFLINE',
+      twoFactorEnabled: membership?.twoFactorEnabled ?? false,
       organizations: user.organizations.map((o) => ({
         id: o.organization.id,
         companyName: o.organization.companyName,

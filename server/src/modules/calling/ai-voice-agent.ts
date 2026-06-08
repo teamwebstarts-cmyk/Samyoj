@@ -1,5 +1,5 @@
 import prisma from '../../config/database';
-import { config } from '../../config';
+import { unregisterActiveCall } from './session-store';
 import { createModuleLogger } from '../../utils/logger';
 import { emitToOrg } from '../../realtime';
 import { generateBotReply, performHandoff } from '../ai/chatbot.service';
@@ -69,7 +69,10 @@ export class AiVoiceCallSession {
       },
     });
 
-    await this.speak(config.calling.aiGreeting, 'system');
+    if (this.ctx.consentMessage) {
+      await this.speak(this.ctx.consentMessage, 'system');
+    }
+    await this.speak(this.ctx.greeting || 'Hello! How can I help you today?', 'system');
     log.info('AI voice call session started', { callId: this.ctx.callId });
   }
 
@@ -118,7 +121,17 @@ export class AiVoiceCallSession {
       }
 
       if (result.handoff) {
-        await performHandoff(this.ctx.organizationId, this.ctx.conversationId, result.handoffReason || 'VOICE_HANDOFF');
+        const handoff = await performHandoff(
+          this.ctx.organizationId,
+          this.ctx.conversationId,
+          result.handoffReason || 'VOICE_HANDOFF'
+        );
+        if (handoff?.assignedAgent?.id) {
+          await prisma.call.update({
+            where: { id: this.ctx.callId },
+            data: { assignedAgentId: handoff.assignedAgent.id },
+          });
+        }
         await this.speak(
           'I am connecting you with our team. They will follow up with you shortly. Thank you for calling.',
           'assistant'
@@ -141,7 +154,10 @@ export class AiVoiceCallSession {
     await this.appendTranscript(role, text);
 
     try {
-      const audio = await synthesizeSpeech(text);
+      const audio = await synthesizeSpeech(text, {
+        voice: this.ctx.ttsVoice,
+        language: this.ctx.ttsLanguage,
+      });
       await this.bridge.playPcm(audio.samples, audio.sampleRate);
     } finally {
       this.speaking = false;
@@ -196,6 +212,8 @@ export class AiVoiceCallSession {
     this.bridge?.close();
     this.transcriber = null;
     this.bridge = null;
+
+    await unregisterActiveCall(this.ctx.metaCallId, this.ctx.organizationId);
 
     await prisma.call.update({
       where: { id: this.ctx.callId },

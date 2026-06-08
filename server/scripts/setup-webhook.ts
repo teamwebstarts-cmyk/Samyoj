@@ -34,14 +34,53 @@ async function main() {
   logger.info('Registering webhook', { webhookUrl: config.meta.webhookUrl });
   await waitForWebhookReachable(config.meta.webhookUrl);
 
-  const number = await prisma.whatsappNumber.findFirst({ where: { isActive: true } });
-  if (!number) throw new Error('No active WhatsApp number — connect WhatsApp in Settings first');
+  const numbers = await prisma.whatsappNumber.findMany({
+    where: { isActive: true },
+    orderBy: { createdAt: 'desc' },
+  });
+  if (numbers.length === 0) {
+    throw new Error('No active WhatsApp number — connect WhatsApp in Settings first');
+  }
 
-  const token = MetaWhatsAppService.decryptToken(number.accessToken);
-  const result = await MetaWhatsAppService.configureWebhooks(number.wabaId, token);
-  const status = await MetaWhatsAppService.getWebhookStatus(number.wabaId, token);
+  let subscribedCount = 0;
+  const failures: Array<{ phoneNumber: string; wabaId: string; error: string }> = [];
 
-  logger.info('Webhook setup complete', { ...result, subscribed: status.subscribed });
+  for (const number of numbers) {
+    const token = MetaWhatsAppService.decryptToken(number.accessToken);
+    try {
+      await MetaWhatsAppService.ensureWabaSubscribed(number.wabaId, token);
+      subscribedCount++;
+      logger.info('WABA linked to app', {
+        phoneNumber: number.phoneNumber,
+        wabaId: number.wabaId,
+      });
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      failures.push({ phoneNumber: number.phoneNumber, wabaId: number.wabaId, error });
+      logger.warn('WABA subscription skipped', {
+        phoneNumber: number.phoneNumber,
+        wabaId: number.wabaId,
+        error,
+      });
+    }
+  }
+
+  if (subscribedCount === 0) {
+    throw new Error(
+      'Could not link any WhatsApp Business Account to this app. ' +
+        'Disconnect and reconnect WhatsApp in Settings for each number, ' +
+        'and ensure your Meta user is an admin on the WABA.'
+    );
+  }
+
+  await MetaWhatsAppService.registerAppWebhook(config.meta.webhookUrl);
+
+  logger.info('Webhook setup complete', {
+    callbackUrl: config.meta.webhookUrl,
+    subscribedWabas: subscribedCount,
+    skippedWabas: failures.length,
+    failures: failures.length > 0 ? failures : undefined,
+  });
 }
 
 main()

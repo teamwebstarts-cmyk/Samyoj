@@ -92,6 +92,37 @@ export class WhatsAppWebRtcBridge {
     this.onAudioFrame = handler;
   }
 
+  async createOffer(): Promise<string> {
+    this.pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+
+    this.audioSource = new RTCAudioSource();
+    const outboundTrack = this.audioSource.createTrack();
+    this.pc.addTrack(outboundTrack);
+
+    this.pc.ontrack = (event: { track: MediaStreamTrack; streams: MediaStream[] }) => {
+      const [track] = event.streams[0]?.getAudioTracks() || [event.track];
+      if (!track) return;
+
+      this.audioSink?.stop();
+      this.audioSink = new RTCAudioSink(track);
+      this.audioSink.ondata = (data: AudioSinkData) => {
+        const samples = normalizeInboundSamples(data);
+        this.inboundFrames += 1;
+        this.onAudioFrame?.(samples, data.sampleRate);
+      };
+    };
+
+    const offer = await (this.pc as unknown as { createOffer: () => Promise<{ type: string; sdp?: string }> }).createOffer();
+    await this.pc.setLocalDescription(offer);
+    await waitForIceGathering(this.pc);
+
+    const localSdp = this.pc.localDescription?.sdp;
+    if (!localSdp) throw new Error('Failed to generate WebRTC SDP offer');
+
+    this.startPlaybackLoop();
+    return normalizeSdpFingerprint(localSdp);
+  }
+
   async createAnswerFromOffer(sdpOffer: string): Promise<string> {
     this.pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
 

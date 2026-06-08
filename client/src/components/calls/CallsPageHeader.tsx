@@ -1,4 +1,5 @@
-import { Headphones, PhoneCall } from 'lucide-react';
+import { BarChart3, Headphones, PhoneCall } from 'lucide-react';
+import AppButton from '../ui/AppButton';
 
 interface CallsPageHeaderProps {
   phoneNumber?: string | null;
@@ -6,6 +7,8 @@ interface CallsPageHeaderProps {
   liveCount: number;
   callsToday: number;
   totalCalls: number;
+  showAnalytics?: boolean;
+  onToggleAnalytics?: () => void;
 }
 
 export default function CallsPageHeader({
@@ -14,6 +17,8 @@ export default function CallsPageHeader({
   liveCount,
   callsToday,
   totalCalls,
+  showAnalytics,
+  onToggleAnalytics,
 }: CallsPageHeaderProps) {
   const stats = [
     { label: 'Status', value: isReady ? 'Live' : 'Setup', tone: isReady ? 'text-whatsapp-600' : 'text-amber-700' },
@@ -56,6 +61,17 @@ export default function CallsPageHeader({
           </p>
         </div>
 
+        <div className="flex flex-col items-stretch gap-2 sm:items-end">
+        {onToggleAnalytics && (
+          <AppButton
+            variant={showAnalytics ? 'primary' : 'secondary'}
+            size="sm"
+            onClick={onToggleAnalytics}
+          >
+            <BarChart3 className="h-4 w-4" />
+            Analytics
+          </AppButton>
+        )}
         <div className="grid grid-cols-4 gap-2 sm:gap-3">
           {stats.map((item) => (
             <div
@@ -70,6 +86,7 @@ export default function CallsPageHeader({
               </p>
             </div>
           ))}
+        </div>
         </div>
       </div>
     </div>

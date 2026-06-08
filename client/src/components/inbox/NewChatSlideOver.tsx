@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Phone, User } from 'lucide-react';
 import AppAlert from '../ui/AppAlert';
 import AppInput from '../ui/AppInput';
+import { toastError } from '../../utils/toast';
 import SlideOver, { SlideOverFooter } from '../ui/SlideOver';
 import { PHONE_HINT, PHONE_PLACEHOLDER, validatePhone } from '../../utils/phone';
 
@@ -15,12 +16,9 @@ export default function NewChatSlideOver({ open, onClose, onStart }: NewChatSlid
   const [phone, setPhone] = useState('');
   const [name, setName] = useState('');
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-
   const reset = () => {
     setPhone('');
     setName('');
-    setError('');
   };
 
   const handleClose = () => {
@@ -32,12 +30,11 @@ export default function NewChatSlideOver({ open, onClose, onStart }: NewChatSlid
     e.preventDefault();
     const result = validatePhone(phone);
     if (!result.ok) {
-      setError(result.error);
+      toastError(result.error);
       return;
     }
 
     setSaving(true);
-    setError('');
     try {
       await onStart(result.phone, name.trim() || undefined);
       reset();
@@ -45,7 +42,7 @@ export default function NewChatSlideOver({ open, onClose, onStart }: NewChatSlid
       const msg =
         (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
           ?.message || 'Could not start chat';
-      setError(msg);
+      toastError(msg);
     } finally {
       setSaving(false);
     }
@@ -66,8 +63,6 @@ export default function NewChatSlideOver({ open, onClose, onStart }: NewChatSlid
       }
     >
       <form id="slideover-form" onSubmit={handleSubmit} className="space-y-4">
-        {error && <AppAlert variant="error">{error}</AppAlert>}
-
         <AppInput
           label="Phone number"
           hint={PHONE_HINT}

@@ -11,7 +11,7 @@ export default function AuthButton({ loading, loadingText, children }: AuthButto
     <button
       type="submit"
       disabled={loading}
-      className="flex h-11 w-full items-center justify-center gap-2 rounded-[10px] bg-neutral-900 text-[14px] font-semibold text-white transition hover:bg-neutral-800 focus:outline-none focus:ring-4 focus:ring-neutral-900/15 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+      className="auth-btn-primary flex h-12 w-full items-center justify-center gap-2 rounded-xl text-[14px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
     >
       {loading && (
         <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/25 border-t-white" />

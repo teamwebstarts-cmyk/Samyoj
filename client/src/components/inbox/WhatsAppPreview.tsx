@@ -7,7 +7,7 @@ export type WhatsAppBubbleDirection = 'inbound' | 'outbound';
 
 type MessageStatus = 'sent' | 'delivered' | 'read' | 'failed';
 
-function StatusIcon({ status, compact }: { status?: MessageStatus; compact?: boolean }) {
+export function StatusIcon({ status, compact }: { status?: MessageStatus; compact?: boolean }) {
   const size = compact ? 'h-2.5 w-2.5' : 'h-3 w-3';
 
   if (status === 'failed') {
@@ -128,9 +128,25 @@ function ButtonIcon({ type }: { type: string }) {
   return null;
 }
 
+function MediaHeaderPlaceholder({ format, compact }: { format: string; compact?: boolean }) {
+  const label =
+    format === 'VIDEO' ? 'Video header' : format === 'DOCUMENT' ? 'Document header' : 'Image header';
+  return (
+    <div
+      className={`flex items-center justify-center bg-gradient-to-br from-neutral-100 to-neutral-200/80 text-neutral-500 ${
+        compact ? 'h-28' : 'h-36'
+      }`}
+    >
+      <span className={`font-semibold ${compact ? 'text-[11px]' : 'text-[12px]'}`}>{label}</span>
+    </div>
+  );
+}
+
 /** WhatsApp template message card (white bubble + stacked action buttons). */
 export function WhatsAppTemplateCard({
   header,
+  headerFormat,
+  headerMediaUrl,
   body,
   footer,
   buttons = [],
@@ -139,6 +155,8 @@ export function WhatsAppTemplateCard({
   time = '12:30',
 }: {
   header?: string;
+  headerFormat?: string;
+  headerMediaUrl?: string;
   body: string;
   footer?: string;
   buttons?: TemplateButton[];
@@ -146,6 +164,9 @@ export function WhatsAppTemplateCard({
   className?: string;
   time?: string;
 }) {
+  const hasMediaHeader =
+    headerFormat && headerFormat !== 'TEXT' && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerFormat);
+
   return (
     <div className={`flex justify-end ${className}`}>
       <div
@@ -153,6 +174,14 @@ export function WhatsAppTemplateCard({
           compact ? 'w-full max-w-[280px]' : 'w-full max-w-[min(100%,340px)]'
         }`}
       >
+        {hasMediaHeader && (
+          headerMediaUrl && headerFormat === 'IMAGE' ? (
+            <img src={headerMediaUrl} alt="" className={`w-full object-cover ${compact ? 'h-28' : 'h-36'}`} />
+          ) : (
+            <MediaHeaderPlaceholder format={headerFormat!} compact={compact} />
+          )
+        )}
+
         <div className={compact ? 'px-2.5 pt-2.5 pb-1' : 'px-3.5 pt-3 pb-1.5'}>
           {header && (
             <p
@@ -264,8 +293,12 @@ export function WhatsAppMessagePreview({
 
 export function getTemplateParts(template: MessageTemplate | TemplateLibraryEntry) {
   const components = 'components' in template ? template.components ?? [] : [];
+  const headerComponent = components.find((c) => c.type === 'HEADER') as
+    | { text?: string; format?: string }
+    | undefined;
   const header =
-    template.header ?? components.find((c) => c.type === 'HEADER')?.text;
+    template.header ?? headerComponent?.text;
+  const headerFormat = headerComponent?.format?.toUpperCase();
   let bodyText =
     template.body?.trim() ?? components.find((c) => c.type === 'BODY')?.text?.trim();
   const footer =
@@ -279,6 +312,7 @@ export function getTemplateParts(template: MessageTemplate | TemplateLibraryEntr
 
   return {
     header,
+    headerFormat,
     body: bodyText || '—',
     footer,
     buttons: getTemplateButtons(template),
@@ -288,6 +322,8 @@ export function getTemplateParts(template: MessageTemplate | TemplateLibraryEntr
 
 interface WhatsAppTemplatePreviewProps {
   header?: string;
+  headerFormat?: string;
+  headerMediaUrl?: string;
   body: string;
   footer?: string;
   buttons?: TemplateButton[];
@@ -297,6 +333,8 @@ interface WhatsAppTemplatePreviewProps {
 
 export function WhatsAppTemplatePreview({
   header,
+  headerFormat,
+  headerMediaUrl,
   body,
   footer,
   buttons = [],
@@ -309,6 +347,8 @@ export function WhatsAppTemplatePreview({
     <WhatsAppChatSurface compact={compact} className={className}>
       <WhatsAppTemplateCard
         header={header}
+        headerFormat={headerFormat}
+        headerMediaUrl={headerMediaUrl}
         body={body}
         footer={footer}
         buttons={buttons}

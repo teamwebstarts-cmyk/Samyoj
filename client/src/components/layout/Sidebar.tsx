@@ -84,10 +84,10 @@ function NavItem({
           isActive
             ? collapsed
               ? 'bg-whatsapp-500 text-white shadow-[0_2px_8px_rgba(37,211,102,0.35)]'
-              : 'border-l-[3px] border-whatsapp-500 bg-emerald-50 pl-[9px] text-whatsapp-900'
+              : 'border-l-[3px] border-whatsapp-500 bg-whatsapp-500/10 pl-[9px] text-whatsapp-700 dark:text-whatsapp-300'
             : collapsed
-              ? 'text-neutral-800 hover:bg-neutral-100'
-              : 'border-l-[3px] border-transparent text-neutral-800 hover:bg-neutral-100'
+              ? 'text-theme-secondary hover:bg-theme-subtle hover:text-theme-fg'
+              : 'border-l-[3px] border-transparent text-theme-secondary hover:bg-theme-subtle hover:text-theme-fg'
         }`
       }
     >
@@ -111,9 +111,8 @@ export default function Sidebar({
   showClose,
 }: SidebarProps) {
   return (
-    <div className="flex h-full flex-col bg-white">
-      {/* Header: brand + collapse/close */}
-      <div className={`shrink-0 border-b border-neutral-200 ${collapsed ? 'px-2 py-3' : 'px-3 py-3'}`}>
+    <div className="flex h-full flex-col bg-theme-surface">
+      <div className={`shrink-0 border-b border-theme-border ${collapsed ? 'px-2 py-3' : 'px-3 py-3'}`}>
         {collapsed ? (
           <div className="flex flex-col items-center gap-2">
             {collapsible && onToggleCollapse && (
@@ -121,7 +120,7 @@ export default function Sidebar({
                 type="button"
                 onClick={onToggleCollapse}
                 title="Expand sidebar"
-                className="flex h-9 w-9 items-center justify-center rounded-lg border border-neutral-200 text-neutral-700 transition hover:bg-neutral-100"
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-theme-border text-theme-secondary transition hover:bg-theme-subtle hover:text-theme-fg"
               >
                 <PanelLeftOpen className="h-[18px] w-[18px]" />
               </button>
@@ -137,7 +136,7 @@ export default function Sidebar({
                   type="button"
                   onClick={onToggleCollapse}
                   title="Collapse sidebar"
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-neutral-200 text-neutral-700 transition hover:bg-neutral-100"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-theme-border text-theme-secondary transition hover:bg-theme-subtle hover:text-theme-fg"
                 >
                   <PanelLeftClose className="h-[18px] w-[18px]" />
                 </button>
@@ -146,7 +145,7 @@ export default function Sidebar({
                 <button
                   type="button"
                   onClick={onClose}
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-neutral-200 text-neutral-700 transition hover:bg-neutral-100"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-theme-border text-theme-secondary transition hover:bg-theme-subtle hover:text-theme-fg"
                   aria-label="Close menu"
                 >
                   <X className="h-4 w-4" />
@@ -157,7 +156,6 @@ export default function Sidebar({
         )}
       </div>
 
-      {/* Navigation */}
       <nav className={`flex-1 overflow-y-auto ${collapsed ? 'px-2 py-3' : 'px-3 py-4'}`}>
         {collapsed ? (
           <div className="flex flex-col items-center gap-1">
@@ -171,7 +169,7 @@ export default function Sidebar({
           <div className="space-y-5">
             {navSections.map(({ label, items }) => (
               <div key={label}>
-                <p className="mb-2 px-3 text-[11px] font-bold uppercase tracking-wider text-neutral-500">
+                <p className="mb-2 px-3 text-[11px] font-bold uppercase tracking-wider text-theme-muted">
                   {label}
                 </p>
                 <div className="space-y-0.5">
@@ -185,13 +183,12 @@ export default function Sidebar({
         )}
       </nav>
 
-      {/* Footer: logout */}
-      <div className={`shrink-0 border-t border-neutral-200 ${collapsed ? 'p-2' : 'p-3'}`}>
+      <div className={`shrink-0 border-t border-theme-border ${collapsed ? 'p-2' : 'p-3'}`}>
         <button
           type="button"
           onClick={onLogout}
           title={collapsed ? 'Log out' : undefined}
-          className={`inline-flex h-10 items-center justify-center rounded-lg border border-neutral-200 bg-white text-[13px] font-semibold text-neutral-800 transition hover:border-red-200 hover:bg-red-50 hover:text-red-700 ${
+          className={`inline-flex h-10 items-center justify-center rounded-lg border border-theme-border bg-theme-surface text-[13px] font-semibold text-theme-secondary transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 dark:hover:border-red-500/30 dark:hover:bg-red-500/10 dark:hover:text-red-400 ${
             collapsed ? 'mx-auto w-10' : 'w-full gap-2'
           }`}
         >

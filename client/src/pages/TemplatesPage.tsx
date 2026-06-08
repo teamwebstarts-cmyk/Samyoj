@@ -1,89 +1,132 @@
-import { useEffect, useMemo, useState } from 'react';
-import { BookOpen, Eye, FileText, Plus, RefreshCw } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  BookOpen,
+  FileText,
+  Layers,
+  Plus,
+  RefreshCw,
+  Settings,
+} from 'lucide-react';
 import AppAlert from '../components/ui/AppAlert';
 import AppButton from '../components/ui/AppButton';
-import AppInput from '../components/ui/AppInput';
 import AppSelect from '../components/ui/AppSelect';
-import AppTextarea from '../components/ui/AppTextarea';
-import DataTable, { TableSerialCell } from '../components/ui/DataTable';
+import TemplateTable, { type TemplateTableRow } from '../components/templates/TemplateTable';
 import EmptyState from '../components/ui/EmptyState';
 import ListToolbar from '../components/ui/ListToolbar';
 import LoadingState from '../components/ui/LoadingState';
 import PageHeader from '../components/ui/PageHeader';
 import PageHero from '../components/ui/PageHero';
 import PageShell from '../components/ui/PageShell';
-import RowActions from '../components/ui/RowActions';
-import { TableIconButton } from '../components/ui/TableActions';
 import SlideOver, { SlideOverFooter } from '../components/ui/SlideOver';
-import StatusBadge from '../components/ui/StatusBadge';
+import TemplateCreateForm from '../components/templates/TemplateCreateForm';
+import TemplateDetailPanel from '../components/templates/TemplateDetailPanel';
+import TemplateLibraryPanel from '../components/templates/TemplateLibraryPanel';
 import { DEFAULT_PAGE_SIZE } from '../constants/pagination';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
-import {
-  getTemplateParts,
-  WhatsAppTemplatePreview,
-} from '../components/inbox/WhatsAppPreview';
-import TemplateButtonEditor from '../components/templates/TemplateButtonEditor';
-import TemplateLibraryPanel from '../components/templates/TemplateLibraryPanel';
-import { templateApi } from '../services/api';
-import { getTemplateRejectedReason } from '../utils/templateUtils';
+import { getTemplateParts } from '../components/inbox/WhatsAppPreview';
+import { templateApi, whatsappApi } from '../services/api';
 import {
   buildCreatePayload,
+  duplicateTemplateForm,
   emptyTemplateForm,
   formFromLibraryEntry,
   formFromMessageTemplate,
   type TemplateFormState,
 } from '../utils/templateForm';
+import {
+  CATEGORY_OPTIONS,
+  groupTemplatesByName,
+  LANGUAGE_OPTIONS,
+  validateTemplateForm,
+} from '../utils/templateUtils';
 import type { MessageTemplate, TemplateLibraryEntry } from '../types';
-
-const categories = ['UTILITY', 'MARKETING', 'AUTHENTICATION'] as const;
+import { toastError, toastSuccess } from '../utils/toast';
 
 const ALL_STATUSES = '__all__';
+const ALL_CATEGORIES = '__all__';
+const ALL_LANGUAGES = '__all__';
 
 const statusFilterOptions = [
   { value: ALL_STATUSES, label: 'All statuses' },
   { value: 'APPROVED', label: 'Approved' },
   { value: 'PENDING', label: 'Pending' },
   { value: 'REJECTED', label: 'Rejected' },
+  { value: 'PAUSED', label: 'Paused' },
 ];
 
+const PENDING_POLL_MS = 30_000;
+
 export default function TemplatesPage() {
+  const navigate = useNavigate();
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [whatsappConnected, setWhatsappConnected] = useState<boolean | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
   const [viewing, setViewing] = useState<MessageTemplate | null>(null);
   const [form, setForm] = useState<TemplateFormState>(emptyTemplateForm);
+  const [formMode, setFormMode] = useState<'create' | 'resubmit'>('create');
+  const [resubmitName, setResubmitName] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState(ALL_STATUSES);
+  const [categoryFilter, setCategoryFilter] = useState(ALL_CATEGORIES);
+  const [languageFilter, setLanguageFilter] = useState(ALL_LANGUAGES);
+  const [groupView, setGroupView] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
 
   const debouncedSearch = useDebouncedValue(search);
 
-  const load = () => {
-    setLoading(true);
-    templateApi
-      .list(statusFilter !== ALL_STATUSES ? { status: statusFilter } : undefined)
+  const checkWhatsapp = useCallback(() => {
+    whatsappApi
+      .numbers()
       .then(({ data }) => {
-        setTemplates(Array.isArray(data.data) ? data.data : []);
-        setError('');
+        const numbers = Array.isArray(data.data) ? data.data : data.data?.numbers || [];
+        setWhatsappConnected(numbers.length > 0);
+      })
+      .catch(() => setWhatsappConnected(false));
+  }, []);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    const params: Record<string, string> = { all: 'true' };
+    if (statusFilter !== ALL_STATUSES) params.status = statusFilter;
+
+    templateApi
+      .list(params)
+      .then(({ data }) => {
+        const payload = data.data;
+        const list = Array.isArray(payload) ? payload : payload?.templates || [];
+        setTemplates(list);
       })
       .catch((err: unknown) => {
         const msg =
           (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
             ?.error?.message || 'Failed to load templates.';
-        setError(msg);
+        toastError(msg);
+        setTemplates([]);
       })
       .finally(() => setLoading(false));
-  };
+  }, [statusFilter]);
 
-  useEffect(load, [statusFilter]);
+  useEffect(() => {
+    checkWhatsapp();
+    load();
+  }, [checkWhatsapp, load]);
+
+  useEffect(() => {
+    const hasPending = templates.some((t) => t.status === 'PENDING');
+    if (!hasPending) return;
+    const timer = setInterval(load, PENDING_POLL_MS);
+    return () => clearInterval(timer);
+  }, [templates, load]);
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, statusFilter]);
+  }, [debouncedSearch, statusFilter, categoryFilter, languageFilter, groupView]);
 
   const stats = useMemo(
     () => ({
@@ -97,6 +140,8 @@ export default function TemplatesPage() {
 
   const openCreate = () => {
     setForm(emptyTemplateForm);
+    setFormMode('create');
+    setResubmitName(null);
     setCreateOpen(true);
   };
 
@@ -105,30 +150,61 @@ export default function TemplatesPage() {
     setViewOpen(true);
   };
 
+  const openDuplicate = (template: MessageTemplate) => {
+    setForm(duplicateTemplateForm(template));
+    setFormMode('create');
+    setResubmitName(null);
+    setViewOpen(false);
+    setCreateOpen(true);
+  };
+
+  const openResubmit = (template: MessageTemplate) => {
+    setForm(formFromMessageTemplate(template));
+    setFormMode('resubmit');
+    setResubmitName(template.name);
+    setViewOpen(false);
+    setCreateOpen(true);
+  };
+
   const handleUseLibraryReference = (entry: TemplateLibraryEntry | MessageTemplate) => {
     const isLibrary = 'body' in entry && typeof (entry as TemplateLibraryEntry).body === 'string';
     setForm(
       isLibrary
         ? formFromLibraryEntry(entry as TemplateLibraryEntry)
-        : formFromMessageTemplate(entry as MessageTemplate)
+        : formFromMessageTemplate(entry as MessageTemplate),
     );
+    setFormMode('create');
+    setResubmitName(null);
     setLibraryOpen(false);
     setCreateOpen(true);
   };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+    const issues = validateTemplateForm(form).filter((i) => i.severity === 'error');
+    if (issues.length) {
+      toastError(issues[0].message);
+      return;
+    }
+
     setSaving(true);
     try {
-      await templateApi.create(buildCreatePayload(form));
+      const payload = buildCreatePayload(form);
+      if (formMode === 'resubmit' && resubmitName) {
+        await templateApi.resubmit(resubmitName, payload);
+        toastSuccess('Template resubmitted for Meta review');
+      } else {
+        await templateApi.create(payload);
+        toastSuccess('Template submitted for approval');
+      }
       setCreateOpen(false);
       setForm(emptyTemplateForm);
       load();
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
-          ?.error?.message || 'Failed to create template.';
-      alert(msg);
+          ?.error?.message || 'Failed to save template.';
+      toastError(msg);
     } finally {
       setSaving(false);
     }
@@ -138,45 +214,92 @@ export default function TemplatesPage() {
     if (!confirm(`Delete template "${name}"?`)) return;
     try {
       await templateApi.delete(name);
+      setViewOpen(false);
       load();
+      toastSuccess('Template deleted');
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
           ?.error?.message || 'Failed to delete template.';
-      alert(msg);
+      toastError(msg);
     }
   };
 
-  const getBodyPreview = (template: MessageTemplate) => getTemplateParts(template).body;
-
   const filteredTemplates = useMemo(() => {
-    if (!debouncedSearch) return templates;
     const query = debouncedSearch.toLowerCase();
     return templates.filter((template) => {
-      const name = template.name ?? '';
-      const category = template.category ?? '';
-      const body = getBodyPreview(template);
+      if (categoryFilter !== ALL_CATEGORIES && template.category !== categoryFilter) return false;
+      if (languageFilter !== ALL_LANGUAGES && template.language !== languageFilter) return false;
+      if (!query) return true;
+      const body = getTemplateParts(template).body;
       return (
-        name.toLowerCase().includes(query) ||
+        template.name.toLowerCase().includes(query) ||
         body.toLowerCase().includes(query) ||
-        category.toLowerCase().includes(query)
+        (template.category || '').toLowerCase().includes(query)
       );
     });
-  }, [templates, debouncedSearch]);
+  }, [templates, debouncedSearch, categoryFilter, languageFilter]);
 
-  const paginatedTemplates = useMemo(() => {
+  const tableRows = useMemo((): TemplateTableRow[] => {
+    if (!groupView) {
+      return filteredTemplates.map((t) => ({ type: 'single', template: t }));
+    }
+
+    const groups = groupTemplatesByName(filteredTemplates);
+    const rows: TemplateTableRow[] = [];
+
+    for (const group of groups) {
+      if (group.variants.length === 1) {
+        rows.push({ type: 'single', template: group.primary });
+        continue;
+      }
+
+      rows.push({
+        type: 'group',
+        name: group.name,
+        variants: group.variants,
+        primary: group.primary,
+      });
+
+      if (expandedGroups.has(group.name)) {
+        group.variants.forEach((v) => rows.push({ type: 'variant', template: v }));
+      }
+    }
+
+    return rows;
+  }, [filteredTemplates, groupView, expandedGroups]);
+
+  const paginatedRows = useMemo(() => {
     const start = (page - 1) * DEFAULT_PAGE_SIZE;
-    return filteredTemplates.slice(start, start + DEFAULT_PAGE_SIZE);
-  }, [filteredTemplates, page]);
+    return tableRows.slice(start, start + DEFAULT_PAGE_SIZE);
+  }, [tableRows, page]);
 
-  const formPreviewButtons = form.buttons
-    .filter((b) => b.text.trim())
-    .map((b) => ({
-      type: b.type,
-      text: b.text,
-      ...(b.type === 'URL' && b.url ? { url: b.url } : {}),
-      ...(b.type === 'PHONE_NUMBER' && b.phone_number ? { phone_number: b.phone_number } : {}),
-    }));
+  const toggleGroup = (name: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  };
+
+  if (whatsappConnected === false) {
+    return (
+      <PageShell>
+        <PageHeader />
+        <EmptyState
+          icon={Settings}
+          title="Connect WhatsApp first"
+          description="Link your WhatsApp Business account in Settings before managing message templates."
+          action={
+            <AppButton icon={<Settings size={16} />} onClick={() => navigate('/settings')}>
+              Go to Settings
+            </AppButton>
+          }
+        />
+      </PageShell>
+    );
+  }
 
   return (
     <PageShell>
@@ -194,7 +317,7 @@ export default function TemplatesPage() {
               Meta library
             </AppButton>
             <AppButton icon={<Plus size={16} />} onClick={openCreate}>
-              Create Template
+              Create template
             </AppButton>
           </>
         }
@@ -205,7 +328,7 @@ export default function TemplatesPage() {
           badge="Meta templates"
           badgeIcon={FileText}
           title="Manage WhatsApp message templates"
-          description="Create custom templates with buttons, or browse Meta's pre-approved library for reference."
+          description="Create, preview, test, and track Meta-approved templates for campaigns and inbox outreach."
           accent="rose"
           stats={[
             { label: 'Total', value: stats.total },
@@ -215,103 +338,97 @@ export default function TemplatesPage() {
           ]}
         />
 
-        {error && <AppAlert variant="error">{error}</AppAlert>}
-
         <ListToolbar
           search={search}
           onSearchChange={setSearch}
           searchPlaceholder="Search templates..."
           filters={
-            <AppSelect
-              className="w-full sm:w-44"
-              value={statusFilter}
-              placeholder="All statuses"
-              isSearchable={false}
-              options={statusFilterOptions}
-              onChange={(e) => setStatusFilter(e.target.value)}
-            />
+            <div className="flex w-full flex-wrap gap-2">
+              <AppSelect
+                className="w-full sm:w-40"
+                value={statusFilter}
+                placeholder="All statuses"
+                isSearchable={false}
+                options={statusFilterOptions}
+                onChange={(e) => setStatusFilter(e.target.value)}
+              />
+              <AppSelect
+                className="w-full sm:w-40"
+                value={categoryFilter}
+                placeholder="All categories"
+                isSearchable={false}
+                options={[{ value: ALL_CATEGORIES, label: 'All categories' }, ...CATEGORY_OPTIONS]}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+              />
+              <AppSelect
+                className="w-full sm:w-44"
+                value={languageFilter}
+                placeholder="All languages"
+                isSearchable
+                options={[{ value: ALL_LANGUAGES, label: 'All languages' }, ...LANGUAGE_OPTIONS]}
+                onChange={(e) => setLanguageFilter(e.target.value)}
+              />
+              <button
+                type="button"
+                onClick={() => setGroupView((v) => !v)}
+                className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[12px] font-bold ring-1 transition ${
+                  groupView
+                    ? 'bg-rose-100 text-rose-800 ring-rose-200 dark:bg-rose-950/40 dark:text-rose-300'
+                    : 'bg-theme-subtle text-theme-muted ring-theme-border hover:bg-theme-surface'
+                }`}
+              >
+                <Layers className="h-3.5 w-3.5" />
+                Group by name
+              </button>
+            </div>
           }
         />
+
+        {stats.pending > 0 && (
+          <AppAlert variant="info">
+            {stats.pending} template{stats.pending > 1 ? 's' : ''} pending Meta review. This page
+            auto-refreshes every 30 seconds.
+          </AppAlert>
+        )}
 
         {loading ? (
           <LoadingState label="Loading templates..." />
         ) : filteredTemplates.length === 0 ? (
           <EmptyState
             icon={FileText}
-            title={search || statusFilter !== ALL_STATUSES ? 'No templates found' : 'No templates found'}
+            title={search || statusFilter !== ALL_STATUSES ? 'No templates found' : 'No templates yet'}
             description={
               search || statusFilter !== ALL_STATUSES
                 ? 'Try adjusting your search or filters.'
-                : 'Create one, or browse the Meta template library for ideas.'
+                : 'Create one, or browse the Meta template library for proven examples.'
             }
             action={
               <div className="flex flex-wrap justify-center gap-2">
-                <AppButton variant="secondary" icon={<BookOpen size={16} />} onClick={() => setLibraryOpen(true)}>
+                <AppButton
+                  variant="secondary"
+                  icon={<BookOpen size={16} />}
+                  onClick={() => setLibraryOpen(true)}
+                >
                   Browse Meta library
                 </AppButton>
                 <AppButton icon={<Plus size={16} />} onClick={openCreate}>
-                  Create Template
+                  Create template
                 </AppButton>
               </div>
             }
           />
         ) : (
-          <DataTable
-            headers={['Template', 'Status', 'Category', 'Language', 'Actions']}
+          <TemplateTable
+            rows={paginatedRows}
             page={page}
             pageSize={DEFAULT_PAGE_SIZE}
-            total={filteredTemplates.length}
+            total={tableRows.length}
+            expandedGroups={expandedGroups}
+            onToggleGroup={toggleGroup}
             onPageChange={setPage}
-          >
-            {paginatedTemplates.map((template, index) => {
-              const rejectedReason = getTemplateRejectedReason(template.rejected_reason);
-              return (
-              <tr key={template.id || `${template.name}-${index}`}>
-                <TableSerialCell page={page} pageSize={DEFAULT_PAGE_SIZE} rowIndex={index} />
-                <td>
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-rose-500 to-pink-600 text-white shadow-[0_4px_14px_rgba(244,63,94,0.25)]">
-                      <FileText className="h-4 w-4" strokeWidth={2.25} />
-                    </div>
-                    <span className="font-mono text-[12px] font-semibold text-neutral-800">
-                      {template.name}
-                    </span>
-                  </div>
-                </td>
-                <td>
-                  {template.status ? (
-                    <StatusBadge status={template.status} />
-                  ) : (
-                    <span className="text-[13px] text-neutral-400">—</span>
-                  )}
-                  {rejectedReason && (
-                    <p className="mt-1 max-w-xs text-[11px] font-medium text-red-600">
-                      {rejectedReason}
-                    </p>
-                  )}
-                </td>
-                <td>
-                  <span className="rounded-full bg-neutral-100 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-neutral-600 ring-1 ring-neutral-200/60">
-                    {template.category || '—'}
-                  </span>
-                </td>
-                <td className="text-[13px] font-medium text-neutral-600">
-                  {template.language || '—'}
-                </td>
-                <td>
-                  <div className="flex items-center justify-end gap-1.5">
-                    <TableIconButton
-                      onClick={() => openView(template)}
-                      icon={Eye}
-                      label="View template"
-                    />
-                    <RowActions onDelete={() => handleDelete(template.name)} />
-                  </div>
-                </td>
-              </tr>
-            );
-            })}
-          </DataTable>
+            onView={openView}
+            onDuplicate={openDuplicate}
+          />
         )}
       </div>
 
@@ -322,120 +439,30 @@ export default function TemplatesPage() {
         subtitle="Pre-approved templates for reference or direct submission"
         size="xl"
       >
-        <TemplateLibraryPanel
-          onUseAsReference={handleUseLibraryReference}
-          onCreated={() => {
-            load();
-          }}
-        />
+        <TemplateLibraryPanel onUseAsReference={handleUseLibraryReference} onCreated={() => load()} />
       </SlideOver>
 
       <SlideOver
         open={createOpen}
         onClose={() => setCreateOpen(false)}
-        title="Create message template"
+        title={formMode === 'resubmit' ? 'Edit & resubmit template' : 'Create message template'}
         subtitle="Submitted to Meta for review after creation"
         size="lg"
         footer={
           <SlideOverFooter
             onCancel={() => setCreateOpen(false)}
-            submitLabel="Submit to Meta"
+            submitLabel={formMode === 'resubmit' ? 'Resubmit to Meta' : 'Submit to Meta'}
             loading={saving}
           />
         }
       >
-        <form id="slideover-form" onSubmit={handleCreate} className="space-y-4">
-          <div className="rounded-2xl border border-rose-200/70 bg-gradient-to-r from-rose-500/10 to-pink-500/5 p-4">
-            <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-rose-500 to-pink-600 text-white shadow-[0_4px_14px_rgba(244,63,94,0.3)]">
-                <FileText className="h-4 w-4" strokeWidth={2.25} />
-              </div>
-              <div>
-                <p className="text-[13px] font-extrabold text-neutral-900">Meta review required</p>
-                <p className="mt-0.5 text-[12px] font-medium text-neutral-600">
-                  Only approved templates can be used in campaigns. Tip: open Meta library to copy
-                  proven examples.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <AppInput
-              id="template-name"
-              label="Template name"
-              placeholder="order_update"
-              value={form.name}
-              onChange={(e) =>
-                setForm({ ...form, name: e.target.value.toLowerCase().replace(/\s/g, '_') })
-              }
-              required
-              pattern="[a-z0-9_]+"
-            />
-            <AppInput
-              id="template-language"
-              label="Language code"
-              placeholder="en_US"
-              value={form.language}
-              onChange={(e) => setForm({ ...form, language: e.target.value })}
-              required
-            />
-          </div>
-          <AppSelect
-            id="template-category"
-            label="Category"
-            value={form.category}
-            options={categories.map((category) => ({
-              value: category,
-              label: category,
-            }))}
-            isSearchable={false}
-            onChange={(e) => setForm({ ...form, category: e.target.value as typeof form.category })}
-            required
+        <form id="slideover-form" onSubmit={handleCreate}>
+          <TemplateCreateForm
+            form={form}
+            onChange={setForm}
+            mode={formMode}
+            resubmitName={resubmitName || undefined}
           />
-          <AppInput
-            id="template-header"
-            label="Header"
-            hint="Optional"
-            placeholder="Order update"
-            value={form.header}
-            onChange={(e) => setForm({ ...form, header: e.target.value })}
-          />
-          <AppTextarea
-            id="template-body"
-            label="Body text"
-            hint="Use {{1}}, {{2}} for variables"
-            placeholder="Hi {{1}}, your order {{2}} is ready."
-            value={form.body}
-            onChange={(e) => setForm({ ...form, body: e.target.value })}
-            rows={4}
-            required
-          />
-          <AppInput
-            id="template-footer"
-            label="Footer"
-            hint="Optional"
-            placeholder="Reply STOP to unsubscribe"
-            value={form.footer}
-            onChange={(e) => setForm({ ...form, footer: e.target.value })}
-          />
-
-          <TemplateButtonEditor
-            buttons={form.buttons}
-            onChange={(buttons) => setForm({ ...form, buttons })}
-          />
-
-          {(form.body || form.header || form.footer || formPreviewButtons.length > 0) && (
-            <div>
-              <p className="mb-2 text-[13px] font-semibold text-neutral-700">WhatsApp preview</p>
-              <WhatsAppTemplatePreview
-                header={form.header || undefined}
-                body={form.body || 'Your message body will appear here.'}
-                footer={form.footer || undefined}
-                buttons={formPreviewButtons}
-              />
-            </div>
-          )}
         </form>
       </SlideOver>
 
@@ -443,36 +470,16 @@ export default function TemplatesPage() {
         open={viewOpen}
         onClose={() => setViewOpen(false)}
         title={viewing?.name || 'Template'}
-        subtitle="Template details (read-only)"
+        subtitle={viewing ? `${viewing.language} · ${viewing.category}` : 'Template details'}
         size="md"
       >
         {viewing && (
-          <div className="space-y-4">
-            <div className="flex flex-wrap gap-2">
-              <StatusBadge status={viewing.status} />
-              <span className="rounded-full bg-neutral-100 px-2.5 py-0.5 text-[10px] font-bold uppercase text-neutral-600 ring-1 ring-neutral-200/60">
-                {viewing.category || '—'}
-              </span>
-              <span className="rounded-full bg-neutral-100 px-2.5 py-0.5 text-[10px] font-bold uppercase text-neutral-600 ring-1 ring-neutral-200/60">
-                {viewing.language || '—'}
-              </span>
-            </div>
-            <div className="rounded-2xl border border-neutral-100 bg-white p-4 ring-1 ring-neutral-100">
-              <p className="text-[11px] font-bold uppercase tracking-wide text-neutral-400">
-                WhatsApp preview
-              </p>
-              <WhatsAppTemplatePreview
-                {...getTemplateParts(viewing)}
-                className="mt-3"
-              />
-            </div>
-            {getTemplateRejectedReason(viewing.rejected_reason) && (
-              <AppAlert variant="error">{getTemplateRejectedReason(viewing.rejected_reason)}</AppAlert>
-            )}
-            <AppButton variant="danger" size="sm" onClick={() => handleDelete(viewing.name)}>
-              Delete template
-            </AppButton>
-          </div>
+          <TemplateDetailPanel
+            template={viewing}
+            onDuplicate={() => openDuplicate(viewing)}
+            onResubmit={() => openResubmit(viewing)}
+            onDelete={() => handleDelete(viewing.name)}
+          />
         )}
       </SlideOver>
     </PageShell>

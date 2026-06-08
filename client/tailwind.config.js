@@ -1,12 +1,24 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  darkMode: 'class',
   theme: {
     extend: {
       fontFamily: {
         sans: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
       },
       colors: {
+        theme: {
+          fg: 'var(--color-text)',
+          secondary: 'var(--color-text-secondary)',
+          muted: 'var(--color-text-muted)',
+          bg: 'var(--color-bg)',
+          surface: 'var(--color-surface)',
+          'surface-elevated': 'var(--color-surface-elevated)',
+          subtle: 'var(--color-bg-muted)',
+          border: 'var(--color-border)',
+          'border-strong': 'var(--color-border-strong)',
+        },
         whatsapp: {
           50: '#f0fdf4',
           100: '#dcfce7',
@@ -19,9 +31,10 @@ export default {
         },
       },
       boxShadow: {
-        input: '0 0 0 1px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)',
-        'input-focus': '0 0 0 1px rgba(18,140,126,0.65), 0 0 0 4px rgba(18,140,126,0.18)',
-        panel: '0 1px 2px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.06)',
+        input: 'var(--shadow-input)',
+        'input-focus': 'var(--shadow-input-focus)',
+        panel: 'var(--shadow-panel)',
+        theme: 'var(--shadow-theme)',
         showcase: '0 32px 64px -16px rgba(0,0,0,0.55)',
         'showcase-glow': '0 0 60px rgba(37,211,102,0.25)',
       },
@@ -33,11 +46,16 @@ export default {
         float: 'float 6s ease-in-out infinite',
         'float-delayed': 'float 6s ease-in-out 2s infinite',
         shimmer: 'shimmer 3s linear infinite',
+        'slide-in-right': 'slideInRight 0.25s ease-out both',
       },
       keyframes: {
         fadeUp: {
           '0%': { opacity: '0', transform: 'translateY(12px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        slideInRight: {
+          '0%': { opacity: '0', transform: 'translateX(100%)' },
+          '100%': { opacity: '1', transform: 'translateX(0)' },
         },
         pulseSoft: {
           '0%, 100%': { opacity: '1' },

@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useSidebarCollapsed } from '../hooks/useSidebarCollapsed';
 import AppTopbar from './layout/AppTopbar';
 import Sidebar from './layout/Sidebar';
+import CallNotificationProvider from './calls/CallNotificationProvider';
 
 export default function Layout() {
   const { user, organization, logout } = useAuth();
@@ -29,10 +30,11 @@ export default function Layout() {
   };
 
   return (
+    <CallNotificationProvider>
     <div className="flex h-[100dvh] overflow-hidden platform-gradient">
       {/* Desktop sidebar */}
       <aside
-        className={`hidden shrink-0 border-r border-neutral-200 bg-white transition-[width] duration-300 ease-in-out lg:block ${
+        className={`hidden shrink-0 border-r border-theme-border bg-theme-surface transition-[width] duration-300 ease-in-out lg:block ${
           collapsed ? 'w-[72px]' : 'w-[260px]'
         }`}
       >
@@ -46,7 +48,7 @@ export default function Layout() {
       >
         <button
           type="button"
-          className={`absolute inset-0 bg-neutral-900/50 backdrop-blur-sm transition-opacity duration-300 ${
+          className={`absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300 dark:bg-black/70 ${
             mobileOpen ? 'opacity-100' : 'opacity-0'
           }`}
           onClick={() => setMobileOpen(false)}
@@ -75,5 +77,6 @@ export default function Layout() {
         </main>
       </div>
     </div>
+    </CallNotificationProvider>
   );
 }

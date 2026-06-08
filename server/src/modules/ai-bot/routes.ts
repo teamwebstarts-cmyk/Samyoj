@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import prisma from '../../config/database';
-import { authenticate, requireOrg } from '../../middleware/auth';
+import { authenticate, requireOrg, loadOrgRole, requireOrgRole } from '../../middleware/auth';
 import { AppError, asyncHandler, paramId, sendSuccess } from '../../utils/response';
 import {
   clearDefaultFlag,
@@ -11,7 +11,17 @@ import {
   listBots,
 } from '../ai/bot.service';
 import { generateBotReply } from '../ai/chatbot.service';
-import { isAzureOpenAIConfigured } from '../ai/azure-openai.service';
+import { getBotAnalytics } from '../ai/analytics';
+import { isAiConfiguredForOrg } from '../ai/org-ai.service';
+import { upsertKnowledgeEmbedding } from '../ai/knowledge.service';
+import { ingestUrlKnowledge, ingestPdfKnowledge } from '../ai/knowledge-ingest.service';
+import {
+  createBotVersion,
+  listBotAuditLogs,
+  listBotVersions,
+  logBotAudit,
+  restoreBotVersion,
+} from '../ai/versioning.service';
 
 const router = Router();
 
@@ -22,6 +32,12 @@ const botSchema = z.object({
   instructions: z.string().max(8000).optional(),
   handoffMessage: z.string().max(500).optional(),
   triggerKeywords: z.array(z.string().min(1)).max(20).optional(),
+  handoffKeywords: z.array(z.string().min(1)).max(20).optional(),
+  businessHoursOnly: z.boolean().optional(),
+  temperature: z.number().min(0).max(2).optional(),
+  maxTokens: z.number().int().min(50).max(2000).optional(),
+  rateLimitPerMin: z.number().int().min(5).max(200).optional(),
+  changeNote: z.string().max(200).optional(),
 });
 
 const faqSchema = z.object({
@@ -29,22 +45,24 @@ const faqSchema = z.object({
   content: z.string().min(1).max(5000),
 });
 
+const adminGuard = [authenticate, requireOrg, loadOrgRole, requireOrgRole('OWNER', 'ADMIN')];
+const readGuard = [authenticate, requireOrg];
+
 router.get(
   '/status',
-  authenticate,
-  requireOrg,
+  ...readGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     await ensureDefaultBot(orgId);
 
-    const [bots, whatsappCount] = await Promise.all([
+    const [bots, whatsappCount, azureOk] = await Promise.all([
       prisma.aiBot.findMany({ where: { organizationId: orgId } }),
       prisma.whatsappNumber.count({ where: { organizationId: orgId, isActive: true } }),
+      isAiConfiguredForOrg(orgId),
     ]);
 
     const activeBots = bots.filter((b) => b.enabled);
     const defaultBot = bots.find((b) => b.isDefault && b.enabled);
-    const azureOk = isAzureOpenAIConfigured();
 
     const checks = [
       { id: 'whatsapp', label: 'WhatsApp number connected', ok: whatsappCount > 0 },
@@ -65,20 +83,19 @@ router.get(
 
 router.get(
   '/',
-  authenticate,
-  requireOrg,
+  ...readGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     await ensureDefaultBot(orgId);
     const bots = await listBots(orgId);
-    sendSuccess(res, { bots, azureConfigured: isAzureOpenAIConfigured() });
+    const azureConfigured = await isAiConfiguredForOrg(orgId);
+    sendSuccess(res, { bots, azureConfigured });
   })
 );
 
 router.post(
   '/',
-  authenticate,
-  requireOrg,
+  ...adminGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const data = botSchema.parse(req.body);
@@ -98,8 +115,21 @@ router.post(
         handoffMessage:
           data.handoffMessage || 'Let me connect you with our team. Someone will reply shortly.',
         triggerKeywords: data.triggerKeywords || [],
+        handoffKeywords: data.handoffKeywords || [],
+        businessHoursOnly: data.businessHoursOnly ?? false,
+        temperature: data.temperature ?? 0.7,
+        maxTokens: data.maxTokens ?? 500,
+        rateLimitPerMin: data.rateLimitPerMin ?? 30,
       },
       include: { _count: { select: { knowledgeItems: true } } },
+    });
+
+    await createBotVersion(bot, req.user!.userId, 'Initial version');
+    await logBotAudit({
+      botId: bot.id,
+      organizationId: orgId,
+      userId: req.user!.userId,
+      action: 'create',
     });
 
     sendSuccess(res, bot, 201);
@@ -107,9 +137,66 @@ router.post(
 );
 
 router.get(
+  '/:id/analytics',
+  ...readGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const botId = paramId(req);
+    const days = parseInt(String(req.query.days || '30'), 10);
+
+    const bot = await prisma.aiBot.findFirst({ where: { id: botId, organizationId: orgId } });
+    if (!bot) throw new AppError(404, 'Bot not found');
+
+    const analytics = await getBotAnalytics(botId, orgId, days);
+    sendSuccess(res, analytics);
+  })
+);
+
+router.get(
+  '/:id/versions',
+  ...readGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const botId = paramId(req);
+    const bot = await prisma.aiBot.findFirst({ where: { id: botId, organizationId: orgId } });
+    if (!bot) throw new AppError(404, 'Bot not found');
+    const versions = await listBotVersions(botId);
+    sendSuccess(res, { versions });
+  })
+);
+
+router.get(
+  '/:id/audit',
+  ...readGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const botId = paramId(req);
+    const bot = await prisma.aiBot.findFirst({ where: { id: botId, organizationId: orgId } });
+    if (!bot) throw new AppError(404, 'Bot not found');
+    const logs = await listBotAuditLogs(botId);
+    sendSuccess(res, { logs });
+  })
+);
+
+router.post(
+  '/:id/restore/:version',
+  ...adminGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const botId = paramId(req);
+    const version = parseInt(String(req.params.version), 10);
+
+    const bot = await prisma.aiBot.findFirst({ where: { id: botId, organizationId: orgId } });
+    if (!bot) throw new AppError(404, 'Bot not found');
+
+    const restored = await restoreBotVersion(botId, orgId, version, req.user!.userId);
+    sendSuccess(res, restored);
+  })
+);
+
+router.get(
   '/:id',
-  authenticate,
-  requireOrg,
+  ...readGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const bot = await getBot(orgId, paramId(req));
@@ -120,8 +207,7 @@ router.get(
 
 router.patch(
   '/:id',
-  authenticate,
-  requireOrg,
+  ...adminGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const id = paramId(req);
@@ -134,10 +220,21 @@ router.patch(
       await clearDefaultFlag(orgId, id);
     }
 
+    const { changeNote, ...updateData } = data;
+
     const bot = await prisma.aiBot.update({
       where: { id },
-      data,
+      data: updateData,
       include: { knowledgeItems: { orderBy: { createdAt: 'asc' } } },
+    });
+
+    await createBotVersion(bot, req.user!.userId, changeNote);
+    await logBotAudit({
+      botId: bot.id,
+      organizationId: orgId,
+      userId: req.user!.userId,
+      action: 'update',
+      changes: updateData,
     });
 
     sendSuccess(res, bot);
@@ -146,8 +243,7 @@ router.patch(
 
 router.delete(
   '/:id',
-  authenticate,
-  requireOrg,
+  ...adminGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const id = paramId(req);
@@ -157,6 +253,13 @@ router.delete(
 
     const total = await prisma.aiBot.count({ where: { organizationId: orgId } });
     if (total <= 1) throw new AppError(400, 'You need at least one bot');
+
+    await logBotAudit({
+      botId: id,
+      organizationId: orgId,
+      userId: req.user!.userId,
+      action: 'delete',
+    });
 
     await prisma.aiBot.delete({ where: { id } });
 
@@ -176,8 +279,7 @@ router.delete(
 
 router.post(
   '/:id/faq',
-  authenticate,
-  requireOrg,
+  ...adminGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const botId = paramId(req);
@@ -187,17 +289,17 @@ router.post(
     if (!bot) throw new AppError(404, 'Bot not found');
 
     const item = await prisma.knowledgeBaseItem.create({
-      data: { botId, title: data.title, content: data.content },
+      data: { botId, title: data.title, content: data.content, sourceType: 'FAQ' },
     });
 
+    await upsertKnowledgeEmbedding(orgId, item.id, item.title, item.content, botId);
     sendSuccess(res, item, 201);
   })
 );
 
 router.patch(
   '/:id/faq/:faqId',
-  authenticate,
-  requireOrg,
+  ...adminGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const botId = paramId(req);
@@ -214,14 +316,16 @@ router.patch(
     if (item.count === 0) throw new AppError(404, 'FAQ not found');
 
     const updated = await prisma.knowledgeBaseItem.findUnique({ where: { id: faqId } });
+    if (updated) {
+      await upsertKnowledgeEmbedding(orgId, updated.id, updated.title, updated.content, botId);
+    }
     sendSuccess(res, updated);
   })
 );
 
 router.delete(
   '/:id/faq/:faqId',
-  authenticate,
-  requireOrg,
+  ...adminGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const botId = paramId(req);
@@ -236,9 +340,48 @@ router.delete(
 );
 
 router.post(
+  '/:id/ingest/url',
+  ...adminGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const botId = paramId(req);
+    const { url, title } = z
+      .object({ url: z.string().url(), title: z.string().max(200).optional() })
+      .parse(req.body);
+
+    const bot = await prisma.aiBot.findFirst({ where: { id: botId, organizationId: orgId } });
+    if (!bot) throw new AppError(404, 'Bot not found');
+
+    const result = await ingestUrlKnowledge(orgId, botId, url, title);
+    sendSuccess(res, result, 201);
+  })
+);
+
+router.post(
+  '/:id/ingest/pdf',
+  ...adminGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const botId = paramId(req);
+    const { filename, dataBase64 } = z
+      .object({
+        filename: z.string().min(1).max(200),
+        dataBase64: z.string().min(1),
+      })
+      .parse(req.body);
+
+    const bot = await prisma.aiBot.findFirst({ where: { id: botId, organizationId: orgId } });
+    if (!bot) throw new AppError(404, 'Bot not found');
+
+    const buffer = Buffer.from(dataBase64, 'base64');
+    const result = await ingestPdfKnowledge(orgId, botId, filename, buffer);
+    sendSuccess(res, result, 201);
+  })
+);
+
+router.post(
   '/:id/test',
-  authenticate,
-  requireOrg,
+  ...readGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const botId = paramId(req);
@@ -247,37 +390,12 @@ router.post(
     const bot = await prisma.aiBot.findFirst({ where: { id: botId, organizationId: orgId } });
     if (!bot) throw new AppError(404, 'Bot not found');
 
-    const contact = await prisma.contact.upsert({
-      where: { organizationId_phone: { organizationId: orgId, phone: '0000000000' } },
-      create: { organizationId: orgId, phone: '0000000000', name: 'Test User', optedIn: true },
-      update: {},
-    });
-
-    let conversation = await prisma.conversation.findFirst({
-      where: { organizationId: orgId, contactId: contact.id },
-    });
-
-    if (!conversation) {
-      conversation = await prisma.conversation.create({
-        data: {
-          organizationId: orgId,
-          contactId: contact.id,
-          activeBotId: botId,
-          botActive: true,
-        },
-      });
-    } else {
-      conversation = await prisma.conversation.update({
-        where: { id: conversation.id },
-        data: { activeBotId: botId, botActive: true, botHandoffAt: null, botHandoffReason: null },
-      });
-    }
-
     const result = await generateBotReply({
       organizationId: orgId,
-      conversationId: conversation.id,
+      conversationId: `test-${botId}`,
       inboundMessage: message,
       botId,
+      testMode: true,
     });
 
     sendSuccess(res, result);

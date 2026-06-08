@@ -1,0 +1,322 @@
+import { Router, Request, Response } from 'express';
+import prisma from '../../config/database';
+import { authenticate, requireOrg } from '../../middleware/auth';
+import { AppError, sendSuccess, asyncHandler, paramId } from '../../utils/response';
+import { Prisma } from '@prisma/client';
+import { z } from 'zod';
+import { FLOW_TEMPLATES } from './types';
+import { validateFlowGraph } from './validation';
+import { getFlowAnalytics } from './analytics';
+import { simulateFlow } from './simulate';
+import {
+  getFlowVersions,
+  publishFlowDraft,
+  restoreFlowVersion,
+  saveFlowDraft,
+  saveFlowVersion,
+} from './versioning';
+
+const router = Router();
+
+const nodeTypes = [
+  'message', 'buttons', 'question', 'tag', 'handoff', 'ai', 'assign', 'condition', 'end',
+  'template', 'delay', 'media', 'webhook', 'ab_split', 'language',
+] as const;
+
+const triggerTypes = [
+  'WELCOME', 'KEYWORD', 'ANY_MESSAGE', 'BUSINESS_HOURS', 'OFF_HOURS', 'CONTACT_TAG', 'SEGMENT',
+] as const;
+
+const flowNodeSchema = z.object({
+  id: z.string().min(1),
+  type: z.enum(nodeTypes),
+  text: z.string().optional(),
+  buttons: z.array(z.object({ id: z.string(), title: z.string().max(20) })).max(3).optional(),
+  field: z.enum(['name', 'email', 'phone', 'custom']).optional(),
+  customField: z.string().optional(),
+  prompt: z.string().optional(),
+  tag: z.string().optional(),
+  conditionType: z.enum(['business_hours', 'has_tag', 'language']).optional(),
+  conditionTag: z.string().optional(),
+  languageCode: z.string().optional(),
+  maxRetries: z.number().int().min(1).max(5).optional(),
+  retryMessage: z.string().optional(),
+  next: z.string().optional(),
+  branches: z.record(z.string()).optional(),
+  templateName: z.string().optional(),
+  templateLanguage: z.string().optional(),
+  mediaUrl: z.string().url().optional(),
+  mediaType: z.enum(['image', 'document', 'video', 'audio']).optional(),
+  mediaCaption: z.string().optional(),
+  delaySeconds: z.number().int().min(1).max(86400).optional(),
+  webhookUrl: z.string().url().optional(),
+  webhookMethod: z.enum(['GET', 'POST']).optional(),
+  aiBotId: z.string().optional(),
+  assignAgentId: z.string().optional(),
+  position: z.object({ x: z.number(), y: z.number() }).optional(),
+});
+
+const flowSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().optional(),
+  triggerType: z.enum(triggerTypes),
+  triggerConfig: z.record(z.unknown()).default({}),
+  nodes: z.array(flowNodeSchema).min(1),
+  startNodeId: z.string().optional(),
+  enabled: z.boolean().default(true),
+  priority: z.number().int().min(0).max(100).default(0),
+  status: z.enum(['DRAFT', 'PUBLISHED']).optional(),
+});
+
+function assertValidFlow(data: z.infer<typeof flowSchema>) {
+  const result = validateFlowGraph(
+    data.nodes,
+    data.triggerType,
+    data.triggerConfig as Record<string, unknown>,
+    data.startNodeId
+  );
+  if (!result.valid) {
+    throw new AppError(400, result.errors.join('; '));
+  }
+  return result;
+}
+
+router.get('/templates', authenticate, requireOrg, asyncHandler(async (_req, res) => {
+  sendSuccess(res, { templates: FLOW_TEMPLATES });
+}));
+
+router.get('/', authenticate, requireOrg, asyncHandler(async (req, res) => {
+  const orgId = req.user!.organizationId!;
+  const { search, enabled, page = '1', limit = '10' } = req.query;
+  const where: Prisma.FlowWhereInput = { organizationId: orgId };
+  if (search) where.name = { contains: search as string, mode: 'insensitive' };
+  if (enabled === 'true') where.enabled = true;
+  if (enabled === 'false') where.enabled = false;
+
+  const pageNum = parseInt(page as string);
+  const limitNum = parseInt(limit as string);
+
+  const [flows, total, active, paused] = await Promise.all([
+    prisma.flow.findMany({
+      where,
+      orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
+      skip: (pageNum - 1) * limitNum,
+      take: limitNum,
+    }),
+    prisma.flow.count({ where }),
+    prisma.flow.count({ where: { organizationId: orgId, enabled: true } }),
+    prisma.flow.count({ where: { organizationId: orgId, enabled: false } }),
+  ]);
+
+  sendSuccess(res, {
+    flows,
+    total,
+    page: pageNum,
+    limit: limitNum,
+    summary: { total: active + paused, active, paused },
+  });
+}));
+
+router.post('/validate', authenticate, requireOrg, asyncHandler(async (req, res) => {
+  const data = flowSchema.parse(req.body);
+  const result = validateFlowGraph(
+    data.nodes,
+    data.triggerType,
+    data.triggerConfig as Record<string, unknown>,
+    data.startNodeId
+  );
+  sendSuccess(res, result);
+}));
+
+router.post('/simulate', authenticate, requireOrg, asyncHandler(async (req, res) => {
+  const body = z.object({
+    triggerType: z.string(),
+    triggerConfig: z.record(z.unknown()).default({}),
+    nodes: z.array(flowNodeSchema),
+    startNodeId: z.string().optional(),
+    message: z.string().default('hello'),
+    isNewConversation: z.boolean().default(false),
+    contactTags: z.array(z.string()).default([]),
+  }).parse(req.body);
+
+  const result = await simulateFlow({
+    organizationId: req.user!.organizationId!,
+    ...body,
+  });
+  sendSuccess(res, result);
+}));
+
+router.get('/:id', authenticate, requireOrg, asyncHandler(async (req, res) => {
+  const flow = await prisma.flow.findFirst({
+    where: { id: paramId(req), organizationId: req.user!.organizationId! },
+  });
+  if (!flow) throw new AppError(404, 'Flow not found');
+  sendSuccess(res, flow);
+}));
+
+router.get('/:id/analytics', authenticate, requireOrg, asyncHandler(async (req, res) => {
+  const analytics = await getFlowAnalytics(paramId(req), req.user!.organizationId!);
+  if (!analytics) throw new AppError(404, 'Flow not found');
+  sendSuccess(res, analytics);
+}));
+
+router.get('/:id/versions', authenticate, requireOrg, asyncHandler(async (req, res) => {
+  const versions = await getFlowVersions(paramId(req), req.user!.organizationId!);
+  if (!versions) throw new AppError(404, 'Flow not found');
+  sendSuccess(res, { versions });
+}));
+
+router.post('/:id/duplicate', authenticate, requireOrg, asyncHandler(async (req, res) => {
+  const source = await prisma.flow.findFirst({
+    where: { id: paramId(req), organizationId: req.user!.organizationId! },
+  });
+  if (!source) throw new AppError(404, 'Flow not found');
+
+  const flow = await prisma.flow.create({
+    data: {
+      organizationId: req.user!.organizationId!,
+      name: `${source.name} (copy)`,
+      description: source.description,
+      triggerType: source.triggerType,
+      triggerConfig: source.triggerConfig as Prisma.InputJsonValue,
+      nodes: source.nodes as Prisma.InputJsonValue,
+      startNodeId: source.startNodeId,
+      enabled: false,
+      priority: source.priority,
+      status: 'DRAFT',
+    },
+  });
+  sendSuccess(res, flow, 201);
+}));
+
+router.post('/:id/publish', authenticate, requireOrg, asyncHandler(async (req, res) => {
+  const note = (req.body as { note?: string }).note;
+  const version = await publishFlowDraft(paramId(req), req.user!.organizationId!, note);
+  if (!version) throw new AppError(400, 'No draft to publish');
+  sendSuccess(res, { version });
+}));
+
+router.post('/:id/restore/:version', authenticate, requireOrg, asyncHandler(async (req, res) => {
+  const version = parseInt(String(req.params.version));
+  const restored = await restoreFlowVersion(paramId(req), req.user!.organizationId!, version);
+  if (!restored) throw new AppError(404, 'Version not found');
+  sendSuccess(res, { restored: true, version });
+}));
+
+router.post('/', authenticate, requireOrg, asyncHandler(async (req, res) => {
+  const data = flowSchema.parse(req.body);
+  assertValidFlow(data);
+
+  const flow = await prisma.flow.create({
+    data: {
+      organizationId: req.user!.organizationId!,
+      name: data.name,
+      description: data.description,
+      triggerType: data.triggerType,
+      triggerConfig: data.triggerConfig as Prisma.InputJsonValue,
+      nodes: data.nodes as Prisma.InputJsonValue,
+      startNodeId: data.startNodeId,
+      enabled: data.enabled,
+      priority: data.priority,
+      status: data.status || 'PUBLISHED',
+    },
+  });
+
+  await saveFlowVersion(flow.id, data.nodes, data.triggerType, data.triggerConfig as Record<string, unknown>, 'Initial version');
+  sendSuccess(res, flow, 201);
+}));
+
+router.post('/from-template/:templateId', authenticate, requireOrg, asyncHandler(async (req, res) => {
+  const template = FLOW_TEMPLATES.find((t) => t.id === paramId(req));
+  if (!template) throw new AppError(404, 'Template not found');
+
+  const flow = await prisma.flow.create({
+    data: {
+      organizationId: req.user!.organizationId!,
+      name: template.name,
+      description: template.description,
+      triggerType: template.triggerType,
+      triggerConfig: template.triggerConfig as Prisma.InputJsonValue,
+      nodes: template.nodes as unknown as Prisma.InputJsonValue,
+      enabled: false,
+      status: 'DRAFT',
+    },
+  });
+  sendSuccess(res, flow, 201);
+}));
+
+const updateFlowSchema = flowSchema.partial().extend({
+  saveAsDraft: z.boolean().optional(),
+});
+
+router.patch('/:id', authenticate, requireOrg, asyncHandler(async (req, res) => {
+  const id = paramId(req);
+  const existing = await prisma.flow.findFirst({
+    where: { id, organizationId: req.user!.organizationId! },
+  });
+  if (!existing) throw new AppError(404, 'Flow not found');
+
+  const data = updateFlowSchema.parse(req.body);
+
+  if (data.saveAsDraft && data.nodes) {
+    await saveFlowDraft(id, req.user!.organizationId!, {
+      nodes: data.nodes,
+      triggerType: data.triggerType,
+      triggerConfig: data.triggerConfig as Record<string, unknown>,
+      startNodeId: data.startNodeId,
+    });
+    const updated = await prisma.flow.findUnique({ where: { id } });
+    sendSuccess(res, updated);
+    return;
+  }
+
+  const merged = {
+    name: data.name ?? existing.name,
+    triggerType: data.triggerType ?? existing.triggerType,
+    triggerConfig: (data.triggerConfig ?? existing.triggerConfig) as Record<string, unknown>,
+    nodes: data.nodes ?? (existing.nodes as never),
+    startNodeId: data.startNodeId ?? existing.startNodeId,
+  };
+
+  if (data.nodes) {
+    assertValidFlow({
+      name: merged.name,
+      triggerType: merged.triggerType as never,
+      triggerConfig: merged.triggerConfig,
+      nodes: merged.nodes,
+      startNodeId: merged.startNodeId ?? undefined,
+      enabled: data.enabled ?? existing.enabled,
+      priority: data.priority ?? existing.priority,
+    });
+  }
+
+  const flow = await prisma.flow.update({
+    where: { id },
+    data: {
+      name: data.name,
+      description: data.description,
+      triggerType: data.triggerType,
+      triggerConfig: data.triggerConfig ? (data.triggerConfig as Prisma.InputJsonValue) : undefined,
+      nodes: data.nodes ? (data.nodes as Prisma.InputJsonValue) : undefined,
+      startNodeId: data.startNodeId,
+      enabled: data.enabled,
+      priority: data.priority,
+      status: data.status,
+    },
+  });
+
+  if (data.nodes && data.status !== 'DRAFT') {
+    await saveFlowVersion(id, data.nodes, flow.triggerType, flow.triggerConfig as Record<string, unknown>);
+  }
+
+  sendSuccess(res, flow);
+}));
+
+router.delete('/:id', authenticate, requireOrg, asyncHandler(async (req, res) => {
+  await prisma.flow.deleteMany({
+    where: { id: paramId(req), organizationId: req.user!.organizationId! },
+  });
+  sendSuccess(res, { deleted: true });
+}));
+
+export default router;

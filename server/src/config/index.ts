@@ -6,6 +6,7 @@ export const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   logLevel: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'debug'),
   clientUrl: process.env.CLIENT_URL || 'http://localhost:5173',
+  serverUrl: process.env.SERVER_URL || process.env.API_URL || 'http://localhost:5000',
   databaseUrl: process.env.DATABASE_URL!,
   redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
   jwt: {

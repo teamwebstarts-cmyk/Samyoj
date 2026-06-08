@@ -1,4 +1,6 @@
 import { useId, useMemo, type ChangeEvent } from 'react';
+import { useTheme } from '../../contexts/ThemeContext';
+import { createSelectStyles } from '../../utils/selectStyles';
 import type { LucideIcon } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
 import Select, {
@@ -126,23 +128,31 @@ function formatOptionLabel(
 
 function createStyles(
   variant: InboxSelectVariant,
-  hasSelection: boolean
+  hasSelection: boolean,
+  isDark: boolean
 ): StylesConfig<InboxSelectOption, false, GroupBase<InboxSelectOption>> {
   const isAssign = variant === 'assign';
   const controlHeight = isAssign ? 40 : 38;
+  const baseStyles = createSelectStyles(isDark);
+  const surface = isDark ? '#151d2b' : '#ffffff';
+  const assignBg = isDark ? 'rgba(6, 78, 59, 0.28)' : 'rgba(236, 253, 245, 0.72)';
+  const assignBorder = isDark ? 'rgba(16, 185, 129, 0.35)' : 'rgba(167, 243, 208, 0.95)';
 
   return {
+    ...baseStyles,
     control: (base, state) => ({
-      ...base,
+      ...(typeof baseStyles.control === 'function' ? baseStyles.control(base, state) : base),
       minHeight: controlHeight,
       height: isAssign ? controlHeight : base.height,
       borderRadius: 12,
       borderColor: state.isFocused
         ? '#128C7E'
         : isAssign && hasSelection
-          ? 'rgba(167, 243, 208, 0.95)'
-          : 'rgba(229, 231, 235, 0.95)',
-      backgroundColor: isAssign && hasSelection ? 'rgba(236, 253, 245, 0.72)' : '#ffffff',
+          ? assignBorder
+          : isDark
+            ? 'rgba(51, 65, 85, 0.65)'
+            : 'rgba(229, 231, 235, 0.95)',
+      backgroundColor: isAssign && hasSelection ? assignBg : surface,
       boxShadow: state.isFocused
         ? '0 0 0 3px rgba(37, 211, 102, 0.14), 0 4px 14px rgba(15, 23, 42, 0.06)'
         : isAssign && hasSelection
@@ -160,18 +170,18 @@ function createStyles(
     }),
     placeholder: (base) => ({
       ...base,
-      color: '#9ca3af',
+      color: isDark ? '#64748b' : '#9ca3af',
       fontSize: 13,
       fontWeight: 500,
     }),
     singleValue: (base) => ({
       ...base,
-      color: '#171717',
+      color: isDark ? '#f1f5f9' : '#171717',
       margin: 0,
     }),
     input: (base) => ({
       ...base,
-      color: '#171717',
+      color: isDark ? '#f1f5f9' : '#171717',
       fontSize: 13,
       margin: 0,
       padding: 0,
@@ -194,9 +204,11 @@ function createStyles(
       ...base,
       borderRadius: 16,
       overflow: 'hidden',
-      border: '1px solid rgba(229, 231, 235, 0.95)',
-      boxShadow:
-        '0 18px 40px rgba(15, 23, 42, 0.14), 0 0 0 1px rgba(255, 255, 255, 0.6) inset',
+      border: `1px solid ${isDark ? 'rgba(51, 65, 85, 0.65)' : 'rgba(229, 231, 235, 0.95)'}`,
+      backgroundColor: surface,
+      boxShadow: isDark
+        ? '0 18px 40px rgba(0, 0, 0, 0.45)'
+        : '0 18px 40px rgba(15, 23, 42, 0.14), 0 0 0 1px rgba(255, 255, 255, 0.6) inset',
       marginTop: 8,
       marginBottom: 8,
     }),
@@ -209,21 +221,22 @@ function createStyles(
       ...base,
       borderRadius: 10,
       padding: '8px 10px',
+      color: isDark ? '#f1f5f9' : '#171717',
       backgroundColor: state.isSelected
-        ? 'rgba(209, 250, 229, 0.95)'
+        ? isDark ? 'rgba(6, 78, 59, 0.45)' : 'rgba(209, 250, 229, 0.95)'
         : state.isFocused
-          ? 'rgba(240, 253, 244, 0.95)'
+          ? isDark ? 'rgba(6, 78, 59, 0.25)' : 'rgba(240, 253, 244, 0.95)'
           : 'transparent',
       cursor: state.isDisabled ? 'not-allowed' : 'pointer',
       '&:active': {
-        backgroundColor: 'rgba(167, 243, 208, 0.85)',
+        backgroundColor: isDark ? 'rgba(6, 78, 59, 0.55)' : 'rgba(167, 243, 208, 0.85)',
       },
     }),
     noOptionsMessage: (base) => ({
       ...base,
       fontSize: 13,
       fontWeight: 500,
-      color: '#6b7280',
+      color: isDark ? '#64748b' : '#6b7280',
     }),
   };
 }
@@ -244,8 +257,12 @@ export default function InboxSelect({
   const autoId = useId();
   const selected = options.find((option) => option.value === value) ?? null;
   const searchable = isSearchable ?? options.length > 6;
+  const { resolved } = useTheme();
   const hasSelection = Boolean(value);
-  const styles = useMemo(() => createStyles(variant, hasSelection), [variant, hasSelection]);
+  const styles = useMemo(
+    () => createStyles(variant, hasSelection, resolved === 'dark'),
+    [variant, hasSelection, resolved]
+  );
 
   const emitChange = (nextValue: string) => {
     onChange?.({
@@ -259,7 +276,7 @@ export default function InboxSelect({
       return (
         <components.Control {...props}>
           {showIcon && (
-            <span className="pointer-events-none ml-2.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-neutral-50 text-neutral-500 ring-1 ring-neutral-200/70">
+            <span className="pointer-events-none ml-2.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-theme-subtle text-theme-muted ring-1 ring-theme-border">
               <Icon className="h-3.5 w-3.5" strokeWidth={2.25} />
             </span>
           )}

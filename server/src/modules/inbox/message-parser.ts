@@ -2,6 +2,7 @@ import type { MessageMediaMetadata } from '../media/download.service';
 
 interface ParsedInboundMessage {
   content: string;
+  buttonReplyId?: string;
   metadata?: MessageMediaMetadata;
 }
 
@@ -13,7 +14,35 @@ export function parseInboundMessage(msg: Record<string, unknown>): ParsedInbound
   }
 
   if (msgType === 'button') {
-    return { content: (msg.button as { text?: string } | undefined)?.text || '' };
+    const button = msg.button as { text?: string; payload?: string } | undefined;
+    return {
+      content: button?.text || '',
+      buttonReplyId: button?.payload,
+    };
+  }
+
+  if (msgType === 'interactive') {
+    const interactive = msg.interactive as
+      | {
+          type?: string;
+          button_reply?: { id?: string; title?: string };
+          list_reply?: { id?: string; title?: string };
+        }
+      | undefined;
+
+    if (interactive?.button_reply) {
+      return {
+        content: interactive.button_reply.title || '',
+        buttonReplyId: interactive.button_reply.id,
+      };
+    }
+
+    if (interactive?.list_reply) {
+      return {
+        content: interactive.list_reply.title || '',
+        buttonReplyId: interactive.list_reply.id,
+      };
+    }
   }
 
   const mediaTypes = ['image', 'video', 'audio', 'document', 'sticker'];

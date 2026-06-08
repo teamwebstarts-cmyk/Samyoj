@@ -7,6 +7,7 @@ export const webhookQueue = new Queue('webhook-queue', { connection });
 export const messageQueue = new Queue('message-queue', { connection });
 export const broadcastQueue = new Queue('broadcast-queue', { connection });
 export const automationQueue = new Queue('automation-queue', { connection });
+export const flowQueue = new Queue('flow-queue', { connection });
 export const retryQueue = new Queue('retry-queue', { connection });
 export const notificationQueue = new Queue('notification-queue', { connection });
 

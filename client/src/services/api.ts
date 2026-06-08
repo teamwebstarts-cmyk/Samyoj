@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { getErrorMessage, logError } from '../utils/errors';
+import type { AgentAvailability, TeamSettings } from '../types';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
@@ -61,7 +62,8 @@ export default api;
 export const authApi = {
   register: (data: { name: string; email: string; password: string; companyName: string }) =>
     api.post('/auth/register', data),
-  login: (data: { email: string; password: string }) => api.post('/auth/login', data),
+  login: (data: { email: string; password: string; totpCode?: string }) =>
+    api.post('/auth/login', data),
   me: () => api.get('/auth/me'),
   logout: (refreshToken: string) => api.post('/auth/logout', { refreshToken }),
 };
@@ -71,11 +73,17 @@ export const inboxApi = {
   start: (data: { phone: string; name?: string }) => api.post('/inbox/start', data),
   get: (id: string) => api.get(`/inbox/${id}`),
   messages: (id: string) => api.get(`/inbox/${id}/messages`),
-  send: (id: string, content: string) => api.post(`/inbox/${id}/messages`, { content }),
+  send: (id: string, payload: string | import('../types').SendMessagePayload) =>
+    api.post(
+      `/inbox/${id}/messages`,
+      typeof payload === 'string' ? { content: payload } : payload
+    ),
   assign: (id: string, agentId: string | null) =>
     api.patch(`/inbox/${id}/assign`, { agentId }),
-  setBot: (id: string, data: { active?: boolean; resetHandoff?: boolean }) =>
-    api.patch(`/inbox/${id}/bot`, data),
+  setBot: (
+    id: string,
+    data: { active?: boolean; resetHandoff?: boolean; activeBotId?: string | null }
+  ) => api.patch(`/inbox/${id}/bot`, data),
   setStatus: (id: string, status: string) => api.patch(`/inbox/${id}/status`, { status }),
   addNote: (id: string, content: string) => api.post(`/inbox/${id}/notes`, { content }),
 };
@@ -123,11 +131,56 @@ export const automationApi = {
   delete: (id: string) => api.delete(`/automations/${id}`),
 };
 
+export const flowApi = {
+  list: (params?: Record<string, string>) => api.get('/flows', { params }),
+  get: (id: string) => api.get(`/flows/${id}`),
+  create: (data: Record<string, unknown>) => api.post('/flows', data),
+  update: (id: string, data: Record<string, unknown>) => api.patch(`/flows/${id}`, data),
+  delete: (id: string) => api.delete(`/flows/${id}`),
+  templates: () => api.get('/flows/templates'),
+  fromTemplate: (templateId: string) => api.post(`/flows/from-template/${templateId}`),
+  duplicate: (id: string) => api.post(`/flows/${id}/duplicate`),
+  validate: (data: Record<string, unknown>) => api.post('/flows/validate', data),
+  simulate: (data: Record<string, unknown>) => api.post('/flows/simulate', data),
+  analytics: (id: string) => api.get(`/flows/${id}/analytics`),
+  versions: (id: string) => api.get(`/flows/${id}/versions`),
+  publish: (id: string, note?: string) => api.post(`/flows/${id}/publish`, { note }),
+  restoreVersion: (id: string, version: number) => api.post(`/flows/${id}/restore/${version}`),
+};
+
+export const settingsApi = {
+  get: () => api.get('/settings'),
+  updateBusinessHours: (data: {
+    startHour: number;
+    endHour: number;
+    days: number[];
+    timezone?: string;
+  }) => api.patch('/settings/business-hours', data),
+  getAi: () => api.get('/settings/ai'),
+  updateAi: (data: Record<string, unknown>) => api.patch('/settings/ai', data),
+  aiUsage: (days = 30) => api.get('/settings/ai/usage', { params: { days: String(days) } }),
+  updateCampaigns: (data: {
+    dailySendLimit?: number;
+    batchSize?: number;
+    batchDelayMs?: number;
+  }) => api.patch('/settings/campaigns', data),
+};
+
 export const callingApi = {
   status: () => api.get('/calling/status'),
+  settings: () => api.get('/calling/settings'),
+  updateSettings: (data: Record<string, unknown>) => api.patch('/calling/settings', data),
   enable: () => api.post('/calling/enable'),
-  list: () => api.get('/calling'),
+  disable: () => api.post('/calling/disable'),
+  analytics: (days = 30) => api.get('/calling/analytics', { params: { days: String(days) } }),
+  list: (params?: Record<string, string>) => api.get('/calling', { params }),
   get: (id: string) => api.get(`/calling/${id}`),
+  getSignaling: (id: string) => api.get(`/calling/${id}/signaling`),
+  accept: (id: string, sdpAnswer: string) => api.post(`/calling/${id}/accept`, { sdpAnswer }),
+  decline: (id: string) => api.post(`/calling/${id}/decline`),
+  callback: (data: { contactId?: string; phone?: string; conversationId?: string }) =>
+    api.post('/calling/callback', data),
+  updateNotes: (id: string, notes: string) => api.patch(`/calling/${id}`, { notes }),
   terminate: (id: string) => api.post(`/calling/${id}/terminate`),
 };
 
@@ -144,54 +197,96 @@ export const aiBotApi = {
     api.patch(`/ai-bot/${botId}/faq/${faqId}`, data),
   deleteFaq: (botId: string, faqId: string) => api.delete(`/ai-bot/${botId}/faq/${faqId}`),
   test: (botId: string, message: string) => api.post(`/ai-bot/${botId}/test`, { message }),
+  analytics: (botId: string, days = 30) =>
+    api.get(`/ai-bot/${botId}/analytics`, { params: { days: String(days) } }),
+  versions: (botId: string) => api.get(`/ai-bot/${botId}/versions`),
+  audit: (botId: string) => api.get(`/ai-bot/${botId}/audit`),
+  restoreVersion: (botId: string, version: number) =>
+    api.post(`/ai-bot/${botId}/restore/${version}`),
+  ingestUrl: (botId: string, data: { url: string; title?: string }) =>
+    api.post(`/ai-bot/${botId}/ingest/url`, data),
+  ingestPdf: (botId: string, data: { filename: string; dataBase64: string }) =>
+    api.post(`/ai-bot/${botId}/ingest/pdf`, data),
 };
 
 export const campaignApi = {
   list: (params?: Record<string, string>) => api.get('/campaigns', { params }),
+  quota: () => api.get('/campaigns/quota'),
+  previewAudience: (data: Record<string, unknown>) => api.post('/campaigns/preview-audience', data),
   get: (id: string) => api.get(`/campaigns/${id}`),
   create: (data: Record<string, unknown>) => api.post('/campaigns', data),
   update: (id: string, data: Record<string, unknown>) => api.patch(`/campaigns/${id}`, data),
   delete: (id: string) => api.delete(`/campaigns/${id}`),
   send: (id: string) => api.post(`/campaigns/${id}/send`),
+  test: (id: string, phone: string) => api.post(`/campaigns/${id}/test`, { phone }),
+  pause: (id: string) => api.post(`/campaigns/${id}/pause`),
+  resume: (id: string) => api.post(`/campaigns/${id}/resume`),
+  cancel: (id: string) => api.post(`/campaigns/${id}/cancel`),
+  retryFailed: (id: string) => api.post(`/campaigns/${id}/retry-failed`),
+  duplicate: (id: string) => api.post(`/campaigns/${id}/duplicate`),
   stats: (id: string) => api.get(`/campaigns/${id}/stats`),
+  analytics: (id: string) => api.get(`/campaigns/${id}/analytics`),
+  recipients: (id: string, params?: Record<string, string>) =>
+    api.get(`/campaigns/${id}/recipients`, { params }),
+  exportUrl: (id: string) => `${api.defaults.baseURL}/campaigns/${id}/export`,
+  export: (id: string) =>
+    api.get(`/campaigns/${id}/export`, { responseType: 'blob' }),
 };
 
 export const contactApi = {
   list: (params?: Record<string, string>) => api.get('/contacts', { params }),
   tags: () => api.get('/contacts/tags'),
   get: (id: string) => api.get(`/contacts/${id}`),
+  detail: (id: string) => api.get(`/contacts/${id}/detail`),
   create: (data: Record<string, unknown>) => api.post('/contacts', data),
   update: (id: string, data: Record<string, unknown>) => api.patch(`/contacts/${id}`, data),
   delete: (id: string) => api.delete(`/contacts/${id}`),
   import: (contacts: Array<{ phone: string; name?: string; tags?: string[]; notes?: string }>) =>
     api.post('/contacts/import', { contacts }),
+  bulk: (data: {
+    ids: string[];
+    action: 'delete' | 'addTags' | 'removeTags' | 'setOptedIn';
+    tags?: string[];
+    optedIn?: boolean;
+  }) => api.post('/contacts/bulk', data),
+  renameTag: (from: string, to: string) => api.post('/contacts/tags/rename', { from, to }),
+  deleteTag: (tag: string) => api.delete(`/contacts/tags/${encodeURIComponent(tag)}`),
+  export: (params?: Record<string, string>) =>
+    api.get('/contacts/export', { params, responseType: 'blob' }),
 };
 
 export interface TemplateButtonPayload {
-  type: 'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER';
+  type: 'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER' | 'COPY_CODE';
   text: string;
   url?: string;
   phone_number?: string;
+  example?: string;
 }
 
 export const templateApi = {
   list: (params?: Record<string, string>) => api.get('/templates', { params }),
   library: (params?: Record<string, string>) => api.get('/templates/library', { params }),
   get: (name: string) => api.get(`/templates/${name}`),
-  create: (data: {
-    name: string;
-    language: string;
-    category: string;
-    body: string;
-    header?: string;
-    footer?: string;
-    buttons?: TemplateButtonPayload[];
-  }) => api.post('/templates', data),
+  usage: (name: string) => api.get(`/templates/${name}/usage`),
+  create: (data: Record<string, unknown>) => api.post('/templates', data),
   createFromLibrary: (data: {
     name: string;
     language: string;
     libraryTemplateName: string;
+    libraryTemplateButtonInputs?: Array<Record<string, unknown>>;
   }) => api.post('/templates/from-library', data),
+  resubmit: (name: string, data: Record<string, unknown>) =>
+    api.post(`/templates/${name}/resubmit`, data),
+  testSend: (
+    name: string,
+    data: {
+      phone: string;
+      language?: string;
+      templateParams?: { body?: string[]; header?: string[]; headerMediaUrl?: string };
+    }
+  ) => api.post(`/templates/${name}/test-send`, data),
+  uploadHeader: (data: { data: string; mimeType: string }) =>
+    api.post('/templates/upload-header', data),
   delete: (name: string) => api.delete(`/templates/${name}`),
 };
 
@@ -201,16 +296,48 @@ export const analyticsApi = {
 
 export const teamApi = {
   list: (params?: Record<string, string>) => api.get('/team', { params }),
+  get: (id: string) => api.get(`/team/${id}`),
   agents: () => api.get('/team/agents'),
-  create: (data: {
-    name: string;
-    email: string;
-    password: string;
-    orgRole: 'ADMIN' | 'AGENT';
-  }) => api.post('/team', data),
-  update: (
-    id: string,
-    data: { name?: string; orgRole?: 'ADMIN' | 'AGENT'; password?: string }
-  ) => api.patch(`/team/${id}`, data),
-  remove: (id: string) => api.delete(`/team/${id}`),
+  create: (data: Record<string, unknown>) => api.post('/team', data),
+  update: (id: string, data: Record<string, unknown>) => api.patch(`/team/${id}`, data),
+  remove: (id: string, data?: { reassignToId?: string }) =>
+    api.delete(`/team/${id}`, { data }),
+  reassign: (id: string, toAgentId: string | null) =>
+    api.post(`/team/${id}/reassign`, { toAgentId }),
+  heartbeat: (availability?: AgentAvailability) =>
+    api.post('/team/heartbeat', availability ? { availability } : {}),
+  setAvailability: (availability: AgentAvailability) =>
+    api.patch('/team/me/availability', { availability }),
+  settings: {
+    get: () => api.get('/team/settings'),
+    update: (data: Partial<TeamSettings>) => api.patch('/team/settings', data),
+  },
+  invites: {
+    list: () => api.get('/team/invites'),
+    create: (data: Record<string, unknown>) => api.post('/team/invites', data),
+    revoke: (id: string) => api.delete(`/team/invites/${id}`),
+    getByToken: (token: string) => api.get(`/team/invites/token/${token}`),
+    accept: (data: { token: string; name?: string; password: string }) =>
+      api.post('/team/invites/accept', data),
+  },
+  departments: {
+    list: () => api.get('/team/departments'),
+    create: (data: { name: string; color?: string }) => api.post('/team/departments', data),
+    update: (id: string, data: { name?: string; color?: string }) =>
+      api.patch(`/team/departments/${id}`, data),
+    remove: (id: string) => api.delete(`/team/departments/${id}`),
+  },
+  audit: (limit?: number) => api.get('/team/audit', { params: { limit: String(limit ?? 50) } }),
+  sessions: {
+    list: () => api.get('/team/sessions'),
+    revoke: (id: string) => api.delete(`/team/sessions/${id}`),
+    revokeAll: (exceptCurrent?: string) =>
+      api.delete('/team/sessions', { data: { exceptCurrent } }),
+  },
+  twoFactor: {
+    setup: () => api.post('/team/me/2fa/setup'),
+    enable: (code: string) => api.post('/team/me/2fa/enable', { code }),
+    disable: (code: string, password: string) =>
+      api.post('/team/me/2fa/disable', { code, password }),
+  },
 };

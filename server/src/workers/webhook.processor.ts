@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import prisma from '../config/database';
 import { MetaWhatsAppService } from '../modules/whatsapp/meta.service';
 import { handleInboundAutomations } from '../modules/automation/engine';
@@ -49,13 +50,16 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
       const orgId = whatsappNumber.organizationId;
 
       for (const status of (value.statuses as Array<Record<string, unknown>>) || []) {
+        const metaMessageId = status.id as string;
+        const statusValue = (status.status as string)?.toUpperCase();
+
         await prisma.message.updateMany({
-          where: { metaMessageId: status.id as string },
-          data: { status: (status.status as string)?.toUpperCase() as never },
+          where: { metaMessageId },
+          data: { status: statusValue as never },
         });
 
         const msg = await prisma.message.findFirst({
-          where: { metaMessageId: status.id as string },
+          where: { metaMessageId },
           include: { conversation: true },
         });
 
@@ -66,6 +70,9 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
             conversationId: msg.conversationId,
           });
         }
+
+        const { syncCampaignRecipientFromWebhook } = await import('../modules/campaigns/service');
+        await syncCampaignRecipientFromWebhook(metaMessageId, statusValue);
       }
 
       for (const msg of (value.messages as Array<Record<string, unknown>>) || []) {
@@ -87,6 +94,7 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
               phone: contactPhone,
               name: contactName,
               optedIn: true,
+              source: 'INBOUND',
             },
           });
         } else if (contactName && !contact.name) {
@@ -123,15 +131,20 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
 
         const parsed = parseInboundMessage(msg);
 
+        const inboundType = mapInboundMessageType(msg.type as string | undefined);
+        const inboundMetadata = parsed.buttonReplyId
+          ? { ...parsed.metadata, buttonReplyId: parsed.buttonReplyId, isButtonReply: true }
+          : parsed.metadata;
+
         let message = await prisma.message.create({
           data: {
             conversationId: conversation.id,
             metaMessageId: msg.id as string,
             direction: 'INBOUND',
-            type: mapInboundMessageType(msg.type as string | undefined),
+            type: inboundType,
             content: parsed.content,
             status: 'DELIVERED',
-            metadata: parsed.metadata,
+            metadata: inboundMetadata as Prisma.InputJsonValue,
           },
         });
 
@@ -181,11 +194,13 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
         await handleInboundAutomations({
           organizationId: orgId,
           conversationId: conversation.id,
+          contactId: contact.id,
           messageId: message.id,
           contactPhone,
           phoneNumberId: whatsappNumber.phoneNumberId,
           encryptedToken: whatsappNumber.accessToken,
           content: content || '',
+          buttonReplyId: parsed.buttonReplyId,
           isNewConversation: isNew,
         }).catch((err) =>
           logError(err, { source: 'webhook', action: 'Automation processing failed' })

@@ -6,6 +6,7 @@ import {
   MessageSquare,
   Send,
   Users,
+  PhoneCall,
   Zap,
 } from 'lucide-react';
 import DashboardSkeleton from '../components/dashboard/DashboardSkeleton';
@@ -14,8 +15,9 @@ import WhatsAppConnectGuide from '../components/dashboard/WhatsAppConnectGuide';
 import RingMetric from '../components/dashboard/RingMetric';
 import StatCard from '../components/dashboard/StatCard';
 import PageShell from '../components/ui/PageShell';
-import AppAlert from '../components/ui/AppAlert';
+import EmptyState from '../components/ui/EmptyState';
 import { analyticsApi } from '../services/api';
+import { toastError } from '../utils/toast';
 import type { AnalyticsOverview } from '../types';
 
 const quickActions = [
@@ -51,18 +53,32 @@ const quickActions = [
     gradient: 'bg-gradient-to-br from-amber-50/95 via-white to-orange-50/40',
     iconBg: 'bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-[0_4px_14px_rgba(245,158,11,0.3)]',
   },
+  {
+    to: '/calls',
+    label: 'Voice calls',
+    desc: 'AI & agent calling',
+    icon: PhoneCall,
+    gradient: 'bg-gradient-to-br from-violet-50/95 via-white to-indigo-50/40',
+    iconBg: 'bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-[0_4px_14px_rgba(99,102,241,0.3)]',
+  },
 ];
 
 export default function DashboardPage() {
   const [stats, setStats] = useState<AnalyticsOverview | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
     analyticsApi
       .overview()
-      .then(({ data }) => setStats(data.data))
-      .catch(() => setError('Unable to load dashboard metrics. Please try again.'))
+      .then(({ data }) => {
+        setStats(data.data);
+        setLoadFailed(false);
+      })
+      .catch(() => {
+        setLoadFailed(true);
+        toastError('Unable to load dashboard metrics. Please try again.');
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -76,8 +92,12 @@ export default function DashboardPage() {
 
       {loading ? (
         <DashboardSkeleton />
-      ) : error ? (
-        <AppAlert variant="error">{error}</AppAlert>
+      ) : loadFailed ? (
+        <EmptyState
+          icon={AlertCircle}
+          title="Could not load metrics"
+          description="Please refresh the page or try again in a moment."
+        />
       ) : stats ? (
         <div className="space-y-5 pb-6 sm:space-y-6 sm:pb-8">
           {/* Hero */}
@@ -89,7 +109,7 @@ export default function DashboardPage() {
 
             <div className="relative">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200/80 bg-white/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-whatsapp-700 shadow-sm backdrop-blur-sm">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200/80 bg-theme-surface/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-whatsapp-700 shadow-sm backdrop-blur-sm dark:text-whatsapp-400">
                   <span className="relative flex h-1.5 w-1.5">
                     <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-whatsapp-500 opacity-50" />
                     <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-whatsapp-500" />
@@ -104,7 +124,7 @@ export default function DashboardPage() {
 
               <div className="mt-5 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
                 <div>
-                  <p className="text-sm font-semibold text-neutral-600">Total messages sent</p>
+                  <p className="text-sm font-semibold text-theme-secondary">Total messages sent</p>
                   <p className="mt-1 bg-gradient-to-br from-neutral-900 via-neutral-800 to-whatsapp-700 bg-clip-text text-[2.5rem] font-extrabold tabular-nums leading-none tracking-tight text-transparent sm:text-5xl">
                     {stats.messagesSent.toLocaleString()}
                   </p>

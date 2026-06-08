@@ -1,0 +1,305 @@
+import type { FlowNode, FlowNodeType } from '../../types';
+
+export function linkNodes(nodes: FlowNode[]): FlowNode[] {
+  return nodes.map((node, index) => {
+    const next = index < nodes.length - 1 ? nodes[index + 1].id : undefined;
+
+    if (node.type === 'buttons') {
+      const branches = { ...(node.branches || {}) };
+      if (node.buttons) {
+        for (const btn of node.buttons) {
+          if (!branches[btn.id] && next) branches[btn.id] = next;
+        }
+      }
+      return { ...node, branches, next };
+    }
+
+    if (node.type === 'condition') {
+      const branches = { ...(node.branches || {}) };
+      if (!branches.true && next) branches.true = next;
+      if (!branches.false && next) branches.false = next;
+      return { ...node, branches };
+    }
+
+    if (node.type === 'ab_split') {
+      const branches = { ...(node.branches || {}) };
+      if (!branches.a && next) branches.a = next;
+      if (!branches.b && next) branches.b = next;
+      return { ...node, branches };
+    }
+
+    if (node.type === 'language') {
+      const branches = { ...(node.branches || {}) };
+      if (!branches.default && next) branches.default = next;
+      return { ...node, branches };
+    }
+
+    return { ...node, next };
+  });
+}
+
+export function getNodeSummary(node: FlowNode): string {
+  switch (node.type) {
+    case 'message':
+    case 'handoff':
+    case 'ai':
+    case 'end':
+    case 'assign':
+      return node.text || '—';
+    case 'buttons':
+      return node.text || `${node.buttons?.length || 0} buttons`;
+    case 'question':
+      return node.prompt || 'Ask question';
+    case 'tag':
+      return `Tag: ${node.tag || '—'}`;
+    case 'condition':
+      if (node.conditionType === 'has_tag') return `If tag: ${node.conditionTag}`;
+      if (node.conditionType === 'language') return `If language: ${node.languageCode}`;
+      return 'If business hours';
+    case 'template':
+      return node.templateName ? `Template: ${node.templateName}` : 'Template message';
+    case 'delay':
+      return `Wait ${node.delaySeconds || 0}s`;
+    case 'media':
+      return node.mediaCaption || node.mediaUrl || 'Media message';
+    case 'webhook':
+      return node.webhookUrl || 'Webhook call';
+    case 'ab_split':
+      return '50/50 A/B split';
+    case 'language':
+      return `Language: ${node.languageCode || 'en'}`;
+    default:
+      return '—';
+  }
+}
+
+export function getBranchLabels(
+  node: FlowNode,
+  allNodes: FlowNode[]
+): Array<{ key: string; label: string; targetId?: string; targetLabel: string }> {
+  if (!node.branches) return [];
+
+  return Object.entries(node.branches).map(([key, targetId]) => {
+    const target = allNodes.find((n) => n.id === targetId);
+    const targetLabel = target ? `${allNodes.indexOf(target) + 1}. ${target.type}` : 'Next';
+    return { key, label: key, targetId, targetLabel };
+  });
+}
+
+export function validateFlow(
+  name: string,
+  triggerType: string,
+  triggerConfig: Record<string, unknown>,
+  keyword: string,
+  nodes: FlowNode[]
+): string[] {
+  const errors: string[] = [];
+  if (!name.trim()) errors.push('Flow name is required');
+  if (triggerType === 'KEYWORD' && !keyword.trim()) errors.push('Keyword is required for keyword trigger');
+  if (triggerType === 'CONTACT_TAG' && !String(triggerConfig.tag || '').trim()) {
+    errors.push('Tag is required for contact tag trigger');
+  }
+  if (triggerType === 'SEGMENT') {
+    const tags = triggerConfig.tags as string[] | undefined;
+    if (!tags?.length) errors.push('At least one tag is required for segment trigger');
+  }
+  if (nodes.length === 0) errors.push('Add at least one step');
+
+  for (const node of nodes) {
+    if (['message', 'handoff', 'ai', 'end', 'assign'].includes(node.type) && !node.text?.trim()) {
+      errors.push(`${node.type} step needs a message`);
+    }
+    if (node.type === 'buttons') {
+      if (!node.text?.trim()) errors.push('Button step needs a message');
+      if (!node.buttons?.length) errors.push('Button step needs at least one button');
+    }
+    if (node.type === 'question' && !node.prompt?.trim()) errors.push('Question step needs a prompt');
+    if (node.type === 'tag' && !node.tag?.trim()) errors.push('Tag step needs a tag name');
+    if (node.type === 'template' && !node.templateName?.trim()) errors.push('Template step needs a template name');
+    if (node.type === 'media' && !node.mediaUrl?.trim()) errors.push('Media step needs a URL');
+    if (node.type === 'webhook' && !node.webhookUrl?.trim()) errors.push('Webhook step needs a URL');
+    if (node.type === 'delay' && (!node.delaySeconds || node.delaySeconds < 1)) {
+      errors.push('Delay step needs at least 1 second');
+    }
+  }
+
+  return errors;
+}
+
+export type FlowPreviewMessage =
+  | {
+      id: string;
+      kind: 'outbound';
+      text: string;
+      time: string;
+      status?: 'sent' | 'delivered' | 'read';
+    }
+  | { id: string; kind: 'inbound'; text: string; time: string }
+  | {
+      id: string;
+      kind: 'buttons';
+      text: string;
+      buttons: Array<{ id: string; title: string }>;
+      time: string;
+    }
+  | { id: string; kind: 'button_reply'; text: string; time: string }
+  | { id: string; kind: 'notice'; text: string };
+
+function previewTime(index: number): string {
+  const hour = 10 + Math.floor(index / 12);
+  const minute = (index * 3) % 60;
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+}
+
+export function buildFlowPreviewMessages(
+  nodes: FlowNode[],
+  selectedIndex: number,
+  branchChoice?: string,
+): FlowPreviewMessage[] {
+  const messages: FlowPreviewMessage[] = [];
+  let i = 0;
+  let seq = 0;
+
+  const push = (message: Omit<FlowPreviewMessage, 'id'> & { id?: string }) => {
+    messages.push({ ...message, id: message.id ?? `preview-${seq++}` } as FlowPreviewMessage);
+  };
+
+  while (i <= selectedIndex && i < nodes.length) {
+    const node = nodes[i];
+    const time = previewTime(seq);
+
+    if (node.type === 'buttons') {
+      const body = node.text?.trim() || 'Please choose an option:';
+      push({
+        kind: 'buttons',
+        text: body,
+        buttons: (node.buttons || []).map((btn) => ({ id: btn.id, title: btn.title })),
+        time,
+      });
+
+      const btn = node.buttons?.find((b) => b.id === branchChoice) || node.buttons?.[0];
+      if (btn) {
+        push({ kind: 'button_reply', text: btn.title, time: previewTime(seq) });
+        if (node.branches?.[btn.id]) {
+          const nextIdx = nodes.findIndex((n) => n.id === node.branches![btn.id]);
+          if (nextIdx > i) {
+            i = nextIdx;
+            continue;
+          }
+        }
+      }
+    } else if (node.type === 'question') {
+      const prompt = node.prompt?.trim() || node.text?.trim();
+      if (prompt) push({ kind: 'outbound', text: prompt, time, status: 'read' });
+      push({ kind: 'inbound', text: 'Alex Kumar', time: previewTime(seq) });
+    } else if (node.type === 'condition') {
+      push({ kind: 'notice', text: 'Condition checked — showing true path' });
+      if (node.branches?.true) {
+        const nextIdx = nodes.findIndex((n) => n.id === node.branches!.true);
+        if (nextIdx > i) {
+          i = nextIdx;
+          continue;
+        }
+      }
+    } else if (node.type === 'tag') {
+      push({ kind: 'notice', text: `Contact tagged: ${node.tag || 'lead'}` });
+    } else if (node.type === 'assign') {
+      const text = node.text?.trim() || 'Connecting you with our team...';
+      push({ kind: 'outbound', text, time, status: 'delivered' });
+      push({ kind: 'notice', text: 'Assigned to available agent' });
+    } else if (node.type === 'handoff') {
+      const text = node.text?.trim() || 'Let me connect you with our team.';
+      push({ kind: 'outbound', text, time, status: 'delivered' });
+      push({ kind: 'notice', text: 'Handed off to human agent' });
+    } else if (node.type === 'delay') {
+      push({ kind: 'notice', text: `Waiting ${node.delaySeconds || 30} seconds...` });
+    } else if (node.type === 'webhook') {
+      push({ kind: 'notice', text: 'Webhook triggered' });
+    } else if (node.type === 'template') {
+      const text = node.text?.trim() || `Template: ${node.templateName || 'message'}`;
+      push({ kind: 'outbound', text, time, status: 'delivered' });
+    } else if (node.type === 'media') {
+      const caption = node.mediaCaption?.trim() || `${node.mediaType || 'Media'} message`;
+      push({ kind: 'outbound', text: `📎 ${caption}`, time, status: 'delivered' });
+    } else if (node.type === 'ai') {
+      const text = node.text?.trim() || 'Let me help with that...';
+      push({ kind: 'outbound', text, time, status: 'read' });
+    } else if (node.type === 'end') {
+      const text = node.text?.trim() || 'Thank you! Have a great day.';
+      push({ kind: 'outbound', text, time, status: 'read' });
+    } else {
+      const text = node.text?.trim() || getNodeSummary(node);
+      if (text && text !== '—') {
+        push({ kind: 'outbound', text, time, status: i === selectedIndex ? 'read' : 'delivered' });
+      }
+    }
+
+    i++;
+  }
+
+  return messages;
+}
+
+export function simulateMessages(
+  nodes: FlowNode[],
+  selectedIndex: number,
+  branchChoice?: string
+): Array<{ type: 'bot' | 'user'; text: string }> {
+  const messages: Array<{ type: 'bot' | 'user'; text: string }> = [];
+  let i = 0;
+
+  while (i <= selectedIndex && i < nodes.length) {
+    const node = nodes[i];
+    const text = node.text || node.prompt || getNodeSummary(node);
+    if (text) messages.push({ type: 'bot', text });
+
+    if (node.type === 'buttons' && node.buttons?.length) {
+      const btn = node.buttons.find((b) => b.id === branchChoice) || node.buttons[0];
+      messages.push({ type: 'user', text: `[Taps: ${btn.title}]` });
+      if (node.branches?.[btn.id]) {
+        const nextIdx = nodes.findIndex((n) => n.id === node.branches![btn.id]);
+        if (nextIdx > i) {
+          i = nextIdx;
+          continue;
+        }
+      }
+    }
+
+    if (node.type === 'condition') {
+      messages.push({ type: 'bot', text: '↳ Condition evaluated (true path shown)' });
+      if (node.branches?.true) {
+        const nextIdx = nodes.findIndex((n) => n.id === node.branches!.true);
+        if (nextIdx > i) {
+          i = nextIdx;
+          continue;
+        }
+      }
+    }
+
+    if (node.type === 'question') messages.push({ type: 'user', text: '[Customer reply...]' });
+    if (node.type === 'tag') messages.push({ type: 'bot', text: `🏷️ Tagged as "${node.tag}"` });
+    if (node.type === 'assign') messages.push({ type: 'bot', text: '👤 Assigned to agent' });
+    if (node.type === 'handoff') messages.push({ type: 'bot', text: '🤝 Handed off to team' });
+    if (node.type === 'delay') messages.push({ type: 'bot', text: `⏳ Waiting ${node.delaySeconds}s...` });
+    if (node.type === 'webhook') messages.push({ type: 'bot', text: '🔗 Webhook triggered' });
+    if (node.type === 'template') messages.push({ type: 'bot', text: `📋 Template: ${node.templateName}` });
+    if (node.type === 'media') messages.push({ type: 'bot', text: `📎 Media: ${node.mediaType}` });
+
+    i++;
+  }
+
+  return messages;
+}
+
+export const TEMPLATE_COLORS: Record<string, { gradient: string; ring: string; bg: string }> = {
+  violet: { gradient: 'from-violet-500 to-purple-600', ring: 'ring-violet-200/60', bg: 'bg-violet-50' },
+  emerald: { gradient: 'from-whatsapp-500 to-emerald-600', ring: 'ring-emerald-200/60', bg: 'bg-emerald-50' },
+  amber: { gradient: 'from-amber-500 to-orange-500', ring: 'ring-amber-200/60', bg: 'bg-amber-50' },
+  sky: { gradient: 'from-sky-500 to-blue-600', ring: 'ring-sky-200/60', bg: 'bg-sky-50' },
+};
+
+export const NODE_CATEGORIES: Array<{ label: string; types: FlowNodeType[] }> = [
+  { label: 'Messages', types: ['message', 'buttons', 'question', 'template', 'media'] },
+  { label: 'Actions', types: ['tag', 'assign', 'handoff', 'ai', 'webhook', 'end'] },
+  { label: 'Logic', types: ['condition', 'delay', 'ab_split', 'language'] },
+];

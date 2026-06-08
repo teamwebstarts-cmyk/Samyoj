@@ -55,18 +55,18 @@ function ContextMenuPanel({
   return (
     <div
       ref={panelRef}
-      className="context-menu-panel min-w-[220px] overflow-visible rounded-2xl border border-neutral-200/90 bg-white/95 p-1.5 shadow-[0_20px_50px_rgba(15,23,42,0.16),0_0_0_1px_rgba(255,255,255,0.7)_inset] backdrop-blur-xl"
+      className="context-menu-panel min-w-[220px] overflow-visible rounded-2xl border border-theme-border bg-theme-surface p-1.5 shadow-panel"
       role="menu"
       onContextMenu={(e) => e.preventDefault()}
     >
       {header && (
-        <div className="mb-1 border-b border-neutral-100 px-3 py-2.5">{header}</div>
+        <div className="mb-1 border-b border-theme-border px-3 py-2.5">{header}</div>
       )}
 
       <div className="py-0.5">
         {items.map((item) => {
           if (item.separator) {
-            return <div key={item.id} className="my-1 border-t border-neutral-100" />;
+            return <div key={item.id} className="my-1 border-t border-theme-border" />;
           }
 
           const Icon = item.icon;
@@ -101,18 +101,18 @@ function ContextMenuPanel({
                   item.disabled
                     ? 'cursor-not-allowed opacity-45'
                     : submenuOpen
-                      ? 'bg-emerald-50/90 text-emerald-900'
+                      ? 'bg-whatsapp-500/10 text-whatsapp-700 dark:text-whatsapp-300'
                       : item.danger
-                        ? 'text-red-600 hover:bg-red-50'
-                        : 'text-neutral-800 hover:bg-emerald-50/80'
+                        ? 'text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 dark:text-red-400'
+                        : 'text-theme-fg hover:bg-whatsapp-500/10'
                 }`}
               >
                 {Icon && (
                   <span
                     className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ring-1 ${
                       item.danger
-                        ? 'bg-red-50 text-red-600 ring-red-100'
-                        : 'bg-neutral-50 text-neutral-600 ring-neutral-200/70'
+                        ? 'bg-red-50 text-red-600 ring-red-100 dark:bg-red-500/10 dark:text-red-400'
+                        : 'bg-theme-subtle text-theme-secondary ring-theme-border'
                     }`}
                   >
                     <Icon className="h-3.5 w-3.5" strokeWidth={2.25} />
@@ -121,7 +121,7 @@ function ContextMenuPanel({
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[13px] font-semibold">{item.label}</span>
                   {item.description && (
-                    <span className="block truncate text-[11px] font-medium text-neutral-500">
+                    <span className="block truncate text-[11px] font-medium text-theme-muted">
                       {item.description}
                     </span>
                   )}
@@ -141,7 +141,7 @@ function ContextMenuPanel({
                   className={`absolute top-0 z-20 ${flipSubmenu ? 'right-full pr-1' : 'left-full pl-1'}`}
                   onMouseEnter={() => setOpenSubmenu(item.id)}
                 >
-                  <div className="max-h-64 min-w-[200px] max-w-[240px] overflow-y-auto overflow-x-hidden rounded-2xl border border-neutral-200/90 bg-white/95 p-1.5 shadow-[0_16px_40px_rgba(15,23,42,0.14)] backdrop-blur-xl">
+                  <div className="max-h-64 min-w-[200px] max-w-[240px] overflow-y-auto overflow-x-hidden rounded-2xl border border-theme-border bg-theme-surface p-1.5 shadow-panel">
                     {item.children!.map((child) => {
                       const ChildIcon = child.icon;
                       return (
@@ -159,12 +159,12 @@ function ContextMenuPanel({
                             child.disabled
                               ? 'cursor-not-allowed opacity-45'
                               : child.checked
-                                ? 'bg-emerald-50/90 text-emerald-900'
-                                : 'text-neutral-800 hover:bg-emerald-50/80'
+                                ? 'bg-whatsapp-500/10 text-whatsapp-700 dark:text-whatsapp-300'
+                                : 'text-theme-fg hover:bg-whatsapp-500/10'
                           }`}
                         >
                           {ChildIcon && (
-                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-neutral-50 text-neutral-600 ring-1 ring-neutral-200/70">
+                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-theme-subtle text-theme-secondary ring-1 ring-theme-border">
                               <ChildIcon className="h-3.5 w-3.5" strokeWidth={2.25} />
                             </span>
                           )}

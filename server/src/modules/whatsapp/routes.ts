@@ -249,12 +249,17 @@ router.delete(
     });
     if (!number) throw new AppError(404, 'WhatsApp number not found');
 
-    await prisma.conversation.updateMany({
-      where: { organizationId: orgId, whatsappNumberId: id },
-      data: { whatsappNumberId: null },
+    await prisma.$transaction(async (tx) => {
+      await tx.conversation.updateMany({
+        where: { organizationId: orgId, whatsappNumberId: id },
+        data: { whatsappNumberId: null },
+      });
+      await tx.call.updateMany({
+        where: { organizationId: orgId, whatsappNumberId: id },
+        data: { whatsappNumberId: null },
+      });
+      await tx.whatsappNumber.delete({ where: { id } });
     });
-
-    await prisma.whatsappNumber.delete({ where: { id } });
 
     sendSuccess(res, { disconnected: true });
   })

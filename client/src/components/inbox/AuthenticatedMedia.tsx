@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { FileText, Loader2 } from 'lucide-react';
+import { FileText, Loader2, Play } from 'lucide-react';
 import api from '../../services/api';
 
 function useAuthenticatedMediaUrl(messageId: string | undefined) {
@@ -47,14 +47,15 @@ interface AuthenticatedImageProps {
   messageId: string;
   alt?: string;
   className?: string;
+  onClick?: (url: string) => void;
 }
 
-export function AuthenticatedImage({ messageId, alt = 'Image', className = '' }: AuthenticatedImageProps) {
+export function AuthenticatedImage({ messageId, alt = 'Image', className = '', onClick }: AuthenticatedImageProps) {
   const { url, loading, error } = useAuthenticatedMediaUrl(messageId);
 
   if (loading) {
     return (
-      <div className={`flex items-center justify-center bg-[#f0f2f5] ${className}`}>
+      <div className={`flex min-h-[120px] items-center justify-center bg-[#f0f2f5] ${className}`}>
         <Loader2 className="h-5 w-5 animate-spin text-[#8696a0]" />
       </div>
     );
@@ -68,20 +69,41 @@ export function AuthenticatedImage({ messageId, alt = 'Image', className = '' }:
     );
   }
 
-  return <img src={url} alt={alt} className={`block max-h-72 w-full object-cover ${className}`} loading="lazy" />;
+  return (
+    <button
+      type="button"
+      onClick={() => onClick?.(url)}
+      className={`group relative block w-full cursor-zoom-in ${onClick ? '' : 'cursor-default'} ${className}`}
+    >
+      <img
+        src={url}
+        alt={alt}
+        className="block max-h-72 w-full object-cover transition group-hover:brightness-95"
+        loading="lazy"
+      />
+      {onClick && (
+        <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 transition group-hover:bg-black/10">
+          <span className="rounded-full bg-black/50 px-2 py-1 text-[10px] font-medium text-white opacity-0 transition group-hover:opacity-100">
+            View
+          </span>
+        </span>
+      )}
+    </button>
+  );
 }
 
 interface AuthenticatedVideoProps {
   messageId: string;
   className?: string;
+  onClick?: (url: string) => void;
 }
 
-export function AuthenticatedVideo({ messageId, className = '' }: AuthenticatedVideoProps) {
+export function AuthenticatedVideo({ messageId, className = '', onClick }: AuthenticatedVideoProps) {
   const { url, loading, error } = useAuthenticatedMediaUrl(messageId);
 
   if (loading) {
     return (
-      <div className={`flex items-center justify-center bg-[#111b21] ${className}`}>
+      <div className={`flex min-h-[120px] items-center justify-center bg-[#111b21] ${className}`}>
         <Loader2 className="h-5 w-5 animate-spin text-white/70" />
       </div>
     );
@@ -92,6 +114,23 @@ export function AuthenticatedVideo({ messageId, className = '' }: AuthenticatedV
       <div className={`flex items-center justify-center bg-[#111b21] px-3 py-8 text-[12px] text-white/70 ${className}`}>
         Video unavailable
       </div>
+    );
+  }
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={() => onClick(url)}
+        className={`group relative block w-full cursor-pointer ${className}`}
+      >
+        <video src={url} className="block max-h-72 w-full bg-black object-cover" preload="metadata" muted />
+        <span className="absolute inset-0 flex items-center justify-center bg-black/30 transition group-hover:bg-black/40">
+          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white/90 shadow-lg">
+            <Play className="h-6 w-6 fill-[#111b21] text-[#111b21]" />
+          </span>
+        </span>
+      </button>
     );
   }
 
@@ -130,14 +169,19 @@ interface AuthenticatedDocumentProps {
   messageId: string;
   filename?: string;
   className?: string;
+  onClick?: (url: string) => void;
 }
 
-export function AuthenticatedDocument({ messageId, filename, className = '' }: AuthenticatedDocumentProps) {
+export function AuthenticatedDocument({ messageId, filename, className = '', onClick }: AuthenticatedDocumentProps) {
   const { url, loading, error } = useAuthenticatedMediaUrl(messageId);
 
   const handleOpen = () => {
     if (!url) return;
-    window.open(url, '_blank', 'noopener,noreferrer');
+    if (onClick) {
+      onClick(url);
+    } else {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
   };
 
   return (
@@ -155,7 +199,7 @@ export function AuthenticatedDocument({ messageId, filename, className = '' }: A
           {filename || 'Document'}
         </p>
         <p className="text-[11px] text-[#667781]">
-          {loading ? 'Loading...' : error ? 'Unavailable' : 'Tap to open'}
+          {loading ? 'Loading...' : error ? 'Unavailable' : 'Tap to view'}
         </p>
       </div>
     </button>

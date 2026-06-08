@@ -15,10 +15,10 @@ const variants: Record<AppButtonVariant, string> = {
   primary:
     'bg-gradient-to-br from-whatsapp-500 to-whatsapp-600 text-white shadow-[0_4px_14px_rgba(37,211,102,0.35)] hover:from-whatsapp-600 hover:to-whatsapp-700 focus:ring-whatsapp-500/25',
   secondary:
-    'border border-neutral-200/80 bg-white/90 text-neutral-800 shadow-input hover:border-whatsapp-500/30 hover:bg-emerald-50/80 focus:ring-neutral-900/10',
-  ghost: 'text-neutral-700 hover:bg-neutral-100/90 focus:ring-neutral-900/10',
+    'border border-theme-border bg-theme-surface text-theme-fg shadow-input hover:border-whatsapp-500/30 hover:bg-whatsapp-500/10 focus:ring-whatsapp-500/15',
+  ghost: 'text-theme-secondary hover:bg-theme-subtle hover:text-theme-fg focus:ring-whatsapp-500/10',
   danger:
-    'border border-red-200/80 bg-red-50 text-red-700 hover:bg-red-100 focus:ring-red-500/20',
+    'border border-red-200/80 bg-red-50 text-red-700 hover:bg-red-100 focus:ring-red-500/20 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/15',
 };
 
 const sizes: Record<AppButtonSize, string> = {

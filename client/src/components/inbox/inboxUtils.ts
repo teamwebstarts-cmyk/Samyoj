@@ -153,6 +153,10 @@ export function getMessagePreview(message?: Pick<Message, 'type' | 'content' | '
       return meta?.filename || message.content || 'Document';
     case 'TEMPLATE':
       return message.content || 'Template message';
+    case 'INTERACTIVE':
+      if (meta?.isButtonReply) return message.content || 'Button reply';
+      if (meta?.buttons?.length) return message.content || 'Interactive message';
+      return message.content || 'Interactive message';
     default:
       break;
   }

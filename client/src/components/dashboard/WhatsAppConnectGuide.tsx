@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { CheckCircle2, Link2, LogOut, Smartphone } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import AppAlert from '../ui/AppAlert';
 import AppButton from '../ui/AppButton';
+import { toastError, toastSuccess } from '../../utils/toast';
 import { whatsappApi } from '../../services/api';
 
 interface WhatsappNumberRow {
@@ -17,11 +17,8 @@ export default function WhatsAppConnectGuide() {
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
-  const [error, setError] = useState('');
-
   const load = useCallback(() => {
     setLoading(true);
-    setError('');
     Promise.all([whatsappApi.numbers(), whatsappApi.connectUrl()])
       .then(([numbersRes, urlRes]) => {
         const numbers = numbersRes.data.data as WhatsappNumberRow[];
@@ -31,7 +28,7 @@ export default function WhatsAppConnectGuide() {
       .catch(() => {
         setNumber(null);
         setConnectUrl('');
-        setError('Could not load WhatsApp connection status.');
+        toastError('Could not load WhatsApp connection status.');
       })
       .finally(() => setLoading(false));
   }, []);
@@ -54,15 +51,15 @@ export default function WhatsAppConnectGuide() {
     if (!confirmed) return;
 
     setDisconnecting(true);
-    setError('');
     try {
       await whatsappApi.disconnect(number.id);
       setNumber(null);
+      toastSuccess('WhatsApp disconnected');
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
           ?.error?.message || 'Failed to disconnect WhatsApp.';
-      setError(msg);
+      toastError(msg);
     } finally {
       setDisconnecting(false);
     }
@@ -79,11 +76,6 @@ export default function WhatsAppConnectGuide() {
   if (number) {
     return (
       <section className="mb-8 sm:mb-10" aria-label="WhatsApp connection">
-        {error && (
-          <AppAlert variant="error" className="mb-3">
-            {error}
-          </AppAlert>
-        )}
         <div className="dashboard-card flex flex-col gap-4 rounded-2xl p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-whatsapp-500 to-whatsapp-600 text-white">
@@ -119,11 +111,6 @@ export default function WhatsAppConnectGuide() {
 
   return (
     <section className="mb-8 sm:mb-10" aria-label="WhatsApp connection">
-      {error && (
-        <AppAlert variant="error" className="mb-3">
-          {error}
-        </AppAlert>
-      )}
       <div className="dashboard-card rounded-2xl p-4 sm:p-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex gap-3">

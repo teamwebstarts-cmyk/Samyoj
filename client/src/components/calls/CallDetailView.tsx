@@ -1,4 +1,5 @@
-import { ArrowLeft, Bot, PhoneOff } from 'lucide-react';
+import { ArrowLeft, Bot, MessageSquare, PhoneOff, User } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import ContactAvatar from '../inbox/ContactAvatar';
 import AppButton from '../ui/AppButton';
 import { callStatusLabel, formatCallTime, formatDuration, isActiveCallStatus } from './callUtils';
@@ -16,6 +17,8 @@ interface CallDetailViewProps {
   createdAt: string;
   durationSeconds?: number | null;
   botName?: string | null;
+  agentName?: string | null;
+  conversationId?: string | null;
   transcript?: TranscriptEntry[] | null;
   onBack?: () => void;
   onEndCall?: () => void;
@@ -35,6 +38,8 @@ export default function CallDetailView({
   createdAt,
   durationSeconds,
   botName,
+  agentName,
+  conversationId,
   transcript,
   onBack,
   onEndCall,
@@ -88,7 +93,7 @@ export default function CallDetailView({
         </div>
       </div>
 
-      {(botName || !active) && (
+      {(botName || agentName || conversationId || !active) && (
         <div className="flex flex-wrap items-center gap-2 border-b border-neutral-100/80 bg-white/60 px-4 py-2">
           {!active && (
             <span className="rounded-full bg-neutral-100 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-neutral-600">
@@ -100,6 +105,21 @@ export default function CallDetailView({
               <Bot className="h-3 w-3" />
               {botName}
             </span>
+          )}
+          {agentName && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2.5 py-0.5 text-[10px] font-bold text-sky-700 ring-1 ring-sky-100">
+              <User className="h-3 w-3" />
+              {agentName}
+            </span>
+          )}
+          {conversationId && (
+            <Link
+              to={`/inbox?conversation=${conversationId}`}
+              className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700 ring-1 ring-emerald-100 hover:bg-emerald-100"
+            >
+              <MessageSquare className="h-3 w-3" />
+              Open in inbox
+            </Link>
           )}
         </div>
       )}

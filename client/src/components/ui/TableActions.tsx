@@ -3,11 +3,11 @@ import type { ReactNode } from 'react';
 
 const iconVariants = {
   default:
-    'border-neutral-200/90 bg-white text-neutral-600 hover:border-emerald-200 hover:bg-emerald-50 hover:text-whatsapp-700',
+    'border-theme-border bg-theme-surface text-theme-secondary hover:border-whatsapp-500/30 hover:bg-whatsapp-500/10 hover:text-whatsapp-600 dark:hover:text-whatsapp-400',
   primary:
-    'border-emerald-200/80 bg-emerald-50 text-whatsapp-700 hover:border-emerald-300 hover:bg-emerald-100',
+    'border-emerald-200/80 bg-emerald-50 text-whatsapp-700 hover:border-emerald-300 hover:bg-emerald-100 dark:border-emerald-500/30 dark:bg-emerald-900/30 dark:text-emerald-300',
   danger:
-    'border-red-100 bg-white text-red-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600',
+    'border-red-100 bg-theme-surface text-red-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600 dark:border-red-500/30 dark:hover:bg-red-500/10 dark:hover:text-red-400',
 } as const;
 
 interface TableIconButtonProps {
@@ -38,9 +38,9 @@ export function TableIconButton({
 
 const textVariants = {
   primary:
-    'border-emerald-200/80 bg-emerald-50 text-whatsapp-700 hover:border-emerald-300 hover:bg-emerald-100',
+    'border-emerald-200/80 bg-emerald-50 text-whatsapp-700 hover:border-emerald-300 hover:bg-emerald-100 dark:border-emerald-500/30 dark:bg-emerald-900/30 dark:text-emerald-300',
   neutral:
-    'border-neutral-200/90 bg-white text-neutral-700 hover:border-neutral-300 hover:bg-neutral-50',
+    'border-theme-border bg-theme-surface text-theme-secondary hover:border-theme-border-strong hover:bg-theme-subtle',
 } as const;
 
 interface TableTextButtonProps {

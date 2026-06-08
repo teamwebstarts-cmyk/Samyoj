@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
-import { ArrowLeft, Bot, MessageSquare, MessageSquarePlus } from 'lucide-react';
-import ChatComposer from '../components/inbox/ChatComposer';
+import { useNavigate } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
+import { ArrowLeft, Bot, MessageSquare, MessageSquarePlus, Phone } from 'lucide-react';
+import ChatComposer, { type PendingAttachment } from '../components/inbox/ChatComposer';
+import TemplateComposer from '../components/inbox/TemplateComposer';
+import MediaViewer, { type MediaViewerItem } from '../components/inbox/MediaViewer';
 import ChatContextMenu from '../components/inbox/ChatContextMenu';
 import ChatPlaceholder from '../components/inbox/ChatPlaceholder';
 import ContactAvatar from '../components/inbox/ContactAvatar';
@@ -13,18 +17,21 @@ import {
   formatDateDivider,
   getServiceWindowInfo,
   groupMessagesByDate,
+  messageHasMedia,
 } from '../components/inbox/inboxUtils';
 import EmptyState from '../components/ui/EmptyState';
+import AppSelect from '../components/ui/AppSelect';
 import InboxSelect, { type InboxSelectOption } from '../components/inbox/InboxSelect';
 import Pagination from '../components/ui/Pagination';
 import PageShell from '../components/ui/PageShell';
 import SearchInput from '../components/ui/SearchInput';
 import { DEFAULT_PAGE_SIZE } from '../constants/pagination';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
-import { inboxApi, teamApi } from '../services/api';
+import api, { aiBotApi, callingApi, inboxApi, teamApi } from '../services/api';
+import { toastError, toastSuccess } from '../utils/toast';
 import { useSocket } from '../hooks/useSocket';
 import { useAuth } from '../contexts/AuthContext';
-import type { Conversation, Message, ServiceWindowInfo, TeamAgent } from '../types';
+import type { AiBot, Conversation, Message, ServiceWindowInfo, TeamAgent } from '../types';
 
 const CLOSED_WINDOW: ServiceWindowInfo = {
   open: false,
@@ -41,6 +48,8 @@ const statusFilterOptions: InboxSelectOption[] = [
 
 export default function InboxPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [agents, setAgents] = useState<TeamAgent[]>([]);
   const [selected, setSelected] = useState<Conversation | null>(null);
@@ -52,10 +61,15 @@ export default function InboxPage() {
   const [agentFilter, setAgentFilter] = useState('');
   const [assigning, setAssigning] = useState(false);
   const [botToggling, setBotToggling] = useState(false);
+  const [callingBack, setCallingBack] = useState(false);
+  const [aiBots, setAiBots] = useState<AiBot[]>([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [templateMode, setTemplateMode] = useState(false);
+  const [attachment, setAttachment] = useState<PendingAttachment | null>(null);
+  const [mediaViewer, setMediaViewer] = useState<MediaViewerItem | null>(null);
   const [newChatOpen, setNewChatOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
@@ -70,6 +84,10 @@ export default function InboxPage() {
     teamApi
       .agents()
       .then(({ data }) => setAgents(data.data.agents))
+      .catch(console.error);
+    aiBotApi
+      .list()
+      .then(({ data }) => setAiBots(data.data.bots.filter((b: AiBot) => b.enabled)))
       .catch(console.error);
   }, []);
 
@@ -103,6 +121,10 @@ export default function InboxPage() {
   }, [debouncedSearch, statusFilter, agentFilter]);
 
   useEffect(() => {
+    setTemplateMode(false);
+  }, [selected?.id]);
+
+  useEffect(() => {
     loadConversations();
   }, [loadConversations]);
 
@@ -115,12 +137,47 @@ export default function InboxPage() {
   const selectConversation = async (conv: Conversation) => {
     setSelected(conv);
     setNewMessage('');
+    setAttachment((prev) => {
+      if (prev?.previewUrl) URL.revokeObjectURL(prev.previewUrl);
+      return null;
+    });
+    setMediaViewer((prev) => {
+      if (prev?.url) URL.revokeObjectURL(prev.url);
+      return null;
+    });
     setServiceWindow(CLOSED_WINDOW);
     await loadMessages(conv.id);
     setConversations((prev) =>
       prev.map((c) => (c.id === conv.id ? { ...c, unreadCount: 0 } : c))
     );
   };
+
+  useEffect(() => {
+    const conversationId = searchParams.get('conversation');
+    if (!conversationId) return;
+
+    let cancelled = false;
+
+    inboxApi
+      .get(conversationId)
+      .then(async ({ data }) => {
+        if (cancelled) return;
+        const conv = data.data as Conversation;
+        setConversations((prev) => {
+          if (prev.some((c) => c.id === conv.id)) return prev;
+          return [conv, ...prev];
+        });
+        await selectConversation(conv);
+      })
+      .catch(console.error)
+      .finally(() => {
+        if (!cancelled) setSearchParams({}, { replace: true });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams, setSearchParams]);
 
   const handleSocketEvent = useCallback(
     (event: string, data: unknown) => {
@@ -181,6 +238,7 @@ export default function InboxPage() {
           conversationId: string;
           botActive: boolean;
           botHandoffAt?: string | null;
+          activeBot?: { id: string; name: string } | null;
         };
         setConversations((prev) =>
           prev.map((c) =>
@@ -189,6 +247,7 @@ export default function InboxPage() {
                   ...c,
                   botActive: botPayload.botActive,
                   botHandoffAt: botPayload.botHandoffAt,
+                  activeBot: botPayload.activeBot ?? c.activeBot,
                 }
               : c
           )
@@ -200,8 +259,51 @@ export default function InboxPage() {
                   ...prev,
                   botActive: botPayload.botActive,
                   botHandoffAt: botPayload.botHandoffAt,
+                  activeBot: botPayload.activeBot ?? prev.activeBot,
                 }
               : prev
+          );
+        }
+      }
+
+      if (event === 'conversation:handoff') {
+        const handoffPayload = data as {
+          conversationId: string;
+          reason?: string;
+          assignedAgent?: { id: string; name: string } | null;
+          botActive?: boolean;
+        };
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.id === handoffPayload.conversationId
+              ? {
+                  ...c,
+                  botActive: handoffPayload.botActive ?? false,
+                  botHandoffAt: new Date().toISOString(),
+                  botHandoffReason: handoffPayload.reason,
+                  status: 'PENDING',
+                  assignedAgent: handoffPayload.assignedAgent || c.assignedAgent,
+                }
+              : c
+          )
+        );
+        if (selected?.id === handoffPayload.conversationId) {
+          setSelected((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  botActive: handoffPayload.botActive ?? false,
+                  botHandoffAt: new Date().toISOString(),
+                  botHandoffReason: handoffPayload.reason,
+                  status: 'PENDING',
+                  assignedAgent: handoffPayload.assignedAgent || prev.assignedAgent,
+                }
+              : prev
+          );
+          toastSuccess(
+            handoffPayload.assignedAgent
+              ? `Handed off to ${handoffPayload.assignedAgent.name}`
+              : 'Customer handed off to your team'
           );
         }
       }
@@ -215,12 +317,93 @@ export default function InboxPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selected || !newMessage.trim() || !serviceWindow.open) return;
+  const handleAttach = (file: File) => {
+    const type = file.type.startsWith('image/')
+      ? 'IMAGE'
+      : file.type.startsWith('video/')
+        ? 'VIDEO'
+        : file.type.startsWith('audio/')
+          ? 'AUDIO'
+          : 'DOCUMENT';
+
+    const previewUrl = type === 'IMAGE' ? URL.createObjectURL(file) : undefined;
+    setAttachment({ file, previewUrl, type });
+  };
+
+  const handleRemoveAttachment = () => {
+    if (attachment?.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
+    setAttachment(null);
+  };
+
+  const fileToBase64 = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        resolve(result.split(',')[1] || '');
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+  const handleSendTemplate = async (payload: {
+    templateName: string;
+    templateLanguage: string;
+    templateParams?: { body?: string[]; header?: string[]; headerMediaUrl?: string };
+  }) => {
+    if (!selected) return;
     setSending(true);
     try {
-      const { data } = await inboxApi.send(selected.id, newMessage.trim());
+      const { data } = await inboxApi.send(selected.id, {
+        type: 'TEMPLATE',
+        templateName: payload.templateName,
+        templateLanguage: payload.templateLanguage,
+        templateParams: payload.templateParams,
+      });
+      const sent = data.data as Message;
+      setMessages((prev) => (prev.some((m) => m.id === sent.id) ? prev : [...prev, sent]));
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === selected.id
+            ? { ...c, lastMessageAt: sent.createdAt, messages: [sent] }
+            : c,
+        ),
+      );
+      setTemplateMode(false);
+      toastSuccess('Template sent');
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
+        ?.error?.message;
+      toastError(msg || 'Failed to send template');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleSend = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selected || !serviceWindow.open) return;
+    if (!newMessage.trim() && !attachment) return;
+
+    setSending(true);
+    try {
+      let payload;
+      if (attachment) {
+        const base64 = await fileToBase64(attachment.file);
+        payload = {
+          type: attachment.type,
+          content: newMessage.trim() || undefined,
+          media: {
+            data: base64,
+            mimeType: attachment.file.type || 'application/octet-stream',
+            filename: attachment.file.name,
+          },
+        };
+      } else {
+        payload = { content: newMessage.trim() };
+      }
+
+      const { data } = await inboxApi.send(selected.id, payload);
       const sent = data.data as Message;
       setMessages((prev) => (prev.some((m) => m.id === sent.id) ? prev : [...prev, sent]));
       setConversations((prev) =>
@@ -231,11 +414,50 @@ export default function InboxPage() {
         )
       );
       setNewMessage('');
+      handleRemoveAttachment();
+      toastSuccess(attachment ? 'Media sent' : 'Message sent');
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message;
-      alert(msg || 'Failed to send message');
+      toastError(msg || 'Failed to send message');
     } finally {
       setSending(false);
+    }
+  };
+
+  const mediaGallery = useMemo(() => {
+    return messages.filter(
+      (m) => messageHasMedia(m) && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(m.type?.toUpperCase() || '')
+    );
+  }, [messages]);
+
+  const openMediaViewer = useCallback(
+    async (item: MediaViewerItem) => {
+      setMediaViewer(item);
+    },
+    []
+  );
+
+  const mediaViewerIndex = mediaViewer
+    ? mediaGallery.findIndex((m) => m.id === mediaViewer.messageId)
+    : -1;
+
+  const navigateMedia = async (direction: 'prev' | 'next') => {
+    const nextIndex = direction === 'prev' ? mediaViewerIndex - 1 : mediaViewerIndex + 1;
+    const nextMsg = mediaGallery[nextIndex];
+    if (!nextMsg) return;
+
+    try {
+      const { data } = await api.get(`/inbox/messages/${nextMsg.id}/media`, { responseType: 'blob' });
+      const url = URL.createObjectURL(data);
+      if (mediaViewer?.url) URL.revokeObjectURL(mediaViewer.url);
+      setMediaViewer({
+        messageId: nextMsg.id,
+        type: nextMsg.type?.toUpperCase() as MediaViewerItem['type'],
+        url,
+        filename: nextMsg.metadata?.filename,
+      });
+    } catch {
+      toastError('Could not load media');
     }
   };
 
@@ -252,6 +474,7 @@ export default function InboxPage() {
     });
 
     setNewChatOpen(false);
+    toastSuccess('Chat started');
     await selectConversation(conversation);
   };
 
@@ -270,11 +493,12 @@ export default function InboxPage() {
           c.id === targetId ? { ...c, assignedAgent: updated.assignedAgent } : c
         )
       );
+      toastSuccess(agentId ? 'Agent assigned' : 'Agent unassigned');
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
           ?.message || 'Failed to assign agent';
-      alert(msg);
+      toastError(msg);
     } finally {
       setAssigning(false);
     }
@@ -290,8 +514,9 @@ export default function InboxPage() {
       setConversations((prev) =>
         prev.map((c) => (c.id === targetId ? { ...c, status: updated.status } : c))
       );
+      toastSuccess('Status updated');
     } catch (err: unknown) {
-      alert(
+      toastError(
         (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
           ?.message || 'Failed to update status'
       );
@@ -306,6 +531,53 @@ export default function InboxPage() {
       y: event.clientY,
       conversationId: conversation.id,
     });
+  };
+
+  const handleChangeActiveBot = async (botId: string) => {
+    if (!selected) return;
+    setBotToggling(true);
+    try {
+      const { data } = await inboxApi.setBot(selected.id, {
+        activeBotId: botId || null,
+        active: true,
+        resetHandoff: true,
+      });
+      const updated = data.data as Conversation;
+      setSelected((prev) => (prev ? { ...prev, ...updated } : prev));
+      setConversations((prev) =>
+        prev.map((c) => (c.id === selected.id ? { ...c, ...updated } : c))
+      );
+      toastSuccess('Active bot updated');
+    } catch (err: unknown) {
+      toastError(
+        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
+          ?.message || 'Failed to change bot'
+      );
+    } finally {
+      setBotToggling(false);
+    }
+  };
+
+  const handleCallBack = async () => {
+    if (!selected) return;
+    setCallingBack(true);
+    try {
+      const { data } = await callingApi.callback({
+        contactId: selected.contact.id,
+        conversationId: selected.id,
+        phone: selected.contact.phone,
+      });
+      toastSuccess('Outbound call initiated.');
+      const callId = (data.data as { call?: { id: string } })?.call?.id;
+      if (callId) navigate(`/calls/${callId}`);
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
+          ?.message || 'Could not start call.';
+      toastError(msg);
+    } finally {
+      setCallingBack(false);
+    }
   };
 
   const handleToggleBot = async (conversationId?: string) => {
@@ -328,18 +600,25 @@ export default function InboxPage() {
               ...prev,
               botActive: updated.botActive,
               botHandoffAt: updated.botHandoffAt,
+              activeBot: updated.activeBot ?? prev.activeBot,
             }
           : prev
       );
       setConversations((prev) =>
         prev.map((c) =>
           c.id === targetId
-            ? { ...c, botActive: updated.botActive, botHandoffAt: updated.botHandoffAt }
+            ? {
+                ...c,
+                botActive: updated.botActive,
+                botHandoffAt: updated.botHandoffAt,
+                activeBot: updated.activeBot ?? c.activeBot,
+              }
             : c
         )
       );
+      toastSuccess(turningOn ? 'AI bot resumed' : 'AI bot paused');
     } catch (err: unknown) {
-      alert(
+      toastError(
         (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
           ?.message || 'Failed to update bot'
       );
@@ -383,17 +662,26 @@ export default function InboxPage() {
     [agents, user]
   );
 
+  const botSelectOptions = useMemo(
+    () => [
+      { value: '', label: 'Default bot' },
+      ...aiBots.map((bot) => ({ value: bot.id, label: bot.name })),
+    ],
+    [aiBots],
+  );
+
   const unreadTotal = conversations.reduce((sum, c) => sum + c.unreadCount, 0);
   const messageGroups = groupMessagesByDate(messages);
   const canSendText = serviceWindow.open;
+  const hasPagination = total > DEFAULT_PAGE_SIZE;
 
   return (
-    <PageShell fullBleed>
-      <div className="flex min-h-0 flex-1 overflow-hidden">
-        <div className="inbox-shell flex min-h-0 w-full flex-1 overflow-hidden md:rounded-2xl">
+    <PageShell fullBleed className="!h-[calc(100dvh-60px)] !max-h-[calc(100dvh-60px)] !min-h-0 !overflow-hidden">
+      <div className="flex h-full min-h-0 flex-1 overflow-hidden">
+        <div className="inbox-shell flex h-full min-h-0 w-full flex-1 overflow-hidden md:rounded-2xl">
           {/* Conversation list */}
           <div
-            className={`relative flex w-full flex-col border-neutral-200/80 md:w-[320px] md:border-r lg:w-[360px] ${
+            className={`relative flex h-full min-h-0 w-full flex-col border-neutral-200/80 md:w-[320px] md:border-r lg:w-[360px] ${
               selected ? 'hidden md:flex' : 'flex'
             }`}
           >
@@ -442,51 +730,56 @@ export default function InboxPage() {
               </div>
             </div>
 
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden pb-20">
-              <div className="flex-1 overflow-y-auto">
-              {loading ? (
-                <ConversationListSkeleton />
-              ) : conversations.length === 0 ? (
-                <div className="p-5">
-                  <EmptyState
-                    icon={MessageSquare}
-                    title={search || statusFilter || agentFilter ? 'No conversations found' : 'No conversations yet'}
-                    description={
-                      search || statusFilter || agentFilter
-                        ? 'Try adjusting your search or filters.'
-                        : 'When customers message you, conversations will show up here.'
-                    }
-                  />
-                </div>
-              ) : (
-                <div className="divide-y divide-neutral-100/80">
-                  {conversations.map((conv) => (
-                    <ConversationItem
-                      key={conv.id}
-                      conversation={conv}
-                      selected={selected?.id === conv.id}
-                      onSelect={() => selectConversation(conv)}
-                      onContextMenu={(event) => openChatContextMenu(event, conv)}
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+                {loading ? (
+                  <ConversationListSkeleton />
+                ) : conversations.length === 0 ? (
+                  <div className="p-5">
+                    <EmptyState
+                      icon={MessageSquare}
+                      title={search || statusFilter || agentFilter ? 'No conversations found' : 'No conversations yet'}
+                      description={
+                        search || statusFilter || agentFilter
+                          ? 'Try adjusting your search or filters.'
+                          : 'When customers message you, conversations will show up here.'
+                      }
                     />
-                  ))}
-                </div>
-              )}
+                  </div>
+                ) : (
+                  <div className="divide-y divide-neutral-100/80">
+                    {conversations.map((conv) => (
+                      <ConversationItem
+                        key={conv.id}
+                        conversation={conv}
+                        selected={selected?.id === conv.id}
+                        onSelect={() => selectConversation(conv)}
+                        onContextMenu={(event) => openChatContextMenu(event, conv)}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
 
-              {total > DEFAULT_PAGE_SIZE && (
-                <Pagination
-                  page={page}
-                  pageSize={DEFAULT_PAGE_SIZE}
-                  total={total}
-                  onPageChange={setPage}
-                />
+              {hasPagination && (
+                <div className="shrink-0 border-t border-neutral-100 bg-white">
+                  <Pagination
+                    page={page}
+                    pageSize={DEFAULT_PAGE_SIZE}
+                    total={total}
+                    onPageChange={setPage}
+                    className="!border-t-0"
+                  />
+                </div>
               )}
             </div>
 
             <button
               type="button"
               onClick={() => setNewChatOpen(true)}
-              className="absolute bottom-5 right-5 z-10 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-whatsapp-500 to-whatsapp-600 text-white shadow-[0_4px_20px_rgba(37,211,102,0.45)] transition hover:scale-[1.03] hover:shadow-[0_6px_28px_rgba(37,211,102,0.5)] active:scale-95"
+              className={`absolute right-4 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-whatsapp-500 to-whatsapp-600 text-white shadow-[0_4px_20px_rgba(37,211,102,0.45)] transition hover:scale-[1.03] hover:shadow-[0_6px_28px_rgba(37,211,102,0.5)] active:scale-95 ${
+                hasPagination ? 'bottom-[4.75rem]' : 'bottom-5'
+              }`}
               aria-label="New chat"
             >
               <MessageSquarePlus className="h-6 w-6" strokeWidth={2.25} />
@@ -495,7 +788,7 @@ export default function InboxPage() {
 
           {/* Chat area */}
           <div
-            className={`min-w-0 flex-1 flex-col bg-white ${!selected ? 'hidden md:flex' : 'flex'}`}
+            className={`flex h-full min-h-0 min-w-0 flex-1 flex-col bg-white ${!selected ? 'hidden md:flex' : 'flex'}`}
           >
             {selected ? (
               <>
@@ -553,8 +846,52 @@ export default function InboxPage() {
                     {botToggling ? '...' : botIsLive ? 'AI ON' : 'AI OFF'}
                   </button>
 
+                  {aiBots.length > 0 && (
+                    <AppSelect
+                      className="w-[148px] shrink-0"
+                      size="compact"
+                      value={selected.activeBot?.id || ''}
+                      options={botSelectOptions}
+                      placeholder="Default bot"
+                      isSearchable={false}
+                      disabled={botToggling}
+                      ariaLabel="Active AI bot for this chat"
+                      onChange={(e) => handleChangeActiveBot(e.target.value)}
+                    />
+                  )}
+
+                  <button
+                    type="button"
+                    disabled={callingBack}
+                    onClick={() => void handleCallBack()}
+                    title="Call this contact via WhatsApp"
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-violet-200/80 bg-violet-50 px-3 py-2 text-[11px] font-bold text-violet-800 transition hover:bg-violet-100 disabled:opacity-60"
+                  >
+                    <Phone className="h-3.5 w-3.5" />
+                    {callingBack ? 'Calling...' : 'Call'}
+                  </button>
+
                   <ServiceWindowBadge serviceWindow={serviceWindow} />
                 </div>
+
+                {selected.botHandoffAt && (
+                  <div className="border-b border-orange-200/60 bg-orange-50/80 px-4 py-2 text-center text-[12px] font-medium text-orange-900">
+                    Handed off to team
+                    {selected.botHandoffReason ? ` (${selected.botHandoffReason.replace(/_/g, ' ').toLowerCase()})` : ''}
+                    {selected.assignedAgent ? ` · ${selected.assignedAgent.name}` : ''}
+                  </div>
+                )}
+
+                {selected.activeFlow && (
+                  <div className="border-b border-violet-200/60 bg-violet-50/80 px-4 py-2 text-center text-[12px] font-medium text-violet-900">
+                    <span className="font-bold">{selected.activeFlow.flowName || 'Automation flow'}</span>
+                    {' · '}
+                    Step: {selected.activeFlow.currentStepLabel || selected.activeFlow.currentNodeId}
+                    {selected.activeFlow.waitingFor && (
+                      <span className="text-violet-600"> · waiting for {selected.activeFlow.waitingFor}</span>
+                    )}
+                  </div>
+                )}
 
                 {!botIsLive && (
                   <div className="border-b border-amber-200/60 bg-amber-50/80 px-4 py-2 text-center text-[12px] font-medium text-amber-900">
@@ -576,7 +913,7 @@ export default function InboxPage() {
                       <div key={group.date} className="space-y-2">
                         <DateDivider label={formatDateDivider(group.date)} />
                         {group.messages.map((msg) => (
-                          <MessageBubble key={msg.id} message={msg} />
+                          <MessageBubble key={msg.id} message={msg} onOpenMedia={openMediaViewer} />
                         ))}
                       </div>
                     ))}
@@ -585,20 +922,34 @@ export default function InboxPage() {
                 </div>
                 </div>
 
-                {!canSendText && <ServiceWindowBanner serviceWindow={serviceWindow} />}
+                {!canSendText && !templateMode && (
+                  <ServiceWindowBanner serviceWindow={serviceWindow} />
+                )}
 
-                <ChatComposer
-                  value={newMessage}
-                  onChange={setNewMessage}
-                  onSubmit={handleSend}
-                  sending={sending}
-                  disabled={!canSendText}
-                  disabledReason={
-                    canSendText
-                      ? 'Type a message...'
-                      : '24-hour window closed — use a template'
-                  }
-                />
+                {templateMode ? (
+                  <TemplateComposer
+                    onSend={handleSendTemplate}
+                    sending={sending}
+                    onCancel={() => setTemplateMode(false)}
+                  />
+                ) : (
+                  <ChatComposer
+                    value={newMessage}
+                    onChange={setNewMessage}
+                    onSubmit={handleSend}
+                    onAttach={handleAttach}
+                    attachment={attachment}
+                    onRemoveAttachment={handleRemoveAttachment}
+                    sending={sending}
+                    disabled={!canSendText}
+                    disabledReason={
+                      canSendText
+                        ? 'Type a message...'
+                        : '24-hour window closed — use a template'
+                    }
+                    onTemplateClick={!canSendText ? () => setTemplateMode(true) : undefined}
+                  />
+                )}
               </>
             ) : (
               <ChatPlaceholder />
@@ -611,6 +962,18 @@ export default function InboxPage() {
         open={newChatOpen}
         onClose={() => setNewChatOpen(false)}
         onStart={handleStartChat}
+      />
+
+      <MediaViewer
+        item={mediaViewer}
+        onClose={() => {
+          if (mediaViewer?.url) URL.revokeObjectURL(mediaViewer.url);
+          setMediaViewer(null);
+        }}
+        onPrev={() => navigateMedia('prev')}
+        onNext={() => navigateMedia('next')}
+        hasPrev={mediaViewerIndex > 0}
+        hasNext={mediaViewerIndex >= 0 && mediaViewerIndex < mediaGallery.length - 1}
       />
 
       <ChatContextMenu

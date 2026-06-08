@@ -83,15 +83,15 @@ export default function PageHero({
       <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
         <div className="max-w-2xl">
           <span
-            className={`inline-flex items-center gap-1.5 rounded-full border bg-white/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider shadow-sm ${theme.badge}`}
+            className={`inline-flex items-center gap-1.5 rounded-full border bg-theme-surface/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider shadow-sm backdrop-blur-sm ${theme.badge} dark:bg-theme-surface-elevated/90`}
           >
             <BadgeIcon className="h-3 w-3" />
             {badge}
           </span>
-          <h2 className="mt-3 text-xl font-extrabold tracking-tight text-neutral-900 sm:text-2xl">
+          <h2 className="mt-3 text-xl font-extrabold tracking-tight text-theme-fg sm:text-2xl">
             {title}
           </h2>
-          <p className="mt-2 text-[14px] font-medium leading-relaxed text-neutral-600">{description}</p>
+          <p className="mt-2 text-[14px] font-medium leading-relaxed text-theme-secondary">{description}</p>
         </div>
 
         {stats.length > 0 && (
@@ -103,14 +103,14 @@ export default function PageHero({
             {stats.map((item) => (
               <div
                 key={item.label}
-                className="rounded-2xl border border-white/80 bg-white/75 px-3 py-3 text-center shadow-sm backdrop-blur-sm sm:px-4"
+                className="rounded-2xl border border-theme-border bg-theme-surface/75 px-3 py-3 text-center shadow-sm backdrop-blur-sm sm:px-4"
               >
                 <p
-                  className={`text-xl font-extrabold tabular-nums sm:text-2xl ${item.tone ?? 'text-neutral-900'}`}
+                  className={`text-xl font-extrabold tabular-nums sm:text-2xl ${item.tone ?? 'text-theme-fg'}`}
                 >
                   {item.value}
                 </p>
-                <p className="mt-0.5 text-[10px] font-bold uppercase tracking-wide text-neutral-500">
+                <p className="mt-0.5 text-[10px] font-bold uppercase tracking-wide text-theme-muted">
                   {item.label}
                 </p>
               </div>

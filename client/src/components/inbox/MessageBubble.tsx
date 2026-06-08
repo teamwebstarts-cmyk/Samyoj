@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { formatMessageTime, messageHasMedia } from './inboxUtils';
 import {
   AuthenticatedAudio,
@@ -5,11 +6,14 @@ import {
   AuthenticatedImage,
   AuthenticatedVideo,
 } from './AuthenticatedMedia';
+import InteractiveMessageCard from './InteractiveMessageCard';
+import MediaViewer, { type MediaViewerItem } from './MediaViewer';
 import { WhatsAppBubble } from './WhatsAppPreview';
 import type { Message } from '../../types';
 
 interface MessageBubbleProps {
   message: Message;
+  onOpenMedia?: (item: MediaViewerItem) => void;
 }
 
 function mapStatus(status: string): 'sent' | 'delivered' | 'read' | 'failed' {
@@ -28,7 +32,10 @@ function MediaUnavailable({ label }: { label: string }) {
   );
 }
 
-function renderMediaContent(message: Message) {
+function renderMediaContent(
+  message: Message,
+  onMediaClick?: (item: MediaViewerItem) => void
+) {
   const type = message.type?.toUpperCase();
   const hasMedia = messageHasMedia(message);
 
@@ -44,11 +51,27 @@ function renderMediaContent(message: Message) {
     return null;
   }
 
+  const handleClick = (url: string) => {
+    if (!onMediaClick || !type) return;
+    onMediaClick({
+      messageId: message.id,
+      type: type as MediaViewerItem['type'],
+      url,
+      filename: message.metadata?.filename,
+    });
+  };
+
   switch (type) {
     case 'IMAGE':
-      return <AuthenticatedImage messageId={message.id} alt={message.content || 'Photo'} />;
+      return (
+        <AuthenticatedImage
+          messageId={message.id}
+          alt={message.content || 'Photo'}
+          onClick={handleClick}
+        />
+      );
     case 'VIDEO':
-      return <AuthenticatedVideo messageId={message.id} />;
+      return <AuthenticatedVideo messageId={message.id} onClick={handleClick} />;
     case 'AUDIO':
       return <AuthenticatedAudio messageId={message.id} />;
     case 'DOCUMENT':
@@ -56,6 +79,7 @@ function renderMediaContent(message: Message) {
         <AuthenticatedDocument
           messageId={message.id}
           filename={message.metadata?.filename || message.content || 'Document'}
+          onClick={handleClick}
         />
       );
     default:
@@ -63,11 +87,31 @@ function renderMediaContent(message: Message) {
   }
 }
 
-export default function MessageBubble({ message }: MessageBubbleProps) {
+export default function MessageBubble({ message, onOpenMedia }: MessageBubbleProps) {
+  const [localViewer, setLocalViewer] = useState<MediaViewerItem | null>(null);
   const isOutbound = message.direction === 'OUTBOUND';
   const type = message.type?.toUpperCase();
   const isMediaMessage = ['IMAGE', 'VIDEO', 'AUDIO', 'DOCUMENT'].includes(type);
-  const mediaContent = isMediaMessage ? renderMediaContent(message) : null;
+  const isInteractive = type === 'INTERACTIVE';
+  const buttons = message.metadata?.buttons;
+  const isButtonReply = message.metadata?.isButtonReply;
+
+  const openMedia = onOpenMedia || setLocalViewer;
+
+  if (isInteractive || (buttons && buttons.length > 0)) {
+    return (
+      <InteractiveMessageCard
+        body={message.content}
+        buttons={buttons}
+        direction={isOutbound ? 'outbound' : 'inbound'}
+        time={formatMessageTime(message.createdAt)}
+        status={isOutbound ? mapStatus(message.status) : undefined}
+        isButtonReply={isButtonReply}
+      />
+    );
+  }
+
+  const mediaContent = isMediaMessage ? renderMediaContent(message, openMedia) : null;
   let caption: string | undefined;
   if (isMediaMessage && message.content) {
     if (type === 'DOCUMENT' && message.content === message.metadata?.filename) {
@@ -79,14 +123,19 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
 
   if (mediaContent) {
     return (
-      <WhatsAppBubble
-        direction={isOutbound ? 'outbound' : 'inbound'}
-        content={caption}
-        time={formatMessageTime(message.createdAt)}
-        status={isOutbound ? mapStatus(message.status) : undefined}
-      >
-        {mediaContent}
-      </WhatsAppBubble>
+      <>
+        <WhatsAppBubble
+          direction={isOutbound ? 'outbound' : 'inbound'}
+          content={caption}
+          time={formatMessageTime(message.createdAt)}
+          status={isOutbound ? mapStatus(message.status) : undefined}
+        >
+          {mediaContent}
+        </WhatsAppBubble>
+        {!onOpenMedia && (
+          <MediaViewer item={localViewer} onClose={() => setLocalViewer(null)} />
+        )}
+      </>
     );
   }
 

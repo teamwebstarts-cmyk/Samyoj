@@ -11,9 +11,12 @@ import {
 import { getOrgWhatsappContext } from '../whatsapp/context';
 import { deliverOutboundMessage } from '../messages/send.service';
 import { getMessageMediaBuffer, type MessageMediaMetadata } from '../media/download.service';
+import { storeOutboundMedia } from '../media/upload.service';
 import { emitToOrg } from '../../realtime';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
+import { parseActiveFlow } from '../flows/flow-state';
+import type { FlowNode } from '../flows/types';
 
 const router = Router();
 
@@ -45,6 +48,7 @@ router.get(
         include: {
           contact: true,
           assignedAgent: { select: { id: true, name: true } },
+          activeBot: { select: { id: true, name: true } },
           messages: { orderBy: { createdAt: 'desc' }, take: 1 },
           labels: { include: { label: true } },
         },
@@ -55,7 +59,38 @@ router.get(
       prisma.conversation.count({ where }),
     ]);
 
-    sendSuccess(res, { conversations, total, page: parseInt(page as string) });
+    const flowIds = [
+      ...new Set(
+        conversations
+          .map((c) => {
+            const state = c.botState as Record<string, unknown> | null;
+            return state?.flowId as string | undefined;
+          })
+          .filter(Boolean)
+      ),
+    ] as string[];
+
+    const flows = flowIds.length
+      ? await prisma.flow.findMany({
+          where: { id: { in: flowIds }, organizationId: orgId },
+          select: { id: true, name: true, nodes: true },
+        })
+      : [];
+
+    const flowMap = new Map(flows.map((f) => [f.id, f]));
+
+    const enriched = conversations.map((c) => {
+      const state = c.botState as Record<string, unknown> | null;
+      const flowId = state?.flowId as string | undefined;
+      const flow = flowId ? flowMap.get(flowId) : undefined;
+      const flowNodes = flow?.nodes as FlowNode[] | undefined;
+      const activeFlow = parseActiveFlow(c.botState, flowNodes);
+      if (activeFlow && flow?.name) activeFlow.flowName = flow.name;
+      const { botState: _botState, ...rest } = c;
+      return { ...rest, activeFlow };
+    });
+
+    sendSuccess(res, { conversations: enriched, total, page: parseInt(page as string) });
   })
 );
 
@@ -82,6 +117,7 @@ router.post(
         phone,
         name: data.name,
         optedIn: true,
+        source: 'OUTBOUND',
       },
       update: { name: data.name || undefined },
     });
@@ -167,6 +203,7 @@ router.get(
       include: {
         contact: true,
         assignedAgent: { select: { id: true, name: true } },
+        activeBot: { select: { id: true, name: true } },
         labels: { include: { label: true } },
         internalNotes: {
           include: { user: { select: { id: true, name: true } } },
@@ -263,12 +300,44 @@ router.get(
   })
 );
 
-const sendMessageSchema = z.object({
-  content: z.string().min(1),
-  type: z.enum(['TEXT', 'TEMPLATE']).default('TEXT'),
-  templateName: z.string().optional(),
-  templateLanguage: z.string().optional(),
+const mediaPayloadSchema = z.object({
+  data: z.string().min(1),
+  mimeType: z.string().min(1),
+  filename: z.string().optional(),
 });
+
+const templateParamsSchema = z
+  .object({
+    body: z.array(z.string()).optional(),
+    header: z.array(z.string()).optional(),
+    headerMediaUrl: z.string().url().optional(),
+  })
+  .optional();
+
+const sendMessageSchema = z
+  .object({
+    content: z.string().optional(),
+    type: z.enum(['TEXT', 'TEMPLATE', 'IMAGE', 'VIDEO', 'DOCUMENT', 'AUDIO']).default('TEXT'),
+    templateName: z.string().optional(),
+    templateLanguage: z.string().optional(),
+    templateParams: templateParamsSchema,
+    media: mediaPayloadSchema.optional(),
+  })
+  .superRefine((data, ctx) => {
+    const isMedia = ['IMAGE', 'VIDEO', 'DOCUMENT', 'AUDIO'].includes(data.type);
+    if (isMedia) {
+      if (!data.media) {
+        ctx.addIssue({ code: 'custom', message: 'Media payload required for media messages', path: ['media'] });
+      }
+      return;
+    }
+    if (data.type === 'TEXT' && !data.content?.trim()) {
+      ctx.addIssue({ code: 'custom', message: 'Message content required', path: ['content'] });
+    }
+    if (data.type === 'TEMPLATE' && !data.templateName && !data.content?.trim()) {
+      ctx.addIssue({ code: 'custom', message: 'Template name or content required', path: ['templateName'] });
+    }
+  });
 
 router.post(
   '/:id/messages',
@@ -296,27 +365,61 @@ router.post(
     if (!conversation.whatsappNumber) throw new AppError(400, 'No WhatsApp number connected');
 
     const lastInbound = conversation.messages[0]?.createdAt ?? null;
-    if (data.type === 'TEXT' && !isWithin24HourWindow(lastInbound)) {
+    const isMediaType = ['IMAGE', 'VIDEO', 'DOCUMENT', 'AUDIO'].includes(data.type);
+    if ((data.type === 'TEXT' || isMediaType) && !isWithin24HourWindow(lastInbound)) {
       throw new AppError(
         400,
         '24-hour window expired. Use an approved template message.'
       );
     }
 
-    let messageContent = data.content;
+    let messageContent = data.content?.trim() || '';
     let messageMetadata: Record<string, unknown> | undefined;
+    let deliverType: 'TEXT' | 'TEMPLATE' | 'IMAGE' | 'VIDEO' | 'DOCUMENT' | 'AUDIO' = data.type as 'TEXT' | 'TEMPLATE' | 'IMAGE' | 'VIDEO' | 'DOCUMENT' | 'AUDIO';
+    let mediaUrl: string | undefined;
+    let mediaCaption: string | undefined;
 
-    if (data.type === 'TEMPLATE' && data.templateName) {
+    if (isMediaType && data.media) {
+      let buffer: Buffer;
+      try {
+        buffer = Buffer.from(data.media.data, 'base64');
+      } catch {
+        throw new AppError(400, 'Invalid media data');
+      }
+
+      const stored = await storeOutboundMedia({
+        organizationId: orgId,
+        buffer,
+        mimeType: data.media.mimeType,
+        filename: data.media.filename,
+      });
+
+      deliverType = stored.messageType;
+      mediaUrl = stored.publicUrl;
+      mediaCaption = messageContent || undefined;
+      messageContent = messageContent || data.media.filename || '';
+      messageMetadata = {
+        mimeType: stored.mimeType,
+        filename: data.media.filename,
+        mediaPath: stored.mediaPath,
+        size: stored.size,
+        caption: mediaCaption,
+      };
+    } else if (data.type === 'TEMPLATE' && data.templateName) {
       const { wabaId, accessToken } = await getOrgWhatsappContext(orgId);
       const template = await MetaWhatsAppService.getMessageTemplate(
         wabaId,
         accessToken,
         data.templateName
       );
+      if (template?.status !== 'APPROVED') {
+        throw new AppError(400, 'Only approved templates can be sent');
+      }
       messageContent = getTemplateDisplayText(template, data.templateName);
       messageMetadata = {
         templateName: data.templateName,
         templateLanguage: data.templateLanguage || template?.language || 'en_US',
+        templateParams: data.templateParams,
       };
     }
 
@@ -324,10 +427,10 @@ router.post(
       data: {
         conversationId: conversation.id,
         direction: 'OUTBOUND',
-        type: data.type === 'TEMPLATE' ? 'TEMPLATE' : 'TEXT',
+        type: isMediaType ? data.type : data.type === 'TEMPLATE' ? 'TEMPLATE' : 'TEXT',
         content: messageContent,
         status: 'PENDING',
-        metadata: messageMetadata,
+        metadata: messageMetadata as Prisma.InputJsonValue,
       },
     });
 
@@ -342,10 +445,13 @@ router.post(
       phoneNumberId: conversation.whatsappNumber.phoneNumberId,
       encryptedToken: conversation.whatsappNumber.accessToken,
       to: conversation.contact.phone,
-      content: data.type === 'TEMPLATE' ? data.templateName || data.content : data.content,
-      type: data.type,
+      content: data.type === 'TEMPLATE' ? data.templateName || messageContent : messageContent,
+      type: deliverType,
       templateName: data.templateName,
       templateLanguage: data.templateLanguage || 'en_US',
+      templateParams: data.templateParams,
+      mediaUrl,
+      mediaCaption,
     });
 
     sendSuccess(res, sentMessage, 201);
@@ -398,7 +504,11 @@ router.patch(
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const id = paramId(req);
-    const { active, resetHandoff } = req.body as { active?: boolean; resetHandoff?: boolean };
+    const { active, resetHandoff, activeBotId } = req.body as {
+      active?: boolean;
+      resetHandoff?: boolean;
+      activeBotId?: string | null;
+    };
 
     const data: {
       botActive?: boolean;
@@ -406,6 +516,7 @@ router.patch(
       botHandoffReason?: string | null;
       botState?: null;
       status?: 'OPEN';
+      activeBotId?: string | null;
     } = {};
 
     if (typeof active === 'boolean') data.botActive = active;
@@ -416,6 +527,15 @@ router.patch(
       data.botActive = true;
       data.status = 'OPEN';
     }
+    if (activeBotId !== undefined) {
+      if (activeBotId) {
+        const bot = await prisma.aiBot.findFirst({
+          where: { id: activeBotId, organizationId: orgId },
+        });
+        if (!bot) throw new AppError(404, 'Bot not found');
+      }
+      data.activeBotId = activeBotId || null;
+    }
 
     const conversation = await prisma.conversation.update({
       where: { id, organizationId: orgId },
@@ -423,6 +543,7 @@ router.patch(
       include: {
         contact: { select: { id: true, name: true, phone: true } },
         assignedAgent: { select: { id: true, name: true } },
+        activeBot: { select: { id: true, name: true } },
       },
     });
 
@@ -430,6 +551,7 @@ router.patch(
       conversationId: conversation.id,
       botActive: conversation.botActive,
       botHandoffAt: conversation.botHandoffAt,
+      activeBot: conversation.activeBot,
     });
 
     sendSuccess(res, conversation);

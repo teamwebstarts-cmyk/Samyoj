@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express';
+import { Prisma } from '@prisma/client';
+import { z } from 'zod';
 import prisma from '../../config/database';
-import { authenticate, requireOrg } from '../../middleware/auth';
+import { authenticate, requireOrg, loadOrgRole, requireOrgRole } from '../../middleware/auth';
 import { AppError, sendSuccess, asyncHandler } from '../../utils/response';
 import { MetaWhatsAppService } from '../whatsapp/meta.service';
 import {
@@ -13,57 +15,148 @@ import { isAzureOpenAIConfigured } from '../ai/azure-openai.service';
 import { isDeepgramConfigured } from './deepgram.stt';
 import { isGoogleTtsConfigured } from './google-tts.service';
 import { config } from '../../config';
+import { getOrgCallingSettings, saveOrgCallingSettings } from './settings.service';
+import { getOrgActiveCallCount } from './session-store';
+import { getCallAnalytics } from './analytics';
+import { acceptCallWithAgentAnswer, declineCallAsAgent } from './agent-call.service';
+import { getPendingCallByCallId } from './session-store';
+import { clearRingTimeout } from './call.processor';
+import { logTeamAudit } from '../team/audit';
+import { WhatsAppWebRtcBridge } from './webrtc-bridge';
+import { emitToOrg } from '../../realtime';
 
 const router = Router();
 
+const adminGuard = [authenticate, requireOrg, loadOrgRole, requireOrgRole('OWNER', 'ADMIN')];
+const memberGuard = [authenticate, requireOrg];
+
+const listQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+  status: z.string().optional(),
+  handler: z.string().optional(),
+  direction: z.string().optional(),
+  search: z.string().optional(),
+  contactId: z.string().optional(),
+  conversationId: z.string().optional(),
+  from: z.string().optional(),
+  to: z.string().optional(),
+});
+
+const callingSettingsSchema = z.object({
+  aiAutoAnswer: z.boolean().optional(),
+  aiGreeting: z.string().max(500).optional(),
+  defaultBotId: z.string().uuid().nullable().optional(),
+  routingMode: z.enum(['ai_only', 'agents_first', 'ai_then_agents']).optional(),
+  agentRingTimeoutSec: z.number().int().min(10).max(120).optional(),
+  maxConcurrentCalls: z.number().int().min(1).max(100).optional(),
+  afterHoursMode: z.enum(['ai', 'message', 'missed']).optional(),
+  afterHoursMessage: z.string().max(1000).optional(),
+  missedCallAutoMessage: z.boolean().optional(),
+  missedCallMessage: z.string().max(1000).optional(),
+  recordingConsentEnabled: z.boolean().optional(),
+  recordingConsentMessage: z.string().max(500).optional(),
+  ttsVoice: z.string().nullable().optional(),
+  ttsLanguage: z.string().nullable().optional(),
+  deepgramLanguage: z.string().nullable().optional(),
+});
+
+const notesSchema = z.object({
+  notes: z.string().max(5000),
+});
+
+const acceptSchema = z.object({
+  sdpAnswer: z.string().min(10),
+});
+
+const callbackSchema = z.object({
+  contactId: z.string().uuid().optional(),
+  phone: z.string().optional(),
+  conversationId: z.string().uuid().optional(),
+});
+
 router.get(
   '/status',
-  authenticate,
-  requireOrg,
+  ...memberGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
-    const number = await prisma.whatsappNumber.findFirst({
-      where: { organizationId: orgId, isActive: true },
-    });
+    const [number, callingSettings, redisActive] = await Promise.all([
+      prisma.whatsappNumber.findFirst({
+        where: { organizationId: orgId, isActive: true },
+      }),
+      getOrgCallingSettings(orgId),
+      getOrgActiveCallCount(orgId),
+    ]);
 
-    let callingSettings: Record<string, unknown> | null = null;
+    let callingSettingsMeta: Record<string, unknown> | null = null;
     if (number) {
       try {
         const accessToken = MetaWhatsAppService.decryptToken(number.accessToken);
-        callingSettings = await MetaCallingService.getCallingSettings(
+        callingSettingsMeta = await MetaCallingService.getCallingSettings(
           number.phoneNumberId,
           accessToken
         );
       } catch {
-        callingSettings = null;
+        callingSettingsMeta = null;
       }
     }
+
+    const localActive = getActiveSessionCount();
+    const activeCalls = Math.max(redisActive, localActive);
 
     sendSuccess(res, {
       configured: isCallingConfigured() && isAzureOpenAIConfigured(),
       deepgram: isDeepgramConfigured(),
       googleTts: isGoogleTtsConfigured(),
       azureOpenAI: isAzureOpenAIConfigured(),
-      aiAutoAnswer: config.calling.aiAutoAnswer,
-      activeCalls: getActiveSessionCount(),
+      aiAutoAnswer: callingSettings.aiAutoAnswer,
+      activeCalls,
       whatsappConnected: Boolean(number),
       phoneNumber: number?.phoneNumber ?? null,
-      callingSettings,
-      callingEnabled: MetaCallingService.isCallingEnabled(callingSettings),
-      enableHints: MetaCallingService.isCallingEnabled(callingSettings) ? [] : CALLING_ENABLE_HINTS,
+      callingSettings: callingSettingsMeta,
+      callingEnabled: MetaCallingService.isCallingEnabled(callingSettingsMeta),
+      enableHints: MetaCallingService.isCallingEnabled(callingSettingsMeta) ? [] : CALLING_ENABLE_HINTS,
       voiceReady:
         Boolean(number) &&
         isCallingConfigured() &&
         isAzureOpenAIConfigured() &&
-        MetaCallingService.isCallingEnabled(callingSettings),
+        MetaCallingService.isCallingEnabled(callingSettingsMeta),
+      orgCallingSettings: callingSettings,
     });
+  })
+);
+
+router.get(
+  '/settings',
+  ...memberGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const settings = await getOrgCallingSettings(req.user!.organizationId!);
+    sendSuccess(res, settings);
+  })
+);
+
+router.patch(
+  '/settings',
+  ...adminGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const data = callingSettingsSchema.parse(req.body);
+    const saved = await saveOrgCallingSettings(orgId, data);
+
+    await logTeamAudit({
+      organizationId: orgId,
+      actorId: req.user!.userId,
+      action: 'SETTINGS_CHANGED',
+      metadata: { area: 'calling', updates: Object.keys(data) },
+    });
+
+    sendSuccess(res, saved);
   })
 );
 
 router.post(
   '/enable',
-  authenticate,
-  requireOrg,
+  ...adminGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const number = await prisma.whatsappNumber.findFirst({
@@ -87,38 +180,278 @@ router.post(
       }
       throw err;
     }
+
     const settings = await MetaCallingService.getCallingSettings(number.phoneNumberId, accessToken);
+
+    await logTeamAudit({
+      organizationId: orgId,
+      actorId: req.user!.userId,
+      action: 'SETTINGS_CHANGED',
+      metadata: { area: 'calling', action: 'enabled' },
+    });
 
     sendSuccess(res, { enabled: true, settings });
   })
 );
 
-router.get(
-  '/',
-  authenticate,
-  requireOrg,
+router.post(
+  '/disable',
+  ...adminGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
-    const limit = Math.min(Number(req.query.limit) || 50, 100);
+    const number = await prisma.whatsappNumber.findFirst({
+      where: { organizationId: orgId, isActive: true },
+    });
+    if (!number) throw new AppError(400, 'Connect a WhatsApp number first');
 
-    const calls = await prisma.call.findMany({
-      where: { organizationId: orgId },
-      orderBy: { createdAt: 'desc' },
-      take: limit,
-      include: {
-        contact: { select: { id: true, name: true, phone: true } },
-        aiBot: { select: { id: true, name: true } },
-      },
+    const accessToken = MetaWhatsAppService.decryptToken(number.accessToken);
+    const res2 = await fetch(
+      `https://graph.facebook.com/${config.meta.apiVersion}/${number.phoneNumberId}/settings`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          calling: { status: 'DISABLED' },
+        }),
+      }
+    );
+    const data = (await res2.json()) as Record<string, unknown>;
+    if (!res2.ok) {
+      throw new AppError(502, 'Failed to disable calling on Meta');
+    }
+
+    await logTeamAudit({
+      organizationId: orgId,
+      actorId: req.user!.userId,
+      action: 'SETTINGS_CHANGED',
+      metadata: { area: 'calling', action: 'disabled' },
     });
 
-    sendSuccess(res, calls);
+    sendSuccess(res, { disabled: true, settings: data });
+  })
+);
+
+router.get(
+  '/analytics',
+  ...memberGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const days = Math.min(Number(req.query.days) || 30, 90);
+    const analytics = await getCallAnalytics(orgId, days);
+    sendSuccess(res, analytics);
+  })
+);
+
+router.get(
+  '/',
+  ...memberGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const query = listQuerySchema.parse(req.query);
+    const skip = (query.page - 1) * query.limit;
+
+    const where: Prisma.CallWhereInput = { organizationId: orgId };
+
+    if (query.status) where.status = query.status as Prisma.EnumCallStatusFilter['equals'];
+    if (query.handler) where.handler = query.handler as Prisma.EnumCallHandlerFilter['equals'];
+    if (query.direction) where.direction = query.direction as Prisma.EnumCallDirectionFilter['equals'];
+    if (query.contactId) where.contactId = query.contactId;
+    if (query.conversationId) where.conversationId = query.conversationId;
+
+    if (query.search?.trim()) {
+      const term = query.search.trim();
+      where.OR = [
+        { fromPhone: { contains: term } },
+        { toPhone: { contains: term } },
+        { contact: { name: { contains: term, mode: 'insensitive' } } },
+        { contact: { phone: { contains: term } } },
+      ];
+    }
+
+    if (query.from || query.to) {
+      where.createdAt = {};
+      if (query.from) where.createdAt.gte = new Date(query.from);
+      if (query.to) {
+        const end = new Date(query.to);
+        end.setHours(23, 59, 59, 999);
+        where.createdAt.lte = end;
+      }
+    }
+
+    const [total, calls] = await Promise.all([
+      prisma.call.count({ where }),
+      prisma.call.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: query.limit,
+        include: {
+          contact: { select: { id: true, name: true, phone: true } },
+          aiBot: { select: { id: true, name: true } },
+          assignedAgent: { select: { id: true, name: true } },
+        },
+      }),
+    ]);
+
+    sendSuccess(res, {
+      items: calls,
+      pagination: {
+        page: query.page,
+        limit: query.limit,
+        total,
+        totalPages: Math.ceil(total / query.limit),
+      },
+    });
+  })
+);
+
+router.post(
+  '/callback',
+  ...memberGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const data = callbackSchema.parse(req.body);
+
+    const number = await prisma.whatsappNumber.findFirst({
+      where: { organizationId: orgId, isActive: true },
+    });
+    if (!number) throw new AppError(400, 'Connect a WhatsApp number first');
+
+    let contact = data.contactId
+      ? await prisma.contact.findFirst({ where: { id: data.contactId, organizationId: orgId } })
+      : null;
+
+    if (!contact && data.phone) {
+      contact = await prisma.contact.findFirst({
+        where: { organizationId: orgId, phone: data.phone.replace(/\D/g, '') },
+      });
+    }
+
+    if (!contact) throw new AppError(400, 'Contact not found');
+
+    const accessToken = MetaWhatsAppService.decryptToken(number.accessToken);
+    const bridge = new WhatsAppWebRtcBridge();
+
+    try {
+      const sdpOffer = await bridge.createOffer();
+      const metaCallId = `outbound-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+      let conversation = data.conversationId
+        ? await prisma.conversation.findFirst({
+            where: { id: data.conversationId, organizationId: orgId },
+          })
+        : null;
+
+      if (!conversation) {
+        conversation = await prisma.conversation.findFirst({
+          where: { organizationId: orgId, contactId: contact.id },
+          orderBy: { lastMessageAt: 'desc' },
+        });
+      }
+
+      const call = await prisma.call.create({
+        data: {
+          organizationId: orgId,
+          contactId: contact.id,
+          conversationId: conversation?.id,
+          whatsappNumberId: number.id,
+          metaCallId,
+          direction: 'BUSINESS_INITIATED',
+          status: 'CONNECTING',
+          handler: 'AGENT',
+          assignedAgentId: req.user!.userId,
+          fromPhone: number.phoneNumber,
+          toPhone: contact.phone,
+        },
+      });
+
+      await MetaCallingService.callAction(
+        number.phoneNumberId,
+        accessToken,
+        metaCallId,
+        'connect',
+        { sdp_type: 'offer', sdp: sdpOffer },
+        contact.phone
+      );
+
+      emitToOrg(orgId, 'call:updated', { callId: call.id, status: 'CONNECTING' });
+
+      sendSuccess(res, { call, sdpOffer });
+    } finally {
+      bridge.close();
+    }
+  })
+);
+
+router.get(
+  '/:id/signaling',
+  ...memberGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const id = String(req.params.id);
+
+    const call = await prisma.call.findFirst({
+      where: { id, organizationId: orgId },
+    });
+    if (!call) throw new AppError(404, 'Call not found');
+
+    const pending = await getPendingCallByCallId(id);
+    if (!pending) throw new AppError(404, 'Call signaling not available');
+
+    sendSuccess(res, {
+      callId: call.id,
+      sdpOffer: pending.sdpOffer,
+      metaCallId: pending.metaCallId,
+    });
+  })
+);
+
+router.post(
+  '/:id/accept',
+  ...memberGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const id = String(req.params.id);
+    const { sdpAnswer } = acceptSchema.parse(req.body);
+
+    try {
+      await acceptCallWithAgentAnswer({
+        callId: id,
+        agentId: req.user!.userId,
+        organizationId: orgId,
+        sdpAnswer,
+      });
+      clearRingTimeout(
+        (await prisma.call.findUnique({ where: { id } }))?.metaCallId || ''
+      );
+      sendSuccess(res, { accepted: true });
+    } catch (err) {
+      throw new AppError(400, err instanceof Error ? err.message : 'Could not accept call');
+    }
+  })
+);
+
+router.post(
+  '/:id/decline',
+  ...memberGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const id = String(req.params.id);
+    await declineCallAsAgent({
+      callId: id,
+      agentId: req.user!.userId,
+      organizationId: orgId,
+    });
+    sendSuccess(res, { declined: true });
   })
 );
 
 router.get(
   '/:id',
-  authenticate,
-  requireOrg,
+  ...memberGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const id = String(req.params.id);
@@ -128,6 +461,7 @@ router.get(
         contact: true,
         conversation: { select: { id: true, status: true } },
         aiBot: { select: { id: true, name: true } },
+        assignedAgent: { select: { id: true, name: true } },
       },
     });
     if (!call) throw new AppError(404, 'Call not found');
@@ -135,10 +469,34 @@ router.get(
   })
 );
 
+router.patch(
+  '/:id',
+  ...memberGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const id = String(req.params.id);
+    const { notes } = notesSchema.parse(req.body);
+
+    const call = await prisma.call.findFirst({ where: { id, organizationId: orgId } });
+    if (!call) throw new AppError(404, 'Call not found');
+
+    const metadata = ((call.metadata as Record<string, unknown>) || {});
+    const updated = await prisma.call.update({
+      where: { id },
+      data: { metadata: { ...metadata, notes } },
+      include: {
+        contact: { select: { id: true, name: true, phone: true } },
+        assignedAgent: { select: { id: true, name: true } },
+      },
+    });
+
+    sendSuccess(res, updated);
+  })
+);
+
 router.post(
   '/:id/terminate',
-  authenticate,
-  requireOrg,
+  ...memberGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const id = String(req.params.id);
@@ -147,8 +505,12 @@ router.post(
       include: { whatsappNumber: true },
     });
     if (!call) throw new AppError(404, 'Call not found');
+    if (!call.whatsappNumber) {
+      throw new AppError(400, 'WhatsApp number is no longer connected for this call');
+    }
 
     const accessToken = MetaWhatsAppService.decryptToken(call.whatsappNumber.accessToken);
+    clearRingTimeout(call.metaCallId);
     await endCallSession(call.metaCallId, 'agent_terminate');
 
     try {
@@ -164,6 +526,13 @@ router.post(
     await prisma.call.update({
       where: { id: call.id },
       data: { status: 'TERMINATED', endedAt: new Date() },
+    });
+
+    await logTeamAudit({
+      organizationId: orgId,
+      actorId: req.user!.userId,
+      action: 'SETTINGS_CHANGED',
+      metadata: { area: 'calling', action: 'terminated', callId: id },
     });
 
     sendSuccess(res, { terminated: true });

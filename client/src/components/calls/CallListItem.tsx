@@ -1,4 +1,4 @@
-import { Bot, PhoneCall } from 'lucide-react';
+import { Bot, PhoneCall, User } from 'lucide-react';
 import ContactAvatar from '../inbox/ContactAvatar';
 import { callStatusLabel, formatCallTime, formatDuration, isActiveCallStatus } from './callUtils';
 
@@ -11,6 +11,7 @@ interface CallListItemProps {
   preview: string;
   createdAt: string;
   botName?: string | null;
+  agentName?: string | null;
   selected: boolean;
   onSelect: () => void;
 }
@@ -24,6 +25,7 @@ export default function CallListItem({
   preview,
   createdAt,
   botName,
+  agentName,
   selected,
   onSelect,
 }: CallListItemProps) {
@@ -81,6 +83,12 @@ export default function CallListItem({
             <span className="inline-flex items-center gap-0.5 rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-bold text-violet-700 ring-1 ring-violet-100">
               <Bot className="h-2.5 w-2.5" />
               AI
+            </span>
+          )}
+          {handler === 'AGENT' && (
+            <span className="inline-flex items-center gap-0.5 rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-bold text-sky-700 ring-1 ring-sky-100">
+              <User className="h-2.5 w-2.5" />
+              {agentName?.split(' ')[0] || 'Agent'}
             </span>
           )}
           {durationSeconds != null && durationSeconds > 0 && (

@@ -17,14 +17,14 @@ export default function SearchInput({
     <div className={`relative ${className}`}>
       <Search
         size={16}
-        className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400"
+        className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-theme-muted"
       />
       <input
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="h-11 w-full rounded-xl border border-neutral-200/90 bg-white pl-10 pr-3.5 text-[14px] text-neutral-900 shadow-input transition placeholder:text-neutral-400 focus:border-whatsapp-600 focus:outline-none focus:shadow-input-focus"
+        className="h-11 w-full rounded-xl border border-theme-border bg-theme-surface pl-10 pr-3.5 text-[14px] text-theme-fg shadow-input transition placeholder:text-theme-muted focus:border-whatsapp-600 focus:outline-none focus:shadow-input-focus dark:focus:border-whatsapp-500"
       />
     </div>
   );

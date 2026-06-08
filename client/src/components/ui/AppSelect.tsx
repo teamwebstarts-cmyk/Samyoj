@@ -7,7 +7,9 @@ import {
   type ReactNode,
   type SelectHTMLAttributes,
 } from 'react';
-import Select, { type GroupBase, type StylesConfig } from 'react-select';
+import Select from 'react-select';
+import { useTheme } from '../../contexts/ThemeContext';
+import { createSelectStyles, type SelectOption, type SelectSize } from '../../utils/selectStyles';
 
 export interface AppSelectOption {
   value: string;
@@ -22,6 +24,8 @@ interface AppSelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, '
   options?: AppSelectOption[];
   placeholder?: string;
   isSearchable?: boolean;
+  size?: SelectSize;
+  ariaLabel?: string;
   onChange?: (event: ChangeEvent<HTMLSelectElement>) => void;
   value?: string;
 }
@@ -41,81 +45,6 @@ function optionsFromChildren(children: ReactNode): AppSelectOption[] {
   return options;
 }
 
-const selectStyles: StylesConfig<AppSelectOption, false, GroupBase<AppSelectOption>> = {
-  control: (base, state) => ({
-    ...base,
-    minHeight: 44,
-    borderRadius: 12,
-    borderColor: state.isFocused ? '#128C7E' : 'rgba(229, 231, 235, 0.9)',
-    boxShadow: state.isFocused ? '0 0 0 3px rgba(37, 211, 102, 0.15)' : 'none',
-    backgroundColor: '#ffffff',
-    fontSize: 14,
-    cursor: 'pointer',
-    transition: 'border-color 150ms ease, box-shadow 150ms ease',
-    '&:hover': {
-      borderColor: state.isFocused ? '#128C7E' : '#d1d5db',
-    },
-  }),
-  valueContainer: (base) => ({
-    ...base,
-    padding: '0 12px',
-  }),
-  placeholder: (base) => ({
-    ...base,
-    color: '#9ca3af',
-    fontSize: 14,
-  }),
-  singleValue: (base) => ({
-    ...base,
-    color: '#171717',
-    fontSize: 14,
-    fontWeight: 500,
-  }),
-  input: (base) => ({
-    ...base,
-    color: '#171717',
-    fontSize: 14,
-  }),
-  indicatorSeparator: () => ({ display: 'none' }),
-  dropdownIndicator: (base, state) => ({
-    ...base,
-    color: state.isFocused ? '#128C7E' : '#9ca3af',
-    paddingRight: 12,
-    '&:hover': { color: '#128C7E' },
-  }),
-  menuPortal: (base) => ({
-    ...base,
-    zIndex: 9999,
-  }),
-  menu: (base) => ({
-    ...base,
-    borderRadius: 12,
-    overflow: 'hidden',
-    border: '1px solid rgba(229, 231, 235, 0.9)',
-    boxShadow: '0 12px 32px rgba(15, 23, 42, 0.12)',
-  }),
-  menuList: (base) => ({
-    ...base,
-    padding: 6,
-  }),
-  option: (base, state) => ({
-    ...base,
-    borderRadius: 8,
-    fontSize: 14,
-    fontWeight: state.isSelected ? 600 : 500,
-    color: state.isSelected ? '#065f46' : '#171717',
-    backgroundColor: state.isSelected
-      ? 'rgba(209, 250, 229, 0.95)'
-      : state.isFocused
-        ? 'rgba(240, 253, 244, 0.95)'
-        : 'transparent',
-    cursor: state.isDisabled ? 'not-allowed' : 'pointer',
-    '&:active': {
-      backgroundColor: 'rgba(209, 250, 229, 0.85)',
-    },
-  }),
-};
-
 export default function AppSelect({
   label,
   hint,
@@ -126,11 +55,14 @@ export default function AppSelect({
   options: optionsProp,
   placeholder = 'Select an option',
   isSearchable,
+  size = 'default',
+  ariaLabel,
   value = '',
   onChange,
   disabled,
   required,
 }: AppSelectProps) {
+  const { resolved } = useTheme();
   const autoId = useId();
   const selectId = id || autoId;
 
@@ -141,6 +73,10 @@ export default function AppSelect({
 
   const selected = options.find((option) => option.value === value) ?? null;
   const searchable = isSearchable ?? options.length > 6;
+  const styles = useMemo(
+    () => createSelectStyles(resolved === 'dark', size),
+    [resolved, size],
+  );
 
   const emitChange = (nextValue: string) => {
     onChange?.({
@@ -149,22 +85,23 @@ export default function AppSelect({
   };
 
   return (
-    <div className={`relative space-y-1.5 ${className}`}>
+    <div className={`relative ${label || hint || error ? 'space-y-1.5' : ''} ${className}`}>
       {(label || hint) && (
         <div className="flex items-center justify-between gap-2">
           {label && (
-            <label htmlFor={selectId} className="text-[13px] font-semibold text-neutral-700">
+            <label htmlFor={selectId} className="text-[13px] font-semibold text-theme-secondary">
               {label}
               {required && <span className="text-red-500"> *</span>}
             </label>
           )}
-          {hint && <span className="text-[11px] font-medium text-neutral-500">{hint}</span>}
+          {hint && <span className="text-[11px] font-medium text-theme-muted">{hint}</span>}
         </div>
       )}
 
-      <Select<AppSelectOption, false>
+      <Select<SelectOption, false>
         inputId={selectId}
         instanceId={selectId}
+        aria-label={ariaLabel || label}
         options={options}
         value={selected}
         onChange={(option) => emitChange(option?.value ?? '')}
@@ -172,7 +109,7 @@ export default function AppSelect({
         isDisabled={disabled}
         isSearchable={searchable}
         isClearable={false}
-        styles={selectStyles}
+        styles={styles}
         menuPortalTarget={typeof document !== 'undefined' ? document.body : null}
         menuPosition="fixed"
         classNamePrefix="app-select"
@@ -190,7 +127,7 @@ export default function AppSelect({
         />
       )}
 
-      {error && <p className="text-[12px] font-medium text-red-600">{error}</p>}
+      {error && <p className="text-[12px] font-medium text-red-600 dark:text-red-400">{error}</p>}
     </div>
   );
 }

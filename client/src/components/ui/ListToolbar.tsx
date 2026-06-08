@@ -6,6 +6,7 @@ interface ListToolbarProps {
   onSearchChange: (value: string) => void;
   searchPlaceholder?: string;
   filters?: ReactNode;
+  actions?: ReactNode;
   className?: string;
 }
 
@@ -14,6 +15,7 @@ export default function ListToolbar({
   onSearchChange,
   searchPlaceholder = 'Search...',
   filters,
+  actions,
   className = '',
 }: ListToolbarProps) {
   return (
@@ -26,11 +28,14 @@ export default function ListToolbar({
           className="w-full lg:max-w-sm"
         />
 
-        {filters && (
-          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center lg:justify-end">
-            {filters}
-          </div>
-        )}
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center lg:justify-end">
+          {filters && (
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+              {filters}
+            </div>
+          )}
+          {actions}
+        </div>
       </div>
     </div>
   );

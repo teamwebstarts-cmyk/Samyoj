@@ -3,14 +3,28 @@ import { decrypt, encrypt } from '../../utils/crypto';
 
 const META_BASE = `https://graph.facebook.com/${config.meta.apiVersion}`;
 
+export interface InteractiveButton {
+  type: 'reply';
+  reply: { id: string; title: string };
+}
+
 export interface SendMessagePayload {
   to: string;
-  type: 'text' | 'template' | 'image' | 'document';
+  type: 'text' | 'template' | 'image' | 'document' | 'video' | 'audio' | 'interactive';
   text?: { body: string };
   template?: {
     name: string;
     language: { code: string };
     components?: unknown[];
+  };
+  image?: { link: string; caption?: string };
+  document?: { link: string; caption?: string; filename?: string };
+  video?: { link: string; caption?: string };
+  audio?: { link: string };
+  interactive?: {
+    type: 'button';
+    body: { text: string };
+    action: { buttons: InteractiveButton[] };
   };
 }
 
@@ -42,6 +56,7 @@ export interface MessageTemplate {
   status: string;
   category: string;
   language: string;
+  quality_score?: { score?: string; date?: number };
   components?: Array<{
     type: string;
     text?: string;
@@ -50,6 +65,11 @@ export interface MessageTemplate {
     buttons?: TemplateButton[];
   }>;
   rejected_reason?: string;
+}
+
+export interface TemplateListResult {
+  templates: MessageTemplate[];
+  paging?: { cursors?: { before?: string; after?: string }; next?: string };
 }
 
 export interface TemplateLibraryEntry {
@@ -109,12 +129,8 @@ export interface CreateTemplatePayload {
   name: string;
   language: string;
   category: 'MARKETING' | 'UTILITY' | 'AUTHENTICATION';
-  components: Array<{
-    type: 'HEADER' | 'BODY' | 'FOOTER' | 'BUTTONS';
-    format?: 'TEXT' | 'IMAGE' | 'VIDEO' | 'DOCUMENT';
-    text?: string;
-    buttons?: Array<{ type: string; text: string; url?: string; phone_number?: string }>;
-  }>;
+  components: Array<Record<string, unknown>>;
+  allow_category_change?: boolean;
 }
 
 interface GraphError {
@@ -338,19 +354,86 @@ export class MetaWhatsAppService {
   static async listMessageTemplates(
     wabaId: string,
     accessToken: string,
-    options?: { status?: string; limit?: number }
-  ): Promise<MessageTemplate[]> {
+    options?: { status?: string; limit?: number; after?: string }
+  ): Promise<TemplateListResult> {
     const params = new URLSearchParams({
-      fields: 'id,name,status,category,language,components,rejected_reason',
+      fields: 'id,name,status,category,language,components,rejected_reason,quality_score',
       limit: String(options?.limit || 100),
     });
     if (options?.status) params.set('status', options.status);
+    if (options?.after) params.set('after', options.after);
 
-    const data = await this.graphGet<{ data?: MessageTemplate[] }>(
-      `/${wabaId}/message_templates?${params.toString()}`,
-      accessToken
-    );
-    return (data.data || []).map(normalizeMessageTemplate);
+    const data = await this.graphGet<{
+      data?: MessageTemplate[];
+      paging?: TemplateListResult['paging'];
+    }>(`/${wabaId}/message_templates?${params.toString()}`, accessToken);
+
+    return {
+      templates: (data.data || []).map(normalizeMessageTemplate),
+      paging: data.paging,
+    };
+  }
+
+  static async listAllMessageTemplates(
+    wabaId: string,
+    accessToken: string,
+    options?: { status?: string; maxPages?: number }
+  ): Promise<MessageTemplate[]> {
+    const all: MessageTemplate[] = [];
+    let after: string | undefined;
+    const maxPages = options?.maxPages ?? 10;
+
+    for (let page = 0; page < maxPages; page++) {
+      const result = await this.listMessageTemplates(wabaId, accessToken, {
+        status: options?.status,
+        limit: 100,
+        after,
+      });
+      all.push(...result.templates);
+      after = result.paging?.cursors?.after;
+      if (!after || !result.templates.length) break;
+    }
+
+    return all;
+  }
+
+  static async uploadTemplateMedia(
+    accessToken: string,
+    buffer: Buffer,
+    mimeType: string
+  ): Promise<string> {
+    const appId = config.meta.appId;
+    if (!appId) throw new Error('META_APP_ID is required for template media upload');
+
+    const sessionParams = new URLSearchParams({
+      file_length: String(buffer.length),
+      file_type: mimeType,
+    });
+
+    const sessionRes = await fetch(`${META_BASE}/${appId}/uploads?${sessionParams}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const sessionData = (await sessionRes.json()) as { id?: string } & GraphError;
+    if (!sessionRes.ok || !sessionData.id) {
+      throw new Error(sessionData.error?.message || 'Failed to start media upload session');
+    }
+
+    const uploadRes = await fetch(`${META_BASE}/${sessionData.id}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `OAuth ${accessToken}`,
+        'Content-Type': mimeType,
+        'file_offset': '0',
+      },
+      body: buffer,
+    });
+    const uploadData = (await uploadRes.json()) as { h?: string } & GraphError;
+    if (!uploadRes.ok || !uploadData.h) {
+      throw new Error(uploadData.error?.message || 'Failed to upload template media');
+    }
+
+    return uploadData.h;
   }
 
   static async getMessageTemplate(
@@ -491,6 +574,10 @@ export class MetaWhatsAppService {
         type: payload.type,
         ...(payload.text && { text: payload.text }),
         ...(payload.template && { template: payload.template }),
+        ...(payload.image && { image: payload.image }),
+        ...(payload.document && { document: payload.document }),
+        ...(payload.video && { video: payload.video }),
+        ...(payload.interactive && { interactive: payload.interactive }),
       }),
     });
 
@@ -530,6 +617,31 @@ export class MetaWhatsAppService {
       throw new Error('Failed to download media from Meta');
     }
     return Buffer.from(await res.arrayBuffer());
+  }
+
+  static async sendTypingIndicator(
+    phoneNumberId: string,
+    accessToken: string,
+    to: string
+  ): Promise<void> {
+    const phone = to.replace(/\D/g, '');
+    try {
+      await fetch(`${META_BASE}/${phoneNumberId}/messages`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          recipient_type: 'individual',
+          to: phone,
+          typing_indicator: { type: 'text' },
+        }),
+      });
+    } catch {
+      /* typing indicator is best-effort */
+    }
   }
 
   static async markAsRead(phoneNumberId: string, accessToken: string, messageId: string) {
@@ -648,6 +760,44 @@ export class MetaWhatsAppService {
     await this.ensureWabaSubscribed(wabaId, accessToken);
     await this.registerAppWebhook(callbackUrl);
     return { callbackUrl };
+  }
+
+  /** Subscribe app webhook once; link every active WABA, skipping invalid ones. */
+  static async configureWebhooksForNumbers(
+    numbers: Array<{ phoneNumber: string; wabaId: string; accessToken: string }>
+  ): Promise<{ callbackUrl: string; subscribedWabas: number; failures: Array<{ phoneNumber: string; wabaId: string; error: string }> }> {
+    const callbackUrl = config.meta.webhookUrl;
+    if (!callbackUrl) {
+      throw new Error(
+        'META_WEBHOOK_URL is not set. Use an HTTPS tunnel URL ending with /api/whatsapp/webhook'
+      );
+    }
+
+    let subscribedWabas = 0;
+    const failures: Array<{ phoneNumber: string; wabaId: string; error: string }> = [];
+
+    for (const number of numbers) {
+      try {
+        await this.ensureWabaSubscribed(number.wabaId, number.accessToken);
+        subscribedWabas++;
+      } catch (err) {
+        failures.push({
+          phoneNumber: number.phoneNumber,
+          wabaId: number.wabaId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    if (subscribedWabas === 0) {
+      throw new Error(
+        'Could not link any WhatsApp Business Account to this app. ' +
+          'Disconnect and reconnect WhatsApp in Settings, and ensure your Meta user is an admin on the WABA.'
+      );
+    }
+
+    await this.registerAppWebhook(callbackUrl);
+    return { callbackUrl, subscribedWabas, failures };
   }
 
   static async getWebhookStatus(

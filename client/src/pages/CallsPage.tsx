@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { callingApi } from '../services/api';
 import { useSocket } from '../hooks/useSocket';
+import CallAnalyticsPanel, { type CallAnalyticsData } from '../components/calls/CallAnalyticsPanel';
 import CallDetailView from '../components/calls/CallDetailView';
+import CallFiltersBar from '../components/calls/CallFiltersBar';
 import CallInfoPanel from '../components/calls/CallInfoPanel';
 import CallListItem from '../components/calls/CallListItem';
 import CallOverviewPanel from '../components/calls/CallOverviewPanel';
@@ -14,9 +17,12 @@ import {
   normalizeTranscript,
   transcriptPreview,
 } from '../components/calls/callUtils';
-import AppAlert from '../components/ui/AppAlert';
+import { toastError, toastSuccess } from '../utils/toast';
 import LoadingState from '../components/ui/LoadingState';
 import PageShell from '../components/ui/PageShell';
+import Pagination from '../components/ui/Pagination';
+import AppTextarea from '../components/ui/AppTextarea';
+import AppButton from '../components/ui/AppButton';
 
 interface CallRecord {
   id: string;
@@ -28,9 +34,12 @@ interface CallRecord {
   toPhone: string;
   durationSeconds?: number | null;
   transcript?: unknown;
+  metadata?: { notes?: string } | null;
   createdAt: string;
-  contact?: { name?: string | null; phone: string };
+  contact?: { id?: string; name?: string | null; phone: string };
   aiBot?: { name: string } | null;
+  assignedAgent?: { id: string; name: string } | null;
+  conversation?: { id: string } | null;
 }
 
 interface CallingStatus {
@@ -48,38 +57,75 @@ interface CallingStatus {
   callingSettings?: { calling?: { status?: string } } | null;
 }
 
+const PAGE_SIZE = 25;
+
 function parseCall(raw: CallRecord): CallRecord {
   return { ...raw, transcript: normalizeTranscript(raw.transcript) };
 }
 
 export default function CallsPage() {
+  const { callId: routeCallId } = useParams();
+  const navigate = useNavigate();
+
   const [calls, setCalls] = useState<CallRecord[]>([]);
   const [status, setStatus] = useState<CallingStatus | null>(null);
+  const [analytics, setAnalytics] = useState<CallAnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [enabling, setEnabling] = useState(false);
   const [ending, setEnding] = useState(false);
-  const [selectedCallId, setSelectedCallId] = useState<string | null>(null);
-  const [error, setError] = useState('');
-  const [toast, setToast] = useState('');
+  const [savingNotes, setSavingNotes] = useState(false);
+  const [selectedCallId, setSelectedCallId] = useState<string | null>(routeCallId ?? null);
+  const [page, setPage] = useState(1);
+  const [totalCalls, setTotalCalls] = useState(0);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [handlerFilter, setHandlerFilter] = useState('');
+  const [notes, setNotes] = useState('');
+  const [showAnalytics, setShowAnalytics] = useState(false);
+
+  const loadCalls = useCallback(async () => {
+    const params: Record<string, string> = {
+      page: String(page),
+      limit: String(PAGE_SIZE),
+    };
+    if (search.trim()) params.search = search.trim();
+    if (statusFilter) params.status = statusFilter;
+    if (handlerFilter) params.handler = handlerFilter;
+
+    const { data } = await callingApi.list(params);
+    const payload = data.data as {
+      items: CallRecord[];
+      pagination: { total: number };
+    };
+    setCalls(payload.items.map(parseCall));
+    setTotalCalls(payload.pagination.total);
+  }, [page, search, statusFilter, handlerFilter]);
 
   const load = useCallback(async () => {
     try {
-      const [statusRes, callsRes] = await Promise.all([callingApi.status(), callingApi.list()]);
+      const [statusRes, , analyticsRes] = await Promise.all([
+        callingApi.status(),
+        loadCalls(),
+        callingApi.analytics(30),
+      ]);
       setStatus(statusRes.data.data);
-      setCalls((callsRes.data.data as CallRecord[]).map(parseCall));
-      setError('');
+      setAnalytics(analyticsRes.data.data);
     } catch {
-      setError('Could not load calls. Please refresh the page.');
+      toastError('Could not load calls. Please refresh the page.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loadCalls]);
 
   const loadCallDetail = useCallback(async (callId: string) => {
     try {
       const { data } = await callingApi.get(callId);
       const parsed = parseCall(data.data as CallRecord);
-      setCalls((prev) => prev.map((c) => (c.id === callId ? parsed : c)));
+      setCalls((prev) => {
+        const exists = prev.some((c) => c.id === callId);
+        return exists ? prev.map((c) => (c.id === callId ? parsed : c)) : [parsed, ...prev];
+      });
+      setNotes((parsed.metadata as { notes?: string })?.notes || '');
       return parsed;
     } catch {
       return null;
@@ -89,6 +135,17 @@ export default function CallsPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    void loadCalls().catch(() => undefined);
+  }, [loadCalls]);
+
+  useEffect(() => {
+    if (routeCallId) {
+      setSelectedCallId(routeCallId);
+      void loadCallDetail(routeCallId);
+    }
+  }, [routeCallId, loadCallDetail]);
 
   const applyTranscriptUpdate = useCallback((callId: string, transcript: unknown) => {
     const normalized = normalizeTranscript(transcript);
@@ -100,7 +157,7 @@ export default function CallsPage() {
   useSocket((event, data) => {
     if (event === 'call:incoming') {
       const payload = data as { fromPhone: string; contactName?: string };
-      setToast(`Incoming call from ${payload.contactName || payload.fromPhone}`);
+      toastSuccess(`Incoming call from ${payload.contactName || payload.fromPhone}`);
       void load();
     }
     if (event === 'call:updated') void load();
@@ -112,16 +169,14 @@ export default function CallsPage() {
 
   const handleEnableCalling = useCallback(async () => {
     setEnabling(true);
-    setToast('');
-    setError('');
     try {
       await callingApi.enable();
-      setToast('Voice calls are now enabled on your WhatsApp number.');
+      toastSuccess('Voice calls are now enabled on your WhatsApp number.');
       await load();
     } catch (err: unknown) {
       const body = (err as { response?: { data?: { error?: { message?: string; hints?: string[] } } } })
         ?.response?.data?.error;
-      setError(body?.message || 'Could not enable calls. Check your account in Meta Business Manager.');
+      toastError(body?.message || 'Could not enable calls. Check your account in Meta Business Manager.');
       if (body?.hints?.length) {
         setStatus((prev) => (prev ? { ...prev, enableHints: body.hints } : prev));
       }
@@ -148,6 +203,7 @@ export default function CallsPage() {
   );
 
   useEffect(() => {
+    if (routeCallId) return;
     if (calls.length === 0) {
       setSelectedCallId(null);
       return;
@@ -155,9 +211,8 @@ export default function CallsPage() {
     if (!selectedCallId || !calls.some((c) => c.id === selectedCallId)) {
       setSelectedCallId(calls[0].id);
     }
-  }, [calls, selectedCallId]);
+  }, [calls, selectedCallId, routeCallId]);
 
-  // Refresh transcript while a call is live
   useEffect(() => {
     if (!selectedCallId || !selectedCall || !isActiveCallStatus(selectedCall.status)) return;
 
@@ -171,9 +226,10 @@ export default function CallsPage() {
   const handleSelectCall = useCallback(
     (call: CallRecord) => {
       setSelectedCallId(call.id);
+      navigate(`/calls/${call.id}`);
       void loadCallDetail(call.id);
     },
-    [loadCallDetail]
+    [loadCallDetail, navigate]
   );
 
   async function handleTerminate() {
@@ -181,13 +237,27 @@ export default function CallsPage() {
     setEnding(true);
     try {
       await callingApi.terminate(selectedCall.id);
-      setToast('Call ended.');
+      toastSuccess('Call ended.');
       await load();
       await loadCallDetail(selectedCall.id);
     } catch {
-      setError('Could not end the call.');
+      toastError('Could not end the call.');
     } finally {
       setEnding(false);
+    }
+  }
+
+  async function handleSaveNotes() {
+    if (!selectedCall) return;
+    setSavingNotes(true);
+    try {
+      await callingApi.updateNotes(selectedCall.id, notes);
+      toastSuccess('Notes saved.');
+      await loadCallDetail(selectedCall.id);
+    } catch {
+      toastError('Could not save notes.');
+    } finally {
+      setSavingNotes(false);
     }
   }
 
@@ -214,16 +284,17 @@ export default function CallsPage() {
 
   return (
     <PageShell fullBleed className="gap-3 sm:gap-4">
-      {error && <AppAlert variant="error">{error}</AppAlert>}
-      {toast && <AppAlert variant="success">{toast}</AppAlert>}
-
       <CallsPageHeader
         phoneNumber={status?.phoneNumber}
         isReady={isReady}
         liveCount={liveCount}
-        callsToday={completedToday}
-        totalCalls={callStats.total}
+        callsToday={analytics?.today ?? completedToday}
+        totalCalls={analytics?.total ?? callStats.total}
+        onToggleAnalytics={() => setShowAnalytics((v) => !v)}
+        showAnalytics={showAnalytics}
       />
+
+      {showAnalytics && <CallAnalyticsPanel data={analytics} />}
 
       <CallSetupProgress
         whatsappConnected={Boolean(status?.whatsappConnected)}
@@ -240,12 +311,30 @@ export default function CallsPage() {
             selectedCall ? 'hidden md:flex' : 'flex'
           }`}
         >
+          <CallFiltersBar
+            search={search}
+            onSearchChange={(v) => {
+              setSearch(v);
+              setPage(1);
+            }}
+            status={statusFilter}
+            onStatusChange={(v) => {
+              setStatusFilter(v);
+              setPage(1);
+            }}
+            handler={handlerFilter}
+            onHandlerChange={(v) => {
+              setHandlerFilter(v);
+              setPage(1);
+            }}
+          />
+
           <div className="shrink-0 border-b border-neutral-100 bg-gradient-to-b from-violet-50/60 via-white to-white px-4 py-3.5">
             <div className="flex items-center justify-between gap-2">
               <div>
                 <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-neutral-500">Call history</p>
                 <p className="mt-0.5 text-[13px] font-extrabold text-neutral-900">
-                  {calls.length === 0 ? 'No calls yet' : `${calls.length} recorded`}
+                  {calls.length === 0 ? 'No calls yet' : `${calls.length} on this page`}
                 </p>
               </div>
               {liveCount > 0 && (
@@ -269,26 +358,39 @@ export default function CallsPage() {
                 </div>
               </div>
             ) : (
-              <div className="flex-1 divide-y divide-neutral-100/80 overflow-y-auto">
-                {calls.map((call) => {
-                  const phone = call.contact?.phone || call.fromPhone;
-                  return (
-                    <CallListItem
-                      key={call.id}
-                      name={call.contact?.name}
-                      phone={phone}
-                      status={call.status}
-                      handler={call.handler}
-                      durationSeconds={call.durationSeconds}
-                      preview={transcriptPreview(call.transcript)}
-                      createdAt={call.createdAt}
-                      botName={call.aiBot?.name}
-                      selected={selectedCallId === call.id}
-                      onSelect={() => handleSelectCall(call)}
+              <>
+                <div className="flex-1 divide-y divide-neutral-100/80 overflow-y-auto">
+                  {calls.map((call) => {
+                    const phone = call.contact?.phone || call.fromPhone;
+                    return (
+                      <CallListItem
+                        key={call.id}
+                        name={call.contact?.name}
+                        phone={phone}
+                        status={call.status}
+                        handler={call.handler}
+                        durationSeconds={call.durationSeconds}
+                        preview={transcriptPreview(call.transcript)}
+                        createdAt={call.createdAt}
+                        botName={call.aiBot?.name}
+                        agentName={call.assignedAgent?.name}
+                        selected={selectedCallId === call.id}
+                        onSelect={() => handleSelectCall(call)}
+                      />
+                    );
+                  })}
+                </div>
+                {totalCalls > PAGE_SIZE && (
+                  <div className="shrink-0 border-t border-neutral-100 p-2">
+                    <Pagination
+                      page={page}
+                      pageSize={PAGE_SIZE}
+                      total={totalCalls}
+                      onPageChange={setPage}
                     />
-                  );
-                })}
-              </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -299,18 +401,41 @@ export default function CallsPage() {
           }`}
         >
           {selectedCall ? (
-            <CallDetailView
-              name={selectedCall.contact?.name}
-              phone={selectedCall.contact?.phone || selectedCall.fromPhone}
-              status={selectedCall.status}
-              createdAt={selectedCall.createdAt}
-              durationSeconds={selectedCall.durationSeconds}
-              botName={selectedCall.aiBot?.name}
-              transcript={selectedTranscript}
-              onBack={() => setSelectedCallId(null)}
-              onEndCall={isActiveCallStatus(selectedCall.status) ? () => void handleTerminate() : undefined}
-              ending={ending}
-            />
+            <>
+              <CallDetailView
+                name={selectedCall.contact?.name}
+                phone={selectedCall.contact?.phone || selectedCall.fromPhone}
+                status={selectedCall.status}
+                createdAt={selectedCall.createdAt}
+                durationSeconds={selectedCall.durationSeconds}
+                botName={selectedCall.aiBot?.name}
+                agentName={selectedCall.assignedAgent?.name}
+                conversationId={selectedCall.conversation?.id}
+                transcript={selectedTranscript}
+                onBack={() => {
+                  setSelectedCallId(null);
+                  navigate('/calls');
+                }}
+                onEndCall={isActiveCallStatus(selectedCall.status) ? () => void handleTerminate() : undefined}
+                ending={ending}
+              />
+              {!isActiveCallStatus(selectedCall.status) && (
+                <div className="border-t border-neutral-100 bg-neutral-50/50 px-4 py-3">
+                  <AppTextarea
+                    label="Internal notes"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    rows={2}
+                    placeholder="Add notes about this call..."
+                  />
+                  <div className="mt-2 flex justify-end">
+                    <AppButton size="sm" loading={savingNotes} onClick={() => void handleSaveNotes()}>
+                      Save notes
+                    </AppButton>
+                  </div>
+                </div>
+              )}
+            </>
           ) : (
             <CallOverviewPanel
               status={overviewStatus}

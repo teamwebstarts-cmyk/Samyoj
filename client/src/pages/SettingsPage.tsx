@@ -1,21 +1,45 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
+  Bot,
   CheckCircle,
+  CheckCircle2,
+  Clock,
   Link2,
   LogOut,
+  Moon,
+  Palette,
+  PhoneCall,
+  Send,
   Settings2,
   ShieldCheck,
   Smartphone,
+  Sparkles,
   Webhook,
 } from 'lucide-react';
+import CallingSettingsPanel from '../components/calls/CallingSettingsPanel';
+import SettingsInsightCards from '../components/settings/SettingsInsightCards';
+import SettingsPanel from '../components/settings/SettingsPanel';
+import SettingsReadinessBanner from '../components/settings/SettingsReadinessBanner';
+import SettingsSidebar from '../components/settings/SettingsSidebar';
+import SettingsStat from '../components/settings/SettingsStat';
+import SettingsStatusPill from '../components/settings/SettingsStatusPill';
 import AppAlert from '../components/ui/AppAlert';
 import AppButton from '../components/ui/AppButton';
+import AppInput from '../components/ui/AppInput';
 import LoadingState from '../components/ui/LoadingState';
+import PageHeader from '../components/ui/PageHeader';
 import PageHero from '../components/ui/PageHero';
 import PageShell from '../components/ui/PageShell';
-import SectionCard from '../components/ui/SectionCard';
-import { whatsappApi } from '../services/api';
+import ThemeToggle from '../components/ui/ThemeToggle';
+import { useTheme } from '../contexts/ThemeContext';
+import { settingsApi, whatsappApi } from '../services/api';
+import type { AiUsageSummary, BusinessHours, OrgAiSettings } from '../types';
+import { toastError, toastSuccess } from '../utils/toast';
+
+const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+type SettingsTab = 'general' | 'whatsapp' | 'automation' | 'ai' | 'calling' | 'campaigns' | 'setup';
 
 interface WhatsappNumber {
   id: string;
@@ -31,7 +55,16 @@ interface WebhookStatus {
   subscribed: boolean;
 }
 
+function formatHour(hour: number) {
+  const normalized = hour === 24 ? 0 : hour;
+  const period = normalized >= 12 ? 'PM' : 'AM';
+  const display = normalized % 12 === 0 ? 12 : normalized % 12;
+  return `${display}:00 ${period}`;
+}
+
 export default function SettingsPage() {
+  const { mode, resolved } = useTheme();
+  const [activeTab, setActiveTab] = useState<SettingsTab>('general');
   const [numbers, setNumbers] = useState<WhatsappNumber[]>([]);
   const [connectUrl, setConnectUrl] = useState('');
   const [webhookStatus, setWebhookStatus] = useState<WebhookStatus | null>(null);
@@ -39,35 +72,111 @@ export default function SettingsPage() {
   const [connecting, setConnecting] = useState(false);
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
   const [settingUpWebhook, setSettingUpWebhook] = useState(false);
-  const [error, setError] = useState('');
-  const [webhookMessage, setWebhookMessage] = useState('');
+  const [businessHours, setBusinessHours] = useState<BusinessHours>({
+    startHour: 9,
+    endHour: 18,
+    days: [1, 2, 3, 4, 5],
+  });
+  const [savingHours, setSavingHours] = useState(false);
+  const [aiSettings, setAiSettings] = useState<OrgAiSettings>({ useCustomConfig: false });
+  const [aiApiKey, setAiApiKey] = useState('');
+  const [aiUsage, setAiUsage] = useState<AiUsageSummary | null>(null);
+  const [savingAi, setSavingAi] = useState(false);
+  const [campaignSettings, setCampaignSettings] = useState({
+    dailySendLimit: 5000,
+    batchSize: 50,
+    batchDelayMs: 1000,
+  });
+  const [savingCampaigns, setSavingCampaigns] = useState(false);
 
   const load = () => {
-    Promise.all([whatsappApi.numbers(), whatsappApi.connectUrl(), whatsappApi.webhookStatus()])
-      .then(([numbersRes, urlRes, webhookRes]) => {
+    Promise.all([
+      whatsappApi.numbers(),
+      whatsappApi.connectUrl(),
+      whatsappApi.webhookStatus(),
+      settingsApi.get(),
+      settingsApi.aiUsage(),
+    ])
+      .then(([numbersRes, urlRes, webhookRes, settingsRes, usageRes]) => {
         setNumbers(numbersRes.data.data);
         setConnectUrl(urlRes.data.data.url);
         setWebhookStatus(webhookRes.data.data);
-        setError('');
+        if (settingsRes.data.data.businessHours) {
+          setBusinessHours(settingsRes.data.data.businessHours);
+        }
+        if (settingsRes.data.data.ai) {
+          setAiSettings(settingsRes.data.data.ai);
+        }
+        if (settingsRes.data.data.campaigns) {
+          setCampaignSettings((prev) => ({ ...prev, ...settingsRes.data.data.campaigns }));
+        }
+        setAiUsage(usageRes.data.data);
       })
       .catch((err: unknown) => {
         const msg =
           (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
-            ?.error?.message || 'Failed to load WhatsApp settings.';
-        setError(msg);
+            ?.error?.message || 'Failed to load settings.';
+        toastError(msg);
       })
       .finally(() => setLoading(false));
   };
 
   useEffect(load, []);
 
-  const stats = useMemo(
-    () => ({
-      connected: numbers.length,
-      webhook: webhookStatus?.subscribed ? 1 : 0,
-      ready: numbers.length > 0 && webhookStatus?.subscribed ? 1 : 0,
-    }),
-    [numbers, webhookStatus],
+  const isReady = numbers.length > 0 && Boolean(webhookStatus?.subscribed);
+  const setupProgress = useMemo(() => {
+    const autoSteps = [numbers.length > 0, Boolean(webhookStatus?.subscribed)];
+    const completed = autoSteps.filter(Boolean).length;
+    return Math.round((completed / 6) * 100);
+  }, [numbers, webhookStatus]);
+
+  const tabs = useMemo(
+    () => [
+      {
+        id: 'general' as const,
+        label: 'Appearance',
+        description: 'Theme & display',
+        icon: Palette,
+      },
+      {
+        id: 'whatsapp' as const,
+        label: 'WhatsApp',
+        description: 'Connection & webhooks',
+        icon: Smartphone,
+        badge: !isReady ? 'Setup' : undefined,
+      },
+      {
+        id: 'automation' as const,
+        label: 'Business hours',
+        description: 'Away messages & automations',
+        icon: Clock,
+      },
+      {
+        id: 'ai' as const,
+        label: 'AI',
+        description: 'Azure OpenAI & limits',
+        icon: Bot,
+      },
+      {
+        id: 'calling' as const,
+        label: 'Calling',
+        description: 'Voice routing & AI answer',
+        icon: PhoneCall,
+      },
+      {
+        id: 'campaigns' as const,
+        label: 'Campaigns',
+        description: 'Send limits & throttling',
+        icon: Send,
+      },
+      {
+        id: 'setup' as const,
+        label: 'Setup guide',
+        description: 'Meta configuration steps',
+        icon: ShieldCheck,
+      },
+    ],
+    [isReady],
   );
 
   const handleConnect = () => {
@@ -78,281 +187,770 @@ export default function SettingsPage() {
 
   const handleDisconnect = async (id: string, phone: string) => {
     const confirmed = window.confirm(
-      `Disconnect +${phone}?\n\nNew messages will stop until you connect again. Existing chats remain saved.`
+      `Disconnect +${phone}?\n\nNew messages will stop until you connect again. Existing chats remain saved.`,
     );
     if (!confirmed) return;
 
     setDisconnectingId(id);
-    setError('');
     try {
       await whatsappApi.disconnect(id);
       load();
+      toastSuccess('WhatsApp disconnected');
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
           ?.error?.message || 'Failed to disconnect WhatsApp.';
-      setError(msg);
+      toastError(msg);
     } finally {
       setDisconnectingId(null);
     }
   };
 
+  const toggleDay = (day: number) => {
+    setBusinessHours((prev) => ({
+      ...prev,
+      days: prev.days.includes(day)
+        ? prev.days.filter((d) => d !== day)
+        : [...prev.days, day].sort(),
+    }));
+  };
+
+  const handleSaveBusinessHours = async () => {
+    setSavingHours(true);
+    try {
+      await settingsApi.updateBusinessHours(businessHours);
+      toastSuccess('Business hours saved');
+    } catch {
+      toastError('Failed to save business hours');
+    } finally {
+      setSavingHours(false);
+    }
+  };
+
+  const handleSaveCampaigns = async () => {
+    setSavingCampaigns(true);
+    try {
+      await settingsApi.updateCampaigns(campaignSettings);
+      toastSuccess('Campaign settings saved');
+    } catch {
+      toastError('Failed to save campaign settings');
+    } finally {
+      setSavingCampaigns(false);
+    }
+  };
+
+  const handleSaveAi = async () => {
+    setSavingAi(true);
+    try {
+      const payload: Record<string, unknown> = {
+        useCustomConfig: aiSettings.useCustomConfig,
+        endpoint: aiSettings.endpoint || '',
+        deployment: aiSettings.deployment,
+        embeddingDeployment: aiSettings.embeddingDeployment,
+        apiVersion: aiSettings.apiVersion,
+        monthlyTokenLimit: aiSettings.monthlyTokenLimit,
+      };
+      if (aiApiKey.trim()) payload.apiKey = aiApiKey.trim();
+      const { data } = await settingsApi.updateAi(payload);
+      setAiSettings(data.data.ai);
+      setAiApiKey('');
+      toastSuccess('AI settings saved');
+      const usageRes = await settingsApi.aiUsage();
+      setAiUsage(usageRes.data.data);
+    } catch {
+      toastError('Failed to save AI settings');
+    } finally {
+      setSavingAi(false);
+    }
+  };
+
   const handleSetupWebhook = async () => {
     setSettingUpWebhook(true);
-    setWebhookMessage('');
     try {
       const { data } = await whatsappApi.setupWebhook();
       const url = data.data.callbackUrl;
-      setWebhookMessage(
+      toastSuccess(
         url
           ? `Webhook configured: ${url}`
-          : 'WhatsApp Business Account linked to this app. You can send campaigns now.'
+          : 'WhatsApp Business Account linked to this app. You can send campaigns now.',
       );
       load();
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
           ?.error?.message || 'Webhook setup failed';
-      setWebhookMessage(msg);
+      toastError(msg);
     } finally {
       setSettingUpWebhook(false);
     }
   };
 
+  const setupSteps = [
+    { text: 'Add WhatsApp product in Meta Developer Console', done: false },
+    {
+      text: 'Add redirect URI',
+      code: 'http://localhost:5173/settings/whatsapp/callback',
+      done: false,
+    },
+    { text: 'Set META_APP_ID and META_APP_SECRET in server .env', done: false },
+    { text: 'Run HTTPS tunnel', code: 'cloudflared tunnel --url http://localhost:5000', done: false },
+    {
+      text: 'Set META_WEBHOOK_URL to tunnel URL +',
+      code: '/api/whatsapp/webhook',
+      done: Boolean(webhookStatus?.webhookUrl),
+    },
+    {
+      text: 'Register webhook with Meta',
+      done: Boolean(webhookStatus?.subscribed),
+    },
+    { text: 'Connect WhatsApp Business number', done: numbers.length > 0 },
+  ];
+
   return (
     <PageShell>
+      <PageHeader
+        actions={
+          !isReady ? (
+            <AppButton size="sm" onClick={handleConnect} loading={connecting} disabled={!connectUrl}>
+              Connect WhatsApp
+            </AppButton>
+          ) : (
+            <AppButton
+              size="sm"
+              variant="secondary"
+              onClick={() => setActiveTab('whatsapp')}
+            >
+              Manage connection
+            </AppButton>
+          )
+        }
+      />
+
       <div className="space-y-5 animate-fade-up-delay sm:space-y-6">
         <PageHero
-          badge="Account setup"
+          badge="Workspace"
           badgeIcon={Settings2}
-          title="Connect WhatsApp and enable real-time inbox"
-          description="Link your WhatsApp Business number via Meta OAuth and register webhooks to receive customer messages instantly."
+          title="Configure your WhatsApp workspace"
+          description="Appearance, integrations, AI, business hours, and campaign limits — all in one polished control center."
           accent="emerald"
           stats={[
-            { label: 'Numbers', value: stats.connected, tone: 'text-whatsapp-700' },
+            { label: 'Numbers', value: numbers.length, tone: 'text-whatsapp-700 dark:text-whatsapp-400' },
             {
               label: 'Webhook',
-              value: stats.webhook ? 'Live' : 'Off',
-              tone: stats.webhook ? 'text-whatsapp-700' : 'text-amber-700',
+              value: webhookStatus?.subscribed ? 'Live' : 'Off',
+              tone: webhookStatus?.subscribed
+                ? 'text-whatsapp-700 dark:text-whatsapp-400'
+                : 'text-amber-700 dark:text-amber-400',
+            },
+            {
+              label: 'Setup',
+              value: `${setupProgress}%`,
+              tone: isReady ? 'text-whatsapp-700 dark:text-whatsapp-400' : 'text-theme-secondary',
             },
             {
               label: 'Ready',
-              value: stats.ready ? 'Yes' : 'No',
-              tone: stats.ready ? 'text-whatsapp-700' : 'text-neutral-500',
+              value: isReady ? 'Yes' : 'No',
+              tone: isReady ? 'text-whatsapp-700 dark:text-whatsapp-400' : 'text-theme-muted',
             },
           ]}
         />
 
-        {error && <AppAlert variant="error">{error}</AppAlert>}
+        <SettingsReadinessBanner
+          isReady={isReady}
+          setupProgress={setupProgress}
+          onGoToSetup={() => setActiveTab('setup')}
+          onConnect={!isReady ? handleConnect : undefined}
+          connecting={connecting}
+        />
 
-        <SectionCard
-          title="WhatsApp Business API"
-          subtitle="Connect via Meta OAuth"
-          headerAction={
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-whatsapp-500 to-whatsapp-600 text-white shadow-[0_4px_14px_rgba(37,211,102,0.35)]">
-              <Smartphone className="h-5 w-5" strokeWidth={2.25} />
-            </div>
-          }
-        >
-          {loading ? (
-            <LoadingState label="Loading connection..." />
-          ) : numbers.length > 0 ? (
-            <div className="space-y-3">
-              {numbers.map((number) => (
-                <div
-                  key={number.id}
-                  className="flex flex-col gap-3 rounded-2xl border border-emerald-200/80 bg-gradient-to-r from-emerald-50/90 to-white p-4 ring-1 ring-emerald-100 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white text-whatsapp-600 shadow-sm ring-1 ring-emerald-100">
-                      <CheckCircle size={20} strokeWidth={2.25} />
-                    </div>
-                    <div>
-                      <p className="font-extrabold text-neutral-900">+{number.phoneNumber}</p>
-                      <p className="text-[12px] font-semibold text-whatsapp-700">Connected · Active</p>
+        <SettingsInsightCards />
+
+        <div className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-6">
+          <SettingsSidebar
+            tabs={tabs}
+            activeTab={activeTab}
+            onTabChange={(id) => setActiveTab(id as SettingsTab)}
+            isReady={isReady}
+          />
+
+          <div className="min-w-0 space-y-5">
+            {activeTab === 'general' && (
+              <SettingsPanel
+                title="Appearance"
+                description="Choose how the app looks on your device. Changes apply instantly across the whole workspace."
+                icon={Moon}
+                accent="violet"
+              >
+                <div className="space-y-5">
+                  <div className="rounded-2xl border border-violet-200/60 bg-gradient-to-r from-violet-50/80 via-white to-fuchsia-50/30 p-4 dark:border-violet-800/40 dark:from-violet-950/20 dark:via-theme-surface dark:to-fuchsia-950/10">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-[0_4px_12px_rgba(139,92,246,0.28)]">
+                        <Sparkles className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <p className="text-[13px] font-extrabold text-theme-fg">Active theme</p>
+                        <p className="text-[12px] font-semibold capitalize text-violet-700 dark:text-violet-300">
+                          {mode === 'system' ? `System (${resolved})` : mode}
+                        </p>
+                      </div>
                     </div>
                   </div>
-                  <AppButton
-                    variant="danger"
-                    size="sm"
-                    icon={<LogOut className="h-4 w-4" />}
-                    onClick={() => handleDisconnect(number.id, number.phoneNumber)}
-                    loading={disconnectingId === number.id}
-                    disabled={disconnectingId !== null}
-                  >
-                    Disconnect
-                  </AppButton>
-                </div>
-              ))}
-              <AppButton variant="ghost" size="sm" onClick={handleConnect} disabled={connecting || !connectUrl}>
-                Reconnect or add another number
-              </AppButton>
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-dashed border-neutral-200 bg-neutral-50/70 px-4 py-8 text-center">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-whatsapp-500 to-whatsapp-600 text-white shadow-[0_4px_14px_rgba(37,211,102,0.35)]">
-                <Smartphone className="h-6 w-6" strokeWidth={2.25} />
-              </div>
-              <p className="mt-4 text-[14px] font-semibold text-neutral-800">
-                No WhatsApp number connected yet
-              </p>
-              <p className="mt-1 text-[13px] font-medium text-neutral-500">
-                Connect your business number to start messaging customers.
-              </p>
-              <AppButton
-                className="mt-5"
-                onClick={handleConnect}
-                disabled={connecting || !connectUrl}
-                loading={connecting}
-              >
-                Connect WhatsApp
-              </AppButton>
-              <p className="mt-3 text-[11px] font-medium text-neutral-500">
-                After granting permissions, you will return here automatically.
-              </p>
-            </div>
-          )}
-        </SectionCard>
 
-        <SectionCard
-          title="Incoming messages"
-          subtitle="Webhook configuration for real-time inbox"
-          headerAction={
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-[0_4px_14px_rgba(14,165,233,0.3)]">
-              <Webhook className="h-5 w-5" strokeWidth={2.25} />
-            </div>
-          }
-        >
-          {webhookStatus?.connected ? (
-            <div className="space-y-3 text-[13px]">
-              <div
-                className={`flex items-start gap-2.5 rounded-2xl p-4 ring-1 ${
-                  webhookStatus.subscribed
-                    ? 'bg-emerald-50/90 ring-emerald-100'
-                    : 'bg-amber-50/90 ring-amber-100'
-                }`}
-              >
-                {webhookStatus.subscribed ? (
-                  <>
-                    <CheckCircle size={18} className="mt-0.5 shrink-0 text-whatsapp-600" />
-                    <div>
-                      <p className="font-extrabold text-emerald-900">Webhook subscribed</p>
-                      <p className="mt-0.5 font-medium text-emerald-800/90">
-                        Incoming messages are enabled for your inbox.
-                      </p>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <AlertCircle size={18} className="mt-0.5 shrink-0 text-amber-600" />
-                    <div>
-                      <p className="font-extrabold text-amber-900">Webhook not subscribed</p>
-                      <p className="mt-0.5 font-medium text-amber-800/90">
-                        Customer messages won&apos;t arrive until the webhook is registered.
-                      </p>
-                    </div>
-                  </>
-                )}
-              </div>
+                  <div>
+                    <p className="mb-3 text-[12px] font-bold uppercase tracking-wide text-theme-muted">
+                      Theme mode
+                    </p>
+                    <ThemeToggle variant="menu" />
+                  </div>
 
-              {webhookStatus.webhookUrl ? (
-                <div className="rounded-2xl border border-neutral-100 bg-neutral-50/80 p-4">
-                  <p className="text-[11px] font-bold uppercase tracking-wide text-neutral-400">
-                    Webhook URL
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {[
+                      {
+                        label: 'Light workspace',
+                        active: resolved === 'light',
+                        preview: 'bg-white ring-slate-200',
+                        bar: 'bg-slate-100',
+                        dot: 'bg-whatsapp-500',
+                      },
+                      {
+                        label: 'Dark workspace',
+                        active: resolved === 'dark',
+                        preview: 'bg-slate-900 ring-slate-700',
+                        bar: 'bg-slate-800',
+                        dot: 'bg-emerald-400',
+                      },
+                    ].map((item) => (
+                      <div
+                        key={item.label}
+                        className={`rounded-2xl border p-3 transition ${
+                          item.active
+                            ? 'border-violet-300/70 bg-violet-50/50 ring-1 ring-violet-200/60 dark:border-violet-700/50 dark:bg-violet-950/20 dark:ring-violet-800/40'
+                            : 'border-theme-border bg-theme-subtle/40'
+                        }`}
+                      >
+                        <div
+                          className={`overflow-hidden rounded-xl ring-1 ${item.preview} p-2`}
+                        >
+                          <div className={`mb-2 h-2 rounded-full ${item.bar}`} />
+                          <div className="flex gap-1.5">
+                            <div className={`h-8 w-8 rounded-lg ${item.bar}`} />
+                            <div className="flex-1 space-y-1">
+                              <div className={`h-1.5 w-full rounded ${item.bar}`} />
+                              <div className={`h-1.5 w-2/3 rounded ${item.bar}`} />
+                            </div>
+                          </div>
+                          <div className={`mt-2 h-1.5 w-1/3 rounded-full ${item.dot}`} />
+                        </div>
+                        <p className="mt-2 text-center text-[11px] font-bold text-theme-secondary">
+                          {item.label}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <p className="text-[12px] font-medium leading-relaxed text-theme-muted">
+                    System mode follows your OS preference and updates automatically when you switch
+                    between light and dark on your device.
                   </p>
-                  <code className="mt-2 block break-all rounded-xl bg-white px-3 py-2 text-[12px] text-neutral-800 ring-1 ring-neutral-100">
-                    {webhookStatus.webhookUrl}
-                  </code>
                 </div>
-              ) : (
-                <AppAlert variant="info">
-                  Set <code className="rounded bg-white/80 px-1">META_WEBHOOK_URL</code> in server .env
-                </AppAlert>
-              )}
+              </SettingsPanel>
+            )}
 
-              <AppButton
-                variant="secondary"
-                size="sm"
-                onClick={handleSetupWebhook}
-                disabled={settingUpWebhook}
-                loading={settingUpWebhook}
-              >
-                {webhookStatus.webhookUrl ? 'Register webhook with Meta' : 'Link WhatsApp to this app'}
-              </AppButton>
+            {activeTab === 'whatsapp' && (
+              <div className="space-y-5">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <SettingsStatusPill
+                    label="WhatsApp number"
+                    active={numbers.length > 0}
+                    icon={Smartphone}
+                    activeLabel={`${numbers.length} connected`}
+                    inactiveLabel="Not connected"
+                  />
+                  <SettingsStatusPill
+                    label="Incoming webhook"
+                    active={Boolean(webhookStatus?.subscribed)}
+                    icon={Webhook}
+                    activeLabel="Subscribed & live"
+                    inactiveLabel="Not subscribed"
+                  />
+                </div>
 
-              {webhookMessage && (
-                <AppAlert
-                  variant={
-                    webhookMessage.startsWith('Webhook configured') ||
-                    webhookMessage.includes('linked to this app')
-                      ? 'success'
-                      : 'error'
+                <SettingsPanel
+                  title="WhatsApp Business API"
+                  description="Connect your business number via Meta OAuth to send and receive messages."
+                  icon={Smartphone}
+                  accent="emerald"
+                >
+                  {loading ? (
+                    <LoadingState label="Loading connection..." />
+                  ) : numbers.length > 0 ? (
+                    <div className="space-y-3">
+                      {numbers.map((number) => (
+                        <div
+                          key={number.id}
+                          className="flex flex-col gap-3 rounded-2xl border border-emerald-200/80 bg-gradient-to-r from-emerald-50/90 to-theme-surface p-4 ring-1 ring-emerald-100 dark:border-emerald-800/40 dark:from-emerald-950/30 dark:ring-emerald-900/40 sm:flex-row sm:items-center sm:justify-between"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-theme-surface text-whatsapp-600 shadow-sm ring-1 ring-emerald-100 dark:ring-emerald-800/50">
+                              <CheckCircle size={20} strokeWidth={2.25} />
+                            </div>
+                            <div>
+                              <p className="font-extrabold text-theme-fg">+{number.phoneNumber}</p>
+                              <p className="text-[12px] font-semibold text-whatsapp-700 dark:text-whatsapp-400">
+                                Connected · Active
+                              </p>
+                            </div>
+                          </div>
+                          <AppButton
+                            variant="danger"
+                            size="sm"
+                            icon={<LogOut className="h-4 w-4" />}
+                            onClick={() => handleDisconnect(number.id, number.phoneNumber)}
+                            loading={disconnectingId === number.id}
+                            disabled={disconnectingId !== null}
+                          >
+                            Disconnect
+                          </AppButton>
+                        </div>
+                      ))}
+                      <AppButton
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleConnect}
+                        disabled={connecting || !connectUrl}
+                      >
+                        Reconnect or add another number
+                      </AppButton>
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-theme-border bg-theme-subtle/40 px-4 py-10 text-center">
+                      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-whatsapp-500 to-whatsapp-600 text-white shadow-[0_4px_14px_rgba(37,211,102,0.35)]">
+                        <Smartphone className="h-6 w-6" strokeWidth={2.25} />
+                      </div>
+                      <p className="mt-4 text-[14px] font-semibold text-theme-fg">
+                        No WhatsApp number connected yet
+                      </p>
+                      <p className="mt-1 text-[13px] font-medium text-theme-secondary">
+                        Connect your business number to start messaging customers.
+                      </p>
+                      <AppButton
+                        className="mt-5"
+                        onClick={handleConnect}
+                        disabled={connecting || !connectUrl}
+                        loading={connecting}
+                      >
+                        Connect WhatsApp
+                      </AppButton>
+                      <p className="mt-3 text-[11px] font-medium text-theme-muted">
+                        After granting permissions, you will return here automatically.
+                      </p>
+                    </div>
+                  )}
+                </SettingsPanel>
+
+                <SettingsPanel
+                  title="Incoming messages"
+                  description="Webhook configuration for real-time inbox delivery."
+                  icon={Webhook}
+                  accent="sky"
+                  footer={
+                    webhookStatus?.connected ? (
+                      <AppButton
+                        variant="secondary"
+                        size="sm"
+                        onClick={handleSetupWebhook}
+                        disabled={settingUpWebhook}
+                        loading={settingUpWebhook}
+                      >
+                        {webhookStatus.webhookUrl ? 'Register webhook with Meta' : 'Link WhatsApp to this app'}
+                      </AppButton>
+                    ) : undefined
                   }
                 >
-                  {webhookMessage}
-                </AppAlert>
-              )}
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-dashed border-neutral-200 bg-neutral-50/70 px-4 py-6 text-center">
-              <p className="text-[13px] font-medium text-neutral-600">
-                Connect WhatsApp first to enable incoming messages.
-              </p>
-            </div>
-          )}
-        </SectionCard>
+                  {webhookStatus?.connected ? (
+                    <div className="space-y-4 text-[13px]">
+                      <div
+                        className={`flex items-start gap-2.5 rounded-2xl p-4 ring-1 ${
+                          webhookStatus.subscribed
+                            ? 'bg-emerald-50/90 ring-emerald-100 dark:bg-emerald-950/30 dark:ring-emerald-900/40'
+                            : 'bg-amber-50/90 ring-amber-100 dark:bg-amber-950/30 dark:ring-amber-900/40'
+                        }`}
+                      >
+                        {webhookStatus.subscribed ? (
+                          <>
+                            <CheckCircle size={18} className="mt-0.5 shrink-0 text-whatsapp-600" />
+                            <div>
+                              <p className="font-extrabold text-emerald-900 dark:text-emerald-200">
+                                Webhook subscribed
+                              </p>
+                              <p className="mt-0.5 font-medium text-emerald-800/90 dark:text-emerald-300/90">
+                                Incoming messages are enabled for your inbox.
+                              </p>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <AlertCircle size={18} className="mt-0.5 shrink-0 text-amber-600" />
+                            <div>
+                              <p className="font-extrabold text-amber-900 dark:text-amber-200">
+                                Webhook not subscribed
+                              </p>
+                              <p className="mt-0.5 font-medium text-amber-800/90 dark:text-amber-300/90">
+                                Customer messages won&apos;t arrive until the webhook is registered.
+                              </p>
+                            </div>
+                          </>
+                        )}
+                      </div>
 
-        <SectionCard
-          title="Setup checklist"
-          subtitle="Complete these steps for full functionality"
-          headerAction={
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-[0_4px_14px_rgba(139,92,246,0.35)]">
-              <ShieldCheck className="h-5 w-5" strokeWidth={2.25} />
-            </div>
-          }
-        >
-          <ol className="space-y-3">
-            {[
-              { text: 'Add WhatsApp product in Meta Developer Console' },
-              {
-                text: 'Add redirect URI',
-                code: 'http://localhost:5173/settings/whatsapp/callback',
-              },
-              { text: 'Set META_APP_ID and META_APP_SECRET in server .env' },
-              { text: 'Run HTTPS tunnel', code: 'cloudflared tunnel --url http://localhost:5000' },
-              {
-                text: 'Set META_WEBHOOK_URL to tunnel URL +',
-                code: '/api/whatsapp/webhook',
-              },
-              { text: 'Click "Register webhook with Meta" above' },
-            ].map((step, index) => (
-              <li
-                key={step.text}
-                className="flex gap-3 rounded-xl border border-neutral-100 bg-neutral-50/70 px-3 py-3 text-[12px] font-medium text-neutral-600"
-              >
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white text-[11px] font-bold text-violet-700 ring-1 ring-violet-100">
-                  {index + 1}
-                </span>
-                <span className="pt-0.5 leading-relaxed">
-                  {step.text}
-                  {step.code && (
-                    <>
-                      {' '}
-                      <code className="rounded bg-white px-1.5 py-0.5 text-[11px] text-neutral-800 ring-1 ring-neutral-100">
-                        {step.code}
-                      </code>
-                    </>
+                      {webhookStatus.webhookUrl ? (
+                        <div className="rounded-2xl border border-theme-border bg-theme-subtle/50 p-4">
+                          <p className="text-[11px] font-bold uppercase tracking-wide text-theme-muted">
+                            Webhook URL
+                          </p>
+                          <code className="mt-2 block break-all rounded-xl bg-theme-surface px-3 py-2 text-[12px] text-theme-fg ring-1 ring-theme-border">
+                            {webhookStatus.webhookUrl}
+                          </code>
+                        </div>
+                      ) : (
+                        <AppAlert variant="info">
+                          Set <code className="rounded bg-theme-surface px-1">META_WEBHOOK_URL</code> in
+                          server .env
+                        </AppAlert>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-theme-border bg-theme-subtle/40 px-4 py-8 text-center">
+                      <p className="text-[13px] font-medium text-theme-secondary">
+                        Connect WhatsApp first to enable incoming messages.
+                      </p>
+                    </div>
                   )}
-                </span>
-              </li>
-            ))}
-          </ol>
+                </SettingsPanel>
+              </div>
+            )}
 
-          <div className="mt-4 flex items-center gap-2 rounded-xl bg-emerald-50/80 px-3 py-2 text-[12px] font-semibold text-whatsapp-800 ring-1 ring-emerald-100">
-            <Link2 className="h-3.5 w-3.5" />
-            Need help? Follow Meta&apos;s WhatsApp Cloud API setup guide in the developer docs.
+            {activeTab === 'automation' && (
+              <SettingsPanel
+                title="Business hours"
+                description="Used by away messages and quick reply automations to know when your team is available."
+                icon={Clock}
+                accent="amber"
+                footer={
+                  <AppButton loading={savingHours} onClick={handleSaveBusinessHours}>
+                    Save hours
+                  </AppButton>
+                }
+              >
+                <div className="mb-5 overflow-hidden rounded-2xl border border-amber-200/70 bg-gradient-to-r from-amber-50/80 via-white to-orange-50/40 dark:border-amber-900/40 dark:from-amber-950/30 dark:via-theme-surface dark:to-orange-950/10">
+                  <div className="h-0.5 bg-gradient-to-r from-amber-500 to-orange-500" />
+                  <div className="px-4 py-3.5">
+                    <p className="text-[13px] font-extrabold text-amber-900 dark:text-amber-200">
+                      {formatHour(businessHours.startHour)} – {formatHour(businessHours.endHour)}
+                    </p>
+                    <p className="mt-0.5 text-[11px] font-medium text-amber-800/80 dark:text-amber-300/80">
+                      {businessHours.days.length} working day{businessHours.days.length === 1 ? '' : 's'} ·
+                      outside hours trigger away messages
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <AppInput
+                    label="Start hour (0–23)"
+                    type="number"
+                    min={0}
+                    max={23}
+                    value={String(businessHours.startHour)}
+                    onChange={(e) =>
+                      setBusinessHours((prev) => ({ ...prev, startHour: Number(e.target.value) }))
+                    }
+                  />
+                  <AppInput
+                    label="End hour (1–24)"
+                    type="number"
+                    min={1}
+                    max={24}
+                    value={String(businessHours.endHour)}
+                    onChange={(e) =>
+                      setBusinessHours((prev) => ({ ...prev, endHour: Number(e.target.value) }))
+                    }
+                  />
+                </div>
+
+                <div className="mt-5">
+                  <p className="mb-3 text-[13px] font-semibold text-theme-fg">Working days</p>
+                  <div className="flex flex-wrap gap-2">
+                    {DAY_LABELS.map((label, index) => {
+                      const selected = businessHours.days.includes(index);
+                      return (
+                        <button
+                          key={label}
+                          type="button"
+                          onClick={() => toggleDay(index)}
+                          className={`min-w-[3.25rem] rounded-xl px-3 py-2.5 text-[12px] font-bold transition ${
+                            selected
+                              ? 'bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-[0_4px_12px_rgba(245,158,11,0.28)]'
+                              : 'bg-theme-subtle text-theme-muted ring-1 ring-theme-border hover:bg-theme-surface hover:text-theme-secondary'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </SettingsPanel>
+            )}
+
+            {activeTab === 'ai' && (
+              <SettingsPanel
+                title="AI configuration"
+                description="Per-organization Azure OpenAI keys, deployments, and monthly token limits."
+                icon={Bot}
+                accent="indigo"
+                footer={
+                  <AppButton loading={savingAi} onClick={handleSaveAi}>
+                    Save AI settings
+                  </AppButton>
+                }
+              >
+                <label className="mb-5 flex cursor-pointer items-center gap-3 rounded-2xl border border-theme-border bg-theme-subtle/40 px-4 py-3.5 transition hover:border-indigo-300/50 dark:hover:border-indigo-500/30">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(aiSettings.useCustomConfig)}
+                    onChange={(e) =>
+                      setAiSettings((prev) => ({ ...prev, useCustomConfig: e.target.checked }))
+                    }
+                    className="h-4 w-4 rounded border-theme-border text-indigo-600 focus:ring-indigo-500/25"
+                  />
+                  <div>
+                    <p className="text-[13px] font-bold text-theme-fg">
+                      Use custom Azure OpenAI for this org
+                    </p>
+                    <p className="text-[11px] text-theme-muted">
+                      Leave off to use server default from .env
+                    </p>
+                  </div>
+                </label>
+
+                {aiSettings.useCustomConfig && (
+                  <div className="mb-5 grid gap-4 sm:grid-cols-2">
+                    <AppInput
+                      label="Endpoint"
+                      placeholder="https://your-resource.openai.azure.com"
+                      value={aiSettings.endpoint || ''}
+                      onChange={(e) => setAiSettings((p) => ({ ...p, endpoint: e.target.value }))}
+                    />
+                    <AppInput
+                      label="API key"
+                      type="password"
+                      placeholder={aiSettings.hasApiKey ? '•••••••• (saved)' : 'Azure API key'}
+                      value={aiApiKey}
+                      onChange={(e) => setAiApiKey(e.target.value)}
+                    />
+                    <AppInput
+                      label="Chat deployment"
+                      value={aiSettings.deployment || ''}
+                      onChange={(e) => setAiSettings((p) => ({ ...p, deployment: e.target.value }))}
+                    />
+                    <AppInput
+                      label="Embedding deployment"
+                      value={aiSettings.embeddingDeployment || ''}
+                      onChange={(e) =>
+                        setAiSettings((p) => ({ ...p, embeddingDeployment: e.target.value }))
+                      }
+                    />
+                    <AppInput
+                      label="Monthly token limit (0 = unlimited)"
+                      type="number"
+                      min={0}
+                      value={String(aiSettings.monthlyTokenLimit ?? 0)}
+                      onChange={(e) =>
+                        setAiSettings((p) => ({
+                          ...p,
+                          monthlyTokenLimit: parseInt(e.target.value, 10) || 0,
+                        }))
+                      }
+                    />
+                  </div>
+                )}
+
+                {aiUsage && (
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    <SettingsStat
+                      label="Month tokens"
+                      value={
+                        aiUsage.monthlyTokenLimit
+                          ? `${aiUsage.monthTokens} / ${aiUsage.monthlyTokenLimit}`
+                          : aiUsage.monthTokens
+                      }
+                      tone="text-indigo-700 dark:text-indigo-400"
+                    />
+                    <SettingsStat
+                      label="30d requests"
+                      value={aiUsage.totalRequests}
+                      tone="text-violet-700 dark:text-violet-400"
+                    />
+                    <SettingsStat
+                      label="Chat tokens"
+                      value={aiUsage.byAction.chat || 0}
+                      tone="text-sky-700 dark:text-sky-400"
+                    />
+                    <SettingsStat
+                      label="Embeddings"
+                      value={aiUsage.byAction.embedding || 0}
+                      tone="text-emerald-700 dark:text-emerald-400"
+                    />
+                  </div>
+                )}
+              </SettingsPanel>
+            )}
+
+            {activeTab === 'calling' && <CallingSettingsPanel />}
+
+            {activeTab === 'campaigns' && (
+              <SettingsPanel
+                title="Campaign limits"
+                description="Daily send quota and batch throttling to stay within Meta rate limits."
+                icon={Send}
+                accent="rose"
+                footer={
+                  <AppButton loading={savingCampaigns} onClick={handleSaveCampaigns}>
+                    Save campaign settings
+                  </AppButton>
+                }
+              >
+                <div className="mb-5 grid gap-3 sm:grid-cols-3">
+                  <SettingsStat
+                    label="Daily limit"
+                    value={campaignSettings.dailySendLimit.toLocaleString()}
+                    tone="text-rose-700 dark:text-rose-400"
+                  />
+                  <SettingsStat
+                    label="Batch size"
+                    value={campaignSettings.batchSize}
+                    tone="text-violet-700 dark:text-violet-400"
+                  />
+                  <SettingsStat
+                    label="Delay (ms)"
+                    value={campaignSettings.batchDelayMs}
+                    tone="text-sky-700 dark:text-sky-400"
+                  />
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <AppInput
+                    id="daily-send-limit"
+                    label="Daily send limit"
+                    type="number"
+                    min={1}
+                    value={String(campaignSettings.dailySendLimit)}
+                    onChange={(e) =>
+                      setCampaignSettings((prev) => ({
+                        ...prev,
+                        dailySendLimit: parseInt(e.target.value, 10) || 1,
+                      }))
+                    }
+                  />
+                  <AppInput
+                    id="batch-size"
+                    label="Batch size"
+                    type="number"
+                    min={1}
+                    value={String(campaignSettings.batchSize)}
+                    onChange={(e) =>
+                      setCampaignSettings((prev) => ({
+                        ...prev,
+                        batchSize: parseInt(e.target.value, 10) || 1,
+                      }))
+                    }
+                  />
+                  <AppInput
+                    id="batch-delay"
+                    label="Batch delay (ms)"
+                    type="number"
+                    min={0}
+                    value={String(campaignSettings.batchDelayMs)}
+                    onChange={(e) =>
+                      setCampaignSettings((prev) => ({
+                        ...prev,
+                        batchDelayMs: parseInt(e.target.value, 10) || 0,
+                      }))
+                    }
+                  />
+                </div>
+
+                <p className="mt-4 text-[12px] font-medium leading-relaxed text-theme-muted">
+                  Messages are sent in batches with a delay between each batch to avoid rate limiting.
+                  Lower batch sizes and higher delays are safer for large broadcasts.
+                </p>
+              </SettingsPanel>
+            )}
+
+            {activeTab === 'setup' && (
+              <SettingsPanel
+                title="Setup checklist"
+                description="Complete these steps for full WhatsApp Cloud API functionality."
+                icon={ShieldCheck}
+                accent="violet"
+              >
+                <div className="mb-5">
+                  <div className="mb-2 flex items-center justify-between text-[12px] font-semibold">
+                    <span className="text-theme-secondary">Setup progress</span>
+                    <span className="tabular-nums text-theme-fg">{setupProgress}%</span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-theme-subtle">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-violet-500 to-whatsapp-500 transition-all duration-500"
+                      style={{ width: `${setupProgress}%` }}
+                    />
+                  </div>
+                </div>
+
+                <ol className="space-y-2">
+                  {setupSteps.map((step, index) => (
+                    <li
+                      key={step.text}
+                      className={`flex gap-3 rounded-2xl border px-4 py-3.5 text-[12px] font-medium transition ${
+                        step.done
+                          ? 'border-emerald-200/80 bg-gradient-to-r from-emerald-50/70 to-teal-50/30 text-emerald-900 dark:border-emerald-800/40 dark:from-emerald-950/30 dark:to-teal-950/10 dark:text-emerald-200'
+                          : 'border-theme-border bg-theme-subtle/40 text-theme-secondary hover:border-theme-border-strong'
+                      }`}
+                    >
+                      <span
+                        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-extrabold ${
+                          step.done
+                            ? 'bg-gradient-to-br from-whatsapp-500 to-emerald-600 text-white shadow-[0_4px_10px_rgba(37,211,102,0.25)]'
+                            : 'bg-theme-surface text-theme-muted ring-1 ring-theme-border'
+                        }`}
+                      >
+                        {step.done ? (
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                        ) : (
+                          index + 1
+                        )}
+                      </span>
+                      <span className="min-w-0 pt-0.5 leading-relaxed">
+                        {step.text}
+                        {step.code && (
+                          <code className="mt-1.5 block break-all rounded-xl bg-theme-surface px-2.5 py-1.5 text-[11px] font-mono text-theme-fg ring-1 ring-theme-border">
+                            {step.code}
+                          </code>
+                        )}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+
+                <div className="mt-5 flex items-center gap-2 rounded-xl bg-emerald-50/80 px-3 py-2.5 text-[12px] font-semibold text-whatsapp-800 ring-1 ring-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-300 dark:ring-emerald-900/40">
+                  <Link2 className="h-3.5 w-3.5 shrink-0" />
+                  Need help? Follow Meta&apos;s WhatsApp Cloud API setup guide in the developer docs.
+                </div>
+              </SettingsPanel>
+            )}
           </div>
-        </SectionCard>
+        </div>
       </div>
     </PageShell>
   );

@@ -18,7 +18,7 @@ export const PAGE_META: Record<string, PageMeta> = {
   },
   '/automations': {
     title: 'Automations',
-    description: 'Set up automatic replies for common scenarios',
+    description: 'Build conversation flows and quick replies',
   },
   '/ai-bot': {
     title: 'AI Bots',

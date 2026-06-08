@@ -18,3 +18,19 @@ export async function getOrgWhatsappContext(organizationId: string) {
     accessToken: MetaWhatsAppService.decryptToken(whatsappNumber.accessToken),
   };
 }
+
+export async function getWhatsappContextById(organizationId: string, whatsappNumberId: string) {
+  const whatsappNumber = await prisma.whatsappNumber.findFirst({
+    where: { id: whatsappNumberId, organizationId, isActive: true },
+  });
+
+  if (!whatsappNumber) {
+    throw new AppError(400, 'WhatsApp number not found or inactive.');
+  }
+
+  return {
+    whatsappNumber,
+    wabaId: whatsappNumber.wabaId,
+    accessToken: MetaWhatsAppService.decryptToken(whatsappNumber.accessToken),
+  };
+}

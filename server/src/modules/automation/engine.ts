@@ -2,10 +2,15 @@ import prisma from '../../config/database';
 import { automationQueue } from '../../config/queues';
 import { generateBotReply, logAutomationRun, performHandoff } from '../ai/chatbot.service';
 import { hasEnabledBots } from '../ai/bot.service';
+import { withAiBotConversationLock } from '../ai/lock';
 import { deliverOutboundMessage } from '../messages/send.service';
+import { MetaWhatsAppService } from '../whatsapp/meta.service';
+import { handleInboundFlow } from '../flows/engine';
+import { getOrgBusinessHours, isWithinBusinessHours } from '../settings/business-hours';
 import { createModuleLogger } from '../../utils/logger';
 
 const log = createModuleLogger('automation-engine');
+const AI_BOT_DEBOUNCE_MS = 1500;
 
 export interface AutomationContext {
   message?: string;
@@ -16,20 +21,19 @@ export interface AutomationContext {
 export interface InboundAutomationPayload {
   organizationId: string;
   conversationId: string;
+  contactId: string;
   messageId: string;
   contactPhone: string;
   phoneNumberId: string;
   encryptedToken: string;
   content: string;
+  buttonReplyId?: string;
   isNewConversation: boolean;
 }
 
-function checkBusinessHours(): boolean {
-  const now = new Date();
-  const hour = now.getHours();
-  const day = now.getDay();
-  if (day === 0 || day === 6) return false;
-  return hour >= 9 && hour < 18;
+async function checkBusinessHours(organizationId: string): Promise<boolean> {
+  const hours = await getOrgBusinessHours(organizationId);
+  return isWithinBusinessHours(hours);
 }
 
 export async function processRuleAutomations(
@@ -79,7 +83,7 @@ export async function resolveStaticAutoReply(
   organizationId: string,
   context: AutomationContext
 ): Promise<string | null> {
-  const withinHours = checkBusinessHours();
+  const withinHours = await checkBusinessHours(organizationId);
 
   return (
     (context.message
@@ -87,6 +91,9 @@ export async function resolveStaticAutoReply(
       : null) ||
     (context.isNewConversation
       ? await processRuleAutomations(organizationId, 'WELCOME', { isNewConversation: true })
+      : null) ||
+    (context.message
+      ? await processRuleAutomations(organizationId, 'LEAD_CAPTURE', { message: context.message })
       : null) ||
     (!withinHours
       ? await processRuleAutomations(organizationId, 'AWAY', { isBusinessHours: withinHours })
@@ -165,55 +172,115 @@ export async function queueAiBotProcessing(payload: InboundAutomationPayload): P
     return;
   }
 
+  if (conversation.assignedAgentId && conversation.status !== 'OPEN') {
+    log.info('AI bot skipped — agent assigned', {
+      conversationId: payload.conversationId,
+      assignedAgentId: conversation.assignedAgentId,
+    });
+    return;
+  }
+
+  const jobId = `ai-bot-${payload.conversationId}`;
+  const existing = await automationQueue.getJob(jobId);
+  if (existing) {
+    await existing.remove();
+  }
+
   await automationQueue.add('ai-chatbot', payload, {
+    jobId,
+    delay: AI_BOT_DEBOUNCE_MS,
     attempts: 3,
     backoff: { type: 'exponential', delay: 2000 },
     removeOnComplete: 200,
     removeOnFail: 500,
   });
 
-  log.info('Queued AI chatbot job', { conversationId: payload.conversationId });
+  log.info('Queued AI chatbot job (debounced)', { conversationId: payload.conversationId });
 }
 
 export async function processAiChatbotJob(payload: InboundAutomationPayload): Promise<void> {
-  const start = Date.now();
-  const result = await generateBotReply({
-    organizationId: payload.organizationId,
-    conversationId: payload.conversationId,
-    inboundMessage: payload.content,
-  });
+  await withAiBotConversationLock(payload.conversationId, async () => {
+    try {
+      const accessToken = MetaWhatsAppService.decryptToken(payload.encryptedToken);
+      await MetaWhatsAppService.sendTypingIndicator(
+        payload.phoneNumberId,
+        accessToken,
+        payload.contactPhone
+      );
+    } catch {
+      /* best-effort typing indicator */
+    }
 
-  if (result.skipped) {
+    const start = Date.now();
+    const result = await generateBotReply({
+      organizationId: payload.organizationId,
+      conversationId: payload.conversationId,
+      inboundMessage: payload.content,
+    });
+
+    if (result.skipped) {
+      await logAutomationRun({
+        organizationId: payload.organizationId,
+        conversationId: payload.conversationId,
+        triggerType: 'AI_CHATBOT',
+        action: 'generate_reply',
+        status: 'skipped',
+        input: { reason: result.skipReason, botId: result.botId },
+        durationMs: Date.now() - start,
+      });
+      return;
+    }
+
     await logAutomationRun({
       organizationId: payload.organizationId,
       conversationId: payload.conversationId,
       triggerType: 'AI_CHATBOT',
       action: 'generate_reply',
-      status: 'skipped',
-      input: { reason: result.skipReason, botId: result.botId },
+      status: 'success',
+      input: { botId: result.botId },
+      output: {
+        botId: result.botId,
+        handoff: result.handoff,
+        handoffReason: result.handoffReason,
+        totalTokens: result.totalTokens,
+      },
       durationMs: Date.now() - start,
     });
-    return;
-  }
 
-  if (!result.reply) return;
+    if (!result.reply) return;
 
-  await sendAutomationReply(payload, result.reply, 'AI_CHATBOT');
+    await sendAutomationReply(payload, result.reply, 'AI_CHATBOT');
 
-  if (result.handoff) {
-    await performHandoff(
-      payload.organizationId,
-      payload.conversationId,
-      result.handoffReason || 'USER_REQUEST'
-    );
-  }
+    if (result.handoff) {
+      await performHandoff(
+        payload.organizationId,
+        payload.conversationId,
+        result.handoffReason || 'USER_REQUEST'
+      );
+    }
+  });
 }
 
 export async function handleInboundAutomations(payload: InboundAutomationPayload): Promise<void> {
+  const flowHandled = await handleInboundFlow({
+    organizationId: payload.organizationId,
+    conversationId: payload.conversationId,
+    contactId: payload.contactId,
+    messageId: payload.messageId,
+    contactPhone: payload.contactPhone,
+    phoneNumberId: payload.phoneNumberId,
+    encryptedToken: payload.encryptedToken,
+    content: payload.content,
+    buttonReplyId: payload.buttonReplyId,
+    isNewConversation: payload.isNewConversation,
+  });
+
+  if (flowHandled) return;
+
   const staticReply = await resolveStaticAutoReply(payload.organizationId, {
     message: payload.content,
     isNewConversation: payload.isNewConversation,
-    isBusinessHours: checkBusinessHours(),
+    isBusinessHours: await checkBusinessHours(payload.organizationId),
   });
 
   if (staticReply) {

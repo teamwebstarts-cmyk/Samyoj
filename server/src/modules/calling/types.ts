@@ -37,4 +37,8 @@ export interface ActiveCallContext {
   toPhone: string;
   direction: 'USER_INITIATED' | 'BUSINESS_INITIATED';
   aiBotId?: string | null;
+  greeting?: string;
+  consentMessage?: string;
+  ttsVoice?: string;
+  ttsLanguage?: string;
 }

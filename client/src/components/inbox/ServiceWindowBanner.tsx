@@ -24,12 +24,13 @@ export default function ServiceWindowBanner({ serviceWindow }: ServiceWindowBann
               ? ' Wait for them to message again, or send an approved template.'
               : ' The customer must message you first, or use an approved template.'}
           </p>
-          <Link
-            to="/campaigns"
-            className="mt-2 inline-flex items-center gap-1 text-[12px] font-bold text-whatsapp-700 hover:text-whatsapp-800"
-          >
-            Send template via campaign →
-          </Link>
+          <p className="mt-2 text-[12px] font-medium text-amber-900/85">
+            Tap <strong>Template</strong> below to message this contact, or{' '}
+            <Link to="/campaigns" className="font-bold text-whatsapp-700 hover:text-whatsapp-800">
+              send a campaign
+            </Link>
+            .
+          </p>
         </div>
       </div>
     </div>

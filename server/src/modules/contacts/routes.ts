@@ -4,6 +4,14 @@ import { authenticate, requireOrg } from '../../middleware/auth';
 import { AppError, sendSuccess, asyncHandler, paramId } from '../../utils/response';
 import { phoneFieldSchema, validatePhone } from '../../utils/phone';
 import { z } from 'zod';
+import {
+  bulkUpdateContacts,
+  deleteTag,
+  exportContacts,
+  getContactDetail,
+  listContacts,
+  renameTag,
+} from './service';
 
 const router = Router();
 
@@ -12,69 +20,19 @@ router.get(
   authenticate,
   requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
-    const { search, tag, named: namedFilter, page = '1', limit = '50' } = req.query;
     const orgId = req.user!.organizationId!;
-
-    const andConditions: Record<string, unknown>[] = [];
-
-    if (search) {
-      andConditions.push({
-        OR: [
-          { name: { contains: search as string, mode: 'insensitive' } },
-          { phone: { contains: search as string } },
-        ],
-      });
-    }
-    if (tag === '__none__') {
-      andConditions.push({ tags: { equals: [] } });
-    } else if (tag) {
-      andConditions.push({ tags: { has: tag as string } });
-    }
-    if (namedFilter === 'true') {
-      andConditions.push({ name: { not: null } }, { NOT: { name: '' } });
-    } else if (namedFilter === 'false') {
-      andConditions.push({ OR: [{ name: null }, { name: '' }] });
-    }
-
-    const where: Record<string, unknown> = { organizationId: orgId };
-    if (andConditions.length > 0) {
-      where.AND = andConditions;
-    }
-
-    const skip = (parseInt(page as string) - 1) * parseInt(limit as string);
-
-    const [contacts, total, totalAll, named] = await Promise.all([
-      prisma.contact.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: parseInt(limit as string),
-      }),
-      prisma.contact.count({ where }),
-      prisma.contact.count({ where: { organizationId: orgId } }),
-      prisma.contact.count({
-        where: {
-          organizationId: orgId,
-          AND: [{ name: { not: null } }, { NOT: { name: '' } }],
-        },
-      }),
-    ]);
-
-    sendSuccess(res, {
-      contacts,
-      total,
-      page: parseInt(page as string),
-      limit: parseInt(limit as string),
-      summary: { total: totalAll, named },
-    });
+    const result = await listContacts(orgId, req.query as Record<string, string>);
+    sendSuccess(res, result);
   })
 );
 
 const contactSchema = z.object({
   phone: phoneFieldSchema,
   name: z.string().optional(),
+  email: z.string().email().optional().or(z.literal('')),
   tags: z.array(z.string()).optional(),
   notes: z.string().optional(),
+  optedIn: z.boolean().optional(),
 });
 
 router.post(
@@ -95,13 +53,18 @@ router.post(
         organizationId: req.user!.organizationId!,
         phone: data.phone,
         name: data.name,
+        email: data.email || undefined,
         tags: data.tags || [],
         notes: data.notes,
+        optedIn: data.optedIn ?? false,
+        source: 'MANUAL',
       },
       update: {
         name: data.name,
+        email: data.email || undefined,
         tags: data.tags,
         notes: data.notes,
+        ...(data.optedIn !== undefined ? { optedIn: data.optedIn } : {}),
       },
     });
 
@@ -136,6 +99,7 @@ router.post(
           name: c.name,
           tags: c.tags || [],
           notes: c.notes,
+          source: 'IMPORT',
         },
         update: { name: c.name, tags: c.tags, notes: c.notes },
       });
@@ -143,6 +107,23 @@ router.post(
     }
 
     sendSuccess(res, { imported });
+  })
+);
+
+router.post(
+  '/bulk',
+  authenticate,
+  requireOrg,
+  asyncHandler(async (req: Request, res: Response) => {
+    const schema = z.object({
+      ids: z.array(z.string()).min(1),
+      action: z.enum(['delete', 'addTags', 'removeTags', 'setOptedIn']),
+      tags: z.array(z.string()).optional(),
+      optedIn: z.boolean().optional(),
+    });
+    const data = schema.parse(req.body);
+    const result = await bulkUpdateContacts(req.user!.organizationId!, data);
+    sendSuccess(res, result);
   })
 );
 
@@ -157,14 +138,41 @@ router.get(
       select: { tags: true },
     });
 
-    const tagSet = new Set<string>();
+    const tagCounts = new Map<string, number>();
     for (const contact of contacts) {
       for (const tag of contact.tags) {
-        tagSet.add(tag);
+        tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
       }
     }
 
-    sendSuccess(res, { tags: [...tagSet].sort((a, b) => a.localeCompare(b)) });
+    const tags = [...tagCounts.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([name, count]) => ({ name, count }));
+
+    sendSuccess(res, { tags });
+  })
+);
+
+router.post(
+  '/tags/rename',
+  authenticate,
+  requireOrg,
+  asyncHandler(async (req: Request, res: Response) => {
+    const schema = z.object({ from: z.string().min(1), to: z.string().min(1) });
+    const data = schema.parse(req.body);
+    const result = await renameTag(req.user!.organizationId!, data.from, data.to);
+    sendSuccess(res, result);
+  })
+);
+
+router.delete(
+  '/tags/:tag',
+  authenticate,
+  requireOrg,
+  asyncHandler(async (req: Request, res: Response) => {
+    const tag = decodeURIComponent(String(req.params.tag));
+    const result = await deleteTag(req.user!.organizationId!, tag);
+    sendSuccess(res, result);
   })
 );
 
@@ -173,14 +181,21 @@ router.get(
   authenticate,
   requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
-    const contacts = await prisma.contact.findMany({
-      where: { organizationId: req.user!.organizationId! },
-      select: { phone: true, name: true, tags: true, notes: true, optedIn: true },
-    });
+    const result = await exportContacts(req.user!.organizationId!, req.query as Record<string, string>);
+    const ext = result.contentType === 'text/csv' ? 'csv' : 'json';
+    res.setHeader('Content-Type', result.contentType);
+    res.setHeader('Content-Disposition', `attachment; filename=contacts.${ext}`);
+    res.send(result.body);
+  })
+);
 
-    res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Content-Disposition', 'attachment; filename=contacts.json');
-    res.send(JSON.stringify(contacts, null, 2));
+router.get(
+  '/:id/detail',
+  authenticate,
+  requireOrg,
+  asyncHandler(async (req: Request, res: Response) => {
+    const detail = await getContactDetail(req.user!.organizationId!, paramId(req));
+    sendSuccess(res, detail);
   })
 );
 
@@ -199,8 +214,10 @@ router.get(
 
 const updateContactSchema = z.object({
   name: z.string().optional(),
+  email: z.string().email().optional().or(z.literal('')),
   tags: z.array(z.string()).optional(),
   notes: z.string().optional(),
+  optedIn: z.boolean().optional(),
 });
 
 router.patch(
@@ -217,7 +234,10 @@ router.patch(
 
     const contact = await prisma.contact.update({
       where: { id },
-      data,
+      data: {
+        ...data,
+        email: data.email === '' ? null : data.email,
+      },
     });
 
     sendSuccess(res, contact);

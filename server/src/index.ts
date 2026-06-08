@@ -13,6 +13,8 @@ import authRoutes from './modules/auth/routes';
 import whatsappRoutes from './modules/whatsapp/routes';
 import inboxRoutes from './modules/inbox/routes';
 import automationRoutes from './modules/automation/routes';
+import flowRoutes from './modules/flows/routes';
+import settingsRoutes from './modules/settings/routes';
 import campaignRoutes from './modules/campaigns/routes';
 import contactRoutes from './modules/contacts/routes';
 import analyticsRoutes from './modules/analytics/routes';
@@ -21,6 +23,7 @@ import messageRoutes from './modules/messages/routes';
 import teamRoutes from './modules/team/routes';
 import aiBotRoutes from './modules/ai-bot/routes';
 import callingRoutes from './modules/calling/routes';
+import publicMediaRoutes from './modules/media/public.routes';
 import { setRealtimeIO } from './realtime';
 
 const app = express();
@@ -56,6 +59,9 @@ io.on('connection', (socket) => {
   const user = socket.data.user;
   if (user.organizationId) {
     socket.join(`org:${user.organizationId}`);
+  }
+  if (user.userId) {
+    socket.join(`user:${user.userId}`);
   }
 
   socket.on('join:conversation', (conversationId: string) => {
@@ -128,10 +134,14 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+app.use('/api/media/public', publicMediaRoutes);
+
 app.use('/api/auth', authRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/inbox', inboxRoutes);
 app.use('/api/automations', automationRoutes);
+app.use('/api/flows', flowRoutes);
+app.use('/api/settings', settingsRoutes);
 app.use('/api/campaigns', campaignRoutes);
 app.use('/api/contacts', contactRoutes);
 app.use('/api/analytics', analyticsRoutes);
@@ -143,21 +153,49 @@ app.use('/api/calling', callingRoutes);
 
 app.use(errorHandler);
 
+async function listen(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const onError = (err: NodeJS.ErrnoException) => {
+      httpServer.off('listening', onListening);
+
+      if (err.code === 'EADDRINUSE') {
+        logger.error(
+          `Port ${config.port} is already in use. Stop the other server (e.g. root "npm run dev") before starting another instance.`,
+          { source: 'startup', port: config.port }
+        );
+        process.exit(1);
+      }
+
+      reject(err);
+    };
+
+    const onListening = () => {
+      httpServer.off('error', onError);
+      resolve();
+    };
+
+    httpServer.once('error', onError);
+    httpServer.once('listening', onListening);
+    httpServer.listen(config.port);
+  });
+}
+
 async function start() {
   setupGlobalErrorHandlers();
   setRealtimeIO(io);
+
+  await listen();
+
   const { setSocketIO } = await import('./workers/index');
   setSocketIO(io);
 
-  httpServer.listen(config.port, () => {
-    logger.info('API server started', {
-      source: 'startup',
-      port: config.port,
-      env: config.nodeEnv,
-      logLevel: config.logLevel,
-    });
-    logger.info('WebSocket server ready', { source: 'startup' });
+  logger.info('API server started', {
+    source: 'startup',
+    port: config.port,
+    env: config.nodeEnv,
+    logLevel: config.logLevel,
   });
+  logger.info('WebSocket server ready', { source: 'startup' });
 }
 
 start().catch((err) => {

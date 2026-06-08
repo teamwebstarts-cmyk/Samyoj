@@ -39,7 +39,10 @@ export function pcmBytesToInt16(data: Buffer | Uint8Array): Int16Array {
   return samples;
 }
 
-export async function synthesizeSpeech(text: string): Promise<SynthesizedAudio> {
+export async function synthesizeSpeech(
+  text: string,
+  options?: { voice?: string; language?: string }
+): Promise<SynthesizedAudio> {
   const trimmed = text.trim();
   if (!trimmed) {
     return { samples: new Int16Array(0), sampleRate: 48000 };
@@ -49,8 +52,8 @@ export async function synthesizeSpeech(text: string): Promise<SynthesizedAudio> 
   const [response] = await tts.synthesizeSpeech({
     input: { text: trimmed },
     voice: {
-      languageCode: config.calling.googleTtsLanguage,
-      name: config.calling.googleTtsVoice,
+      languageCode: options?.language || config.calling.googleTtsLanguage,
+      name: options?.voice || config.calling.googleTtsVoice,
     },
     audioConfig: {
       audioEncoding: 'LINEAR16',
