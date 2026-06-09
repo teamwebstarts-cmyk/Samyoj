@@ -31,6 +31,8 @@ export function getNodeHandles(node: FlowNode): Array<{ id: string; label: strin
   switch (node.type) {
     case 'buttons':
       return (node.buttons || []).map((b) => ({ id: b.id, label: b.title }));
+    case 'list':
+      return (node.listSections || []).flatMap((s) => s.rows).map((r) => ({ id: r.id, label: r.title }));
     case 'condition':
       return [
         { id: 'true', label: 'Yes' },

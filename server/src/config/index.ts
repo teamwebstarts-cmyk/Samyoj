@@ -42,4 +42,29 @@ export const config = {
       process.env.CALLING_AI_GREETING ||
       'Hello! Thank you for calling. How can I help you today?',
   },
+  email: {
+    from: process.env.EMAIL_FROM || 'noreply@whatsapp-platform.local',
+    smtpHost: process.env.SMTP_HOST || '',
+    smtpPort: parseInt(process.env.SMTP_PORT || '587', 10),
+    smtpUser: process.env.SMTP_USER || '',
+    smtpPass: process.env.SMTP_PASS || '',
+    smtpSecure: process.env.SMTP_SECURE === 'true',
+  },
+  storage: {
+    driver: (process.env.STORAGE_DRIVER || 'local') as 'local' | 's3',
+    s3Bucket: process.env.S3_BUCKET || '',
+    s3Region: process.env.S3_REGION || 'us-east-1',
+    s3AccessKey: process.env.S3_ACCESS_KEY || '',
+    s3SecretKey: process.env.S3_SECRET_KEY || '',
+    s3PublicUrl: process.env.S3_PUBLIC_URL || '',
+  },
+  razorpay: {
+    keyId: process.env.RAZORPAY_KEY_ID || '',
+    keySecret: process.env.RAZORPAY_KEY_SECRET || '',
+    webhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET || '',
+  },
+  alerts: {
+    checkIntervalMs: parseInt(process.env.ALERT_CHECK_INTERVAL_MS || '30000', 10),
+    defaultSlaMinutes: parseInt(process.env.DEFAULT_SLA_MINUTES || '15', 10),
+  },
 };

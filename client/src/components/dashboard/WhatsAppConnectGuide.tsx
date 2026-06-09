@@ -120,7 +120,7 @@ export default function WhatsAppConnectGuide() {
             <div>
               <h2 className="text-[15px] font-bold text-neutral-900">Connect WhatsApp</h2>
               <p className="mt-0.5 text-[13px] text-neutral-600">
-                Sign in with Meta, pick your business number, and you&apos;re ready.
+                Sign in and pick your business number to get started.
               </p>
               <p className="mt-2 text-[12px] text-neutral-500">
                 Connect → Sign in → Choose number

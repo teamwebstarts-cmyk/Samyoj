@@ -15,6 +15,7 @@ import NewChatSlideOver from '../components/inbox/NewChatSlideOver';
 import ServiceWindowBanner, { ServiceWindowBadge } from '../components/inbox/ServiceWindowBanner';
 import {
   formatDateDivider,
+  formatHandoffReason,
   getServiceWindowInfo,
   groupMessagesByDate,
   messageHasMedia,
@@ -27,11 +28,13 @@ import PageShell from '../components/ui/PageShell';
 import SearchInput from '../components/ui/SearchInput';
 import { DEFAULT_PAGE_SIZE } from '../constants/pagination';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
-import api, { aiBotApi, callingApi, inboxApi, teamApi } from '../services/api';
+import InboxDetailsPanel from '../components/inbox/InboxDetailsPanel';
+import InteractiveComposer from '../components/inbox/InteractiveComposer';
+import api, { aiBotApi, callingApi, cannedRepliesApi, inboxApi, teamApi } from '../services/api';
 import { toastError, toastSuccess } from '../utils/toast';
 import { useSocket } from '../hooks/useSocket';
 import { useAuth } from '../contexts/AuthContext';
-import type { AiBot, Conversation, Message, ServiceWindowInfo, TeamAgent } from '../types';
+import type { AiBot, CannedReply, Conversation, ConversationLabel, Message, ServiceWindowInfo, TeamAgent } from '../types';
 
 const CLOSED_WINDOW: ServiceWindowInfo = {
   open: false,
@@ -76,6 +79,8 @@ export default function InboxPage() {
     y: number;
     conversationId: string;
   } | null>(null);
+  const [cannedReplies, setCannedReplies] = useState<CannedReply[]>([]);
+  const [interactiveOpen, setInteractiveOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const debouncedSearch = useDebouncedValue(search);
@@ -88,6 +93,10 @@ export default function InboxPage() {
     aiBotApi
       .list()
       .then(({ data }) => setAiBots(data.data.bots.filter((b: AiBot) => b.enabled)))
+      .catch(console.error);
+    cannedRepliesApi
+      .list()
+      .then(({ data }) => setCannedReplies(data.data.replies))
       .catch(console.error);
   }, []);
 
@@ -788,12 +797,12 @@ export default function InboxPage() {
 
           {/* Chat area */}
           <div
-            className={`flex h-full min-h-0 min-w-0 flex-1 flex-col bg-white ${!selected ? 'hidden md:flex' : 'flex'}`}
+            className={`flex h-full min-h-0 min-w-0 flex-1 bg-white ${!selected ? 'hidden md:flex' : 'flex'}`}
           >
             {selected ? (
               <>
                 <div
-                  className="flex min-h-0 flex-1 flex-col"
+                  className="flex min-h-0 min-w-0 flex-1 flex-col"
                   onContextMenu={(event) => openChatContextMenu(event, selected)}
                 >
                 <div className="flex flex-wrap items-center gap-3 border-b border-neutral-100 bg-gradient-to-r from-white via-emerald-50/30 to-white px-4 py-3">
@@ -876,17 +885,23 @@ export default function InboxPage() {
 
                 {selected.botHandoffAt && (
                   <div className="border-b border-orange-200/60 bg-orange-50/80 px-4 py-2 text-center text-[12px] font-medium text-orange-900">
-                    Handed off to team
-                    {selected.botHandoffReason ? ` (${selected.botHandoffReason.replace(/_/g, ' ').toLowerCase()})` : ''}
+                    With your team
+                    {selected.botHandoffReason
+                      ? ` · ${formatHandoffReason(selected.botHandoffReason)}`
+                      : ''}
                     {selected.assignedAgent ? ` · ${selected.assignedAgent.name}` : ''}
                   </div>
                 )}
 
                 {selected.activeFlow && (
                   <div className="border-b border-violet-200/60 bg-violet-50/80 px-4 py-2 text-center text-[12px] font-medium text-violet-900">
-                    <span className="font-bold">{selected.activeFlow.flowName || 'Automation flow'}</span>
-                    {' · '}
-                    Step: {selected.activeFlow.currentStepLabel || selected.activeFlow.currentNodeId}
+                    <span className="font-bold">{selected.activeFlow.flowName || 'Automation'}</span>
+                    {selected.activeFlow.currentStepLabel && (
+                      <>
+                        {' · '}
+                        {selected.activeFlow.currentStepLabel}
+                      </>
+                    )}
                     {selected.activeFlow.waitingFor && (
                       <span className="text-violet-600"> · waiting for {selected.activeFlow.waitingFor}</span>
                     )}
@@ -920,36 +935,78 @@ export default function InboxPage() {
                     <div ref={messagesEndRef} />
                   </div>
                 </div>
-                </div>
 
                 {!canSendText && !templateMode && (
                   <ServiceWindowBanner serviceWindow={serviceWindow} />
                 )}
 
-                {templateMode ? (
+                {interactiveOpen && canSendText ? (
+                  <InteractiveComposer
+                    open={interactiveOpen}
+                    onClose={() => setInteractiveOpen(false)}
+                    sending={sending}
+                    onSend={async (payload) => {
+                      if (!selected) return;
+                      setSending(true);
+                      try {
+                        const { data } = await inboxApi.send(selected.id, payload);
+                        const sent = data.data as Message;
+                        setMessages((prev) => (prev.some((m) => m.id === sent.id) ? prev : [...prev, sent]));
+                        toastSuccess('Interactive message sent');
+                      } catch (err: unknown) {
+                        const msg = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message;
+                        toastError(msg || 'Failed to send');
+                      } finally {
+                        setSending(false);
+                      }
+                    }}
+                  />
+                ) : templateMode ? (
                   <TemplateComposer
                     onSend={handleSendTemplate}
                     sending={sending}
                     onCancel={() => setTemplateMode(false)}
                   />
                 ) : (
-                  <ChatComposer
-                    value={newMessage}
-                    onChange={setNewMessage}
-                    onSubmit={handleSend}
-                    onAttach={handleAttach}
-                    attachment={attachment}
-                    onRemoveAttachment={handleRemoveAttachment}
-                    sending={sending}
-                    disabled={!canSendText}
-                    disabledReason={
-                      canSendText
-                        ? 'Type a message...'
-                        : '24-hour window closed — use a template'
-                    }
-                    onTemplateClick={!canSendText ? () => setTemplateMode(true) : undefined}
-                  />
+                  <>
+                    {canSendText && (
+                      <div className="border-t border-neutral-100 bg-neutral-50/50 px-3 py-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setInteractiveOpen(true)}
+                          className="text-[11px] font-bold text-violet-700 hover:underline"
+                        >
+                          + Send quick reply buttons
+                        </button>
+                      </div>
+                    )}
+                    <ChatComposer
+                      value={newMessage}
+                      onChange={setNewMessage}
+                      onSubmit={handleSend}
+                      onAttach={handleAttach}
+                      attachment={attachment}
+                      onRemoveAttachment={handleRemoveAttachment}
+                      sending={sending}
+                      disabled={!canSendText}
+                      disabledReason={
+                        canSendText
+                          ? 'Type a message...'
+                          : '24-hour window closed — use a template'
+                      }
+                      onTemplateClick={!canSendText ? () => setTemplateMode(true) : undefined}
+                      cannedReplies={cannedReplies}
+                    />
+                  </>
                 )}
+                </div>
+                <InboxDetailsPanel
+                  conversationId={selected.id}
+                  labels={selected.labels}
+                  onLabelsChange={(labels: ConversationLabel[]) =>
+                    setSelected((prev) => (prev ? { ...prev, labels } : prev))
+                  }
+                />
               </>
             ) : (
               <ChatPlaceholder />

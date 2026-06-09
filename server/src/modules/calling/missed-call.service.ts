@@ -1,5 +1,6 @@
 import prisma from '../../config/database';
 import { createModuleLogger } from '../../utils/logger';
+import { triggerMissedCallFlow } from '../flows/engine';
 import { sendDirectMessage } from '../messages/service';
 import { getOrgCallingSettings } from './settings.service';
 
@@ -39,6 +40,25 @@ export async function handleMissedCallFollowUp(params: {
 
   const contact = await prisma.contact.findUnique({ where: { id: params.contactId } });
   if (!contact) return;
+
+  const whatsappNumber = await prisma.whatsappNumber.findFirst({
+    where: { organizationId: params.organizationId, isActive: true },
+  });
+
+  if (conversationId && whatsappNumber) {
+    const flowHandled = await triggerMissedCallFlow({
+      organizationId: params.organizationId,
+      conversationId,
+      contactId: params.contactId,
+      contactPhone: contact.phone,
+      phoneNumberId: whatsappNumber.phoneNumberId,
+      encryptedToken: whatsappNumber.accessToken,
+    });
+    if (flowHandled) {
+      log.info('Missed call handled by automation flow', { callId: params.callId, conversationId });
+      return;
+    }
+  }
 
   try {
     await sendDirectMessage(params.organizationId, {

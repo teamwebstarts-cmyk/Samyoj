@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { formatMessageTime, messageHasMedia } from './inboxUtils';
+import { formatMessageTime, getAutomationSourceLabel, messageHasMedia } from './inboxUtils';
 import {
   AuthenticatedAudio,
   AuthenticatedDocument,
@@ -95,19 +95,29 @@ export default function MessageBubble({ message, onOpenMedia }: MessageBubblePro
   const isInteractive = type === 'INTERACTIVE';
   const buttons = message.metadata?.buttons;
   const isButtonReply = message.metadata?.isButtonReply;
+  const automationLabel = isOutbound ? getAutomationSourceLabel(message.metadata) : null;
 
   const openMedia = onOpenMedia || setLocalViewer;
 
+  const sourceBadge = automationLabel ? (
+    <span className="mb-1 inline-flex rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold text-violet-800">
+      {automationLabel}
+    </span>
+  ) : null;
+
   if (isInteractive || (buttons && buttons.length > 0)) {
     return (
-      <InteractiveMessageCard
-        body={message.content}
-        buttons={buttons}
-        direction={isOutbound ? 'outbound' : 'inbound'}
-        time={formatMessageTime(message.createdAt)}
-        status={isOutbound ? mapStatus(message.status) : undefined}
-        isButtonReply={isButtonReply}
-      />
+      <div>
+        {sourceBadge}
+        <InteractiveMessageCard
+          body={message.content}
+          buttons={buttons}
+          direction={isOutbound ? 'outbound' : 'inbound'}
+          time={formatMessageTime(message.createdAt)}
+          status={isOutbound ? mapStatus(message.status) : undefined}
+          isButtonReply={isButtonReply}
+        />
+      </div>
     );
   }
 
@@ -140,12 +150,15 @@ export default function MessageBubble({ message, onOpenMedia }: MessageBubblePro
   }
 
   return (
-    <WhatsAppBubble
-      direction={isOutbound ? 'outbound' : 'inbound'}
-      content={message.content}
-      time={formatMessageTime(message.createdAt)}
-      status={isOutbound ? mapStatus(message.status) : undefined}
-    />
+    <div>
+      {sourceBadge}
+      <WhatsAppBubble
+        direction={isOutbound ? 'outbound' : 'inbound'}
+        content={message.content}
+        time={formatMessageTime(message.createdAt)}
+        status={isOutbound ? mapStatus(message.status) : undefined}
+      />
+    </div>
   );
 }
 

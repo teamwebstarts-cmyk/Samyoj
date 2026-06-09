@@ -55,11 +55,20 @@ router.get(
     const orgId = req.user!.organizationId!;
     await ensureDefaultBot(orgId);
 
-    const [bots, whatsappCount, azureOk] = await Promise.all([
+    const [bots, whatsappCount, azureOk, knowledgeItems] = await Promise.all([
       prisma.aiBot.findMany({ where: { organizationId: orgId } }),
       prisma.whatsappNumber.count({ where: { organizationId: orgId, isActive: true } }),
       isAiConfiguredForOrg(orgId),
+      prisma.knowledgeBaseItem.findMany({
+        where: { bot: { organizationId: orgId } },
+        select: { embedding: true },
+      }),
     ]);
+
+    const knowledgeCount = knowledgeItems.length;
+    const embeddedCount = knowledgeItems.filter(
+      (item) => Array.isArray(item.embedding) && (item.embedding as number[]).length > 0
+    ).length;
 
     const activeBots = bots.filter((b) => b.enabled);
     const defaultBot = bots.find((b) => b.isDefault && b.enabled);
@@ -69,10 +78,17 @@ router.get(
       { id: 'ai', label: 'AI service configured', ok: azureOk },
       { id: 'active', label: 'At least one bot is active', ok: activeBots.length > 0 },
       { id: 'default', label: 'Default bot is set', ok: Boolean(defaultBot) },
+      { id: 'knowledge', label: 'Knowledge base has content', ok: knowledgeCount > 0, optional: true },
+      {
+        id: 'embeddings',
+        label: 'Semantic search ready (embeddings indexed)',
+        ok: knowledgeCount === 0 || embeddedCount > 0,
+        optional: true,
+      },
     ];
 
     sendSuccess(res, {
-      ready: checks.every((c) => c.ok),
+      ready: checks.filter((c) => !c.optional).every((c) => c.ok),
       checks,
       activeBots: activeBots.length,
       totalBots: bots.length,

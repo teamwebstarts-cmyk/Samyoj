@@ -314,14 +314,37 @@ const templateParamsSchema = z
   })
   .optional();
 
+const interactiveSchema = z
+  .object({
+    mode: z.enum(['reply', 'cta_url', 'cta_call', 'list']).default('reply'),
+    body: z.string().min(1),
+    buttons: z.array(z.object({ id: z.string(), title: z.string().max(20) })).max(3).optional(),
+    ctaLabel: z.string().optional(),
+    ctaUrl: z.string().url().optional(),
+    ctaPhone: z.string().optional(),
+    listButtonLabel: z.string().optional(),
+    listSections: z
+      .array(
+        z.object({
+          title: z.string().optional(),
+          rows: z.array(z.object({ id: z.string(), title: z.string(), description: z.string().optional() })),
+        })
+      )
+      .optional(),
+  })
+  .optional();
+
 const sendMessageSchema = z
   .object({
     content: z.string().optional(),
-    type: z.enum(['TEXT', 'TEMPLATE', 'IMAGE', 'VIDEO', 'DOCUMENT', 'AUDIO']).default('TEXT'),
+    type: z
+      .enum(['TEXT', 'TEMPLATE', 'IMAGE', 'VIDEO', 'DOCUMENT', 'AUDIO', 'INTERACTIVE'])
+      .default('TEXT'),
     templateName: z.string().optional(),
     templateLanguage: z.string().optional(),
     templateParams: templateParamsSchema,
     media: mediaPayloadSchema.optional(),
+    interactive: interactiveSchema,
   })
   .superRefine((data, ctx) => {
     const isMedia = ['IMAGE', 'VIDEO', 'DOCUMENT', 'AUDIO'].includes(data.type);
@@ -330,6 +353,9 @@ const sendMessageSchema = z
         ctx.addIssue({ code: 'custom', message: 'Media payload required for media messages', path: ['media'] });
       }
       return;
+    }
+    if (data.type === 'INTERACTIVE' && !data.interactive?.body?.trim()) {
+      ctx.addIssue({ code: 'custom', message: 'Interactive body required', path: ['interactive'] });
     }
     if (data.type === 'TEXT' && !data.content?.trim()) {
       ctx.addIssue({ code: 'custom', message: 'Message content required', path: ['content'] });
@@ -366,7 +392,7 @@ router.post(
 
     const lastInbound = conversation.messages[0]?.createdAt ?? null;
     const isMediaType = ['IMAGE', 'VIDEO', 'DOCUMENT', 'AUDIO'].includes(data.type);
-    if ((data.type === 'TEXT' || isMediaType) && !isWithin24HourWindow(lastInbound)) {
+    if ((data.type === 'TEXT' || data.type === 'INTERACTIVE' || isMediaType) && !isWithin24HourWindow(lastInbound)) {
       throw new AppError(
         400,
         '24-hour window expired. Use an approved template message.'
@@ -375,7 +401,9 @@ router.post(
 
     let messageContent = data.content?.trim() || '';
     let messageMetadata: Record<string, unknown> | undefined;
-    let deliverType: 'TEXT' | 'TEMPLATE' | 'IMAGE' | 'VIDEO' | 'DOCUMENT' | 'AUDIO' = data.type as 'TEXT' | 'TEMPLATE' | 'IMAGE' | 'VIDEO' | 'DOCUMENT' | 'AUDIO';
+    let deliverType: 'TEXT' | 'TEMPLATE' | 'IMAGE' | 'VIDEO' | 'DOCUMENT' | 'AUDIO' | 'INTERACTIVE' =
+      data.type as 'TEXT' | 'TEMPLATE' | 'IMAGE' | 'VIDEO' | 'DOCUMENT' | 'AUDIO' | 'INTERACTIVE';
+    let interactiveOpts = data.interactive;
     let mediaUrl: string | undefined;
     let mediaCaption: string | undefined;
 
@@ -405,6 +433,10 @@ router.post(
         size: stored.size,
         caption: mediaCaption,
       };
+    } else if (data.type === 'INTERACTIVE' && data.interactive) {
+      messageContent = data.interactive.body;
+      messageMetadata = { interactive: data.interactive };
+      deliverType = 'INTERACTIVE';
     } else if (data.type === 'TEMPLATE' && data.templateName) {
       const { wabaId, accessToken } = await getOrgWhatsappContext(orgId);
       const template = await MetaWhatsAppService.getMessageTemplate(
@@ -427,7 +459,13 @@ router.post(
       data: {
         conversationId: conversation.id,
         direction: 'OUTBOUND',
-        type: isMediaType ? data.type : data.type === 'TEMPLATE' ? 'TEMPLATE' : 'TEXT',
+        type: isMediaType
+          ? data.type
+          : data.type === 'TEMPLATE'
+            ? 'TEMPLATE'
+            : data.type === 'INTERACTIVE'
+              ? 'INTERACTIVE'
+              : 'TEXT',
         content: messageContent,
         status: 'PENDING',
         metadata: messageMetadata as Prisma.InputJsonValue,
@@ -438,6 +476,9 @@ router.post(
       where: { id: conversation.id },
       data: { lastMessageAt: new Date() },
     });
+
+    const { markFirstResponse } = await import('../sla/service');
+    await markFirstResponse(conversation.id);
 
     const sentMessage = await deliverOutboundMessage({
       organizationId: orgId,
@@ -452,6 +493,13 @@ router.post(
       templateParams: data.templateParams,
       mediaUrl,
       mediaCaption,
+      interactive: interactiveOpts,
+    });
+
+    const { dispatchOrgWebhook } = await import('../integrations/dispatch');
+    void dispatchOrgWebhook(orgId, 'message.sent', {
+      conversationId: conversation.id,
+      messageId: sentMessage.id,
     });
 
     sendSuccess(res, sentMessage, 201);

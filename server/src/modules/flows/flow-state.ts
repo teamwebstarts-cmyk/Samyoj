@@ -3,8 +3,10 @@ import type { FlowNode } from './types';
 const STEP_LABELS: Record<string, string> = {
   message: 'Send Message',
   buttons: 'Quick Buttons',
+  list: 'List Menu',
   question: 'Ask Question',
   tag: 'Add Tag',
+  remove_tag: 'Remove Tag',
   assign: 'Assign Agent',
   condition: 'Condition',
   handoff: 'Handoff',
@@ -12,10 +14,18 @@ const STEP_LABELS: Record<string, string> = {
   end: 'End',
   template: 'Template',
   delay: 'Delay',
+  schedule: 'Schedule',
   media: 'Media',
   webhook: 'Webhook',
   ab_split: 'A/B Split',
   language: 'Language Route',
+  set_variable: 'Set Variable',
+  goto_flow: 'Go to Flow',
+  goto_step: 'Go to Step',
+  request_callback: 'Request Callback',
+  location: 'Send Location',
+  contact_card: 'Contact Card',
+  wa_flow: 'WhatsApp Flow',
 };
 
 export interface ActiveFlowInfo {

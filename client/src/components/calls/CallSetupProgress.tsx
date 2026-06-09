@@ -197,7 +197,7 @@ export default function CallSetupProgress({
 
       {enableHints.length > 0 && !callingEnabled && whatsappConnected && (
         <div className="border-t border-amber-100 bg-amber-50/60 px-5 py-4 sm:px-6">
-          <p className="text-[12px] font-bold text-amber-900">If enable fails, check in Meta Business Manager:</p>
+          <p className="text-[12px] font-bold text-amber-900">If this fails, check your WhatsApp Business settings:</p>
           <ul className="mt-2 grid gap-1.5 sm:grid-cols-2">
             {enableHints.map((hint) => (
               <li key={hint} className="flex gap-2 text-[11px] font-medium leading-relaxed text-amber-950/90">

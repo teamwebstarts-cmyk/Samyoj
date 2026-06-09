@@ -74,7 +74,7 @@ export default function CallingSettingsPanel() {
   return (
     <SettingsPanel
       title="Voice calling"
-      description="AI auto-answer, agent routing, after-hours behavior, and missed-call follow-ups."
+      description="Set how calls are answered, routed, and what happens after hours."
       icon={PhoneCall}
       accent="violet"
       footer={
@@ -85,17 +85,23 @@ export default function CallingSettingsPanel() {
     >
       <div className="mb-5 grid gap-3 sm:grid-cols-3">
         <SettingsStat
-          label="Routing"
-          value={settings.routingMode.replace(/_/g, ' ')}
+          label="Who answers"
+          value={
+            settings.routingMode === 'ai_then_agents'
+              ? 'AI first'
+              : settings.routingMode === 'agents_first'
+                ? 'Team first'
+                : 'AI only'
+          }
           tone="text-violet-700 dark:text-violet-400"
         />
         <SettingsStat
-          label="Ring timeout"
+          label="Ring time"
           value={`${settings.agentRingTimeoutSec}s`}
           tone="text-emerald-700 dark:text-emerald-400"
         />
         <SettingsStat
-          label="Max concurrent"
+          label="Max at once"
           value={settings.maxConcurrentCalls}
           tone="text-sky-700 dark:text-sky-400"
         />
@@ -109,11 +115,11 @@ export default function CallingSettingsPanel() {
             onChange={(e) => setSettings((s) => ({ ...s, aiAutoAnswer: e.target.checked }))}
             className="rounded border-neutral-300"
           />
-          AI auto-answer enabled
+          AI answers calls automatically
         </label>
 
         <AppSelect
-          label="Routing mode"
+          label="Who answers first"
           value={settings.routingMode}
           onChange={(e) =>
             setSettings((s) => ({
@@ -141,7 +147,7 @@ export default function CallingSettingsPanel() {
         />
 
         <AppInput
-          label="Agent ring timeout (sec)"
+          label="How long to ring team (seconds)"
           type="number"
           min={10}
           max={120}
@@ -155,7 +161,7 @@ export default function CallingSettingsPanel() {
         />
 
         <AppInput
-          label="Max concurrent calls"
+          label="Max calls at the same time"
           type="number"
           min={1}
           max={100}

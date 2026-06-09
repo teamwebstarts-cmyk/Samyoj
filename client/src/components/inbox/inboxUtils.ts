@@ -1,4 +1,17 @@
-import type { Message } from '../../types';
+import type { Message, MessageMetadata } from '../../types';
+
+export function getAutomationSourceLabel(metadata?: MessageMetadata | null): string | null {
+  if (!metadata?.source) return null;
+  if (metadata.source === 'flow') {
+    return metadata.flowName ? `Flow: ${metadata.flowName}` : 'Automation flow';
+  }
+  if (metadata.source === 'automation') {
+    if (metadata.automationName) return `Quick reply: ${metadata.automationName}`;
+    if (metadata.triggerType) return `Auto: ${metadata.triggerType}`;
+    return 'Quick reply';
+  }
+  return null;
+}
 
 const AVATAR_GRADIENTS = [
   'from-violet-500 to-purple-600',
@@ -175,4 +188,19 @@ export function messageHasMedia(message: Pick<Message, 'type' | 'metadata'>) {
     ['IMAGE', 'VIDEO', 'AUDIO', 'DOCUMENT'].includes(type) &&
     Boolean(message.metadata?.mediaId || message.metadata?.mediaPath)
   );
+}
+
+const HANDOFF_REASON_LABELS: Record<string, string> = {
+  USER_REQUEST: 'Customer asked for help',
+  KEYWORD_MATCH: 'Customer used a handoff word',
+  LOW_CONFIDENCE: 'Bot was not sure',
+  BLOCKED_CONTENT: 'Sensitive topic',
+  ERROR: 'Something went wrong',
+  FLOW_HANDOFF: 'Flow sent to team',
+  VOICE_HANDOFF: 'Call transferred',
+};
+
+export function formatHandoffReason(reason?: string | null) {
+  if (!reason) return '';
+  return HANDOFF_REASON_LABELS[reason] || 'Sent to team';
 }

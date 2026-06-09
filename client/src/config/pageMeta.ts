@@ -6,43 +6,51 @@ export interface PageMeta {
 export const PAGE_META: Record<string, PageMeta> = {
   '/': {
     title: 'Dashboard',
-    description: 'Your WhatsApp performance at a glance',
+    description: 'See how your WhatsApp is doing',
   },
   '/inbox': {
     title: 'Inbox',
-    description: 'Reply to customer conversations',
+    description: 'Reply to your customers',
   },
   '/calls': {
     title: 'Calls',
-    description: 'Voice calls answered by your AI bot',
+    description: 'Voice calls handled by your AI bot',
   },
   '/automations': {
     title: 'Automations',
-    description: 'Build conversation flows and quick replies',
+    description: 'Auto-replies and conversation flows',
   },
   '/ai-bot': {
     title: 'AI Bots',
-    description: 'Create and manage multiple AI chatbots for WhatsApp',
+    description: 'Set up smart auto-replies for WhatsApp',
   },
   '/campaigns': {
     title: 'Campaigns',
-    description: 'Send template messages to multiple contacts',
+    description: 'Send messages to many contacts at once',
   },
   '/templates': {
     title: 'Templates',
-    description: 'Manage Meta-approved WhatsApp message templates',
+    description: 'Approved message templates for outreach',
   },
   '/contacts': {
     title: 'Contacts',
-    description: 'Manage your customer contacts',
+    description: 'Your customer list',
   },
   '/team': {
     title: 'Team',
-    description: 'Manage support agents and roles',
+    description: 'Manage your support team',
+  },
+  '/reports': {
+    title: 'Reports',
+    description: 'Analytics and team performance',
+  },
+  '/billing': {
+    title: 'Billing',
+    description: 'Plans and seat limits',
   },
   '/settings': {
     title: 'Settings',
-    description: 'Manage your WhatsApp Business connection',
+    description: 'Connect WhatsApp and set up your workspace',
   },
 };
 

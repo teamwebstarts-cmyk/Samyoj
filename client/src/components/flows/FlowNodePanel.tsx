@@ -4,8 +4,8 @@ import AppButton from '../ui/AppButton';
 import AppInput from '../ui/AppInput';
 import AppSelect from '../ui/AppSelect';
 import AppTextarea from '../ui/AppTextarea';
-import { aiBotApi, teamApi, templateApi } from '../../services/api';
-import type { AiBot, FlowNode, TeamAgent } from '../../types';
+import { aiBotApi, flowApi, teamApi, templateApi } from '../../services/api';
+import type { AiBot, Flow, FlowNode, TeamAgent } from '../../types';
 import { nodeMeta } from './flowMeta';
 
 interface FlowNodePanelProps {
@@ -70,11 +70,13 @@ export default function FlowNodePanel({
 
   const [bots, setBots] = useState<AiBot[]>([]);
   const [agents, setAgents] = useState<TeamAgent[]>([]);
+  const [flows, setFlows] = useState<Flow[]>([]);
   const [templates, setTemplates] = useState<Array<{ name: string; language: string; status: string }>>([]);
 
   useEffect(() => {
     aiBotApi.list().then(({ data }) => setBots(data.data.bots || data.data || [])).catch(() => {});
     teamApi.agents().then(({ data }) => setAgents(data.data.agents || [])).catch(() => {});
+    flowApi.list({ limit: '100' }).then(({ data }) => setFlows(data.data.flows || [])).catch(() => {});
     templateApi.list().then(({ data }) => setTemplates(data.data.templates || [])).catch(() => {});
   }, []);
 
@@ -138,7 +140,7 @@ export default function FlowNodePanel({
           label="Assign to agent"
           value={node.assignAgentId || ''}
           options={[
-            { value: '', label: 'Round-robin (any available)' },
+            { value: '', label: 'Next available agent' },
             ...agents.map((a) => ({ value: a.id, label: a.name })),
           ]}
           isSearchable
@@ -148,7 +150,32 @@ export default function FlowNodePanel({
 
       {node.type === 'buttons' && (
         <div className="space-y-3">
+          <AppSelect
+            label="Button type"
+            value={node.buttonMode || 'reply'}
+            options={[
+              { value: 'reply', label: 'Reply buttons (tap to respond)' },
+              { value: 'url', label: 'URL button (open link)' },
+              { value: 'call', label: 'Call button (tap to dial)' },
+            ]}
+            isSearchable={false}
+            onChange={(e) => onChange({ buttonMode: e.target.value as FlowNode['buttonMode'] })}
+          />
           <AppTextarea label="Message" value={node.text || ''} onChange={(e) => onChange({ text: e.target.value })} rows={2} />
+          {node.buttonMode === 'url' && (
+            <>
+              <AppInput label="Button label" value={node.ctaLabel || ''} onChange={(e) => onChange({ ctaLabel: e.target.value })} placeholder="Visit website" />
+              <AppInput label="URL" value={node.ctaUrl || ''} onChange={(e) => onChange({ ctaUrl: e.target.value })} placeholder="https://..." />
+            </>
+          )}
+          {node.buttonMode === 'call' && (
+            <>
+              <AppInput label="Button label" value={node.ctaLabel || ''} onChange={(e) => onChange({ ctaLabel: e.target.value })} placeholder="Call us" />
+              <AppInput label="Phone number" value={node.ctaPhone || ''} onChange={(e) => onChange({ ctaPhone: e.target.value })} placeholder="+1234567890" />
+            </>
+          )}
+          {(!node.buttonMode || node.buttonMode === 'reply') && (
+            <>
           <p className="text-[12px] font-bold text-neutral-700">Buttons (max 3)</p>
           {(node.buttons || []).map((btn, btnIdx) => (
             <div key={btn.id} className="space-y-2 rounded-xl border border-neutral-100 bg-neutral-50/50 p-3">
@@ -201,6 +228,76 @@ export default function FlowNodePanel({
               Add button
             </AppButton>
           )}
+            </>
+          )}
+        </div>
+      )}
+
+      {node.type === 'list' && (
+        <div className="space-y-3">
+          <AppTextarea label="Message" value={node.text || ''} onChange={(e) => onChange({ text: e.target.value })} rows={2} />
+          <AppInput label="Menu button label" value={node.listButtonLabel || ''} onChange={(e) => onChange({ listButtonLabel: e.target.value })} placeholder="View options" />
+          {(node.listSections || []).map((section, sIdx) => (
+            <div key={sIdx} className="space-y-2 rounded-xl border border-neutral-100 bg-neutral-50/50 p-3">
+              <AppInput
+                label={`Section ${sIdx + 1} title`}
+                value={section.title || ''}
+                onChange={(e) => {
+                  const listSections = [...(node.listSections || [])];
+                  listSections[sIdx] = { ...listSections[sIdx], title: e.target.value };
+                  onChange({ listSections });
+                }}
+              />
+              {section.rows.map((row, rIdx) => (
+                <div key={row.id} className="space-y-2 rounded-lg border border-neutral-100 bg-white p-2">
+                  <AppInput
+                    label={`Item ${rIdx + 1}`}
+                    value={row.title}
+                    onChange={(e) => {
+                      const listSections = [...(node.listSections || [])];
+                      const rows = [...listSections[sIdx].rows];
+                      rows[rIdx] = { ...rows[rIdx], title: e.target.value.slice(0, 24) };
+                      listSections[sIdx] = { ...listSections[sIdx], rows };
+                      onChange({ listSections });
+                    }}
+                  />
+                  <AppInput
+                    label="Description"
+                    value={row.description || ''}
+                    onChange={(e) => {
+                      const listSections = [...(node.listSections || [])];
+                      const rows = [...listSections[sIdx].rows];
+                      rows[rIdx] = { ...rows[rIdx], description: e.target.value.slice(0, 72) };
+                      listSections[sIdx] = { ...listSections[sIdx], rows };
+                      onChange({ listSections });
+                    }}
+                  />
+                  {branchOptions.length > 0 && (
+                    <AppSelect
+                      label="Go to step"
+                      value={branches[row.id] || ''}
+                      options={[{ value: '', label: 'Next step (default)' }, ...branchOptions]}
+                      isSearchable={false}
+                      onChange={(e) => setBranch({ [row.id]: e.target.value })}
+                    />
+                  )}
+                </div>
+              ))}
+              <AppButton
+                variant="secondary"
+                size="sm"
+                icon={<Plus size={14} />}
+                onClick={() => {
+                  const listSections = [...(node.listSections || [])];
+                  const rows = [...(listSections[sIdx]?.rows || []), { id: `row-${Date.now()}`, title: `Option ${(listSections[sIdx]?.rows.length || 0) + 1}` }];
+                  listSections[sIdx] = { ...listSections[sIdx], rows };
+                  onChange({ listSections });
+                }}
+              >
+                Add item
+              </AppButton>
+            </div>
+          ))}
         </div>
       )}
 
@@ -224,11 +321,57 @@ export default function FlowNodePanel({
           )}
           <AppInput label="Max retries" type="number" min={1} max={5} value={String(node.maxRetries ?? 2)} onChange={(e) => onChange({ maxRetries: Number(e.target.value) })} />
           <AppInput label="Retry message" value={node.retryMessage || ''} onChange={(e) => onChange({ retryMessage: e.target.value })} placeholder="Please try again." />
+          <label className="flex items-center gap-2 text-[12px] font-medium text-neutral-700">
+            <input type="checkbox" checked={Boolean(node.acceptMedia)} onChange={(e) => onChange({ acceptMedia: e.target.checked })} />
+            Accept image/document as answer
+          </label>
         </div>
       )}
 
       {node.type === 'tag' && (
         <AppInput label="Tag name" value={node.tag || ''} onChange={(e) => onChange({ tag: e.target.value })} placeholder="sales-lead" />
+      )}
+
+      {node.type === 'remove_tag' && (
+        <AppInput label="Tag to remove" value={node.tag || ''} onChange={(e) => onChange({ tag: e.target.value })} placeholder="sales-lead" />
+      )}
+
+      {node.type === 'set_variable' && (
+        <div className="space-y-3">
+          <AppInput label="Variable name" value={node.variableName || ''} onChange={(e) => onChange({ variableName: e.target.value })} placeholder="discount_code" />
+          <AppInput label="Value" hint="Use {{name}} for customer name" value={node.variableValue || ''} onChange={(e) => onChange({ variableValue: e.target.value })} />
+        </div>
+      )}
+
+      {node.type === 'goto_flow' && (
+        <AppSelect
+          label="Target flow"
+          value={node.targetFlowId || ''}
+          options={[
+            { value: '', label: 'Select a flow...' },
+            ...flows.map((f) => ({ value: f.id, label: f.name })),
+          ]}
+          isSearchable
+          onChange={(e) => onChange({ targetFlowId: e.target.value || undefined })}
+        />
+      )}
+
+      {node.type === 'request_callback' && (
+        <div className="space-y-3">
+          <AppTextarea label="Message" value={node.text || ''} onChange={(e) => onChange({ text: e.target.value })} rows={2} />
+          <AppInput label="Callback tag" value={node.callbackTag || ''} onChange={(e) => onChange({ callbackTag: e.target.value })} placeholder="callback-requested" />
+          <AppSelect
+            label="Assign to agent"
+            value={node.assignAgentId || ''}
+            options={[
+              { value: '', label: 'No assignment' },
+              { value: '*', label: 'Next available agent' },
+              ...agents.map((a) => ({ value: a.id, label: a.name })),
+            ]}
+            isSearchable
+            onChange={(e) => onChange({ assignAgentId: e.target.value || undefined })}
+          />
+        </div>
       )}
 
       {node.type === 'condition' && (
@@ -240,6 +383,9 @@ export default function FlowNodePanel({
               { value: 'business_hours', label: 'Business hours check' },
               { value: 'has_tag', label: 'Contact has tag' },
               { value: 'language', label: 'Customer language' },
+              { value: 'variable_equals', label: 'Variable equals value' },
+              { value: 'variable_contains', label: 'Variable contains text' },
+              { value: 'webhook_ok', label: 'Last webhook succeeded' },
             ]}
             isSearchable={false}
             onChange={(e) => onChange({ conditionType: e.target.value as FlowNode['conditionType'] })}
@@ -248,7 +394,13 @@ export default function FlowNodePanel({
             <AppInput label="Tag to check" value={node.conditionTag || ''} onChange={(e) => onChange({ conditionTag: e.target.value })} />
           )}
           {node.conditionType === 'language' && (
-            <AppInput label="Language code" value={node.languageCode || ''} onChange={(e) => onChange({ languageCode: e.target.value })} placeholder="en" />
+            <AppInput label="Language" value={node.languageCode || ''} onChange={(e) => onChange({ languageCode: e.target.value })} placeholder="English" />
+          )}
+          {(node.conditionType === 'variable_equals' || node.conditionType === 'variable_contains') && (
+            <>
+              <AppInput label="Variable name" value={node.conditionVariable || ''} onChange={(e) => onChange({ conditionVariable: e.target.value })} />
+              <AppInput label="Value to match" value={node.conditionValue || ''} onChange={(e) => onChange({ conditionValue: e.target.value })} />
+            </>
           )}
           <div className="rounded-xl border border-violet-100 bg-violet-50/50 p-3 space-y-2">
             <p className="text-[11px] font-bold uppercase text-violet-600">Branch paths</p>
@@ -278,13 +430,20 @@ export default function FlowNodePanel({
               });
             }}
           />
-          <AppInput label="Language code" value={node.templateLanguage || 'en_US'} onChange={(e) => onChange({ templateLanguage: e.target.value })} />
+          <AppInput label="Language" value={node.templateLanguage || 'en_US'} onChange={(e) => onChange({ templateLanguage: e.target.value })} />
           <AppTextarea label="Fallback text" value={node.text || ''} onChange={(e) => onChange({ text: e.target.value })} rows={2} />
         </div>
       )}
 
       {node.type === 'delay' && (
         <AppInput label="Delay (seconds)" type="number" min={1} max={86400} value={String(node.delaySeconds || 30)} onChange={(e) => onChange({ delaySeconds: Number(e.target.value) })} hint="Max 24 hours" />
+      )}
+
+      {node.type === 'schedule' && (
+        <div className="space-y-3">
+          <AppInput label="Schedule at (ISO datetime)" type="datetime-local" value={node.scheduleAt?.slice(0, 16) || ''} onChange={(e) => onChange({ scheduleAt: e.target.value ? new Date(e.target.value).toISOString() : undefined })} />
+          <AppInput label="Or delay (seconds)" type="number" min={1} max={604800} value={String(node.delaySeconds || 3600)} onChange={(e) => onChange({ delaySeconds: Number(e.target.value) })} hint="Used if no schedule time set" />
+        </div>
       )}
 
       {node.type === 'media' && (
@@ -296,6 +455,7 @@ export default function FlowNodePanel({
               { value: 'image', label: 'Image' },
               { value: 'document', label: 'Document' },
               { value: 'video', label: 'Video' },
+              { value: 'audio', label: 'Audio' },
             ]}
             isSearchable={false}
             onChange={(e) => onChange({ mediaType: e.target.value as FlowNode['mediaType'] })}
@@ -307,9 +467,9 @@ export default function FlowNodePanel({
 
       {node.type === 'webhook' && (
         <div className="space-y-3">
-          <AppInput label="Webhook URL" value={node.webhookUrl || ''} onChange={(e) => onChange({ webhookUrl: e.target.value })} placeholder="https://api.example.com/hook" />
+          <AppInput label="App URL" value={node.webhookUrl || ''} onChange={(e) => onChange({ webhookUrl: e.target.value })} placeholder="https://your-app.com/notify" />
           <AppSelect
-            label="Method"
+            label="Send as"
             value={node.webhookMethod || 'POST'}
             options={[
               { value: 'POST', label: 'POST' },
@@ -318,12 +478,108 @@ export default function FlowNodePanel({
             isSearchable={false}
             onChange={(e) => onChange({ webhookMethod: e.target.value as 'GET' | 'POST' })}
           />
+          <AppInput label="Store response in variable" value={node.webhookVariable || ''} onChange={(e) => onChange({ webhookVariable: e.target.value })} placeholder="webhook_result" hint="Also sets webhook_ok and webhook_status" />
+        </div>
+      )}
+
+      {node.type === 'goto_step' && (
+        <AppSelect
+          label="Jump to step"
+          value={node.targetNodeId || ''}
+          options={[
+            { value: '', label: 'Select a step...' },
+            ...allNodes
+              .filter((n) => n.id !== node.id)
+              .map((n, i) => ({ value: n.id, label: `${i + 1}. ${nodeMeta[n.type].label}` })),
+          ]}
+          isSearchable
+          onChange={(e) => onChange({ targetNodeId: e.target.value || undefined })}
+          hint="Use to loop back to a menu or earlier step"
+        />
+      )}
+
+      {node.type === 'location' && (
+        <div className="space-y-3">
+          <AppTextarea label="Message" value={node.text || ''} onChange={(e) => onChange({ text: e.target.value })} rows={2} />
+          <div className="grid grid-cols-2 gap-3">
+            <AppInput label="Latitude" type="number" step="any" value={String(node.latitude ?? '')} onChange={(e) => onChange({ latitude: Number(e.target.value) })} />
+            <AppInput label="Longitude" type="number" step="any" value={String(node.longitude ?? '')} onChange={(e) => onChange({ longitude: Number(e.target.value) })} />
+          </div>
+          <AppInput label="Place name" value={node.locationName || ''} onChange={(e) => onChange({ locationName: e.target.value })} />
+          <AppInput label="Address" value={node.locationAddress || ''} onChange={(e) => onChange({ locationAddress: e.target.value })} />
+        </div>
+      )}
+
+      {node.type === 'contact_card' && (
+        <div className="space-y-3">
+          <AppTextarea label="Message" value={node.text || ''} onChange={(e) => onChange({ text: e.target.value })} rows={2} />
+          <AppInput label="Contact name" value={node.contactName || ''} onChange={(e) => onChange({ contactName: e.target.value })} />
+          <AppInput label="Phone" value={node.contactPhone || ''} onChange={(e) => onChange({ contactPhone: e.target.value })} />
+          <AppInput label="Email (optional)" value={node.contactEmail || ''} onChange={(e) => onChange({ contactEmail: e.target.value })} />
+        </div>
+      )}
+
+      {node.type === 'wa_flow' && (
+        <div className="space-y-3">
+          <AppTextarea label="Message" value={node.text || ''} onChange={(e) => onChange({ text: e.target.value })} rows={2} />
+          <AppInput label="Meta Flow ID" value={node.waFlowId || ''} onChange={(e) => onChange({ waFlowId: e.target.value })} />
+          <AppInput label="Flow token" value={node.waFlowToken || ''} onChange={(e) => onChange({ waFlowToken: e.target.value })} />
+          <AppInput label="Button label" value={node.waFlowCta || ''} onChange={(e) => onChange({ waFlowCta: e.target.value })} placeholder="Open form" />
+          <AppInput label="Screen ID (optional)" value={node.waFlowScreen || ''} onChange={(e) => onChange({ waFlowScreen: e.target.value })} />
+        </div>
+      )}
+
+      {(node.type === 'buttons' || node.type === 'list') && (
+        <div className="space-y-2 rounded-xl border border-sky-100 bg-sky-50/50 p-3">
+          <p className="text-[11px] font-bold uppercase text-sky-600">Text intent routing</p>
+          <p className="text-[11px] text-neutral-500">If customer types instead of tapping, match keywords to branch.</p>
+          {(node.intentRoutes || []).map((route, idx) => (
+            <div key={idx} className="space-y-2 rounded-lg border border-white bg-white p-2">
+              <AppInput
+                label="Keywords (comma-separated)"
+                value={route.keywords.join(', ')}
+                onChange={(e) => {
+                  const intentRoutes = [...(node.intentRoutes || [])];
+                  intentRoutes[idx] = {
+                    ...intentRoutes[idx],
+                    keywords: e.target.value.split(',').map((k) => k.trim()).filter(Boolean),
+                  };
+                  onChange({ intentRoutes });
+                }}
+              />
+              <AppInput
+                label="Branch key (button/list item id)"
+                value={route.branchKey}
+                onChange={(e) => {
+                  const intentRoutes = [...(node.intentRoutes || [])];
+                  intentRoutes[idx] = { ...intentRoutes[idx], branchKey: e.target.value };
+                  onChange({ intentRoutes });
+                }}
+              />
+              <button type="button" className="text-[11px] font-bold text-red-600" onClick={() => onChange({ intentRoutes: node.intentRoutes!.filter((_, i) => i !== idx) })}>
+                Remove route
+              </button>
+            </div>
+          ))}
+          <AppButton
+            variant="secondary"
+            size="sm"
+            icon={<Plus size={14} />}
+            onClick={() =>
+              onChange({
+                intentRoutes: [...(node.intentRoutes || []), { keywords: ['help'], branchKey: '' }],
+              })
+            }
+          >
+            Add intent route
+          </AppButton>
         </div>
       )}
 
       {node.type === 'ab_split' && (
         <div className="rounded-xl border border-fuchsia-100 bg-fuchsia-50/50 p-3 space-y-2">
-          <p className="text-[11px] font-bold uppercase text-fuchsia-600">A/B paths (50/50)</p>
+          <AppInput label="Path A % (1-99)" type="number" min={1} max={99} value={String(node.splitRatio ?? 50)} onChange={(e) => onChange({ splitRatio: Number(e.target.value) })} />
+          <p className="text-[11px] font-bold uppercase text-fuchsia-600">A/B paths</p>
           <BranchSelect label="Path A → go to" value={branches.a} branchKey="a" allNodes={allNodes} currentNodeId={node.id} branches={branches} onChange={onChange} />
           <BranchSelect label="Path B → go to" value={branches.b} branchKey="b" allNodes={allNodes} currentNodeId={node.id} branches={branches} onChange={onChange} />
         </div>

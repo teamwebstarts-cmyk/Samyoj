@@ -1,8 +1,10 @@
 export type FlowNodeType =
   | 'message'
   | 'buttons'
+  | 'list'
   | 'question'
   | 'tag'
+  | 'remove_tag'
   | 'handoff'
   | 'ai'
   | 'assign'
@@ -10,10 +12,18 @@ export type FlowNodeType =
   | 'end'
   | 'template'
   | 'delay'
+  | 'schedule'
   | 'media'
   | 'webhook'
   | 'ab_split'
-  | 'language';
+  | 'language'
+  | 'set_variable'
+  | 'goto_flow'
+  | 'goto_step'
+  | 'request_callback'
+  | 'location'
+  | 'contact_card'
+  | 'wa_flow';
 
 export type FlowTriggerType =
   | 'WELCOME'
@@ -22,27 +32,59 @@ export type FlowTriggerType =
   | 'BUSINESS_HOURS'
   | 'OFF_HOURS'
   | 'CONTACT_TAG'
-  | 'SEGMENT';
+  | 'SEGMENT'
+  | 'MISSED_CALL'
+  | 'CAMPAIGN_REPLY'
+  | 'CALL_COMPLETED';
+
+export interface FlowIntentRoute {
+  keywords: string[];
+  branchKey: string;
+}
+
+export type FlowButtonMode = 'reply' | 'url' | 'call';
 
 export interface FlowButton {
   id: string;
   title: string;
 }
 
+export interface FlowListSection {
+  title?: string;
+  rows: Array<{ id: string; title: string; description?: string }>;
+}
+
 export interface FlowNode {
   id: string;
   type: FlowNodeType;
   text?: string;
+  buttonMode?: FlowButtonMode;
+  ctaLabel?: string;
+  ctaUrl?: string;
+  ctaPhone?: string;
   buttons?: FlowButton[];
+  listButtonLabel?: string;
+  listSections?: FlowListSection[];
   field?: 'name' | 'email' | 'phone' | 'custom';
   customField?: string;
   prompt?: string;
   tag?: string;
-  conditionType?: 'business_hours' | 'has_tag' | 'language';
+  conditionType?:
+    | 'business_hours'
+    | 'has_tag'
+    | 'language'
+    | 'variable_equals'
+    | 'variable_contains'
+    | 'webhook_ok';
   conditionTag?: string;
+  conditionVariable?: string;
+  conditionValue?: string;
   languageCode?: string;
   maxRetries?: number;
   retryMessage?: string;
+  acceptMedia?: boolean;
+  intentRoutes?: FlowIntentRoute[];
+  splitRatio?: number;
   next?: string;
   branches?: Record<string, string>;
   templateName?: string;
@@ -51,10 +93,28 @@ export interface FlowNode {
   mediaType?: 'image' | 'document' | 'video' | 'audio';
   mediaCaption?: string;
   delaySeconds?: number;
+  scheduleAt?: string;
   webhookUrl?: string;
   webhookMethod?: 'GET' | 'POST';
   aiBotId?: string;
   assignAgentId?: string;
+  variableName?: string;
+  variableValue?: string;
+  targetFlowId?: string;
+  targetNodeId?: string;
+  callbackTag?: string;
+  webhookVariable?: string;
+  latitude?: number;
+  longitude?: number;
+  locationName?: string;
+  locationAddress?: string;
+  contactName?: string;
+  contactPhone?: string;
+  contactEmail?: string;
+  waFlowId?: string;
+  waFlowToken?: string;
+  waFlowCta?: string;
+  waFlowScreen?: string;
   position?: { x: number; y: number };
 }
 
@@ -64,13 +124,15 @@ export interface FlowTriggerConfig {
   regex?: boolean;
   tag?: string;
   tags?: string[];
+  campaignId?: string;
+  withinHours?: number;
 }
 
 export interface FlowState {
   flowId: string;
   flowName?: string;
   currentNodeId: string;
-  waitingFor: 'button' | 'text' | 'delay' | null;
+  waitingFor: 'button' | 'text' | 'delay' | 'media' | null;
   variables: Record<string, string>;
   attempts: number;
   resumeAt?: string;
@@ -108,6 +170,8 @@ export interface InboundFlowPayload {
   content: string;
   buttonReplyId?: string;
   isNewConversation: boolean;
+  messageType?: string;
+  hasMedia?: boolean;
 }
 
 export const HANDOFF_KEYWORDS = ['human', 'agent', 'representative', 'talk to someone', 'real person'];
@@ -170,6 +234,64 @@ export const FLOW_TEMPLATES = [
       { id: 'collect', type: 'question' as const, prompt: 'Please leave your message and we will reply first thing tomorrow:', field: 'custom' as const, customField: 'after_hours_message', next: 'tag' },
       { id: 'tag', type: 'tag' as const, tag: 'after-hours', next: 'end' },
       { id: 'end', type: 'end' as const, text: 'Message received! We will get back to you soon. 🙏' },
+    ],
+  },
+  {
+    id: 'campaign-followup',
+    name: 'Campaign Reply Follow-up',
+    description: 'Engage customers who reply after a broadcast campaign',
+    triggerType: 'CAMPAIGN_REPLY' as const,
+    triggerConfig: {},
+    color: 'sky',
+    nodes: [
+      { id: 'thanks', type: 'message' as const, text: 'Thanks for your reply! How can we help you further?', next: 'menu' },
+      {
+        id: 'menu', type: 'buttons' as const, text: 'Choose an option:',
+        buttons: [
+          { id: 'info', title: 'More info' },
+          { id: 'agent', title: 'Talk to agent' },
+        ],
+        branches: { info: 'info-msg', agent: 'handoff' },
+        intentRoutes: [{ keywords: ['agent', 'human', 'help'], branchKey: 'agent' }],
+      },
+      { id: 'info-msg', type: 'message' as const, text: 'Here is more information about our offer!', next: 'end' },
+      { id: 'handoff', type: 'handoff' as const, text: 'Connecting you with our team now.' },
+      { id: 'end', type: 'end' as const, text: 'Thank you!' },
+    ],
+  },
+  {
+    id: 'missed-call-followup',
+    name: 'Missed Call Follow-up',
+    description: 'Auto-message when a WhatsApp call is missed — offer callback or chat',
+    triggerType: 'MISSED_CALL' as const,
+    triggerConfig: {},
+    color: 'rose',
+    nodes: [
+      {
+        id: 'missed',
+        type: 'message' as const,
+        text: 'Sorry we missed your call! 📞 How would you like us to help?',
+        next: 'options',
+      },
+      {
+        id: 'options',
+        type: 'buttons' as const,
+        text: 'Choose an option:',
+        buttons: [
+          { id: 'callback', title: 'Request callback' },
+          { id: 'chat', title: 'Continue in chat' },
+        ],
+        branches: { callback: 'callback', chat: 'chat' },
+      },
+      {
+        id: 'callback',
+        type: 'request_callback' as const,
+        text: 'Got it! Our team will call you back shortly.',
+        callbackTag: 'callback-requested',
+        next: 'end',
+      },
+      { id: 'chat', type: 'handoff' as const, text: 'Sure! Type your question and our team will reply here.' },
+      { id: 'end', type: 'end' as const, text: 'Thank you! We will be in touch soon.' },
     ],
   },
   {

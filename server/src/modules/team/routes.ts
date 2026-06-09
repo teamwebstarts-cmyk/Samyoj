@@ -385,7 +385,7 @@ router.post(
 
     const org = await prisma.organization.findUnique({
       where: { id: orgId },
-      select: { plan: true, settings: true },
+      select: { plan: true, settings: true, companyName: true },
     });
     const teamSettings = await getTeamSettingsFromOrg(orgId);
     const seatLimit = getSeatLimit(org?.plan ?? 'starter', teamSettings);
@@ -434,6 +434,20 @@ router.post(
       metadata: { email: data.email, orgRole: data.orgRole },
     });
 
+    const inviteUrl = `${config.clientUrl}/invite/${token}`;
+    const inviter = await prisma.user.findUnique({
+      where: { id: req.user!.userId },
+      select: { name: true },
+    });
+
+    const { sendTeamInviteEmail } = await import('../../services/email.service');
+    await sendTeamInviteEmail(
+      data.email,
+      inviteUrl,
+      org?.companyName || 'your workspace',
+      inviter?.name || 'A team admin'
+    );
+
     sendSuccess(
       res,
       {
@@ -444,7 +458,8 @@ router.post(
         department: invite.department,
         status: invite.status,
         expiresAt: invite.expiresAt,
-        inviteUrl: `${config.clientUrl}/invite/${token}`,
+        inviteUrl,
+        emailSent: true,
       },
       201
     );

@@ -3,8 +3,10 @@ import type { LucideIcon } from 'lucide-react';
 import {
   BarChart3,
   Bot,
+  CreditCard,
   FileText,
   Headset,
+  LineChart,
   LogOut,
   MessageSquare,
   PanelLeftClose,
@@ -38,9 +40,16 @@ const navSections = [
     ],
   },
   {
+    label: 'Insights',
+    items: [
+      { to: '/reports', icon: LineChart, label: 'Reports' },
+    ],
+  },
+  {
     label: 'Account',
     items: [
       { to: '/team', icon: Headset, label: 'Team' },
+      { to: '/billing', icon: CreditCard, label: 'Billing' },
       { to: '/settings', icon: Settings, label: 'Settings' },
     ],
   },

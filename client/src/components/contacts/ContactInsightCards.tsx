@@ -3,24 +3,24 @@ import { MessageSquare, Send, Tag } from 'lucide-react';
 const tips = [
   {
     icon: Tag,
-    title: 'Segment with tags',
-    description: 'Group VIPs, leads, and regions — then target them in campaigns instantly.',
+    title: 'Use tags',
+    description: 'Group VIPs, leads, and regions — then use them in campaigns.',
     accent: 'from-violet-500/10 via-white to-purple-500/5 border-violet-200/60 dark:via-slate-900 dark:border-violet-800/40',
     iconBg:
       'bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-[0_4px_14px_rgba(139,92,246,0.35)]',
   },
   {
     icon: MessageSquare,
-    title: 'WhatsApp-ready profiles',
-    description: 'Inbound chats auto-create contacts with activity history and conversation links.',
+    title: 'Auto-created contacts',
+    description: 'New chats automatically add contacts with their message history.',
     accent: 'from-sky-500/10 via-white to-blue-500/5 border-sky-200/60 dark:via-slate-900 dark:border-sky-800/40',
     iconBg:
       'bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-[0_4px_14px_rgba(14,165,233,0.3)]',
   },
   {
     icon: Send,
-    title: 'Campaign audiences',
-    description: 'Select contacts in bulk or filter by opt-in status before sending templates.',
+    title: 'Send campaigns',
+    description: 'Pick contacts in bulk or filter by who opted in.',
     accent: 'from-emerald-500/10 via-white to-teal-500/5 border-emerald-200/60 dark:via-slate-900 dark:border-emerald-800/40',
     iconBg:
       'bg-gradient-to-br from-whatsapp-500 to-emerald-600 text-white shadow-[0_4px_14px_rgba(37,211,102,0.3)]',

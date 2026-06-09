@@ -12,6 +12,7 @@ import {
 import { isCallingConfigured, MetaCallingService } from './meta-calling.service';
 import { decideCallRoute, resolveCallBot } from './routing.service';
 import { getOrgCallingSettings, resolveEffectiveVoiceConfig } from './settings.service';
+import { triggerCallCompletedFlow } from '../flows/engine';
 import { handleMissedCallFollowUp } from './missed-call.service';
 import {
   registerActiveCall,
@@ -454,6 +455,23 @@ async function handleCallTerminate(orgId: string, call: CallWebhookEntry): Promi
       conversationId: existing.conversationId,
       contactId: existing.contactId,
     });
+  }
+
+  if (status === 'COMPLETED' && existing.conversationId) {
+    const contact = await prisma.contact.findUnique({ where: { id: existing.contactId } });
+    const whatsappNumber = await prisma.whatsappNumber.findFirst({
+      where: { organizationId: orgId, isActive: true },
+    });
+    if (contact && whatsappNumber) {
+      void triggerCallCompletedFlow({
+        organizationId: orgId,
+        conversationId: existing.conversationId,
+        contactId: existing.contactId,
+        contactPhone: contact.phone,
+        phoneNumberId: whatsappNumber.phoneNumberId,
+        encryptedToken: whatsappNumber.accessToken,
+      });
+    }
   }
 
   log.info('Call terminated', { metaCallId, status, duration });

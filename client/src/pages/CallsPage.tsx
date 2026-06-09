@@ -176,7 +176,7 @@ export default function CallsPage() {
     } catch (err: unknown) {
       const body = (err as { response?: { data?: { error?: { message?: string; hints?: string[] } } } })
         ?.response?.data?.error;
-      toastError(body?.message || 'Could not enable calls. Check your account in Meta Business Manager.');
+      toastError(body?.message || 'Could not enable calls. Check your WhatsApp Business settings.');
       if (body?.hints?.length) {
         setStatus((prev) => (prev ? { ...prev, enableHints: body.hints } : prev));
       }

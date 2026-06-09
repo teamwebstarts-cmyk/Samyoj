@@ -109,6 +109,8 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
         });
 
         const isNew = !conversation;
+        const { computeSlaDueAt } = await import('../modules/sla/service');
+
         if (!conversation) {
           conversation = await prisma.conversation.create({
             data: {
@@ -117,15 +119,24 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
               whatsappNumberId: whatsappNumber.id,
               lastMessageAt: new Date(),
               unreadCount: 1,
+              slaDueAt: computeSlaDueAt(),
             },
           });
         } else {
+          const updateData: Prisma.ConversationUpdateInput = {
+            lastMessageAt: new Date(),
+            unreadCount: { increment: 1 },
+          };
+          const existing = await prisma.conversation.findUnique({
+            where: { id: conversation.id },
+            select: { firstResponseAt: true, slaDueAt: true },
+          });
+          if (!existing?.firstResponseAt && !existing?.slaDueAt) {
+            updateData.slaDueAt = computeSlaDueAt();
+          }
           await prisma.conversation.update({
             where: { id: conversation.id },
-            data: {
-              lastMessageAt: new Date(),
-              unreadCount: { increment: 1 },
-            },
+            data: updateData,
           });
         }
 
@@ -191,6 +202,16 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
           contact,
         });
 
+        const { dispatchOrgWebhook } = await import('../modules/integrations/dispatch');
+        void dispatchOrgWebhook(orgId, 'message.received', {
+          conversationId: conversation.id,
+          messageId: message.id,
+          contactPhone,
+        });
+
+        const msgType = (msg.type as string | undefined)?.toLowerCase() || 'text';
+        const hasMedia = ['image', 'video', 'audio', 'document', 'sticker'].includes(msgType);
+
         await handleInboundAutomations({
           organizationId: orgId,
           conversationId: conversation.id,
@@ -202,6 +223,8 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
           content: content || '',
           buttonReplyId: parsed.buttonReplyId,
           isNewConversation: isNew,
+          messageType: msgType,
+          hasMedia,
         }).catch((err) =>
           logError(err, { source: 'webhook', action: 'Automation processing failed' })
         );

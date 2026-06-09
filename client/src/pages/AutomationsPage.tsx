@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
 import {
   ArrowRight,
+  BarChart3,
   Bot,
   Clock,
   GitBranch,
@@ -13,10 +14,13 @@ import {
   PlayCircle,
   Plus,
   Sparkles,
+  Trash2,
   UserPlus,
   Zap,
 } from 'lucide-react';
+import AutomationAnalyticsPanel from '../components/automations/AutomationAnalyticsPanel';
 import AutomationCard from '../components/automations/AutomationCard';
+import AutomationConflictsBanner from '../components/automations/AutomationConflictsBanner';
 import FlowsTab, { type FlowSummary } from '../components/flows/FlowsTab';
 import { getErrorMessage } from '../utils/errors';
 import { toastError, toastSuccess, toastValidationErrors } from '../utils/toast';
@@ -40,7 +44,7 @@ import { DEFAULT_PAGE_SIZE } from '../constants/pagination';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { automationApi } from '../services/api';
 import { WhatsAppMessagePreview } from '../components/inbox/WhatsAppPreview';
-import type { Automation } from '../types';
+import type { Automation, AutomationAnalytics, AutomationConflict } from '../types';
 
 const triggerMeta: Record<
   string,
@@ -79,7 +83,7 @@ const triggerMeta: Record<
   },
   BUSINESS_HOURS: {
     label: 'Business Hours',
-    description: 'Different replies inside and outside working hours',
+    description: 'Different replies during and after working hours',
     icon: Bot,
     accent: 'from-sky-500/10 to-blue-500/5 border-sky-200/70',
     iconBg: 'bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-[0_4px_14px_rgba(14,165,233,0.3)]',
@@ -87,7 +91,7 @@ const triggerMeta: Record<
   },
   LEAD_CAPTURE: {
     label: 'Lead Capture',
-    description: 'Collect details before handing off to an agent',
+    description: 'Reply, tag as lead, and optionally hand off to your team',
     icon: UserPlus,
     accent: 'from-rose-500/10 to-pink-500/5 border-rose-200/70',
     iconBg: 'bg-gradient-to-br from-rose-500 to-pink-600 text-white shadow-[0_4px_14px_rgba(244,63,94,0.3)]',
@@ -95,7 +99,7 @@ const triggerMeta: Record<
   },
   AI_CHATBOT: {
     label: 'AI Chatbot',
-    description: 'Managed from AI Bot settings — uses Azure OpenAI',
+    description: 'Set up in AI Bots — answers customers automatically',
     icon: Bot,
     accent: 'from-indigo-500/10 to-violet-500/5 border-indigo-200/70',
     iconBg: 'bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-[0_4px_14px_rgba(99,102,241,0.35)]',
@@ -118,7 +122,19 @@ const statusFilterOptions = [
   { value: 'paused', label: 'Paused' },
 ] as const;
 
-const emptyForm = { name: '', triggerType: 'KEYWORD', keyword: '', message: '' };
+type QuickReplyButton = { id: string; title: string };
+
+const emptyForm = {
+  name: '',
+  triggerType: 'KEYWORD',
+  keyword: '',
+  message: '',
+  duringHoursMessage: '',
+  awayMessage: '',
+  tag: 'lead',
+  handoff: false,
+  buttons: [] as QuickReplyButton[],
+};
 
 function getTriggerMeta(triggerType: string) {
   return (
@@ -133,7 +149,7 @@ function getTriggerMeta(triggerType: string) {
   );
 }
 
-type AutomationTab = 'flows' | 'quick';
+type AutomationTab = 'flows' | 'quick' | 'analytics';
 
 function TabIntroCard({
   icon: Icon,
@@ -200,6 +216,9 @@ export default function AutomationsPage() {
   const [summary, setSummary] = useState({ total: 0, active: 0, paused: 0 });
   const [flowSummary, setFlowSummary] = useState<FlowSummary>({ total: 0, active: 0, paused: 0 });
   const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [conflicts, setConflicts] = useState<AutomationConflict[]>([]);
+  const [analytics, setAnalytics] = useState<AutomationAnalytics | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
   const debouncedSearch = useDebouncedValue(search);
   const hasFilters = Boolean(search || triggerFilter || statusFilter);
@@ -235,6 +254,23 @@ export default function AutomationsPage() {
     if (activeTab === 'quick') load();
   }, [load, activeTab]);
 
+  useEffect(() => {
+    automationApi
+      .conflicts()
+      .then(({ data }) => setConflicts(data.data.conflicts || []))
+      .catch(() => {});
+  }, [automations.length, flowSummary.total]);
+
+  useEffect(() => {
+    if (activeTab !== 'analytics') return;
+    setAnalyticsLoading(true);
+    automationApi
+      .analytics(30)
+      .then(({ data }) => setAnalytics(data.data))
+      .catch((err) => toastError(getErrorMessage(err, 'Failed to load analytics')))
+      .finally(() => setAnalyticsLoading(false));
+  }, [activeTab]);
+
   const openCreate = (triggerType = 'KEYWORD') => {
     setEditing(null);
     setForm({ ...emptyForm, triggerType });
@@ -242,13 +278,18 @@ export default function AutomationsPage() {
   };
 
   const openEdit = (automation: Automation) => {
-    const config = automation.config as Record<string, string>;
+    const config = automation.config as Record<string, unknown>;
     setEditing(automation);
     setForm({
       name: automation.name,
       triggerType: automation.triggerType,
-      keyword: config.keyword || '',
-      message: config.message || '',
+      keyword: String(config.keyword || ''),
+      message: String(config.message || ''),
+      duringHoursMessage: String(config.duringHoursMessage || config.message || ''),
+      awayMessage: String(config.awayMessage || ''),
+      tag: String(config.tag || 'lead'),
+      handoff: Boolean(config.handoff),
+      buttons: Array.isArray(config.buttons) ? (config.buttons as QuickReplyButton[]) : [],
     });
     setSlideOpen(true);
   };
@@ -264,7 +305,14 @@ export default function AutomationsPage() {
 
     const validationErrors: string[] = [];
     if (!form.name.trim()) validationErrors.push('Automation name is required');
-    if (!form.message.trim()) validationErrors.push('Reply message is required');
+    if (form.triggerType === 'BUSINESS_HOURS') {
+      if (!form.duringHoursMessage.trim() && !form.message.trim()) {
+        validationErrors.push('During-hours message is required');
+      }
+      if (!form.awayMessage.trim()) validationErrors.push('After-hours message is required');
+    } else if (!form.message.trim()) {
+      validationErrors.push('Reply message is required');
+    }
     if (form.triggerType === 'KEYWORD' && !form.keyword.trim()) {
       validationErrors.push('Keyword is required for keyword trigger');
     }
@@ -274,8 +322,19 @@ export default function AutomationsPage() {
     }
 
     setSaving(true);
-    const config: Record<string, string> = { message: form.message };
+    const config: Record<string, unknown> = { message: form.message };
     if (form.triggerType === 'KEYWORD') config.keyword = form.keyword;
+    if (form.triggerType === 'BUSINESS_HOURS') {
+      config.duringHoursMessage = form.duringHoursMessage || form.message;
+      config.awayMessage = form.awayMessage;
+      config.message = form.duringHoursMessage || form.message;
+    }
+    if (form.triggerType === 'LEAD_CAPTURE') {
+      if (form.keyword.trim()) config.keyword = form.keyword;
+      config.tag = form.tag || 'lead';
+      config.handoff = form.handoff;
+    }
+    if (form.buttons.length > 0) config.buttons = form.buttons.slice(0, 3);
 
     try {
       if (editing) {
@@ -344,6 +403,14 @@ export default function AutomationsPage() {
     setSearchParams(tab === 'flows' ? {} : { tab });
   };
 
+  const addQuickReplyButton = () => {
+    if (form.buttons.length >= 3) return;
+    setForm((prev) => ({
+      ...prev,
+      buttons: [...prev.buttons, { id: `btn-${Date.now()}`, title: `Option ${prev.buttons.length + 1}` }],
+    }));
+  };
+
   const heroStats =
     activeTab === 'flows'
       ? [
@@ -351,18 +418,24 @@ export default function AutomationsPage() {
           { label: 'Active', value: flowSummary.active, tone: 'text-whatsapp-700' },
           { label: 'Paused', value: flowSummary.paused, tone: 'text-amber-700' },
         ]
-      : [
-          { label: 'Quick replies', value: summary.total },
-          { label: 'Active', value: summary.active, tone: 'text-whatsapp-700' },
-          { label: 'Paused', value: summary.paused, tone: 'text-amber-700' },
-        ];
+      : activeTab === 'analytics'
+        ? [
+            { label: 'Total runs', value: analytics?.total ?? 0 },
+            { label: 'Success', value: analytics?.success ?? 0, tone: 'text-whatsapp-700' },
+            { label: 'Failed', value: analytics?.failed ?? 0, tone: 'text-amber-700' },
+          ]
+        : [
+            { label: 'Quick replies', value: summary.total },
+            { label: 'Active', value: summary.active, tone: 'text-whatsapp-700' },
+            { label: 'Paused', value: summary.paused, tone: 'text-amber-700' },
+          ];
 
   return (
     <PageShell>
       <PageHeader
         actions={
           activeTab === 'flows' ? (
-            <div className="hidden w-full gap-2 sm:flex sm:w-auto">
+            <div className="flex w-full gap-2 sm:w-auto">
               <AppButton
                 variant="secondary"
                 icon={<LayoutTemplate size={16} />}
@@ -374,7 +447,7 @@ export default function AutomationsPage() {
                 Blank flow
               </AppButton>
             </div>
-          ) : (
+          ) : activeTab === 'analytics' ? null : (
             <AppButton fullWidth className="w-full sm:w-auto" icon={<Plus size={16} />} onClick={() => openCreate()}>
               New quick reply
             </AppButton>
@@ -384,13 +457,21 @@ export default function AutomationsPage() {
 
       <div className="space-y-5 animate-fade-up-delay sm:space-y-6">
         <PageHero
-          badge="Automation Studio"
+          badge="Automations"
           badgeIcon={Zap}
-          title={activeTab === 'flows' ? 'Design conversation flows' : 'Quick reply automations'}
+          title={
+            activeTab === 'flows'
+              ? 'Conversation flows'
+              : activeTab === 'analytics'
+                ? 'Automation analytics'
+                : 'Quick replies'
+          }
           description={
             activeTab === 'flows'
-              ? 'Build multi-step customer journeys with buttons, lead capture, conditions, and AI handoff.'
-              : 'Set up instant keyword replies, welcome messages, and away responses — no coding needed.'
+              ? 'Build step-by-step chats with buttons, questions, and handoff to your team.'
+              : activeTab === 'analytics'
+                ? 'Track how flows, quick replies, and AI automations perform.'
+                : 'Set up instant replies for keywords, welcome messages, and away notices.'
           }
           accent="violet"
           stats={heroStats}
@@ -402,14 +483,17 @@ export default function AutomationsPage() {
           options={[
             { value: 'flows', label: 'Flows', icon: GitBranch },
             { value: 'quick', label: 'Quick replies', icon: MessageSquareQuote },
+            { value: 'analytics', label: 'Analytics', icon: BarChart3 },
           ]}
         />
+
+        <AutomationConflictsBanner conflicts={conflicts} />
 
         <div className="grid auto-rows-fr gap-3 sm:grid-cols-2">
           <TabIntroCard
             icon={GitBranch}
             title="Conversation flows"
-            description="Multi-step journeys with buttons, conditions, delays, and handoff to your team."
+            description="Step-by-step chats with buttons, waits, and handoff to your team."
             accent="from-violet-500/10 via-white to-indigo-500/5 border-violet-200/60"
             iconBg="bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-[0_4px_14px_rgba(99,102,241,0.3)]"
             cta={activeTab === 'flows' ? 'Currently viewing' : 'Switch to flows'}
@@ -418,7 +502,7 @@ export default function AutomationsPage() {
           <TabIntroCard
             icon={Zap}
             title="Quick replies"
-            description="Single-message automations for keywords, welcome texts, and away notices."
+            description="One-message replies for keywords, welcomes, and away notices."
             accent="from-emerald-500/10 via-white to-teal-500/5 border-emerald-200/60"
             iconBg="bg-gradient-to-br from-whatsapp-500 to-emerald-600 text-white shadow-[0_4px_14px_rgba(37,211,102,0.3)]"
             cta={activeTab === 'quick' ? 'Currently viewing' : 'Switch to quick replies'}
@@ -426,7 +510,9 @@ export default function AutomationsPage() {
           />
         </div>
 
-        {activeTab === 'flows' ? (
+        {activeTab === 'analytics' ? (
+          <AutomationAnalyticsPanel analytics={analytics} loading={analyticsLoading} />
+        ) : activeTab === 'flows' ? (
           <FlowsTab
             templatesOpen={templatesOpen}
             onTemplatesOpenChange={setTemplatesOpen}
@@ -786,21 +872,112 @@ export default function AutomationsPage() {
               />
             )}
 
-            <AppTextarea
-              id="reply-message"
-              label="Reply message"
-              placeholder="Thanks for reaching out! Our team will respond shortly."
-              value={form.message}
-              onChange={(e) => setForm({ ...form, message: e.target.value })}
-              rows={4}
-              required
-            />
+            {form.triggerType === 'LEAD_CAPTURE' && (
+              <>
+                <AppInput
+                  id="lead-keyword"
+                  label="Keyword (optional)"
+                  hint="Leave empty to match any message"
+                  placeholder="demo"
+                  value={form.keyword}
+                  onChange={(e) => setForm({ ...form, keyword: e.target.value })}
+                />
+                <AppInput
+                  id="lead-tag"
+                  label="Tag to apply"
+                  value={form.tag}
+                  onChange={(e) => setForm({ ...form, tag: e.target.value })}
+                />
+                <label className="flex items-center gap-2 text-[12px] font-medium text-neutral-700">
+                  <input
+                    type="checkbox"
+                    checked={form.handoff}
+                    onChange={(e) => setForm({ ...form, handoff: e.target.checked })}
+                  />
+                  Hand off to human agent after reply
+                </label>
+              </>
+            )}
+
+            {form.triggerType === 'BUSINESS_HOURS' ? (
+              <>
+                <AppTextarea
+                  id="during-hours-message"
+                  label="During-hours message"
+                  placeholder="Hi! Our team is available now. How can we help?"
+                  value={form.duringHoursMessage}
+                  onChange={(e) => setForm({ ...form, duringHoursMessage: e.target.value, message: e.target.value })}
+                  rows={3}
+                  required
+                />
+                <AppTextarea
+                  id="away-message"
+                  label="After-hours message"
+                  placeholder="Thanks for reaching out! We are currently closed."
+                  value={form.awayMessage}
+                  onChange={(e) => setForm({ ...form, awayMessage: e.target.value })}
+                  rows={3}
+                  required
+                />
+                <p className="text-[11px] font-medium text-neutral-500">
+                  Business hours are configured in{' '}
+                  <Link to="/settings" className="font-bold text-violet-700 underline">
+                    Settings
+                  </Link>
+                  .
+                </p>
+              </>
+            ) : (
+              <AppTextarea
+                id="reply-message"
+                label="Reply message"
+                placeholder="Thanks for reaching out! Our team will respond shortly."
+                value={form.message}
+                onChange={(e) => setForm({ ...form, message: e.target.value })}
+                rows={4}
+                required
+              />
+            )}
+
+            <div className="space-y-2">
+              <p className="text-[12px] font-bold text-neutral-700">Quick reply buttons (optional, max 3)</p>
+              {form.buttons.map((btn, idx) => (
+                <div key={btn.id} className="flex items-end gap-2">
+                  <div className="flex-1">
+                    <AppInput
+                      label={`Button ${idx + 1}`}
+                      value={btn.title}
+                      onChange={(e) => {
+                        const buttons = [...form.buttons];
+                        buttons[idx] = { ...buttons[idx], title: e.target.value.slice(0, 20) };
+                        setForm({ ...form, buttons });
+                      }}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, buttons: form.buttons.filter((_, i) => i !== idx) })}
+                    className="mb-1 rounded-lg p-2 text-red-500 hover:bg-red-50"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+              {form.buttons.length < 3 && (
+                <AppButton variant="secondary" size="sm" icon={<Plus size={14} />} onClick={addQuickReplyButton}>
+                  Add button
+                </AppButton>
+              )}
+            </div>
           </section>
 
-          {form.message.trim() && (
+          {(form.message.trim() || form.duringHoursMessage.trim()) && (
             <section className="space-y-2 rounded-2xl border border-neutral-200/70 bg-neutral-50/50 p-4">
               <p className="text-[13px] font-extrabold text-neutral-900">WhatsApp preview</p>
-              <WhatsAppMessagePreview content={form.message.trim()} direction="outbound" />
+              <WhatsAppMessagePreview
+                content={(form.triggerType === 'BUSINESS_HOURS' ? form.duringHoursMessage : form.message).trim()}
+                direction="outbound"
+              />
             </section>
           )}
         </form>

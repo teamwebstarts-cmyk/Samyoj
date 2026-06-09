@@ -64,6 +64,7 @@ export default function FlowBuilderPage() {
   const [regexMatch, setRegexMatch] = useState(false);
   const [contactTag, setContactTag] = useState('');
   const [segmentTags, setSegmentTags] = useState('');
+  const [campaignId, setCampaignId] = useState('');
   const [startNodeId, setStartNodeId] = useState('');
   const [flowStatus, setFlowStatus] = useState<FlowStatus>('PUBLISHED');
   const [priority, setPriority] = useState(50);
@@ -76,8 +77,9 @@ export default function FlowBuilderPage() {
     if (triggerType === 'KEYWORD') return { keyword, exactMatch, regex: regexMatch };
     if (triggerType === 'CONTACT_TAG') return { tag: contactTag };
     if (triggerType === 'SEGMENT') return { tags: segmentTags.split(',').map((t) => t.trim()).filter(Boolean) };
+    if (triggerType === 'CAMPAIGN_REPLY') return { ...(campaignId.trim() ? { campaignId: campaignId.trim() } : {}) };
     return {};
-  }, [triggerType, keyword, exactMatch, regexMatch, contactTag, segmentTags]);
+  }, [triggerType, keyword, exactMatch, regexMatch, contactTag, segmentTags, campaignId]);
 
   const selectedIndex = selectedNodeId ? nodes.findIndex((n) => n.id === selectedNodeId) : -1;
   const selectedNode = selectedIndex >= 0 ? nodes[selectedIndex] : null;
@@ -97,6 +99,7 @@ export default function FlowBuilderPage() {
         setRegexMatch(Boolean(flow.triggerConfig?.regex));
         setContactTag((flow.triggerConfig?.tag as string) || '');
         setSegmentTags(((flow.triggerConfig?.tags as string[]) || []).join(', '));
+        setCampaignId((flow.triggerConfig?.campaignId as string) || '');
         setStartNodeId(flow.startNodeId || '');
         setFlowStatus(flow.status || 'PUBLISHED');
         setPriority(flow.priority ?? 50);
@@ -291,7 +294,7 @@ export default function FlowBuilderPage() {
             <input type="checkbox" checked={exactMatch} onChange={(e) => setExactMatch(e.target.checked)} /> Exact match
           </label>
           <label className="flex items-center gap-2 text-[12px] font-medium text-neutral-700">
-            <input type="checkbox" checked={regexMatch} onChange={(e) => setRegexMatch(e.target.checked)} /> Regex match
+            <input type="checkbox" checked={regexMatch} onChange={(e) => setRegexMatch(e.target.checked)} /> Pattern match
           </label>
         </>
       )}
@@ -309,6 +312,28 @@ export default function FlowBuilderPage() {
           <Clock className="h-4 w-4" />
           Configure business hours in Settings →
         </Link>
+      )}
+
+      {triggerType === 'MISSED_CALL' && (
+        <div className="rounded-xl border border-rose-100 bg-rose-50 px-3 py-2.5 text-[12px] font-medium leading-relaxed text-rose-800">
+          Runs automatically when a WhatsApp voice call is missed. Requires voice calls enabled in Settings → Calling.
+        </div>
+      )}
+
+      {triggerType === 'CAMPAIGN_REPLY' && (
+        <AppInput
+          label="Campaign ID (optional)"
+          value={campaignId}
+          onChange={(e) => setCampaignId(e.target.value)}
+          placeholder="Leave empty for any campaign reply"
+          hint="Only trigger when replying after a campaign message"
+        />
+      )}
+
+      {triggerType === 'CALL_COMPLETED' && (
+        <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2.5 text-[12px] font-medium leading-relaxed text-emerald-800">
+          Runs automatically after a WhatsApp voice call completes successfully.
+        </div>
       )}
 
       {nodes.length > 0 && (

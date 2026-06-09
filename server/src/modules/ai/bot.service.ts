@@ -23,10 +23,20 @@ export async function listBots(organizationId: string) {
 }
 
 export async function getBot(organizationId: string, botId: string) {
-  return prisma.aiBot.findFirst({
+  const bot = await prisma.aiBot.findFirst({
     where: { id: botId, organizationId },
     include: { knowledgeItems: { orderBy: { createdAt: 'asc' } } },
   });
+  if (!bot) return null;
+
+  const { knowledgeItems, ...rest } = bot;
+  return {
+    ...rest,
+    knowledgeItems: knowledgeItems.map(({ embedding, ...item }) => ({
+      ...item,
+      hasEmbedding: Array.isArray(embedding) && (embedding as number[]).length > 0,
+    })),
+  };
 }
 
 export async function ensureDefaultBot(organizationId: string): Promise<AiBot> {

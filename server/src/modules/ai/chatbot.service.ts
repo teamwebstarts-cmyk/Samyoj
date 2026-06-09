@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 import type { AiBot, Contact } from '@prisma/client';
 import { emitToOrg } from '../../realtime';
 import { createChatCompletion } from './azure-openai.service';
-import { formatKnowledgeContext, searchKnowledgeBase } from './knowledge.service';
+import { formatKnowledgeContext, searchKnowledgeBase, type KnowledgeMatch } from './knowledge.service';
 import { checkRateLimit } from './rate-limit.service';
 import { isAiConfiguredForOrg } from './org-ai.service';
 import {
@@ -47,6 +47,7 @@ export interface GenerateBotReplyResult {
   skipReason?: string;
   totalTokens?: number;
   assignedAgent?: { id: string; name: string } | null;
+  knowledgeMatches?: KnowledgeMatch[];
 }
 
 function detectHandoff(message: string, bot: AiBot): boolean {
@@ -59,7 +60,7 @@ async function buildConversationMessages(
   bot: AiBot,
   contact: Contact | null | undefined,
   inboundMessage: string,
-  organizationId: string,
+  knowledge: KnowledgeMatch[],
   channel: 'text' | 'voice' = 'text',
   testMode = false
 ): Promise<import('./azure-openai.service').ChatMessage[]> {
@@ -71,7 +72,6 @@ async function buildConversationMessages(
         take: MAX_CONTEXT,
       });
 
-  const knowledge = await searchKnowledgeBase(bot.id, inboundMessage, 5, organizationId);
   const knowledgeBlock = formatKnowledgeContext(knowledge);
 
   const systemParts = [
@@ -190,6 +190,13 @@ export async function generateBotReply(
     log.warn('Prompt injection attempt detected', { conversationId: input.conversationId, botId: bot.id });
   }
 
+  const knowledgeMatches = await searchKnowledgeBase(
+    bot.id,
+    sanitizedMessage,
+    5,
+    input.organizationId
+  );
+
   if (detectHandoff(sanitizedMessage, bot)) {
     return {
       reply: bot.handoffMessage,
@@ -197,6 +204,7 @@ export async function generateBotReply(
       handoffReason: 'USER_REQUEST',
       botId: bot.id,
       botName: bot.name,
+      ...(input.testMode ? { knowledgeMatches } : {}),
     };
   }
 
@@ -206,7 +214,7 @@ export async function generateBotReply(
       bot,
       conversation?.contact,
       sanitizedMessage,
-      input.organizationId,
+      knowledgeMatches,
       input.channel || 'text',
       input.testMode
     );
@@ -229,6 +237,7 @@ export async function generateBotReply(
         botId: bot.id,
         botName: bot.name,
         totalTokens: completion.usage?.totalTokens,
+        ...(input.testMode ? { knowledgeMatches } : {}),
       };
     }
 
@@ -240,6 +249,7 @@ export async function generateBotReply(
         botId: bot.id,
         botName: bot.name,
         totalTokens: completion.usage?.totalTokens,
+        ...(input.testMode ? { knowledgeMatches } : {}),
       };
     }
 
@@ -256,6 +266,7 @@ export async function generateBotReply(
       botId: bot.id,
       botName: bot.name,
       totalTokens: completion.usage?.totalTokens,
+      ...(input.testMode ? { knowledgeMatches } : {}),
     };
   } catch (err) {
     log.error('Bot reply failed', {

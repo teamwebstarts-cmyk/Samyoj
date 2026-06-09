@@ -7,6 +7,8 @@ import {
   Clock,
   Link2,
   LogOut,
+  MessageSquare,
+  Plug,
   Moon,
   Palette,
   PhoneCall,
@@ -20,6 +22,8 @@ import {
 import CallingSettingsPanel from '../components/calls/CallingSettingsPanel';
 import SettingsInsightCards from '../components/settings/SettingsInsightCards';
 import SettingsPanel from '../components/settings/SettingsPanel';
+import CannedRepliesPanel from '../components/settings/CannedRepliesPanel';
+import IntegrationsPanel from '../components/settings/IntegrationsPanel';
 import SettingsReadinessBanner from '../components/settings/SettingsReadinessBanner';
 import SettingsSidebar from '../components/settings/SettingsSidebar';
 import SettingsStat from '../components/settings/SettingsStat';
@@ -33,13 +37,13 @@ import PageHero from '../components/ui/PageHero';
 import PageShell from '../components/ui/PageShell';
 import ThemeToggle from '../components/ui/ThemeToggle';
 import { useTheme } from '../contexts/ThemeContext';
-import { settingsApi, whatsappApi } from '../services/api';
+import { aiBotApi, settingsApi, teamApi, whatsappApi } from '../services/api';
 import type { AiUsageSummary, BusinessHours, OrgAiSettings } from '../types';
 import { toastError, toastSuccess } from '../utils/toast';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-type SettingsTab = 'general' | 'whatsapp' | 'automation' | 'ai' | 'calling' | 'campaigns' | 'setup';
+type SettingsTab = 'general' | 'whatsapp' | 'automation' | 'ai' | 'calling' | 'campaigns' | 'inbox' | 'integrations' | 'setup';
 
 interface WhatsappNumber {
   id: string;
@@ -88,6 +92,11 @@ export default function SettingsPage() {
     batchDelayMs: 1000,
   });
   const [savingCampaigns, setSavingCampaigns] = useState(false);
+  const [setupMeta, setSetupMeta] = useState({
+    hasBusinessHours: false,
+    hasAiBot: false,
+    teamCount: 1,
+  });
 
   const load = () => {
     Promise.all([
@@ -96,14 +105,22 @@ export default function SettingsPage() {
       whatsappApi.webhookStatus(),
       settingsApi.get(),
       settingsApi.aiUsage(),
+      aiBotApi.list(),
+      teamApi.list(),
     ])
-      .then(([numbersRes, urlRes, webhookRes, settingsRes, usageRes]) => {
+      .then(([numbersRes, urlRes, webhookRes, settingsRes, usageRes, botsRes, teamRes]) => {
         setNumbers(numbersRes.data.data);
         setConnectUrl(urlRes.data.data.url);
         setWebhookStatus(webhookRes.data.data);
-        if (settingsRes.data.data.businessHours) {
-          setBusinessHours(settingsRes.data.data.businessHours);
+        const hours = settingsRes.data.data.businessHours;
+        if (hours) {
+          setBusinessHours(hours);
         }
+        setSetupMeta({
+          hasBusinessHours: Boolean(hours?.days?.length),
+          hasAiBot: (botsRes.data.data.bots?.length ?? 0) > 0,
+          teamCount: teamRes.data.data.members?.length ?? 1,
+        });
         if (settingsRes.data.data.ai) {
           setAiSettings(settingsRes.data.data.ai);
         }
@@ -125,10 +142,15 @@ export default function SettingsPage() {
 
   const isReady = numbers.length > 0 && Boolean(webhookStatus?.subscribed);
   const setupProgress = useMemo(() => {
-    const autoSteps = [numbers.length > 0, Boolean(webhookStatus?.subscribed)];
-    const completed = autoSteps.filter(Boolean).length;
-    return Math.round((completed / 6) * 100);
-  }, [numbers, webhookStatus]);
+    const steps = [
+      numbers.length > 0,
+      Boolean(webhookStatus?.subscribed),
+      setupMeta.hasBusinessHours,
+      setupMeta.hasAiBot,
+      setupMeta.teamCount > 1,
+    ];
+    return Math.round((steps.filter(Boolean).length / steps.length) * 100);
+  }, [numbers, webhookStatus, setupMeta]);
 
   const tabs = useMemo(
     () => [
@@ -141,38 +163,50 @@ export default function SettingsPage() {
       {
         id: 'whatsapp' as const,
         label: 'WhatsApp',
-        description: 'Connection & webhooks',
+        description: 'Number & messages',
         icon: Smartphone,
         badge: !isReady ? 'Setup' : undefined,
       },
       {
         id: 'automation' as const,
         label: 'Business hours',
-        description: 'Away messages & automations',
+        description: 'When your team is available',
         icon: Clock,
       },
       {
         id: 'ai' as const,
         label: 'AI',
-        description: 'Azure OpenAI & limits',
+        description: 'Smart reply settings',
         icon: Bot,
       },
       {
         id: 'calling' as const,
         label: 'Calling',
-        description: 'Voice routing & AI answer',
+        description: 'Voice calls & routing',
         icon: PhoneCall,
       },
       {
         id: 'campaigns' as const,
         label: 'Campaigns',
-        description: 'Send limits & throttling',
+        description: 'Send limits & speed',
         icon: Send,
       },
       {
+        id: 'inbox' as const,
+        label: 'Inbox tools',
+        description: 'Canned replies & labels',
+        icon: MessageSquare,
+      },
+      {
+        id: 'integrations' as const,
+        label: 'Integrations',
+        description: 'API keys, webhooks, GDPR',
+        icon: Plug,
+      },
+      {
         id: 'setup' as const,
-        label: 'Setup guide',
-        description: 'Meta configuration steps',
+        label: 'Getting started',
+        description: 'Step-by-step setup',
         icon: ShieldCheck,
       },
     ],
@@ -271,14 +305,14 @@ export default function SettingsPage() {
       const url = data.data.callbackUrl;
       toastSuccess(
         url
-          ? `Webhook configured: ${url}`
-          : 'WhatsApp Business Account linked to this app. You can send campaigns now.',
+          ? 'Incoming messages are now enabled.'
+          : 'WhatsApp is linked. You can send campaigns now.',
       );
       load();
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
-          ?.error?.message || 'Webhook setup failed';
+          ?.error?.message || 'Could not enable incoming messages';
       toastError(msg);
     } finally {
       setSettingUpWebhook(false);
@@ -286,24 +320,11 @@ export default function SettingsPage() {
   };
 
   const setupSteps = [
-    { text: 'Add WhatsApp product in Meta Developer Console', done: false },
-    {
-      text: 'Add redirect URI',
-      code: 'http://localhost:5173/settings/whatsapp/callback',
-      done: false,
-    },
-    { text: 'Set META_APP_ID and META_APP_SECRET in server .env', done: false },
-    { text: 'Run HTTPS tunnel', code: 'cloudflared tunnel --url http://localhost:5000', done: false },
-    {
-      text: 'Set META_WEBHOOK_URL to tunnel URL +',
-      code: '/api/whatsapp/webhook',
-      done: Boolean(webhookStatus?.webhookUrl),
-    },
-    {
-      text: 'Register webhook with Meta',
-      done: Boolean(webhookStatus?.subscribed),
-    },
-    { text: 'Connect WhatsApp Business number', done: numbers.length > 0 },
+    { text: 'Connect your WhatsApp business number', done: numbers.length > 0 },
+    { text: 'Turn on incoming messages', done: Boolean(webhookStatus?.subscribed) },
+    { text: 'Set your business hours', done: setupMeta.hasBusinessHours },
+    { text: 'Create an AI bot for auto-replies', done: setupMeta.hasAiBot },
+    { text: 'Invite your team members', done: setupMeta.teamCount > 1 },
   ];
 
   return (
@@ -328,16 +349,16 @@ export default function SettingsPage() {
 
       <div className="space-y-5 animate-fade-up-delay sm:space-y-6">
         <PageHero
-          badge="Workspace"
+          badge="Settings"
           badgeIcon={Settings2}
-          title="Configure your WhatsApp workspace"
-          description="Appearance, integrations, AI, business hours, and campaign limits — all in one polished control center."
+          title="Settings"
+          description="Connect WhatsApp, set business hours, AI replies, and campaign limits."
           accent="emerald"
           stats={[
             { label: 'Numbers', value: numbers.length, tone: 'text-whatsapp-700 dark:text-whatsapp-400' },
             {
-              label: 'Webhook',
-              value: webhookStatus?.subscribed ? 'Live' : 'Off',
+              label: 'Messages',
+              value: webhookStatus?.subscribed ? 'On' : 'Off',
               tone: webhookStatus?.subscribed
                 ? 'text-whatsapp-700 dark:text-whatsapp-400'
                 : 'text-amber-700 dark:text-amber-400',
@@ -377,7 +398,7 @@ export default function SettingsPage() {
             {activeTab === 'general' && (
               <SettingsPanel
                 title="Appearance"
-                description="Choose how the app looks on your device. Changes apply instantly across the whole workspace."
+                description="Choose light or dark mode. Changes apply right away."
                 icon={Moon}
                 accent="violet"
               >
@@ -467,17 +488,17 @@ export default function SettingsPage() {
                     inactiveLabel="Not connected"
                   />
                   <SettingsStatusPill
-                    label="Incoming webhook"
+                    label="Incoming messages"
                     active={Boolean(webhookStatus?.subscribed)}
                     icon={Webhook}
-                    activeLabel="Subscribed & live"
-                    inactiveLabel="Not subscribed"
+                    activeLabel="Working"
+                    inactiveLabel="Not set up"
                   />
                 </div>
 
                 <SettingsPanel
-                  title="WhatsApp Business API"
-                  description="Connect your business number via Meta OAuth to send and receive messages."
+                  title="WhatsApp connection"
+                  description="Connect your business number to send and receive messages."
                   icon={Smartphone}
                   accent="emerald"
                 >
@@ -550,7 +571,7 @@ export default function SettingsPage() {
 
                 <SettingsPanel
                   title="Incoming messages"
-                  description="Webhook configuration for real-time inbox delivery."
+                  description="Make sure customer messages arrive in your inbox."
                   icon={Webhook}
                   accent="sky"
                   footer={
@@ -562,7 +583,7 @@ export default function SettingsPage() {
                         disabled={settingUpWebhook}
                         loading={settingUpWebhook}
                       >
-                        {webhookStatus.webhookUrl ? 'Register webhook with Meta' : 'Link WhatsApp to this app'}
+                        {webhookStatus.webhookUrl ? 'Refresh connection' : 'Enable incoming messages'}
                       </AppButton>
                     ) : undefined
                   }
@@ -581,10 +602,10 @@ export default function SettingsPage() {
                             <CheckCircle size={18} className="mt-0.5 shrink-0 text-whatsapp-600" />
                             <div>
                               <p className="font-extrabold text-emerald-900 dark:text-emerald-200">
-                                Webhook subscribed
+                                Incoming messages enabled
                               </p>
                               <p className="mt-0.5 font-medium text-emerald-800/90 dark:text-emerald-300/90">
-                                Incoming messages are enabled for your inbox.
+                                Customer messages will show up in your inbox.
                               </p>
                             </div>
                           </>
@@ -593,10 +614,10 @@ export default function SettingsPage() {
                             <AlertCircle size={18} className="mt-0.5 shrink-0 text-amber-600" />
                             <div>
                               <p className="font-extrabold text-amber-900 dark:text-amber-200">
-                                Webhook not subscribed
+                                Incoming messages not enabled
                               </p>
                               <p className="mt-0.5 font-medium text-amber-800/90 dark:text-amber-300/90">
-                                Customer messages won&apos;t arrive until the webhook is registered.
+                                Customer messages won&apos;t arrive until you enable this.
                               </p>
                             </div>
                           </>
@@ -606,16 +627,15 @@ export default function SettingsPage() {
                       {webhookStatus.webhookUrl ? (
                         <div className="rounded-2xl border border-theme-border bg-theme-subtle/50 p-4">
                           <p className="text-[11px] font-bold uppercase tracking-wide text-theme-muted">
-                            Webhook URL
+                            Connection status
                           </p>
-                          <code className="mt-2 block break-all rounded-xl bg-theme-surface px-3 py-2 text-[12px] text-theme-fg ring-1 ring-theme-border">
-                            {webhookStatus.webhookUrl}
-                          </code>
+                          <p className="mt-2 text-[12px] font-medium text-theme-fg">
+                            Connected and receiving messages.
+                          </p>
                         </div>
                       ) : (
                         <AppAlert variant="info">
-                          Set <code className="rounded bg-theme-surface px-1">META_WEBHOOK_URL</code> in
-                          server .env
+                          Tap the button below to enable incoming messages.
                         </AppAlert>
                       )}
                     </div>
@@ -633,7 +653,7 @@ export default function SettingsPage() {
             {activeTab === 'automation' && (
               <SettingsPanel
                 title="Business hours"
-                description="Used by away messages and quick reply automations to know when your team is available."
+                description="Used for away messages and auto-replies when your team is offline."
                 icon={Clock}
                 accent="amber"
                 footer={
@@ -657,7 +677,7 @@ export default function SettingsPage() {
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <AppInput
-                    label="Start hour (0–23)"
+                    label="Open at (hour)"
                     type="number"
                     min={0}
                     max={23}
@@ -667,7 +687,7 @@ export default function SettingsPage() {
                     }
                   />
                   <AppInput
-                    label="End hour (1–24)"
+                    label="Close at (hour)"
                     type="number"
                     min={1}
                     max={24}
@@ -705,8 +725,8 @@ export default function SettingsPage() {
 
             {activeTab === 'ai' && (
               <SettingsPanel
-                title="AI configuration"
-                description="Per-organization Azure OpenAI keys, deployments, and monthly token limits."
+                title="AI settings"
+                description="Control how smart replies work for your business."
                 icon={Bot}
                 accent="indigo"
                 footer={
@@ -726,10 +746,10 @@ export default function SettingsPage() {
                   />
                   <div>
                     <p className="text-[13px] font-bold text-theme-fg">
-                      Use custom Azure OpenAI for this org
+                      Use your own AI service
                     </p>
                     <p className="text-[11px] text-theme-muted">
-                      Leave off to use server default from .env
+                      Leave off to use the default service
                     </p>
                   </div>
                 </label>
@@ -737,32 +757,32 @@ export default function SettingsPage() {
                 {aiSettings.useCustomConfig && (
                   <div className="mb-5 grid gap-4 sm:grid-cols-2">
                     <AppInput
-                      label="Endpoint"
-                      placeholder="https://your-resource.openai.azure.com"
+                      label="Service URL"
+                      placeholder="https://your-ai-service.com"
                       value={aiSettings.endpoint || ''}
                       onChange={(e) => setAiSettings((p) => ({ ...p, endpoint: e.target.value }))}
                     />
                     <AppInput
                       label="API key"
                       type="password"
-                      placeholder={aiSettings.hasApiKey ? '•••••••• (saved)' : 'Azure API key'}
+                      placeholder={aiSettings.hasApiKey ? '•••••••• (saved)' : 'Your API key'}
                       value={aiApiKey}
                       onChange={(e) => setAiApiKey(e.target.value)}
                     />
                     <AppInput
-                      label="Chat deployment"
+                      label="Chat model"
                       value={aiSettings.deployment || ''}
                       onChange={(e) => setAiSettings((p) => ({ ...p, deployment: e.target.value }))}
                     />
                     <AppInput
-                      label="Embedding deployment"
+                      label="Search model"
                       value={aiSettings.embeddingDeployment || ''}
                       onChange={(e) =>
                         setAiSettings((p) => ({ ...p, embeddingDeployment: e.target.value }))
                       }
                     />
                     <AppInput
-                      label="Monthly token limit (0 = unlimited)"
+                      label="Monthly limit (0 = no limit)"
                       type="number"
                       min={0}
                       value={String(aiSettings.monthlyTokenLimit ?? 0)}
@@ -779,7 +799,7 @@ export default function SettingsPage() {
                 {aiUsage && (
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                     <SettingsStat
-                      label="Month tokens"
+                      label="Used this month"
                       value={
                         aiUsage.monthlyTokenLimit
                           ? `${aiUsage.monthTokens} / ${aiUsage.monthlyTokenLimit}`
@@ -788,17 +808,17 @@ export default function SettingsPage() {
                       tone="text-indigo-700 dark:text-indigo-400"
                     />
                     <SettingsStat
-                      label="30d requests"
+                      label="Replies (30 days)"
                       value={aiUsage.totalRequests}
                       tone="text-violet-700 dark:text-violet-400"
                     />
                     <SettingsStat
-                      label="Chat tokens"
+                      label="Chat usage"
                       value={aiUsage.byAction.chat || 0}
                       tone="text-sky-700 dark:text-sky-400"
                     />
                     <SettingsStat
-                      label="Embeddings"
+                      label="Search usage"
                       value={aiUsage.byAction.embedding || 0}
                       tone="text-emerald-700 dark:text-emerald-400"
                     />
@@ -812,7 +832,7 @@ export default function SettingsPage() {
             {activeTab === 'campaigns' && (
               <SettingsPanel
                 title="Campaign limits"
-                description="Daily send quota and batch throttling to stay within Meta rate limits."
+                description="Control how many messages you send per day and how fast."
                 icon={Send}
                 accent="rose"
                 footer={
@@ -833,8 +853,8 @@ export default function SettingsPage() {
                     tone="text-violet-700 dark:text-violet-400"
                   />
                   <SettingsStat
-                    label="Delay (ms)"
-                    value={campaignSettings.batchDelayMs}
+                    label="Wait between batches"
+                    value={`${Math.round(campaignSettings.batchDelayMs / 1000)}s`}
                     tone="text-sky-700 dark:text-sky-400"
                   />
                 </div>
@@ -868,30 +888,52 @@ export default function SettingsPage() {
                   />
                   <AppInput
                     id="batch-delay"
-                    label="Batch delay (ms)"
+                    label="Wait between batches (seconds)"
                     type="number"
                     min={0}
-                    value={String(campaignSettings.batchDelayMs)}
+                    value={String(Math.round(campaignSettings.batchDelayMs / 1000))}
                     onChange={(e) =>
                       setCampaignSettings((prev) => ({
                         ...prev,
-                        batchDelayMs: parseInt(e.target.value, 10) || 0,
+                        batchDelayMs: (parseInt(e.target.value, 10) || 0) * 1000,
                       }))
                     }
                   />
                 </div>
 
                 <p className="mt-4 text-[12px] font-medium leading-relaxed text-theme-muted">
-                  Messages are sent in batches with a delay between each batch to avoid rate limiting.
-                  Lower batch sizes and higher delays are safer for large broadcasts.
+                  Large campaigns are sent in small groups with a short pause between each group.
+                  Smaller groups and longer pauses are safer for big sends.
                 </p>
+              </SettingsPanel>
+            )}
+
+            {activeTab === 'inbox' && (
+              <SettingsPanel
+                title="Inbox tools"
+                description="Saved replies your team can use in conversations."
+                icon={MessageSquare}
+                accent="violet"
+              >
+                <CannedRepliesPanel />
+              </SettingsPanel>
+            )}
+
+            {activeTab === 'integrations' && (
+              <SettingsPanel
+                title="Integrations & privacy"
+                description="API keys, outbound webhooks, and GDPR export."
+                icon={Plug}
+                accent="indigo"
+              >
+                <IntegrationsPanel />
               </SettingsPanel>
             )}
 
             {activeTab === 'setup' && (
               <SettingsPanel
-                title="Setup checklist"
-                description="Complete these steps for full WhatsApp Cloud API functionality."
+                title="Getting started"
+                description="Follow these steps to set up your WhatsApp workspace."
                 icon={ShieldCheck}
                 accent="violet"
               >
@@ -931,21 +973,14 @@ export default function SettingsPage() {
                           index + 1
                         )}
                       </span>
-                      <span className="min-w-0 pt-0.5 leading-relaxed">
-                        {step.text}
-                        {step.code && (
-                          <code className="mt-1.5 block break-all rounded-xl bg-theme-surface px-2.5 py-1.5 text-[11px] font-mono text-theme-fg ring-1 ring-theme-border">
-                            {step.code}
-                          </code>
-                        )}
-                      </span>
+                      <span className="min-w-0 pt-0.5 leading-relaxed">{step.text}</span>
                     </li>
                   ))}
                 </ol>
 
                 <div className="mt-5 flex items-center gap-2 rounded-xl bg-emerald-50/80 px-3 py-2.5 text-[12px] font-semibold text-whatsapp-800 ring-1 ring-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-300 dark:ring-emerald-900/40">
                   <Link2 className="h-3.5 w-3.5 shrink-0" />
-                  Need help? Follow Meta&apos;s WhatsApp Cloud API setup guide in the developer docs.
+                  Need help? Go to WhatsApp → Settings or contact your administrator.
                 </div>
               </SettingsPanel>
             )}

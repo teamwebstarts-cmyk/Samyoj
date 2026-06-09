@@ -65,8 +65,8 @@ export default function SettingsSidebar({
                 <Settings2 className="h-3.5 w-3.5" strokeWidth={2.25} />
               </div>
               <div>
-                <p className="text-[12px] font-extrabold text-theme-fg">Workspace settings</p>
-                <p className="text-[10px] font-medium text-theme-muted">6 configuration areas</p>
+                <p className="text-[12px] font-extrabold text-theme-fg">Settings</p>
+                <p className="text-[10px] font-medium text-theme-muted">6 areas</p>
               </div>
             </div>
           </div>
@@ -124,7 +124,7 @@ export default function SettingsSidebar({
                 }`}
               />
               <p className="text-[11px] font-semibold text-theme-secondary">
-                {isReady ? 'All systems operational' : 'Action required'}
+                {isReady ? 'Everything working' : 'Needs attention'}
               </p>
             </div>
           </div>

@@ -76,6 +76,18 @@ export async function simulateFlow(input: SimulateInput): Promise<{
       triggered = Boolean(config.tags?.some((t) => input.contactTags?.includes(t)));
       reason = triggered ? 'Contact in segment' : 'Contact not in segment';
       break;
+    case 'MISSED_CALL':
+      triggered = true;
+      reason = 'Triggered by missed call event';
+      break;
+    case 'CAMPAIGN_REPLY':
+      triggered = Boolean(input.message);
+      reason = triggered ? 'Reply after campaign message' : 'No campaign context';
+      break;
+    case 'CALL_COMPLETED':
+      triggered = true;
+      reason = 'Triggered by completed call event';
+      break;
     default:
       reason = 'Unknown trigger';
   }

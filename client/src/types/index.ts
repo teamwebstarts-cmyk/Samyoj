@@ -210,6 +210,14 @@ export interface MessageMetadata {
   isButtonReply?: boolean;
   templateName?: string;
   templateLanguage?: string;
+  source?: 'flow' | 'automation';
+  triggerType?: string;
+  flowId?: string;
+  flowName?: string;
+  automationId?: string;
+  automationName?: string;
+  ctaType?: 'url' | 'call';
+  listMenu?: boolean;
 }
 
 export interface SendMediaPayload {
@@ -226,11 +234,24 @@ export interface TemplateParams {
 
 export interface SendMessagePayload {
   content?: string;
-  type?: 'TEXT' | 'TEMPLATE' | 'IMAGE' | 'VIDEO' | 'DOCUMENT' | 'AUDIO';
+  type?: 'TEXT' | 'TEMPLATE' | 'IMAGE' | 'VIDEO' | 'DOCUMENT' | 'AUDIO' | 'INTERACTIVE';
   templateName?: string;
   templateLanguage?: string;
   templateParams?: TemplateParams;
   media?: SendMediaPayload;
+  interactive?: {
+    mode: 'reply' | 'cta_url' | 'cta_call' | 'list';
+    body: string;
+    buttons?: Array<{ id: string; title: string }>;
+    ctaLabel?: string;
+    ctaUrl?: string;
+    ctaPhone?: string;
+    listButtonLabel?: string;
+    listSections?: Array<{
+      title?: string;
+      rows: Array<{ id: string; title: string; description?: string }>;
+    }>;
+  };
 }
 
 export interface Message {
@@ -252,6 +273,31 @@ export interface ActiveFlowInfo {
   waitingFor?: string | null;
 }
 
+export interface ConversationLabel {
+  label: { id: string; name: string; color: string };
+}
+
+export interface InternalNote {
+  id: string;
+  content: string;
+  createdAt: string;
+  user?: { id: string; name: string };
+}
+
+export interface InboxLabel {
+  id: string;
+  name: string;
+  color: string;
+  conversationCount?: number;
+}
+
+export interface CannedReply {
+  id: string;
+  shortcut: string;
+  title: string;
+  content: string;
+}
+
 export interface Conversation {
   id: string;
   status: string;
@@ -265,13 +311,86 @@ export interface Conversation {
   contact: Contact;
   assignedAgent?: { id: string; name: string };
   messages?: Message[];
-  labels?: Array<{ label: { id: string; name: string; color: string } }>;
+  labels?: ConversationLabel[];
+  internalNotes?: InternalNote[];
+}
+
+export interface BillingPlan {
+  id: string;
+  name: string;
+  pricePaise: number;
+  priceLabel: string;
+  seats: number;
+  features: string[];
+}
+
+export interface BillingInfo {
+  plan: string;
+  currentPlan: BillingPlan;
+  plans: BillingPlan[];
+  seatsUsed: number;
+  seatLimit: number;
+  canManageBilling: boolean;
+  razorpayConfigured: boolean;
+  razorpayKeyId: string | null;
+  planExpiresAt?: string | null;
+  subscriptionStatus?: string;
+  recentPayments?: Array<{ planId: string; amountPaise: number; paidAt: string | null }>;
+}
+
+export interface ApiKeyItem {
+  id: string;
+  name: string;
+  keyPrefix: string;
+  lastUsedAt?: string | null;
+  createdAt: string;
+}
+
+export interface WebhookEndpoint {
+  id: string;
+  url: string;
+  events: string[];
+  enabled: boolean;
+  createdAt?: string;
+}
+
+export interface SlaStats {
+  breached: number;
+  pending: number;
+  avgFirstResponseMinutes: number | null;
+}
+
+export interface ReportsData {
+  periodDays: number;
+  messaging: {
+    sent: number;
+    delivered: number;
+    read: number;
+    failed: number;
+    inbound: number;
+    deliveryRate: string;
+    readRate: string;
+  };
+  conversations: { active: number; closed: number };
+  contacts: { total: number };
+  campaigns: { sent: number; delivered: number; read: number; failed: number };
+  calls: { completed: number };
+  ai: { requests: number; totalTokens: number };
+  agentPerformance: Array<{
+    agentId: string;
+    name: string;
+    messagesSent: number;
+    openAssigned: number;
+    closedLastPeriod: number;
+    availability: AgentAvailability;
+  }>;
 }
 
 export interface BotSetupCheck {
   id: string;
   label: string;
   ok: boolean;
+  optional?: boolean;
 }
 
 export interface BotSetupStatus {
@@ -327,6 +446,25 @@ export interface KnowledgeBaseItem {
   content: string;
   sourceType?: 'FAQ' | 'URL' | 'PDF' | 'DOCUMENT';
   sourceUrl?: string | null;
+  hasEmbedding?: boolean;
+}
+
+export interface BotTestResult {
+  reply: string | null;
+  handoff: boolean;
+  handoffReason?: string;
+  botId?: string;
+  botName?: string;
+  skipped?: boolean;
+  skipReason?: string;
+  totalTokens?: number;
+  knowledgeMatches?: Array<{
+    id: string;
+    title: string;
+    content: string;
+    score: number;
+    sourceType?: string;
+  }>;
 }
 
 export interface OrgAiSettings {
@@ -378,8 +516,10 @@ export interface Automation {
 export type FlowNodeType =
   | 'message'
   | 'buttons'
+  | 'list'
   | 'question'
   | 'tag'
+  | 'remove_tag'
   | 'handoff'
   | 'ai'
   | 'assign'
@@ -387,10 +527,18 @@ export type FlowNodeType =
   | 'end'
   | 'template'
   | 'delay'
+  | 'schedule'
   | 'media'
   | 'webhook'
   | 'ab_split'
-  | 'language';
+  | 'language'
+  | 'set_variable'
+  | 'goto_flow'
+  | 'goto_step'
+  | 'request_callback'
+  | 'location'
+  | 'contact_card'
+  | 'wa_flow';
 
 export type FlowTriggerType =
   | 'WELCOME'
@@ -399,7 +547,17 @@ export type FlowTriggerType =
   | 'BUSINESS_HOURS'
   | 'OFF_HOURS'
   | 'CONTACT_TAG'
-  | 'SEGMENT';
+  | 'SEGMENT'
+  | 'MISSED_CALL'
+  | 'CAMPAIGN_REPLY'
+  | 'CALL_COMPLETED';
+
+export interface FlowIntentRoute {
+  keywords: string[];
+  branchKey: string;
+}
+
+export type FlowButtonMode = 'reply' | 'url' | 'call';
 
 export type FlowStatus = 'DRAFT' | 'PUBLISHED';
 
@@ -408,20 +566,42 @@ export interface FlowButton {
   title: string;
 }
 
+export interface FlowListSection {
+  title?: string;
+  rows: Array<{ id: string; title: string; description?: string }>;
+}
+
 export interface FlowNode {
   id: string;
   type: FlowNodeType;
   text?: string;
+  buttonMode?: FlowButtonMode;
+  ctaLabel?: string;
+  ctaUrl?: string;
+  ctaPhone?: string;
   buttons?: FlowButton[];
+  listButtonLabel?: string;
+  listSections?: FlowListSection[];
   field?: 'name' | 'email' | 'phone' | 'custom';
   customField?: string;
   prompt?: string;
   tag?: string;
-  conditionType?: 'business_hours' | 'has_tag' | 'language';
+  conditionType?:
+    | 'business_hours'
+    | 'has_tag'
+    | 'language'
+    | 'variable_equals'
+    | 'variable_contains'
+    | 'webhook_ok';
   conditionTag?: string;
+  conditionVariable?: string;
+  conditionValue?: string;
   languageCode?: string;
   maxRetries?: number;
   retryMessage?: string;
+  acceptMedia?: boolean;
+  intentRoutes?: FlowIntentRoute[];
+  splitRatio?: number;
   next?: string;
   branches?: Record<string, string>;
   templateName?: string;
@@ -430,11 +610,58 @@ export interface FlowNode {
   mediaType?: 'image' | 'document' | 'video' | 'audio';
   mediaCaption?: string;
   delaySeconds?: number;
+  scheduleAt?: string;
   webhookUrl?: string;
   webhookMethod?: 'GET' | 'POST';
   aiBotId?: string;
   assignAgentId?: string;
+  variableName?: string;
+  variableValue?: string;
+  targetFlowId?: string;
+  targetNodeId?: string;
+  callbackTag?: string;
+  webhookVariable?: string;
+  latitude?: number;
+  longitude?: number;
+  locationName?: string;
+  locationAddress?: string;
+  contactName?: string;
+  contactPhone?: string;
+  contactEmail?: string;
+  waFlowId?: string;
+  waFlowToken?: string;
+  waFlowCta?: string;
+  waFlowScreen?: string;
   position?: { x: number; y: number };
+}
+
+export interface AutomationConflict {
+  type: string;
+  severity: 'warning' | 'error';
+  message: string;
+  items: string[];
+}
+
+export interface AutomationAnalytics {
+  days: number;
+  total: number;
+  success: number;
+  failed: number;
+  skipped: number;
+  byTrigger: Record<string, number>;
+  byAction: Record<string, number>;
+  byStatus: Record<string, number>;
+  daily: Array<{ date: string; total: number; success: number; failed: number }>;
+  recent: Array<{
+    id: string;
+    triggerType: string;
+    action: string;
+    status: string;
+    flowId?: string | null;
+    conversationId?: string | null;
+    error?: string | null;
+    createdAt: string;
+  }>;
 }
 
 export interface FlowStats {

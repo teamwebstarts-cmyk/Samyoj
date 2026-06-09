@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  ClipboardList,
   Clock,
   FileText,
   FlaskConical,
@@ -25,6 +26,8 @@ import {
   XCircle,
   Zap,
 } from 'lucide-react';
+import AiBotAnalyticsPanel from '../components/ai-bot/AiBotAnalyticsPanel';
+import AiBotAuditPanel from '../components/ai-bot/AiBotAuditPanel';
 import AiBotHowItWorks from '../components/ai-bot/AiBotHowItWorks';
 import AiBotTemplatePicker from '../components/ai-bot/AiBotTemplatePicker';
 import {
@@ -55,7 +58,14 @@ import { TableTextButton } from '../components/ui/TableActions';
 import { WhatsAppMessagePreview } from '../components/inbox/WhatsAppPreview';
 import { aiBotApi } from '../services/api';
 import { toastError, toastSuccess } from '../utils/toast';
-import type { AiBot, AiBotVersion, BotAnalytics, BotSetupStatus, KnowledgeBaseItem } from '../types';
+import type {
+  AiBot,
+  AiBotVersion,
+  BotAnalytics,
+  BotSetupStatus,
+  BotTestResult,
+  KnowledgeBaseItem,
+} from '../types';
 
 const emptyBotForm = {
   name: '',
@@ -139,15 +149,6 @@ function ToggleCard({
   );
 }
 
-function StatTile({ label, value, tone }: { label: string; value: string | number; tone?: string }) {
-  return (
-    <div className="rounded-xl bg-theme-surface p-3 ring-1 ring-theme-border">
-      <p className="text-[10px] font-bold uppercase tracking-wide text-theme-muted">{label}</p>
-      <p className={`mt-1 text-lg font-extrabold tabular-nums text-theme-fg ${tone ?? ''}`}>{value}</p>
-    </div>
-  );
-}
-
 function SetupBanner({
   setupStatus,
   setupProgress,
@@ -159,7 +160,8 @@ function SetupBanner({
   expanded: boolean;
   onToggle: () => void;
 }) {
-  const passed = setupStatus.checks.filter((c) => c.ok).length;
+  const required = setupStatus.checks.filter((c) => !c.optional);
+  const passedRequired = required.filter((c) => c.ok).length;
 
   return (
     <div className="overflow-hidden rounded-2xl border border-amber-200/60 bg-gradient-to-r from-amber-50/80 to-orange-50/40 dark:border-amber-500/25 dark:from-amber-950/30 dark:to-orange-950/20">
@@ -167,7 +169,7 @@ function SetupBanner({
         <AlertCircle className="h-4 w-4 shrink-0 text-amber-600" />
         <div className="min-w-0 flex-1">
           <p className="text-[13px] font-bold text-neutral-900 dark:text-amber-100">
-            Setup incomplete · {passed}/{setupStatus.checks.length} checks passed
+            Setup incomplete · {passedRequired}/{required.length} required steps done
           </p>
           <div className="mt-2 h-1.5 max-w-xs overflow-hidden rounded-full bg-white/70 ring-1 ring-amber-200/40">
             <div
@@ -188,7 +190,7 @@ function SetupBanner({
           onClick={onToggle}
           className="inline-flex shrink-0 items-center gap-1 text-[12px] font-bold text-amber-800 hover:text-amber-900"
         >
-          {expanded ? 'Hide' : 'View checks'}
+          {expanded ? 'Hide' : 'View steps'}
           {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </button>
       </div>
@@ -200,7 +202,10 @@ function SetupBanner({
               className="flex items-center gap-2 rounded-lg bg-white/50 px-2.5 py-1.5 text-[12px] font-medium text-neutral-700 dark:bg-white/5 dark:text-amber-100/90"
             >
               <StatusIcon ok={check.ok} />
-              {check.label}
+              <span className={check.optional && !check.ok ? 'text-neutral-500' : ''}>
+                {check.label}
+                {check.optional ? ' (recommended)' : ''}
+              </span>
             </li>
           ))}
         </ul>
@@ -222,8 +227,10 @@ export default function AiBotPage() {
   const [editingFaqId, setEditingFaqId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [testMessage, setTestMessage] = useState('');
-  const [testReply, setTestReply] = useState('');
+  const [testResult, setTestResult] = useState<BotTestResult | null>(null);
   const [testLoading, setTestLoading] = useState(false);
+  const [changeNote, setChangeNote] = useState('');
+  const [knowledgeSearch, setKnowledgeSearch] = useState('');
   const [analytics, setAnalytics] = useState<BotAnalytics | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [versions, setVersions] = useState<AiBotVersion[]>([]);
@@ -289,7 +296,9 @@ export default function AiBotPage() {
   const resetSlideState = () => {
     setSlideTab('setup');
     setTestMessage('');
-    setTestReply('');
+    setTestResult(null);
+    setChangeNote('');
+    setKnowledgeSearch('');
     setFaqForm(emptyFaq);
     setEditingFaqId(null);
     setAnalytics(null);
@@ -377,6 +386,7 @@ export default function AiBotPage() {
     temperature: form.temperature,
     maxTokens: form.maxTokens,
     rateLimitPerMin: form.rateLimitPerMin,
+    ...(editing && changeNote.trim() ? { changeNote: changeNote.trim() } : {}),
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -387,12 +397,24 @@ export default function AiBotPage() {
     try {
       if (editing) {
         await aiBotApi.update(editing.id, payload);
+        setChangeNote('');
+        closeSlide();
+        load();
+        toastSuccess('AI bot updated');
       } else {
-        await aiBotApi.create(payload);
+        const { data } = await aiBotApi.create(payload);
+        load();
+        toastSuccess('AI bot created — add knowledge next');
+        const created = data.data as AiBot;
+        setEditing(created);
+        setSlideTab('knowledge');
+        try {
+          const { data: botData } = await aiBotApi.get(created.id);
+          setFaqs(botData.data.knowledgeItems || []);
+        } catch {
+          setFaqs([]);
+        }
       }
-      closeSlide();
-      load();
-      toastSuccess(editing ? 'AI bot updated' : 'AI bot created');
     } catch (err: unknown) {
       toastError(
         (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
@@ -422,14 +444,14 @@ export default function AiBotPage() {
     setSaving(true);
     try {
       if (editingFaqId) {
-        const { data } = await aiBotApi.updateFaq(editing.id, editingFaqId, faqForm);
-        setFaqs((prev) => prev.map((f) => (f.id === editingFaqId ? data.data : f)));
+        await aiBotApi.updateFaq(editing.id, editingFaqId, faqForm);
         toastSuccess('FAQ updated');
       } else {
-        const { data } = await aiBotApi.addFaq(editing.id, faqForm);
-        setFaqs((prev) => [...prev, data.data]);
+        await aiBotApi.addFaq(editing.id, faqForm);
         toastSuccess('FAQ added');
       }
+      const { data: botData } = await aiBotApi.get(editing.id);
+      setFaqs(botData.data.knowledgeItems || []);
       setFaqForm(emptyFaq);
       setEditingFaqId(null);
     } finally {
@@ -457,7 +479,7 @@ export default function AiBotPage() {
     setIngestLoading(true);
     try {
       const { data } = await aiBotApi.ingestUrl(editing.id, { url: ingestUrl.trim() });
-      toastSuccess(`Imported ${data.data.itemsCreated} knowledge chunk(s)`);
+      toastSuccess(`Added ${data.data.itemsCreated} item(s) to your bot's knowledge`);
       setIngestUrl('');
       const { data: botData } = await aiBotApi.get(editing.id);
       setFaqs(botData.data.knowledgeItems || []);
@@ -485,7 +507,7 @@ export default function AiBotPage() {
         filename: file.name,
         dataBase64,
       });
-      toastSuccess(`Imported ${data.data.itemsCreated} chunk(s) from PDF`);
+      toastSuccess(`Added ${data.data.itemsCreated} item(s) from your PDF`);
       const { data: botData } = await aiBotApi.get(editing.id);
       setFaqs(botData.data.knowledgeItems || []);
       load();
@@ -518,31 +540,47 @@ export default function AiBotPage() {
   const runTest = async () => {
     if (!editing || !testMessage.trim()) return;
     setTestLoading(true);
-    setTestReply('');
+    setTestResult(null);
     try {
       const { data } = await aiBotApi.test(editing.id, testMessage.trim());
-      const result = data.data;
-      if (result.reply) {
-        setTestReply(result.reply + (result.handoff ? ' (→ handoff)' : ''));
-      } else {
-        setTestReply(`No reply (${result.skipReason || 'unknown'})`);
-      }
+      setTestResult(data.data as BotTestResult);
     } catch (err: unknown) {
-      setTestReply(
-        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
-          ?.message || 'Test failed'
-      );
+      setTestResult({
+        reply: null,
+        handoff: false,
+        skipReason:
+          (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
+            ?.message || 'Test failed',
+        skipped: true,
+      });
     } finally {
       setTestLoading(false);
     }
   };
 
+  const filteredFaqs = useMemo(() => {
+    const q = knowledgeSearch.trim().toLowerCase();
+    if (!q) return faqs;
+    return faqs.filter(
+      (faq) =>
+        faq.title.toLowerCase().includes(q) ||
+        faq.content.toLowerCase().includes(q) ||
+        (faq.sourceUrl?.toLowerCase().includes(q) ?? false)
+    );
+  }, [faqs, knowledgeSearch]);
+
+  const embeddingStats = useMemo(() => {
+    const indexed = faqs.filter((f) => f.hasEmbedding).length;
+    return { total: faqs.length, indexed };
+  }, [faqs]);
+
   const activeCount = bots.filter((b) => b.enabled).length;
   const defaultBot = bots.find((b) => b.isDefault);
   const isLive = bots.some((b) => b.enabled && b.isDefault);
   const knowledgeTotal = bots.reduce((sum, b) => sum + (b._count?.knowledgeItems ?? 0), 0);
+  const requiredChecks = setupStatus?.checks.filter((c) => !c.optional) ?? [];
   const setupProgress = setupStatus
-    ? Math.round((setupStatus.checks.filter((c) => c.ok).length / setupStatus.checks.length) * 100)
+    ? Math.round((requiredChecks.filter((c) => c.ok).length / Math.max(requiredChecks.length, 1)) * 100)
     : 0;
 
   const slideTabOptions: Array<{ value: SlideTab; label: string; icon: LucideIcon }> = editing
@@ -570,8 +608,8 @@ export default function AiBotPage() {
         <PageHero
           badge="AI Auto-Reply"
           badgeIcon={Sparkles}
-          title="Intelligent WhatsApp replies, 24/7"
-          description="Train bots with your knowledge base and let Azure OpenAI handle customer questions instantly — with seamless handoff to your team."
+          title="Auto-reply for WhatsApp, 24/7"
+          description="Teach your bot about your business. It answers customers instantly and passes tricky chats to your team."
           accent="violet"
           stats={[
             {
@@ -865,7 +903,7 @@ export default function AiBotPage() {
         icon={Bot}
         accent="violet"
         footer={
-          slideTab === 'setup' || !editing ? (
+          slideTab === 'setup' || slideTab === 'advanced' || !editing ? (
             <SlideOverFooter
               onCancel={closeSlide}
               submitLabel={editing ? 'Save changes' : 'Create & activate'}
@@ -891,8 +929,9 @@ export default function AiBotPage() {
         <form
           id="slideover-form"
           onSubmit={handleSubmit}
-          className={slideTab !== 'setup' && editing ? 'hidden' : undefined}
+          className={slideTab !== 'setup' && slideTab !== 'advanced' && editing ? 'hidden' : undefined}
         >
+          {(slideTab === 'setup' || !editing) && (
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_280px]">
             <div className="space-y-6">
               <ModalCallout
@@ -979,6 +1018,18 @@ export default function AiBotPage() {
                     onChange={(e) => setForm({ ...form, handoffMessage: e.target.value })}
                   />
                 </div>
+
+                {editing && (
+                  <div className="mt-4">
+                    <AppInput
+                      label="Change note (optional)"
+                      hint="Saved in version history when you update this bot"
+                      placeholder="e.g. Updated pricing FAQ"
+                      value={changeNote}
+                      onChange={(e) => setChangeNote(e.target.value)}
+                    />
+                  </div>
+                )}
               </ModalSection>
             </div>
 
@@ -1002,6 +1053,7 @@ export default function AiBotPage() {
               )}
             </aside>
           </div>
+          )}
         </form>
 
         {editing && slideTab === 'knowledge' && (
@@ -1013,9 +1065,49 @@ export default function AiBotPage() {
               accent="sky"
             />
 
-            {faqs.length > 0 ? (
+            {faqs.length > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-theme-surface px-4 py-3 ring-1 ring-theme-border">
+                <div>
+                  <p className="text-[12px] font-bold text-theme-fg">Semantic search (RAG)</p>
+                  <p className="text-[11px] text-theme-secondary">
+                    {embeddingStats.indexed}/{embeddingStats.total} items indexed with embeddings
+                    {embeddingStats.total > 0 && embeddingStats.indexed < embeddingStats.total
+                      ? ' — unindexed items use keyword matching'
+                      : embeddingStats.indexed > 0
+                        ? ' — full semantic search active'
+                        : ' — add content and configure AI in Settings'}
+                  </p>
+                </div>
+                <span
+                  className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase ring-1 ${
+                    embeddingStats.total > 0 && embeddingStats.indexed === embeddingStats.total
+                      ? 'bg-emerald-100 text-emerald-800 ring-emerald-200/70'
+                      : embeddingStats.indexed > 0
+                        ? 'bg-amber-100 text-amber-800 ring-amber-200/70'
+                        : 'bg-theme-subtle text-theme-muted ring-theme-border'
+                  }`}
+                >
+                  {embeddingStats.total === 0
+                    ? 'Empty'
+                    : embeddingStats.indexed === embeddingStats.total
+                      ? 'Ready'
+                      : 'Partial'}
+                </span>
+              </div>
+            )}
+
+            {faqs.length > 0 && (
+              <AppInput
+                label="Search knowledge"
+                placeholder="Filter by question, answer, or source URL..."
+                value={knowledgeSearch}
+                onChange={(e) => setKnowledgeSearch(e.target.value)}
+              />
+            )}
+
+            {filteredFaqs.length > 0 ? (
               <div className="space-y-2">
-                {faqs.map((faq) => (
+                {filteredFaqs.map((faq) => (
                   <div
                     key={faq.id}
                     className="group flex items-start justify-between gap-3 rounded-2xl border border-theme-border bg-theme-surface p-4 transition hover:border-violet-200/60 hover:shadow-sm dark:hover:border-violet-500/25"
@@ -1028,7 +1120,17 @@ export default function AiBotPage() {
                             {faq.sourceType}
                           </span>
                         )}
+                        {faq.hasEmbedding && (
+                          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-bold uppercase text-emerald-700 ring-1 ring-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-300">
+                            Indexed
+                          </span>
+                        )}
                       </div>
+                      {faq.sourceUrl && (
+                        <p className="mt-1 truncate text-[11px] font-medium text-sky-700 dark:text-sky-400">
+                          {faq.sourceUrl}
+                        </p>
+                      )}
                       <p className="mt-1.5 line-clamp-2 text-[12px] leading-relaxed text-theme-secondary">
                         {faq.content}
                       </p>
@@ -1043,6 +1145,8 @@ export default function AiBotPage() {
                   </div>
                 ))}
               </div>
+            ) : faqs.length > 0 ? (
+              <ModalEmptyHint message="No knowledge items match your search." />
             ) : (
               <ModalEmptyHint message="No knowledge items yet. Add FAQs or import from a URL/PDF below." />
             )}
@@ -1108,7 +1212,7 @@ export default function AiBotPage() {
                   <FileText className="h-8 w-8 text-indigo-400" />
                   <p className="mt-2 text-[13px] font-semibold text-theme-fg">Drop PDF or click to upload</p>
                   <p className="mt-1 text-[11px] text-theme-secondary">
-                    Content is chunked and added to knowledge base
+                    We read your PDF and add it to your bot&apos;s knowledge
                   </p>
                   <input
                     type="file"
@@ -1128,10 +1232,10 @@ export default function AiBotPage() {
 
         {editing && slideTab === 'advanced' && (
           <div className="space-y-6">
-            <ModalPanel title="Model settings" icon={SlidersHorizontal} accent="neutral">
+            <ModalPanel title="Reply style" icon={SlidersHorizontal} accent="neutral">
               <div className="grid gap-3 sm:grid-cols-3">
                 <AppInput
-                  label="Temperature"
+                  label="Creativity"
                   type="number"
                   min={0}
                   max={2}
@@ -1140,7 +1244,7 @@ export default function AiBotPage() {
                   onChange={(e) => setForm({ ...form, temperature: parseFloat(e.target.value) || 0.7 })}
                 />
                 <AppInput
-                  label="Max tokens"
+                  label="Max reply length"
                   type="number"
                   min={50}
                   max={2000}
@@ -1148,7 +1252,7 @@ export default function AiBotPage() {
                   onChange={(e) => setForm({ ...form, maxTokens: parseInt(e.target.value, 10) || 500 })}
                 />
                 <AppInput
-                  label="Rate limit/min"
+                  label="Replies per minute"
                   type="number"
                   min={5}
                   max={200}
@@ -1158,42 +1262,18 @@ export default function AiBotPage() {
                   }
                 />
               </div>
-              <AppButton
-                type="button"
+              <AppInput
                 className="mt-4"
-                variant="secondary"
-                size="sm"
-                onClick={async () => {
-                  if (!editing) return;
-                  setSaving(true);
-                  try {
-                    await aiBotApi.update(editing.id, buildPayload());
-                    toastSuccess('Advanced settings saved');
-                  } catch {
-                    toastError('Failed to save settings');
-                  } finally {
-                    setSaving(false);
-                  }
-                }}
-                loading={saving}
-              >
-                Save model settings
-              </AppButton>
+                label="Change note (optional)"
+                hint="Saved in version history when you save"
+                placeholder="e.g. Lowered creativity for support tone"
+                value={changeNote}
+                onChange={(e) => setChangeNote(e.target.value)}
+              />
             </ModalPanel>
 
             <ModalPanel title="Analytics · 30 days" icon={BarChart3} accent="indigo">
-              {analyticsLoading ? (
-                <p className="text-[12px] text-theme-secondary">Loading analytics...</p>
-              ) : analytics ? (
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  <StatTile label="Replies" value={analytics.successfulReplies} tone="text-emerald-700" />
-                  <StatTile label="Handoffs" value={analytics.handoffs} tone="text-amber-700" />
-                  <StatTile label="Avg ms" value={analytics.avgDurationMs} />
-                  <StatTile label="Tokens" value={analytics.totalTokens} tone="text-indigo-700" />
-                </div>
-              ) : (
-                <ModalEmptyHint message="No analytics data yet. Stats appear after the bot handles conversations." />
-              )}
+              <AiBotAnalyticsPanel analytics={analytics} loading={analyticsLoading} />
             </ModalPanel>
 
             {versions.length > 0 && (
@@ -1224,6 +1304,10 @@ export default function AiBotPage() {
                 </div>
               </ModalPanel>
             )}
+
+            <ModalPanel title="Activity log" icon={ClipboardList} accent="neutral">
+              <AiBotAuditPanel botId={editing.id} />
+            </ModalPanel>
           </div>
         )}
 
@@ -1251,10 +1335,60 @@ export default function AiBotPage() {
 
             <div className="space-y-3">
               <p className="text-[12px] font-extrabold uppercase tracking-wide text-theme-muted">Bot reply</p>
-              {testReply ? (
-                <ModalPreviewCard title="WhatsApp preview">
-                  <WhatsAppMessagePreview content={testReply} direction="outbound" />
-                </ModalPreviewCard>
+              {testResult ? (
+                <div className="space-y-3">
+                  {testResult.reply ? (
+                    <ModalPreviewCard title="WhatsApp preview">
+                      <WhatsAppMessagePreview
+                        content={
+                          testResult.reply + (testResult.handoff ? ' (→ handoff)' : '')
+                        }
+                        direction="outbound"
+                      />
+                    </ModalPreviewCard>
+                  ) : (
+                    <ModalEmptyHint
+                      message={`No reply${testResult.skipReason ? ` (${testResult.skipReason.replace(/_/g, ' ')})` : ''}`}
+                    />
+                  )}
+                  {(testResult.handoffReason || testResult.totalTokens) && (
+                    <div className="flex flex-wrap gap-2 text-[11px] font-medium text-theme-secondary">
+                      {testResult.handoffReason && (
+                        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-amber-800 ring-1 ring-amber-100">
+                          Handoff: {testResult.handoffReason.replace(/_/g, ' ')}
+                        </span>
+                      )}
+                      {testResult.totalTokens != null && testResult.totalTokens > 0 && (
+                        <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-indigo-800 ring-1 ring-indigo-100">
+                          {testResult.totalTokens} tokens
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {testResult.knowledgeMatches && testResult.knowledgeMatches.length > 0 && (
+                    <div className="rounded-xl ring-1 ring-theme-border">
+                      <p className="border-b border-theme-border bg-theme-subtle/50 px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-theme-muted">
+                        Matched knowledge ({testResult.knowledgeMatches.length})
+                      </p>
+                      <div className="max-h-48 space-y-2 overflow-y-auto p-3">
+                        {testResult.knowledgeMatches.map((match) => (
+                          <div key={match.id} className="rounded-lg bg-theme-subtle/50 px-2.5 py-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="truncate text-[12px] font-semibold text-theme-fg">{match.title}</p>
+                              <span className="shrink-0 text-[10px] font-bold tabular-nums text-violet-700">
+                                {(match.score * 100).toFixed(0)}%
+                              </span>
+                            </div>
+                            <p className="mt-0.5 line-clamp-2 text-[11px] text-theme-secondary">{match.content}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {testResult.knowledgeMatches?.length === 0 && (
+                    <p className="text-[11px] text-theme-muted">No knowledge items matched this message.</p>
+                  )}
+                </div>
               ) : (
                 <ModalEmptyHint message="Run a test to see how your bot responds here." />
               )}

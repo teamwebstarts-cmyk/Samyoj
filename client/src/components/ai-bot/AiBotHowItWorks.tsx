@@ -11,8 +11,8 @@ const steps: Array<{
 }> = [
   {
     step: '01',
-    title: 'Configure your bot',
-    description: 'Set instructions, tone, and when the bot should reply — default bot handles all messages.',
+    title: 'Set up your bot',
+    description: 'Give it a name, set the tone, and choose when it should reply.',
     icon: Bot,
     accent: 'from-violet-500/10 via-theme-surface to-indigo-500/5 border-violet-200/60 dark:border-violet-500/25',
     iconBg:
@@ -20,16 +20,16 @@ const steps: Array<{
   },
   {
     step: '02',
-    title: 'Add knowledge',
-    description: 'Upload FAQs, import your website, or add PDFs so answers stay accurate and on-brand.',
+    title: 'Add what it should know',
+    description: 'Upload FAQs, your website, or PDFs so answers stay accurate.',
     icon: BookOpen,
     accent: 'from-sky-500/10 via-theme-surface to-blue-500/5 border-sky-200/60 dark:border-sky-500/25',
     iconBg: 'bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-[0_4px_14px_rgba(14,165,233,0.3)]',
   },
   {
     step: '03',
-    title: 'Go live on WhatsApp',
-    description: 'Turn the bot ON — customers get instant AI replies. Hand off to humans anytime from Inbox.',
+    title: 'Turn it on',
+    description: 'Customers get instant replies. Your team can take over anytime from Inbox.',
     icon: MessageSquare,
     accent: 'from-emerald-500/10 via-theme-surface to-teal-500/5 border-emerald-200/60 dark:border-emerald-500/25',
     iconBg:
@@ -46,8 +46,8 @@ export default function AiBotHowItWorks() {
             <Sparkles className="h-4 w-4" />
           </div>
           <div>
-            <h3 className="text-[14px] font-extrabold tracking-tight text-theme-fg">How AI auto-reply works</h3>
-            <p className="text-[12px] font-medium text-theme-secondary">Three steps to automate customer conversations</p>
+            <h3 className="text-[14px] font-extrabold tracking-tight text-theme-fg">How it works</h3>
+            <p className="text-[12px] font-medium text-theme-secondary">Three simple steps</p>
           </div>
         </div>
       </div>

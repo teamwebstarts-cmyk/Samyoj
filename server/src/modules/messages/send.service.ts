@@ -5,6 +5,7 @@ import { getOrgWhatsappContext } from '../whatsapp/context';
 import { buildTemplateComponents } from '../campaigns/template-params';
 import { emitToOrg } from '../../realtime';
 import { messageQueue } from '../../config/queues';
+import { buildInteractivePayload, type InteractiveMessageOptions } from './interactive';
 
 interface DeliverMessageInput {
   organizationId: string;
@@ -13,11 +14,25 @@ interface DeliverMessageInput {
   encryptedToken: string;
   to: string;
   content: string;
-  type: 'TEXT' | 'TEMPLATE' | 'INTERACTIVE' | 'IMAGE' | 'DOCUMENT' | 'VIDEO' | 'AUDIO';
+  type: 'TEXT' | 'TEMPLATE' | 'INTERACTIVE' | 'IMAGE' | 'DOCUMENT' | 'VIDEO' | 'AUDIO' | 'LOCATION' | 'CONTACTS';
   templateName?: string;
   templateLanguage?: string;
   templateParams?: { body?: string[]; header?: string[]; headerMediaUrl?: string };
   buttons?: Array<{ id: string; title: string }>;
+  interactive?: InteractiveMessageOptions;
+  location?: { latitude: number; longitude: number; name?: string; address?: string };
+  contacts?: Array<{
+    name: string;
+    phone: string;
+    email?: string;
+  }>;
+  waFlow?: {
+    flowId: string;
+    flowToken: string;
+    cta: string;
+    screen?: string;
+    body?: string;
+  };
   mediaUrl?: string;
   mediaCaption?: string;
 }
@@ -49,21 +64,17 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
           ...(components.length ? { components } : {}),
         },
       });
-    } else if (input.type === 'INTERACTIVE' && input.buttons?.length) {
-      result = await MetaWhatsAppService.sendMessage(input.phoneNumberId, accessToken, {
-        to: phone,
-        type: 'interactive',
-        interactive: {
-          type: 'button',
-          body: { text: input.content },
-          action: {
-            buttons: input.buttons.slice(0, 3).map((btn) => ({
-              type: 'reply' as const,
-              reply: { id: btn.id, title: btn.title.slice(0, 20) },
-            })),
-          },
-        },
-      });
+    } else if (input.type === 'INTERACTIVE' && (input.interactive || input.buttons?.length)) {
+      const interactiveOpts: InteractiveMessageOptions = input.interactive || {
+        mode: 'reply',
+        body: input.content,
+        buttons: input.buttons,
+      };
+      result = await MetaWhatsAppService.sendMessage(
+        input.phoneNumberId,
+        accessToken,
+        buildInteractivePayload(phone, interactiveOpts)
+      );
     } else if (input.type === 'IMAGE' && input.mediaUrl) {
       result = await MetaWhatsAppService.sendMessage(input.phoneNumberId, accessToken, {
         to: phone,
@@ -87,6 +98,44 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
         to: phone,
         type: 'audio',
         audio: { link: input.mediaUrl },
+      });
+    } else if (input.type === 'LOCATION' && input.location) {
+      result = await MetaWhatsAppService.sendMessage(input.phoneNumberId, accessToken, {
+        to: phone,
+        type: 'location',
+        location: input.location,
+      });
+    } else if (input.type === 'CONTACTS' && input.contacts?.length) {
+      result = await MetaWhatsAppService.sendMessage(input.phoneNumberId, accessToken, {
+        to: phone,
+        type: 'contacts',
+        contacts: input.contacts.map((c) => ({
+          name: { formatted_name: c.name, first_name: c.name.split(' ')[0] },
+          phones: [{ phone: c.phone.replace(/\D/g, ''), type: 'CELL', wa_id: c.phone.replace(/\D/g, '') }],
+          ...(c.email ? { emails: [{ email: c.email, type: 'WORK' }] } : {}),
+        })),
+      });
+    } else if (input.waFlow) {
+      result = await MetaWhatsAppService.sendMessage(input.phoneNumberId, accessToken, {
+        to: phone,
+        type: 'interactive',
+        interactive: {
+          type: 'flow',
+          body: { text: input.waFlow.body || 'Please complete the form' },
+          action: {
+            name: 'flow',
+            parameters: {
+              flow_message_version: '3',
+              flow_token: input.waFlow.flowToken,
+              flow_id: input.waFlow.flowId,
+              flow_cta: input.waFlow.cta.slice(0, 20),
+              flow_action: 'navigate',
+              ...(input.waFlow.screen
+                ? { flow_action_payload: { screen: input.waFlow.screen, data: {} } }
+                : {}),
+            },
+          },
+        },
       });
     } else {
       result = await MetaWhatsAppService.sendMessage(input.phoneNumberId, accessToken, {
@@ -145,6 +194,10 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
         templateLanguage: input.templateLanguage,
         templateParams: input.templateParams,
         buttons: input.buttons,
+        interactive: input.interactive,
+        location: input.location,
+        contacts: input.contacts,
+        waFlow: input.waFlow,
         mediaUrl: input.mediaUrl,
         mediaCaption: input.mediaCaption,
       },

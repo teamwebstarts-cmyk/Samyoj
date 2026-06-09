@@ -17,17 +17,17 @@ export default function ServiceWindowBanner({ serviceWindow }: ServiceWindowBann
           <Lock className="h-4 w-4" strokeWidth={2.25} />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-[13px] font-bold text-amber-950">Customer service window closed</p>
+          <p className="text-[13px] font-bold text-amber-950">Reply window closed</p>
           <p className="mt-0.5 text-[12px] font-medium leading-relaxed text-amber-900/85">
-            Free-text replies are only available within 24 hours of the customer&apos;s last message.
+            You can only send free-text replies within 24 hours of the customer&apos;s last message.
             {serviceWindow.lastInboundAt
               ? ' Wait for them to message again, or send an approved template.'
-              : ' The customer must message you first, or use an approved template.'}
+              : ' Ask them to message you first, or send an approved template.'}
           </p>
           <p className="mt-2 text-[12px] font-medium text-amber-900/85">
-            Tap <strong>Template</strong> below to message this contact, or{' '}
+            Tap <strong>Template</strong> below, or{' '}
             <Link to="/campaigns" className="font-bold text-whatsapp-700 hover:text-whatsapp-800">
-              send a campaign
+              start a campaign
             </Link>
             .
           </p>
@@ -47,7 +47,7 @@ export function ServiceWindowBadge({ serviceWindow }: ServiceWindowBannerProps) 
         </span>
         <Clock className="h-3 w-3 text-whatsapp-600" />
         <span className="text-[10px] font-bold uppercase tracking-wide text-whatsapp-700">
-          {formatWindowExpiry(serviceWindow.expiresAt) || 'Window open'}
+          {formatWindowExpiry(serviceWindow.expiresAt) || 'Can reply'}
         </span>
       </div>
     );
@@ -56,7 +56,7 @@ export function ServiceWindowBadge({ serviceWindow }: ServiceWindowBannerProps) 
   return (
     <div className="hidden shrink-0 items-center gap-1.5 rounded-full border border-amber-200/80 bg-amber-50/90 px-2.5 py-1 sm:flex">
       <Lock className="h-3 w-3 text-amber-700" />
-      <span className="text-[10px] font-bold uppercase tracking-wide text-amber-800">Window closed</span>
+      <span className="text-[10px] font-bold uppercase tracking-wide text-amber-800">Use template</span>
     </div>
   );
 }

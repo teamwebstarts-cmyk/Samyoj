@@ -23,6 +23,11 @@ import messageRoutes from './modules/messages/routes';
 import teamRoutes from './modules/team/routes';
 import aiBotRoutes from './modules/ai-bot/routes';
 import callingRoutes from './modules/calling/routes';
+import labelRoutes from './modules/labels/routes';
+import cannedReplyRoutes from './modules/canned-replies/routes';
+import billingRoutes from './modules/billing/routes';
+import complianceRoutes from './modules/compliance/routes';
+import integrationsRoutes from './modules/integrations/routes';
 import publicMediaRoutes from './modules/media/public.routes';
 import { setRealtimeIO } from './realtime';
 
@@ -108,22 +113,30 @@ app.use(
   })
 );
 
-// Preserve raw body for Meta webhook signature verification
+function rawJsonBodyParser(req: express.Request, _res: express.Response, next: express.NextFunction) {
+  if (req.method === 'POST' && Buffer.isBuffer(req.body)) {
+    const raw = req.body.toString('utf8');
+    req.rawBody = raw;
+    try {
+      req.body = JSON.parse(raw);
+    } catch {
+      req.body = {};
+    }
+  }
+  next();
+}
+
+// Preserve raw body for webhook signature verification
 app.use(
   '/api/whatsapp/webhook',
   express.raw({ type: 'application/json', limit: '10mb' }),
-  (req, _res, next) => {
-    if (req.method === 'POST' && Buffer.isBuffer(req.body)) {
-      const raw = req.body.toString('utf8');
-      req.rawBody = raw;
-      try {
-        req.body = JSON.parse(raw);
-      } catch {
-        req.body = {};
-      }
-    }
-    next();
-  }
+  rawJsonBodyParser
+);
+
+app.use(
+  '/api/billing/webhook',
+  express.raw({ type: 'application/json', limit: '1mb' }),
+  rawJsonBodyParser
 );
 
 app.use(express.json({ limit: '10mb' }));
@@ -150,6 +163,11 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/team', teamRoutes);
 app.use('/api/ai-bot', aiBotRoutes);
 app.use('/api/calling', callingRoutes);
+app.use('/api/labels', labelRoutes);
+app.use('/api/canned-replies', cannedReplyRoutes);
+app.use('/api/billing', billingRoutes);
+app.use('/api/compliance', complianceRoutes);
+app.use('/api/integrations', integrationsRoutes);
 
 app.use(errorHandler);
 
@@ -188,6 +206,9 @@ async function start() {
 
   const { setSocketIO } = await import('./workers/index');
   setSocketIO(io);
+
+  const { startAlertWorker } = await import('./workers/alert.worker');
+  startAlertWorker();
 
   logger.info('API server started', {
     source: 'startup',

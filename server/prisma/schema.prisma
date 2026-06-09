@@ -126,6 +126,9 @@ enum FlowTriggerType {
   OFF_HOURS
   CONTACT_TAG
   SEGMENT
+  MISSED_CALL
+  CAMPAIGN_REPLY
+  CALL_COMPLETED
 }
 
 enum FlowStatus {
@@ -152,16 +155,31 @@ model User {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  organizations     OrganizationUser[]
-  assignedConversations Conversation[] @relation("AssignedAgent")
-  assignedCalls         Call[]         @relation("AssignedCallAgent")
-  internalNotes     InternalNote[]
-  refreshTokens     RefreshToken[]
-  sentInvites       TeamInvite[]     @relation("SentInvites")
-  auditActions      TeamAuditLog[]   @relation("AuditActor")
-  auditTargets      TeamAuditLog[]   @relation("AuditTarget")
+  organizations         OrganizationUser[]
+  assignedConversations Conversation[]     @relation("AssignedAgent")
+  assignedCalls         Call[]             @relation("AssignedCallAgent")
+  internalNotes         InternalNote[]
+  refreshTokens         RefreshToken[]
+  passwordResetTokens   PasswordResetToken[]
+  sentInvites           TeamInvite[]       @relation("SentInvites")
+  auditActions          TeamAuditLog[]     @relation("AuditActor")
+  auditTargets          TeamAuditLog[]     @relation("AuditTarget")
 
   @@map("users")
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
 }
 
 model RefreshToken {
@@ -207,9 +225,88 @@ model Organization {
   aiUsageLogs    AiUsageLog[]
   departments    TeamDepartment[]
   teamInvites    TeamInvite[]
-  teamAuditLogs  TeamAuditLog[]
+  teamAuditLogs     TeamAuditLog[]
+  cannedReplies     CannedReply[]
+  paymentOrders     PaymentOrder[]
+  apiKeys           ApiKey[]
+  webhookEndpoints  WebhookEndpoint[]
+
+  planExpiresAt      DateTime? @map("plan_expires_at")
+  subscriptionStatus String    @default("active") @map("subscription_status")
 
   @@map("organizations")
+}
+
+enum PaymentStatus {
+  CREATED
+  AUTHORIZED
+  CAPTURED
+  FAILED
+}
+
+model PaymentOrder {
+  id              String        @id @default(uuid())
+  organizationId  String        @map("organization_id")
+  razorpayOrderId String        @unique @map("razorpay_order_id")
+  planId          String        @map("plan_id")
+  amountPaise     Int           @map("amount_paise")
+  currency        String        @default("INR")
+  status          PaymentStatus @default(CREATED)
+  paymentId       String?       @map("payment_id")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  paidAt          DateTime?     @map("paid_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@map("payment_orders")
+}
+
+model ApiKey {
+  id             String    @id @default(uuid())
+  organizationId String    @map("organization_id")
+  name           String
+  keyHash        String    @unique @map("key_hash")
+  keyPrefix      String    @map("key_prefix")
+  lastUsedAt     DateTime? @map("last_used_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  revokedAt      DateTime? @map("revoked_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("api_keys")
+}
+
+model WebhookEndpoint {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  url            String
+  secret         String
+  events         String[] @default([])
+  enabled        Boolean  @default(true)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("webhook_endpoints")
+}
+
+model CannedReply {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  shortcut       String
+  title          String
+  content        String
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, shortcut])
+  @@map("canned_replies")
 }
 
 model OrganizationUser {
@@ -349,6 +446,9 @@ model Conversation {
   botState        Json?              @map("bot_state")
   lastMessageAt   DateTime?          @map("last_message_at")
   unreadCount     Int                @default(0) @map("unread_count")
+  firstResponseAt DateTime?          @map("first_response_at")
+  slaDueAt        DateTime?          @map("sla_due_at")
+  slaBreached     Boolean            @default(false) @map("sla_breached")
   createdAt       DateTime           @default(now()) @map("created_at")
   updatedAt       DateTime           @updatedAt @map("updated_at")
 

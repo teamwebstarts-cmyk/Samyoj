@@ -367,8 +367,8 @@ export default function ContactsPage() {
         <PageHero
           badge="Audience"
           badgeIcon={Users}
-          title="Your WhatsApp contact directory"
-          description="Build segments, track opt-in compliance, and launch campaigns from one polished audience hub."
+          title="Your contacts"
+          description="Manage customers, tags, and groups for campaigns."
           accent="sky"
           stats={[
             { label: 'Total', value: summary.total },

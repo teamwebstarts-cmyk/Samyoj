@@ -88,6 +88,12 @@ export default function LoginPage() {
                   />
                   <span className="text-[12px] font-medium text-theme-secondary">Remember me</span>
                 </label>
+                <Link
+                  to="/forgot-password"
+                  className="text-[12px] font-semibold text-theme-secondary hover:text-theme-fg"
+                >
+                  Forgot password?
+                </Link>
               </div>
             </div>
           </>

@@ -24,10 +24,10 @@ export default function SettingsReadinessBanner({
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-[13px] font-extrabold text-emerald-900 dark:text-emerald-200">
-            Workspace is live
+            You&apos;re all set
           </p>
           <p className="text-[12px] font-medium text-emerald-800/80 dark:text-emerald-300/80">
-            WhatsApp and webhooks are configured. You&apos;re ready to message customers.
+            WhatsApp is connected. You can message customers now.
           </p>
         </div>
       </div>
@@ -44,10 +44,10 @@ export default function SettingsReadinessBanner({
           </div>
           <div>
             <p className="text-[13px] font-extrabold text-amber-900 dark:text-amber-200">
-              Setup incomplete — {setupProgress}% ready
+              Setup not finished — {setupProgress}% done
             </p>
             <p className="mt-0.5 text-[12px] font-medium text-amber-800/85 dark:text-amber-300/85">
-              Connect WhatsApp and register webhooks to unlock inbox and campaigns.
+              Connect WhatsApp to start receiving and sending messages.
             </p>
             <div className="mt-2.5 h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-amber-200/60 dark:bg-amber-900/40">
               <div

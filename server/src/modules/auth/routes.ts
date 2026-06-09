@@ -8,6 +8,7 @@ import { AppError, sendSuccess, asyncHandler } from '../../utils/response';
 import { config } from '../../config';
 import { z } from 'zod';
 import { verifyTotp } from '../team/totp';
+import { sendPasswordResetEmail } from '../../services/email.service';
 
 const router = Router();
 
@@ -271,5 +272,64 @@ router.post('/logout', authenticate, async (req: Request, res: Response) => {
   }
   sendSuccess(res, { message: 'Logged out' });
 });
+
+router.post(
+  '/forgot-password',
+  asyncHandler(async (req: Request, res: Response) => {
+    const { email } = z.object({ email: z.string().email() }).parse(req.body);
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (user) {
+      const token = uuidv4();
+      await prisma.passwordResetToken.create({
+        data: {
+          userId: user.id,
+          token,
+          expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        },
+      });
+      const resetUrl = `${config.clientUrl}/reset-password?token=${token}`;
+      await sendPasswordResetEmail(email, resetUrl);
+    }
+
+    sendSuccess(res, {
+      message: 'If that email is registered, you will receive a reset link shortly.',
+    });
+  })
+);
+
+router.post(
+  '/reset-password',
+  asyncHandler(async (req: Request, res: Response) => {
+    const { token, password } = z
+      .object({ token: z.string().uuid(), password: z.string().min(8) })
+      .parse(req.body);
+
+    const resetToken = await prisma.passwordResetToken.findUnique({
+      where: { token },
+      include: { user: true },
+    });
+
+    if (!resetToken || resetToken.usedAt || resetToken.expiresAt < new Date()) {
+      throw new AppError(400, 'Invalid or expired reset link');
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: resetToken.userId },
+        data: { passwordHash },
+      }),
+      prisma.passwordResetToken.update({
+        where: { id: resetToken.id },
+        data: { usedAt: new Date() },
+      }),
+      prisma.refreshToken.deleteMany({ where: { userId: resetToken.userId } }),
+    ]);
+
+    sendSuccess(res, { message: 'Password updated. You can sign in now.' });
+  })
+);
 
 export default router;

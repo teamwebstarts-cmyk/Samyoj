@@ -23,13 +23,13 @@ export default function WhatsappCallbackPage() {
 
     if (error) {
       setStatus('error');
-      setMessage(errorDescription || error || 'Meta authorization was cancelled.');
+      setMessage(errorDescription || error || 'Sign-in was cancelled.');
       return;
     }
 
     if (!code) {
       setStatus('error');
-      setMessage('Authorization code missing. Please try connecting again from Settings.');
+      setMessage('Something went wrong. Please try connecting again from Settings.');
       return;
     }
 

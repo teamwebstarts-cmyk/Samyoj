@@ -14,6 +14,16 @@ export function linkNodes(nodes: FlowNode[]): FlowNode[] {
       return { ...node, branches, next };
     }
 
+    if (node.type === 'list') {
+      const branches = { ...(node.branches || {}) };
+      for (const section of node.listSections || []) {
+        for (const row of section.rows) {
+          if (!branches[row.id] && next) branches[row.id] = next;
+        }
+      }
+      return { ...node, branches, next };
+    }
+
     if (node.type === 'condition') {
       const branches = { ...(node.branches || {}) };
       if (!branches.true && next) branches.true = next;
@@ -47,11 +57,33 @@ export function getNodeSummary(node: FlowNode): string {
     case 'assign':
       return node.text || '—';
     case 'buttons':
+      if (node.buttonMode === 'url') return node.ctaUrl ? `URL: ${node.ctaLabel || node.ctaUrl}` : 'URL button';
+      if (node.buttonMode === 'call') return node.ctaPhone ? `Call: ${node.ctaLabel || node.ctaPhone}` : 'Call button';
       return node.text || `${node.buttons?.length || 0} buttons`;
+    case 'list':
+      return node.text || `${node.listSections?.flatMap((s) => s.rows).length || 0} menu items`;
     case 'question':
       return node.prompt || 'Ask question';
     case 'tag':
       return `Tag: ${node.tag || '—'}`;
+    case 'remove_tag':
+      return `Remove tag: ${node.tag || '—'}`;
+    case 'set_variable':
+      return `${node.variableName || 'var'} = ${node.variableValue || '—'}`;
+    case 'goto_flow':
+      return node.targetFlowId ? `Go to flow` : 'Go to flow';
+    case 'request_callback':
+      return node.text || 'Request callback';
+    case 'goto_step':
+      return node.targetNodeId ? 'Loop to step' : 'Go to step';
+    case 'location':
+      return node.locationName || `${node.latitude}, ${node.longitude}`;
+    case 'contact_card':
+      return node.contactName || 'Contact card';
+    case 'wa_flow':
+      return node.waFlowId ? `WA Flow: ${node.waFlowCta || node.waFlowId}` : 'WhatsApp Flow';
+    case 'schedule':
+      return node.scheduleAt ? `At ${node.scheduleAt}` : `Wait ${node.delaySeconds || 0}s`;
     case 'condition':
       if (node.conditionType === 'has_tag') return `If tag: ${node.conditionTag}`;
       if (node.conditionType === 'language') return `If language: ${node.languageCode}`;
@@ -63,7 +95,7 @@ export function getNodeSummary(node: FlowNode): string {
     case 'media':
       return node.mediaCaption || node.mediaUrl || 'Media message';
     case 'webhook':
-      return node.webhookUrl || 'Webhook call';
+      return node.webhookUrl || 'Connect to app';
     case 'ab_split':
       return '50/50 A/B split';
     case 'language':
@@ -117,7 +149,7 @@ export function validateFlow(
     if (node.type === 'tag' && !node.tag?.trim()) errors.push('Tag step needs a tag name');
     if (node.type === 'template' && !node.templateName?.trim()) errors.push('Template step needs a template name');
     if (node.type === 'media' && !node.mediaUrl?.trim()) errors.push('Media step needs a URL');
-    if (node.type === 'webhook' && !node.webhookUrl?.trim()) errors.push('Webhook step needs a URL');
+    if (node.type === 'webhook' && !node.webhookUrl?.trim()) errors.push('Connect step needs a URL');
     if (node.type === 'delay' && (!node.delaySeconds || node.delaySeconds < 1)) {
       errors.push('Delay step needs at least 1 second');
     }
@@ -214,7 +246,7 @@ export function buildFlowPreviewMessages(
     } else if (node.type === 'delay') {
       push({ kind: 'notice', text: `Waiting ${node.delaySeconds || 30} seconds...` });
     } else if (node.type === 'webhook') {
-      push({ kind: 'notice', text: 'Webhook triggered' });
+      push({ kind: 'notice', text: 'Connected to your app' });
     } else if (node.type === 'template') {
       const text = node.text?.trim() || `Template: ${node.templateName || 'message'}`;
       push({ kind: 'outbound', text, time, status: 'delivered' });
@@ -281,7 +313,7 @@ export function simulateMessages(
     if (node.type === 'assign') messages.push({ type: 'bot', text: '👤 Assigned to agent' });
     if (node.type === 'handoff') messages.push({ type: 'bot', text: '🤝 Handed off to team' });
     if (node.type === 'delay') messages.push({ type: 'bot', text: `⏳ Waiting ${node.delaySeconds}s...` });
-    if (node.type === 'webhook') messages.push({ type: 'bot', text: '🔗 Webhook triggered' });
+    if (node.type === 'webhook') messages.push({ type: 'bot', text: '🔗 Connected to your app' });
     if (node.type === 'template') messages.push({ type: 'bot', text: `📋 Template: ${node.templateName}` });
     if (node.type === 'media') messages.push({ type: 'bot', text: `📎 Media: ${node.mediaType}` });
 
@@ -296,10 +328,11 @@ export const TEMPLATE_COLORS: Record<string, { gradient: string; ring: string; b
   emerald: { gradient: 'from-whatsapp-500 to-emerald-600', ring: 'ring-emerald-200/60', bg: 'bg-emerald-50' },
   amber: { gradient: 'from-amber-500 to-orange-500', ring: 'ring-amber-200/60', bg: 'bg-amber-50' },
   sky: { gradient: 'from-sky-500 to-blue-600', ring: 'ring-sky-200/60', bg: 'bg-sky-50' },
+  rose: { gradient: 'from-rose-500 to-red-600', ring: 'ring-rose-200/60', bg: 'bg-rose-50' },
 };
 
 export const NODE_CATEGORIES: Array<{ label: string; types: FlowNodeType[] }> = [
-  { label: 'Messages', types: ['message', 'buttons', 'question', 'template', 'media'] },
-  { label: 'Actions', types: ['tag', 'assign', 'handoff', 'ai', 'webhook', 'end'] },
-  { label: 'Logic', types: ['condition', 'delay', 'ab_split', 'language'] },
+  { label: 'Messages', types: ['message', 'buttons', 'list', 'question', 'template', 'media', 'location', 'contact_card', 'wa_flow'] },
+  { label: 'Actions', types: ['tag', 'remove_tag', 'assign', 'handoff', 'request_callback', 'ai', 'webhook', 'set_variable', 'goto_flow', 'goto_step', 'end'] },
+  { label: 'Logic', types: ['condition', 'delay', 'schedule', 'ab_split', 'language'] },
 ];

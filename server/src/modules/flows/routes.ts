@@ -19,28 +19,57 @@ import {
 const router = Router();
 
 const nodeTypes = [
-  'message', 'buttons', 'question', 'tag', 'handoff', 'ai', 'assign', 'condition', 'end',
-  'template', 'delay', 'media', 'webhook', 'ab_split', 'language',
+  'message', 'buttons', 'list', 'question', 'tag', 'remove_tag', 'handoff', 'ai', 'assign', 'condition', 'end',
+  'template', 'delay', 'schedule', 'media', 'webhook', 'ab_split', 'language',
+  'set_variable', 'goto_flow', 'goto_step', 'request_callback', 'location', 'contact_card', 'wa_flow',
 ] as const;
 
 const triggerTypes = [
-  'WELCOME', 'KEYWORD', 'ANY_MESSAGE', 'BUSINESS_HOURS', 'OFF_HOURS', 'CONTACT_TAG', 'SEGMENT',
+  'WELCOME', 'KEYWORD', 'ANY_MESSAGE', 'BUSINESS_HOURS', 'OFF_HOURS', 'CONTACT_TAG', 'SEGMENT', 'MISSED_CALL',
+  'CAMPAIGN_REPLY', 'CALL_COMPLETED',
 ] as const;
+
+const intentRouteSchema = z.object({
+  keywords: z.array(z.string().min(1)).min(1),
+  branchKey: z.string().min(1),
+});
+
+const listRowSchema = z.object({
+  id: z.string(),
+  title: z.string().max(24),
+  description: z.string().max(72).optional(),
+});
 
 const flowNodeSchema = z.object({
   id: z.string().min(1),
   type: z.enum(nodeTypes),
   text: z.string().optional(),
+  buttonMode: z.enum(['reply', 'url', 'call']).optional(),
+  ctaLabel: z.string().max(20).optional(),
+  ctaUrl: z.string().url().optional(),
+  ctaPhone: z.string().max(20).optional(),
   buttons: z.array(z.object({ id: z.string(), title: z.string().max(20) })).max(3).optional(),
+  listButtonLabel: z.string().max(20).optional(),
+  listSections: z
+    .array(z.object({ title: z.string().max(24).optional(), rows: z.array(listRowSchema).max(10) }))
+    .max(10)
+    .optional(),
   field: z.enum(['name', 'email', 'phone', 'custom']).optional(),
   customField: z.string().optional(),
   prompt: z.string().optional(),
   tag: z.string().optional(),
-  conditionType: z.enum(['business_hours', 'has_tag', 'language']).optional(),
+  conditionType: z
+    .enum(['business_hours', 'has_tag', 'language', 'variable_equals', 'variable_contains', 'webhook_ok'])
+    .optional(),
   conditionTag: z.string().optional(),
+  conditionVariable: z.string().optional(),
+  conditionValue: z.string().optional(),
   languageCode: z.string().optional(),
   maxRetries: z.number().int().min(1).max(5).optional(),
   retryMessage: z.string().optional(),
+  acceptMedia: z.boolean().optional(),
+  intentRoutes: z.array(intentRouteSchema).max(10).optional(),
+  splitRatio: z.number().int().min(1).max(99).optional(),
   next: z.string().optional(),
   branches: z.record(z.string()).optional(),
   templateName: z.string().optional(),
@@ -49,10 +78,28 @@ const flowNodeSchema = z.object({
   mediaType: z.enum(['image', 'document', 'video', 'audio']).optional(),
   mediaCaption: z.string().optional(),
   delaySeconds: z.number().int().min(1).max(86400).optional(),
+  scheduleAt: z.string().optional(),
   webhookUrl: z.string().url().optional(),
   webhookMethod: z.enum(['GET', 'POST']).optional(),
   aiBotId: z.string().optional(),
   assignAgentId: z.string().optional(),
+  variableName: z.string().optional(),
+  variableValue: z.string().optional(),
+  targetFlowId: z.string().optional(),
+  targetNodeId: z.string().optional(),
+  callbackTag: z.string().optional(),
+  webhookVariable: z.string().optional(),
+  latitude: z.number().optional(),
+  longitude: z.number().optional(),
+  locationName: z.string().optional(),
+  locationAddress: z.string().optional(),
+  contactName: z.string().optional(),
+  contactPhone: z.string().optional(),
+  contactEmail: z.string().optional(),
+  waFlowId: z.string().optional(),
+  waFlowToken: z.string().optional(),
+  waFlowCta: z.string().optional(),
+  waFlowScreen: z.string().optional(),
   position: z.object({ x: z.number(), y: z.number() }).optional(),
 });
 
@@ -227,7 +274,8 @@ router.post('/', authenticate, requireOrg, asyncHandler(async (req, res) => {
 }));
 
 router.post('/from-template/:templateId', authenticate, requireOrg, asyncHandler(async (req, res) => {
-  const template = FLOW_TEMPLATES.find((t) => t.id === paramId(req));
+  const templateId = req.params.templateId as string;
+  const template = FLOW_TEMPLATES.find((t) => t.id === templateId);
   if (!template) throw new AppError(404, 'Template not found');
 
   const flow = await prisma.flow.create({
@@ -310,6 +358,39 @@ router.patch('/:id', authenticate, requireOrg, asyncHandler(async (req, res) => 
   }
 
   sendSuccess(res, flow);
+}));
+
+router.post('/:id/schedule', authenticate, requireOrg, asyncHandler(async (req, res) => {
+  const orgId = req.user!.organizationId!;
+  const flowId = paramId(req);
+  const { conversationId, delaySeconds = 60 } = req.body as { conversationId?: string; delaySeconds?: number };
+
+  if (!conversationId) throw new AppError(400, 'conversationId is required');
+
+  const flow = await prisma.flow.findFirst({ where: { id: flowId, organizationId: orgId, enabled: true } });
+  if (!flow) throw new AppError(404, 'Flow not found');
+
+  const conversation = await prisma.conversation.findFirst({
+    where: { id: conversationId, organizationId: orgId },
+    include: { contact: true, whatsappNumber: true },
+  });
+  if (!conversation?.contact || !conversation.whatsappNumber) {
+    throw new AppError(404, 'Conversation not found');
+  }
+
+  const { scheduleFlowStart } = await import('./engine');
+  await scheduleFlowStart({
+    organizationId: orgId,
+    flowId,
+    conversationId,
+    contactId: conversation.contactId,
+    contactPhone: conversation.contact.phone,
+    phoneNumberId: conversation.whatsappNumber.phoneNumberId,
+    encryptedToken: conversation.whatsappNumber.accessToken,
+    delayMs: Math.min(Math.max(Number(delaySeconds) * 1000, 1000), 7 * 86400000),
+  });
+
+  sendSuccess(res, { scheduled: true, delaySeconds: Number(delaySeconds) });
 }));
 
 router.delete('/:id', authenticate, requireOrg, asyncHandler(async (req, res) => {

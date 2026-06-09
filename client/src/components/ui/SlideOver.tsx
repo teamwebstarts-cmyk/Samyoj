@@ -144,6 +144,7 @@ interface SlideOverFooterProps {
   onCancel: () => void;
   submitLabel?: string;
   loading?: boolean;
+  submitDisabled?: boolean;
   onDelete?: () => void;
   deleteLabel?: string;
 }
@@ -152,6 +153,7 @@ export function SlideOverFooter({
   onCancel,
   submitLabel = 'Save',
   loading,
+  submitDisabled,
   onDelete,
   deleteLabel = 'Delete',
 }: SlideOverFooterProps) {
@@ -179,7 +181,7 @@ export function SlideOverFooter({
       <button
         type="submit"
         form="slideover-form"
-        disabled={loading}
+        disabled={loading || submitDisabled}
         className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-whatsapp-500 to-whatsapp-600 px-5 text-[13px] font-semibold text-white shadow-[0_4px_14px_rgba(37,211,102,0.35)] transition hover:from-whatsapp-600 hover:to-whatsapp-700 disabled:opacity-50"
       >
         {loading && (

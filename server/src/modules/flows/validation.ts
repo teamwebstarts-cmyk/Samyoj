@@ -56,12 +56,56 @@ export function validateFlowGraph(
       if (!node.branches?.false) warnings.push(`Condition step "${node.id}" has no false branch`);
     }
 
-    if (node.type === 'buttons' && node.buttons?.length) {
-      for (const btn of node.buttons) {
-        if (!node.branches?.[btn.id] && !node.next) {
-          warnings.push(`Button "${btn.title}" in step "${node.id}" has no branch target`);
+    if (node.type === 'buttons') {
+      const mode = node.buttonMode || 'reply';
+      if (mode === 'url' && !node.ctaUrl) errors.push(`URL button step "${node.id}" needs a URL`);
+      if (mode === 'call' && !node.ctaPhone) errors.push(`Call button step "${node.id}" needs a phone number`);
+      if (mode === 'reply' && node.buttons?.length) {
+        for (const btn of node.buttons) {
+          if (!node.branches?.[btn.id] && !node.next) {
+            warnings.push(`Button "${btn.title}" in step "${node.id}" has no branch target`);
+          }
         }
       }
+    }
+
+    if (node.type === 'list') {
+      if (!node.listSections?.length) errors.push(`List step "${node.id}" needs at least one section`);
+      for (const section of node.listSections || []) {
+        for (const row of section.rows) {
+          if (!node.branches?.[row.id] && !node.next) {
+            warnings.push(`List item "${row.title}" in step "${node.id}" has no branch target`);
+          }
+        }
+      }
+    }
+
+    if (node.type === 'goto_flow' && !node.targetFlowId) {
+      errors.push(`Go to flow step "${node.id}" needs a target flow`);
+    }
+
+    if (node.type === 'goto_step' && !node.targetNodeId) {
+      errors.push(`Go to step "${node.id}" needs a target step`);
+    }
+
+    if (node.type === 'location' && (node.latitude == null || node.longitude == null)) {
+      errors.push(`Location step "${node.id}" needs latitude and longitude`);
+    }
+
+    if (node.type === 'contact_card' && (!node.contactName || !node.contactPhone)) {
+      errors.push(`Contact card step "${node.id}" needs name and phone`);
+    }
+
+    if (node.type === 'wa_flow' && (!node.waFlowId || !node.waFlowToken)) {
+      errors.push(`WhatsApp Flow step "${node.id}" needs flow ID and token`);
+    }
+
+    if (node.type === 'condition' && node.conditionType === 'variable_equals' && !node.conditionVariable) {
+      errors.push(`Condition step "${node.id}" needs a variable name`);
+    }
+
+    if (node.type === 'schedule' && !node.scheduleAt && !node.delaySeconds) {
+      errors.push(`Schedule step "${node.id}" needs a time or delay`);
     }
 
     if (node.type === 'template' && !node.templateName) {

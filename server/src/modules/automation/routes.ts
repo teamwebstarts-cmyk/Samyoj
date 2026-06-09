@@ -5,6 +5,8 @@ import { AppError, sendSuccess, asyncHandler, paramId } from '../../utils/respon
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { processAutomations, isBusinessHours } from './engine';
+import { getAutomationAnalytics } from './analytics';
+import { detectAutomationConflicts } from './conflicts';
 
 const router = Router();
 
@@ -21,6 +23,29 @@ const automationSchema = z.object({
   config: z.record(z.unknown()),
   enabled: z.boolean().default(true),
 });
+
+router.get(
+  '/analytics',
+  authenticate,
+  requireOrg,
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const days = parseInt((req.query.days as string) || '30', 10);
+    const analytics = await getAutomationAnalytics(orgId, days);
+    sendSuccess(res, analytics);
+  })
+);
+
+router.get(
+  '/conflicts',
+  authenticate,
+  requireOrg,
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const conflicts = await detectAutomationConflicts(orgId);
+    sendSuccess(res, { conflicts });
+  })
+);
 
 router.get(
   '/',

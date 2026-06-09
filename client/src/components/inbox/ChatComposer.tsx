@@ -1,5 +1,6 @@
-import { useRef, useState } from 'react';
-import { FileText, Image, LayoutTemplate, Lock, Paperclip, Send, X } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
+import { FileText, Image, LayoutTemplate, Lock, Paperclip, Send, X, Zap } from 'lucide-react';
+import type { CannedReply } from '../../types';
 
 export interface PendingAttachment {
   file: File;
@@ -18,6 +19,7 @@ interface ChatComposerProps {
   disabled?: boolean;
   disabledReason?: string;
   onTemplateClick?: () => void;
+  cannedReplies?: CannedReply[];
 }
 
 function formatFileSize(bytes: number) {
@@ -37,11 +39,19 @@ export default function ChatComposer({
   disabled,
   disabledReason = 'Messaging unavailable',
   onTemplateClick,
+  cannedReplies = [],
 }: ChatComposerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [attachMenuOpen, setAttachMenuOpen] = useState(false);
   const isDisabled = disabled || sending;
   const canSend = Boolean(value.trim() || attachment);
+
+  const shortcutMatch = value.match(/^\/([a-z0-9_-]*)$/i);
+  const filteredReplies = useMemo(() => {
+    if (!shortcutMatch) return [];
+    const q = shortcutMatch[1].toLowerCase();
+    return cannedReplies.filter((r) => r.shortcut.startsWith(q)).slice(0, 6);
+  }, [cannedReplies, shortcutMatch]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -98,7 +108,7 @@ export default function ChatComposer({
       )}
 
       <div
-        className={`flex items-end gap-2 rounded-2xl border p-1.5 shadow-input ring-1 transition ${
+        className={`relative flex items-end gap-2 rounded-2xl border p-1.5 shadow-input ring-1 transition ${
           isDisabled
             ? 'border-theme-border bg-theme-subtle ring-theme-border'
             : 'border-theme-border bg-theme-subtle ring-theme-surface'
@@ -154,6 +164,25 @@ export default function ChatComposer({
             </>
           )}
         </div>
+
+        {filteredReplies.length > 0 && (
+          <div className="absolute bottom-full left-14 right-2 z-20 mb-2 max-h-48 overflow-y-auto rounded-xl border border-theme-border bg-theme-surface py-1 shadow-panel">
+            {filteredReplies.map((reply) => (
+              <button
+                key={reply.id}
+                type="button"
+                onClick={() => onChange(reply.content)}
+                className="flex w-full items-start gap-2 px-3 py-2 text-left transition hover:bg-theme-subtle"
+              >
+                <Zap className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-600" />
+                <span className="min-w-0">
+                  <span className="block text-[12px] font-bold text-theme-fg">/{reply.shortcut}</span>
+                  <span className="block truncate text-[11px] text-theme-muted">{reply.title}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
 
         <input
           type="text"

@@ -13,7 +13,9 @@ import AppButton from '../ui/AppButton';
 import LoadingState from '../ui/LoadingState';
 import StatCard from '../dashboard/StatCard';
 import { teamApi } from '../../services/api';
-import type { AgentMetrics, TeamMember } from '../../types';
+import AppSelect from '../ui/AppSelect';
+import type { AgentMetrics, ShiftSchedule, TeamMember } from '../../types';
+import { DAY_LABELS } from './teamUi';
 import { toastError, toastSuccess } from '../../utils/toast';
 import AvailabilityBadge, { RoleBadge } from './AvailabilityBadge';
 import { formatJoinedDate, formatRelativeTime } from './teamUi';
@@ -46,6 +48,14 @@ export default function TeamMemberDetailPanel({
   const [conversations, setConversations] = useState<AssignedConversation[]>([]);
   const [loading, setLoading] = useState(false);
   const [reassignTo, setReassignTo] = useState('');
+  const [shiftSchedule, setShiftSchedule] = useState<ShiftSchedule>({
+    enabled: false,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    days: [1, 2, 3, 4, 5],
+    startHour: 9,
+    endHour: 18,
+  });
+  const [savingShift, setSavingShift] = useState(false);
 
   useEffect(() => {
     if (!memberId) {
@@ -59,10 +69,36 @@ export default function TeamMemberDetailPanel({
         setMember(data.data.member);
         setMetrics(data.data.metrics);
         setConversations(data.data.conversations);
+        if (data.data.member.shiftSchedule) {
+          setShiftSchedule(data.data.member.shiftSchedule);
+        }
       })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [memberId]);
+
+  const handleSaveShift = async () => {
+    if (!memberId) return;
+    setSavingShift(true);
+    try {
+      await teamApi.update(memberId, { shiftSchedule });
+      toastSuccess('Shift schedule saved');
+      onUpdated();
+    } catch {
+      toastError('Failed to save shift schedule');
+    } finally {
+      setSavingShift(false);
+    }
+  };
+
+  const toggleShiftDay = (day: number) => {
+    setShiftSchedule((prev) => ({
+      ...prev,
+      days: prev.days.includes(day)
+        ? prev.days.filter((d) => d !== day)
+        : [...prev.days, day].sort(),
+    }));
+  };
 
   const handleReassignAll = async () => {
     if (!memberId) return;
@@ -144,6 +180,73 @@ export default function TeamMemberDetailPanel({
                 <Row label="Last active" value={formatRelativeTime(member.lastActiveAt)} />
               )}
             </div>
+
+            {canManage && (
+              <div className="rounded-2xl border border-theme-border/70 bg-theme-subtle/30 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-[13px] font-bold text-theme-fg">Shift schedule</p>
+                  <label className="flex items-center gap-2 text-[12px] font-medium text-theme-secondary">
+                    <input
+                      type="checkbox"
+                      checked={shiftSchedule.enabled}
+                      onChange={(e) =>
+                        setShiftSchedule((prev) => ({ ...prev, enabled: e.target.checked }))
+                      }
+                    />
+                    Enabled
+                  </label>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {DAY_LABELS.map((label, day) => (
+                    <button
+                      key={label}
+                      type="button"
+                      onClick={() => toggleShiftDay(day)}
+                      className={`rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition ${
+                        shiftSchedule.days.includes(day)
+                          ? 'bg-whatsapp-500 text-white'
+                          : 'bg-theme-surface text-theme-secondary ring-1 ring-theme-border'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <AppSelect
+                    label="Start hour"
+                    value={String(shiftSchedule.startHour)}
+                    onChange={(e) =>
+                      setShiftSchedule((prev) => ({
+                        ...prev,
+                        startHour: parseInt(e.target.value, 10),
+                      }))
+                    }
+                    options={Array.from({ length: 24 }, (_, i) => ({
+                      value: String(i),
+                      label: `${i}:00`,
+                    }))}
+                  />
+                  <AppSelect
+                    label="End hour"
+                    value={String(shiftSchedule.endHour)}
+                    onChange={(e) =>
+                      setShiftSchedule((prev) => ({
+                        ...prev,
+                        endHour: parseInt(e.target.value, 10),
+                      }))
+                    }
+                    options={Array.from({ length: 24 }, (_, i) => ({
+                      value: String(i),
+                      label: `${i}:00`,
+                    }))}
+                  />
+                </div>
+                <AppButton size="sm" loading={savingShift} onClick={() => void handleSaveShift()}>
+                  Save schedule
+                </AppButton>
+              </div>
+            )}
 
             <div>
               <h3 className="mb-3 text-[13px] font-extrabold text-theme-fg">

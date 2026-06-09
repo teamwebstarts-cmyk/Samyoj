@@ -4,7 +4,7 @@ const tips = [
   {
     icon: Smartphone,
     title: 'Connect WhatsApp',
-    description: 'Link your business number and register webhooks for real-time inbox delivery.',
+    description: 'Link your business number to send and receive messages.',
     accent:
       'from-emerald-500/10 via-white to-teal-500/5 border-emerald-200/60 dark:via-slate-900 dark:border-emerald-800/40',
     iconBg:
@@ -12,8 +12,8 @@ const tips = [
   },
   {
     icon: Bot,
-    title: 'Configure AI',
-    description: 'Set Azure OpenAI per org with token limits for bots, flows, and knowledge.',
+    title: 'Set up AI replies',
+    description: 'Create a bot that answers common questions for you.',
     accent:
       'from-indigo-500/10 via-white to-violet-500/5 border-indigo-200/60 dark:via-slate-900 dark:border-indigo-800/40',
     iconBg:
@@ -22,7 +22,7 @@ const tips = [
   {
     icon: Clock,
     title: 'Business hours',
-    description: 'Define when your team is available for away messages and automations.',
+    description: 'Set when your team is available for away messages.',
     accent:
       'from-amber-500/10 via-white to-orange-500/5 border-amber-200/60 dark:via-slate-900 dark:border-amber-800/40',
     iconBg:

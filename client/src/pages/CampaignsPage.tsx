@@ -577,8 +577,8 @@ export default function CampaignsPage() {
         <PageHero
           badge="Broadcast"
           badgeIcon={Send}
-          title="Reach customers with template campaigns"
-          description="Send Meta-approved templates with scheduling, segments, delivery tracking, and analytics."
+          title="Send messages to many contacts"
+          description="Use approved templates, pick your audience, and track delivery."
           accent="violet"
           stats={[
             { label: 'Total', value: summary.total },
@@ -601,7 +601,7 @@ export default function CampaignsPage() {
             {
               icon: LayoutTemplate,
               title: 'Approved templates',
-              description: 'Only Meta-approved templates can be sent in bulk broadcasts.',
+              description: 'Only approved templates can be sent in bulk.',
               accent: 'from-violet-500/10 via-white to-purple-500/5 border-violet-200/60 dark:via-slate-900',
               iconBg:
                 'bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-[0_4px_14px_rgba(139,92,246,0.35)]',
@@ -869,8 +869,8 @@ export default function CampaignsPage() {
             {!editing && (
               <ModalCallout
                 icon={LayoutTemplate}
-                title="Meta-approved templates only"
-                description="Bulk campaigns require an approved WhatsApp template. Create one under Templates if needed."
+                title="Approved templates only"
+                description="Bulk campaigns need an approved template. Create one under Templates if needed."
                 accent="violet"
               />
             )}
@@ -915,13 +915,13 @@ export default function CampaignsPage() {
             </ModalSection>
 
             {(form.bodyParams.length > 0 || form.headerParams.length > 0 || selectedTemplate) && (
-              <ModalSection step={2} title="Template variables" subtitle="Fill placeholders and preview the message">
+              <ModalSection step={2} title="Message details" subtitle="Fill in the blanks and preview your message">
                 <div className="space-y-4">
                   {form.bodyParams.map((_, i) => (
                     <AppInput
                       key={`body-${i}`}
                       id={`body-param-${i}`}
-                      label={`Body variable {{${i + 1}}}`}
+                      label={`Message line {{${i + 1}}}`}
                       placeholder={i === 0 ? '{{name}} or static text' : 'Value'}
                       value={form.bodyParams[i]}
                       onChange={(e) => {
@@ -936,7 +936,7 @@ export default function CampaignsPage() {
                     <AppInput
                       key={`header-${i}`}
                       id={`header-param-${i}`}
-                      label={`Header variable {{${i + 1}}}`}
+                      label={`Header line {{${i + 1}}}`}
                       value={form.headerParams[i]}
                       onChange={(e) => {
                         const headerParams = [...form.headerParams];
@@ -950,7 +950,7 @@ export default function CampaignsPage() {
                     <AppInput
                       id="header-media-url"
                       label={headerMediaLabel(selectedTemplate ? getTemplateHeaderFormat(selectedTemplate) : undefined)}
-                      hint="Public HTTPS URL for the template header media"
+                      hint="Link to your image or video for the header"
                       placeholder="https://example.com/image.jpg"
                       value={form.headerMediaUrl}
                       onChange={(e) => setForm({ ...form, headerMediaUrl: e.target.value })}
@@ -1025,7 +1025,7 @@ export default function CampaignsPage() {
               <ModalCallout
                 icon={LayoutTemplate}
                 title="No approved templates"
-                description="Create a template under Templates and wait for Meta approval before sending campaigns."
+                description="Create a template under Templates and wait for approval before sending."
                 accent="amber"
               />
             )}

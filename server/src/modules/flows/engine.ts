@@ -9,6 +9,7 @@ import { createModuleLogger } from '../../utils/logger';
 import { withConversationLock } from './lock';
 import { incrementFlowStat } from './analytics';
 import { detectMessageLanguage } from './language';
+import type { InteractiveMessageOptions } from '../messages/interactive';
 import {
   HANDOFF_KEYWORDS,
   type FlowNode,
@@ -60,7 +61,7 @@ function interpolate(text: string, variables: Record<string, string>, contactNam
 }
 
 function resolveNextNode(node: FlowNode, buttonReplyId?: string): string | null {
-  if (node.type === 'buttons' && buttonReplyId) {
+  if ((node.type === 'buttons' || node.type === 'list') && buttonReplyId) {
     return node.branches?.[buttonReplyId] || node.next || null;
   }
   return node.next || null;
@@ -77,6 +78,37 @@ function isValidPhone(value: string): boolean {
 function wantsHandoff(message: string): boolean {
   const lower = message.toLowerCase();
   return HANDOFF_KEYWORDS.some((kw) => lower.includes(kw));
+}
+
+function matchTextIntent(node: FlowNode, content: string): string | null {
+  if (!node.intentRoutes?.length || !content.trim()) return null;
+  const lower = content.toLowerCase();
+  for (const route of node.intentRoutes) {
+    if (route.keywords.some((kw) => lower.includes(kw.toLowerCase()))) {
+      return node.branches?.[route.branchKey] || null;
+    }
+  }
+  return null;
+}
+
+async function hasRecentCampaignMessage(
+  conversationId: string,
+  campaignId?: string,
+  withinHours = 168
+): Promise<boolean> {
+  const since = new Date(Date.now() - withinHours * 3600000);
+  const messages = await prisma.message.findMany({
+    where: { conversationId, direction: 'OUTBOUND', createdAt: { gte: since } },
+    orderBy: { createdAt: 'desc' },
+    take: 30,
+    select: { metadata: true },
+  });
+  return messages.some((m) => {
+    const meta = m.metadata as Record<string, unknown> | null;
+    if (!meta?.campaignId) return false;
+    if (campaignId && meta.campaignId !== campaignId) return false;
+    return true;
+  });
 }
 
 function keywordMatches(content: string, config: FlowTriggerConfig): boolean {
@@ -121,24 +153,45 @@ async function sendFlowMessage(
   content: string,
   variables: Record<string, string>,
   contactName?: string | null,
-  type: 'TEXT' | 'INTERACTIVE' | 'TEMPLATE' | 'IMAGE' | 'DOCUMENT' | 'VIDEO' = 'TEXT',
+  type: 'TEXT' | 'INTERACTIVE' | 'TEMPLATE' | 'IMAGE' | 'DOCUMENT' | 'VIDEO' | 'LOCATION' | 'CONTACTS' = 'TEXT',
   options?: {
     buttons?: Array<{ id: string; title: string }>;
+    interactive?: InteractiveMessageOptions;
     templateName?: string;
     templateLanguage?: string;
     mediaUrl?: string;
     mediaCaption?: string;
+    flowId?: string;
+    flowName?: string;
+    location?: { latitude: number; longitude: number; name?: string; address?: string };
+    contacts?: Array<{ name: string; phone: string; email?: string }>;
+    waFlow?: { flowId: string; flowToken: string; cta: string; screen?: string; body?: string };
   }
 ): Promise<string> {
   const rendered = interpolate(content, variables, contactName);
-  const metadata: Record<string, unknown> = { source: 'flow' };
+  const metadata: Record<string, unknown> = { source: 'flow', triggerType: 'FLOW' };
+  if (options?.flowId) metadata.flowId = options.flowId;
+  if (options?.flowName) metadata.flowName = options.flowName;
   if (options?.buttons?.length) metadata.buttons = options.buttons;
+  if (options?.interactive?.mode === 'cta_url') metadata.ctaType = 'url';
+  if (options?.interactive?.mode === 'cta_call') metadata.ctaType = 'call';
+  if (options?.interactive?.mode === 'list') metadata.listMenu = true;
+  if (options?.waFlow) metadata.waFlow = true;
+
+  const msgType =
+    type === 'TEXT'
+      ? 'TEXT'
+      : type === 'INTERACTIVE'
+        ? 'INTERACTIVE'
+        : type === 'TEMPLATE'
+          ? 'TEMPLATE'
+          : type;
 
   const msg = await prisma.message.create({
     data: {
       conversationId: payload.conversationId,
       direction: 'OUTBOUND',
-      type: type === 'TEXT' ? 'TEXT' : type === 'INTERACTIVE' ? 'INTERACTIVE' : type === 'TEMPLATE' ? 'TEMPLATE' : type,
+      type: msgType,
       content: rendered,
       status: 'PENDING',
       metadata: metadata as Prisma.InputJsonValue,
@@ -152,10 +205,14 @@ async function sendFlowMessage(
     encryptedToken: payload.encryptedToken,
     to: payload.contactPhone,
     content: rendered,
-    type,
+    type: options?.waFlow ? 'INTERACTIVE' : type,
     buttons: options?.buttons,
+    interactive: options?.interactive,
     templateName: options?.templateName,
     templateLanguage: options?.templateLanguage,
+    location: options?.location,
+    contacts: options?.contacts,
+    waFlow: options?.waFlow,
     mediaUrl: options?.mediaUrl,
     mediaCaption: options?.mediaCaption,
   });
@@ -195,6 +252,15 @@ async function addContactTag(contactId: string, tag: string): Promise<void> {
   });
 }
 
+async function removeContactTag(contactId: string, tag: string): Promise<void> {
+  const contact = await prisma.contact.findUnique({ where: { id: contactId } });
+  if (!contact || !contact.tags.includes(tag)) return;
+  await prisma.contact.update({
+    where: { id: contactId },
+    data: { tags: contact.tags.filter((t) => t !== tag) },
+  });
+}
+
 async function assignToAgent(
   organizationId: string,
   conversationId: string,
@@ -229,8 +295,12 @@ async function assignToAgent(
   });
 }
 
-async function callWebhook(node: FlowNode, payload: InboundFlowPayload, variables: Record<string, string>) {
-  if (!node.webhookUrl) return;
+async function callWebhook(
+  node: FlowNode,
+  payload: InboundFlowPayload,
+  variables: Record<string, string>
+): Promise<{ ok: boolean; status: number; body: string } | null> {
+  if (!node.webhookUrl) return null;
   const method = node.webhookMethod || 'POST';
   const body = {
     organizationId: payload.organizationId,
@@ -240,12 +310,20 @@ async function callWebhook(node: FlowNode, payload: InboundFlowPayload, variable
     timestamp: new Date().toISOString(),
   };
 
-  await fetch(node.webhookUrl, {
+  const res = await fetch(node.webhookUrl, {
     method,
     headers: { 'Content-Type': 'application/json' },
     body: method === 'POST' ? JSON.stringify(body) : undefined,
     signal: AbortSignal.timeout(10000),
   });
+  const text = await res.text().catch(() => '');
+  variables.webhook_status = String(res.status);
+  variables.webhook_ok = res.ok ? 'true' : 'false';
+  variables.webhook_body = text.slice(0, 2000);
+  if (node.webhookVariable) {
+    variables[node.webhookVariable] = text.slice(0, 500);
+  }
+  return { ok: res.ok, status: res.status, body: text };
 }
 
 async function executeNode(
@@ -267,8 +345,47 @@ async function executeNode(
       }
 
       case 'buttons': {
-        if (node.text && node.buttons?.length) {
-          await sendFlowMessage(payload, node.text, state.variables, contactName, 'INTERACTIVE', { buttons: node.buttons });
+        const mode = node.buttonMode || 'reply';
+        if (node.text) {
+          if (mode === 'url' && node.ctaUrl) {
+            await sendFlowMessage(payload, node.text, state.variables, contactName, 'INTERACTIVE', {
+              flowId,
+              interactive: { mode: 'cta_url', body: node.text, ctaLabel: node.ctaLabel, ctaUrl: node.ctaUrl },
+            });
+            await logNode(flowId, payload, node, 'success', { mode: 'url' }, undefined, Date.now() - start);
+            return { done: false, nextNodeId: node.next || null, waitingFor: null };
+          }
+          if (mode === 'call' && node.ctaPhone) {
+            await sendFlowMessage(payload, node.text, state.variables, contactName, 'INTERACTIVE', {
+              flowId,
+              interactive: { mode: 'cta_call', body: node.text, ctaLabel: node.ctaLabel, ctaPhone: node.ctaPhone },
+            });
+            await logNode(flowId, payload, node, 'success', { mode: 'call' }, undefined, Date.now() - start);
+            return { done: false, nextNodeId: node.next || null, waitingFor: null };
+          }
+          if (node.buttons?.length) {
+            await sendFlowMessage(payload, node.text, state.variables, contactName, 'INTERACTIVE', {
+              flowId,
+              buttons: node.buttons,
+              interactive: { mode: 'reply', body: node.text, buttons: node.buttons },
+            });
+          }
+        }
+        await logNode(flowId, payload, node, 'success', undefined, undefined, Date.now() - start);
+        return { done: false, nextNodeId: null, waitingFor: 'button' };
+      }
+
+      case 'list': {
+        if (node.text && node.listSections?.length) {
+          await sendFlowMessage(payload, node.text, state.variables, contactName, 'INTERACTIVE', {
+            flowId,
+            interactive: {
+              mode: 'list',
+              body: node.text,
+              listButtonLabel: node.listButtonLabel,
+              listSections: node.listSections,
+            },
+          });
         }
         await logNode(flowId, payload, node, 'success', undefined, undefined, Date.now() - start);
         return { done: false, nextNodeId: null, waitingFor: 'button' };
@@ -285,6 +402,64 @@ async function executeNode(
       case 'tag': {
         if (node.tag) await addContactTag(payload.contactId, node.tag);
         await logNode(flowId, payload, node, 'success', { tag: node.tag }, undefined, Date.now() - start);
+        return { done: false, nextNodeId: node.next || null, waitingFor: null };
+      }
+
+      case 'remove_tag': {
+        if (node.tag) await removeContactTag(payload.contactId, node.tag);
+        await logNode(flowId, payload, node, 'success', { tag: node.tag }, undefined, Date.now() - start);
+        return { done: false, nextNodeId: node.next || null, waitingFor: null };
+      }
+
+      case 'set_variable': {
+        if (node.variableName) {
+          state.variables[node.variableName] = interpolate(node.variableValue || '', state.variables, contactName);
+        }
+        await logNode(flowId, payload, node, 'success', { variable: node.variableName }, undefined, Date.now() - start);
+        return { done: false, nextNodeId: node.next || null, waitingFor: null };
+      }
+
+      case 'goto_flow': {
+        if (!node.targetFlowId) {
+          await logNode(flowId, payload, node, 'failed', undefined, 'Missing target flow', Date.now() - start);
+          return { done: true, nextNodeId: null, waitingFor: null };
+        }
+        const target = await prisma.flow.findFirst({
+          where: { id: node.targetFlowId, organizationId: payload.organizationId, enabled: true, status: 'PUBLISHED' },
+        });
+        if (!target) {
+          await logNode(flowId, payload, node, 'failed', undefined, 'Target flow not found', Date.now() - start);
+          return { done: true, nextNodeId: null, waitingFor: null };
+        }
+        const targetNodes = parseNodes(target.nodes);
+        const targetStart = getStartNode(targetNodes, target.startNodeId);
+        if (!targetStart) {
+          await logNode(flowId, payload, node, 'failed', undefined, 'Target flow has no start', Date.now() - start);
+          return { done: true, nextNodeId: null, waitingFor: null };
+        }
+        state.flowId = target.id;
+        state.currentNodeId = targetStart.id;
+        state.waitingFor = null;
+        await incrementFlowStat(target.id, 'starts');
+        await logNode(flowId, payload, node, 'success', { targetFlowId: target.id }, undefined, Date.now() - start);
+        await runFromNode(payload, target.id, targetNodes, targetStart.id, state, contactName, contactTags);
+        return { done: true, nextNodeId: null, waitingFor: null };
+      }
+
+      case 'request_callback': {
+        const callbackTag = node.callbackTag || 'callback-requested';
+        await addContactTag(payload.contactId, callbackTag);
+        if (node.text) {
+          await sendFlowMessage(payload, node.text, state.variables, contactName, 'TEXT', { flowId });
+        }
+        if (node.assignAgentId) {
+          await assignToAgent(
+            payload.organizationId,
+            payload.conversationId,
+            node.assignAgentId === '*' ? undefined : node.assignAgentId
+          );
+        }
+        await logNode(flowId, payload, node, 'success', { tag: callbackTag }, undefined, Date.now() - start);
         return { done: false, nextNodeId: node.next || null, waitingFor: null };
       }
 
@@ -305,6 +480,15 @@ async function executeNode(
         } else if (node.conditionType === 'language' && node.languageCode) {
           const lang = state.variables.language || state.variables.lang || '';
           branchKey = lang.toLowerCase() === node.languageCode.toLowerCase() ? 'true' : 'false';
+        } else if (node.conditionType === 'variable_equals' && node.conditionVariable) {
+          const actual = state.variables[node.conditionVariable] || '';
+          branchKey = actual === (node.conditionValue || '') ? 'true' : 'false';
+        } else if (node.conditionType === 'variable_contains' && node.conditionVariable) {
+          const actual = (state.variables[node.conditionVariable] || '').toLowerCase();
+          const expected = (node.conditionValue || '').toLowerCase();
+          branchKey = expected && actual.includes(expected) ? 'true' : 'false';
+        } else if (node.conditionType === 'webhook_ok') {
+          branchKey = state.variables.webhook_ok === 'true' ? 'true' : 'false';
         }
         const nextId = node.branches?.[branchKey] || node.next || null;
         await logNode(flowId, payload, node, 'success', { branch: branchKey }, undefined, Date.now() - start);
@@ -376,8 +560,14 @@ async function executeNode(
         return { done: false, nextNodeId: node.next || null, waitingFor: null };
       }
 
-      case 'delay': {
-        const delayMs = Math.min((node.delaySeconds || 5) * 1000, 86400000);
+      case 'delay':
+      case 'schedule': {
+        let delayMs = Math.min((node.delaySeconds || 5) * 1000, 86400000);
+        if (node.type === 'schedule' && node.scheduleAt) {
+          const target = new Date(node.scheduleAt).getTime();
+          const diff = target - Date.now();
+          if (diff > 0) delayMs = Math.min(diff, 7 * 86400000);
+        }
         state.waitingFor = 'delay';
         state.resumeAt = new Date(Date.now() + delayMs).toISOString();
         await saveFlowState(payload.conversationId, state);
@@ -398,18 +588,85 @@ async function executeNode(
           },
           { delay: delayMs, jobId: `flow-delay-${payload.conversationId}-${Date.now()}` }
         );
-        await logNode(flowId, payload, node, 'success', { delaySeconds: node.delaySeconds }, undefined, Date.now() - start);
+        await logNode(
+          flowId,
+          payload,
+          node,
+          'success',
+          node.type === 'schedule' ? { scheduleAt: node.scheduleAt, delayMs } : { delaySeconds: node.delaySeconds },
+          undefined,
+          Date.now() - start
+        );
         return { done: false, nextNodeId: null, waitingFor: 'delay' };
       }
 
       case 'webhook': {
-        await callWebhook(node, payload, state.variables);
-        await logNode(flowId, payload, node, 'success', { url: node.webhookUrl }, undefined, Date.now() - start);
+        const result = await callWebhook(node, payload, state.variables);
+        await logNode(
+          flowId,
+          payload,
+          node,
+          result?.ok === false ? 'failed' : 'success',
+          { url: node.webhookUrl, status: result?.status },
+          result?.ok === false ? `Webhook returned ${result?.status}` : undefined,
+          Date.now() - start
+        );
+        return { done: false, nextNodeId: node.next || null, waitingFor: null };
+      }
+
+      case 'goto_step': {
+        const nextId = node.targetNodeId || node.next || null;
+        await logNode(flowId, payload, node, 'success', { targetNodeId: nextId }, undefined, Date.now() - start);
+        return { done: false, nextNodeId: nextId, waitingFor: null };
+      }
+
+      case 'location': {
+        if (node.latitude != null && node.longitude != null) {
+          await sendFlowMessage(payload, node.text || node.locationName || 'Our location', state.variables, contactName, 'LOCATION', {
+            flowId,
+            location: {
+              latitude: node.latitude,
+              longitude: node.longitude,
+              name: node.locationName,
+              address: node.locationAddress,
+            },
+          });
+        }
+        await logNode(flowId, payload, node, 'success', undefined, undefined, Date.now() - start);
+        return { done: false, nextNodeId: node.next || null, waitingFor: null };
+      }
+
+      case 'contact_card': {
+        if (node.contactName && node.contactPhone) {
+          await sendFlowMessage(payload, node.text || `Contact: ${node.contactName}`, state.variables, contactName, 'CONTACTS', {
+            flowId,
+            contacts: [{ name: node.contactName, phone: node.contactPhone, email: node.contactEmail }],
+          });
+        }
+        await logNode(flowId, payload, node, 'success', undefined, undefined, Date.now() - start);
+        return { done: false, nextNodeId: node.next || null, waitingFor: null };
+      }
+
+      case 'wa_flow': {
+        if (node.waFlowId && node.waFlowToken) {
+          await sendFlowMessage(payload, node.text || 'Please complete the form', state.variables, contactName, 'INTERACTIVE', {
+            flowId,
+            waFlow: {
+              flowId: node.waFlowId,
+              flowToken: node.waFlowToken,
+              cta: node.waFlowCta || 'Open',
+              screen: node.waFlowScreen,
+              body: node.text,
+            },
+          });
+        }
+        await logNode(flowId, payload, node, 'success', undefined, undefined, Date.now() - start);
         return { done: false, nextNodeId: node.next || null, waitingFor: null };
       }
 
       case 'ab_split': {
-        const branchKey = Math.random() < 0.5 ? 'a' : 'b';
+        const ratio = Math.min(Math.max(node.splitRatio ?? 50, 1), 99) / 100;
+        const branchKey = Math.random() < ratio ? 'a' : 'b';
         const nextId = node.branches?.[branchKey] || node.next || null;
         await logNode(flowId, payload, node, 'success', { branch: branchKey }, undefined, Date.now() - start);
         return { done: false, nextNodeId: nextId, waitingFor: null };
@@ -454,7 +711,7 @@ async function runFromNode(
   let currentId: string | null = startNodeId;
   let iterations = 0;
 
-  while (currentId && iterations < 25) {
+  while (currentId && iterations < 50) {
     iterations++;
     const node = findNode(nodes, currentId);
     if (!node) {
@@ -480,7 +737,7 @@ async function runFromNode(
     }
   }
 
-  if (iterations >= 25) {
+  if (iterations >= 50) {
     log.warn('Flow iteration limit exceeded', { flowId, conversationId: payload.conversationId });
     await incrementFlowStat(flowId, 'dropoffs', state.currentNodeId);
   }
@@ -512,6 +769,15 @@ async function flowMatchesTrigger(
       return Boolean(config.tag && contactTags.includes(config.tag));
     case 'SEGMENT':
       return Boolean(config.tags?.some((t) => contactTags.includes(t)));
+    case 'CAMPAIGN_REPLY':
+      return (
+        Boolean(payload.content) &&
+        (await hasRecentCampaignMessage(
+          payload.conversationId,
+          config.campaignId,
+          config.withinHours ?? 168
+        ))
+      );
     default:
       return false;
   }
@@ -619,6 +885,20 @@ async function processInboundFlow(payload: InboundFlowPayload): Promise<boolean>
       }
 
       if (payload.content) {
+        const intentNext = matchTextIntent(currentNode, payload.content);
+        if (intentNext) {
+          existingState.waitingFor = null;
+          existingState.attempts = 0;
+          return runFromNode(
+            payload,
+            flow.id,
+            nodes,
+            intentNext,
+            existingState,
+            conversation.contact?.name,
+            contactTags
+          );
+        }
         await sendFlowMessage(
           payload,
           'Please tap one of the buttons above to continue. 👆',
@@ -632,10 +912,34 @@ async function processInboundFlow(payload: InboundFlowPayload): Promise<boolean>
       return true;
     }
 
-    if (existingState.waitingFor === 'text' && payload.content) {
+    if (existingState.waitingFor === 'text' && (payload.content || payload.hasMedia)) {
       const field = currentNode.field || 'custom';
       const fieldKey = field === 'custom' ? (currentNode.customField || 'answer') : field;
       const maxRetries = currentNode.maxRetries ?? 2;
+
+      const answerValue = payload.hasMedia
+        ? `[${payload.messageType || 'media'}]`
+        : payload.content;
+
+      if (currentNode.acceptMedia && payload.hasMedia) {
+        existingState.variables[fieldKey] = answerValue;
+        existingState.attempts = 0;
+        const nextId = currentNode.next;
+        if (!nextId) {
+          await saveFlowState(payload.conversationId, null);
+          return true;
+        }
+        existingState.waitingFor = null;
+        return runFromNode(
+          payload,
+          flow.id,
+          nodes,
+          nextId,
+          existingState,
+          conversation.contact?.name,
+          contactTags
+        );
+      }
 
       if (!validateAnswer(field, payload.content)) {
         existingState.attempts += 1;
@@ -780,5 +1084,249 @@ export async function resumeFlowAfterDelay(jobData: {
     state,
     conversation.contact?.name,
     conversation.contact?.tags || []
+  );
+}
+
+export async function triggerMissedCallFlow(params: {
+  organizationId: string;
+  conversationId: string;
+  contactId: string;
+  contactPhone: string;
+  phoneNumberId: string;
+  encryptedToken: string;
+}): Promise<boolean> {
+  const flows = await prisma.flow.findMany({
+    where: {
+      organizationId: params.organizationId,
+      enabled: true,
+      status: 'PUBLISHED',
+      triggerType: 'MISSED_CALL',
+    },
+    orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }],
+  });
+
+  if (flows.length === 0) return false;
+
+  const flow = flows[0];
+  const nodes = parseNodes(flow.nodes);
+  const startNode = getStartNode(nodes, flow.startNodeId);
+  if (!startNode) return false;
+
+  const conversation = await prisma.conversation.findFirst({
+    where: { id: params.conversationId, organizationId: params.organizationId },
+    include: { contact: true },
+  });
+  if (!conversation || conversation.botHandoffAt) return false;
+
+  const state: FlowState = {
+    flowId: flow.id,
+    flowName: flow.name,
+    currentNodeId: startNode.id,
+    waitingFor: null,
+    variables: {},
+    attempts: 0,
+  };
+  if (conversation.contact?.name) state.variables.name = conversation.contact.name;
+
+  const payload: InboundFlowPayload = {
+    organizationId: params.organizationId,
+    conversationId: params.conversationId,
+    contactId: params.contactId,
+    messageId: '',
+    contactPhone: params.contactPhone,
+    phoneNumberId: params.phoneNumberId,
+    encryptedToken: params.encryptedToken,
+    content: '',
+    isNewConversation: false,
+  };
+
+  await incrementFlowStat(flow.id, 'starts');
+  log.info('Starting missed-call flow', { flowId: flow.id, conversationId: params.conversationId });
+
+  return withConversationLock(params.conversationId, async () => {
+    await runFromNode(
+      payload,
+      flow.id,
+      nodes,
+      startNode.id,
+      state,
+      conversation.contact?.name,
+      conversation.contact?.tags || []
+    );
+    return true;
+  }).then((r) => r ?? false);
+}
+
+async function triggerEventFlow(
+  triggerType: 'CALL_COMPLETED',
+  params: {
+    organizationId: string;
+    conversationId: string;
+    contactId: string;
+    contactPhone: string;
+    phoneNumberId: string;
+    encryptedToken: string;
+  }
+): Promise<boolean> {
+  const flows = await prisma.flow.findMany({
+    where: {
+      organizationId: params.organizationId,
+      enabled: true,
+      status: 'PUBLISHED',
+      triggerType,
+    },
+    orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }],
+  });
+  if (flows.length === 0) return false;
+
+  const flow = flows[0];
+  const nodes = parseNodes(flow.nodes);
+  const startNode = getStartNode(nodes, flow.startNodeId);
+  if (!startNode) return false;
+
+  const conversation = await prisma.conversation.findFirst({
+    where: { id: params.conversationId, organizationId: params.organizationId },
+    include: { contact: true },
+  });
+  if (!conversation || conversation.botHandoffAt) return false;
+
+  const state: FlowState = {
+    flowId: flow.id,
+    flowName: flow.name,
+    currentNodeId: startNode.id,
+    waitingFor: null,
+    variables: {},
+    attempts: 0,
+  };
+  if (conversation.contact?.name) state.variables.name = conversation.contact.name;
+
+  const payload: InboundFlowPayload = {
+    organizationId: params.organizationId,
+    conversationId: params.conversationId,
+    contactId: params.contactId,
+    messageId: '',
+    contactPhone: params.contactPhone,
+    phoneNumberId: params.phoneNumberId,
+    encryptedToken: params.encryptedToken,
+    content: '',
+    isNewConversation: false,
+  };
+
+  await incrementFlowStat(flow.id, 'starts');
+  log.info('Starting event flow', { flowId: flow.id, triggerType, conversationId: params.conversationId });
+
+  return withConversationLock(params.conversationId, async () => {
+    await runFromNode(
+      payload,
+      flow.id,
+      nodes,
+      startNode.id,
+      state,
+      conversation.contact?.name,
+      conversation.contact?.tags || []
+    );
+    return true;
+  }).then((r) => r ?? false);
+}
+
+export async function triggerCallCompletedFlow(params: {
+  organizationId: string;
+  conversationId: string;
+  contactId: string;
+  contactPhone: string;
+  phoneNumberId: string;
+  encryptedToken: string;
+}): Promise<boolean> {
+  return triggerEventFlow('CALL_COMPLETED', params);
+}
+
+export async function scheduleFlowStart(params: {
+  organizationId: string;
+  flowId: string;
+  conversationId: string;
+  contactId: string;
+  contactPhone: string;
+  phoneNumberId: string;
+  encryptedToken: string;
+  delayMs: number;
+  isNewConversation?: boolean;
+}): Promise<void> {
+  await flowQueue.add(
+    'start-flow',
+    {
+      organizationId: params.organizationId,
+      flowId: params.flowId,
+      conversationId: params.conversationId,
+      contactId: params.contactId,
+      contactPhone: params.contactPhone,
+      phoneNumberId: params.phoneNumberId,
+      encryptedToken: params.encryptedToken,
+      isNewConversation: params.isNewConversation ?? false,
+    },
+    {
+      delay: Math.min(Math.max(params.delayMs, 0), 7 * 86400000),
+      jobId: `flow-start-${params.conversationId}-${params.flowId}-${Date.now()}`,
+    }
+  );
+}
+
+export async function startFlowFromJob(jobData: {
+  organizationId: string;
+  flowId: string;
+  conversationId: string;
+  contactId: string;
+  contactPhone: string;
+  phoneNumberId: string;
+  encryptedToken: string;
+  isNewConversation: boolean;
+}): Promise<void> {
+  const flow = await prisma.flow.findFirst({
+    where: { id: jobData.flowId, organizationId: jobData.organizationId, enabled: true, status: 'PUBLISHED' },
+  });
+  if (!flow) return;
+
+  const nodes = parseNodes(flow.nodes);
+  const startNode = getStartNode(nodes, flow.startNodeId);
+  if (!startNode) return;
+
+  const conversation = await prisma.conversation.findFirst({
+    where: { id: jobData.conversationId, organizationId: jobData.organizationId },
+    include: { contact: true },
+  });
+  if (!conversation || conversation.botHandoffAt) return;
+
+  const state: FlowState = {
+    flowId: flow.id,
+    flowName: flow.name,
+    currentNodeId: startNode.id,
+    waitingFor: null,
+    variables: {},
+    attempts: 0,
+  };
+  if (conversation.contact?.name) state.variables.name = conversation.contact.name;
+
+  const payload: InboundFlowPayload = {
+    organizationId: jobData.organizationId,
+    conversationId: jobData.conversationId,
+    contactId: jobData.contactId,
+    messageId: '',
+    contactPhone: jobData.contactPhone,
+    phoneNumberId: jobData.phoneNumberId,
+    encryptedToken: jobData.encryptedToken,
+    content: '',
+    isNewConversation: jobData.isNewConversation,
+  };
+
+  await incrementFlowStat(flow.id, 'starts');
+  await withConversationLock(jobData.conversationId, () =>
+    runFromNode(
+      payload,
+      flow.id,
+      nodes,
+      startNode.id,
+      state,
+      conversation.contact?.name,
+      conversation.contact?.tags || []
+    )
   );
 }

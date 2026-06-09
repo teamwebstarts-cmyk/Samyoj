@@ -192,7 +192,7 @@ export default function TemplatesPage() {
       const payload = buildCreatePayload(form);
       if (formMode === 'resubmit' && resubmitName) {
         await templateApi.resubmit(resubmitName, payload);
-        toastSuccess('Template resubmitted for Meta review');
+        toastSuccess('Template resubmitted for review');
       } else {
         await templateApi.create(payload);
         toastSuccess('Template submitted for approval');
@@ -314,7 +314,7 @@ export default function TemplatesPage() {
               icon={<BookOpen size={16} />}
               onClick={() => setLibraryOpen(true)}
             >
-              Meta library
+              Template library
             </AppButton>
             <AppButton icon={<Plus size={16} />} onClick={openCreate}>
               Create template
@@ -325,10 +325,10 @@ export default function TemplatesPage() {
 
       <div className="space-y-5 animate-fade-up-delay sm:space-y-6">
         <PageHero
-          badge="Meta templates"
+          badge="Templates"
           badgeIcon={FileText}
-          title="Manage WhatsApp message templates"
-          description="Create, preview, test, and track Meta-approved templates for campaigns and inbox outreach."
+          title="Message templates"
+          description="Create and manage approved templates for campaigns and outreach."
           accent="rose"
           stats={[
             { label: 'Total', value: stats.total },
@@ -386,7 +386,7 @@ export default function TemplatesPage() {
 
         {stats.pending > 0 && (
           <AppAlert variant="info">
-            {stats.pending} template{stats.pending > 1 ? 's' : ''} pending Meta review. This page
+            {stats.pending} template{stats.pending > 1 ? 's' : ''} waiting for approval. This page
             auto-refreshes every 30 seconds.
           </AppAlert>
         )}
@@ -400,7 +400,7 @@ export default function TemplatesPage() {
             description={
               search || statusFilter !== ALL_STATUSES
                 ? 'Try adjusting your search or filters.'
-                : 'Create one, or browse the Meta template library for proven examples.'
+                : 'Create one, or browse the template library for examples.'
             }
             action={
               <div className="flex flex-wrap justify-center gap-2">
@@ -409,7 +409,7 @@ export default function TemplatesPage() {
                   icon={<BookOpen size={16} />}
                   onClick={() => setLibraryOpen(true)}
                 >
-                  Browse Meta library
+                  Browse library
                 </AppButton>
                 <AppButton icon={<Plus size={16} />} onClick={openCreate}>
                   Create template
@@ -435,8 +435,8 @@ export default function TemplatesPage() {
       <SlideOver
         open={libraryOpen}
         onClose={() => setLibraryOpen(false)}
-        title="Meta Template Library"
-        subtitle="Pre-approved templates for reference or direct submission"
+        title="Template library"
+        subtitle="Ready-made templates you can use or submit"
         size="xl"
       >
         <TemplateLibraryPanel onUseAsReference={handleUseLibraryReference} onCreated={() => load()} />
@@ -446,12 +446,12 @@ export default function TemplatesPage() {
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         title={formMode === 'resubmit' ? 'Edit & resubmit template' : 'Create message template'}
-        subtitle="Submitted to Meta for review after creation"
+        subtitle="Sent for review after you create it"
         size="lg"
         footer={
           <SlideOverFooter
             onCancel={() => setCreateOpen(false)}
-            submitLabel={formMode === 'resubmit' ? 'Resubmit to Meta' : 'Submit to Meta'}
+            submitLabel={formMode === 'resubmit' ? 'Resubmit for review' : 'Submit for review'}
             loading={saving}
           />
         }

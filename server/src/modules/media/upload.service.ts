@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import { config } from '../../config';
+import { getPublicMediaUrl } from './storage-adapter';
 import { saveMediaBuffer } from './storage';
 
 const MAX_MEDIA_BYTES = 16 * 1024 * 1024;
@@ -43,7 +43,7 @@ export async function storeOutboundMedia(options: {
 
   return {
     mediaPath: saved.mediaPath,
-    publicUrl: `${config.serverUrl}/api/media/public/${saved.mediaPath}`,
+    publicUrl: getPublicMediaUrl(saved.mediaPath),
     mimeType: saved.mimeType,
     size: saved.size,
     messageType: mimeToMessageType(saved.mimeType),

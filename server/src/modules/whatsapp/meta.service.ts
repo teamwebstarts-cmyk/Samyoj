@@ -10,7 +10,7 @@ export interface InteractiveButton {
 
 export interface SendMessagePayload {
   to: string;
-  type: 'text' | 'template' | 'image' | 'document' | 'video' | 'audio' | 'interactive';
+  type: 'text' | 'template' | 'image' | 'document' | 'video' | 'audio' | 'interactive' | 'location' | 'contacts';
   text?: { body: string };
   template?: {
     name: string;
@@ -21,10 +21,44 @@ export interface SendMessagePayload {
   document?: { link: string; caption?: string; filename?: string };
   video?: { link: string; caption?: string };
   audio?: { link: string };
+  location?: {
+    latitude: number;
+    longitude: number;
+    name?: string;
+    address?: string;
+  };
+  contacts?: Array<{
+    name: { formatted_name: string; first_name?: string };
+    phones?: Array<{ phone: string; type?: string; wa_id?: string }>;
+    emails?: Array<{ email: string; type?: string }>;
+  }>;
   interactive?: {
-    type: 'button';
+    type: 'button' | 'cta_url' | 'list' | 'flow';
     body: { text: string };
-    action: { buttons: InteractiveButton[] };
+    action:
+      | { buttons: InteractiveButton[] }
+      | {
+          name: 'cta_url';
+          parameters: { display_text: string; url: string };
+        }
+      | {
+          button: string;
+          sections: Array<{
+            title?: string;
+            rows: Array<{ id: string; title: string; description?: string }>;
+          }>;
+        }
+      | {
+          name: 'flow';
+          parameters: {
+            flow_message_version: string;
+            flow_token: string;
+            flow_id: string;
+            flow_cta: string;
+            flow_action?: string;
+            flow_action_payload?: { screen?: string; data?: Record<string, unknown> };
+          };
+        };
   };
 }
 

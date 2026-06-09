@@ -279,6 +279,10 @@ const flowWorker = new Worker(
       const { resumeFlowAfterDelay } = await import('../modules/flows/engine');
       await resumeFlowAfterDelay(job.data);
     }
+    if (job.name === 'start-flow') {
+      const { startFlowFromJob } = await import('../modules/flows/engine');
+      await startFlowFromJob(job.data);
+    }
   },
   {
     connection,

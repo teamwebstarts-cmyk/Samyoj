@@ -66,6 +66,9 @@ export const authApi = {
     api.post('/auth/login', data),
   me: () => api.get('/auth/me'),
   logout: (refreshToken: string) => api.post('/auth/logout', { refreshToken }),
+  forgotPassword: (email: string) => api.post('/auth/forgot-password', { email }),
+  resetPassword: (token: string, password: string) =>
+    api.post('/auth/reset-password', { token, password }),
 };
 
 export const inboxApi = {
@@ -86,6 +89,26 @@ export const inboxApi = {
   ) => api.patch(`/inbox/${id}/bot`, data),
   setStatus: (id: string, status: string) => api.patch(`/inbox/${id}/status`, { status }),
   addNote: (id: string, content: string) => api.post(`/inbox/${id}/notes`, { content }),
+};
+
+export const labelsApi = {
+  list: () => api.get('/labels'),
+  create: (data: { name: string; color?: string }) => api.post('/labels', data),
+  update: (id: string, data: { name?: string; color?: string }) => api.patch(`/labels/${id}`, data),
+  remove: (id: string) => api.delete(`/labels/${id}`),
+  addToConversation: (conversationId: string, labelId: string) =>
+    api.post(`/labels/conversations/${conversationId}`, { labelId }),
+  removeFromConversation: (conversationId: string, labelId: string) =>
+    api.delete(`/labels/conversations/${conversationId}/${labelId}`),
+};
+
+export const cannedRepliesApi = {
+  list: (search?: string) => api.get('/canned-replies', { params: search ? { search } : {} }),
+  create: (data: { shortcut: string; title: string; content: string }) =>
+    api.post('/canned-replies', data),
+  update: (id: string, data: Partial<{ shortcut: string; title: string; content: string }>) =>
+    api.patch(`/canned-replies/${id}`, data),
+  remove: (id: string) => api.delete(`/canned-replies/${id}`),
 };
 
 export interface WhatsappPhoneOption {
@@ -129,6 +152,8 @@ export const automationApi = {
   create: (data: Record<string, unknown>) => api.post('/automations', data),
   update: (id: string, data: Record<string, unknown>) => api.patch(`/automations/${id}`, data),
   delete: (id: string) => api.delete(`/automations/${id}`),
+  analytics: (days = 30) => api.get('/automations/analytics', { params: { days: String(days) } }),
+  conflicts: () => api.get('/automations/conflicts'),
 };
 
 export const flowApi = {
@@ -146,6 +171,8 @@ export const flowApi = {
   versions: (id: string) => api.get(`/flows/${id}/versions`),
   publish: (id: string, note?: string) => api.post(`/flows/${id}/publish`, { note }),
   restoreVersion: (id: string, version: number) => api.post(`/flows/${id}/restore/${version}`),
+  scheduleStart: (id: string, data: { conversationId: string; delaySeconds?: number }) =>
+    api.post(`/flows/${id}/schedule`, data),
 };
 
 export const settingsApi = {
@@ -292,6 +319,38 @@ export const templateApi = {
 
 export const analyticsApi = {
   overview: () => api.get('/analytics/overview'),
+  reports: (days?: number) => api.get('/analytics/reports', { params: days ? { days: String(days) } : {} }),
+};
+
+export const billingApi = {
+  get: () => api.get('/billing'),
+  updatePlan: (plan: string) => api.patch('/billing/plan', { plan }),
+  createOrder: (planId: string) => api.post('/billing/create-order', { planId }),
+  verifyPayment: (data: {
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+    planId: 'growth' | 'business';
+  }) => api.post('/billing/verify', data),
+};
+
+export const complianceApi = {
+  exportData: () =>
+    api.get('/compliance/export', { responseType: 'blob' }).then((res) => res.data),
+  requestDeletion: () => api.post('/compliance/delete-request', { confirm: 'DELETE MY DATA' }),
+  sla: () => api.get('/compliance/sla'),
+};
+
+export const integrationsApi = {
+  listKeys: () => api.get('/integrations/api-keys'),
+  createKey: (name: string) => api.post('/integrations/api-keys', { name }),
+  revokeKey: (id: string) => api.delete(`/integrations/api-keys/${id}`),
+  listWebhooks: () => api.get('/integrations/webhooks'),
+  createWebhook: (data: { url: string; events: string[] }) =>
+    api.post('/integrations/webhooks', data),
+  updateWebhook: (id: string, data: Partial<{ url: string; events: string[]; enabled: boolean }>) =>
+    api.patch(`/integrations/webhooks/${id}`, data),
+  deleteWebhook: (id: string) => api.delete(`/integrations/webhooks/${id}`),
 };
 
 export const teamApi = {
