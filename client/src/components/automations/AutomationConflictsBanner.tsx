@@ -21,6 +21,9 @@ export default function AutomationConflictsBanner({ conflicts }: AutomationConfl
             {conflict.items.length > 0 && (
               <p className="mt-1 text-[12px] font-medium text-amber-800/90">{conflict.items.join(' · ')}</p>
             )}
+            <p className="mt-2 text-[11px] font-medium text-amber-800/80">
+              Tip: Turn off the one you don't need, or keep only one active for the same situation.
+            </p>
           </div>
         </div>
       ))}

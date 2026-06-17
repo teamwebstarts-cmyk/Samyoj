@@ -218,6 +218,9 @@ export interface MessageMetadata {
   automationName?: string;
   ctaType?: 'url' | 'call';
   listMenu?: boolean;
+  waFlow?: boolean;
+  contacts?: Array<{ name: string; phone: string; email?: string }>;
+  location?: { latitude: number; longitude: number; name?: string; address?: string };
 }
 
 export interface SendMediaPayload {
@@ -697,6 +700,21 @@ export interface FlowTemplate {
   triggerConfig: Record<string, unknown>;
   nodes: FlowNode[];
   color?: string;
+}
+
+export interface WhatsAppForm {
+  id: string;
+  name: string;
+  status: string;
+  categories: string[];
+  validationErrors: string[];
+}
+
+export interface WaFormFieldInput {
+  id: string;
+  label: string;
+  type: 'text' | 'email' | 'phone' | 'number';
+  required?: boolean;
 }
 
 export interface BusinessHours {

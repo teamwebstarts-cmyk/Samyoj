@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Bot, MessageSquare, MessageSquarePlus, Phone } from 'lucide-react';
+import { ArrowLeft, Bot, MessageSquare, MessageSquarePlus, Phone, StickyNote, Tag } from 'lucide-react';
 import ChatComposer, { type PendingAttachment } from '../components/inbox/ChatComposer';
 import TemplateComposer from '../components/inbox/TemplateComposer';
 import MediaViewer, { type MediaViewerItem } from '../components/inbox/MediaViewer';
@@ -28,7 +28,7 @@ import PageShell from '../components/ui/PageShell';
 import SearchInput from '../components/ui/SearchInput';
 import { DEFAULT_PAGE_SIZE } from '../constants/pagination';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
-import InboxDetailsPanel from '../components/inbox/InboxDetailsPanel';
+import InboxDetailsPanel, { type PanelSection } from '../components/inbox/InboxDetailsPanel';
 import InteractiveComposer from '../components/inbox/InteractiveComposer';
 import api, { aiBotApi, callingApi, cannedRepliesApi, inboxApi, teamApi } from '../services/api';
 import { toastError, toastSuccess } from '../utils/toast';
@@ -81,6 +81,9 @@ export default function InboxPage() {
   } | null>(null);
   const [cannedReplies, setCannedReplies] = useState<CannedReply[]>([]);
   const [interactiveOpen, setInteractiveOpen] = useState(false);
+  const [detailsOverlay, setDetailsOverlay] = useState<{ open: boolean; section?: PanelSection }>({
+    open: false,
+  });
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const debouncedSearch = useDebouncedValue(search);
@@ -877,7 +880,30 @@ export default function InboxPage() {
                     className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-violet-200/80 bg-violet-50 px-3 py-2 text-[11px] font-bold text-violet-800 transition hover:bg-violet-100 disabled:opacity-60"
                   >
                     <Phone className="h-3.5 w-3.5" />
-                    {callingBack ? 'Calling...' : 'Call'}
+                    <span className="hidden sm:inline">{callingBack ? 'Calling...' : 'Call'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setDetailsOverlay({ open: true, section: 'labels' })}
+                    title="Labels"
+                    className="relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-violet-200/80 bg-violet-50 text-violet-700 transition hover:bg-violet-100 lg:hidden"
+                  >
+                    <Tag className="h-4 w-4" />
+                    {(selected.labels?.length ?? 0) > 0 && (
+                      <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-violet-600 px-1 text-[9px] font-bold text-white">
+                        {selected.labels!.length}
+                      </span>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setDetailsOverlay({ open: true, section: 'notes' })}
+                    title="Team notes"
+                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-amber-200/80 bg-amber-50 text-amber-700 transition hover:bg-amber-100 lg:hidden"
+                  >
+                    <StickyNote className="h-4 w-4" />
                   </button>
 
                   <ServiceWindowBadge serviceWindow={serviceWindow} />
@@ -1006,6 +1032,9 @@ export default function InboxPage() {
                   onLabelsChange={(labels: ConversationLabel[]) =>
                     setSelected((prev) => (prev ? { ...prev, labels } : prev))
                   }
+                  overlayOpen={detailsOverlay.open}
+                  overlaySection={detailsOverlay.section}
+                  onOverlayClose={() => setDetailsOverlay({ open: false })}
                 />
               </>
             ) : (

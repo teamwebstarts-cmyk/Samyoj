@@ -847,6 +847,109 @@ export class MetaWhatsAppService {
       .filter(Boolean) as string[];
     return { subscribed: apps.includes(config.meta.appId), apps };
   }
+
+  static async listWhatsAppFlows(
+    wabaId: string,
+    accessToken: string
+  ): Promise<
+    Array<{
+      id: string;
+      name: string;
+      status: string;
+      categories: string[];
+      validationErrors: string[];
+    }>
+  > {
+    const data = await this.graphGet<{
+      data?: Array<{
+        id: string;
+        name: string;
+        status: string;
+        categories?: string[];
+        validation_errors?: Array<{ message?: string }>;
+      }>;
+    }>(`/${wabaId}/flows?fields=id,name,status,categories,validation_errors`, accessToken);
+
+    return (data.data || []).map((flow) => ({
+      id: flow.id,
+      name: flow.name,
+      status: flow.status,
+      categories: flow.categories || [],
+      validationErrors: (flow.validation_errors || [])
+        .map((e) => e.message)
+        .filter(Boolean) as string[],
+    }));
+  }
+
+  static async getWhatsAppFlow(
+    flowId: string,
+    accessToken: string
+  ): Promise<{
+    id: string;
+    name: string;
+    status: string;
+    categories: string[];
+    validationErrors: string[];
+  }> {
+    const flow = await this.graphGet<{
+      id: string;
+      name: string;
+      status: string;
+      categories?: string[];
+      validation_errors?: Array<{ message?: string }>;
+    }>(`/${flowId}?fields=id,name,status,categories,validation_errors`, accessToken);
+
+    return {
+      id: flow.id,
+      name: flow.name,
+      status: flow.status,
+      categories: flow.categories || [],
+      validationErrors: (flow.validation_errors || [])
+        .map((e) => e.message)
+        .filter(Boolean) as string[],
+    };
+  }
+
+  static async createWhatsAppFlow(
+    wabaId: string,
+    accessToken: string,
+    payload: { name: string; categories: string[]; flowJson: string }
+  ): Promise<{ id: string; status: string }> {
+    const res = await fetch(`${META_BASE}/${wabaId}/flows`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: payload.name,
+        categories: payload.categories,
+        flow_json: payload.flowJson,
+      }),
+    });
+
+    const data = (await res.json()) as { id?: string; status?: string } & GraphError;
+    if (!res.ok || !data.id) {
+      throw new Error(data.error?.message || 'Failed to create WhatsApp form');
+    }
+    return { id: data.id, status: data.status || 'DRAFT' };
+  }
+
+  static async publishWhatsAppFlow(flowId: string, accessToken: string): Promise<void> {
+    const res = await fetch(`${META_BASE}/${flowId}/publish`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({}),
+    });
+
+    const data = (await res.json()) as GraphError;
+    if (!res.ok) {
+      throw new Error(data.error?.message || 'Failed to publish WhatsApp form');
+    }
+  }
 }
 
 export function isWithin24HourWindow(lastInboundAt: Date | null): boolean {

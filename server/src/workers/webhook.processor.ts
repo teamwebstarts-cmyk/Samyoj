@@ -143,9 +143,11 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
         const parsed = parseInboundMessage(msg);
 
         const inboundType = mapInboundMessageType(msg.type as string | undefined);
-        const inboundMetadata = parsed.buttonReplyId
-          ? { ...parsed.metadata, buttonReplyId: parsed.buttonReplyId, isButtonReply: true }
-          : parsed.metadata;
+        const inboundMetadata = parsed.waFlowResponse
+          ? { ...parsed.metadata, waFlowResponse: parsed.waFlowResponse, isWaFlowReply: true }
+          : parsed.buttonReplyId
+            ? { ...parsed.metadata, buttonReplyId: parsed.buttonReplyId, isButtonReply: true }
+            : parsed.metadata;
 
         let message = await prisma.message.create({
           data: {
@@ -225,6 +227,7 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
           isNewConversation: isNew,
           messageType: msgType,
           hasMedia,
+          waFlowResponse: parsed.waFlowResponse,
         }).catch((err) =>
           logError(err, { source: 'webhook', action: 'Automation processing failed' })
         );

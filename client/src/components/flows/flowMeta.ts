@@ -97,16 +97,16 @@ export const nodeMeta: Record<
     shadow: 'shadow-[0_4px_14px_rgba(99,102,241,0.3)]',
   },
   condition: {
-    label: 'Condition',
-    description: 'Branch on rules',
+    label: 'Check & Choose',
+    description: 'Send different replies based on time, tags, or answers',
     icon: GitBranch,
     color: 'text-rose-700',
     gradient: 'from-rose-500 to-pink-600',
     shadow: 'shadow-[0_4px_14px_rgba(244,63,94,0.3)]',
   },
   handoff: {
-    label: 'Handoff',
-    description: 'Transfer to human agent',
+    label: 'Talk to Team',
+    description: 'Pass the chat to a person on your team',
     icon: Hand,
     color: 'text-rose-700',
     gradient: 'from-rose-500 to-red-600',
@@ -121,8 +121,8 @@ export const nodeMeta: Record<
     shadow: 'shadow-[0_4px_14px_rgba(99,102,241,0.3)]',
   },
   end: {
-    label: 'End Flow',
-    description: 'Close the conversation flow',
+    label: 'End',
+    description: 'Close this conversation',
     icon: CircleStop,
     color: 'text-neutral-700',
     gradient: 'from-neutral-500 to-neutral-600',
@@ -153,16 +153,16 @@ export const nodeMeta: Record<
     shadow: 'shadow-[0_4px_14px_rgba(249,115,22,0.3)]',
   },
   set_variable: {
-    label: 'Set Variable',
-    description: 'Store a value for later steps',
+    label: 'Save an Answer',
+    description: 'Remember something to use in a later message',
     icon: Variable,
     color: 'text-cyan-700',
     gradient: 'from-cyan-500 to-teal-600',
     shadow: 'shadow-[0_4px_14px_rgba(6,182,212,0.3)]',
   },
   goto_flow: {
-    label: 'Go to Flow',
-    description: 'Jump to another conversation flow',
+    label: 'Switch Auto-reply',
+    description: 'Continue in a different set of steps',
     icon: Workflow,
     color: 'text-indigo-700',
     gradient: 'from-indigo-500 to-blue-600',
@@ -201,8 +201,8 @@ export const nodeMeta: Record<
     shadow: 'shadow-[0_4px_14px_rgba(59,130,246,0.3)]',
   },
   wa_flow: {
-    label: 'WhatsApp Flow',
-    description: 'Native Meta form (Flow ID required)',
+    label: 'In-Chat Form',
+    description: 'A form customers fill inside WhatsApp',
     icon: FormInput,
     color: 'text-teal-700',
     gradient: 'from-teal-500 to-cyan-600',
@@ -289,8 +289,8 @@ export const triggerMeta: Record<
     gradient: 'from-amber-500 to-orange-500',
   },
   SEGMENT: {
-    label: 'By Tag Group',
-    description: 'When a contact has certain tags',
+    label: 'When Contact Has Tags',
+    description: 'Starts for contacts with certain labels',
     icon: Tag,
     accent: 'bg-indigo-50 text-indigo-800 ring-indigo-200/70',
     gradient: 'from-indigo-500 to-violet-600',
@@ -385,9 +385,9 @@ export function createNode(type: FlowNodeType, index: number): import('../../typ
     case 'location':
       return { ...base, text: 'Here is our location:', latitude: 0, longitude: 0, locationName: 'Our office' };
     case 'contact_card':
-      return { ...base, text: 'Save our contact:', contactName: 'Support Team', contactPhone: '+10000000000' };
+      return { ...base, text: 'Save our contact:', contactName: 'Support Team', contactPhone: '+919876543210' };
     case 'wa_flow':
-      return { ...base, text: 'Please fill out this form:', waFlowId: '', waFlowToken: '', waFlowCta: 'Open form' };
+      return { ...base, text: 'Please fill out this form:', waFlowId: '', waFlowCta: 'Open form' };
     case 'media':
       return { ...base, mediaUrl: '', mediaType: 'image', mediaCaption: '' };
     case 'webhook':

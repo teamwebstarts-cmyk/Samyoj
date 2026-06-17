@@ -1,6 +1,6 @@
 import prisma from '../../config/database';
 import { Prisma } from '@prisma/client';
-import { deliverOutboundMessage } from '../messages/send.service';
+import { deliverOutboundMessage, toDbMessageType, type DeliverMessageType } from '../messages/send.service';
 import { logAutomationRun, performHandoff } from '../ai/chatbot.service';
 import { queueAiBotProcessing } from '../automation/engine';
 import { getOrgBusinessHours, isWithinBusinessHours } from '../settings/business-hours';
@@ -153,7 +153,7 @@ async function sendFlowMessage(
   content: string,
   variables: Record<string, string>,
   contactName?: string | null,
-  type: 'TEXT' | 'INTERACTIVE' | 'TEMPLATE' | 'IMAGE' | 'DOCUMENT' | 'VIDEO' | 'LOCATION' | 'CONTACTS' = 'TEXT',
+  type: DeliverMessageType = 'TEXT',
   options?: {
     buttons?: Array<{ id: string; title: string }>;
     interactive?: InteractiveMessageOptions;
@@ -177,21 +177,16 @@ async function sendFlowMessage(
   if (options?.interactive?.mode === 'cta_call') metadata.ctaType = 'call';
   if (options?.interactive?.mode === 'list') metadata.listMenu = true;
   if (options?.waFlow) metadata.waFlow = true;
+  if (options?.contacts?.length) metadata.contacts = options.contacts;
+  if (options?.location) metadata.location = options.location;
 
-  const msgType =
-    type === 'TEXT'
-      ? 'TEXT'
-      : type === 'INTERACTIVE'
-        ? 'INTERACTIVE'
-        : type === 'TEMPLATE'
-          ? 'TEMPLATE'
-          : type;
+  const dbType = options?.waFlow ? 'INTERACTIVE' : toDbMessageType(type);
 
   const msg = await prisma.message.create({
     data: {
       conversationId: payload.conversationId,
       direction: 'OUTBOUND',
-      type: msgType,
+      type: dbType,
       content: rendered,
       status: 'PENDING',
       metadata: metadata as Prisma.InputJsonValue,
@@ -550,7 +545,14 @@ async function executeNode(
 
       case 'media': {
         if (node.mediaUrl) {
-          const mediaType = node.mediaType === 'document' ? 'DOCUMENT' : node.mediaType === 'video' ? 'VIDEO' : 'IMAGE';
+          const mediaTypeMap = {
+            image: 'IMAGE',
+            video: 'VIDEO',
+            document: 'DOCUMENT',
+            audio: 'AUDIO',
+          } as const;
+          const mediaType: DeliverMessageType =
+            mediaTypeMap[node.mediaType || 'image'] || 'IMAGE';
           await sendFlowMessage(payload, node.mediaCaption || node.text || '', state.variables, contactName, mediaType, {
             mediaUrl: node.mediaUrl,
             mediaCaption: node.mediaCaption,
@@ -622,15 +624,26 @@ async function executeNode(
 
       case 'location': {
         if (node.latitude != null && node.longitude != null) {
-          await sendFlowMessage(payload, node.text || node.locationName || 'Our location', state.variables, contactName, 'LOCATION', {
-            flowId,
-            location: {
-              latitude: node.latitude,
-              longitude: node.longitude,
-              name: node.locationName,
-              address: node.locationAddress,
-            },
-          });
+          const intro = node.text?.trim();
+          if (intro) {
+            await sendFlowMessage(payload, intro, state.variables, contactName, 'TEXT', { flowId });
+          }
+          await sendFlowMessage(
+            payload,
+            node.locationName || 'Our location',
+            state.variables,
+            contactName,
+            'LOCATION',
+            {
+              flowId,
+              location: {
+                latitude: node.latitude,
+                longitude: node.longitude,
+                name: node.locationName,
+                address: node.locationAddress,
+              },
+            }
+          );
         }
         await logNode(flowId, payload, node, 'success', undefined, undefined, Date.now() - start);
         return { done: false, nextNodeId: node.next || null, waitingFor: null };
@@ -638,29 +651,49 @@ async function executeNode(
 
       case 'contact_card': {
         if (node.contactName && node.contactPhone) {
-          await sendFlowMessage(payload, node.text || `Contact: ${node.contactName}`, state.variables, contactName, 'CONTACTS', {
+          const intro = node.text?.trim();
+          if (intro) {
+            await sendFlowMessage(payload, intro, state.variables, contactName, 'TEXT', { flowId });
+          }
+          await sendFlowMessage(payload, node.contactName, state.variables, contactName, 'CONTACTS', {
             flowId,
             contacts: [{ name: node.contactName, phone: node.contactPhone, email: node.contactEmail }],
           });
+        } else {
+          await logNode(
+            flowId,
+            payload,
+            node,
+            'failed',
+            undefined,
+            'Contact name and phone are required',
+            Date.now() - start
+          );
+          return { done: false, nextNodeId: node.next || null, waitingFor: null };
         }
         await logNode(flowId, payload, node, 'success', undefined, undefined, Date.now() - start);
         return { done: false, nextNodeId: node.next || null, waitingFor: null };
       }
 
       case 'wa_flow': {
-        if (node.waFlowId && node.waFlowToken) {
+        if (node.waFlowId) {
+          const { randomUUID } = await import('crypto');
+          const flowToken = `${payload.conversationId}:${node.id}:${randomUUID()}`;
           await sendFlowMessage(payload, node.text || 'Please complete the form', state.variables, contactName, 'INTERACTIVE', {
             flowId,
             waFlow: {
               flowId: node.waFlowId,
-              flowToken: node.waFlowToken,
-              cta: node.waFlowCta || 'Open',
+              flowToken,
+              cta: (node.waFlowCta || 'Open form').slice(0, 20),
               screen: node.waFlowScreen,
               body: node.text,
             },
           });
+          state.variables._last_wa_flow_token = flowToken;
+          await logNode(flowId, payload, node, 'success', { waFlowId: node.waFlowId }, undefined, Date.now() - start);
+          return { done: false, nextNodeId: null, waitingFor: 'wa_flow' };
         }
-        await logNode(flowId, payload, node, 'success', undefined, undefined, Date.now() - start);
+        await logNode(flowId, payload, node, 'failed', undefined, 'No form selected', Date.now() - start);
         return { done: false, nextNodeId: node.next || null, waitingFor: null };
       }
 
@@ -909,6 +942,33 @@ async function processInboundFlow(payload: InboundFlowPayload): Promise<boolean>
         return true;
       }
 
+      return true;
+    }
+
+    if (existingState.waitingFor === 'wa_flow') {
+      if (payload.waFlowResponse && Object.keys(payload.waFlowResponse).length > 0) {
+        for (const [key, value] of Object.entries(payload.waFlowResponse)) {
+          if (key.startsWith('_')) continue;
+          existingState.variables[`form_${key}`] = String(value ?? '');
+        }
+        existingState.variables._form_response = JSON.stringify(payload.waFlowResponse);
+        existingState.waitingFor = null;
+        existingState.attempts = 0;
+        const nextId = currentNode.next;
+        if (!nextId) {
+          await saveFlowState(payload.conversationId, null);
+          return true;
+        }
+        return runFromNode(
+          payload,
+          flow.id,
+          nodes,
+          nextId,
+          existingState,
+          conversation.contact?.name,
+          contactTags
+        );
+      }
       return true;
     }
 

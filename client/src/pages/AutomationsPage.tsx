@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
 import {
-  ArrowRight,
   BarChart3,
   Bot,
   Clock,
@@ -44,6 +43,7 @@ import { DEFAULT_PAGE_SIZE } from '../constants/pagination';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { automationApi } from '../services/api';
 import { WhatsAppMessagePreview } from '../components/inbox/WhatsAppPreview';
+import InteractiveMessageCard from '../components/inbox/InteractiveMessageCard';
 import type { Automation, AutomationAnalytics, AutomationConflict } from '../types';
 
 const triggerMeta: Record<
@@ -91,7 +91,7 @@ const triggerMeta: Record<
   },
   LEAD_CAPTURE: {
     label: 'Lead Capture',
-    description: 'Reply, tag as lead, and optionally hand off to your team',
+    description: 'Reply, tag as lead, and optionally connect to your team',
     icon: UserPlus,
     accent: 'from-rose-500/10 to-pink-500/5 border-rose-200/70',
     iconBg: 'bg-gradient-to-br from-rose-500 to-pink-600 text-white shadow-[0_4px_14px_rgba(244,63,94,0.3)]',
@@ -114,13 +114,41 @@ const triggerOptions = creatableTriggers.map((value) => ({
   label: triggerMeta[value].label,
 }));
 
-const filterTriggerOptions = [{ value: '', label: 'All triggers' }, ...triggerOptions];
+const filterTriggerOptions = [{ value: '', label: 'All types' }, ...triggerOptions];
 
 const statusFilterOptions = [
   { value: '', label: 'All' },
-  { value: 'active', label: 'Active' },
-  { value: 'paused', label: 'Paused' },
+  { value: 'active', label: 'On' },
+  { value: 'paused', label: 'Off' },
 ] as const;
+
+const triggerDefaults: Record<string, Partial<typeof emptyForm>> = {
+  KEYWORD: {
+    name: 'Keyword reply',
+    keyword: 'pricing',
+    message: 'Thanks for asking about pricing! Our team will share details with you shortly.',
+  },
+  WELCOME: {
+    name: 'Welcome message',
+    message: 'Hi there! 👋 Thanks for reaching out. How can we help you today?',
+  },
+  AWAY: {
+    name: 'Away message',
+    message: "Thanks for your message! We're away right now but will reply as soon as we're back.",
+  },
+  BUSINESS_HOURS: {
+    name: 'Business hours reply',
+    duringHoursMessage: 'Hi! Our team is available now. How can we help you?',
+    awayMessage: "Thanks for reaching out! We're currently closed and will reply during business hours.",
+    message: 'Hi! Our team is available now. How can we help you?',
+  },
+  LEAD_CAPTURE: {
+    name: 'Lead capture',
+    message: "Thanks for your interest! We've noted your request and someone from our team will contact you soon.",
+    tag: 'lead',
+    handoff: true,
+  },
+};
 
 type QuickReplyButton = { id: string; title: string };
 
@@ -140,7 +168,7 @@ function getTriggerMeta(triggerType: string) {
   return (
     triggerMeta[triggerType] ?? {
       label: triggerType,
-      description: 'Custom automation trigger',
+      description: 'Custom start rule',
       icon: MessageSquareQuote,
       accent: 'from-neutral-500/10 to-neutral-500/5 border-neutral-200/70',
       iconBg: 'bg-gradient-to-br from-neutral-600 to-neutral-700 text-white',
@@ -150,52 +178,6 @@ function getTriggerMeta(triggerType: string) {
 }
 
 type AutomationTab = 'flows' | 'quick' | 'analytics';
-
-function TabIntroCard({
-  icon: Icon,
-  title,
-  description,
-  accent,
-  iconBg,
-  cta,
-  onClick,
-}: {
-  icon: LucideIcon;
-  title: string;
-  description: string;
-  accent: string;
-  iconBg: string;
-  cta: string;
-  onClick?: () => void;
-}) {
-  const className = `flex h-full items-start gap-4 rounded-2xl border bg-gradient-to-br p-5 text-left transition hover:shadow-md ${accent}`;
-
-  const inner = (
-    <>
-      <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${iconBg}`}>
-        <Icon className="h-5 w-5" strokeWidth={2.25} />
-      </div>
-      <div className="flex min-w-0 flex-1 flex-col">
-        <p className="text-[14px] font-extrabold tracking-tight text-neutral-900">{title}</p>
-        <p className="mt-1 flex-1 text-[12px] font-medium leading-relaxed text-neutral-600">{description}</p>
-        <span className="mt-auto inline-flex items-center gap-1 pt-3 text-[12px] font-bold text-violet-700">
-          {cta}
-          {onClick && <ArrowRight className="h-3.5 w-3.5" />}
-        </span>
-      </div>
-    </>
-  );
-
-  if (onClick) {
-    return (
-      <button type="button" onClick={onClick} className={`${className} w-full active:scale-[0.995]`}>
-        {inner}
-      </button>
-    );
-  }
-
-  return <div className={className}>{inner}</div>;
-}
 
 export default function AutomationsPage() {
   const navigate = useNavigate();
@@ -273,7 +255,8 @@ export default function AutomationsPage() {
 
   const openCreate = (triggerType = 'KEYWORD') => {
     setEditing(null);
-    setForm({ ...emptyForm, triggerType });
+    const defaults = triggerDefaults[triggerType] || {};
+    setForm({ ...emptyForm, triggerType, ...defaults });
     setSlideOpen(true);
   };
 
@@ -314,7 +297,7 @@ export default function AutomationsPage() {
       validationErrors.push('Reply message is required');
     }
     if (form.triggerType === 'KEYWORD' && !form.keyword.trim()) {
-      validationErrors.push('Keyword is required for keyword trigger');
+      validationErrors.push('Enter the word customers should text');
     }
     if (validationErrors.length > 0) {
       toastValidationErrors(validationErrors);
@@ -420,14 +403,14 @@ export default function AutomationsPage() {
         ]
       : activeTab === 'analytics'
         ? [
-            { label: 'Total runs', value: analytics?.total ?? 0 },
-            { label: 'Success', value: analytics?.success ?? 0, tone: 'text-whatsapp-700' },
-            { label: 'Failed', value: analytics?.failed ?? 0, tone: 'text-amber-700' },
+            { label: 'Times used', value: analytics?.total ?? 0 },
+            { label: 'Sent OK', value: analytics?.success ?? 0, tone: 'text-whatsapp-700' },
+            { label: "Didn't send", value: analytics?.failed ?? 0, tone: 'text-amber-700' },
           ]
         : [
             { label: 'Quick replies', value: summary.total },
-            { label: 'Active', value: summary.active, tone: 'text-whatsapp-700' },
-            { label: 'Paused', value: summary.paused, tone: 'text-amber-700' },
+          { label: 'On', value: summary.active, tone: 'text-whatsapp-700' },
+          { label: 'Off', value: summary.paused, tone: 'text-amber-700' },
           ];
 
   return (
@@ -441,15 +424,15 @@ export default function AutomationsPage() {
                 icon={<LayoutTemplate size={16} />}
                 onClick={() => setTemplatesOpen(true)}
               >
-                Browse templates
+                Start from template
               </AppButton>
-              <AppButton icon={<Plus size={16} />} onClick={() => navigate('/automations/flows/new')}>
-                Blank flow
+              <AppButton variant="ghost" icon={<Plus size={16} />} onClick={() => navigate('/automations/flows/new')}>
+                Build from scratch
               </AppButton>
             </div>
           ) : activeTab === 'analytics' ? null : (
             <AppButton fullWidth className="w-full sm:w-auto" icon={<Plus size={16} />} onClick={() => openCreate()}>
-              New quick reply
+              New auto-reply
             </AppButton>
           )
         }
@@ -461,17 +444,17 @@ export default function AutomationsPage() {
           badgeIcon={Zap}
           title={
             activeTab === 'flows'
-              ? 'Conversation flows'
+              ? 'Multi-step conversations'
               : activeTab === 'analytics'
-                ? 'Automation analytics'
-                : 'Quick replies'
+                ? 'How your automations are doing'
+                : 'Instant auto-replies'
           }
           description={
             activeTab === 'flows'
-              ? 'Build step-by-step chats with buttons, questions, and handoff to your team.'
+              ? 'Guide customers through questions, menus, and your team — step by step.'
               : activeTab === 'analytics'
-                ? 'Track how flows, quick replies, and AI automations perform.'
-                : 'Set up instant replies for keywords, welcome messages, and away notices.'
+                ? 'See how many customers your automations have helped.'
+                : 'Send one automatic message when someone texts a keyword, says hi, or messages after hours.'
           }
           accent="violet"
           stats={heroStats}
@@ -481,34 +464,27 @@ export default function AutomationsPage() {
           value={activeTab}
           onChange={setTab}
           options={[
-            { value: 'flows', label: 'Flows', icon: GitBranch },
-            { value: 'quick', label: 'Quick replies', icon: MessageSquareQuote },
-            { value: 'analytics', label: 'Analytics', icon: BarChart3 },
+            { value: 'flows', label: 'Multi-step', icon: GitBranch },
+            { value: 'quick', label: 'Auto-replies', icon: MessageSquareQuote },
+            { value: 'analytics', label: 'Stats', icon: BarChart3 },
           ]}
         />
 
         <AutomationConflictsBanner conflicts={conflicts} />
 
-        <div className="grid auto-rows-fr gap-3 sm:grid-cols-2">
-          <TabIntroCard
-            icon={GitBranch}
-            title="Conversation flows"
-            description="Step-by-step chats with buttons, waits, and handoff to your team."
-            accent="from-violet-500/10 via-white to-indigo-500/5 border-violet-200/60"
-            iconBg="bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-[0_4px_14px_rgba(99,102,241,0.3)]"
-            cta={activeTab === 'flows' ? 'Currently viewing' : 'Switch to flows'}
-            onClick={activeTab === 'flows' ? undefined : () => setTab('flows')}
-          />
-          <TabIntroCard
-            icon={Zap}
-            title="Quick replies"
-            description="One-message replies for keywords, welcomes, and away notices."
-            accent="from-emerald-500/10 via-white to-teal-500/5 border-emerald-200/60"
-            iconBg="bg-gradient-to-br from-whatsapp-500 to-emerald-600 text-white shadow-[0_4px_14px_rgba(37,211,102,0.3)]"
-            cta={activeTab === 'quick' ? 'Currently viewing' : 'Switch to quick replies'}
-            onClick={activeTab === 'quick' ? undefined : () => setTab('quick')}
-          />
-        </div>
+        {activeTab !== 'analytics' && (
+          <div className="rounded-2xl border border-violet-100/70 bg-gradient-to-r from-violet-50/50 to-white px-4 py-3.5">
+            <p className="text-[13px] font-medium leading-relaxed text-neutral-700">
+              <span className="font-extrabold text-neutral-900">Not sure which to pick?</span>{' '}
+              Use <strong>Auto-replies</strong> for a single message. Use <strong>Multi-step</strong> when you need
+              menus, questions, or multiple messages. For smart AI answers, go to{' '}
+              <Link to="/ai-bot" className="font-bold text-violet-700 underline underline-offset-2">
+                AI Bots
+              </Link>
+              .
+            </p>
+          </div>
+        )}
 
         {activeTab === 'analytics' ? (
           <AutomationAnalyticsPanel analytics={analytics} loading={analyticsLoading} />
@@ -523,11 +499,11 @@ export default function AutomationsPage() {
             <div className="flex items-start gap-3 rounded-2xl border border-indigo-200/60 bg-gradient-to-r from-indigo-50/80 to-violet-50/40 px-4 py-3.5 dark:border-indigo-500/25 dark:from-indigo-950/30 dark:to-violet-950/20">
               <Bot className="mt-0.5 h-4 w-4 shrink-0 text-indigo-600" />
               <p className="text-[13px] font-medium leading-relaxed text-indigo-950 dark:text-indigo-200">
-                Need AI-powered replies? Configure intelligent bots in{' '}
+                Want the bot to answer questions on its own? Set up an{' '}
                 <Link to="/ai-bot" className="font-bold underline underline-offset-2">
-                  AI Bots
+                  AI Bot
                 </Link>{' '}
-                — they run automatically on every inbound message.
+                — it reads messages and replies automatically.
               </p>
             </div>
 
@@ -559,7 +535,7 @@ export default function AutomationsPage() {
                   <AppSelect
                     className="w-full sm:w-44"
                     value={triggerFilter}
-                    placeholder="All triggers"
+                    placeholder="All types"
                     isSearchable={false}
                     options={filterTriggerOptions}
                     onChange={(e) => setTriggerFilter(e.target.value)}
@@ -571,8 +547,8 @@ export default function AutomationsPage() {
                     isSearchable={false}
                     options={[
                       { value: '', label: 'All statuses' },
-                      { value: 'active', label: 'Active' },
-                      { value: 'paused', label: 'Paused' },
+                      { value: 'active', label: 'On' },
+                      { value: 'paused', label: 'Off' },
                     ]}
                     onChange={(e) => setStatusFilter(e.target.value)}
                   />
@@ -586,16 +562,16 @@ export default function AutomationsPage() {
               <div className="space-y-6">
                 <EmptyState
                   icon={Zap}
-                  title={hasFilters ? 'No automations found' : 'No quick replies yet'}
+                  title={hasFilters ? 'No auto-replies found' : 'No auto-replies yet'}
                   description={
                     hasFilters
-                      ? 'Try adjusting your search or filters.'
-                      : 'Pick a trigger type below to send the right message at the right time.'
+                      ? 'Try a different search or filter.'
+                      : 'Pick a ready-made template below — you can edit the message before saving.'
                   }
                   action={
                     !hasFilters ? (
                       <AppButton icon={<Plus size={16} />} onClick={() => openCreate()}>
-                        Create quick reply
+                        Create auto-reply
                       </AppButton>
                     ) : undefined
                   }
@@ -604,9 +580,9 @@ export default function AutomationsPage() {
                 {!hasFilters && (
                   <section className="space-y-3">
                     <div>
-                      <h3 className="text-[14px] font-extrabold text-neutral-900">Popular triggers</h3>
+                      <h3 className="text-[14px] font-extrabold text-neutral-900">Popular setups</h3>
                       <p className="mt-1 text-[12px] font-medium text-neutral-500">
-                        Tap a template to start — you can customize the message before saving.
+                        Tap one to start — we've filled in a sample message you can change.
                       </p>
                     </div>
                     <div className="grid auto-rows-fr gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -668,7 +644,7 @@ export default function AutomationsPage() {
 
                 <div className="hidden lg:block">
                   <DataTable
-                    headers={['Automation', 'Trigger', 'Keyword', 'Reply preview', 'Status', 'Actions']}
+                    headers={['Auto-reply', 'Starts when', 'Keyword', 'Reply preview', 'Status', 'Actions']}
                     page={page}
                     pageSize={DEFAULT_PAGE_SIZE}
                     total={total}
@@ -736,7 +712,7 @@ export default function AutomationsPage() {
                                   : 'bg-neutral-100 text-neutral-500 ring-neutral-200/70'
                               }`}
                             >
-                              {automation.enabled ? 'Active' : 'Paused'}
+                              {automation.enabled ? 'On' : 'Off'}
                             </span>
                           </td>
                           <td>
@@ -746,7 +722,7 @@ export default function AutomationsPage() {
                                 icon={automation.enabled ? PauseCircle : PlayCircle}
                                 variant={automation.enabled ? 'primary' : 'neutral'}
                               >
-                                {automation.enabled ? 'Pause' : 'Activate'}
+                                {automation.enabled ? 'Turn off' : 'Turn on'}
                               </TableTextButton>
                               <RowActions
                                 onEdit={() => openEdit(automation)}
@@ -768,23 +744,23 @@ export default function AutomationsPage() {
       <SlideOver
         open={slideOpen}
         onClose={closeSlide}
-        title={editing ? 'Edit quick reply' : 'New quick reply'}
-        subtitle="Choose a trigger, write your message, and preview how it looks on WhatsApp"
+        title={editing ? 'Edit auto-reply' : 'New auto-reply'}
+        subtitle="Choose when to send, write your message, and preview it on WhatsApp"
         size="lg"
         footer={
           <SlideOverFooter
             onCancel={closeSlide}
-            submitLabel={editing ? 'Update automation' : 'Create automation'}
+            submitLabel={editing ? 'Save changes' : 'Turn on auto-reply'}
             loading={saving}
             onDelete={editing ? handleDelete : undefined}
-            deleteLabel="Delete automation"
+            deleteLabel="Delete auto-reply"
           />
         }
       >
         <form id="slideover-form" onSubmit={handleSubmit} className="space-y-5">
           {!editing && (
             <section className="space-y-2">
-              <p className="text-[13px] font-extrabold text-neutral-900">1. Choose trigger</p>
+              <p className="text-[13px] font-extrabold text-neutral-900">1. When should we reply?</p>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {creatableTriggers.map((type) => {
                   const meta = triggerMeta[type];
@@ -794,7 +770,10 @@ export default function AutomationsPage() {
                     <button
                       key={type}
                       type="button"
-                      onClick={() => setForm((prev) => ({ ...prev, triggerType: type }))}
+                      onClick={() => {
+                        const defaults = triggerDefaults[type] || {};
+                        setForm((prev) => ({ ...prev, triggerType: type, ...defaults }));
+                      }}
                       className={`flex items-start gap-3 rounded-2xl border p-3.5 text-left transition ${
                         selected
                           ? `bg-gradient-to-br ring-2 ring-violet-400/40 ${meta.accent}`
@@ -837,12 +816,12 @@ export default function AutomationsPage() {
 
           <section className="space-y-3">
             <p className="text-[13px] font-extrabold text-neutral-900">
-              {editing ? 'Details' : '2. Configure'}
+              {editing ? 'Your auto-reply' : '2. Write your message'}
             </p>
             <AppInput
               id="automation-name"
-              label="Automation name"
-              placeholder="Pricing auto-reply"
+              label="Name (for your reference)"
+              placeholder="e.g. Pricing reply"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               required
@@ -851,7 +830,7 @@ export default function AutomationsPage() {
             {editing && (
               <AppSelect
                 id="trigger-type"
-                label="Trigger type"
+                label="When to reply"
                 value={form.triggerType}
                 options={triggerOptions}
                 isSearchable={false}
@@ -863,8 +842,8 @@ export default function AutomationsPage() {
             {form.triggerType === 'KEYWORD' && (
               <AppInput
                 id="keyword"
-                label="Keyword"
-                hint="Case-insensitive match"
+                label="Word or phrase to watch for"
+                hint="We'll reply when a customer sends this word"
                 placeholder="pricing"
                 value={form.keyword}
                 onChange={(e) => setForm({ ...form, keyword: e.target.value })}
@@ -894,7 +873,7 @@ export default function AutomationsPage() {
                     checked={form.handoff}
                     onChange={(e) => setForm({ ...form, handoff: e.target.checked })}
                   />
-                  Hand off to human agent after reply
+                  Connect to a team member after replying
                 </label>
               </>
             )}
@@ -903,7 +882,7 @@ export default function AutomationsPage() {
               <>
                 <AppTextarea
                   id="during-hours-message"
-                  label="During-hours message"
+                  label="Message during working hours"
                   placeholder="Hi! Our team is available now. How can we help?"
                   value={form.duringHoursMessage}
                   onChange={(e) => setForm({ ...form, duringHoursMessage: e.target.value, message: e.target.value })}
@@ -912,7 +891,7 @@ export default function AutomationsPage() {
                 />
                 <AppTextarea
                   id="away-message"
-                  label="After-hours message"
+                  label="Message after working hours"
                   placeholder="Thanks for reaching out! We are currently closed."
                   value={form.awayMessage}
                   onChange={(e) => setForm({ ...form, awayMessage: e.target.value })}
@@ -920,7 +899,7 @@ export default function AutomationsPage() {
                   required
                 />
                 <p className="text-[11px] font-medium text-neutral-500">
-                  Business hours are configured in{' '}
+                  Set your working hours in{' '}
                   <Link to="/settings" className="font-bold text-violet-700 underline">
                     Settings
                   </Link>
@@ -930,7 +909,7 @@ export default function AutomationsPage() {
             ) : (
               <AppTextarea
                 id="reply-message"
-                label="Reply message"
+                label="Message to send"
                 placeholder="Thanks for reaching out! Our team will respond shortly."
                 value={form.message}
                 onChange={(e) => setForm({ ...form, message: e.target.value })}
@@ -940,7 +919,7 @@ export default function AutomationsPage() {
             )}
 
             <div className="space-y-2">
-              <p className="text-[12px] font-bold text-neutral-700">Quick reply buttons (optional, max 3)</p>
+              <p className="text-[12px] font-bold text-neutral-700">Add tap-to-reply buttons (optional, max 3)</p>
               {form.buttons.map((btn, idx) => (
                 <div key={btn.id} className="flex items-end gap-2">
                   <div className="flex-1">
@@ -971,13 +950,49 @@ export default function AutomationsPage() {
             </div>
           </section>
 
-          {(form.message.trim() || form.duringHoursMessage.trim()) && (
-            <section className="space-y-2 rounded-2xl border border-neutral-200/70 bg-neutral-50/50 p-4">
+          {(form.message.trim() || form.duringHoursMessage.trim() || form.awayMessage.trim()) && (
+            <section className="space-y-3 rounded-2xl border border-neutral-200/70 bg-neutral-50/50 p-4">
               <p className="text-[13px] font-extrabold text-neutral-900">WhatsApp preview</p>
-              <WhatsAppMessagePreview
-                content={(form.triggerType === 'BUSINESS_HOURS' ? form.duringHoursMessage : form.message).trim()}
-                direction="outbound"
-              />
+
+              {form.triggerType === 'BUSINESS_HOURS' ? (
+                <div className="space-y-4">
+                  {(form.duringHoursMessage || form.message).trim() && (
+                    <div className="space-y-1.5">
+                      <p className="text-[11px] font-bold text-neutral-500">During working hours</p>
+                      {form.buttons.length > 0 ? (
+                        <InteractiveMessageCard
+                          body={(form.duringHoursMessage || form.message).trim()}
+                          buttons={form.buttons}
+                          direction="outbound"
+                          time="10:30"
+                          status="read"
+                        />
+                      ) : (
+                        <WhatsAppMessagePreview
+                          content={(form.duringHoursMessage || form.message).trim()}
+                          direction="outbound"
+                        />
+                      )}
+                    </div>
+                  )}
+                  {form.awayMessage.trim() && (
+                    <div className="space-y-1.5">
+                      <p className="text-[11px] font-bold text-neutral-500">After working hours</p>
+                      <WhatsAppMessagePreview content={form.awayMessage.trim()} direction="outbound" />
+                    </div>
+                  )}
+                </div>
+              ) : form.buttons.length > 0 ? (
+                <InteractiveMessageCard
+                  body={form.message.trim()}
+                  buttons={form.buttons}
+                  direction="outbound"
+                  time="10:30"
+                  status="read"
+                />
+              ) : (
+                <WhatsAppMessagePreview content={form.message.trim()} direction="outbound" />
+              )}
             </section>
           )}
         </form>

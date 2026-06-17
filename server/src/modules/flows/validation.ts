@@ -96,8 +96,8 @@ export function validateFlowGraph(
       errors.push(`Contact card step "${node.id}" needs name and phone`);
     }
 
-    if (node.type === 'wa_flow' && (!node.waFlowId || !node.waFlowToken)) {
-      errors.push(`WhatsApp Flow step "${node.id}" needs flow ID and token`);
+    if (node.type === 'wa_flow' && !node.waFlowId?.trim()) {
+      errors.push(`In-chat form step "${node.id}" needs a form selected`);
     }
 
     if (node.type === 'condition' && node.conditionType === 'variable_equals' && !node.conditionVariable) {

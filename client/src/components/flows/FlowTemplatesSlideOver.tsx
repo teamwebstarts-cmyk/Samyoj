@@ -75,7 +75,7 @@ export default function FlowTemplatesSlideOver({
       icon={LayoutTemplate}
       accent="violet"
       title="Start from a template"
-      subtitle="Pick a ready-made flow, then customize triggers and steps in the builder"
+      subtitle="Pick a ready-made flow, then customize when it starts and the steps"
       footer={
         <SlideOverFooter
           onCancel={onClose}
@@ -88,7 +88,7 @@ export default function FlowTemplatesSlideOver({
       <form id="slideover-form" onSubmit={handleSubmit} className="space-y-4">
         {templates.length > 1 && triggerFilters.length > 2 && (
           <div className="space-y-2">
-            <p className="text-[12px] font-semibold text-neutral-600">Filter by trigger</p>
+            <p className="text-[12px] font-semibold text-neutral-600">Filter by start type</p>
             <div className="flex flex-wrap gap-2">
               {triggerFilters.map((filter) => {
                 const isActive = triggerFilter === filter.value;

@@ -132,7 +132,7 @@ export interface FlowState {
   flowId: string;
   flowName?: string;
   currentNodeId: string;
-  waitingFor: 'button' | 'text' | 'delay' | 'media' | null;
+  waitingFor: 'button' | 'text' | 'delay' | 'media' | 'wa_flow' | null;
   variables: Record<string, string>;
   attempts: number;
   resumeAt?: string;
@@ -172,6 +172,7 @@ export interface InboundFlowPayload {
   isNewConversation: boolean;
   messageType?: string;
   hasMedia?: boolean;
+  waFlowResponse?: Record<string, unknown>;
 }
 
 export const HANDOFF_KEYWORDS = ['human', 'agent', 'representative', 'talk to someone', 'real person'];

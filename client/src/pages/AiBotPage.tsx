@@ -181,7 +181,7 @@ function SetupBanner({
         {!setupStatus.azureConfigured && (
           <Link to="/settings" className="shrink-0">
             <AppButton variant="secondary" size="sm" icon={<Settings size={14} />}>
-              Configure AI
+              Set up AI
             </AppButton>
           </Link>
         )}
@@ -646,7 +646,7 @@ export default function AiBotPage() {
               value={activeCount}
               icon={Bot}
               accent="violet"
-              hint={`${bots.length} total configured`}
+              hint={`${bots.length} total set up`}
               delay={60}
             />
             <StatCard
@@ -757,7 +757,7 @@ export default function AiBotPage() {
           />
         ) : (
           <div className="space-y-5">
-            <DataTable headers={['Bot', 'Triggers', 'Knowledge', 'Status', 'Actions']}>
+            <DataTable headers={['Bot', 'Starts when', 'Knowledge', 'Status', 'Actions']}>
               {filteredBots.map((bot, index) => (
                 <tr key={bot.id} className="group">
                   <TableSerialCell rowIndex={index} />
@@ -896,7 +896,7 @@ export default function AiBotPage() {
         title={editing ? form.name || 'Edit bot' : 'New AI bot'}
         subtitle={
           editing
-            ? 'Configure personality, knowledge, and behavior'
+            ? 'Set up how your bot talks and what it knows'
             : 'Set up how this bot replies on WhatsApp'
         }
         size="2xl"
@@ -974,25 +974,25 @@ export default function AiBotPage() {
                     checked={form.businessHoursOnly}
                     onChange={(businessHoursOnly) => setForm({ ...form, businessHoursOnly })}
                     title="Business hours only"
-                    description="Skip AI replies outside configured hours in Settings"
+                    description="Only reply during business hours (set in Settings)"
                     accent="from-sky-500/10 to-blue-500/5 border-sky-200/70 dark:border-sky-500/25"
                     icon={Clock}
                   />
                 </div>
               </ModalSection>
 
-              <ModalSection step={2} title="Keywords" subtitle="Optional routing and human handoff">
+              <ModalSection step={2} title="Special words" subtitle="Optional — route messages or connect to a person">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <AppInput
-                    label="Trigger keywords (optional)"
+                    label="Special words (optional)"
                     hint="For extra bots — e.g. sales, pricing"
                     placeholder="pricing, quote"
                     value={form.triggerKeywords}
                     onChange={(e) => setForm({ ...form, triggerKeywords: e.target.value })}
                   />
                   <AppInput
-                    label="Handoff keywords"
-                    hint="Customer says these → connect to human"
+                    label="Words to connect to a person"
+                    hint="When customer says these, pass chat to your team"
                     placeholder="human, agent, manager"
                     value={form.handoffKeywords}
                     onChange={(e) => setForm({ ...form, handoffKeywords: e.target.value })}
@@ -1000,7 +1000,7 @@ export default function AiBotPage() {
                 </div>
               </ModalSection>
 
-              <ModalSection step={3} title="Instructions & handoff" subtitle="How the bot speaks and when to escalate">
+              <ModalSection step={3} title="How the bot replies" subtitle="Instructions and when to involve your team">
                 <AppTextarea
                   label="Bot instructions"
                   rows={5}
@@ -1011,8 +1011,8 @@ export default function AiBotPage() {
 
                 <div className="mt-4">
                   <AppTextarea
-                    label="Handoff message"
-                    hint="Sent when customer asks for a human"
+                    label="Message when connecting to team"
+                    hint="Sent when customer asks for a person"
                     rows={2}
                     value={form.handoffMessage}
                     onChange={(e) => setForm({ ...form, handoffMessage: e.target.value })}
@@ -1043,9 +1043,9 @@ export default function AiBotPage() {
               </ModalPanel>
 
               {(form.handoffMessage.trim() || form.instructions.trim()) && (
-                <ModalPreviewCard title="WhatsApp handoff preview">
+                <ModalPreviewCard title="Team connection preview">
                   <WhatsAppMessagePreview
-                    content={form.handoffMessage || 'Handoff message preview'}
+                    content={form.handoffMessage || 'Preview of team connection message'}
                     direction="outbound"
                     variant="compact"
                   />
@@ -1355,7 +1355,7 @@ export default function AiBotPage() {
                     <div className="flex flex-wrap gap-2 text-[11px] font-medium text-theme-secondary">
                       {testResult.handoffReason && (
                         <span className="rounded-full bg-amber-50 px-2 py-0.5 text-amber-800 ring-1 ring-amber-100">
-                          Handoff: {testResult.handoffReason.replace(/_/g, ' ')}
+                          Passed to team: {testResult.handoffReason.replace(/_/g, ' ')}
                         </span>
                       )}
                       {testResult.totalTokens != null && testResult.totalTokens > 0 && (

@@ -149,7 +149,7 @@ export default function CampaignAudiencePreview({
             </p>
           ) : (
             <p className="mt-0.5 text-[13px] font-medium text-theme-secondary">
-              Configure your audience to see the recipient count
+              Choose who receives this to see the recipient count
             </p>
           )}
         </div>

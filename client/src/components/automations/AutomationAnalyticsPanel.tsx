@@ -1,6 +1,39 @@
 import { BarChart3, CheckCircle2, XCircle } from 'lucide-react';
 import LoadingState from '../ui/LoadingState';
+import { triggerMeta } from '../flows/flowMeta';
 import type { AutomationAnalytics } from '../../types';
+
+const quickReplyTriggerLabels: Record<string, string> = {
+  KEYWORD: 'Keyword reply',
+  WELCOME: 'Welcome message',
+  AWAY: 'Away message',
+  BUSINESS_HOURS: 'Business hours',
+  LEAD_CAPTURE: 'Lead capture',
+  AI_CHATBOT: 'AI chatbot',
+};
+
+const actionLabels: Record<string, string> = {
+  sent: 'Reply sent',
+  skipped: 'Not sent',
+  failed: 'Did not send',
+  handoff: 'Passed to team',
+  tagged: 'Tag added',
+};
+
+function getTriggerLabel(trigger: string): string {
+  return quickReplyTriggerLabels[trigger] || triggerMeta[trigger]?.label || trigger;
+}
+
+function getActionLabel(action: string): string {
+  return actionLabels[action] || action.replace(/_/g, ' ');
+}
+
+function getStatusLabel(status: string): string {
+  if (status === 'success') return 'Worked';
+  if (status === 'failed') return "Didn't work";
+  if (status === 'skipped') return 'Not sent';
+  return status;
+}
 
 interface AutomationAnalyticsPanelProps {
   analytics: AutomationAnalytics | null;
@@ -8,12 +41,12 @@ interface AutomationAnalyticsPanelProps {
 }
 
 export default function AutomationAnalyticsPanel({ analytics, loading }: AutomationAnalyticsPanelProps) {
-  if (loading) return <LoadingState label="Loading analytics..." />;
+  if (loading) return <LoadingState label="Loading stats..." />;
 
   if (!analytics) {
     return (
       <div className="rounded-2xl border border-dashed border-neutral-200 px-6 py-10 text-center text-[13px] text-neutral-500">
-        No analytics data yet.
+        No activity yet. Turn on an auto-reply or multi-step flow to start seeing stats here.
       </div>
     );
   }
@@ -24,10 +57,10 @@ export default function AutomationAnalyticsPanel({ analytics, loading }: Automat
     <div className="space-y-5">
       <div className="grid gap-3 sm:grid-cols-4">
         {[
-          { label: 'Total runs', value: analytics.total, icon: BarChart3, tone: 'text-violet-700' },
-          { label: 'Success', value: analytics.success, icon: CheckCircle2, tone: 'text-emerald-700' },
-          { label: 'Failed', value: analytics.failed, icon: XCircle, tone: 'text-red-700' },
-          { label: 'Skipped', value: analytics.skipped, icon: BarChart3, tone: 'text-amber-700' },
+          { label: 'Total replies sent', value: analytics.total, icon: BarChart3, tone: 'text-violet-700' },
+          { label: 'Sent OK', value: analytics.success, icon: CheckCircle2, tone: 'text-emerald-700' },
+          { label: "Didn't send", value: analytics.failed, icon: XCircle, tone: 'text-red-700' },
+          { label: 'Not sent', value: analytics.skipped, icon: BarChart3, tone: 'text-amber-700' },
         ].map((stat) => {
           const Icon = stat.icon;
           return (
@@ -44,11 +77,11 @@ export default function AutomationAnalyticsPanel({ analytics, loading }: Automat
 
       {triggerEntries.length > 0 && (
         <div className="dashboard-card p-4">
-          <p className="text-[13px] font-extrabold text-neutral-900">By trigger type</p>
+          <p className="text-[13px] font-extrabold text-neutral-900">By type</p>
           <div className="mt-3 space-y-2">
             {triggerEntries.map(([trigger, count]) => (
               <div key={trigger} className="flex items-center justify-between text-[13px]">
-                <span className="font-semibold text-neutral-700">{trigger}</span>
+                <span className="font-semibold text-neutral-700">{getTriggerLabel(trigger)}</span>
                 <span className="font-bold text-violet-700">{count}</span>
               </div>
             ))}
@@ -66,7 +99,7 @@ export default function AutomationAnalyticsPanel({ analytics, loading }: Automat
               <div key={entry.id} className="flex items-center justify-between gap-3 px-4 py-2.5 text-[12px]">
                 <div className="min-w-0">
                   <p className="truncate font-semibold text-neutral-800">
-                    {entry.triggerType} · {entry.action}
+                    {getTriggerLabel(entry.triggerType)} · {getActionLabel(entry.action)}
                   </p>
                   <p className="text-neutral-500">{new Date(entry.createdAt).toLocaleString()}</p>
                 </div>
@@ -79,7 +112,7 @@ export default function AutomationAnalyticsPanel({ analytics, loading }: Automat
                         : 'bg-neutral-100 text-neutral-600'
                   }`}
                 >
-                  {entry.status}
+                  {getStatusLabel(entry.status)}
                 </span>
               </div>
             ))}

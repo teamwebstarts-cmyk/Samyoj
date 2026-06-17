@@ -200,7 +200,7 @@ export default function SettingsPage() {
       {
         id: 'integrations' as const,
         label: 'Integrations',
-        description: 'API keys, webhooks, GDPR',
+        description: 'Connect other apps & download your data',
         icon: Plug,
       },
       {
@@ -670,7 +670,7 @@ export default function SettingsPage() {
                     </p>
                     <p className="mt-0.5 text-[11px] font-medium text-amber-800/80 dark:text-amber-300/80">
                       {businessHours.days.length} working day{businessHours.days.length === 1 ? '' : 's'} ·
-                      outside hours trigger away messages
+                      outside hours send away messages
                     </p>
                   </div>
                 </div>
@@ -922,7 +922,7 @@ export default function SettingsPage() {
             {activeTab === 'integrations' && (
               <SettingsPanel
                 title="Integrations & privacy"
-                description="API keys, outbound webhooks, and GDPR export."
+                description="Connect other apps and download your data."
                 icon={Plug}
                 accent="indigo"
               >

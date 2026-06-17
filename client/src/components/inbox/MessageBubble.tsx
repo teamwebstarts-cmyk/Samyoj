@@ -93,6 +93,8 @@ export default function MessageBubble({ message, onOpenMedia }: MessageBubblePro
   const type = message.type?.toUpperCase();
   const isMediaMessage = ['IMAGE', 'VIDEO', 'AUDIO', 'DOCUMENT'].includes(type);
   const isInteractive = type === 'INTERACTIVE';
+  const isContactCard = type === 'CONTACTS';
+  const isLocation = type === 'LOCATION';
   const buttons = message.metadata?.buttons;
   const isButtonReply = message.metadata?.isButtonReply;
   const automationLabel = isOutbound ? getAutomationSourceLabel(message.metadata) : null;
@@ -117,6 +119,68 @@ export default function MessageBubble({ message, onOpenMedia }: MessageBubblePro
           status={isOutbound ? mapStatus(message.status) : undefined}
           isButtonReply={isButtonReply}
         />
+      </div>
+    );
+  }
+
+  if (isContactCard) {
+    const contact = message.metadata?.contacts?.[0];
+    return (
+      <div>
+        {sourceBadge}
+        <WhatsAppBubble
+          direction={isOutbound ? 'outbound' : 'inbound'}
+          time={formatMessageTime(message.createdAt)}
+          status={isOutbound ? mapStatus(message.status) : undefined}
+        >
+          <div className="rounded-lg bg-white px-3 py-2.5 shadow-sm">
+            <p className="text-[13px] font-bold text-neutral-800">
+              {contact?.name || message.content || 'Contact'}
+            </p>
+            {contact?.phone && (
+              <p className="mt-0.5 text-[12px] text-neutral-500">{contact.phone}</p>
+            )}
+            {contact?.email && (
+              <p className="text-[11px] text-neutral-400">{contact.email}</p>
+            )}
+          </div>
+        </WhatsAppBubble>
+      </div>
+    );
+  }
+
+  if (isLocation) {
+    const loc = message.metadata?.location;
+    return (
+      <div>
+        {sourceBadge}
+        <div className="space-y-1.5">
+          {message.content && (
+            <WhatsAppBubble
+              direction={isOutbound ? 'outbound' : 'inbound'}
+              content={message.content}
+              time={formatMessageTime(message.createdAt)}
+              status={isOutbound ? mapStatus(message.status) : undefined}
+            />
+          )}
+          <WhatsAppBubble
+            direction={isOutbound ? 'outbound' : 'inbound'}
+            time={message.content ? undefined : formatMessageTime(message.createdAt)}
+            status={isOutbound && !message.content ? mapStatus(message.status) : undefined}
+          >
+            <div className="overflow-hidden rounded-lg bg-white shadow-sm">
+              <div className="flex h-20 items-center justify-center bg-emerald-50 text-2xl">📍</div>
+              <div className="px-2.5 py-2">
+                <p className="text-[12px] font-semibold text-neutral-800">
+                  {loc?.name || 'Location'}
+                </p>
+                {loc?.address && (
+                  <p className="text-[10px] text-neutral-500">{loc.address}</p>
+                )}
+              </div>
+            </div>
+          </WhatsAppBubble>
+        </div>
       </div>
     );
   }

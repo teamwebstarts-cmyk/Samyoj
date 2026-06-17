@@ -118,10 +118,10 @@ export default function TemplateCreateForm({
           </div>
           <div>
             <p className="text-[13px] font-extrabold text-theme-fg">
-              {mode === 'resubmit' ? 'Edit & resubmit to Meta' : 'Meta review required'}
+              {mode === 'resubmit' ? 'Edit & resubmit for approval' : 'WhatsApp must approve this first'}
             </p>
             <p className="mt-0.5 text-[12px] font-medium text-theme-muted">
-              Only approved templates can be used in campaigns. Add sample values for every variable
+              Only approved templates can be used in campaigns. Add sample values for every placeholder
               to improve approval chances.
             </p>
           </div>
@@ -132,7 +132,7 @@ export default function TemplateCreateForm({
         <AppAlert variant="info">
           <p className="font-semibold">Marketing template guidelines</p>
           <p className="mt-1 text-[12px]">
-            Include opt-out language in the footer. Avoid misleading claims. Meta may take 24–48 hours
+            Include opt-out language in the footer. Avoid misleading claims. WhatsApp may take 24–48 hours
             to review.
           </p>
         </AppAlert>
@@ -213,9 +213,9 @@ export default function TemplateCreateForm({
 
       {['IMAGE', 'VIDEO', 'DOCUMENT'].includes(form.headerFormat) && (
         <div className="rounded-2xl border border-dashed border-theme-border bg-theme-subtle/50 p-4">
-          <p className="text-[13px] font-semibold text-theme-fg">Sample {form.headerFormat.toLowerCase()} for Meta review</p>
+          <p className="text-[13px] font-semibold text-theme-fg">Sample {form.headerFormat.toLowerCase()} for approval</p>
           <p className="mt-1 text-[11px] text-theme-muted">
-            Upload a sample file. Meta uses this during template approval.
+            Upload a sample file. WhatsApp uses this during template approval.
           </p>
           <input
             ref={fileRef}
@@ -257,7 +257,7 @@ export default function TemplateCreateForm({
       <AppTextarea
         id="template-body"
         label="Body text"
-        hint="Use {{1}}, {{2}} for variables"
+        hint="Use {{1}}, {{2}} for placeholders like a name or order number"
         placeholder={
           form.category === 'AUTHENTICATION'
             ? 'Your verification code is {{1}}.'
@@ -276,7 +276,7 @@ export default function TemplateCreateForm({
             Body variable samples
           </p>
           <p className="mt-1 text-[11px] text-violet-700/80 dark:text-violet-400">
-            Required by Meta for approval
+            Required by WhatsApp for approval
           </p>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             {form.bodyExamples.map((val, i) => (

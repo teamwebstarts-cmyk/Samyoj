@@ -28,6 +28,7 @@ import cannedReplyRoutes from './modules/canned-replies/routes';
 import billingRoutes from './modules/billing/routes';
 import complianceRoutes from './modules/compliance/routes';
 import integrationsRoutes from './modules/integrations/routes';
+import waFormsRoutes from './modules/wa-forms/routes';
 import publicMediaRoutes from './modules/media/public.routes';
 import { setRealtimeIO } from './realtime';
 
@@ -168,6 +169,7 @@ app.use('/api/canned-replies', cannedReplyRoutes);
 app.use('/api/billing', billingRoutes);
 app.use('/api/compliance', complianceRoutes);
 app.use('/api/integrations', integrationsRoutes);
+app.use('/api/wa-forms', waFormsRoutes);
 
 app.use(errorHandler);
 

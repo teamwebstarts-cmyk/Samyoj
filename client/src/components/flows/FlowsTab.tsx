@@ -45,8 +45,8 @@ interface FlowsTabProps {
 
 const statusOptions = [
   { value: '', label: 'All' },
-  { value: 'active', label: 'Active' },
-  { value: 'paused', label: 'Paused' },
+  { value: 'active', label: 'On' },
+  { value: 'paused', label: 'Off' },
 ] as const;
 
 export default function FlowsTab({
@@ -163,10 +163,11 @@ export default function FlowsTab({
           </AppButton>
           <AppButton
             fullWidth
+            variant="ghost"
             icon={<Plus size={16} />}
             onClick={() => navigate('/automations/flows/new')}
           >
-            Blank flow
+            Build from scratch
           </AppButton>
         </div>
 
@@ -202,8 +203,8 @@ export default function FlowsTab({
                 isSearchable={false}
                 options={[
                   { value: '', label: 'All statuses' },
-                  { value: 'active', label: 'Active' },
-                  { value: 'paused', label: 'Paused' },
+                  { value: 'active', label: 'On' },
+                  { value: 'paused', label: 'Off' },
                 ]}
                 onChange={(e) => setStatusFilter(e.target.value)}
               />
@@ -217,29 +218,29 @@ export default function FlowsTab({
           <div className="space-y-5">
             <EmptyState
               icon={Workflow}
-              title={hasFilters ? 'No flows found' : 'No flows yet'}
+              title={hasFilters ? 'No flows found' : 'No conversation flows yet'}
               description={
                 hasFilters
-                  ? 'Try adjusting your search or filters.'
-                  : 'Start with a ready-made template or build a custom journey from scratch.'
+                  ? 'Try a different search or filter.'
+                  : 'Start with a ready-made template — easiest way to get going.'
               }
               action={
                 !hasFilters ? (
                   <div className="grid w-full max-w-md grid-cols-1 gap-2 sm:grid-cols-2">
                     <AppButton
                       fullWidth
-                      variant="secondary"
                       icon={<Sparkles size={16} />}
                       onClick={() => onTemplatesOpenChange(true)}
                     >
-                      Browse templates
+                      Start from template
                     </AppButton>
                     <AppButton
                       fullWidth
+                      variant="ghost"
                       icon={<Plus size={16} />}
                       onClick={() => navigate('/automations/flows/new')}
                     >
-                      Blank flow
+                      Build from scratch
                     </AppButton>
                   </div>
                 ) : undefined
@@ -249,9 +250,9 @@ export default function FlowsTab({
             {!hasFilters && templates.length > 0 && (
               <section className="space-y-3">
                 <div>
-                  <h3 className="text-[14px] font-extrabold text-neutral-900">Popular templates</h3>
+                  <h3 className="text-[14px] font-extrabold text-neutral-900">Ready-made templates</h3>
                   <p className="mt-1 text-[12px] font-medium text-neutral-500">
-                    Tap a template to create and customize it in the builder.
+                    Tap a template — we'll set it up and you can customize the messages.
                   </p>
                 </div>
                 <div className="grid auto-rows-fr gap-3 sm:grid-cols-2">
@@ -305,7 +306,7 @@ export default function FlowsTab({
             {/* Desktop table */}
             <div className="hidden lg:block">
               <DataTable
-                headers={['Flow', 'Trigger', 'Keyword', 'Steps', 'Priority', 'Status', 'Actions']}
+                headers={['Flow', 'Starts when', 'Keyword', 'Steps', 'Status', 'Actions']}
                 page={page}
                 pageSize={DEFAULT_PAGE_SIZE}
                 total={total}
@@ -357,9 +358,6 @@ export default function FlowsTab({
                       <td className="tabular-nums text-[13px] font-semibold text-neutral-700">
                         {flow.nodes?.length || 0}
                       </td>
-                      <td className="tabular-nums text-[13px] font-medium text-neutral-600">
-                        {flow.priority ?? 0}
-                      </td>
                       <td>
                         <span
                           className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${
@@ -368,7 +366,7 @@ export default function FlowsTab({
                               : 'bg-neutral-100 text-neutral-500 ring-neutral-200/70'
                           }`}
                         >
-                          {flow.enabled ? 'Active' : 'Paused'}
+                          {flow.enabled ? 'On' : 'Off'}
                         </span>
                       </td>
                       <td>
@@ -378,7 +376,7 @@ export default function FlowsTab({
                             icon={flow.enabled ? PauseCircle : PlayCircle}
                             variant={flow.enabled ? 'primary' : 'neutral'}
                           >
-                            {flow.enabled ? 'Pause' : 'Activate'}
+                            {flow.enabled ? 'Turn off' : 'Turn on'}
                           </TableTextButton>
                           <TableIconButton
                             onClick={() => handleDuplicate(flow.id)}

@@ -11,7 +11,7 @@ export default function FlowStepPalette({ onAdd, variant = 'sidebar' }: FlowStep
   if (variant === 'horizontal') {
     return (
       <div className="rounded-2xl border border-slate-200/60 bg-white px-3 py-3 shadow-sm">
-        <p className="mb-2.5 px-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">More steps</p>
+        <p className="mb-2.5 px-1 text-[12px] font-bold text-slate-700">Add a step</p>
         <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {NODE_CATEGORIES.flatMap((cat) =>
             cat.types.map((type) => {
@@ -40,10 +40,8 @@ export default function FlowStepPalette({ onAdd, variant = 'sidebar' }: FlowStep
   return (
     <div className="space-y-4">
       <div className="rounded-xl bg-gradient-to-br from-slate-50 to-emerald-50/30 px-3 py-3 ring-1 ring-slate-100">
-        <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Add steps</p>
-        <p className="mt-0.5 text-[12px] leading-relaxed text-slate-500">
-          Click to add, then drag the <span className="font-bold text-emerald-600">green dot</span> to connect
-        </p>
+        <p className="text-[12px] font-bold text-slate-700">Add a step</p>
+        <p className="mt-0.5 text-[12px] leading-relaxed text-slate-500">Tap one below</p>
       </div>
 
       {NODE_CATEGORIES.map((cat) => (

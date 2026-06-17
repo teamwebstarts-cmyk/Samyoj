@@ -39,7 +39,7 @@ export default function FlowCard({ flow, onOpen, onToggle, onDuplicate, onDelete
                   : 'bg-neutral-100 text-neutral-500 ring-neutral-200/70'
               }`}
             >
-              {flow.enabled ? 'Live' : 'Paused'}
+              {flow.enabled ? 'On' : 'Off'}
             </span>
           </div>
 
@@ -70,7 +70,6 @@ export default function FlowCard({ flow, onOpen, onToggle, onDuplicate, onDelete
               <Layers className="h-3.5 w-3.5 text-violet-400" />
               {stepCount} {stepCount === 1 ? 'step' : 'steps'}
             </span>
-            <span>Priority {flow.priority ?? 0}</span>
           </div>
         </div>
       </button>
@@ -83,7 +82,7 @@ export default function FlowCard({ flow, onOpen, onToggle, onDuplicate, onDelete
           icon={flow.enabled ? <PauseCircle size={14} /> : <PlayCircle size={14} />}
           onClick={onToggle}
         >
-          {flow.enabled ? 'Pause' : 'Activate'}
+          {flow.enabled ? 'Turn off' : 'Turn on'}
         </AppButton>
         <AppButton size="sm" fullWidth variant="secondary" icon={<Copy size={14} />} onClick={onDuplicate}>
           Copy

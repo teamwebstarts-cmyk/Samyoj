@@ -11,12 +11,12 @@ interface FlowMobileNavProps {
 
 export default function FlowMobileNav({ active, onChange, showTest, showAnalytics }: FlowMobileNavProps) {
   const tabs: Array<{ id: FlowBuilderTab; label: string; icon: typeof GitBranch }> = [
-    { id: 'flow', label: 'Flow', icon: GitBranch },
+    { id: 'flow', label: 'Steps', icon: GitBranch },
     { id: 'edit', label: 'Edit', icon: SlidersHorizontal },
     { id: 'preview', label: 'Preview', icon: Smartphone },
-    ...(showTest ? [{ id: 'test' as const, label: 'Test', icon: FlaskConical }] : []),
+    ...(showTest ? [{ id: 'test' as const, label: 'Try it', icon: FlaskConical }] : []),
     ...(showAnalytics ? [{ id: 'analytics' as const, label: 'Stats', icon: BarChart3 }] : []),
-    { id: 'settings', label: 'Setup', icon: Settings2 },
+    { id: 'settings', label: 'Settings', icon: Settings2 },
   ];
 
   return (

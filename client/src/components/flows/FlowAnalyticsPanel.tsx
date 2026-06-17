@@ -20,6 +20,12 @@ function stepLabel(nodes: FlowNode[] | undefined, nodeId: string): string {
   return `${idx + 1}. ${nodeMeta[node.type]?.label || node.type}`;
 }
 
+function statusLabel(status: string): string {
+  if (status === 'success') return 'Worked';
+  if (status === 'failed') return "Didn't work";
+  return status;
+}
+
 export default function FlowAnalyticsPanel({ flowId, nodes }: FlowAnalyticsPanelProps) {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<{
@@ -35,20 +41,20 @@ export default function FlowAnalyticsPanel({ flowId, nodes }: FlowAnalyticsPanel
       .analytics(flowId)
       .then(({ data: res }) => setData(res.data))
       .catch((err) => {
-        toastError(getErrorMessage(err, 'Failed to load flow analytics'));
+        toastError(getErrorMessage(err, 'Failed to load stats'));
         setData(null);
       })
       .finally(() => setLoading(false));
   }, [flowId]);
 
-  if (loading) return <LoadingState label="Loading analytics..." />;
-  if (!data) return <p className="text-[13px] text-neutral-500">No analytics data yet.</p>;
+  if (loading) return <LoadingState label="Loading stats..." />;
+  if (!data) return <p className="text-[13px] text-neutral-500">No stats yet.</p>;
 
   const stats = [
-    { label: 'Starts', value: data.stats.starts, icon: Play, color: 'text-sky-600' },
-    { label: 'Completions', value: data.stats.completions, icon: CheckCircle, color: 'text-emerald-600' },
-    { label: 'Handoffs', value: data.stats.handoffs, icon: UserX, color: 'text-amber-600' },
-    { label: 'Completion rate', value: `${data.completionRate}%`, icon: BarChart3, color: 'text-violet-600' },
+    { label: 'Started', value: data.stats.starts, icon: Play, color: 'text-sky-600' },
+    { label: 'Finished', value: data.stats.completions, icon: CheckCircle, color: 'text-emerald-600' },
+    { label: 'Passed to team', value: data.stats.handoffs, icon: UserX, color: 'text-amber-600' },
+    { label: 'Finish rate', value: `${data.completionRate}%`, icon: BarChart3, color: 'text-violet-600' },
   ];
 
   return (
@@ -67,15 +73,15 @@ export default function FlowAnalyticsPanel({ flowId, nodes }: FlowAnalyticsPanel
       </div>
 
       <div className="rounded-xl border border-neutral-100 p-3">
-        <p className="text-[12px] font-bold text-neutral-700">Node runs</p>
+        <p className="text-[12px] font-bold text-neutral-700">Steps completed</p>
         <p className="mt-1 text-[13px] text-neutral-600">
-          {data.nodeRuns.success} success · {data.nodeRuns.failed} failed
+          {data.nodeRuns.success} worked · {data.nodeRuns.failed} didn't work
         </p>
       </div>
 
       {Object.keys(data.stats.dropoffs || {}).length > 0 && (
         <div>
-          <p className="mb-2 text-[12px] font-bold text-neutral-700">Drop-offs by step</p>
+          <p className="mb-2 text-[12px] font-bold text-neutral-700">Where people stopped</p>
           <div className="space-y-1">
             {Object.entries(data.stats.dropoffs).map(([nodeId, count]) => (
               <div key={nodeId} className="flex justify-between text-[12px] text-neutral-600">
@@ -94,7 +100,9 @@ export default function FlowAnalyticsPanel({ flowId, nodes }: FlowAnalyticsPanel
             {data.recentRuns.slice(0, 10).map((run, i) => (
               <div key={i} className="flex justify-between text-[11px] text-neutral-500">
                 <span className="truncate">{run.action}</span>
-                <span className={run.status === 'success' ? 'text-emerald-600' : 'text-red-500'}>{run.status}</span>
+                <span className={run.status === 'success' ? 'text-emerald-600' : 'text-red-500'}>
+                  {statusLabel(run.status)}
+                </span>
               </div>
             ))}
           </div>

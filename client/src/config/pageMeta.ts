@@ -18,11 +18,11 @@ export const PAGE_META: Record<string, PageMeta> = {
   },
   '/automations': {
     title: 'Automations',
-    description: 'Auto-replies and conversation flows',
+    description: 'Automatic replies and step-by-step conversations',
   },
   '/ai-bot': {
     title: 'AI Bots',
-    description: 'Set up smart auto-replies for WhatsApp',
+    description: 'Smart auto-replies for WhatsApp',
   },
   '/campaigns': {
     title: 'Campaigns',

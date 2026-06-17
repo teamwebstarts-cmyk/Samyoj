@@ -7,6 +7,20 @@ import { complianceApi, integrationsApi } from '../../services/api';
 import type { ApiKeyItem, WebhookEndpoint } from '../../types';
 import { toastError, toastSuccess } from '../../utils/toast';
 
+const eventLabels: Record<string, string> = {
+  'message.received': 'New message received',
+  'message.sent': 'Message sent',
+  'message.delivered': 'Message delivered',
+  'message.read': 'Message read',
+  'message.failed': 'Message failed to send',
+  'contact.created': 'New contact added',
+  'contact.updated': 'Contact updated',
+};
+
+function eventLabel(event: string): string {
+  return eventLabels[event] || event.replace(/\./g, ' · ').replace(/_/g, ' ');
+}
+
 export default function IntegrationsPanel() {
   const [keys, setKeys] = useState<ApiKeyItem[]>([]);
   const [webhooks, setWebhooks] = useState<WebhookEndpoint[]>([]);
@@ -35,11 +49,11 @@ export default function IntegrationsPanel() {
     try {
       const { data } = await integrationsApi.createKey(newKeyName.trim());
       await navigator.clipboard.writeText(data.data.key);
-      toastSuccess('API key created and copied to clipboard');
+      toastSuccess('Connection key created and copied');
       setNewKeyName('');
       load();
     } catch {
-      toastError('Failed to create API key');
+      toastError('Failed to create key');
     }
   };
 
@@ -51,11 +65,11 @@ export default function IntegrationsPanel() {
         events: selectedEvents,
       });
       await navigator.clipboard.writeText(data.data.secret);
-      toastSuccess('Webhook created — signing secret copied');
+      toastSuccess('Notification set up — security key copied');
       setNewWebhookUrl('');
       load();
     } catch {
-      toastError('Failed to create webhook');
+      toastError('Failed to set up notification');
     }
   };
 
@@ -66,12 +80,12 @@ export default function IntegrationsPanel() {
       const url = URL.createObjectURL(blob as Blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `gdpr-export-${Date.now()}.json`;
+      a.download = `data-export-${Date.now()}.json`;
       a.click();
       URL.revokeObjectURL(url);
-      toastSuccess('Data export downloaded');
+      toastSuccess('Your data download started');
     } catch {
-      toastError('Export failed');
+      toastError('Download failed');
     } finally {
       setExporting(false);
     }
@@ -81,7 +95,10 @@ export default function IntegrationsPanel() {
 
   return (
     <div className="space-y-5">
-      <SectionCard title="API keys" subtitle="Use X-API-Key header for programmatic access">
+      <SectionCard
+        title="Connect other apps"
+        subtitle="For Zapier, your website, or custom tools. Ask a developer if you're not sure."
+      >
         <div className="flex flex-wrap gap-2">
           <AppInput
             value={newKeyName}
@@ -105,7 +122,7 @@ export default function IntegrationsPanel() {
               <button
                 type="button"
                 onClick={() =>
-                  integrationsApi.revokeKey(k.id).then(load).catch(() => toastError('Revoke failed'))
+                  integrationsApi.revokeKey(k.id).then(load).catch(() => toastError('Could not remove key'))
                 }
                 className="text-red-600"
               >
@@ -116,12 +133,12 @@ export default function IntegrationsPanel() {
         </div>
       </SectionCard>
 
-      <SectionCard title="Outbound webhooks" subtitle="Receive events at your URL">
+      <SectionCard title="App notifications" subtitle="Get notified in your other software when something happens">
         <AppInput
-          label="Endpoint URL"
+          label="Notification URL"
           value={newWebhookUrl}
           onChange={(e) => setNewWebhookUrl(e.target.value)}
-          placeholder="https://your-app.com/webhooks/whatsapp"
+          placeholder="https://your-app.com/notifications"
         />
         <div className="mt-2 flex flex-wrap gap-2">
           {events.map((ev) => (
@@ -135,7 +152,7 @@ export default function IntegrationsPanel() {
                   )
                 }
               />
-              {ev}
+              {eventLabel(ev)}
             </label>
           ))}
         </div>
@@ -145,21 +162,21 @@ export default function IntegrationsPanel() {
           icon={<Webhook className="h-4 w-4" />}
           onClick={() => void createWebhook()}
         >
-          Add webhook
+          Add notification
         </AppButton>
         <div className="mt-3 space-y-2">
           {webhooks.map((w) => (
             <div key={w.id} className="rounded-xl border border-theme-border px-3 py-2 text-[12px]">
               <p className="font-semibold break-all">{w.url}</p>
-              <p className="text-theme-muted">{w.events.join(', ')}</p>
+              <p className="text-theme-muted">{w.events.map(eventLabel).join(', ')}</p>
             </div>
           ))}
         </div>
       </SectionCard>
 
-      <SectionCard title="GDPR data export" subtitle="Download all workspace data as JSON">
+      <SectionCard title="Download my data" subtitle="Get a copy of your contacts, messages, and settings">
         <AppButton size="sm" loading={exporting} icon={<Copy className="h-4 w-4" />} onClick={() => void handleExport()}>
-          Export my data
+          Download my data
         </AppButton>
       </SectionCard>
     </div>

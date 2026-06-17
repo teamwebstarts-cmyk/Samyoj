@@ -48,7 +48,7 @@ const quickActions = [
   {
     to: '/automations',
     label: 'Automations',
-    desc: 'Build smart workflows',
+    desc: 'Set up automatic replies',
     icon: Zap,
     gradient: 'bg-gradient-to-br from-amber-50/95 via-white to-orange-50/40',
     iconBg: 'bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-[0_4px_14px_rgba(245,158,11,0.3)]',
@@ -213,7 +213,7 @@ export default function DashboardPage() {
               <div className="mb-3 flex items-end justify-between gap-3 px-0.5">
                 <div>
                   <h2 className="text-base font-extrabold tracking-tight text-neutral-900">Quick actions</h2>
-                  <p className="mt-0.5 text-[12px] font-medium text-neutral-600">Jump into your workflow</p>
+                  <p className="mt-0.5 text-[12px] font-medium text-neutral-600">Jump into your day</p>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">

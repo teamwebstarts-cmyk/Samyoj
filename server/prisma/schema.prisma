@@ -77,6 +77,8 @@ enum MessageType {
   VIDEO
   TEMPLATE
   INTERACTIVE
+  LOCATION
+  CONTACTS
 }
 
 enum MessageStatus {

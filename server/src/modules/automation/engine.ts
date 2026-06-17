@@ -31,6 +31,7 @@ export interface InboundAutomationPayload {
   isNewConversation: boolean;
   messageType?: string;
   hasMedia?: boolean;
+  waFlowResponse?: Record<string, unknown>;
 }
 
 async function checkBusinessHours(organizationId: string): Promise<boolean> {
@@ -322,6 +323,9 @@ export async function handleInboundAutomations(payload: InboundAutomationPayload
     content: payload.content,
     buttonReplyId: payload.buttonReplyId,
     isNewConversation: payload.isNewConversation,
+    messageType: payload.messageType,
+    hasMedia: payload.hasMedia,
+    waFlowResponse: payload.waFlowResponse,
   });
 
   if (flowHandled) return;

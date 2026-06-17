@@ -290,6 +290,18 @@ export interface TemplateButtonPayload {
   example?: string;
 }
 
+export const waFormsApi = {
+  list: () => api.get('/wa-forms'),
+  get: (id: string) => api.get(`/wa-forms/${id}`),
+  create: (data: {
+    name: string;
+    title: string;
+    submitLabel?: string;
+    fields: Array<{ id: string; label: string; type: string; required?: boolean }>;
+  }) => api.post('/wa-forms', data),
+  publish: (id: string) => api.post(`/wa-forms/${id}/publish`),
+};
+
 export const templateApi = {
   list: (params?: Record<string, string>) => api.get('/templates', { params }),
   library: (params?: Record<string, string>) => api.get('/templates/library', { params }),

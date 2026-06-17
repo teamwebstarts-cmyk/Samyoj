@@ -120,7 +120,7 @@ export default function AiBotCard({ bot, onEdit, onToggle, onDelete }: AiBotCard
           </div>
 
           <span className="mt-3 inline-flex items-center gap-1 text-[11px] font-bold text-violet-700 opacity-0 transition group-hover:opacity-100 dark:text-violet-400">
-            Configure bot
+            Edit bot
             <ArrowRight className="h-3.5 w-3.5" />
           </span>
         </div>

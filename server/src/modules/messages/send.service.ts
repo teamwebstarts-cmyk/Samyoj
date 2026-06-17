@@ -1,3 +1,4 @@
+import type { MessageType } from '@prisma/client';
 import prisma from '../../config/database';
 import { AppError } from '../../utils/response';
 import { MetaWhatsAppService } from '../whatsapp/meta.service';
@@ -6,6 +7,43 @@ import { buildTemplateComponents } from '../campaigns/template-params';
 import { emitToOrg } from '../../realtime';
 import { messageQueue } from '../../config/queues';
 import { buildInteractivePayload, type InteractiveMessageOptions } from './interactive';
+import { normalizePhone } from '../../utils/phone';
+
+export type DeliverMessageType =
+  | 'TEXT'
+  | 'TEMPLATE'
+  | 'INTERACTIVE'
+  | 'IMAGE'
+  | 'DOCUMENT'
+  | 'VIDEO'
+  | 'AUDIO'
+  | 'LOCATION'
+  | 'CONTACTS';
+
+export function toDbMessageType(type: DeliverMessageType): MessageType {
+  const map: Record<DeliverMessageType, MessageType> = {
+    TEXT: 'TEXT',
+    TEMPLATE: 'TEMPLATE',
+    INTERACTIVE: 'INTERACTIVE',
+    IMAGE: 'IMAGE',
+    DOCUMENT: 'DOCUMENT',
+    VIDEO: 'VIDEO',
+    AUDIO: 'AUDIO',
+    LOCATION: 'LOCATION',
+    CONTACTS: 'CONTACTS',
+  };
+  return map[type] || 'TEXT';
+}
+
+function formatContactForWhatsApp(contact: { name: string; phone: string; email?: string }) {
+  const phone = normalizePhone(contact.phone);
+  const firstName = contact.name.trim().split(/\s+/)[0] || contact.name.trim();
+  return {
+    name: { formatted_name: contact.name.trim(), first_name: firstName },
+    phones: [{ phone, type: 'CELL' as const }],
+    ...(contact.email?.trim() ? { emails: [{ email: contact.email.trim(), type: 'WORK' as const }] } : {}),
+  };
+}
 
 interface DeliverMessageInput {
   organizationId: string;
@@ -14,7 +52,7 @@ interface DeliverMessageInput {
   encryptedToken: string;
   to: string;
   content: string;
-  type: 'TEXT' | 'TEMPLATE' | 'INTERACTIVE' | 'IMAGE' | 'DOCUMENT' | 'VIDEO' | 'AUDIO' | 'LOCATION' | 'CONTACTS';
+  type: DeliverMessageType;
   templateName?: string;
   templateLanguage?: string;
   templateParams?: { body?: string[]; header?: string[]; headerMediaUrl?: string };
@@ -106,14 +144,16 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
         location: input.location,
       });
     } else if (input.type === 'CONTACTS' && input.contacts?.length) {
+      const contacts = input.contacts
+        .map((c) => formatContactForWhatsApp(c))
+        .filter((c) => c.phones[0]?.phone.length >= 10);
+      if (!contacts.length) {
+        throw new AppError(400, 'Contact card needs a valid phone number with country code');
+      }
       result = await MetaWhatsAppService.sendMessage(input.phoneNumberId, accessToken, {
         to: phone,
         type: 'contacts',
-        contacts: input.contacts.map((c) => ({
-          name: { formatted_name: c.name, first_name: c.name.split(' ')[0] },
-          phones: [{ phone: c.phone.replace(/\D/g, ''), type: 'CELL', wa_id: c.phone.replace(/\D/g, '') }],
-          ...(c.email ? { emails: [{ email: c.email, type: 'WORK' }] } : {}),
-        })),
+        contacts,
       });
     } else if (input.waFlow) {
       result = await MetaWhatsAppService.sendMessage(input.phoneNumberId, accessToken, {

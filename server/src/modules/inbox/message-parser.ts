@@ -3,6 +3,7 @@ import type { MessageMediaMetadata } from '../media/download.service';
 interface ParsedInboundMessage {
   content: string;
   buttonReplyId?: string;
+  waFlowResponse?: Record<string, unknown>;
   metadata?: MessageMediaMetadata;
 }
 
@@ -27,8 +28,22 @@ export function parseInboundMessage(msg: Record<string, unknown>): ParsedInbound
           type?: string;
           button_reply?: { id?: string; title?: string };
           list_reply?: { id?: string; title?: string };
+          nfm_reply?: { response_json?: string; body?: string; name?: string };
         }
       | undefined;
+
+    if (interactive?.type === 'nfm_reply' && interactive.nfm_reply) {
+      let waFlowResponse: Record<string, unknown> = {};
+      try {
+        waFlowResponse = JSON.parse(interactive.nfm_reply.response_json || '{}') as Record<string, unknown>;
+      } catch {
+        waFlowResponse = {};
+      }
+      return {
+        content: interactive.nfm_reply.body || 'Form submitted',
+        waFlowResponse,
+      };
+    }
 
     if (interactive?.button_reply) {
       return {

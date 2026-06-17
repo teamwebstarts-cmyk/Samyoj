@@ -313,7 +313,7 @@ export default function ReportsPage() {
           <div className="grid gap-4 lg:grid-cols-3">
             <ReportsBreakdownCard
               title="Campaigns"
-              subtitle="Broadcast delivery funnel"
+              subtitle="How campaigns were delivered"
               icon={Megaphone}
               accent="violet"
               metrics={[
@@ -325,12 +325,12 @@ export default function ReportsPage() {
             />
             <ReportsBreakdownCard
               title="AI & Calls"
-              subtitle="Automation & voice usage"
+              subtitle="Auto-replies & phone calls"
               icon={Bot}
               accent="sky"
               metrics={[
                 { label: 'AI requests', value: data.ai.requests, tone: 'sky' },
-                { label: 'Tokens used', value: data.ai.totalTokens, tone: 'violet' },
+                { label: 'AI usage', value: data.ai.totalTokens, tone: 'violet' },
                 { label: 'Calls completed', value: data.calls.completed, tone: 'emerald' },
                 { label: 'Inbound messages', value: data.messaging.inbound, tone: 'amber' },
               ]}

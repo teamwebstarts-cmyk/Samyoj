@@ -25,7 +25,7 @@ const STEP_LABELS: Record<string, string> = {
   request_callback: 'Request Callback',
   location: 'Send Location',
   contact_card: 'Contact Card',
-  wa_flow: 'WhatsApp Flow',
+  wa_flow: 'In-Chat Form',
 };
 
 export interface ActiveFlowInfo {

@@ -28,10 +28,10 @@ export default function FlowEmptyState({ onAdd, compact }: FlowEmptyStateProps) 
       </div>
 
       <h2 className="mt-8 text-[20px] font-extrabold tracking-tight text-neutral-900 sm:text-[22px]">
-        Build your first step
+        Add your first step
       </h2>
       <p className="mt-2 max-w-sm text-[14px] leading-relaxed text-neutral-500">
-        Start with a message, menu buttons, or a question. You can add more steps anytime.
+        Pick one to start. You can always add more steps later.
       </p>
 
       <div className="mt-8 grid w-full max-w-md gap-3 sm:grid-cols-3">

@@ -53,7 +53,7 @@ function parseWarning(raw: string, nodes: FlowNode[]): ParsedWarning {
     const [, nodeId, branch] = conditionMatch;
     return {
       id: raw,
-      title: `Missing ${branch === 'true' ? 'Yes' : 'No'} branch`,
+      title: `Missing ${branch === 'true' ? 'Yes' : 'No'} next step`,
       stepLabel: getStepLabel(nodes, nodeId),
       nodeId,
       icon: Split,
@@ -169,7 +169,7 @@ export default function FlowValidationWarnings({
                   Complete your flow connections
                 </p>
                 <p className="mt-1 text-[12px] font-medium leading-relaxed text-neutral-600">
-                  Every button and branch needs a next step. Tap an issue below to jump to that step
+                  Every button and path needs a next step. Tap an issue below to jump to that step
                   in the builder.
                 </p>
                 {fixableCount > 0 && (

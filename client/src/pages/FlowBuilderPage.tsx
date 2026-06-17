@@ -4,6 +4,8 @@ import {
   ArrowLeft,
   BarChart3,
   Check,
+  ChevronDown,
+  ChevronUp,
   Clock,
   Copy,
   FileEdit,
@@ -39,10 +41,15 @@ import { getErrorMessage } from '../utils/errors';
 import { toastError, toastSuccess, toastValidationErrors } from '../utils/toast';
 import type { FlowNode, FlowNodeType, FlowStatus, FlowTriggerType } from '../types';
 
-const triggerOptions = Object.entries(triggerMeta).map(([value, meta]) => ({
-  value,
-  label: meta.label,
-}));
+const BASIC_TRIGGERS: FlowTriggerType[] = ['WELCOME', 'KEYWORD', 'OFF_HOURS', 'BUSINESS_HOURS'];
+const ADVANCED_TRIGGERS: FlowTriggerType[] = [
+  'ANY_MESSAGE',
+  'CONTACT_TAG',
+  'SEGMENT',
+  'MISSED_CALL',
+  'CAMPAIGN_REPLY',
+  'CALL_COMPLETED',
+];
 
 type DesktopPanel = 'edit' | 'setup' | 'preview' | 'test' | 'analytics' | 'versions';
 
@@ -72,6 +79,8 @@ export default function FlowBuilderPage() {
   const [nodes, setNodes] = useState<FlowNode[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
+  const [showAdvancedTriggers, setShowAdvancedTriggers] = useState(false);
+  const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
 
   const triggerConfig = useMemo(() => {
     if (triggerType === 'KEYWORD') return { keyword, exactMatch, regex: regexMatch };
@@ -265,9 +274,9 @@ export default function FlowBuilderPage() {
     <div className="min-w-0 space-y-5">
       <div className="flex items-center justify-between gap-3 rounded-xl border border-emerald-100/80 bg-gradient-to-r from-emerald-50/70 to-white px-4 py-3">
         <div className="min-w-0">
-          <p className="text-[12px] font-bold text-neutral-800">Flow status</p>
+          <p className="text-[12px] font-bold text-neutral-800">Turn this flow on?</p>
           <p className="mt-0.5 truncate text-[11px] font-medium text-neutral-500">
-            {enabled ? 'Live and responding' : 'Paused'} · {flowStatus}
+            {enabled ? 'Customers will get automatic replies' : 'Turn on when you are ready'}
           </p>
         </div>
         <button
@@ -279,88 +288,200 @@ export default function FlowBuilderPage() {
               : 'bg-neutral-100 text-neutral-600 ring-1 ring-neutral-200/80 hover:bg-neutral-200/80'
           }`}
         >
-          {enabled ? 'Live' : 'Paused'}
+          {enabled ? 'On' : 'Off'}
         </button>
       </div>
 
-      <AppInput label="Flow name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Welcome journey" />
-      <AppTextarea label="Description" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} placeholder="Optional" />
-      <AppSelect label="Trigger" value={triggerType} options={triggerOptions} isSearchable={false} onChange={(e) => setTriggerType(e.target.value as FlowTriggerType)} />
+      <AppInput
+        label="Flow name"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="e.g. Welcome new customers"
+        hint="A name you'll recognize later"
+      />
+      <AppTextarea
+        label="Notes (optional)"
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        rows={2}
+        placeholder="What does this flow do?"
+      />
+
+      <section className="space-y-2">
+        <p className="text-[13px] font-extrabold text-neutral-900">When should this start?</p>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {BASIC_TRIGGERS.map((type) => {
+            const meta = triggerMeta[type];
+            const Icon = meta.icon;
+            const selected = triggerType === type;
+            return (
+              <button
+                key={type}
+                type="button"
+                onClick={() => setTriggerType(type)}
+                className={`flex items-start gap-3 rounded-2xl border p-3 text-left transition ${
+                  selected
+                    ? `bg-gradient-to-br ring-2 ring-violet-400/40 ${meta.accent}`
+                    : 'border-neutral-200/80 bg-white hover:border-violet-200 hover:bg-violet-50/30'
+                }`}
+              >
+                <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${meta.gradient} text-white shadow-sm`}>
+                  <Icon className="h-4 w-4" strokeWidth={2.25} />
+                </div>
+                <div>
+                  <p className="text-[12px] font-extrabold text-neutral-900">{meta.label}</p>
+                  <p className="mt-0.5 text-[10px] font-medium leading-snug text-neutral-600">{meta.description}</p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setShowAdvancedTriggers(!showAdvancedTriggers)}
+          className="flex w-full items-center justify-between rounded-xl border border-dashed border-neutral-200/80 px-3 py-2.5 text-left transition hover:border-violet-200 hover:bg-violet-50/30"
+        >
+          <span className="text-[12px] font-bold text-neutral-700">
+            {showAdvancedTriggers ? 'Hide more start options' : 'More ways to start'}
+          </span>
+          {showAdvancedTriggers ? <ChevronUp className="h-4 w-4 text-neutral-400" /> : <ChevronDown className="h-4 w-4 text-neutral-400" />}
+        </button>
+
+        {showAdvancedTriggers && (
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {ADVANCED_TRIGGERS.map((type) => {
+              const meta = triggerMeta[type];
+              const Icon = meta.icon;
+              const selected = triggerType === type;
+              return (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => setTriggerType(type)}
+                  className={`flex items-start gap-3 rounded-2xl border p-3 text-left transition ${
+                    selected
+                      ? `bg-gradient-to-br ring-2 ring-violet-400/40 ${meta.accent}`
+                      : 'border-neutral-200/80 bg-white hover:border-violet-200 hover:bg-violet-50/30'
+                  }`}
+                >
+                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${meta.gradient} text-white shadow-sm`}>
+                    <Icon className="h-4 w-4" strokeWidth={2.25} />
+                  </div>
+                  <div>
+                    <p className="text-[12px] font-extrabold text-neutral-900">{meta.label}</p>
+                    <p className="mt-0.5 text-[10px] font-medium leading-snug text-neutral-600">{meta.description}</p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
       {triggerType === 'KEYWORD' && (
-        <>
-          <AppInput label="Keyword" value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="demo" />
-          <label className="flex items-center gap-2 text-[12px] font-medium text-neutral-700">
-            <input type="checkbox" checked={exactMatch} onChange={(e) => setExactMatch(e.target.checked)} /> Exact match
-          </label>
-          <label className="flex items-center gap-2 text-[12px] font-medium text-neutral-700">
-            <input type="checkbox" checked={regexMatch} onChange={(e) => setRegexMatch(e.target.checked)} /> Pattern match
-          </label>
-        </>
+        <AppInput
+          label="Word or phrase to watch for"
+          value={keyword}
+          onChange={(e) => setKeyword(e.target.value)}
+          placeholder="e.g. pricing, demo, help"
+          hint="We'll start this flow when a customer sends this word"
+        />
       )}
 
       {triggerType === 'CONTACT_TAG' && (
-        <AppInput label="Required tag" value={contactTag} onChange={(e) => setContactTag(e.target.value)} placeholder="vip" />
+        <AppInput label="Contact must have this tag" value={contactTag} onChange={(e) => setContactTag(e.target.value)} placeholder="e.g. vip" />
       )}
 
       {triggerType === 'SEGMENT' && (
-        <AppInput label="Tags (any match)" value={segmentTags} onChange={(e) => setSegmentTags(e.target.value)} placeholder="vip, lead, premium" hint="Comma-separated" />
+        <AppInput label="Contact tags (any match)" value={segmentTags} onChange={(e) => setSegmentTags(e.target.value)} placeholder="vip, lead, premium" hint="Separate with commas" />
       )}
 
       {(triggerType === 'BUSINESS_HOURS' || triggerType === 'OFF_HOURS') && (
         <Link to="/settings" className="flex items-center gap-2 rounded-xl border border-sky-100 bg-sky-50 px-3 py-2.5 text-[12px] font-semibold text-sky-700 hover:bg-sky-100">
           <Clock className="h-4 w-4" />
-          Configure business hours in Settings →
+          Set your business hours in Settings →
         </Link>
       )}
 
       {triggerType === 'MISSED_CALL' && (
         <div className="rounded-xl border border-rose-100 bg-rose-50 px-3 py-2.5 text-[12px] font-medium leading-relaxed text-rose-800">
-          Runs automatically when a WhatsApp voice call is missed. Requires voice calls enabled in Settings → Calling.
+          Runs when a customer calls and nobody answers. Voice calls must be enabled in Settings.
         </div>
       )}
 
       {triggerType === 'CAMPAIGN_REPLY' && (
         <AppInput
-          label="Campaign ID (optional)"
+          label="Specific campaign (optional)"
           value={campaignId}
           onChange={(e) => setCampaignId(e.target.value)}
-          placeholder="Leave empty for any campaign reply"
-          hint="Only trigger when replying after a campaign message"
+          placeholder="Leave blank for any campaign reply"
+          hint="Only needed if you want replies to one specific campaign"
         />
       )}
 
       {triggerType === 'CALL_COMPLETED' && (
         <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2.5 text-[12px] font-medium leading-relaxed text-emerald-800">
-          Runs automatically after a WhatsApp voice call completes successfully.
+          Runs after a phone call with the customer ends successfully.
         </div>
       )}
 
-      {nodes.length > 0 && (
-        <AppSelect
-          label="Start step"
-          value={startNodeId || nodes[0]?.id || ''}
-          options={startNodeOptions}
-          isSearchable={false}
-          onChange={(e) => setStartNodeId(e.target.value)}
-          hint="First step after trigger — or drag from trigger node"
-        />
+      <button
+        type="button"
+        onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
+        className="flex w-full items-center justify-between rounded-xl border border-dashed border-neutral-200/80 px-3 py-2.5 text-left transition hover:border-violet-200 hover:bg-violet-50/30"
+      >
+        <span className="text-[12px] font-bold text-neutral-700">
+          {showAdvancedSettings ? 'Hide advanced settings' : 'Advanced settings'}
+        </span>
+        {showAdvancedSettings ? <ChevronUp className="h-4 w-4 text-neutral-400" /> : <ChevronDown className="h-4 w-4 text-neutral-400" />}
+      </button>
+
+      {showAdvancedSettings && (
+        <div className="space-y-4 rounded-xl border border-neutral-100 bg-neutral-50/50 p-4">
+          {triggerType === 'KEYWORD' && (
+            <>
+              <label className="flex items-center gap-2 text-[12px] font-medium text-neutral-700">
+                <input type="checkbox" checked={exactMatch} onChange={(e) => setExactMatch(e.target.checked)} />
+                Match the whole message exactly
+              </label>
+              <label className="flex items-center gap-2 text-[12px] font-medium text-neutral-700">
+                <input type="checkbox" checked={regexMatch} onChange={(e) => setRegexMatch(e.target.checked)} />
+                Use pattern matching (for developers)
+              </label>
+            </>
+          )}
+
+          {nodes.length > 0 && (
+            <AppSelect
+              label="First step"
+              value={startNodeId || nodes[0]?.id || ''}
+              options={startNodeOptions}
+              isSearchable={false}
+              onChange={(e) => setStartNodeId(e.target.value)}
+              hint="Which step runs right after it starts"
+            />
+          )}
+
+          <AppInput
+            label="Which flow runs first"
+            type="number"
+            min={0}
+            max={100}
+            value={String(priority)}
+            onChange={(e) => setPriority(Number(e.target.value))}
+            hint="If two auto-replies could apply, the higher number wins (default: 50)"
+          />
+        </div>
       )}
 
-      <AppInput label="Priority (0-100)" type="number" min={0} max={100} value={String(priority)} onChange={(e) => setPriority(Number(e.target.value))} hint="Higher priority runs first" />
-
-      <div
-        className={`rounded-xl border px-3.5 py-3 text-[12px] leading-relaxed ${
-          triggerMeta[triggerType]?.accent || 'border-neutral-100 bg-neutral-50 text-neutral-600'
-        }`}
-      >
-        {triggerMeta[triggerType]?.description}
-      </div>
-
       {!isNew && flowStatus === 'DRAFT' && (
-        <AppButton size="sm" icon={<Rocket size={14} />} loading={saving} onClick={handlePublish}>
-          Publish flow
-        </AppButton>
+        <div className="rounded-xl border border-amber-100 bg-amber-50 px-3.5 py-3 text-[12px] leading-relaxed text-amber-900">
+          This flow is saved as a draft — customers won't see it until you publish.
+          <AppButton className="mt-3" size="sm" icon={<Rocket size={14} />} loading={saving} onClick={handlePublish}>
+            Publish & go live
+          </AppButton>
+        </div>
       )}
     </div>
   );
@@ -374,27 +495,27 @@ export default function FlowBuilderPage() {
   const desktopPanelTabs: FlowBuilderPanelTab<DesktopPanel>[] = [
     {
       value: 'edit',
-      label: 'Edit',
+      label: 'Edit step',
       icon: SlidersHorizontal,
-      description: 'Configure the selected step fields, branches, and messages.',
+      description: 'Change the message, buttons, or options for the selected step.',
     },
     {
       value: 'setup',
-      label: 'Setup',
+      label: 'Settings',
       icon: Settings2,
-      description: 'Set the flow name, trigger rules, priority, and publish status.',
+      description: 'Name your flow, choose when it starts, and turn it on or off.',
     },
     {
       value: 'preview',
       label: 'Preview',
       icon: Smartphone,
-      description: 'See how the conversation looks on WhatsApp for customers.',
+      description: 'See how customers will see this on WhatsApp.',
     },
     {
       value: 'test',
-      label: 'Test',
+      label: 'Try it',
       icon: FlaskConical,
-      description: 'Simulate incoming messages and verify the flow path.',
+      description: 'Try a sample message and see which steps would run.',
     },
     ...(!isNew
       ? [
@@ -402,13 +523,13 @@ export default function FlowBuilderPage() {
             value: 'analytics' as const,
             label: 'Stats',
             icon: BarChart3,
-            description: 'Track starts, completions, handoffs, and drop-off points.',
+            description: 'See how many people started, finished, talked to your team, or stopped early.',
           },
           {
             value: 'versions' as const,
             label: 'History',
             icon: History,
-            description: 'Browse published versions and restore earlier snapshots.',
+            description: 'See saved versions and restore an older one.',
           },
         ]
       : []),
@@ -461,7 +582,7 @@ export default function FlowBuilderPage() {
                     enabled ? 'bg-emerald-100 text-emerald-800' : 'bg-neutral-100 text-neutral-500'
                   }`}
                 >
-                  {enabled ? 'Live' : 'Paused'}
+                  {enabled ? 'On' : 'Off'}
                 </span>
                 {flowStatus === 'DRAFT' && (
                   <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-700">

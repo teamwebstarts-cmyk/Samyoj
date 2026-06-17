@@ -55,7 +55,7 @@ export default function AutomationCard({
                   : 'bg-neutral-100 text-neutral-500 ring-neutral-200/70'
               }`}
             >
-              {automation.enabled ? 'Live' : 'Paused'}
+              {automation.enabled ? 'On' : 'Off'}
             </span>
           </div>
 
@@ -89,7 +89,7 @@ export default function AutomationCard({
           icon={automation.enabled ? <PauseCircle size={14} /> : <PlayCircle size={14} />}
           onClick={onToggle}
         >
-          {automation.enabled ? 'Pause' : 'Activate'}
+          {automation.enabled ? 'Turn off' : 'Turn on'}
         </AppButton>
         <AppButton size="sm" fullWidth variant="secondary" icon={<Pencil size={14} />} onClick={onEdit}>
           Edit
