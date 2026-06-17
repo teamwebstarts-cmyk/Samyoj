@@ -3,13 +3,15 @@ import type { ReactNode } from 'react';
 interface PageShellProps {
   children: ReactNode;
   fullBleed?: boolean;
+  /** Wider layout for inbox (uses page-shell-inbox) */
+  inbox?: boolean;
   className?: string;
 }
 
-export default function PageShell({ children, fullBleed = false, className = '' }: PageShellProps) {
-  if (fullBleed) {
+export default function PageShell({ children, fullBleed = false, inbox = false, className = '' }: PageShellProps) {
+  if (fullBleed || inbox) {
     return (
-      <div className={`page-shell-bleed ${className}`}>{children}</div>
+      <div className={`${inbox ? 'page-shell-inbox' : 'page-shell-bleed'} ${className}`}>{children}</div>
     );
   }
 

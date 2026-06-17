@@ -59,7 +59,20 @@ export function buildTemplateComponents(data: TemplateInput) {
     components.push({ type: 'FOOTER', text: data.footer });
   }
 
-  if (data.buttons?.length) {
+  if (data.category === 'AUTHENTICATION') {
+    const otpType = data.authType === 'ONE_TAP' ? 'ONE_TAP' : 'COPY_CODE';
+    const buttonText = data.buttons?.[0]?.text?.trim() || (otpType === 'ONE_TAP' ? 'Autofill' : 'Copy Code');
+    components.push({
+      type: 'BUTTONS',
+      buttons: [
+        {
+          type: 'OTP',
+          otp_type: otpType,
+          text: buttonText,
+        },
+      ],
+    });
+  } else if (data.buttons?.length) {
     components.push({
       type: 'BUTTONS',
       buttons: data.buttons.map((btn) => {

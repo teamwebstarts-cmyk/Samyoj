@@ -17,7 +17,7 @@ export interface AppSelectOption {
   disabled?: boolean;
 }
 
-interface AppSelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 'onChange' | 'value'> {
+interface AppSelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 'onChange' | 'value' | 'size'> {
   label?: string;
   hint?: string;
   error?: string;

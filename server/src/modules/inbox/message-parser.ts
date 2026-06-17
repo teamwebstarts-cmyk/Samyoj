@@ -4,6 +4,12 @@ interface ParsedInboundMessage {
   content: string;
   buttonReplyId?: string;
   waFlowResponse?: Record<string, unknown>;
+  referral?: Record<string, unknown>;
+  orderPayload?: {
+    catalogId: string;
+    productItems: Array<{ product_retailer_id: string; quantity: number; item_price?: number; currency?: string }>;
+    text?: string;
+  };
   metadata?: MessageMediaMetadata;
 }
 
@@ -11,7 +17,12 @@ export function parseInboundMessage(msg: Record<string, unknown>): ParsedInbound
   const msgType = (msg.type as string | undefined)?.toLowerCase() || 'text';
 
   if (msgType === 'text') {
-    return { content: (msg.text as { body?: string } | undefined)?.body || '' };
+    const textBody = (msg.text as { body?: string } | undefined)?.body || '';
+    const referral = msg.referral as Record<string, unknown> | undefined;
+    return {
+      content: textBody,
+      ...(referral ? { referral } : {}),
+    };
   }
 
   if (msgType === 'button') {
@@ -39,9 +50,16 @@ export function parseInboundMessage(msg: Record<string, unknown>): ParsedInbound
       } catch {
         waFlowResponse = {};
       }
+      const flowToken =
+        (interactive.nfm_reply as { flow_token?: string }).flow_token ||
+        (waFlowResponse.flow_token as string | undefined);
       return {
         content: interactive.nfm_reply.body || 'Form submitted',
-        waFlowResponse,
+        waFlowResponse: {
+          ...waFlowResponse,
+          ...(flowToken ? { flow_token: flowToken } : {}),
+          nfm_name: interactive.nfm_reply.name,
+        },
       };
     }
 
@@ -56,6 +74,35 @@ export function parseInboundMessage(msg: Record<string, unknown>): ParsedInbound
       return {
         content: interactive.list_reply.title || '',
         buttonReplyId: interactive.list_reply.id,
+      };
+    }
+  }
+
+  if (msgType === 'order') {
+    const order = msg.order as
+      | {
+          catalog_id?: string;
+          product_items?: Array<{
+            product_retailer_id: string;
+            quantity: number;
+            item_price?: number;
+            currency?: string;
+          }>;
+          text?: string;
+        }
+      | undefined;
+
+    if (order?.catalog_id && order.product_items?.length) {
+      const itemSummary = order.product_items
+        .map((i) => `${i.product_retailer_id} x${i.quantity}`)
+        .join(', ');
+      return {
+        content: order.text || `Order: ${itemSummary}`,
+        orderPayload: {
+          catalogId: order.catalog_id,
+          productItems: order.product_items,
+          text: order.text,
+        },
       };
     }
   }

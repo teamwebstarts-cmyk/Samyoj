@@ -78,7 +78,7 @@ export default function WhatsAppConnectGuide() {
       <section className="mb-8 sm:mb-10" aria-label="WhatsApp connection">
         <div className="dashboard-card flex flex-col gap-4 rounded-2xl p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-whatsapp-500 to-whatsapp-600 text-white">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-whatsapp-600 to-whatsapp-700 text-white">
               <CheckCircle2 className="h-5 w-5" strokeWidth={2.25} />
             </div>
             <div>
@@ -114,7 +114,7 @@ export default function WhatsAppConnectGuide() {
       <div className="dashboard-card rounded-2xl p-4 sm:p-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-whatsapp-500 to-whatsapp-600 text-white">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-whatsapp-600 to-whatsapp-700 text-white">
               <Smartphone className="h-5 w-5" strokeWidth={2.25} />
             </div>
             <div>

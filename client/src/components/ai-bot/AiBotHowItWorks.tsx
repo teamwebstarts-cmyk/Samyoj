@@ -33,7 +33,7 @@ const steps: Array<{
     icon: MessageSquare,
     accent: 'from-emerald-500/10 via-theme-surface to-teal-500/5 border-emerald-200/60 dark:border-emerald-500/25',
     iconBg:
-      'bg-gradient-to-br from-whatsapp-500 to-emerald-600 text-white shadow-[0_4px_14px_rgba(37,211,102,0.35)]',
+      'bg-gradient-to-br from-whatsapp-600 to-emerald-700 text-white shadow-[0_4px_14px_rgba(37,211,102,0.35)]',
   },
 ];
 

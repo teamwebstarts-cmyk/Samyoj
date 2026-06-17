@@ -14,14 +14,14 @@ const benefits = [
     icon: Headphones,
     title: '24/7 availability',
     text: 'Customers can call anytime — your AI bot answers even after hours.',
-    color: 'from-violet-500 to-purple-600',
+    color: 'from-violet-600 to-purple-700',
     bg: 'from-violet-50 to-white',
   },
   {
     icon: MessageSquare,
     title: 'Saved transcripts',
     text: 'Every call is logged here with what the customer and bot said.',
-    color: 'from-whatsapp-500 to-emerald-600',
+    color: 'from-whatsapp-600 to-emerald-700',
     bg: 'from-emerald-50 to-white',
   },
   {
@@ -128,7 +128,7 @@ export default function CallInfoPanel({ compact, phoneNumber }: CallInfoPanelPro
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
           {flow.map((item) => (
             <div key={item.step} className="rounded-xl border border-neutral-100 bg-neutral-50/50 p-3">
-              <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600 text-[11px] font-bold text-white">
+              <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-violet-600 to-indigo-700 text-[11px] font-bold text-white">
                 {item.step}
               </span>
               <p className="mt-2 text-[13px] font-extrabold text-neutral-900">{item.title}</p>

@@ -32,6 +32,10 @@ export const PAGE_META: Record<string, PageMeta> = {
     title: 'Templates',
     description: 'Approved message templates for outreach',
   },
+  '/content-studio': {
+    title: 'Content Studio',
+    description: 'Create on-brand images, copy, and videos',
+  },
   '/contacts': {
     title: 'Contacts',
     description: 'Your customer list',
@@ -52,14 +56,36 @@ export const PAGE_META: Record<string, PageMeta> = {
     title: 'Settings',
     description: 'Connect WhatsApp and set up your workspace',
   },
+  '/onboarding': {
+    title: 'Getting Started',
+    description: 'Set up your WhatsApp workspace',
+  },
 };
 
 export function getPageMeta(pathname: string): PageMeta {
   if (PAGE_META[pathname]) return PAGE_META[pathname];
+
+  if (pathname.startsWith('/automations/flows/')) {
+    return { title: 'Flow Builder', description: 'Design conversation flows' };
+  }
+  if (pathname.startsWith('/automations/meta-flows/')) {
+    return { title: 'Meta Flow Builder', description: 'Build WhatsApp Flow forms' };
+  }
 
   const match = Object.entries(PAGE_META).find(
     ([path]) => path !== '/' && pathname.startsWith(path),
   );
 
   return match?.[1] ?? { title: 'Workspace' };
+}
+
+export function isBuilderRoute(pathname: string): boolean {
+  return (
+    pathname.startsWith('/automations/flows/') ||
+    pathname.startsWith('/automations/meta-flows/')
+  );
+}
+
+export function shouldShowMobileBottomNav(pathname: string): boolean {
+  return !isBuilderRoute(pathname);
 }

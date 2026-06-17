@@ -12,8 +12,8 @@ interface SettingsPanelProps {
 }
 
 const accentStyles = {
-  emerald: 'from-whatsapp-500 to-emerald-600 shadow-[0_4px_14px_rgba(37,211,102,0.3)]',
-  violet: 'from-violet-500 to-purple-600 shadow-[0_4px_14px_rgba(139,92,246,0.3)]',
+  emerald: 'from-whatsapp-600 to-emerald-700 shadow-[0_4px_14px_rgba(37,211,102,0.3)]',
+  violet: 'from-violet-600 to-purple-700 shadow-[0_4px_14px_rgba(139,92,246,0.3)]',
   sky: 'from-sky-500 to-blue-600 shadow-[0_4px_14px_rgba(14,165,233,0.3)]',
   amber: 'from-amber-500 to-orange-500 shadow-[0_4px_14px_rgba(245,158,11,0.3)]',
   indigo: 'from-indigo-500 to-violet-600 shadow-[0_4px_14px_rgba(99,102,241,0.3)]',
@@ -36,7 +36,7 @@ export default function SettingsPanel({
         <div className="pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full bg-theme-subtle opacity-60 blur-2xl" />
         <div className="relative flex items-start gap-4">
           <div
-            className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br text-white ${accentStyles[accent]}`}
+            className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br text-white ${accentStyles[accent as keyof typeof accentStyles]}`}
           >
             <Icon className="h-5 w-5" strokeWidth={2.25} />
           </div>

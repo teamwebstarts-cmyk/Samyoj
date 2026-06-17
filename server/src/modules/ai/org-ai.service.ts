@@ -44,7 +44,7 @@ export async function saveOrgAiSettings(
       settings: {
         ...current,
         ai: next,
-      },
+      } as object,
     },
   });
 

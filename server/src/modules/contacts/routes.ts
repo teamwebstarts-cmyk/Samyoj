@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../../config/database';
 import { authenticate, requireOrg } from '../../middleware/auth';
+import { authenticateJwtOrApiKey } from '../../middleware/authenticate-jwt-or-api-key';
 import { AppError, sendSuccess, asyncHandler, paramId } from '../../utils/response';
 import { phoneFieldSchema, validatePhone } from '../../utils/phone';
 import { z } from 'zod';
@@ -17,7 +18,7 @@ const router = Router();
 
 router.get(
   '/',
-  authenticate,
+  authenticateJwtOrApiKey,
   requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
@@ -37,7 +38,7 @@ const contactSchema = z.object({
 
 router.post(
   '/',
-  authenticate,
+  authenticateJwtOrApiKey,
   requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
     const data = contactSchema.parse(req.body);
@@ -196,6 +197,18 @@ router.get(
   asyncHandler(async (req: Request, res: Response) => {
     const detail = await getContactDetail(req.user!.organizationId!, paramId(req));
     sendSuccess(res, detail);
+  })
+);
+
+router.get(
+  '/:id/timeline',
+  authenticate,
+  requireOrg,
+  asyncHandler(async (req: Request, res: Response) => {
+    const { getContactTimeline } = await import('./timeline');
+    const result = await getContactTimeline(req.user!.organizationId!, paramId(req));
+    if (!result) throw new AppError(404, 'Contact not found');
+    sendSuccess(res, result);
   })
 );
 

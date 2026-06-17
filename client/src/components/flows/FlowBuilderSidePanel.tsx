@@ -39,7 +39,7 @@ export default function FlowBuilderSidePanel<T extends string>({
                 title={tab.label}
                 className={`flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-2 text-[12px] font-bold transition active:scale-[0.98] ${
                   isActive
-                    ? 'border-violet-200 bg-gradient-to-r from-violet-500 to-indigo-600 text-white shadow-[0_4px_12px_rgba(99,102,241,0.28)]'
+                    ? 'border-violet-200 bg-gradient-to-r from-violet-600 to-indigo-700 text-white shadow-[0_4px_12px_rgba(99,102,241,0.28)]'
                     : 'border-neutral-200/80 bg-white text-neutral-600 hover:border-violet-200 hover:bg-violet-50/50 hover:text-violet-700'
                 }`}
               >

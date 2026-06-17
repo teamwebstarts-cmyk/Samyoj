@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
-import { Settings2 } from 'lucide-react';
+import { ChevronDown, Settings2 } from 'lucide-react';
 
 export interface SettingsTabItem {
   id: string;
@@ -24,7 +24,7 @@ export default function SettingsSidebar({
 }: SettingsSidebarProps) {
   return (
     <>
-      <div className="flex gap-2 overflow-x-auto pb-1 lg:hidden">
+      <nav className="space-y-1 lg:hidden" aria-label="Settings sections">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const active = activeTab === tab.id;
@@ -33,29 +33,40 @@ export default function SettingsSidebar({
               key={tab.id}
               type="button"
               onClick={() => onTabChange(tab.id)}
-              className={`inline-flex shrink-0 items-center gap-2 rounded-full px-3.5 py-2 text-[12px] font-bold transition active:scale-[0.98] ${
+              aria-current={active ? 'page' : undefined}
+              className={`flex w-full min-h-[44px] items-center gap-3 rounded-xl border px-3 py-3 text-left transition active:scale-[0.98] ${
                 active
-                  ? 'bg-gradient-to-r from-whatsapp-600 to-emerald-500 text-white shadow-[0_4px_12px_rgba(37,211,102,0.3)]'
-                  : 'border border-theme-border bg-theme-surface text-theme-secondary hover:border-whatsapp-500/30 hover:text-theme-fg'
+                  ? 'border-whatsapp-500/30 bg-whatsapp-500/10 text-whatsapp-700 dark:text-whatsapp-300'
+                  : 'border-theme-border bg-theme-surface text-theme-secondary hover:bg-theme-subtle'
               }`}
             >
-              <Icon className="h-3.5 w-3.5" strokeWidth={2.25} />
-              {tab.label}
-              {tab.badge && (
-                <span
-                  className={`rounded-full px-1.5 py-0.5 text-[9px] font-extrabold uppercase ${
-                    active
-                      ? 'bg-white/20 text-white'
-                      : 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
-                  }`}
-                >
-                  {tab.badge}
+              <span
+                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
+                  active
+                    ? 'bg-gradient-to-br from-whatsapp-500 to-emerald-600 text-white'
+                    : 'bg-theme-subtle text-theme-muted ring-1 ring-theme-border'
+                }`}
+              >
+                <Icon className="h-4 w-4" strokeWidth={2.25} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-2">
+                  <span className="block truncate text-label">{tab.label}</span>
+                  {tab.badge && (
+                    <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-micro uppercase text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                      {tab.badge}
+                    </span>
+                  )}
                 </span>
-              )}
+                <span className="block truncate text-caption text-theme-muted">{tab.description}</span>
+              </span>
+              <ChevronDown
+                className={`h-4 w-4 shrink-0 text-theme-muted transition ${active ? 'rotate-180' : ''}`}
+              />
             </button>
           );
         })}
-      </div>
+      </nav>
 
       <nav className="hidden lg:block lg:sticky lg:top-6 lg:self-start">
         <div className="dashboard-card overflow-hidden p-0">
@@ -65,13 +76,13 @@ export default function SettingsSidebar({
                 <Settings2 className="h-3.5 w-3.5" strokeWidth={2.25} />
               </div>
               <div>
-                <p className="text-[12px] font-extrabold text-theme-fg">Settings</p>
-                <p className="text-[10px] font-medium text-theme-muted">6 areas</p>
+                <p className="text-label font-extrabold text-theme-fg">Settings</p>
+                <p className="text-caption text-theme-muted">{tabs.length} areas</p>
               </div>
             </div>
           </div>
 
-          <ul className="space-y-1 p-2">
+          <ul className="space-y-1 p-2" role="tablist" aria-label="Settings sections">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const active = activeTab === tab.id;
@@ -79,6 +90,8 @@ export default function SettingsSidebar({
                 <li key={tab.id}>
                   <button
                     type="button"
+                    role="tab"
+                    aria-selected={active}
                     onClick={() => onTabChange(tab.id)}
                     className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition ${
                       active
@@ -97,16 +110,14 @@ export default function SettingsSidebar({
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-2">
-                        <span className="block truncate text-[13px] font-bold">{tab.label}</span>
+                        <span className="block truncate text-label">{tab.label}</span>
                         {tab.badge && (
-                          <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-extrabold uppercase text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                          <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-micro uppercase text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
                             {tab.badge}
                           </span>
                         )}
                       </span>
-                      <span className="block truncate text-[11px] font-medium text-theme-muted">
-                        {tab.description}
-                      </span>
+                      <span className="block truncate text-caption text-theme-muted">{tab.description}</span>
                     </span>
                   </button>
                 </li>
@@ -123,7 +134,7 @@ export default function SettingsSidebar({
                     : 'bg-amber-400'
                 }`}
               />
-              <p className="text-[11px] font-semibold text-theme-secondary">
+              <p className="text-caption font-semibold text-theme-secondary">
                 {isReady ? 'Everything working' : 'Needs attention'}
               </p>
             </div>

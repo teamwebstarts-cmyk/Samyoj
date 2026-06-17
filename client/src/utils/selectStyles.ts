@@ -8,6 +8,12 @@ export interface SelectOption {
 
 export type SelectSize = 'default' | 'compact';
 
+function cssVar(name: string, fallback: string): string {
+  if (typeof document === 'undefined') return fallback;
+  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return value || fallback;
+}
+
 export function createSelectStyles(
   isDark: boolean,
   size: SelectSize = 'default',
@@ -15,16 +21,16 @@ export function createSelectStyles(
   const isCompact = size === 'compact';
   const controlHeight = isCompact ? 36 : 44;
   const fontSize = isCompact ? 12 : 14;
-  const surface = isDark ? '#151d2b' : '#ffffff';
-  const text = isDark ? '#f1f5f9' : '#171717';
-  const muted = isDark ? '#64748b' : '#9ca3af';
-  const border = isDark ? 'rgba(51, 65, 85, 0.65)' : 'rgba(229, 231, 235, 0.9)';
-  const borderHover = isDark ? '#475569' : '#d1d5db';
+  const surface = cssVar('--color-surface', isDark ? '#151d2b' : '#ffffff');
+  const text = cssVar('--color-text', isDark ? '#f1f5f9' : '#0f172a');
+  const muted = cssVar('--color-text-muted', isDark ? '#64748b' : '#64748b');
+  const border = cssVar('--color-border', isDark ? 'rgba(51, 65, 85, 0.65)' : 'rgba(226, 232, 240, 0.85)');
+  const borderHover = cssVar('--color-border-strong', isDark ? '#475569' : '#d1d5db');
   const focusBorder = '#128C7E';
   const focusRing = isDark ? '0 0 0 3px rgba(37, 211, 102, 0.2)' : '0 0 0 3px rgba(37, 211, 102, 0.15)';
-  const menuShadow = isDark
+  const menuShadow = cssVar('--shadow-panel', isDark
     ? '0 12px 32px rgba(0, 0, 0, 0.45)'
-    : '0 12px 32px rgba(15, 23, 42, 0.12)';
+    : '0 12px 32px rgba(15, 23, 42, 0.12)');
   const selectedBg = isDark ? 'rgba(6, 78, 59, 0.45)' : 'rgba(209, 250, 229, 0.95)';
   const focusedBg = isDark ? 'rgba(6, 78, 59, 0.25)' : 'rgba(240, 253, 244, 0.95)';
   const selectedText = isDark ? '#6ee7b7' : '#065f46';

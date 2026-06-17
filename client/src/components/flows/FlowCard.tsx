@@ -23,7 +23,7 @@ export default function FlowCard({ flow, onOpen, onToggle, onDuplicate, onDelete
         onClick={onOpen}
         className="flex w-full items-start gap-3 p-4 text-left active:bg-neutral-50/50 sm:gap-4 sm:p-5"
       >
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-[0_4px_14px_rgba(99,102,241,0.3)] sm:h-12 sm:w-12">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-700 text-white shadow-[0_4px_14px_rgba(99,102,241,0.3)] sm:h-12 sm:w-12">
           <GitBranch className="h-5 w-5" strokeWidth={2.25} />
         </div>
 

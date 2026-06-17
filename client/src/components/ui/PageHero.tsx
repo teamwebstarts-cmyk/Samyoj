@@ -1,4 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
+import { pageHeroAccents, type AccentName } from './accentTokens';
 
 export interface PageHeroStat {
   label: string;
@@ -6,7 +7,7 @@ export interface PageHeroStat {
   tone?: string;
 }
 
-type PageHeroAccent = 'emerald' | 'violet' | 'sky' | 'amber' | 'rose' | 'neutral';
+type PageHeroAccent = Exclude<AccentName, 'indigo'>;
 
 interface PageHeroProps {
   badge: string;
@@ -17,48 +18,6 @@ interface PageHeroProps {
   accent?: PageHeroAccent;
 }
 
-const accents: Record<
-  PageHeroAccent,
-  { gridColor: string; blurLeft: string; blurRight: string; badge: string }
-> = {
-  emerald: {
-    gridColor: 'rgba(37,211,102,0.05)',
-    blurLeft: 'bg-whatsapp-500/10',
-    blurRight: 'bg-emerald-300/20',
-    badge: 'border-emerald-200/80 text-whatsapp-700',
-  },
-  amber: {
-    gridColor: 'rgba(245,158,11,0.05)',
-    blurLeft: 'bg-amber-400/15',
-    blurRight: 'bg-whatsapp-500/10',
-    badge: 'border-amber-200/80 text-amber-800',
-  },
-  violet: {
-    gridColor: 'rgba(139,92,246,0.05)',
-    blurLeft: 'bg-violet-400/15',
-    blurRight: 'bg-purple-300/15',
-    badge: 'border-violet-200/80 text-violet-800',
-  },
-  sky: {
-    gridColor: 'rgba(14,165,233,0.05)',
-    blurLeft: 'bg-sky-400/15',
-    blurRight: 'bg-blue-300/15',
-    badge: 'border-sky-200/80 text-sky-800',
-  },
-  rose: {
-    gridColor: 'rgba(244,63,94,0.05)',
-    blurLeft: 'bg-rose-400/15',
-    blurRight: 'bg-pink-300/15',
-    badge: 'border-rose-200/80 text-rose-800',
-  },
-  neutral: {
-    gridColor: 'rgba(115,115,115,0.05)',
-    blurLeft: 'bg-neutral-400/10',
-    blurRight: 'bg-neutral-300/10',
-    badge: 'border-neutral-200/80 text-neutral-700',
-  },
-};
-
 export default function PageHero({
   badge,
   badgeIcon: BadgeIcon,
@@ -67,7 +26,7 @@ export default function PageHero({
   stats = [],
   accent = 'emerald',
 }: PageHeroProps) {
-  const theme = accents[accent];
+  const theme = pageHeroAccents[accent];
 
   return (
     <div className="dashboard-hero relative overflow-hidden rounded-2xl p-5 sm:p-6">

@@ -1,6 +1,7 @@
 import prisma from '../../config/database';
 import { AppError } from '../../utils/response';
 import { DEFAULT_CAMPAIGN_SETTINGS, type CampaignSettings } from './types';
+import { estimateCampaignCost } from '../billing/usage.service';
 
 export async function getCampaignSettings(organizationId: string): Promise<CampaignSettings> {
   const org = await prisma.organization.findUnique({
@@ -57,4 +58,37 @@ export async function assertDailySendQuota(organizationId: string, recipientCoun
       `Daily campaign send limit exceeded (${sentToday}/${limit} sent today, ${recipientCount} requested).`
     );
   }
+}
+
+export async function assertDailyBudget(organizationId: string, recipientCount: number, category = 'MARKETING') {
+  const settings = await getCampaignSettings(organizationId);
+  const budget = settings.dailyBudgetInr ?? DEFAULT_CAMPAIGN_SETTINGS.dailyBudgetInr!;
+
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+
+  const sentToday = await prisma.campaignRecipient.count({
+    where: {
+      campaign: { organizationId },
+      status: { in: ['SENT', 'DELIVERED', 'READ'] },
+      sentAt: { gte: startOfDay },
+    },
+  });
+
+  const spentEstimate = estimateCampaignCost(sentToday, category).estimatedCostInr;
+  const sendEstimate = estimateCampaignCost(recipientCount, category).estimatedCostInr;
+
+  if (spentEstimate + sendEstimate > budget) {
+    throw new AppError(
+      429,
+      `Daily Meta budget exceeded. Estimated spend today: ₹${spentEstimate.toFixed(2)} + ₹${sendEstimate.toFixed(2)} requested exceeds ₹${budget} daily cap.`
+    );
+  }
+
+  return {
+    budgetInr: budget,
+    spentEstimateInr: spentEstimate,
+    sendEstimateInr: sendEstimate,
+    remainingInr: Math.max(0, budget - spentEstimate),
+  };
 }

@@ -116,6 +116,12 @@ export default function ReportsPage() {
   const [days, setDays] = useState('30');
   const [data, setData] = useState<ReportsData | null>(null);
   const [sla, setSla] = useState<SlaStats | null>(null);
+  const [leaderboard, setLeaderboard] = useState<
+    Array<{ name: string; messagesSent: number; closedChats: number; productivityScore: number; avgFirstResponseMinutes: number | null }>
+  >([]);
+  const [templateMetrics, setTemplateMetrics] = useState<
+    Array<{ templateName: string; sent: number; delivered: number; read: number; deliveryRate: string; campaigns: number }>
+  >([]);
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
 
@@ -125,10 +131,14 @@ export default function ReportsPage() {
     Promise.all([
       analyticsApi.reports(parseInt(days, 10)),
       complianceApi.sla(),
+      analyticsApi.leaderboard(parseInt(days, 10)),
+      analyticsApi.templates(parseInt(days, 10)),
     ])
-      .then(([reportsRes, slaRes]) => {
+      .then(([reportsRes, slaRes, leaderboardRes, templatesRes]) => {
         setData(reportsRes.data.data);
         setSla(slaRes.data.data);
+        setLeaderboard(leaderboardRes.data.data.leaderboard || []);
+        setTemplateMetrics(templatesRes.data.data.templates || []);
       })
       .catch(() => {
         setLoadFailed(true);
@@ -350,6 +360,74 @@ export default function ReportsPage() {
           </div>
 
           <ReportsAgentTable agents={data.agentPerformance} periodDays={data.periodDays} />
+
+          {leaderboard.length > 0 && (
+            <div className="dashboard-card overflow-hidden p-5 animate-fade-up-delay">
+              <h2 className="text-base font-extrabold text-theme-fg">Agent leaderboard</h2>
+              <p className="mt-0.5 text-[12px] text-theme-secondary">Ranked by productivity score</p>
+              <div className="mt-4 overflow-x-auto">
+                <table className="w-full min-w-[480px] text-left text-[13px]">
+                  <thead className="text-[11px] font-bold uppercase tracking-wider text-theme-muted">
+                    <tr>
+                      <th className="pb-2 pr-4">#</th>
+                      <th className="pb-2 pr-4">Agent</th>
+                      <th className="pb-2 pr-4">Score</th>
+                      <th className="pb-2 pr-4">Closed</th>
+                      <th className="pb-2">Avg FRT</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-theme-border">
+                    {leaderboard.map((agent, index) => (
+                      <tr key={agent.name}>
+                        <td className="py-2.5 pr-4 font-bold text-theme-muted">{index + 1}</td>
+                        <td className="py-2.5 pr-4 font-semibold text-theme-fg">{agent.name}</td>
+                        <td className="py-2.5 pr-4 tabular-nums">{agent.productivityScore}</td>
+                        <td className="py-2.5 pr-4 tabular-nums">{agent.closedChats}</td>
+                        <td className="py-2.5 tabular-nums">
+                          {agent.avgFirstResponseMinutes != null
+                            ? `${agent.avgFirstResponseMinutes}m`
+                            : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {templateMetrics.length > 0 && (
+            <div className="dashboard-card overflow-hidden p-5 animate-fade-up-delay">
+              <h2 className="text-base font-extrabold text-theme-fg">Template success rates</h2>
+              <p className="mt-0.5 text-[12px] text-theme-secondary">Campaign delivery & read performance by template</p>
+              <div className="mt-4 overflow-x-auto">
+                <table className="w-full min-w-[520px] text-left text-[13px]">
+                  <thead className="text-[11px] font-bold uppercase tracking-wider text-theme-muted">
+                    <tr>
+                      <th className="pb-2 pr-4">Template</th>
+                      <th className="pb-2 pr-4">Campaigns</th>
+                      <th className="pb-2 pr-4">Sent</th>
+                      <th className="pb-2 pr-4">Delivered</th>
+                      <th className="pb-2 pr-4">Read</th>
+                      <th className="pb-2">Delivery %</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-theme-border">
+                    {templateMetrics.slice(0, 10).map((t) => (
+                      <tr key={t.templateName}>
+                        <td className="py-2.5 pr-4 font-semibold text-theme-fg">{t.templateName}</td>
+                        <td className="py-2.5 pr-4 tabular-nums">{t.campaigns}</td>
+                        <td className="py-2.5 pr-4 tabular-nums">{t.sent.toLocaleString()}</td>
+                        <td className="py-2.5 pr-4 tabular-nums">{t.delivered.toLocaleString()}</td>
+                        <td className="py-2.5 pr-4 tabular-nums">{t.read.toLocaleString()}</td>
+                        <td className="py-2.5 tabular-nums">{t.deliveryRate}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       ) : null}
     </PageShell>

@@ -45,7 +45,7 @@ export const nodeMeta: Record<
     description: 'Send a text reply',
     icon: MessageSquare,
     color: 'text-emerald-700',
-    gradient: 'from-whatsapp-500 to-emerald-600',
+    gradient: 'from-whatsapp-600 to-emerald-700',
     shadow: 'shadow-[0_4px_14px_rgba(37,211,102,0.3)]',
   },
   buttons: {
@@ -53,7 +53,7 @@ export const nodeMeta: Record<
     description: 'Reply, URL, or call buttons',
     icon: GitBranch,
     color: 'text-violet-700',
-    gradient: 'from-violet-500 to-purple-600',
+    gradient: 'from-violet-600 to-purple-700',
     shadow: 'shadow-[0_4px_14px_rgba(139,92,246,0.3)]',
   },
   list: {
@@ -201,8 +201,9 @@ export const nodeMeta: Record<
     shadow: 'shadow-[0_4px_14px_rgba(59,130,246,0.3)]',
   },
   wa_flow: {
-    label: 'In-Chat Form',
-    description: 'A form customers fill inside WhatsApp',
+    label: 'Meta Form',
+    description:
+      'A form customers fill inside WhatsApp. This is a Meta Form — not the same as your Automations.',
     icon: FormInput,
     color: 'text-teal-700',
     gradient: 'from-teal-500 to-cyan-600',
@@ -258,7 +259,7 @@ export const triggerMeta: Record<
     description: 'When message contains a specific word',
     icon: Zap,
     accent: 'bg-violet-50 text-violet-800 ring-violet-200/70',
-    gradient: 'from-violet-500 to-purple-600',
+    gradient: 'from-violet-600 to-purple-700',
   },
   BUSINESS_HOURS: {
     label: 'During Hours',

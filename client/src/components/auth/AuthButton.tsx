@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import AppButton from '../ui/AppButton';
 
 interface AuthButtonProps {
   loading?: boolean;
@@ -8,15 +9,15 @@ interface AuthButtonProps {
 
 export default function AuthButton({ loading, loadingText, children }: AuthButtonProps) {
   return (
-    <button
+    <AppButton
       type="submit"
-      disabled={loading}
-      className="auth-btn-primary flex h-12 w-full items-center justify-center gap-2 rounded-xl text-[14px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+      variant="primary"
+      size="xl"
+      fullWidth
+      loading={loading}
+      className="shadow-[0_4px_14px_rgba(37,211,102,0.35)]"
     >
-      {loading && (
-        <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/25 border-t-white" />
-      )}
       {loading ? loadingText : children}
-    </button>
+    </AppButton>
   );
 }

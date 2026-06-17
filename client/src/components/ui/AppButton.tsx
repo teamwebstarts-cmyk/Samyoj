@@ -1,7 +1,7 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 
 type AppButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
-type AppButtonSize = 'sm' | 'md' | 'lg';
+type AppButtonSize = 'sm' | 'md' | 'lg' | 'xl';
 
 interface AppButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: AppButtonVariant;
@@ -12,8 +12,7 @@ interface AppButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variants: Record<AppButtonVariant, string> = {
-  primary:
-    'bg-gradient-to-br from-whatsapp-500 to-whatsapp-600 text-white shadow-[0_4px_14px_rgba(37,211,102,0.35)] hover:from-whatsapp-600 hover:to-whatsapp-700 focus:ring-whatsapp-500/25',
+  primary: 'btn-primary focus:ring-4 focus:ring-whatsapp-500/25',
   secondary:
     'border border-theme-border bg-theme-surface text-theme-fg shadow-input hover:border-whatsapp-500/30 hover:bg-whatsapp-500/10 focus:ring-whatsapp-500/15',
   ghost: 'text-theme-secondary hover:bg-theme-subtle hover:text-theme-fg focus:ring-whatsapp-500/10',
@@ -22,9 +21,10 @@ const variants: Record<AppButtonVariant, string> = {
 };
 
 const sizes: Record<AppButtonSize, string> = {
-  sm: 'h-9 gap-1.5 rounded-xl px-3 text-[12px] font-semibold',
-  md: 'h-10 gap-2 rounded-xl px-4 text-[13px] font-semibold',
-  lg: 'h-11 gap-2 rounded-xl px-5 text-[14px] font-semibold',
+  sm: 'h-9 min-h-[44px] gap-1.5 rounded-xl px-3 text-xs',
+  md: 'h-10 min-h-[44px] gap-2 rounded-xl px-4 text-[13px]',
+  lg: 'h-11 min-h-[44px] gap-2 rounded-xl px-5 text-sm',
+  xl: 'h-12 min-h-[44px] gap-2 rounded-xl px-5 text-sm',
 };
 
 export default function AppButton({
@@ -42,7 +42,7 @@ export default function AppButton({
     <button
       type="button"
       disabled={disabled || loading}
-      className={`inline-flex items-center justify-center transition focus:outline-none focus:ring-4 disabled:cursor-not-allowed disabled:opacity-50 ${variants[variant]} ${sizes[size]} ${fullWidth ? 'w-full' : ''} ${className}`}
+      className={`inline-flex items-center justify-center transition focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 ${variants[variant]} ${sizes[size]} ${fullWidth ? 'w-full' : ''} ${className}`}
       {...props}
     >
       {loading && (

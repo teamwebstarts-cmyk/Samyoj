@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Bot, MessageSquare, MessageSquarePlus, Phone, StickyNote, Tag } from 'lucide-react';
+import { ArrowLeft, MessageSquare, MessageSquarePlus } from 'lucide-react';
 import ChatComposer, { type PendingAttachment } from '../components/inbox/ChatComposer';
 import TemplateComposer from '../components/inbox/TemplateComposer';
 import MediaViewer, { type MediaViewerItem } from '../components/inbox/MediaViewer';
@@ -21,7 +21,6 @@ import {
   messageHasMedia,
 } from '../components/inbox/inboxUtils';
 import EmptyState from '../components/ui/EmptyState';
-import AppSelect from '../components/ui/AppSelect';
 import InboxSelect, { type InboxSelectOption } from '../components/inbox/InboxSelect';
 import Pagination from '../components/ui/Pagination';
 import PageShell from '../components/ui/PageShell';
@@ -29,8 +28,11 @@ import SearchInput from '../components/ui/SearchInput';
 import { DEFAULT_PAGE_SIZE } from '../constants/pagination';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import InboxDetailsPanel, { type PanelSection } from '../components/inbox/InboxDetailsPanel';
+import InboxChatHeaderActions from '../components/inbox/InboxChatHeaderActions';
+import FirstVisitHint from '../components/ui/FirstVisitHint';
+import { useFirstVisit } from '../hooks/useFirstVisit';
 import InteractiveComposer from '../components/inbox/InteractiveComposer';
-import api, { aiBotApi, callingApi, cannedRepliesApi, inboxApi, teamApi } from '../services/api';
+import api, { aiBotApi, billingApi, callingApi, cannedRepliesApi, inboxApi, teamApi, ticketApi } from '../services/api';
 import { toastError, toastSuccess } from '../utils/toast';
 import { useSocket } from '../hooks/useSocket';
 import { useAuth } from '../contexts/AuthContext';
@@ -40,6 +42,7 @@ const CLOSED_WINDOW: ServiceWindowInfo = {
   open: false,
   lastInboundAt: null,
   expiresAt: null,
+  windowOpensAt: null,
 };
 
 const statusFilterOptions: InboxSelectOption[] = [
@@ -47,6 +50,7 @@ const statusFilterOptions: InboxSelectOption[] = [
   { value: 'OPEN', label: 'Open', dotColor: '#22c55e' },
   { value: 'PENDING', label: 'Pending', dotColor: '#f59e0b' },
   { value: 'CLOSED', label: 'Closed', dotColor: '#94a3b8' },
+  { value: 'SNOOZED', label: 'Snoozed', dotColor: '#6366f1' },
 ];
 
 export default function InboxPage() {
@@ -74,6 +78,7 @@ export default function InboxPage() {
   const [attachment, setAttachment] = useState<PendingAttachment | null>(null);
   const [mediaViewer, setMediaViewer] = useState<MediaViewerItem | null>(null);
   const [newChatOpen, setNewChatOpen] = useState(false);
+  const [inboxHintVisible, dismissInboxHint] = useFirstVisit('inbox-empty');
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -208,7 +213,9 @@ export default function InboxPage() {
             return [...prev, payload.message!];
           });
           if (payload.message.direction === 'INBOUND') {
-            setServiceWindow(getServiceWindowInfo(payload.message.createdAt));
+            setServiceWindow(
+              getServiceWindowInfo(payload.message.createdAt, payload.message.createdAt)
+            );
           }
         }
       }
@@ -358,6 +365,42 @@ export default function InboxPage() {
       reader.readAsDataURL(file);
     });
 
+  const uploadAttachment = async (
+    file: File,
+  ): Promise<{ mediaPath: string; mimeType: string; filename: string }> => {
+    const mimeType = file.type || 'application/octet-stream';
+    const filename = file.name;
+
+    try {
+      const { data: urlRes } = await inboxApi.uploadUrl({
+        mimeType,
+        size: file.size,
+        filename,
+      });
+      const info = urlRes.data as {
+        mode: string;
+        uploadUrl: string;
+        mediaPath: string;
+      };
+      if (info.mode === 'presigned') {
+        const put = await fetch(info.uploadUrl, {
+          method: 'PUT',
+          body: file,
+          headers: { 'Content-Type': mimeType },
+        });
+        if (!put.ok) throw new Error('Presigned upload failed');
+        return { mediaPath: info.mediaPath, mimeType, filename };
+      }
+    } catch {
+      /* fall through to direct upload */
+    }
+
+    const base64 = await fileToBase64(file);
+    const { data: upRes } = await inboxApi.uploadMedia({ mimeType, data: base64, filename });
+    const uploaded = upRes.data as { mediaPath: string };
+    return { mediaPath: uploaded.mediaPath, mimeType, filename };
+  };
+
   const handleSendTemplate = async (payload: {
     templateName: string;
     templateLanguage: string;
@@ -401,14 +444,14 @@ export default function InboxPage() {
     try {
       let payload;
       if (attachment) {
-        const base64 = await fileToBase64(attachment.file);
+        const uploaded = await uploadAttachment(attachment.file);
         payload = {
           type: attachment.type,
           content: newMessage.trim() || undefined,
           media: {
-            data: base64,
-            mimeType: attachment.file.type || 'application/octet-stream',
-            filename: attachment.file.name,
+            mediaPath: uploaded.mediaPath,
+            mimeType: uploaded.mimeType,
+            filename: uploaded.filename,
           },
         };
       } else {
@@ -592,6 +635,68 @@ export default function InboxPage() {
     }
   };
 
+  const handleSnooze = async (hours: number) => {
+    if (!selected) return;
+    const until = new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+    try {
+      await inboxApi.snooze(selected.id, until);
+      toastSuccess(`Snoozed for ${hours} hour${hours > 1 ? 's' : ''}`);
+      loadConversations();
+      setSelected(null);
+    } catch {
+      toastError('Could not snooze conversation');
+    }
+  };
+
+  const handleConvertToTicket = async () => {
+    if (!selected) return;
+    const title = prompt(
+      'Ticket title',
+      `Support: ${selected.contact.name || selected.contact.phone}`,
+    );
+    if (!title?.trim()) return;
+    try {
+      await ticketApi.fromConversation(selected.id, { title: title.trim() });
+      toastSuccess('Ticket created — view in Tickets');
+    } catch {
+      toastError('Could not create ticket');
+    }
+  };
+
+  const handlePaymentLink = async () => {
+    if (!selected || !serviceWindow.open) return;
+    const amountStr = prompt('Amount in INR', '500');
+    if (!amountStr) return;
+    const amount = parseFloat(amountStr);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toastError('Enter a valid amount');
+      return;
+    }
+    const description = prompt('Payment description', 'Payment request')?.trim() || 'Payment request';
+    setSending(true);
+    try {
+      const { data: linkRes } = await billingApi.createPaymentLink({
+        amountPaise: Math.round(amount * 100),
+        description,
+        customerName: selected.contact.name || undefined,
+        customerPhone: selected.contact.phone,
+      });
+      const url = linkRes.data.url as string;
+      const { data } = await inboxApi.send(selected.id, {
+        content: `${description}\n\nPay here: ${url}`,
+      });
+      const sent = data.data as Message;
+      setMessages((prev) => (prev.some((m) => m.id === sent.id) ? prev : [...prev, sent]));
+      toastSuccess('Payment link sent');
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
+        ?.error?.message;
+      toastError(msg || 'Could not send payment link');
+    } finally {
+      setSending(false);
+    }
+  };
+
   const handleToggleBot = async (conversationId?: string) => {
     const targetId = conversationId || selected?.id;
     const target =
@@ -688,12 +793,12 @@ export default function InboxPage() {
   const hasPagination = total > DEFAULT_PAGE_SIZE;
 
   return (
-    <PageShell fullBleed className="!h-[calc(100dvh-60px)] !max-h-[calc(100dvh-60px)] !min-h-0 !overflow-hidden">
+    <PageShell inbox className="!h-[calc(100dvh-60px)] !max-h-[calc(100dvh-60px)] !min-h-0 !overflow-hidden">
       <div className="flex h-full min-h-0 flex-1 overflow-hidden">
         <div className="inbox-shell flex h-full min-h-0 w-full flex-1 overflow-hidden md:rounded-2xl">
           {/* Conversation list */}
           <div
-            className={`relative flex h-full min-h-0 w-full flex-col border-neutral-200/80 md:w-[320px] md:border-r lg:w-[360px] ${
+            className={`relative flex h-full min-h-0 w-full flex-col border-neutral-200/80 md:w-[360px] md:border-r lg:w-[400px] ${
               selected ? 'hidden md:flex' : 'flex'
             }`}
           >
@@ -748,13 +853,48 @@ export default function InboxPage() {
                   <ConversationListSkeleton />
                 ) : conversations.length === 0 ? (
                   <div className="p-5">
+                    {!search && !statusFilter && !agentFilter && (
+                      <FirstVisitHint
+                        visible={inboxHintVisible}
+                        onDismiss={dismissInboxHint}
+                        title="Your inbox is ready"
+                      >
+                        When customers message your WhatsApp number, conversations appear here. Use
+                        the + button to start a new chat anytime.
+                      </FirstVisitHint>
+                    )}
                     <EmptyState
                       icon={MessageSquare}
                       title={search || statusFilter || agentFilter ? 'No conversations found' : 'No conversations yet'}
                       description={
                         search || statusFilter || agentFilter
                           ? 'Try adjusting your search or filters.'
-                          : 'When customers message you, conversations will show up here.'
+                          : 'Connect WhatsApp, import contacts, or send a test message to get started.'
+                      }
+                      action={
+                        !search && !statusFilter && !agentFilter ? (
+                          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-center">
+                            <Link
+                              to="/settings?tab=whatsapp"
+                              className="btn-primary inline-flex items-center justify-center rounded-xl px-4 py-2 text-[13px] font-bold"
+                            >
+                              Connect WhatsApp
+                            </Link>
+                            <Link
+                              to="/contacts"
+                              className="inline-flex items-center justify-center rounded-xl border border-theme-border px-4 py-2 text-[13px] font-semibold text-theme-secondary hover:bg-theme-subtle"
+                            >
+                              Import contacts
+                            </Link>
+                            <button
+                              type="button"
+                              onClick={() => setNewChatOpen(true)}
+                              className="inline-flex items-center justify-center rounded-xl border border-theme-border px-4 py-2 text-[13px] font-semibold text-theme-secondary hover:bg-theme-subtle"
+                            >
+                              Send test message
+                            </button>
+                          </div>
+                        ) : undefined
                       }
                     />
                   </div>
@@ -789,7 +929,7 @@ export default function InboxPage() {
             <button
               type="button"
               onClick={() => setNewChatOpen(true)}
-              className={`absolute right-4 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-whatsapp-500 to-whatsapp-600 text-white shadow-[0_4px_20px_rgba(37,211,102,0.45)] transition hover:scale-[1.03] hover:shadow-[0_6px_28px_rgba(37,211,102,0.5)] active:scale-95 ${
+              className={`btn-primary absolute right-4 z-20 flex h-14 w-14 items-center justify-center rounded-full shadow-[0_4px_20px_rgba(37,211,102,0.45)] transition hover:scale-[1.03] hover:shadow-[0_6px_28px_rgba(37,211,102,0.5)] active:scale-95 ${
                 hasPagination ? 'bottom-[4.75rem]' : 'bottom-5'
               }`}
               aria-label="New chat"
@@ -839,74 +979,26 @@ export default function InboxPage() {
                     </p>
                   </div>
 
-                  <button
-                    type="button"
-                    disabled={botToggling}
-                    onClick={() => handleToggleBot()}
-                    title={
-                      botIsLive
-                        ? 'AI bot is replying — click to pause for this chat'
-                        : 'AI bot is paused — click to enable auto-reply'
-                    }
-                    className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-[11px] font-bold uppercase tracking-wide ring-1 transition ${
-                      botIsLive
-                        ? 'bg-emerald-50 text-emerald-800 ring-emerald-200/80 hover:bg-emerald-100'
-                        : 'bg-neutral-100 text-neutral-600 ring-neutral-200/80 hover:bg-neutral-200/60'
-                    } ${botToggling ? 'opacity-60' : ''}`}
-                  >
-                    <Bot className="h-3.5 w-3.5" />
-                    {botToggling ? '...' : botIsLive ? 'AI ON' : 'AI OFF'}
-                  </button>
+                  <InboxChatHeaderActions
+                    selected={selected}
+                    botIsLive={botIsLive}
+                    botToggling={botToggling}
+                    callingBack={callingBack}
+                    aiBots={aiBots}
+                    botSelectOptions={botSelectOptions}
+                    labelsCount={selected.labels?.length ?? 0}
+                    onToggleBot={() => handleToggleBot()}
+                    onChangeActiveBot={handleChangeActiveBot}
+                    onCallBack={() => void handleCallBack()}
+                    onOpenLabels={() => setDetailsOverlay({ open: true, section: 'labels' })}
+                    onOpenNotes={() => setDetailsOverlay({ open: true, section: 'notes' })}
+                    onSnooze={(hours) => void handleSnooze(hours)}
+                    onConvertToTicket={() => void handleConvertToTicket()}
+                  />
 
-                  {aiBots.length > 0 && (
-                    <AppSelect
-                      className="w-[148px] shrink-0"
-                      size="compact"
-                      value={selected.activeBot?.id || ''}
-                      options={botSelectOptions}
-                      placeholder="Default bot"
-                      isSearchable={false}
-                      disabled={botToggling}
-                      ariaLabel="Active AI bot for this chat"
-                      onChange={(e) => handleChangeActiveBot(e.target.value)}
-                    />
-                  )}
-
-                  <button
-                    type="button"
-                    disabled={callingBack}
-                    onClick={() => void handleCallBack()}
-                    title="Call this contact via WhatsApp"
-                    className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-violet-200/80 bg-violet-50 px-3 py-2 text-[11px] font-bold text-violet-800 transition hover:bg-violet-100 disabled:opacity-60"
-                  >
-                    <Phone className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">{callingBack ? 'Calling...' : 'Call'}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setDetailsOverlay({ open: true, section: 'labels' })}
-                    title="Labels"
-                    className="relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-violet-200/80 bg-violet-50 text-violet-700 transition hover:bg-violet-100 lg:hidden"
-                  >
-                    <Tag className="h-4 w-4" />
-                    {(selected.labels?.length ?? 0) > 0 && (
-                      <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-violet-600 px-1 text-[9px] font-bold text-white">
-                        {selected.labels!.length}
-                      </span>
-                    )}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setDetailsOverlay({ open: true, section: 'notes' })}
-                    title="Team notes"
-                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-amber-200/80 bg-amber-50 text-amber-700 transition hover:bg-amber-100 lg:hidden"
-                  >
-                    <StickyNote className="h-4 w-4" />
-                  </button>
-
-                  <ServiceWindowBadge serviceWindow={serviceWindow} />
+                  <div className="hidden md:block">
+                    <ServiceWindowBadge serviceWindow={serviceWindow} />
+                  </div>
                 </div>
 
                 {selected.botHandoffAt && (
@@ -963,14 +1055,24 @@ export default function InboxPage() {
                 </div>
 
                 {!canSendText && !templateMode && (
-                  <ServiceWindowBanner serviceWindow={serviceWindow} />
+                  <div className="shrink-0 md:hidden">
+                    <ServiceWindowBanner serviceWindow={serviceWindow} compact />
+                  </div>
                 )}
 
-                {interactiveOpen && canSendText ? (
+                {!canSendText && !templateMode && (
+                  <div className="hidden shrink-0 md:block">
+                    <ServiceWindowBanner serviceWindow={serviceWindow} />
+                  </div>
+                )}
+
+                <div className="sticky bottom-0 z-10 shrink-0 bg-white/95 backdrop-blur-sm">
+                {interactiveOpen ? (
                   <InteractiveComposer
                     open={interactiveOpen}
                     onClose={() => setInteractiveOpen(false)}
                     sending={sending}
+                    serviceWindow={serviceWindow}
                     onSend={async (payload) => {
                       if (!selected) return;
                       setSending(true);
@@ -1002,7 +1104,18 @@ export default function InboxPage() {
                           onClick={() => setInteractiveOpen(true)}
                           className="text-[11px] font-bold text-violet-700 hover:underline"
                         >
-                          + Send quick reply buttons
+                          + Send interactive message
+                        </button>
+                      </div>
+                    )}
+                    {!canSendText && (
+                      <div className="border-t border-neutral-100 bg-neutral-50/50 px-3 py-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setInteractiveOpen(true)}
+                          className="text-[11px] font-bold text-violet-700 hover:underline"
+                        >
+                          + Send copy-code template
                         </button>
                       </div>
                     )}
@@ -1022,9 +1135,11 @@ export default function InboxPage() {
                       }
                       onTemplateClick={!canSendText ? () => setTemplateMode(true) : undefined}
                       cannedReplies={cannedReplies}
+                      onPaymentLink={canSendText ? () => void handlePaymentLink() : undefined}
                     />
                   </>
                 )}
+                </div>
                 </div>
                 <InboxDetailsPanel
                   conversationId={selected.id}

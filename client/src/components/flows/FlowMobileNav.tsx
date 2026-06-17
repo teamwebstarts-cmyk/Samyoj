@@ -36,7 +36,7 @@ export default function FlowMobileNav({ active, onChange, showTest, showAnalytic
               <div
                 className={`flex h-8 w-8 items-center justify-center rounded-xl transition ${
                   isActive
-                    ? 'bg-gradient-to-br from-whatsapp-500 to-emerald-600 text-white shadow-[0_4px_12px_rgba(37,211,102,0.35)]'
+                    ? 'bg-gradient-to-br from-whatsapp-600 to-emerald-700 text-white shadow-[0_4px_12px_rgba(37,211,102,0.35)]'
                     : 'bg-neutral-100 text-neutral-500'
                 }`}
               >

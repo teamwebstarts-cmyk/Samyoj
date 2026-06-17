@@ -9,8 +9,11 @@ import { config } from '../../config';
 import { z } from 'zod';
 import { verifyTotp } from '../team/totp';
 import { sendPasswordResetEmail } from '../../services/email.service';
+import oauthRoutes from './oauth.routes';
 
 const router = Router();
+
+router.use('/oauth', oauthRoutes);
 
 const registerSchema = z.object({
   name: z.string().min(2),

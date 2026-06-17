@@ -15,8 +15,12 @@ import {
 } from './razorpay.service';
 import { config } from '../../config';
 import logger from '../../utils/logger';
+import { getOrgUsage, estimateCampaignCost } from './usage.service';
+import paymentLinksRoutes from './payment-links.routes';
 
 const router = Router();
+
+router.use(paymentLinksRoutes);
 
 router.get(
   '/',
@@ -59,6 +63,32 @@ router.get(
         paidAt: p.paidAt,
       })),
     });
+  })
+);
+
+router.get(
+  '/usage',
+  authenticate,
+  requireOrg,
+  loadPermissions,
+  asyncHandler(async (req: Request, res: Response) => {
+    const usage = await getOrgUsage(req.user!.organizationId!);
+    sendSuccess(res, usage);
+  })
+);
+
+router.post(
+  '/estimate',
+  authenticate,
+  requireOrg,
+  asyncHandler(async (req: Request, res: Response) => {
+    const { recipientCount, category } = z
+      .object({
+        recipientCount: z.number().int().positive(),
+        category: z.enum(['MARKETING', 'UTILITY', 'AUTHENTICATION']).default('MARKETING'),
+      })
+      .parse(req.body);
+    sendSuccess(res, estimateCampaignCost(recipientCount, category));
   })
 );
 

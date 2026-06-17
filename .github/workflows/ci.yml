@@ -46,7 +46,7 @@ jobs:
         working-directory: server
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/whatsapp_platform
-        run: npx prisma db push
+        run: npx prisma migrate deploy
       - name: Test
         working-directory: server
         env:

@@ -44,7 +44,7 @@ export default class ErrorBoundary extends Component<Props, State> {
             <button
               type="button"
               onClick={() => window.location.reload()}
-              className="mt-6 rounded-xl bg-whatsapp-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-whatsapp-700"
+              className="btn-primary mt-6 rounded-xl px-4 py-2 text-sm font-semibold"
             >
               Reload page
             </button>

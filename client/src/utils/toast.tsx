@@ -21,13 +21,27 @@ function baseStyle(): CSSProperties {
 
 const sharedOptions: ToastOptions = {
   duration: 4000,
-  position: 'bottom-center',
 };
+
+function getToastPosition(): ToastOptions['position'] {
+  if (typeof window === 'undefined') return 'top-center';
+  return window.innerWidth < 1024 ? 'bottom-center' : 'top-center';
+}
+
+function toastContainerStyle(): CSSProperties {
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024;
+  return {
+    bottom: isMobile ? 88 : undefined,
+    top: isMobile ? undefined : 20,
+    zIndex: 10050,
+  };
+}
 
 export function toastSuccess(message: string) {
   const dark = isDark();
   return toast.success(message, {
     ...sharedOptions,
+    position: getToastPosition(),
     style: {
       ...baseStyle(),
       background: dark ? 'rgba(6, 78, 59, 0.95)' : 'rgba(236, 253, 245, 0.98)',
@@ -45,6 +59,7 @@ export function toastError(message: string, options?: Partial<ToastOptions>) {
   const dark = isDark();
   return toast.error(message, {
     ...sharedOptions,
+    position: getToastPosition(),
     duration: 5000,
     ...options,
     style: {
@@ -65,6 +80,7 @@ export function toastInfo(message: string) {
   const dark = isDark();
   return toast(message, {
     ...sharedOptions,
+    position: getToastPosition(),
     style: {
       ...baseStyle(),
       background: dark ? 'rgba(12, 74, 110, 0.95)' : 'rgba(240, 249, 255, 0.98)',
@@ -79,6 +95,7 @@ export function toastWarning(message: string) {
   const dark = isDark();
   return toast(message, {
     ...sharedOptions,
+    position: getToastPosition(),
     duration: 4500,
     style: {
       ...baseStyle(),
@@ -102,9 +119,9 @@ export function toastValidationErrors(errors: string[]) {
 export function AppToaster() {
   return (
     <Toaster
-      position="bottom-center"
+      position="top-center"
       gutter={10}
-      containerStyle={{ bottom: 20, zIndex: 10050 }}
+      containerStyle={toastContainerStyle()}
       toastOptions={{
         ...sharedOptions,
       }}

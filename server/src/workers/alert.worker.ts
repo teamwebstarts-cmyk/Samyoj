@@ -1,5 +1,6 @@
 import { config } from '../config';
 import { checkSlaBreaches } from '../modules/sla/service';
+import { pollTemplateRejections } from '../modules/billing/usage.service';
 import { createModuleLogger } from '../utils/logger';
 import { emitToOrg } from '../realtime';
 import prisma from '../config/database';
@@ -46,6 +47,8 @@ export function startAlertWorker() {
           planExpiresAt: org.planExpiresAt,
         });
       }
+
+      await pollTemplateRejections();
     } catch (err) {
       log.error('Alert check failed', { error: String(err) });
     }

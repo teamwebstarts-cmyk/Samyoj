@@ -5,8 +5,17 @@ import prisma from '../../config/database';
 import { authenticate, requireOrg } from '../../middleware/auth';
 import { loadPermissions, requirePermission } from '../../middleware/permissions';
 import { AppError, sendSuccess, asyncHandler, paramId } from '../../utils/response';
+import inboundRoutes from './inbound.routes';
+import openapiRoutes from './openapi';
+import zapierRoutes from './zapier';
+import googleSheetsRoutes from './google-sheets.routes';
 
 const router = Router();
+
+router.use(openapiRoutes);
+router.use('/inbound', inboundRoutes);
+router.use('/zapier', zapierRoutes);
+router.use('/google-sheets', googleSheetsRoutes);
 
 const WEBHOOK_EVENTS = [
   'message.received',
@@ -215,6 +224,63 @@ router.delete(
 
     await prisma.webhookEndpoint.delete({ where: { id } });
     sendSuccess(res, { deleted: true });
+  })
+);
+
+router.get(
+  '/webhooks/:id/deliveries',
+  authenticate,
+  requireOrg,
+  loadPermissions,
+  requirePermission('manageSettings'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const id = paramId(req);
+
+    const endpoint = await prisma.webhookEndpoint.findFirst({
+      where: { id, organizationId: orgId },
+    });
+    if (!endpoint) throw new AppError(404, 'Webhook not found');
+
+    const deliveries = await prisma.webhookDelivery.findMany({
+      where: { endpointId: id },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      select: {
+        id: true,
+        event: true,
+        status: true,
+        attempts: true,
+        lastStatusCode: true,
+        lastError: true,
+        createdAt: true,
+        deliveredAt: true,
+      },
+    });
+
+    sendSuccess(res, { deliveries });
+  })
+);
+
+router.post(
+  '/webhooks/deliveries/:deliveryId/replay',
+  authenticate,
+  requireOrg,
+  loadPermissions,
+  requirePermission('manageSettings'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const deliveryId = paramId(req);
+
+    const delivery = await prisma.webhookDelivery.findFirst({
+      where: { id: deliveryId, organizationId: orgId },
+    });
+    if (!delivery) throw new AppError(404, 'Delivery not found');
+
+    const { webhookDispatchQueue } = await import('../../config/queues');
+    await webhookDispatchQueue.add('dispatch', { deliveryId }, { attempts: 4 });
+
+    sendSuccess(res, { replayed: true, deliveryId });
   })
 );
 

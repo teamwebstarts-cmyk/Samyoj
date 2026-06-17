@@ -133,7 +133,7 @@ export default function DashboardPage() {
                   </p>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 sm:gap-3 lg:min-w-[320px]">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:min-w-[320px]">
                   {[
                     { label: 'Delivery', value: `${stats.deliveryRate}%` },
                     { label: 'Read rate', value: `${stats.readRate}%` },

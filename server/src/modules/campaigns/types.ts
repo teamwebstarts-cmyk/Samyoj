@@ -8,6 +8,7 @@ export interface TemplateParams {
   body?: string[];
   header?: string[];
   headerMediaUrl?: string;
+  couponCode?: string;
 }
 
 export interface AudienceConfig {
@@ -32,6 +33,7 @@ export const templateParamsSchema = z
     body: z.array(z.string()).optional(),
     header: z.array(z.string()).optional(),
     headerMediaUrl: z.string().url().optional(),
+    couponCode: z.string().max(15).optional(),
   })
   .optional();
 
@@ -81,12 +83,14 @@ export const previewAudienceSchema = z.object({
 
 export interface CampaignSettings {
   dailySendLimit?: number;
+  dailyBudgetInr?: number;
   batchSize?: number;
   batchDelayMs?: number;
 }
 
 export const DEFAULT_CAMPAIGN_SETTINGS: CampaignSettings = {
   dailySendLimit: 5000,
+  dailyBudgetInr: 5000,
   batchSize: 50,
   batchDelayMs: 1000,
 };

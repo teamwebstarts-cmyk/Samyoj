@@ -218,13 +218,15 @@ export interface MessageMetadata {
   automationName?: string;
   ctaType?: 'url' | 'call';
   listMenu?: boolean;
+  interactive?: SendMessagePayload['interactive'];
   waFlow?: boolean;
   contacts?: Array<{ name: string; phone: string; email?: string }>;
   location?: { latitude: number; longitude: number; name?: string; address?: string };
 }
 
 export interface SendMediaPayload {
-  data: string;
+  data?: string;
+  mediaPath?: string;
   mimeType: string;
   filename?: string;
 }
@@ -233,6 +235,7 @@ export interface TemplateParams {
   body?: string[];
   header?: string[];
   headerMediaUrl?: string;
+  couponCode?: string;
 }
 
 export interface SendMessagePayload {
@@ -244,7 +247,9 @@ export interface SendMessagePayload {
   media?: SendMediaPayload;
   interactive?: {
     mode: 'reply' | 'cta_url' | 'cta_call' | 'list';
+    header?: string;
     body: string;
+    footer?: string;
     buttons?: Array<{ id: string; title: string }>;
     ctaLabel?: string;
     ctaUrl?: string;
@@ -339,6 +344,15 @@ export interface BillingInfo {
   planExpiresAt?: string | null;
   subscriptionStatus?: string;
   recentPayments?: Array<{ planId: string; amountPaise: number; paidAt: string | null }>;
+}
+
+export interface BillingUsage {
+  period: string;
+  totalConversations: number;
+  totalCostInr: number;
+  byCategory: Record<string, { count: number; costInr: number }>;
+  qualityRatings: Array<{ phoneNumber: string; qualityRating: string; wabaId: string }>;
+  messagesWithPricing: number;
 }
 
 export interface ApiKeyItem {
@@ -842,4 +856,5 @@ export interface ServiceWindowInfo {
   open: boolean;
   lastInboundAt: string | null;
   expiresAt: string | null;
+  windowOpensAt?: string | null;
 }

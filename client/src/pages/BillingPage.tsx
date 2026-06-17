@@ -9,13 +9,15 @@ import {
   Smartphone,
 } from 'lucide-react';
 import PageShell from '../components/ui/PageShell';
+import PageHero from '../components/ui/PageHero';
 import EmptyState from '../components/ui/EmptyState';
 import BillingCurrentPlanHero from '../components/billing/BillingCurrentPlanHero';
 import BillingPlanCard from '../components/billing/BillingPlanCard';
 import BillingSkeleton from '../components/billing/BillingSkeleton';
-import { billingApi } from '../services/api';
+import BillingUsageWidget from '../components/billing/BillingUsageWidget';
+import { billingApi, settingsApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
-import type { BillingInfo, BillingPlan } from '../types';
+import type { BillingInfo, BillingPlan, BillingUsage } from '../types';
 import { openRazorpayCheckout } from '../utils/razorpay';
 import { toastError, toastSuccess } from '../utils/toast';
 
@@ -33,15 +35,21 @@ function formatAmount(paise: number) {
 export default function BillingPage() {
   const { user } = useAuth();
   const [info, setInfo] = useState<BillingInfo | null>(null);
+  const [usage, setUsage] = useState<BillingUsage | null>(null);
+  const [dailyBudgetInr, setDailyBudgetInr] = useState<number | undefined>();
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
   const [upgrading, setUpgrading] = useState<string | null>(null);
 
   const load = () => {
     setLoadFailed(false);
-    billingApi
-      .get()
-      .then((res) => setInfo(res.data.data))
+    Promise.all([billingApi.get(), billingApi.usage(), settingsApi.get()])
+      .then(([billingRes, usageRes, settingsRes]) => {
+        setInfo(billingRes.data.data);
+        setUsage(usageRes.data.data);
+        const campaign = settingsRes.data.data?.campaigns as { dailyBudgetInr?: number } | undefined;
+        setDailyBudgetInr(campaign?.dailyBudgetInr);
+      })
       .catch(() => {
         setLoadFailed(true);
         toastError('Failed to load billing');
@@ -123,19 +131,13 @@ export default function BillingPage() {
 
   return (
     <PageShell>
-      <div className="mb-5">
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200/80 bg-emerald-50/90 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-800 dark:border-emerald-800/50 dark:bg-emerald-900/30 dark:text-emerald-300">
-          <CreditCard className="h-3 w-3" />
-          Account
-        </span>
-        <h1 className="mt-3 text-2xl font-extrabold tracking-tight text-theme-fg sm:text-[1.75rem]">
-          Billing & Plans
-        </h1>
-        <p className="mt-1 max-w-2xl text-[14px] font-medium text-theme-secondary">
-          Manage your subscription, team seats, and upgrades. Pay securely with Razorpay — UPI,
-          cards, and netbanking supported.
-        </p>
-      </div>
+      <PageHero
+        badge="Account"
+        badgeIcon={CreditCard}
+        title="Billing & Plans"
+        description="Manage your subscription, team seats, and upgrades. Pay securely with Razorpay — UPI, cards, and netbanking supported."
+        accent="emerald"
+      />
 
       {loading ? (
         <BillingSkeleton />
@@ -148,6 +150,8 @@ export default function BillingPage() {
       ) : info ? (
         <div className="space-y-6 pb-8">
           <BillingCurrentPlanHero info={info} />
+
+          {usage && <BillingUsageWidget usage={usage} dailyBudgetInr={dailyBudgetInr} />}
 
           {/* Payment trust strip */}
           <div className="dashboard-card flex flex-wrap items-center justify-between gap-4 px-5 py-4 animate-fade-up-delay">

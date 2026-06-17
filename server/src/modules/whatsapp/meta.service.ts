@@ -32,34 +32,7 @@ export interface SendMessagePayload {
     phones?: Array<{ phone: string; type?: string; wa_id?: string }>;
     emails?: Array<{ email: string; type?: string }>;
   }>;
-  interactive?: {
-    type: 'button' | 'cta_url' | 'list' | 'flow';
-    body: { text: string };
-    action:
-      | { buttons: InteractiveButton[] }
-      | {
-          name: 'cta_url';
-          parameters: { display_text: string; url: string };
-        }
-      | {
-          button: string;
-          sections: Array<{
-            title?: string;
-            rows: Array<{ id: string; title: string; description?: string }>;
-          }>;
-        }
-      | {
-          name: 'flow';
-          parameters: {
-            flow_message_version: string;
-            flow_token: string;
-            flow_id: string;
-            flow_cta: string;
-            flow_action?: string;
-            flow_action_payload?: { screen?: string; data?: Record<string, unknown> };
-          };
-        };
-  };
+  interactive?: Record<string, unknown>;
 }
 
 export interface WhatsappConnectionDetails {
@@ -283,6 +256,10 @@ export class MetaWhatsAppService {
     }
 
     return options;
+  }
+
+  static async graphGetPublic<T>(path: string, accessToken: string): Promise<T> {
+    return this.graphGet<T>(path, accessToken);
   }
 
   private static async graphGet<T>(path: string, accessToken: string): Promise<T> {
@@ -950,10 +927,108 @@ export class MetaWhatsAppService {
       throw new Error(data.error?.message || 'Failed to publish WhatsApp form');
     }
   }
+
+  static async updateWhatsAppFlowJson(
+    flowId: string,
+    accessToken: string,
+    flowJson: string
+  ): Promise<void> {
+    const res = await fetch(`${META_BASE}/${flowId}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ flow_json: flowJson }),
+    });
+
+    const data = (await res.json()) as GraphError;
+    if (!res.ok) {
+      throw new Error(data.error?.message || 'Failed to update WhatsApp flow');
+    }
+  }
+
+  static async registerFlowPublicKey(
+    wabaId: string,
+    accessToken: string,
+    publicKeyPem: string
+  ): Promise<void> {
+    const res = await fetch(`${META_BASE}/${wabaId}/flows/public_key`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        business_public_key: publicKeyPem,
+      }),
+    });
+
+    const data = (await res.json()) as GraphError;
+    if (!res.ok) {
+      throw new Error(data.error?.message || 'Failed to register flow public key');
+    }
+  }
+
+  static async getConversationAnalytics(
+    wabaId: string,
+    accessToken: string,
+    start: number,
+    end: number
+  ): Promise<
+    Array<{
+      conversation_category?: string;
+      conversation?: number;
+      cost?: number;
+    }>
+  > {
+    const params = new URLSearchParams({
+      start: String(start),
+      end: String(end),
+      granularity: 'DAILY',
+    });
+
+    const data = await this.graphGet<{
+      conversation_analytics?: {
+        data?: Array<{
+          data_points?: Array<{
+            conversation_category?: string;
+            conversation?: number;
+            cost?: number;
+          }>;
+        }>;
+      };
+    }>(`/${wabaId}?fields=conversation_analytics.data(${params})`, accessToken);
+
+    const points: Array<{
+      conversation_category?: string;
+      conversation?: number;
+      cost?: number;
+    }> = [];
+
+    for (const series of data.conversation_analytics?.data || []) {
+      for (const point of series.data_points || []) {
+        points.push(point);
+      }
+    }
+    return points;
+  }
+
+  static async getPhoneNumberQuality(
+    phoneNumberId: string,
+    accessToken: string
+  ): Promise<string | null> {
+    const data = await this.graphGet<{
+      quality_rating?: string;
+      quality_score?: { score?: string };
+    }>(`/${phoneNumberId}?fields=quality_rating,quality_score`, accessToken);
+
+    return data.quality_rating || data.quality_score?.score || null;
+  }
 }
 
-export function isWithin24HourWindow(lastInboundAt: Date | null): boolean {
-  if (!lastInboundAt) return false;
-  const hoursSince = (Date.now() - lastInboundAt.getTime()) / (1000 * 60 * 60);
+export function isWithin24HourWindow(windowOpensAt: Date | null | undefined): boolean {
+  if (!windowOpensAt) return false;
+  const hoursSince = (Date.now() - windowOpensAt.getTime()) / (1000 * 60 * 60);
   return hoursSince < 24;
 }

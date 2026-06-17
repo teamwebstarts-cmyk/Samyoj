@@ -111,7 +111,7 @@ export default function ImportContactsModal({ open, onClose, onImport }: ImportC
             type="button"
             disabled={!canImport}
             onClick={() => void handleImport()}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-whatsapp-500 to-whatsapp-600 px-4 text-[13px] font-semibold text-white shadow-[0_4px_14px_rgba(37,211,102,0.35)] transition hover:from-whatsapp-600 hover:to-whatsapp-700 disabled:opacity-50"
+            className="btn-primary inline-flex h-10 items-center justify-center gap-2 rounded-xl px-4 text-[13px] font-semibold disabled:opacity-50"
           >
             {importing && (
               <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />

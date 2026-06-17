@@ -621,7 +621,8 @@ function FlowNodePanelForm({
             hint="Max 20 characters — e.g. Fill form, Book now"
           />
           <p className="text-[11px] leading-relaxed text-neutral-500">
-            When the customer submits, their answers are saved automatically and the flow continues to the next step.
+            Meta Forms run inside WhatsApp and are different from your Automations. When the customer
+            submits, their answers are saved automatically and the automation continues.
           </p>
         </div>
       )}

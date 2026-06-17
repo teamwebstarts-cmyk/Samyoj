@@ -67,4 +67,7 @@ export const config = {
     checkIntervalMs: parseInt(process.env.ALERT_CHECK_INTERVAL_MS || '30000', 10),
     defaultSlaMinutes: parseInt(process.env.DEFAULT_SLA_MINUTES || '15', 10),
   },
+  sentry: {
+    dsn: process.env.SENTRY_DSN || '',
+  },
 };

@@ -542,6 +542,16 @@ export async function processWebhookFields(payload: Record<string, unknown>): Pr
   if (fields.has('calls')) {
     await processCallWebhookPayload(payload);
   }
+
+  const nonMessageFields = [
+    'message_template_status_update',
+    'phone_number_quality_update',
+    'account_alerts',
+  ];
+  if (nonMessageFields.some((f) => fields.has(f))) {
+    const { dispatchNonMessageWebhookFields } = await import('../whatsapp/webhook-dispatcher');
+    await dispatchNonMessageWebhookFields(payload);
+  }
 }
 
 export { clearRingTimeout };

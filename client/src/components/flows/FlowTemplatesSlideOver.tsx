@@ -99,7 +99,7 @@ export default function FlowTemplatesSlideOver({
                     onClick={() => setTriggerFilter(filter.value)}
                     className={`rounded-full px-3 py-1.5 text-[12px] font-bold transition active:scale-[0.98] ${
                       isActive
-                        ? 'bg-gradient-to-r from-violet-500 to-indigo-600 text-white shadow-[0_4px_12px_rgba(99,102,241,0.3)]'
+                        ? 'bg-gradient-to-r from-violet-600 to-indigo-700 text-white shadow-[0_4px_12px_rgba(99,102,241,0.3)]'
                         : 'border border-neutral-200/80 bg-white text-neutral-600 hover:border-violet-200 hover:text-violet-700'
                     }`}
                   >
@@ -163,7 +163,7 @@ export default function FlowTemplatesSlideOver({
                   <div className="flex items-start gap-3">
                     {SelectedTriggerIcon && (
                       <div
-                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${selectedTrigger?.gradient || 'from-violet-500 to-indigo-600'} text-white shadow-[0_4px_14px_rgba(99,102,241,0.25)]`}
+                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${selectedTrigger?.gradient || 'from-violet-600 to-indigo-700'} text-white shadow-[0_4px_14px_rgba(99,102,241,0.25)]`}
                       >
                         <SelectedTriggerIcon className="h-4 w-4" strokeWidth={2.25} />
                       </div>
@@ -232,7 +232,7 @@ export default function FlowTemplatesSlideOver({
                   <button
                     type="submit"
                     disabled={isCreating}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-whatsapp-500 to-whatsapp-600 px-4 py-2.5 text-[13px] font-bold text-white shadow-[0_4px_14px_rgba(37,211,102,0.3)] transition hover:from-whatsapp-600 hover:to-whatsapp-700 disabled:opacity-50 lg:hidden"
+                    className="btn-primary flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-bold disabled:opacity-50 lg:hidden"
                   >
                     {isCreating ? 'Creating...' : 'Create & edit flow'}
                     {!isCreating && <ArrowRight className="h-4 w-4" />}

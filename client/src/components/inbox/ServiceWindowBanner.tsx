@@ -5,10 +5,21 @@ import type { ServiceWindowInfo } from '../../types';
 
 interface ServiceWindowBannerProps {
   serviceWindow: ServiceWindowInfo;
+  compact?: boolean;
 }
 
-export default function ServiceWindowBanner({ serviceWindow }: ServiceWindowBannerProps) {
+export default function ServiceWindowBanner({ serviceWindow, compact }: ServiceWindowBannerProps) {
   if (serviceWindow.open) return null;
+
+  if (compact) {
+    return (
+      <div className="border-t border-amber-200/80 bg-amber-50/95 px-3 py-2">
+        <p className="text-center text-caption font-semibold text-amber-900">
+          Reply window closed — use a template
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="border-t border-amber-200/80 bg-gradient-to-r from-amber-50/95 to-orange-50/60 px-3 py-3 sm:px-4">
@@ -20,7 +31,7 @@ export default function ServiceWindowBanner({ serviceWindow }: ServiceWindowBann
           <p className="text-[13px] font-bold text-amber-950">Reply window closed</p>
           <p className="mt-0.5 text-[12px] font-medium leading-relaxed text-amber-900/85">
             You can only send free-text replies within 24 hours of the customer&apos;s last message.
-            {serviceWindow.lastInboundAt
+            {serviceWindow.windowOpensAt || serviceWindow.lastInboundAt
               ? ' Wait for them to message again, or send an approved template.'
               : ' Ask them to message you first, or send an approved template.'}
           </p>

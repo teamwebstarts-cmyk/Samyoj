@@ -30,7 +30,17 @@ export function mergeTemplateParams(
     body: body?.filter(Boolean),
     header: header?.filter(Boolean),
     headerMediaUrl: campaignParams?.headerMediaUrl,
+    couponCode: campaignParams?.couponCode,
   };
+}
+
+function findCopyCodeButtonIndex(template?: MessageTemplate | null): number | null {
+  const buttonsComponent = template?.components?.find((c) => c.type?.toUpperCase() === 'BUTTONS');
+  const buttons = buttonsComponent?.buttons;
+  if (!buttons?.length) return null;
+
+  const index = buttons.findIndex((btn) => btn.type?.toUpperCase() === 'COPY_CODE');
+  return index >= 0 ? index : null;
 }
 
 export function buildTemplateComponents(
@@ -60,6 +70,19 @@ export function buildTemplateComponents(
       type: 'body',
       parameters: textParameters(params.body),
     });
+  }
+
+  const couponCode = params.couponCode?.trim();
+  if (couponCode) {
+    const copyCodeIndex = findCopyCodeButtonIndex(template);
+    if (copyCodeIndex !== null) {
+      components.push({
+        type: 'button',
+        sub_type: 'copy_code',
+        index: copyCodeIndex,
+        parameters: [{ type: 'coupon_code', coupon_code: couponCode }],
+      });
+    }
   }
 
   return components;

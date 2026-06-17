@@ -62,7 +62,7 @@ const triggerMeta: Record<
     description: 'Reply when a customer sends a matching keyword',
     icon: Hash,
     accent: 'from-violet-500/10 to-purple-500/5 border-violet-200/70',
-    iconBg: 'bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-[0_4px_14px_rgba(139,92,246,0.35)]',
+    iconBg: 'bg-gradient-to-br from-violet-600 to-purple-700 text-white shadow-[0_4px_14px_rgba(139,92,246,0.35)]',
     badge: 'bg-violet-50 text-violet-800 ring-violet-200/70',
   },
   WELCOME: {
@@ -70,7 +70,7 @@ const triggerMeta: Record<
     description: 'Greet customers on their first message',
     icon: Sparkles,
     accent: 'from-emerald-500/10 to-teal-500/5 border-emerald-200/70',
-    iconBg: 'bg-gradient-to-br from-whatsapp-500 to-whatsapp-600 text-white shadow-[0_4px_14px_rgba(37,211,102,0.35)]',
+    iconBg: 'bg-gradient-to-br from-whatsapp-600 to-whatsapp-700 text-white shadow-[0_4px_14px_rgba(37,211,102,0.35)]',
     badge: 'bg-emerald-100 text-emerald-800 ring-emerald-200/70',
   },
   AWAY: {
@@ -523,7 +523,7 @@ export default function AutomationsPage() {
                           onClick={() => setStatusFilter(option.value)}
                           className={`shrink-0 rounded-full px-3.5 py-2 text-[12px] font-bold transition active:scale-[0.98] ${
                             isActive
-                              ? 'bg-gradient-to-r from-violet-500 to-indigo-600 text-white shadow-[0_4px_12px_rgba(99,102,241,0.3)]'
+                              ? 'bg-gradient-to-r from-violet-600 to-indigo-700 text-white shadow-[0_4px_12px_rgba(99,102,241,0.3)]'
                               : 'border border-neutral-200/80 bg-white text-neutral-600 hover:border-violet-200 hover:text-violet-700'
                           }`}
                         >

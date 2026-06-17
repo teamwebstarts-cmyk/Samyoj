@@ -84,7 +84,7 @@ export default function ContactTagManager({
               key={tag.name}
               className="flex items-center gap-3 rounded-2xl border border-violet-200/50 bg-gradient-to-r from-violet-50/60 to-theme-surface p-3 transition hover:border-violet-300/60 dark:border-violet-800/40 dark:from-violet-950/20"
             >
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-[0_4px_12px_rgba(139,92,246,0.28)]">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-purple-700 text-white shadow-[0_4px_12px_rgba(139,92,246,0.28)]">
                 <Tag className="h-4 w-4" />
               </div>
 

@@ -29,6 +29,7 @@ import {
 import AiBotAnalyticsPanel from '../components/ai-bot/AiBotAnalyticsPanel';
 import AiBotAuditPanel from '../components/ai-bot/AiBotAuditPanel';
 import AiBotHowItWorks from '../components/ai-bot/AiBotHowItWorks';
+import AiBotCard from '../components/ai-bot/AiBotCard';
 import AiBotTemplatePicker from '../components/ai-bot/AiBotTemplatePicker';
 import {
   ModalCallout,
@@ -51,6 +52,7 @@ import LoadingState from '../components/ui/LoadingState';
 import PageHeader from '../components/ui/PageHeader';
 import PageHero from '../components/ui/PageHero';
 import PageShell from '../components/ui/PageShell';
+import ResponsiveDataView from '../components/ui/ResponsiveDataView';
 import RowActions from '../components/ui/RowActions';
 import SegmentedControl from '../components/ui/SegmentedControl';
 import SlideOver, { SlideOverFooter } from '../components/ui/SlideOver';
@@ -757,109 +759,123 @@ export default function AiBotPage() {
           />
         ) : (
           <div className="space-y-5">
-            <DataTable headers={['Bot', 'Starts when', 'Knowledge', 'Status', 'Actions']}>
-              {filteredBots.map((bot, index) => (
-                <tr key={bot.id} className="group">
-                  <TableSerialCell rowIndex={index} />
-                  <td>
-                    <button
-                      type="button"
-                      onClick={() => openEdit(bot)}
-                      className="flex w-full items-center gap-3 rounded-xl py-1 text-left transition hover:opacity-90"
-                    >
-                      <div
-                        className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-                          bot.enabled
-                            ? 'bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-[0_4px_14px_rgba(99,102,241,0.35)]'
-                            : 'bg-theme-subtle text-theme-muted ring-1 ring-theme-border'
-                        }`}
-                      >
-                        <Bot className="h-4 w-4" strokeWidth={2.25} />
-                        {bot.enabled && (
-                          <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-theme-surface" />
-                        )}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="truncate font-semibold text-theme-fg group-hover:text-whatsapp-700">
-                          {bot.name}
-                        </p>
-                        <div className="mt-0.5 flex flex-wrap items-center gap-1">
-                          {bot.isDefault && (
-                            <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-amber-800 ring-1 ring-amber-100 dark:bg-amber-900/30 dark:text-amber-300 dark:ring-amber-700/40">
-                              <Star className="h-2 w-2" />
-                              Default
-                            </span>
-                          )}
-                          {bot.businessHoursOnly && (
-                            <span className="inline-flex items-center gap-0.5 rounded-full bg-sky-50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-sky-800 ring-1 ring-sky-100 dark:bg-sky-900/30 dark:text-sky-300 dark:ring-sky-700/40">
-                              <Clock className="h-2.5 w-2.5" />
-                              Hours
-                            </span>
-                          )}
-                        </div>
-                        {bot.instructions.trim() && (
-                          <p className="mt-1 line-clamp-1 max-w-[280px] text-[12px] text-theme-secondary">
-                            {bot.instructions.trim()}
-                          </p>
-                        )}
-                      </div>
-                    </button>
-                  </td>
-                  <td className="max-w-[180px]">
-                    {bot.triggerKeywords.length > 0 ? (
-                      <div className="flex flex-wrap gap-1">
-                        {bot.triggerKeywords.slice(0, 2).map((kw) => (
-                          <span
-                            key={kw}
-                            className="inline-flex rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-800 ring-1 ring-indigo-200/70 dark:bg-indigo-900/30 dark:text-indigo-300 dark:ring-indigo-700/40"
+            <ResponsiveDataView
+              items={filteredBots}
+              renderCard={(bot) => (
+                <AiBotCard
+                  key={bot.id}
+                  bot={bot}
+                  onEdit={() => openEdit(bot)}
+                  onToggle={() => toggleEnabled(bot)}
+                  onDelete={() => handleDelete(bot.id)}
+                />
+              )}
+              renderTable={() => (
+                <DataTable headers={['Bot', 'Starts when', 'Knowledge', 'Status', 'Actions']}>
+                  {filteredBots.map((bot, index) => (
+                    <tr key={bot.id} className="group">
+                      <TableSerialCell rowIndex={index} />
+                      <td>
+                        <button
+                          type="button"
+                          onClick={() => openEdit(bot)}
+                          className="flex w-full items-center gap-3 rounded-xl py-1 text-left transition hover:opacity-90"
+                        >
+                          <div
+                            className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+                              bot.enabled
+                                ? 'bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-[0_4px_14px_rgba(99,102,241,0.35)]'
+                                : 'bg-theme-subtle text-theme-muted ring-1 ring-theme-border'
+                            }`}
                           >
-                            {kw}
-                          </span>
-                        ))}
-                        {bot.triggerKeywords.length > 2 && (
-                          <span className="text-[10px] font-bold text-theme-muted">
-                            +{bot.triggerKeywords.length - 2}
-                          </span>
+                            <Bot className="h-4 w-4" strokeWidth={2.25} />
+                            {bot.enabled && (
+                              <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-theme-surface" />
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="truncate font-semibold text-theme-fg group-hover:text-whatsapp-700">
+                              {bot.name}
+                            </p>
+                            <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                              {bot.isDefault && (
+                                <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-amber-800 ring-1 ring-amber-100 dark:bg-amber-900/30 dark:text-amber-300 dark:ring-amber-700/40">
+                                  <Star className="h-2 w-2" />
+                                  Default
+                                </span>
+                              )}
+                              {bot.businessHoursOnly && (
+                                <span className="inline-flex items-center gap-0.5 rounded-full bg-sky-50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-sky-800 ring-1 ring-sky-100 dark:bg-sky-900/30 dark:text-sky-300 dark:ring-sky-700/40">
+                                  <Clock className="h-2.5 w-2.5" />
+                                  Hours
+                                </span>
+                              )}
+                            </div>
+                            {bot.instructions.trim() && (
+                              <p className="mt-1 line-clamp-1 max-w-[280px] text-[12px] text-theme-secondary">
+                                {bot.instructions.trim()}
+                              </p>
+                            )}
+                          </div>
+                        </button>
+                      </td>
+                      <td className="max-w-[180px]">
+                        {bot.triggerKeywords.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {bot.triggerKeywords.slice(0, 2).map((kw) => (
+                              <span
+                                key={kw}
+                                className="inline-flex rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-800 ring-1 ring-indigo-200/70 dark:bg-indigo-900/30 dark:text-indigo-300 dark:ring-indigo-700/40"
+                              >
+                                {kw}
+                              </span>
+                            ))}
+                            {bot.triggerKeywords.length > 2 && (
+                              <span className="text-[10px] font-bold text-theme-muted">
+                                +{bot.triggerKeywords.length - 2}
+                              </span>
+                            )}
+                          </div>
+                        ) : bot.isDefault ? (
+                          <span className="text-[13px] font-medium text-theme-secondary">All messages</span>
+                        ) : (
+                          <span className="text-[13px] text-theme-muted">—</span>
                         )}
-                      </div>
-                    ) : bot.isDefault ? (
-                      <span className="text-[13px] font-medium text-theme-secondary">All messages</span>
-                    ) : (
-                      <span className="text-[13px] text-theme-muted">—</span>
-                    )}
-                  </td>
-                  <td>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2.5 py-0.5 text-[11px] font-bold text-sky-800 ring-1 ring-sky-100 dark:bg-sky-900/30 dark:text-sky-300 dark:ring-sky-700/40">
-                      <BookOpen className="h-3 w-3" />
-                      {bot._count?.knowledgeItems ?? 0}
-                    </span>
-                  </td>
-                  <td>
-                    <span
-                      className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${
-                        bot.enabled
-                          ? 'bg-emerald-100 text-emerald-800 ring-emerald-200/70 dark:bg-emerald-900/40 dark:text-emerald-300 dark:ring-emerald-700/50'
-                          : 'bg-theme-subtle text-theme-muted ring-theme-border'
-                      }`}
-                    >
-                      {bot.enabled ? 'Live' : 'Paused'}
-                    </span>
-                  </td>
-                  <td>
-                    <div className="flex items-center justify-end gap-1.5">
-                      <TableTextButton
-                        onClick={() => toggleEnabled(bot)}
-                        icon={bot.enabled ? PauseCircle : PlayCircle}
-                        variant={bot.enabled ? 'primary' : 'neutral'}
-                      >
-                        {bot.enabled ? 'Pause' : 'Activate'}
-                      </TableTextButton>
-                      <RowActions onEdit={() => openEdit(bot)} onDelete={() => handleDelete(bot.id)} />
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </DataTable>
+                      </td>
+                      <td>
+                        <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2.5 py-0.5 text-[11px] font-bold text-sky-800 ring-1 ring-sky-100 dark:bg-sky-900/30 dark:text-sky-300 dark:ring-sky-700/40">
+                          <BookOpen className="h-3 w-3" />
+                          {bot._count?.knowledgeItems ?? 0}
+                        </span>
+                      </td>
+                      <td>
+                        <span
+                          className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${
+                            bot.enabled
+                              ? 'bg-emerald-100 text-emerald-800 ring-emerald-200/70 dark:bg-emerald-900/40 dark:text-emerald-300 dark:ring-emerald-700/50'
+                              : 'bg-theme-subtle text-theme-muted ring-theme-border'
+                          }`}
+                        >
+                          {bot.enabled ? 'Live' : 'Paused'}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <TableTextButton
+                            onClick={() => toggleEnabled(bot)}
+                            icon={bot.enabled ? PauseCircle : PlayCircle}
+                            variant={bot.enabled ? 'primary' : 'neutral'}
+                          >
+                            {bot.enabled ? 'Pause' : 'Activate'}
+                          </TableTextButton>
+                          <RowActions onEdit={() => openEdit(bot)} onDelete={() => handleDelete(bot.id)} />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </DataTable>
+              )}
+            />
 
             {!hasFilters && (
               <AiBotTemplatePicker

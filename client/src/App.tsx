@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { lazy, Suspense } from 'react';
 import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -12,6 +13,7 @@ import DashboardPage from './pages/DashboardPage';
 import InboxPage from './pages/InboxPage';
 import AutomationsPage from './pages/AutomationsPage';
 import FlowBuilderPage from './pages/FlowBuilderPage';
+import MetaFlowBuilder from './pages/MetaFlowBuilder';
 import AiBotPage from './pages/AiBotPage';
 import CampaignsPage from './pages/CampaignsPage';
 import ContactsPage from './pages/ContactsPage';
@@ -23,7 +25,16 @@ import CallsPage from './pages/CallsPage';
 import TemplatesPage from './pages/TemplatesPage';
 import ReportsPage from './pages/ReportsPage';
 import BillingPage from './pages/BillingPage';
+import ContentStudioPage from './pages/ContentStudioPage';
+import CommercePage from './pages/CommercePage';
+import LeadsPage from './pages/LeadsPage';
+import TicketsPage from './pages/TicketsPage';
+import OnboardingPage from './pages/OnboardingPage';
 import { AppToaster } from './utils/toast';
+
+const ComponentShowcase = import.meta.env.DEV
+  ? lazy(() => import('./pages/dev/ComponentShowcase'))
+  : null;
 
 export default function App() {
   return (
@@ -40,6 +51,7 @@ export default function App() {
           <Route path="/invite/:token" element={<AcceptInvitePage />} />
           <Route element={<ProtectedRoute />}>
             <Route path="/settings/whatsapp/callback" element={<WhatsappCallbackPage />} />
+            <Route path="/onboarding" element={<OnboardingPage />} />
             <Route element={<Layout />}>
               <Route path="/" element={<DashboardPage />} />
               <Route path="/inbox" element={<InboxPage />} />
@@ -47,14 +59,29 @@ export default function App() {
               <Route path="/calls/:callId" element={<CallsPage />} />
               <Route path="/automations" element={<AutomationsPage />} />
               <Route path="/automations/flows/:id" element={<FlowBuilderPage />} />
+              <Route path="/automations/meta-flows/:id" element={<MetaFlowBuilder />} />
               <Route path="/ai-bot" element={<AiBotPage />} />
               <Route path="/campaigns" element={<CampaignsPage />} />
               <Route path="/templates" element={<TemplatesPage />} />
+              <Route path="/content-studio" element={<ContentStudioPage />} />
+              <Route path="/commerce" element={<CommercePage />} />
+              <Route path="/leads" element={<LeadsPage />} />
+              <Route path="/tickets" element={<TicketsPage />} />
               <Route path="/contacts" element={<ContactsPage />} />
               <Route path="/team" element={<TeamPage />} />
               <Route path="/reports" element={<ReportsPage />} />
               <Route path="/billing" element={<BillingPage />} />
               <Route path="/settings" element={<SettingsPage />} />
+              {import.meta.env.DEV && ComponentShowcase && (
+                <Route
+                  path="/dev/components"
+                  element={
+                    <Suspense fallback={null}>
+                      <ComponentShowcase />
+                    </Suspense>
+                  }
+                />
+              )}
             </Route>
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

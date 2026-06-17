@@ -64,6 +64,8 @@ export const authApi = {
     api.post('/auth/register', data),
   login: (data: { email: string; password: string; totpCode?: string }) =>
     api.post('/auth/login', data),
+  googleUrl: () => api.get('/auth/oauth/google/url'),
+  microsoftUrl: () => api.get('/auth/oauth/microsoft/url'),
   me: () => api.get('/auth/me'),
   logout: (refreshToken: string) => api.post('/auth/logout', { refreshToken }),
   forgotPassword: (email: string) => api.post('/auth/forgot-password', { email }),
@@ -88,7 +90,13 @@ export const inboxApi = {
     data: { active?: boolean; resetHandoff?: boolean; activeBotId?: string | null }
   ) => api.patch(`/inbox/${id}/bot`, data),
   setStatus: (id: string, status: string) => api.patch(`/inbox/${id}/status`, { status }),
+  snooze: (id: string, until: string) => api.patch(`/inbox/${id}/snooze`, { until }),
+  unsnooze: (id: string) => api.delete(`/inbox/${id}/snooze`),
   addNote: (id: string, content: string) => api.post(`/inbox/${id}/notes`, { content }),
+  uploadMedia: (data: { mimeType: string; data: string; filename?: string }) =>
+    api.post('/media/upload', data),
+  uploadUrl: (data: { mimeType: string; size: number; filename?: string }) =>
+    api.post('/media/upload-url', data),
 };
 
 export const labelsApi = {
@@ -188,6 +196,7 @@ export const settingsApi = {
   aiUsage: (days = 30) => api.get('/settings/ai/usage', { params: { days: String(days) } }),
   updateCampaigns: (data: {
     dailySendLimit?: number;
+    dailyBudgetInr?: number;
     batchSize?: number;
     batchDelayMs?: number;
   }) => api.patch('/settings/campaigns', data),
@@ -280,6 +289,7 @@ export const contactApi = {
   deleteTag: (tag: string) => api.delete(`/contacts/tags/${encodeURIComponent(tag)}`),
   export: (params?: Record<string, string>) =>
     api.get('/contacts/export', { params, responseType: 'blob' }),
+  timeline: (id: string) => api.get(`/contacts/${id}/timeline`),
 };
 
 export interface TemplateButtonPayload {
@@ -300,6 +310,15 @@ export const waFormsApi = {
     fields: Array<{ id: string; label: string; type: string; required?: boolean }>;
   }) => api.post('/wa-forms', data),
   publish: (id: string) => api.post(`/wa-forms/${id}/publish`),
+};
+
+export const flowAssetsApi = {
+  list: (params?: Record<string, string>) => api.get('/flows-assets', { params }),
+  get: (id: string) => api.get(`/flows-assets/${id}`),
+  create: (data: Record<string, unknown>) => api.post('/flows-assets', data),
+  update: (id: string, data: Record<string, unknown>) => api.patch(`/flows-assets/${id}`, data),
+  delete: (id: string) => api.delete(`/flows-assets/${id}`),
+  publish: (id: string) => api.post(`/flows-assets/${id}/publish`),
 };
 
 export const templateApi = {
@@ -332,10 +351,15 @@ export const templateApi = {
 export const analyticsApi = {
   overview: () => api.get('/analytics/overview'),
   reports: (days?: number) => api.get('/analytics/reports', { params: days ? { days: String(days) } : {} }),
+  leaderboard: (days?: number) =>
+    api.get('/analytics/leaderboard', { params: days ? { days: String(days) } : {} }),
+  templates: (days?: number) =>
+    api.get('/analytics/templates', { params: days ? { days: String(days) } : {} }),
 };
 
 export const billingApi = {
   get: () => api.get('/billing'),
+  usage: () => api.get('/billing/usage'),
   updatePlan: (plan: string) => api.patch('/billing/plan', { plan }),
   createOrder: (planId: string) => api.post('/billing/create-order', { planId }),
   verifyPayment: (data: {
@@ -344,6 +368,21 @@ export const billingApi = {
     razorpay_signature: string;
     planId: 'growth' | 'business';
   }) => api.post('/billing/verify', data),
+  estimateCost: (recipientCount: number, category?: string) =>
+    api.get('/billing/estimate', { params: { recipientCount, category } }),
+  createPaymentLink: (data: {
+    amountPaise: number;
+    description: string;
+    customerName?: string;
+    customerPhone?: string;
+    customerEmail?: string;
+  }) => api.post('/billing/payment-link', data),
+};
+
+export const onboardingApi = {
+  status: () => api.get('/onboarding/status'),
+  readiness: () => api.get('/onboarding/readiness'),
+  completeStep: (stepId: string) => api.post('/onboarding/complete-step', { stepId }),
 };
 
 export const complianceApi = {
@@ -363,6 +402,36 @@ export const integrationsApi = {
   updateWebhook: (id: string, data: Partial<{ url: string; events: string[]; enabled: boolean }>) =>
     api.patch(`/integrations/webhooks/${id}`, data),
   deleteWebhook: (id: string) => api.delete(`/integrations/webhooks/${id}`),
+  webhookDeliveries: (webhookId: string) => api.get(`/integrations/webhooks/${webhookId}/deliveries`),
+  replayDelivery: (deliveryId: string) => api.post(`/integrations/webhooks/deliveries/${deliveryId}/replay`),
+  exportGoogleSheets: () => api.get('/integrations/google-sheets/export', { responseType: 'blob' }),
+};
+
+export const leadApi = {
+  list: (params?: Record<string, string>) => api.get('/leads', { params }),
+  create: (data: Record<string, unknown>) => api.post('/leads', data),
+  update: (id: string, data: Record<string, unknown>) => api.patch(`/leads/${id}`, data),
+  fromContact: (contactId: string) => api.post(`/leads/from-contact/${contactId}`),
+};
+
+export const ticketApi = {
+  list: (params?: Record<string, string>) => api.get('/tickets', { params }),
+  create: (data: Record<string, unknown>) => api.post('/tickets', data),
+  update: (id: string, data: Record<string, unknown>) => api.patch(`/tickets/${id}`, data),
+  fromConversation: (conversationId: string, data?: Record<string, unknown>) =>
+    api.post(`/tickets/from-conversation/${conversationId}`, data || {}),
+};
+
+export const commerceApi = {
+  orders: (params?: Record<string, string>) => api.get('/commerce/orders', { params }),
+  order: (id: string) => api.get(`/commerce/orders/${id}`),
+  updateStatus: (id: string, data: { status: string; statusNote?: string }) =>
+    api.patch(`/commerce/orders/${id}/status`, data),
+};
+
+export const authApiOAuth = {
+  googleUrl: () => api.get('/auth/oauth/google/url'),
+  microsoftUrl: () => api.get('/auth/oauth/microsoft/url'),
 };
 
 export const teamApi = {
@@ -411,4 +480,27 @@ export const teamApi = {
     disable: (code: string, password: string) =>
       api.post('/team/me/2fa/disable', { code, password }),
   },
+};
+
+export const contentStudioApi = {
+  getBrandKit: () => api.get('/content-studio/brand-kit'),
+  updateBrandKit: (data: Record<string, unknown>) => api.put('/content-studio/brand-kit', data),
+  getCredits: () => api.get('/content-studio/credits'),
+  generate: (data: { prompt: string; kind?: string; locale?: string; templateCategory?: string }) =>
+    api.post('/content-studio/composer/generate', data),
+  listDrafts: (params?: Record<string, string>) =>
+    api.get('/content-studio/composer/drafts', { params }),
+  getDraft: (id: string) => api.get(`/content-studio/composer/drafts/${id}`),
+  updateDraft: (id: string, data: Record<string, unknown>) =>
+    api.patch(`/content-studio/composer/drafts/${id}`, data),
+  generateImage: (data: Record<string, unknown>) =>
+    api.post('/content-studio/images/generate', data),
+  getImageJob: (id: string) => api.get(`/content-studio/images/jobs/${id}`),
+  listAssets: (params?: Record<string, string>) =>
+    api.get('/content-studio/library', { params }),
+  getCalendar: (params?: Record<string, string>) =>
+    api.get('/content-studio/calendar', { params }),
+  getApprovalQueue: () => api.get('/content-studio/approvals'),
+  submitApproval: (data: Record<string, unknown>) =>
+    api.post('/content-studio/approvals', data),
 };

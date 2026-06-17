@@ -378,6 +378,44 @@
       0 4px 16px rgba(37, 211, 102, 0.28);
   }
 
+  .btn-primary {
+    @apply inline-flex items-center justify-center font-semibold text-white antialiased;
+    background: linear-gradient(135deg, #128c7e 0%, #075e54 100%);
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.08),
+      0 4px 14px rgba(37, 211, 102, 0.32);
+    transition:
+      transform 0.15s ease,
+      box-shadow 0.2s ease,
+      filter 0.2s ease;
+  }
+
+  .btn-primary svg {
+    color: currentColor;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    filter: brightness(1.06);
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.08),
+      0 6px 18px rgba(37, 211, 102, 0.4);
+  }
+
+  .btn-primary:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+
+  .btn-primary:disabled {
+    @apply cursor-not-allowed opacity-50;
+  }
+
+  .btn-primary:focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 4px rgba(37, 211, 102, 0.22),
+      0 4px 14px rgba(37, 211, 102, 0.32);
+  }
+
   .data-table tbody tr {
     border-bottom: 1px solid var(--color-border);
     transition: background-color 0.15s ease;
@@ -432,7 +470,7 @@
   }
 
   .contact-checkbox {
-    accent-color: #0ea5e9;
+    accent-color: #128C7E;
     cursor: pointer;
   }
 
@@ -456,6 +494,45 @@
       0 12px 32px var(--color-accent-glow-strong);
   }
 
+  .text-display {
+    @apply text-2xl font-extrabold tracking-tight text-theme-fg;
+  }
+
+  .text-title {
+    @apply text-xl font-extrabold tracking-tight text-theme-fg;
+  }
+
+  .text-body {
+    @apply text-sm font-medium;
+  }
+
+  .text-label {
+    @apply text-[13px] font-semibold;
+  }
+
+  .text-caption {
+    @apply text-xs font-medium;
+  }
+
+  .text-micro {
+    @apply text-[10px] font-bold;
+  }
+
+  .gap-section {
+    @apply gap-6 lg:gap-8;
+  }
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
   .page-gutter-x {
     @apply px-4 sm:px-6 lg:px-8;
   }
@@ -466,6 +543,10 @@
 
   .page-shell-bleed {
     @apply mx-auto flex h-full min-h-[calc(100dvh-60px)] w-full max-w-6xl flex-col page-gutter-x py-4 sm:py-5 lg:py-6;
+  }
+
+  .page-shell-inbox {
+    @apply mx-auto flex h-full min-h-[calc(100dvh-60px)] w-full max-w-[88rem] flex-col page-gutter-x py-4 sm:py-5 lg:py-6;
   }
 
   .inbox-shell {

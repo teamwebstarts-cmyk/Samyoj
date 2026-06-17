@@ -8,7 +8,7 @@ const tips = [
     accent:
       'from-emerald-500/10 via-white to-teal-500/5 border-emerald-200/60 dark:via-slate-900 dark:border-emerald-800/40',
     iconBg:
-      'bg-gradient-to-br from-whatsapp-500 to-emerald-600 text-white shadow-[0_4px_14px_rgba(37,211,102,0.3)]',
+      'bg-gradient-to-br from-whatsapp-600 to-emerald-700 text-white shadow-[0_4px_14px_rgba(37,211,102,0.3)]',
   },
   {
     icon: Bot,

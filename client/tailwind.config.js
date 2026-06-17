@@ -7,6 +7,18 @@ export default {
       fontFamily: {
         sans: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
       },
+      fontSize: {
+        display: ['1.5rem', { lineHeight: '1.25', fontWeight: '800' }],
+        title: ['1.25rem', { lineHeight: '1.3', fontWeight: '800' }],
+        body: ['0.875rem', { lineHeight: '1.5', fontWeight: '500' }],
+        label: ['0.8125rem', { lineHeight: '1.4', fontWeight: '600' }],
+        caption: ['0.75rem', { lineHeight: '1.4', fontWeight: '500' }],
+        micro: ['0.625rem', { lineHeight: '1.3', fontWeight: '700' }],
+      },
+      spacing: {
+        section: '1.5rem',
+        'section-lg': '2rem',
+      },
       colors: {
         theme: {
           fg: 'var(--color-text)',

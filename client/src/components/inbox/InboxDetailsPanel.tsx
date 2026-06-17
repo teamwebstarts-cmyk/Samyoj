@@ -343,7 +343,7 @@ export default function InboxDetailsPanel({
           className="fixed inset-0 z-40 bg-black/20 lg:hidden"
           onClick={closePanel}
         />
-        <aside className="fixed inset-y-0 right-0 z-50 flex w-[min(100%,280px)] flex-col border-l border-neutral-100 bg-white shadow-2xl lg:hidden">
+        <aside className="fixed inset-x-0 bottom-0 z-50 flex max-h-[75dvh] flex-col rounded-t-2xl border border-theme-border bg-theme-surface shadow-2xl lg:hidden">
           {panelBody}
         </aside>
       </>
@@ -394,7 +394,7 @@ export default function InboxDetailsPanel({
   }
 
   return (
-    <aside className="hidden w-60 shrink-0 flex-col border-l border-neutral-100 bg-white/95 shadow-[-4px_0_24px_rgba(15,23,42,0.04)] lg:flex">
+    <aside className="hidden w-72 shrink-0 flex-col border-l border-neutral-100 bg-white/95 shadow-[-4px_0_24px_rgba(15,23,42,0.04)] lg:flex">
       {panelBody}
     </aside>
   );

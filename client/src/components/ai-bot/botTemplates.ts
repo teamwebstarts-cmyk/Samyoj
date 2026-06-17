@@ -36,7 +36,7 @@ export const botTemplates: BotTemplate[] = [
     icon: ShoppingBag,
     accent: 'from-emerald-500/10 via-theme-surface to-teal-500/5 border-emerald-200/60 dark:border-emerald-500/25',
     iconBg:
-      'bg-gradient-to-br from-whatsapp-500 to-emerald-600 text-white shadow-[0_4px_14px_rgba(37,211,102,0.35)]',
+      'bg-gradient-to-br from-whatsapp-600 to-emerald-700 text-white shadow-[0_4px_14px_rgba(37,211,102,0.35)]',
     instructions:
       'You are a helpful sales assistant. Answer questions about pricing, packages, and product features. Recommend the best option based on customer needs. Encourage next steps like booking a demo or placing an order when appropriate.',
     handoffMessage: 'I will connect you with a sales specialist who can help further.',

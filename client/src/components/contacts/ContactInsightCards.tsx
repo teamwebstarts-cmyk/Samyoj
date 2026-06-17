@@ -7,7 +7,7 @@ const tips = [
     description: 'Group VIPs, leads, and regions — then use them in campaigns.',
     accent: 'from-violet-500/10 via-white to-purple-500/5 border-violet-200/60 dark:via-slate-900 dark:border-violet-800/40',
     iconBg:
-      'bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-[0_4px_14px_rgba(139,92,246,0.35)]',
+      'bg-gradient-to-br from-violet-600 to-purple-700 text-white shadow-[0_4px_14px_rgba(139,92,246,0.35)]',
   },
   {
     icon: MessageSquare,
@@ -23,7 +23,7 @@ const tips = [
     description: 'Pick contacts in bulk or filter by who opted in.',
     accent: 'from-emerald-500/10 via-white to-teal-500/5 border-emerald-200/60 dark:via-slate-900 dark:border-emerald-800/40',
     iconBg:
-      'bg-gradient-to-br from-whatsapp-500 to-emerald-600 text-white shadow-[0_4px_14px_rgba(37,211,102,0.3)]',
+      'bg-gradient-to-br from-whatsapp-600 to-emerald-700 text-white shadow-[0_4px_14px_rgba(37,211,102,0.3)]',
   },
 ] as const;
 

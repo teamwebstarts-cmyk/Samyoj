@@ -38,7 +38,7 @@ export default function ContactBulkBar({
 
   return (
     <div
-      className={`pointer-events-none fixed bottom-0 right-0 z-40 flex justify-center page-gutter-x pb-4 sm:pb-6 ${
+      className={`pointer-events-none fixed bottom-0 right-0 z-40 flex justify-center page-gutter-x pb-[calc(1rem+env(safe-area-inset-bottom,0px)+4rem)] sm:pb-6 lg:pb-6 ${
         collapsed ? 'lg:left-[72px]' : 'lg:left-[260px]'
       } left-0`}
     >

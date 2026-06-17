@@ -5,7 +5,6 @@ import { MetaWhatsAppService } from '../whatsapp/meta.service';
 import { getOrgWhatsappContext } from '../whatsapp/context';
 import { buildTemplateComponents } from '../campaigns/template-params';
 import { emitToOrg } from '../../realtime';
-import { messageQueue } from '../../config/queues';
 import { buildInteractivePayload, type InteractiveMessageOptions } from './interactive';
 import { normalizePhone } from '../../utils/phone';
 
@@ -55,7 +54,7 @@ interface DeliverMessageInput {
   type: DeliverMessageType;
   templateName?: string;
   templateLanguage?: string;
-  templateParams?: { body?: string[]; header?: string[]; headerMediaUrl?: string };
+  templateParams?: { body?: string[]; header?: string[]; headerMediaUrl?: string; couponCode?: string };
   buttons?: Array<{ id: string; title: string }>;
   interactive?: InteractiveMessageOptions;
   location?: { latitude: number; longitude: number; name?: string; address?: string };
@@ -219,30 +218,6 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
       error: errorMessage,
       conversationId: message.conversationId,
     });
-
-    await messageQueue.add(
-      'retry-send',
-      {
-        messageId: input.messageId,
-        organizationId: input.organizationId,
-        phoneNumberId: input.phoneNumberId,
-        encryptedToken: input.encryptedToken,
-        to: input.to,
-        content: input.content,
-        type: input.type,
-        templateName: input.templateName,
-        templateLanguage: input.templateLanguage,
-        templateParams: input.templateParams,
-        buttons: input.buttons,
-        interactive: input.interactive,
-        location: input.location,
-        contacts: input.contacts,
-        waFlow: input.waFlow,
-        mediaUrl: input.mediaUrl,
-        mediaCaption: input.mediaCaption,
-      },
-      { attempts: 4, backoff: { type: 'custom' } }
-    );
 
     throw new AppError(502, errorMessage);
   }

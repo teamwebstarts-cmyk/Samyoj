@@ -1,9 +1,10 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { LucideIcon } from 'lucide-react';
 import { Trash2, X } from 'lucide-react';
+import { slideOverAccents } from './accentTokens';
 
-type SlideOverAccent = 'violet' | 'emerald' | 'sky' | 'neutral';
+type SlideOverAccent = keyof typeof slideOverAccents;
 
 interface SlideOverProps {
   open: boolean;
@@ -15,6 +16,7 @@ interface SlideOverProps {
   size?: 'md' | 'lg' | 'xl' | '2xl';
   icon?: LucideIcon;
   accent?: SlideOverAccent;
+  step?: { current: number; total: number };
 }
 
 const widths = {
@@ -22,32 +24,6 @@ const widths = {
   lg: 'w-full max-w-lg sm:max-w-[min(100vw,32rem)]',
   xl: 'w-full max-w-xl sm:max-w-[min(100vw,56rem)]',
   '2xl': 'w-full sm:max-w-[min(100vw,48rem)]',
-};
-
-const headerAccents: Record<
-  SlideOverAccent,
-  { bar: string; icon: string; glow: string }
-> = {
-  violet: {
-    bar: 'from-indigo-500 via-violet-500 to-purple-600',
-    icon: 'bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-[0_4px_14px_rgba(99,102,241,0.35)]',
-    glow: 'bg-violet-400/15',
-  },
-  emerald: {
-    bar: 'from-whatsapp-500 via-emerald-500 to-teal-600',
-    icon: 'bg-gradient-to-br from-whatsapp-500 to-emerald-600 text-white shadow-[0_4px_14px_rgba(37,211,102,0.35)]',
-    glow: 'bg-emerald-400/15',
-  },
-  sky: {
-    bar: 'from-sky-500 via-blue-500 to-indigo-600',
-    icon: 'bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-[0_4px_14px_rgba(14,165,233,0.3)]',
-    glow: 'bg-sky-400/15',
-  },
-  neutral: {
-    bar: 'from-neutral-400 to-neutral-500',
-    icon: 'bg-theme-subtle text-theme-secondary ring-1 ring-theme-border',
-    glow: 'bg-neutral-400/10',
-  },
 };
 
 export default function SlideOver({
@@ -60,19 +36,27 @@ export default function SlideOver({
   size = 'md',
   icon: HeaderIcon,
   accent = 'neutral',
+  step,
 }: SlideOverProps) {
-  const theme = headerAccents[accent];
+  const theme = slideOverAccents[accent];
+  const panelRef = useRef<HTMLDivElement>(null);
+  const previousFocus = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
+    previousFocus.current = document.activeElement as HTMLElement | null;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
     document.body.style.overflow = 'hidden';
     window.addEventListener('keydown', onKey);
+    requestAnimationFrame(() => {
+      panelRef.current?.querySelector<HTMLElement>('button')?.focus();
+    });
     return () => {
       document.body.style.overflow = '';
       window.removeEventListener('keydown', onKey);
+      previousFocus.current?.focus();
     };
   }, [open, onClose]);
 
@@ -87,7 +71,8 @@ export default function SlideOver({
         aria-label="Close panel"
       />
       <div
-        className={`modal-panel ${widths[size]}`}
+        ref={panelRef}
+        className={`modal-panel ${widths[size]} max-sm:!w-full max-sm:!max-w-none`}
         role="dialog"
         aria-modal="true"
         aria-labelledby="slideover-title"
@@ -98,7 +83,7 @@ export default function SlideOver({
             className={`pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full blur-3xl ${theme.glow}`}
           />
 
-          <div className="relative flex items-start justify-between gap-4 px-6 py-5">
+          <div className="relative flex items-start justify-between gap-4 px-5 py-4 sm:px-6 sm:py-5">
             <div className="flex min-w-0 items-start gap-3.5">
               {HeaderIcon && (
                 <div
@@ -108,18 +93,23 @@ export default function SlideOver({
                 </div>
               )}
               <div className="min-w-0">
-                <h2 id="slideover-title" className="text-lg font-extrabold tracking-tight text-theme-fg">
+                {step && (
+                  <p className="mb-1 text-caption font-bold uppercase tracking-wide text-theme-muted">
+                    Step {step.current} of {step.total}
+                  </p>
+                )}
+                <h2 id="slideover-title" className="text-title">
                   {title}
                 </h2>
                 {subtitle && (
-                  <p className="mt-1 text-[13px] font-medium leading-relaxed text-theme-secondary">{subtitle}</p>
+                  <p className="mt-1 text-label font-medium leading-relaxed text-theme-secondary">{subtitle}</p>
                 )}
               </div>
             </div>
             <button
               type="button"
               onClick={onClose}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-theme-border bg-theme-surface text-theme-secondary transition hover:border-theme-border-strong hover:bg-theme-subtle hover:text-theme-fg"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-theme-border bg-theme-surface text-theme-secondary transition hover:border-theme-border-strong hover:bg-theme-subtle hover:text-theme-fg"
               aria-label="Close"
             >
               <X className="h-4 w-4" />
@@ -127,16 +117,16 @@ export default function SlideOver({
           </div>
         </div>
 
-        <div className="modal-panel__body px-6 py-6">{children}</div>
+        <div className="modal-panel__body flex-1 overflow-y-auto px-5 py-5 sm:px-6 sm:py-6">{children}</div>
 
         {footer && (
-          <div className="modal-panel__footer border-t border-theme-border bg-theme-subtle/30 px-6 py-4 backdrop-blur-sm">
+          <div className="modal-panel__footer sticky bottom-0 border-t border-theme-border bg-theme-surface/95 px-5 py-4 backdrop-blur-sm sm:px-6">
             {footer}
           </div>
         )}
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }
 
@@ -163,7 +153,7 @@ export function SlideOverFooter({
         <button
           type="button"
           onClick={onDelete}
-          className="mr-auto inline-flex h-10 items-center gap-2 rounded-xl border border-red-200/70 bg-red-50 px-3 text-[13px] font-semibold text-red-600 transition hover:border-red-300 hover:bg-red-100 hover:text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/15"
+          className="mr-auto inline-flex h-10 min-h-[44px] items-center gap-2 rounded-xl border border-red-200/70 bg-red-50 px-3 text-[13px] font-semibold text-red-600 transition hover:border-red-300 hover:bg-red-100 hover:text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/15"
           title={deleteLabel}
           aria-label={deleteLabel}
         >
@@ -174,7 +164,7 @@ export function SlideOverFooter({
       <button
         type="button"
         onClick={onCancel}
-        className="inline-flex h-10 items-center justify-center rounded-xl border border-theme-border bg-theme-surface px-5 text-[13px] font-semibold text-theme-fg transition hover:bg-theme-subtle"
+        className="inline-flex h-10 min-h-[44px] flex-1 items-center justify-center rounded-xl border border-theme-border bg-theme-surface px-5 text-[13px] font-semibold text-theme-fg transition hover:bg-theme-subtle sm:flex-none"
       >
         Cancel
       </button>
@@ -182,10 +172,10 @@ export function SlideOverFooter({
         type="submit"
         form="slideover-form"
         disabled={loading || submitDisabled}
-        className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-whatsapp-500 to-whatsapp-600 px-5 text-[13px] font-semibold text-white shadow-[0_4px_14px_rgba(37,211,102,0.35)] transition hover:from-whatsapp-600 hover:to-whatsapp-700 disabled:opacity-50"
+        className="btn-primary inline-flex h-10 min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl px-5 text-[13px] font-semibold sm:flex-none disabled:opacity-50"
       >
         {loading && (
-          <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+          <span className="h-4 w-4 animate-spin rounded-full border-2 border-current/25 border-t-current" />
         )}
         {submitLabel}
       </button>

@@ -91,10 +91,13 @@ router.post(
       },
     });
 
+    const { compliancePurgeQueue } = await import('../../config/queues');
+    const purgeDelayMs = parseInt(process.env.COMPLIANCE_PURGE_DELAY_MS || String(30 * 24 * 60 * 60 * 1000), 10);
+    await compliancePurgeQueue.add('purge', { organizationId: orgId }, { attempts: 3, delay: purgeDelayMs });
+
     sendSuccess(res, {
-      message:
-        'Deletion request recorded. Your workspace data will be purged within 30 days per GDPR policy.',
-      status: 'pending',
+      message: `Deletion request queued. Your workspace data will be purged in ${Math.round(purgeDelayMs / 86400000)} days per GDPR policy.`,
+      status: 'queued',
     });
   })
 );

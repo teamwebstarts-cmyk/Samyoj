@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AlertCircle, Loader2, Users } from 'lucide-react';
-import { campaignApi } from '../../services/api';
+import { campaignApi, billingApi } from '../../services/api';
 import { validatePhoneLines } from '../../utils/phone';
 
 type AudienceType = 'MANUAL' | 'TAGS' | 'CONTACTS' | 'ALL_OPTED_IN';
@@ -19,6 +19,7 @@ export default function CampaignAudiencePreview({
   selectedContactIds,
 }: CampaignAudiencePreviewProps) {
   const [count, setCount] = useState<number | null>(null);
+  const [costInr, setCostInr] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -77,11 +78,18 @@ export default function CampaignAudiencePreview({
         const { data } = await campaignApi.previewAudience(payload);
         if (!cancelled) {
           setCount(data.data.count);
-          if (data.data.count === 0) setError('No opted-in recipients match this audience');
+          if (data.data.count === 0) {
+            setCostInr(null);
+            setError('No opted-in recipients match this audience');
+          } else {
+            const est = await billingApi.estimateCost(data.data.count);
+            if (!cancelled) setCostInr(est.data.data.estimatedCostInr);
+          }
         }
       } catch (err: unknown) {
         if (!cancelled) {
           setCount(null);
+          setCostInr(null);
           setError(
             (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
               ?.message || 'Could not preview audience',
@@ -139,14 +147,21 @@ export default function CampaignAudiencePreview({
               {error}
             </p>
           ) : count !== null ? (
-            <p className="mt-0.5 text-[13px] font-medium text-theme-secondary">
-              <span className="text-2xl font-extrabold tabular-nums text-sky-700 dark:text-sky-400">
-                {count.toLocaleString()}
-              </span>{' '}
-              <span className="font-semibold text-theme-fg">
-                {count === 1 ? 'recipient' : 'recipients'} ready to receive
-              </span>
-            </p>
+            <div>
+              <p className="mt-0.5 text-[13px] font-medium text-theme-secondary">
+                <span className="text-2xl font-extrabold tabular-nums text-sky-700 dark:text-sky-400">
+                  {count.toLocaleString()}
+                </span>{' '}
+                <span className="font-semibold text-theme-fg">
+                  {count === 1 ? 'recipient' : 'recipients'} ready to receive
+                </span>
+              </p>
+              {costInr != null && costInr > 0 && (
+                <p className="mt-1 text-[12px] font-semibold text-amber-800 dark:text-amber-300">
+                  Estimated Meta cost: ₹{costInr.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                </p>
+              )}
+            </div>
           ) : (
             <p className="mt-0.5 text-[13px] font-medium text-theme-secondary">
               Choose who receives this to see the recipient count

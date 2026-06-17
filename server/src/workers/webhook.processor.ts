@@ -16,6 +16,7 @@ function mapInboundMessageType(type: string | undefined): 'TEXT' | 'IMAGE' | 'DO
   if (normalized === 'document') return 'DOCUMENT';
   if (normalized === 'audio' || normalized === 'voice') return 'AUDIO';
   if (normalized === 'video') return 'VIDEO';
+  if (normalized === 'order') return 'INTERACTIVE';
   if (
     ['button', 'interactive', 'list', 'reaction', 'sticker', 'location', 'contacts'].includes(
       normalized
@@ -53,9 +54,23 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
         const metaMessageId = status.id as string;
         const statusValue = (status.status as string)?.toUpperCase();
 
+        const existingMsg = await prisma.message.findFirst({
+          where: { metaMessageId },
+          select: { id: true, metadata: true },
+        });
+
+        const existingMeta = (existingMsg?.metadata as Record<string, unknown>) || {};
+        const statusMeta: Record<string, unknown> = { ...existingMeta };
+        if (status.pricing) statusMeta.pricing = status.pricing;
+        if (status.errors) statusMeta.errors = status.errors;
+        if (status.conversation) statusMeta.conversationId = (status.conversation as { id?: string })?.id;
+
         await prisma.message.updateMany({
           where: { metaMessageId },
-          data: { status: statusValue as never },
+          data: {
+            status: statusValue as never,
+            metadata: statusMeta as Prisma.InputJsonValue,
+          },
         });
 
         const msg = await prisma.message.findFirst({
@@ -110,6 +125,9 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
 
         const isNew = !conversation;
         const { computeSlaDueAt } = await import('../modules/sla/service');
+        const inboundTimestamp = msg.timestamp
+          ? new Date(Number(msg.timestamp) * 1000)
+          : new Date();
 
         if (!conversation) {
           conversation = await prisma.conversation.create({
@@ -117,14 +135,16 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
               organizationId: orgId,
               contactId: contact.id,
               whatsappNumberId: whatsappNumber.id,
-              lastMessageAt: new Date(),
+              lastMessageAt: inboundTimestamp,
+              cs24hWindowOpensAt: inboundTimestamp,
               unreadCount: 1,
               slaDueAt: computeSlaDueAt(),
             },
           });
         } else {
           const updateData: Prisma.ConversationUpdateInput = {
-            lastMessageAt: new Date(),
+            lastMessageAt: inboundTimestamp,
+            cs24hWindowOpensAt: inboundTimestamp,
             unreadCount: { increment: 1 },
           };
           const existing = await prisma.conversation.findUnique({
@@ -147,7 +167,11 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
           ? { ...parsed.metadata, waFlowResponse: parsed.waFlowResponse, isWaFlowReply: true }
           : parsed.buttonReplyId
             ? { ...parsed.metadata, buttonReplyId: parsed.buttonReplyId, isButtonReply: true }
-            : parsed.metadata;
+            : parsed.referral
+              ? { ...parsed.metadata, referral: parsed.referral, isCtwaReferral: true }
+              : parsed.orderPayload
+                ? { ...parsed.metadata, orderPayload: parsed.orderPayload, isCatalogOrder: true }
+                : parsed.metadata;
 
         let message = await prisma.message.create({
           data: {
@@ -205,6 +229,72 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
         });
 
         const { dispatchOrgWebhook } = await import('../modules/integrations/dispatch');
+
+        if (parsed.orderPayload) {
+          try {
+            const { createOrderFromInbound } = await import('../modules/commerce/service');
+            const items = parsed.orderPayload.productItems.map((item) => ({
+              retailerId: item.product_retailer_id,
+              name: item.product_retailer_id,
+              quantity: item.quantity,
+              amountCents: Math.round((item.item_price || 0) * 100),
+            }));
+            const subtotalCents = items.reduce(
+              (sum, item) => sum + item.amountCents * item.quantity,
+              0
+            );
+            const referenceId = `ord_${Date.now()}_${contact.id.slice(0, 8)}`;
+            await createOrderFromInbound(orgId, {
+              contactId: contact.id,
+              conversationId: conversation.id,
+              catalogId: parsed.orderPayload.catalogId,
+              referenceId,
+              items,
+              amounts: {
+                subtotalCents,
+                taxCents: 0,
+                shippingCents: 0,
+                totalCents: subtotalCents,
+                currency: parsed.orderPayload.productItems[0]?.currency || 'INR',
+              },
+              metadata: { inboundMessageId: message.id },
+            });
+          } catch (err) {
+            logError(err, { source: 'webhook', action: 'Catalog order creation failed' });
+          }
+        }
+
+        if (parsed.referral) {
+          try {
+            const existingConv = await prisma.conversation.findUnique({
+              where: { id: conversation.id },
+              select: { botState: true },
+            });
+            const priorState =
+              existingConv?.botState && typeof existingConv.botState === 'object'
+                ? (existingConv.botState as Record<string, unknown>)
+                : {};
+
+            await prisma.conversation.update({
+              where: { id: conversation.id },
+              data: {
+                botState: {
+                  ...priorState,
+                  ctwaReferral: parsed.referral,
+                  ctwaReceivedAt: new Date().toISOString(),
+                } as Prisma.InputJsonValue,
+              },
+            });
+            void dispatchOrgWebhook(orgId, 'referral.received', {
+              conversationId: conversation.id,
+              contactPhone,
+              referral: parsed.referral,
+            });
+          } catch (err) {
+            logError(err, { source: 'webhook', action: 'CTWA referral handling failed' });
+          }
+        }
+
         void dispatchOrgWebhook(orgId, 'message.received', {
           conversationId: conversation.id,
           messageId: message.id,
@@ -213,6 +303,20 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
 
         const msgType = (msg.type as string | undefined)?.toLowerCase() || 'text';
         const hasMedia = ['image', 'video', 'audio', 'document', 'sticker'].includes(msgType);
+
+        const textContent = (content || '').trim();
+        if (textContent && !hasMedia) {
+          const { isOptOutMessage, isOptInMessage, handleOptOut, handleOptIn } = await import(
+            '../modules/compliance/opt-out'
+          );
+          if (isOptOutMessage(textContent)) {
+            await handleOptOut(orgId, contact.id, conversation.id, whatsappNumber.id);
+            continue;
+          }
+          if (isOptInMessage(textContent)) {
+            await handleOptIn(orgId, contact.id);
+          }
+        }
 
         await handleInboundAutomations({
           organizationId: orgId,

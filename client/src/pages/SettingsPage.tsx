@@ -32,13 +32,15 @@ import AppAlert from '../components/ui/AppAlert';
 import AppButton from '../components/ui/AppButton';
 import AppInput from '../components/ui/AppInput';
 import LoadingState from '../components/ui/LoadingState';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
 import PageHeader from '../components/ui/PageHeader';
 import PageHero from '../components/ui/PageHero';
 import PageShell from '../components/ui/PageShell';
 import ThemeToggle from '../components/ui/ThemeToggle';
 import { useTheme } from '../contexts/ThemeContext';
-import { aiBotApi, settingsApi, teamApi, whatsappApi } from '../services/api';
+import { aiBotApi, onboardingApi, settingsApi, teamApi, whatsappApi } from '../services/api';
 import type { AiUsageSummary, BusinessHours, OrgAiSettings } from '../types';
+import type { ReadinessCheck } from '../components/settings/SettingsReadinessBanner';
 import { toastError, toastSuccess } from '../utils/toast';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -88,6 +90,7 @@ export default function SettingsPage() {
   const [savingAi, setSavingAi] = useState(false);
   const [campaignSettings, setCampaignSettings] = useState({
     dailySendLimit: 5000,
+    dailyBudgetInr: 5000,
     batchSize: 50,
     batchDelayMs: 1000,
   });
@@ -97,6 +100,9 @@ export default function SettingsPage() {
     hasAiBot: false,
     teamCount: 1,
   });
+  const [disconnectTarget, setDisconnectTarget] = useState<{ id: string; phone: string } | null>(null);
+  const [readinessChecks, setReadinessChecks] = useState<ReadinessCheck[]>([]);
+  const [readinessMeta, setReadinessMeta] = useState({ completedCount: 0, totalChecks: 5, progress: 0, isReady: false });
 
   const load = () => {
     Promise.all([
@@ -107,8 +113,9 @@ export default function SettingsPage() {
       settingsApi.aiUsage(),
       aiBotApi.list(),
       teamApi.list(),
+      onboardingApi.readiness(),
     ])
-      .then(([numbersRes, urlRes, webhookRes, settingsRes, usageRes, botsRes, teamRes]) => {
+      .then(([numbersRes, urlRes, webhookRes, settingsRes, usageRes, botsRes, teamRes, readinessRes]) => {
         setNumbers(numbersRes.data.data);
         setConnectUrl(urlRes.data.data.url);
         setWebhookStatus(webhookRes.data.data);
@@ -128,6 +135,20 @@ export default function SettingsPage() {
           setCampaignSettings((prev) => ({ ...prev, ...settingsRes.data.data.campaigns }));
         }
         setAiUsage(usageRes.data.data);
+        const readiness = readinessRes.data.data as {
+          checks: ReadinessCheck[];
+          completedCount: number;
+          totalChecks: number;
+          progress: number;
+          isReady: boolean;
+        };
+        setReadinessChecks(readiness.checks || []);
+        setReadinessMeta({
+          completedCount: readiness.completedCount,
+          totalChecks: readiness.totalChecks,
+          progress: readiness.progress,
+          isReady: readiness.isReady,
+        });
       })
       .catch((err: unknown) => {
         const msg =
@@ -140,8 +161,8 @@ export default function SettingsPage() {
 
   useEffect(load, []);
 
-  const isReady = numbers.length > 0 && Boolean(webhookStatus?.subscribed);
-  const setupProgress = useMemo(() => {
+  const isReady = readinessMeta.isReady || (numbers.length > 0 && Boolean(webhookStatus?.subscribed));
+  const fallbackProgress = useMemo(() => {
     const steps = [
       numbers.length > 0,
       Boolean(webhookStatus?.subscribed),
@@ -151,6 +172,7 @@ export default function SettingsPage() {
     ];
     return Math.round((steps.filter(Boolean).length / steps.length) * 100);
   }, [numbers, webhookStatus, setupMeta]);
+  const setupProgress = readinessMeta.progress || fallbackProgress;
 
   const tabs = useMemo(
     () => [
@@ -220,11 +242,12 @@ export default function SettingsPage() {
   };
 
   const handleDisconnect = async (id: string, phone: string) => {
-    const confirmed = window.confirm(
-      `Disconnect +${phone}?\n\nNew messages will stop until you connect again. Existing chats remain saved.`,
-    );
-    if (!confirmed) return;
+    setDisconnectTarget({ id, phone });
+  };
 
+  const confirmDisconnect = async () => {
+    if (!disconnectTarget) return;
+    const { id } = disconnectTarget;
     setDisconnectingId(id);
     try {
       await whatsappApi.disconnect(id);
@@ -237,6 +260,7 @@ export default function SettingsPage() {
       toastError(msg);
     } finally {
       setDisconnectingId(null);
+      setDisconnectTarget(null);
     }
   };
 
@@ -379,6 +403,9 @@ export default function SettingsPage() {
         <SettingsReadinessBanner
           isReady={isReady}
           setupProgress={setupProgress}
+          completedCount={readinessMeta.completedCount}
+          totalChecks={readinessMeta.totalChecks}
+          checks={readinessChecks}
           onGoToSetup={() => setActiveTab('setup')}
           onConnect={!isReady ? handleConnect : undefined}
           connecting={connecting}
@@ -859,7 +886,7 @@ export default function SettingsPage() {
                   />
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-3">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                   <AppInput
                     id="daily-send-limit"
                     label="Daily send limit"
@@ -870,6 +897,19 @@ export default function SettingsPage() {
                       setCampaignSettings((prev) => ({
                         ...prev,
                         dailySendLimit: parseInt(e.target.value, 10) || 1,
+                      }))
+                    }
+                  />
+                  <AppInput
+                    id="daily-budget"
+                    label="Daily Meta budget (₹)"
+                    type="number"
+                    min={0}
+                    value={String(campaignSettings.dailyBudgetInr ?? 5000)}
+                    onChange={(e) =>
+                      setCampaignSettings((prev) => ({
+                        ...prev,
+                        dailyBudgetInr: parseFloat(e.target.value) || 0,
                       }))
                     }
                   />
@@ -987,6 +1027,21 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={Boolean(disconnectTarget)}
+        onClose={() => setDisconnectTarget(null)}
+        onConfirm={confirmDisconnect}
+        title="Disconnect WhatsApp number?"
+        description={
+          disconnectTarget
+            ? `Disconnect +${disconnectTarget.phone}? New messages will stop until you connect again. Existing chats remain saved.`
+            : undefined
+        }
+        confirmLabel="Disconnect"
+        variant="danger"
+        loading={Boolean(disconnectingId)}
+      />
     </PageShell>
   );
 }

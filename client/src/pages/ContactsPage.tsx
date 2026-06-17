@@ -6,6 +6,7 @@ import ContactDetailPanel from '../components/contacts/ContactDetailPanel';
 import ContactFiltersBar, { type ContactQuickFilter } from '../components/contacts/ContactFiltersBar';
 import ContactInsightCards from '../components/contacts/ContactInsightCards';
 import ContactTable from '../components/contacts/ContactTable';
+import ContactCard from '../components/contacts/ContactCard';
 import ContactTagManager from '../components/contacts/ContactTagManager';
 import ImportContactsModal from '../components/contacts/ImportContactsModal';
 import AppButton from '../components/ui/AppButton';
@@ -16,6 +17,8 @@ import LoadingState from '../components/ui/LoadingState';
 import PageHeader from '../components/ui/PageHeader';
 import PageHero from '../components/ui/PageHero';
 import PageShell from '../components/ui/PageShell';
+import ResponsiveDataView from '../components/ui/ResponsiveDataView';
+import Pagination from '../components/ui/Pagination';
 import SlideOver, { SlideOverFooter } from '../components/ui/SlideOver';
 import { DEFAULT_PAGE_SIZE } from '../constants/pagination';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
@@ -437,22 +440,49 @@ export default function ContactsPage() {
             }
           />
         ) : (
-          <ContactTable
-            contacts={contacts}
-            page={page}
-            pageSize={DEFAULT_PAGE_SIZE}
-            total={total}
-            selectedIds={selectedIds}
-            allSelected={allSelected}
-            partialSelected={partialSelected}
-            onPageChange={setPage}
-            onToggleSelect={toggleSelect}
-            onToggleSelectAll={toggleSelectAll}
-            onView={openDetail}
-            onEdit={openEdit}
-            onDelete={handleDeleteContact}
-            onMessage={openMessage}
-          />
+          <>
+            <ResponsiveDataView
+              items={contacts}
+              renderCard={(contact) => (
+                <ContactCard
+                  key={contact.id}
+                  contact={contact}
+                  selected={selectedIds.includes(contact.id)}
+                  onToggleSelect={() => toggleSelect(contact.id)}
+                  onView={() => openDetail(contact)}
+                  onEdit={() => openEdit(contact)}
+                  onDelete={() => handleDeleteContact(contact)}
+                  onMessage={() => openMessage(contact)}
+                />
+              )}
+              renderTable={() => (
+                <ContactTable
+                  contacts={contacts}
+                  page={page}
+                  pageSize={DEFAULT_PAGE_SIZE}
+                  total={total}
+                  selectedIds={selectedIds}
+                  allSelected={allSelected}
+                  partialSelected={partialSelected}
+                  onPageChange={setPage}
+                  onToggleSelect={toggleSelect}
+                  onToggleSelectAll={toggleSelectAll}
+                  onView={openDetail}
+                  onEdit={openEdit}
+                  onDelete={handleDeleteContact}
+                  onMessage={openMessage}
+                />
+              )}
+            />
+            <div className="lg:hidden">
+              <Pagination
+                page={page}
+                pageSize={DEFAULT_PAGE_SIZE}
+                total={total}
+                onPageChange={setPage}
+              />
+            </div>
+          </>
         )}
       </div>
 

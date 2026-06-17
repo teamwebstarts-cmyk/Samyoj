@@ -351,7 +351,7 @@ export default function TeamMembersTab({
             {!editing && (
               <div className="rounded-2xl border border-emerald-200/70 bg-gradient-to-r from-emerald-500/10 to-whatsapp-500/5 p-4 dark:border-emerald-800/40">
                 <div className="flex items-start gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-whatsapp-500 to-emerald-600 text-white shadow-[0_4px_14px_rgba(37,211,102,0.3)]">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-whatsapp-600 to-emerald-700 text-white shadow-[0_4px_14px_rgba(37,211,102,0.3)]">
                     <UserCheck className="h-4 w-4" strokeWidth={2.25} />
                   </div>
                   <div>

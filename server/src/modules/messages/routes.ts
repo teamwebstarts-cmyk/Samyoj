@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { authenticate, requireOrg } from '../../middleware/auth';
+import { authenticateJwtOrApiKey } from '../../middleware/authenticate-jwt-or-api-key';
 import { sendSuccess, asyncHandler } from '../../utils/response';
 import { phoneFieldSchema } from '../../utils/phone';
 import { sendDirectMessage } from './service';
@@ -18,7 +19,7 @@ const sendSchema = z.object({
 
 router.post(
   '/send',
-  authenticate,
+  authenticateJwtOrApiKey,
   requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
     const data = sendSchema.parse(req.body);

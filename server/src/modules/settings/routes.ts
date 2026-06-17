@@ -12,11 +12,13 @@ import {
 } from '../ai/org-ai.service';
 import { DEFAULT_CAMPAIGN_SETTINGS, type CampaignSettings } from '../campaigns/types';
 import { getOrgCallingSettings } from '../calling/settings.service';
+import { getOrgFeatureFlags, setFeatureFlag } from './feature-flags';
 
 const router = Router();
 
 const campaignSettingsSchema = z.object({
   dailySendLimit: z.number().int().min(1).max(100000).optional(),
+  dailyBudgetInr: z.number().min(0).max(1000000).optional(),
   batchSize: z.number().int().min(1).max(500).optional(),
   batchDelayMs: z.number().int().min(0).max(60000).optional(),
 });
@@ -159,6 +161,56 @@ router.patch(
     const settings = (updated.settings as Record<string, unknown>) || {};
     sendSuccess(res, {
       campaigns: { ...DEFAULT_CAMPAIGN_SETTINGS, ...(settings.campaigns as CampaignSettings) },
+    });
+  })
+);
+
+router.get(
+  '/feature-flags',
+  authenticate,
+  requireOrg,
+  asyncHandler(async (req: Request, res: Response) => {
+    const flags = await getOrgFeatureFlags(req.user!.organizationId!);
+    sendSuccess(res, { flags });
+  })
+);
+
+router.patch(
+  '/feature-flags/:flag',
+  ...adminGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const { enabled, metadata } = z
+      .object({
+        enabled: z.boolean(),
+        metadata: z.record(z.unknown()).optional(),
+      })
+      .parse(req.body);
+
+    const flag = await setFeatureFlag(
+      req.user!.organizationId!,
+      req.params.flag as string,
+      enabled,
+      metadata
+    );
+    sendSuccess(res, { flag: flag.flag, enabled: flag.enabled, metadata: flag.metadata });
+  })
+);
+
+router.get(
+  '/alerts',
+  authenticate,
+  requireOrg,
+  asyncHandler(async (req: Request, res: Response) => {
+    const org = await prisma.organization.findUnique({
+      where: { id: req.user!.organizationId! },
+      select: { settings: true },
+    });
+    const settings = (org?.settings as Record<string, unknown>) || {};
+    const alerts = (settings.alerts as Record<string, unknown[]>) || {};
+    sendSuccess(res, {
+      templateRejections: alerts.templateRejections || [],
+      qualityRating: alerts.qualityRating || [],
+      accountAlerts: alerts.accountAlerts || [],
     });
   })
 );

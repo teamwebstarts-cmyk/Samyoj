@@ -164,7 +164,7 @@ export async function sendDirectMessage(organizationId: string, input: SendDirec
       type: type === 'TEMPLATE' ? 'TEMPLATE' : 'TEXT',
       content: messageContent,
       status: 'PENDING',
-      metadata: messageMetadata,
+      metadata: messageMetadata as import('@prisma/client').Prisma.InputJsonValue,
     },
   });
 

@@ -157,7 +157,7 @@ export default function CallDetailView({
                         isCustomer
                           ? 'rounded-tl-md bg-white/95 ring-1 ring-black/[0.04]'
                           : isAssistant
-                            ? 'rounded-tr-md bg-gradient-to-br from-whatsapp-500 to-whatsapp-600 text-white shadow-[0_2px_12px_rgba(37,211,102,0.25)]'
+                            ? 'rounded-tr-md bg-gradient-to-br from-whatsapp-600 to-whatsapp-700 text-white shadow-[0_2px_12px_rgba(37,211,102,0.25)]'
                             : isSystem
                               ? 'rounded-tr-md bg-violet-500/90 text-white shadow-[0_2px_12px_rgba(139,92,246,0.2)]'
                               : 'rounded-tr-md bg-neutral-500/90 text-white'

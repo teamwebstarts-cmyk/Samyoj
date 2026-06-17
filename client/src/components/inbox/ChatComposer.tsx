@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { FileText, Image, LayoutTemplate, Lock, Paperclip, Send, X, Zap } from 'lucide-react';
+import { FileText, Image, IndianRupee, LayoutTemplate, Lock, Paperclip, Send, X, Zap } from 'lucide-react';
 import type { CannedReply } from '../../types';
 
 export interface PendingAttachment {
@@ -20,6 +20,7 @@ interface ChatComposerProps {
   disabledReason?: string;
   onTemplateClick?: () => void;
   cannedReplies?: CannedReply[];
+  onPaymentLink?: () => void;
 }
 
 function formatFileSize(bytes: number) {
@@ -40,6 +41,7 @@ export default function ChatComposer({
   disabledReason = 'Messaging unavailable',
   onTemplateClick,
   cannedReplies = [],
+  onPaymentLink,
 }: ChatComposerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [attachMenuOpen, setAttachMenuOpen] = useState(false);
@@ -160,6 +162,19 @@ export default function ChatComposer({
                   <FileText size={16} className="text-[#008069]" />
                   Document
                 </button>
+                {onPaymentLink && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAttachMenuOpen(false);
+                      onPaymentLink();
+                    }}
+                    className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-[13px] text-theme-secondary transition hover:bg-theme-subtle"
+                  >
+                    <IndianRupee size={16} className="text-[#008069]" />
+                    Payment link
+                  </button>
+                )}
               </div>
             </>
           )}
@@ -211,7 +226,7 @@ export default function ChatComposer({
           <button
             type="submit"
             disabled={isDisabled || !canSend}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-whatsapp-500 to-whatsapp-600 text-white shadow-[0_4px_14px_rgba(37,211,102,0.35)] transition hover:from-whatsapp-600 hover:to-whatsapp-700 disabled:cursor-not-allowed disabled:from-neutral-300 disabled:to-neutral-400 disabled:shadow-none"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl btn-primary shadow-[0_4px_14px_rgba(37,211,102,0.35)] transition disabled:cursor-not-allowed disabled:from-neutral-300 disabled:to-neutral-400 disabled:shadow-none disabled:opacity-50"
             aria-label="Send message"
           >
             {sending ? (

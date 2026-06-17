@@ -187,7 +187,7 @@ export default function FlowsTab({
                       onClick={() => setStatusFilter(option.value)}
                       className={`shrink-0 rounded-full px-3.5 py-2 text-[12px] font-bold transition active:scale-[0.98] ${
                         isActive
-                          ? 'bg-gradient-to-r from-violet-500 to-indigo-600 text-white shadow-[0_4px_12px_rgba(99,102,241,0.3)]'
+                          ? 'bg-gradient-to-r from-violet-600 to-indigo-700 text-white shadow-[0_4px_12px_rgba(99,102,241,0.3)]'
                           : 'border border-neutral-200/80 bg-white text-neutral-600 hover:border-violet-200 hover:text-violet-700'
                       }`}
                     >
@@ -325,7 +325,7 @@ export default function FlowsTab({
                           onClick={() => navigate(`/automations/flows/${flow.id}`)}
                           className="flex w-full items-center gap-3 rounded-xl text-left transition hover:bg-white/60"
                         >
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-[0_4px_14px_rgba(99,102,241,0.3)]">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-indigo-700 text-white shadow-[0_4px_14px_rgba(99,102,241,0.3)]">
                             <GitBranch className="h-4 w-4" strokeWidth={2.25} />
                           </div>
                           <div className="min-w-0">

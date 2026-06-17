@@ -12,6 +12,7 @@ export type ErrorSource =
   | 'startup'
   | 'database'
   | 'external'
+  | 'media'
   | 'process';
 
 export interface ErrorContext {
@@ -172,6 +173,12 @@ export function logError(err: unknown, context?: ErrorContext): NormalizedError 
     },
     stack: normalized.stack,
   });
+
+  if (!normalized.isOperational || normalized.statusCode >= 500) {
+    import('../config/sentry').then(({ captureException }) => {
+      captureException(err, context);
+    }).catch(() => {});
+  }
 
   return normalized;
 }

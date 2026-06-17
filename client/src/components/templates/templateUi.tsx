@@ -25,7 +25,7 @@ export const categoryMeta: Record<
     icon: KeyRound,
     badge:
       'bg-violet-50 text-violet-800 ring-violet-200/70 dark:bg-violet-950/40 dark:text-violet-300 dark:ring-violet-800/50',
-    iconBg: 'bg-gradient-to-br from-violet-500 to-indigo-600',
+    iconBg: 'bg-gradient-to-br from-violet-600 to-indigo-700',
   },
 };
 

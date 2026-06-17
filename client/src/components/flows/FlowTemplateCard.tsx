@@ -7,7 +7,7 @@ const templateAccents: Record<
   { gradient: string; selectedRing: string; selectedBg: string; iconShadow: string }
 > = {
   violet: {
-    gradient: 'from-violet-500 to-indigo-600',
+    gradient: 'from-violet-600 to-indigo-700',
     selectedRing: 'ring-violet-500/40',
     selectedBg: 'bg-violet-50/80',
     iconShadow: 'shadow-[0_4px_14px_rgba(99,102,241,0.28)]',

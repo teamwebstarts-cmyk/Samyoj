@@ -99,7 +99,7 @@ export default function WhatsappCallbackPage() {
 
         {status === 'select' && (
           <>
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-whatsapp-500 to-whatsapp-600 text-white shadow-[0_4px_14px_rgba(37,211,102,0.35)]">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-whatsapp-600 to-whatsapp-700 text-white shadow-[0_4px_14px_rgba(37,211,102,0.35)]">
               <Smartphone className="h-7 w-7" strokeWidth={2.25} />
             </div>
             <h1 className="mt-4 text-xl font-extrabold text-neutral-900">Select a number</h1>

@@ -51,7 +51,7 @@ export default function CampaignCard({
         className="flex w-full flex-col p-4 text-left active:bg-neutral-50/50 sm:p-5"
       >
         <div className="flex items-start gap-3 sm:gap-4">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-[0_4px_14px_rgba(139,92,246,0.35)] sm:h-12 sm:w-12">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 to-purple-700 text-white shadow-[0_4px_14px_rgba(139,92,246,0.35)] sm:h-12 sm:w-12">
             <Send className="h-5 w-5" strokeWidth={2.25} />
           </div>
 

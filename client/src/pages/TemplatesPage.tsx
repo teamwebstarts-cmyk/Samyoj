@@ -12,12 +12,15 @@ import AppAlert from '../components/ui/AppAlert';
 import AppButton from '../components/ui/AppButton';
 import AppSelect from '../components/ui/AppSelect';
 import TemplateTable, { type TemplateTableRow } from '../components/templates/TemplateTable';
+import TemplateCard from '../components/templates/TemplateCard';
 import EmptyState from '../components/ui/EmptyState';
 import ListToolbar from '../components/ui/ListToolbar';
 import LoadingState from '../components/ui/LoadingState';
 import PageHeader from '../components/ui/PageHeader';
 import PageHero from '../components/ui/PageHero';
 import PageShell from '../components/ui/PageShell';
+import ResponsiveDataView from '../components/ui/ResponsiveDataView';
+import Pagination from '../components/ui/Pagination';
 import SlideOver, { SlideOverFooter } from '../components/ui/SlideOver';
 import TemplateCreateForm from '../components/templates/TemplateCreateForm';
 import TemplateDetailPanel from '../components/templates/TemplateDetailPanel';
@@ -274,6 +277,11 @@ export default function TemplatesPage() {
     return tableRows.slice(start, start + DEFAULT_PAGE_SIZE);
   }, [tableRows, page]);
 
+  const paginatedTemplates = useMemo(() => {
+    const start = (page - 1) * DEFAULT_PAGE_SIZE;
+    return filteredTemplates.slice(start, start + DEFAULT_PAGE_SIZE);
+  }, [filteredTemplates, page]);
+
   const toggleGroup = (name: string) => {
     setExpandedGroups((prev) => {
       const next = new Set(prev);
@@ -418,17 +426,39 @@ export default function TemplatesPage() {
             }
           />
         ) : (
-          <TemplateTable
-            rows={paginatedRows}
-            page={page}
-            pageSize={DEFAULT_PAGE_SIZE}
-            total={tableRows.length}
-            expandedGroups={expandedGroups}
-            onToggleGroup={toggleGroup}
-            onPageChange={setPage}
-            onView={openView}
-            onDuplicate={openDuplicate}
-          />
+          <>
+            <ResponsiveDataView
+              items={paginatedTemplates}
+              renderCard={(template) => (
+                <TemplateCard
+                  key={template.id}
+                  template={template}
+                  onView={() => openView(template)}
+                />
+              )}
+              renderTable={() => (
+                <TemplateTable
+                  rows={paginatedRows}
+                  page={page}
+                  pageSize={DEFAULT_PAGE_SIZE}
+                  total={tableRows.length}
+                  expandedGroups={expandedGroups}
+                  onToggleGroup={toggleGroup}
+                  onPageChange={setPage}
+                  onView={openView}
+                  onDuplicate={openDuplicate}
+                />
+              )}
+            />
+            <div className="lg:hidden">
+              <Pagination
+                page={page}
+                pageSize={DEFAULT_PAGE_SIZE}
+                total={filteredTemplates.length}
+                onPageChange={setPage}
+              />
+            </div>
+          </>
         )}
       </div>
 

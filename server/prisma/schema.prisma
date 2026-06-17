@@ -138,6 +138,12 @@ enum FlowStatus {
   PUBLISHED
 }
 
+enum FlowAssetStatus {
+  DRAFT
+  PUBLISHED
+  DEPRECATED
+}
+
 enum CampaignStatus {
   DRAFT
   SCHEDULED
@@ -166,6 +172,9 @@ model User {
   sentInvites           TeamInvite[]       @relation("SentInvites")
   auditActions          TeamAuditLog[]     @relation("AuditActor")
   auditTargets          TeamAuditLog[]     @relation("AuditTarget")
+  oauthAccounts         OAuthAccount[]
+  assignedLeads         Lead[]             @relation("AssignedLeads")
+  assignedTickets       Ticket[]           @relation("AssignedTickets")
 
   @@map("users")
 }
@@ -211,6 +220,7 @@ model Organization {
   companyName String   @map("company_name")
   plan        String   @default("starter")
   settings    Json?
+  retentionDaysMessages Int @default(365) @map("retention_days_messages")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
@@ -220,6 +230,7 @@ model Organization {
   conversations  Conversation[]
   automations    Automation[]
   flows          Flow[]
+  flowAssets     FlowAsset[]
   campaigns      Campaign[]
   labels         Label[]
   aiBots         AiBot[]
@@ -232,6 +243,17 @@ model Organization {
   paymentOrders     PaymentOrder[]
   apiKeys           ApiKey[]
   webhookEndpoints  WebhookEndpoint[]
+  catalogProducts   CatalogProduct[]
+  orders            Order[]
+  brandKit          BrandKit?
+  contentDrafts     ContentDraft[]
+  generationJobs    GenerationJob[]
+  mediaAssets       MediaAsset[]
+  generationCredits GenerationCreditLedger[]
+  approvalLogs      ApprovalLog[]
+  featureFlags      OrgFeatureFlag[]
+  leads             Lead[]
+  tickets           Ticket[]
 
   planExpiresAt      DateTime? @map("plan_expires_at")
   subscriptionStatus String    @default("active") @map("subscription_status")
@@ -280,6 +302,13 @@ model ApiKey {
   @@map("api_keys")
 }
 
+enum WebhookDeliveryStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  DISABLED
+}
+
 model WebhookEndpoint {
   id             String   @id @default(uuid())
   organizationId String   @map("organization_id")
@@ -287,13 +316,54 @@ model WebhookEndpoint {
   secret         String
   events         String[] @default([])
   enabled        Boolean  @default(true)
+  failureCount   Int      @default(0) @map("failure_count")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  deliveries   WebhookDelivery[]
 
   @@index([organizationId])
   @@map("webhook_endpoints")
+}
+
+model WebhookDelivery {
+  id             String                @id @default(uuid())
+  endpointId     String                @map("endpoint_id")
+  organizationId String                @map("organization_id")
+  event          String
+  status         WebhookDeliveryStatus @default(PENDING)
+  attempts       Int                   @default(0)
+  lastStatusCode Int?                  @map("last_status_code")
+  lastError      String?               @map("last_error")
+  requestBody    Json                  @map("request_body")
+  createdAt      DateTime              @default(now()) @map("created_at")
+  deliveredAt    DateTime?             @map("delivered_at")
+
+  endpoint WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@index([endpointId, status])
+  @@map("webhook_deliveries")
+}
+
+model ConversationCharge {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  wabaId         String   @map("waba_id")
+  phoneNumberId  String?  @map("phone_number_id")
+  category       String
+  country        String   @default("IN")
+  conversationCount Int   @default(0) @map("conversation_count")
+  costUsd        Float    @default(0) @map("cost_usd")
+  costInr        Float    @default(0) @map("cost_inr")
+  periodStart    DateTime @map("period_start")
+  periodEnd      DateTime @map("period_end")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, wabaId, category, periodStart])
+  @@index([organizationId, periodStart])
+  @@map("conversation_charges")
 }
 
 model CannedReply {
@@ -401,6 +471,7 @@ model WhatsappNumber {
   businessId    String?  @map("business_id")
   accessToken   String   @map("access_token")
   webhookSecret String?  @map("webhook_secret")
+  qualityRating String?  @map("quality_rating")
   isActive      Boolean  @default(true) @map("is_active")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
@@ -422,6 +493,8 @@ model Contact {
   tags           String[]      @default([])
   notes          String?
   optedIn        Boolean       @default(false) @map("opted_in")
+  consentSource  String?       @map("consent_source")
+  consentAt      DateTime?     @map("consent_at")
   source         ContactSource @default(MANUAL)
   createdAt      DateTime      @default(now()) @map("created_at")
   updatedAt      DateTime      @updatedAt @map("updated_at")
@@ -429,6 +502,9 @@ model Contact {
   organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   conversations Conversation[]
   calls         Call[]
+  orders        Order[]
+  leads         Lead[]
+  tickets       Ticket[]
 
   @@unique([organizationId, phone])
   @@map("contacts")
@@ -447,10 +523,12 @@ model Conversation {
   botHandoffReason String?           @map("bot_handoff_reason")
   botState        Json?              @map("bot_state")
   lastMessageAt   DateTime?          @map("last_message_at")
+  cs24hWindowOpensAt DateTime?       @map("cs24h_window_opens_at")
   unreadCount     Int                @default(0) @map("unread_count")
   firstResponseAt DateTime?          @map("first_response_at")
   slaDueAt        DateTime?          @map("sla_due_at")
   slaBreached     Boolean            @default(false) @map("sla_breached")
+  snoozedUntil    DateTime?          @map("snoozed_until")
   createdAt       DateTime           @default(now()) @map("created_at")
   updatedAt       DateTime           @updatedAt @map("updated_at")
 
@@ -463,9 +541,95 @@ model Conversation {
   internalNotes  InternalNote[]
   labels         ConversationLabel[]
   calls          Call[]
+  orders         Order[]
+  tickets        Ticket[]
 
   @@index([organizationId, lastMessageAt])
+  @@index([organizationId, snoozedUntil])
   @@map("conversations")
+}
+
+enum LeadStage {
+  NEW
+  CONTACTED
+  QUALIFIED
+  PROPOSAL
+  NEGOTIATION
+  WON
+  LOST
+}
+
+model Lead {
+  id              String    @id @default(uuid())
+  organizationId  String    @map("organization_id")
+  contactId       String?   @map("contact_id")
+  title           String
+  stage           LeadStage @default(NEW)
+  source          String?
+  assignedAgentId String?   @map("assigned_agent_id")
+  notes           String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contact       Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  assignedAgent User?        @relation("AssignedLeads", fields: [assignedAgentId], references: [id])
+
+  @@index([organizationId, stage])
+  @@map("leads")
+}
+
+enum TicketStatus {
+  OPEN
+  PENDING
+  WAITING
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model Ticket {
+  id              String         @id @default(uuid())
+  organizationId  String         @map("organization_id")
+  conversationId  String?        @map("conversation_id")
+  contactId       String?        @map("contact_id")
+  title           String
+  status          TicketStatus   @default(OPEN)
+  priority        TicketPriority @default(MEDIUM)
+  category        String?
+  slaDueAt        DateTime?      @map("sla_due_at")
+  assignedAgentId String?        @map("assigned_agent_id")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  conversation  Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  contact       Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  assignedAgent User?         @relation("AssignedTickets", fields: [assignedAgentId], references: [id])
+
+  @@index([organizationId, status])
+  @@map("tickets")
+}
+
+model OAuthAccount {
+  id                String   @id @default(uuid())
+  userId            String   @map("user_id")
+  provider          String
+  providerAccountId String   @map("provider_account_id")
+  email             String?
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("oauth_accounts")
 }
 
 model Call {
@@ -612,6 +776,27 @@ model FlowVersion {
 
   @@unique([flowId, version])
   @@map("flow_versions")
+}
+
+model FlowAsset {
+  id               String          @id @default(uuid())
+  organizationId   String          @map("organization_id")
+  name             String
+  description      String?
+  flowJson         Json            @map("flow_json")
+  metaFlowId       String?         @map("meta_flow_id")
+  metaStatus       String?         @map("meta_status")
+  version          Int             @default(1)
+  status           FlowAssetStatus @default(DRAFT)
+  categories       String[]        @default([])
+  validationErrors String[]        @default([]) @map("validation_errors")
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+  @@map("flow_assets")
 }
 
 model AiBot {
@@ -792,4 +977,334 @@ model AuditLog {
 
   @@index([organizationId, createdAt])
   @@map("audit_logs")
+}
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  PARTIALLY_SHIPPED
+  SHIPPED
+  COMPLETED
+  CANCELED
+}
+
+enum OrderPaymentStatus {
+  PENDING
+  CAPTURED
+  FAILED
+}
+
+model CatalogProduct {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  metaCatalogId  String   @map("meta_catalog_id")
+  metaProductId  String?  @map("meta_product_id")
+  retailerId     String   @map("retailer_id")
+  name           String
+  description    String?
+  priceCents     Int?     @map("price_cents")
+  currency       String   @default("INR")
+  imageUrl       String?  @map("image_url")
+  availability   String   @default("in stock")
+  syncedAt       DateTime @default(now()) @map("synced_at")
+  metadata       Json?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, metaCatalogId, retailerId])
+  @@index([organizationId, metaCatalogId])
+  @@map("catalog_products")
+}
+
+model Order {
+  id             String             @id @default(uuid())
+  organizationId String             @map("organization_id")
+  contactId      String?            @map("contact_id")
+  conversationId String?            @map("conversation_id")
+  referenceId    String             @map("reference_id")
+  catalogId      String?            @map("catalog_id")
+  status         OrderStatus        @default(PENDING)
+  paymentStatus  OrderPaymentStatus @default(PENDING) @map("payment_status")
+  items          Json
+  subtotalCents  Int                @default(0) @map("subtotal_cents")
+  taxCents       Int                @default(0) @map("tax_cents")
+  shippingCents  Int                @default(0) @map("shipping_cents")
+  totalCents     Int                @default(0) @map("total_cents")
+  currency       String             @default("INR")
+  statusNote     String?            @map("status_note")
+  metadata       Json?
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contact      Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, referenceId])
+  @@index([organizationId, status])
+  @@map("orders")
+}
+
+enum MediaAssetKind {
+  IMAGE
+  VIDEO
+  AUDIO
+  DOCUMENT
+  LOGO
+}
+
+enum MediaAssetStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  PUBLISHED
+  ARCHIVED
+}
+
+enum GenerationJobKind {
+  TEXT
+  IMAGE
+  VIDEO
+  VOICE
+  STT
+  TRANSLATION
+  CATALOG_DESCRIPTION
+  FAQ_GENERATION
+  POLICY_TEMPLATE
+}
+
+enum GenerationJobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  BLOCKED_BY_POLICY
+  BUDGET_EXCEEDED
+}
+
+enum ContentDraftKind {
+  TEMPLATE_BODY
+  TEMPLATE_HEADER
+  TEMPLATE_FOOTER
+  BUTTON_LABEL
+  LIST_SECTION
+  LIST_ROW
+  FLOW_COPY
+  CAMPAIGN_COPY
+  AGENT_REPLY
+  FAQ
+  AB_VARIANT
+  EMAIL_SUBJECT
+  PUSH_NOTIFICATION
+  PRODUCT_DESCRIPTION
+  AD_COPY
+}
+
+enum ContentDraftStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  PUBLISHED
+  REJECTED
+  BLOCKED
+  ARCHIVED
+}
+
+enum GenerationCreditKind {
+  TEXT_TOKENS
+  IMAGES
+  VIDEO_SECONDS
+  VOICE_MINUTES
+  STT_MINUTES
+}
+
+model BrandKit {
+  id               String   @id @default(uuid())
+  organizationId   String   @unique @map("organization_id")
+  companyName      String   @map("company_name")
+  logoPrimaryAssetId String? @map("logo_primary_asset_id")
+  logoMonoAssetId  String?  @map("logo_mono_asset_id")
+  colorPrimary     String?  @map("color_primary")
+  colorSecondary   String?  @map("color_secondary")
+  colorAccent      String?  @map("color_accent")
+  fontHeading      String?  @map("font_heading")
+  fontBody         String?  @map("font_body")
+  toneFormal       Int      @default(60) @map("tone_formal")
+  toneBrief        Int      @default(40) @map("tone_brief")
+  toneFriendly     Int      @default(70) @map("tone_friendly")
+  tonePlayful      Int      @default(30) @map("tone_playful")
+  bannedWords      String[] @default([]) @map("banned_words")
+  mandatoryPhrases String[] @default([]) @map("mandatory_phrases")
+  sampleLike       String[] @default([]) @map("sample_like")
+  sampleDislike    String[] @default([]) @map("sample_dislike")
+  audience         String?
+  valueProps       String[] @default([]) @map("value_props")
+  defaultLocale    String   @default("en-IN") @map("default_locale")
+  locales          String[] @default(["en-IN"]) @map("locales")
+  schemaVersion    Int      @default(1) @map("schema_version")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("brand_kits")
+}
+
+model MediaAsset {
+  id             String           @id @default(uuid())
+  organizationId String           @map("organization_id")
+  kind           MediaAssetKind
+  status         MediaAssetStatus @default(DRAFT)
+  provider       String?
+  modelUsed      String?          @map("model_used")
+  prompt         String?
+  negativePrompt String?          @map("negative_prompt")
+  params         Json?
+  storageDriver  String           @map("storage_driver")
+  storagePath    String           @map("storage_path")
+  publicUrl      String?          @map("public_url")
+  cdnUrl         String?          @map("cdn_url")
+  mimeType       String           @map("mime_type")
+  sizeBytes      Int              @map("size_bytes")
+  durationMs     Int?             @map("duration_ms")
+  widthPx        Int?             @map("width_px")
+  heightPx       Int?             @map("height_px")
+  locale         String?
+  brandKitId     String?          @map("brand_kit_id")
+  costCents      Int              @default(0) @map("cost_cents")
+  meta           Json?
+  tags           String[]         @default([])
+  folder         String?
+  createdById    String?          @map("created_by_id")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  jobs         GenerationJob[]
+  attachments  ContentDraftAttachment[]
+
+  @@index([organizationId, kind, status])
+  @@index([organizationId, createdAt])
+  @@map("media_assets")
+}
+
+model GenerationJob {
+  id             String              @id @default(uuid())
+  organizationId String              @map("organization_id")
+  kind           GenerationJobKind
+  status         GenerationJobStatus @default(QUEUED)
+  provider       String?
+  modelUsed      String?             @map("model_used")
+  prompt         String?
+  params         Json?
+  resultAssetId  String?             @map("result_asset_id")
+  costCents      Int                 @default(0) @map("cost_cents")
+  errorMessage   String?             @map("error_message")
+  attempts       Int                 @default(0)
+  durationMs     Int?                @map("duration_ms")
+  triggeredBy    String?             @map("triggered_by")
+  meta           Json?
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  resultAsset  MediaAsset?  @relation(fields: [resultAssetId], references: [id])
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, kind, status])
+  @@map("generation_jobs")
+}
+
+model ContentDraft {
+  id                  String             @id @default(uuid())
+  organizationId      String             @map("organization_id")
+  kind                ContentDraftKind
+  status              ContentDraftStatus @default(DRAFT)
+  body                String
+  locale              String             @default("en-IN")
+  templateCategory    String?            @map("template_category")
+  metaTemplateName    String?            @map("meta_template_name")
+  metaTemplateStatus  String?            @map("meta_template_status")
+  metaRejectionReason String?            @map("meta_rejection_reason")
+  brandKitId          String?            @map("brand_kit_id")
+  parentDraftId       String?            @map("parent_draft_id")
+  version             Int                @default(1)
+  approvedById        String?            @map("approved_by_id")
+  approvedAt          DateTime?          @map("approved_at")
+  createdById         String?            @map("created_by_id")
+  createdAt           DateTime           @default(now()) @map("created_at")
+  updatedAt           DateTime           @updatedAt @map("updated_at")
+
+  organization Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  attachments  ContentDraftAttachment[]
+
+  @@index([organizationId, status, kind])
+  @@index([organizationId, createdAt])
+  @@map("content_drafts")
+}
+
+model ContentDraftAttachment {
+  draftId String @map("draft_id")
+  assetId String @map("asset_id")
+  role    String
+
+  draft ContentDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  asset MediaAsset   @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@id([draftId, assetId])
+  @@map("content_draft_attachments")
+}
+
+model GenerationCreditLedger {
+  id             String               @id @default(uuid())
+  organizationId String               @map("organization_id")
+  periodStart    DateTime             @map("period_start")
+  periodEnd      DateTime             @map("period_end")
+  kind           GenerationCreditKind
+  usedUnits      BigInt               @default(0) @map("used_units")
+  softLimitUnits BigInt               @default(0) @map("soft_limit_units")
+  hardLimitUnits BigInt               @default(0) @map("hard_limit_units")
+  updatedAt      DateTime             @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, periodStart, kind])
+  @@index([organizationId, kind])
+  @@map("generation_credit_ledger")
+}
+
+model ApprovalLog {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  resourceKind   String   @map("resource_kind")
+  resourceId     String   @map("resource_id")
+  action         String
+  actorId        String?  @map("actor_id")
+  comment        String?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, resourceKind, resourceId])
+  @@index([organizationId, createdAt])
+  @@map("approval_logs")
+}
+
+model OrgFeatureFlag {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  flag           String
+  enabled        Boolean  @default(false)
+  metadata       Json?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, flag])
+  @@index([organizationId])
+  @@map("org_feature_flags")
 }

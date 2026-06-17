@@ -1,0 +1,54 @@
+# Privacy Policy
+
+**Last updated:** June 2026
+
+## 1. Information We Collect
+
+- **Account data**: name, email, company name, password (hashed)
+- **WhatsApp data**: phone numbers, message content, contact information
+- **Usage data**: feature usage, API calls, billing transactions
+- **Technical data**: IP address, browser type, session logs
+
+## 2. How We Use Information
+
+- Provide and improve the Service
+- Process WhatsApp messages on your behalf
+- Send service-related notifications
+- Comply with legal obligations
+
+## 3. Data Storage
+
+- Data is stored in PostgreSQL databases
+- Media files stored in S3 (when configured) or local storage
+- Access tokens are encrypted at rest using AES-256
+
+## 4. Data Sharing
+
+We do not sell your data. We share data only with:
+- Meta (WhatsApp Cloud API) — to deliver messages
+- Payment processors (Razorpay) — for billing
+- Error tracking (Sentry) — with PII redaction
+
+## 5. Your Rights (GDPR / DPDP)
+
+- **Access**: Export your data via Settings → Compliance
+- **Deletion**: Request data purge via Settings → Compliance → Delete Request
+- **Rectification**: Update your account and contact information
+- **Portability**: JSON export available on request
+
+## 6. Data Retention
+
+- Active account data: retained while account is active
+- Deleted account data: purged within 30 days of deletion request
+- Audit logs: retained for 90 days
+
+## 7. Security
+
+- TLS encryption in transit
+- JWT authentication with refresh tokens
+- Optional two-factor authentication
+- Rate limiting and webhook signature verification
+
+## 8. Contact
+
+Data protection inquiries: privacy@palermo.app

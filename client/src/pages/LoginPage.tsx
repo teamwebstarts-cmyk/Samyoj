@@ -1,10 +1,11 @@
 import { ArrowRight, Lock, Mail, ShieldCheck } from 'lucide-react';
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import AuthButton from '../components/auth/AuthButton';
 import AuthInput from '../components/auth/AuthInput';
 import AuthLayout from '../components/auth/AuthLayout';
 import { useAuth } from '../contexts/AuthContext';
+import { authApi } from '../services/api';
 import { getErrorMessage } from '../utils/errors';
 import { toastError } from '../utils/toast';
 
@@ -22,6 +23,28 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    const oauth = searchParams.get('oauth');
+    const accessToken = searchParams.get('accessToken');
+    const refreshToken = searchParams.get('refreshToken');
+    if (oauth && accessToken && refreshToken) {
+      localStorage.setItem('accessToken', accessToken);
+      localStorage.setItem('refreshToken', refreshToken);
+      navigate('/', { replace: true });
+    }
+  }, [searchParams, navigate]);
+
+  const handleOAuth = async (provider: 'google' | 'microsoft') => {
+    try {
+      const res =
+        provider === 'google' ? await authApi.googleUrl() : await authApi.microsoftUrl();
+      window.location.href = res.data.data.url;
+    } catch {
+      toastError(`${provider === 'google' ? 'Google' : 'Microsoft'} login is not configured`);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -133,6 +156,23 @@ export default function LoginPage() {
 
       {!requires2FA && (
         <>
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => handleOAuth('google')}
+              className="rounded-xl border border-theme-border px-3 py-2.5 text-[12px] font-semibold text-theme-fg hover:bg-theme-subtle"
+            >
+              Continue with Google
+            </button>
+            <button
+              type="button"
+              onClick={() => handleOAuth('microsoft')}
+              className="rounded-xl border border-theme-border px-3 py-2.5 text-[12px] font-semibold text-theme-fg hover:bg-theme-subtle"
+            >
+              Continue with Microsoft
+            </button>
+          </div>
+
           <div className="mt-6 flex items-center justify-center gap-4 border-t border-theme-border/70 pt-5">
             {trustPoints.map(({ icon: Icon, label }) => (
               <div key={label} className="flex items-center gap-1.5 text-theme-muted">

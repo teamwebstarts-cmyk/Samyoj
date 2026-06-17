@@ -15,11 +15,11 @@ function TriggerNodeComponent({ data }: NodeProps) {
       className="min-w-[240px] overflow-visible rounded-2xl border border-violet-200/80 bg-gradient-to-br from-violet-50 via-white to-purple-50/50"
       style={{ boxShadow: '0 4px 20px rgba(124,58,237,0.12), 0 0 0 1px rgba(139,92,246,0.08)' }}
     >
-      <div className="h-1 rounded-t-2xl bg-gradient-to-r from-violet-500 to-purple-600" />
+      <div className="h-1 rounded-t-2xl bg-gradient-to-r from-violet-600 to-purple-700" />
 
       <div className="flex items-center gap-3 px-4 py-3.5">
         <div
-          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${meta?.gradient || 'from-violet-500 to-purple-600'} text-white shadow-[0_4px_14px_rgba(139,92,246,0.35)]`}
+          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${meta?.gradient || 'from-violet-600 to-purple-700'} text-white shadow-[0_4px_14px_rgba(139,92,246,0.35)]`}
         >
           <Icon className="h-5 w-5" strokeWidth={2.25} />
         </div>

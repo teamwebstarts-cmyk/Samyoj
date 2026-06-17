@@ -204,7 +204,7 @@ export default function TeamMemberDetailPanel({
                       onClick={() => toggleShiftDay(day)}
                       className={`rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition ${
                         shiftSchedule.days.includes(day)
-                          ? 'bg-whatsapp-500 text-white'
+                          ? 'btn-primary rounded-lg px-2.5 py-1.5 text-[11px] font-bold shadow-none'
                           : 'bg-theme-surface text-theme-secondary ring-1 ring-theme-border'
                       }`}
                     >

@@ -67,6 +67,7 @@ export default function DataTable({
                 return (
                   <th
                     key={header}
+                    scope="col"
                     className={`px-5 py-3.5 text-[11px] font-bold uppercase tracking-[0.08em] text-theme-muted ${
                       isActions
                         ? 'min-w-[132px] text-right'

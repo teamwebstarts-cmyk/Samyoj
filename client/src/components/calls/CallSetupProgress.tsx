@@ -175,7 +175,7 @@ export default function CallSetupProgress({
                   done
                     ? 'bg-gradient-to-br from-emerald-500 to-whatsapp-600 text-white shadow-[0_4px_14px_rgba(37,211,102,0.3)]'
                     : isNext
-                      ? 'bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-[0_4px_14px_rgba(99,102,241,0.3)]'
+                      ? 'bg-gradient-to-br from-violet-600 to-indigo-700 text-white shadow-[0_4px_14px_rgba(99,102,241,0.3)]'
                       : 'bg-neutral-100 text-neutral-400'
                 }`}
               >

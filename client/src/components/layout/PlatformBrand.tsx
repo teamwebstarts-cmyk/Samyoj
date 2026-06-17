@@ -19,7 +19,7 @@ export function PlatformLogo({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
 
   return (
     <div
-      className={`flex shrink-0 items-center justify-center bg-whatsapp-500 text-white shadow-[0_2px_10px_rgba(37,211,102,0.35)] ${sizes[size]}`}
+      className={`flex shrink-0 items-center justify-center bg-whatsapp-600 text-white shadow-[0_2px_10px_rgba(37,211,102,0.35)] ${sizes[size]}`}
     >
       <MessageCircle className={iconSizes[size]} strokeWidth={2.2} />
     </div>

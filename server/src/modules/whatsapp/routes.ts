@@ -242,7 +242,7 @@ router.delete(
   requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
-    const { id } = req.params;
+    const id = String(req.params.id);
 
     const number = await prisma.whatsappNumber.findFirst({
       where: { id, organizationId: orgId },
@@ -364,11 +364,21 @@ router.post('/webhook', async (req: Request, res: Response) => {
   const signature = req.headers['x-hub-signature-256'] as string;
   const rawBody = req.rawBody || JSON.stringify(req.body);
 
-  if (signature && config.meta.appSecret) {
+  if (config.nodeEnv === 'production' && !config.meta.appSecret) {
+    log.error('META_APP_SECRET not configured — rejecting webhook', { source: 'webhook' });
+    return res.status(503).send('Webhook verification not configured');
+  }
+
+  if (config.meta.appSecret) {
+    if (!signature) {
+      return res.status(401).send('Missing signature');
+    }
     if (!MetaWhatsAppService.verifyWebhookSignature(signature, rawBody)) {
       log.warn('Invalid webhook signature', { source: 'webhook' });
       return res.status(401).send('Invalid signature');
     }
+  } else if (signature) {
+    log.warn('Webhook signature present but META_APP_SECRET not set', { source: 'webhook' });
   }
 
   res.status(200).send('EVENT_RECEIVED');

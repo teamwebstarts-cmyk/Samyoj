@@ -149,7 +149,7 @@ export default function MediaViewer({
             <button
               type="button"
               onClick={handleDownload}
-              className="rounded-xl bg-whatsapp-500 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-whatsapp-600"
+              className="btn-primary rounded-xl px-6 py-2.5 text-sm font-semibold"
             >
               Open / Download
             </button>

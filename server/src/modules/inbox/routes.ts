@@ -10,6 +10,7 @@ import {
 } from '../whatsapp/meta.service';
 import { getOrgWhatsappContext } from '../whatsapp/context';
 import { deliverOutboundMessage } from '../messages/send.service';
+import { validateInteractive } from '../messages/interactive';
 import { getMessageMediaBuffer, type MessageMediaMetadata } from '../media/download.service';
 import { storeOutboundMedia } from '../media/upload.service';
 import { emitToOrg } from '../../realtime';
@@ -17,6 +18,7 @@ import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { parseActiveFlow } from '../flows/flow-state';
 import type { FlowNode } from '../flows/types';
+import { resolveCs24hWindowOpensAt } from './service-window';
 
 const router = Router();
 
@@ -29,7 +31,12 @@ router.get(
     const { status, search, assignedTo, page = '1', limit = '20' } = req.query;
 
     const where: Record<string, unknown> = { organizationId: orgId };
-    if (status) where.status = status;
+    if (status === 'SNOOZED') {
+      where.snoozedUntil = { gt: new Date() };
+    } else {
+      if (status) where.status = status;
+      where.OR = [{ snoozedUntil: null }, { snoozedUntil: { lte: new Date() } }];
+    }
     if (assignedTo) where.assignedAgentId = assignedTo;
     if (search) {
       where.contact = {
@@ -274,14 +281,10 @@ router.get(
       }
     }
 
-    const lastInboundMessage = await prisma.message.findFirst({
-      where: { conversationId: id, direction: 'INBOUND' },
-      orderBy: { createdAt: 'desc' },
-    });
-    const lastInbound = lastInboundMessage?.createdAt ?? null;
-    const serviceWindowOpen = isWithin24HourWindow(lastInbound);
-    const expiresAt = lastInbound
-      ? new Date(lastInbound.getTime() + 24 * 60 * 60 * 1000)
+    const windowOpensAt = await resolveCs24hWindowOpensAt(id, conversation.cs24hWindowOpensAt);
+    const serviceWindowOpen = isWithin24HourWindow(windowOpensAt);
+    const expiresAt = windowOpensAt
+      ? new Date(windowOpensAt.getTime() + 24 * 60 * 60 * 1000)
       : null;
 
     await prisma.conversation.update({
@@ -293,43 +296,69 @@ router.get(
       messages: messages.reverse(),
       serviceWindow: {
         open: serviceWindowOpen,
-        lastInboundAt: lastInbound?.toISOString() ?? null,
+        lastInboundAt: windowOpensAt?.toISOString() ?? null,
         expiresAt: expiresAt?.toISOString() ?? null,
+        windowOpensAt: windowOpensAt?.toISOString() ?? null,
       },
     });
   })
 );
 
-const mediaPayloadSchema = z.object({
-  data: z.string().min(1),
-  mimeType: z.string().min(1),
-  filename: z.string().optional(),
-});
+const mediaPayloadSchema = z
+  .object({
+    data: z.string().min(1).optional(),
+    mediaPath: z.string().min(1).optional(),
+    mimeType: z.string().min(1),
+    filename: z.string().optional(),
+  })
+  .refine((m) => Boolean(m.data || m.mediaPath), {
+    message: 'Either data or mediaPath is required',
+  });
 
 const templateParamsSchema = z
   .object({
     body: z.array(z.string()).optional(),
     header: z.array(z.string()).optional(),
     headerMediaUrl: z.string().url().optional(),
+    couponCode: z.string().max(15).optional(),
   })
   .optional();
 
 const interactiveSchema = z
   .object({
     mode: z.enum(['reply', 'cta_url', 'cta_call', 'list']).default('reply'),
-    body: z.string().min(1),
-    buttons: z.array(z.object({ id: z.string(), title: z.string().max(20) })).max(3).optional(),
-    ctaLabel: z.string().optional(),
+    header: z.string().max(60).optional(),
+    body: z.string().min(1).max(1024),
+    footer: z.string().max(60).optional(),
+    buttons: z
+      .array(
+        z.object({
+          id: z.string().min(1).max(256),
+          title: z.string().min(1).max(20),
+        })
+      )
+      .max(3)
+      .optional(),
+    ctaLabel: z.string().max(20).optional(),
     ctaUrl: z.string().url().optional(),
     ctaPhone: z.string().optional(),
-    listButtonLabel: z.string().optional(),
+    listButtonLabel: z.string().max(20).optional(),
     listSections: z
       .array(
         z.object({
-          title: z.string().optional(),
-          rows: z.array(z.object({ id: z.string(), title: z.string(), description: z.string().optional() })),
+          title: z.string().max(24).optional(),
+          rows: z
+            .array(
+              z.object({
+                id: z.string().min(1).max(200),
+                title: z.string().min(1).max(24),
+                description: z.string().max(72).optional(),
+              })
+            )
+            .max(10),
         })
       )
+      .max(10)
       .optional(),
   })
   .optional();
@@ -357,6 +386,19 @@ const sendMessageSchema = z
     if (data.type === 'INTERACTIVE' && !data.interactive?.body?.trim()) {
       ctx.addIssue({ code: 'custom', message: 'Interactive body required', path: ['interactive'] });
     }
+    if (data.type === 'INTERACTIVE' && data.interactive) {
+      const totalRows = (data.interactive.listSections || []).reduce(
+        (sum, section) => sum + section.rows.length,
+        0
+      );
+      if (data.interactive.mode === 'list' && totalRows > 10) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'List messages allow at most 10 rows total',
+          path: ['interactive', 'listSections'],
+        });
+      }
+    }
     if (data.type === 'TEXT' && !data.content?.trim()) {
       ctx.addIssue({ code: 'custom', message: 'Message content required', path: ['content'] });
     }
@@ -379,24 +421,31 @@ router.post(
       include: {
         contact: true,
         whatsappNumber: true,
-        messages: {
-          where: { direction: 'INBOUND' },
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-        },
       },
     });
 
     if (!conversation) throw new AppError(404, 'Conversation not found');
     if (!conversation.whatsappNumber) throw new AppError(400, 'No WhatsApp number connected');
 
-    const lastInbound = conversation.messages[0]?.createdAt ?? null;
+    const windowOpensAt = await resolveCs24hWindowOpensAt(
+      conversation.id,
+      conversation.cs24hWindowOpensAt
+    );
     const isMediaType = ['IMAGE', 'VIDEO', 'DOCUMENT', 'AUDIO'].includes(data.type);
-    if ((data.type === 'TEXT' || data.type === 'INTERACTIVE' || isMediaType) && !isWithin24HourWindow(lastInbound)) {
+    if ((data.type === 'TEXT' || data.type === 'INTERACTIVE' || isMediaType) && !isWithin24HourWindow(windowOpensAt)) {
       throw new AppError(
         400,
         '24-hour window expired. Use an approved template message.'
       );
+    }
+
+    if (data.type === 'INTERACTIVE' && data.interactive) {
+      try {
+        validateInteractive(data.interactive);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Invalid interactive message';
+        throw new AppError(400, message);
+      }
     }
 
     let messageContent = data.content?.trim() || '';
@@ -408,34 +457,83 @@ router.post(
     let mediaCaption: string | undefined;
 
     if (isMediaType && data.media) {
-      let buffer: Buffer;
-      try {
-        buffer = Buffer.from(data.media.data, 'base64');
-      } catch {
-        throw new AppError(400, 'Invalid media data');
+      const { getPublicMediaUrl } = await import('../media/storage-adapter');
+      const { mediaExists, fetchMediaBuffer } = await import('../media/storage-adapter');
+      const { mimeToMessageType } = await import('../media/upload.service');
+
+      if (data.media.mediaPath) {
+        const relativePath = data.media.mediaPath;
+        if (!relativePath.startsWith(`${orgId}/`)) {
+          throw new AppError(400, 'Invalid media path');
+        }
+        if (!(await mediaExists(relativePath))) {
+          throw new AppError(404, 'Uploaded media not found — upload again');
+        }
+        deliverType = mimeToMessageType(data.media.mimeType);
+        mediaUrl = getPublicMediaUrl(relativePath);
+        mediaCaption = messageContent || undefined;
+        messageContent = messageContent || data.media.filename || '';
+        const buffer = await fetchMediaBuffer(relativePath);
+        messageMetadata = {
+          mimeType: data.media.mimeType,
+          filename: data.media.filename,
+          mediaPath: relativePath,
+          size: buffer.length,
+          caption: mediaCaption,
+        };
+      } else if (data.media.data) {
+        let buffer: Buffer;
+        try {
+          buffer = Buffer.from(data.media.data, 'base64');
+        } catch {
+          throw new AppError(400, 'Invalid media data');
+        }
+
+        const stored = await storeOutboundMedia({
+          organizationId: orgId,
+          buffer,
+          mimeType: data.media.mimeType,
+          filename: data.media.filename,
+        });
+
+        deliverType = stored.messageType;
+        mediaUrl = stored.publicUrl;
+        mediaCaption = messageContent || undefined;
+        messageContent = messageContent || data.media.filename || '';
+        messageMetadata = {
+          mimeType: stored.mimeType,
+          filename: data.media.filename,
+          mediaPath: stored.mediaPath,
+          size: stored.size,
+          caption: mediaCaption,
+        };
+      } else {
+        throw new AppError(400, 'Media payload required');
       }
-
-      const stored = await storeOutboundMedia({
-        organizationId: orgId,
-        buffer,
-        mimeType: data.media.mimeType,
-        filename: data.media.filename,
-      });
-
-      deliverType = stored.messageType;
-      mediaUrl = stored.publicUrl;
-      mediaCaption = messageContent || undefined;
-      messageContent = messageContent || data.media.filename || '';
-      messageMetadata = {
-        mimeType: stored.mimeType,
-        filename: data.media.filename,
-        mediaPath: stored.mediaPath,
-        size: stored.size,
-        caption: mediaCaption,
-      };
     } else if (data.type === 'INTERACTIVE' && data.interactive) {
       messageContent = data.interactive.body;
       messageMetadata = { interactive: data.interactive };
+      if (data.interactive.mode === 'reply' && data.interactive.buttons?.length) {
+        messageMetadata.buttons = data.interactive.buttons;
+      }
+      if (data.interactive.mode === 'cta_url') {
+        messageMetadata.ctaType = 'url';
+        messageMetadata.buttons = [
+          { id: 'cta', title: data.interactive.ctaLabel || 'Open link' },
+        ];
+      }
+      if (data.interactive.mode === 'cta_call') {
+        messageMetadata.ctaType = 'call';
+        messageMetadata.buttons = [
+          { id: 'cta', title: data.interactive.ctaLabel || 'Call us' },
+        ];
+      }
+      if (data.interactive.mode === 'list') {
+        messageMetadata.listMenu = true;
+        messageMetadata.buttons = [
+          { id: 'list', title: data.interactive.listButtonLabel || 'Menu' },
+        ];
+      }
       deliverType = 'INTERACTIVE';
     } else if (data.type === 'TEMPLATE' && data.templateName) {
       const { wabaId, accessToken } = await getOrgWhatsappContext(orgId);
@@ -541,6 +639,16 @@ router.patch(
       assignedAgent: conversation.assignedAgent,
     });
 
+    if (agentId) {
+      const { notifyAssignment } = await import('../../services/notification.service');
+      void notifyAssignment(
+        orgId,
+        agentId,
+        conversation.id,
+        conversation.contact.name || conversation.contact.phone
+      );
+    }
+
     sendSuccess(res, conversation);
   })
 );
@@ -571,7 +679,7 @@ router.patch(
     if (resetHandoff) {
       data.botHandoffAt = null;
       data.botHandoffReason = null;
-      data.botState = Prisma.JsonNull;
+      data.botState = null;
       data.botActive = true;
       data.status = 'OPEN';
     }
@@ -607,6 +715,49 @@ router.patch(
 );
 
 router.patch(
+  '/:id/snooze',
+  authenticate,
+  requireOrg,
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const id = paramId(req);
+    const { until } = z.object({ until: z.string().datetime() }).parse(req.body);
+
+    const conversation = await prisma.conversation.update({
+      where: { id, organizationId: orgId },
+      data: { snoozedUntil: new Date(until) },
+      include: {
+        contact: true,
+        assignedAgent: { select: { id: true, name: true } },
+      },
+    });
+
+    sendSuccess(res, conversation);
+  })
+);
+
+router.delete(
+  '/:id/snooze',
+  authenticate,
+  requireOrg,
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const id = paramId(req);
+
+    const conversation = await prisma.conversation.update({
+      where: { id, organizationId: orgId },
+      data: { snoozedUntil: null },
+      include: {
+        contact: true,
+        assignedAgent: { select: { id: true, name: true } },
+      },
+    });
+
+    sendSuccess(res, conversation);
+  })
+);
+
+router.patch(
   '/:id/status',
   authenticate,
   requireOrg,
@@ -614,13 +765,23 @@ router.patch(
     const { status } = req.body;
 
     const id = paramId(req);
+    const orgId = req.user!.organizationId!;
     const conversation = await prisma.conversation.update({
       where: {
         id,
-        organizationId: req.user!.organizationId!,
+        organizationId: orgId,
       },
       data: { status },
     });
+
+    if (status === 'CLOSED') {
+      const { dispatchOrgWebhook } = await import('../integrations/dispatch');
+      void dispatchOrgWebhook(orgId, 'conversation.closed', {
+        conversationId: conversation.id,
+        status: conversation.status,
+        contactId: conversation.contactId,
+      });
+    }
 
     sendSuccess(res, conversation);
   })

@@ -7,6 +7,9 @@ import { deliverOutboundMessage } from '../modules/messages/send.service';
 import { retryDelays } from '../config/queues';
 import { processWebhookFields } from '../modules/calling/call.processor';
 import { processAiChatbotJob } from '../modules/automation/engine';
+import { executeWebhookDelivery } from '../modules/integrations/dispatch';
+import { processCompliancePurge } from './compliance-purge.processor';
+import { pollConversationAnalytics, pollQualityRatings } from '../modules/billing/usage.service';
 import { attachWorkerErrorHandlers, logError, setupGlobalErrorHandlers } from '../errors';
 import { createModuleLogger } from '../utils/logger';
 
@@ -66,6 +69,16 @@ const messageWorker = new Worker(
       mediaUrl,
       mediaCaption,
     } = job.data;
+
+    if (!messageId) return;
+
+    const existing = await prisma.message.findUnique({
+      where: { id: messageId },
+      select: { status: true },
+    });
+    if (!existing || existing.status === 'SENT' || existing.status === 'FAILED') {
+      return;
+    }
 
     await deliverOutboundMessage({
       organizationId,
@@ -305,9 +318,111 @@ const flowWorker = new Worker(
 
 attachWorkerErrorHandlers(flowWorker, 'flow-queue');
 
+// Outbound webhook dispatch worker
+const webhookDispatchWorker = new Worker(
+  'webhook-dispatch',
+  async (job: Job) => {
+    await executeWebhookDelivery(job.data.deliveryId);
+  },
+  {
+    connection,
+    concurrency: 5,
+    settings: {
+      backoffStrategy: (attemptsMade: number) => getRetryDelay(attemptsMade),
+    },
+  }
+);
+
+attachWorkerErrorHandlers(webhookDispatchWorker, 'webhook-dispatch');
+
+// GDPR compliance purge worker
+const compliancePurgeWorker = new Worker(
+  'compliance-purge',
+  async (job: Job) => {
+    await processCompliancePurge(job.data.organizationId);
+  },
+  { connection, concurrency: 1 }
+);
+
+attachWorkerErrorHandlers(compliancePurgeWorker, 'compliance-purge');
+
+const contentImageWorker = new Worker(
+  'content-image',
+  async (job: Job) => {
+    const { processImageGenerationJob } = await import('../modules/content-studio/images/routes');
+    await processImageGenerationJob(job.data.jobId, job.data.organizationId);
+  },
+  {
+    connection,
+    concurrency: 3,
+    settings: {
+      backoffStrategy: (attemptsMade: number) => getRetryDelay(attemptsMade),
+    },
+  }
+);
+
+attachWorkerErrorHandlers(contentImageWorker, 'content-image');
+
+const contentVoiceWorker = new Worker(
+  'content',
+  async (job: Job) => {
+    if (job.name === 'generate-voice') {
+      const { processVoiceGenerationJob } = await import('../modules/content-studio/voices/routes');
+      await processVoiceGenerationJob(job.data.jobId, job.data.organizationId);
+    }
+  },
+  {
+    connection,
+    concurrency: 2,
+    settings: {
+      backoffStrategy: (attemptsMade: number) => getRetryDelay(attemptsMade),
+    },
+  }
+);
+
+attachWorkerErrorHandlers(contentVoiceWorker, 'content');
+
+const contentVideoWorker = new Worker(
+  'content-video',
+  async (job: Job) => {
+    const { processVideoGenerationJob } = await import('../modules/content-studio/videos/routes');
+    await processVideoGenerationJob(job.data.jobId, job.data.organizationId);
+  },
+  {
+    connection,
+    concurrency: 2,
+    settings: {
+      backoffStrategy: (attemptsMade: number) => getRetryDelay(attemptsMade),
+    },
+  }
+);
+
+attachWorkerErrorHandlers(contentVideoWorker, 'content-video');
+
 log.info('Workers started', {
-  queues: ['webhook-queue', 'message-queue', 'broadcast-queue', 'automation-queue', 'flow-queue'],
+  queues: [
+    'webhook-queue',
+    'message-queue',
+    'broadcast-queue',
+    'automation-queue',
+    'flow-queue',
+    'webhook-dispatch',
+    'compliance-purge',
+    'content-image',
+    'content',
+    'content-video',
+  ],
 });
+
+// Daily billing analytics poll (every 24 hours)
+setInterval(() => {
+  pollConversationAnalytics().catch((err) =>
+    logError(err, { source: 'worker', action: 'pollConversationAnalytics' })
+  );
+  pollQualityRatings().catch((err) =>
+    logError(err, { source: 'worker', action: 'pollQualityRatings' })
+  );
+}, 24 * 60 * 60 * 1000);
 
 // Scheduled campaign processor (every minute)
 setInterval(() => {

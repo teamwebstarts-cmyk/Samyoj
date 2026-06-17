@@ -159,7 +159,7 @@ export function validateFlow(
     if (node.type === 'tag' && !node.tag?.trim()) errors.push('Add Tag needs a tag name');
     if (node.type === 'template' && !node.templateName?.trim()) errors.push('Template Message needs a template');
     if (node.type === 'media' && !node.mediaUrl?.trim()) errors.push('Send Media needs a file link');
-    if (node.type === 'wa_flow' && !node.waFlowId?.trim()) errors.push('In-Chat Form needs a form selected');
+    if (node.type === 'wa_flow' && !node.waFlowId?.trim()) errors.push('Meta Form needs a form selected');
     if (node.type === 'delay' && (!node.delaySeconds || node.delaySeconds < 1)) {
       errors.push('Wait step needs at least 1 second');
     }
@@ -202,7 +202,7 @@ export function buildFlowPreviewMessages(
   let i = 0;
   let seq = 0;
 
-  const push = (message: Omit<FlowPreviewMessage, 'id'> & { id?: string }) => {
+  const push = (message: Record<string, unknown> & { id?: string }) => {
     messages.push({ ...message, id: message.id ?? `preview-${seq++}` } as FlowPreviewMessage);
   };
 
@@ -389,8 +389,8 @@ export function simulateMessages(
 }
 
 export const TEMPLATE_COLORS: Record<string, { gradient: string; ring: string; bg: string }> = {
-  violet: { gradient: 'from-violet-500 to-purple-600', ring: 'ring-violet-200/60', bg: 'bg-violet-50' },
-  emerald: { gradient: 'from-whatsapp-500 to-emerald-600', ring: 'ring-emerald-200/60', bg: 'bg-emerald-50' },
+  violet: { gradient: 'from-violet-600 to-purple-700', ring: 'ring-violet-200/60', bg: 'bg-violet-50' },
+  emerald: { gradient: 'from-whatsapp-600 to-emerald-700', ring: 'ring-emerald-200/60', bg: 'bg-emerald-50' },
   amber: { gradient: 'from-amber-500 to-orange-500', ring: 'ring-amber-200/60', bg: 'bg-amber-50' },
   sky: { gradient: 'from-sky-500 to-blue-600', ring: 'ring-sky-200/60', bg: 'bg-sky-50' },
   rose: { gradient: 'from-rose-500 to-red-600', ring: 'ring-rose-200/60', bg: 'bg-rose-50' },

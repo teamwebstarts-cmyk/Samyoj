@@ -1,4 +1,4 @@
-import { AlertCircle, Check, CheckCheck, ExternalLink, Phone } from 'lucide-react';
+import { AlertCircle, Check, CheckCheck, ClipboardCopy, ExternalLink, List, Phone } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { MessageTemplate, TemplateButton, TemplateLibraryEntry } from '../../types';
 import { getTemplateButtons } from '../../utils/templateForm';
@@ -354,6 +354,257 @@ export function WhatsAppTemplatePreview({
         buttons={buttons}
         compact={compact}
       />
+    </WhatsAppChatSurface>
+  );
+}
+
+export type InteractivePreviewMode = 'reply' | 'cta_url' | 'cta_call' | 'list' | 'copy_code';
+
+export interface WhatsAppInteractivePreviewProps {
+  mode: InteractivePreviewMode;
+  header?: string;
+  body: string;
+  footer?: string;
+  buttons?: Array<{ id: string; title: string }>;
+  ctaLabel?: string;
+  listButtonLabel?: string;
+  listSections?: Array<{
+    title?: string;
+    rows: Array<{ id: string; title: string; description?: string }>;
+  }>;
+  couponCode?: string;
+  direction?: WhatsAppBubbleDirection;
+  compact?: boolean;
+  className?: string;
+  time?: string;
+  status?: MessageStatus;
+  showSurface?: boolean;
+}
+
+function InteractiveActionButton({
+  label,
+  icon,
+  compact,
+  variant = 'session',
+}: {
+  label: string;
+  icon?: ReactNode;
+  compact?: boolean;
+  variant?: 'session' | 'template';
+}) {
+  const sessionStyles =
+    'border-[#c5e8c0] bg-[#d9fdd3] text-[#008069]';
+  const templateStyles =
+    'border-[#e9edef] bg-white text-[#008069]';
+
+  return (
+    <div
+      className={`flex w-full items-center justify-center gap-2 border-t py-2.5 font-medium ${
+        variant === 'template' ? templateStyles : sessionStyles
+      } ${compact ? 'text-[13px]' : 'text-[14px]'}`}
+    >
+      {icon}
+      <span>{label}</span>
+    </div>
+  );
+}
+
+/** Session interactive message card (reply buttons, CTA, list menu). */
+export function WhatsAppInteractiveCard({
+  mode,
+  header,
+  body,
+  footer,
+  buttons = [],
+  ctaLabel,
+  listButtonLabel,
+  listSections = [],
+  couponCode,
+  direction = 'outbound',
+  compact = false,
+  time = '12:30',
+  status = 'delivered',
+}: Omit<WhatsAppInteractivePreviewProps, 'className' | 'showSurface'>) {
+  const isOutbound = direction === 'outbound';
+  const shellClass = isOutbound ? 'bg-[#d9fdd3]' : 'bg-white';
+
+  if (mode === 'copy_code') {
+    return (
+      <div className={`flex ${isOutbound ? 'justify-end' : 'justify-start'}`}>
+        <div
+          className={`overflow-hidden rounded-lg bg-white text-[#111b21] shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] ${
+            compact ? 'w-full max-w-[280px]' : 'w-full max-w-[min(100%,340px)]'
+          }`}
+        >
+          <div className={compact ? 'px-2.5 pt-2.5 pb-1' : 'px-3.5 pt-3 pb-1.5'}>
+            {header && (
+              <p className={`font-semibold leading-snug ${compact ? 'text-[13px]' : 'text-[15px]'}`}>
+                {header}
+              </p>
+            )}
+            <p
+              className={`whitespace-pre-wrap break-words leading-[1.45] ${
+                compact ? 'text-[12.5px]' : 'text-[14.5px]'
+              } ${header ? 'mt-1' : ''}`}
+            >
+              {body}
+            </p>
+            {footer && (
+              <p className={`mt-2 leading-snug text-[#8696a0] ${compact ? 'text-[10px]' : 'text-[12px]'}`}>
+                {footer}
+              </p>
+            )}
+          </div>
+          <InteractiveActionButton
+            label={couponCode ? `Copy code ${couponCode}` : 'Copy code'}
+            icon={<ClipboardCopy className="h-3.5 w-3.5" strokeWidth={2.25} />}
+            compact={compact}
+            variant="template"
+          />
+          <div className={`flex justify-end gap-1 ${compact ? 'px-2 pb-1.5 pt-0.5' : 'px-3 pb-2 pt-0.5'}`}>
+            <span className={`tabular-nums text-[#667781] ${compact ? 'text-[9px]' : 'text-[11px]'}`}>
+              {time}
+            </span>
+            {isOutbound && <StatusIcon status={status} compact={compact} />}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const ctaIcon =
+    mode === 'cta_call' ? (
+      <Phone className="h-3.5 w-3.5" strokeWidth={2.25} />
+    ) : mode === 'cta_url' ? (
+      <ExternalLink className="h-3.5 w-3.5" strokeWidth={2.25} />
+    ) : mode === 'list' ? (
+      <List className="h-3.5 w-3.5" strokeWidth={2.25} />
+    ) : null;
+
+  const actionButtons =
+    mode === 'reply'
+      ? buttons
+      : mode === 'cta_url' || mode === 'cta_call'
+        ? [{ id: 'cta', title: ctaLabel || (mode === 'cta_call' ? 'Call us' : 'Open link') }]
+        : mode === 'list'
+          ? [{ id: 'list', title: listButtonLabel || 'Menu' }]
+          : [];
+
+  const totalRows = listSections.reduce((sum, section) => sum + section.rows.length, 0);
+
+  return (
+    <div className={`flex ${isOutbound ? 'justify-end' : 'justify-start'}`}>
+      <div
+        className={`overflow-hidden rounded-lg shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] ${
+          compact ? 'max-w-[280px]' : 'max-w-[min(100%,340px)]'
+        } ${isOutbound ? 'rounded-br-[2px]' : 'rounded-bl-[2px]'}`}
+      >
+        <div className={`${compact ? 'px-2.5 pt-2.5 pb-1' : 'px-3.5 pt-3 pb-1.5'} ${shellClass}`}>
+          {header && (
+            <p className={`mb-1 font-semibold leading-snug ${compact ? 'text-[13px]' : 'text-[15px]'}`}>
+              {header}
+            </p>
+          )}
+          <p
+            className={`whitespace-pre-wrap break-words leading-[1.45] text-[#111b21] ${
+              compact ? 'text-[12.5px]' : 'text-[14.5px]'
+            }`}
+          >
+            {body}
+          </p>
+          {footer && (
+            <p className={`mt-2 leading-snug text-[#8696a0] ${compact ? 'text-[10px]' : 'text-[12px]'}`}>
+              {footer}
+            </p>
+          )}
+          {mode === 'list' && totalRows > 0 && (
+            <div className={`mt-2 rounded-lg border border-[#e9edef] bg-white/80 p-2 ${compact ? 'text-[10px]' : 'text-[11px]'}`}>
+              <p className="mb-1 font-semibold text-[#667781]">List preview</p>
+              {listSections.map((section, sectionIndex) => (
+                <div key={sectionIndex} className={sectionIndex > 0 ? 'mt-2 border-t border-[#e9edef] pt-2' : ''}>
+                  {section.title && (
+                    <p className="font-semibold text-[#111b21]">{section.title}</p>
+                  )}
+                  {section.rows.map((row) => (
+                    <div key={row.id} className="mt-1">
+                      <p className="font-medium text-[#111b21]">{row.title}</p>
+                      {row.description && (
+                        <p className="text-[#667781]">{row.description}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+          <div className={`flex justify-end gap-1 ${compact ? 'pt-0.5' : 'pt-0.5'}`}>
+            <span className={`tabular-nums text-[#667781] ${compact ? 'text-[9px]' : 'text-[11px]'}`}>
+              {time}
+            </span>
+            {isOutbound && <StatusIcon status={status} compact={compact} />}
+          </div>
+        </div>
+
+        {actionButtons.length > 0 && (
+          <div className={`border-t border-[#e9edef] ${shellClass}`}>
+            {actionButtons.map((btn, index) => (
+              <div
+                key={`${btn.id}-${index}`}
+                className={`flex w-full items-center justify-center gap-2 border-[#c5e8c0] py-2.5 font-medium text-[#008069] ${
+                  index < actionButtons.length - 1 ? 'border-b' : ''
+                } ${compact ? 'text-[13px]' : 'text-[14px]'}`}
+              >
+                {index === 0 ? ctaIcon : null}
+                <span>{btn.title}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function WhatsAppInteractivePreview({
+  mode,
+  header,
+  body,
+  footer,
+  buttons,
+  ctaLabel,
+  listButtonLabel,
+  listSections,
+  couponCode,
+  direction = 'outbound',
+  compact = false,
+  className = '',
+  time,
+  status,
+  showSurface = true,
+}: WhatsAppInteractivePreviewProps) {
+  const card = (
+    <WhatsAppInteractiveCard
+      mode={mode}
+      header={header}
+      body={body}
+      footer={footer}
+      buttons={buttons}
+      ctaLabel={ctaLabel}
+      listButtonLabel={listButtonLabel}
+      listSections={listSections}
+      couponCode={couponCode}
+      direction={direction}
+      compact={compact}
+      time={time}
+      status={status}
+    />
+  );
+
+  if (!showSurface) return <div className={className}>{card}</div>;
+
+  return (
+    <WhatsAppChatSurface compact={compact} className={className}>
+      {card}
     </WhatsAppChatSurface>
   );
 }

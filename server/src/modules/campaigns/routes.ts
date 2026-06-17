@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../../config/database';
 import { authenticate, requireOrg, loadOrgRole, requireOrgRole } from '../../middleware/auth';
+import { authenticateJwtOrApiKey } from '../../middleware/authenticate-jwt-or-api-key';
 import { AppError, sendSuccess, asyncHandler, paramId } from '../../utils/response';
 import { Prisma } from '@prisma/client';
 import { logCampaignAudit } from './audit';
@@ -30,8 +31,8 @@ import {
 } from './types';
 
 const router = Router();
-const adminGuard = [authenticate, requireOrg, loadOrgRole, requireOrgRole('OWNER', 'ADMIN')];
-const readGuard = [authenticate, requireOrg];
+const adminGuard = [authenticateJwtOrApiKey, requireOrg, loadOrgRole, requireOrgRole('OWNER', 'ADMIN')];
+const readGuard = [authenticateJwtOrApiKey, requireOrg];
 
 router.get(
   '/',

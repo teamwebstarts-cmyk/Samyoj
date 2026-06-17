@@ -5,7 +5,7 @@ import { emitToOrg } from '../../realtime';
 import { getOrgWhatsappContext, getWhatsappContextById } from '../whatsapp/context';
 import { getTemplateDisplayText, MetaWhatsAppService } from '../whatsapp/meta.service';
 import { logCampaignAudit } from './audit';
-import { assertDailySendQuota, getCampaignSettings } from './quota';
+import { assertDailySendQuota, assertDailyBudget, getCampaignSettings } from './quota';
 import {
   applyTemplateParamsToPreview,
   buildTemplateComponents,
@@ -120,6 +120,21 @@ export async function finalizeCampaignIfDone(campaignId: string) {
   });
 
   emitToOrg(campaign.organizationId, 'campaign:status', { campaignId, status });
+
+  if (status === 'COMPLETED') {
+    const owner = await prisma.organizationUser.findFirst({
+      where: { organizationId: campaign.organizationId, role: 'OWNER' },
+      include: { user: { select: { email: true } } },
+    });
+    if (owner?.user.email) {
+      const { notifyCampaignComplete } = await import('../../services/notification.service');
+      void notifyCampaignComplete(campaign.organizationId, owner.user.email, campaign.name, {
+        sent: campaign.sentCount,
+        delivered: campaign.deliveredCount,
+        failed: campaign.failedCount,
+      });
+    }
+  }
 }
 
 export async function syncCampaignRecipientFromWebhook(
@@ -240,6 +255,7 @@ export async function queueCampaignSend(
   }
 
   await assertDailySendQuota(campaign.organizationId, campaign.recipients.length);
+  await assertDailyBudget(campaign.organizationId, campaign.recipients.length, 'MARKETING');
 
   const { whatsappNumber, wabaId, accessToken } = await getWhatsappForCampaign(
     campaign.organizationId,
@@ -491,6 +507,7 @@ export async function retryFailedRecipients(
   if (!failed.length) throw new AppError(400, 'No failed recipients to retry');
 
   await assertDailySendQuota(campaign.organizationId, failed.length);
+  await assertDailyBudget(campaign.organizationId, failed.length, 'MARKETING');
 
   await prisma.campaign.update({
     where: { id: campaign.id },

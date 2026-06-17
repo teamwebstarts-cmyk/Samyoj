@@ -18,6 +18,7 @@ import {
 import CampaignAnalyticsPanel from '../components/campaigns/CampaignAnalyticsPanel';
 import CampaignAudienceSection from '../components/campaigns/CampaignAudienceSection';
 import CampaignTable from '../components/campaigns/CampaignTable';
+import CampaignCard from '../components/campaigns/CampaignCard';
 import CampaignDetailHeader from '../components/campaigns/CampaignDetailHeader';
 import CampaignQuotaBanner from '../components/campaigns/CampaignQuotaBanner';
 import CampaignRecipientTable from '../components/campaigns/CampaignRecipientTable';
@@ -42,15 +43,18 @@ import LoadingState from '../components/ui/LoadingState';
 import PageHeader from '../components/ui/PageHeader';
 import PageHero from '../components/ui/PageHero';
 import PageShell from '../components/ui/PageShell';
+import ResponsiveDataView from '../components/ui/ResponsiveDataView';
+import FirstVisitHint from '../components/ui/FirstVisitHint';
+import { useFirstVisit } from '../hooks/useFirstVisit';
 import SlideOver from '../components/ui/SlideOver';
 import { WhatsAppTemplatePreview } from '../components/inbox/WhatsAppPreview';
 import { DEFAULT_PAGE_SIZE } from '../constants/pagination';
 import { useAuth } from '../contexts/AuthContext';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useSocket } from '../hooks/useSocket';
-import { campaignApi, contactApi, templateApi, whatsappApi } from '../services/api';
+import { billingApi, campaignApi, contactApi, templateApi, whatsappApi } from '../services/api';
 import { toastError, toastSuccess } from '../utils/toast';
-import { PHONE_HINT, PHONE_PLACEHOLDER, validatePhoneLines } from '../utils/phone';
+import { PHONE_PLACEHOLDER, validatePhoneLines } from '../utils/phone';
 import type {
   Campaign,
   CampaignAnalytics,
@@ -186,6 +190,7 @@ export default function CampaignsPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [page, setPage] = useState(1);
+  const [campaignHintVisible, dismissCampaignHint] = useFirstVisit('campaigns-cost');
   const [total, setTotal] = useState(0);
   const [summary, setSummary] = useState({ total: 0, running: 0, completed: 0, sent: 0 });
   const [analytics, setAnalytics] = useState<CampaignAnalytics | null>(null);
@@ -513,7 +518,19 @@ export default function CampaignsPage() {
 
   const handleSend = async (id: string) => {
     if (!canManageTeam) return;
-    if (!confirm('Start sending this campaign?')) return;
+    const campaign = campaigns.find((c) => c.id === id) || (editing?.id === id ? editing : null);
+    const count = campaign?.totalContacts ?? 0;
+    let costLine = '';
+    if (count > 0) {
+      try {
+        const { data } = await billingApi.estimateCost(count);
+        costLine = `\n\nEstimated Meta cost: ₹${data.data.estimatedCostInr.toLocaleString('en-IN')}`;
+      } catch {
+        /* estimate optional */
+      }
+    }
+    const recipientLine = count > 0 ? ` (${count.toLocaleString()} recipients)` : '';
+    if (!confirm(`Start sending this campaign?${recipientLine}${costLine}`)) return;
     try {
       await campaignApi.send(id);
       loadCampaigns(false);
@@ -587,6 +604,15 @@ export default function CampaignsPage() {
             { label: 'Sent', value: summary.sent, tone: 'text-sky-700' },
           ]}
         />
+
+        <FirstVisitHint
+          visible={campaignHintVisible}
+          onDismiss={dismissCampaignHint}
+          title="Campaign costs add up"
+        >
+          Large broadcasts incur Meta conversation charges. Check your audience size and daily quota
+          before sending.
+        </FirstVisitHint>
 
         <CampaignQuotaBanner />
 
@@ -704,17 +730,32 @@ export default function CampaignsPage() {
             }
           />
         ) : (
-          <CampaignTable
-            campaigns={campaigns}
-            page={page}
-            pageSize={DEFAULT_PAGE_SIZE}
-            total={total}
-            onPageChange={setPage}
-            canManageTeam={canManageTeam}
-            onView={openView}
-            onEdit={canManageTeam ? openEdit : undefined}
-            onSend={canManageTeam ? (c) => handleSend(c.id) : undefined}
-            onDelete={canManageTeam ? handleDeleteItem : undefined}
+          <ResponsiveDataView
+            items={campaigns}
+            renderCard={(c) => (
+              <CampaignCard
+                key={c.id}
+                campaign={c}
+                onView={() => openView(c)}
+                onEdit={canManageTeam ? () => openEdit(c) : undefined}
+                onSend={canManageTeam ? () => handleSend(c.id) : undefined}
+                onDelete={canManageTeam ? () => handleDeleteItem(c) : undefined}
+              />
+            )}
+            renderTable={() => (
+              <CampaignTable
+                campaigns={campaigns}
+                page={page}
+                pageSize={DEFAULT_PAGE_SIZE}
+                total={total}
+                onPageChange={setPage}
+                canManageTeam={canManageTeam}
+                onView={openView}
+                onEdit={canManageTeam ? openEdit : undefined}
+                onSend={canManageTeam ? (c) => handleSend(c.id) : undefined}
+                onDelete={canManageTeam ? handleDeleteItem : undefined}
+              />
+            )}
           />
         )}
       </div>
@@ -813,7 +854,7 @@ export default function CampaignsPage() {
                   type="button"
                   disabled={saving}
                   onClick={handleSaveAndSend}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-whatsapp-500 to-whatsapp-600 px-5 text-[13px] font-semibold text-white shadow-[0_4px_14px_rgba(37,211,102,0.35)] transition hover:from-whatsapp-600 hover:to-whatsapp-700 disabled:opacity-50"
+                  className="btn-primary inline-flex h-10 items-center justify-center gap-2 rounded-xl px-5 text-[13px] font-semibold disabled:opacity-50"
                 >
                   {saving && (
                     <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
@@ -885,7 +926,7 @@ export default function CampaignsPage() {
                 required
               />
 
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-4 lg:grid-cols-2">
                 <AppSelect
                   id="campaign-template"
                   label="Approved template"

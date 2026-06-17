@@ -159,6 +159,10 @@ export const DEFAULT_BUSINESS_HOURS: OrgBusinessHours = {
   timezone: 'UTC',
 };
 
+export const FLOW_NODE_LABELS: Partial<Record<FlowNodeType, string>> = {
+  wa_flow: 'Meta Form',
+};
+
 export interface InboundFlowPayload {
   organizationId: string;
   conversationId: string;

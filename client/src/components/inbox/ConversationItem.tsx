@@ -32,7 +32,7 @@ export default function ConversationItem({
       }`}
     >
       {selected && (
-        <span className="absolute bottom-2 left-0 top-2 w-1 rounded-r-full bg-gradient-to-b from-whatsapp-500 to-whatsapp-600" />
+        <span className="absolute bottom-2 left-0 top-2 w-1 rounded-r-full bg-gradient-to-b from-whatsapp-600 to-whatsapp-700" />
       )}
 
       <ContactAvatar name={contact.name} phone={contact.phone} active={hasUnread} />
@@ -75,7 +75,7 @@ export default function ConversationItem({
               </span>
             )}
             {hasUnread && (
-              <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-whatsapp-500 to-whatsapp-600 px-1.5 text-[10px] font-bold text-white shadow-[0_2px_8px_rgba(37,211,102,0.35)]">
+              <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-whatsapp-600 to-whatsapp-700 px-1.5 text-[10px] font-bold text-white shadow-[0_2px_8px_rgba(37,211,102,0.35)]">
                 {unreadCount > 99 ? '99+' : unreadCount}
               </span>
             )}

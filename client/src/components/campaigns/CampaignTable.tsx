@@ -89,7 +89,7 @@ export default function CampaignTable({
                 onClick={() => onView(campaign)}
                 className="flex w-full items-center gap-3 rounded-xl py-1 text-left transition hover:opacity-90"
               >
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-[0_4px_14px_rgba(139,92,246,0.3)]">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-purple-700 text-white shadow-[0_4px_14px_rgba(139,92,246,0.3)]">
                   <Send className="h-4 w-4" strokeWidth={2.25} />
                 </div>
                 <div className="min-w-0">

@@ -7,13 +7,15 @@ import {
   Phone,
   Send,
   Shield,
+  Target,
   User,
 } from 'lucide-react';
 import ContactAvatar from '../inbox/ContactAvatar';
 import AppButton from '../ui/AppButton';
 import LoadingState from '../ui/LoadingState';
 import SlideOver from '../ui/SlideOver';
-import { contactApi } from '../../services/api';
+import { contactApi, leadApi } from '../../services/api';
+import { toastError, toastSuccess } from '../../utils/toast';
 import {
   formatContactPhone,
   formatContactRelativeTime,
@@ -26,7 +28,7 @@ import {
   ContactTagBadge,
 } from './contactUi';
 
-type DetailTab = 'overview' | 'activity' | 'conversations';
+type DetailTab = 'overview' | 'activity' | 'conversations' | 'timeline';
 
 interface ContactDetailPanelProps {
   contact: Contact | null;
@@ -60,18 +62,28 @@ export default function ContactDetailPanel({
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<DetailTab>('overview');
   const [togglingOptIn, setTogglingOptIn] = useState(false);
+  const [convertingLead, setConvertingLead] = useState(false);
+  const [timeline, setTimeline] = useState<Array<{ id: string; type: string; title: string; detail?: string; at: string }>>([]);
 
   useEffect(() => {
     if (!open || !contact?.id) {
       setDetail(null);
       setTab('overview');
+      setTimeline([]);
       return;
     }
 
     setLoading(true);
-    contactApi
-      .detail(contact.id)
-      .then(({ data }) => setDetail(data.data as ContactDetail))
+    Promise.all([
+      contactApi.detail(contact.id),
+      contactApi.timeline(contact.id).catch(() => null),
+    ])
+      .then(([detailRes, timelineRes]) => {
+        setDetail(detailRes.data.data as ContactDetail);
+        if (timelineRes?.data?.data?.timeline) {
+          setTimeline(timelineRes.data.data.timeline);
+        }
+      })
       .catch(() => setDetail(null))
       .finally(() => setLoading(false));
   }, [open, contact?.id]);
@@ -102,8 +114,22 @@ export default function ContactDetailPanel({
     navigate(`/campaigns?contacts=${current.id}`);
   };
 
+  const handleConvertToLead = async () => {
+    if (!current.id) return;
+    setConvertingLead(true);
+    try {
+      await leadApi.fromContact(current.id);
+      toastSuccess('Lead created — view in Leads');
+    } catch {
+      toastError('Could not create lead');
+    } finally {
+      setConvertingLead(false);
+    }
+  };
+
   const tabs: { id: DetailTab; label: string; icon: typeof Activity }[] = [
     { id: 'overview', label: 'Overview', icon: User },
+    { id: 'timeline', label: 'Timeline', icon: Calendar },
     { id: 'activity', label: 'Activity', icon: Activity },
     { id: 'conversations', label: 'Chats', icon: MessageSquare },
   ];
@@ -166,6 +192,15 @@ export default function ContactDetailPanel({
                   )}
                   <AppButton size="sm" variant="secondary" icon={<Send size={14} />} onClick={openCampaign}>
                     Add to campaign
+                  </AppButton>
+                  <AppButton
+                    size="sm"
+                    variant="secondary"
+                    icon={<Target size={14} />}
+                    onClick={() => void handleConvertToLead()}
+                    loading={convertingLead}
+                  >
+                    Convert to lead
                   </AppButton>
                   <AppButton size="sm" variant="secondary" onClick={() => onEdit(current)}>
                     Edit
@@ -323,6 +358,36 @@ export default function ContactDetailPanel({
                     </div>
                   );
                 })
+              )}
+            </div>
+          )}
+
+          {tab === 'timeline' && (
+            <div className="space-y-2">
+              {!timeline.length ? (
+                <div className="rounded-2xl border border-dashed border-theme-border px-4 py-10 text-center">
+                  <p className="text-[13px] font-semibold text-theme-secondary">No timeline events</p>
+                </div>
+              ) : (
+                timeline.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className="rounded-xl border border-theme-border bg-theme-surface px-4 py-3"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[13px] font-bold text-theme-fg">{entry.title}</p>
+                      <span className="text-[10px] font-medium uppercase text-theme-muted">
+                        {entry.type}
+                      </span>
+                    </div>
+                    {entry.detail && (
+                      <p className="mt-1 text-[12px] text-theme-secondary">{entry.detail}</p>
+                    )}
+                    <p className="mt-1 text-[11px] text-theme-muted">
+                      {formatContactRelativeTime(entry.at)}
+                    </p>
+                  </div>
+                ))
               )}
             </div>
           )}

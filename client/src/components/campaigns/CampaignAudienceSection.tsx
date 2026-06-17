@@ -62,10 +62,10 @@ const accentActive: Record<string, string> = {
 
 const accentIcon: Record<string, string> = {
   sky: 'bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-[0_4px_12px_rgba(14,165,233,0.3)]',
-  violet: 'bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-[0_4px_12px_rgba(139,92,246,0.3)]',
+  violet: 'bg-gradient-to-br from-violet-600 to-purple-700 text-white shadow-[0_4px_12px_rgba(139,92,246,0.3)]',
   indigo: 'bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-[0_4px_12px_rgba(99,102,241,0.3)]',
   emerald:
-    'bg-gradient-to-br from-whatsapp-500 to-emerald-600 text-white shadow-[0_4px_12px_rgba(37,211,102,0.3)]',
+    'bg-gradient-to-br from-whatsapp-600 to-emerald-700 text-white shadow-[0_4px_12px_rgba(37,211,102,0.3)]',
 };
 
 interface CampaignAudienceSectionProps {

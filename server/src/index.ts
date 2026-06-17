@@ -5,15 +5,20 @@ import rateLimit from 'express-rate-limit';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { config } from './config';
+import { validateConfig } from './config/validate';
+import { initSentry } from './config/sentry';
 import { errorHandler, logError, setupGlobalErrorHandlers } from './errors';
 import { verifyAccessToken } from './utils/jwt';
 import logger, { requestLogger } from './utils/logger';
+import prisma from './config/database';
+import Redis from 'ioredis';
 
 import authRoutes from './modules/auth/routes';
 import whatsappRoutes from './modules/whatsapp/routes';
 import inboxRoutes from './modules/inbox/routes';
 import automationRoutes from './modules/automation/routes';
 import flowRoutes from './modules/flows/routes';
+import flowAssetsRoutes from './modules/flows-assets/routes';
 import settingsRoutes from './modules/settings/routes';
 import campaignRoutes from './modules/campaigns/routes';
 import contactRoutes from './modules/contacts/routes';
@@ -29,8 +34,17 @@ import billingRoutes from './modules/billing/routes';
 import complianceRoutes from './modules/compliance/routes';
 import integrationsRoutes from './modules/integrations/routes';
 import waFormsRoutes from './modules/wa-forms/routes';
+import onboardingRoutes from './modules/onboarding/routes';
 import publicMediaRoutes from './modules/media/public.routes';
+import mediaRoutes from './modules/media/routes';
+import catalogRoutes from './modules/catalog/routes';
+import commerceRoutes from './modules/commerce/routes';
+import contentStudioRoutes from './modules/content-studio/routes';
+import publicApiRoutes from './modules/public-api/routes';
+import leadRoutes from './modules/leads/routes';
+import ticketRoutes from './modules/tickets/routes';
 import { setRealtimeIO } from './realtime';
+import { initTelemetry } from './config/telemetry';
 
 const app = express();
 const httpServer = createServer(app);
@@ -144,17 +158,43 @@ app.use(express.json({ limit: '10mb' }));
 
 app.use(requestLogger);
 
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+app.get('/health', async (_req, res) => {
+  const checks: Record<string, string> = { api: 'ok' };
+
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    checks.database = 'ok';
+  } catch {
+    checks.database = 'error';
+  }
+
+  try {
+    const redis = new Redis(config.redisUrl, { maxRetriesPerRequest: 1, connectTimeout: 3000 });
+    await redis.ping();
+    redis.disconnect();
+    checks.redis = 'ok';
+  } catch {
+    checks.redis = 'error';
+  }
+
+  const healthy = Object.values(checks).every((v) => v === 'ok');
+  res.status(healthy ? 200 : 503).json({
+    status: healthy ? 'ok' : 'degraded',
+    timestamp: new Date().toISOString(),
+    checks,
+    version: '1.0.0',
+  });
 });
 
 app.use('/api/media/public', publicMediaRoutes);
+app.use('/api/media', mediaRoutes);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/inbox', inboxRoutes);
 app.use('/api/automations', automationRoutes);
 app.use('/api/flows', flowRoutes);
+app.use('/api/flows-assets', flowAssetsRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/campaigns', campaignRoutes);
 app.use('/api/contacts', contactRoutes);
@@ -169,7 +209,14 @@ app.use('/api/canned-replies', cannedReplyRoutes);
 app.use('/api/billing', billingRoutes);
 app.use('/api/compliance', complianceRoutes);
 app.use('/api/integrations', integrationsRoutes);
+app.use('/api/onboarding', onboardingRoutes);
 app.use('/api/wa-forms', waFormsRoutes);
+app.use('/api/catalog', catalogRoutes);
+app.use('/api/commerce', commerceRoutes);
+app.use('/api/content-studio', contentStudioRoutes);
+app.use('/api/v1', publicApiRoutes);
+app.use('/api/leads', leadRoutes);
+app.use('/api/tickets', ticketRoutes);
 
 app.use(errorHandler);
 
@@ -201,6 +248,9 @@ async function listen(): Promise<void> {
 }
 
 async function start() {
+  validateConfig();
+  initTelemetry();
+  await initSentry();
   setupGlobalErrorHandlers();
   setRealtimeIO(io);
 
@@ -211,6 +261,9 @@ async function start() {
 
   const { startAlertWorker } = await import('./workers/alert.worker');
   startAlertWorker();
+
+  const { startMediaRetentionWorker } = await import('./workers/media-retention.worker');
+  startMediaRetentionWorker();
 
   logger.info('API server started', {
     source: 'startup',

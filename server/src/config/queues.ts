@@ -10,6 +10,11 @@ export const automationQueue = new Queue('automation-queue', { connection });
 export const flowQueue = new Queue('flow-queue', { connection });
 export const retryQueue = new Queue('retry-queue', { connection });
 export const notificationQueue = new Queue('notification-queue', { connection });
+export const webhookDispatchQueue = new Queue('webhook-dispatch', { connection });
+export const compliancePurgeQueue = new Queue('compliance-purge', { connection });
+export const contentQueue = new Queue('content', { connection });
+export const contentImageQueue = new Queue('content-image', { connection });
+export const contentVideoQueue = new Queue('content-video', { connection });
 
 export const defaultJobOptions = {
   attempts: 4,

@@ -14,7 +14,7 @@ export function getAutomationSourceLabel(metadata?: MessageMetadata | null): str
 }
 
 const AVATAR_GRADIENTS = [
-  'from-violet-500 to-purple-600',
+  'from-violet-600 to-purple-700',
   'from-sky-500 to-blue-600',
   'from-whatsapp-500 to-whatsapp-700',
   'from-amber-500 to-orange-600',
@@ -119,22 +119,28 @@ export function getLastInboundMessage(messages: Message[]): Message | undefined 
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
 }
 
-export function getServiceWindowInfo(lastInboundAt: string | Date | null | undefined): {
+export function getServiceWindowInfo(
+  lastInboundAt: string | Date | null | undefined,
+  windowOpensAt?: string | Date | null | undefined
+): {
   open: boolean;
   lastInboundAt: string | null;
   expiresAt: string | null;
+  windowOpensAt: string | null;
 } {
-  if (!lastInboundAt) {
-    return { open: false, lastInboundAt: null, expiresAt: null };
+  const anchor = windowOpensAt ?? lastInboundAt;
+  if (!anchor) {
+    return { open: false, lastInboundAt: null, expiresAt: null, windowOpensAt: null };
   }
 
-  const last = lastInboundAt instanceof Date ? lastInboundAt : new Date(lastInboundAt);
-  const expiresAt = new Date(last.getTime() + SERVICE_WINDOW_HOURS * MS_IN_HOUR);
+  const opens = anchor instanceof Date ? anchor : new Date(anchor);
+  const expiresAt = new Date(opens.getTime() + SERVICE_WINDOW_HOURS * MS_IN_HOUR);
 
   return {
     open: Date.now() < expiresAt.getTime(),
-    lastInboundAt: last.toISOString(),
+    lastInboundAt: opens.toISOString(),
     expiresAt: expiresAt.toISOString(),
+    windowOpensAt: opens.toISOString(),
   };
 }
 

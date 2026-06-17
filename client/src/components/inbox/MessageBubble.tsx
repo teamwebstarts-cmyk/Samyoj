@@ -118,6 +118,7 @@ export default function MessageBubble({ message, onOpenMedia }: MessageBubblePro
           time={formatMessageTime(message.createdAt)}
           status={isOutbound ? mapStatus(message.status) : undefined}
           isButtonReply={isButtonReply}
+          metadata={message.metadata}
         />
       </div>
     );

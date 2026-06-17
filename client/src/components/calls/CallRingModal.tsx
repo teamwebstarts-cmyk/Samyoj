@@ -132,7 +132,7 @@ export default function CallRingModal({ ring, onDismiss }: CallRingModalProps) {
         aria-labelledby="call-ring-title"
       >
         <div className="flex items-center gap-3">
-          <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-lg">
+          <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-700 text-white shadow-lg">
             <PhoneIncoming className="h-6 w-6 animate-pulse" />
           </span>
           <div className="min-w-0 flex-1">

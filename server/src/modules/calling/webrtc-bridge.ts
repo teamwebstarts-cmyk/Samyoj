@@ -113,7 +113,7 @@ export class WhatsAppWebRtcBridge {
     };
 
     const offer = await (this.pc as unknown as { createOffer: () => Promise<{ type: string; sdp?: string }> }).createOffer();
-    await this.pc.setLocalDescription(offer);
+    await this.pc.setLocalDescription(offer as { type: 'offer'; sdp?: string });
     await waitForIceGathering(this.pc);
 
     const localSdp = this.pc.localDescription?.sdp;

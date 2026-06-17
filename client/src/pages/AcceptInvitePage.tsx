@@ -99,7 +99,7 @@ export default function AcceptInvitePage() {
     >
       <div className="mb-6 rounded-2xl border border-emerald-200/60 bg-gradient-to-br from-emerald-500/10 to-whatsapp-500/5 p-4 dark:border-emerald-800/40">
         <div className="flex items-start gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-whatsapp-500 to-emerald-600 text-white">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-whatsapp-600 to-emerald-700 text-white">
             <UserPlus className="h-5 w-5" />
           </div>
           <div className="space-y-2">
