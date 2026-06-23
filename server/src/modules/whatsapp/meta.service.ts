@@ -235,6 +235,58 @@ export class MetaWhatsAppService {
     };
   }
 
+  /** Reconcile stored WABA/phone IDs with Meta when the access token was re-authorized. */
+  static async syncWhatsappConnection(
+    stored: { phoneNumber: string; phoneNumberId: string; wabaId: string },
+    accessToken: string
+  ): Promise<{ wabaId: string; phoneNumberId: string; phoneNumber: string; updated: boolean }> {
+    const normalizedStoredPhone = stored.phoneNumber.replace(/\D/g, '');
+
+    try {
+      const phones = await this.listPhoneNumbersForWaba(stored.wabaId, accessToken);
+      const match = phones.find(
+        (p) => p.id === stored.phoneNumberId || p.displayPhoneNumber === normalizedStoredPhone
+      );
+      if (match) {
+        return {
+          wabaId: stored.wabaId,
+          phoneNumberId: match.id,
+          phoneNumber: match.displayPhoneNumber,
+          updated:
+            match.id !== stored.phoneNumberId || match.displayPhoneNumber !== normalizedStoredPhone,
+        };
+      }
+    } catch {
+      // Stored WABA is stale or inaccessible — resolve from token below.
+    }
+
+    const available = await this.listAvailablePhoneNumbers(accessToken);
+    if (available.length === 0) {
+      throw new Error('No phone numbers found on your WhatsApp Business Account.');
+    }
+
+    const selected =
+      available.find((p) => p.phoneNumberId === stored.phoneNumberId) ||
+      available.find((p) => p.phoneNumber === normalizedStoredPhone) ||
+      (available.length === 1 ? available[0] : undefined);
+
+    if (!selected) {
+      throw new Error(
+        'WhatsApp connection is out of sync with Meta. Reconnect WhatsApp in Settings and select your phone number.'
+      );
+    }
+
+    return {
+      wabaId: selected.wabaId,
+      phoneNumberId: selected.phoneNumberId,
+      phoneNumber: selected.phoneNumber,
+      updated:
+        selected.wabaId !== stored.wabaId ||
+        selected.phoneNumberId !== stored.phoneNumberId ||
+        selected.phoneNumber !== normalizedStoredPhone,
+    };
+  }
+
   static async listAvailablePhoneNumbers(accessToken: string): Promise<WhatsappPhoneOption[]> {
     const wabaIds = await this.listAccessibleWabaIds(accessToken);
     const options: WhatsappPhoneOption[] = [];

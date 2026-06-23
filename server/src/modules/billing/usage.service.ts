@@ -121,13 +121,31 @@ export async function pollQualityRatings(): Promise<void> {
 export async function pollTemplateRejections(): Promise<void> {
   const numbers = await prisma.whatsappNumber.findMany({
     where: { isActive: true },
-    select: { organizationId: true, wabaId: true, accessToken: true },
+    select: {
+      id: true,
+      organizationId: true,
+      phoneNumber: true,
+      phoneNumberId: true,
+      wabaId: true,
+      accessToken: true,
+    },
   });
 
   for (const number of numbers) {
     try {
       const accessToken = MetaWhatsAppService.decryptToken(number.accessToken);
-      const rejected = await MetaWhatsAppService.listMessageTemplates(number.wabaId, accessToken, {
+      const synced = await MetaWhatsAppService.syncWhatsappConnection(number, accessToken);
+      if (synced.updated) {
+        await prisma.whatsappNumber.update({
+          where: { id: number.id },
+          data: {
+            wabaId: synced.wabaId,
+            phoneNumberId: synced.phoneNumberId,
+            phoneNumber: synced.phoneNumber,
+          },
+        });
+      }
+      const rejected = await MetaWhatsAppService.listMessageTemplates(synced.wabaId, accessToken, {
         status: 'REJECTED',
         limit: 20,
       });
