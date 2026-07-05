@@ -56,6 +56,10 @@ function parseMetaGraphError(data: GraphError, fallback: string): AppError {
   return new AppError(502, raw, 'META_CALLING_ERROR', undefined, true);
 }
 
+export interface CallActionResult {
+  callId?: string;
+}
+
 export class MetaCallingService {
   static async callAction(
     phoneNumberId: string,
@@ -63,19 +67,27 @@ export class MetaCallingService {
     callId: string,
     action: CallAction,
     session?: CallSessionPayload,
-    to?: string
-  ): Promise<void> {
+    to?: string,
+    bizOpaqueCallbackData?: string
+  ): Promise<CallActionResult> {
+    const isNewOutbound = action === 'connect' && Boolean(to);
+
     const body: Record<string, unknown> = {
       messaging_product: 'whatsapp',
-      call_id: callId,
       action,
     };
 
+    if (!isNewOutbound) {
+      body.call_id = callId;
+    }
     if (session) {
       body.session = session;
     }
     if (to) {
-      body.to = to;
+      body.to = to.replace(/\D/g, '');
+    }
+    if (bizOpaqueCallbackData) {
+      body.biz_opaque_callback_data = bizOpaqueCallbackData.slice(0, 512);
     }
 
     const res = await fetch(`${META_BASE}/${phoneNumberId}/calls`, {
@@ -87,14 +99,47 @@ export class MetaCallingService {
       body: JSON.stringify(body),
     });
 
-    const data = (await res.json()) as { success?: boolean } & GraphError;
+    const data = (await res.json()) as {
+      success?: boolean;
+      calls?: Array<{ id: string }>;
+    } & GraphError;
     if (!res.ok || data.success === false) {
       const message = data.error?.message || `Meta call action ${action} failed (${res.status})`;
-      log.error('Meta call action failed', { action, callId, status: res.status, error: data.error });
+      log.error('Meta call action failed', {
+        action,
+        callId: isNewOutbound ? undefined : callId,
+        to: to ? body.to : undefined,
+        status: res.status,
+        error: data.error,
+      });
       throw parseMetaGraphError(data, message);
     }
 
-    log.info('Meta call action success', { action, callId });
+    const metaCallId = data.calls?.[0]?.id;
+    log.info('Meta call action success', { action, callId: metaCallId || callId });
+    return { callId: metaCallId };
+  }
+
+  static async initiateOutboundCall(
+    phoneNumberId: string,
+    accessToken: string,
+    to: string,
+    session: CallSessionPayload,
+    bizOpaqueCallbackData?: string
+  ): Promise<string> {
+    const { callId } = await this.callAction(
+      phoneNumberId,
+      accessToken,
+      '',
+      'connect',
+      session,
+      to,
+      bizOpaqueCallbackData
+    );
+    if (!callId) {
+      throw new AppError(502, 'Meta did not return a call ID', 'META_CALLING_ERROR', undefined, true);
+    }
+    return callId;
   }
 
   static async preAccept(

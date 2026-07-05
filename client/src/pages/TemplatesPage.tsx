@@ -16,7 +16,6 @@ import TemplateCard from '../components/templates/TemplateCard';
 import EmptyState from '../components/ui/EmptyState';
 import ListToolbar from '../components/ui/ListToolbar';
 import LoadingState from '../components/ui/LoadingState';
-import PageHeader from '../components/ui/PageHeader';
 import PageHero from '../components/ui/PageHero';
 import PageShell from '../components/ui/PageShell';
 import ResponsiveDataView from '../components/ui/ResponsiveDataView';
@@ -282,6 +281,12 @@ export default function TemplatesPage() {
     return filteredTemplates.slice(start, start + DEFAULT_PAGE_SIZE);
   }, [filteredTemplates, page]);
 
+  const hasFilters =
+    Boolean(debouncedSearch) ||
+    statusFilter !== ALL_STATUSES ||
+    categoryFilter !== ALL_CATEGORIES ||
+    languageFilter !== ALL_LANGUAGES;
+
   const toggleGroup = (name: string) => {
     setExpandedGroups((prev) => {
       const next = new Set(prev);
@@ -294,44 +299,26 @@ export default function TemplatesPage() {
   if (whatsappConnected === false) {
     return (
       <PageShell>
-        <PageHeader />
-        <EmptyState
-          icon={Settings}
-          title="Connect WhatsApp first"
-          description="Link your WhatsApp Business account in Settings before managing message templates."
-          action={
-            <AppButton icon={<Settings size={16} />} onClick={() => navigate('/settings')}>
-              Go to Settings
-            </AppButton>
-          }
-        />
+        <div className="p-4 sm:p-6">
+          <EmptyState
+            icon={Settings}
+            title="Connect WhatsApp first"
+            description="You need to link your WhatsApp Business number before creating message templates."
+            steps={['Open Settings', 'Connect your WhatsApp number', 'Come back here to create templates']}
+            action={
+              <AppButton icon={<Settings size={16} />} onClick={() => navigate('/settings')}>
+                Go to Settings
+              </AppButton>
+            }
+          />
+        </div>
       </PageShell>
     );
   }
 
   return (
     <PageShell>
-      <PageHeader
-        actions={
-          <>
-            <AppButton variant="secondary" icon={<RefreshCw size={16} />} onClick={load}>
-              Refresh
-            </AppButton>
-            <AppButton
-              variant="secondary"
-              icon={<BookOpen size={16} />}
-              onClick={() => setLibraryOpen(true)}
-            >
-              Template library
-            </AppButton>
-            <AppButton icon={<Plus size={16} />} onClick={openCreate}>
-              Create template
-            </AppButton>
-          </>
-        }
-      />
-
-      <div className="space-y-5 animate-fade-up-delay sm:space-y-6">
+      <div className="space-y-4 sm:space-y-5">
         <PageHero
           badge="Templates"
           badgeIcon={FileText}
@@ -346,120 +333,155 @@ export default function TemplatesPage() {
           ]}
         />
 
-        <ListToolbar
-          search={search}
-          onSearchChange={setSearch}
-          searchPlaceholder="Search templates..."
-          filters={
-            <div className="flex w-full flex-wrap gap-2">
-              <AppSelect
-                className="w-full sm:w-40"
-                value={statusFilter}
-                placeholder="All statuses"
-                isSearchable={false}
-                options={statusFilterOptions}
-                onChange={(e) => setStatusFilter(e.target.value)}
-              />
-              <AppSelect
-                className="w-full sm:w-40"
-                value={categoryFilter}
-                placeholder="All categories"
-                isSearchable={false}
-                options={[{ value: ALL_CATEGORIES, label: 'All categories' }, ...CATEGORY_OPTIONS]}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-              />
-              <AppSelect
-                className="w-full sm:w-44"
-                value={languageFilter}
-                placeholder="All languages"
-                isSearchable
-                options={[{ value: ALL_LANGUAGES, label: 'All languages' }, ...LANGUAGE_OPTIONS]}
-                onChange={(e) => setLanguageFilter(e.target.value)}
-              />
-              <button
-                type="button"
-                onClick={() => setGroupView((v) => !v)}
-                className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[12px] font-bold ring-1 transition ${
-                  groupView
-                    ? 'bg-rose-100 text-rose-800 ring-rose-200 dark:bg-rose-950/40 dark:text-rose-300'
-                    : 'bg-theme-subtle text-theme-muted ring-theme-border hover:bg-theme-surface'
-                }`}
-              >
-                <Layers className="h-3.5 w-3.5" />
-                Group by name
-              </button>
-            </div>
-          }
-        />
-
-        {stats.pending > 0 && (
-          <AppAlert variant="info">
-            {stats.pending} template{stats.pending > 1 ? 's' : ''} waiting for approval. This page
-            auto-refreshes every 30 seconds.
-          </AppAlert>
-        )}
-
-        {loading ? (
-          <LoadingState label="Loading templates..." />
-        ) : filteredTemplates.length === 0 ? (
-          <EmptyState
-            icon={FileText}
-            title={search || statusFilter !== ALL_STATUSES ? 'No templates found' : 'No templates yet'}
-            description={
-              search || statusFilter !== ALL_STATUSES
-                ? 'Try adjusting your search or filters.'
-                : 'Create one, or browse the template library for examples.'
+        <div className="inbox-shell overflow-hidden">
+          <ListToolbar
+            embedded
+            stackFilters
+            search={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search templates..."
+            filters={
+              <>
+                <AppSelect
+                  className="w-full sm:w-[132px]"
+                  value={statusFilter}
+                  placeholder="All statuses"
+                  isSearchable={false}
+                  options={statusFilterOptions}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                />
+                <AppSelect
+                  className="w-full sm:w-[132px]"
+                  value={categoryFilter}
+                  placeholder="All categories"
+                  isSearchable={false}
+                  options={[{ value: ALL_CATEGORIES, label: 'All categories' }, ...CATEGORY_OPTIONS]}
+                  onChange={(e) => setCategoryFilter(e.target.value)}
+                />
+                <AppSelect
+                  className="w-full sm:w-[140px]"
+                  value={languageFilter}
+                  placeholder="All languages"
+                  isSearchable
+                  options={[{ value: ALL_LANGUAGES, label: 'All languages' }, ...LANGUAGE_OPTIONS]}
+                  onChange={(e) => setLanguageFilter(e.target.value)}
+                />
+                <AppButton
+                  variant={groupView ? 'primary' : 'secondary'}
+                  size="sm"
+                  icon={<Layers size={14} />}
+                  onClick={() => setGroupView((v) => !v)}
+                >
+                  Group
+                </AppButton>
+              </>
             }
-            action={
-              <div className="flex flex-wrap justify-center gap-2">
+            actions={
+              <div className="flex flex-wrap items-center gap-2">
+                <AppButton variant="secondary" size="sm" icon={<RefreshCw size={15} />} onClick={load}>
+                  Refresh
+                </AppButton>
                 <AppButton
                   variant="secondary"
+                  size="sm"
                   icon={<BookOpen size={16} />}
                   onClick={() => setLibraryOpen(true)}
                 >
-                  Browse library
+                  Library
                 </AppButton>
                 <AppButton icon={<Plus size={16} />} onClick={openCreate}>
-                  Create template
+                  New template
                 </AppButton>
               </div>
             }
           />
-        ) : (
-          <>
-            <ResponsiveDataView
-              items={paginatedTemplates}
-              renderCard={(template) => (
-                <TemplateCard
-                  key={template.id}
-                  template={template}
-                  onView={() => openView(template)}
-                />
-              )}
-              renderTable={() => (
-                <TemplateTable
-                  rows={paginatedRows}
-                  page={page}
-                  pageSize={DEFAULT_PAGE_SIZE}
-                  total={tableRows.length}
-                  expandedGroups={expandedGroups}
-                  onToggleGroup={toggleGroup}
-                  onPageChange={setPage}
-                  onView={openView}
-                  onDuplicate={openDuplicate}
-                />
-              )}
-            />
-            <div className="lg:hidden">
-              <Pagination
-                page={page}
-                pageSize={DEFAULT_PAGE_SIZE}
-                total={filteredTemplates.length}
-                onPageChange={setPage}
+
+          {stats.pending > 0 && (
+            <div className="border-b border-theme-border px-4 py-2.5 sm:px-5">
+              <AppAlert variant="info">
+                {stats.pending} template{stats.pending > 1 ? 's' : ''} waiting for approval · auto-refreshes every 30s
+              </AppAlert>
+            </div>
+          )}
+
+          {loading ? (
+            <div className="p-6">
+              <LoadingState label="Loading templates..." />
+            </div>
+          ) : filteredTemplates.length === 0 ? (
+            <div className="p-4 sm:p-6">
+              <EmptyState
+                icon={FileText}
+                variant={hasFilters ? 'filter' : 'default'}
+                title={hasFilters ? 'No templates match your filters' : 'No templates yet'}
+                description={
+                  hasFilters
+                    ? 'Try a different search word or filter.'
+                    : 'Templates are pre-approved messages you can send to customers anytime.'
+                }
+                steps={
+                  hasFilters
+                    ? undefined
+                    : ['Create a new template or browse the library', 'Submit for WhatsApp approval', 'Use it in campaigns and chats']
+                }
+                action={
+                  hasFilters ? undefined : (
+                    <div className="flex flex-wrap justify-center gap-2">
+                      <AppButton
+                        variant="secondary"
+                        icon={<BookOpen size={16} />}
+                        onClick={() => setLibraryOpen(true)}
+                      >
+                        Browse library
+                      </AppButton>
+                      <AppButton icon={<Plus size={16} />} onClick={openCreate}>
+                        Create template
+                      </AppButton>
+                    </div>
+                  )
+                }
               />
             </div>
-          </>
-        )}
+          ) : (
+            <>
+              <ResponsiveDataView
+                items={paginatedTemplates}
+                cardClassName="divide-y divide-neutral-200 dark:divide-neutral-800 lg:hidden"
+                tableClassName="px-4 sm:px-5 pt-4 sm:pb-5"
+                renderCard={(template) => (
+                  <TemplateCard
+                    key={template.id}
+                    template={template}
+                    onView={() => openView(template)}
+                    onDuplicate={() => openDuplicate(template)}
+                  />
+                )}
+                renderTable={() => (
+                  <TemplateTable
+                    rows={paginatedRows}
+                    page={page}
+                    pageSize={DEFAULT_PAGE_SIZE}
+                    total={tableRows.length}
+                    expandedGroups={expandedGroups}
+                    onToggleGroup={toggleGroup}
+                    onPageChange={setPage}
+                    onView={openView}
+                    onDuplicate={openDuplicate}
+                  />
+                )}
+              />
+              <div className="border-t border-theme-border lg:hidden">
+                <Pagination
+                  page={page}
+                  pageSize={DEFAULT_PAGE_SIZE}
+                  total={filteredTemplates.length}
+                  onPageChange={setPage}
+                  className="!border-t-0"
+                />
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       <SlideOver
@@ -468,6 +490,8 @@ export default function TemplatesPage() {
         title="Template library"
         subtitle="Ready-made templates you can use or submit"
         size="xl"
+        icon={BookOpen}
+        accent="violet"
       >
         <TemplateLibraryPanel onUseAsReference={handleUseLibraryReference} onCreated={() => load()} />
       </SlideOver>
@@ -478,6 +502,8 @@ export default function TemplatesPage() {
         title={formMode === 'resubmit' ? 'Edit & resubmit template' : 'Create message template'}
         subtitle="Sent for review after you create it"
         size="lg"
+        icon={FileText}
+        accent="violet"
         footer={
           <SlideOverFooter
             onCancel={() => setCreateOpen(false)}
@@ -502,6 +528,8 @@ export default function TemplatesPage() {
         title={viewing?.name || 'Template'}
         subtitle={viewing ? `${viewing.language} · ${viewing.category}` : 'Template details'}
         size="md"
+        icon={FileText}
+        accent="violet"
       >
         {viewing && (
           <TemplateDetailPanel

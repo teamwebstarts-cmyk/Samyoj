@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
-import { BarChart3, Clock, Copy, Link2, Mail, Send, UserPlus, XCircle } from 'lucide-react';
+import { Copy, Mail, UserPlus, XCircle } from 'lucide-react';
 import AppButton from '../ui/AppButton';
 import AppInput from '../ui/AppInput';
 import AppSelect from '../ui/AppSelect';
+import ConfirmDialog from '../ui/ConfirmDialog';
 import EmptyState from '../ui/EmptyState';
 import LoadingState from '../ui/LoadingState';
-import SectionCard from '../ui/SectionCard';
 import SlideOver, { SlideOverFooter } from '../ui/SlideOver';
+import { ModalCallout, ModalPanel, ModalSection } from '../ui/modalUi';
 import { teamApi } from '../../services/api';
 import type { OrgRole, TeamDepartment, TeamInvite } from '../../types';
 import { toastError, toastSuccess } from '../../utils/toast';
@@ -18,11 +19,16 @@ interface TeamInvitesTabProps {
   canManage: boolean;
 }
 
+function inviteInitials(email: string) {
+  return email.slice(0, 2).toUpperCase();
+}
+
 export default function TeamInvitesTab({ departments, canManage }: TeamInvitesTabProps) {
   const [invites, setInvites] = useState<TeamInvite[]>([]);
   const [loading, setLoading] = useState(true);
   const [slideOpen, setSlideOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [revokeTarget, setRevokeTarget] = useState<TeamInvite | null>(null);
   const [form, setForm] = useState({
     email: '',
     name: '',
@@ -69,14 +75,18 @@ export default function TeamInvitesTab({ departments, canManage }: TeamInvitesTa
     }
   };
 
-  const handleRevoke = async (invite: TeamInvite) => {
-    if (!confirm(`Revoke invite for ${invite.email}?`)) return;
+  const handleRevoke = async () => {
+    if (!revokeTarget) return;
+    setSaving(true);
     try {
-      await teamApi.invites.revoke(invite.id);
+      await teamApi.invites.revoke(revokeTarget.id);
       toastSuccess('Invite revoked');
+      setRevokeTarget(null);
       load();
     } catch {
       toastError('Failed to revoke invite');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -86,47 +96,53 @@ export default function TeamInvitesTab({ departments, canManage }: TeamInvitesTa
     toastSuccess('Link copied');
   };
 
-  if (loading) return <LoadingState label="Loading invites..." />;
-
   return (
-    <div className="space-y-5">
-      <SectionCard
-        title="Pending invites"
-        subtitle="Send email invites with secure join links — no manual passwords needed"
-        headerAction={
-          canManage ? (
-            <AppButton icon={<UserPlus size={16} />} onClick={() => setSlideOpen(true)}>
-              Send invite
-            </AppButton>
-          ) : undefined
-        }
-      >
-        {invites.length === 0 ? (
+    <div className="inbox-shell overflow-hidden">
+      {canManage && (
+        <div className="flex items-center justify-end border-b border-theme-border px-4 py-3.5 sm:px-5">
+          <AppButton size="sm" icon={<UserPlus size={15} />} onClick={() => setSlideOpen(true)}>
+            Send invite
+          </AppButton>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="p-6">
+          <LoadingState label="Loading invites..." />
+        </div>
+      ) : invites.length === 0 ? (
+        <div className="p-4 sm:p-6">
           <EmptyState
             icon={Mail}
             title="No pending invites"
-            description="Invite teammates by email. They'll set their own password when joining."
+            description="Invite teammates by email — they will set their own password when joining."
+            steps={['Tap Send invite', 'Enter their email address', 'They receive a link to join your team']}
             action={
               canManage ? (
-                <AppButton icon={<Send size={16} />} onClick={() => setSlideOpen(true)}>
-                  Send first invite
+                <AppButton icon={<UserPlus size={16} />} onClick={() => setSlideOpen(true)}>
+                  Send invite
                 </AppButton>
               ) : undefined
             }
           />
-        ) : (
-          <div className="divide-y divide-theme-border/60">
-            {invites.map((invite) => (
-              <div
-                key={invite.id}
-                className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
-              >
+        </div>
+      ) : (
+        <div className="divide-y divide-neutral-200 dark:divide-neutral-800">
+          {invites.map((invite) => (
+            <div
+              key={invite.id}
+              className="flex flex-col gap-3 bg-white px-4 py-3.5 transition-colors hover:bg-neutral-50/80 dark:bg-neutral-950 dark:hover:bg-neutral-900/50 sm:flex-row sm:items-center sm:justify-between sm:px-5"
+            >
+              <div className="flex min-w-0 items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-sky-100 to-blue-100 text-[11px] font-extrabold text-sky-800 dark:from-sky-900/50 dark:to-blue-900/40 dark:text-sky-200">
+                  {inviteInitials(invite.email)}
+                </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="truncate font-semibold text-theme-fg">{invite.email}</p>
                     <RoleBadge role={invite.orgRole} />
                     {invite.status === 'EXPIRED' && (
-                      <span className="rounded-full bg-rose-500/10 px-2 py-0.5 text-[10px] font-bold uppercase text-rose-600">
+                      <span className="rounded-full bg-rose-500/10 px-2 py-0.5 text-[10px] font-bold uppercase text-rose-600 dark:text-rose-400">
                         Expired
                       </span>
                     )}
@@ -137,64 +153,31 @@ export default function TeamInvitesTab({ departments, canManage }: TeamInvitesTa
                     {invite.department ? ` · ${invite.department.name}` : ''}
                   </p>
                 </div>
-                {canManage && invite.status === 'PENDING' && (
-                  <div className="flex shrink-0 gap-2">
-                    <AppButton
-                      variant="secondary"
-                      size="sm"
-                      icon={<Copy size={14} />}
-                      onClick={() => copyLink(invite.inviteUrl)}
-                    >
-                      Copy link
-                    </AppButton>
-                    <AppButton
-                      variant="ghost"
-                      size="sm"
-                      icon={<XCircle size={14} />}
-                      onClick={() => handleRevoke(invite)}
-                    >
-                      Revoke
-                    </AppButton>
-                  </div>
-                )}
               </div>
-            ))}
-          </div>
-        )}
-      </SectionCard>
-
-      <div className="grid gap-4 sm:grid-cols-3">
-        {[
-          {
-            icon: Link2,
-            title: 'Secure links',
-            desc: '7-day expiring invite URLs with one-time acceptance',
-          },
-          {
-            icon: Clock,
-            title: 'Self onboarding',
-            desc: 'New agents choose their own password on join',
-          },
-          {
-            icon: BarChart3,
-            title: 'Seat tracking',
-            desc: 'Pending invites count toward your plan seat limit',
-          },
-        ].map(({ icon: Icon, title, desc }) => (
-          <div
-            key={title}
-            className="dashboard-card flex gap-3 p-4"
-          >
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-whatsapp-500/10 text-whatsapp-600">
-              <Icon className="h-4 w-4" />
+              {canManage && invite.status === 'PENDING' && (
+                <div className="flex shrink-0 gap-2">
+                  <AppButton
+                    variant="secondary"
+                    size="sm"
+                    icon={<Copy size={14} />}
+                    onClick={() => copyLink(invite.inviteUrl)}
+                  >
+                    Copy link
+                  </AppButton>
+                  <AppButton
+                    variant="ghost"
+                    size="sm"
+                    icon={<XCircle size={14} />}
+                    onClick={() => setRevokeTarget(invite)}
+                  >
+                    Revoke
+                  </AppButton>
+                </div>
+              )}
             </div>
-            <div>
-              <p className="text-[13px] font-bold text-theme-fg">{title}</p>
-              <p className="mt-0.5 text-[12px] text-theme-secondary">{desc}</p>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {canManage && (
         <SlideOver
@@ -202,6 +185,8 @@ export default function TeamInvitesTab({ departments, canManage }: TeamInvitesTa
           onClose={() => setSlideOpen(false)}
           title="Invite team member"
           subtitle="They'll receive a link to join your workspace"
+          icon={Mail}
+          accent="sky"
           footer={
             <SlideOverFooter
               onCancel={() => setSlideOpen(false)}
@@ -210,50 +195,74 @@ export default function TeamInvitesTab({ departments, canManage }: TeamInvitesTa
             />
           }
         >
-          <form id="slideover-form" onSubmit={handleInvite} className="space-y-4">
-            <AppInput
-              id="invite-email"
-              label="Email address"
-              type="email"
-              placeholder="agent@company.com"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-              required
+          <form id="slideover-form" onSubmit={handleInvite} className="space-y-5">
+            <ModalCallout
+              icon={Mail}
+              accent="sky"
+              title="Email invite"
+              description="We'll send a secure join link. They choose their own password when accepting the invite."
             />
-            <AppInput
-              id="invite-name"
-              label="Name (optional)"
-              placeholder="Agent name"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-            />
-            <AppSelect
-              id="invite-role"
-              label="Role"
-              value={form.orgRole}
-              isSearchable={false}
-              options={(['AGENT', 'SUPERVISOR', 'ADMIN'] as OrgRole[]).map((r) => ({
-                value: r,
-                label: roleLabels[r],
-              }))}
-              onChange={(e) => setForm({ ...form, orgRole: e.target.value as OrgRole })}
-            />
-            {departments.length > 0 && (
-              <AppSelect
-                id="invite-dept"
-                label="Department"
-                value={form.departmentId}
-                isSearchable={false}
-                options={[
-                  { value: '', label: 'No department' },
-                  ...departments.map((d) => ({ value: d.id, label: d.name })),
-                ]}
-                onChange={(e) => setForm({ ...form, departmentId: e.target.value })}
-              />
-            )}
+
+            <ModalSection step={1} title="Invite details" subtitle="Who you're inviting and their role">
+              <ModalPanel accent="sky">
+                <div className="space-y-4">
+                  <AppInput
+                    id="invite-email"
+                    label="Email address"
+                    type="email"
+                    placeholder="agent@company.com"
+                    value={form.email}
+                    onChange={(e) => setForm({ ...form, email: e.target.value })}
+                    required
+                  />
+                  <AppInput
+                    id="invite-name"
+                    label="Name (optional)"
+                    placeholder="Agent name"
+                    value={form.name}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  />
+                  <AppSelect
+                    id="invite-role"
+                    label="Role"
+                    value={form.orgRole}
+                    isSearchable={false}
+                    options={(['AGENT', 'SUPERVISOR', 'ADMIN'] as OrgRole[]).map((r) => ({
+                      value: r,
+                      label: roleLabels[r],
+                    }))}
+                    onChange={(e) => setForm({ ...form, orgRole: e.target.value as OrgRole })}
+                  />
+                  {departments.length > 0 && (
+                    <AppSelect
+                      id="invite-dept"
+                      label="Department"
+                      value={form.departmentId}
+                      isSearchable={false}
+                      options={[
+                        { value: '', label: 'No department' },
+                        ...departments.map((d) => ({ value: d.id, label: d.name })),
+                      ]}
+                      onChange={(e) => setForm({ ...form, departmentId: e.target.value })}
+                    />
+                  )}
+                </div>
+              </ModalPanel>
+            </ModalSection>
           </form>
         </SlideOver>
       )}
+
+      <ConfirmDialog
+        open={Boolean(revokeTarget)}
+        onClose={() => setRevokeTarget(null)}
+        onConfirm={() => void handleRevoke()}
+        title={`Revoke invite for ${revokeTarget?.email ?? 'member'}?`}
+        description="The invite link will stop working immediately."
+        confirmLabel="Revoke invite"
+        variant="danger"
+        loading={saving}
+      />
     </div>
   );
 }

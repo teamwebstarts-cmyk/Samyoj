@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ChevronDown, MessageSquareText, Plus, StickyNote, Tag, X } from 'lucide-react';
+import { ChevronDown, Clock, LifeBuoy, MessageSquareText, Plus, StickyNote, Tag, X } from 'lucide-react';
 import AppButton from '../ui/AppButton';
 import AppInput from '../ui/AppInput';
 import AppTextarea from '../ui/AppTextarea';
@@ -16,6 +16,8 @@ interface InboxDetailsPanelProps {
   overlayOpen?: boolean;
   overlaySection?: PanelSection;
   onOverlayClose?: () => void;
+  onConvertToTicket?: () => void;
+  onSnooze?: (hours: number) => void;
 }
 
 function SectionToggle({
@@ -81,6 +83,8 @@ export default function InboxDetailsPanel({
   overlayOpen = false,
   overlaySection,
   onOverlayClose,
+  onConvertToTicket,
+  onSnooze,
 }: InboxDetailsPanelProps) {
   const [notes, setNotes] = useState<InternalNote[]>([]);
   const [noteText, setNoteText] = useState('');
@@ -387,6 +391,26 @@ export default function InboxDetailsPanel({
             className="flex h-9 w-9 items-center justify-center rounded-xl text-sky-600 transition hover:bg-sky-50"
           >
             <MessageSquareText className="h-4 w-4" />
+          </button>
+        )}
+        {onConvertToTicket && (
+          <button
+            type="button"
+            onClick={onConvertToTicket}
+            title="Convert to ticket"
+            className="flex h-9 w-9 items-center justify-center rounded-xl text-sky-600 transition hover:bg-sky-50"
+          >
+            <LifeBuoy className="h-4 w-4" />
+          </button>
+        )}
+        {onSnooze && (
+          <button
+            type="button"
+            onClick={() => onSnooze(2)}
+            title="Snooze 2 hours"
+            className="flex h-9 w-9 items-center justify-center rounded-xl text-indigo-600 transition hover:bg-indigo-50"
+          >
+            <Clock className="h-4 w-4" />
           </button>
         )}
       </aside>

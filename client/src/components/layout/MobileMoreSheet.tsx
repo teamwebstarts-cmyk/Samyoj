@@ -1,38 +1,19 @@
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { NavLink } from 'react-router-dom';
-import type { LucideIcon } from 'lucide-react';
-import {
-  BarChart3,
-  Bot,
-  CreditCard,
-  FileText,
-  Headset,
-  LineChart,
-  PhoneCall,
-  Settings,
-  Sparkles,
-  X,
-} from 'lucide-react';
+import { X } from 'lucide-react';
+import { getVisibleMobileMoreItems } from '../../config/navigation';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface MobileMoreSheetProps {
   open: boolean;
   onClose: () => void;
 }
 
-const moreItems: Array<{ to: string; icon: LucideIcon; label: string; end?: boolean }> = [
-  { to: '/', icon: BarChart3, label: 'Dashboard', end: true },
-  { to: '/calls', icon: PhoneCall, label: 'Calls' },
-  { to: '/ai-bot', icon: Bot, label: 'AI Bots' },
-  { to: '/templates', icon: FileText, label: 'Templates' },
-  { to: '/content-studio', icon: Sparkles, label: 'Content Studio' },
-  { to: '/reports', icon: LineChart, label: 'Reports' },
-  { to: '/team', icon: Headset, label: 'Team' },
-  { to: '/billing', icon: CreditCard, label: 'Billing' },
-  { to: '/settings', icon: Settings, label: 'Settings' },
-];
-
 export default function MobileMoreSheet({ open, onClose }: MobileMoreSheetProps) {
+  const { orgRole } = useAuth();
+  const moreItems = getVisibleMobileMoreItems(orgRole);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {

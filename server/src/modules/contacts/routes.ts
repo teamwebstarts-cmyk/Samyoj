@@ -13,16 +13,17 @@ import {
   listContacts,
   renameTag,
 } from './service';
+import { resolveActiveWhatsappNumber } from '../whatsapp/active-number';
 
 const router = Router();
 
+router.use(authenticateJwtOrApiKey, requireOrg, resolveActiveWhatsappNumber);
+
 router.get(
   '/',
-  authenticateJwtOrApiKey,
-  requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
-    const result = await listContacts(orgId, req.query as Record<string, string>);
+    const result = await listContacts(orgId, req.query as Record<string, string>, req.activeWhatsappNumberId);
     sendSuccess(res, result);
   })
 );
@@ -38,8 +39,6 @@ const contactSchema = z.object({
 
 router.post(
   '/',
-  authenticateJwtOrApiKey,
-  requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
     const data = contactSchema.parse(req.body);
 

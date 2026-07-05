@@ -4,7 +4,6 @@ import {
   ExternalLink,
   LayoutGrid,
   List,
-  Lock,
   Phone,
   Plus,
   Trash2,
@@ -35,13 +34,12 @@ const MODES: Array<{
   id: InteractiveComposerMode;
   label: string;
   icon: typeof LayoutGrid;
-  requiresWindow: boolean;
 }> = [
-  { id: 'reply', label: 'Buttons', icon: LayoutGrid, requiresWindow: true },
-  { id: 'list', label: 'List', icon: List, requiresWindow: true },
-  { id: 'cta_url', label: 'URL', icon: ExternalLink, requiresWindow: true },
-  { id: 'cta_call', label: 'Call', icon: Phone, requiresWindow: true },
-  { id: 'copy_code', label: 'Copy code', icon: ClipboardCopy, requiresWindow: false },
+  { id: 'reply', label: 'Buttons', icon: LayoutGrid },
+  { id: 'list', label: 'List', icon: List },
+  { id: 'cta_url', label: 'URL', icon: ExternalLink },
+  { id: 'cta_call', label: 'Call', icon: Phone },
+  { id: 'copy_code', label: 'Copy code', icon: ClipboardCopy },
 ];
 
 function emptyListSection(index: number) {
@@ -81,6 +79,11 @@ export default function InteractiveComposer({
 
   useEffect(() => {
     if (!open) return;
+    setMode(serviceWindow.open ? 'reply' : 'copy_code');
+  }, [open, serviceWindow.open]);
+
+  useEffect(() => {
+    if (!open) return;
     templateApi
       .list({ status: 'APPROVED', all: 'true' })
       .then(({ data }) => {
@@ -116,12 +119,9 @@ export default function InteractiveComposer({
   if (!open) return null;
 
   const activeMode = MODES.find((entry) => entry.id === mode)!;
-  const modeBlocked = activeMode.requiresWindow && !serviceWindow.open;
   const totalRows = listSections.reduce((sum, section) => sum + section.rows.length, 0);
 
   const handleSend = async () => {
-    if (modeBlocked) return;
-
     if (mode === 'copy_code') {
       if (!selectedTemplate || !couponCode.trim()) return;
       await onSend({
@@ -211,19 +211,15 @@ export default function InteractiveComposer({
       <div className="mb-3 flex flex-wrap gap-1.5">
         {MODES.map((entry) => {
           const Icon = entry.icon;
-          const disabled = entry.requiresWindow && !serviceWindow.open;
           return (
             <button
               key={entry.id}
               type="button"
-              disabled={disabled}
               onClick={() => setMode(entry.id)}
               className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold transition ${
                 mode === entry.id
                   ? 'bg-violet-700 text-white'
-                  : disabled
-                    ? 'cursor-not-allowed bg-neutral-100 text-neutral-400'
-                    : 'bg-white text-violet-700 ring-1 ring-violet-200 hover:bg-violet-50'
+                  : 'bg-white text-violet-700 ring-1 ring-violet-200 hover:bg-violet-50'
               }`}
             >
               <Icon className="h-3 w-3" />
@@ -232,16 +228,6 @@ export default function InteractiveComposer({
           );
         })}
       </div>
-
-      {modeBlocked && (
-        <div className="mb-3 flex items-start gap-2 rounded-xl border border-amber-200/80 bg-amber-50/90 px-3 py-2 text-[12px] text-amber-900">
-          <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <p>
-            The 24-hour customer service window is closed. Switch to <strong>Copy code</strong> to send
-            an approved template, or wait for the customer to message again.
-          </p>
-        </div>
-      )}
 
       {mode !== 'copy_code' && (
         <>
@@ -490,7 +476,7 @@ export default function InteractiveComposer({
         <AppButton
           size="sm"
           loading={sending}
-          disabled={modeBlocked || (mode === 'list' && totalRows > 10)}
+          disabled={mode === 'list' && totalRows > 10}
           onClick={() => void handleSend()}
         >
           Send {activeMode.label.toLowerCase()}

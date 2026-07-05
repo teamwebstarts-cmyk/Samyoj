@@ -30,10 +30,19 @@ export async function loadPermissions(req: Request, _res: Response, next: NextFu
       return next(new AppError(403, 'Not a member of this organization'));
     }
 
+    const org = await prisma.organization.findUnique({
+      where: { id: req.user.organizationId },
+      select: { settings: true },
+    });
+    const teamSettings = ((org?.settings as Record<string, unknown>) || {}).team as
+      | { rolePermissions?: Partial<Record<string, Partial<TeamPermissions>>> }
+      | undefined;
+
     req.orgRole = membership.role;
     req.permissions = resolvePermissions(
       membership.role,
-      membership.permissions as Record<string, boolean> | null
+      membership.permissions as Record<string, boolean> | null,
+      teamSettings?.rolePermissions ?? null
     );
     next();
   } catch (err) {

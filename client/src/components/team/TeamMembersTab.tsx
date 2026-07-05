@@ -1,22 +1,24 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Headset, Plus, Shield, UserCheck } from 'lucide-react';
+import { Headset, Pencil, Plus, UserPlus } from 'lucide-react';
 import ContactAvatar from '../inbox/ContactAvatar';
 import AppButton from '../ui/AppButton';
 import AppInput from '../ui/AppInput';
 import AppSelect from '../ui/AppSelect';
+import ConfirmDialog from '../ui/ConfirmDialog';
 import DataTable, { TableSerialCell } from '../ui/DataTable';
 import EmptyState from '../ui/EmptyState';
 import ListToolbar from '../ui/ListToolbar';
 import LoadingState from '../ui/LoadingState';
-import RowActions from '../ui/RowActions';
+import ResponsiveDataView from '../ui/ResponsiveDataView';
+import { TableIconButton } from '../ui/TableActions';
 import SlideOver, { SlideOverFooter } from '../ui/SlideOver';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { teamApi } from '../../services/api';
 import { toastError, toastSuccess } from '../../utils/toast';
 import type { OrgRole, TeamDepartment, TeamMember, TeamSummary } from '../../types';
 import AvailabilityBadge, { RoleBadge } from './AvailabilityBadge';
-import TeamMemberDetailPanel from './TeamMemberDetailPanel';
-import { formatJoinedDate, roleLabels } from './teamUi';
+import TeamMemberCard from './TeamMemberCard';
+import { roleLabels } from './teamUi';
 
 const ALL_ROLES = '';
 const roleFilterOptions = [
@@ -33,7 +35,6 @@ const emptyForm = {
   password: '',
   orgRole: 'AGENT' as OrgRole,
   departmentId: '',
-  maxConcurrentChats: '10',
 };
 
 interface TeamMembersTabProps {
@@ -50,24 +51,15 @@ export default function TeamMembersTab({
   onSummaryChange,
 }: TeamMembersTabProps) {
   const [members, setMembers] = useState<TeamMember[]>([]);
-  const [, setSummary] = useState<TeamSummary>({
-    total: 0,
-    owners: 0,
-    admins: 0,
-    supervisors: 0,
-    agents: 0,
-    online: 0,
-  });
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState(ALL_ROLES);
-  const [deptFilter, setDeptFilter] = useState('');
   const [slideOpen, setSlideOpen] = useState(false);
   const [editing, setEditing] = useState<TeamMember | null>(null);
-  const [detailId, setDetailId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [reassignToId, setReassignToId] = useState('');
+  const [removeOpen, setRemoveOpen] = useState(false);
 
   const debouncedSearch = useDebouncedValue(search);
 
@@ -75,18 +67,16 @@ export default function TeamMembersTab({
     setLoading(true);
     const params: Record<string, string> = {};
     if (debouncedSearch) params.search = debouncedSearch;
-    if (deptFilter) params.departmentId = deptFilter;
 
     teamApi
       .list(params)
       .then(({ data }) => {
         setMembers(data.data.members);
-        setSummary(data.data.summary);
         onSummaryChange?.(data.data.summary);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [debouncedSearch, deptFilter, onSummaryChange]);
+  }, [debouncedSearch, onSummaryChange]);
 
   useEffect(load, [load]);
 
@@ -104,6 +94,7 @@ export default function TeamMembersTab({
   };
 
   const openEdit = (member: TeamMember) => {
+    if (!canManage || member.orgRole === 'OWNER') return;
     setEditing(member);
     setForm({
       name: member.name,
@@ -111,7 +102,6 @@ export default function TeamMembersTab({
       password: '',
       orgRole: member.orgRole === 'OWNER' ? 'ADMIN' : member.orgRole,
       departmentId: member.department?.id ?? '',
-      maxConcurrentChats: String(member.maxConcurrentChats ?? 10),
     });
     setReassignToId('');
     setSlideOpen(true);
@@ -130,7 +120,6 @@ export default function TeamMembersTab({
       if (editing) {
         const payload: Record<string, unknown> = {
           name: form.name,
-          maxConcurrentChats: parseInt(form.maxConcurrentChats, 10),
           departmentId: form.departmentId || null,
         };
         if (editing.orgRole !== 'OWNER' && orgRole === 'OWNER') {
@@ -145,16 +134,15 @@ export default function TeamMembersTab({
           password: form.password,
           orgRole: form.orgRole,
           departmentId: form.departmentId || null,
-          maxConcurrentChats: parseInt(form.maxConcurrentChats, 10),
         });
       }
       closeSlide();
       load();
-      toastSuccess(editing ? 'Team member updated' : 'Team member added');
+      toastSuccess(editing ? 'Member updated' : 'Member added');
     } catch (err: unknown) {
       toastError(
         (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
-          ?.message || 'Failed to save team member'
+          ?.message || 'Failed to save member'
       );
     } finally {
       setSaving(false);
@@ -162,62 +150,136 @@ export default function TeamMembersTab({
   };
 
   const handleRemove = async () => {
-    if (!editing || !confirm(`Remove ${editing.name} from the team?`)) return;
+    if (!editing) return;
     setSaving(true);
     try {
       await teamApi.remove(editing.id, {
         reassignToId: reassignToId || undefined,
       });
       closeSlide();
+      setRemoveOpen(false);
       load();
-      toastSuccess('Team member removed');
+      toastSuccess('Member removed');
     } catch (err: unknown) {
       toastError(
         (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
-          ?.message || 'Failed to remove team member'
+          ?.message || 'Failed to remove member'
       );
     } finally {
       setSaving(false);
     }
   };
 
-  const hasActiveFilters = Boolean(search || roleFilter || deptFilter);
+  const hasActiveFilters = Boolean(search || roleFilter);
+
+  const emptyState = (
+    <EmptyState
+      icon={Headset}
+      variant={hasActiveFilters ? 'filter' : 'default'}
+      title={hasActiveFilters ? 'No members match your search' : 'No team members yet'}
+      description={
+        hasActiveFilters
+          ? 'Try a different name or role filter.'
+          : canManage
+            ? 'Add teammates so they can reply to customer chats.'
+            : 'Team members will appear here.'
+      }
+      action={
+        canManage && !hasActiveFilters ? (
+          <AppButton icon={<Plus size={16} />} onClick={openCreate}>
+            Add member
+          </AppButton>
+        ) : undefined
+      }
+    />
+  );
+
+  const renderTable = () => (
+    <DataTable
+      headers={canManage ? ['Member', 'Status', 'Role', 'Actions'] : ['Member', 'Status', 'Role']}
+      className="border-0 bg-transparent shadow-none"
+    >
+      {filteredMembers.map((member, index) => {
+        const editable = canManage && member.orgRole !== 'OWNER';
+
+        return (
+          <tr
+            key={member.id}
+            className={`border-t border-theme-border transition-colors ${
+              editable ? 'cursor-pointer hover:bg-theme-subtle/40' : ''
+            }`}
+            onClick={() => editable && openEdit(member)}
+          >
+            <TableSerialCell rowIndex={index} />
+            <td className="px-5 py-3.5">
+              <div className="flex items-center gap-3">
+                <ContactAvatar name={member.name} phone={member.email} size="sm" />
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-theme-fg">
+                    {member.name}
+                    {member.isCurrentUser && (
+                      <span className="ml-2 text-[11px] font-medium text-whatsapp-700 dark:text-whatsapp-300">
+                        You
+                      </span>
+                    )}
+                  </p>
+                  <p className="truncate text-[12px] text-theme-muted">{member.email}</p>
+                  {member.department && (
+                    <p className="mt-0.5 truncate text-[11px] text-theme-secondary">
+                      {member.department.name}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </td>
+            <td className="px-5 py-3.5">
+              <AvailabilityBadge status={member.availability} />
+            </td>
+            <td className="px-5 py-3.5">
+              <RoleBadge role={member.orgRole} />
+            </td>
+            {canManage && (
+              <td className="px-5 py-3.5" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-end gap-1.5">
+                  {editable ? (
+                    <TableIconButton
+                      onClick={() => openEdit(member)}
+                      icon={Pencil}
+                      label="Edit member"
+                    />
+                  ) : (
+                    <span className="text-[12px] text-theme-muted">—</span>
+                  )}
+                </div>
+              </td>
+            )}
+          </tr>
+        );
+      })}
+    </DataTable>
+  );
 
   return (
     <>
-      <div className="space-y-5">
+      <div className="inbox-shell overflow-hidden">
         <ListToolbar
+          embedded
           search={search}
           onSearchChange={setSearch}
-          searchPlaceholder="Search by name or email..."
+          searchPlaceholder="Search name or email..."
           filters={
-            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-              <AppSelect
-                className="w-full sm:w-40"
-                value={roleFilter}
-                placeholder="All roles"
-                isSearchable={false}
-                options={roleFilterOptions}
-                onChange={(e) => setRoleFilter(e.target.value)}
-              />
-              {departments.length > 0 && (
-                <AppSelect
-                  className="w-full sm:w-44"
-                  value={deptFilter}
-                  placeholder="All departments"
-                  isSearchable={false}
-                  options={[
-                    { value: '', label: 'All departments' },
-                    ...departments.map((d) => ({ value: d.id, label: d.name })),
-                  ]}
-                  onChange={(e) => setDeptFilter(e.target.value)}
-                />
-              )}
-            </div>
+            <AppSelect
+              className="w-full sm:w-40"
+              value={roleFilter}
+              placeholder="All roles"
+              isSearchable={false}
+              options={roleFilterOptions}
+              onChange={(e) => setRoleFilter(e.target.value)}
+            />
           }
           actions={
             canManage ? (
-              <AppButton icon={<Plus size={16} />} onClick={openCreate}>
+              <AppButton size="sm" icon={<Plus size={15} />} onClick={openCreate}>
                 Add member
               </AppButton>
             ) : undefined
@@ -225,198 +287,88 @@ export default function TeamMembersTab({
         />
 
         {loading ? (
-          <LoadingState label="Loading team..." />
+          <div className="p-6">
+            <LoadingState label="Loading team..." />
+          </div>
         ) : filteredMembers.length === 0 ? (
-          <EmptyState
-            icon={Headset}
-            title="No team members found"
-            description={
-              hasActiveFilters
-                ? 'Try adjusting your search or filters.'
-                : canManage
-                  ? 'Add your first agent or send an email invite.'
-                  : 'Your team list will appear here once members are added.'
-            }
-            action={
-              canManage && !hasActiveFilters ? (
-                <AppButton icon={<Plus size={16} />} onClick={openCreate}>
-                  Add member
-                </AppButton>
-              ) : undefined
-            }
-          />
+          <div className="p-4 sm:p-6">{emptyState}</div>
         ) : (
-          <DataTable
-            headers={['Member', 'Status', 'Role', 'Workload', 'Department', 'Joined', 'Actions']}
-          >
-            {filteredMembers.map((member, index) => (
-              <tr
-                key={member.id}
-                className="cursor-pointer transition hover:bg-whatsapp-500/[0.03]"
-                onClick={() => setDetailId(member.id)}
-              >
-                <TableSerialCell rowIndex={index} />
-                <td>
-                  <div className="flex items-center gap-3">
-                    <div className="relative">
-                      <ContactAvatar name={member.name} phone={member.email} size="sm" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="truncate font-semibold text-theme-fg">
-                        {member.name}
-                        {member.isCurrentUser && (
-                          <span className="ml-2 text-[11px] font-bold text-whatsapp-700">You</span>
-                        )}
-                      </p>
-                      <p className="truncate text-[12px] font-medium text-theme-secondary">
-                        {member.email}
-                      </p>
-                    </div>
-                  </div>
-                </td>
-                <td>
-                  <AvailabilityBadge status={member.availability} />
-                </td>
-                <td>
-                  <RoleBadge role={member.orgRole} />
-                </td>
-                <td>
-                  <div className="text-[13px] font-semibold tabular-nums text-theme-fg">
-                    {member.openCount ?? 0}
-                    <span className="font-normal text-theme-muted">
-                      {' '}
-                      / {member.maxConcurrentChats}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-theme-muted">{member.assignedCount} total</p>
-                </td>
-                <td>
-                  {member.department ? (
-                    <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-theme-secondary">
-                      <span
-                        className="h-2 w-2 rounded-full"
-                        style={{ backgroundColor: member.department.color }}
-                      />
-                      {member.department.name}
-                    </span>
-                  ) : (
-                    <span className="text-[12px] text-theme-muted">—</span>
-                  )}
-                </td>
-                <td className="text-[13px] text-theme-secondary">
-                  {formatJoinedDate(member.joinedAt)}
-                </td>
-                <td onClick={(e) => e.stopPropagation()}>
-                  {canManage && member.orgRole !== 'OWNER' ? (
-                    <RowActions onEdit={() => openEdit(member)} />
-                  ) : (
-                    <span className="text-[12px] text-theme-muted">—</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </DataTable>
+          <ResponsiveDataView
+            items={filteredMembers}
+            cardClassName="divide-y divide-neutral-200 dark:divide-neutral-800 lg:hidden"
+            tableClassName="px-4 sm:px-5 pt-4 sm:pb-5"
+            renderCard={(member) => (
+              <TeamMemberCard
+                member={member}
+                canEdit={canManage && member.orgRole !== 'OWNER'}
+                onEdit={() => openEdit(member)}
+              />
+            )}
+            renderTable={renderTable}
+          />
         )}
       </div>
-
-      <TeamMemberDetailPanel
-        memberId={detailId}
-        onClose={() => setDetailId(null)}
-        canManage={canManage}
-        agents={agents}
-        onUpdated={load}
-      />
 
       {canManage && (
         <SlideOver
           open={slideOpen}
           onClose={closeSlide}
-          title={editing ? 'Edit team member' : 'Add team member'}
-          subtitle={
-            editing
-              ? 'Update profile, role, capacity, or department'
-              : 'Create an account for a new support agent'
-          }
+          title={editing ? 'Edit member' : 'Add member'}
+          subtitle={editing ? editing.email : 'Create a teammate account'}
+          icon={UserPlus}
+          accent="emerald"
           footer={
             <SlideOverFooter
               onCancel={closeSlide}
-              submitLabel={editing ? 'Update member' : 'Add member'}
+              submitLabel={editing ? 'Save changes' : 'Add member'}
               loading={saving}
-              onDelete={editing && editing.orgRole !== 'OWNER' ? handleRemove : undefined}
-              deleteLabel="Remove from team"
+              onDelete={editing && editing.orgRole !== 'OWNER' ? () => setRemoveOpen(true) : undefined}
+              deleteLabel="Remove"
             />
           }
         >
           <form id="slideover-form" onSubmit={handleSubmit} className="space-y-4">
-            {!editing && (
-              <div className="rounded-2xl border border-emerald-200/70 bg-gradient-to-r from-emerald-500/10 to-whatsapp-500/5 p-4 dark:border-emerald-800/40">
-                <div className="flex items-start gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-whatsapp-600 to-emerald-700 text-white shadow-[0_4px_14px_rgba(37,211,102,0.3)]">
-                    <UserCheck className="h-4 w-4" strokeWidth={2.25} />
-                  </div>
-                  <div>
-                    <p className="text-[13px] font-extrabold text-theme-fg">Direct add</p>
-                    <p className="mt-0.5 text-[12px] font-medium text-theme-secondary">
-                      Or use the Invites tab to send a secure email link instead.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
             <AppInput
               id="team-name"
-              label="Full name"
-              placeholder="Agent name"
+              label="Name"
+              placeholder="Full name"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               required
             />
 
-            <AppInput
-              id="team-email"
-              label="Email"
-              type="email"
-              placeholder="agent@company.com"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-              required
-              disabled={!!editing}
-              hint={editing ? 'Email cannot be changed' : undefined}
-            />
+            {!editing && (
+              <>
+                <AppInput
+                  id="team-email"
+                  label="Email"
+                  type="email"
+                  placeholder="agent@company.com"
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  required
+                />
+                <AppInput
+                  id="team-password"
+                  label="Password"
+                  type="password"
+                  placeholder="Minimum 8 characters"
+                  value={form.password}
+                  onChange={(e) => setForm({ ...form, password: e.target.value })}
+                  required
+                  minLength={8}
+                />
+              </>
+            )}
 
-            <AppInput
-              id="team-password"
-              label={editing ? 'New password' : 'Password'}
-              type="password"
-              placeholder={editing ? 'Leave blank to keep current password' : 'Minimum 8 characters'}
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-              required={!editing}
-              minLength={editing ? undefined : 8}
-            />
-
-            <AppInput
-              id="team-capacity"
-              label="Max concurrent chats"
-              type="number"
-              min={1}
-              max={100}
-              value={form.maxConcurrentChats}
-              onChange={(e) => setForm({ ...form, maxConcurrentChats: e.target.value })}
-            />
-
-            {departments.length > 0 && (
-              <AppSelect
-                id="team-dept"
-                label="Department"
-                value={form.departmentId}
-                isSearchable={false}
-                options={[
-                  { value: '', label: 'No department' },
-                  ...departments.map((d) => ({ value: d.id, label: d.name })),
-                ]}
-                onChange={(e) => setForm({ ...form, departmentId: e.target.value })}
+            {editing && (
+              <AppInput
+                id="team-password"
+                label="New password"
+                type="password"
+                placeholder="Leave blank to keep current"
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
               />
             )}
 
@@ -434,31 +386,55 @@ export default function TeamMembersTab({
               />
             )}
 
-            {editing?.orgRole === 'OWNER' && (
-              <div className="flex items-start gap-3 rounded-2xl border border-violet-200/70 bg-violet-50/60 p-4 dark:border-violet-800/40 dark:bg-violet-900/20">
-                <Shield className="mt-0.5 h-4 w-4 shrink-0 text-violet-600" />
-                <p className="text-[12px] font-medium text-violet-800 dark:text-violet-200">
-                  Organization owners keep full access. Role changes are not available for this account.
-                </p>
-              </div>
-            )}
-
-            {editing && editing.assignedCount > 0 && (
+            {departments.length > 0 && (
               <AppSelect
-                id="reassign-on-remove"
-                label="On remove, reassign chats to"
-                value={reassignToId}
+                id="team-dept"
+                label="Department"
+                value={form.departmentId}
                 isSearchable={false}
                 options={[
-                  { value: '', label: 'Unassign (leave in queue)' },
-                  ...agents.filter((a) => a.id !== editing.id).map((a) => ({ value: a.id, label: a.name })),
+                  { value: '', label: 'No department' },
+                  ...departments.map((d) => ({ value: d.id, label: d.name })),
                 ]}
-                onChange={(e) => setReassignToId(e.target.value)}
+                onChange={(e) => setForm({ ...form, departmentId: e.target.value })}
               />
+            )}
+
+            {editing?.orgRole === 'OWNER' && (
+              <p className="text-[12px] text-theme-secondary">
+                Owner accounts cannot change role.
+              </p>
             )}
           </form>
         </SlideOver>
       )}
+
+      <ConfirmDialog
+        open={removeOpen}
+        onClose={() => setRemoveOpen(false)}
+        onConfirm={() => void handleRemove()}
+        title={`Remove ${editing?.name ?? 'member'}?`}
+        description="They will lose access to this workspace."
+        confirmLabel="Remove"
+        variant="danger"
+        loading={saving}
+      >
+        {editing && editing.assignedCount > 0 && (
+          <div className="mt-4">
+            <AppSelect
+              id="reassign-on-remove"
+              label="Reassign their chats to"
+              value={reassignToId}
+              isSearchable={false}
+              options={[
+                { value: '', label: 'Leave unassigned' },
+                ...agents.filter((a) => a.id !== editing.id).map((a) => ({ value: a.id, label: a.name })),
+              ]}
+              onChange={(e) => setReassignToId(e.target.value)}
+            />
+          </div>
+        )}
+      </ConfirmDialog>
     </>
   );
 }

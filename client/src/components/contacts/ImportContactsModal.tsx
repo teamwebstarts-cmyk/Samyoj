@@ -9,8 +9,10 @@ import {
 } from 'lucide-react';
 import AppAlert from '../ui/AppAlert';
 import AppButton from '../ui/AppButton';
-import { toastError, toastSuccess } from '../../utils/toast';
+import { ModalCallout, ModalPanel, ModalSection } from '../ui/modalUi';
 import SlideOver from '../ui/SlideOver';
+import { toastError, toastSuccess } from '../../utils/toast';
+import { messagingConsent } from '../../utils/plainLanguage';
 import {
   CONTACT_IMPORT_ACCEPT,
   downloadContactImportTemplate,
@@ -33,6 +35,7 @@ export default function ImportContactsModal({ open, onClose, onImport }: ImportC
   const [dragging, setDragging] = useState(false);
   const [preview, setPreview] = useState<ContactImportPreview>(emptyPreview);
   const [importing, setImporting] = useState(false);
+
   const resetState = useCallback(() => {
     setPreview(emptyPreview);
     setDragging(false);
@@ -75,9 +78,7 @@ export default function ImportContactsModal({ open, onClose, onImport }: ImportC
     try {
       await onImport(preview.rows);
       toastSuccess(`Successfully imported ${preview.rows.length} contact(s).`);
-      setTimeout(() => {
-        handleClose();
-      }, 900);
+      handleClose();
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
@@ -95,70 +96,65 @@ export default function ImportContactsModal({ open, onClose, onImport }: ImportC
       open={open}
       onClose={handleClose}
       title="Import contacts"
-      subtitle="Download the template, fill in your customers, then upload the file."
+      subtitle="Upload a CSV or JSON file with your customer list"
       size="lg"
+      icon={Upload}
+      accent="sky"
       footer={
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <button
-            type="button"
+        <div className="flex w-full flex-wrap items-center gap-2">
+          <AppButton
+            variant="secondary"
+            size="sm"
             onClick={handleClose}
             disabled={importing}
-            className="inline-flex h-10 items-center justify-center rounded-xl border border-theme-border bg-theme-surface px-4 text-[13px] font-semibold text-theme-fg transition hover:bg-theme-subtle disabled:opacity-50"
+            className="flex-1 sm:flex-none"
           >
             Cancel
-          </button>
-          <button
-            type="button"
-            disabled={!canImport}
+          </AppButton>
+          <AppButton
             onClick={() => void handleImport()}
-            className="btn-primary inline-flex h-10 items-center justify-center gap-2 rounded-xl px-4 text-[13px] font-semibold disabled:opacity-50"
+            loading={importing}
+            disabled={!canImport}
+            icon={<Upload size={16} />}
+            size="sm"
+            className="flex-1 sm:flex-none"
           >
-            {importing && (
-              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-            )}
-            {!importing && <Upload className="h-4 w-4" strokeWidth={2.25} />}
-            Import {preview.rows.length > 0 ? `${preview.rows.length} contacts` : 'contacts'}
-          </button>
+            Import{preview.rows.length > 0 ? ` ${preview.rows.length} contacts` : ' contacts'}
+          </AppButton>
         </div>
       }
     >
       <div className="space-y-5">
-        <AppAlert variant="info">
-          <span>
-            <strong className="font-bold">Opt-in compliance:</strong> Only import contacts who have
-            given consent to receive WhatsApp messages. Manage opt-in status from the contacts list
-            after import.
-          </span>
-        </AppAlert>
+        <ModalCallout
+          icon={CheckCircle2}
+          accent="sky"
+          title="Before you import"
+          description={messagingConsent.importNotice}
+        />
 
-        <section className="rounded-2xl border border-sky-200/70 bg-gradient-to-r from-sky-500/10 to-blue-500/5 p-4">
-          <div className="flex flex-col gap-4">
-            <div className="min-w-0">
-              <p className="text-[13px] font-extrabold text-neutral-900">Step 1 — Download template</p>
-              <p className="mt-1 text-[12px] font-medium text-neutral-600">
-                Use the CSV template with sample rows. Phone must include country code without +.
+        <ModalSection
+          step={1}
+          title="Download template"
+          subtitle={`Use international format with country code. ${PHONE_HINT}`}
+        >
+          <ModalPanel title="CSV template" accent="sky">
+            <div className="space-y-3">
+              <p className="text-[12px] font-medium text-theme-secondary">
+                Columns: <span className="font-semibold text-theme-fg">phone</span>, name, tags (optional)
               </p>
-              <p className="mt-1 text-[11px] font-medium text-neutral-500">{PHONE_HINT}</p>
+              <AppButton
+                variant="secondary"
+                icon={<Download size={16} />}
+                onClick={downloadContactImportTemplate}
+                fullWidth
+              >
+                Download CSV template
+              </AppButton>
             </div>
-            <AppButton
-              variant="secondary"
-              icon={<Download size={16} />}
-              onClick={downloadContactImportTemplate}
-              fullWidth
-            >
-              Download template
-            </AppButton>
-          </div>
-        </section>
+          </ModalPanel>
+        </ModalSection>
 
-        <section className="space-y-3">
-          <div>
-            <p className="text-[13px] font-extrabold text-neutral-900">Step 2 — Upload file</p>
-            <p className="mt-1 text-[12px] font-medium text-neutral-600">
-              Drag and drop your CSV or JSON file, or click to browse.
-            </p>
-          </div>
-
+        <ModalSection step={2} title="Upload file" subtitle="Drag and drop or click to browse">
           <div
             onDragEnter={(e) => {
               e.preventDefault();
@@ -176,8 +172,8 @@ export default function ImportContactsModal({ open, onClose, onImport }: ImportC
             onClick={() => inputRef.current?.click()}
             className={`flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-10 text-center transition ${
               dragging
-                ? 'border-sky-400 bg-sky-50/80'
-                : 'border-neutral-200 bg-neutral-50/60 hover:border-sky-300 hover:bg-sky-50/40'
+                ? 'border-sky-400 bg-sky-50/80 dark:border-sky-500/50 dark:bg-sky-950/30'
+                : 'border-theme-border bg-theme-subtle/50 hover:border-sky-300 hover:bg-sky-50/40 dark:hover:border-sky-700/50 dark:hover:bg-sky-950/20'
             }`}
           >
             <input
@@ -188,23 +184,25 @@ export default function ImportContactsModal({ open, onClose, onImport }: ImportC
               onChange={(e) => handleFiles(e.target.files)}
             />
 
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-sky-600 shadow-sm ring-1 ring-sky-100">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-theme-surface text-sky-600 shadow-sm ring-1 ring-sky-200/60 dark:text-sky-400 dark:ring-sky-800/40">
               <Upload className="h-5 w-5" strokeWidth={2.25} />
             </div>
-            <p className="mt-4 text-[13px] font-bold text-neutral-900">
+            <p className="mt-4 text-[13px] font-bold text-theme-fg">
               {dragging ? 'Drop file here' : 'Drag & drop your file here'}
             </p>
-            <p className="mt-1 text-[12px] font-medium text-neutral-500">or click to choose CSV / JSON</p>
+            <p className="mt-1 text-[12px] font-medium text-theme-muted">
+              CSV / JSON only · Max 1 file
+            </p>
           </div>
 
           {preview.fileName && (
-            <div className="flex items-center gap-3 rounded-xl border border-neutral-200/80 bg-white px-3 py-2.5">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+            <div className="flex items-center gap-3 rounded-xl border border-theme-border bg-theme-surface px-3 py-2.5">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
                 <FileSpreadsheet className="h-4 w-4" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[13px] font-semibold text-neutral-900">{preview.fileName}</p>
-                <p className="text-[11px] font-medium text-neutral-500">
+                <p className="truncate text-[13px] font-semibold text-theme-fg">{preview.fileName}</p>
+                <p className="text-[11px] font-medium text-theme-muted">
                   {preview.rows.length} valid row(s)
                   {preview.errors.length ? ` · ${preview.errors.length} error(s)` : ''}
                 </p>
@@ -215,14 +213,14 @@ export default function ImportContactsModal({ open, onClose, onImport }: ImportC
                   e.stopPropagation();
                   resetState();
                 }}
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-700"
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-theme-muted transition hover:bg-theme-subtle hover:text-theme-fg"
                 aria-label="Remove file"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
           )}
-        </section>
+        </ModalSection>
 
         {preview.errors.length > 0 && (
           <AppAlert variant="error">
@@ -241,40 +239,42 @@ export default function ImportContactsModal({ open, onClose, onImport }: ImportC
         )}
 
         {preview.rows.length > 0 && preview.errors.length === 0 && (
-          <section className="space-y-3">
-            <div className="flex items-center gap-2 text-emerald-700">
+          <ModalSection title="Preview" subtitle={`${preview.rows.length} contact(s) ready to import`}>
+            <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
               <CheckCircle2 className="h-4 w-4" />
-              <p className="text-[13px] font-bold">Ready to import {preview.rows.length} contact(s)</p>
+              <p className="text-[13px] font-bold">File validated successfully</p>
             </div>
 
-            <div className="overflow-hidden rounded-2xl border border-neutral-200/80">
-              <table className="min-w-full text-left text-[12px]">
-                <thead className="bg-neutral-50 text-[10px] font-bold uppercase tracking-wide text-neutral-500">
-                  <tr>
-                    <th className="px-3 py-2">Phone</th>
-                    <th className="px-3 py-2">Name</th>
-                    <th className="px-3 py-2">Tags</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-neutral-100">
-                  {preview.rows.slice(0, 5).map((row: ContactImportRow) => (
-                    <tr key={`${row.phone}-${row.name ?? ''}`}>
-                      <td className="px-3 py-2 font-mono text-neutral-700">+{row.phone}</td>
-                      <td className="px-3 py-2 text-neutral-800">{row.name || '—'}</td>
-                      <td className="px-3 py-2 text-neutral-600">
-                        {row.tags?.length ? row.tags.join(', ') : '—'}
-                      </td>
+            <ModalPanel title="Sample rows" accent="sky">
+              <div className="overflow-hidden rounded-2xl border border-theme-border">
+                <table className="min-w-full text-left text-[12px]">
+                  <thead className="bg-theme-subtle text-[10px] font-bold uppercase tracking-wide text-theme-muted">
+                    <tr>
+                      <th className="px-3 py-2">Phone</th>
+                      <th className="px-3 py-2">Name</th>
+                      <th className="px-3 py-2">Tags</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-              {preview.rows.length > 5 && (
-                <p className="border-t border-neutral-100 bg-neutral-50 px-3 py-2 text-[11px] font-medium text-neutral-500">
-                  + {preview.rows.length - 5} more row(s) not shown
-                </p>
-              )}
-            </div>
-          </section>
+                  </thead>
+                  <tbody className="divide-y divide-theme-border">
+                    {preview.rows.slice(0, 5).map((row: ContactImportRow) => (
+                      <tr key={`${row.phone}-${row.name ?? ''}`}>
+                        <td className="px-3 py-2 font-mono text-theme-secondary">+{row.phone}</td>
+                        <td className="px-3 py-2 text-theme-fg">{row.name || '—'}</td>
+                        <td className="px-3 py-2 text-theme-secondary">
+                          {row.tags?.length ? row.tags.join(', ') : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {preview.rows.length > 5 && (
+                  <p className="border-t border-theme-border bg-theme-subtle px-3 py-2 text-[11px] font-medium text-theme-muted">
+                    + {preview.rows.length - 5} more row(s) not shown
+                  </p>
+                )}
+              </div>
+            </ModalPanel>
+          </ModalSection>
         )}
       </div>
     </SlideOver>

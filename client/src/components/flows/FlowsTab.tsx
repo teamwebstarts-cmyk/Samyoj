@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Copy,
@@ -7,24 +7,28 @@ import {
   LayoutTemplate,
   PauseCircle,
   PlayCircle,
-  Plus,
   Sparkles,
   Workflow,
 } from 'lucide-react';
 import AppButton from '../ui/AppButton';
 import AppSelect from '../ui/AppSelect';
-import DataTable, { TableSerialCell } from '../ui/DataTable';
+import DataTable from '../ui/DataTable';
 import EmptyState from '../ui/EmptyState';
 import ListToolbar from '../ui/ListToolbar';
 import LoadingState from '../ui/LoadingState';
+import ResponsiveDataView from '../ui/ResponsiveDataView';
+import SectionCard from '../ui/SectionCard';
 import Pagination from '../ui/Pagination';
 import RowActions from '../ui/RowActions';
 import { TableIconButton, TableTextButton } from '../ui/TableActions';
 import FlowCard from './FlowCard';
 import FlowTemplateCard from './FlowTemplateCard';
+import BuildFromScratchButton from './BuildFromScratchButton';
 import FlowTemplatesSlideOver from './FlowTemplatesSlideOver';
+import WhatsAppFormsPromo from './WhatsAppFormsPromo';
 import { DEFAULT_PAGE_SIZE } from '../../constants/pagination';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
+import { useOnActiveNumberChange } from '../../hooks/useOnActiveNumberChange';
 import { flowApi } from '../../services/api';
 import { getErrorMessage } from '../../utils/errors';
 import { toastError, toastSuccess } from '../../utils/toast';
@@ -41,18 +45,14 @@ interface FlowsTabProps {
   templatesOpen: boolean;
   onTemplatesOpenChange: (open: boolean) => void;
   onSummaryChange?: (summary: FlowSummary) => void;
+  onNewFlow?: () => void;
 }
-
-const statusOptions = [
-  { value: '', label: 'All' },
-  { value: 'active', label: 'On' },
-  { value: 'paused', label: 'Off' },
-] as const;
 
 export default function FlowsTab({
   templatesOpen,
   onTemplatesOpenChange,
   onSummaryChange,
+  onNewFlow,
 }: FlowsTabProps) {
   const navigate = useNavigate();
   const [flows, setFlows] = useState<Flow[]>([]);
@@ -86,6 +86,14 @@ export default function FlowsTab({
       .catch((err) => toastError(getErrorMessage(err, 'Failed to load flows')))
       .finally(() => setLoading(false));
   }, [debouncedSearch, statusFilter, page, onSummaryChange]);
+
+  const loadRef = useRef(load);
+  loadRef.current = load;
+
+  useOnActiveNumberChange(({ isInitial }) => {
+    if (isInitial) return;
+    loadRef.current();
+  });
 
   useEffect(() => {
     flowApi
@@ -150,80 +158,56 @@ export default function FlowsTab({
 
   return (
     <>
-      <div className="space-y-4 sm:space-y-5">
-        {/* Mobile-first quick actions */}
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:hidden">
-          <AppButton
-            fullWidth
-            variant="secondary"
-            icon={<LayoutTemplate size={16} />}
-            onClick={() => onTemplatesOpenChange(true)}
-          >
-            Browse templates
-          </AppButton>
-          <AppButton
-            fullWidth
-            variant="ghost"
-            icon={<Plus size={16} />}
-            onClick={() => navigate('/automations/flows/new')}
-          >
-            Build from scratch
-          </AppButton>
-        </div>
-
+      <div className="inbox-shell overflow-hidden">
         <ListToolbar
+          embedded
           search={search}
           onSearchChange={setSearch}
           searchPlaceholder="Search flows..."
           filters={
-            <>
-              <div className="flex gap-2 overflow-x-auto pb-0.5 lg:hidden">
-                {statusOptions.map((option) => {
-                  const isActive = statusFilter === option.value;
-                  return (
-                    <button
-                      key={option.value || 'all'}
-                      type="button"
-                      onClick={() => setStatusFilter(option.value)}
-                      className={`shrink-0 rounded-full px-3.5 py-2 text-[12px] font-bold transition active:scale-[0.98] ${
-                        isActive
-                          ? 'bg-gradient-to-r from-violet-600 to-indigo-700 text-white shadow-[0_4px_12px_rgba(99,102,241,0.3)]'
-                          : 'border border-neutral-200/80 bg-white text-neutral-600 hover:border-violet-200 hover:text-violet-700'
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  );
-                })}
-              </div>
-              <AppSelect
-                className="hidden w-44 lg:block"
-                value={statusFilter}
-                placeholder="All statuses"
-                isSearchable={false}
-                options={[
-                  { value: '', label: 'All statuses' },
-                  { value: 'active', label: 'On' },
-                  { value: 'paused', label: 'Off' },
-                ]}
-                onChange={(e) => setStatusFilter(e.target.value)}
-              />
-            </>
+            <AppSelect
+              className="w-full sm:w-[132px]"
+              value={statusFilter}
+              placeholder="All statuses"
+              isSearchable={false}
+              options={[
+                { value: '', label: 'All statuses' },
+                { value: 'active', label: 'On' },
+                { value: 'paused', label: 'Off' },
+              ]}
+              onChange={(e) => setStatusFilter(e.target.value)}
+            />
+          }
+          actions={
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <AppButton
+                variant="secondary"
+                icon={<LayoutTemplate size={16} />}
+                onClick={() => onTemplatesOpenChange(true)}
+              >
+                Template
+              </AppButton>
+              <BuildFromScratchButton onClick={onNewFlow ?? (() => navigate('/automations/flows/new'))} />
+            </div>
           }
         />
 
         {loading ? (
-          <LoadingState label="Loading flows..." />
+          <div className="p-6">
+            <LoadingState label="Loading flows..." />
+          </div>
         ) : flows.length === 0 ? (
-          <div className="space-y-5">
+          <div className="space-y-5 p-4 sm:p-6">
             <EmptyState
               icon={Workflow}
-              title={hasFilters ? 'No flows found' : 'No conversation flows yet'}
+              variant={hasFilters ? 'filter' : 'default'}
+              title={hasFilters ? 'No flows match your filters' : 'No conversation flows yet'}
               description={
                 hasFilters
-                  ? 'Try a different search or filter.'
-                  : 'Start with a ready-made template — easiest way to get going.'
+                  ? 'Try a different search word or filter.'
+                  : 'Build a step-by-step chat guide — like a menu that walks customers through options.'
               }
+              steps={hasFilters ? undefined : ['Pick a ready-made template (easiest)', 'Or build from scratch', 'Turn it on when you are happy with it']}
               action={
                 !hasFilters ? (
                   <div className="grid w-full max-w-md grid-cols-1 gap-2 sm:grid-cols-2">
@@ -234,27 +218,14 @@ export default function FlowsTab({
                     >
                       Start from template
                     </AppButton>
-                    <AppButton
-                      fullWidth
-                      variant="ghost"
-                      icon={<Plus size={16} />}
-                      onClick={() => navigate('/automations/flows/new')}
-                    >
-                      Build from scratch
-                    </AppButton>
+                    <BuildFromScratchButton fullWidth onClick={() => navigate('/automations/flows/new')} />
                   </div>
                 ) : undefined
               }
             />
 
             {!hasFilters && templates.length > 0 && (
-              <section className="space-y-3">
-                <div>
-                  <h3 className="text-[14px] font-extrabold text-neutral-900">Ready-made templates</h3>
-                  <p className="mt-1 text-[12px] font-medium text-neutral-500">
-                    Tap a template — we'll set it up and you can customize the messages.
-                  </p>
-                </div>
+              <SectionCard title="Ready-made templates" subtitle="Tap a template to customize messages">
                 <div className="grid auto-rows-fr gap-3 sm:grid-cols-2">
                   {templates.slice(0, 4).map((template) => (
                     <FlowTemplateCard
@@ -268,136 +239,143 @@ export default function FlowsTab({
                 {templates.length > 4 && (
                   <AppButton
                     variant="ghost"
-                    className="w-full sm:w-auto"
+                    className="mt-3 w-full sm:w-auto"
                     onClick={() => onTemplatesOpenChange(true)}
                   >
                     View all {templates.length} templates
                   </AppButton>
                 )}
-              </section>
+              </SectionCard>
             )}
           </div>
         ) : (
           <>
-            {/* Mobile & tablet card list */}
-            <div className="space-y-3 lg:hidden">
-              {flows.map((flow) => (
+            <ResponsiveDataView
+              items={flows}
+              emptyState={null}
+              cardClassName="divide-y divide-neutral-200 dark:divide-neutral-800 lg:hidden"
+              renderCard={(flow) => (
                 <FlowCard
-                  key={flow.id}
                   flow={flow}
                   onOpen={() => navigate(`/automations/flows/${flow.id}`)}
                   onToggle={() => toggleEnabled(flow)}
                   onDuplicate={() => handleDuplicate(flow.id)}
                   onDelete={() => handleDelete(flow.id)}
                 />
-              ))}
-              {showPagination && (
-                <div className="dashboard-card overflow-hidden p-0">
-                  <Pagination
-                    page={page}
-                    pageSize={DEFAULT_PAGE_SIZE}
-                    total={total}
-                    onPageChange={setPage}
-                  />
-                </div>
               )}
-            </div>
+              renderTable={() => (
+                <DataTable
+                  headers={['Flow', 'Starts when', 'Keyword', 'Steps', 'Status', 'Actions']}
+                  serialNo={false}
+                  page={page}
+                  pageSize={DEFAULT_PAGE_SIZE}
+                  total={total}
+                  onPageChange={setPage}
+                >
+                  {flows.map((flow) => {
+                    const trigger = triggerMeta[flow.triggerType];
+                    const keyword = flow.triggerConfig?.keyword as string | undefined;
 
-            {/* Desktop table */}
-            <div className="hidden lg:block">
-              <DataTable
-                headers={['Flow', 'Starts when', 'Keyword', 'Steps', 'Status', 'Actions']}
-                page={page}
-                pageSize={DEFAULT_PAGE_SIZE}
-                total={total}
-                onPageChange={setPage}
-              >
-                {flows.map((flow, index) => {
-                  const trigger = triggerMeta[flow.triggerType];
-                  const keyword = flow.triggerConfig?.keyword as string | undefined;
-
-                  return (
-                    <tr key={flow.id} className="group">
-                      <TableSerialCell page={page} pageSize={DEFAULT_PAGE_SIZE} rowIndex={index} />
-                      <td>
-                        <button
-                          type="button"
-                          onClick={() => navigate(`/automations/flows/${flow.id}`)}
-                          className="flex w-full items-center gap-3 rounded-xl text-left transition hover:bg-white/60"
-                        >
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-indigo-700 text-white shadow-[0_4px_14px_rgba(99,102,241,0.3)]">
-                            <GitBranch className="h-4 w-4" strokeWidth={2.25} />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="truncate font-semibold text-neutral-900 group-hover:text-whatsapp-700">
-                              {flow.name}
-                            </p>
-                            {flow.description && (
-                              <p className="mt-0.5 truncate text-[12px] text-neutral-500">{flow.description}</p>
-                            )}
-                          </div>
-                        </button>
-                      </td>
-                      <td>
-                        <span
-                          className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${trigger?.accent || 'bg-neutral-100 text-neutral-600 ring-neutral-200/60'}`}
-                        >
-                          {trigger?.label || flow.triggerType}
-                        </span>
-                      </td>
-                      <td>
-                        {flow.triggerType === 'KEYWORD' && keyword ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2.5 py-0.5 text-[11px] font-bold text-violet-700 ring-1 ring-violet-100">
-                            <Hash className="h-3 w-3" />
-                            {keyword}
-                          </span>
-                        ) : (
-                          <span className="text-[13px] text-neutral-400">—</span>
-                        )}
-                      </td>
-                      <td className="tabular-nums text-[13px] font-semibold text-neutral-700">
-                        {flow.nodes?.length || 0}
-                      </td>
-                      <td>
-                        <span
-                          className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${
-                            flow.enabled
-                              ? 'bg-emerald-100 text-emerald-800 ring-emerald-200/70'
-                              : 'bg-neutral-100 text-neutral-500 ring-neutral-200/70'
-                          }`}
-                        >
-                          {flow.enabled ? 'On' : 'Off'}
-                        </span>
-                      </td>
-                      <td>
-                        <div className="flex items-center justify-end gap-1.5">
-                          <TableTextButton
-                            onClick={() => toggleEnabled(flow)}
-                            icon={flow.enabled ? PauseCircle : PlayCircle}
-                            variant={flow.enabled ? 'primary' : 'neutral'}
+                    return (
+                      <tr
+                        key={flow.id}
+                        className="group border-t border-theme-border transition-colors hover:bg-theme-subtle/40"
+                      >
+                        <td className="px-5 py-3.5">
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/automations/flows/${flow.id}`)}
+                            className="flex w-full items-center gap-3 text-left"
                           >
-                            {flow.enabled ? 'Turn off' : 'Turn on'}
-                          </TableTextButton>
-                          <TableIconButton
-                            onClick={() => handleDuplicate(flow.id)}
-                            icon={Copy}
-                            label="Duplicate"
-                            variant="default"
-                          />
-                          <RowActions
-                            onEdit={() => navigate(`/automations/flows/${flow.id}`)}
-                            onDelete={() => handleDelete(flow.id)}
-                          />
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </DataTable>
-            </div>
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-indigo-700 text-white shadow-[0_4px_14px_rgba(99,102,241,0.3)]">
+                              <GitBranch className="h-4 w-4" strokeWidth={2.25} />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="truncate font-semibold text-theme-fg group-hover:text-whatsapp-700">
+                                {flow.name}
+                              </p>
+                              {flow.description && (
+                                <p className="mt-0.5 truncate text-[12px] text-theme-secondary">
+                                  {flow.description}
+                                </p>
+                              )}
+                            </div>
+                          </button>
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <span
+                            className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${trigger?.accent || 'bg-theme-subtle text-theme-secondary ring-theme-border'}`}
+                          >
+                            {trigger?.label || flow.triggerType}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3.5">
+                          {flow.triggerType === 'KEYWORD' && keyword ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/10 px-2.5 py-0.5 text-[11px] font-bold text-violet-700 ring-1 ring-violet-500/20 dark:text-violet-300">
+                              <Hash className="h-3 w-3" />
+                              {keyword}
+                            </span>
+                          ) : (
+                            <span className="text-[13px] text-theme-muted">—</span>
+                          )}
+                        </td>
+                        <td className="px-5 py-3.5 tabular-nums text-[13px] font-semibold text-theme-fg">
+                          {flow.nodes?.length || 0}
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <span
+                            className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${
+                              flow.enabled
+                                ? 'bg-emerald-500/10 text-emerald-800 ring-emerald-500/20 dark:text-emerald-300'
+                                : 'bg-theme-subtle text-theme-muted ring-theme-border'
+                            }`}
+                          >
+                            {flow.enabled ? 'On' : 'Off'}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3.5 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <TableTextButton
+                              onClick={() => toggleEnabled(flow)}
+                              icon={flow.enabled ? PauseCircle : PlayCircle}
+                              variant={flow.enabled ? 'primary' : 'neutral'}
+                            >
+                              {flow.enabled ? 'Turn off' : 'Turn on'}
+                            </TableTextButton>
+                            <TableIconButton
+                              onClick={() => handleDuplicate(flow.id)}
+                              icon={Copy}
+                              label="Duplicate"
+                              variant="default"
+                            />
+                            <RowActions
+                              onEdit={() => navigate(`/automations/flows/${flow.id}`)}
+                              onDelete={() => handleDelete(flow.id)}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </DataTable>
+              )}
+            />
+            {showPagination && (
+              <div className="border-t border-theme-border lg:hidden">
+                <Pagination
+                  page={page}
+                  pageSize={DEFAULT_PAGE_SIZE}
+                  total={total}
+                  onPageChange={setPage}
+                  className="!border-t-0"
+                />
+              </div>
+            )}
           </>
         )}
       </div>
+
+      <WhatsAppFormsPromo />
 
       <FlowTemplatesSlideOver
         open={templatesOpen}

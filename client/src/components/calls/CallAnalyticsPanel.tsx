@@ -38,7 +38,7 @@ export default function CallAnalyticsPanel({ data, loading }: CallAnalyticsPanel
     { label: 'Agent handled', value: data.agentAnswered, icon: User },
     { label: 'Missed', value: data.missed, icon: PhoneMissed },
     { label: 'Avg duration', value: formatDuration(data.avgDurationSec), icon: BarChart3 },
-    { label: 'Outbound', value: data.outbound, icon: PhoneCall },
+    { label: 'Calls made', value: data.outbound, icon: PhoneCall },
   ];
 
   const maxDay = Math.max(...data.byDay.map((d) => d.count), 1);

@@ -24,6 +24,7 @@ export interface ContactActivityItem {
 
 export interface ContactDetail {
   contact: Contact;
+  lead?: { id: string; stage: string; title: string } | null;
   conversations: Array<{
     id: string;
     status: string;
@@ -50,7 +51,8 @@ function buildContactWhere(
     optedIn?: string;
     source?: string;
     activeSince?: Date;
-  }
+  },
+  whatsappNumberId?: string
 ): Prisma.ContactWhereInput {
   const andConditions: Prisma.ContactWhereInput[] = [];
 
@@ -83,7 +85,16 @@ function buildContactWhere(
   }
   if (filters.activeSince) {
     andConditions.push({
-      conversations: { some: { lastMessageAt: { gte: filters.activeSince } } },
+      conversations: {
+        some: {
+          lastMessageAt: { gte: filters.activeSince },
+          ...(whatsappNumberId ? { whatsappNumberId } : {}),
+        },
+      },
+    });
+  } else if (whatsappNumberId) {
+    andConditions.push({
+      conversations: { some: { whatsappNumberId } },
     });
   }
 
@@ -92,12 +103,15 @@ function buildContactWhere(
   return where;
 }
 
-async function enrichContacts(contacts: Contact[]): Promise<ContactListItem[]> {
+async function enrichContacts(contacts: Contact[], whatsappNumberId?: string): Promise<ContactListItem[]> {
   if (!contacts.length) return [];
 
   const ids = contacts.map((c) => c.id);
   const conversations = await prisma.conversation.findMany({
-    where: { contactId: { in: ids } },
+    where: {
+      contactId: { in: ids },
+      ...(whatsappNumberId ? { whatsappNumberId } : {}),
+    },
     orderBy: { lastMessageAt: 'desc' },
     select: {
       id: true,
@@ -145,17 +159,22 @@ export async function listContacts(
     active?: string;
     page?: string;
     limit?: string;
-  }
+  },
+  whatsappNumberId?: string
 ) {
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-  const where = buildContactWhere(orgId, {
-    search: query.search,
-    tag: query.tag,
-    named: query.named,
-    optedIn: query.optedIn,
-    source: query.source,
-    activeSince: query.active === '7d' ? sevenDaysAgo : undefined,
-  });
+  const where = buildContactWhere(
+    orgId,
+    {
+      search: query.search,
+      tag: query.tag,
+      named: query.named,
+      optedIn: query.optedIn,
+      source: query.source,
+      activeSince: query.active === '7d' ? sevenDaysAgo : undefined,
+    },
+    whatsappNumberId
+  );
 
   const page = parseInt(query.page || '1');
   const limit = parseInt(query.limit || '50');
@@ -187,7 +206,7 @@ export async function listContacts(
     }),
   ]);
 
-  const enriched = await enrichContacts(contacts);
+  const enriched = await enrichContacts(contacts, whatsappNumberId);
 
   return {
     contacts: enriched,
@@ -220,7 +239,7 @@ export async function getContactDetail(orgId: string, contactId: string): Promis
 
   const conversationIds = conversations.map((c) => c.id);
 
-  const [messages, calls, campaignRecipients, totalMessages, totalCalls, campaignsReceived] =
+  const [messages, calls, campaignRecipients, totalMessages, totalCalls, campaignsReceived, lead] =
     await Promise.all([
       conversationIds.length
         ? prisma.message.findMany({
@@ -270,6 +289,10 @@ export async function getContactDetail(orgId: string, contactId: string): Promis
       prisma.campaignRecipient.count({
         where: { phone: contact.phone, campaign: { organizationId: orgId } },
       }),
+      prisma.lead.findFirst({
+        where: { organizationId: orgId, contactId: contact.id },
+        select: { id: true, stage: true, title: true },
+      }),
     ]);
 
   const activity: ContactActivityItem[] = [
@@ -308,6 +331,7 @@ export async function getContactDetail(orgId: string, contactId: string): Promis
 
   return {
     contact,
+    lead,
     conversations,
     activity,
     stats: { totalMessages, totalCalls, campaignsReceived },

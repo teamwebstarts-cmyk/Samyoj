@@ -1,59 +1,87 @@
-import { useEffect, useState } from 'react';
-import { ClipboardList } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { ClipboardList, RefreshCw } from 'lucide-react';
+import AppButton from '../ui/AppButton';
+import DataTable from '../ui/DataTable';
+import EmptyState from '../ui/EmptyState';
 import LoadingState from '../ui/LoadingState';
-import SectionCard from '../ui/SectionCard';
 import { teamApi } from '../../services/api';
-import type { TeamAuditLog } from '../../types';
 import { auditActionLabels, formatRelativeTime } from './teamUi';
 
+interface AuditLog {
+  id: string;
+  action: string;
+  createdAt: string;
+  metadata?: Record<string, unknown> | null;
+  actor?: { id: string; name: string; email: string } | null;
+  targetUser?: { id: string; name: string; email: string } | null;
+}
+
 export default function TeamAuditTab() {
-  const [logs, setLogs] = useState<TeamAuditLog[]>([]);
+  const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    teamApi.audit(50)
-      .then(({ data }) => setLogs(data.data.logs))
+  const load = useCallback(() => {
+    setLoading(true);
+    teamApi
+      .audit(100)
+      .then(({ data }) => setLogs(data.data.logs || []))
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <LoadingState label="Loading activity log..." />;
+  useEffect(() => {
+    load();
+  }, [load]);
 
   return (
-    <SectionCard
-      title="Activity log"
-      subtitle="Track team changes, invites, and security events"
-    >
-      {logs.length === 0 ? (
-        <p className="py-8 text-center text-[13px] text-theme-secondary">No activity yet</p>
+    <div className="inbox-shell overflow-hidden">
+      <div className="flex items-center justify-end border-b border-theme-border px-4 py-3.5 sm:px-5">
+        <AppButton variant="secondary" size="sm" icon={<RefreshCw size={15} />} onClick={load}>
+          Refresh
+        </AppButton>
+      </div>
+
+      {loading ? (
+        <div className="p-6">
+          <LoadingState label="Loading audit log…" />
+        </div>
+      ) : logs.length === 0 ? (
+        <div className="p-4 sm:p-6">
+          <EmptyState
+            icon={ClipboardList}
+            title="No activity logged yet"
+            description="Team changes like invites, role updates, and settings edits will show up here."
+            compact
+          />
+        </div>
       ) : (
-        <div className="relative space-y-0">
-          <div className="absolute bottom-2 left-[15px] top-2 w-px bg-theme-border/60" aria-hidden />
-          {logs.map((log) => (
-            <div key={log.id} className="relative flex gap-4 pb-5 last:pb-0">
-              <div className="relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-theme-border bg-theme-bg">
-                <ClipboardList className="h-3.5 w-3.5 text-theme-muted" />
-              </div>
-              <div className="min-w-0 flex-1 pt-0.5">
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                  <p className="text-[13px] font-semibold text-theme-fg">
-                    {auditActionLabels[log.action] ?? log.action}
+        <div className="px-4 pb-5 pt-4 sm:px-5">
+          <DataTable
+            headers={['Action', 'Actor', 'Target', 'When']}
+            serialNo={false}
+            className="border-0 bg-transparent shadow-none"
+          >
+            {logs.map((log) => (
+              <tr key={log.id} className="border-t border-theme-border hover:bg-theme-subtle/40">
+                <td className="px-5 py-3.5">
+                  <p className="font-semibold text-theme-fg">
+                    {auditActionLabels[log.action] || log.action}
                   </p>
-                  <span className="text-[11px] text-theme-muted">
-                    {formatRelativeTime(log.createdAt)}
-                  </span>
-                </div>
-                <p className="mt-0.5 text-[12px] text-theme-secondary">
-                  {log.actor?.name && <span>{log.actor.name}</span>}
-                  {log.targetUser && log.targetUser.id !== log.actor?.id && (
-                    <span> → {log.targetUser.name}</span>
-                  )}
-                </p>
-              </div>
-            </div>
-          ))}
+                </td>
+                <td className="px-5 py-3.5 text-[13px] text-theme-secondary">
+                  {log.actor?.name || log.actor?.email || 'System'}
+                </td>
+                <td className="px-5 py-3.5 text-[13px] text-theme-secondary">
+                  {log.targetUser?.name || log.targetUser?.email || '—'}
+                </td>
+                <td className="px-5 py-3.5 text-[12px] tabular-nums text-theme-muted">
+                  {formatRelativeTime(log.createdAt)}
+                </td>
+              </tr>
+            ))}
+          </DataTable>
         </div>
       )}
-    </SectionCard>
+    </div>
   );
 }

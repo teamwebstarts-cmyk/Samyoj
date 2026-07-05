@@ -3,6 +3,7 @@ import type { AgentAvailability, OrgRole } from '@prisma/client';
 import {
   DEFAULT_TEAM_SETTINGS,
   type ShiftSchedule,
+  type TeamPermissions,
   type TeamSettings,
 } from './types';
 
@@ -90,8 +91,6 @@ export async function getEligibleAgents(
       },
     });
 
-    if (pending >= member.maxConcurrentChats) continue;
-
     eligible.push({
       userId: member.userId,
       name: member.user.name,
@@ -172,6 +171,33 @@ export async function saveTeamSettings(
   });
 
   return merged;
+}
+
+export async function getOrgRolePermissions(
+  organizationId: string
+): Promise<Partial<Record<OrgRole, Partial<TeamPermissions>>> | null> {
+  const settings = await getTeamSettingsFromOrg(organizationId);
+  return settings.rolePermissions ?? null;
+}
+
+export async function saveOrgRolePermissions(
+  organizationId: string,
+  rolePermissions: Partial<Record<OrgRole, Partial<TeamPermissions>>>
+): Promise<Partial<Record<OrgRole, Partial<TeamPermissions>>>> {
+  const org = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: { settings: true },
+  });
+  const current = (org?.settings as Record<string, unknown>) || {};
+  const existing = getTeamSettings(org?.settings);
+  const mergedRolePermissions = {
+    ...(existing.rolePermissions ?? {}),
+    ...rolePermissions,
+  };
+
+  await saveTeamSettings(organizationId, { rolePermissions: mergedRolePermissions });
+
+  return mergedRolePermissions;
 }
 
 export { getTeamSettings, isWithinShift };

@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import { AuthProvider } from './contexts/AuthContext';
+import { WhatsAppNumberProvider } from './contexts/WhatsAppNumberContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout';
@@ -27,9 +28,8 @@ import ReportsPage from './pages/ReportsPage';
 import BillingPage from './pages/BillingPage';
 import ContentStudioPage from './pages/ContentStudioPage';
 import CommercePage from './pages/CommercePage';
-import LeadsPage from './pages/LeadsPage';
 import TicketsPage from './pages/TicketsPage';
-import OnboardingPage from './pages/OnboardingPage';
+import OnboardingGate from './components/OnboardingGate';
 import { AppToaster } from './utils/toast';
 
 const ComponentShowcase = import.meta.env.DEV
@@ -40,54 +40,58 @@ export default function App() {
   return (
     <ErrorBoundary>
       <ThemeProvider>
-      <AuthProvider>
-        <AppToaster />
-        <BrowserRouter>
-          <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-          <Route path="/reset-password" element={<ResetPasswordPage />} />
-          <Route path="/invite/:token" element={<AcceptInvitePage />} />
-          <Route element={<ProtectedRoute />}>
-            <Route path="/settings/whatsapp/callback" element={<WhatsappCallbackPage />} />
-            <Route path="/onboarding" element={<OnboardingPage />} />
-            <Route element={<Layout />}>
-              <Route path="/" element={<DashboardPage />} />
-              <Route path="/inbox" element={<InboxPage />} />
-              <Route path="/calls" element={<CallsPage />} />
-              <Route path="/calls/:callId" element={<CallsPage />} />
-              <Route path="/automations" element={<AutomationsPage />} />
-              <Route path="/automations/flows/:id" element={<FlowBuilderPage />} />
-              <Route path="/automations/meta-flows/:id" element={<MetaFlowBuilder />} />
-              <Route path="/ai-bot" element={<AiBotPage />} />
-              <Route path="/campaigns" element={<CampaignsPage />} />
-              <Route path="/templates" element={<TemplatesPage />} />
-              <Route path="/content-studio" element={<ContentStudioPage />} />
-              <Route path="/commerce" element={<CommercePage />} />
-              <Route path="/leads" element={<LeadsPage />} />
-              <Route path="/tickets" element={<TicketsPage />} />
-              <Route path="/contacts" element={<ContactsPage />} />
-              <Route path="/team" element={<TeamPage />} />
-              <Route path="/reports" element={<ReportsPage />} />
-              <Route path="/billing" element={<BillingPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-              {import.meta.env.DEV && ComponentShowcase && (
-                <Route
-                  path="/dev/components"
-                  element={
-                    <Suspense fallback={null}>
-                      <ComponentShowcase />
-                    </Suspense>
-                  }
-                />
-              )}
-            </Route>
-          </Route>
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
+        <AuthProvider>
+          <WhatsAppNumberProvider>
+            <AppToaster />
+            <BrowserRouter>
+              <Routes>
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/register" element={<RegisterPage />} />
+                <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                <Route path="/reset-password" element={<ResetPasswordPage />} />
+                <Route path="/invite/:token" element={<AcceptInvitePage />} />
+                <Route element={<ProtectedRoute />}>
+                  <Route path="/settings/whatsapp/callback" element={<WhatsappCallbackPage />} />
+                  <Route path="/onboarding" element={<Navigate to="/settings?tab=setup" replace />} />
+                  <Route element={<OnboardingGate />}>
+                    <Route element={<Layout />}>
+                      <Route path="/" element={<DashboardPage />} />
+                      <Route path="/inbox" element={<InboxPage />} />
+                      <Route path="/calls" element={<CallsPage />} />
+                      <Route path="/calls/:callId" element={<CallsPage />} />
+                      <Route path="/automations" element={<AutomationsPage />} />
+                      <Route path="/automations/flows/:id" element={<FlowBuilderPage />} />
+                      <Route path="/automations/meta-flows/:id" element={<MetaFlowBuilder />} />
+                      <Route path="/ai-bot" element={<AiBotPage />} />
+                      <Route path="/campaigns" element={<CampaignsPage />} />
+                      <Route path="/templates" element={<TemplatesPage />} />
+                      <Route path="/content-studio" element={<ContentStudioPage />} />
+                      <Route path="/commerce" element={<CommercePage />} />
+                      <Route path="/leads" element={<Navigate to="/contacts?tab=pipeline" replace />} />
+                      <Route path="/tickets" element={<TicketsPage />} />
+                      <Route path="/contacts" element={<ContactsPage />} />
+                      <Route path="/team" element={<TeamPage />} />
+                      <Route path="/reports" element={<ReportsPage />} />
+                      <Route path="/billing" element={<BillingPage />} />
+                      <Route path="/settings" element={<SettingsPage />} />
+                      {import.meta.env.DEV && ComponentShowcase && (
+                        <Route
+                          path="/dev/components"
+                          element={
+                            <Suspense fallback={null}>
+                              <ComponentShowcase />
+                            </Suspense>
+                          }
+                        />
+                      )}
+                    </Route>
+                  </Route>
+                </Route>
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </BrowserRouter>
+          </WhatsAppNumberProvider>
+        </AuthProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );

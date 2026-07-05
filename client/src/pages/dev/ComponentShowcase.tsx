@@ -61,8 +61,9 @@ export default function ComponentShowcase() {
 
         <EmptyState
           icon={MessageSquare}
-          title="Empty state"
-          description="Used when lists have no items."
+          title="Nothing here yet"
+          description="This is what users see when a list has no items. Keep the message simple and add a clear next step."
+          steps={['Explain what goes here in plain language', 'Show numbered steps if setup is needed', 'Add one main action button']}
           action={<AppButton icon={<Send size={14} />}>Primary action</AppButton>}
         />
       </div>

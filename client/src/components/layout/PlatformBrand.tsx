@@ -1,7 +1,8 @@
 import { MessageCircle } from 'lucide-react';
 
-export const PLATFORM_NAME = 'WA Platform';
-export const PLATFORM_TAGLINE = 'Business messaging';
+export const PLATFORM_NAME = 'Samyoj';
+/** Short tagline — fits sidebar (~140px text area) without truncation */
+export const PLATFORM_TAGLINE = 'CRM & Automation';
 
 interface PlatformBrandProps {
   variant?: 'light' | 'dark';
@@ -38,19 +39,19 @@ export function PlatformBrand({ variant = 'dark', size = 'md', collapsed = false
   }
 
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex min-w-0 flex-1 items-center gap-2.5">
       <PlatformLogo size={size === 'sm' ? 'sm' : 'md'} />
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <p
           className={`truncate font-bold tracking-[-0.02em] ${
-            size === 'sm' ? 'text-[13px]' : 'text-sm'
+            size === 'sm' ? 'text-sm' : 'text-base'
           } ${isLight ? 'text-white' : 'text-theme-fg'}`}
         >
           {PLATFORM_NAME}
         </p>
         <p
-          className={`truncate text-[11px] font-medium ${
-            isLight ? 'text-emerald-50' : 'text-theme-secondary'
+          className={`truncate text-[10px] font-medium leading-tight tracking-wide ${
+            isLight ? 'text-emerald-100/80' : 'text-theme-muted'
           }`}
         >
           {PLATFORM_TAGLINE}

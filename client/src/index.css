@@ -302,10 +302,12 @@
   }
 
   .auth-card {
-    border-radius: 1.25rem;
+    border-radius: 1.35rem;
     border: 1px solid var(--color-border);
     background: var(--color-surface-elevated);
-    box-shadow: var(--shadow-panel);
+    box-shadow:
+      var(--shadow-panel),
+      0 0 0 1px rgba(37, 211, 102, 0.04);
     backdrop-filter: blur(20px) saturate(1.15);
     -webkit-backdrop-filter: blur(20px) saturate(1.15);
   }
@@ -550,12 +552,102 @@
   }
 
   .inbox-shell {
-    border-radius: 1rem;
+    border-radius: 1.25rem;
     border: 1px solid var(--color-border);
-    background: var(--gradient-card);
-    box-shadow: var(--shadow-panel);
+    background: var(--color-surface);
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.6) inset,
+      0 1px 2px rgba(15, 23, 42, 0.04),
+      0 16px 48px rgba(15, 23, 42, 0.08);
+    overflow: hidden;
+  }
+
+  .dark .inbox-shell {
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.04) inset,
+      0 1px 2px rgba(0, 0, 0, 0.2),
+      0 16px 48px rgba(0, 0, 0, 0.35);
+  }
+
+  .inbox-sidebar {
+    position: relative;
+    z-index: 1;
+    flex-shrink: 0;
+    background-color: #ffffff;
+    border-right: 1px solid var(--color-border);
+  }
+
+  .dark .inbox-sidebar {
+    background-color: var(--color-surface);
+  }
+
+  .inbox-column-divider {
+    display: none;
+  }
+
+  .inbox-chat-pane {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    background-color: var(--color-surface);
+  }
+
+  .dark .inbox-chat-pane {
+    background-color: var(--color-surface);
+  }
+
+  .inbox-list-header {
+    background-color: #ffffff;
+    border-bottom: 1px solid #e2e8f0;
+  }
+
+  .dark .inbox-list-header {
+    background-color: var(--color-surface);
+    border-bottom-color: #334155;
+  }
+
+  .inbox-chat-header {
+    background: color-mix(in srgb, var(--color-surface) 88%, transparent);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .inbox-status-banner {
+    @apply flex items-center justify-center gap-2 px-4 py-2 text-center text-[12px] font-medium;
+  }
+
+  .inbox-fab {
+    background: linear-gradient(135deg, #25d366 0%, #128c7e 100%);
+    box-shadow:
+      0 4px 16px rgba(37, 211, 102, 0.4),
+      0 0 0 1px rgba(255, 255, 255, 0.15) inset;
+  }
+
+  .inbox-fab:hover {
+    box-shadow:
+      0 6px 24px rgba(37, 211, 102, 0.5),
+      0 0 0 1px rgba(255, 255, 255, 0.2) inset;
+  }
+
+  @keyframes inboxShimmer {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
+  }
+
+  .inbox-skeleton-shimmer {
+    background: linear-gradient(
+      90deg,
+      var(--color-bg-muted) 0%,
+      color-mix(in srgb, var(--color-bg-muted) 60%, var(--color-surface)) 50%,
+      var(--color-bg-muted) 100%
+    );
+    background-size: 200% 100%;
+    animation: inboxShimmer 1.5s ease-in-out infinite;
   }
 
   @keyframes slideIn {
@@ -679,6 +771,44 @@
     background-image:
       linear-gradient(rgba(11, 20, 26, 0.72), rgba(11, 20, 26, 0.72)),
       url('/chat-bg.jpg');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-blend-mode: multiply;
+  }
+
+  .inbox-placeholder-bg {
+    background-color: #f5f3ef;
+    background-image:
+      radial-gradient(ellipse 75% 55% at 85% 15%, rgba(37, 211, 102, 0.08), transparent 52%),
+      radial-gradient(ellipse 65% 50% at 10% 90%, rgba(99, 102, 241, 0.05), transparent 48%),
+      url('/chat-bg.jpg');
+    background-size:
+      100% 100%,
+      100% 100%,
+      cover;
+    background-position:
+      center,
+      center,
+      center;
+    background-repeat: no-repeat;
+  }
+
+  .dark .inbox-placeholder-bg {
+    background-color: #0b141a;
+    background-image:
+      linear-gradient(rgba(11, 20, 26, 0.55), rgba(11, 20, 26, 0.55)),
+      radial-gradient(ellipse 75% 55% at 85% 15%, rgba(37, 211, 102, 0.1), transparent 52%),
+      url('/chat-bg.jpg');
+    background-size:
+      100% 100%,
+      100% 100%,
+      cover;
+    background-position:
+      center,
+      center,
+      center;
+    background-repeat: no-repeat;
     background-blend-mode: multiply;
   }
 
@@ -717,6 +847,9 @@
     background-image:
       linear-gradient(rgba(11, 20, 26, 0.65), rgba(11, 20, 26, 0.65)),
       url('/chat-bg.jpg');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
     border-color: rgba(255, 255, 255, 0.06);
   }
 
@@ -801,6 +934,9 @@
     background-image:
       linear-gradient(rgba(11, 20, 26, 0.72), rgba(11, 20, 26, 0.72)),
       url('/chat-bg.jpg');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
     background-blend-mode: multiply;
   }
 }

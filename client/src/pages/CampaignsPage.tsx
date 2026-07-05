@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
-  Calendar,
   Copy,
   Download,
   LayoutTemplate,
@@ -12,8 +11,6 @@ import {
   Send,
   Square,
   TestTube2,
-  Trash2,
-  Users,
 } from 'lucide-react';
 import CampaignAnalyticsPanel from '../components/campaigns/CampaignAnalyticsPanel';
 import CampaignAudienceSection from '../components/campaigns/CampaignAudienceSection';
@@ -40,13 +37,10 @@ import AppSelect from '../components/ui/AppSelect';
 import EmptyState from '../components/ui/EmptyState';
 import ListToolbar from '../components/ui/ListToolbar';
 import LoadingState from '../components/ui/LoadingState';
-import PageHeader from '../components/ui/PageHeader';
 import PageHero from '../components/ui/PageHero';
 import PageShell from '../components/ui/PageShell';
 import ResponsiveDataView from '../components/ui/ResponsiveDataView';
-import FirstVisitHint from '../components/ui/FirstVisitHint';
-import { useFirstVisit } from '../hooks/useFirstVisit';
-import SlideOver from '../components/ui/SlideOver';
+import SlideOver, { SlideOverFooter } from '../components/ui/SlideOver';
 import { WhatsAppTemplatePreview } from '../components/inbox/WhatsAppPreview';
 import { DEFAULT_PAGE_SIZE } from '../constants/pagination';
 import { useAuth } from '../contexts/AuthContext';
@@ -190,7 +184,6 @@ export default function CampaignsPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [page, setPage] = useState(1);
-  const [campaignHintVisible, dismissCampaignHint] = useFirstVisit('campaigns-cost');
   const [total, setTotal] = useState(0);
   const [summary, setSummary] = useState({ total: 0, running: 0, completed: 0, sent: 0 });
   const [analytics, setAnalytics] = useState<CampaignAnalytics | null>(null);
@@ -529,7 +522,7 @@ export default function CampaignsPage() {
         /* estimate optional */
       }
     }
-    const recipientLine = count > 0 ? ` (${count.toLocaleString()} recipients)` : '';
+    const recipientLine = count > 0 ? ` (${count.toLocaleString()} people)` : '';
     if (!confirm(`Start sending this campaign?${recipientLine}${costLine}`)) return;
     try {
       await campaignApi.send(id);
@@ -580,17 +573,7 @@ export default function CampaignsPage() {
 
   return (
     <PageShell>
-      <PageHeader
-        actions={
-          canManageTeam ? (
-            <AppButton icon={<Plus size={16} />} onClick={openCreate}>
-              New Campaign
-            </AppButton>
-          ) : undefined
-        }
-      />
-
-      <div className="space-y-5 animate-fade-up-delay sm:space-y-6">
+      <div className="space-y-4 sm:space-y-5">
         <PageHero
           badge="Broadcast"
           badgeIcon={Send}
@@ -605,159 +588,107 @@ export default function CampaignsPage() {
           ]}
         />
 
-        <FirstVisitHint
-          visible={campaignHintVisible}
-          onDismiss={dismissCampaignHint}
-          title="Campaign costs add up"
-        >
-          Large broadcasts incur Meta conversation charges. Check your audience size and daily quota
-          before sending.
-        </FirstVisitHint>
-
         <CampaignQuotaBanner />
 
         {!canManageTeam && (
-          <div className="rounded-2xl border border-amber-200/70 bg-amber-50/80 px-4 py-3 text-[13px] font-medium text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
+          <div className="rounded-xl border border-amber-200/70 bg-amber-50/80 px-3.5 py-2.5 text-[12px] font-medium text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
             You have read-only access to campaigns. Ask an admin to create or send broadcasts.
           </div>
         )}
 
-        <div className="grid auto-rows-fr gap-3 sm:grid-cols-3">
-          {[
-            {
-              icon: LayoutTemplate,
-              title: 'Approved templates',
-              description: 'Only approved templates can be sent in bulk.',
-              accent: 'from-violet-500/10 via-white to-purple-500/5 border-violet-200/60 dark:via-slate-900',
-              iconBg:
-                'bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-[0_4px_14px_rgba(139,92,246,0.35)]',
-            },
-            {
-              icon: Users,
-              title: 'Smart audiences',
-              description: 'Target manual lists, tags, selected contacts, or all opted-in customers.',
-              accent: 'from-sky-500/10 via-white to-blue-500/5 border-sky-200/60 dark:via-slate-900',
-              iconBg:
-                'bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-[0_4px_14px_rgba(14,165,233,0.3)]',
-            },
-            {
-              icon: Calendar,
-              title: 'Schedule & track',
-              description: 'Send now or schedule later — monitor delivery and read rates live.',
-              accent: 'from-emerald-500/10 via-white to-teal-500/5 border-emerald-200/60 dark:via-slate-900',
-              iconBg:
-                'bg-gradient-to-br from-whatsapp-500 to-emerald-600 text-white shadow-[0_4px_14px_rgba(37,211,102,0.3)]',
-            },
-          ].map((tip) => {
-            const Icon = tip.icon;
-            return (
-              <div
-                key={tip.title}
-                className={`flex items-start gap-3 rounded-2xl border bg-gradient-to-br p-4 sm:gap-4 sm:p-5 ${tip.accent}`}
-              >
-                <div
-                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl sm:h-11 sm:w-11 ${tip.iconBg}`}
-                >
-                  <Icon className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={2.25} />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[13px] font-extrabold tracking-tight text-neutral-900 dark:text-slate-100">
-                    {tip.title}
-                  </p>
-                  <p className="mt-1 text-[11px] font-medium leading-relaxed text-neutral-600 dark:text-slate-400">
-                    {tip.description}
-                  </p>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        <ListToolbar
-          search={search}
-          onSearchChange={setSearch}
-          searchPlaceholder="Search campaigns or templates..."
-          filters={
-            <>
-              <div className="flex gap-2 overflow-x-auto pb-0.5 lg:hidden">
-                {statusFilterOptions.map((option) => {
-                  const isActive = statusFilter === option.value;
-                  return (
-                    <button
-                      key={option.value || 'all'}
-                      type="button"
-                      onClick={() => setStatusFilter(option.value)}
-                      className={`shrink-0 rounded-full px-3.5 py-2 text-[12px] font-bold transition active:scale-[0.98] ${
-                        isActive
-                          ? 'bg-gradient-to-r from-violet-500 to-purple-600 text-white shadow-[0_4px_12px_rgba(139,92,246,0.35)]'
-                          : 'border border-neutral-200/80 bg-white text-neutral-600 hover:border-violet-200 hover:text-violet-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  );
-                })}
-              </div>
+        <div className="inbox-shell overflow-hidden">
+          <ListToolbar
+            embedded
+            search={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search campaigns or templates..."
+            filters={
               <AppSelect
-                className="hidden w-44 lg:block"
+                className="w-full sm:w-[148px]"
                 value={statusFilter}
                 placeholder="All statuses"
                 isSearchable={false}
                 options={statusFilterOptions}
                 onChange={(e) => setStatusFilter(e.target.value)}
               />
-            </>
-          }
-        />
-
-        {loading ? (
-          <LoadingState label="Loading campaigns..." />
-        ) : campaigns.length === 0 ? (
-          <EmptyState
-            icon={Send}
-            title={hasFilters ? 'No campaigns found' : 'No campaigns yet'}
-            description={
-              hasFilters
-                ? 'Try adjusting your search or filters.'
-                : 'Create your first campaign to reach customers at scale with approved WhatsApp templates.'
             }
-            action={
-              !hasFilters && canManageTeam ? (
-                <AppButton icon={<Plus size={16} />} onClick={openCreate}>
-                  New Campaign
-                </AppButton>
+            actions={
+              canManageTeam ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link to="/content-studio">
+                    <AppButton variant="secondary" size="sm">
+                      Content Studio
+                    </AppButton>
+                  </Link>
+                  <AppButton icon={<Plus size={16} />} onClick={openCreate}>
+                    New campaign
+                  </AppButton>
+                </div>
               ) : undefined
             }
           />
-        ) : (
-          <ResponsiveDataView
-            items={campaigns}
-            renderCard={(c) => (
-              <CampaignCard
-                key={c.id}
-                campaign={c}
-                onView={() => openView(c)}
-                onEdit={canManageTeam ? () => openEdit(c) : undefined}
-                onSend={canManageTeam ? () => handleSend(c.id) : undefined}
-                onDelete={canManageTeam ? () => handleDeleteItem(c) : undefined}
+
+          {loading ? (
+            <div className="p-6">
+              <LoadingState label="Loading campaigns..." />
+            </div>
+          ) : campaigns.length === 0 ? (
+            <div className="p-4 sm:p-6">
+              <EmptyState
+                icon={Send}
+                variant={hasFilters ? 'filter' : 'default'}
+                title={hasFilters ? 'No campaigns match your filters' : 'No campaigns yet'}
+                description={
+                  hasFilters
+                    ? 'Try a different search word or status.'
+                    : 'Send approved WhatsApp messages to many contacts at once.'
+                }
+                steps={
+                  hasFilters
+                    ? undefined
+                    : ['Create a message template first', 'Pick contacts to send to', 'Launch your campaign']
+                }
+                action={
+                  !hasFilters && canManageTeam ? (
+                    <AppButton icon={<Plus size={16} />} onClick={openCreate}>
+                      Create campaign
+                    </AppButton>
+                  ) : undefined
+                }
               />
-            )}
-            renderTable={() => (
-              <CampaignTable
-                campaigns={campaigns}
-                page={page}
-                pageSize={DEFAULT_PAGE_SIZE}
-                total={total}
-                onPageChange={setPage}
-                canManageTeam={canManageTeam}
-                onView={openView}
-                onEdit={canManageTeam ? openEdit : undefined}
-                onSend={canManageTeam ? (c) => handleSend(c.id) : undefined}
-                onDelete={canManageTeam ? handleDeleteItem : undefined}
-              />
-            )}
-          />
-        )}
+            </div>
+          ) : (
+            <ResponsiveDataView
+              items={campaigns}
+              cardClassName="divide-y divide-neutral-200 dark:divide-neutral-800 lg:hidden"
+              tableClassName="px-4 sm:px-5 pt-4 sm:pb-5"
+              renderCard={(c) => (
+                <CampaignCard
+                  key={c.id}
+                  campaign={c}
+                  onView={() => openView(c)}
+                  onEdit={canManageTeam ? () => openEdit(c) : undefined}
+                  onSend={canManageTeam ? () => handleSend(c.id) : undefined}
+                  onDelete={canManageTeam ? () => handleDeleteItem(c) : undefined}
+                />
+              )}
+              renderTable={() => (
+                <CampaignTable
+                  campaigns={campaigns}
+                  page={page}
+                  pageSize={DEFAULT_PAGE_SIZE}
+                  total={total}
+                  onPageChange={setPage}
+                  canManageTeam={canManageTeam}
+                  onView={openView}
+                  onEdit={canManageTeam ? openEdit : undefined}
+                  onSend={canManageTeam ? (c) => handleSend(c.id) : undefined}
+                  onDelete={canManageTeam ? handleDeleteItem : undefined}
+                />
+              )}
+            />
+          )}
+        </div>
       </div>
 
       <SlideOver
@@ -766,103 +697,112 @@ export default function CampaignsPage() {
         title={viewOnly ? editing?.name || 'Campaign details' : editing ? 'Edit campaign' : 'New campaign'}
         subtitle={
           viewOnly
-            ? 'Delivery stats, recipient status, and campaign actions'
+            ? 'Delivery stats, who received it, and campaign actions'
             : 'Template, audience, schedule, and preview'
         }
-        size={viewOnly ? 'xl' : 'lg'}
+        size="xl"
         icon={Send}
         accent="violet"
         footer={
           viewOnly ? (
-            <div className="flex flex-wrap items-center justify-end gap-2.5">
-              {canManageTeam && editing?.status === 'RUNNING' && (
-                <AppButton variant="secondary" icon={<Pause size={14} />} onClick={() => editing && handleAction(() => campaignApi.pause(editing.id), 'Campaign paused')}>
-                  Pause
+            <div className="flex w-full flex-col gap-2.5">
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {canManageTeam && editing && canEditCampaign(editing.status) && (
+                  <>
+                    <AppButton size="sm" icon={<Play size={14} />} onClick={() => handleSend(editing.id)}>
+                      Send now
+                    </AppButton>
+                    <AppButton
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => {
+                        setViewOnly(false);
+                        loadTemplates();
+                      }}
+                    >
+                      Edit campaign
+                    </AppButton>
+                  </>
+                )}
+                {canManageTeam && editing?.status === 'RUNNING' && (
+                  <AppButton
+                    size="sm"
+                    variant="secondary"
+                    icon={<Pause size={14} />}
+                    onClick={() => editing && handleAction(() => campaignApi.pause(editing.id), 'Campaign paused')}
+                  >
+                    Pause
+                  </AppButton>
+                )}
+                {canManageTeam && editing?.status === 'PAUSED' && (
+                  <AppButton
+                    size="sm"
+                    variant="secondary"
+                    icon={<Play size={14} />}
+                    onClick={() => editing && handleAction(() => campaignApi.resume(editing.id), 'Campaign resumed')}
+                  >
+                    Resume
+                  </AppButton>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center justify-end gap-2 border-t border-theme-border pt-2.5">
+                {canManageTeam && editing && ['RUNNING', 'PAUSED', 'SCHEDULED'].includes(editing.status) && (
+                  <AppButton
+                    size="sm"
+                    variant="secondary"
+                    icon={<Square size={14} />}
+                    onClick={() => editing && handleAction(() => campaignApi.cancel(editing.id), 'Campaign cancelled')}
+                  >
+                    Cancel
+                  </AppButton>
+                )}
+                {canManageTeam && editing && editing.failedCount > 0 && (
+                  <AppButton
+                    size="sm"
+                    variant="secondary"
+                    icon={<RefreshCw size={14} />}
+                    onClick={() => editing && handleAction(() => campaignApi.retryFailed(editing.id), 'Retrying failed sends')}
+                  >
+                    Retry failed
+                  </AppButton>
+                )}
+                {canManageTeam && editing && (
+                  <AppButton size="sm" variant="secondary" icon={<Copy size={14} />} onClick={handleDuplicate}>
+                    Duplicate
+                  </AppButton>
+                )}
+                {editing && (
+                  <AppButton
+                    size="sm"
+                    variant="secondary"
+                    icon={<Download size={14} />}
+                    onClick={() => editing && handleExport(editing.id, editing.name)}
+                  >
+                    Export
+                  </AppButton>
+                )}
+                <AppButton size="sm" variant="secondary" onClick={closeSlide}>
+                  Close
                 </AppButton>
-              )}
-              {canManageTeam && editing?.status === 'PAUSED' && (
-                <AppButton variant="secondary" icon={<Play size={14} />} onClick={() => editing && handleAction(() => campaignApi.resume(editing.id), 'Campaign resumed')}>
-                  Resume
-                </AppButton>
-              )}
-              {canManageTeam && editing && ['RUNNING', 'PAUSED', 'SCHEDULED'].includes(editing.status) && (
-                <AppButton variant="secondary" icon={<Square size={14} />} onClick={() => editing && handleAction(() => campaignApi.cancel(editing.id), 'Campaign cancelled')}>
-                  Cancel
-                </AppButton>
-              )}
-              {canManageTeam && editing && editing.failedCount > 0 && (
-                <AppButton variant="secondary" icon={<RefreshCw size={14} />} onClick={() => editing && handleAction(() => campaignApi.retryFailed(editing.id), 'Retrying failed recipients')}>
-                  Retry failed
-                </AppButton>
-              )}
-              {canManageTeam && editing && (
-                <AppButton variant="secondary" icon={<Copy size={14} />} onClick={handleDuplicate}>
-                  Duplicate
-                </AppButton>
-              )}
-              {canManageTeam && editing && canEditCampaign(editing.status) && (
-                <AppButton icon={<Play size={14} />} onClick={() => editing && handleSend(editing.id)}>
-                  Send now
-                </AppButton>
-              )}
-              {editing && (
-                <AppButton variant="secondary" icon={<Download size={14} />} onClick={() => editing && handleExport(editing.id, editing.name)}>
-                  Export CSV
-                </AppButton>
-              )}
-              {canManageTeam && editing && canEditCampaign(editing.status) && (
-                <AppButton variant="secondary" onClick={() => { setViewOnly(false); loadTemplates(); }}>
-                  Edit campaign
-                </AppButton>
-              )}
-              <AppButton variant="secondary" onClick={closeSlide}>
-                Close
-              </AppButton>
+              </div>
             </div>
           ) : (
-            <div className="flex flex-wrap items-center gap-2.5">
-              {editing && (
-                <button
-                  type="button"
-                  onClick={handleDelete}
-                  className="mr-auto inline-flex h-10 items-center gap-2 rounded-xl border border-red-200/70 bg-red-50 px-3 text-[13px] font-semibold text-red-600 transition hover:border-red-300 hover:bg-red-100 hover:text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400"
-                >
-                  <Trash2 className="h-4 w-4" strokeWidth={2.25} />
-                  <span className="hidden sm:inline">Delete</span>
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={closeSlide}
-                className="inline-flex h-10 items-center justify-center rounded-xl border border-theme-border bg-theme-surface px-5 text-[13px] font-semibold text-theme-fg transition hover:bg-theme-subtle"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                form="slideover-form"
-                disabled={saving}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-theme-border bg-theme-surface px-5 text-[13px] font-semibold text-theme-fg transition hover:bg-theme-subtle disabled:opacity-50"
-              >
-                {saving && (
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-theme-muted/30 border-t-theme-fg" />
-                )}
-                {editing ? 'Save changes' : 'Save draft'}
-              </button>
-              {!form.scheduleEnabled && (
-                <button
-                  type="button"
-                  disabled={saving}
-                  onClick={handleSaveAndSend}
-                  className="btn-primary inline-flex h-10 items-center justify-center gap-2 rounded-xl px-5 text-[13px] font-semibold disabled:opacity-50"
-                >
-                  {saving && (
-                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                  )}
-                  {editing ? 'Save & send' : 'Create & send'}
-                </button>
-              )}
-            </div>
+            <SlideOverFooter
+              onCancel={closeSlide}
+              submitLabel="Save draft"
+              submitVariant="secondary"
+              loading={saving}
+              onDelete={editing ? handleDelete : undefined}
+              deleteLabel="Delete campaign"
+              primaryAction={
+                !form.scheduleEnabled
+                  ? {
+                      label: editing ? 'Save & send' : 'Create & send',
+                      onClick: handleSaveAndSend,
+                    }
+                  : undefined
+              }
+            />
           )
         }
       >
@@ -1031,35 +971,44 @@ export default function CampaignsPage() {
               title="Scheduling"
               subtitle="Send immediately or pick a date and time"
             >
-              <ModalPanel accent="amber">
-                <label className="flex items-center gap-2.5 text-[13px] font-semibold text-theme-fg">
-                  <input
-                    type="checkbox"
-                    checked={form.scheduleEnabled}
-                    onChange={(e) => setForm({ ...form, scheduleEnabled: e.target.checked })}
-                    className="h-4 w-4 rounded border-theme-border text-violet-600 focus:ring-violet-500/30"
+              <label
+                className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3.5 transition ${
+                  form.scheduleEnabled
+                    ? 'border-amber-500/30 bg-amber-500/[0.04]'
+                    : 'border-theme-border/70 bg-theme-surface hover:bg-theme-subtle/40'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={form.scheduleEnabled}
+                  onChange={(e) => setForm({ ...form, scheduleEnabled: e.target.checked })}
+                  className="mt-1 h-4 w-4 rounded border-theme-border text-amber-600 focus:ring-amber-500/25"
+                />
+                <div>
+                  <p className="text-[13px] font-bold text-theme-fg">Schedule for later</p>
+                  <p className="mt-0.5 text-[11px] leading-relaxed text-theme-secondary">
+                    Leave unchecked to send manually after saving
+                  </p>
+                </div>
+              </label>
+              {form.scheduleEnabled && (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <AppInput
+                    id="scheduled-at"
+                    label="Send at"
+                    type="datetime-local"
+                    value={form.scheduledAt}
+                    onChange={(e) => setForm({ ...form, scheduledAt: e.target.value })}
+                    required={form.scheduleEnabled}
                   />
-                  Schedule for later
-                </label>
-                {form.scheduleEnabled && (
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    <AppInput
-                      id="scheduled-at"
-                      label="Send at"
-                      type="datetime-local"
-                      value={form.scheduledAt}
-                      onChange={(e) => setForm({ ...form, scheduledAt: e.target.value })}
-                      required={form.scheduleEnabled}
-                    />
-                    <AppInput
-                      id="timezone"
-                      label="Timezone"
-                      value={form.timezone}
-                      onChange={(e) => setForm({ ...form, timezone: e.target.value })}
-                    />
-                  </div>
-                )}
-              </ModalPanel>
+                  <AppInput
+                    id="timezone"
+                    label="Timezone"
+                    value={form.timezone}
+                    onChange={(e) => setForm({ ...form, timezone: e.target.value })}
+                  />
+                </div>
+              )}
             </ModalSection>
 
             {templates.length === 0 && (

@@ -15,6 +15,7 @@ import { getOrgCallingSettings, resolveEffectiveVoiceConfig } from './settings.s
 import { triggerCallCompletedFlow } from '../flows/engine';
 import { handleMissedCallFollowUp } from './missed-call.service';
 import {
+  getPendingCall,
   registerActiveCall,
   removePendingCall,
   storePendingCall,
@@ -55,6 +56,11 @@ async function ensureContactAndConversation(
         status: 'OPEN',
         botActive: true,
       },
+    });
+  } else if (!conversation.whatsappNumberId) {
+    conversation = await prisma.conversation.update({
+      where: { id: conversation.id },
+      data: { whatsappNumberId },
     });
   }
 
@@ -279,12 +285,54 @@ async function handleCallConnect(
   const fromPhone = call.from || '';
   const toPhone = call.to || '';
   const direction = call.direction || 'USER_INITIATED';
-  const sdpOffer = call.session?.sdp;
+  const sessionSdp = call.session?.sdp;
 
-  if (!sdpOffer) {
-    log.warn('Call connect webhook missing SDP offer', { metaCallId });
+  if (call.biz_opaque_callback_data) {
+    const linked = await prisma.call.findFirst({
+      where: { id: call.biz_opaque_callback_data, organizationId: orgId },
+    });
+    if (linked && linked.metaCallId.startsWith('pending-') && linked.metaCallId !== metaCallId) {
+      await prisma.call.update({
+        where: { id: linked.id },
+        data: { metaCallId },
+      });
+    }
+  }
+
+  const existingCall = await prisma.call.findUnique({ where: { metaCallId } });
+  if (
+    existingCall &&
+    existingCall.direction === 'BUSINESS_INITIATED' &&
+    existingCall.handler === 'AGENT'
+  ) {
+    const sdpAnswer = call.session?.sdp_type === 'answer' ? sessionSdp : undefined;
+    const pending = await getPendingCall(metaCallId);
+
+    if (pending && sdpAnswer) {
+      await storePendingCall(metaCallId, { ...pending, sdpAnswer });
+    }
+
+    await prisma.call.update({
+      where: { id: existingCall.id },
+      data: { status: 'RINGING' },
+    });
+
+    emitToOrg(orgId, 'call:updated', {
+      callId: existingCall.id,
+      status: 'RINGING',
+      metaCallId,
+      sdpAnswer,
+    });
+    log.info('Outbound agent call ready', { metaCallId, callId: existingCall.id });
     return;
   }
+
+  if (!sessionSdp) {
+    log.warn('Call connect webhook missing SDP', { metaCallId, direction });
+    return;
+  }
+
+  const sdpOffer = sessionSdp;
 
   const normalize = (p: string) => p.replace(/\D/g, '');
   const businessDigits = normalize(businessPhone);

@@ -4,6 +4,7 @@ import SearchInput from '../ui/SearchInput';
 import { contactApi } from '../../services/api';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import type { Contact } from '../../types';
+import { messagingConsent } from '../../utils/plainLanguage';
 
 interface CampaignContactPickerProps {
   selectedIds: string[];
@@ -114,7 +115,7 @@ export default function CampaignContactPicker({ selectedIds, onChange }: Campaig
       <div className="flex items-center justify-between rounded-xl bg-emerald-50/70 px-3 py-2.5 ring-1 ring-emerald-100 dark:bg-emerald-950/25 dark:ring-emerald-900/40">
         <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-800 dark:text-emerald-300">
           <UserCheck className="h-3.5 w-3.5" />
-          Only opted-in contacts receive messages
+          {messagingConsent.contactPickerNotice}
         </p>
         <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-extrabold tabular-nums text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300">
           {selectedIds.length} selected

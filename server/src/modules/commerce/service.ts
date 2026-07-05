@@ -2,6 +2,7 @@ import type { OrderPaymentStatus, OrderStatus } from '@prisma/client';
 import { Prisma } from '@prisma/client';
 import prisma from '../../config/database';
 import type { SendMessagePayload } from '../whatsapp/meta.service';
+import { ordersForNumberFilter } from '../whatsapp/active-number';
 
 export interface OrderLineItem {
   retailerId: string;
@@ -212,7 +213,7 @@ export async function updateOrderPaymentStatus(
 
 export async function listOrders(
   organizationId: string,
-  query: { status?: OrderStatus; page?: number; limit?: number }
+  query: { status?: OrderStatus; page?: number; limit?: number; whatsappNumberId?: string }
 ) {
   const page = Math.max(1, query.page || 1);
   const limit = Math.min(100, Math.max(1, query.limit || 50));
@@ -221,6 +222,7 @@ export async function listOrders(
   const where = {
     organizationId,
     ...(query.status ? { status: query.status } : {}),
+    ...ordersForNumberFilter(query.whatsappNumberId),
   };
 
   const [orders, total] = await Promise.all([

@@ -120,7 +120,7 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
         }
 
         let conversation = await prisma.conversation.findFirst({
-          where: { organizationId: orgId, contactId: contact.id },
+          where: { organizationId: orgId, contactId: contact.id, whatsappNumberId: whatsappNumber.id },
         });
 
         const isNew = !conversation;

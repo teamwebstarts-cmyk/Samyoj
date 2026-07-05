@@ -6,6 +6,7 @@ import { authenticate, requireOrg } from '../../middleware/auth';
 import { AppError, sendSuccess, asyncHandler, paramId } from '../../utils/response';
 import { MetaWhatsAppService } from '../whatsapp/meta.service';
 import { getOrgWhatsappContext } from '../whatsapp/context';
+import { resolveActiveWhatsappNumber } from '../whatsapp/active-number';
 import {
   buildOrderStatusPayload,
   buildPaymentStatusPayload,
@@ -17,10 +18,10 @@ import {
 
 const router = Router();
 
+router.use(authenticate, requireOrg, resolveActiveWhatsappNumber);
+
 router.get(
   '/orders',
-  authenticate,
-  requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const status = req.query.status as OrderStatus | undefined;
@@ -28,6 +29,7 @@ router.get(
       status,
       page: req.query.page ? parseInt(req.query.page as string, 10) : undefined,
       limit: req.query.limit ? parseInt(req.query.limit as string, 10) : undefined,
+      whatsappNumberId: req.activeWhatsappNumberId,
     });
     sendSuccess(res, result);
   })

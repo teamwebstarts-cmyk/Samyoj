@@ -26,6 +26,7 @@ export interface TeamSettings {
   seatLimit: number;
   handoffOnlyOnline: boolean;
   respectShiftSchedule: boolean;
+  rolePermissions?: Partial<Record<OrgRole, Partial<TeamPermissions>>>;
 }
 
 export const DEFAULT_TEAM_SETTINGS: TeamSettings = {
@@ -77,11 +78,33 @@ export const DEFAULT_PERMISSIONS: Record<OrgRole, TeamPermissions> = {
 
 export function resolvePermissions(
   role: OrgRole,
-  overrides?: Record<string, boolean> | null
+  memberOverrides?: Record<string, boolean> | null,
+  orgRolePermissions?: Partial<Record<OrgRole, Partial<TeamPermissions>>> | null
 ): TeamPermissions {
-  const base = { ...DEFAULT_PERMISSIONS[role] };
-  if (!overrides) return base;
-  return { ...base, ...overrides } as TeamPermissions;
+  if (role === 'OWNER') {
+    return { ...DEFAULT_PERMISSIONS.OWNER };
+  }
+
+  const orgOverrides = orgRolePermissions?.[role];
+  const base = { ...DEFAULT_PERMISSIONS[role], ...(orgOverrides || {}) };
+
+  if (!memberOverrides) return base as TeamPermissions;
+  return { ...base, ...memberOverrides } as TeamPermissions;
+}
+
+export type RolePermissionsMatrix = Record<OrgRole, TeamPermissions>;
+
+export const CONFIGURABLE_ROLES: OrgRole[] = ['ADMIN', 'SUPERVISOR', 'AGENT'];
+
+export function buildRolePermissionsMatrix(
+  orgRolePermissions?: Partial<Record<OrgRole, Partial<TeamPermissions>>> | null
+): RolePermissionsMatrix {
+  return {
+    OWNER: resolvePermissions('OWNER', null, orgRolePermissions),
+    ADMIN: resolvePermissions('ADMIN', null, orgRolePermissions),
+    SUPERVISOR: resolvePermissions('SUPERVISOR', null, orgRolePermissions),
+    AGENT: resolvePermissions('AGENT', null, orgRolePermissions),
+  };
 }
 
 export function getSeatLimit(plan: string, settings?: TeamSettings): number {

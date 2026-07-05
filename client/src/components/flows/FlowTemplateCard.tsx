@@ -65,8 +65,8 @@ export default function FlowTemplateCard({
         selected
           ? `border-violet-300 ${accent.selectedBg} ring-2 ${accent.selectedRing}`
           : compact
-            ? 'border-neutral-200/80 bg-white hover:border-violet-200 hover:bg-violet-50/30'
-            : 'dashboard-card border-violet-100/80 bg-gradient-to-br from-white to-violet-50/20 hover:border-violet-200 hover:shadow-panel'
+            ? 'border-theme-border bg-theme-surface hover:border-violet-500/25 hover:bg-violet-500/[0.03]'
+            : 'dashboard-card border-violet-500/10 hover:border-violet-500/25 hover:shadow-md'
       } ${compact ? 'p-3.5' : 'p-4 sm:p-5'}`}
     >
       {selected && (
@@ -87,13 +87,13 @@ export default function FlowTemplateCard({
         </div>
 
         <div className="flex min-w-0 flex-1 flex-col pr-5">
-          <p className="truncate text-[14px] font-extrabold text-neutral-900">{template.name}</p>
-          <p className="mt-1 line-clamp-2 flex-1 text-[12px] font-medium leading-relaxed text-neutral-500">
+          <p className="truncate text-[14px] font-extrabold text-theme-fg">{template.name}</p>
+          <p className="mt-1 line-clamp-2 flex-1 text-[12px] font-medium leading-relaxed text-theme-secondary">
             {template.description}
           </p>
 
           {firstStepMeta && !compact && (
-            <p className="mt-2 line-clamp-1 text-[11px] text-neutral-400">
+            <p className="mt-2 line-clamp-1 text-[11px] text-theme-muted">
               Starts with: {firstStepMeta.label}
             </p>
           )}
@@ -101,12 +101,12 @@ export default function FlowTemplateCard({
           <div className="mt-auto flex flex-wrap items-center gap-2 pt-2.5">
             <span
               className={`inline-flex rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ring-1 ${
-                trigger?.accent || 'bg-neutral-100 text-neutral-600 ring-neutral-200/60'
+                trigger?.accent || 'bg-theme-subtle text-theme-secondary ring-theme-border'
               }`}
             >
               {trigger?.label || template.triggerType}
             </span>
-            <span className="text-[11px] font-semibold text-neutral-400">
+            <span className="text-[11px] font-semibold text-theme-muted">
               {template.nodes.length} steps
             </span>
           </div>

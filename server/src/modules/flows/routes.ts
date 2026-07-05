@@ -15,6 +15,7 @@ import {
   saveFlowDraft,
   saveFlowVersion,
 } from './versioning';
+import type { FlowNode } from './types';
 
 const router = Router();
 
@@ -40,13 +41,21 @@ const listRowSchema = z.object({
   description: z.string().max(72).optional(),
 });
 
+/** Treat blank strings as unset so in-progress flow steps don't fail Zod URL checks. */
+function optionalUrl() {
+  return z.preprocess(
+    (val) => (typeof val === 'string' && val.trim() === '' ? undefined : val),
+    z.string().url().optional()
+  );
+}
+
 const flowNodeSchema = z.object({
   id: z.string().min(1),
   type: z.enum(nodeTypes),
   text: z.string().optional(),
   buttonMode: z.enum(['reply', 'url', 'call']).optional(),
   ctaLabel: z.string().max(20).optional(),
-  ctaUrl: z.string().url().optional(),
+  ctaUrl: optionalUrl(),
   ctaPhone: z.string().max(20).optional(),
   buttons: z.array(z.object({ id: z.string(), title: z.string().max(20) })).max(3).optional(),
   listButtonLabel: z.string().max(20).optional(),
@@ -74,12 +83,12 @@ const flowNodeSchema = z.object({
   branches: z.record(z.string()).optional(),
   templateName: z.string().optional(),
   templateLanguage: z.string().optional(),
-  mediaUrl: z.string().url().optional(),
+  mediaUrl: optionalUrl(),
   mediaType: z.enum(['image', 'document', 'video', 'audio']).optional(),
   mediaCaption: z.string().optional(),
   delaySeconds: z.number().int().min(1).max(86400).optional(),
   scheduleAt: z.string().optional(),
-  webhookUrl: z.string().url().optional(),
+  webhookUrl: optionalUrl(),
   webhookMethod: z.enum(['GET', 'POST']).optional(),
   aiBotId: z.string().optional(),
   assignAgentId: z.string().optional(),
@@ -114,6 +123,13 @@ const flowSchema = z.object({
   priority: z.number().int().min(0).max(100).default(0),
   status: z.enum(['DRAFT', 'PUBLISHED']).optional(),
 });
+
+function withLinkedNodes<T extends { nodes: FlowNode[]; startNodeId?: string | null }>(data: T): T {
+  return {
+    ...data,
+    startNodeId: data.startNodeId || data.nodes[0]?.id,
+  };
+}
 
 function assertValidFlow(data: z.infer<typeof flowSchema>) {
   const result = validateFlowGraph(
@@ -165,7 +181,7 @@ router.get('/', authenticate, requireOrg, asyncHandler(async (req, res) => {
 }));
 
 router.post('/validate', authenticate, requireOrg, asyncHandler(async (req, res) => {
-  const data = flowSchema.parse(req.body);
+  const data = withLinkedNodes(flowSchema.parse(req.body));
   const result = validateFlowGraph(
     data.nodes,
     data.triggerType,
@@ -186,9 +202,10 @@ router.post('/simulate', authenticate, requireOrg, asyncHandler(async (req, res)
     contactTags: z.array(z.string()).default([]),
   }).parse(req.body);
 
+  const linked = withLinkedNodes(body);
   const result = await simulateFlow({
     organizationId: req.user!.organizationId!,
-    ...body,
+    ...linked,
   });
   sendSuccess(res, result);
 }));
@@ -251,7 +268,7 @@ router.post('/:id/restore/:version', authenticate, requireOrg, asyncHandler(asyn
 }));
 
 router.post('/', authenticate, requireOrg, asyncHandler(async (req, res) => {
-  const data = flowSchema.parse(req.body);
+  const data = withLinkedNodes(flowSchema.parse(req.body));
   assertValidFlow(data);
 
   const flow = await prisma.flow.create({
@@ -311,20 +328,20 @@ router.patch('/:id', authenticate, requireOrg, asyncHandler(async (req, res) => 
       nodes: data.nodes,
       triggerType: data.triggerType,
       triggerConfig: data.triggerConfig as Record<string, unknown>,
-      startNodeId: data.startNodeId,
+      startNodeId: data.startNodeId ?? data.nodes[0]?.id,
     });
     const updated = await prisma.flow.findUnique({ where: { id } });
     sendSuccess(res, updated);
     return;
   }
 
-  const merged = {
+  const merged = withLinkedNodes({
     name: data.name ?? existing.name,
     triggerType: data.triggerType ?? existing.triggerType,
     triggerConfig: (data.triggerConfig ?? existing.triggerConfig) as Record<string, unknown>,
-    nodes: data.nodes ?? (existing.nodes as never),
+    nodes: (data.nodes ?? existing.nodes) as FlowNode[],
     startNodeId: data.startNodeId ?? existing.startNodeId,
-  };
+  });
 
   if (data.nodes) {
     assertValidFlow({
@@ -345,8 +362,8 @@ router.patch('/:id', authenticate, requireOrg, asyncHandler(async (req, res) => 
       description: data.description,
       triggerType: data.triggerType,
       triggerConfig: data.triggerConfig ? (data.triggerConfig as Prisma.InputJsonValue) : undefined,
-      nodes: data.nodes ? (data.nodes as Prisma.InputJsonValue) : undefined,
-      startNodeId: data.startNodeId,
+      nodes: data.nodes ? (data.nodes as unknown as Prisma.InputJsonValue) : undefined,
+      startNodeId: data.nodes ? (data.startNodeId ?? merged.startNodeId) : data.startNodeId,
       enabled: data.enabled,
       priority: data.priority,
       status: data.status,

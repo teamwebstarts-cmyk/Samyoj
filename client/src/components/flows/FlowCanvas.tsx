@@ -49,17 +49,16 @@ interface FlowCanvasProps {
   isNew?: boolean;
 }
 
-function graphKey(nodes: FlowNode[], startNodeId: string, triggerType: string, keyword: string) {
+function structureKey(nodes: FlowNode[], startNodeId: string) {
   return JSON.stringify({
     startNodeId,
-    triggerType,
-    keyword,
     nodes: nodes.map((n) => ({
       id: n.id,
       type: n.type,
       next: n.next,
       branches: n.branches,
       buttons: n.buttons?.map((b) => b.id),
+      listRows: n.listSections?.flatMap((s) => s.rows.map((r) => r.id)),
     })),
   });
 }
@@ -80,30 +79,35 @@ export default function FlowCanvas({
   const triggerDetail =
     triggerType === 'KEYWORD' && keyword ? `Contains "${keyword}"` : trigger?.description || '';
 
-  const structureKey = useMemo(
-    () => graphKey(nodes, startNodeId, triggerType, keyword),
-    [nodes, startNodeId, triggerType, keyword]
-  );
+  const resolvedStartNodeId = startNodeId || nodes[0]?.id || '';
 
   const graph = useMemo(
     () =>
       flowNodesToGraph(
         nodes,
-        startNodeId || nodes[0]?.id || '',
+        resolvedStartNodeId,
         triggerType,
         trigger?.label || triggerType,
         triggerDetail,
-        null
+        selectedNodeId
       ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [structureKey, trigger?.label, triggerDetail]
+    [nodes, resolvedStartNodeId, triggerType, trigger?.label, triggerDetail, selectedNodeId]
+  );
+
+  const edgeStructureKey = useMemo(
+    () => structureKey(nodes, startNodeId),
+    [nodes, startNodeId]
   );
 
   const [rfNodes, setRfNodes, onNodesChange] = useNodesState(graph.rfNodes);
   const [rfEdges, setRfEdges, onEdgesChange] = useEdgesState(graph.rfEdges);
   const positionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+  const lastEdgeStructureKey = useRef(edgeStructureKey);
 
   useEffect(() => {
+    const edgesChanged = lastEdgeStructureKey.current !== edgeStructureKey;
+    lastEdgeStructureKey.current = edgeStructureKey;
+
     setRfNodes(
       graph.rfNodes.map((n) => ({
         ...n,
@@ -111,17 +115,11 @@ export default function FlowCanvas({
         position: positionsRef.current.get(n.id) ?? n.position,
       }))
     );
-    setRfEdges(graph.rfEdges);
-  }, [graph.rfNodes, graph.rfEdges, setRfNodes, setRfEdges]);
 
-  useEffect(() => {
-    setRfNodes((nds) =>
-      nds.map((n) => ({
-        ...n,
-        selected: n.id === selectedNodeId,
-      }))
-    );
-  }, [selectedNodeId, setRfNodes]);
+    if (edgesChanged) {
+      setRfEdges(graph.rfEdges);
+    }
+  }, [graph, edgeStructureKey, selectedNodeId, setRfNodes, setRfEdges]);
 
   const handleNodesChange: OnNodesChange = useCallback(
     (changes) => {

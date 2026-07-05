@@ -29,20 +29,25 @@ import {
   updateCampaignSchema,
   type AudienceType,
 } from './types';
+import { resolveActiveWhatsappNumber } from '../whatsapp/active-number';
 
 const router = Router();
-const adminGuard = [authenticateJwtOrApiKey, requireOrg, loadOrgRole, requireOrgRole('OWNER', 'ADMIN')];
-const readGuard = [authenticateJwtOrApiKey, requireOrg];
+const adminGuard = [authenticateJwtOrApiKey, requireOrg, resolveActiveWhatsappNumber, loadOrgRole, requireOrgRole('OWNER', 'ADMIN')];
+const readGuard = [authenticateJwtOrApiKey, requireOrg, resolveActiveWhatsappNumber];
 
 router.get(
   '/',
   ...readGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
+    const numberId = req.activeWhatsappNumberId;
     const { search, status, page = '1', limit = '10' } = req.query;
     await syncRunningCampaignStatuses(orgId);
 
-    const where: Prisma.CampaignWhereInput = { organizationId: orgId };
+    const where: Prisma.CampaignWhereInput = {
+      organizationId: orgId,
+      ...(numberId ? { whatsappNumberId: numberId } : {}),
+    };
     if (search) {
       where.OR = [
         { name: { contains: search as string, mode: 'insensitive' } },
@@ -66,16 +71,24 @@ router.get(
       }),
       prisma.campaign.count({ where }),
       prisma.campaign.count({
-        where: { organizationId: orgId, status: { in: ['RUNNING', 'SCHEDULED', 'PAUSED'] } },
+        where: {
+          organizationId: orgId,
+          status: { in: ['RUNNING', 'SCHEDULED', 'PAUSED'] },
+          ...(numberId ? { whatsappNumberId: numberId } : {}),
+        },
       }),
-      prisma.campaign.count({ where: { organizationId: orgId, status: 'COMPLETED' } }),
+      prisma.campaign.count({
+        where: { organizationId: orgId, status: 'COMPLETED', ...(numberId ? { whatsappNumberId: numberId } : {}) },
+      }),
       prisma.campaign.aggregate({
-        where: { organizationId: orgId },
+        where: { organizationId: orgId, ...(numberId ? { whatsappNumberId: numberId } : {}) },
         _sum: { sentCount: true },
       }),
     ]);
 
-    const allTotal = await prisma.campaign.count({ where: { organizationId: orgId } });
+    const allTotal = await prisma.campaign.count({
+      where: { organizationId: orgId, ...(numberId ? { whatsappNumberId: numberId } : {}) },
+    });
 
     sendSuccess(res, {
       campaigns,
@@ -159,7 +172,7 @@ router.post(
         templateParams: data.templateParams ? (data.templateParams as object) : undefined,
         audienceType: data.audienceType,
         audienceConfig: data.audienceConfig ? (data.audienceConfig as object) : undefined,
-        whatsappNumberId: data.whatsappNumberId,
+        whatsappNumberId: data.whatsappNumberId ?? req.activeWhatsappNumberId,
         status: data.scheduledAt ? 'SCHEDULED' : 'DRAFT',
         scheduledAt: data.scheduledAt ? new Date(data.scheduledAt) : null,
         timezone: data.timezone,

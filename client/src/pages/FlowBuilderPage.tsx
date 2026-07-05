@@ -1,26 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   BarChart3,
   Check,
-  ChevronDown,
-  ChevronUp,
-  Clock,
   Copy,
   FileEdit,
   FlaskConical,
   History,
-  Rocket,
   Save,
   Settings2,
   SlidersHorizontal,
   Smartphone,
 } from 'lucide-react';
 import AppButton from '../components/ui/AppButton';
-import AppInput from '../components/ui/AppInput';
-import AppSelect from '../components/ui/AppSelect';
-import AppTextarea from '../components/ui/AppTextarea';
 import LoadingState from '../components/ui/LoadingState';
 import PageShell from '../components/ui/PageShell';
 import FlowAnalyticsPanel from '../components/flows/FlowAnalyticsPanel';
@@ -29,27 +22,17 @@ import FlowValidationWarnings from '../components/flows/FlowValidationWarnings';
 import FlowCanvas from '../components/flows/FlowCanvas';
 import FlowMobileNav, { type FlowBuilderTab } from '../components/flows/FlowMobileNav';
 import FlowNodePanel from '../components/flows/FlowNodePanel';
-import FlowPhoneMockup from '../components/flows/FlowPhoneMockup';
+import FlowPreviewPanel from '../components/flows/FlowPreviewPanel';
 import FlowStepPalette from '../components/flows/FlowStepPalette';
 import FlowTestPanel from '../components/flows/FlowTestPanel';
+import FlowSettingsPanel from '../components/flows/FlowSettingsPanel';
 import FlowVersionsPanel from '../components/flows/FlowVersionsPanel';
-import { triggerMeta } from '../components/flows/flowMeta';
 import { autoLayoutNodes, createNodeAtPosition } from '../components/flows/flowGraphUtils';
-import { validateFlow } from '../components/flows/flowUtils';
+import { prepareNodesForSave, validateFlow } from '../components/flows/flowUtils';
 import { flowApi } from '../services/api';
-import { getErrorMessage } from '../utils/errors';
+import { getErrorMessage, normalizeError } from '../utils/errors';
 import { toastError, toastSuccess, toastValidationErrors } from '../utils/toast';
 import type { FlowNode, FlowNodeType, FlowStatus, FlowTriggerType } from '../types';
-
-const BASIC_TRIGGERS: FlowTriggerType[] = ['WELCOME', 'KEYWORD', 'OFF_HOURS', 'BUSINESS_HOURS'];
-const ADVANCED_TRIGGERS: FlowTriggerType[] = [
-  'ANY_MESSAGE',
-  'CONTACT_TAG',
-  'SEGMENT',
-  'MISSED_CALL',
-  'CAMPAIGN_REPLY',
-  'CALL_COMPLETED',
-];
 
 type DesktopPanel = 'edit' | 'setup' | 'preview' | 'test' | 'analytics' | 'versions';
 
@@ -79,8 +62,6 @@ export default function FlowBuilderPage() {
   const [nodes, setNodes] = useState<FlowNode[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
-  const [showAdvancedTriggers, setShowAdvancedTriggers] = useState(false);
-  const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
 
   const triggerConfig = useMemo(() => {
     if (triggerType === 'KEYWORD') return { keyword, exactMatch, regex: regexMatch };
@@ -92,6 +73,8 @@ export default function FlowBuilderPage() {
 
   const selectedIndex = selectedNodeId ? nodes.findIndex((n) => n.id === selectedNodeId) : -1;
   const selectedNode = selectedIndex >= 0 ? nodes[selectedIndex] : null;
+
+  const linkedNodes = useMemo(() => prepareNodesForSave(nodes), [nodes]);
 
   const load = useCallback(() => {
     if (!id || isNew) return;
@@ -138,8 +121,22 @@ export default function FlowBuilderPage() {
         startNodeId: startNodeId || nodes[0]?.id,
       });
       setWarnings(data.data.warnings || []);
-    } catch {
-      setWarnings([]);
+    } catch (err) {
+      const normalized = normalizeError(err);
+      const details = normalized.details;
+      if (Array.isArray(details) && details.length > 0) {
+        setWarnings(
+          details.map((detail) => {
+            if (typeof detail === 'object' && detail !== null && 'message' in detail) {
+              const path = 'path' in detail && detail.path ? `${String(detail.path)}: ` : '';
+              return `${path}${String((detail as { message: string }).message)}`;
+            }
+            return getErrorMessage(detail, 'Validation failed');
+          })
+        );
+      } else {
+        setWarnings(normalized.message ? [normalized.message] : []);
+      }
     }
   }, [name, triggerType, triggerConfig, nodes, startNodeId]);
 
@@ -162,7 +159,13 @@ export default function FlowBuilderPage() {
   const addNode = (type: FlowNodeType) => {
     const position = { x: 80 + nodes.length * 40, y: 80 + nodes.length * 60 };
     const node = createNodeAtPosition(type, position);
-    const nextNodes = [...nodes, node];
+    const nextNodes = [...nodes];
+
+    if (nextNodes.length === 0) {
+      setStartNodeId(node.id);
+    }
+
+    nextNodes.push(node);
     setNodes(nextNodes);
     if (!startNodeId && nextNodes.length === 1) setStartNodeId(node.id);
     setSelectedNodeId(node.id);
@@ -179,7 +182,7 @@ export default function FlowBuilderPage() {
         if (updated.next === nodeId) updated.next = undefined;
         if (updated.branches) {
           updated.branches = Object.fromEntries(
-            Object.entries(updated.branches).map(([k, v]) => [k, v === nodeId ? '' : v])
+            Object.entries(updated.branches).filter(([, v]) => v && v !== nodeId)
           );
         }
         return updated;
@@ -190,21 +193,25 @@ export default function FlowBuilderPage() {
     setSaved(false);
   };
 
-  const buildPayload = (asDraft = false) => ({
-    name: name.trim(),
-    description: description.trim() || undefined,
-    triggerType,
-    triggerConfig,
-    nodes,
-    startNodeId: startNodeId || nodes[0]?.id || undefined,
-    enabled,
-    priority,
-    status: asDraft ? 'DRAFT' : flowStatus,
-    saveAsDraft: asDraft,
-  });
+  const buildPayload = (asDraft = false) => {
+    const preparedNodes = prepareNodesForSave(nodes);
+    return {
+      name: name.trim(),
+      description: description.trim() || undefined,
+      triggerType,
+      triggerConfig,
+      nodes: preparedNodes,
+      startNodeId: startNodeId || preparedNodes[0]?.id || undefined,
+      enabled,
+      priority,
+      status: asDraft ? 'DRAFT' : 'PUBLISHED',
+      saveAsDraft: asDraft,
+    };
+  };
 
   const handleSave = async (asDraft = false) => {
-    const validationErrors = validateFlow(name, triggerType, triggerConfig, keyword, nodes);
+    const preparedNodes = prepareNodesForSave(nodes);
+    const validationErrors = validateFlow(name, triggerType, triggerConfig, keyword, preparedNodes);
     if (validationErrors.length > 0) {
       toastValidationErrors(validationErrors);
       setMobileTab('settings');
@@ -220,8 +227,9 @@ export default function FlowBuilderPage() {
         navigate(`/automations/flows/${data.data.id}`, { replace: true });
       } else {
         await flowApi.update(id!, buildPayload(asDraft));
+        if (!asDraft) setFlowStatus('PUBLISHED');
         setSaved(true);
-        toastSuccess(asDraft ? 'Draft saved' : 'Flow saved');
+        toastSuccess(asDraft ? 'Draft saved' : 'Flow saved and live');
         setTimeout(() => setSaved(false), 2000);
       }
     } catch (err: unknown) {
@@ -268,222 +276,39 @@ export default function FlowBuilderPage() {
     toastSuccess(`Loaded version ${version} — save to apply`);
   };
 
-  const startNodeOptions = nodes.map((n, i) => ({ value: n.id, label: `${i + 1}. ${n.type}` }));
-
   const settingsForm = (
-    <div className="min-w-0 space-y-5">
-      <div className="flex items-center justify-between gap-3 rounded-xl border border-emerald-100/80 bg-gradient-to-r from-emerald-50/70 to-white px-4 py-3">
-        <div className="min-w-0">
-          <p className="text-[12px] font-bold text-neutral-800">Turn this flow on?</p>
-          <p className="mt-0.5 truncate text-[11px] font-medium text-neutral-500">
-            {enabled ? 'Customers will get automatic replies' : 'Turn on when you are ready'}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => { setEnabled(!enabled); setSaved(false); }}
-          className={`shrink-0 rounded-full px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-wide transition ${
-            enabled
-              ? 'bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200/80 hover:bg-emerald-200/80'
-              : 'bg-neutral-100 text-neutral-600 ring-1 ring-neutral-200/80 hover:bg-neutral-200/80'
-          }`}
-        >
-          {enabled ? 'On' : 'Off'}
-        </button>
-      </div>
-
-      <AppInput
-        label="Flow name"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        placeholder="e.g. Welcome new customers"
-        hint="A name you'll recognize later"
-      />
-      <AppTextarea
-        label="Notes (optional)"
-        value={description}
-        onChange={(e) => setDescription(e.target.value)}
-        rows={2}
-        placeholder="What does this flow do?"
-      />
-
-      <section className="space-y-2">
-        <p className="text-[13px] font-extrabold text-neutral-900">When should this start?</p>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {BASIC_TRIGGERS.map((type) => {
-            const meta = triggerMeta[type];
-            const Icon = meta.icon;
-            const selected = triggerType === type;
-            return (
-              <button
-                key={type}
-                type="button"
-                onClick={() => setTriggerType(type)}
-                className={`flex items-start gap-3 rounded-2xl border p-3 text-left transition ${
-                  selected
-                    ? `bg-gradient-to-br ring-2 ring-violet-400/40 ${meta.accent}`
-                    : 'border-neutral-200/80 bg-white hover:border-violet-200 hover:bg-violet-50/30'
-                }`}
-              >
-                <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${meta.gradient} text-white shadow-sm`}>
-                  <Icon className="h-4 w-4" strokeWidth={2.25} />
-                </div>
-                <div>
-                  <p className="text-[12px] font-extrabold text-neutral-900">{meta.label}</p>
-                  <p className="mt-0.5 text-[10px] font-medium leading-snug text-neutral-600">{meta.description}</p>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setShowAdvancedTriggers(!showAdvancedTriggers)}
-          className="flex w-full items-center justify-between rounded-xl border border-dashed border-neutral-200/80 px-3 py-2.5 text-left transition hover:border-violet-200 hover:bg-violet-50/30"
-        >
-          <span className="text-[12px] font-bold text-neutral-700">
-            {showAdvancedTriggers ? 'Hide more start options' : 'More ways to start'}
-          </span>
-          {showAdvancedTriggers ? <ChevronUp className="h-4 w-4 text-neutral-400" /> : <ChevronDown className="h-4 w-4 text-neutral-400" />}
-        </button>
-
-        {showAdvancedTriggers && (
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {ADVANCED_TRIGGERS.map((type) => {
-              const meta = triggerMeta[type];
-              const Icon = meta.icon;
-              const selected = triggerType === type;
-              return (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() => setTriggerType(type)}
-                  className={`flex items-start gap-3 rounded-2xl border p-3 text-left transition ${
-                    selected
-                      ? `bg-gradient-to-br ring-2 ring-violet-400/40 ${meta.accent}`
-                      : 'border-neutral-200/80 bg-white hover:border-violet-200 hover:bg-violet-50/30'
-                  }`}
-                >
-                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${meta.gradient} text-white shadow-sm`}>
-                    <Icon className="h-4 w-4" strokeWidth={2.25} />
-                  </div>
-                  <div>
-                    <p className="text-[12px] font-extrabold text-neutral-900">{meta.label}</p>
-                    <p className="mt-0.5 text-[10px] font-medium leading-snug text-neutral-600">{meta.description}</p>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </section>
-
-      {triggerType === 'KEYWORD' && (
-        <AppInput
-          label="Word or phrase to watch for"
-          value={keyword}
-          onChange={(e) => setKeyword(e.target.value)}
-          placeholder="e.g. pricing, demo, help"
-          hint="We'll start this flow when a customer sends this word"
-        />
-      )}
-
-      {triggerType === 'CONTACT_TAG' && (
-        <AppInput label="Contact must have this tag" value={contactTag} onChange={(e) => setContactTag(e.target.value)} placeholder="e.g. vip" />
-      )}
-
-      {triggerType === 'SEGMENT' && (
-        <AppInput label="Contact tags (any match)" value={segmentTags} onChange={(e) => setSegmentTags(e.target.value)} placeholder="vip, lead, premium" hint="Separate with commas" />
-      )}
-
-      {(triggerType === 'BUSINESS_HOURS' || triggerType === 'OFF_HOURS') && (
-        <Link to="/settings" className="flex items-center gap-2 rounded-xl border border-sky-100 bg-sky-50 px-3 py-2.5 text-[12px] font-semibold text-sky-700 hover:bg-sky-100">
-          <Clock className="h-4 w-4" />
-          Set your business hours in Settings →
-        </Link>
-      )}
-
-      {triggerType === 'MISSED_CALL' && (
-        <div className="rounded-xl border border-rose-100 bg-rose-50 px-3 py-2.5 text-[12px] font-medium leading-relaxed text-rose-800">
-          Runs when a customer calls and nobody answers. Voice calls must be enabled in Settings.
-        </div>
-      )}
-
-      {triggerType === 'CAMPAIGN_REPLY' && (
-        <AppInput
-          label="Specific campaign (optional)"
-          value={campaignId}
-          onChange={(e) => setCampaignId(e.target.value)}
-          placeholder="Leave blank for any campaign reply"
-          hint="Only needed if you want replies to one specific campaign"
-        />
-      )}
-
-      {triggerType === 'CALL_COMPLETED' && (
-        <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2.5 text-[12px] font-medium leading-relaxed text-emerald-800">
-          Runs after a phone call with the customer ends successfully.
-        </div>
-      )}
-
-      <button
-        type="button"
-        onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
-        className="flex w-full items-center justify-between rounded-xl border border-dashed border-neutral-200/80 px-3 py-2.5 text-left transition hover:border-violet-200 hover:bg-violet-50/30"
-      >
-        <span className="text-[12px] font-bold text-neutral-700">
-          {showAdvancedSettings ? 'Hide advanced settings' : 'Advanced settings'}
-        </span>
-        {showAdvancedSettings ? <ChevronUp className="h-4 w-4 text-neutral-400" /> : <ChevronDown className="h-4 w-4 text-neutral-400" />}
-      </button>
-
-      {showAdvancedSettings && (
-        <div className="space-y-4 rounded-xl border border-neutral-100 bg-neutral-50/50 p-4">
-          {triggerType === 'KEYWORD' && (
-            <>
-              <label className="flex items-center gap-2 text-[12px] font-medium text-neutral-700">
-                <input type="checkbox" checked={exactMatch} onChange={(e) => setExactMatch(e.target.checked)} />
-                Match the whole message exactly
-              </label>
-              <label className="flex items-center gap-2 text-[12px] font-medium text-neutral-700">
-                <input type="checkbox" checked={regexMatch} onChange={(e) => setRegexMatch(e.target.checked)} />
-                Use pattern matching (for developers)
-              </label>
-            </>
-          )}
-
-          {nodes.length > 0 && (
-            <AppSelect
-              label="First step"
-              value={startNodeId || nodes[0]?.id || ''}
-              options={startNodeOptions}
-              isSearchable={false}
-              onChange={(e) => setStartNodeId(e.target.value)}
-              hint="Which step runs right after it starts"
-            />
-          )}
-
-          <AppInput
-            label="Which flow runs first"
-            type="number"
-            min={0}
-            max={100}
-            value={String(priority)}
-            onChange={(e) => setPriority(Number(e.target.value))}
-            hint="If two auto-replies could apply, the higher number wins (default: 50)"
-          />
-        </div>
-      )}
-
-      {!isNew && flowStatus === 'DRAFT' && (
-        <div className="rounded-xl border border-amber-100 bg-amber-50 px-3.5 py-3 text-[12px] leading-relaxed text-amber-900">
-          This flow is saved as a draft — customers won't see it until you publish.
-          <AppButton className="mt-3" size="sm" icon={<Rocket size={14} />} loading={saving} onClick={handlePublish}>
-            Publish & go live
-          </AppButton>
-        </div>
-      )}
-    </div>
+    <FlowSettingsPanel
+      name={name}
+      description={description}
+      triggerType={triggerType}
+      enabled={enabled}
+      keyword={keyword}
+      exactMatch={exactMatch}
+      regexMatch={regexMatch}
+      contactTag={contactTag}
+      segmentTags={segmentTags}
+      campaignId={campaignId}
+      startNodeId={startNodeId}
+      priority={priority}
+      nodes={nodes}
+      flowStatus={flowStatus}
+      isNew={isNew}
+      saving={saving}
+      onNameChange={setName}
+      onDescriptionChange={setDescription}
+      onTriggerTypeChange={setTriggerType}
+      onEnabledChange={setEnabled}
+      onKeywordChange={setKeyword}
+      onExactMatchChange={setExactMatch}
+      onRegexMatchChange={setRegexMatch}
+      onContactTagChange={setContactTag}
+      onSegmentTagsChange={setSegmentTags}
+      onCampaignIdChange={setCampaignId}
+      onStartNodeIdChange={setStartNodeId}
+      onPriorityChange={setPriority}
+      onPublish={handlePublish}
+      onDirty={() => setSaved(false)}
+    />
   );
 
   const goToWarningStep = (nodeId: string) => {
@@ -503,19 +328,19 @@ export default function FlowBuilderPage() {
       value: 'setup',
       label: 'Settings',
       icon: Settings2,
-      description: 'Name your flow, choose when it starts, and turn it on or off.',
+      description: 'Name your flow, pick when it runs, and turn it on.',
     },
     {
       value: 'preview',
       label: 'Preview',
       icon: Smartphone,
-      description: 'See how customers will see this on WhatsApp.',
+      description: 'See the full conversation your customer gets on WhatsApp.',
     },
     {
       value: 'test',
       label: 'Try it',
       icon: FlaskConical,
-      description: 'Try a sample message and see which steps would run.',
+      description: 'Send a sample message and check if your flow starts — no real WhatsApp needed.',
     },
     ...(!isNew
       ? [
@@ -662,13 +487,13 @@ export default function FlowBuilderPage() {
             </div>
           )}
           {mobileTab === 'preview' && (
-            <div className="flex justify-center p-4 sm:p-6">
-              <FlowPhoneMockup nodes={nodes} selectedIndex={Math.max(0, selectedIndex)} />
+            <div className="p-4">
+              <FlowPreviewPanel nodes={linkedNodes} startNodeId={startNodeId} flowName={name} />
             </div>
           )}
-          {mobileTab === 'test' && !isNew && (
+          {mobileTab === 'test' && (
             <div className="p-4">
-              <FlowTestPanel triggerType={triggerType} triggerConfig={triggerConfig} nodes={nodes} startNodeId={startNodeId} />
+              <FlowTestPanel triggerType={triggerType} triggerConfig={triggerConfig} nodes={linkedNodes} startNodeId={startNodeId} />
             </div>
           )}
           {mobileTab === 'analytics' && !isNew && id && (
@@ -700,15 +525,13 @@ export default function FlowBuilderPage() {
             )}
             {desktopPanel === 'setup' && settingsForm}
             {desktopPanel === 'preview' && (
-              <div className="flex min-h-[580px] items-start justify-center py-1">
-                <FlowPhoneMockup nodes={nodes} selectedIndex={Math.max(0, selectedIndex)} />
-              </div>
+              <FlowPreviewPanel nodes={linkedNodes} startNodeId={startNodeId} flowName={name} />
             )}
             {desktopPanel === 'test' && (
               <FlowTestPanel
                 triggerType={triggerType}
                 triggerConfig={triggerConfig}
-                nodes={nodes}
+                nodes={linkedNodes}
                 startNodeId={startNodeId}
               />
             )}
@@ -722,7 +545,7 @@ export default function FlowBuilderPage() {
           </div>
         </div>
 
-        <FlowMobileNav active={mobileTab} onChange={setMobileTab} showTest={!isNew} showAnalytics={!isNew} />
+        <FlowMobileNav active={mobileTab} onChange={setMobileTab} showTest showAnalytics={!isNew} />
       </div>
     </PageShell>
   );

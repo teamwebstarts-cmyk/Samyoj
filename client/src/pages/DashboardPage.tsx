@@ -16,6 +16,7 @@ import RingMetric from '../components/dashboard/RingMetric';
 import StatCard from '../components/dashboard/StatCard';
 import PageShell from '../components/ui/PageShell';
 import EmptyState from '../components/ui/EmptyState';
+import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 import { analyticsApi } from '../services/api';
 import { toastError } from '../utils/toast';
 import type { AnalyticsOverview } from '../types';
@@ -68,7 +69,8 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
 
-  useEffect(() => {
+  const loadStats = () => {
+    setLoading(true);
     analyticsApi
       .overview()
       .then(({ data }) => {
@@ -80,7 +82,16 @@ export default function DashboardPage() {
         toastError('Unable to load dashboard metrics. Please try again.');
       })
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadStats();
   }, []);
+
+  useOnActiveNumberChange(({ isInitial }) => {
+    if (isInitial) return;
+    loadStats();
+  });
 
   const deliveryNum = parseFloat(stats?.deliveryRate ?? '0') || 0;
   const readNum = parseFloat(stats?.readRate ?? '0') || 0;
@@ -95,8 +106,9 @@ export default function DashboardPage() {
       ) : loadFailed ? (
         <EmptyState
           icon={AlertCircle}
-          title="Could not load metrics"
-          description="Please refresh the page or try again in a moment."
+          variant="error"
+          title="Could not load dashboard"
+          description="Something went wrong while loading your numbers. Please refresh or try again in a moment."
         />
       ) : stats ? (
         <div className="space-y-5 pb-6 sm:space-y-6 sm:pb-8">

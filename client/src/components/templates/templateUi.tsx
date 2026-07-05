@@ -47,12 +47,3 @@ export function getLanguageLabel(code?: string) {
   const match = LANGUAGE_OPTIONS.find((o) => o.value === code);
   return match?.label ?? code.replace('_', ' ');
 }
-
-export function getQualityDot(score?: string) {
-  if (!score) return null;
-  const upper = score.toUpperCase();
-  if (upper === 'GREEN') return 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)]';
-  if (upper === 'YELLOW') return 'bg-amber-400 shadow-[0_0_6px_rgba(245,158,11,0.5)]';
-  if (upper === 'RED') return 'bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.5)]';
-  return 'bg-theme-muted';
-}

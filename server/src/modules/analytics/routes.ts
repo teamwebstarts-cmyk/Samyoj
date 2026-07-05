@@ -3,8 +3,11 @@ import prisma from '../../config/database';
 import { authenticate, requireOrg } from '../../middleware/auth';
 import { loadPermissions, requirePermission } from '../../middleware/permissions';
 import { sendSuccess, asyncHandler } from '../../utils/response';
+import { resolveActiveWhatsappNumber, conversationFilter, contactsForNumberFilter } from '../whatsapp/active-number';
 
 const router = Router();
+
+router.use(authenticate, requireOrg, resolveActiveWhatsappNumber);
 
 function daysAgo(days: number) {
   return new Date(Date.now() - days * 24 * 60 * 60 * 1000);
@@ -12,11 +15,11 @@ function daysAgo(days: number) {
 
 router.get(
   '/overview',
-  authenticate,
-  requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
+    const numberId = req.activeWhatsappNumberId;
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const convScope = { organizationId: orgId, ...conversationFilter(numberId) };
 
     const [
       messagesSent,
@@ -30,7 +33,7 @@ router.get(
         where: {
           direction: 'OUTBOUND',
           createdAt: { gte: thirtyDaysAgo },
-          conversation: { organizationId: orgId },
+          conversation: convScope,
         },
       }),
       prisma.message.count({
@@ -38,7 +41,7 @@ router.get(
           direction: 'OUTBOUND',
           status: 'DELIVERED',
           createdAt: { gte: thirtyDaysAgo },
-          conversation: { organizationId: orgId },
+          conversation: convScope,
         },
       }),
       prisma.message.count({
@@ -46,7 +49,7 @@ router.get(
           direction: 'OUTBOUND',
           status: 'READ',
           createdAt: { gte: thirtyDaysAgo },
-          conversation: { organizationId: orgId },
+          conversation: convScope,
         },
       }),
       prisma.message.count({
@@ -54,13 +57,13 @@ router.get(
           direction: 'OUTBOUND',
           status: 'FAILED',
           createdAt: { gte: thirtyDaysAgo },
-          conversation: { organizationId: orgId },
+          conversation: convScope,
         },
       }),
       prisma.conversation.count({
-        where: { organizationId: orgId, status: 'OPEN' },
+        where: { organizationId: orgId, status: 'OPEN', ...conversationFilter(numberId) },
       }),
-      prisma.contact.count({ where: { organizationId: orgId } }),
+      prisma.contact.count({ where: { organizationId: orgId, ...contactsForNumberFilter(numberId) } }),
     ]);
 
     sendSuccess(res, {
@@ -76,14 +79,14 @@ router.get(
 
 router.get(
   '/reports',
-  authenticate,
-  requireOrg,
   loadPermissions,
   requirePermission('viewAnalytics'),
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
+    const numberId = req.activeWhatsappNumberId;
     const days = Math.min(90, Math.max(7, parseInt((req.query.days as string) || '30', 10)));
     const since = daysAgo(days);
+    const convScope = { organizationId: orgId, ...conversationFilter(numberId) };
 
     const [
       messagesSent,
@@ -99,31 +102,42 @@ router.get(
       aiUsage,
     ] = await Promise.all([
       prisma.message.count({
-        where: { direction: 'OUTBOUND', createdAt: { gte: since }, conversation: { organizationId: orgId } },
+        where: { direction: 'OUTBOUND', createdAt: { gte: since }, conversation: convScope },
       }),
       prisma.message.count({
-        where: { direction: 'OUTBOUND', status: 'DELIVERED', createdAt: { gte: since }, conversation: { organizationId: orgId } },
+        where: { direction: 'OUTBOUND', status: 'DELIVERED', createdAt: { gte: since }, conversation: convScope },
       }),
       prisma.message.count({
-        where: { direction: 'OUTBOUND', status: 'READ', createdAt: { gte: since }, conversation: { organizationId: orgId } },
+        where: { direction: 'OUTBOUND', status: 'READ', createdAt: { gte: since }, conversation: convScope },
       }),
       prisma.message.count({
-        where: { direction: 'OUTBOUND', status: 'FAILED', createdAt: { gte: since }, conversation: { organizationId: orgId } },
+        where: { direction: 'OUTBOUND', status: 'FAILED', createdAt: { gte: since }, conversation: convScope },
       }),
       prisma.message.count({
-        where: { direction: 'INBOUND', createdAt: { gte: since }, conversation: { organizationId: orgId } },
+        where: { direction: 'INBOUND', createdAt: { gte: since }, conversation: convScope },
       }),
-      prisma.conversation.count({ where: { organizationId: orgId, status: 'OPEN' } }),
       prisma.conversation.count({
-        where: { organizationId: orgId, status: 'CLOSED', updatedAt: { gte: since } },
+        where: { organizationId: orgId, status: 'OPEN', ...conversationFilter(numberId) },
       }),
-      prisma.contact.count({ where: { organizationId: orgId } }),
+      prisma.conversation.count({
+        where: { organizationId: orgId, status: 'CLOSED', updatedAt: { gte: since }, ...conversationFilter(numberId) },
+      }),
+      prisma.contact.count({ where: { organizationId: orgId, ...contactsForNumberFilter(numberId) } }),
       prisma.campaign.aggregate({
-        where: { organizationId: orgId, updatedAt: { gte: since } },
+        where: {
+          organizationId: orgId,
+          updatedAt: { gte: since },
+          ...(numberId ? { whatsappNumberId: numberId } : {}),
+        },
         _sum: { sentCount: true, deliveredCount: true, readCount: true, failedCount: true },
       }),
       prisma.call.count({
-        where: { organizationId: orgId, status: 'COMPLETED', createdAt: { gte: since } },
+        where: {
+          organizationId: orgId,
+          status: 'COMPLETED',
+          createdAt: { gte: since },
+          ...(numberId ? { whatsappNumberId: numberId } : {}),
+        },
       }),
       prisma.aiUsageLog.aggregate({
         where: { organizationId: orgId, createdAt: { gte: since } },

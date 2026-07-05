@@ -39,8 +39,8 @@ export default function CallOverviewPanel({ status, liveCount, callStats, hasCal
   ];
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-neutral-50/40">
-      <div className="shrink-0 border-b border-neutral-100 bg-white px-4 py-3">
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-white dark:bg-neutral-950">
+      <div className="shrink-0 border-b border-neutral-200 bg-white px-4 py-3 dark:border-neutral-800 dark:bg-neutral-950">
         <div className="flex items-center gap-2">
           <PhoneCall className="h-4 w-4 text-violet-600" />
           <div>
@@ -80,7 +80,7 @@ export default function CallOverviewPanel({ status, liveCount, callStats, hasCal
 
       <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
         {tab === 'overview' ? (
-          <div className="mx-auto max-w-2xl space-y-4">
+          <div className="mx-auto w-full min-w-0 max-w-2xl space-y-4">
             <CallSystemStatus
               whatsappConnected={status.whatsappConnected}
               callingEnabled={status.callingEnabled}
@@ -116,8 +116,8 @@ export default function CallOverviewPanel({ status, liveCount, callStats, hasCal
             )}
           </div>
         ) : (
-          <div className="mx-auto max-w-2xl">
-            <CallInfoPanel phoneNumber={status.phoneNumber} />
+          <div className="w-full min-w-0">
+            <CallInfoPanel embedded phoneNumber={status.phoneNumber} />
           </div>
         )}
       </div>

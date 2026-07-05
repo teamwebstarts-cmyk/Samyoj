@@ -1,28 +1,36 @@
 import {
-  ArrowUpRight,
   BarChart3,
   CheckCheck,
   MessageSquare,
   Send,
+  Shield,
   Sparkles,
-  TrendingUp,
   Users,
   Zap,
 } from 'lucide-react';
 import AuthBrand from './AuthBrand';
 
-const features = [
-  { icon: MessageSquare, label: 'Team inbox' },
-  { icon: Zap, label: 'Automations' },
-  { icon: Send, label: 'Campaigns' },
-  { icon: BarChart3, label: 'Analytics' },
+const highlights = [
+  {
+    icon: MessageSquare,
+    title: 'Team inbox',
+    description: 'Assign, tag & reply together',
+  },
+  {
+    icon: Zap,
+    title: 'Automations',
+    description: 'Flows that run around the clock',
+  },
+  {
+    icon: Send,
+    title: 'Campaigns',
+    description: 'Broadcasts with templates',
+  },
 ];
-
-const avatars = ['SK', 'RM', 'AP', 'JT'];
 
 export default function AuthShowcase() {
   return (
-    <div className="relative flex h-full min-h-screen flex-col overflow-hidden bg-[#011a14]">
+    <div className="relative flex h-screen flex-col overflow-hidden bg-[#011a14]">
       {/* Background layers */}
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-whatsapp-900 via-[#022c22] to-[#011a14]" />
       <div className="pointer-events-none absolute inset-0 showcase-grid" />
@@ -31,18 +39,18 @@ export default function AuthShowcase() {
       <div className="pointer-events-none absolute -left-20 top-1/4 h-72 w-72 rounded-full bg-whatsapp-500/20 blur-[100px] animate-pulse-soft" />
       <div className="pointer-events-none absolute -right-16 bottom-1/4 h-64 w-64 rounded-full bg-emerald-400/10 blur-[90px] animate-float" />
 
-      <div className="relative flex flex-1 flex-col px-10 py-12 xl:px-14 xl:py-14">
+      <div className="relative flex min-h-0 flex-1 flex-col px-10 py-8 xl:px-14 xl:py-10">
         {/* Header */}
         <div className="flex items-center justify-between animate-fade-up">
           <AuthBrand variant="light" />
           <div className="hidden items-center gap-1.5 rounded-full border border-emerald-400/25 bg-emerald-950/40 px-3 py-1.5 backdrop-blur-md xl:flex">
-            <Sparkles className="h-3 w-3 text-amber-300" />
-            <span className="text-[11px] font-semibold text-emerald-50">Trusted by 500+ teams</span>
+            <Shield className="h-3 w-3 text-emerald-300" />
+            <span className="text-[11px] font-semibold text-emerald-50">WhatsApp Business API</span>
           </div>
         </div>
 
         {/* Hero copy */}
-        <div className="mt-10 max-w-lg animate-fade-up-delay xl:mt-12">
+        <div className="mt-8 max-w-lg shrink-0 animate-fade-up-delay xl:mt-10">
           <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-emerald-400/35 bg-emerald-900/50 px-3 py-1">
             <span className="relative flex h-2 w-2">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-300 opacity-60" />
@@ -62,25 +70,13 @@ export default function AuthShowcase() {
             The all-in-one WhatsApp workspace for support, marketing, and sales teams
             who need speed at scale.
           </p>
-
-          <div className="mt-5 flex flex-wrap gap-2">
-            {features.map(({ icon: Icon, label }) => (
-              <span
-                key={label}
-                className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/20 bg-emerald-950/50 px-2.5 py-1 text-[11px] font-semibold text-emerald-100"
-              >
-                <Icon className="h-3 w-3 shrink-0 text-emerald-300" />
-                {label}
-              </span>
-            ))}
-          </div>
         </div>
 
         {/* Dashboard mock */}
-        <div className="relative mt-8 flex-1 animate-fade-up-delay-2 xl:mt-10">
+        <div className="relative mt-5 flex min-h-0 flex-1 flex-col xl:mt-6">
           <div className="pointer-events-none absolute -inset-3 rounded-[2rem] bg-gradient-to-r from-whatsapp-500/20 via-emerald-500/10 to-transparent blur-2xl" />
 
-          <div className="relative overflow-hidden rounded-[1.35rem] border border-emerald-400/20 bg-[#0f2a24] shadow-showcase ring-1 ring-emerald-400/10 backdrop-blur-xl">
+          <div className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-[1.35rem] border border-emerald-400/20 bg-[#0f2a24] shadow-showcase ring-1 ring-emerald-400/10 backdrop-blur-xl">
             {/* Browser bar */}
             <div className="flex items-center justify-between border-b border-emerald-400/15 bg-emerald-950/40 px-4 py-3">
               <div className="flex items-center gap-2">
@@ -94,9 +90,9 @@ export default function AuthShowcase() {
               </div>
             </div>
 
-            <div className="grid grid-cols-[118px_1fr]">
+            <div className="grid min-h-0 flex-1 grid-cols-[118px_1fr]">
               {/* Sidebar */}
-              <aside className="border-r border-emerald-400/10 bg-emerald-950/30 p-3">
+              <aside className="flex flex-col border-r border-emerald-400/10 bg-emerald-950/30 p-3">
                 <div className="mb-4 flex items-center gap-2">
                   <div className="h-7 w-7 rounded-lg bg-emerald-500/30" />
                   <div className="space-y-1">
@@ -127,8 +123,8 @@ export default function AuthShowcase() {
               </aside>
 
               {/* Main content */}
-              <div className="p-3.5">
-                <div className="mb-3 flex items-center justify-between">
+              <div className="flex min-h-0 flex-1 flex-col p-3.5">
+                <div className="mb-3 flex shrink-0 items-center justify-between">
                   <div>
                     <p className="text-[12px] font-bold text-white">Inbox</p>
                     <p className="showcase-text-muted text-[10px]">24 conversations · 3 unread</p>
@@ -139,7 +135,7 @@ export default function AuthShowcase() {
                 </div>
 
                 {/* Chat messages */}
-                <div className="space-y-2">
+                <div className="flex min-h-0 flex-1 flex-col justify-center space-y-2.5 py-2">
                   <div className="flex justify-start">
                     <div className="max-w-[78%] rounded-2xl rounded-bl-md bg-emerald-950/50 px-3 py-2 ring-1 ring-emerald-400/15">
                       <p className="text-[10px] font-semibold text-emerald-100">Sarah K.</p>
@@ -165,7 +161,7 @@ export default function AuthShowcase() {
                 </div>
 
                 {/* Quick stats row */}
-                <div className="mt-3 grid grid-cols-3 gap-1.5">
+                <div className="mt-auto grid shrink-0 grid-cols-3 gap-1.5 pt-3">
                   {[
                     { label: 'Open', value: '24' },
                     { label: 'Avg reply', value: '4m' },
@@ -187,44 +183,42 @@ export default function AuthShowcase() {
             <div className="pointer-events-none absolute inset-0 showcase-shimmer animate-shimmer opacity-20" />
           </div>
 
-          {/* Floating stat card */}
-          <div className="absolute -right-2 top-6 animate-float-delayed rounded-xl border border-emerald-400/20 bg-[#0f2a24] px-4 py-3 shadow-showcase backdrop-blur-xl xl:-right-5">
+          {/* Floating highlight */}
+          <div className="absolute -right-2 top-12 animate-float-delayed rounded-xl border border-emerald-400/20 bg-[#0f2a24] px-4 py-3 shadow-showcase backdrop-blur-xl xl:-right-5 xl:top-14">
             <div className="flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/20 ring-1 ring-emerald-400/25">
-                <TrendingUp className="h-4 w-4 text-emerald-300" />
+                <Zap className="h-4 w-4 text-emerald-300" />
               </div>
               <div>
                 <p className="text-[9px] font-bold uppercase tracking-wider text-emerald-200">
-                  Campaign ROI
+                  Automations
                 </p>
-                <p className="text-lg font-extrabold leading-none text-white">+142%</p>
+                <p className="text-sm font-bold leading-tight text-white">Reply faster, 24/7</p>
               </div>
             </div>
-            <p className="mt-1.5 text-[10px] font-semibold text-emerald-300">↑ vs last month</p>
+            <p className="mt-1.5 text-[10px] font-medium text-emerald-300">Flows, triggers & smart routing</p>
           </div>
         </div>
 
-        {/* Footer social proof */}
-        <div className="mt-8 flex items-center justify-between border-t border-emerald-400/15 pt-6 animate-fade-up-delay-2">
-          <div className="flex items-center gap-3">
-            <div className="flex -space-x-2">
-              {avatars.map((initials) => (
-                <div
-                  key={initials}
-                  className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#022c22] bg-emerald-600 text-[10px] font-bold text-white"
-                >
-                  {initials}
-                </div>
-              ))}
+        <div className="mt-3 shrink-0 overflow-hidden rounded-xl border border-emerald-400/20 bg-gradient-to-b from-emerald-950/50 to-emerald-950/20 shadow-[0_8px_32px_rgba(0,0,0,0.2)] backdrop-blur-sm">
+          <div className="flex items-center gap-2 border-b border-emerald-400/10 px-4 py-2.5">
+            <div className="flex h-5 w-5 items-center justify-center rounded-md bg-emerald-500/20">
+              <Sparkles className="h-3 w-3 text-emerald-300" />
             </div>
-            <div>
-              <p className="text-[12px] font-semibold text-white">500+ teams onboarded</p>
-              <p className="showcase-text-muted text-[11px]">Join growing businesses today</p>
-            </div>
+            <p className="text-[11px] font-semibold tracking-wide text-emerald-100">
+              One workspace for your entire WhatsApp operation
+            </p>
           </div>
-          <div className="showcase-accent hidden items-center gap-1 text-[11px] font-semibold xl:flex">
-            Explore product
-            <ArrowUpRight className="h-3.5 w-3.5" />
+          <div className="grid grid-cols-3 divide-x divide-emerald-400/10">
+            {highlights.map(({ icon: Icon, title, description }) => (
+              <div key={title} className="group px-3 py-3 text-center transition-colors hover:bg-emerald-500/5">
+                <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/15 ring-1 ring-emerald-400/20 transition group-hover:bg-emerald-500/25">
+                  <Icon className="h-3.5 w-3.5 text-emerald-300" />
+                </div>
+                <p className="text-[11px] font-bold text-white">{title}</p>
+                <p className="mt-0.5 text-[9px] leading-snug text-emerald-200/65">{description}</p>
+              </div>
+            ))}
           </div>
         </div>
       </div>

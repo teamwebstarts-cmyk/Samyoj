@@ -119,7 +119,7 @@ export default function InboxChatHeaderActions({
             type="button"
             onClick={onConvertToTicket}
             title="Convert to ticket"
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-sky-200/80 bg-sky-50 px-3 py-2 text-micro font-bold text-sky-800 transition hover:bg-sky-100"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-sky-200/80 bg-sky-50 px-3 py-2 text-micro font-bold text-sky-800 transition hover:bg-sky-100 lg:hidden"
           >
             <LifeBuoy className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Ticket</span>
@@ -131,7 +131,7 @@ export default function InboxChatHeaderActions({
             type="button"
             onClick={() => onSnooze(2)}
             title="Snooze 2 hours"
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-indigo-200/80 bg-indigo-50 text-indigo-700 transition hover:bg-indigo-100"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-indigo-200/80 bg-indigo-50 text-indigo-700 transition hover:bg-indigo-100 lg:hidden"
           >
             <Clock className="h-4 w-4" />
           </button>
@@ -194,6 +194,32 @@ export default function InboxChatHeaderActions({
               <StickyNote className="h-4 w-4" />
               Team notes
             </button>
+            {onConvertToTicket && (
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-label text-theme-fg hover:bg-theme-subtle"
+                onClick={() => {
+                  onConvertToTicket();
+                  setMenuOpen(false);
+                }}
+              >
+                <LifeBuoy className="h-4 w-4" />
+                Convert to ticket
+              </button>
+            )}
+            {onSnooze && (
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-label text-theme-fg hover:bg-theme-subtle"
+                onClick={() => {
+                  onSnooze(2);
+                  setMenuOpen(false);
+                }}
+              >
+                <Clock className="h-4 w-4" />
+                Snooze 2 hours
+              </button>
+            )}
           </div>
         )}
       </div>

@@ -1,4 +1,4 @@
-import { AlertTriangle } from 'lucide-react';
+import AppAlert from '../ui/AppAlert';
 import type { AutomationConflict } from '../../types';
 
 interface AutomationConflictsBannerProps {
@@ -11,21 +11,15 @@ export default function AutomationConflictsBanner({ conflicts }: AutomationConfl
   return (
     <div className="space-y-2">
       {conflicts.map((conflict) => (
-        <div
-          key={conflict.type}
-          className="flex items-start gap-3 rounded-2xl border border-amber-200/70 bg-gradient-to-r from-amber-50/90 to-orange-50/50 px-4 py-3.5"
-        >
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-          <div className="min-w-0">
-            <p className="text-[13px] font-bold text-amber-950">{conflict.message}</p>
-            {conflict.items.length > 0 && (
-              <p className="mt-1 text-[12px] font-medium text-amber-800/90">{conflict.items.join(' · ')}</p>
-            )}
-            <p className="mt-2 text-[11px] font-medium text-amber-800/80">
-              Tip: Turn off the one you don't need, or keep only one active for the same situation.
-            </p>
-          </div>
-        </div>
+        <AppAlert key={conflict.type} variant={conflict.severity === 'error' ? 'error' : 'warning'}>
+          <p className="font-bold">{conflict.message}</p>
+          {conflict.items.length > 0 && (
+            <p className="mt-1 text-[12px] opacity-90">{conflict.items.join(' · ')}</p>
+          )}
+          <p className="mt-1.5 text-[11px] opacity-80">
+            Turn off the automation you don't need, or keep only one active for the same situation.
+          </p>
+        </AppAlert>
       ))}
     </div>
   );

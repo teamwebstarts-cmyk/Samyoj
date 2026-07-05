@@ -22,7 +22,7 @@ const checks = [
   {
     key: 'calling',
     label: 'Voice calling',
-    detail: 'Inbound calls allowed',
+    detail: 'Can receive calls',
     icon: Radio,
     ok: (s: CallSystemStatusProps) => s.callingEnabled,
   },

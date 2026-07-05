@@ -44,10 +44,10 @@ export default function CampaignRecipientTable({
   onStatusFilterChange,
 }: CampaignRecipientTableProps) {
   return (
-    <ModalPanel title={`Recipients (${total})`} icon={Users} accent="neutral">
+    <ModalPanel title={`People in campaign (${total})`} icon={Users} accent="neutral">
       <div className="mb-4 flex items-center justify-between gap-3">
         <p className="text-[12px] font-medium text-theme-muted">
-          Delivery status for each recipient in this campaign
+          Delivery status for each person in this campaign
         </p>
         <AppSelect
           className="w-40 shrink-0"
@@ -61,7 +61,7 @@ export default function CampaignRecipientTable({
 
       {recipients.length === 0 ? (
         <div className="rounded-xl border border-dashed border-theme-border bg-theme-subtle/40 px-4 py-12 text-center text-[13px] font-medium text-theme-muted">
-          No recipients match this filter
+          No one matches this filter
         </div>
       ) : (
         <DataTable

@@ -16,6 +16,7 @@ import CampaignAudiencePreview from './CampaignAudiencePreview';
 import CampaignContactPicker from './CampaignContactPicker';
 import CampaignPhoneCsvImport from './CampaignPhoneCsvImport';
 import { PHONE_HINT, PHONE_PLACEHOLDER, validatePhoneLines } from '../../utils/phone';
+import { messagingConsent } from '../../utils/plainLanguage';
 
 export type AudienceType = 'MANUAL' | 'TAGS' | 'CONTACTS' | 'ALL_OPTED_IN';
 
@@ -25,48 +26,26 @@ const audienceTypes = [
     label: 'Manual list',
     description: 'Paste or import numbers',
     icon: Phone,
-    accent: 'sky',
   },
   {
     id: 'TAGS' as const,
     label: 'By tags',
     description: 'Filter by contact tags',
     icon: Tag,
-    accent: 'violet',
   },
   {
     id: 'CONTACTS' as const,
     label: 'Pick contacts',
     description: 'Select individuals',
     icon: UserCheck,
-    accent: 'indigo',
   },
   {
     id: 'ALL_OPTED_IN' as const,
-    label: 'All opted-in',
-    description: 'Full subscribed list',
+    label: messagingConsent.allAudienceLabel,
+    description: messagingConsent.allAudienceDescription,
     icon: Users,
-    accent: 'emerald',
   },
 ] as const;
-
-const accentActive: Record<string, string> = {
-  sky: 'border-sky-300/80 bg-sky-50/80 ring-sky-200/70 dark:border-sky-700/50 dark:bg-sky-950/30 dark:ring-sky-800/40',
-  violet:
-    'border-violet-300/80 bg-violet-50/80 ring-violet-200/70 dark:border-violet-700/50 dark:bg-violet-950/30 dark:ring-violet-800/40',
-  indigo:
-    'border-indigo-300/80 bg-indigo-50/80 ring-indigo-200/70 dark:border-indigo-700/50 dark:bg-indigo-950/30 dark:ring-indigo-800/40',
-  emerald:
-    'border-emerald-300/80 bg-emerald-50/80 ring-emerald-200/70 dark:border-emerald-700/50 dark:bg-emerald-950/30 dark:ring-emerald-800/40',
-};
-
-const accentIcon: Record<string, string> = {
-  sky: 'bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-[0_4px_12px_rgba(14,165,233,0.3)]',
-  violet: 'bg-gradient-to-br from-violet-600 to-purple-700 text-white shadow-[0_4px_12px_rgba(139,92,246,0.3)]',
-  indigo: 'bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-[0_4px_12px_rgba(99,102,241,0.3)]',
-  emerald:
-    'bg-gradient-to-br from-whatsapp-600 to-emerald-700 text-white shadow-[0_4px_12px_rgba(37,211,102,0.3)]',
-};
 
 interface CampaignAudienceSectionProps {
   audienceType: AudienceType;
@@ -126,61 +105,52 @@ export default function CampaignAudienceSection({
   };
 
   return (
-    <div className="space-y-5">
-      <div>
-        <p className="mb-3 text-[12px] font-bold uppercase tracking-wide text-theme-muted">
-          Choose audience type
-        </p>
-        <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
-          {audienceTypes.map((type) => {
-            const Icon = type.icon;
-            const active = audienceType === type.id;
-            return (
-              <button
-                key={type.id}
-                type="button"
-                onClick={() => onAudienceTypeChange(type.id)}
-                className={`relative flex flex-col items-start gap-2.5 rounded-2xl border p-3.5 text-left ring-1 transition active:scale-[0.99] sm:p-4 ${
-                  active
-                    ? accentActive[type.accent]
-                    : 'border-theme-border bg-theme-surface hover:border-theme-border-strong hover:bg-theme-subtle/50'
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-2">
+        {audienceTypes.map((type) => {
+          const Icon = type.icon;
+          const active = audienceType === type.id;
+          return (
+            <button
+              key={type.id}
+              type="button"
+              onClick={() => onAudienceTypeChange(type.id)}
+              className={`flex items-start gap-2.5 rounded-xl border p-3 text-left transition ${
+                active
+                  ? 'border-whatsapp-500/30 bg-whatsapp-500/[0.04]'
+                  : 'border-theme-border bg-theme-surface hover:border-theme-border-strong hover:bg-theme-subtle/40'
+              }`}
+            >
+              <span
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                  active ? 'bg-whatsapp-500/10 text-whatsapp-600' : 'bg-theme-subtle text-theme-muted'
                 }`}
               >
-                {active && (
-                  <span className="absolute right-2.5 top-2.5 text-sky-600 dark:text-sky-400">
-                    <CheckCircle2 className="h-4 w-4" strokeWidth={2.5} />
-                  </span>
-                )}
-                <span
-                  className={`flex h-9 w-9 items-center justify-center rounded-xl ${
-                    active ? accentIcon[type.accent] : 'bg-theme-subtle text-theme-muted ring-1 ring-theme-border'
-                  }`}
-                >
-                  <Icon className="h-4 w-4" strokeWidth={2.25} />
+                <Icon className="h-4 w-4" strokeWidth={2.25} />
+              </span>
+              <span className="min-w-0">
+                <span className="flex items-center gap-1.5">
+                  <span className="block text-[12px] font-bold text-theme-fg">{type.label}</span>
+                  {active && <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-whatsapp-600" />}
                 </span>
-                <span>
-                  <span className="block text-[13px] font-extrabold text-theme-fg">{type.label}</span>
-                  <span className="mt-0.5 block text-[11px] font-medium text-theme-muted">
-                    {type.description}
-                  </span>
+                <span className="mt-0.5 block text-[10px] leading-snug text-theme-muted">
+                  {type.description}
                 </span>
-              </button>
-            );
-          })}
-        </div>
+              </span>
+            </button>
+          );
+        })}
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-theme-border bg-theme-subtle/30">
-        <div className="border-b border-theme-border/70 bg-theme-surface/60 px-4 py-3">
-          <p className="text-[12px] font-extrabold text-theme-fg">
-            {audienceTypes.find((t) => t.id === audienceType)?.label} configuration
+      <div className="overflow-hidden rounded-xl border border-theme-border">
+        <div className="border-b border-theme-border bg-theme-subtle/40 px-3.5 py-2.5">
+          <p className="text-[12px] font-bold text-theme-fg">
+            {audienceTypes.find((t) => t.id === audienceType)?.label}
           </p>
-          <p className="mt-0.5 text-[11px] font-medium text-theme-muted">
-            Only opted-in contacts receive campaign messages
-          </p>
+          <p className="mt-0.5 text-[11px] text-theme-muted">{messagingConsent.campaignNotice}</p>
         </div>
 
-        <div className="space-y-4 p-4">
+        <div className="space-y-4 bg-theme-surface p-3.5">
           {audienceType === 'MANUAL' && (
             <>
               <CampaignPhoneCsvImport
@@ -298,8 +268,8 @@ export default function CampaignAudienceSection({
           {audienceType === 'ALL_OPTED_IN' && (
             <ModalCallout
               icon={Sparkles}
-              title="Broadcast to your full opted-in list"
-              description="Every contact with opt-in enabled will be included when you save this campaign. Great for announcements and updates."
+              title={messagingConsent.allAudienceTitle}
+              description={messagingConsent.allAudienceDetail}
               accent="emerald"
             />
           )}
@@ -307,7 +277,7 @@ export default function CampaignAudienceSection({
           {showSavedCount && ['TAGS', 'CONTACTS', 'ALL_OPTED_IN'].includes(audienceType) && (
             <div className="rounded-xl border border-sky-200/70 bg-sky-50/60 px-3.5 py-2.5 dark:border-sky-800/40 dark:bg-sky-950/25">
               <p className="text-[12px] font-medium text-sky-900 dark:text-sky-200">
-                Recipients resolve from your contact list on save. Current saved count:{' '}
+                People are picked from your contact list when you save. Current count:{' '}
                 <span className="font-extrabold tabular-nums">{editingTotalContacts ?? 0}</span>.
               </p>
             </div>

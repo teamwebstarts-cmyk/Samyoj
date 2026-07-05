@@ -40,7 +40,6 @@ import {
   ModalStatusSummary,
 } from '../components/ui/modalUi';
 import { botTemplates, type BotTemplate } from '../components/ai-bot/botTemplates';
-import StatCard from '../components/dashboard/StatCard';
 import AppButton from '../components/ui/AppButton';
 import AppInput from '../components/ui/AppInput';
 import AppSelect from '../components/ui/AppSelect';
@@ -49,7 +48,6 @@ import DataTable, { TableSerialCell } from '../components/ui/DataTable';
 import EmptyState from '../components/ui/EmptyState';
 import ListToolbar from '../components/ui/ListToolbar';
 import LoadingState from '../components/ui/LoadingState';
-import PageHeader from '../components/ui/PageHeader';
 import PageHero from '../components/ui/PageHero';
 import PageShell from '../components/ui/PageShell';
 import ResponsiveDataView from '../components/ui/ResponsiveDataView';
@@ -85,13 +83,6 @@ const emptyBotForm = {
 
 const emptyFaq = { title: '', content: '' };
 
-const statusFilterOptions = [
-  { value: '', label: 'All' },
-  { value: 'active', label: 'Live' },
-  { value: 'paused', label: 'Paused' },
-  { value: 'default', label: 'Default' },
-] as const;
-
 type SlideTab = 'setup' | 'knowledge' | 'advanced' | 'test';
 
 function StatusIcon({ ok }: { ok: boolean }) {
@@ -102,52 +93,45 @@ function StatusIcon({ ok }: { ok: boolean }) {
   );
 }
 
-function ToggleCard({
+function ToggleRow({
   checked,
   onChange,
   title,
   description,
-  accent,
   icon: Icon,
 }: {
   checked: boolean;
   onChange: (value: boolean) => void;
   title: string;
   description: string;
-  accent: string;
   icon: LucideIcon;
 }) {
   return (
-    <button
-      type="button"
-      onClick={() => onChange(!checked)}
-      className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition active:scale-[0.995] ${
+    <label
+      className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3.5 transition ${
         checked
-          ? `bg-gradient-to-br ${accent} ring-2 ring-whatsapp-500/25 shadow-sm`
-          : 'border-theme-border bg-theme-surface hover:border-theme-border-strong'
+          ? 'border-whatsapp-500/30 bg-whatsapp-500/[0.04]'
+          : 'border-theme-border/70 bg-theme-surface hover:border-theme-border-strong hover:bg-theme-subtle/40'
       }`}
     >
       <div
-        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-          checked ? 'bg-theme-surface/80 text-whatsapp-700 shadow-sm' : 'bg-theme-subtle text-theme-muted'
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+          checked ? 'bg-whatsapp-500/10 text-whatsapp-600' : 'bg-theme-subtle text-theme-muted'
         }`}
       >
         <Icon className="h-4 w-4" strokeWidth={2.25} />
       </div>
       <div className="min-w-0 flex-1">
         <p className="text-[13px] font-bold text-theme-fg">{title}</p>
-        <p className="mt-0.5 text-[11px] font-medium leading-relaxed text-theme-secondary">{description}</p>
+        <p className="mt-0.5 text-[11px] leading-relaxed text-theme-secondary">{description}</p>
       </div>
-      <div
-        className={`mt-1 h-5 w-9 shrink-0 rounded-full p-0.5 transition ${
-          checked ? 'bg-whatsapp-500' : 'bg-neutral-200 dark:bg-slate-600'
-        }`}
-      >
-        <div
-          className={`h-4 w-4 rounded-full bg-white shadow transition ${checked ? 'translate-x-4' : 'translate-x-0'}`}
-        />
-      </div>
-    </button>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="mt-1 h-4 w-4 shrink-0 rounded border-theme-border text-whatsapp-600 focus:ring-whatsapp-500/25"
+      />
+    </label>
   );
 }
 
@@ -577,7 +561,6 @@ export default function AiBotPage() {
   }, [faqs]);
 
   const activeCount = bots.filter((b) => b.enabled).length;
-  const defaultBot = bots.find((b) => b.isDefault);
   const isLive = bots.some((b) => b.enabled && b.isDefault);
   const knowledgeTotal = bots.reduce((sum, b) => sum + (b._count?.knowledgeItems ?? 0), 0);
   const requiredChecks = setupStatus?.checks.filter((c) => !c.optional) ?? [];
@@ -585,28 +568,21 @@ export default function AiBotPage() {
     ? Math.round((requiredChecks.filter((c) => c.ok).length / Math.max(requiredChecks.length, 1)) * 100)
     : 0;
 
-  const slideTabOptions: Array<{ value: SlideTab; label: string; icon: LucideIcon }> = editing
-    ? [
-        { value: 'setup', label: 'Setup', icon: Bot },
-        { value: 'knowledge', label: 'Knowledge', icon: BookOpen },
-        { value: 'advanced', label: 'Advanced', icon: SlidersHorizontal },
-        { value: 'test', label: 'Test', icon: FlaskConical },
-      ]
-    : [{ value: 'setup', label: 'Setup', icon: Bot }];
+  const slideTabOptions: Array<{ value: SlideTab; label: string; shortLabel: string; icon: LucideIcon }> =
+    editing
+      ? [
+          { value: 'setup', label: 'Setup', shortLabel: 'Setup', icon: Bot },
+          { value: 'knowledge', label: 'Knowledge', shortLabel: 'Know', icon: BookOpen },
+          { value: 'advanced', label: 'Advanced', shortLabel: 'More', icon: SlidersHorizontal },
+          { value: 'test', label: 'Test', shortLabel: 'Test', icon: FlaskConical },
+        ]
+      : [{ value: 'setup', label: 'Setup', shortLabel: 'Setup', icon: Bot }];
 
   const hasFilters = Boolean(search || statusFilter);
 
   return (
     <PageShell>
-      <PageHeader
-        actions={
-          <AppButton fullWidth className="w-full sm:w-auto" icon={<Plus size={16} />} onClick={() => openCreate()}>
-            New Bot
-          </AppButton>
-        }
-      />
-
-      <div className="space-y-5 animate-fade-up-delay sm:space-y-6">
+      <div className="space-y-4 sm:space-y-5">
         <PageHero
           badge="AI Auto-Reply"
           badgeIcon={Sparkles}
@@ -620,6 +596,7 @@ export default function AiBotPage() {
               tone: isLive ? 'text-whatsapp-700' : 'text-amber-700',
             },
             { label: 'Active bots', value: activeCount, tone: 'text-indigo-700' },
+            { label: 'Knowledge', value: knowledgeTotal },
             { label: 'Total bots', value: bots.length },
           ]}
         />
@@ -633,70 +610,15 @@ export default function AiBotPage() {
           />
         )}
 
-        {!loading && (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <StatCard
-              label="Live status"
-              value={isLive ? 'ON' : 'OFF'}
-              icon={Sparkles}
-              accent={isLive ? 'emerald' : 'amber'}
-              hint={isLive ? 'Auto-reply active' : 'Turn on default bot'}
-              delay={0}
-            />
-            <StatCard
-              label="Active bots"
-              value={activeCount}
-              icon={Bot}
-              accent="violet"
-              hint={`${bots.length} total set up`}
-              delay={60}
-            />
-            <StatCard
-              label="Knowledge items"
-              value={knowledgeTotal}
-              icon={BookOpen}
-              accent="blue"
-              hint="FAQs & imported docs"
-              delay={120}
-            />
-            <StatCard
-              label="Default bot"
-              value={defaultBot?.name ? 'Set' : 'None'}
-              icon={Star}
-              accent={defaultBot ? 'emerald' : 'slate'}
-              hint={defaultBot?.name ?? 'Required for all messages'}
-              delay={180}
-            />
-          </div>
-        )}
-
-        <ListToolbar
-          search={search}
-          onSearchChange={setSearch}
-          searchPlaceholder="Search bots..."
-          filters={
-            <>
-              <div className="flex gap-2 overflow-x-auto pb-0.5 lg:hidden">
-                {statusFilterOptions.map((option) => {
-                  const isActive = statusFilter === option.value;
-                  return (
-                    <button
-                      key={option.value || 'all'}
-                      type="button"
-                      onClick={() => setStatusFilter(option.value)}
-                      className={`shrink-0 rounded-full px-3.5 py-2 text-[12px] font-bold transition active:scale-[0.98] ${
-                        isActive
-                          ? 'bg-gradient-to-r from-violet-500 to-indigo-600 text-white shadow-[0_4px_12px_rgba(99,102,241,0.3)]'
-                          : 'border border-neutral-200/80 bg-white text-neutral-600 hover:border-violet-200 hover:text-violet-700'
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  );
-                })}
-              </div>
+        <div className="inbox-shell overflow-hidden">
+          <ListToolbar
+            embedded
+            search={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search bots..."
+            filters={
               <AppSelect
-                className="hidden w-40 lg:block"
+                className="w-full sm:w-[132px]"
                 value={statusFilter}
                 placeholder="All statuses"
                 isSearchable={false}
@@ -708,22 +630,30 @@ export default function AiBotPage() {
                 ]}
                 onChange={(e) => setStatusFilter(e.target.value)}
               />
-            </>
-          }
-        />
+            }
+            actions={
+              <AppButton icon={<Plus size={16} />} onClick={() => openCreate()}>
+                New bot
+              </AppButton>
+            }
+          />
 
-        {loading ? (
-          <LoadingState label="Loading bots..." />
-        ) : bots.length === 0 ? (
-          <div className="space-y-5">
+          {loading ? (
+            <div className="p-6">
+              <LoadingState label="Loading bots..." />
+            </div>
+          ) : bots.length === 0 ? (
+            <div className="space-y-5 p-4 sm:p-6">
             <EmptyState
               icon={Bot}
-              title={hasFilters ? 'No bots found' : 'No AI bots yet'}
+              variant={hasFilters ? 'filter' : 'default'}
+              title={hasFilters ? 'No bots match your filters' : 'No AI bots yet'}
               description={
                 hasFilters
-                  ? 'Try adjusting your search or filters.'
-                  : 'Create a bot to auto-reply on every inbound WhatsApp message.'
+                  ? 'Try a different search word or clear your filters.'
+                  : 'An AI bot can reply to customers automatically — even when you are offline.'
               }
+              steps={hasFilters ? undefined : ['Tap Create bot below', 'Add your business info and FAQs', 'Turn it on — it starts replying instantly']}
               action={
                 !hasFilters ? (
                   <AppButton icon={<Plus size={16} />} onClick={() => openCreate()}>
@@ -741,10 +671,12 @@ export default function AiBotPage() {
             )}
           </div>
         ) : filteredBots.length === 0 ? (
-          <EmptyState
+          <div className="p-4 sm:p-6">
+            <EmptyState
             icon={Bot}
+            variant="filter"
             title="No bots match your filters"
-            description="Try a different search term or clear the status filter."
+            description="Try a different search word or clear the status filter."
             action={
               <AppButton
                 variant="secondary"
@@ -757,10 +689,13 @@ export default function AiBotPage() {
               </AppButton>
             }
           />
+          </div>
         ) : (
-          <div className="space-y-5">
+          <>
             <ResponsiveDataView
               items={filteredBots}
+              cardClassName="divide-y divide-neutral-200 dark:divide-neutral-800 lg:hidden"
+              tableClassName="px-4 sm:px-5 pt-4 sm:pb-5"
               renderCard={(bot) => (
                 <AiBotCard
                   key={bot.id}
@@ -878,31 +813,29 @@ export default function AiBotPage() {
             />
 
             {!hasFilters && (
-              <AiBotTemplatePicker
-                templates={botTemplates}
-                onSelect={(t) => openCreate(t)}
-                compact
-              />
+              <div className="px-4 pb-4 sm:px-5 sm:pb-5">
+                <AiBotTemplatePicker
+                  templates={botTemplates}
+                  onSelect={(t) => openCreate(t)}
+                  compact
+                />
+              </div>
             )}
-          </div>
+          </>
         )}
+        </div>
 
-        {!loading && bots.length > 0 && <AiBotHowItWorks />}
-
-        <div className="dashboard-card flex items-start gap-3 overflow-hidden p-4 sm:p-5">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-[0_4px_14px_rgba(14,165,233,0.3)]">
-            <MessageSquare className="h-4 w-4" strokeWidth={2.25} />
-          </div>
-          <div>
-            <p className="text-[13px] font-extrabold text-theme-fg">Per-conversation control</p>
-            <p className="mt-1 text-[12px] font-medium leading-relaxed text-theme-secondary">
-              Pause AI for a single customer from{' '}
-              <Link to="/inbox" className="font-bold text-sky-700 underline underline-offset-2 dark:text-sky-400">
-                Inbox
-              </Link>{' '}
-              using the AI Bot toggle on that conversation — without affecting other chats.
-            </p>
-          </div>
+        <div className="flex items-start gap-2.5 rounded-xl border border-sky-200/50 bg-sky-50/40 px-3.5 py-2.5 dark:border-sky-500/20 dark:bg-sky-950/20">
+          <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-sky-600 dark:text-sky-400" strokeWidth={2} />
+          <p className="min-w-0 text-[12px] leading-relaxed text-theme-secondary">
+            <span className="font-bold text-theme-fg">Per-chat control</span>
+            {' — '}
+            Pause AI for one customer from{' '}
+            <Link to="/inbox" className="font-bold text-sky-700 underline underline-offset-2 dark:text-sky-400">
+              Inbox
+            </Link>{' '}
+            without affecting other chats.
+          </p>
         </div>
       </div>
 
@@ -919,43 +852,36 @@ export default function AiBotPage() {
         icon={Bot}
         accent="violet"
         footer={
-          slideTab === 'setup' || slideTab === 'advanced' || !editing ? (
-            <SlideOverFooter
-              onCancel={closeSlide}
-              submitLabel={editing ? 'Save changes' : 'Create & activate'}
-              loading={saving}
-              onDelete={editing ? () => handleDelete(editing.id) : undefined}
-              deleteLabel="Delete bot"
-            />
-          ) : (
-            <div className="flex justify-end">
-              <AppButton variant="secondary" onClick={closeSlide}>
-                Close
-              </AppButton>
-            </div>
-          )
+          <SlideOverFooter
+            onCancel={closeSlide}
+            submitLabel={editing ? 'Save changes' : 'Create & activate'}
+            loading={saving}
+            onDelete={editing ? () => handleDelete(editing.id) : undefined}
+            deleteLabel="Delete bot"
+          />
         }
       >
         {editing && slideTabOptions.length > 1 && (
-          <div className="mb-6">
-            <SegmentedControl value={slideTab} onChange={setSlideTab} options={slideTabOptions} />
+          <div className="mb-5">
+            <SegmentedControl embedded value={slideTab} onChange={setSlideTab} options={slideTabOptions} />
           </div>
         )}
 
         <form
           id="slideover-form"
           onSubmit={handleSubmit}
-          className={slideTab !== 'setup' && slideTab !== 'advanced' && editing ? 'hidden' : undefined}
+          className={slideTab !== 'setup' && slideTab !== 'advanced' && editing ? 'hidden' : 'space-y-6'}
         >
           {(slideTab === 'setup' || !editing) && (
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_280px]">
-            <div className="space-y-6">
-              <ModalCallout
-                icon={Sparkles}
-                title="Quick setup"
-                description="Turn ON + set as Default = bot replies to all customer messages automatically."
-                accent="violet"
-              />
+            <>
+              {!editing && (
+                <ModalCallout
+                  icon={Sparkles}
+                  title="Quick start"
+                  description="Turn the bot ON and set as Default to reply to all customer messages automatically."
+                  accent="violet"
+                />
+              )}
 
               <ModalSection step={1} title="Bot identity" subtitle="Name and routing behavior">
                 <AppInput
@@ -966,57 +892,52 @@ export default function AiBotPage() {
                   required
                 />
 
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <ToggleCard
+                <div className="mt-4 space-y-2">
+                  <ToggleRow
                     checked={form.enabled}
                     onChange={(enabled) => setForm({ ...form, enabled })}
                     title="Bot is ON"
                     description="Replies automatically on WhatsApp"
-                    accent="from-emerald-500/10 to-teal-500/5 border-emerald-200/70 dark:border-emerald-500/25"
                     icon={PlayCircle}
                   />
-                  <ToggleCard
+                  <ToggleRow
                     checked={form.isDefault}
                     onChange={(isDefault) => setForm({ ...form, isDefault })}
                     title="Default bot"
-                    description="Handles all inbound messages"
-                    accent="from-amber-500/10 to-orange-500/5 border-amber-200/70 dark:border-amber-500/25"
+                    description="Replies to every message you receive"
                     icon={Star}
                   />
-                </div>
-
-                <div className="mt-3">
-                  <ToggleCard
+                  <ToggleRow
                     checked={form.businessHoursOnly}
                     onChange={(businessHoursOnly) => setForm({ ...form, businessHoursOnly })}
                     title="Business hours only"
                     description="Only reply during business hours (set in Settings)"
-                    accent="from-sky-500/10 to-blue-500/5 border-sky-200/70 dark:border-sky-500/25"
                     icon={Clock}
                   />
                 </div>
               </ModalSection>
 
-              <ModalSection step={2} title="Special words" subtitle="Optional — route messages or connect to a person">
-                <div className="grid gap-3 sm:grid-cols-2">
+              {!form.isDefault && (
+                <ModalSection
+                  step={2}
+                  title="Trigger keywords"
+                  subtitle="This bot replies when a customer message contains any of these words"
+                >
                   <AppInput
-                    label="Special words (optional)"
-                    hint="For extra bots — e.g. sales, pricing"
+                    label="Keywords"
+                    hint="Comma-separated — e.g. pricing, quote, sales"
                     placeholder="pricing, quote"
                     value={form.triggerKeywords}
                     onChange={(e) => setForm({ ...form, triggerKeywords: e.target.value })}
                   />
-                  <AppInput
-                    label="Words to connect to a person"
-                    hint="When customer says these, pass chat to your team"
-                    placeholder="human, agent, manager"
-                    value={form.handoffKeywords}
-                    onChange={(e) => setForm({ ...form, handoffKeywords: e.target.value })}
-                  />
-                </div>
-              </ModalSection>
+                </ModalSection>
+              )}
 
-              <ModalSection step={3} title="How the bot replies" subtitle="Instructions and when to involve your team">
+              <ModalSection
+                step={form.isDefault ? 2 : 3}
+                title="How the bot replies"
+                subtitle="Instructions for the AI and when to pass chats to your team"
+              >
                 <AppTextarea
                   label="Bot instructions"
                   rows={5}
@@ -1025,55 +946,91 @@ export default function AiBotPage() {
                   onChange={(e) => setForm({ ...form, instructions: e.target.value })}
                 />
 
-                <div className="mt-4">
-                  <AppTextarea
-                    label="Message when connecting to team"
-                    hint="Sent when customer asks for a person"
-                    rows={2}
-                    value={form.handoffMessage}
-                    onChange={(e) => setForm({ ...form, handoffMessage: e.target.value })}
-                  />
-                </div>
+                <AppInput
+                  label="Hand off to team when customer says"
+                  hint="Comma-separated — e.g. human, agent, manager"
+                  placeholder="human, agent, manager"
+                  value={form.handoffKeywords}
+                  onChange={(e) => setForm({ ...form, handoffKeywords: e.target.value })}
+                />
+
+                <AppTextarea
+                  label="Message when handing off"
+                  hint="Sent to the customer before your team takes over"
+                  rows={2}
+                  value={form.handoffMessage}
+                  onChange={(e) => setForm({ ...form, handoffMessage: e.target.value })}
+                />
 
                 {editing && (
-                  <div className="mt-4">
-                    <AppInput
-                      label="Change note (optional)"
-                      hint="Saved in version history when you update this bot"
-                      placeholder="e.g. Updated pricing FAQ"
-                      value={changeNote}
-                      onChange={(e) => setChangeNote(e.target.value)}
-                    />
-                  </div>
+                  <AppInput
+                    label="Change note (optional)"
+                    hint="Saved in version history when you update this bot"
+                    placeholder="e.g. Updated pricing FAQ"
+                    value={changeNote}
+                    onChange={(e) => setChangeNote(e.target.value)}
+                  />
                 )}
               </ModalSection>
-            </div>
 
-            <aside className="space-y-4 xl:sticky xl:top-0 xl:self-start">
-              <ModalPanel title="Live preview" icon={MessageSquare} accent="neutral">
+              <section className="space-y-3 rounded-xl border border-theme-border bg-theme-subtle/30 p-4">
+                <p className="text-[13px] font-extrabold text-theme-fg">Live preview</p>
                 <ModalStatusSummary
                   enabled={form.enabled}
                   isDefault={form.isDefault}
                   businessHoursOnly={form.businessHoursOnly}
                 />
-              </ModalPanel>
+                {(form.handoffMessage.trim() || form.instructions.trim()) && (
+                  <div className="space-y-2 pt-1">
+                    <p className="text-[11px] font-bold text-theme-muted">Team connection message</p>
+                    <WhatsAppMessagePreview
+                      content={form.handoffMessage || 'Preview of team connection message'}
+                      direction="outbound"
+                      variant="compact"
+                    />
+                  </div>
+                )}
+              </section>
+            </>
+          )}
 
-              {(form.handoffMessage.trim() || form.instructions.trim()) && (
-                <ModalPreviewCard title="Team connection preview">
-                  <WhatsAppMessagePreview
-                    content={form.handoffMessage || 'Preview of team connection message'}
-                    direction="outbound"
-                    variant="compact"
-                  />
-                </ModalPreviewCard>
-              )}
-            </aside>
-          </div>
+          {editing && slideTab === 'advanced' && (
+            <ModalPanel title="Reply style" icon={SlidersHorizontal} accent="neutral">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <AppInput
+                  label="Creativity"
+                  type="number"
+                  min={0}
+                  max={2}
+                  step={0.1}
+                  value={form.temperature}
+                  onChange={(e) => setForm({ ...form, temperature: parseFloat(e.target.value) || 0.7 })}
+                />
+                <AppInput
+                  label="Max reply length"
+                  type="number"
+                  min={50}
+                  max={2000}
+                  value={form.maxTokens}
+                  onChange={(e) => setForm({ ...form, maxTokens: parseInt(e.target.value, 10) || 500 })}
+                />
+                <AppInput
+                  label="Replies per minute"
+                  type="number"
+                  min={5}
+                  max={200}
+                  value={form.rateLimitPerMin}
+                  onChange={(e) =>
+                    setForm({ ...form, rateLimitPerMin: parseInt(e.target.value, 10) || 30 })
+                  }
+                />
+              </div>
+            </ModalPanel>
           )}
         </form>
 
         {editing && slideTab === 'knowledge' && (
-          <div className="space-y-6">
+          <div className="space-y-5">
             <ModalCallout
               icon={BookOpen}
               title="Knowledge base"
@@ -1082,11 +1039,11 @@ export default function AiBotPage() {
             />
 
             {faqs.length > 0 && (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-theme-surface px-4 py-3 ring-1 ring-theme-border">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-theme-border bg-theme-subtle/30 px-3.5 py-3">
                 <div>
                   <p className="text-[12px] font-bold text-theme-fg">Semantic search (RAG)</p>
                   <p className="text-[11px] text-theme-secondary">
-                    {embeddingStats.indexed}/{embeddingStats.total} items indexed with embeddings
+                    {embeddingStats.indexed}/{embeddingStats.total} items indexed
                     {embeddingStats.total > 0 && embeddingStats.indexed < embeddingStats.total
                       ? ' — unindexed items use keyword matching'
                       : embeddingStats.indexed > 0
@@ -1122,12 +1079,9 @@ export default function AiBotPage() {
             )}
 
             {filteredFaqs.length > 0 ? (
-              <div className="space-y-2">
+              <div className="divide-y divide-theme-border overflow-hidden rounded-xl border border-theme-border">
                 {filteredFaqs.map((faq) => (
-                  <div
-                    key={faq.id}
-                    className="group flex items-start justify-between gap-3 rounded-2xl border border-theme-border bg-theme-surface p-4 transition hover:border-violet-200/60 hover:shadow-sm dark:hover:border-violet-500/25"
-                  >
+                  <div key={faq.id} className="flex items-start gap-3 bg-theme-surface px-3.5 py-3">
                     <button type="button" className="min-w-0 flex-1 text-left" onClick={() => startEditFaq(faq)}>
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="text-[13px] font-semibold text-theme-fg">{faq.title}</p>
@@ -1147,14 +1101,15 @@ export default function AiBotPage() {
                           {faq.sourceUrl}
                         </p>
                       )}
-                      <p className="mt-1.5 line-clamp-2 text-[12px] leading-relaxed text-theme-secondary">
+                      <p className="mt-1 line-clamp-2 text-[12px] leading-relaxed text-theme-secondary">
                         {faq.content}
                       </p>
                     </button>
                     <button
                       type="button"
                       onClick={() => deleteFaq(faq.id)}
-                      className="rounded-xl p-2 text-theme-muted opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100 dark:hover:bg-red-500/10"
+                      className="shrink-0 rounded-lg p-2 text-theme-muted transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10"
+                      aria-label="Delete FAQ"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -1203,7 +1158,7 @@ export default function AiBotPage() {
             </ModalPanel>
 
             <div className="grid gap-4 lg:grid-cols-2">
-              <ModalPanel title="Import from website" icon={Globe} accent="indigo">
+              <ModalPanel title="Import from website" icon={Globe} accent="neutral">
                 <div className="space-y-3">
                   <AppInput
                     label="Website URL"
@@ -1223,9 +1178,9 @@ export default function AiBotPage() {
                 </div>
               </ModalPanel>
 
-              <ModalPanel title="Import PDF" icon={FileText} accent="indigo">
-                <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-indigo-200/80 bg-theme-surface/60 px-4 py-8 text-center transition hover:border-indigo-300 hover:bg-theme-surface dark:border-indigo-500/30">
-                  <FileText className="h-8 w-8 text-indigo-400" />
+              <ModalPanel title="Import PDF" icon={FileText} accent="neutral">
+                <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-theme-border bg-theme-subtle/30 px-4 py-8 text-center transition hover:border-theme-border-strong hover:bg-theme-subtle/50">
+                  <FileText className="h-8 w-8 text-theme-muted" />
                   <p className="mt-2 text-[13px] font-semibold text-theme-fg">Drop PDF or click to upload</p>
                   <p className="mt-1 text-[11px] text-theme-secondary">
                     We read your PDF and add it to your bot&apos;s knowledge
@@ -1247,47 +1202,7 @@ export default function AiBotPage() {
         )}
 
         {editing && slideTab === 'advanced' && (
-          <div className="space-y-6">
-            <ModalPanel title="Reply style" icon={SlidersHorizontal} accent="neutral">
-              <div className="grid gap-3 sm:grid-cols-3">
-                <AppInput
-                  label="Creativity"
-                  type="number"
-                  min={0}
-                  max={2}
-                  step={0.1}
-                  value={form.temperature}
-                  onChange={(e) => setForm({ ...form, temperature: parseFloat(e.target.value) || 0.7 })}
-                />
-                <AppInput
-                  label="Max reply length"
-                  type="number"
-                  min={50}
-                  max={2000}
-                  value={form.maxTokens}
-                  onChange={(e) => setForm({ ...form, maxTokens: parseInt(e.target.value, 10) || 500 })}
-                />
-                <AppInput
-                  label="Replies per minute"
-                  type="number"
-                  min={5}
-                  max={200}
-                  value={form.rateLimitPerMin}
-                  onChange={(e) =>
-                    setForm({ ...form, rateLimitPerMin: parseInt(e.target.value, 10) || 30 })
-                  }
-                />
-              </div>
-              <AppInput
-                className="mt-4"
-                label="Change note (optional)"
-                hint="Saved in version history when you save"
-                placeholder="e.g. Lowered creativity for support tone"
-                value={changeNote}
-                onChange={(e) => setChangeNote(e.target.value)}
-              />
-            </ModalPanel>
-
+          <div className="space-y-5">
             <ModalPanel title="Analytics · 30 days" icon={BarChart3} accent="indigo">
               <AiBotAnalyticsPanel analytics={analytics} loading={analyticsLoading} />
             </ModalPanel>
@@ -1328,29 +1243,30 @@ export default function AiBotPage() {
         )}
 
         {editing && slideTab === 'test' && (
-          <div className="grid gap-6 lg:grid-cols-2">
-            <div className="space-y-5">
-              <ModalCallout
-                icon={FlaskConical}
-                title="Test before going live"
-                description="Send a sample customer message — no real WhatsApp message is sent."
-                accent="emerald"
-              />
+          <div className="space-y-5">
+            <ModalCallout
+              icon={FlaskConical}
+              title="Test before going live"
+              description="Send a sample customer message — no real WhatsApp message is sent."
+              accent="emerald"
+            />
 
-              <AppTextarea
-                label="Sample customer message"
-                rows={4}
-                value={testMessage}
-                onChange={(e) => setTestMessage(e.target.value)}
-                placeholder="Hi, what are your prices?"
-              />
-              <AppButton type="button" loading={testLoading} onClick={runTest} icon={<Zap size={16} />}>
-                Send test
-              </AppButton>
-            </div>
+            <div className="grid gap-5 lg:grid-cols-2">
+              <div className="space-y-4">
+                <AppTextarea
+                  label="Sample customer message"
+                  rows={4}
+                  value={testMessage}
+                  onChange={(e) => setTestMessage(e.target.value)}
+                  placeholder="Hi, what are your prices?"
+                />
+                <AppButton type="button" loading={testLoading} onClick={runTest} icon={<Zap size={16} />}>
+                  Send test
+                </AppButton>
+              </div>
 
-            <div className="space-y-3">
-              <p className="text-[12px] font-extrabold uppercase tracking-wide text-theme-muted">Bot reply</p>
+              <div className="space-y-3">
+                <p className="text-[12px] font-extrabold uppercase tracking-wide text-theme-muted">Bot reply</p>
               {testResult ? (
                 <div className="space-y-3">
                   {testResult.reply ? (
@@ -1408,6 +1324,7 @@ export default function AiBotPage() {
               ) : (
                 <ModalEmptyHint message="Run a test to see how your bot responds here." />
               )}
+              </div>
             </div>
           </div>
         )}

@@ -1,19 +1,29 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Palette, FolderOpen, Sparkles, RefreshCw } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  Calendar,
+  FileText,
+  FolderOpen,
+  Image,
+  Palette,
+  RefreshCw,
+  Sparkles,
+  Wand2,
+} from 'lucide-react';
 import AppButton from '../components/ui/AppButton';
 import AppInput from '../components/ui/AppInput';
 import AppTextarea from '../components/ui/AppTextarea';
 import EmptyState from '../components/ui/EmptyState';
 import LoadingState from '../components/ui/LoadingState';
-import PageHeader from '../components/ui/PageHeader';
 import PageHero from '../components/ui/PageHero';
 import PageShell from '../components/ui/PageShell';
 import SegmentedControl from '../components/ui/SegmentedControl';
 import { contentStudioApi } from '../services/api';
 import { getErrorMessage } from '../utils/errors';
 import { toastError, toastSuccess } from '../utils/toast';
+import { messagingConsent } from '../utils/plainLanguage';
 
-type Tab = 'brand-kit' | 'composer' | 'library' | 'images' | 'calendar';
+type Tab = 'brand' | 'create' | 'library';
+type CreateMode = 'copy' | 'image';
 
 interface BrandKit {
   companyName: string;
@@ -46,6 +56,13 @@ interface MediaAsset {
   createdAt: string;
 }
 
+interface CalendarItem {
+  id: string;
+  title: string;
+  scheduledAt: string;
+  status: string;
+}
+
 const emptyBrandKit: BrandKit = {
   companyName: '',
   colorPrimary: '#10b981',
@@ -60,20 +77,94 @@ const emptyBrandKit: BrandKit = {
   tonePlayful: 30,
 };
 
+const tabMeta = {
+  brand: { label: 'Brand Kit', shortLabel: 'Brand', icon: Palette },
+  create: { label: 'Create', shortLabel: 'Create', icon: Sparkles },
+  library: { label: 'Library', shortLabel: 'Library', icon: FolderOpen },
+} as const;
+
+const toneFields = [
+  { key: 'toneFormal' as const, label: 'Formal' },
+  { key: 'toneBrief' as const, label: 'Brief' },
+  { key: 'toneFriendly' as const, label: 'Friendly' },
+  { key: 'tonePlayful' as const, label: 'Playful' },
+];
+
+const colorFields = [
+  { key: 'colorPrimary' as const, label: 'Primary' },
+  { key: 'colorSecondary' as const, label: 'Secondary' },
+  { key: 'colorAccent' as const, label: 'Accent' },
+];
+
+function formatDate(value: string) {
+  return new Date(value).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const tone =
+    status === 'APPROVED' || status === 'READY' || status === 'COMPLETED'
+      ? 'bg-emerald-500/10 text-emerald-700 ring-emerald-500/20 dark:text-emerald-300'
+      : status === 'FAILED'
+        ? 'bg-rose-500/10 text-rose-700 ring-rose-500/20 dark:text-rose-300'
+        : 'bg-amber-500/10 text-amber-700 ring-amber-500/20 dark:text-amber-300';
+
+  return (
+    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${tone}`}>
+      {status.toLowerCase()}
+    </span>
+  );
+}
+
+function StudioSection({
+  title,
+  subtitle,
+  action,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section>
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-[14px] font-extrabold tracking-tight text-theme-fg">{title}</h3>
+          {subtitle && <p className="mt-0.5 text-[12px] text-theme-secondary">{subtitle}</p>}
+        </div>
+        {action}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function ListShell({ children }: { children: ReactNode }) {
+  return (
+    <div className="divide-y divide-theme-border overflow-hidden rounded-xl border border-theme-border bg-theme-surface">
+      {children}
+    </div>
+  );
+}
+
 export default function ContentStudioPage() {
-  const [tab, setTab] = useState<Tab>('brand-kit');
+  const [tab, setTab] = useState<Tab>('brand');
+  const [createMode, setCreateMode] = useState<CreateMode>('copy');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [brandKit, setBrandKit] = useState<BrandKit>(emptyBrandKit);
   const [drafts, setDrafts] = useState<ContentDraft[]>([]);
   const [assets, setAssets] = useState<MediaAsset[]>([]);
+  const [calendarItems, setCalendarItems] = useState<CalendarItem[]>([]);
   const [prompt, setPrompt] = useState('');
   const [bannedWordsText, setBannedWordsText] = useState('');
   const [mandatoryPhrasesText, setMandatoryPhrasesText] = useState('');
-  const [calendarItems, setCalendarItems] = useState<
-    Array<{ id: string; title: string; scheduledAt: string; status: string }>
-  >([]);
 
   const loadBrandKit = useCallback(async () => {
     const { data } = await contentStudioApi.getBrandKit();
@@ -84,12 +175,14 @@ export default function ContentStudioPage() {
   }, []);
 
   const loadLibrary = useCallback(async () => {
-    const [draftsRes, assetsRes] = await Promise.all([
+    const [draftsRes, assetsRes, calendarRes] = await Promise.all([
       contentStudioApi.listDrafts(),
       contentStudioApi.listAssets(),
+      contentStudioApi.getCalendar().catch(() => ({ data: { data: { items: [] } } })),
     ]);
     setDrafts(draftsRes.data.data.drafts || []);
     setAssets(assetsRes.data.data.assets || []);
+    setCalendarItems(calendarRes.data.data.items || []);
   }, []);
 
   const load = useCallback(async () => {
@@ -130,56 +223,46 @@ export default function ContentStudioPage() {
     }
   };
 
-  const loadCalendar = useCallback(async () => {
-    try {
-      const { data } = await contentStudioApi.getCalendar();
-      setCalendarItems(data.data.items || []);
-    } catch {
-      setCalendarItems([]);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (tab === 'calendar') void loadCalendar();
-  }, [tab, loadCalendar]);
-
-  const generateCopy = async () => {
+  const generate = async () => {
     if (!prompt.trim()) {
       toastError('Enter a prompt first');
       return;
     }
     setGenerating(true);
     try {
-      await contentStudioApi.generate({ prompt: prompt.trim(), kind: 'TEMPLATE_BODY' });
-      toastSuccess('Draft generated');
+      if (createMode === 'copy') {
+        await contentStudioApi.generate({ prompt: prompt.trim(), kind: 'TEMPLATE_BODY' });
+        toastSuccess('Draft generated');
+      } else {
+        await contentStudioApi.generateImage({ prompt: prompt.trim() });
+        toastSuccess('Image job queued');
+      }
       setPrompt('');
       await loadLibrary();
       setTab('library');
     } catch (err) {
-      toastError(getErrorMessage(err, 'Generation failed'));
+      toastError(
+        getErrorMessage(err, createMode === 'copy' ? 'Generation failed' : 'Image generation failed')
+      );
     } finally {
       setGenerating(false);
     }
   };
 
-  const generateImage = async () => {
-    if (!prompt.trim()) {
-      toastError('Enter a prompt first');
-      return;
-    }
-    setGenerating(true);
-    try {
-      await contentStudioApi.generateImage({ prompt: prompt.trim() });
-      toastSuccess('Image job queued');
-      setPrompt('');
-      await loadLibrary();
-      setTab('library');
-    } catch (err) {
-      toastError(getErrorMessage(err, 'Image generation failed'));
-    } finally {
-      setGenerating(false);
-    }
-  };
+  const heroStats = useMemo(
+    () => [
+      { label: 'Drafts', value: drafts.length, tone: 'text-violet-700 dark:text-violet-300' },
+      { label: 'Assets', value: assets.length, tone: 'text-sky-700 dark:text-sky-300' },
+      {
+        label: 'Scheduled',
+        value: calendarItems.length,
+        tone: 'text-amber-700 dark:text-amber-300',
+      },
+    ],
+    [drafts.length, assets.length, calendarItems.length]
+  );
+
+  const brandPreview = brandKit.companyName || 'Your brand';
 
   if (loading) {
     return (
@@ -191,245 +274,332 @@ export default function ContentStudioPage() {
 
   return (
     <PageShell>
-      <PageHero
-        badge="Content Studio"
-        badgeIcon={Sparkles}
-        title="AI content workspace"
-        description="Brand-aligned copy and assets for WhatsApp templates, campaigns, and CTWA creatives."
-        accent="violet"
-      />
-
-      <PageHeader
-        actions={
-          <AppButton variant="secondary" size="sm" onClick={() => void load()}>
-            <RefreshCw className="h-4 w-4" />
-            Refresh
-          </AppButton>
-        }
-      />
-
-      <div className="mb-6">
-        <SegmentedControl
-          value={tab}
-          onChange={(v) => setTab(v as Tab)}
-          options={[
-            { value: 'brand-kit', label: 'Brand Kit', shortLabel: 'Brand', icon: Palette },
-            { value: 'composer', label: 'Composer', shortLabel: 'Create', icon: Sparkles },
-            { value: 'images', label: 'Images', shortLabel: 'Images', icon: Sparkles },
-            { value: 'calendar', label: 'Calendar', shortLabel: 'Cal', icon: FolderOpen },
-            { value: 'library', label: 'Library', shortLabel: 'Library', icon: FolderOpen },
-          ]}
+      <div className="space-y-4 sm:space-y-5">
+        <PageHero
+          badge="Content Studio"
+          badgeIcon={Sparkles}
+          title="AI content for WhatsApp"
+          description="Set your brand voice, generate copy and images, and manage everything in one library."
+          accent="violet"
+          stats={heroStats}
         />
-      </div>
 
-      {tab === 'brand-kit' && (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <section className="rounded-xl border border-theme-border bg-theme-surface p-6 shadow-sm">
-            <h2 className="mb-4 text-lg font-semibold text-theme-fg">Identity</h2>
-            <div className="space-y-4">
-              <AppInput
-                label="Company name"
-                value={brandKit.companyName}
-                onChange={(e) => setBrandKit({ ...brandKit, companyName: e.target.value })}
+        <div className="inbox-shell overflow-hidden">
+          <div className="flex items-center gap-3 border-b border-theme-border px-4 py-3 sm:px-5">
+            <div className="min-w-0 flex-1">
+              <SegmentedControl
+                bare
+                value={tab}
+                onChange={(v) => setTab(v as Tab)}
+                options={[
+                  { value: 'brand', ...tabMeta.brand },
+                  { value: 'create', ...tabMeta.create },
+                  { value: 'library', ...tabMeta.library },
+                ]}
+                ariaLabel="Content Studio sections"
               />
-              <AppInput
-                label="Audience"
-                value={brandKit.audience || ''}
-                onChange={(e) => setBrandKit({ ...brandKit, audience: e.target.value })}
-                placeholder="e.g. SMB retailers in India"
-              />
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                <AppInput
-                  label="Primary"
-                  type="color"
-                  value={brandKit.colorPrimary || '#10b981'}
-                  onChange={(e) => setBrandKit({ ...brandKit, colorPrimary: e.target.value })}
-                />
-                <AppInput
-                  label="Secondary"
-                  type="color"
-                  value={brandKit.colorSecondary || '#6366f1'}
-                  onChange={(e) => setBrandKit({ ...brandKit, colorSecondary: e.target.value })}
-                />
-                <AppInput
-                  label="Accent"
-                  type="color"
-                  value={brandKit.colorAccent || '#f59e0b'}
-                  onChange={(e) => setBrandKit({ ...brandKit, colorAccent: e.target.value })}
-                />
-              </div>
             </div>
-          </section>
-
-          <section className="rounded-xl border border-theme-border bg-theme-surface p-6 shadow-sm">
-            <h2 className="mb-4 text-lg font-semibold text-theme-fg">Voice & policy</h2>
-            <div className="space-y-4">
-              <AppTextarea
-                label="Banned words (comma-separated)"
-                value={bannedWordsText}
-                onChange={(e) => setBannedWordsText(e.target.value)}
-                rows={2}
-              />
-              <AppTextarea
-                label="Mandatory phrases (comma-separated)"
-                value={mandatoryPhrasesText}
-                onChange={(e) => setMandatoryPhrasesText(e.target.value)}
-                rows={2}
-                placeholder="Reply STOP to opt out"
-              />
-              <div className="grid grid-cols-2 gap-3">
-                {(['toneFormal', 'toneBrief', 'toneFriendly', 'tonePlayful'] as const).map((key) => (
-                  <AppInput
-                    key={key}
-                    label={key.replace('tone', '')}
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={String(brandKit[key])}
-                    onChange={(e) =>
-                      setBrandKit({ ...brandKit, [key]: parseInt(e.target.value, 10) || 0 })
-                    }
-                  />
-                ))}
-              </div>
-              <AppButton onClick={() => void saveBrandKit()} disabled={saving}>
-                {saving ? 'Saving…' : 'Save brand kit'}
-              </AppButton>
-            </div>
-          </section>
-        </div>
-      )}
-
-      {tab === 'composer' && (
-        <section className="max-w-2xl rounded-xl border border-theme-border bg-theme-surface p-6 shadow-sm">
-          <h2 className="mb-2 text-lg font-semibold text-theme-fg">AI Composer</h2>
-          <p className="mb-4 text-sm text-theme-secondary">
-            Generate WhatsApp-ready copy using your brand kit tone and policy rules.
-          </p>
-          <AppTextarea
-            label="Prompt"
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            rows={5}
-            placeholder="Write a promotional message for our summer sale…"
-          />
-          <div className="mt-4">
-            <AppButton onClick={() => void generateCopy()} disabled={generating}>
-              {generating ? 'Generating…' : 'Generate draft'}
+            <AppButton
+              variant="secondary"
+              size="sm"
+              icon={<RefreshCw size={15} />}
+              onClick={() => void load()}
+              aria-label="Refresh"
+            >
+              <span className="hidden sm:inline">Refresh</span>
             </AppButton>
           </div>
-        </section>
-      )}
 
-      {tab === 'images' && (
-        <section className="rounded-xl border border-theme-border bg-theme-surface p-6 shadow-sm">
-          <h2 className="mb-2 text-lg font-semibold text-theme-fg">AI image generation</h2>
-          <p className="mb-4 text-[13px] text-theme-secondary">
-            Generate on-brand images from your Brand Kit. Jobs appear in Library when complete.
-          </p>
-          <AppTextarea
-            label="Image prompt"
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            placeholder="Product hero shot on emerald gradient background..."
-          />
-          <AppButton className="mt-4" disabled={generating} onClick={() => void generateImage()}>
-            Queue image job
-          </AppButton>
-        </section>
-      )}
+          <div className="p-4 sm:p-5">
+            {tab === 'brand' && (
+              <div className="space-y-6">
+                <div className="grid gap-6 lg:grid-cols-2">
+                  <StudioSection title="Identity" subtitle="Company profile and brand colors">
+                    <div className="space-y-4">
+                      <div className="rounded-xl border border-theme-border bg-theme-subtle/30 p-3.5">
+                        <div className="flex items-center gap-3">
+                          <div className="flex gap-1">
+                            {[brandKit.colorPrimary, brandKit.colorSecondary, brandKit.colorAccent].map(
+                              (color, i) => (
+                                <span
+                                  key={i}
+                                  className="h-8 w-8 rounded-lg ring-1 ring-theme-border"
+                                  style={{ backgroundColor: color || '#10b981' }}
+                                />
+                              )
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="truncate text-[13px] font-bold text-theme-fg">{brandPreview}</p>
+                            <p className="truncate text-[12px] text-theme-secondary">
+                              {brandKit.audience || 'Add your target audience'}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
 
-      {tab === 'calendar' && (
-        <section className="rounded-xl border border-theme-border bg-theme-surface p-6 shadow-sm">
-          <h2 className="mb-2 text-lg font-semibold text-theme-fg">Content calendar</h2>
-          <p className="mb-4 text-[13px] text-theme-secondary">
-            Scheduled drafts and approved assets for the next 30 days.
-          </p>
-          {calendarItems.length === 0 ? (
-            <EmptyState
-              icon={FolderOpen}
-              title="Nothing scheduled"
-              description="Approved drafts with a schedule date will appear here."
-              action={
-                <AppButton variant="secondary" onClick={() => setTab('library')}>
-                  View library
-                </AppButton>
-              }
-            />
-          ) : (
-            <ul className="space-y-2">
-              {calendarItems.map((item) => (
-                <li
-                  key={item.id}
-                  className="flex items-center justify-between rounded-lg border border-theme-border px-3 py-2 text-[13px]"
-                >
-                  <span className="font-medium text-theme-fg">{item.title}</span>
-                  <span className="text-theme-muted">
-                    {new Date(item.scheduledAt).toLocaleDateString()} · {item.status}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      )}
+                      <AppInput
+                        label="Company name"
+                        value={brandKit.companyName}
+                        onChange={(e) => setBrandKit({ ...brandKit, companyName: e.target.value })}
+                      />
+                      <AppInput
+                        label="Audience"
+                        value={brandKit.audience || ''}
+                        onChange={(e) => setBrandKit({ ...brandKit, audience: e.target.value })}
+                        placeholder="e.g. SMB retailers in India"
+                      />
 
-      {tab === 'library' && (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <section className="rounded-xl border border-theme-border bg-theme-surface p-6 shadow-sm">
-            <h2 className="mb-4 text-lg font-semibold text-theme-fg">Text drafts</h2>
-            {drafts.length === 0 ? (
-              <EmptyState
-                icon={Sparkles}
-                title="No drafts yet"
-                description="Generate on-brand copy in the Composer tab."
-                action={
-                  <AppButton variant="secondary" onClick={() => setTab('composer')}>
-                    Open Composer
+                      <div>
+                        <p className="mb-2 text-[12px] font-bold text-theme-secondary">Brand colors</p>
+                        <div className="grid gap-3 sm:grid-cols-3">
+                          {colorFields.map(({ key, label }) => (
+                            <label key={key} className="space-y-2">
+                              <span className="text-[11px] font-semibold text-theme-muted">{label}</span>
+                              <div className="flex items-center gap-2 rounded-xl border border-theme-border bg-theme-subtle/40 p-2">
+                                <input
+                                  type="color"
+                                  value={brandKit[key] || '#10b981'}
+                                  onChange={(e) => setBrandKit({ ...brandKit, [key]: e.target.value })}
+                                  className="h-9 w-9 cursor-pointer rounded-lg border-0 bg-transparent p-0"
+                                  aria-label={label}
+                                />
+                                <span className="font-mono text-[11px] text-theme-secondary">
+                                  {brandKit[key]}
+                                </span>
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </StudioSection>
+
+                  <StudioSection title="Voice & policy" subtitle="Tone sliders and content guardrails">
+                    <div className="space-y-4">
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {toneFields.map(({ key, label }) => (
+                          <ToneSlider
+                            key={key}
+                            label={label}
+                            value={brandKit[key]}
+                            onChange={(value) => setBrandKit({ ...brandKit, [key]: value })}
+                          />
+                        ))}
+                      </div>
+
+                      <AppTextarea
+                        label="Banned words"
+                        hint="Comma-separated"
+                        value={bannedWordsText}
+                        onChange={(e) => setBannedWordsText(e.target.value)}
+                        rows={2}
+                        placeholder="cheap, guaranteed, free money"
+                      />
+                      <AppTextarea
+                        label="Mandatory phrases"
+                        hint="Comma-separated"
+                        value={mandatoryPhrasesText}
+                        onChange={(e) => setMandatoryPhrasesText(e.target.value)}
+                        rows={2}
+                        placeholder={messagingConsent.templateStopPlaceholder}
+                      />
+                    </div>
+                  </StudioSection>
+                </div>
+
+                <div className="flex justify-end border-t border-theme-border pt-4">
+                  <AppButton onClick={() => void saveBrandKit()} loading={saving} icon={<Palette size={16} />}>
+                    Save brand kit
                   </AppButton>
-                }
-              />
-            ) : (
-              <ul className="space-y-3">
-                {drafts.map((draft) => (
-                  <li
-                    key={draft.id}
-                    className="rounded-lg border border-theme-border bg-theme-subtle p-3 text-sm"
-                  >
-                    <div className="mb-1 flex items-center justify-between gap-2">
-                      <span className="font-medium text-theme-fg">{draft.kind}</span>
-                      <span className="text-xs uppercase text-theme-secondary">{draft.status}</span>
-                    </div>
-                    <p className="whitespace-pre-wrap text-theme-secondary">{draft.body}</p>
-                  </li>
-                ))}
-              </ul>
+                </div>
+              </div>
             )}
-          </section>
 
-          <section className="rounded-xl border border-theme-border bg-theme-surface p-6 shadow-sm">
-            <h2 className="mb-4 text-lg font-semibold text-theme-fg">Media assets</h2>
-            {assets.length === 0 ? (
-              <EmptyState icon={FolderOpen} title="No assets yet" description="Image generation will appear here." />
-            ) : (
-              <ul className="space-y-3">
-                {assets.map((asset) => (
-                  <li
-                    key={asset.id}
-                    className="rounded-lg border border-theme-border bg-theme-subtle p-3 text-sm"
+            {tab === 'create' && (
+              <div className="mx-auto max-w-2xl space-y-4">
+                <StudioSection
+                  title="AI generator"
+                  subtitle={
+                    createMode === 'copy'
+                      ? 'WhatsApp-ready copy aligned to your brand kit'
+                      : 'On-brand images queued to your library'
+                  }
+                >
+                  <SegmentedControl
+                    bare
+                    value={createMode}
+                    onChange={setCreateMode}
+                    options={[
+                      { value: 'copy', label: 'Copy', shortLabel: 'Copy', icon: FileText },
+                      { value: 'image', label: 'Image', shortLabel: 'Image', icon: Image },
+                    ]}
+                    ariaLabel="Create mode"
+                  />
+                </StudioSection>
+
+                <AppTextarea
+                  label={createMode === 'copy' ? 'What should we write?' : 'Describe the image'}
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  rows={5}
+                  placeholder={
+                    createMode === 'copy'
+                      ? 'Write a promotional message for our summer sale…'
+                      : 'Product hero shot on emerald gradient background…'
+                  }
+                />
+
+                <div className="flex flex-col gap-3 border-t border-theme-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-[12px] text-theme-secondary">
+                    {createMode === 'copy'
+                      ? 'Uses your tone settings and policy rules from Brand Kit.'
+                      : 'Completed jobs appear in Library when ready.'}
+                  </p>
+                  <AppButton
+                    icon={createMode === 'copy' ? <Wand2 size={16} /> : <Image size={16} />}
+                    onClick={() => void generate()}
+                    loading={generating}
                   >
-                    <div className="mb-1 flex items-center justify-between gap-2">
-                      <span className="font-medium text-theme-fg">{asset.kind}</span>
-                      <span className="text-xs uppercase text-theme-secondary">{asset.status}</span>
-                    </div>
-                    <p className="text-theme-secondary">{asset.prompt || 'Generated asset'}</p>
-                  </li>
-                ))}
-              </ul>
+                    {createMode === 'copy' ? 'Generate draft' : 'Queue image'}
+                  </AppButton>
+                </div>
+              </div>
             )}
-          </section>
+
+            {tab === 'library' && (
+              <div className="space-y-6">
+                {calendarItems.length > 0 && (
+                  <StudioSection title="Scheduled" subtitle="Approved content for the next 30 days">
+                    <ListShell>
+                      {calendarItems.map((item) => (
+                        <div
+                          key={item.id}
+                          className="flex flex-col gap-2 px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between"
+                        >
+                          <div className="flex min-w-0 items-center gap-3">
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600">
+                              <Calendar className="h-4 w-4" />
+                            </div>
+                            <p className="truncate text-[13px] font-semibold text-theme-fg">{item.title}</p>
+                          </div>
+                          <div className="flex items-center gap-2 sm:shrink-0">
+                            <span className="text-[12px] text-theme-secondary">
+                              {formatDate(item.scheduledAt)}
+                            </span>
+                            <StatusBadge status={item.status} />
+                          </div>
+                        </div>
+                      ))}
+                    </ListShell>
+                  </StudioSection>
+                )}
+
+                <div className="grid gap-6 lg:grid-cols-2">
+                  <StudioSection title="Text drafts" subtitle={`${drafts.length} saved`}>
+                    {drafts.length === 0 ? (
+                      <EmptyState
+                        icon={FileText}
+                        compact
+                        title="No drafts yet"
+                        description="Create marketing copy in the Create tab."
+                        action={
+                          <AppButton variant="secondary" onClick={() => setTab('create')}>
+                            Create copy
+                          </AppButton>
+                        }
+                      />
+                    ) : (
+                      <ListShell>
+                        {drafts.map((draft) => (
+                          <article key={draft.id} className="px-3.5 py-3">
+                            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                              <span className="text-[11px] font-bold uppercase tracking-wide text-theme-muted">
+                                {draft.kind.replace(/_/g, ' ')}
+                              </span>
+                              <StatusBadge status={draft.status} />
+                            </div>
+                            <p className="line-clamp-4 whitespace-pre-wrap text-[13px] leading-relaxed text-theme-secondary">
+                              {draft.body}
+                            </p>
+                            <p className="mt-2 text-[11px] text-theme-muted">{formatDate(draft.createdAt)}</p>
+                          </article>
+                        ))}
+                      </ListShell>
+                    )}
+                  </StudioSection>
+
+                  <StudioSection title="Media assets" subtitle={`${assets.length} items`}>
+                    {assets.length === 0 ? (
+                      <EmptyState
+                        icon={Image}
+                        compact
+                        title="No images yet"
+                        description="Generate images in the Create tab."
+                        action={
+                          <AppButton
+                            variant="secondary"
+                            onClick={() => {
+                              setCreateMode('image');
+                              setTab('create');
+                            }}
+                          >
+                            Create image
+                          </AppButton>
+                        }
+                      />
+                    ) : (
+                      <ListShell>
+                        {assets.map((asset) => (
+                          <article key={asset.id} className="px-3.5 py-3">
+                            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                              <span className="text-[11px] font-bold uppercase tracking-wide text-theme-muted">
+                                {asset.kind}
+                              </span>
+                              <StatusBadge status={asset.status} />
+                            </div>
+                            <p className="line-clamp-2 text-[13px] text-theme-secondary">
+                              {asset.prompt || 'Generated asset'}
+                            </p>
+                            <p className="mt-2 text-[11px] text-theme-muted">{formatDate(asset.createdAt)}</p>
+                          </article>
+                        ))}
+                      </ListShell>
+                    )}
+                  </StudioSection>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
-      )}
+      </div>
     </PageShell>
+  );
+}
+
+function ToneSlider({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <label className="block rounded-xl border border-theme-border/60 bg-theme-subtle/30 p-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className="text-[12px] font-bold text-theme-fg">{label}</span>
+        <span className="text-[11px] font-semibold tabular-nums text-theme-muted">{value}</span>
+      </div>
+      <input
+        type="range"
+        min={0}
+        max={100}
+        value={value}
+        onChange={(e) => onChange(parseInt(e.target.value, 10))}
+        className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-theme-subtle accent-violet-600"
+      />
+    </label>
   );
 }

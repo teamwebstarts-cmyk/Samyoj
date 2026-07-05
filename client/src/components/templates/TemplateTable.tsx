@@ -19,7 +19,6 @@ import {
 import {
   getCategoryMeta,
   getLanguageLabel,
-  getQualityDot,
 } from './templateUi';
 
 export type TemplateTableRow =
@@ -59,7 +58,7 @@ function TemplateRowContent({
       className={`flex w-full items-center gap-3 rounded-xl py-1 text-left transition hover:opacity-90 ${indented ? 'pl-4' : ''}`}
     >
       <div
-        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white shadow-[0_4px_14px_rgba(244,63,94,0.22)] ${category?.iconBg ?? 'bg-gradient-to-br from-rose-500 to-pink-600'}`}
+        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white ${category?.iconBg ?? 'bg-gradient-to-br from-rose-500 to-pink-600'}`}
       >
         <CategoryIcon className="h-4 w-4" strokeWidth={2.25} />
       </div>
@@ -107,8 +106,8 @@ export default function TemplateTable({
           const approvedCount = row.variants.filter((v) => v.status === 'APPROVED').length;
 
           return (
-            <tr key={`group-${row.name}`} className="bg-gradient-to-r from-rose-50/80 via-theme-subtle/40 to-transparent dark:from-rose-950/20">
-              <td colSpan={6} className="!px-4 !py-3 sm:!px-5">
+            <tr key={`group-${row.name}`} className="bg-theme-subtle/50">
+              <td colSpan={6} className="!px-4 !py-2.5 sm:!px-5">
                 <button
                   type="button"
                   onClick={() => onToggleGroup(row.name)}
@@ -143,7 +142,6 @@ export default function TemplateTable({
         const serialIndex = templateRowIndex++;
         const rejectedReason = getTemplateRejectedReason(template.rejected_reason);
         const quality = getQualityLabel(template.quality_score?.score);
-        const qualityDot = getQualityDot(template.quality_score?.score);
         const category = getCategoryMeta(template.category);
         const CategoryIcon = category?.icon ?? FileText;
 
@@ -169,12 +167,6 @@ export default function TemplateTable({
                     <StatusBadge status={template.status} />
                   ) : (
                     <span className="text-[13px] text-theme-muted">—</span>
-                  )}
-                  {qualityDot && (
-                    <span
-                      className={`h-2 w-2 shrink-0 rounded-full ${qualityDot}`}
-                      title={quality?.label}
-                    />
                   )}
                 </div>
                 {quality && (

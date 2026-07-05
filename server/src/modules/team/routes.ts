@@ -8,12 +8,14 @@ import { config } from '../../config';
 import { z } from 'zod';
 import { logTeamAudit } from './audit';
 import { getAgentMetrics, getMemberAssignedConversations } from './metrics';
-import { getTeamSettingsFromOrg, saveTeamSettings, pickAgentForHandoff } from './assignment';
+import { getTeamSettingsFromOrg, saveTeamSettings, pickAgentForHandoff, getOrgRolePermissions, saveOrgRolePermissions } from './assignment';
 import { generateTwoFactorSecret, verifyTotp } from './totp';
 import {
   DEFAULT_TEAM_SETTINGS,
   getSeatLimit,
   resolvePermissions,
+  buildRolePermissionsMatrix,
+  CONFIGURABLE_ROLES,
   type ShiftSchedule,
   type TeamPermissions,
   type TeamSettings,
@@ -66,12 +68,14 @@ function formatMember(
     assignedCount: number;
     isCurrentUser: boolean;
     openCount?: number;
+    orgRolePermissions?: Partial<Record<OrgRole, Partial<TeamPermissions>>> | null;
   }
 ) {
   if (!m) return null;
   const perms = resolvePermissions(
     m.role,
-    m.permissions as Record<string, boolean> | null
+    m.permissions as Record<string, boolean> | null,
+    extras.orgRolePermissions ?? null
   );
   return {
     id: m.user.id,
@@ -81,11 +85,9 @@ function formatMember(
     orgRole: m.role,
     userRole: m.user.role,
     assignedCount: extras.assignedCount,
-    openCount: extras.openCount ?? 0,
     joinedAt: m.user.createdAt,
     isCurrentUser: extras.isCurrentUser,
     availability: m.availability,
-    maxConcurrentChats: m.maxConcurrentChats,
     department: m.department,
     permissions: perms,
     shiftSchedule: m.shiftSchedule as ShiftSchedule | null,
@@ -171,6 +173,58 @@ router.patch(
     });
 
     sendSuccess(res, updated);
+  })
+);
+
+router.get(
+  '/role-permissions',
+  authenticate,
+  requireOrg,
+  loadOrgRole,
+  requireOrgRole('OWNER', 'ADMIN'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const orgRolePermissions = await getOrgRolePermissions(orgId);
+
+    sendSuccess(res, {
+      roles: buildRolePermissionsMatrix(orgRolePermissions),
+      overrides: orgRolePermissions ?? {},
+    });
+  })
+);
+
+router.patch(
+  '/role-permissions',
+  ...adminGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const schema = z.object({
+      rolePermissions: z.record(
+        z.enum(['ADMIN', 'SUPERVISOR', 'AGENT']),
+        permissionsSchema
+      ),
+    });
+    const data = schema.parse(req.body);
+
+    for (const role of Object.keys(data.rolePermissions) as OrgRole[]) {
+      if (!CONFIGURABLE_ROLES.includes(role)) {
+        throw new AppError(400, `Role ${role} cannot be customized`);
+      }
+    }
+
+    const overrides = await saveOrgRolePermissions(orgId, data.rolePermissions);
+
+    await logTeamAudit({
+      organizationId: orgId,
+      actorId: req.user!.userId,
+      action: 'SETTINGS_CHANGED',
+      metadata: { rolePermissions: data.rolePermissions },
+    });
+
+    sendSuccess(res, {
+      roles: buildRolePermissionsMatrix(overrides),
+      overrides,
+    });
   })
 );
 
@@ -851,31 +905,20 @@ router.get(
 
     const userIds = memberships.map((m) => m.userId);
 
-    const [assignmentCounts, openCounts] = await Promise.all([
-      prisma.conversation.groupBy({
-        by: ['assignedAgentId'],
-        where: { organizationId: orgId, assignedAgentId: { in: userIds } },
-        _count: { id: true },
-      }),
-      prisma.conversation.groupBy({
-        by: ['assignedAgentId'],
-        where: {
-          organizationId: orgId,
-          assignedAgentId: { in: userIds },
-          status: { in: ['OPEN', 'PENDING'] },
-        },
-        _count: { id: true },
-      }),
-    ]);
+    const assignmentCounts = await prisma.conversation.groupBy({
+      by: ['assignedAgentId'],
+      where: { organizationId: orgId, assignedAgentId: { in: userIds } },
+      _count: { id: true },
+    });
 
     const countMap = new Map(assignmentCounts.map((r) => [r.assignedAgentId!, r._count.id]));
-    const openMap = new Map(openCounts.map((r) => [r.assignedAgentId!, r._count.id]));
+    const orgRolePermissions = await getOrgRolePermissions(orgId);
 
     const members = memberships.map((m) =>
       formatMember(m, {
         assignedCount: countMap.get(m.userId) ?? 0,
-        openCount: openMap.get(m.userId) ?? 0,
         isCurrentUser: m.userId === req.user!.userId,
+        orgRolePermissions,
       })
     );
 
@@ -909,10 +952,11 @@ router.get(
     ]);
 
     const assignedCount = metrics.assignedCount;
+    const orgRolePermissions = await getOrgRolePermissions(orgId);
     const member = formatMember(membership, {
       assignedCount,
-      openCount: metrics.openCount,
       isCurrentUser: userId === req.user!.userId,
+      orgRolePermissions,
     });
 
     sendSuccess(res, { member, metrics, conversations });
@@ -925,7 +969,6 @@ const createMemberSchema = z.object({
   password: z.string().min(8),
   orgRole: z.enum(['ADMIN', 'SUPERVISOR', 'AGENT']).default('AGENT'),
   departmentId: z.string().uuid().optional().nullable(),
-  maxConcurrentChats: z.number().int().min(1).max(100).optional(),
   permissions: permissionsSchema.optional(),
   shiftSchedule: shiftScheduleSchema.optional(),
 });
@@ -980,7 +1023,6 @@ router.post(
           userId: user.id,
           role: data.orgRole as OrgRole,
           departmentId: data.departmentId ?? null,
-          maxConcurrentChats: data.maxConcurrentChats ?? 10,
           permissions: data.permissions ?? undefined,
           shiftSchedule: data.shiftSchedule ?? undefined,
           mustResetPassword: true,
@@ -1001,9 +1043,15 @@ router.post(
       metadata: { email: data.email, orgRole: data.orgRole },
     });
 
+    const orgRolePermissions = await getOrgRolePermissions(orgId);
+
     sendSuccess(
       res,
-      formatMember(member, { assignedCount: 0, openCount: 0, isCurrentUser: false }),
+      formatMember(member, {
+        assignedCount: 0,
+        isCurrentUser: false,
+        orgRolePermissions,
+      }),
       201
     );
   })
@@ -1014,7 +1062,6 @@ const updateMemberSchema = z.object({
   orgRole: z.enum(['ADMIN', 'SUPERVISOR', 'AGENT']).optional(),
   password: z.string().min(8).optional(),
   departmentId: z.string().uuid().nullable().optional(),
-  maxConcurrentChats: z.number().int().min(1).max(100).optional(),
   availability: z.enum(['ONLINE', 'AWAY', 'OFFLINE']).optional(),
   permissions: permissionsSchema.optional(),
   shiftSchedule: shiftScheduleSchema.nullable().optional(),
@@ -1053,7 +1100,6 @@ router.patch(
     const memberUpdate: Record<string, unknown> = {};
     if (data.orgRole) memberUpdate.role = data.orgRole;
     if (data.departmentId !== undefined) memberUpdate.departmentId = data.departmentId;
-    if (data.maxConcurrentChats !== undefined) memberUpdate.maxConcurrentChats = data.maxConcurrentChats;
     if (data.availability) memberUpdate.availability = data.availability;
     if (data.permissions !== undefined) memberUpdate.permissions = data.permissions;
     if (data.shiftSchedule !== undefined) memberUpdate.shiftSchedule = data.shiftSchedule;
@@ -1089,6 +1135,7 @@ router.patch(
     }
 
     const metrics = await getAgentMetrics(orgId, userId);
+    const orgRolePermissions = await getOrgRolePermissions(orgId);
 
     sendSuccess(
       res,
@@ -1096,6 +1143,7 @@ router.patch(
         assignedCount: metrics.assignedCount,
         openCount: metrics.openCount,
         isCurrentUser: userId === req.user!.userId,
+        orgRolePermissions,
       })
     );
   })

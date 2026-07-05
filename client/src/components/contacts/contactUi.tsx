@@ -1,6 +1,7 @@
 import { CheckCircle2, MessageSquare, Shield, XCircle } from 'lucide-react';
 import type { Contact, ContactSource } from '../../types';
 import { formatContactPhone, formatContactRelativeTime, getContactSourceMeta } from '../../utils/contactUtils';
+import { messagingConsent, conversationStatusLabel } from '../../utils/plainLanguage';
 
 export function ContactOptInBadge({ optedIn }: { optedIn?: boolean }) {
   return (
@@ -12,7 +13,7 @@ export function ContactOptInBadge({ optedIn }: { optedIn?: boolean }) {
       }`}
     >
       {optedIn ? <CheckCircle2 className="h-3 w-3" /> : <Shield className="h-3 w-3" />}
-      {optedIn ? 'Opted in' : 'Opted out'}
+      {optedIn ? messagingConsent.badgeYes : messagingConsent.badgeNo}
     </span>
   );
 }
@@ -50,7 +51,7 @@ export function ContactConversationBadge({ status }: { status: string }) {
       }`}
     >
       <MessageSquare className="h-2.5 w-2.5" />
-      {status}
+      {conversationStatusLabel[status] || status}
     </span>
   );
 }

@@ -6,9 +6,9 @@ import AppSelect from '../ui/AppSelect';
 import AppTextarea from '../ui/AppTextarea';
 import FlowStepPreview from './FlowStepPreview';
 import WaFormPicker from './WaFormPicker';
-import { aiBotApi, flowApi, teamApi, templateApi } from '../../services/api';
-import type { AiBot, Flow, FlowNode, TeamAgent } from '../../types';
+import { getFlowReferenceData } from './flowReferenceData';
 import { nodeMeta } from './flowMeta';
+import type { AiBot, Flow, FlowNode, TeamAgent } from '../../types';
 
 interface FlowNodePanelProps {
   node: FlowNode | null;
@@ -46,7 +46,12 @@ function BranchSelect({
       value={value || ''}
       options={[{ value: '', label: 'Go to next step' }, ...options]}
       isSearchable={false}
-      onChange={(e) => onChange({ branches: { ...branches, [branchKey]: e.target.value } })}
+      onChange={(e) => {
+        const next = { ...branches };
+        if (e.target.value) next[branchKey] = e.target.value;
+        else delete next[branchKey];
+        onChange({ branches: next });
+      }}
     />
   );
 }
@@ -97,10 +102,14 @@ function FlowNodePanelForm({
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   useEffect(() => {
-    aiBotApi.list().then(({ data }) => setBots(data.data.bots || data.data || [])).catch(() => {});
-    teamApi.agents().then(({ data }) => setAgents(data.data.agents || [])).catch(() => {});
-    flowApi.list({ limit: '100' }).then(({ data }) => setFlows(data.data.flows || [])).catch(() => {});
-    templateApi.list().then(({ data }) => setTemplates(data.data.templates || [])).catch(() => {});
+    getFlowReferenceData()
+      .then((data) => {
+        setBots(data.bots);
+        setAgents(data.agents);
+        setFlows(data.flows);
+        setTemplates(data.templates);
+      })
+      .catch(() => {});
   }, []);
 
   const meta = nodeMeta[node.type];
@@ -108,7 +117,12 @@ function FlowNodePanelForm({
   const branches = node.branches || {};
 
   const setBranch = (patch: Record<string, string>) => {
-    onChange({ branches: { ...branches, ...patch } });
+    const next = { ...branches };
+    for (const [key, value] of Object.entries(patch)) {
+      if (value) next[key] = value;
+      else delete next[key];
+    }
+    onChange({ branches: next });
   };
 
   const branchOptions = allNodes
@@ -224,7 +238,13 @@ function FlowNodePanelForm({
                 {(node.buttons?.length || 0) > 1 && (
                   <button
                     type="button"
-                    onClick={() => onChange({ buttons: node.buttons!.filter((_, i) => i !== btnIdx) })}
+                    onClick={() => {
+                      const removed = node.buttons![btnIdx];
+                      const buttons = node.buttons!.filter((_, i) => i !== btnIdx);
+                      const nextBranches = { ...(node.branches || {}) };
+                      delete nextBranches[removed.id];
+                      onChange({ buttons, branches: nextBranches });
+                    }}
                     className="mt-6 rounded-lg p-1.5 text-red-500 hover:bg-red-50"
                   >
                     <Trash2 className="h-4 w-4" />

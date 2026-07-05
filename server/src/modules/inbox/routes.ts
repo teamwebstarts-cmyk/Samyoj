@@ -9,6 +9,7 @@ import {
   isWithin24HourWindow,
 } from '../whatsapp/meta.service';
 import { getOrgWhatsappContext } from '../whatsapp/context';
+import { resolveActiveWhatsappNumber, conversationFilter } from '../whatsapp/active-number';
 import { deliverOutboundMessage } from '../messages/send.service';
 import { validateInteractive } from '../messages/interactive';
 import { getMessageMediaBuffer, type MessageMediaMetadata } from '../media/download.service';
@@ -22,15 +23,16 @@ import { resolveCs24hWindowOpensAt } from './service-window';
 
 const router = Router();
 
+router.use(authenticate, requireOrg, resolveActiveWhatsappNumber);
+
 router.get(
   '/',
-  authenticate,
-  requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
+    const numberId = req.activeWhatsappNumberId;
     const { status, search, assignedTo, page = '1', limit = '20' } = req.query;
 
-    const where: Record<string, unknown> = { organizationId: orgId };
+    const where: Record<string, unknown> = { organizationId: orgId, ...conversationFilter(numberId) };
     if (status === 'SNOOZED') {
       where.snoozedUntil = { gt: new Date() };
     } else {
@@ -108,14 +110,12 @@ const startChatSchema = z.object({
 
 router.post(
   '/start',
-  authenticate,
-  requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
     const data = startChatSchema.parse(req.body);
     const orgId = req.user!.organizationId!;
     const phone = data.phone;
 
-    const { whatsappNumber } = await getOrgWhatsappContext(orgId);
+    const { whatsappNumber } = await getOrgWhatsappContext(orgId, req.activeWhatsappNumberId);
 
     const contact = await prisma.contact.upsert({
       where: { organizationId_phone: { organizationId: orgId, phone } },
@@ -130,7 +130,7 @@ router.post(
     });
 
     let conversation = await prisma.conversation.findFirst({
-      where: { organizationId: orgId, contactId: contact.id },
+      where: { organizationId: orgId, contactId: contact.id, whatsappNumberId: whatsappNumber.id },
     });
 
     if (!conversation) {
@@ -161,8 +161,6 @@ router.post(
 
 router.get(
   '/messages/:messageId/media',
-  authenticate,
-  requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
     const messageId = req.params.messageId as string;
     const orgId = req.user!.organizationId!;
@@ -198,8 +196,6 @@ router.get(
 
 router.get(
   '/:id',
-  authenticate,
-  requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
     const id = paramId(req);
     const conversation = await prisma.conversation.findFirst({
@@ -220,14 +216,19 @@ router.get(
     });
 
     if (!conversation) throw new AppError(404, 'Conversation not found');
+    if (
+      req.activeWhatsappNumberId &&
+      conversation.whatsappNumberId &&
+      conversation.whatsappNumberId !== req.activeWhatsappNumberId
+    ) {
+      throw new AppError(404, 'Conversation not found');
+    }
     sendSuccess(res, conversation);
   })
 );
 
 router.get(
   '/:id/messages',
-  authenticate,
-  requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
     const { before, limit = '50' } = req.query;
 
@@ -259,7 +260,10 @@ router.get(
 
     if (templateNames.size > 0) {
       try {
-        const { wabaId, accessToken } = await getOrgWhatsappContext(req.user!.organizationId!);
+        const { wabaId, accessToken } = await getOrgWhatsappContext(
+          req.user!.organizationId!,
+          req.activeWhatsappNumberId
+        );
         const displayByName = new Map<string, string>();
         await Promise.all(
           [...templateNames].map(async (name) => {
@@ -409,8 +413,6 @@ const sendMessageSchema = z
 
 router.post(
   '/:id/messages',
-  authenticate,
-  requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
     const data = sendMessageSchema.parse(req.body);
     const id = paramId(req);
@@ -536,7 +538,7 @@ router.post(
       }
       deliverType = 'INTERACTIVE';
     } else if (data.type === 'TEMPLATE' && data.templateName) {
-      const { wabaId, accessToken } = await getOrgWhatsappContext(orgId);
+      const { wabaId, accessToken } = await getOrgWhatsappContext(orgId, req.activeWhatsappNumberId);
       const template = await MetaWhatsAppService.getMessageTemplate(
         wabaId,
         accessToken,
@@ -606,8 +608,6 @@ router.post(
 
 router.patch(
   '/:id/assign',
-  authenticate,
-  requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
     const { agentId } = req.body;
     const orgId = req.user!.organizationId!;
@@ -655,8 +655,6 @@ router.patch(
 
 router.patch(
   '/:id/bot',
-  authenticate,
-  requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const id = paramId(req);
@@ -716,8 +714,6 @@ router.patch(
 
 router.patch(
   '/:id/snooze',
-  authenticate,
-  requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const id = paramId(req);
@@ -738,8 +734,6 @@ router.patch(
 
 router.delete(
   '/:id/snooze',
-  authenticate,
-  requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const id = paramId(req);
@@ -759,8 +753,6 @@ router.delete(
 
 router.patch(
   '/:id/status',
-  authenticate,
-  requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
     const { status } = req.body;
 
@@ -789,8 +781,6 @@ router.patch(
 
 router.post(
   '/:id/notes',
-  authenticate,
-  requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
     const { content } = req.body;
     if (!content) throw new AppError(400, 'Note content required');

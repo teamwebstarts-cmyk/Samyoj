@@ -1,4 +1,5 @@
 import { getOrgBusinessHours, isWithinBusinessHours } from '../settings/business-hours';
+import { linkFlowNodes } from './link-nodes';
 import type { FlowNode, FlowTriggerConfig } from './types';
 
 export interface SimulateInput {
@@ -20,7 +21,7 @@ export interface SimulateStep {
 }
 
 function keywordMatches(content: string, config: FlowTriggerConfig): boolean {
-  const keyword = config.keyword?.toLowerCase();
+  const keyword = config.keyword?.toLowerCase().trim();
   if (!keyword) return false;
   const lower = content.toLowerCase();
   if (config.regex) {
@@ -30,8 +31,91 @@ function keywordMatches(content: string, config: FlowTriggerConfig): boolean {
       return false;
     }
   }
-  if (config.exactMatch) return lower === keyword;
+  if (config.exactMatch) return lower.trim() === keyword;
   return lower.includes(keyword);
+}
+
+function nodeAction(node: FlowNode): string {
+  switch (node.type) {
+    case 'message':
+    case 'handoff':
+    case 'ai':
+    case 'end':
+    case 'assign':
+      return node.text || node.type;
+    case 'buttons':
+      return node.text || 'Show buttons';
+    case 'list':
+      return node.text || 'Show list menu';
+    case 'question':
+      return node.prompt || 'Ask question';
+    case 'tag':
+      return `Add tag: ${node.tag || '—'}`;
+    case 'remove_tag':
+      return `Remove tag: ${node.tag || '—'}`;
+    case 'set_variable':
+      return `Set ${node.variableName || 'variable'}`;
+    case 'template':
+      return node.text || `Template: ${node.templateName || '—'}`;
+    case 'media':
+      return node.mediaCaption || node.text || `Send ${node.mediaType || 'media'}`;
+    case 'delay':
+      return `Wait ${node.delaySeconds || 30}s`;
+    case 'schedule':
+      return node.scheduleAt ? `Schedule at ${node.scheduleAt}` : `Wait ${node.delaySeconds || 3600}s`;
+    case 'webhook':
+      return `Webhook: ${node.webhookUrl || '—'}`;
+    case 'goto_step':
+      return `Jump to step`;
+    case 'goto_flow':
+      return `Start another flow`;
+    case 'location':
+      return node.text || node.locationName || 'Send location';
+    case 'contact_card':
+      return node.text || `Share contact: ${node.contactName || '—'}`;
+    case 'wa_flow':
+      return node.text || 'Open Meta form';
+    case 'request_callback':
+      return node.text || 'Request callback';
+    default:
+      return node.text || node.prompt || node.tag || node.type;
+  }
+}
+
+function resolveConditionBranch(
+  node: FlowNode,
+  withinHours: boolean,
+  contactTags: string[] | undefined,
+  variables: Record<string, string>
+): string {
+  if (node.conditionType === 'business_hours') {
+    return withinHours ? 'true' : 'false';
+  }
+  if (node.conditionType === 'has_tag' && node.conditionTag) {
+    return contactTags?.includes(node.conditionTag) ? 'true' : 'false';
+  }
+  if (node.conditionType === 'language' && node.languageCode) {
+    const lang = variables.language || variables.lang || '';
+    return lang.toLowerCase() === node.languageCode.toLowerCase() ? 'true' : 'false';
+  }
+  if (node.conditionType === 'variable_equals' && node.conditionVariable) {
+    const actual = variables[node.conditionVariable] || '';
+    return actual === (node.conditionValue || '') ? 'true' : 'false';
+  }
+  if (node.conditionType === 'variable_contains' && node.conditionVariable) {
+    const actual = (variables[node.conditionVariable] || '').toLowerCase();
+    const expected = (node.conditionValue || '').toLowerCase();
+    return expected && actual.includes(expected) ? 'true' : 'false';
+  }
+  if (node.conditionType === 'webhook_ok') {
+    return variables.webhook_ok === 'true' ? 'true' : 'false';
+  }
+  return 'false';
+}
+
+function nextFromNode(node: FlowNode, branchKey?: string): string | null {
+  if (branchKey && node.branches?.[branchKey]) return node.branches[branchKey];
+  return node.next || null;
 }
 
 export async function simulateFlow(input: SimulateInput): Promise<{
@@ -92,62 +176,116 @@ export async function simulateFlow(input: SimulateInput): Promise<{
       reason = 'Unknown trigger';
   }
 
-  if (!triggered || !input.nodes.length) {
+  const linkedNodes = linkFlowNodes(input.nodes);
+  if (!triggered || !linkedNodes.length) {
     return { triggered, reason, steps: [] };
   }
 
-  const idSet = new Set(input.nodes.map((n) => n.id));
+  const idSet = new Set(linkedNodes.map((n) => n.id));
   const startId =
-    input.startNodeId && idSet.has(input.startNodeId) ? input.startNodeId : input.nodes[0].id;
+    input.startNodeId && idSet.has(input.startNodeId) ? input.startNodeId : linkedNodes[0].id;
 
   const steps: SimulateStep[] = [];
+  const variables: Record<string, string> = {};
   let currentId: string | null = startId;
   let iterations = 0;
 
-  while (currentId && iterations < 20) {
+  while (currentId && iterations < 30) {
     iterations++;
-    const node = input.nodes.find((n) => n.id === currentId);
+    const node = linkedNodes.find((n) => n.id === currentId);
     if (!node) break;
 
     if (node.type === 'condition') {
-      let branchKey = 'false';
-      if (node.conditionType === 'business_hours') {
-        branchKey = withinHours ? 'true' : 'false';
-      } else if (node.conditionType === 'has_tag' && node.conditionTag) {
-        branchKey = input.contactTags?.includes(node.conditionTag) ? 'true' : 'false';
-      } else if (node.conditionType === 'language' && node.languageCode) {
-        branchKey = 'false';
-      }
+      const branchKey = resolveConditionBranch(node, withinHours, input.contactTags, variables);
       steps.push({ nodeId: node.id, type: node.type, action: `Branch: ${branchKey}`, branch: branchKey });
-      currentId = node.branches?.[branchKey] || node.next || null;
+      currentId = nextFromNode(node, branchKey);
       continue;
     }
 
     if (node.type === 'buttons') {
-      steps.push({ nodeId: node.id, type: node.type, action: node.text || 'Show buttons' });
+      const mode = node.buttonMode || 'reply';
+      steps.push({ nodeId: node.id, type: node.type, action: nodeAction(node) });
+      if (mode === 'url' || mode === 'call') {
+        currentId = node.next || null;
+        continue;
+      }
       const firstBtn = node.buttons?.[0];
-      currentId = firstBtn ? node.branches?.[firstBtn.id] || node.next || null : node.next || null;
+      if (firstBtn) {
+        steps.push({ nodeId: node.id, type: 'user', action: `[Taps: ${firstBtn.title}]` });
+        currentId = nextFromNode(node, firstBtn.id);
+      } else {
+        currentId = node.next || null;
+      }
+      continue;
+    }
+
+    if (node.type === 'list') {
+      steps.push({ nodeId: node.id, type: node.type, action: nodeAction(node) });
+      const firstRow = node.listSections?.flatMap((s) => s.rows)[0];
+      if (firstRow) {
+        steps.push({ nodeId: node.id, type: 'user', action: `[Selects: ${firstRow.title}]` });
+        currentId = nextFromNode(node, firstRow.id);
+      } else {
+        currentId = node.next || null;
+      }
       continue;
     }
 
     if (node.type === 'question') {
-      steps.push({ nodeId: node.id, type: node.type, action: node.prompt || 'Ask question' });
+      steps.push({ nodeId: node.id, type: node.type, action: nodeAction(node) });
       steps.push({ nodeId: node.id, type: 'user', action: '[Customer reply]' });
+      const fieldKey = node.field === 'custom' ? node.customField || 'answer' : node.field || 'name';
+      variables[fieldKey] = 'Sample answer';
       currentId = node.next || null;
       continue;
     }
 
     if (node.type === 'ab_split') {
-      const branchKey = Math.random() < 0.5 ? 'a' : 'b';
+      const branchKey = Math.random() < (Math.min(Math.max(node.splitRatio ?? 50, 1), 99) / 100) ? 'a' : 'b';
       steps.push({ nodeId: node.id, type: node.type, action: `A/B branch: ${branchKey}`, branch: branchKey });
-      currentId = node.branches?.[branchKey] || node.next || null;
+      currentId = nextFromNode(node, branchKey);
+      continue;
+    }
+
+    if (node.type === 'language') {
+      const branchKey = 'default';
+      steps.push({ nodeId: node.id, type: node.type, action: `Language branch: ${branchKey}`, branch: branchKey });
+      currentId = nextFromNode(node, branchKey);
+      continue;
+    }
+
+    if (node.type === 'set_variable' && node.variableName) {
+      variables[node.variableName] = node.variableValue || '';
+    }
+
+    if (node.type === 'goto_step') {
+      steps.push({ nodeId: node.id, type: node.type, action: nodeAction(node) });
+      currentId = node.targetNodeId || node.next || null;
+      continue;
+    }
+
+    if (node.type === 'goto_flow') {
+      steps.push({ nodeId: node.id, type: node.type, action: nodeAction(node) });
+      break;
+    }
+
+    if (node.type === 'wa_flow') {
+      steps.push({ nodeId: node.id, type: node.type, action: nodeAction(node) });
+      steps.push({ nodeId: node.id, type: 'user', action: '[Form submitted]' });
+      currentId = node.next || null;
+      continue;
+    }
+
+    if (node.type === 'delay' || node.type === 'schedule') {
+      steps.push({ nodeId: node.id, type: node.type, action: nodeAction(node) });
+      currentId = node.next || null;
       continue;
     }
 
     steps.push({
       nodeId: node.id,
       type: node.type,
-      action: node.text || node.prompt || node.tag || node.type,
+      action: nodeAction(node),
     });
 
     if (['handoff', 'end', 'ai'].includes(node.type)) break;

@@ -20,6 +20,7 @@ export interface PendingCallSignaling {
   toPhone: string;
   direction: 'USER_INITIATED' | 'BUSINESS_INITIATED';
   sdpOffer: string;
+  sdpAnswer?: string;
   createdAt: string;
 }
 

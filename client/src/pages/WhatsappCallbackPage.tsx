@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AlertCircle, CheckCircle, Loader2, Smartphone } from 'lucide-react';
 import AppButton from '../components/ui/AppButton';
+import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { whatsappApi, type WhatsappPhoneOption } from '../services/api';
 
 type PageStatus = 'loading' | 'select' | 'connecting' | 'success' | 'error';
@@ -9,6 +10,7 @@ type PageStatus = 'loading' | 'select' | 'connecting' | 'success' | 'error';
 export default function WhatsappCallbackPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { refreshNumbers } = useWhatsAppNumber();
   const [status, setStatus] = useState<PageStatus>('loading');
   const [message, setMessage] = useState('Connecting your WhatsApp number...');
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -49,6 +51,7 @@ export default function WhatsappCallbackPage() {
         setPhoneNumber(result.phoneNumber || '');
         setStatus('success');
         setMessage('WhatsApp connected successfully!');
+        void refreshNumbers();
         setTimeout(() => navigate('/settings', { replace: true }), 2500);
       })
       .catch((err: unknown) => {
@@ -76,6 +79,7 @@ export default function WhatsappCallbackPage() {
       setPhoneNumber(data.data.phoneNumber || selected.phoneNumber);
       setStatus('success');
       setMessage('WhatsApp connected successfully!');
+      void refreshNumbers();
       setTimeout(() => navigate('/settings', { replace: true }), 2500);
     } catch (err: unknown) {
       const msg =

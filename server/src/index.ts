@@ -50,6 +50,7 @@ const app = express();
 const httpServer = createServer(app);
 
 app.set('trust proxy', 1);
+app.set('etag', false);
 
 const io = new Server(httpServer, {
   cors: {

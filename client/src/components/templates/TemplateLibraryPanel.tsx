@@ -7,7 +7,9 @@ import AppInput from '../ui/AppInput';
 import AppSelect from '../ui/AppSelect';
 import LoadingState from '../ui/LoadingState';
 import SearchInput from '../ui/SearchInput';
+import SegmentedControl from '../ui/SegmentedControl';
 import StatusBadge from '../ui/StatusBadge';
+import { ModalPreviewCard } from '../ui/modalUi';
 import { WhatsAppTemplatePreview, getTemplateParts } from '../inbox/WhatsAppPreview';
 import { templateApi } from '../../services/api';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
@@ -208,31 +210,22 @@ export default function TemplateLibraryPanel({
         </p>
       </AppAlert>
 
-      <div className="mt-4 flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => setSourceTab('meta')}
-          className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-[12px] font-bold transition ${
-            sourceTab === 'meta'
-              ? 'bg-rose-100 text-rose-800 ring-1 ring-rose-200'
-              : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200/80'
-          }`}
-        >
-          <BookOpen className="h-4 w-4" />
-          Meta library ({metaEntries.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setSourceTab('account')}
-          className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-[12px] font-bold transition ${
-            sourceTab === 'account'
-              ? 'bg-rose-100 text-rose-800 ring-1 ring-rose-200'
-              : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200/80'
-          }`}
-        >
-          <Building2 className="h-4 w-4" />
-          Your templates ({accountEntries.length})
-        </button>
+      <div className="mt-4">
+        <SegmentedControl
+          bare
+          value={sourceTab}
+          onChange={setSourceTab}
+          ariaLabel="Template source"
+          options={[
+            { value: 'meta', label: `Meta library (${metaEntries.length})`, shortLabel: 'Meta', icon: BookOpen },
+            {
+              value: 'account',
+              label: `Your templates (${accountEntries.length})`,
+              shortLabel: 'Yours',
+              icon: Building2,
+            },
+          ]}
+        />
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -301,9 +294,9 @@ export default function TemplateLibraryPanel({
         <LoadingState className="mt-6" label="Loading templates..." />
       ) : (
         <div className="mt-4 grid min-h-0 flex-1 gap-5 lg:grid-cols-[minmax(260px,1fr)_minmax(340px,1.3fr)]">
-          <div className="max-h-[min(70vh,520px)] space-y-2 overflow-y-auto pr-1">
+          <div className="max-h-[min(70vh,520px)] divide-y divide-theme-border overflow-y-auto rounded-xl border border-theme-border">
             {listItems.length === 0 ? (
-              <p className="py-8 text-center text-[13px] font-medium text-neutral-500">
+              <p className="py-8 text-center text-[13px] font-medium text-theme-muted">
                 No templates match these filters.
               </p>
             ) : (
@@ -315,25 +308,25 @@ export default function TemplateLibraryPanel({
                     key={key}
                     type="button"
                     onClick={() => setSelectedKey(key)}
-                    className={`w-full rounded-2xl border p-3 text-left transition ${
+                    className={`w-full px-3 py-3 text-left transition ${
                       selectedKey === key
-                        ? 'border-rose-300 bg-rose-50/80 ring-1 ring-rose-200'
-                        : 'border-neutral-200 bg-white hover:border-neutral-300'
+                        ? 'bg-violet-50/80 dark:bg-violet-950/30'
+                        : 'bg-theme-surface hover:bg-theme-subtle/60'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
-                        <p className="truncate font-mono text-[12px] font-bold text-neutral-900">
+                        <p className="truncate font-mono text-[12px] font-bold text-theme-fg">
                           {entry.name}
                         </p>
-                        <p className="mt-1 line-clamp-2 text-[11px] font-medium text-neutral-500">
+                        <p className="mt-1 line-clamp-2 text-[11px] font-medium text-theme-muted">
                           {parts.body.slice(0, 80)}
                           {parts.body.length > 80 ? '…' : ''}
                         </p>
                       </div>
                       <StatusBadge status={entry.category || 'UTILITY'} />
                     </div>
-                    <p className="mt-2 text-[10px] font-medium text-neutral-400">
+                    <p className="mt-2 text-[10px] font-medium text-theme-muted">
                       {entry.language}
                       {'usecase' in entry && entry.usecase ? ` · ${entry.usecase}` : ''}
                       {entry.source === 'account' && 'status' in entry ? ` · ${entry.status}` : ''}
@@ -345,31 +338,29 @@ export default function TemplateLibraryPanel({
           </div>
 
           {selected && preview && (
-            <div className="flex min-h-0 flex-col rounded-2xl border border-neutral-200 bg-neutral-50/50 p-4 ring-1 ring-neutral-100">
+            <div className="flex min-h-0 flex-col rounded-xl border border-theme-border bg-theme-subtle/30 p-4">
               <div className="mb-3 flex flex-wrap items-center gap-2">
-                <p className="font-mono text-[12px] font-bold text-neutral-900">{selected.name}</p>
+                <p className="font-mono text-[12px] font-bold text-theme-fg">{selected.name}</p>
                 <StatusBadge status={selected.category || 'UTILITY'} />
                 {selected.source === 'account' && 'status' in selected && (
                   <StatusBadge status={selected.status} />
                 )}
               </div>
 
-              <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-neutral-400">
-                WhatsApp preview (as customer sees)
-              </p>
+              <ModalPreviewCard title="WhatsApp preview">
+                <div className="min-h-0 max-h-[min(50vh,400px)] overflow-y-auto">
+                  <WhatsAppTemplatePreview
+                    header={preview.header}
+                    headerFormat={preview.headerFormat}
+                    body={preview.body}
+                    footer={preview.footer}
+                    buttons={preview.buttons}
+                    variant="compact"
+                  />
+                </div>
+              </ModalPreviewCard>
 
-              <div className="min-h-0 flex-1 overflow-y-auto rounded-xl">
-                <WhatsAppTemplatePreview
-                  header={preview.header}
-                  headerFormat={preview.headerFormat}
-                  body={preview.body}
-                  footer={preview.footer}
-                  buttons={preview.buttons}
-                  variant="compact"
-                />
-              </div>
-
-              <div className="mt-4 space-y-3 border-t border-neutral-200 pt-4">
+              <div className="mt-4 space-y-3 border-t border-theme-border pt-4">
                 <AppButton
                   type="button"
                   variant="secondary"
@@ -377,15 +368,15 @@ export default function TemplateLibraryPanel({
                   icon={<Copy size={16} />}
                   onClick={() => onUseAsReference(selected)}
                 >
-                  Use as reference (copy to create form)
+                  Use as reference
                 </AppButton>
 
                 {selected.source === 'meta' && normalizeCategory(selected.category) === 'UTILITY' && (
-                  <div className="rounded-xl border border-dashed border-neutral-200 bg-white p-3">
-                    <p className="text-[11px] font-bold uppercase tracking-wide text-neutral-500">
+                  <div className="rounded-xl border border-dashed border-theme-border bg-theme-surface p-3">
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-theme-muted">
                       Create from Meta library
                     </p>
-                    <p className="mt-1 text-[11px] text-neutral-600">
+                    <p className="mt-1 text-[11px] text-theme-secondary">
                       Clones this library template to your WABA (Utility only).
                     </p>
                     <AppInput

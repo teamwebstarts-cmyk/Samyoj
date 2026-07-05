@@ -38,8 +38,10 @@ export default function ReportsAgentTable({ agents, periodDays }: ReportsAgentTa
         <div className="p-6">
           <EmptyState
             icon={Users}
+            compact
             title="No agent activity yet"
-            description="Performance metrics appear once your team starts handling conversations."
+            description="Performance numbers appear once your team starts handling customer chats."
+            steps={['Invite team members', 'Assign chats from Inbox', 'Check back here for response times and stats']}
           />
         </div>
       ) : (

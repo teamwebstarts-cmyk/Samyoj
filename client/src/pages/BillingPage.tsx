@@ -1,39 +1,67 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  AlertCircle,
   CreditCard,
-  IndianRupee,
-  Lock,
+  LayoutGrid,
   Receipt,
+  RefreshCw,
   ShieldAlert,
-  Smartphone,
 } from 'lucide-react';
-import PageShell from '../components/ui/PageShell';
-import PageHero from '../components/ui/PageHero';
-import EmptyState from '../components/ui/EmptyState';
+import AppAlert from '../components/ui/AppAlert';
+import AppButton from '../components/ui/AppButton';
 import BillingCurrentPlanHero from '../components/billing/BillingCurrentPlanHero';
 import BillingPlanCard from '../components/billing/BillingPlanCard';
 import BillingSkeleton from '../components/billing/BillingSkeleton';
 import BillingUsageWidget from '../components/billing/BillingUsageWidget';
+import EmptyState from '../components/ui/EmptyState';
+import PageHeader from '../components/ui/PageHeader';
+import PageHero from '../components/ui/PageHero';
+import PageShell from '../components/ui/PageShell';
+import SectionCard from '../components/ui/SectionCard';
+import SegmentedControl from '../components/ui/SegmentedControl';
 import { billingApi, settingsApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import type { BillingInfo, BillingPlan, BillingUsage } from '../types';
 import { openRazorpayCheckout } from '../utils/razorpay';
 import { toastError, toastSuccess } from '../utils/toast';
 
-const paymentMethods = [
-  { label: 'UPI', icon: Smartphone },
-  { label: 'Cards', icon: CreditCard },
-  { label: 'Netbanking', icon: IndianRupee },
-  { label: 'Secure checkout', icon: Lock },
-];
+type BillingTab = 'overview' | 'plans' | 'history';
+
+const tabMeta = {
+  overview: { label: 'Overview', shortLabel: 'Overview', icon: LayoutGrid },
+  plans: { label: 'Plans', shortLabel: 'Plans', icon: CreditCard },
+  history: { label: 'History', shortLabel: 'History', icon: Receipt },
+} as const;
+
+const heroCopy: Record<BillingTab, { title: string; description: string }> = {
+  overview: {
+    title: 'Billing overview',
+    description: 'Your current plan, seat usage, and WhatsApp conversation costs.',
+  },
+  plans: {
+    title: 'Choose a plan',
+    description: 'Scale seats and features as your team grows. Pay securely with Razorpay.',
+  },
+  history: {
+    title: 'Payment history',
+    description: 'Recent successful plan payments and transactions.',
+  },
+};
 
 function formatAmount(paise: number) {
   return `₹${(paise / 100).toLocaleString('en-IN')}`;
 }
 
+function formatPaidAt(value: string | null) {
+  if (!value) return 'Pending confirmation';
+  return new Date(value).toLocaleString(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
+}
+
 export default function BillingPage() {
   const { user } = useAuth();
+  const [tab, setTab] = useState<BillingTab>('overview');
   const [info, setInfo] = useState<BillingInfo | null>(null);
   const [usage, setUsage] = useState<BillingUsage | null>(null);
   const [dailyBudgetInr, setDailyBudgetInr] = useState<number | undefined>();
@@ -41,8 +69,9 @@ export default function BillingPage() {
   const [loadFailed, setLoadFailed] = useState(false);
   const [upgrading, setUpgrading] = useState<string | null>(null);
 
-  const load = () => {
+  const load = useCallback(() => {
     setLoadFailed(false);
+    setLoading(true);
     Promise.all([billingApi.get(), billingApi.usage(), settingsApi.get()])
       .then(([billingRes, usageRes, settingsRes]) => {
         setInfo(billingRes.data.data);
@@ -55,9 +84,11 @@ export default function BillingPage() {
         toastError('Failed to load billing');
       })
       .finally(() => setLoading(false));
-  };
+  }, []);
 
-  useEffect(load, []);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const handleFreePlan = async (plan: BillingPlan) => {
     if (!info?.canManageBilling || plan.id === info.plan) return;
@@ -129,159 +160,165 @@ export default function BillingPage() {
     }
   };
 
+  const heroStats = useMemo(() => {
+    if (!info) return [];
+    return [
+      {
+        label: 'Seats',
+        value: `${info.seatsUsed}/${info.seatLimit}`,
+        tone: 'text-emerald-700 dark:text-emerald-300',
+      },
+      {
+        label: 'Usage est.',
+        value: usage ? `₹${usage.totalCostInr.toLocaleString('en-IN')}` : '—',
+        tone: 'text-sky-700 dark:text-sky-300',
+      },
+      {
+        label: 'Payments',
+        value: info.recentPayments?.length ?? 0,
+        tone: 'text-violet-700 dark:text-violet-300',
+      },
+    ];
+  }, [info, usage]);
+
+  const copy = heroCopy[tab];
+
   return (
     <PageShell>
-      <PageHero
-        badge="Account"
-        badgeIcon={CreditCard}
-        title="Billing & Plans"
-        description="Manage your subscription, team seats, and upgrades. Pay securely with Razorpay — UPI, cards, and netbanking supported."
-        accent="emerald"
+      <PageHeader
+        actions={
+          <AppButton variant="secondary" size="sm" icon={<RefreshCw size={15} />} onClick={load}>
+            Refresh
+          </AppButton>
+        }
       />
 
-      {loading ? (
-        <BillingSkeleton />
-      ) : loadFailed ? (
-        <EmptyState
-          icon={ShieldAlert}
-          title="Could not load billing"
-          description="Please refresh the page or try again in a moment."
+      <div className="space-y-5 animate-fade-up-delay sm:space-y-6">
+        <PageHero
+          badge="Billing"
+          badgeIcon={CreditCard}
+          title={copy.title}
+          description={copy.description}
+          accent="emerald"
+          stats={loading || !info ? [] : heroStats}
         />
-      ) : info ? (
-        <div className="space-y-6 pb-8">
-          <BillingCurrentPlanHero info={info} />
 
-          {usage && <BillingUsageWidget usage={usage} dailyBudgetInr={dailyBudgetInr} />}
+        {loading ? (
+          <BillingSkeleton />
+        ) : loadFailed ? (
+          <EmptyState
+            icon={ShieldAlert}
+            variant="error"
+            title="Could not load billing"
+            description="Something went wrong while loading your billing info. Please try again."
+            action={
+              <AppButton variant="secondary" onClick={load}>
+                Try again
+              </AppButton>
+            }
+          />
+        ) : info ? (
+          <>
+            <SegmentedControl
+              value={tab}
+              onChange={(v) => setTab(v as BillingTab)}
+              options={[
+                { value: 'overview', ...tabMeta.overview },
+                { value: 'plans', ...tabMeta.plans },
+                { value: 'history', ...tabMeta.history },
+              ]}
+              ariaLabel="Billing sections"
+            />
 
-          {/* Payment trust strip */}
-          <div className="dashboard-card flex flex-wrap items-center justify-between gap-4 px-5 py-4 animate-fade-up-delay">
-            <div>
-              <p className="text-[12px] font-extrabold text-theme-fg">Secure payments via Razorpay</p>
-              <p className="mt-0.5 text-[11px] font-medium text-theme-muted">
-                PCI-compliant checkout · instant plan activation
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {paymentMethods.map(({ label, icon: Icon }) => (
-                <span
-                  key={label}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-theme-border bg-theme-subtle/50 px-3 py-1.5 text-[11px] font-semibold text-theme-secondary"
-                >
-                  <Icon className="h-3.5 w-3.5 text-whatsapp-600" />
-                  {label}
-                </span>
-              ))}
-            </div>
-          </div>
+            {!info.canManageBilling && (
+              <AppAlert variant="info">
+                Only organization admins can change plans. Contact your admin to upgrade.
+              </AppAlert>
+            )}
 
-          {!info.canManageBilling && (
-            <div className="flex items-start gap-3 rounded-2xl border border-sky-200/80 bg-sky-50/90 px-4 py-3.5 dark:border-sky-800/40 dark:bg-sky-900/20">
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-sky-700 dark:text-sky-400" />
-              <div>
-                <p className="text-[13px] font-bold text-sky-900 dark:text-sky-200">
-                  View-only access
-                </p>
-                <p className="mt-0.5 text-[12px] font-medium text-sky-800/90 dark:text-sky-300/90">
-                  Only organization admins can change plans. Contact your admin to upgrade.
-                </p>
+            {!info.razorpayConfigured && tab === 'plans' && (
+              <AppAlert variant="info">
+                Paid checkout is unavailable — Razorpay is not configured on the server.
+              </AppAlert>
+            )}
+
+            {tab === 'overview' && (
+              <div className="space-y-5">
+                <BillingCurrentPlanHero info={info} />
+                {usage && <BillingUsageWidget usage={usage} dailyBudgetInr={dailyBudgetInr} />}
               </div>
-            </div>
-          )}
+            )}
 
-          {!info.razorpayConfigured && (
-            <div className="flex items-start gap-3 rounded-2xl border border-amber-200/80 bg-amber-50/90 px-4 py-3.5 dark:border-amber-800/40 dark:bg-amber-900/20">
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-400" />
-              <div>
-                <p className="text-[13px] font-bold text-amber-900 dark:text-amber-200">
-                  Paid plans unavailable
-                </p>
-                <p className="mt-0.5 text-[12px] font-medium text-amber-800/90 dark:text-amber-300/90">
-                  Razorpay is not configured on the server. Set RAZORPAY_KEY_ID and
-                  RAZORPAY_KEY_SECRET to enable checkout.
-                </p>
+            {tab === 'plans' && (
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                {info.plans.map((plan, index) => (
+                  <div key={plan.id} style={{ animationDelay: `${index * 60}ms` }}>
+                    <BillingPlanCard
+                      plan={plan}
+                      isCurrent={plan.id === info.plan}
+                      canManage={info.canManageBilling}
+                      razorpayConfigured={info.razorpayConfigured}
+                      loading={upgrading === plan.id}
+                      onSelect={() => handleUpgrade(plan)}
+                    />
+                  </div>
+                ))}
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Plans */}
-          <div>
-            <div className="mb-4 flex items-end justify-between gap-3 px-0.5">
-              <div>
-                <h2 className="text-base font-extrabold tracking-tight text-theme-fg">
-                  Choose your plan
-                </h2>
-                <p className="mt-0.5 text-[12px] font-medium text-theme-secondary">
-                  Scale as your team and customer base grows
-                </p>
-              </div>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              {info.plans.map((plan, index) => (
-                <div key={plan.id} style={{ animationDelay: `${index * 60}ms` }}>
-                  <BillingPlanCard
-                    plan={plan}
-                    isCurrent={plan.id === info.plan}
-                    canManage={info.canManageBilling}
-                    razorpayConfigured={info.razorpayConfigured}
-                    loading={upgrading === plan.id}
-                    onSelect={() => handleUpgrade(plan)}
+            {tab === 'history' && (
+              <SectionCard title="Recent payments" subtitle="Successful plan transactions">
+                {!info.recentPayments || info.recentPayments.length === 0 ? (
+                  <EmptyState
+                    icon={Receipt}
+                    title="No payments yet"
+                    description="Your payment history will show up here after you upgrade to a paid plan."
+                    compact
+                    action={
+                      <AppButton variant="secondary" onClick={() => setTab('plans')}>
+                        View plans
+                      </AppButton>
+                    }
                   />
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Recent payments */}
-          {info.recentPayments && info.recentPayments.length > 0 && (
-            <div className="dashboard-card overflow-hidden animate-fade-up-delay-2">
-              <div className="flex items-center gap-2 border-b border-theme-border bg-theme-subtle/50 px-5 py-4">
-                <Receipt className="h-4 w-4 text-theme-muted" />
-                <div>
-                  <h3 className="text-base font-extrabold tracking-tight text-theme-fg">
-                    Payment history
-                  </h3>
-                  <p className="text-[12px] font-medium text-theme-secondary">
-                    Recent successful transactions
-                  </p>
-                </div>
-              </div>
-              <div className="divide-y divide-theme-border">
-                {info.recentPayments.map((payment, i) => {
-                  const planName =
-                    info.plans.find((p) => p.id === payment.planId)?.name ?? payment.planId;
-                  return (
-                    <div
-                      key={`${payment.planId}-${payment.paidAt ?? i}`}
-                      className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 text-[13px]"
-                    >
-                      <div>
-                        <p className="font-semibold text-theme-fg">{planName} plan</p>
-                        <p className="text-[11px] text-theme-muted">
-                          {payment.paidAt
-                            ? new Date(payment.paidAt).toLocaleString(undefined, {
-                                dateStyle: 'medium',
-                                timeStyle: 'short',
-                              })
-                            : 'Pending confirmation'}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="font-extrabold tabular-nums text-emerald-700 dark:text-emerald-300">
-                          {formatAmount(payment.amountPaise)}
-                        </span>
-                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300">
-                          Paid
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
-      ) : null}
+                ) : (
+                  <div className="space-y-3">
+                    {info.recentPayments.map((payment, i) => {
+                      const planName =
+                        info.plans.find((p) => p.id === payment.planId)?.name ?? payment.planId;
+                      return (
+                        <div
+                          key={`${payment.planId}-${payment.paidAt ?? i}`}
+                          className="dashboard-card flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between"
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600">
+                              <Receipt className="h-4 w-4" />
+                            </div>
+                            <div>
+                              <p className="font-semibold text-theme-fg">{planName} plan</p>
+                              <p className="text-[12px] text-theme-muted">
+                                {formatPaidAt(payment.paidAt)}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 sm:pl-0">
+                            <span className="text-lg font-extrabold tabular-nums text-emerald-700 dark:text-emerald-300">
+                              {formatAmount(payment.amountPaise)}
+                            </span>
+                            <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-700 dark:text-emerald-300">
+                              Paid
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </SectionCard>
+            )}
+          </>
+        ) : null}
+      </div>
     </PageShell>
   );
 }

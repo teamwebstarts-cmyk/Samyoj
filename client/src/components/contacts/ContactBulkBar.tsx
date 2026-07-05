@@ -1,16 +1,12 @@
-import { CheckSquare, ChevronDown, Send, Tag, Trash2, UserCheck, UserX, X } from 'lucide-react';
-import { useState } from 'react';
+import { CheckSquare, Send, Tag, Trash2, UserCheck, UserX, X } from 'lucide-react';
 import { useSidebarCollapsed } from '../../hooks/useSidebarCollapsed';
 import AppButton from '../ui/AppButton';
-import AppInput from '../ui/AppInput';
+import { messagingConsent } from '../../utils/plainLanguage';
 
 interface ContactBulkBarProps {
   selectedCount: number;
-  bulkTags: string;
-  onBulkTagsChange: (value: string) => void;
   onClear: () => void;
-  onAddTags: () => void;
-  onRemoveTags: () => void;
+  onOpenTags: () => void;
   onOptIn: () => void;
   onOptOut: () => void;
   onDelete: () => void;
@@ -20,18 +16,14 @@ interface ContactBulkBarProps {
 
 export default function ContactBulkBar({
   selectedCount,
-  bulkTags,
-  onBulkTagsChange,
   onClear,
-  onAddTags,
-  onRemoveTags,
+  onOpenTags,
   onOptIn,
   onOptOut,
   onDelete,
   onAddToCampaign,
   busy,
 }: ContactBulkBarProps) {
-  const [expanded, setExpanded] = useState(false);
   const { collapsed } = useSidebarCollapsed();
 
   if (!selectedCount) return null;
@@ -72,11 +64,20 @@ export default function ContactBulkBar({
             <AppButton
               size="sm"
               variant="secondary"
+              icon={<Tag size={14} />}
+              onClick={onOpenTags}
+              disabled={busy}
+            >
+              Tags
+            </AppButton>
+            <AppButton
+              size="sm"
+              variant="secondary"
               icon={<UserCheck size={14} />}
               onClick={onOptIn}
               disabled={busy}
             >
-              Opt in
+              {messagingConsent.allowMessages}
             </AppButton>
             <AppButton
               size="sm"
@@ -85,19 +86,8 @@ export default function ContactBulkBar({
               onClick={onOptOut}
               disabled={busy}
             >
-              Opt out
+              {messagingConsent.stopMessages}
             </AppButton>
-            <button
-              type="button"
-              onClick={() => setExpanded((v) => !v)}
-              className="inline-flex h-9 items-center gap-1 rounded-xl border border-theme-border bg-theme-subtle px-3 text-[12px] font-bold text-theme-secondary transition hover:bg-theme-surface"
-            >
-              <Tag className="h-3.5 w-3.5" />
-              Tags
-              <ChevronDown
-                className={`h-3.5 w-3.5 transition ${expanded ? 'rotate-180' : ''}`}
-              />
-            </button>
             <AppButton
               size="sm"
               variant="danger"
@@ -117,25 +107,6 @@ export default function ContactBulkBar({
             </button>
           </div>
         </div>
-
-        {expanded && (
-          <div className="flex flex-col gap-2 border-t border-theme-border bg-theme-subtle/40 px-4 py-3 sm:flex-row sm:items-center">
-            <AppInput
-              className="flex-1"
-              placeholder="Enter tags separated by commas"
-              value={bulkTags}
-              onChange={(e) => onBulkTagsChange(e.target.value)}
-            />
-            <div className="flex gap-2">
-              <AppButton size="sm" variant="secondary" onClick={onAddTags} disabled={busy}>
-                Add tags
-              </AppButton>
-              <AppButton size="sm" variant="ghost" onClick={onRemoveTags} disabled={busy}>
-                Remove tags
-              </AppButton>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

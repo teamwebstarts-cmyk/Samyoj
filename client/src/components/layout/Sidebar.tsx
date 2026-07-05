@@ -1,67 +1,9 @@
 import { NavLink } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
-import {
-  BarChart3,
-  Bot,
-  CreditCard,
-  FileText,
-  Headset,
-  LineChart,
-  LifeBuoy,
-  LogOut,
-  MessageSquare,
-  PanelLeftClose,
-  PanelLeftOpen,
-  PhoneCall,
-  Send,
-  Settings,
-  Sparkles,
-  ShoppingBag,
-  Target,
-  Users,
-  X,
-  Zap,
-} from 'lucide-react';
+import { LogOut, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
+import { getVisibleNavSections } from '../../config/navigation';
+import { useAuth } from '../../contexts/AuthContext';
 import { PlatformBrand } from './PlatformBrand';
-
-const navSections = [
-  {
-    label: 'Main',
-    items: [
-      { to: '/', icon: BarChart3, label: 'Dashboard', end: true },
-      { to: '/inbox', icon: MessageSquare, label: 'Inbox' },
-      { to: '/calls', icon: PhoneCall, label: 'Calls' },
-    ],
-  },
-  {
-    label: 'Grow',
-    items: [
-      { to: '/automations', icon: Zap, label: 'Automations' },
-      { to: '/ai-bot', icon: Bot, label: 'AI Bots' },
-      { to: '/campaigns', icon: Send, label: 'Campaigns' },
-      { to: '/templates', icon: FileText, label: 'Templates' },
-      { to: '/content-studio', icon: Sparkles, label: 'Content Studio' },
-      { to: '/commerce', icon: ShoppingBag, label: 'Commerce' },
-      { to: '/leads', icon: Target, label: 'Leads' },
-      { to: '/tickets', icon: LifeBuoy, label: 'Tickets' },
-      { to: '/contacts', icon: Users, label: 'Contacts' },
-    ],
-  },
-  {
-    label: 'Insights',
-    items: [
-      { to: '/reports', icon: LineChart, label: 'Reports' },
-    ],
-  },
-  {
-    label: 'Account',
-    items: [
-      { to: '/team', icon: Headset, label: 'Team' },
-      { to: '/billing', icon: CreditCard, label: 'Billing' },
-      { to: '/settings', icon: Settings, label: 'Settings' },
-    ],
-  },
-];
 
 interface SidebarProps {
   collapsed?: boolean;
@@ -127,6 +69,9 @@ export default function Sidebar({
   onClose,
   showClose,
 }: SidebarProps) {
+  const { orgRole } = useAuth();
+  const navSections = getVisibleNavSections(orgRole);
+
   return (
     <div className="flex h-full flex-col bg-theme-surface">
       <div className={`shrink-0 border-b border-theme-border ${collapsed ? 'px-2 py-3' : 'px-3 py-3'}`}>
@@ -145,7 +90,7 @@ export default function Sidebar({
             <PlatformBrand collapsed />
           </div>
         ) : (
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center justify-between gap-2">
             <PlatformBrand />
             <div className="flex items-center gap-1">
               {collapsible && onToggleCollapse && (

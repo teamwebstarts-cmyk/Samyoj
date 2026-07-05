@@ -42,19 +42,19 @@ export function ModalSection({
   children: ReactNode;
 }) {
   return (
-    <section className="space-y-4">
+    <section className="space-y-3">
       <div className="flex items-start gap-3">
         {step !== undefined && (
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-[11px] font-black text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
             {step}
           </span>
         )}
-        <div>
+        <div className="min-w-0 flex-1">
           <h3 className="text-[13px] font-extrabold tracking-tight text-theme-fg">{title}</h3>
-          {subtitle && <p className="mt-0.5 text-[12px] font-medium text-theme-secondary">{subtitle}</p>}
+          {subtitle && <p className="mt-0.5 text-[12px] font-medium leading-relaxed text-theme-secondary">{subtitle}</p>}
         </div>
       </div>
-      {children}
+      <div className={step !== undefined ? 'space-y-4 pl-10' : 'space-y-4'}>{children}</div>
     </section>
   );
 }
@@ -149,8 +149,12 @@ export function ModalStatusSummary({
 
 export function ModalEmptyHint({ message }: { message: string }) {
   return (
-    <div className="rounded-xl border border-dashed border-theme-border bg-theme-subtle/40 px-4 py-6 text-center">
-      <p className="text-[13px] font-medium text-theme-secondary">{message}</p>
+    <div className="relative overflow-hidden rounded-xl border border-dashed border-theme-border/80 bg-theme-subtle/50 px-4 py-7 text-center">
+      <div
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_0%,rgba(37,211,102,0.06),transparent_70%)]"
+        aria-hidden
+      />
+      <p className="relative text-[13px] font-semibold leading-relaxed text-theme-secondary">{message}</p>
     </div>
   );
 }

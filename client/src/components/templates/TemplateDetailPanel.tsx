@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { BarChart3, Copy, Megaphone, Pencil, TestTube2, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { ModalPreviewCard } from '../ui/modalUi';
 import AppAlert from '../ui/AppAlert';
 import AppButton from '../ui/AppButton';
 import AppInput from '../ui/AppInput';
@@ -96,24 +97,22 @@ export default function TemplateDetailPanel({
         <AppAlert variant="error">{rejectedReason}</AppAlert>
       )}
 
-      <div className="rounded-2xl border border-theme-border bg-theme-surface p-4 ring-1 ring-theme-border/60">
-        <p className="text-[11px] font-bold uppercase tracking-wide text-theme-muted">Preview</p>
+      <ModalPreviewCard title="Preview">
         <WhatsAppTemplatePreview
           {...filledPreview}
           headerFormat={parts.headerFormat}
           headerMediaUrl={headerMediaUrl || undefined}
-          className="mt-3"
         />
-      </div>
+      </ModalPreviewCard>
 
       {template.status === 'APPROVED' && (
         <>
-          <div className="rounded-2xl border border-emerald-200/60 bg-emerald-50/40 p-4 dark:border-emerald-900/40 dark:bg-emerald-950/20">
-            <p className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-wide text-emerald-800 dark:text-emerald-300">
-              <TestTube2 className="h-4 w-4" />
+          <div className="rounded-xl border border-theme-border bg-theme-subtle/30 p-4">
+            <p className="flex items-center gap-2 text-[12px] font-bold text-theme-fg">
+              <TestTube2 className="h-4 w-4 text-emerald-600" />
               Test send
             </p>
-            <p className="mt-1 text-[11px] text-emerald-700/80 dark:text-emerald-400">
+            <p className="mt-1 text-[11px] text-theme-secondary">
               Send this template to your phone before using it in a campaign.
             </p>
 
@@ -176,7 +175,7 @@ export default function TemplateDetailPanel({
 
           <Link
             to={`/campaigns?template=${encodeURIComponent(template.name)}&language=${encodeURIComponent(template.language)}`}
-            className="flex items-center justify-center gap-2 rounded-2xl border border-violet-200/70 bg-gradient-to-r from-violet-500/10 to-fuchsia-500/5 px-4 py-3.5 text-[13px] font-bold text-violet-800 transition hover:from-violet-500/15 dark:text-violet-300"
+            className="flex items-center justify-center gap-2 rounded-xl border border-theme-border bg-theme-subtle/40 px-4 py-3 text-[13px] font-bold text-violet-700 transition hover:bg-theme-subtle dark:text-violet-300"
           >
             <Megaphone className="h-4 w-4" />
             Use in campaign

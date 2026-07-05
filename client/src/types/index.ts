@@ -49,11 +49,9 @@ export interface TeamMember {
   orgRole: OrgRole;
   userRole: 'ADMIN' | 'AGENT';
   assignedCount: number;
-  openCount?: number;
   joinedAt: string;
   isCurrentUser: boolean;
   availability: AgentAvailability;
-  maxConcurrentChats: number;
   department?: TeamDepartment | null;
   permissions?: TeamPermissions;
   shiftSchedule?: ShiftSchedule | null;
@@ -104,7 +102,10 @@ export interface TeamSettings {
   handoffOnlyOnline: boolean;
   respectShiftSchedule: boolean;
   plan: string;
+  rolePermissions?: Partial<Record<OrgRole, Partial<TeamPermissions>>>;
 }
+
+export type RolePermissionsMatrix = Record<OrgRole, TeamPermissions>;
 
 export interface TeamAuditLog {
   id: string;
@@ -176,6 +177,7 @@ export interface ContactActivityItem {
 
 export interface ContactDetail {
   contact: Contact;
+  lead?: { id: string; stage: string; title: string } | null;
   conversations: Array<{
     id: string;
     status: string;

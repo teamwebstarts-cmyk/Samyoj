@@ -71,8 +71,8 @@ export default function BillingPlanCard({
     : isEnterprise
       ? 'Contact sales'
       : isPaid
-        ? 'Upgrade with Razorpay'
-        : 'Switch to free';
+        ? 'Upgrade'
+        : 'Switch plan';
 
   return (
     <div

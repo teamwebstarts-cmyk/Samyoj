@@ -1,7 +1,6 @@
 export default function ReportsSkeleton() {
   return (
-    <div className="animate-pulse space-y-6 pb-8">
-      <div className="h-[180px] rounded-2xl border border-theme-border bg-theme-subtle" />
+    <div className="animate-pulse space-y-5 pb-6 sm:space-y-6 sm:pb-8">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
           <div key={i} className="h-[118px] rounded-2xl bg-theme-subtle" />
@@ -17,6 +16,7 @@ export default function ReportsSkeleton() {
         ))}
       </div>
       <div className="h-[280px] rounded-2xl bg-theme-subtle" />
+      <div className="h-[240px] rounded-2xl bg-theme-subtle" />
     </div>
   );
 }

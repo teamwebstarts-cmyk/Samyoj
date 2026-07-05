@@ -36,14 +36,14 @@ export default function CallListItem({
     <button
       type="button"
       onClick={onSelect}
-      className={`group relative flex w-full items-center gap-3 px-4 py-3.5 text-left transition-all ${
+      className={`group relative flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors ${
         selected
-          ? 'bg-gradient-to-r from-violet-50/95 to-emerald-50/30'
-          : 'hover:bg-neutral-50/90'
+          ? 'bg-violet-50/90 dark:bg-violet-950/30'
+          : 'bg-white hover:bg-neutral-50 dark:bg-neutral-950 dark:hover:bg-neutral-900/60'
       }`}
     >
       {selected && (
-        <span className="absolute bottom-2 left-0 top-2 w-1 rounded-r-full bg-gradient-to-b from-violet-500 to-whatsapp-500" />
+        <span className="absolute bottom-0 left-0 top-0 w-[3px] bg-gradient-to-b from-violet-500 to-whatsapp-500" />
       )}
 
       <div className="relative shrink-0">

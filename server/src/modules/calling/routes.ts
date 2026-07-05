@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { Router, Request, Response } from 'express';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
@@ -16,7 +17,7 @@ import { isDeepgramConfigured } from './deepgram.stt';
 import { isGoogleTtsConfigured } from './google-tts.service';
 import { config } from '../../config';
 import { getOrgCallingSettings, saveOrgCallingSettings } from './settings.service';
-import { getOrgActiveCallCount } from './session-store';
+import { getOrgActiveCallCount, storePendingCall } from './session-store';
 import { getCallAnalytics } from './analytics';
 import { acceptCallWithAgentAnswer, declineCallAsAgent } from './agent-call.service';
 import { getPendingCallByCallId } from './session-store';
@@ -24,11 +25,12 @@ import { clearRingTimeout } from './call.processor';
 import { logTeamAudit } from '../team/audit';
 import { WhatsAppWebRtcBridge } from './webrtc-bridge';
 import { emitToOrg } from '../../realtime';
+import { resolveActiveWhatsappNumber } from '../whatsapp/active-number';
 
 const router = Router();
 
 const adminGuard = [authenticate, requireOrg, loadOrgRole, requireOrgRole('OWNER', 'ADMIN')];
-const memberGuard = [authenticate, requireOrg];
+const memberGuard = [authenticate, requireOrg, resolveActiveWhatsappNumber];
 
 const listQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -250,10 +252,14 @@ router.get(
   ...memberGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
+    const numberId = req.activeWhatsappNumberId;
     const query = listQuerySchema.parse(req.query);
     const skip = (query.page - 1) * query.limit;
 
-    const where: Prisma.CallWhereInput = { organizationId: orgId };
+    const where: Prisma.CallWhereInput = {
+      organizationId: orgId,
+      ...(numberId ? { whatsappNumberId: numberId } : {}),
+    };
 
     if (query.status) where.status = query.status as Prisma.EnumCallStatusFilter['equals'];
     if (query.handler) where.handler = query.handler as Prisma.EnumCallHandlerFilter['equals'];
@@ -337,7 +343,6 @@ router.post(
 
     try {
       const sdpOffer = await bridge.createOffer();
-      const metaCallId = `outbound-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
       let conversation = data.conversationId
         ? await prisma.conversation.findFirst({
@@ -352,13 +357,14 @@ router.post(
         });
       }
 
+      const placeholderMetaCallId = `pending-${randomUUID()}`;
       const call = await prisma.call.create({
         data: {
           organizationId: orgId,
           contactId: contact.id,
           conversationId: conversation?.id,
           whatsappNumberId: number.id,
-          metaCallId,
+          metaCallId: placeholderMetaCallId,
           direction: 'BUSINESS_INITIATED',
           status: 'CONNECTING',
           handler: 'AGENT',
@@ -368,18 +374,40 @@ router.post(
         },
       });
 
-      await MetaCallingService.callAction(
+      const metaCallId = await MetaCallingService.initiateOutboundCall(
         number.phoneNumberId,
         accessToken,
-        metaCallId,
-        'connect',
+        contact.phone,
         { sdp_type: 'offer', sdp: sdpOffer },
-        contact.phone
+        call.id
       );
 
-      emitToOrg(orgId, 'call:updated', { callId: call.id, status: 'CONNECTING' });
+      const updatedCall =
+        metaCallId === placeholderMetaCallId
+          ? call
+          : await prisma.call.update({
+              where: { id: call.id },
+              data: { metaCallId },
+            });
 
-      sendSuccess(res, { call, sdpOffer });
+      await storePendingCall(metaCallId, {
+        callId: updatedCall.id,
+        metaCallId,
+        organizationId: orgId,
+        conversationId: conversation?.id || updatedCall.conversationId || '',
+        contactId: contact.id,
+        phoneNumberId: number.phoneNumberId,
+        accessToken,
+        fromPhone: number.phoneNumber,
+        toPhone: contact.phone,
+        direction: 'BUSINESS_INITIATED',
+        sdpOffer,
+        createdAt: new Date().toISOString(),
+      });
+
+      emitToOrg(orgId, 'call:updated', { callId: updatedCall.id, status: 'CONNECTING' });
+
+      sendSuccess(res, { call: updatedCall, sdpOffer });
     } finally {
       bridge.close();
     }

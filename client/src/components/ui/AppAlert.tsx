@@ -1,7 +1,7 @@
-import { AlertCircle, CheckCircle2, Info } from 'lucide-react';
+import { AlertCircle, AlertTriangle, CheckCircle2, Info } from 'lucide-react';
 import type { ReactNode } from 'react';
 
-type AppAlertVariant = 'success' | 'error' | 'info';
+type AppAlertVariant = 'success' | 'error' | 'info' | 'warning';
 
 interface AppAlertProps {
   variant?: AppAlertVariant;
@@ -21,6 +21,10 @@ const styles: Record<AppAlertVariant, { wrap: string; icon: typeof CheckCircle2 
   info: {
     wrap: 'border-sky-200/80 bg-sky-50/90 text-sky-800 dark:border-sky-500/30 dark:bg-sky-900/30 dark:text-sky-300',
     icon: Info,
+  },
+  warning: {
+    wrap: 'border-amber-200/80 bg-amber-50/90 text-amber-900 dark:border-amber-500/30 dark:bg-amber-900/30 dark:text-amber-200',
+    icon: AlertTriangle,
   },
 };
 

@@ -89,8 +89,10 @@ export default function CannedRepliesPanel() {
       ) : replies.length === 0 ? (
         <EmptyState
           icon={Zap}
-          title="No canned replies yet"
-          description="Create shortcuts like /thanks or /hours for your team."
+          compact
+          title="No quick replies yet"
+          description="Save message shortcuts like /thanks or /hours — your team can type them in any chat."
+          steps={['Tap Add reply above', 'Pick a short keyword like "thanks"', 'Type /thanks in chat to insert it instantly']}
         />
       ) : (
         <div className="space-y-2">

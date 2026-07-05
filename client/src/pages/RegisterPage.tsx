@@ -2,9 +2,12 @@ import { Building2, Lock, Mail, User } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import AuthButton from '../components/auth/AuthButton';
+import AuthDivider from '../components/auth/AuthDivider';
 import AuthInput from '../components/auth/AuthInput';
 import AuthLayout from '../components/auth/AuthLayout';
+import GoogleAuthButton from '../components/auth/GoogleAuthButton';
 import { useAuth } from '../contexts/AuthContext';
+import { useGoogleAuth } from '../hooks/useGoogleAuth';
 import { getErrorMessage } from '../utils/errors';
 import { toastError } from '../utils/toast';
 
@@ -27,6 +30,7 @@ export default function RegisterPage() {
   });
   const [loading, setLoading] = useState(false);
   const { register } = useAuth();
+  const { signInWithGoogle } = useGoogleAuth();
   const navigate = useNavigate();
 
   const passwordStrength = useMemo(
@@ -49,30 +53,33 @@ export default function RegisterPage() {
 
   return (
     <AuthLayout
+      eyebrow="Get started"
       title="Create your account"
-      subtitle="Start free — no credit card required."
+      subtitle="Set up your workspace in minutes. Free to start, no credit card required."
     >
       <form onSubmit={handleSubmit} className="space-y-4">
-        <AuthInput
-          id="name"
-          label="Full name"
-          icon={User}
-          value={form.name}
-          onChange={(value) => setForm({ ...form, name: value })}
-          placeholder="Jane Doe"
-          autoComplete="name"
-          required
-        />
-        <AuthInput
-          id="companyName"
-          label="Company"
-          icon={Building2}
-          value={form.companyName}
-          onChange={(value) => setForm({ ...form, companyName: value })}
-          placeholder="Acme Inc."
-          autoComplete="organization"
-          required
-        />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <AuthInput
+            id="name"
+            label="Full name"
+            icon={User}
+            value={form.name}
+            onChange={(value) => setForm({ ...form, name: value })}
+            placeholder="Jane Doe"
+            autoComplete="name"
+            required
+          />
+          <AuthInput
+            id="companyName"
+            label="Company"
+            icon={Building2}
+            value={form.companyName}
+            onChange={(value) => setForm({ ...form, companyName: value })}
+            placeholder="Acme Inc."
+            autoComplete="organization"
+            required
+          />
+        </div>
 
         <AuthInput
           id="email"
@@ -102,14 +109,14 @@ export default function RegisterPage() {
           />
           {form.password && (
             <div className="mt-2.5">
-              <div className="h-1 overflow-hidden rounded-full bg-neutral-100">
+              <div className="h-1 overflow-hidden rounded-full bg-neutral-100 dark:bg-neutral-800">
                 <div
                   className={`h-full rounded-full transition-all duration-300 ${passwordStrength.color}`}
                   style={{ width: passwordStrength.width }}
                 />
               </div>
-              <p className="mt-1.5 text-[11px] font-medium text-neutral-600">
-                Strength: <span className="text-neutral-600">{passwordStrength.label}</span>
+              <p className="mt-1.5 text-[11px] font-medium text-theme-muted">
+                Strength: <span className="text-theme-secondary">{passwordStrength.label}</span>
               </p>
             </div>
           )}
@@ -122,11 +129,14 @@ export default function RegisterPage() {
         </div>
       </form>
 
-      <p className="mt-5 text-center text-[13px] text-theme-secondary">
+      <AuthDivider label="or" />
+      <GoogleAuthButton onClick={signInWithGoogle} label="Sign up with Google" />
+
+      <p className="mt-6 text-center text-[13px] text-theme-secondary">
         Already have an account?{' '}
         <Link
           to="/login"
-          className="font-semibold text-theme-fg underline decoration-whatsapp-500/40 underline-offset-2 transition hover:decoration-whatsapp-500"
+          className="font-semibold text-whatsapp-700 underline decoration-whatsapp-500/40 underline-offset-2 transition hover:decoration-whatsapp-500 dark:text-whatsapp-400"
         >
           Sign in
         </Link>

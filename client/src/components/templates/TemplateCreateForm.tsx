@@ -1,9 +1,10 @@
 import { useRef, useState } from 'react';
 import { AlertTriangle, FileText, Image, Loader2, Upload } from 'lucide-react';
 import AppAlert from '../ui/AppAlert';
-import AppInput from '../ui/AppInput';
+import { messagingConsent } from '../../utils/plainLanguage';
 import AppSelect from '../ui/AppSelect';
 import AppTextarea from '../ui/AppTextarea';
+import { ModalCallout, ModalPanel, ModalPreviewCard } from '../ui/modalUi';
 import { WhatsAppTemplatePreview } from '../inbox/WhatsAppPreview';
 import TemplateButtonEditor from './TemplateButtonEditor';
 import { templateApi } from '../../services/api';
@@ -111,28 +112,18 @@ export default function TemplateCreateForm({
 
   return (
     <div className="space-y-5">
-      <div className="rounded-2xl border border-rose-200/70 bg-gradient-to-r from-rose-500/10 via-pink-500/5 to-violet-500/5 p-4 dark:border-rose-900/40">
-        <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-rose-500 to-pink-600 text-white shadow-[0_4px_14px_rgba(244,63,94,0.3)]">
-            <FileText className="h-4 w-4" strokeWidth={2.25} />
-          </div>
-          <div>
-            <p className="text-[13px] font-extrabold text-theme-fg">
-              {mode === 'resubmit' ? 'Edit & resubmit for approval' : 'WhatsApp must approve this first'}
-            </p>
-            <p className="mt-0.5 text-[12px] font-medium text-theme-muted">
-              Only approved templates can be used in campaigns. Add sample values for every placeholder
-              to improve approval chances.
-            </p>
-          </div>
-        </div>
-      </div>
+      <ModalCallout
+        icon={FileText}
+        accent="rose"
+        title={mode === 'resubmit' ? 'Edit & resubmit for approval' : 'WhatsApp must approve this first'}
+        description="Only approved templates can be used in campaigns. Add sample values for every placeholder to improve approval chances."
+      />
 
       {form.category === 'MARKETING' && (
         <AppAlert variant="info">
           <p className="font-semibold">Marketing template guidelines</p>
           <p className="mt-1 text-[12px]">
-            Include opt-out language in the footer. Avoid misleading claims. WhatsApp may take 24–48 hours
+            {messagingConsent.templateStopHint} Avoid misleading claims. WhatsApp may take 24–48 hours
             to review.
           </p>
         </AppAlert>
@@ -271,14 +262,9 @@ export default function TemplateCreateForm({
       />
 
       {form.bodyExamples.length > 0 && (
-        <div className="rounded-2xl border border-violet-200/60 bg-violet-50/40 p-4 dark:border-violet-900/40 dark:bg-violet-950/20">
-          <p className="text-[12px] font-bold uppercase tracking-wide text-violet-800 dark:text-violet-300">
-            Body variable samples
-          </p>
-          <p className="mt-1 text-[11px] text-violet-700/80 dark:text-violet-400">
-            Required by WhatsApp for approval
-          </p>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <ModalPanel title="Body variable samples" accent="violet">
+          <p className="mb-3 text-[11px] text-theme-secondary">Required by WhatsApp for approval</p>
+          <div className="grid gap-3 sm:grid-cols-2">
             {form.bodyExamples.map((val, i) => (
               <AppInput
                 key={`body-ex-${i}`}
@@ -294,15 +280,12 @@ export default function TemplateCreateForm({
               />
             ))}
           </div>
-        </div>
+        </ModalPanel>
       )}
 
       {form.headerExamples.length > 0 && (
-        <div className="rounded-2xl border border-sky-200/60 bg-sky-50/40 p-4 dark:border-sky-900/40 dark:bg-sky-950/20">
-          <p className="text-[12px] font-bold uppercase tracking-wide text-sky-800 dark:text-sky-300">
-            Header variable samples
-          </p>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <ModalPanel title="Header variable samples" accent="sky">
+          <div className="grid gap-3 sm:grid-cols-2">
             {form.headerExamples.map((val, i) => (
               <AppInput
                 key={`header-ex-${i}`}
@@ -317,7 +300,7 @@ export default function TemplateCreateForm({
               />
             ))}
           </div>
-        </div>
+        </ModalPanel>
       )}
 
       <AppInput
@@ -365,10 +348,7 @@ export default function TemplateCreateForm({
         </div>
       )}
 
-      <div className="rounded-2xl border border-theme-border bg-gradient-to-b from-theme-subtle/80 to-theme-surface p-4 ring-1 ring-theme-border/60">
-        <p className="mb-3 text-[11px] font-bold uppercase tracking-wide text-theme-muted">
-          Live WhatsApp preview
-        </p>
+      <ModalPreviewCard title="Live WhatsApp preview">
         <WhatsAppTemplatePreview
           header={filledPreview.header}
           headerFormat={form.headerFormat !== 'TEXT' && form.headerFormat !== 'NONE' ? form.headerFormat : undefined}
@@ -377,7 +357,7 @@ export default function TemplateCreateForm({
           footer={filledPreview.footer}
           buttons={formPreviewButtons}
         />
-      </div>
+      </ModalPreviewCard>
 
       <input type="hidden" value={JSON.stringify(buildCreatePayload(form))} readOnly />
     </div>

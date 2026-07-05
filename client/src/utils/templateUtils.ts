@@ -1,5 +1,6 @@
 import type { MessageTemplate } from '../types';
 import { getTemplateParts } from '../components/inbox/WhatsAppPreview';
+import { messagingConsent } from './plainLanguage';
 
 export function getTemplateRejectedReason(reason?: string): string | null {
   if (!reason) return null;
@@ -65,10 +66,11 @@ export function groupTemplatesByName(templates: MessageTemplate[]): TemplateGrou
 export function getQualityLabel(score?: string): { label: string; tone: string } | null {
   if (!score) return null;
   const upper = score.toUpperCase();
+  if (upper === 'UNKNOWN' || upper === 'NA' || upper === 'N/A') return null;
   if (upper === 'GREEN') return { label: 'High quality', tone: 'text-emerald-700' };
   if (upper === 'YELLOW') return { label: 'Medium quality', tone: 'text-amber-700' };
   if (upper === 'RED') return { label: 'Low quality', tone: 'text-red-600' };
-  return { label: score, tone: 'text-neutral-600' };
+  return null;
 }
 
 export interface TemplateValidationIssue {
@@ -139,7 +141,7 @@ export function validateTemplateForm(form: {
   if (form.category === 'MARKETING' && !form.footer.toLowerCase().includes('stop')) {
     issues.push({
       field: 'footer',
-      message: 'Marketing templates should include opt-out text (e.g. Reply STOP to unsubscribe)',
+      message: messagingConsent.templateStopHint,
       severity: 'warning',
     });
   }

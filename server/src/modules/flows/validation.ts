@@ -62,8 +62,11 @@ export function validateFlowGraph(
       if (mode === 'call' && !node.ctaPhone) errors.push(`Call button step "${node.id}" needs a phone number`);
       if (mode === 'reply' && node.buttons?.length) {
         for (const btn of node.buttons) {
-          if (!node.branches?.[btn.id] && !node.next) {
-            warnings.push(`Button "${btn.title}" in step "${node.id}" has no branch target`);
+          if (!btn.title?.trim()) {
+            errors.push(`Button in step "${node.id}" needs a label`);
+          }
+          if (!node.branches?.[btn.id]?.trim()) {
+            errors.push(`Button "${btn.title || btn.id}" in step "${node.id}" has no branch target`);
           }
         }
       }

@@ -28,23 +28,24 @@ export default function ContactCard({
   onMessage,
 }: ContactCardProps) {
   return (
-    <article className="dashboard-card overflow-hidden p-0 transition active:scale-[0.99]">
-      <div className="flex items-start gap-3 p-4">
+    <article className="bg-white transition-colors hover:bg-neutral-50/80 dark:bg-neutral-950 dark:hover:bg-neutral-900/50">
+      <div className="flex items-start gap-3 px-4 py-3.5">
         <input
           type="checkbox"
           checked={selected}
           onChange={onToggleSelect}
-          className="contact-checkbox mt-3 h-4 w-4 rounded border-theme-border text-whatsapp-600 focus:ring-whatsapp-500/30"
+          onClick={(e) => e.stopPropagation()}
+          className="contact-checkbox mt-2.5 h-4 w-4 rounded border-theme-border text-whatsapp-600 focus:ring-whatsapp-500/30"
           aria-label={`Select ${contact.name || contact.phone}`}
         />
         <button type="button" onClick={onView} className="flex min-w-0 flex-1 items-start gap-3 text-left">
           <ContactAvatar name={contact.name} phone={contact.phone} size="md" />
           <div className="min-w-0 flex-1">
-            <p className="truncate text-label font-extrabold text-theme-fg">
+            <p className="truncate text-[13px] font-bold text-theme-fg">
               {contact.name || contact.phone}
             </p>
             {contact.name && (
-              <p className="truncate text-caption text-theme-muted">{contact.phone}</p>
+              <p className="truncate text-[11px] text-theme-muted">{contact.phone}</p>
             )}
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
               <ContactOptInBadge optedIn={contact.optedIn} />
@@ -56,28 +57,51 @@ export default function ContactCard({
                   <ContactTagBadge key={tag} tag={tag} />
                 ))}
                 {contact.tags.length > 3 && (
-                  <span className="text-caption text-theme-muted">+{contact.tags.length - 3}</span>
+                  <span className="text-[11px] text-theme-muted">+{contact.tags.length - 3}</span>
                 )}
               </div>
             )}
             {contact.lastActiveAt && (
-              <p className="mt-2 text-caption text-theme-muted">
+              <p className="mt-1.5 text-[11px] text-theme-muted">
                 Active {new Date(contact.lastActiveAt).toLocaleDateString()}
               </p>
             )}
           </div>
         </button>
       </div>
-      <div className="grid grid-cols-3 gap-2 border-t border-theme-border bg-theme-subtle/40 p-3">
-        <AppButton size="sm" fullWidth variant="primary" icon={<MessageSquare size={14} />} onClick={onMessage}>
+      <div className="flex items-center gap-2 border-t border-theme-border/60 bg-theme-subtle/20 px-3 py-2.5">
+        <AppButton
+          size="sm"
+          className="flex-1"
+          variant="secondary"
+          icon={<MessageSquare size={14} />}
+          onClick={(e) => {
+            e.stopPropagation();
+            onMessage();
+          }}
+        >
           Chat
         </AppButton>
-        <AppButton size="sm" fullWidth variant="secondary" icon={<Pencil size={14} />} onClick={onEdit}>
-          Edit
-        </AppButton>
-        <AppButton size="sm" fullWidth variant="danger" icon={<Trash2 size={14} />} onClick={onDelete}>
-          Delete
-        </AppButton>
+        <AppButton
+          size="sm"
+          variant="secondary"
+          icon={<Pencil size={14} />}
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit();
+          }}
+          aria-label="Edit"
+        />
+        <AppButton
+          size="sm"
+          variant="secondary"
+          icon={<Trash2 size={14} />}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          aria-label="Delete"
+        />
       </div>
     </article>
   );

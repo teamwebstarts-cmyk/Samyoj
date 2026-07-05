@@ -15,7 +15,6 @@ export default function AuthButton({ loading, loadingText, children }: AuthButto
       size="xl"
       fullWidth
       loading={loading}
-      className="shadow-[0_4px_14px_rgba(37,211,102,0.35)]"
     >
       {loading ? loadingText : children}
     </AppButton>

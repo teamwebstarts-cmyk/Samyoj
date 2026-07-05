@@ -75,10 +75,10 @@ export default function ChatComposer({
   return (
     <form
       onSubmit={onSubmit}
-      className="border-t border-theme-border bg-theme-surface/95 px-2 py-2.5 backdrop-blur-md sm:px-3 sm:py-3"
+      className="bg-theme-surface/95 px-3 py-3 backdrop-blur-md sm:px-4"
     >
       {attachment && (
-        <div className="mb-2 flex items-center gap-2 rounded-xl border border-neutral-200/80 bg-neutral-50/80 p-2">
+        <div className="mb-2.5 flex items-center gap-2.5 rounded-2xl border border-neutral-200/70 bg-neutral-50/90 p-2.5 shadow-sm dark:border-neutral-700/60 dark:bg-neutral-800/40">
           {attachment.previewUrl && attachment.type === 'IMAGE' ? (
             <img
               src={attachment.previewUrl}
@@ -110,10 +110,10 @@ export default function ChatComposer({
       )}
 
       <div
-        className={`relative flex items-end gap-2 rounded-2xl border p-1.5 shadow-input ring-1 transition ${
+        className={`relative flex items-end gap-2 rounded-2xl border p-1.5 shadow-input ring-1 transition-all duration-150 ${
           isDisabled
             ? 'border-theme-border bg-theme-subtle ring-theme-border'
-            : 'border-theme-border bg-theme-subtle ring-theme-surface'
+            : 'border-neutral-200/80 bg-white ring-neutral-100 focus-within:border-whatsapp-500/40 focus-within:ring-whatsapp-500/15 dark:border-neutral-700/60 dark:bg-neutral-900/60 dark:ring-neutral-800'
         }`}
       >
         <input

@@ -42,7 +42,14 @@ async function resolveWhatsappContext(whatsappNumber: WhatsappNumber) {
   };
 }
 
-export async function getOrgWhatsappContext(organizationId: string) {
+export async function getOrgWhatsappContext(
+  organizationId: string,
+  preferredWhatsappNumberId?: string
+) {
+  if (preferredWhatsappNumberId) {
+    return getWhatsappContextById(organizationId, preferredWhatsappNumberId);
+  }
+
   const whatsappNumber = await prisma.whatsappNumber.findFirst({
     where: { organizationId, isActive: true },
     orderBy: { updatedAt: 'desc' },

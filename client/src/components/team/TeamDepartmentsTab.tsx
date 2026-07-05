@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react';
 import { Building2, Plus, Trash2, Users } from 'lucide-react';
 import AppButton from '../ui/AppButton';
 import AppInput from '../ui/AppInput';
+import ConfirmDialog from '../ui/ConfirmDialog';
 import EmptyState from '../ui/EmptyState';
 import LoadingState from '../ui/LoadingState';
-import SectionCard from '../ui/SectionCard';
 import SlideOver, { SlideOverFooter } from '../ui/SlideOver';
+import { ModalCallout, ModalPanel, ModalSection } from '../ui/modalUi';
 import { teamApi } from '../../services/api';
 import type { TeamDepartment } from '../../types';
 import { toastError, toastSuccess } from '../../utils/toast';
@@ -22,6 +23,7 @@ export default function TeamDepartmentsTab({ canManage, onChanged }: TeamDepartm
   const [loading, setLoading] = useState(true);
   const [slideOpen, setSlideOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<TeamDepartment | null>(null);
   const [form, setForm] = useState({ name: '', color: PRESET_COLORS[0] });
 
   const load = () => {
@@ -55,38 +57,43 @@ export default function TeamDepartmentsTab({ canManage, onChanged }: TeamDepartm
     }
   };
 
-  const handleDelete = async (dept: TeamDepartment) => {
-    if (!confirm(`Delete "${dept.name}"? Members will be unassigned from this department.`)) return;
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setSaving(true);
     try {
-      await teamApi.departments.remove(dept.id);
+      await teamApi.departments.remove(deleteTarget.id);
       toastSuccess('Department deleted');
+      setDeleteTarget(null);
       load();
       onChanged?.();
     } catch {
       toastError('Failed to delete department');
+    } finally {
+      setSaving(false);
     }
   };
 
-  if (loading) return <LoadingState label="Loading departments..." />;
-
   return (
-    <div className="space-y-5">
-      <SectionCard
-        title="Departments"
-        subtitle="Organize agents into teams for routing and reporting"
-        headerAction={
-          canManage ? (
-            <AppButton icon={<Plus size={16} />} onClick={() => setSlideOpen(true)}>
-              Add department
-            </AppButton>
-          ) : undefined
-        }
-      >
-        {departments.length === 0 ? (
+    <div className="inbox-shell overflow-hidden">
+      {canManage && (
+        <div className="flex items-center justify-end border-b border-theme-border px-4 py-3.5 sm:px-5">
+          <AppButton size="sm" icon={<Plus size={15} />} onClick={() => setSlideOpen(true)}>
+            Add department
+          </AppButton>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="p-6">
+          <LoadingState label="Loading departments..." />
+        </div>
+      ) : departments.length === 0 ? (
+        <div className="p-4 sm:p-6">
           <EmptyState
             icon={Building2}
             title="No departments yet"
-            description="Create departments like Sales, Support, or Billing to organize your team."
+            description="Group your team into departments like Sales, Support, or Billing."
+            steps={['Tap Create department', 'Give it a name like "Support"', 'Assign team members to it']}
             action={
               canManage ? (
                 <AppButton icon={<Plus size={16} />} onClick={() => setSlideOpen(true)}>
@@ -95,18 +102,23 @@ export default function TeamDepartmentsTab({ canManage, onChanged }: TeamDepartm
               ) : undefined
             }
           />
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {departments.map((dept) => (
-              <div
-                key={dept.id}
-                className="group relative overflow-hidden rounded-2xl border border-theme-border/70 bg-theme-subtle/30 p-4 transition hover:border-whatsapp-500/30 hover:shadow-sm"
-              >
-                <div
-                  className="absolute inset-x-0 top-0 h-1"
-                  style={{ backgroundColor: dept.color }}
-                />
-                <div className="flex items-start justify-between gap-2 pt-1">
+        </div>
+      ) : (
+        <div className="grid gap-3 p-4 sm:grid-cols-2 sm:p-5 lg:grid-cols-3">
+          {departments.map((dept) => (
+            <div
+              key={dept.id}
+              className="overflow-hidden rounded-2xl border border-theme-border bg-theme-surface transition hover:shadow-md"
+            >
+              <div className="h-1.5" style={{ backgroundColor: dept.color }} />
+              <div className="flex items-start justify-between gap-2 p-4">
+                <div className="flex items-start gap-3">
+                  <div
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white shadow-sm"
+                    style={{ backgroundColor: dept.color }}
+                  >
+                    <Building2 className="h-4 w-4" />
+                  </div>
                   <div>
                     <p className="font-bold text-theme-fg">{dept.name}</p>
                     <p className="mt-1 flex items-center gap-1.5 text-[12px] text-theme-secondary">
@@ -114,29 +126,31 @@ export default function TeamDepartmentsTab({ canManage, onChanged }: TeamDepartm
                       {dept.memberCount ?? 0} member{(dept.memberCount ?? 0) !== 1 ? 's' : ''}
                     </p>
                   </div>
-                  {canManage && (
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(dept)}
-                      className="rounded-lg p-1.5 text-theme-muted opacity-0 transition hover:bg-rose-500/10 hover:text-rose-600 group-hover:opacity-100"
-                      aria-label={`Delete ${dept.name}`}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  )}
                 </div>
+                {canManage && (
+                  <button
+                    type="button"
+                    onClick={() => setDeleteTarget(dept)}
+                    className="rounded-lg p-1.5 text-theme-muted transition hover:bg-rose-500/10 hover:text-rose-600 dark:hover:text-rose-400"
+                    aria-label={`Delete ${dept.name}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
               </div>
-            ))}
-          </div>
-        )}
-      </SectionCard>
+            </div>
+          ))}
+        </div>
+      )}
 
       {canManage && (
         <SlideOver
           open={slideOpen}
           onClose={() => setSlideOpen(false)}
           title="New department"
-          subtitle="Group agents for smarter handoffs and filters"
+          subtitle="Group agents for routing"
+          icon={Building2}
+          accent="violet"
           footer={
             <SlideOverFooter
               onCancel={() => setSlideOpen(false)}
@@ -145,35 +159,63 @@ export default function TeamDepartmentsTab({ canManage, onChanged }: TeamDepartm
             />
           }
         >
-          <form id="slideover-form" onSubmit={handleCreate} className="space-y-4">
-            <AppInput
-              id="dept-name"
-              label="Department name"
-              placeholder="e.g. Customer Support"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              required
+          <form id="slideover-form" onSubmit={handleCreate} className="space-y-5">
+            <ModalCallout
+              icon={Building2}
+              accent="violet"
+              title="Organize your team"
+              description="Departments help route chats and filter members in Inbox and Reports."
             />
-            <div>
-              <label className="mb-2 block text-[12px] font-bold text-theme-secondary">Color</label>
-              <div className="flex flex-wrap gap-2">
-                {PRESET_COLORS.map((color) => (
-                  <button
-                    key={color}
-                    type="button"
-                    onClick={() => setForm({ ...form, color })}
-                    className={`h-8 w-8 rounded-full ring-2 ring-offset-2 transition ${
-                      form.color === color ? 'ring-whatsapp-500 scale-110' : 'ring-transparent'
-                    }`}
-                    style={{ backgroundColor: color }}
-                    aria-label={`Color ${color}`}
+
+            <ModalSection step={1} title="Department details" subtitle="Name and color for quick recognition">
+              <ModalPanel accent="violet">
+                <div className="space-y-4">
+                  <AppInput
+                    id="dept-name"
+                    label="Department name"
+                    placeholder="e.g. Customer Support"
+                    value={form.name}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    required
                   />
-                ))}
-              </div>
-            </div>
+                  <div>
+                    <label className="mb-2 block text-[12px] font-bold text-theme-secondary">
+                      Color
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {PRESET_COLORS.map((color) => (
+                        <button
+                          key={color}
+                          type="button"
+                          onClick={() => setForm({ ...form, color })}
+                          className={`h-9 w-9 rounded-full ring-2 ring-offset-2 transition ${
+                            form.color === color
+                              ? 'scale-110 ring-whatsapp-500'
+                              : 'ring-transparent hover:scale-105'
+                          }`}
+                          style={{ backgroundColor: color }}
+                          aria-label={`Color ${color}`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </ModalPanel>
+            </ModalSection>
           </form>
         </SlideOver>
       )}
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => void handleDelete()}
+        title={`Delete "${deleteTarget?.name ?? 'department'}"?`}
+        description="Members will be unassigned from this department."
+        confirmLabel="Delete department"
+        variant="danger"
+        loading={saving}
+      />
     </div>
   );
 }

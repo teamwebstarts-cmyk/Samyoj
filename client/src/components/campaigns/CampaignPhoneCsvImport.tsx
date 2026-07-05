@@ -51,10 +51,10 @@ export default function CampaignPhoneCsvImport({ onPhonesImported }: CampaignPho
       }}
       onDragLeave={() => setDragging(false)}
       onDrop={onDrop}
-      className={`cursor-pointer rounded-2xl border-2 border-dashed px-4 py-5 text-center transition ${
+      className={`cursor-pointer rounded-xl border-2 border-dashed px-4 py-4 text-center transition ${
         dragging
           ? 'border-sky-400 bg-sky-50/80 dark:border-sky-500 dark:bg-sky-950/30'
-          : 'border-theme-border bg-theme-surface/50 hover:border-sky-300/70 hover:bg-sky-50/40 dark:hover:border-sky-700/50 dark:hover:bg-sky-950/20'
+          : 'border-theme-border bg-theme-subtle/30 hover:border-theme-border-strong hover:bg-theme-subtle/50'
       }`}
     >
       <input
@@ -68,10 +68,10 @@ export default function CampaignPhoneCsvImport({ onPhonesImported }: CampaignPho
           e.target.value = '';
         }}
       />
-      <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-[0_4px_14px_rgba(14,165,233,0.28)]">
+      <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-lg bg-sky-500/10 text-sky-600">
         <Upload className="h-5 w-5" strokeWidth={2.25} />
       </div>
-      <p className="mt-3 text-[13px] font-extrabold text-theme-fg">Import phone numbers</p>
+      <p className="mt-2.5 text-[13px] font-bold text-theme-fg">Import phone numbers</p>
       <p className="mt-1 text-[11px] font-medium text-theme-muted">
         Drop CSV or JSON here, or click to browse
       </p>

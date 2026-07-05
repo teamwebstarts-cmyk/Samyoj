@@ -52,15 +52,51 @@ export async function detectAutomationConflicts(organizationId: string): Promise
     }
   }
 
-  const awayCount = automations.filter((a) => ['AWAY', 'BUSINESS_HOURS'].includes(a.triggerType)).length;
+  const awayAutomations = automations.filter((a) => a.triggerType === 'AWAY');
+  const businessHoursAutomations = automations.filter((a) => a.triggerType === 'BUSINESS_HOURS');
+  const offHoursFlows = flows.filter((f) => f.triggerType === 'OFF_HOURS');
+  const businessHoursFlows = flows.filter((f) => f.triggerType === 'BUSINESS_HOURS');
+
+  const awayCount = awayAutomations.length + businessHoursAutomations.length;
   if (awayCount > 2) {
     conflicts.push({
       type: 'away_overlap',
       severity: 'warning',
       message: 'Multiple away/business-hours quick replies may overlap',
-      items: automations
-        .filter((a) => ['AWAY', 'BUSINESS_HOURS'].includes(a.triggerType))
-        .map((a) => `${a.name} (${a.triggerType})`),
+      items: [...awayAutomations, ...businessHoursAutomations].map((a) => `${a.name} (${a.triggerType})`),
+    });
+  }
+
+  if (offHoursFlows.length > 0 && awayAutomations.length > 0) {
+    conflicts.push({
+      type: 'off_hours_away_overlap',
+      severity: 'warning',
+      message: 'After-hours flows and away quick replies both active — flows run first',
+      items: [...offHoursFlows.map((f) => `Flow: ${f.name}`), ...awayAutomations.map((a) => a.name)],
+    });
+  }
+
+  if (offHoursFlows.length > 0 && businessHoursAutomations.length > 0) {
+    conflicts.push({
+      type: 'off_hours_business_hours_overlap',
+      severity: 'warning',
+      message: 'After-hours flows and business-hours quick replies may both reply outside working hours — flows run first',
+      items: [
+        ...offHoursFlows.map((f) => `Flow: ${f.name}`),
+        ...businessHoursAutomations.map((a) => a.name),
+      ],
+    });
+  }
+
+  if (businessHoursFlows.length > 0 && businessHoursAutomations.length > 0) {
+    conflicts.push({
+      type: 'business_hours_overlap',
+      severity: 'warning',
+      message: 'During-hours flows and business-hours quick replies both active — flows run first',
+      items: [
+        ...businessHoursFlows.map((f) => `Flow: ${f.name}`),
+        ...businessHoursAutomations.map((a) => a.name),
+      ],
     });
   }
 

@@ -1,13 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { PhoneCall } from 'lucide-react';
 import { callingApi } from '../services/api';
 import { useSocket } from '../hooks/useSocket';
+import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 import CallAnalyticsPanel, { type CallAnalyticsData } from '../components/calls/CallAnalyticsPanel';
 import CallDetailView from '../components/calls/CallDetailView';
 import CallFiltersBar from '../components/calls/CallFiltersBar';
-import CallInfoPanel from '../components/calls/CallInfoPanel';
 import CallListItem from '../components/calls/CallListItem';
-import CallOverviewPanel from '../components/calls/CallOverviewPanel';
 import CallPlaceholder from '../components/calls/CallPlaceholder';
 import CallSetupProgress from '../components/calls/CallSetupProgress';
 import CallsPageHeader from '../components/calls/CallsPageHeader';
@@ -23,6 +23,7 @@ import PageShell from '../components/ui/PageShell';
 import Pagination from '../components/ui/Pagination';
 import AppTextarea from '../components/ui/AppTextarea';
 import AppButton from '../components/ui/AppButton';
+import { readNumberCache, writeNumberCache } from '../utils/whatsappNumberCache';
 
 interface CallRecord {
   id: string;
@@ -58,6 +59,19 @@ interface CallingStatus {
 }
 
 const PAGE_SIZE = 25;
+const CALLS_CACHE_KEY = 'calls';
+
+type CallsNumberCache = {
+  calls: CallRecord[];
+  totalCalls: number;
+  page: number;
+  search: string;
+  statusFilter: string;
+  handlerFilter: string;
+  selectedCallId: string | null;
+  notes: string;
+  showAnalytics: boolean;
+};
 
 function parseCall(raw: CallRecord): CallRecord {
   return { ...raw, transcript: normalizeTranscript(raw.transcript) };
@@ -82,6 +96,31 @@ export default function CallsPage() {
   const [handlerFilter, setHandlerFilter] = useState('');
   const [notes, setNotes] = useState('');
   const [showAnalytics, setShowAnalytics] = useState(false);
+
+  const loadRef = useRef<() => Promise<void>>(async () => {});
+  const callsSnapshotRef = useRef<CallsNumberCache>({
+    calls: [],
+    totalCalls: 0,
+    page: 1,
+    search: '',
+    statusFilter: '',
+    handlerFilter: '',
+    selectedCallId: null,
+    notes: '',
+    showAnalytics: false,
+  });
+
+  callsSnapshotRef.current = {
+    calls,
+    totalCalls,
+    page,
+    search,
+    statusFilter,
+    handlerFilter,
+    selectedCallId,
+    notes,
+    showAnalytics,
+  };
 
   const loadCalls = useCallback(async () => {
     const params: Record<string, string> = {
@@ -132,13 +171,38 @@ export default function CallsPage() {
     }
   }, []);
 
+  loadRef.current = load;
+
+  useOnActiveNumberChange(({ numberId, previousNumberId, isInitial }) => {
+    if (isInitial) return;
+
+    if (previousNumberId) {
+      writeNumberCache(CALLS_CACHE_KEY, previousNumberId, callsSnapshotRef.current);
+    }
+
+    const cached = readNumberCache<CallsNumberCache>(CALLS_CACHE_KEY, numberId);
+    if (cached) {
+      setCalls(cached.calls);
+      setTotalCalls(cached.totalCalls);
+      setPage(cached.page);
+      setSearch(cached.search);
+      setStatusFilter(cached.statusFilter);
+      setHandlerFilter(cached.handlerFilter);
+      setSelectedCallId(cached.selectedCallId);
+      setNotes(cached.notes);
+      setShowAnalytics(cached.showAnalytics);
+      setLoading(false);
+      return;
+    }
+
+    setSelectedCallId(null);
+    setNotes('');
+    void loadRef.current();
+  });
+
   useEffect(() => {
     void load();
   }, [load]);
-
-  useEffect(() => {
-    void loadCalls().catch(() => undefined);
-  }, [loadCalls]);
 
   useEffect(() => {
     if (routeCallId) {
@@ -206,12 +270,8 @@ export default function CallsPage() {
     if (routeCallId) return;
     if (calls.length === 0) {
       setSelectedCallId(null);
-      return;
     }
-    if (!selectedCallId || !calls.some((c) => c.id === selectedCallId)) {
-      setSelectedCallId(calls[0].id);
-    }
-  }, [calls, selectedCallId, routeCallId]);
+  }, [calls.length, routeCallId]);
 
   useEffect(() => {
     if (!selectedCallId || !selectedCall || !isActiveCallStatus(selectedCall.status)) return;
@@ -269,21 +329,10 @@ export default function CallsPage() {
     );
   }
 
-  const overviewStatus = {
-    whatsappConnected: Boolean(status?.whatsappConnected),
-    callingEnabled: Boolean(callingEnabled),
-    phoneNumber: status?.phoneNumber,
-    deepgram: status?.deepgram,
-    googleTts: status?.googleTts,
-    azureOpenAI: status?.azureOpenAI,
-    aiAutoAnswer: status?.aiAutoAnswer,
-    voiceReady: isReady,
-  };
-
   const selectedTranscript = normalizeTranscript(selectedCall?.transcript);
 
   return (
-    <PageShell fullBleed className="gap-3 sm:gap-4">
+    <PageShell className="space-y-4 sm:space-y-5">
       <CallsPageHeader
         phoneNumber={status?.phoneNumber}
         isReady={isReady}
@@ -305,9 +354,9 @@ export default function CallsPage() {
         enableHints={status?.enableHints}
       />
 
-      <div className="inbox-shell flex min-h-0 flex-1 overflow-hidden md:rounded-2xl">
+      <div className="inbox-shell flex h-[min(680px,calc(100dvh-220px))] min-h-[420px] flex-row overflow-hidden">
         <div
-          className={`relative flex w-full flex-col border-neutral-200/80 md:w-[300px] md:border-r lg:w-[340px] ${
+          className={`inbox-sidebar relative flex h-full min-h-0 w-full flex-col md:w-[300px] lg:w-[340px] ${
             selectedCall ? 'hidden md:flex' : 'flex'
           }`}
         >
@@ -327,66 +376,52 @@ export default function CallsPage() {
               setHandlerFilter(v);
               setPage(1);
             }}
+            totalOnPage={calls.length}
+            liveCount={liveCount}
           />
-
-          <div className="shrink-0 border-b border-neutral-100 bg-gradient-to-b from-violet-50/60 via-white to-white px-4 py-3.5">
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-neutral-500">Call history</p>
-                <p className="mt-0.5 text-[13px] font-extrabold text-neutral-900">
-                  {calls.length === 0 ? 'No calls yet' : `${calls.length} on this page`}
-                </p>
-              </div>
-              {liveCount > 0 && (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-emerald-500 to-whatsapp-600 px-2.5 py-1 text-[10px] font-bold text-white shadow-[0_2px_10px_rgba(37,211,102,0.35)]">
-                  <span className="relative flex h-1.5 w-1.5">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-70" />
-                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-white" />
-                  </span>
-                  {liveCount} live
-                </span>
-              )}
-            </div>
-          </div>
 
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             {calls.length === 0 ? (
-              <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-                <CallPlaceholder variant="empty" />
-                <div className="border-t border-neutral-100 md:hidden">
-                  <CallInfoPanel compact phoneNumber={status?.phoneNumber} />
-                </div>
+              <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
+                <PhoneCall className="h-10 w-10 text-neutral-300 dark:text-neutral-600" strokeWidth={1.5} />
+                <p className="mt-3 text-[14px] font-bold text-theme-fg">No calls in list</p>
+                <p className="mt-1 max-w-[200px] text-[12px] leading-relaxed text-theme-muted">
+                  Incoming calls will show up here. Check setup on the right.
+                </p>
               </div>
             ) : (
               <>
-                <div className="flex-1 divide-y divide-neutral-100/80 overflow-y-auto">
-                  {calls.map((call) => {
-                    const phone = call.contact?.phone || call.fromPhone;
-                    return (
-                      <CallListItem
-                        key={call.id}
-                        name={call.contact?.name}
-                        phone={phone}
-                        status={call.status}
-                        handler={call.handler}
-                        durationSeconds={call.durationSeconds}
-                        preview={transcriptPreview(call.transcript)}
-                        createdAt={call.createdAt}
-                        botName={call.aiBot?.name}
-                        agentName={call.assignedAgent?.name}
-                        selected={selectedCallId === call.id}
-                        onSelect={() => handleSelectCall(call)}
-                      />
-                    );
-                  })}
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+                  <div className="divide-y divide-neutral-200 dark:divide-neutral-800">
+                    {calls.map((call) => {
+                      const phone = call.contact?.phone || call.fromPhone;
+                      return (
+                        <CallListItem
+                          key={call.id}
+                          name={call.contact?.name}
+                          phone={phone}
+                          status={call.status}
+                          handler={call.handler}
+                          durationSeconds={call.durationSeconds}
+                          preview={transcriptPreview(call.transcript)}
+                          createdAt={call.createdAt}
+                          botName={call.aiBot?.name}
+                          agentName={call.assignedAgent?.name}
+                          selected={selectedCallId === call.id}
+                          onSelect={() => handleSelectCall(call)}
+                        />
+                      );
+                    })}
+                  </div>
                 </div>
                 {totalCalls > PAGE_SIZE && (
-                  <div className="shrink-0 border-t border-neutral-100 p-2">
+                  <div className="shrink-0 border-t border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-950">
                     <Pagination
                       page={page}
                       pageSize={PAGE_SIZE}
                       total={totalCalls}
                       onPageChange={setPage}
+                      className="!border-t-0"
                     />
                   </div>
                 )}
@@ -396,12 +431,12 @@ export default function CallsPage() {
         </div>
 
         <div
-          className={`min-w-0 flex-1 flex-col bg-white ${
+          className={`inbox-chat-pane flex h-full min-h-0 min-w-0 flex-col overflow-hidden ${
             selectedCall ? 'flex' : 'hidden md:flex'
           }`}
         >
           {selectedCall ? (
-            <>
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white dark:bg-neutral-950">
               <CallDetailView
                 name={selectedCall.contact?.name}
                 phone={selectedCall.contact?.phone || selectedCall.fromPhone}
@@ -420,7 +455,7 @@ export default function CallsPage() {
                 ending={ending}
               />
               {!isActiveCallStatus(selectedCall.status) && (
-                <div className="border-t border-neutral-100 bg-neutral-50/50 px-4 py-3">
+                <div className="shrink-0 border-t border-neutral-200 bg-neutral-50/80 px-4 py-3 dark:border-neutral-800 dark:bg-neutral-900/50">
                   <AppTextarea
                     label="Internal notes"
                     value={notes}
@@ -435,14 +470,11 @@ export default function CallsPage() {
                   </div>
                 </div>
               )}
-            </>
+            </div>
+          ) : calls.length === 0 ? (
+            <CallPlaceholder variant="empty" />
           ) : (
-            <CallOverviewPanel
-              status={overviewStatus}
-              liveCount={liveCount}
-              callStats={callStats}
-              hasCalls={calls.length > 0}
-            />
+            <CallPlaceholder variant="select" />
           )}
         </div>
       </div>

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Plus, RefreshCw } from 'lucide-react';
+import { FormInput, Plus, RefreshCw } from 'lucide-react';
 import AppButton from '../ui/AppButton';
 import AppInput from '../ui/AppInput';
 import AppSelect from '../ui/AppSelect';
+import EmptyState from '../ui/EmptyState';
 import LoadingState from '../ui/LoadingState';
 import SlideOver, { SlideOverFooter } from '../ui/SlideOver';
 import { waFormsApi } from '../../services/api';
@@ -152,10 +153,14 @@ export default function WaFormPicker({ value, onChange }: WaFormPickerProps) {
       )}
 
       {forms.length === 0 && (
-        <div className="rounded-xl border border-dashed border-neutral-200 bg-neutral-50/80 px-4 py-4 text-center">
-          <p className="text-[13px] font-semibold text-neutral-800">No forms yet</p>
-          <p className="mt-1 text-[12px] text-neutral-500">Create one here — we'll handle the WhatsApp setup for you.</p>
-        </div>
+        <EmptyState
+          icon={FormInput}
+          compact
+          bare
+          title="No forms yet"
+          description="Create one here — we'll handle the WhatsApp setup for you."
+          steps={['Tap Create new form below', 'Add fields like name and email', 'Use it in a Meta Form flow step']}
+        />
       )}
 
       <AppButton variant="secondary" size="sm" fullWidth icon={<Plus size={14} />} onClick={() => setCreateOpen(true)}>

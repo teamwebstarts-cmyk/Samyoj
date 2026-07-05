@@ -1,3 +1,4 @@
+import { forwardRef } from 'react';
 import { Search } from 'lucide-react';
 
 interface SearchInputProps {
@@ -7,12 +8,10 @@ interface SearchInputProps {
   className?: string;
 }
 
-export default function SearchInput({
-  value,
-  onChange,
-  placeholder = 'Search...',
-  className = '',
-}: SearchInputProps) {
+const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(function SearchInput(
+  { value, onChange, placeholder = 'Search...', className = '' },
+  ref,
+) {
   return (
     <div className={`relative ${className}`}>
       <Search
@@ -20,6 +19,7 @@ export default function SearchInput({
         className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-theme-muted"
       />
       <input
+        ref={ref}
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -28,4 +28,6 @@ export default function SearchInput({
       />
     </div>
   );
-}
+});
+
+export default SearchInput;

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   AlertCircle,
   Bot,
@@ -9,14 +10,13 @@ import {
   LogOut,
   MessageSquare,
   Plug,
-  Moon,
   Palette,
   PhoneCall,
+  PhoneOff,
   Send,
   Settings2,
   ShieldCheck,
   Smartphone,
-  Sparkles,
   Webhook,
 } from 'lucide-react';
 import CallingSettingsPanel from '../components/calls/CallingSettingsPanel';
@@ -36,12 +36,16 @@ import ConfirmDialog from '../components/ui/ConfirmDialog';
 import PageHeader from '../components/ui/PageHeader';
 import PageHero from '../components/ui/PageHero';
 import PageShell from '../components/ui/PageShell';
-import ThemeToggle from '../components/ui/ThemeToggle';
-import { useTheme } from '../contexts/ThemeContext';
+// import ThemeToggle from '../components/ui/ThemeToggle';
+import TeamSecurityPanel from '../components/team/TeamSecurityPanel';
+import { skipOnboardingSetup } from '../components/OnboardingGate';
+// import { useTheme } from '../contexts/ThemeContext';
+import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { aiBotApi, onboardingApi, settingsApi, teamApi, whatsappApi } from '../services/api';
 import type { AiUsageSummary, BusinessHours, OrgAiSettings } from '../types';
 import type { ReadinessCheck } from '../components/settings/SettingsReadinessBanner';
 import { toastError, toastSuccess } from '../utils/toast';
+import { formatPhoneDisplay } from '../utils/formatPhone';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -69,8 +73,21 @@ function formatHour(hour: number) {
 }
 
 export default function SettingsPage() {
-  const { mode, resolved } = useTheme();
-  const [activeTab, setActiveTab] = useState<SettingsTab>('general');
+  const { refreshNumbers } = useWhatsAppNumber();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabFromUrl = searchParams.get('tab') as SettingsTab | null;
+  const [activeTab, setActiveTabState] = useState<SettingsTab>(tabFromUrl || 'general');
+
+  const setActiveTab = (tab: SettingsTab) => {
+    setActiveTabState(tab);
+    setSearchParams(tab === 'general' ? {} : { tab });
+  };
+
+  useEffect(() => {
+    if (tabFromUrl && tabFromUrl !== activeTab) {
+      setActiveTabState(tabFromUrl);
+    }
+  }, [tabFromUrl]);
   const [numbers, setNumbers] = useState<WhatsappNumber[]>([]);
   const [connectUrl, setConnectUrl] = useState('');
   const [webhookStatus, setWebhookStatus] = useState<WebhookStatus | null>(null);
@@ -181,6 +198,7 @@ export default function SettingsPage() {
         label: 'Appearance',
         description: 'Theme & display',
         icon: Palette,
+        group: 'AI & Brand',
       },
       {
         id: 'whatsapp' as const,
@@ -188,48 +206,56 @@ export default function SettingsPage() {
         description: 'Number & messages',
         icon: Smartphone,
         badge: !isReady ? 'Setup' : undefined,
-      },
-      {
-        id: 'automation' as const,
-        label: 'Business hours',
-        description: 'When your team is available',
-        icon: Clock,
-      },
-      {
-        id: 'ai' as const,
-        label: 'AI',
-        description: 'Smart reply settings',
-        icon: Bot,
+        group: 'Connect',
       },
       {
         id: 'calling' as const,
         label: 'Calling',
         description: 'Voice calls & routing',
         icon: PhoneCall,
-      },
-      {
-        id: 'campaigns' as const,
-        label: 'Campaigns',
-        description: 'Send limits & speed',
-        icon: Send,
-      },
-      {
-        id: 'inbox' as const,
-        label: 'Inbox tools',
-        description: 'Canned replies & labels',
-        icon: MessageSquare,
+        group: 'Connect',
       },
       {
         id: 'integrations' as const,
         label: 'Integrations',
         description: 'Connect other apps & download your data',
         icon: Plug,
+        group: 'Connect',
+      },
+      {
+        id: 'automation' as const,
+        label: 'Business hours',
+        description: 'When your team is available',
+        icon: Clock,
+        group: 'Workspace',
+      },
+      {
+        id: 'campaigns' as const,
+        label: 'Campaigns',
+        description: 'Send limits & speed',
+        icon: Send,
+        group: 'Workspace',
+      },
+      {
+        id: 'inbox' as const,
+        label: 'Inbox tools',
+        description: 'Canned replies & labels',
+        icon: MessageSquare,
+        group: 'Workspace',
+      },
+      {
+        id: 'ai' as const,
+        label: 'AI',
+        description: 'Smart reply settings',
+        icon: Bot,
+        group: 'AI & Brand',
       },
       {
         id: 'setup' as const,
         label: 'Getting started',
         description: 'Step-by-step setup',
         icon: ShieldCheck,
+        group: 'Account',
       },
     ],
     [isReady],
@@ -252,6 +278,7 @@ export default function SettingsPage() {
     try {
       await whatsappApi.disconnect(id);
       load();
+      await refreshNumbers();
       toastSuccess('WhatsApp disconnected');
     } catch (err: unknown) {
       const msg =
@@ -422,87 +449,7 @@ export default function SettingsPage() {
           />
 
           <div className="min-w-0 space-y-5">
-            {activeTab === 'general' && (
-              <SettingsPanel
-                title="Appearance"
-                description="Choose light or dark mode. Changes apply right away."
-                icon={Moon}
-                accent="violet"
-              >
-                <div className="space-y-5">
-                  <div className="rounded-2xl border border-violet-200/60 bg-gradient-to-r from-violet-50/80 via-white to-fuchsia-50/30 p-4 dark:border-violet-800/40 dark:from-violet-950/20 dark:via-theme-surface dark:to-fuchsia-950/10">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-[0_4px_12px_rgba(139,92,246,0.28)]">
-                        <Sparkles className="h-4 w-4" />
-                      </div>
-                      <div>
-                        <p className="text-[13px] font-extrabold text-theme-fg">Active theme</p>
-                        <p className="text-[12px] font-semibold capitalize text-violet-700 dark:text-violet-300">
-                          {mode === 'system' ? `System (${resolved})` : mode}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <p className="mb-3 text-[12px] font-bold uppercase tracking-wide text-theme-muted">
-                      Theme mode
-                    </p>
-                    <ThemeToggle variant="menu" />
-                  </div>
-
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {[
-                      {
-                        label: 'Light workspace',
-                        active: resolved === 'light',
-                        preview: 'bg-white ring-slate-200',
-                        bar: 'bg-slate-100',
-                        dot: 'bg-whatsapp-500',
-                      },
-                      {
-                        label: 'Dark workspace',
-                        active: resolved === 'dark',
-                        preview: 'bg-slate-900 ring-slate-700',
-                        bar: 'bg-slate-800',
-                        dot: 'bg-emerald-400',
-                      },
-                    ].map((item) => (
-                      <div
-                        key={item.label}
-                        className={`rounded-2xl border p-3 transition ${
-                          item.active
-                            ? 'border-violet-300/70 bg-violet-50/50 ring-1 ring-violet-200/60 dark:border-violet-700/50 dark:bg-violet-950/20 dark:ring-violet-800/40'
-                            : 'border-theme-border bg-theme-subtle/40'
-                        }`}
-                      >
-                        <div
-                          className={`overflow-hidden rounded-xl ring-1 ${item.preview} p-2`}
-                        >
-                          <div className={`mb-2 h-2 rounded-full ${item.bar}`} />
-                          <div className="flex gap-1.5">
-                            <div className={`h-8 w-8 rounded-lg ${item.bar}`} />
-                            <div className="flex-1 space-y-1">
-                              <div className={`h-1.5 w-full rounded ${item.bar}`} />
-                              <div className={`h-1.5 w-2/3 rounded ${item.bar}`} />
-                            </div>
-                          </div>
-                          <div className={`mt-2 h-1.5 w-1/3 rounded-full ${item.dot}`} />
-                        </div>
-                        <p className="mt-2 text-center text-[11px] font-bold text-theme-secondary">
-                          {item.label}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-
-                  <p className="text-[12px] font-medium leading-relaxed text-theme-muted">
-                    System mode follows your OS preference and updates automatically when you switch
-                    between light and dark on your device.
-                  </p>
-                </div>
-              </SettingsPanel>
-            )}
+            {activeTab === 'general' && <TeamSecurityPanel />}
 
             {activeTab === 'whatsapp' && (
               <div className="space-y-5">
@@ -1018,9 +965,23 @@ export default function SettingsPage() {
                   ))}
                 </ol>
 
-                <div className="mt-5 flex items-center gap-2 rounded-xl bg-emerald-50/80 px-3 py-2.5 text-[12px] font-semibold text-whatsapp-800 ring-1 ring-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-300 dark:ring-emerald-900/40">
-                  <Link2 className="h-3.5 w-3.5 shrink-0" />
-                  Need help? Go to WhatsApp → Settings or contact your administrator.
+                <div className="mt-5 flex flex-wrap items-center gap-2">
+                  <div className="flex flex-1 items-center gap-2 rounded-xl bg-emerald-50/80 px-3 py-2.5 text-[12px] font-semibold text-whatsapp-800 ring-1 ring-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-300 dark:ring-emerald-900/40">
+                    <Link2 className="h-3.5 w-3.5 shrink-0" />
+                    Need help? Go to WhatsApp → Settings or contact your administrator.
+                  </div>
+                  {!isReady && (
+                    <AppButton
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        skipOnboardingSetup();
+                        window.location.href = '/';
+                      }}
+                    >
+                      Skip for now
+                    </AppButton>
+                  )}
                 </div>
               </SettingsPanel>
             )}
@@ -1033,13 +994,16 @@ export default function SettingsPage() {
         onClose={() => setDisconnectTarget(null)}
         onConfirm={confirmDisconnect}
         title="Disconnect WhatsApp number?"
-        description={
-          disconnectTarget
-            ? `Disconnect +${disconnectTarget.phone}? New messages will stop until you connect again. Existing chats remain saved.`
-            : undefined
-        }
+        description="You're about to disconnect this number from your workspace."
+        highlight={disconnectTarget ? formatPhoneDisplay(disconnectTarget.phone) : undefined}
+        details={[
+          'New messages will stop until you connect again',
+          'Existing chats remain saved',
+        ]}
         confirmLabel="Disconnect"
+        cancelLabel="Keep connected"
         variant="danger"
+        icon={PhoneOff}
         loading={Boolean(disconnectingId)}
       />
     </PageShell>

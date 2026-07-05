@@ -1,4 +1,3 @@
-import { memo } from 'react';
 import { type NodeProps } from '@xyflow/react';
 import { nodeMeta } from './flowMeta';
 import { getNodeHandles, type FlowStepNodeData } from './flowGraphUtils';
@@ -85,4 +84,4 @@ function FlowStepNodeComponent({ data, selected }: NodeProps) {
   );
 }
 
-export const FlowStepNode = memo(FlowStepNodeComponent);
+export const FlowStepNode = FlowStepNodeComponent;

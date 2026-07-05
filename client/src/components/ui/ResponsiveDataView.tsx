@@ -6,6 +6,7 @@ interface ResponsiveDataViewProps<T> {
   renderTable: () => ReactNode;
   emptyState?: ReactNode;
   cardClassName?: string;
+  tableClassName?: string;
 }
 
 export default function ResponsiveDataView<T>({
@@ -14,6 +15,7 @@ export default function ResponsiveDataView<T>({
   renderTable,
   emptyState,
   cardClassName = 'space-y-3 lg:hidden',
+  tableClassName = '',
 }: ResponsiveDataViewProps<T>) {
   if (items.length === 0 && emptyState) {
     return <>{emptyState}</>;
@@ -22,11 +24,15 @@ export default function ResponsiveDataView<T>({
   return (
     <>
       <div className={cardClassName}>
-        {items.map((item, index) => (
-          <div key={index}>{renderCard(item)}</div>
-        ))}
+        {items.map((item, index) => {
+          const key =
+            typeof item === 'object' && item !== null && 'id' in item
+              ? String((item as { id: string }).id)
+              : index;
+          return <div key={key}>{renderCard(item)}</div>;
+        })}
       </div>
-      <div className="hidden lg:block">{renderTable()}</div>
+      <div className={`hidden lg:block ${tableClassName}`.trim()}>{renderTable()}</div>
     </>
   );
 }

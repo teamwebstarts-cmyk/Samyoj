@@ -17,6 +17,7 @@ export interface CallWebhookEntry {
   end_time?: string;
   duration?: number;
   session?: CallWebhookSession;
+  biz_opaque_callback_data?: string;
 }
 
 export interface TranscriptEntry {

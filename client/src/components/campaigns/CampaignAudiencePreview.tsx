@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { AlertCircle, Loader2, Users } from 'lucide-react';
 import { campaignApi, billingApi } from '../../services/api';
 import { validatePhoneLines } from '../../utils/phone';
+import { messagingConsent } from '../../utils/plainLanguage';
 
 type AudienceType = 'MANUAL' | 'TAGS' | 'CONTACTS' | 'ALL_OPTED_IN';
 
@@ -80,7 +81,7 @@ export default function CampaignAudiencePreview({
           setCount(data.data.count);
           if (data.data.count === 0) {
             setCostInr(null);
-            setError('No opted-in recipients match this audience');
+            setError(messagingConsent.noMatchingAudience);
           } else {
             const est = await billingApi.estimateCost(data.data.count);
             if (!cancelled) setCostInr(est.data.data.estimatedCostInr);
@@ -140,7 +141,7 @@ export default function CampaignAudiencePreview({
           </p>
           {loading ? (
             <p className="mt-0.5 text-[13px] font-semibold text-theme-secondary">
-              Calculating recipient count…
+              Calculating how many people…
             </p>
           ) : error ? (
             <p className="mt-0.5 text-[13px] font-semibold text-amber-800 dark:text-amber-300">
@@ -153,7 +154,7 @@ export default function CampaignAudiencePreview({
                   {count.toLocaleString()}
                 </span>{' '}
                 <span className="font-semibold text-theme-fg">
-                  {count === 1 ? 'recipient' : 'recipients'} ready to receive
+                  {count === 1 ? 'person' : 'people'} will get this
                 </span>
               </p>
               {costInr != null && costInr > 0 && (
@@ -164,7 +165,7 @@ export default function CampaignAudiencePreview({
             </div>
           ) : (
             <p className="mt-0.5 text-[13px] font-medium text-theme-secondary">
-              Choose who receives this to see the recipient count
+              Choose who receives this to see the count
             </p>
           )}
         </div>

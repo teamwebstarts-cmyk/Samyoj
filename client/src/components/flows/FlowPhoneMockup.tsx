@@ -3,29 +3,29 @@ import { ChevronLeft, MoreVertical, Paperclip, Phone, Smile, Video } from 'lucid
 import InteractiveMessageCard from '../inbox/InteractiveMessageCard';
 import { WhatsAppBubble } from '../inbox/WhatsAppPreview';
 import type { FlowNode } from '../../types';
-import { buildFlowPreviewMessages } from './flowUtils';
+import { buildFullFlowPreviewMessages } from './flowUtils';
 
 interface FlowPhoneMockupProps {
   nodes: FlowNode[];
-  selectedIndex: number;
+  startNodeId?: string;
   businessName?: string;
   className?: string;
 }
 
 export default function FlowPhoneMockup({
   nodes,
-  selectedIndex,
+  startNodeId,
   businessName = 'Your Business',
   className = '',
 }: FlowPhoneMockupProps) {
   const chatRef = useRef<HTMLDivElement>(null);
-  const messages = buildFlowPreviewMessages(nodes, selectedIndex);
+  const messages = buildFullFlowPreviewMessages(nodes, startNodeId);
 
   useEffect(() => {
     const el = chatRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
-  }, [messages.length, selectedIndex]);
+  }, [messages.length, startNodeId]);
 
   return (
     <div className={`mx-auto w-full max-w-[300px] ${className}`}>
@@ -67,9 +67,9 @@ export default function FlowPhoneMockup({
               <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white/70 text-2xl shadow-sm">
                 💬
               </div>
-              <p className="mt-3 text-[13px] font-semibold text-[#3b4a54]">Add steps to preview</p>
+              <p className="mt-3 text-[13px] font-semibold text-[#3b4a54]">Add a step to preview</p>
               <p className="mt-1 text-[11px] leading-relaxed text-[#667781]">
-                Messages from your flow will appear here exactly as customers see them.
+                Your auto-replies will appear here like on WhatsApp.
               </p>
             </div>
           ) : (

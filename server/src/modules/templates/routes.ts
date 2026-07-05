@@ -4,6 +4,7 @@ import { authenticate, requireOrg } from '../../middleware/auth';
 import { AppError, sendSuccess, asyncHandler } from '../../utils/response';
 import { MetaWhatsAppService } from '../whatsapp/meta.service';
 import { getOrgWhatsappContext } from '../whatsapp/context';
+import { resolveActiveWhatsappNumber } from '../whatsapp/active-number';
 import { buildTemplateComponents } from '../campaigns/template-params';
 import { buildTemplateComponents as buildCreateComponents } from './builder';
 import { getTemplateUsage } from './analytics';
@@ -14,6 +15,8 @@ import {
 } from './types';
 
 const router = Router();
+
+router.use(authenticate, requireOrg, resolveActiveWhatsappNumber);
 
 const uploadHeaderSchema = z.object({
   data: z.string().min(1),
@@ -26,7 +29,10 @@ router.get(
   requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
     const { status, after, all } = req.query;
-    const { wabaId, accessToken } = await getOrgWhatsappContext(req.user!.organizationId!);
+    const { wabaId, accessToken } = await getOrgWhatsappContext(
+      req.user!.organizationId!,
+      req.activeWhatsappNumberId
+    );
 
     if (all === 'true') {
       const templates = await MetaWhatsAppService.listAllMessageTemplates(wabaId, accessToken, {
@@ -51,7 +57,10 @@ router.get(
   requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
     const { search, language, topic, usecase, industry, name, limit } = req.query;
-    const { accessToken } = await getOrgWhatsappContext(req.user!.organizationId!);
+    const { accessToken } = await getOrgWhatsappContext(
+      req.user!.organizationId!,
+      req.activeWhatsappNumberId
+    );
 
     const templates = await MetaWhatsAppService.listMessageTemplateLibrary(accessToken, {
       search: search as string | undefined,
@@ -84,7 +93,10 @@ router.get(
   requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
     const name = req.params.name as string;
-    const { wabaId, accessToken } = await getOrgWhatsappContext(req.user!.organizationId!);
+    const { wabaId, accessToken } = await getOrgWhatsappContext(
+      req.user!.organizationId!,
+      req.activeWhatsappNumberId
+    );
 
     const template = await MetaWhatsAppService.getMessageTemplate(wabaId, accessToken, name);
     if (!template) throw new AppError(404, 'Template not found');
@@ -104,7 +116,10 @@ router.post(
       throw new AppError(400, 'File too large. Maximum size is 16 MB.');
     }
 
-    const { accessToken } = await getOrgWhatsappContext(req.user!.organizationId!);
+    const { accessToken } = await getOrgWhatsappContext(
+      req.user!.organizationId!,
+      req.activeWhatsappNumberId
+    );
     const handle = await MetaWhatsAppService.uploadTemplateMedia(accessToken, buffer, mimeType);
 
     sendSuccess(res, { handle, mimeType, size: buffer.length });
@@ -117,7 +132,10 @@ router.post(
   requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
     const data = createTemplateSchema.parse(req.body);
-    const { wabaId, accessToken } = await getOrgWhatsappContext(req.user!.organizationId!);
+    const { wabaId, accessToken } = await getOrgWhatsappContext(
+      req.user!.organizationId!,
+      req.activeWhatsappNumberId
+    );
 
     const result = await MetaWhatsAppService.createMessageTemplate(wabaId, accessToken, {
       name: data.name,
@@ -136,7 +154,10 @@ router.post(
   requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
     const data = createFromLibrarySchema.parse(req.body);
-    const { wabaId, accessToken } = await getOrgWhatsappContext(req.user!.organizationId!);
+    const { wabaId, accessToken } = await getOrgWhatsappContext(
+      req.user!.organizationId!,
+      req.activeWhatsappNumberId
+    );
 
     const result = await MetaWhatsAppService.createMessageTemplateFromLibrary(wabaId, accessToken, {
       name: data.name,
@@ -158,7 +179,10 @@ router.post(
     const { phone, language, templateParams } = testSendSchema.parse(req.body);
     const orgId = req.user!.organizationId!;
 
-    const { wabaId, accessToken, whatsappNumber } = await getOrgWhatsappContext(orgId);
+    const { wabaId, accessToken, whatsappNumber } = await getOrgWhatsappContext(
+      orgId,
+      req.activeWhatsappNumberId
+    );
     const phoneNumberId = whatsappNumber.phoneNumberId;
     const template = await MetaWhatsAppService.getMessageTemplate(wabaId, accessToken, name);
     if (!template) throw new AppError(404, 'Template not found');
@@ -190,7 +214,10 @@ router.post(
   asyncHandler(async (req: Request, res: Response) => {
     const name = req.params.name as string;
     const data = createTemplateSchema.parse(req.body);
-    const { wabaId, accessToken } = await getOrgWhatsappContext(req.user!.organizationId!);
+    const { wabaId, accessToken } = await getOrgWhatsappContext(
+      req.user!.organizationId!,
+      req.activeWhatsappNumberId
+    );
 
     const existing = await MetaWhatsAppService.getMessageTemplate(wabaId, accessToken, name);
     if (!existing) throw new AppError(404, 'Template not found');
@@ -217,7 +244,10 @@ router.delete(
   requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
     const name = req.params.name as string;
-    const { wabaId, accessToken } = await getOrgWhatsappContext(req.user!.organizationId!);
+    const { wabaId, accessToken } = await getOrgWhatsappContext(
+      req.user!.organizationId!,
+      req.activeWhatsappNumberId
+    );
 
     await MetaWhatsAppService.deleteMessageTemplate(wabaId, accessToken, name);
     sendSuccess(res, { deleted: true, name });

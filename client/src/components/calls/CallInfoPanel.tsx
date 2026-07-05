@@ -56,10 +56,12 @@ const faq = [
 
 interface CallInfoPanelProps {
   compact?: boolean;
+  /** Fits the calls page right-hand sidebar column */
+  embedded?: boolean;
   phoneNumber?: string | null;
 }
 
-export default function CallInfoPanel({ compact, phoneNumber }: CallInfoPanelProps) {
+export default function CallInfoPanel({ compact, embedded, phoneNumber }: CallInfoPanelProps) {
   if (compact) {
     return (
       <div className="space-y-5 p-5">
@@ -88,6 +90,115 @@ export default function CallInfoPanel({ compact, phoneNumber }: CallInfoPanelPro
             </p>
           </div>
         )}
+      </div>
+    );
+  }
+
+  if (embedded) {
+    return (
+      <div className="w-full min-w-0 space-y-4">
+        <div className="space-y-2.5">
+          {benefits.map((item) => {
+            const Icon = item.icon;
+            return (
+              <div
+                key={item.title}
+                className={`flex gap-3 rounded-xl border border-neutral-200/60 bg-gradient-to-r ${item.bg} p-3.5`}
+              >
+                <div
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${item.color} text-white shadow-[0_4px_14px_rgba(0,0,0,0.12)]`}
+                >
+                  <Icon className="h-4 w-4" strokeWidth={2} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[13px] font-extrabold text-neutral-900">{item.title}</p>
+                  <p className="mt-0.5 text-[12px] font-medium leading-relaxed text-neutral-600">{item.text}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="rounded-xl border border-neutral-200/70 bg-white p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-neutral-500">Call flow</p>
+              <h3 className="mt-1 text-[14px] font-extrabold text-neutral-900">What happens when someone calls</h3>
+            </div>
+            <div className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-200/80 bg-emerald-50/80 px-2.5 py-1 text-[10px] font-semibold text-emerald-800">
+              <PhoneIncoming className="h-3 w-3" />
+              Voice
+            </div>
+          </div>
+          <div className="mt-4 space-y-3">
+            {flow.map((item) => (
+              <div key={item.step} className="flex gap-3">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-violet-600 to-indigo-700 text-[11px] font-bold text-white">
+                  {item.step}
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[13px] font-bold text-neutral-900">{item.title}</p>
+                  <p className="text-[12px] font-medium leading-relaxed text-neutral-600">{item.text}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-neutral-200/70 bg-white p-4">
+          <div className="flex items-center gap-2">
+            <Users className="h-4 w-4 shrink-0 text-violet-600" />
+            <p className="text-[13px] font-extrabold text-neutral-900">For your customers</p>
+          </div>
+          <ul className="mt-3 space-y-2 text-[12px] font-medium leading-relaxed text-neutral-600">
+            <li className="flex gap-2">
+              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-violet-500" />
+              Call directly from WhatsApp — no extra apps needed.
+            </li>
+            <li className="flex gap-2">
+              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-violet-500" />
+              Get instant voice answers from your AI bot.
+            </li>
+            <li className="flex gap-2">
+              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-violet-500" />
+              Continue in chat if they need more help.
+            </li>
+          </ul>
+          {phoneNumber && (
+            <div className="mt-4 rounded-xl border border-violet-200/60 bg-violet-50/50 px-3 py-2.5">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-violet-700">Test call</p>
+              <p className="mt-0.5 break-words text-[12px] font-medium text-violet-950">
+                Open WhatsApp chat with <span className="font-extrabold">{phoneNumber}</span> and tap the call icon.
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-xl border border-neutral-200/70 bg-white p-4">
+          <div className="flex items-center gap-2">
+            <HelpCircle className="h-4 w-4 shrink-0 text-whatsapp-600" />
+            <p className="text-[13px] font-extrabold text-neutral-900">Common questions</p>
+          </div>
+          <div className="mt-3 space-y-3">
+            {faq.map((item) => (
+              <div key={item.q}>
+                <p className="text-[12px] font-bold text-neutral-900">{item.q}</p>
+                <p className="mt-0.5 text-[12px] font-medium leading-relaxed text-neutral-600">{item.a}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2 rounded-xl border border-neutral-200/60 bg-neutral-50/80 px-3.5 py-3 text-[12px] font-medium text-neutral-600 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
+          <span className="inline-flex items-center gap-1.5">
+            <Bot className="h-4 w-4 shrink-0 text-violet-600" />
+            Uses your default AI bot
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <Clock className="h-4 w-4 shrink-0 text-whatsapp-600" />
+            Calls logged with date &amp; duration
+          </span>
+        </div>
       </div>
     );
   }

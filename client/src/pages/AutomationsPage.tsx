@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -7,7 +7,6 @@ import {
   Clock,
   GitBranch,
   Hash,
-  LayoutTemplate,
   MessageSquareQuote,
   PauseCircle,
   PlayCircle,
@@ -20,6 +19,7 @@ import {
 import AutomationAnalyticsPanel from '../components/automations/AutomationAnalyticsPanel';
 import AutomationCard from '../components/automations/AutomationCard';
 import AutomationConflictsBanner from '../components/automations/AutomationConflictsBanner';
+import AutomationTipCard, { AiBotLink } from '../components/automations/AutomationTipCard';
 import FlowsTab, { type FlowSummary } from '../components/flows/FlowsTab';
 import { getErrorMessage } from '../utils/errors';
 import { toastError, toastSuccess, toastValidationErrors } from '../utils/toast';
@@ -28,19 +28,21 @@ import AppButton from '../components/ui/AppButton';
 import AppInput from '../components/ui/AppInput';
 import AppSelect from '../components/ui/AppSelect';
 import AppTextarea from '../components/ui/AppTextarea';
-import DataTable, { TableSerialCell } from '../components/ui/DataTable';
+import DataTable from '../components/ui/DataTable';
 import EmptyState from '../components/ui/EmptyState';
 import ListToolbar from '../components/ui/ListToolbar';
 import LoadingState from '../components/ui/LoadingState';
-import PageHeader from '../components/ui/PageHeader';
 import PageHero from '../components/ui/PageHero';
 import PageShell from '../components/ui/PageShell';
+import ResponsiveDataView from '../components/ui/ResponsiveDataView';
+import SectionCard from '../components/ui/SectionCard';
 import Pagination from '../components/ui/Pagination';
 import RowActions from '../components/ui/RowActions';
 import { TableTextButton } from '../components/ui/TableActions';
 import SlideOver, { SlideOverFooter } from '../components/ui/SlideOver';
 import { DEFAULT_PAGE_SIZE } from '../constants/pagination';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 import { automationApi } from '../services/api';
 import { WhatsAppMessagePreview } from '../components/inbox/WhatsAppPreview';
 import InteractiveMessageCard from '../components/inbox/InteractiveMessageCard';
@@ -116,12 +118,6 @@ const triggerOptions = creatableTriggers.map((value) => ({
 
 const filterTriggerOptions = [{ value: '', label: 'All types' }, ...triggerOptions];
 
-const statusFilterOptions = [
-  { value: '', label: 'All' },
-  { value: 'active', label: 'On' },
-  { value: 'paused', label: 'Off' },
-] as const;
-
 const triggerDefaults: Record<string, Partial<typeof emptyForm>> = {
   KEYWORD: {
     name: 'Keyword reply',
@@ -179,10 +175,25 @@ function getTriggerMeta(triggerType: string) {
 
 type AutomationTab = 'flows' | 'quick' | 'analytics';
 
+const heroCopy: Record<AutomationTab, { title: string; description: string }> = {
+  flows: {
+    title: 'Multi-step flows',
+    description: 'Guide customers through menus, questions, and handoffs step by step.',
+  },
+  quick: {
+    title: 'Auto-replies',
+    description: 'Send one automatic message for keywords, welcomes, away times, and more.',
+  },
+  analytics: {
+    title: 'Automation stats',
+    description: 'See how often your auto-replies and flows run.',
+  },
+};
+
 export default function AutomationsPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = (searchParams.get('tab') as AutomationTab) || 'flows';
+  const activeTab = (searchParams.get('tab') as AutomationTab) || 'quick';
 
   const [automations, setAutomations] = useState<Automation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -228,6 +239,14 @@ export default function AutomationsPage() {
       .finally(() => setLoading(false));
   }, [page, debouncedSearch, triggerFilter, statusFilter]);
 
+  const loadRef = useRef(load);
+  loadRef.current = load;
+
+  useOnActiveNumberChange(({ isInitial }) => {
+    if (isInitial || activeTab !== 'quick') return;
+    loadRef.current();
+  });
+
   useEffect(() => {
     setPage(1);
   }, [debouncedSearch, triggerFilter, statusFilter]);
@@ -241,7 +260,7 @@ export default function AutomationsPage() {
       .conflicts()
       .then(({ data }) => setConflicts(data.data.conflicts || []))
       .catch(() => {});
-  }, [automations.length, flowSummary.total]);
+  }, [summary.active, summary.paused, flowSummary.active, flowSummary.paused, activeTab]);
 
   useEffect(() => {
     if (activeTab !== 'analytics') return;
@@ -383,7 +402,7 @@ export default function AutomationsPage() {
   const SelectedTriggerIcon = selectedTrigger.icon;
 
   const setTab = (tab: AutomationTab) => {
-    setSearchParams(tab === 'flows' ? {} : { tab });
+    setSearchParams(tab === 'quick' ? {} : { tab });
   };
 
   const addQuickReplyButton = () => {
@@ -398,92 +417,66 @@ export default function AutomationsPage() {
     activeTab === 'flows'
       ? [
           { label: 'Total flows', value: flowSummary.total },
-          { label: 'Active', value: flowSummary.active, tone: 'text-whatsapp-700' },
-          { label: 'Paused', value: flowSummary.paused, tone: 'text-amber-700' },
+          { label: 'Active', value: flowSummary.active, tone: 'text-emerald-700 dark:text-emerald-300' },
+          { label: 'Paused', value: flowSummary.paused, tone: 'text-amber-700 dark:text-amber-300' },
         ]
       : activeTab === 'analytics'
         ? [
             { label: 'Times used', value: analytics?.total ?? 0 },
-            { label: 'Sent OK', value: analytics?.success ?? 0, tone: 'text-whatsapp-700' },
-            { label: "Didn't send", value: analytics?.failed ?? 0, tone: 'text-amber-700' },
+            { label: 'Sent OK', value: analytics?.success ?? 0, tone: 'text-emerald-700 dark:text-emerald-300' },
+            { label: "Didn't send", value: analytics?.failed ?? 0, tone: 'text-amber-700 dark:text-amber-300' },
           ]
         : [
             { label: 'Quick replies', value: summary.total },
-          { label: 'On', value: summary.active, tone: 'text-whatsapp-700' },
-          { label: 'Off', value: summary.paused, tone: 'text-amber-700' },
+            { label: 'On', value: summary.active, tone: 'text-emerald-700 dark:text-emerald-300' },
+            { label: 'Off', value: summary.paused, tone: 'text-amber-700 dark:text-amber-300' },
           ];
 
   return (
     <PageShell>
-      <PageHeader
-        actions={
-          activeTab === 'flows' ? (
-            <div className="flex w-full gap-2 sm:w-auto">
-              <AppButton
-                variant="secondary"
-                icon={<LayoutTemplate size={16} />}
-                onClick={() => setTemplatesOpen(true)}
-              >
-                Start from template
-              </AppButton>
-              <AppButton variant="ghost" icon={<Plus size={16} />} onClick={() => navigate('/automations/flows/new')}>
-                Build from scratch
-              </AppButton>
-            </div>
-          ) : activeTab === 'analytics' ? null : (
-            <AppButton fullWidth className="w-full sm:w-auto" icon={<Plus size={16} />} onClick={() => openCreate()}>
-              New auto-reply
-            </AppButton>
-          )
-        }
-      />
-
-      <div className="space-y-5 animate-fade-up-delay sm:space-y-6">
+      <div className="space-y-4 sm:space-y-5">
         <PageHero
           badge="Automations"
           badgeIcon={Zap}
-          title={
-            activeTab === 'flows'
-              ? 'Multi-step conversations'
-              : activeTab === 'analytics'
-                ? 'How your automations are doing'
-                : 'Instant auto-replies'
-          }
-          description={
-            activeTab === 'flows'
-              ? 'Guide customers through questions, menus, and your team — step by step.'
-              : activeTab === 'analytics'
-                ? 'See how many customers your automations have helped.'
-                : 'Send one automatic message when someone texts a keyword, says hi, or messages after hours.'
-          }
+          title={heroCopy[activeTab].title}
+          description={heroCopy[activeTab].description}
           accent="violet"
           stats={heroStats}
         />
 
         <SegmentedControl
+          embedded
           value={activeTab}
           onChange={setTab}
           options={[
-            { value: 'flows', label: 'Multi-step', icon: GitBranch },
-            { value: 'quick', label: 'Auto-replies', icon: MessageSquareQuote },
-            { value: 'analytics', label: 'Stats', icon: BarChart3 },
+            { value: 'quick', label: 'Auto-replies', shortLabel: 'Replies', icon: MessageSquareQuote },
+            { value: 'flows', label: 'Conversation flows', shortLabel: 'Flows', icon: GitBranch },
+            { value: 'analytics', label: 'Performance', shortLabel: 'Stats', icon: BarChart3 },
           ]}
+          ariaLabel="Automation sections"
         />
 
         <AutomationConflictsBanner conflicts={conflicts} />
 
-        {activeTab !== 'analytics' && (
-          <div className="rounded-2xl border border-violet-100/70 bg-gradient-to-r from-violet-50/50 to-white px-4 py-3.5">
-            <p className="text-[13px] font-medium leading-relaxed text-neutral-700">
-              <span className="font-extrabold text-neutral-900">Not sure which to pick?</span>{' '}
-              Use <strong>Auto-replies</strong> for a single message. Use <strong>Multi-step</strong> when you need
-              menus, questions, or multiple messages. For smart AI answers, go to{' '}
-              <Link to="/ai-bot" className="font-bold text-violet-700 underline underline-offset-2">
-                AI Bots
-              </Link>
-              .
-            </p>
-          </div>
+        {activeTab === 'flows' && (
+          <AutomationTipCard icon={GitBranch} title="Multi-step flows">
+            Build menus, collect answers, and route to your team. For a single automatic message, use{' '}
+            <button
+              type="button"
+              onClick={() => setTab('quick')}
+              className="font-bold text-violet-700 underline underline-offset-2 dark:text-violet-300"
+            >
+              Auto-replies
+            </button>
+            .
+          </AutomationTipCard>
+        )}
+
+        {activeTab === 'quick' && (
+          <AutomationTipCard icon={MessageSquareQuote} title="Quick auto-replies">
+            One message when customers text a keyword or message after hours. For smart AI answers, try{' '}
+            <AiBotLink />.
+          </AutomationTipCard>
         )}
 
         {activeTab === 'analytics' ? (
@@ -493,47 +486,19 @@ export default function AutomationsPage() {
             templatesOpen={templatesOpen}
             onTemplatesOpenChange={setTemplatesOpen}
             onSummaryChange={setFlowSummary}
+            onNewFlow={() => navigate('/automations/flows/new')}
           />
         ) : (
-          <>
-            <div className="flex items-start gap-3 rounded-2xl border border-indigo-200/60 bg-gradient-to-r from-indigo-50/80 to-violet-50/40 px-4 py-3.5 dark:border-indigo-500/25 dark:from-indigo-950/30 dark:to-violet-950/20">
-              <Bot className="mt-0.5 h-4 w-4 shrink-0 text-indigo-600" />
-              <p className="text-[13px] font-medium leading-relaxed text-indigo-950 dark:text-indigo-200">
-                Want the bot to answer questions on its own? Set up an{' '}
-                <Link to="/ai-bot" className="font-bold underline underline-offset-2">
-                  AI Bot
-                </Link>{' '}
-                — it reads messages and replies automatically.
-              </p>
-            </div>
-
+          <div className="inbox-shell overflow-hidden">
             <ListToolbar
+              embedded
               search={search}
               onSearchChange={setSearch}
-              searchPlaceholder="Search automations..."
+              searchPlaceholder="Search auto-replies..."
               filters={
                 <>
-                  <div className="flex gap-2 overflow-x-auto pb-0.5 lg:hidden">
-                    {statusFilterOptions.map((option) => {
-                      const isActive = statusFilter === option.value;
-                      return (
-                        <button
-                          key={option.value || 'all'}
-                          type="button"
-                          onClick={() => setStatusFilter(option.value)}
-                          className={`shrink-0 rounded-full px-3.5 py-2 text-[12px] font-bold transition active:scale-[0.98] ${
-                            isActive
-                              ? 'bg-gradient-to-r from-violet-600 to-indigo-700 text-white shadow-[0_4px_12px_rgba(99,102,241,0.3)]'
-                              : 'border border-neutral-200/80 bg-white text-neutral-600 hover:border-violet-200 hover:text-violet-700'
-                          }`}
-                        >
-                          {option.label}
-                        </button>
-                      );
-                    })}
-                  </div>
                   <AppSelect
-                    className="w-full sm:w-44"
+                    className="w-full sm:w-[148px]"
                     value={triggerFilter}
                     placeholder="All types"
                     isSearchable={false}
@@ -541,7 +506,7 @@ export default function AutomationsPage() {
                     onChange={(e) => setTriggerFilter(e.target.value)}
                   />
                   <AppSelect
-                    className="hidden w-40 lg:block"
+                    className="w-full sm:w-[132px]"
                     value={statusFilter}
                     placeholder="All statuses"
                     isSearchable={false}
@@ -554,19 +519,32 @@ export default function AutomationsPage() {
                   />
                 </>
               }
+              actions={
+                <AppButton icon={<Plus size={16} />} onClick={() => openCreate()}>
+                  New auto-reply
+                </AppButton>
+              }
             />
 
             {loading ? (
-              <LoadingState label="Loading automations..." />
+              <div className="p-6">
+                <LoadingState label="Loading automations..." />
+              </div>
             ) : automations.length === 0 ? (
-              <div className="space-y-6">
+              <div className="space-y-6 p-4 sm:p-6">
                 <EmptyState
                   icon={Zap}
-                  title={hasFilters ? 'No auto-replies found' : 'No auto-replies yet'}
+                  variant={hasFilters ? 'filter' : 'default'}
+                  title={hasFilters ? 'No auto-replies match your filters' : 'No auto-replies yet'}
                   description={
                     hasFilters
-                      ? 'Try a different search or filter.'
-                      : 'Pick a ready-made template below — you can edit the message before saving.'
+                      ? 'Try a different search word or filter.'
+                      : 'Auto-replies send instant messages when customers text you — like a welcome message or away reply.'
+                  }
+                  steps={
+                    hasFilters
+                      ? undefined
+                      : ['Pick a ready-made template below', 'Edit the message to fit your business', 'Turn it on — done!']
                   }
                   action={
                     !hasFilters ? (
@@ -578,13 +556,7 @@ export default function AutomationsPage() {
                 />
 
                 {!hasFilters && (
-                  <section className="space-y-3">
-                    <div>
-                      <h3 className="text-[14px] font-extrabold text-neutral-900">Popular setups</h3>
-                      <p className="mt-1 text-[12px] font-medium text-neutral-500">
-                        Tap one to start — we've filled in a sample message you can change.
-                      </p>
-                    </div>
+                  <SectionCard title="Popular setups" subtitle="Tap a template to start with a sample message">
                     <div className="grid auto-rows-fr gap-3 sm:grid-cols-2 lg:grid-cols-3">
                       {creatableTriggers.map((type) => {
                         const meta = triggerMeta[type];
@@ -594,7 +566,7 @@ export default function AutomationsPage() {
                             key={type}
                             type="button"
                             onClick={() => openCreate(type)}
-                            className={`group flex h-full items-start gap-3 rounded-2xl border bg-gradient-to-br p-4 text-left transition hover:shadow-md active:scale-[0.995] ${meta.accent}`}
+                            className="dashboard-card group flex h-full items-start gap-3 p-4 text-left transition hover:border-violet-500/25 hover:shadow-md active:scale-[0.99]"
                           >
                             <div
                               className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition group-hover:scale-105 ${meta.iconBg}`}
@@ -602,8 +574,8 @@ export default function AutomationsPage() {
                               <Icon className="h-4 w-4" strokeWidth={2.25} />
                             </div>
                             <div className="flex min-w-0 flex-1 flex-col">
-                              <p className="text-[13px] font-extrabold text-neutral-900">{meta.label}</p>
-                              <p className="mt-1 flex-1 text-[11px] font-medium leading-relaxed text-neutral-600">
+                              <p className="text-[13px] font-extrabold text-theme-fg">{meta.label}</p>
+                              <p className="mt-1 flex-1 text-[11px] font-medium leading-relaxed text-theme-secondary">
                                 {meta.description}
                               </p>
                             </div>
@@ -611,59 +583,52 @@ export default function AutomationsPage() {
                         );
                       })}
                     </div>
-                  </section>
+                  </SectionCard>
                 )}
               </div>
             ) : (
               <>
-                <div className="space-y-3 lg:hidden">
-                  {automations.map((automation) => {
-                    const meta = getTriggerMeta(automation.triggerType);
-                    return (
-                      <AutomationCard
-                        key={automation.id}
-                        automation={automation}
-                        meta={meta}
-                        onEdit={() => openEdit(automation)}
-                        onToggle={() => toggleEnabled(automation)}
-                        onDelete={() => handleDeleteItem(automation.id)}
-                      />
-                    );
-                  })}
-                  {showPagination && (
-                    <div className="dashboard-card overflow-hidden p-0">
-                      <Pagination
-                        page={page}
-                        pageSize={DEFAULT_PAGE_SIZE}
-                        total={total}
-                        onPageChange={setPage}
-                      />
-                    </div>
-                  )}
-                </div>
-
-                <div className="hidden lg:block">
+                <ResponsiveDataView
+                  items={automations}
+                  emptyState={null}
+                  cardClassName="divide-y divide-neutral-200 dark:divide-neutral-800 lg:hidden"
+                  renderCard={(automation) => {
+                  const meta = getTriggerMeta(automation.triggerType);
+                  return (
+                    <AutomationCard
+                      automation={automation}
+                      meta={meta}
+                      onEdit={() => openEdit(automation)}
+                      onToggle={() => toggleEnabled(automation)}
+                      onDelete={() => handleDeleteItem(automation.id)}
+                    />
+                  );
+                }}
+                renderTable={() => (
                   <DataTable
-                    headers={['Auto-reply', 'Starts when', 'Keyword', 'Reply preview', 'Status', 'Actions']}
+                    headers={['Auto-reply', 'Starts when', 'Keyword', 'Status', 'Actions']}
+                    serialNo={false}
                     page={page}
                     pageSize={DEFAULT_PAGE_SIZE}
                     total={total}
                     onPageChange={setPage}
                   >
-                    {automations.map((automation, index) => {
+                    {automations.map((automation) => {
                       const meta = getTriggerMeta(automation.triggerType);
                       const Icon = meta.icon;
                       const config = automation.config as Record<string, string>;
                       const preview = config.message || '—';
 
                       return (
-                        <tr key={automation.id} className="group">
-                          <TableSerialCell page={page} pageSize={DEFAULT_PAGE_SIZE} rowIndex={index} />
-                          <td>
+                        <tr
+                          key={automation.id}
+                          className="group border-t border-theme-border transition-colors hover:bg-theme-subtle/40"
+                        >
+                          <td className="px-5 py-3.5">
                             <button
                               type="button"
                               onClick={() => openEdit(automation)}
-                              className="flex w-full items-center gap-3 rounded-xl py-1 text-left transition hover:opacity-90"
+                              className="flex w-full items-center gap-3 text-left"
                             >
                               <div
                                 className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${meta.iconBg}`}
@@ -671,51 +636,44 @@ export default function AutomationsPage() {
                                 <Icon className="h-4 w-4" strokeWidth={2.25} />
                               </div>
                               <div className="min-w-0">
-                                <p className="truncate font-semibold text-neutral-900 group-hover:text-whatsapp-700">
+                                <p className="truncate font-semibold text-theme-fg group-hover:text-whatsapp-700">
                                   {automation.name}
                                 </p>
-                                <p className="mt-0.5 truncate text-[12px] text-neutral-500">{preview}</p>
+                                <p className="mt-0.5 line-clamp-1 text-[12px] text-theme-secondary">
+                                  {preview}
+                                </p>
                               </div>
                             </button>
                           </td>
-                          <td>
+                          <td className="px-5 py-3.5">
                             <span
                               className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${meta.badge}`}
                             >
                               {meta.label}
                             </span>
                           </td>
-                          <td>
+                          <td className="px-5 py-3.5">
                             {automation.triggerType === 'KEYWORD' && config.keyword ? (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2.5 py-0.5 text-[11px] font-bold text-violet-700 ring-1 ring-violet-100">
+                              <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/10 px-2.5 py-0.5 text-[11px] font-bold text-violet-700 ring-1 ring-violet-500/20 dark:text-violet-300">
                                 <Hash className="h-3 w-3" />
                                 {config.keyword}
                               </span>
                             ) : (
-                              <span className="text-[13px] text-neutral-400">—</span>
+                              <span className="text-[13px] text-theme-muted">—</span>
                             )}
                           </td>
-                          <td className="max-w-[220px]">
-                            {preview !== '—' ? (
-                              <div className="scale-[0.92] origin-left">
-                                <WhatsAppMessagePreview content={preview} direction="outbound" variant="compact" />
-                              </div>
-                            ) : (
-                              <span className="text-[13px] text-neutral-400">—</span>
-                            )}
-                          </td>
-                          <td>
+                          <td className="px-5 py-3.5">
                             <span
                               className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${
                                 automation.enabled
-                                  ? 'bg-emerald-100 text-emerald-800 ring-emerald-200/70'
-                                  : 'bg-neutral-100 text-neutral-500 ring-neutral-200/70'
+                                  ? 'bg-emerald-500/10 text-emerald-800 ring-emerald-500/20 dark:text-emerald-300'
+                                  : 'bg-theme-subtle text-theme-muted ring-theme-border'
                               }`}
                             >
                               {automation.enabled ? 'On' : 'Off'}
                             </span>
                           </td>
-                          <td>
+                          <td className="px-5 py-3.5 text-right">
                             <div className="flex items-center justify-end gap-1.5">
                               <TableTextButton
                                 onClick={() => toggleEnabled(automation)}
@@ -734,10 +692,22 @@ export default function AutomationsPage() {
                       );
                     })}
                   </DataTable>
-                </div>
+                )}
+                />
+                {showPagination && (
+                  <div className="border-t border-theme-border lg:hidden">
+                    <Pagination
+                      page={page}
+                      pageSize={DEFAULT_PAGE_SIZE}
+                      total={total}
+                      onPageChange={setPage}
+                      className="!border-t-0"
+                    />
+                  </div>
+                )}
               </>
             )}
-          </>
+          </div>
         )}
       </div>
 
@@ -747,6 +717,7 @@ export default function AutomationsPage() {
         title={editing ? 'Edit auto-reply' : 'New auto-reply'}
         subtitle="Choose when to send, write your message, and preview it on WhatsApp"
         size="lg"
+        accent="violet"
         footer={
           <SlideOverFooter
             onCancel={closeSlide}

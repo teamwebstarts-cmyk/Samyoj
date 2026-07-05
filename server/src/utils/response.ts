@@ -3,6 +3,7 @@ import { Request, Response, NextFunction, RequestHandler } from 'express';
 export { AppError } from '../errors';
 
 export function sendSuccess(res: Response, data: unknown, statusCode = 200) {
+  res.set('Cache-Control', 'no-store');
   return res.status(statusCode).json({ success: true, data });
 }
 

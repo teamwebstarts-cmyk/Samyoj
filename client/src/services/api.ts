@@ -1,8 +1,19 @@
 import axios from 'axios';
 import { getErrorMessage, logError } from '../utils/errors';
-import type { AgentAvailability, TeamSettings } from '../types';
+import type { AgentAvailability, OrgRole, TeamPermissions, TeamSettings } from '../types';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
+
+/** Active WhatsApp number sent with every API request for data isolation */
+let activeWhatsappNumberId: string | null = null;
+
+export function setActiveWhatsappNumberId(id: string | null) {
+  activeWhatsappNumberId = id;
+}
+
+export function getActiveWhatsappNumberId() {
+  return activeWhatsappNumberId;
+}
 
 const api = axios.create({
   baseURL: API_URL,
@@ -13,6 +24,9 @@ api.interceptors.request.use((config) => {
   const token = localStorage.getItem('accessToken');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+  }
+  if (activeWhatsappNumberId) {
+    config.headers['X-WhatsApp-Number-Id'] = activeWhatsappNumberId;
   }
   return config;
 });
@@ -451,6 +465,11 @@ export const teamApi = {
   settings: {
     get: () => api.get('/team/settings'),
     update: (data: Partial<TeamSettings>) => api.patch('/team/settings', data),
+  },
+  rolePermissions: {
+    get: () => api.get('/team/role-permissions'),
+    update: (rolePermissions: Partial<Record<OrgRole, Partial<TeamPermissions>>>) =>
+      api.patch('/team/role-permissions', { rolePermissions }),
   },
   invites: {
     list: () => api.get('/team/invites'),

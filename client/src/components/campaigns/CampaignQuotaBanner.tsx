@@ -28,9 +28,9 @@ export default function CampaignQuotaBanner() {
     usedPct >= 90 ? 'text-red-600 dark:text-red-400' : usedPct >= 70 ? 'text-amber-700 dark:text-amber-400' : 'text-emerald-700 dark:text-emerald-400';
 
   return (
-    <div className="dashboard-card flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+    <div className="flex flex-col gap-3 rounded-xl border border-theme-border bg-theme-subtle/30 px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4 sm:py-3.5">
       <div className="flex min-w-0 items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-[0_4px_14px_rgba(14,165,233,0.3)]">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-500/10 text-sky-600">
           <Gauge className="h-4 w-4" strokeWidth={2.25} />
         </div>
         <div className="min-w-0">

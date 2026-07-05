@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { BarChart3, CheckCircle2, Clock, SkipForward, UserX, XCircle } from 'lucide-react';
+import EmptyState from '../ui/EmptyState';
 import LoadingState from '../ui/LoadingState';
 import type { BotAnalytics } from '../../types';
 
@@ -32,9 +33,13 @@ export default function AiBotAnalyticsPanel({ analytics, loading }: AiBotAnalyti
 
   if (!analytics) {
     return (
-      <p className="rounded-xl border border-dashed border-theme-border px-4 py-8 text-center text-[12px] text-theme-secondary">
-        No analytics data yet. Stats appear after the bot handles conversations.
-      </p>
+      <EmptyState
+        icon={BarChart3}
+        compact
+        title="No stats yet"
+        description="Numbers will show up here after your bot starts replying to customers."
+        steps={['Make sure your bot is turned on', 'Send a test message to your WhatsApp number', 'Check back here for reply stats']}
+      />
     );
   }
 

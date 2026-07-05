@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   BarChart3,
   Bot,
@@ -5,13 +6,16 @@ import {
   FileText,
   Headset,
   LayoutGrid,
+  LifeBuoy,
   LineChart,
   LogOut,
   Menu,
   MessageSquare,
   PhoneCall,
+  Search,
   Send,
   Settings,
+  ShoppingBag,
   Sparkles,
   Users,
   Zap,
@@ -19,7 +23,10 @@ import {
 } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { getPageMeta } from '../../config/pageMeta';
-import ThemeToggle from '../ui/ThemeToggle';
+// import ThemeToggle from '../ui/ThemeToggle';
+import GlobalSearch, { useGlobalSearchShortcut } from './GlobalSearch';
+import NotificationCenter from './NotificationCenter';
+import NumberSwitcher, { NumberSwitcherMobile } from './NumberSwitcher';
 import { PAGE_GUTTER_X } from '../ui/PageShell';
 import { PLATFORM_NAME } from './PlatformBrand';
 
@@ -39,7 +46,9 @@ const PAGE_ICONS: Array<{ prefix: string; icon: LucideIcon; exact?: boolean }> =
   { prefix: '/campaigns', icon: Send },
   { prefix: '/templates', icon: FileText },
   { prefix: '/content-studio', icon: Sparkles },
+  { prefix: '/commerce', icon: ShoppingBag },
   { prefix: '/contacts', icon: Users },
+  { prefix: '/tickets', icon: LifeBuoy },
   { prefix: '/team', icon: Headset },
   { prefix: '/reports', icon: LineChart },
   { prefix: '/billing', icon: CreditCard },
@@ -60,9 +69,13 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
   const initial = userName?.charAt(0).toUpperCase() || 'U';
   const firstName = userName?.split(' ')[0] || 'there';
   const workspace = companyName || PLATFORM_NAME;
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  useGlobalSearchShortcut(() => setSearchOpen(true));
 
   return (
-    <header className="topbar-glass sticky top-0 z-30 shrink-0">
+    <>
+      <header className="topbar-glass sticky top-0 z-30 shrink-0">
       <div className={`flex min-h-[64px] items-center gap-3 py-2.5 lg:gap-4 lg:py-0 ${PAGE_GUTTER_X}`}>
         {onMenuOpen && (
           <button
@@ -105,7 +118,22 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
 
         {/* Actions */}
         <div className="flex shrink-0 items-center gap-2 lg:gap-2.5">
-          <ThemeToggle variant="compact" />
+          <NumberSwitcherMobile />
+          <NumberSwitcher />
+
+          <button
+            type="button"
+            onClick={() => setSearchOpen(true)}
+            className="topbar-icon-btn hidden sm:flex"
+            aria-label="Search"
+            title="Search (⌘K)"
+          >
+            <Search className="h-[17px] w-[17px]" strokeWidth={2} />
+          </button>
+
+          <NotificationCenter />
+
+          {/* <ThemeToggle variant="compact" /> */}
 
           <div className="topbar-divider hidden h-8 w-px sm:block" />
 
@@ -147,6 +175,8 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
           )}
         </div>
       </div>
-    </header>
+      </header>
+      <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
+    </>
   );
 }

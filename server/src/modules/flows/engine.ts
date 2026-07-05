@@ -9,6 +9,8 @@ import { createModuleLogger } from '../../utils/logger';
 import { withConversationLock } from './lock';
 import { incrementFlowStat } from './analytics';
 import { detectMessageLanguage } from './language';
+import { linkFlowNodes } from './link-nodes';
+import { matchInteractiveTextIntent, resolveInteractiveBranch, syncButtonNode } from './branch-resolve';
 import type { InteractiveMessageOptions } from '../messages/interactive';
 import {
   HANDOFF_KEYWORDS,
@@ -22,7 +24,8 @@ const log = createModuleLogger('flow-engine');
 
 function parseNodes(raw: unknown): FlowNode[] {
   if (!Array.isArray(raw)) return [];
-  return raw as FlowNode[];
+  const synced = (raw as FlowNode[]).map((node) => syncButtonNode(node));
+  return linkFlowNodes(synced);
 }
 
 function getFlowState(botState: unknown): FlowState | null {
@@ -60,11 +63,8 @@ function interpolate(text: string, variables: Record<string, string>, contactNam
   return text.replace(/\{\{(\w+)\}\}/g, (_, key: string) => vars[key] || '');
 }
 
-function resolveNextNode(node: FlowNode, buttonReplyId?: string): string | null {
-  if ((node.type === 'buttons' || node.type === 'list') && buttonReplyId) {
-    return node.branches?.[buttonReplyId] || node.next || null;
-  }
-  return node.next || null;
+function resolveNextNode(node: FlowNode, buttonReplyId?: string, buttonTitle?: string): string | null {
+  return resolveInteractiveBranch(node, buttonReplyId, buttonTitle);
 }
 
 function isValidEmail(value: string): boolean {
@@ -81,14 +81,7 @@ function wantsHandoff(message: string): boolean {
 }
 
 function matchTextIntent(node: FlowNode, content: string): string | null {
-  if (!node.intentRoutes?.length || !content.trim()) return null;
-  const lower = content.toLowerCase();
-  for (const route of node.intentRoutes) {
-    if (route.keywords.some((kw) => lower.includes(kw.toLowerCase()))) {
-      return node.branches?.[route.branchKey] || null;
-    }
-  }
-  return null;
+  return matchInteractiveTextIntent(node, content);
 }
 
 async function hasRecentCampaignMessage(
@@ -359,10 +352,21 @@ async function executeNode(
             return { done: false, nextNodeId: node.next || null, waitingFor: null };
           }
           if (node.buttons?.length) {
+            const buttons = (node.buttons || [])
+              .map((btn, idx) => ({
+                id: btn.id?.trim() || `${node.id}-btn-${idx}`,
+                title: (btn.title?.trim() || `Option ${idx + 1}`).slice(0, 20),
+              }))
+              .filter((btn) => btn.title)
+              .slice(0, 3);
+            if (buttons.length === 0) {
+              await logNode(flowId, payload, node, 'failed', undefined, 'No valid reply buttons', Date.now() - start);
+              return { done: false, nextNodeId: node.next || null, waitingFor: null };
+            }
             await sendFlowMessage(payload, node.text, state.variables, contactName, 'INTERACTIVE', {
               flowId,
-              buttons: node.buttons,
-              interactive: { mode: 'reply', body: node.text, buttons: node.buttons },
+              buttons,
+              interactive: { mode: 'reply', body: node.text, buttons },
             });
           }
         }
@@ -855,6 +859,68 @@ function validateAnswer(field: string, value: string): boolean {
   return value.trim().length > 0;
 }
 
+async function recoverFlowFromButtonReply(
+  payload: InboundFlowPayload,
+  contactName?: string | null,
+  contactTags?: string[]
+): Promise<boolean> {
+  if (!payload.buttonReplyId) return false;
+
+  const recent = await prisma.message.findFirst({
+    where: {
+      conversationId: payload.conversationId,
+      direction: 'OUTBOUND',
+      type: 'INTERACTIVE',
+      createdAt: { gte: new Date(Date.now() - 24 * 3600000) },
+    },
+    orderBy: { createdAt: 'desc' },
+    select: { metadata: true },
+  });
+
+  const meta = recent?.metadata as Record<string, unknown> | null;
+  const flowId = meta?.flowId as string | undefined;
+  if (!flowId) return false;
+
+  const flow = await prisma.flow.findFirst({
+    where: { id: flowId, organizationId: payload.organizationId, enabled: true },
+  });
+  if (!flow) return false;
+
+  const nodes = parseNodes(flow.nodes);
+  const menuNode = nodes.find(
+    (n) =>
+      (n.type === 'buttons' &&
+        n.buttons?.some((b) => b.id === payload.buttonReplyId || b.id.trim() === payload.buttonReplyId?.trim())) ||
+      (n.type === 'list' &&
+        n.listSections?.some((s) =>
+          s.rows.some((r) => r.id === payload.buttonReplyId || r.id.trim() === payload.buttonReplyId?.trim())
+        ))
+  );
+  if (!menuNode) return false;
+
+  const nextId = resolveNextNode(menuNode, payload.buttonReplyId, payload.content);
+  if (!nextId || !findNode(nodes, nextId)) return false;
+
+  const state: FlowState = {
+    flowId: flow.id,
+    flowName: flow.name,
+    currentNodeId: nextId,
+    waitingFor: null,
+    variables: {},
+    attempts: 0,
+  };
+  if (contactName) state.variables.name = contactName;
+
+  log.info('Recovering flow from button reply', {
+    flowId: flow.id,
+    conversationId: payload.conversationId,
+    buttonReplyId: payload.buttonReplyId,
+    nextId,
+  });
+
+  return runFromNode(payload, flow.id, nodes, nextId, state, contactName, contactTags);
+}
+
 async function processInboundFlow(payload: InboundFlowPayload): Promise<boolean> {
   const conversation = await prisma.conversation.findFirst({
     where: { id: payload.conversationId, organizationId: payload.organizationId },
@@ -898,46 +964,70 @@ async function processInboundFlow(payload: InboundFlowPayload): Promise<boolean>
     }
 
     if (existingState.waitingFor === 'button') {
-      if (payload.buttonReplyId) {
-        const nextId = resolveNextNode(currentNode, payload.buttonReplyId);
-        if (!nextId) {
-          await saveFlowState(payload.conversationId, null);
-          return true;
-        }
-        existingState.waitingFor = null;
-        existingState.attempts = 0;
-        return runFromNode(
-          payload,
-          flow.id,
-          nodes,
-          nextId,
-          existingState,
-          conversation.contact?.name,
-          contactTags
+      if (payload.buttonReplyId || payload.content?.trim()) {
+        let nextId = resolveNextNode(
+          currentNode,
+          payload.buttonReplyId,
+          payload.content
         );
-      }
 
-      if (payload.content) {
-        const intentNext = matchTextIntent(currentNode, payload.content);
-        if (intentNext) {
+        if (!nextId && !payload.buttonReplyId && payload.content) {
+          nextId = matchTextIntent(currentNode, payload.content);
+        }
+
+        if (nextId) {
+          const targetNode = findNode(nodes, nextId);
+          if (!targetNode) {
+            log.warn('Flow button branch target missing', {
+              flowId: flow.id,
+              nodeId: currentNode.id,
+              nextId,
+            });
+            await sendFlowMessage(
+              payload,
+              'Something went wrong with that option. Please try another button or type help.',
+              existingState.variables,
+              conversation.contact?.name
+            );
+            await saveFlowState(payload.conversationId, existingState);
+            return true;
+          }
           existingState.waitingFor = null;
           existingState.attempts = 0;
           return runFromNode(
             payload,
             flow.id,
             nodes,
-            intentNext,
+            nextId,
             existingState,
             conversation.contact?.name,
             contactTags
           );
         }
-        await sendFlowMessage(
-          payload,
-          'Please tap one of the buttons above to continue. 👆',
-          existingState.variables,
-          conversation.contact?.name
-        );
+
+        if (payload.buttonReplyId) {
+          log.warn('Flow button branch not found', {
+            flowId: flow.id,
+            nodeId: currentNode.id,
+            buttonReplyId: payload.buttonReplyId,
+            content: payload.content,
+            branches: currentNode.branches,
+            buttons: currentNode.buttons?.map((b) => b.id),
+          });
+          await sendFlowMessage(
+            payload,
+            'That option is not set up yet. Please tap one of the other buttons above.',
+            existingState.variables,
+            conversation.contact?.name
+          );
+        } else {
+          await sendFlowMessage(
+            payload,
+            'Please tap one of the buttons above to continue. 👆',
+            existingState.variables,
+            conversation.contact?.name
+          );
+        }
         await saveFlowState(payload.conversationId, existingState);
         return true;
       }
@@ -1047,6 +1137,15 @@ async function processInboundFlow(payload: InboundFlowPayload): Promise<boolean>
     }
 
     return true;
+  }
+
+  if (payload.buttonReplyId) {
+    const recovered = await recoverFlowFromButtonReply(
+      payload,
+      conversation.contact?.name,
+      contactTags
+    );
+    if (recovered) return true;
   }
 
   const matched = await matchFlow(payload.organizationId, payload, contactTags);

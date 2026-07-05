@@ -9,17 +9,17 @@ export default function AuthTabs() {
   const { pathname } = useLocation();
 
   return (
-    <div className="mb-7 grid grid-cols-2 gap-1 rounded-xl border border-theme-border/60 bg-theme-subtle/80 p-1">
+    <div className="mb-8 flex gap-6 border-b border-theme-border">
       {tabs.map(({ label, to }) => {
         const active = pathname === to;
         return (
           <Link
             key={to}
             to={to}
-            className={`rounded-[10px] px-3 py-2.5 text-center text-[13px] font-semibold transition-all duration-200 ${
+            className={`-mb-px border-b-2 pb-3 text-sm font-medium transition-colors ${
               active
-                ? 'bg-theme-surface text-theme-fg shadow-sm ring-1 ring-whatsapp-500/20'
-                : 'text-theme-secondary hover:bg-theme-surface/50 hover:text-theme-fg'
+                ? 'border-whatsapp-600 text-theme-fg dark:border-whatsapp-400'
+                : 'border-transparent text-theme-muted hover:text-theme-fg'
             }`}
           >
             {label}

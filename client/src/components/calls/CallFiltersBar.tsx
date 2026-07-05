@@ -8,6 +8,8 @@ interface CallFiltersBarProps {
   onStatusChange: (value: string) => void;
   handler: string;
   onHandlerChange: (value: string) => void;
+  totalOnPage?: number;
+  liveCount?: number;
 }
 
 const statusOptions = [
@@ -33,27 +35,49 @@ export default function CallFiltersBar({
   onStatusChange,
   handler,
   onHandlerChange,
+  totalOnPage = 0,
+  liveCount = 0,
 }: CallFiltersBarProps) {
   return (
-    <div className="flex flex-wrap items-center gap-2 border-b border-neutral-100 bg-white/80 px-4 py-2.5">
+    <div className="inbox-list-header shrink-0 px-4 pb-4 pt-4">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div>
+          <p className="text-[15px] font-bold tracking-tight text-theme-fg">Call history</p>
+          <p className="mt-0.5 text-[11px] font-medium text-theme-muted">
+            {totalOnPage === 0 ? 'No calls yet' : `${totalOnPage} on this page`}
+          </p>
+        </div>
+        {liveCount > 0 && (
+          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-r from-emerald-500 to-whatsapp-600 px-2.5 py-1 text-[10px] font-bold text-white shadow-[0_2px_8px_rgba(37,211,102,0.35)]">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-70" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-white" />
+            </span>
+            {liveCount} live
+          </span>
+        )}
+      </div>
+
       <SearchInput
         value={search}
         onChange={onSearchChange}
         placeholder="Search phone or name..."
-        className="min-w-[160px] flex-1"
       />
-      <AppSelect
-        value={status}
-        onChange={(e) => onStatusChange(e.target.value)}
-        options={statusOptions}
-        className="w-[140px]"
-      />
-      <AppSelect
-        value={handler}
-        onChange={(e) => onHandlerChange(e.target.value)}
-        options={handlerOptions}
-        className="w-[140px]"
-      />
+
+      <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <AppSelect
+          value={status}
+          onChange={(e) => onStatusChange(e.target.value)}
+          options={statusOptions}
+          placeholder="All statuses"
+        />
+        <AppSelect
+          value={handler}
+          onChange={(e) => onHandlerChange(e.target.value)}
+          options={handlerOptions}
+          placeholder="All handlers"
+        />
+      </div>
     </div>
   );
 }

@@ -2,9 +2,18 @@ import type { Edge, Node } from '@xyflow/react';
 import type { FlowNode, FlowNodeType } from '../../types';
 import { buildStepEdge, buildTriggerEdge } from './flowEdgeUtils';
 import { getNodeSummary } from './flowUtils';
-import { nodeMeta } from './flowMeta';
+import { createNode, nodeMeta } from './flowMeta';
 
 export const TRIGGER_NODE_ID = '__trigger__';
+
+/** Node types whose outgoing edges map to `branches`, not `next`. */
+export const BRANCHING_NODE_TYPES: FlowNodeType[] = [
+  'buttons',
+  'list',
+  'condition',
+  'ab_split',
+  'language',
+];
 
 const NODE_WIDTH = 260;
 const NODE_HEIGHT = 120;
@@ -167,9 +176,12 @@ export function applyGraphConnections(
   edges: Edge[],
   startNodeId: string
 ): { nodes: FlowNode[]; startNodeId: string } {
+  const preservedBranches = new Map(nodes.map((n) => [n.id, { ...(n.branches || {}) }]));
+  const validTargets = new Set(nodes.map((n) => n.id));
+
   const updated = nodes.map((node) => {
     const clone = { ...node };
-    if (['buttons', 'condition', 'ab_split', 'language'].includes(node.type)) {
+    if (BRANCHING_NODE_TYPES.includes(node.type)) {
       clone.branches = {};
       clone.next = undefined;
     } else {
@@ -179,6 +191,7 @@ export function applyGraphConnections(
   });
 
   const nodeMap = new Map(updated.map((n) => [n.id, n]));
+  const wiredHandles = new Map<string, Set<string>>();
   let newStartNodeId = startNodeId;
 
   for (const edge of edges) {
@@ -191,10 +204,26 @@ export function applyGraphConnections(
     if (!source) continue;
     const handle = edge.sourceHandle || 'next';
 
-    if (['buttons', 'condition', 'ab_split', 'language'].includes(source.type)) {
+    if (BRANCHING_NODE_TYPES.includes(source.type)) {
       source.branches = { ...(source.branches || {}), [handle]: edge.target };
+      if (!wiredHandles.has(source.id)) wiredHandles.set(source.id, new Set());
+      wiredHandles.get(source.id)!.add(handle);
     } else {
       source.next = edge.target;
+    }
+  }
+
+  // Keep panel-configured routes when the canvas has no wire for that button/row.
+  for (const node of nodeMap.values()) {
+    if (node.type !== 'buttons' && node.type !== 'list') continue;
+    const preserved = preservedBranches.get(node.id) || {};
+    const wired = wiredHandles.get(node.id) || new Set();
+    for (const handle of getNodeHandles(node)) {
+      if (wired.has(handle.id)) continue;
+      const target = preserved[handle.id];
+      if (target && validTargets.has(target)) {
+        node.branches = { ...(node.branches || {}), [handle.id]: target };
+      }
     }
   }
 
@@ -212,42 +241,5 @@ export function applyNodePositions(nodes: FlowNode[], rfNodes: Node[]): FlowNode
 }
 
 export function createNodeAtPosition(type: FlowNodeType, position: { x: number; y: number }): FlowNode {
-  const id = `node-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-  const base: FlowNode = { id, type, position };
-
-  switch (type) {
-    case 'message':
-    case 'handoff':
-    case 'ai':
-    case 'end':
-    case 'assign':
-      return { ...base, text: '' };
-    case 'buttons':
-      return {
-        ...base,
-        text: '',
-        buttons: [{ id: 'btn-1', title: 'Option 1' }],
-        branches: {},
-      };
-    case 'question':
-      return { ...base, prompt: '', field: 'name', maxRetries: 2 };
-    case 'tag':
-      return { ...base, tag: '' };
-    case 'condition':
-      return { ...base, conditionType: 'business_hours', branches: { true: '', false: '' } };
-    case 'template':
-      return { ...base, templateName: '', templateLanguage: 'en_US' };
-    case 'delay':
-      return { ...base, delaySeconds: 30 };
-    case 'media':
-      return { ...base, mediaType: 'image', mediaUrl: '' };
-    case 'webhook':
-      return { ...base, webhookUrl: '', webhookMethod: 'POST' };
-    case 'ab_split':
-      return { ...base, branches: { a: '', b: '' } };
-    case 'language':
-      return { ...base, languageCode: 'en', branches: { match: '', default: '' } };
-    default:
-      return base;
-  }
+  return { ...createNode(type, 0), position };
 }

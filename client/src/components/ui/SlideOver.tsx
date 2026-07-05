@@ -22,8 +22,8 @@ interface SlideOverProps {
 const widths = {
   md: 'w-full max-w-md sm:max-w-[min(100vw,28rem)]',
   lg: 'w-full max-w-lg sm:max-w-[min(100vw,32rem)]',
-  xl: 'w-full max-w-xl sm:max-w-[min(100vw,56rem)]',
-  '2xl': 'w-full sm:max-w-[min(100vw,48rem)]',
+  xl: 'w-full max-w-xl sm:max-w-[min(100vw,36rem)]',
+  '2xl': 'w-full sm:max-w-[min(100vw,42rem)]',
 };
 
 export default function SlideOver({
@@ -41,24 +41,35 @@ export default function SlideOver({
   const theme = slideOverAccents[accent];
   const panelRef = useRef<HTMLDivElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!open) return;
     previousFocus.current = document.activeElement as HTMLElement | null;
+    requestAnimationFrame(() => {
+      const firstField = panelRef.current?.querySelector<HTMLElement>(
+        'input:not([type="hidden"]):not([tabindex="-1"]), textarea, select',
+      );
+      (firstField ?? panelRef.current?.querySelector<HTMLElement>('button'))?.focus();
+    });
+    return () => {
+      previousFocus.current?.focus();
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') onCloseRef.current();
     };
     document.body.style.overflow = 'hidden';
     window.addEventListener('keydown', onKey);
-    requestAnimationFrame(() => {
-      panelRef.current?.querySelector<HTMLElement>('button')?.focus();
-    });
     return () => {
       document.body.style.overflow = '';
       window.removeEventListener('keydown', onKey);
-      previousFocus.current?.focus();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open || typeof document === 'undefined') return null;
 
@@ -135,8 +146,13 @@ interface SlideOverFooterProps {
   submitLabel?: string;
   loading?: boolean;
   submitDisabled?: boolean;
+  submitVariant?: 'primary' | 'secondary';
   onDelete?: () => void;
   deleteLabel?: string;
+  primaryAction?: {
+    label: string;
+    onClick: () => void;
+  };
 }
 
 export function SlideOverFooter({
@@ -144,9 +160,16 @@ export function SlideOverFooter({
   submitLabel = 'Save',
   loading,
   submitDisabled,
+  submitVariant = 'primary',
   onDelete,
   deleteLabel = 'Delete',
+  primaryAction,
 }: SlideOverFooterProps) {
+  const submitClass =
+    submitVariant === 'secondary' || primaryAction
+      ? 'inline-flex h-10 min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl border border-theme-border bg-theme-surface px-5 text-[13px] font-semibold text-theme-fg transition hover:bg-theme-subtle sm:flex-none disabled:opacity-50'
+      : 'btn-primary inline-flex h-10 min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl px-5 text-[13px] font-semibold sm:flex-none disabled:opacity-50';
+
   return (
     <div className="flex flex-wrap items-center gap-2.5">
       {onDelete && (
@@ -172,13 +195,26 @@ export function SlideOverFooter({
         type="submit"
         form="slideover-form"
         disabled={loading || submitDisabled}
-        className="btn-primary inline-flex h-10 min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl px-5 text-[13px] font-semibold sm:flex-none disabled:opacity-50"
+        className={submitClass}
       >
-        {loading && (
+        {loading && !primaryAction && (
           <span className="h-4 w-4 animate-spin rounded-full border-2 border-current/25 border-t-current" />
         )}
         {submitLabel}
       </button>
+      {primaryAction && (
+        <button
+          type="button"
+          disabled={loading || submitDisabled}
+          onClick={primaryAction.onClick}
+          className="btn-primary inline-flex h-10 min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl px-5 text-[13px] font-semibold sm:flex-none disabled:opacity-50"
+        >
+          {loading && (
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+          )}
+          {primaryAction.label}
+        </button>
+      )}
     </div>
   );
 }

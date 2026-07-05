@@ -1,6 +1,61 @@
 import { Link } from 'react-router-dom';
-import { Bot, PhoneCall, Settings } from 'lucide-react';
+import {
+  Bot,
+  Clock3,
+  FileText,
+  PhoneCall,
+  PhoneIncoming,
+  Settings,
+  Timer,
+} from 'lucide-react';
 import AppButton from '../ui/AppButton';
+import EmptyState from '../ui/EmptyState';
+
+function CallsEmptyState() {
+  const features = [
+    { icon: Clock3, label: 'When', hint: 'Date & time' },
+    { icon: Timer, label: 'Duration', hint: 'Call length' },
+    { icon: FileText, label: 'Transcript', hint: 'Full conversation' },
+  ];
+
+  return (
+    <div className="inbox-placeholder-bg flex h-full min-h-0 flex-1 flex-col items-center justify-center px-6 py-8">
+      <div className="w-full max-w-[380px] text-center">
+        <div className="relative mx-auto flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-700 text-white shadow-[0_8px_24px_rgba(99,102,241,0.35)]">
+          <PhoneIncoming className="h-7 w-7" strokeWidth={1.85} />
+        </div>
+
+        <h2 className="mt-6 text-xl font-bold tracking-tight text-theme-fg">No calls yet</h2>
+        <p className="mx-auto mt-2 max-w-[300px] text-[14px] leading-relaxed text-theme-secondary">
+          When a customer calls your WhatsApp number, every conversation appears here automatically.
+        </p>
+
+        <div className="mt-8 grid grid-cols-3 gap-2">
+          {features.map(({ icon: Icon, label, hint }) => (
+            <div
+              key={label}
+              className="flex flex-col items-center rounded-xl border border-white/70 bg-white/80 px-2 py-3 shadow-sm backdrop-blur-sm dark:border-neutral-700/60 dark:bg-neutral-900/75"
+            >
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-50 text-violet-600 dark:bg-violet-950/50 dark:text-violet-300">
+                <Icon className="h-4 w-4" strokeWidth={2} />
+              </div>
+              <p className="mt-2 text-[11px] font-bold text-theme-fg">{label}</p>
+              <p className="mt-0.5 text-[10px] leading-tight text-theme-muted">{hint}</p>
+            </div>
+          ))}
+        </div>
+
+        <p className="mx-auto mt-6 inline-flex items-center gap-2 rounded-full border border-violet-200/60 bg-violet-50/80 px-4 py-2 text-[12px] font-semibold text-violet-700 dark:border-violet-500/20 dark:bg-violet-950/40 dark:text-violet-300">
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-violet-400 opacity-50" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-violet-500" />
+          </span>
+          Complete setup above to go live
+        </p>
+      </div>
+    </div>
+  );
+}
 
 interface CallPlaceholderProps {
   variant?: 'empty' | 'select' | 'setup';
@@ -20,116 +75,92 @@ export default function CallPlaceholder({
   if (variant === 'setup') {
     const copy = {
       settings: {
-        title: 'Connect WhatsApp',
-        text: 'Link your business number to start receiving voice calls.',
+        title: 'Connect WhatsApp first',
+        text: 'Link your business number in Settings to start receiving voice calls.',
         icon: Settings,
-        cta: 'Open Settings',
+        cta: 'Go to Settings',
         to: '/settings',
+        steps: ['Open Settings', 'Connect your WhatsApp number', 'Come back here to enable calls'],
       },
       enable: {
-        title: 'Turn on calls',
-        text: 'Enable voice calling so customers can reach you on WhatsApp.',
+        title: 'Turn on voice calls',
+        text: 'Enable calling so customers can reach you directly on WhatsApp.',
         icon: PhoneCall,
         cta: 'Enable now',
         to: null,
+        steps: ['Tap Enable now below', 'Wait a few seconds for setup', 'You are ready to receive calls'],
       },
       bot: {
-        title: 'Set up your AI bot',
-        text: 'Create an active bot to answer calls on your behalf.',
+        title: 'Set up your AI assistant',
+        text: 'Create an active bot that can answer calls for you, 24/7.',
         icon: Bot,
         cta: 'Go to AI Bots',
         to: '/ai-bot',
+        steps: ['Open AI Bots', 'Create and turn on a bot', 'Return here to test calls'],
       },
     }[setupAction || 'settings'];
 
     const Icon = copy.icon;
 
     return (
-      <div className="inbox-chat-bg flex flex-1 flex-col items-center justify-center p-8">
-        <div className="relative">
-          <div className="pointer-events-none absolute -inset-10 rounded-full bg-violet-500/10 blur-3xl" />
-          <div className="relative flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-violet-50 to-white shadow-panel ring-1 ring-violet-100">
-            <Icon className="h-9 w-9 text-violet-600" strokeWidth={1.75} />
-          </div>
-        </div>
-        <h2 className="mt-6 text-lg font-extrabold tracking-tight text-neutral-900">{copy.title}</h2>
-        <p className="mt-2 max-w-sm text-center text-[13px] font-medium leading-relaxed text-neutral-600">
-          {copy.text}
-        </p>
-        {setupAction === 'enable' && enableHints.length > 0 && (
-          <ul className="mt-5 max-w-md space-y-2 text-left">
-            {enableHints.map((hint) => (
-              <li
-                key={hint}
-                className="flex gap-2 rounded-xl border border-amber-200/70 bg-amber-50/80 px-3 py-2 text-[12px] font-medium leading-relaxed text-amber-950"
-              >
-                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
-                {hint}
-              </li>
-            ))}
-          </ul>
-        )}
-        <div className="mt-6">
-          {copy.to ? (
-            <Link to={copy.to}>
-              <AppButton>{copy.cta}</AppButton>
-            </Link>
-          ) : (
-            <AppButton loading={enabling} onClick={onEnable}>
-              {copy.cta}
-            </AppButton>
-          )}
-        </div>
+      <div className="inbox-chat-bg flex flex-col items-center justify-center p-10 sm:p-14">
+        <EmptyState
+          icon={Icon}
+          title={copy.title}
+          description={copy.text}
+          steps={setupAction === 'enable' && enableHints.length > 0 ? enableHints : copy.steps}
+          compact
+          className="w-full max-w-lg border-0 bg-transparent shadow-none"
+          action={
+            copy.to ? (
+              <Link to={copy.to}>
+                <AppButton>{copy.cta}</AppButton>
+              </Link>
+            ) : (
+              <AppButton loading={enabling} onClick={onEnable}>
+                {copy.cta}
+              </AppButton>
+            )
+          }
+        />
       </div>
     );
   }
 
   if (variant === 'empty') {
-    return (
-      <div className="flex flex-1 flex-col items-center justify-center px-6 py-10 text-center">
-        <div className="relative">
-          <div className="pointer-events-none absolute -inset-6 rounded-full bg-violet-500/10 blur-2xl" />
-          <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-100 to-white shadow-panel ring-1 ring-violet-100">
-            <PhoneCall className="h-7 w-7 text-violet-600" strokeWidth={1.75} />
-          </div>
-        </div>
-        <h3 className="mt-5 text-[15px] font-extrabold text-neutral-900">No calls yet</h3>
-        <p className="mt-2 max-w-[260px] text-[12px] font-medium leading-relaxed text-neutral-500">
-          When a customer calls your WhatsApp number, it appears here with date, duration, and full transcript.
-        </p>
-        <p className="mt-4 rounded-full border border-neutral-200/80 bg-neutral-50 px-3 py-1.5 text-[11px] font-semibold text-neutral-600">
-          Make sure setup above is complete
-        </p>
-      </div>
-    );
+    return <CallsEmptyState />;
   }
 
   return (
-    <div className="inbox-chat-bg flex flex-1 flex-col items-center justify-center p-8">
-      <div className="relative">
-        <div className="pointer-events-none absolute -inset-10 rounded-full bg-gradient-to-br from-violet-500/15 to-whatsapp-500/10 blur-3xl" />
-        <div className="relative flex h-24 w-24 items-center justify-center rounded-[1.75rem] bg-gradient-to-br from-white to-emerald-50 shadow-panel ring-1 ring-emerald-100/80">
-          <PhoneCall className="h-10 w-10 text-whatsapp-600" strokeWidth={1.5} />
+    <div className="inbox-placeholder-bg flex h-full min-h-0 flex-1 flex-col items-center justify-center px-6 py-8">
+      <div className="w-full max-w-[380px] text-center">
+        <div className="relative mx-auto flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-700 text-white shadow-[0_8px_24px_rgba(99,102,241,0.35)]">
+          <PhoneCall className="h-7 w-7" strokeWidth={1.85} />
         </div>
-      </div>
-      <h2 className="mt-6 text-xl font-extrabold tracking-tight text-neutral-900">Select a call</h2>
-      <p className="mt-2 max-w-sm text-center text-[13px] font-medium leading-relaxed text-neutral-600">
-        Pick any call from the list to read the full voice conversation between your customer and AI bot.
-      </p>
-      <div className="mt-6 grid max-w-xs gap-2 text-left">
-        {[
-          'See who called and when',
-          'Read the full voice transcript',
-          'End live calls from here',
-        ].map((tip) => (
-          <div
-            key={tip}
-            className="flex items-center gap-2 rounded-xl border border-white/80 bg-white/70 px-3 py-2 text-[12px] font-medium text-neutral-700 shadow-sm backdrop-blur-sm"
-          >
-            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-whatsapp-500" />
-            {tip}
-          </div>
-        ))}
+
+        <h2 className="mt-6 text-xl font-bold tracking-tight text-theme-fg">Select a call</h2>
+        <p className="mx-auto mt-2 max-w-[300px] text-[14px] leading-relaxed text-theme-secondary">
+          Pick a call from the list to view the transcript, duration, and handler details.
+        </p>
+
+        <div className="mt-8 grid grid-cols-3 gap-2">
+          {[
+            { icon: Clock3, label: 'When', hint: 'Date & time' },
+            { icon: Timer, label: 'Duration', hint: 'Call length' },
+            { icon: FileText, label: 'Transcript', hint: 'Full conversation' },
+          ].map(({ icon: Icon, label, hint }) => (
+            <div
+              key={label}
+              className="flex flex-col items-center rounded-xl border border-white/70 bg-white/80 px-2 py-3 shadow-sm backdrop-blur-sm dark:border-neutral-700/60 dark:bg-neutral-900/75"
+            >
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-50 text-violet-600 dark:bg-violet-950/50 dark:text-violet-300">
+                <Icon className="h-4 w-4" strokeWidth={2} />
+              </div>
+              <p className="mt-2 text-[11px] font-bold text-theme-fg">{label}</p>
+              <p className="mt-0.5 text-[10px] leading-tight text-theme-muted">{hint}</p>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

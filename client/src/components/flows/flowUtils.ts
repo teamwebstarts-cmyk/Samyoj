@@ -1,51 +1,77 @@
 import type { FlowNode, FlowNodeType } from '../../types';
 import { nodeMeta } from './flowMeta';
 
+/** Align button ids with branch keys before save (fixes option 3 routing after edits). */
+export function syncButtonNode(node: FlowNode): FlowNode {
+  if (node.type !== 'buttons') return node;
+
+  const oldButtons = node.buttons || [];
+  const branches = { ...(node.branches || {}) };
+  const seen = new Set<string>();
+
+  const buttons = oldButtons.slice(0, 3).map((btn, idx) => {
+    let id = btn.id?.trim() || `${node.id}-btn-${idx}`;
+    if (seen.has(id)) id = `${node.id}-btn-${idx}`;
+    seen.add(id);
+    return {
+      id,
+      title: (btn.title?.trim() || `Option ${idx + 1}`).slice(0, 20),
+    };
+  });
+
+  const syncedBranches: Record<string, string> = {};
+  for (let i = 0; i < buttons.length; i++) {
+    const btn = buttons[i];
+    const oldBtn = oldButtons[i];
+    const target =
+      branches[btn.id] ||
+      (oldBtn ? branches[oldBtn.id] : undefined) ||
+      Object.values(branches)[i];
+    if (target?.trim()) syncedBranches[btn.id] = target.trim();
+  }
+
+  return { ...node, buttons, branches: syncedBranches };
+}
+
+export function prepareNodesForSave(nodes: FlowNode[]): FlowNode[] {
+  return nodes.map((node) => syncButtonNode(node));
+}
+
 export function linkNodes(nodes: FlowNode[]): FlowNode[] {
+  if (!nodes.length) return nodes;
+
+  const branchTargets = new Set<string>();
+  for (const node of nodes) {
+    if (node.next) branchTargets.add(node.next);
+    if (node.targetNodeId) branchTargets.add(node.targetNodeId);
+    for (const target of Object.values(node.branches || {})) {
+      if (target?.trim()) branchTargets.add(target.trim());
+    }
+  }
+
   return nodes.map((node, index) => {
-    const next = index < nodes.length - 1 ? nodes[index + 1].id : undefined;
+    const fallbackNext = index < nodes.length - 1 ? nodes[index + 1].id : undefined;
+    const linearFallback = branchTargets.has(node.id) ? undefined : fallbackNext;
 
-    if (node.type === 'buttons') {
-      const branches = { ...(node.branches || {}) };
-      if (node.buttons) {
-        for (const btn of node.buttons) {
-          if (!branches[btn.id] && next) branches[btn.id] = next;
-        }
-      }
-      return { ...node, branches, next };
+    if (node.type === 'buttons' || node.type === 'list') {
+      return {
+        ...node,
+        branches: { ...(node.branches || {}) },
+        next: node.next || linearFallback,
+      };
     }
 
-    if (node.type === 'list') {
-      const branches = { ...(node.branches || {}) };
-      for (const section of node.listSections || []) {
-        for (const row of section.rows) {
-          if (!branches[row.id] && next) branches[row.id] = next;
-        }
-      }
-      return { ...node, branches, next };
-    }
-
-    if (node.type === 'condition') {
-      const branches = { ...(node.branches || {}) };
-      if (!branches.true && next) branches.true = next;
-      if (!branches.false && next) branches.false = next;
-      return { ...node, branches };
-    }
-
-    if (node.type === 'ab_split') {
-      const branches = { ...(node.branches || {}) };
-      if (!branches.a && next) branches.a = next;
-      if (!branches.b && next) branches.b = next;
-      return { ...node, branches };
+    if (node.type === 'condition' || node.type === 'ab_split') {
+      return { ...node, branches: { ...(node.branches || {}) } };
     }
 
     if (node.type === 'language') {
       const branches = { ...(node.branches || {}) };
-      if (!branches.default && next) branches.default = next;
+      if (!branches.default && linearFallback) branches.default = linearFallback;
       return { ...node, branches };
     }
 
-    return { ...node, next };
+    return { ...node, next: node.next || linearFallback };
   });
 }
 
@@ -147,6 +173,15 @@ export function validateFlow(
       if (!node.text?.trim()) errors.push('Quick Buttons needs a message');
       const mode = node.buttonMode || 'reply';
       if (mode === 'reply' && !node.buttons?.length) errors.push('Add at least one reply button');
+      if (mode === 'reply' && node.buttons?.length) {
+        for (let i = 0; i < node.buttons.length; i++) {
+          const btn = node.buttons[i];
+          if (!btn.title?.trim()) errors.push(`Button ${i + 1} needs a label`);
+          if (!node.branches?.[btn.id]) {
+            errors.push(`Button "${btn.title || i + 1}" needs a connected next step`);
+          }
+        }
+      }
       if (mode === 'url' && !node.ctaUrl?.trim()) errors.push('Add a website link for the URL button');
       if (mode === 'call' && !node.ctaPhone?.trim()) errors.push('Add a phone number for the call button');
     }
@@ -191,6 +226,213 @@ function previewTime(index: number): string {
   const hour = 10 + Math.floor(index / 12);
   const minute = (index * 3) % 60;
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+}
+
+type PreviewPush = (message: Record<string, unknown> & { id?: string }) => void;
+
+function processNodeForPreview(
+  node: FlowNode,
+  push: PreviewPush,
+  seq: { value: number },
+  options: { branchChoice?: string; markAsRead?: boolean },
+): { jumpToNodeId?: string | null; stop?: boolean } {
+  const time = previewTime(seq.value);
+
+  if (node.type === 'buttons') {
+    const body = node.text?.trim() || 'Please choose an option:';
+    const mode = node.buttonMode || 'reply';
+
+    if (mode === 'url') {
+      push({
+        kind: 'buttons',
+        text: body,
+        buttons: [{ id: 'url', title: `🔗 ${node.ctaLabel?.trim() || 'Visit website'}` }],
+        time,
+      });
+      return { jumpToNodeId: node.next ?? null };
+    }
+
+    if (mode === 'call') {
+      push({
+        kind: 'buttons',
+        text: body,
+        buttons: [{ id: 'call', title: `📞 ${node.ctaLabel?.trim() || 'Call us'}` }],
+        time,
+      });
+      return { jumpToNodeId: node.next ?? null };
+    }
+
+    push({
+      kind: 'buttons',
+      text: body,
+      buttons: (node.buttons || []).map((btn) => ({ id: btn.id, title: btn.title })),
+      time,
+    });
+
+    const btn = node.buttons?.find((b) => b.id === options.branchChoice) || node.buttons?.[0];
+    if (btn) {
+      push({ kind: 'button_reply', text: btn.title, time: previewTime(seq.value) });
+      return { jumpToNodeId: node.branches?.[btn.id] ?? node.next ?? null };
+    }
+    return { jumpToNodeId: node.next ?? null };
+  }
+
+  if (node.type === 'list') {
+    const body = node.text?.trim() || 'Please select from the menu:';
+    const menuLabel = node.listButtonLabel?.trim() || 'View options';
+    push({
+      kind: 'buttons',
+      text: body,
+      buttons: [{ id: 'list-menu', title: `☰ ${menuLabel}` }],
+      time,
+    });
+    const firstRow = node.listSections?.flatMap((s) => s.rows)[0];
+    if (firstRow) {
+      push({ kind: 'button_reply', text: firstRow.title, time: previewTime(seq.value) });
+      return { jumpToNodeId: node.branches?.[firstRow.id] ?? node.next ?? null };
+    }
+    return { jumpToNodeId: node.next ?? null };
+  }
+
+  if (node.type === 'question') {
+    const prompt = node.prompt?.trim() || node.text?.trim();
+    if (prompt) push({ kind: 'outbound', text: prompt, time, status: 'read' });
+    const samples: Record<string, string> = {
+      name: 'Rahul Sharma',
+      email: 'rahul@example.com',
+      phone: '+91 98765 43210',
+      custom: 'Customer answer',
+    };
+    push({
+      kind: 'inbound',
+      text: samples[node.field || 'name'] || 'Customer answer',
+      time: previewTime(seq.value),
+    });
+    return { jumpToNodeId: node.next ?? null };
+  }
+
+  if (node.type === 'condition') {
+    push({ kind: 'notice', text: 'Rule checked — showing yes path' });
+    return { jumpToNodeId: node.branches?.true ?? node.next ?? null };
+  }
+
+  if (node.type === 'ab_split') {
+    push({ kind: 'notice', text: 'Split test — showing path A' });
+    return { jumpToNodeId: node.branches?.a ?? node.next ?? null };
+  }
+
+  if (node.type === 'tag') {
+    push({ kind: 'notice', text: `Contact tagged: ${node.tag || 'lead'}` });
+    return { jumpToNodeId: node.next ?? null };
+  }
+
+  if (node.type === 'assign') {
+    const text = node.text?.trim() || 'Connecting you with our team...';
+    push({ kind: 'outbound', text, time, status: 'delivered' });
+    push({ kind: 'notice', text: 'Assigned to available agent' });
+    return { jumpToNodeId: node.next ?? null };
+  }
+
+  if (node.type === 'handoff') {
+    const text = node.text?.trim() || 'Let me connect you with our team.';
+    push({ kind: 'outbound', text, time, status: 'delivered' });
+    push({ kind: 'notice', text: 'Passed to your team' });
+    return { stop: true };
+  }
+
+  if (node.type === 'delay') {
+    push({ kind: 'notice', text: `Waiting ${node.delaySeconds || 30} seconds...` });
+    return { jumpToNodeId: node.next ?? null };
+  }
+
+  if (node.type === 'webhook') {
+    push({ kind: 'notice', text: 'Connected to your app' });
+    return { jumpToNodeId: node.next ?? null };
+  }
+
+  if (node.type === 'template') {
+    const text = node.text?.trim() || `Template: ${node.templateName || 'message'}`;
+    push({ kind: 'outbound', text, time, status: 'delivered' });
+    return { jumpToNodeId: node.next ?? null };
+  }
+
+  if (node.type === 'media') {
+    const caption = node.mediaCaption?.trim();
+    const label = caption || `${node.mediaType || 'Media'} attachment`;
+    push({ kind: 'outbound', text: `📎 ${label}`, time, status: 'delivered' });
+    return { jumpToNodeId: node.next ?? null };
+  }
+
+  if (node.type === 'ai') {
+    const text = node.text?.trim() || 'Let me help with that...';
+    push({ kind: 'outbound', text, time, status: 'read' });
+    return { stop: true };
+  }
+
+  if (node.type === 'end') {
+    const text = node.text?.trim() || 'Thank you! Have a great day.';
+    push({ kind: 'outbound', text, time, status: 'read' });
+    return { stop: true };
+  }
+
+  if (node.type === 'wa_flow') {
+    const body = node.text?.trim() || 'Please fill out this form:';
+    const cta = node.waFlowCta?.trim() || 'Open form';
+    push({
+      kind: 'buttons',
+      text: body,
+      buttons: [{ id: 'wa-form', title: `📝 ${cta}` }],
+      time,
+    });
+    push({ kind: 'button_reply', text: 'Form submitted ✓', time: previewTime(seq.value) });
+    return { jumpToNodeId: node.next ?? null };
+  }
+
+  const text = node.text?.trim() || getNodeSummary(node);
+  if (text && text !== '—') {
+    push({
+      kind: 'outbound',
+      text,
+      time,
+      status: options.markAsRead ? 'read' : 'delivered',
+    });
+  }
+  return { jumpToNodeId: node.next ?? null };
+}
+
+export function buildFullFlowPreviewMessages(
+  nodes: FlowNode[],
+  startNodeId?: string,
+): FlowPreviewMessage[] {
+  if (!nodes.length) return [];
+
+  const idSet = new Set(nodes.map((n) => n.id));
+  const startId = startNodeId && idSet.has(startNodeId) ? startNodeId : nodes[0].id;
+
+  const messages: FlowPreviewMessage[] = [];
+  const seq = { value: 0 };
+  const push: PreviewPush = (message) => {
+    messages.push({ ...message, id: message.id ?? `preview-${seq.value++}` } as FlowPreviewMessage);
+  };
+
+  let currentId: string | null = startId;
+  let iterations = 0;
+  const visited = new Set<string>();
+
+  while (currentId && iterations < 30) {
+    iterations++;
+    if (visited.has(currentId)) break;
+    visited.add(currentId);
+
+    const node = nodes.find((n) => n.id === currentId);
+    if (!node) break;
+
+    const { jumpToNodeId, stop } = processNodeForPreview(node, push, seq, {});
+    if (stop) break;
+    currentId = jumpToNodeId !== undefined ? jumpToNodeId : null;
+  }
+
+  return messages;
 }
 
 export function buildFlowPreviewMessages(

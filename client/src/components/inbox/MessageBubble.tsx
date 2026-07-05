@@ -229,8 +229,8 @@ export default function MessageBubble({ message, onOpenMedia }: MessageBubblePro
 
 export function DateDivider({ label }: { label: string }) {
   return (
-    <div className="flex items-center justify-center py-2">
-      <span className="rounded-lg bg-[#ffffffdd] px-3 py-1 text-[11px] font-medium text-[#54656f] shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]">
+    <div className="flex items-center justify-center py-3">
+      <span className="rounded-full border border-white/60 bg-white/90 px-4 py-1 text-[11px] font-semibold tracking-wide text-[#54656f] shadow-[0_1px_3px_rgba(11,20,26,0.08)] backdrop-blur-sm">
         {label}
       </span>
     </div>

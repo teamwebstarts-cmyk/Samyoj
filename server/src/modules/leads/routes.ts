@@ -5,7 +5,11 @@ import { authenticate, requireOrg } from '../../middleware/auth';
 import { loadPermissions, requirePermission } from '../../middleware/permissions';
 import { sendSuccess, asyncHandler, AppError, paramId } from '../../utils/response';
 
+import { resolveActiveWhatsappNumber, leadsForNumberFilter } from '../whatsapp/active-number';
+
 const router = Router();
+
+router.use(authenticate, requireOrg, resolveActiveWhatsappNumber);
 
 const leadSchema = z.object({
   title: z.string().min(1),
@@ -18,18 +22,18 @@ const leadSchema = z.object({
 
 router.get(
   '/',
-  authenticate,
-  requireOrg,
   loadPermissions,
-  requirePermission('viewAnalytics'),
+  requirePermission('manageInbox', 'viewAnalytics'),
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
+    const numberId = req.activeWhatsappNumberId;
     const stage = req.query.stage as string | undefined;
 
     const leads = await prisma.lead.findMany({
       where: {
         organizationId: orgId,
         ...(stage ? { stage: stage as never } : {}),
+        ...leadsForNumberFilter(numberId),
       },
       include: {
         contact: { select: { id: true, phone: true, name: true } },
@@ -121,12 +125,23 @@ router.post(
   requirePermission('manageInbox'),
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
-    const contactId = paramId(req);
+    const contactId = req.params.contactId as string;
 
     const contact = await prisma.contact.findFirst({
       where: { id: contactId, organizationId: orgId },
     });
     if (!contact) throw new AppError(404, 'Contact not found');
+
+    const existing = await prisma.lead.findFirst({
+      where: { organizationId: orgId, contactId: contact.id },
+      include: {
+        contact: { select: { id: true, phone: true, name: true } },
+      },
+    });
+    if (existing) {
+      sendSuccess(res, { lead: existing, created: false });
+      return;
+    }
 
     const lead = await prisma.lead.create({
       data: {
@@ -141,7 +156,7 @@ router.post(
       },
     });
 
-    sendSuccess(res, lead, 201);
+    sendSuccess(res, { lead, created: true }, 201);
   })
 );
 

@@ -1,30 +1,15 @@
 import { NavLink, useLocation } from 'react-router-dom';
-import { MessageSquare, MoreHorizontal, Send, Users, Zap } from 'lucide-react';
+import { MoreHorizontal } from 'lucide-react';
+import { MOBILE_BOTTOM_NAV } from '../../config/navigation';
 
 interface MobileBottomNavProps {
   onMoreOpen: () => void;
 }
 
-const primaryTabs = [
-  { to: '/inbox', icon: MessageSquare, label: 'Inbox' },
-  { to: '/campaigns', icon: Send, label: 'Campaigns' },
-  { to: '/contacts', icon: Users, label: 'Contacts' },
-  { to: '/automations', icon: Zap, label: 'Automations' },
-];
-
 function isMoreRouteActive(pathname: string): boolean {
-  const morePrefixes = [
-    '/',
-    '/calls',
-    '/ai-bot',
-    '/templates',
-    '/content-studio',
-    '/reports',
-    '/team',
-    '/billing',
-    '/settings',
-  ];
-  return morePrefixes.some((p) => (p === '/' ? pathname === '/' : pathname.startsWith(p)));
+  const primaryPaths = MOBILE_BOTTOM_NAV.map((t) => t.to);
+  if (primaryPaths.some((p) => pathname.startsWith(p))) return false;
+  return true;
 }
 
 export default function MobileBottomNav({ onMoreOpen }: MobileBottomNavProps) {
@@ -38,7 +23,7 @@ export default function MobileBottomNav({ onMoreOpen }: MobileBottomNavProps) {
       aria-label="Primary navigation"
     >
       <div className="flex h-16 items-stretch">
-        {primaryTabs.map(({ to, icon: Icon, label }) => {
+        {MOBILE_BOTTOM_NAV.map(({ to, icon: Icon, label }) => {
           const isActive = pathname.startsWith(to);
           return (
             <NavLink

@@ -18,7 +18,7 @@ export const PAGE_META: Record<string, PageMeta> = {
   },
   '/automations': {
     title: 'Automations',
-    description: 'Automatic replies and step-by-step conversations',
+    description: 'Auto-replies and conversation flows',
   },
   '/ai-bot': {
     title: 'AI Bots',
@@ -34,11 +34,23 @@ export const PAGE_META: Record<string, PageMeta> = {
   },
   '/content-studio': {
     title: 'Content Studio',
-    description: 'Create on-brand images, copy, and videos',
+    description: 'Create on-brand copy and images',
+  },
+  '/commerce': {
+    title: 'Orders',
+    description: 'Track and fulfill WhatsApp catalog purchases',
   },
   '/contacts': {
     title: 'Contacts',
-    description: 'Your customer list',
+    description: 'Your customer list and sales pipeline',
+  },
+  '/leads': {
+    title: 'Pipeline',
+    description: 'Track prospects through your sales stages',
+  },
+  '/tickets': {
+    title: 'Tickets',
+    description: 'Support issues with reply deadlines',
   },
   '/team': {
     title: 'Team',
@@ -69,7 +81,7 @@ export function getPageMeta(pathname: string): PageMeta {
     return { title: 'Flow Builder', description: 'Design conversation flows' };
   }
   if (pathname.startsWith('/automations/meta-flows/')) {
-    return { title: 'Meta Flow Builder', description: 'Build WhatsApp Flow forms' };
+    return { title: 'WhatsApp Forms', description: 'Build WhatsApp Flow forms (advanced)' };
   }
 
   const match = Object.entries(PAGE_META).find(

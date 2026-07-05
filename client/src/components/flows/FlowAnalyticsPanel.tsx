@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { BarChart3, CheckCircle, Play, UserX } from 'lucide-react';
+import EmptyState from '../ui/EmptyState';
 import LoadingState from '../ui/LoadingState';
 import { flowApi } from '../../services/api';
 import { getErrorMessage } from '../../utils/errors';
@@ -48,7 +49,17 @@ export default function FlowAnalyticsPanel({ flowId, nodes }: FlowAnalyticsPanel
   }, [flowId]);
 
   if (loading) return <LoadingState label="Loading stats..." />;
-  if (!data) return <p className="text-[13px] text-neutral-500">No stats yet.</p>;
+  if (!data) {
+    return (
+      <EmptyState
+        icon={BarChart3}
+        compact
+        title="No stats yet"
+        description="Numbers appear once customers start going through this flow."
+        steps={['Turn the flow on', 'Share your WhatsApp number with customers', 'Check back here for completion rates']}
+      />
+    );
+  }
 
   const stats = [
     { label: 'Started', value: data.stats.starts, icon: Play, color: 'text-sky-600' },

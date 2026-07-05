@@ -6,7 +6,11 @@ import { loadPermissions, requirePermission } from '../../middleware/permissions
 import { sendSuccess, asyncHandler, AppError, paramId } from '../../utils/response';
 import { computeSlaDueAt } from '../sla/service';
 
+import { resolveActiveWhatsappNumber, ticketsForNumberFilter } from '../whatsapp/active-number';
+
 const router = Router();
+
+router.use(authenticate, requireOrg, resolveActiveWhatsappNumber);
 
 const ticketSchema = z.object({
   title: z.string().min(1),
@@ -21,18 +25,18 @@ const ticketSchema = z.object({
 
 router.get(
   '/',
-  authenticate,
-  requireOrg,
   loadPermissions,
   requirePermission('manageInbox'),
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
+    const numberId = req.activeWhatsappNumberId;
     const status = req.query.status as string | undefined;
 
     const tickets = await prisma.ticket.findMany({
       where: {
         organizationId: orgId,
         ...(status ? { status: status as never } : {}),
+        ...ticketsForNumberFilter(numberId),
       },
       include: {
         contact: { select: { id: true, phone: true, name: true } },
@@ -87,7 +91,7 @@ router.post(
   requirePermission('manageInbox'),
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
-    const conversationId = paramId(req);
+    const conversationId = req.params.conversationId as string;
     const { title, priority, category } = z
       .object({
         title: z.string().optional(),

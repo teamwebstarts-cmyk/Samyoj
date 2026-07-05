@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useSearchParams } from 'react-router-dom';
-import { ArrowLeft, MessageSquare, MessageSquarePlus } from 'lucide-react';
+import { ArrowLeft, MessageSquarePlus } from 'lucide-react';
 import ChatComposer, { type PendingAttachment } from '../components/inbox/ChatComposer';
 import TemplateComposer from '../components/inbox/TemplateComposer';
 import MediaViewer, { type MediaViewerItem } from '../components/inbox/MediaViewer';
@@ -10,6 +10,7 @@ import ChatPlaceholder from '../components/inbox/ChatPlaceholder';
 import ContactAvatar from '../components/inbox/ContactAvatar';
 import ConversationItem from '../components/inbox/ConversationItem';
 import ConversationListSkeleton from '../components/inbox/ConversationListSkeleton';
+import InboxListEmpty from '../components/inbox/InboxListEmpty';
 import MessageBubble, { DateDivider } from '../components/inbox/MessageBubble';
 import NewChatSlideOver from '../components/inbox/NewChatSlideOver';
 import ServiceWindowBanner, { ServiceWindowBadge } from '../components/inbox/ServiceWindowBanner';
@@ -20,20 +21,20 @@ import {
   groupMessagesByDate,
   messageHasMedia,
 } from '../components/inbox/inboxUtils';
-import EmptyState from '../components/ui/EmptyState';
 import InboxSelect, { type InboxSelectOption } from '../components/inbox/InboxSelect';
 import Pagination from '../components/ui/Pagination';
 import PageShell from '../components/ui/PageShell';
 import SearchInput from '../components/ui/SearchInput';
 import { DEFAULT_PAGE_SIZE } from '../constants/pagination';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { useInboxKeyboardShortcuts } from '../hooks/useInboxKeyboardShortcuts';
+import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 import InboxDetailsPanel, { type PanelSection } from '../components/inbox/InboxDetailsPanel';
 import InboxChatHeaderActions from '../components/inbox/InboxChatHeaderActions';
-import FirstVisitHint from '../components/ui/FirstVisitHint';
-import { useFirstVisit } from '../hooks/useFirstVisit';
 import InteractiveComposer from '../components/inbox/InteractiveComposer';
 import api, { aiBotApi, billingApi, callingApi, cannedRepliesApi, inboxApi, teamApi, ticketApi } from '../services/api';
 import { toastError, toastSuccess } from '../utils/toast';
+import { readNumberCache, writeNumberCache } from '../utils/whatsappNumberCache';
 import { useSocket } from '../hooks/useSocket';
 import { useAuth } from '../contexts/AuthContext';
 import type { AiBot, CannedReply, Conversation, ConversationLabel, Message, ServiceWindowInfo, TeamAgent } from '../types';
@@ -43,6 +44,20 @@ const CLOSED_WINDOW: ServiceWindowInfo = {
   lastInboundAt: null,
   expiresAt: null,
   windowOpensAt: null,
+};
+
+const INBOX_CACHE_KEY = 'inbox';
+
+type InboxNumberCache = {
+  conversations: Conversation[];
+  total: number;
+  selected: Conversation | null;
+  messages: Message[];
+  serviceWindow: ServiceWindowInfo;
+  page: number;
+  search: string;
+  statusFilter: string;
+  agentFilter: string;
 };
 
 const statusFilterOptions: InboxSelectOption[] = [
@@ -78,7 +93,6 @@ export default function InboxPage() {
   const [attachment, setAttachment] = useState<PendingAttachment | null>(null);
   const [mediaViewer, setMediaViewer] = useState<MediaViewerItem | null>(null);
   const [newChatOpen, setNewChatOpen] = useState(false);
-  const [inboxHintVisible, dismissInboxHint] = useFirstVisit('inbox-empty');
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -90,8 +104,61 @@ export default function InboxPage() {
     open: false,
   });
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const loadConversationsRef = useRef<() => Promise<void>>(async () => {});
+  const inboxSnapshotRef = useRef<InboxNumberCache>({
+    conversations: [],
+    total: 0,
+    selected: null,
+    messages: [],
+    serviceWindow: CLOSED_WINDOW,
+    page: 1,
+    search: '',
+    statusFilter: '',
+    agentFilter: '',
+  });
+  const [ticketConversationIds, setTicketConversationIds] = useState<Set<string>>(new Set());
 
   const debouncedSearch = useDebouncedValue(search);
+
+  inboxSnapshotRef.current = {
+    conversations,
+    total,
+    selected,
+    messages,
+    serviceWindow,
+    page,
+    search,
+    statusFilter,
+    agentFilter,
+  };
+
+  useEffect(() => {
+    ticketApi
+      .list()
+      .then((res) => {
+        const ids = new Set<string>();
+        for (const t of res.data.data.tickets || []) {
+          if (
+            t.conversation?.id &&
+            !['RESOLVED', 'CLOSED'].includes(t.status)
+          ) {
+            ids.add(t.conversation.id);
+          }
+        }
+        setTicketConversationIds(ids);
+      })
+      .catch(console.error);
+  }, []);
+
+  useInboxKeyboardShortcuts({
+    onFocusSearch: () => searchInputRef.current?.focus(),
+    onCloseChat: () => setSelected(null),
+    onOpenDetails: () => {
+      if (selected) setDetailsOverlay({ open: true });
+    },
+    enabled: true,
+  });
 
   useEffect(() => {
     teamApi
@@ -132,6 +199,40 @@ export default function InboxPage() {
       setLoading(false);
     }
   }, [debouncedSearch, statusFilter, agentFilter, page, user?.id]);
+
+  loadConversationsRef.current = loadConversations;
+
+  useOnActiveNumberChange(({ numberId, previousNumberId, isInitial }) => {
+    if (isInitial) return;
+
+    if (previousNumberId) {
+      writeNumberCache(INBOX_CACHE_KEY, previousNumberId, inboxSnapshotRef.current);
+    }
+
+    const cached = readNumberCache<InboxNumberCache>(INBOX_CACHE_KEY, numberId);
+    if (cached) {
+      setConversations(cached.conversations);
+      setTotal(cached.total);
+      setSelected(cached.selected);
+      setMessages(cached.messages);
+      setServiceWindow(cached.serviceWindow);
+      setPage(cached.page);
+      setSearch(cached.search);
+      setStatusFilter(cached.statusFilter);
+      setAgentFilter(cached.agentFilter);
+      setNewMessage('');
+      setTemplateMode(false);
+      setLoading(false);
+      return;
+    }
+
+    setSelected(null);
+    setMessages([]);
+    setServiceWindow(CLOSED_WINDOW);
+    setNewMessage('');
+    setTemplateMode(false);
+    void loadConversationsRef.current();
+  });
 
   useEffect(() => {
     setPage(1);
@@ -622,7 +723,7 @@ export default function InboxPage() {
         conversationId: selected.id,
         phone: selected.contact.phone,
       });
-      toastSuccess('Outbound call initiated.');
+      toastSuccess('Calling…');
       const callId = (data.data as { call?: { id: string } })?.call?.id;
       if (callId) navigate(`/calls/${callId}`);
     } catch (err: unknown) {
@@ -795,32 +896,40 @@ export default function InboxPage() {
   return (
     <PageShell inbox className="!h-[calc(100dvh-60px)] !max-h-[calc(100dvh-60px)] !min-h-0 !overflow-hidden">
       <div className="flex h-full min-h-0 flex-1 overflow-hidden">
-        <div className="inbox-shell flex h-full min-h-0 w-full flex-1 overflow-hidden md:rounded-2xl">
+        <div className="inbox-shell flex h-full min-h-0 w-full flex-1 flex-row overflow-hidden md:rounded-2xl">
           {/* Conversation list */}
           <div
-            className={`relative flex h-full min-h-0 w-full flex-col border-neutral-200/80 md:w-[360px] md:border-r lg:w-[400px] ${
+            className={`inbox-sidebar relative flex h-full min-h-0 w-full flex-col md:w-[360px] lg:w-[400px] ${
               selected ? 'hidden md:flex' : 'flex'
             }`}
           >
-            <div className="border-b border-neutral-100 bg-gradient-to-b from-emerald-50/60 via-white to-white px-4 pb-4 pt-4">
-              <div className="mb-3 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-neutral-500">
-                    Chats
-                  </span>
-                  {!loading && total > 0 && (
-                    <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-bold tabular-nums text-neutral-600 ring-1 ring-neutral-200/60">
-                      {total}
-                    </span>
-                  )}
+            <div className="inbox-list-header shrink-0 px-4 pb-4 pt-4">
+              <div className="mb-4 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-whatsapp-400 to-whatsapp-600 text-white shadow-[0_2px_8px_rgba(37,211,102,0.35)]">
+                    <MessageSquarePlus className="h-4 w-4" strokeWidth={2.25} />
+                  </div>
+                  <div>
+                    <h2 className="text-[15px] font-bold tracking-tight text-theme-fg leading-none">Inbox</h2>
+                    {!loading && total > 0 && (
+                      <p className="mt-0.5 text-[11px] font-medium text-theme-muted">
+                        {total} conversation{total !== 1 ? 's' : ''}
+                      </p>
+                    )}
+                  </div>
                 </div>
                 {unreadTotal > 0 && (
-                  <span className="rounded-full bg-gradient-to-r from-whatsapp-500 to-whatsapp-600 px-2 py-0.5 text-[10px] font-bold text-white shadow-[0_2px_8px_rgba(37,211,102,0.3)]">
+                  <span className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-whatsapp-500 to-whatsapp-600 px-3 py-1 text-[11px] font-bold text-white shadow-[0_2px_8px_rgba(37,211,102,0.35)]">
+                    <span className="relative flex h-1.5 w-1.5">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-60" />
+                      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-white" />
+                    </span>
                     {unreadTotal} unread
                   </span>
                 )}
               </div>
               <SearchInput
+                ref={searchInputRef}
                 value={search}
                 onChange={setSearch}
                 placeholder="Search by name or phone..."
@@ -852,54 +961,12 @@ export default function InboxPage() {
                 {loading ? (
                   <ConversationListSkeleton />
                 ) : conversations.length === 0 ? (
-                  <div className="p-5">
-                    {!search && !statusFilter && !agentFilter && (
-                      <FirstVisitHint
-                        visible={inboxHintVisible}
-                        onDismiss={dismissInboxHint}
-                        title="Your inbox is ready"
-                      >
-                        When customers message your WhatsApp number, conversations appear here. Use
-                        the + button to start a new chat anytime.
-                      </FirstVisitHint>
-                    )}
-                    <EmptyState
-                      icon={MessageSquare}
-                      title={search || statusFilter || agentFilter ? 'No conversations found' : 'No conversations yet'}
-                      description={
-                        search || statusFilter || agentFilter
-                          ? 'Try adjusting your search or filters.'
-                          : 'Connect WhatsApp, import contacts, or send a test message to get started.'
-                      }
-                      action={
-                        !search && !statusFilter && !agentFilter ? (
-                          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-center">
-                            <Link
-                              to="/settings?tab=whatsapp"
-                              className="btn-primary inline-flex items-center justify-center rounded-xl px-4 py-2 text-[13px] font-bold"
-                            >
-                              Connect WhatsApp
-                            </Link>
-                            <Link
-                              to="/contacts"
-                              className="inline-flex items-center justify-center rounded-xl border border-theme-border px-4 py-2 text-[13px] font-semibold text-theme-secondary hover:bg-theme-subtle"
-                            >
-                              Import contacts
-                            </Link>
-                            <button
-                              type="button"
-                              onClick={() => setNewChatOpen(true)}
-                              className="inline-flex items-center justify-center rounded-xl border border-theme-border px-4 py-2 text-[13px] font-semibold text-theme-secondary hover:bg-theme-subtle"
-                            >
-                              Send test message
-                            </button>
-                          </div>
-                        ) : undefined
-                      }
-                    />
-                  </div>
+                  <InboxListEmpty
+                    filtered={Boolean(search || statusFilter || agentFilter)}
+                    onNewChat={() => setNewChatOpen(true)}
+                  />
                 ) : (
-                  <div className="divide-y divide-neutral-100/80">
+                  <div className="divide-y divide-neutral-200 dark:divide-neutral-800">
                     {conversations.map((conv) => (
                       <ConversationItem
                         key={conv.id}
@@ -907,6 +974,7 @@ export default function InboxPage() {
                         selected={selected?.id === conv.id}
                         onSelect={() => selectConversation(conv)}
                         onContextMenu={(event) => openChatContextMenu(event, conv)}
+                        hasTicket={ticketConversationIds.has(conv.id)}
                       />
                     ))}
                   </div>
@@ -914,7 +982,7 @@ export default function InboxPage() {
               </div>
 
               {hasPagination && (
-                <div className="shrink-0 border-t border-neutral-100 bg-white">
+                <div className="shrink-0 border-t border-neutral-100/80 bg-white/80 backdrop-blur-sm dark:border-neutral-800/80 dark:bg-neutral-950/80">
                   <Pagination
                     page={page}
                     pageSize={DEFAULT_PAGE_SIZE}
@@ -929,29 +997,29 @@ export default function InboxPage() {
             <button
               type="button"
               onClick={() => setNewChatOpen(true)}
-              className={`btn-primary absolute right-4 z-20 flex h-14 w-14 items-center justify-center rounded-full shadow-[0_4px_20px_rgba(37,211,102,0.45)] transition hover:scale-[1.03] hover:shadow-[0_6px_28px_rgba(37,211,102,0.5)] active:scale-95 ${
+              className={`inbox-fab absolute right-4 z-20 flex h-12 w-12 items-center justify-center rounded-full text-white transition hover:scale-105 active:scale-95 ${
                 hasPagination ? 'bottom-[4.75rem]' : 'bottom-5'
               }`}
               aria-label="New chat"
             >
-              <MessageSquarePlus className="h-6 w-6" strokeWidth={2.25} />
+              <MessageSquarePlus className="h-5 w-5" strokeWidth={2.25} />
             </button>
           </div>
 
           {/* Chat area */}
           <div
-            className={`flex h-full min-h-0 min-w-0 flex-1 bg-white ${!selected ? 'hidden md:flex' : 'flex'}`}
+            className={`inbox-chat-pane flex h-full min-h-0 min-w-0 flex-col overflow-hidden ${!selected ? 'hidden md:flex' : 'flex'}`}
           >
             {selected ? (
-              <>
+              <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
                 <div
-                  className="flex min-h-0 min-w-0 flex-1 flex-col"
+                  className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
                   onContextMenu={(event) => openChatContextMenu(event, selected)}
                 >
-                <div className="flex flex-wrap items-center gap-3 border-b border-neutral-100 bg-gradient-to-r from-white via-emerald-50/30 to-white px-4 py-3">
+                <div className="inbox-chat-header flex shrink-0 items-center gap-3 px-4 py-3">
                   <button
                     type="button"
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-neutral-200/80 bg-white text-neutral-700 shadow-input transition hover:border-whatsapp-500/30 hover:bg-emerald-50 md:hidden"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-neutral-200/80 bg-white text-neutral-700 shadow-input transition hover:border-whatsapp-500/30 hover:bg-emerald-50 md:hidden dark:border-neutral-700 dark:bg-neutral-900 dark:hover:bg-emerald-950/30"
                     onClick={() => setSelected(null)}
                     aria-label="Back to conversations"
                   >
@@ -964,21 +1032,22 @@ export default function InboxPage() {
                     size="lg"
                   />
 
-                  <div className="min-w-0 flex-1 basis-[140px]">
-                    <p className="truncate text-[15px] font-extrabold tracking-tight text-neutral-900">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[15px] font-bold tracking-tight text-theme-fg">
                       {selected.contact.name || selected.contact.phone}
                     </p>
-                    <p className="truncate text-[12px] font-medium text-neutral-500">
+                    <p className="truncate text-[12px] font-medium text-theme-muted">
                       {selected.contact.phone}
                       {selected.contact.name && (
-                        <span className="text-neutral-400"> · WhatsApp</span>
+                        <span className="text-theme-muted/70"> · WhatsApp</span>
                       )}
                       {selected.assignedAgent && (
-                        <span className="text-emerald-600"> · {selected.assignedAgent.name}</span>
+                        <span className="text-emerald-600 dark:text-emerald-400"> · {selected.assignedAgent.name}</span>
                       )}
                     </p>
                   </div>
 
+                  <div className="flex shrink-0 items-center gap-2">
                   <InboxChatHeaderActions
                     selected={selected}
                     botIsLive={botIsLive}
@@ -999,10 +1068,12 @@ export default function InboxPage() {
                   <div className="hidden md:block">
                     <ServiceWindowBadge serviceWindow={serviceWindow} />
                   </div>
+                  </div>
                 </div>
 
                 {selected.botHandoffAt && (
-                  <div className="border-b border-orange-200/60 bg-orange-50/80 px-4 py-2 text-center text-[12px] font-medium text-orange-900">
+                  <div className="inbox-status-banner border-b border-orange-200/50 bg-gradient-to-r from-orange-50/90 to-amber-50/70 text-orange-900 dark:from-orange-950/40 dark:to-amber-950/30 dark:text-orange-200">
+                    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-orange-200/80 text-[10px] dark:bg-orange-800/50">👋</span>
                     With your team
                     {selected.botHandoffReason
                       ? ` · ${formatHandoffReason(selected.botHandoffReason)}`
@@ -1012,7 +1083,8 @@ export default function InboxPage() {
                 )}
 
                 {selected.activeFlow && (
-                  <div className="border-b border-violet-200/60 bg-violet-50/80 px-4 py-2 text-center text-[12px] font-medium text-violet-900">
+                  <div className="inbox-status-banner border-b border-violet-200/50 bg-gradient-to-r from-violet-50/90 to-purple-50/70 text-violet-900 dark:from-violet-950/40 dark:to-purple-950/30 dark:text-violet-200">
+                    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-violet-200/80 text-[10px] dark:bg-violet-800/50">⚡</span>
                     <span className="font-bold">{selected.activeFlow.flowName || 'Automation'}</span>
                     {selected.activeFlow.currentStepLabel && (
                       <>
@@ -1021,26 +1093,27 @@ export default function InboxPage() {
                       </>
                     )}
                     {selected.activeFlow.waitingFor && (
-                      <span className="text-violet-600"> · waiting for {selected.activeFlow.waitingFor}</span>
+                      <span className="text-violet-600 dark:text-violet-400"> · waiting for {selected.activeFlow.waitingFor}</span>
                     )}
                   </div>
                 )}
 
                 {!botIsLive && (
-                  <div className="border-b border-amber-200/60 bg-amber-50/80 px-4 py-2 text-center text-[12px] font-medium text-amber-900">
-                    AI bot is paused for this chat.{' '}
+                  <div className="inbox-status-banner border-b border-amber-200/50 bg-gradient-to-r from-amber-50/90 to-yellow-50/70 text-amber-900 dark:from-amber-950/40 dark:to-yellow-950/30 dark:text-amber-200">
+                    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-amber-200/80 text-[10px] dark:bg-amber-800/50">🤖</span>
+                    AI bot paused.{' '}
                     <button
                       type="button"
                       onClick={() => handleToggleBot()}
-                      className="font-bold underline hover:no-underline"
+                      className="font-bold underline decoration-amber-400/60 underline-offset-2 hover:no-underline"
                     >
-                      Turn ON
+                      Turn on
                     </button>{' '}
-                    to auto-reply again.
+                    to auto-reply.
                   </div>
                 )}
 
-                <div className="inbox-chat-bg flex-1 overflow-y-auto px-2 py-3 sm:px-3">
+                <div className="inbox-chat-bg min-h-0 flex-1 overflow-y-auto px-2 py-3 sm:px-3">
                   <div className="space-y-2">
                     {messageGroups.map((group) => (
                       <div key={group.date} className="space-y-2">
@@ -1066,7 +1139,7 @@ export default function InboxPage() {
                   </div>
                 )}
 
-                <div className="sticky bottom-0 z-10 shrink-0 bg-white/95 backdrop-blur-sm">
+                <div className="sticky bottom-0 z-10 shrink-0 border-t border-neutral-100/80 bg-white/95 backdrop-blur-md dark:border-neutral-800/80 dark:bg-neutral-950/95">
                 {interactiveOpen ? (
                   <InteractiveComposer
                     open={interactiveOpen}
@@ -1097,28 +1170,16 @@ export default function InboxPage() {
                   />
                 ) : (
                   <>
-                    {canSendText && (
-                      <div className="border-t border-neutral-100 bg-neutral-50/50 px-3 py-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setInteractiveOpen(true)}
-                          className="text-[11px] font-bold text-violet-700 hover:underline"
-                        >
-                          + Send interactive message
-                        </button>
-                      </div>
-                    )}
-                    {!canSendText && (
-                      <div className="border-t border-neutral-100 bg-neutral-50/50 px-3 py-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setInteractiveOpen(true)}
-                          className="text-[11px] font-bold text-violet-700 hover:underline"
-                        >
-                          + Send copy-code template
-                        </button>
-                      </div>
-                    )}
+                    <div className="flex items-center justify-center border-b border-neutral-100/60 bg-neutral-50/50 px-3 py-1.5 dark:border-neutral-800/60 dark:bg-neutral-900/30">
+                      <button
+                        type="button"
+                        onClick={() => setInteractiveOpen(true)}
+                        className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold text-violet-700 transition hover:bg-violet-50 dark:text-violet-400 dark:hover:bg-violet-950/40"
+                      >
+                        <span className="text-violet-500">+</span>
+                        Send interactive message
+                      </button>
+                    </div>
                     <ChatComposer
                       value={newMessage}
                       onChange={setNewMessage}
@@ -1150,8 +1211,10 @@ export default function InboxPage() {
                   overlayOpen={detailsOverlay.open}
                   overlaySection={detailsOverlay.section}
                   onOverlayClose={() => setDetailsOverlay({ open: false })}
+                  onConvertToTicket={() => void handleConvertToTicket()}
+                  onSnooze={(hours) => void handleSnooze(hours)}
                 />
-              </>
+              </div>
             ) : (
               <ChatPlaceholder />
             )}

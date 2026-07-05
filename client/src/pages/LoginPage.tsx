@@ -1,17 +1,19 @@
-import { ArrowRight, Lock, Mail, ShieldCheck } from 'lucide-react';
+import { ArrowRight, Clock, Lock, Mail, Rocket, ShieldCheck } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import AuthButton from '../components/auth/AuthButton';
+import AuthDivider from '../components/auth/AuthDivider';
 import AuthInput from '../components/auth/AuthInput';
 import AuthLayout from '../components/auth/AuthLayout';
+import GoogleAuthButton from '../components/auth/GoogleAuthButton';
 import { useAuth } from '../contexts/AuthContext';
-import { authApi } from '../services/api';
+import { useGoogleAuth } from '../hooks/useGoogleAuth';
 import { getErrorMessage } from '../utils/errors';
 import { toastError } from '../utils/toast';
 
-const trustPoints = [
-  { icon: ShieldCheck, label: '256-bit encryption' },
-  { icon: Lock, label: 'SOC 2 compliant' },
+const highlights = [
+  { icon: Rocket, label: 'Free to start' },
+  { icon: Clock, label: 'Setup in minutes' },
 ];
 
 export default function LoginPage() {
@@ -22,6 +24,7 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
+  const { signInWithGoogle } = useGoogleAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -35,16 +38,6 @@ export default function LoginPage() {
       navigate('/', { replace: true });
     }
   }, [searchParams, navigate]);
-
-  const handleOAuth = async (provider: 'google' | 'microsoft') => {
-    try {
-      const res =
-        provider === 'google' ? await authApi.googleUrl() : await authApi.microsoftUrl();
-      window.location.href = res.data.data.url;
-    } catch {
-      toastError(`${provider === 'google' ? 'Google' : 'Microsoft'} login is not configured`);
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,11 +59,12 @@ export default function LoginPage() {
 
   return (
     <AuthLayout
+      eyebrow={requires2FA ? 'Security' : 'Sign in'}
       title={requires2FA ? 'Two-factor authentication' : 'Welcome back'}
       subtitle={
         requires2FA
-          ? 'Enter the 6-digit code from your authenticator app'
-          : 'Sign in to manage conversations, campaigns, and your team inbox.'
+          ? 'Enter the 6-digit code from your authenticator app to continue.'
+          : 'Access your team inbox, campaigns, and automations from one workspace.'
       }
     >
       <form onSubmit={handleSubmit} className="space-y-5">
@@ -113,7 +107,7 @@ export default function LoginPage() {
                 </label>
                 <Link
                   to="/forgot-password"
-                  className="text-[12px] font-semibold text-theme-secondary hover:text-theme-fg"
+                  className="text-[12px] font-semibold text-whatsapp-700 transition hover:text-whatsapp-600 dark:text-whatsapp-400 dark:hover:text-whatsapp-300"
                 >
                   Forgot password?
                 </Link>
@@ -137,7 +131,7 @@ export default function LoginPage() {
                 setRequires2FA(false);
                 setTotpCode('');
               }}
-              className="text-[12px] font-semibold text-theme-secondary hover:text-theme-fg"
+              className="text-[12px] font-semibold text-theme-secondary transition hover:text-theme-fg"
             >
               ← Back to password
             </button>
@@ -156,37 +150,23 @@ export default function LoginPage() {
 
       {!requires2FA && (
         <>
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => handleOAuth('google')}
-              className="rounded-xl border border-theme-border px-3 py-2.5 text-[12px] font-semibold text-theme-fg hover:bg-theme-subtle"
-            >
-              Continue with Google
-            </button>
-            <button
-              type="button"
-              onClick={() => handleOAuth('microsoft')}
-              className="rounded-xl border border-theme-border px-3 py-2.5 text-[12px] font-semibold text-theme-fg hover:bg-theme-subtle"
-            >
-              Continue with Microsoft
-            </button>
-          </div>
+          <AuthDivider label="or" />
+          <GoogleAuthButton onClick={signInWithGoogle} />
 
-          <div className="mt-6 flex items-center justify-center gap-4 border-t border-theme-border/70 pt-5">
-            {trustPoints.map(({ icon: Icon, label }) => (
-              <div key={label} className="flex items-center gap-1.5 text-theme-muted">
-                <Icon className="h-3.5 w-3.5 shrink-0 text-whatsapp-600 dark:text-whatsapp-400" />
-                <span className="text-[11px] font-medium">{label}</span>
+          <div className="mt-6 flex items-center justify-center gap-5 text-theme-muted">
+            {highlights.map(({ icon: Icon, label }) => (
+              <div key={label} className="flex items-center gap-1.5">
+                <Icon className="h-3.5 w-3.5 shrink-0" />
+                <span className="text-xs">{label}</span>
               </div>
             ))}
           </div>
 
-          <p className="mt-5 text-center text-[13px] text-theme-secondary">
+          <p className="mt-6 text-center text-[13px] text-theme-secondary">
             No account yet?{' '}
             <Link
               to="/register"
-              className="font-semibold text-theme-fg underline decoration-whatsapp-500/40 underline-offset-2 transition hover:decoration-whatsapp-500"
+              className="font-semibold text-whatsapp-700 underline decoration-whatsapp-500/40 underline-offset-2 transition hover:decoration-whatsapp-500 dark:text-whatsapp-400"
             >
               Create one free
             </Link>
