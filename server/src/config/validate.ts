@@ -22,7 +22,10 @@ export function validateConfig(): void {
       errors.push('ENCRYPTION_KEY must be a 64-character hex string in production');
     }
     if (!config.meta.appSecret) {
-      errors.push('META_APP_SECRET is required in production');
+      logger.warn(
+        'META_APP_SECRET is not set globally — each organization must configure Meta credentials in Settings',
+        { source: 'startup' }
+      );
     }
     if (!config.meta.verifyToken || config.meta.verifyToken === DEFAULT_VERIFY_TOKEN) {
       errors.push('META_VERIFY_TOKEN must be set to a non-default value in production');

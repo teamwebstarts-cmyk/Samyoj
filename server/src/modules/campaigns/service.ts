@@ -4,6 +4,7 @@ import { AppError } from '../../utils/response';
 import { emitToOrg } from '../../realtime';
 import { getOrgWhatsappContext, getWhatsappContextById } from '../whatsapp/context';
 import { getTemplateDisplayText, MetaWhatsAppService } from '../whatsapp/meta.service';
+import { resolveMetaCredentials } from '../whatsapp/org-meta.service';
 import { logCampaignAudit } from './audit';
 import { assertDailySendQuota, assertDailyBudget, getCampaignSettings } from './quota';
 import {
@@ -262,7 +263,7 @@ export async function queueCampaignSend(
     campaign.whatsappNumberId
   );
 
-  await MetaWhatsAppService.ensureWabaSubscribed(wabaId, accessToken);
+  await MetaWhatsAppService.ensureWabaSubscribed(wabaId, accessToken, await resolveMetaCredentials(campaign.organizationId));
 
   const template = await validateTemplate(
     campaign.organizationId,

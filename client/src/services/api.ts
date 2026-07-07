@@ -1,8 +1,9 @@
 import axios from 'axios';
 import { getErrorMessage, logError } from '../utils/errors';
 import type { AgentAvailability, OrgRole, TeamPermissions, TeamSettings } from '../types';
+import { apiBaseUrl } from './utils';
 
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+const API_URL = apiBaseUrl;
 
 /** Active WhatsApp number sent with every API request for data isolation */
 let activeWhatsappNumberId: string | null = null;
@@ -17,6 +18,7 @@ export function getActiveWhatsappNumberId() {
 
 const api = axios.create({
   baseURL: API_URL,
+  withCredentials: true,
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -153,6 +155,9 @@ export interface WhatsappConnectResult {
 }
 
 export const whatsappApi = {
+  metaConfig: () => api.get<{ data: import('../types').OrgMetaSettings }>('/whatsapp/meta-config'),
+  updateMetaConfig: (data: { appId: string; appSecret?: string }) =>
+    api.patch<{ data: import('../types').OrgMetaSettings }>('/whatsapp/meta-config', data),
   connectUrl: () => api.get('/whatsapp/connect-url'),
   completeConnect: (code: string) =>
     api.post<{ data: WhatsappConnectResult }>('/whatsapp/connect/callback', { code }),

@@ -144,10 +144,26 @@ interface GraphError {
   error?: { message?: string; code?: number };
 }
 
+export interface MetaCredentials {
+  appId: string;
+  appSecret: string;
+}
+
+function requireMetaCredentials(credentials?: MetaCredentials): MetaCredentials {
+  if (credentials?.appId && credentials?.appSecret) {
+    return credentials;
+  }
+  if (config.meta.appId && config.meta.appSecret) {
+    return { appId: config.meta.appId, appSecret: config.meta.appSecret };
+  }
+  throw new Error('Meta app credentials are not configured');
+}
+
 export class MetaWhatsAppService {
-  static getEmbeddedSignupUrl(state: string): string {
+  static getEmbeddedSignupUrl(state: string, credentials?: MetaCredentials): string {
+    const creds = requireMetaCredentials(credentials);
     const params = new URLSearchParams({
-      client_id: config.meta.appId,
+      client_id: creds.appId,
       redirect_uri: config.meta.redirectUri,
       state,
       scope: 'whatsapp_business_management,whatsapp_business_messaging',
@@ -156,14 +172,12 @@ export class MetaWhatsAppService {
     return `https://www.facebook.com/${config.meta.apiVersion}/dialog/oauth?${params}`;
   }
 
-  static async exchangeCodeForToken(code: string): Promise<string> {
-    if (!config.meta.appSecret) {
-      throw new Error('META_APP_SECRET is not configured');
-    }
+  static async exchangeCodeForToken(code: string, credentials?: MetaCredentials): Promise<string> {
+    const creds = requireMetaCredentials(credentials);
 
     const params = new URLSearchParams({
-      client_id: config.meta.appId,
-      client_secret: config.meta.appSecret,
+      client_id: creds.appId,
+      client_secret: creds.appSecret,
       redirect_uri: config.meta.redirectUri,
       code,
     });
@@ -176,11 +190,15 @@ export class MetaWhatsAppService {
     return data.access_token;
   }
 
-  static async exchangeForLongLivedToken(shortLivedToken: string): Promise<string> {
+  static async exchangeForLongLivedToken(
+    shortLivedToken: string,
+    credentials?: MetaCredentials
+  ): Promise<string> {
+    const creds = requireMetaCredentials(credentials);
     const params = new URLSearchParams({
       grant_type: 'fb_exchange_token',
-      client_id: config.meta.appId,
-      client_secret: config.meta.appSecret,
+      client_id: creds.appId,
+      client_secret: creds.appSecret,
       fb_exchange_token: shortLivedToken,
     });
 
@@ -192,9 +210,12 @@ export class MetaWhatsAppService {
     return data.access_token;
   }
 
-  static async exchangeCodeForAccessToken(code: string): Promise<string> {
-    const shortLivedToken = await this.exchangeCodeForToken(code);
-    return this.exchangeForLongLivedToken(shortLivedToken);
+  static async exchangeCodeForAccessToken(
+    code: string,
+    credentials?: MetaCredentials
+  ): Promise<string> {
+    const shortLivedToken = await this.exchangeCodeForToken(code, credentials);
+    return this.exchangeForLongLivedToken(shortLivedToken, credentials);
   }
 
   static async completeConnection(code: string): Promise<WhatsappConnectionDetails> {
@@ -287,8 +308,11 @@ export class MetaWhatsAppService {
     };
   }
 
-  static async listAvailablePhoneNumbers(accessToken: string): Promise<WhatsappPhoneOption[]> {
-    const wabaIds = await this.listAccessibleWabaIds(accessToken);
+  static async listAvailablePhoneNumbers(
+    accessToken: string,
+    credentials?: MetaCredentials
+  ): Promise<WhatsappPhoneOption[]> {
+    const wabaIds = await this.listAccessibleWabaIds(accessToken, credentials);
     const options: WhatsappPhoneOption[] = [];
     const seen = new Set<string>();
 
@@ -329,9 +353,13 @@ export class MetaWhatsAppService {
     return wabaIds[0];
   }
 
-  private static async listAccessibleWabaIds(accessToken: string): Promise<string[]> {
+  private static async listAccessibleWabaIds(
+    accessToken: string,
+    credentials?: MetaCredentials
+  ): Promise<string[]> {
     const ids = new Set<string>();
-    const appToken = `${config.meta.appId}|${config.meta.appSecret}`;
+    const creds = requireMetaCredentials(credentials);
+    const appToken = `${creds.appId}|${creds.appSecret}`;
     const debugRes = await fetch(
       `${META_BASE}/debug_token?input_token=${encodeURIComponent(accessToken)}&access_token=${encodeURIComponent(appToken)}`
     );
@@ -463,10 +491,10 @@ export class MetaWhatsAppService {
   static async uploadTemplateMedia(
     accessToken: string,
     buffer: Buffer,
-    mimeType: string
+    mimeType: string,
+    credentials?: MetaCredentials
   ): Promise<string> {
-    const appId = config.meta.appId;
-    if (!appId) throw new Error('META_APP_ID is required for template media upload');
+    const appId = requireMetaCredentials(credentials).appId;
 
     const sessionParams = new URLSearchParams({
       file_length: String(buffer.length),
@@ -730,10 +758,12 @@ export class MetaWhatsAppService {
     return decrypt(encrypted);
   }
 
-  static verifyWebhookSignature(signature: string, body: string): boolean {
+  static verifyWebhookSignature(signature: string, body: string, appSecret?: string): boolean {
     const crypto = require('crypto');
+    const secret = appSecret || config.meta.appSecret;
+    if (!secret) return false;
     const expected = crypto
-      .createHmac('sha256', config.meta.appSecret)
+      .createHmac('sha256', secret)
       .update(body)
       .digest('hex');
     const expectedSig = `sha256=${expected}`;
@@ -748,20 +778,22 @@ export class MetaWhatsAppService {
     }
   }
 
-  private static getAppAccessToken(): string {
-    return `${config.meta.appId}|${config.meta.appSecret}`;
+  private static getAppAccessToken(credentials?: MetaCredentials): string {
+    const creds = requireMetaCredentials(credentials);
+    return `${creds.appId}|${creds.appSecret}`;
   }
 
-  static async registerAppWebhook(callbackUrl: string): Promise<void> {
+  static async registerAppWebhook(callbackUrl: string, credentials?: MetaCredentials): Promise<void> {
+    const creds = requireMetaCredentials(credentials);
     const params = new URLSearchParams({
       object: 'whatsapp_business_account',
       callback_url: callbackUrl,
       verify_token: config.meta.verifyToken,
       fields: 'messages,calls',
-      access_token: this.getAppAccessToken(),
+      access_token: this.getAppAccessToken(credentials),
     });
 
-    const res = await fetch(`${META_BASE}/${config.meta.appId}/subscriptions?${params}`, {
+    const res = await fetch(`${META_BASE}/${creds.appId}/subscriptions?${params}`, {
       method: 'POST',
     });
     const data = (await res.json()) as { success?: boolean } & GraphError;
@@ -787,14 +819,18 @@ export class MetaWhatsAppService {
   }
 
   /** Links the WABA to this Meta app so Cloud API can send messages (required even without webhooks). */
-  static async ensureWabaSubscribed(wabaId: string, accessToken: string): Promise<void> {
+  static async ensureWabaSubscribed(
+    wabaId: string,
+    accessToken: string,
+    credentials?: MetaCredentials
+  ): Promise<void> {
     try {
       await this.postSubscribeWaba(wabaId, accessToken);
       return;
     } catch (userErr) {
       const userMessage = userErr instanceof Error ? userErr.message : String(userErr);
       try {
-        await this.postSubscribeWaba(wabaId, this.getAppAccessToken());
+        await this.postSubscribeWaba(wabaId, this.getAppAccessToken(credentials));
         return;
       } catch {
         throw new Error(
@@ -805,13 +841,18 @@ export class MetaWhatsAppService {
     }
   }
 
-  static async subscribeWabaToApp(wabaId: string, accessToken: string): Promise<void> {
-    await this.ensureWabaSubscribed(wabaId, accessToken);
+  static async subscribeWabaToApp(
+    wabaId: string,
+    accessToken: string,
+    credentials?: MetaCredentials
+  ): Promise<void> {
+    await this.ensureWabaSubscribed(wabaId, accessToken, credentials);
   }
 
   static async configureWebhooks(
     wabaId: string,
-    accessToken: string
+    accessToken: string,
+    credentials?: MetaCredentials
   ): Promise<{ callbackUrl: string }> {
     const callbackUrl = config.meta.webhookUrl;
     if (!callbackUrl) {
@@ -820,14 +861,15 @@ export class MetaWhatsAppService {
       );
     }
 
-    await this.ensureWabaSubscribed(wabaId, accessToken);
-    await this.registerAppWebhook(callbackUrl);
+    await this.ensureWabaSubscribed(wabaId, accessToken, credentials);
+    await this.registerAppWebhook(callbackUrl, credentials);
     return { callbackUrl };
   }
 
   /** Subscribe app webhook once; link every active WABA, skipping invalid ones. */
   static async configureWebhooksForNumbers(
-    numbers: Array<{ phoneNumber: string; wabaId: string; accessToken: string }>
+    numbers: Array<{ phoneNumber: string; wabaId: string; accessToken: string }>,
+    credentials?: MetaCredentials
   ): Promise<{ callbackUrl: string; subscribedWabas: number; failures: Array<{ phoneNumber: string; wabaId: string; error: string }> }> {
     const callbackUrl = config.meta.webhookUrl;
     if (!callbackUrl) {
@@ -841,7 +883,7 @@ export class MetaWhatsAppService {
 
     for (const number of numbers) {
       try {
-        await this.ensureWabaSubscribed(number.wabaId, number.accessToken);
+        await this.ensureWabaSubscribed(number.wabaId, number.accessToken, credentials);
         subscribedWabas++;
       } catch (err) {
         failures.push({
@@ -859,14 +901,16 @@ export class MetaWhatsAppService {
       );
     }
 
-    await this.registerAppWebhook(callbackUrl);
+    await this.registerAppWebhook(callbackUrl, credentials);
     return { callbackUrl, subscribedWabas, failures };
   }
 
   static async getWebhookStatus(
     wabaId: string,
-    accessToken: string
+    accessToken: string,
+    credentials?: MetaCredentials
   ): Promise<{ subscribed: boolean; apps: string[] }> {
+    const creds = requireMetaCredentials(credentials);
     const data = await this.graphGet<{ data?: Array<{ whatsapp_business_api_data?: { id?: string } }> }>(
       `/${wabaId}/subscribed_apps`,
       accessToken
@@ -874,7 +918,7 @@ export class MetaWhatsAppService {
     const apps = (data.data || [])
       .map((app) => app.whatsapp_business_api_data?.id)
       .filter(Boolean) as string[];
-    return { subscribed: apps.includes(config.meta.appId), apps };
+    return { subscribed: apps.includes(creds.appId), apps };
   }
 
   static async listWhatsAppFlows(

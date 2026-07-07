@@ -23,6 +23,7 @@ import CallingSettingsPanel from '../components/calls/CallingSettingsPanel';
 import SettingsInsightCards from '../components/settings/SettingsInsightCards';
 import SettingsPanel from '../components/settings/SettingsPanel';
 import CannedRepliesPanel from '../components/settings/CannedRepliesPanel';
+import MetaAppConfigModal from '../components/settings/MetaAppConfigModal';
 import IntegrationsPanel from '../components/settings/IntegrationsPanel';
 import SettingsReadinessBanner from '../components/settings/SettingsReadinessBanner';
 import SettingsSidebar from '../components/settings/SettingsSidebar';
@@ -42,7 +43,7 @@ import { skipOnboardingSetup } from '../components/OnboardingGate';
 // import { useTheme } from '../contexts/ThemeContext';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { aiBotApi, onboardingApi, settingsApi, teamApi, whatsappApi } from '../services/api';
-import type { AiUsageSummary, BusinessHours, OrgAiSettings } from '../types';
+import type { AiUsageSummary, BusinessHours, OrgAiSettings, OrgMetaSettings } from '../types';
 import type { ReadinessCheck } from '../components/settings/SettingsReadinessBanner';
 import { toastError, toastSuccess } from '../utils/toast';
 import { formatPhoneDisplay } from '../utils/formatPhone';
@@ -89,6 +90,8 @@ export default function SettingsPage() {
     }
   }, [tabFromUrl]);
   const [numbers, setNumbers] = useState<WhatsappNumber[]>([]);
+  const [metaConfig, setMetaConfig] = useState<OrgMetaSettings>({ configured: false });
+  const [metaModalOpen, setMetaModalOpen] = useState(false);
   const [connectUrl, setConnectUrl] = useState('');
   const [webhookStatus, setWebhookStatus] = useState<WebhookStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -121,10 +124,23 @@ export default function SettingsPage() {
   const [readinessChecks, setReadinessChecks] = useState<ReadinessCheck[]>([]);
   const [readinessMeta, setReadinessMeta] = useState({ completedCount: 0, totalChecks: 5, progress: 0, isReady: false });
 
+  const loadConnectUrl = async (configured?: boolean) => {
+    if (!configured) {
+      setConnectUrl('');
+      return;
+    }
+    try {
+      const { data } = await whatsappApi.connectUrl();
+      setConnectUrl(data.data.url);
+    } catch {
+      setConnectUrl('');
+    }
+  };
+
   const load = () => {
     Promise.all([
       whatsappApi.numbers(),
-      whatsappApi.connectUrl(),
+      whatsappApi.metaConfig(),
       whatsappApi.webhookStatus(),
       settingsApi.get(),
       settingsApi.aiUsage(),
@@ -132,9 +148,11 @@ export default function SettingsPage() {
       teamApi.list(),
       onboardingApi.readiness(),
     ])
-      .then(([numbersRes, urlRes, webhookRes, settingsRes, usageRes, botsRes, teamRes, readinessRes]) => {
+      .then(async ([numbersRes, metaRes, webhookRes, settingsRes, usageRes, botsRes, teamRes, readinessRes]) => {
+        const meta = metaRes.data.data;
+        setMetaConfig(meta);
         setNumbers(numbersRes.data.data);
-        setConnectUrl(urlRes.data.data.url);
+        await loadConnectUrl(meta.configured);
         setWebhookStatus(webhookRes.data.data);
         const hours = settingsRes.data.data.businessHours;
         if (hours) {
@@ -262,9 +280,18 @@ export default function SettingsPage() {
   );
 
   const handleConnect = () => {
+    if (!metaConfig.configured) {
+      setMetaModalOpen(true);
+      return;
+    }
     if (!connectUrl) return;
     setConnecting(true);
     window.location.href = connectUrl;
+  };
+
+  const handleMetaSaved = async (config: OrgMetaSettings) => {
+    setMetaConfig(config);
+    await loadConnectUrl(config.configured);
   };
 
   const handleDisconnect = async (id: string, phone: string) => {
@@ -383,7 +410,7 @@ export default function SettingsPage() {
       <PageHeader
         actions={
           !isReady ? (
-            <AppButton size="sm" onClick={handleConnect} loading={connecting} disabled={!connectUrl}>
+            <AppButton size="sm" onClick={handleConnect} loading={connecting} disabled={connecting}>
               Connect WhatsApp
             </AppButton>
           ) : (
@@ -453,7 +480,14 @@ export default function SettingsPage() {
 
             {activeTab === 'whatsapp' && (
               <div className="space-y-5">
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <SettingsStatusPill
+                    label="Meta app"
+                    active={Boolean(metaConfig.configured)}
+                    icon={Settings2}
+                    activeLabel="Configured"
+                    inactiveLabel="Not configured"
+                  />
                   <SettingsStatusPill
                     label="WhatsApp number"
                     active={numbers.length > 0}
@@ -469,6 +503,41 @@ export default function SettingsPage() {
                     inactiveLabel="Not set up"
                   />
                 </div>
+
+                <SettingsPanel
+                  title="Meta developer app"
+                  description="Use your own Meta App ID and App Secret — each account connects with its own credentials."
+                  icon={Settings2}
+                  accent="sky"
+                  footer={
+                    <AppButton size="sm" onClick={() => setMetaModalOpen(true)}>
+                      {metaConfig.configured ? 'Update credentials' : 'Configure Meta app'}
+                    </AppButton>
+                  }
+                >
+                  {metaConfig.configured ? (
+                    <div className="rounded-2xl border border-sky-200/80 bg-gradient-to-r from-sky-50/90 to-theme-surface p-4 ring-1 ring-sky-100 dark:border-sky-800/40 dark:from-sky-950/30 dark:ring-sky-900/40">
+                      <p className="text-[11px] font-bold uppercase tracking-wide text-theme-muted">
+                        Meta App ID
+                      </p>
+                      <p className="mt-1 font-mono text-[15px] font-extrabold text-theme-fg">
+                        {metaConfig.appId}
+                      </p>
+                      <p className="mt-2 text-[12px] font-semibold text-sky-700 dark:text-sky-400">
+                        App secret saved · ready to connect WhatsApp
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-theme-border bg-theme-subtle/40 px-4 py-8 text-center">
+                      <p className="text-[13px] font-medium text-theme-secondary">
+                        Add your Meta App ID and App Secret before connecting WhatsApp.
+                      </p>
+                      <AppButton className="mt-4" size="sm" onClick={() => setMetaModalOpen(true)}>
+                        Configure Meta app
+                      </AppButton>
+                    </div>
+                  )}
+                </SettingsPanel>
 
                 <SettingsPanel
                   title="WhatsApp connection"
@@ -512,7 +581,7 @@ export default function SettingsPage() {
                         variant="ghost"
                         size="sm"
                         onClick={handleConnect}
-                        disabled={connecting || !connectUrl}
+                        disabled={connecting}
                       >
                         Reconnect or add another number
                       </AppButton>
@@ -526,15 +595,17 @@ export default function SettingsPage() {
                         No WhatsApp number connected yet
                       </p>
                       <p className="mt-1 text-[13px] font-medium text-theme-secondary">
-                        Connect your business number to start messaging customers.
+                        {metaConfig.configured
+                          ? 'Connect your business number to start messaging customers.'
+                          : 'Configure your Meta app first, then connect your business number.'}
                       </p>
                       <AppButton
                         className="mt-5"
                         onClick={handleConnect}
-                        disabled={connecting || !connectUrl}
+                        disabled={connecting}
                         loading={connecting}
                       >
-                        Connect WhatsApp
+                        {metaConfig.configured ? 'Connect WhatsApp' : 'Configure Meta app first'}
                       </AppButton>
                       <p className="mt-3 text-[11px] font-medium text-theme-muted">
                         After granting permissions, you will return here automatically.
@@ -988,6 +1059,13 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+
+      <MetaAppConfigModal
+        open={metaModalOpen}
+        onClose={() => setMetaModalOpen(false)}
+        initial={metaConfig}
+        onSaved={(config) => void handleMetaSaved(config)}
+      />
 
       <ConfirmDialog
         open={Boolean(disconnectTarget)}

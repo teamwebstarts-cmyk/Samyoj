@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { CheckCircle2, Link2, LogOut, Smartphone } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import AppButton from '../ui/AppButton';
 import { toastError, toastSuccess } from '../../utils/toast';
 import { whatsappApi } from '../../services/api';
@@ -12,18 +12,30 @@ interface WhatsappNumberRow {
 }
 
 export default function WhatsAppConnectGuide() {
+  const navigate = useNavigate();
   const [connectUrl, setConnectUrl] = useState('');
+  const [metaConfigured, setMetaConfigured] = useState(false);
   const [number, setNumber] = useState<WhatsappNumberRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const load = useCallback(() => {
     setLoading(true);
-    Promise.all([whatsappApi.numbers(), whatsappApi.connectUrl()])
-      .then(([numbersRes, urlRes]) => {
+    Promise.all([whatsappApi.numbers(), whatsappApi.metaConfig()])
+      .then(async ([numbersRes, metaRes]) => {
         const numbers = numbersRes.data.data as WhatsappNumberRow[];
         setNumber(numbers[0] ?? null);
-        setConnectUrl(urlRes.data.data.url);
+        setMetaConfigured(Boolean(metaRes.data.data.configured));
+        if (metaRes.data.data.configured) {
+          try {
+            const urlRes = await whatsappApi.connectUrl();
+            setConnectUrl(urlRes.data.data.url);
+          } catch {
+            setConnectUrl('');
+          }
+        } else {
+          setConnectUrl('');
+        }
       })
       .catch(() => {
         setNumber(null);
@@ -38,6 +50,10 @@ export default function WhatsAppConnectGuide() {
   }, [load]);
 
   const handleConnect = () => {
+    if (!metaConfigured) {
+      navigate('/settings?tab=whatsapp');
+      return;
+    }
     if (!connectUrl) return;
     setConnecting(true);
     window.location.href = connectUrl;
@@ -120,7 +136,9 @@ export default function WhatsAppConnectGuide() {
             <div>
               <h2 className="text-[15px] font-bold text-neutral-900">Connect WhatsApp</h2>
               <p className="mt-0.5 text-[13px] text-neutral-600">
-                Sign in and pick your business number to get started.
+                {metaConfigured
+                  ? 'Sign in and pick your business number to get started.'
+                  : 'Configure your Meta app in Settings first, then connect your number.'}
               </p>
               <p className="mt-2 text-[12px] text-neutral-500">
                 Connect → Sign in → Choose number
@@ -131,10 +149,10 @@ export default function WhatsAppConnectGuide() {
             className="shrink-0 sm:ml-4"
             icon={<Link2 className="h-4 w-4" />}
             onClick={handleConnect}
-            disabled={connecting || !connectUrl}
+            disabled={connecting}
             loading={connecting}
           >
-            Connect WhatsApp
+            {metaConfigured ? 'Connect WhatsApp' : 'Configure in Settings'}
           </AppButton>
         </div>
       </div>

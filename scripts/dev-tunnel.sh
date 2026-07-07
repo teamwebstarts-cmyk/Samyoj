@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BIN_DIR="$ROOT_DIR/.bin"
 ENV_FILE="$ROOT_DIR/server/.env"
 CLOUDFLARED="$BIN_DIR/cloudflared"
-PORT="${TUNNEL_PORT:-5000}"
+PORT="${TUNNEL_PORT:-8000}"
 TARGET="http://localhost:${PORT}"
 
 mkdir -p "$BIN_DIR"

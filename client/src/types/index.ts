@@ -496,6 +496,12 @@ export interface OrgAiSettings {
   hasApiKey?: boolean;
 }
 
+export interface OrgMetaSettings {
+  appId?: string;
+  hasAppSecret?: boolean;
+  configured?: boolean;
+}
+
 export interface AiUsageSummary {
   periodDays: number;
   totalRequests: number;

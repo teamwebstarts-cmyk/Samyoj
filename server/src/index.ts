@@ -1,10 +1,12 @@
 import express from 'express';
+import path from 'path';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { config } from './config';
+import { clientBuildExists, getClientPaths } from './config/paths';
 import { validateConfig } from './config/validate';
 import { initSentry } from './config/sentry';
 import { errorHandler, logError, setupGlobalErrorHandlers } from './errors';
@@ -219,6 +221,28 @@ app.use('/api/v1', publicApiRoutes);
 app.use('/api/leads', leadRoutes);
 app.use('/api/tickets', ticketRoutes);
 
+const { clientDist, clientPublic } = getClientPaths();
+const serveClient = config.nodeEnv === 'production' || clientBuildExists();
+
+if (serveClient) {
+  app.use(express.static(clientPublic));
+  app.use(express.static(clientDist));
+
+  app.get('*', (req, res, next) => {
+    if (req.method !== 'GET') return next();
+    if (
+      req.path.startsWith('/api') ||
+      req.path === '/health' ||
+      req.path.startsWith('/socket.io')
+    ) {
+      return next();
+    }
+    res.sendFile(path.join(clientDist, 'index.html'), (err) => {
+      if (err) next(err);
+    });
+  });
+}
+
 app.use(errorHandler);
 
 async function listen(): Promise<void> {
@@ -257,14 +281,28 @@ async function start() {
 
   await listen();
 
-  const { setSocketIO } = await import('./workers/index');
-  setSocketIO(io);
+  const { checkRedisConnection } = await import('./config/redis');
+  const redisAvailable = await checkRedisConnection();
 
-  const { startAlertWorker } = await import('./workers/alert.worker');
-  startAlertWorker();
+  if (redisAvailable) {
+    const { setSocketIO, startWorkers } = await import('./workers/index');
+    setSocketIO(io);
+    startWorkers();
 
-  const { startMediaRetentionWorker } = await import('./workers/media-retention.worker');
-  startMediaRetentionWorker();
+    const { startAlertWorker } = await import('./workers/alert.worker');
+    startAlertWorker();
+
+    const { startMediaRetentionWorker } = await import('./workers/media-retention.worker');
+    startMediaRetentionWorker();
+  } else {
+    logger.warn(
+      `Redis is not reachable at ${config.redisUrl}. Background workers are disabled — campaigns, webhooks, and queued messages will not process.`,
+      {
+        source: 'startup',
+        hint: 'Start Redis from the repo root: docker compose up -d',
+      }
+    );
+  }
 
   logger.info('API server started', {
     source: 'startup',

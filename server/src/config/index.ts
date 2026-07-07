@@ -1,12 +1,25 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+const defaultPort = 8000;
+const defaultBaseUrl = `http://localhost:${defaultPort}`;
+const defaultClientUrl = 'http://localhost:3000';
+
 export const config = {
-  port: parseInt(process.env.PORT || '5000', 10),
+  port: parseInt(process.env.PORT || String(defaultPort), 10),
   nodeEnv: process.env.NODE_ENV || 'development',
   logLevel: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'debug'),
-  clientUrl: process.env.CLIENT_URL || 'http://localhost:5173',
-  serverUrl: process.env.SERVER_URL || process.env.API_URL || 'http://localhost:5000',
+  clientUrl: process.env.CLIENT_URL || defaultClientUrl,
+  baseUrl:
+    process.env.BASE_URL ||
+    process.env.SERVER_URL ||
+    process.env.API_URL ||
+    defaultBaseUrl,
+  serverUrl:
+    process.env.BASE_URL ||
+    process.env.SERVER_URL ||
+    process.env.API_URL ||
+    defaultBaseUrl,
   databaseUrl: process.env.DATABASE_URL!,
   redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
   jwt: {
@@ -20,7 +33,7 @@ export const config = {
     appSecret: process.env.META_APP_SECRET || '',
     verifyToken: process.env.META_VERIFY_TOKEN || 'whatsapp_verify_token',
     apiVersion: process.env.META_API_VERSION || 'v21.0',
-    redirectUri: process.env.META_REDIRECT_URI || 'http://localhost:5173/settings/whatsapp/callback',
+    redirectUri: process.env.META_REDIRECT_URI || 'http://localhost:3000/settings/whatsapp/callback',
     webhookUrl: process.env.META_WEBHOOK_URL || '',
   },
   encryptionKey: process.env.ENCRYPTION_KEY || '',

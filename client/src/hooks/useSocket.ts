@@ -1,8 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { logError } from '../utils/errors';
-
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
+import { socketBaseUrl } from '../services/utils';
 
 export function useSocket(onMessage?: (event: string, data: unknown) => void) {
   const socketRef = useRef<Socket | null>(null);
@@ -11,8 +10,9 @@ export function useSocket(onMessage?: (event: string, data: unknown) => void) {
     const token = localStorage.getItem('accessToken');
     if (!token) return;
 
-    const socket = io(SOCKET_URL, {
+    const socket = io(socketBaseUrl, {
       auth: { token },
+      withCredentials: true,
       transports: ['websocket'],
     });
 

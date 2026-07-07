@@ -3,6 +3,7 @@ import { Server } from 'socket.io';
 import prisma from '../config/database';
 import { config } from '../config';
 import { MetaWhatsAppService } from '../modules/whatsapp/meta.service';
+import { resolveMetaCredentials } from '../modules/whatsapp/org-meta.service';
 import { deliverOutboundMessage } from '../modules/messages/send.service';
 import { retryDelays } from '../config/queues';
 import { processWebhookFields } from '../modules/calling/call.processor';
@@ -11,6 +12,7 @@ import { executeWebhookDelivery } from '../modules/integrations/dispatch';
 import { processCompliancePurge } from './compliance-purge.processor';
 import { pollConversationAnalytics, pollQualityRatings } from '../modules/billing/usage.service';
 import { attachWorkerErrorHandlers, logError, setupGlobalErrorHandlers } from '../errors';
+import { checkRedisConnection } from '../config/redis';
 import { createModuleLogger } from '../utils/logger';
 
 const log = createModuleLogger('worker');
@@ -18,6 +20,7 @@ const log = createModuleLogger('worker');
 const connection = { url: config.redisUrl };
 
 let io: Server | null = null;
+let workersStarted = false;
 
 export function setSocketIO(socketServer: Server) {
   io = socketServer;
@@ -27,7 +30,9 @@ function getRetryDelay(attemptsMade: number): number {
   return retryDelays[Math.min(attemptsMade, retryDelays.length - 1)];
 }
 
-setupGlobalErrorHandlers();
+export function startWorkers(): void {
+  if (workersStarted) return;
+  workersStarted = true;
 
 // Webhook worker
 const webhookWorker = new Worker(
@@ -142,7 +147,8 @@ const broadcastWorker = new Worker(
 
     const accessToken = MetaWhatsAppService.decryptToken(encryptedToken);
     if (wabaId) {
-      await MetaWhatsAppService.ensureWabaSubscribed(wabaId, accessToken);
+      const metaCredentials = await resolveMetaCredentials(organizationId);
+      await MetaWhatsAppService.ensureWabaSubscribed(wabaId, accessToken, metaCredentials);
     }
     const lang = templateLanguage || 'en_US';
 
@@ -430,3 +436,23 @@ setInterval(() => {
     .then(({ processScheduledCampaigns }) => processScheduledCampaigns())
     .catch((err) => logError(err, { source: 'worker', action: 'processScheduledCampaigns' }));
 }, 60_000);
+}
+
+if (require.main === module) {
+  setupGlobalErrorHandlers();
+
+  checkRedisConnection()
+    .then((ok) => {
+      if (!ok) {
+        log.error(
+          `Redis not reachable at ${config.redisUrl}. Start Redis from the repo root: docker compose up -d`
+        );
+        process.exit(1);
+      }
+      startWorkers();
+    })
+    .catch((err) => {
+      logError(err, { source: 'startup', path: 'workers.main' });
+      process.exit(1);
+    });
+}

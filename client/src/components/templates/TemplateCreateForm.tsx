@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { AlertTriangle, FileText, Image, Loader2, Upload } from 'lucide-react';
 import AppAlert from '../ui/AppAlert';
+import AppInput from '../ui/AppInput';
 import { messagingConsent } from '../../utils/plainLanguage';
 import AppSelect from '../ui/AppSelect';
 import AppTextarea from '../ui/AppTextarea';

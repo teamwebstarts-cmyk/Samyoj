@@ -4,6 +4,7 @@ import { authenticate, requireOrg } from '../../middleware/auth';
 import { AppError, sendSuccess, asyncHandler } from '../../utils/response';
 import { MetaWhatsAppService } from '../whatsapp/meta.service';
 import { getOrgWhatsappContext } from '../whatsapp/context';
+import { resolveMetaCredentials } from '../whatsapp/org-meta.service';
 import { resolveActiveWhatsappNumber } from '../whatsapp/active-number';
 import { buildTemplateComponents } from '../campaigns/template-params';
 import { buildTemplateComponents as buildCreateComponents } from './builder';
@@ -120,7 +121,13 @@ router.post(
       req.user!.organizationId!,
       req.activeWhatsappNumberId
     );
-    const handle = await MetaWhatsAppService.uploadTemplateMedia(accessToken, buffer, mimeType);
+    const metaCredentials = await resolveMetaCredentials(req.user!.organizationId!);
+    const handle = await MetaWhatsAppService.uploadTemplateMedia(
+      accessToken,
+      buffer,
+      mimeType,
+      metaCredentials
+    );
 
     sendSuccess(res, { handle, mimeType, size: buffer.length });
   })

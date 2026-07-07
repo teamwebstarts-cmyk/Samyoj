@@ -3,8 +3,18 @@ import { config } from '../config';
 
 const ALGORITHM = 'aes-256-gcm';
 
+function getEncryptionKey(): Buffer {
+  const hex = config.encryptionKey?.trim() || '';
+  if (!/^[0-9a-fA-F]{64}$/.test(hex)) {
+    throw new Error(
+      'ENCRYPTION_KEY is missing or invalid in server/.env. It must be a 64-character hex string (run: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))")'
+    );
+  }
+  return Buffer.from(hex, 'hex');
+}
+
 export function encrypt(text: string): string {
-  const key = Buffer.from(config.encryptionKey.slice(0, 64), 'hex');
+  const key = getEncryptionKey();
   const iv = crypto.randomBytes(16);
   const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
   let encrypted = cipher.update(text, 'utf8', 'hex');
@@ -14,7 +24,7 @@ export function encrypt(text: string): string {
 }
 
 export function decrypt(encryptedText: string): string {
-  const key = Buffer.from(config.encryptionKey.slice(0, 64), 'hex');
+  const key = getEncryptionKey();
   const [ivHex, authTagHex, encrypted] = encryptedText.split(':');
   const iv = Buffer.from(ivHex, 'hex');
   const authTag = Buffer.from(authTagHex, 'hex');

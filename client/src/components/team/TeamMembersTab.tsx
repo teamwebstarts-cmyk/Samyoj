@@ -100,7 +100,7 @@ export default function TeamMembersTab({
       name: member.name,
       email: member.email,
       password: '',
-      orgRole: member.orgRole === 'OWNER' ? 'ADMIN' : member.orgRole,
+      orgRole: member.orgRole,
       departmentId: member.department?.id ?? '',
     });
     setReassignToId('');

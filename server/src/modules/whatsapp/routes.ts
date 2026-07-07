@@ -2,10 +2,17 @@ import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import prisma from '../../config/database';
 import { config } from '../../config';
-import { authenticate, requireOrg } from '../../middleware/auth';
+import { authenticate, requireOrg, loadOrgRole, requireOrgRole } from '../../middleware/auth';
 import { AppError, sendSuccess, asyncHandler } from '../../utils/response';
 import { MetaWhatsAppService } from './meta.service';
 import { signConnectPending, verifyConnectPending } from './connect-pending';
+import {
+  getOrgMetaSettings,
+  resolveMetaCredentials,
+  sanitizeMetaSettingsForClient,
+  saveOrgMetaSettings,
+  verifyWebhookSignatureForPayload,
+} from './org-meta.service';
 import { webhookQueue } from '../../config/queues';
 import { z } from 'zod';
 import { logError } from '../../errors';
@@ -20,6 +27,7 @@ async function saveWhatsappConnection(
   connection: Awaited<ReturnType<typeof MetaWhatsAppService.buildConnectionDetails>>
 ) {
   const encryptedToken = MetaWhatsAppService.encryptToken(connection.accessToken);
+  const metaCredentials = await resolveMetaCredentials(orgId);
 
   const existing = await prisma.whatsappNumber.findFirst({
     where: {
@@ -51,7 +59,11 @@ async function saveWhatsappConnection(
       });
 
   try {
-    await MetaWhatsAppService.ensureWabaSubscribed(connection.wabaId, connection.accessToken);
+    await MetaWhatsAppService.ensureWabaSubscribed(
+      connection.wabaId,
+      connection.accessToken,
+      metaCredentials
+    );
   } catch (err) {
     logError(err, { source: 'api', action: 'WABA subscribe failed', organizationId: orgId });
     throw err;
@@ -60,7 +72,11 @@ async function saveWhatsappConnection(
   let webhookConfigured = false;
   if (config.meta.webhookUrl) {
     try {
-      await MetaWhatsAppService.configureWebhooks(connection.wabaId, connection.accessToken);
+      await MetaWhatsAppService.configureWebhooks(
+        connection.wabaId,
+        connection.accessToken,
+        metaCredentials
+      );
       webhookConfigured = true;
     } catch (err) {
       logError(err, { source: 'webhook', action: 'Webhook auto-config failed', organizationId: orgId });
@@ -70,20 +86,43 @@ async function saveWhatsappConnection(
   return { whatsappNumber, webhookConfigured };
 }
 
+const metaConfigSchema = z.object({
+  appId: z.string().min(1),
+  appSecret: z.string().optional(),
+});
+
+const metaAdminGuard = [authenticate, requireOrg, loadOrgRole, requireOrgRole('OWNER', 'ADMIN')];
+
+router.get(
+  '/meta-config',
+  authenticate,
+  requireOrg,
+  asyncHandler(async (req: Request, res: Response) => {
+    const settings = await getOrgMetaSettings(req.user!.organizationId!);
+    sendSuccess(res, sanitizeMetaSettingsForClient(settings));
+  })
+);
+
+router.patch(
+  '/meta-config',
+  ...metaAdminGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const data = metaConfigSchema.parse(req.body);
+    const saved = await saveOrgMetaSettings(req.user!.organizationId!, data);
+    sendSuccess(res, saved);
+  })
+);
+
 router.get(
   '/connect-url',
   authenticate,
   requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
-    if (!config.meta.appId || !config.meta.appSecret) {
-      throw new AppError(
-        400,
-        'Meta app is not configured. Set META_APP_ID and META_APP_SECRET in server .env'
-      );
-    }
+    const orgId = req.user!.organizationId!;
+    const metaCredentials = await resolveMetaCredentials(orgId);
 
     const state = uuidv4();
-    const url = MetaWhatsAppService.getEmbeddedSignupUrl(state);
+    const url = MetaWhatsAppService.getEmbeddedSignupUrl(state, metaCredentials);
     sendSuccess(res, { url, state });
   })
 );
@@ -98,8 +137,9 @@ router.post(
 
     const orgId = req.user!.organizationId!;
     const userId = req.user!.userId;
-    const accessToken = await MetaWhatsAppService.exchangeCodeForAccessToken(code);
-    const phones = await MetaWhatsAppService.listAvailablePhoneNumbers(accessToken);
+    const metaCredentials = await resolveMetaCredentials(orgId);
+    const accessToken = await MetaWhatsAppService.exchangeCodeForAccessToken(code, metaCredentials);
+    const phones = await MetaWhatsAppService.listAvailablePhoneNumbers(accessToken, metaCredentials);
 
     if (phones.length === 0) {
       throw new AppError(400, 'No phone numbers found on your WhatsApp Business Account.');
@@ -155,6 +195,7 @@ router.post(
   asyncHandler(async (req: Request, res: Response) => {
     const data = selectPhoneSchema.parse(req.body);
     const orgId = req.user!.organizationId!;
+    const metaCredentials = await resolveMetaCredentials(orgId);
 
     let pending;
     try {
@@ -167,7 +208,10 @@ router.post(
       throw new AppError(403, 'Invalid connect session');
     }
 
-    const phones = await MetaWhatsAppService.listAvailablePhoneNumbers(pending.accessToken);
+    const phones = await MetaWhatsAppService.listAvailablePhoneNumbers(
+      pending.accessToken,
+      metaCredentials
+    );
     const selected = phones.find(
       (p) => p.phoneNumberId === data.phoneNumberId && p.wabaId === data.wabaId
     );
@@ -291,6 +335,7 @@ router.get(
   requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
+    const metaCredentials = await resolveMetaCredentials(orgId);
     const number = await prisma.whatsappNumber.findFirst({
       where: { organizationId: orgId, isActive: true },
     });
@@ -305,7 +350,11 @@ router.get(
     const accessToken = MetaWhatsAppService.decryptToken(number.accessToken);
     let subscribed = false;
     try {
-      const status = await MetaWhatsAppService.getWebhookStatus(number.wabaId, accessToken);
+      const status = await MetaWhatsAppService.getWebhookStatus(
+        number.wabaId,
+        accessToken,
+        metaCredentials
+      );
       subscribed = status.subscribed;
     } catch (err) {
       logError(err, { source: 'webhook', action: 'Webhook status check failed', organizationId: orgId });
@@ -327,22 +376,31 @@ router.post(
   requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
+    const metaCredentials = await resolveMetaCredentials(orgId);
     const number = await prisma.whatsappNumber.findFirst({
       where: { organizationId: orgId, isActive: true },
     });
     if (!number) throw new AppError(400, 'Connect a WhatsApp number first');
 
     const accessToken = MetaWhatsAppService.decryptToken(number.accessToken);
-    await MetaWhatsAppService.ensureWabaSubscribed(number.wabaId, accessToken);
+    await MetaWhatsAppService.ensureWabaSubscribed(number.wabaId, accessToken, metaCredentials);
 
     let result: { callbackUrl: string };
     if (config.meta.webhookUrl) {
-      result = await MetaWhatsAppService.configureWebhooks(number.wabaId, accessToken);
+      result = await MetaWhatsAppService.configureWebhooks(
+        number.wabaId,
+        accessToken,
+        metaCredentials
+      );
     } else {
       result = { callbackUrl: '' };
     }
 
-    const status = await MetaWhatsAppService.getWebhookStatus(number.wabaId, accessToken);
+    const status = await MetaWhatsAppService.getWebhookStatus(
+      number.wabaId,
+      accessToken,
+      metaCredentials
+    );
     sendSuccess(res, { ...result, subscribed: status.subscribed, wabaLinked: true });
   })
 );
@@ -364,21 +422,22 @@ router.post('/webhook', async (req: Request, res: Response) => {
   const signature = req.headers['x-hub-signature-256'] as string;
   const rawBody = req.rawBody || JSON.stringify(req.body);
 
-  if (config.nodeEnv === 'production' && !config.meta.appSecret) {
-    log.error('META_APP_SECRET not configured — rejecting webhook', { source: 'webhook' });
-    return res.status(503).send('Webhook verification not configured');
+  if (config.nodeEnv === 'production') {
+    const hasGlobalSecret = Boolean(config.meta.appSecret);
+    if (!hasGlobalSecret && !signature) {
+      log.error('Webhook verification not configured — rejecting webhook', { source: 'webhook' });
+      return res.status(503).send('Webhook verification not configured');
+    }
   }
 
-  if (config.meta.appSecret) {
-    if (!signature) {
-      return res.status(401).send('Missing signature');
-    }
-    if (!MetaWhatsAppService.verifyWebhookSignature(signature, rawBody)) {
+  if (signature) {
+    const valid = await verifyWebhookSignatureForPayload(signature, rawBody, req.body);
+    if (!valid) {
       log.warn('Invalid webhook signature', { source: 'webhook' });
       return res.status(401).send('Invalid signature');
     }
-  } else if (signature) {
-    log.warn('Webhook signature present but META_APP_SECRET not set', { source: 'webhook' });
+  } else if (config.nodeEnv === 'production') {
+    return res.status(401).send('Missing signature');
   }
 
   res.status(200).send('EVENT_RECEIVED');
