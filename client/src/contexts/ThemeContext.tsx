@@ -28,10 +28,10 @@ function getSystemTheme(): ResolvedTheme {
 }
 
 function getStoredMode(): ThemeMode {
-  if (typeof window === 'undefined') return 'system';
+  if (typeof window === 'undefined') return 'light';
   const stored = localStorage.getItem(STORAGE_KEY);
   if (stored === 'light' || stored === 'dark' || stored === 'system') return stored;
-  return 'system';
+  return 'light';
 }
 
 function resolveTheme(mode: ThemeMode): ResolvedTheme {

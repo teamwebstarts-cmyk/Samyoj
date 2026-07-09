@@ -15,9 +15,7 @@
       (function () {
         var key = 'wa-theme';
         var stored = localStorage.getItem(key);
-        var dark =
-          stored === 'dark' ||
-          (stored !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        var dark = stored === 'dark';
         document.documentElement.classList.toggle('dark', dark);
         document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
       })();
