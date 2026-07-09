@@ -114,7 +114,21 @@ io.engine.on('connection_error', (err) => {
 
 export { io };
 
-app.use(helmet());
+const useHttps = config.baseUrl.startsWith('https://');
+
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      useDefaults: true,
+      directives: {
+        // HTTP deployments (IP-only) break when the browser upgrades asset URLs to HTTPS.
+        upgradeInsecureRequests: useHttps ? [] : null,
+        // Vite index.html includes a small inline theme bootstrap script.
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+      },
+    },
+  })
+);
 app.use(
   cors({
     origin: config.clientUrl,
