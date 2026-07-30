@@ -6,6 +6,7 @@ import rateLimit from 'express-rate-limit';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { config } from './config';
+import { corsOriginDelegate } from './config/cors';
 import { clientBuildExists, getClientPaths } from './config/paths';
 import { validateConfig } from './config/validate';
 import { initSentry } from './config/sentry';
@@ -56,7 +57,7 @@ app.set('etag', false);
 
 const io = new Server(httpServer, {
   cors: {
-    origin: config.clientUrl,
+    origin: corsOriginDelegate,
     credentials: true,
   },
 });
@@ -131,7 +132,7 @@ app.use(
 );
 app.use(
   cors({
-    origin: config.clientUrl,
+    origin: corsOriginDelegate,
     credentials: true,
   })
 );

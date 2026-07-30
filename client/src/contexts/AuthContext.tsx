@@ -1,6 +1,17 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback } from 'react';
+import axios from 'axios';
 import { authApi, teamApi } from '../services/api';
 import type { AgentAvailability, User, Organization, OrgRole } from '../types';
+import { apiBaseUrl } from '../services/utils';
+import {
+  clearAuthBackup,
+  clearAuthTokens,
+  getAccessToken,
+  getRefreshToken,
+  isRequestAborted,
+  restoreAuthBackupIfNeeded,
+  setAuthTokens,
+} from '../utils/authStorage';
 
 interface AuthContextType {
   user: User | null;
@@ -34,6 +45,17 @@ function applySession(
   setTwoFactorEnabled(twoFactorEnabled ?? false);
 }
 
+async function refreshAccessToken(): Promise<string | null> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return null;
+  const { data } = await axios.post(`${apiBaseUrl}/auth/refresh`, { refreshToken });
+  const accessToken = data?.data?.accessToken as string | undefined;
+  const nextRefresh = (data?.data?.refreshToken as string | undefined) || refreshToken;
+  if (!accessToken) return null;
+  setAuthTokens(accessToken, nextRefresh);
+  return accessToken;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [organization, setOrganization] = useState<Organization | null>(null);
@@ -42,18 +64,57 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const heartbeat = useCallback(() => {
-    if (!localStorage.getItem('accessToken')) return;
+    if (!getAccessToken()) return;
     teamApi.heartbeat().then(({ data }) => {
       setAvailabilityState(data.data.availability);
-    }).catch(() => {});
+    }).catch((err) => {
+      if (!isRequestAborted(err)) {
+        // keep session; transient heartbeat failures must not log the user out
+      }
+    });
   }, []);
 
   useEffect(() => {
-    const token = localStorage.getItem('accessToken');
-    if (token) {
-      authApi
-        .me()
-        .then(({ data }) => {
+    restoreAuthBackupIfNeeded();
+
+    const boot = async () => {
+      const token = getAccessToken();
+      const refreshToken = getRefreshToken();
+      if (!token && !refreshToken) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const { data } = await authApi.me();
+        const org = data.data.organizations?.[0];
+        applySession(
+          setUser,
+          setOrganization,
+          setAvailabilityState,
+          setTwoFactorEnabled,
+          data.data,
+          org
+            ? {
+                id: org.id,
+                companyName: org.companyName,
+                role: org.role,
+              }
+            : null,
+          data.data.availability,
+          data.data.twoFactorEnabled
+        );
+        clearAuthBackup();
+        heartbeat();
+      } catch (err) {
+        if (isRequestAborted(err)) {
+          setLoading(false);
+          return;
+        }
+        try {
+          const access = await refreshAccessToken();
+          if (!access) throw err;
+          const { data } = await authApi.me();
           const org = data.data.organizations?.[0];
           applySession(
             setUser,
@@ -71,13 +132,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             data.data.availability,
             data.data.twoFactorEnabled
           );
+          clearAuthBackup();
           heartbeat();
-        })
-        .catch(() => localStorage.clear())
-        .finally(() => setLoading(false));
-    } else {
-      setLoading(false);
-    }
+        } catch (refreshErr) {
+          if (!isRequestAborted(refreshErr)) {
+            clearAuthTokens();
+            clearAuthBackup();
+            applySession(setUser, setOrganization, setAvailabilityState, setTwoFactorEnabled, null, null);
+          }
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void boot();
   }, [heartbeat]);
 
   useEffect(() => {
@@ -87,13 +156,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(interval);
   }, [user, heartbeat]);
 
+  // Coming back from Facebook via Back/bfcache — re-hydrate session if needed
+  useEffect(() => {
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (!event.persisted) return;
+      restoreAuthBackupIfNeeded();
+      if (!user && (getAccessToken() || getRefreshToken())) {
+        void authApi
+          .me()
+          .then(({ data }) => {
+            const org = data.data.organizations?.[0];
+            applySession(
+              setUser,
+              setOrganization,
+              setAvailabilityState,
+              setTwoFactorEnabled,
+              data.data,
+              org
+                ? { id: org.id, companyName: org.companyName, role: org.role }
+                : null,
+              data.data.availability,
+              data.data.twoFactorEnabled
+            );
+          })
+          .catch(() => {});
+      }
+    };
+    window.addEventListener('pageshow', onPageShow);
+    return () => window.removeEventListener('pageshow', onPageShow);
+  }, [user]);
+
   const login = async (email: string, password: string, totpCode?: string) => {
     const { data } = await authApi.login({ email, password, totpCode });
     if (data.data.requires2FA) {
       return { requires2FA: true };
     }
-    localStorage.setItem('accessToken', data.data.accessToken);
-    localStorage.setItem('refreshToken', data.data.refreshToken);
+    setAuthTokens(data.data.accessToken, data.data.refreshToken);
+    clearAuthBackup();
     applySession(
       setUser,
       setOrganization,
@@ -115,8 +214,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     companyName: string;
   }) => {
     const { data } = await authApi.register(formData);
-    localStorage.setItem('accessToken', data.data.accessToken);
-    localStorage.setItem('refreshToken', data.data.refreshToken);
+    setAuthTokens(data.data.accessToken, data.data.refreshToken);
+    clearAuthBackup();
     applySession(
       setUser,
       setOrganization,
@@ -130,9 +229,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
-    const refreshToken = localStorage.getItem('refreshToken');
+    const refreshToken = getRefreshToken();
     if (refreshToken) authApi.logout(refreshToken);
-    localStorage.clear();
+    clearAuthTokens();
+    clearAuthBackup();
     applySession(setUser, setOrganization, setAvailabilityState, setTwoFactorEnabled, null, null);
   };
 

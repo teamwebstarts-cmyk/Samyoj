@@ -37,13 +37,24 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const original = error.config;
-    if (error.response?.status === 401 && !original._retry) {
+    const aborted =
+      error?.code === 'ERR_CANCELED' ||
+      error?.name === 'CanceledError' ||
+      error?.message === 'canceled' ||
+      error?.message === 'cancelled';
+    if (aborted) {
+      return Promise.reject(error);
+    }
+    if (error.response?.status === 401 && original && !original._retry) {
       original._retry = true;
       const refreshToken = localStorage.getItem('refreshToken');
       if (refreshToken) {
         try {
           const { data } = await axios.post(`${API_URL}/auth/refresh`, { refreshToken });
           localStorage.setItem('accessToken', data.data.accessToken);
+          if (data.data.refreshToken) {
+            localStorage.setItem('refreshToken', data.data.refreshToken);
+          }
           original.headers.Authorization = `Bearer ${data.data.accessToken}`;
           return api(original);
         } catch (refreshError) {
@@ -53,8 +64,13 @@ api.interceptors.response.use(
             method: original.method?.toUpperCase(),
             url: original.url,
           });
-          localStorage.clear();
-          window.location.href = '/login';
+          // Only clear auth keys — do not wipe the whole localStorage
+          localStorage.removeItem('accessToken');
+          localStorage.removeItem('refreshToken');
+          const returnTo = `${window.location.pathname}${window.location.search}`;
+          if (!window.location.pathname.startsWith('/login')) {
+            window.location.href = `/login?returnTo=${encodeURIComponent(returnTo)}`;
+          }
         }
       }
     }
@@ -158,9 +174,12 @@ export const whatsappApi = {
   metaConfig: () => api.get<{ data: import('../types').OrgMetaSettings }>('/whatsapp/meta-config'),
   updateMetaConfig: (data: { appId: string; appSecret?: string }) =>
     api.patch<{ data: import('../types').OrgMetaSettings }>('/whatsapp/meta-config', data),
-  connectUrl: () => api.get('/whatsapp/connect-url'),
-  completeConnect: (code: string) =>
-    api.post<{ data: WhatsappConnectResult }>('/whatsapp/connect/callback', { code }),
+  connectUrl: (redirectUri?: string) =>
+    api.get('/whatsapp/connect-url', {
+      params: redirectUri ? { redirectUri } : undefined,
+    }),
+  completeConnect: (code: string, state: string) =>
+    api.post<{ data: WhatsappConnectResult }>('/whatsapp/connect/callback', { code, state }),
   selectConnect: (pendingToken: string, phoneNumberId: string, wabaId: string) =>
     api.post<{ data: WhatsappConnectResult }>('/whatsapp/connect/select', {
       pendingToken,

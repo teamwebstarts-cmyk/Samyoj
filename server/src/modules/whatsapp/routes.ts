@@ -1,11 +1,15 @@
 import { Router, Request, Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
 import prisma from '../../config/database';
 import { config } from '../../config';
 import { authenticate, requireOrg, loadOrgRole, requireOrgRole } from '../../middleware/auth';
 import { AppError, sendSuccess, asyncHandler } from '../../utils/response';
 import { MetaWhatsAppService } from './meta.service';
 import { signConnectPending, verifyConnectPending } from './connect-pending';
+import {
+  resolveOAuthRedirectUri,
+  signConnectOAuthState,
+  verifyConnectOAuthState,
+} from './connect-oauth-state';
 import {
   getOrgMetaSettings,
   resolveMetaCredentials,
@@ -119,11 +123,22 @@ router.get(
   requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
+    const userId = req.user!.userId;
     const metaCredentials = await resolveMetaCredentials(orgId);
 
-    const state = uuidv4();
-    const url = MetaWhatsAppService.getEmbeddedSignupUrl(state, metaCredentials);
-    sendSuccess(res, { url, state });
+    // Client sends the exact browser origin callback URL (critical for Codespaces /
+    // tunnels where localhost ≠ the public frontend URL Meta redirects to).
+    const redirectUri = resolveOAuthRedirectUri(
+      typeof req.query.redirectUri === 'string' ? req.query.redirectUri : null
+    );
+
+    const state = signConnectOAuthState({
+      organizationId: orgId,
+      userId,
+      redirectUri,
+    });
+    const url = MetaWhatsAppService.getEmbeddedSignupUrl(state, metaCredentials, redirectUri);
+    sendSuccess(res, { url, state, redirectUri });
   })
 );
 
@@ -132,13 +147,33 @@ router.post(
   authenticate,
   requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
-    const { code } = req.body;
+    const { code, state } = req.body as { code?: string; state?: string };
     if (!code) throw new AppError(400, 'Authorization code required');
+    if (!state) throw new AppError(400, 'OAuth state is required');
 
     const orgId = req.user!.organizationId!;
     const userId = req.user!.userId;
+
+    let oauthState;
+    try {
+      oauthState = verifyConnectOAuthState(state);
+    } catch {
+      throw new AppError(
+        400,
+        'Connect session expired or invalid. Please connect WhatsApp again from Settings.'
+      );
+    }
+
+    if (oauthState.organizationId !== orgId || oauthState.userId !== userId) {
+      throw new AppError(403, 'OAuth state does not match the signed-in user');
+    }
+
     const metaCredentials = await resolveMetaCredentials(orgId);
-    const accessToken = await MetaWhatsAppService.exchangeCodeForAccessToken(code, metaCredentials);
+    const accessToken = await MetaWhatsAppService.exchangeCodeForAccessToken(
+      code,
+      metaCredentials,
+      oauthState.redirectUri
+    );
     const phones = await MetaWhatsAppService.listAvailablePhoneNumbers(accessToken, metaCredentials);
 
     if (phones.length === 0) {

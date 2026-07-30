@@ -35,9 +35,18 @@ export default function LoginPage() {
     if (oauth && accessToken && refreshToken) {
       localStorage.setItem('accessToken', accessToken);
       localStorage.setItem('refreshToken', refreshToken);
-      navigate('/', { replace: true });
+      const returnTo = searchParams.get('returnTo');
+      navigate(
+        returnTo && returnTo.startsWith('/') && !returnTo.startsWith('//') ? returnTo : '/',
+        { replace: true }
+      );
     }
   }, [searchParams, navigate]);
+
+  const safeReturnTo = (value: string | null): string | null => {
+    if (!value || !value.startsWith('/') || value.startsWith('//')) return null;
+    return value;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,7 +58,7 @@ export default function LoginPage() {
         toastError('Enter your authenticator code to continue');
         return;
       }
-      navigate('/');
+      navigate(safeReturnTo(searchParams.get('returnTo')) || '/');
     } catch (err: unknown) {
       toastError(getErrorMessage(err, 'Login failed'));
     } finally {

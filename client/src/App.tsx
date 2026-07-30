@@ -50,8 +50,10 @@ export default function App() {
                 <Route path="/forgot-password" element={<ForgotPasswordPage />} />
                 <Route path="/reset-password" element={<ResetPasswordPage />} />
                 <Route path="/invite/:token" element={<AcceptInvitePage />} />
+                {/* Outside ProtectedRoute so Meta's ?code=&state= can be read/stashed
+                    even before auth hydrates. Page itself requires a signed-in user. */}
+                <Route path="/settings/whatsapp/callback" element={<WhatsappCallbackPage />} />
                 <Route element={<ProtectedRoute />}>
-                  <Route path="/settings/whatsapp/callback" element={<WhatsappCallbackPage />} />
                   <Route path="/onboarding" element={<Navigate to="/settings?tab=setup" replace />} />
                   <Route element={<OnboardingGate />}>
                     <Route element={<Layout />}>

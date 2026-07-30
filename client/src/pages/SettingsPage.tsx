@@ -47,6 +47,7 @@ import type { AiUsageSummary, BusinessHours, OrgAiSettings, OrgMetaSettings } fr
 import type { ReadinessCheck } from '../components/settings/SettingsReadinessBanner';
 import { toastError, toastSuccess } from '../utils/toast';
 import { formatPhoneDisplay } from '../utils/formatPhone';
+import { isWaOAuthMessage, startWhatsAppOAuth } from '../utils/whatsappOAuth';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -130,7 +131,8 @@ export default function SettingsPage() {
       return;
     }
     try {
-      const { data } = await whatsappApi.connectUrl();
+      const redirectUri = `${window.location.origin}/settings/whatsapp/callback`;
+      const { data } = await whatsappApi.connectUrl(redirectUri);
       setConnectUrl(data.data.url);
     } catch {
       setConnectUrl('');
@@ -279,15 +281,52 @@ export default function SettingsPage() {
     [isReady],
   );
 
+  const beginWhatsAppOAuth = (url: string) => {
+    setConnecting(true);
+    const { mode, popup } = startWhatsAppOAuth(url, { returnPath: '/settings?tab=whatsapp' });
+    if (mode === 'redirect') return;
+
+    const popupClosedPoll = window.setInterval(() => {
+      if (popup && popup.closed) {
+        window.clearInterval(popupClosedPoll);
+        setConnecting(false);
+      }
+    }, 500);
+  };
+
   const handleConnect = () => {
     if (!metaConfig.configured) {
       setMetaModalOpen(true);
       return;
     }
-    if (!connectUrl) return;
-    setConnecting(true);
-    window.location.href = connectUrl;
+    if (!connectUrl) {
+      toastError('Facebook connect URL not ready. Open Configure Meta app, verify App ID, then try again.');
+      setMetaModalOpen(true);
+      return;
+    }
+    beginWhatsAppOAuth(connectUrl);
   };
+
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      if (!isWaOAuthMessage(event.data)) return;
+      setConnecting(false);
+      if (event.data.status === 'success') {
+        toastSuccess(event.data.message || 'WhatsApp connected');
+        load();
+        void refreshNumbers();
+        return;
+      }
+      if (event.data.status === 'cancel') {
+        toastSuccess(event.data.message || 'Connection cancelled — you are still signed in.');
+        return;
+      }
+      toastError(event.data.message || 'WhatsApp connection failed');
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [refreshNumbers]);
 
   const handleMetaSaved = async (config: OrgMetaSettings) => {
     setMetaConfig(config);
@@ -1065,6 +1104,22 @@ export default function SettingsPage() {
         onClose={() => setMetaModalOpen(false)}
         initial={metaConfig}
         onSaved={(config) => void handleMetaSaved(config)}
+        onRequestConnect={() => {
+          void (async () => {
+            try {
+              const redirectUri = `${window.location.origin}/settings/whatsapp/callback`;
+              const { data } = await whatsappApi.connectUrl(redirectUri);
+              const url = data.data.url as string | undefined;
+              if (!url) {
+                toastError('Could not start Facebook connect. Check App ID / Secret and try again.');
+                return;
+              }
+              beginWhatsAppOAuth(url);
+            } catch {
+              toastError('Could not start Facebook connect. Check App ID / Secret and try again.');
+            }
+          })();
+        }}
       />
 
       <ConfirmDialog

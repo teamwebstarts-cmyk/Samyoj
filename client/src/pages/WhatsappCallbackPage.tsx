@@ -2,14 +2,50 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AlertCircle, CheckCircle, Loader2, Smartphone } from 'lucide-react';
 import AppButton from '../components/ui/AppButton';
+import { useAuth } from '../contexts/AuthContext';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { whatsappApi, type WhatsappPhoneOption } from '../services/api';
+import { clearAuthBackup, restoreAuthBackupIfNeeded } from '../utils/authStorage';
+import { notifyOpenerAndClose } from '../utils/whatsappOAuth';
 
 type PageStatus = 'loading' | 'select' | 'connecting' | 'success' | 'error';
+
+const CODE_KEY = 'wa_oauth_code';
+const STATE_KEY = 'wa_oauth_state';
+
+function stashOAuthParams(code: string | null, state: string | null) {
+  if (code) sessionStorage.setItem(CODE_KEY, code);
+  if (state) sessionStorage.setItem(STATE_KEY, state);
+}
+
+function readStashedOAuthParams() {
+  return {
+    code: sessionStorage.getItem(CODE_KEY),
+    state: sessionStorage.getItem(STATE_KEY),
+  };
+}
+
+function clearStashedOAuthParams() {
+  sessionStorage.removeItem(CODE_KEY);
+  sessionStorage.removeItem(STATE_KEY);
+}
+
+function finishInPopup(payload: {
+  status: 'success' | 'error' | 'cancel';
+  phoneNumber?: string;
+  message?: string;
+}) {
+  if (window.opener && !window.opener.closed) {
+    notifyOpenerAndClose(payload);
+    return true;
+  }
+  return false;
+}
 
 export default function WhatsappCallbackPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { user, loading: authLoading } = useAuth();
   const { refreshNumbers } = useWhatsAppNumber();
   const [status, setStatus] = useState<PageStatus>('loading');
   const [message, setMessage] = useState('Connecting your WhatsApp number...');
@@ -19,25 +55,56 @@ export default function WhatsappCallbackPage() {
   const [selectedKey, setSelectedKey] = useState('');
 
   useEffect(() => {
-    const code = searchParams.get('code');
+    restoreAuthBackupIfNeeded();
+
+    // Persist immediately — ProtectedRoute/login must not lose Meta's code/state.
+    const codeFromUrl = searchParams.get('code');
+    const stateFromUrl = searchParams.get('state');
     const error = searchParams.get('error');
     const errorDescription = searchParams.get('error_description');
 
+    stashOAuthParams(codeFromUrl, stateFromUrl);
+
     if (error) {
+      clearStashedOAuthParams();
+      clearAuthBackup();
+      const msg = errorDescription || error || 'Sign-in was cancelled.';
+      if (finishInPopup({ status: 'error', message: msg })) return;
       setStatus('error');
-      setMessage(errorDescription || error || 'Sign-in was cancelled.');
+      setMessage(msg);
       return;
     }
 
-    if (!code) {
+    if (authLoading) return;
+
+    if (!user) {
+      // Should rarely happen now (returnTo on ProtectedRoute), but keep a safety net.
+      const returnTo = `/settings/whatsapp/callback${window.location.search}`;
+      navigate(`/login?returnTo=${encodeURIComponent(returnTo)}`, { replace: true });
+      return;
+    }
+
+    const stashed = readStashedOAuthParams();
+    const code = codeFromUrl || stashed.code;
+    const state = stateFromUrl || stashed.state;
+
+    if (!code || !state) {
+      // User closed Facebook / hit Back without completing — keep dashboard session
+      const msg = 'WhatsApp connection was cancelled. Your dashboard session is still active.';
+      if (finishInPopup({ status: 'cancel', message: msg })) return;
       setStatus('error');
       setMessage('Something went wrong. Please try connecting again from Settings.');
       return;
     }
 
+    let cancelled = false;
+
     whatsappApi
-      .completeConnect(code)
+      .completeConnect(code, state)
       .then(({ data }) => {
+        if (cancelled) return;
+        clearStashedOAuthParams();
+        clearAuthBackup();
         const result = data.data;
         if (result.requiresSelection && result.phones?.length && result.pendingToken) {
           setPhones(result.phones);
@@ -52,16 +119,31 @@ export default function WhatsappCallbackPage() {
         setStatus('success');
         setMessage('WhatsApp connected successfully!');
         void refreshNumbers();
-        setTimeout(() => navigate('/settings', { replace: true }), 2500);
+        if (
+          finishInPopup({
+            status: 'success',
+            phoneNumber: result.phoneNumber || '',
+            message: 'WhatsApp connected successfully!',
+          })
+        ) {
+          return;
+        }
+        setTimeout(() => navigate('/settings?tab=whatsapp', { replace: true }), 2500);
       })
       .catch((err: unknown) => {
+        if (cancelled) return;
         const msg =
           (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
             ?.error?.message || 'Failed to complete WhatsApp connection.';
+        if (finishInPopup({ status: 'error', message: msg })) return;
         setStatus('error');
         setMessage(msg);
       });
-  }, [searchParams, navigate]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams, navigate, user, authLoading, refreshNumbers]);
 
   const handleSelectConnect = async () => {
     const selected = phones.find((p) => `${p.wabaId}:${p.phoneNumberId}` === selectedKey);
@@ -76,15 +158,27 @@ export default function WhatsappCallbackPage() {
         selected.phoneNumberId,
         selected.wabaId
       );
+      clearStashedOAuthParams();
+      clearAuthBackup();
       setPhoneNumber(data.data.phoneNumber || selected.phoneNumber);
       setStatus('success');
       setMessage('WhatsApp connected successfully!');
       void refreshNumbers();
-      setTimeout(() => navigate('/settings', { replace: true }), 2500);
+      if (
+        finishInPopup({
+          status: 'success',
+          phoneNumber: data.data.phoneNumber || selected.phoneNumber,
+          message: 'WhatsApp connected successfully!',
+        })
+      ) {
+        return;
+      }
+      setTimeout(() => navigate('/settings?tab=whatsapp', { replace: true }), 2500);
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
           ?.error?.message || 'Failed to connect selected number.';
+      if (finishInPopup({ status: 'error', message: msg })) return;
       setStatus('error');
       setMessage(msg);
     }
@@ -167,7 +261,7 @@ export default function WhatsappCallbackPage() {
             </div>
             <h1 className="mt-4 text-xl font-extrabold text-red-800">Connection failed</h1>
             <p className="mt-2 text-[13px] font-medium text-neutral-600">{message}</p>
-            <AppButton className="mt-6" onClick={() => navigate('/settings', { replace: true })}>
+            <AppButton className="mt-6" onClick={() => navigate('/settings?tab=whatsapp', { replace: true })}>
               Back to Settings
             </AppButton>
           </>

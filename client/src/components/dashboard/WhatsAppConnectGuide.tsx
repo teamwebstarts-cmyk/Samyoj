@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import AppButton from '../ui/AppButton';
 import { toastError, toastSuccess } from '../../utils/toast';
 import { whatsappApi } from '../../services/api';
+import { isWaOAuthMessage, startWhatsAppOAuth } from '../../utils/whatsappOAuth';
 
 interface WhatsappNumberRow {
   id: string;
@@ -28,7 +29,8 @@ export default function WhatsAppConnectGuide() {
         setMetaConfigured(Boolean(metaRes.data.data.configured));
         if (metaRes.data.data.configured) {
           try {
-            const urlRes = await whatsappApi.connectUrl();
+            const redirectUri = `${window.location.origin}/settings/whatsapp/callback`;
+            const urlRes = await whatsappApi.connectUrl(redirectUri);
             setConnectUrl(urlRes.data.data.url);
           } catch {
             setConnectUrl('');
@@ -49,6 +51,26 @@ export default function WhatsAppConnectGuide() {
     load();
   }, [load]);
 
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      if (!isWaOAuthMessage(event.data)) return;
+      setConnecting(false);
+      if (event.data.status === 'success') {
+        toastSuccess(event.data.message || 'WhatsApp connected');
+        load();
+        return;
+      }
+      if (event.data.status === 'cancel') {
+        toastSuccess(event.data.message || 'Connection cancelled — you are still signed in.');
+        return;
+      }
+      toastError(event.data.message || 'WhatsApp connection failed');
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [load]);
+
   const handleConnect = () => {
     if (!metaConfigured) {
       navigate('/settings?tab=whatsapp');
@@ -56,7 +78,14 @@ export default function WhatsAppConnectGuide() {
     }
     if (!connectUrl) return;
     setConnecting(true);
-    window.location.href = connectUrl;
+    const { mode, popup } = startWhatsAppOAuth(connectUrl);
+    if (mode === 'redirect') return;
+    const poll = window.setInterval(() => {
+      if (popup && popup.closed) {
+        window.clearInterval(poll);
+        setConnecting(false);
+      }
+    }, 500);
   };
 
   const handleDisconnect = async () => {

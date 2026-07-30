@@ -160,11 +160,15 @@ function requireMetaCredentials(credentials?: MetaCredentials): MetaCredentials 
 }
 
 export class MetaWhatsAppService {
-  static getEmbeddedSignupUrl(state: string, credentials?: MetaCredentials): string {
+  static getEmbeddedSignupUrl(
+    state: string,
+    credentials?: MetaCredentials,
+    redirectUri?: string
+  ): string {
     const creds = requireMetaCredentials(credentials);
     const params = new URLSearchParams({
       client_id: creds.appId,
-      redirect_uri: config.meta.redirectUri,
+      redirect_uri: redirectUri || config.meta.redirectUri,
       state,
       scope: 'whatsapp_business_management,whatsapp_business_messaging',
       response_type: 'code',
@@ -172,13 +176,18 @@ export class MetaWhatsAppService {
     return `https://www.facebook.com/${config.meta.apiVersion}/dialog/oauth?${params}`;
   }
 
-  static async exchangeCodeForToken(code: string, credentials?: MetaCredentials): Promise<string> {
+  static async exchangeCodeForToken(
+    code: string,
+    credentials?: MetaCredentials,
+    redirectUri?: string
+  ): Promise<string> {
     const creds = requireMetaCredentials(credentials);
 
     const params = new URLSearchParams({
       client_id: creds.appId,
       client_secret: creds.appSecret,
-      redirect_uri: config.meta.redirectUri,
+      // Must be identical to the redirect_uri used when Meta issued this code.
+      redirect_uri: redirectUri || config.meta.redirectUri,
       code,
     });
 
@@ -212,9 +221,10 @@ export class MetaWhatsAppService {
 
   static async exchangeCodeForAccessToken(
     code: string,
-    credentials?: MetaCredentials
+    credentials?: MetaCredentials,
+    redirectUri?: string
   ): Promise<string> {
-    const shortLivedToken = await this.exchangeCodeForToken(code, credentials);
+    const shortLivedToken = await this.exchangeCodeForToken(code, credentials, redirectUri);
     return this.exchangeForLongLivedToken(shortLivedToken, credentials);
   }
 
