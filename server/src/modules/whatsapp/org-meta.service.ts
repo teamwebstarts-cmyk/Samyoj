@@ -15,6 +15,8 @@ export interface OrgMetaSettingsClient {
   appId?: string;
   hasAppSecret?: boolean;
   configured?: boolean;
+  /** True when using platform META_APP_ID/SECRET from .env (not org override) */
+  usingPlatform?: boolean;
 }
 
 export async function getOrgMetaSettings(organizationId: string): Promise<OrgMetaSettings> {
@@ -28,20 +30,25 @@ export async function getOrgMetaSettings(organizationId: string): Promise<OrgMet
 
 export function sanitizeMetaSettingsForClient(settings: OrgMetaSettings): OrgMetaSettingsClient {
   const { appSecret, appSecretEncrypted, appId } = settings;
-  const hasAppSecret = Boolean(appSecretEncrypted || appSecret);
+  const hasOrgSecret = Boolean(appSecretEncrypted || appSecret);
+  const orgConfigured = Boolean(appId && hasOrgSecret);
+  const platformConfigured = Boolean(config.meta.appId && config.meta.appSecret);
+
   return {
-    appId: appId || undefined,
-    hasAppSecret,
-    configured: Boolean(appId && hasAppSecret),
+    // Never expose platform App ID to the client UI
+    appId: orgConfigured ? appId : undefined,
+    hasAppSecret: hasOrgSecret || platformConfigured,
+    configured: orgConfigured || platformConfigured,
+    usingPlatform: !orgConfigured && platformConfigured,
   };
 }
 
 export async function saveOrgMetaSettings(
   organizationId: string,
-  input: { appId: string; appSecret?: string }
+  input: { appId?: string; appSecret?: string }
 ): Promise<OrgMetaSettingsClient> {
-  const appId = input.appId.trim();
-  if (!/^\d+$/.test(appId)) {
+  const appId = input.appId?.trim() || config.meta.appId;
+  if (appId && !/^\d+$/.test(appId)) {
     throw new AppError(400, 'Meta App ID must be a numeric value from developers.facebook.com');
   }
 
@@ -54,13 +61,13 @@ export async function saveOrgMetaSettings(
 
   const next: OrgMetaSettings = {
     ...existing,
-    appId,
+    ...(appId ? { appId } : {}),
   };
 
   if (input.appSecret?.trim()) {
     next.appSecretEncrypted = encrypt(input.appSecret.trim());
     delete next.appSecret;
-  } else if (!existing.appSecretEncrypted && !existing.appSecret) {
+  } else if (!existing.appSecretEncrypted && !existing.appSecret && !config.meta.appSecret) {
     throw new AppError(400, 'Meta App Secret is required');
   }
 

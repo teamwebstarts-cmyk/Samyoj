@@ -500,6 +500,7 @@ export interface OrgMetaSettings {
   appId?: string;
   hasAppSecret?: boolean;
   configured?: boolean;
+  usingPlatform?: boolean;
 }
 
 export interface AiUsageSummary {

@@ -23,7 +23,6 @@ import CallingSettingsPanel from '../components/calls/CallingSettingsPanel';
 import SettingsInsightCards from '../components/settings/SettingsInsightCards';
 import SettingsPanel from '../components/settings/SettingsPanel';
 import CannedRepliesPanel from '../components/settings/CannedRepliesPanel';
-import MetaAppConfigModal from '../components/settings/MetaAppConfigModal';
 import IntegrationsPanel from '../components/settings/IntegrationsPanel';
 import SettingsReadinessBanner from '../components/settings/SettingsReadinessBanner';
 import SettingsSidebar from '../components/settings/SettingsSidebar';
@@ -43,7 +42,7 @@ import { skipOnboardingSetup } from '../components/OnboardingGate';
 // import { useTheme } from '../contexts/ThemeContext';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { aiBotApi, onboardingApi, settingsApi, teamApi, whatsappApi } from '../services/api';
-import type { AiUsageSummary, BusinessHours, OrgAiSettings, OrgMetaSettings } from '../types';
+import type { AiUsageSummary, BusinessHours, OrgAiSettings } from '../types';
 import type { ReadinessCheck } from '../components/settings/SettingsReadinessBanner';
 import { toastError, toastSuccess } from '../utils/toast';
 import { formatPhoneDisplay } from '../utils/formatPhone';
@@ -91,8 +90,6 @@ export default function SettingsPage() {
     }
   }, [tabFromUrl]);
   const [numbers, setNumbers] = useState<WhatsappNumber[]>([]);
-  const [metaConfig, setMetaConfig] = useState<OrgMetaSettings>({ configured: false });
-  const [metaModalOpen, setMetaModalOpen] = useState(false);
   const [connectUrl, setConnectUrl] = useState('');
   const [webhookStatus, setWebhookStatus] = useState<WebhookStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -125,11 +122,7 @@ export default function SettingsPage() {
   const [readinessChecks, setReadinessChecks] = useState<ReadinessCheck[]>([]);
   const [readinessMeta, setReadinessMeta] = useState({ completedCount: 0, totalChecks: 5, progress: 0, isReady: false });
 
-  const loadConnectUrl = async (configured?: boolean) => {
-    if (!configured) {
-      setConnectUrl('');
-      return;
-    }
+  const loadConnectUrl = async () => {
     try {
       const redirectUri = `${window.location.origin}/settings/whatsapp/callback`;
       const { data } = await whatsappApi.connectUrl(redirectUri);
@@ -142,7 +135,6 @@ export default function SettingsPage() {
   const load = () => {
     Promise.all([
       whatsappApi.numbers(),
-      whatsappApi.metaConfig(),
       whatsappApi.webhookStatus(),
       settingsApi.get(),
       settingsApi.aiUsage(),
@@ -150,11 +142,9 @@ export default function SettingsPage() {
       teamApi.list(),
       onboardingApi.readiness(),
     ])
-      .then(async ([numbersRes, metaRes, webhookRes, settingsRes, usageRes, botsRes, teamRes, readinessRes]) => {
-        const meta = metaRes.data.data;
-        setMetaConfig(meta);
+      .then(async ([numbersRes, webhookRes, settingsRes, usageRes, botsRes, teamRes, readinessRes]) => {
         setNumbers(numbersRes.data.data);
-        await loadConnectUrl(meta.configured);
+        await loadConnectUrl();
         setWebhookStatus(webhookRes.data.data);
         const hours = settingsRes.data.data.businessHours;
         if (hours) {
@@ -295,22 +285,20 @@ export default function SettingsPage() {
   };
 
   const handleConnect = () => {
-    // Platform App ID is configured in .env — allow direct connect
     if (!connectUrl) {
-      // Generate connect URL (uses platform App ID from backend)
       void (async () => {
         try {
           const redirectUri = `${window.location.origin}/settings/whatsapp/callback`;
           const { data } = await whatsappApi.connectUrl(redirectUri);
           const url = data.data.url;
           if (!url) {
-            toastError('Facebook connect URL not ready. Please try again.');
+            toastError('Could not start WhatsApp connection. Please try again.');
             return;
           }
           setConnectUrl(url);
           beginWhatsAppOAuth(url);
         } catch {
-          toastError('Facebook connect URL not ready. Please try again.');
+          toastError('Could not start WhatsApp connection. Please try again.');
         }
       })();
       return;
@@ -341,11 +329,6 @@ export default function SettingsPage() {
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
   }, [refreshNumbers]);
-
-  const handleMetaSaved = async (config: OrgMetaSettings) => {
-    setMetaConfig(config);
-    await loadConnectUrl(config.configured);
-  };
 
   const handleDisconnect = async (id: string, phone: string) => {
     setDisconnectTarget({ id, phone });
@@ -533,14 +516,7 @@ export default function SettingsPage() {
 
             {activeTab === 'whatsapp' && (
               <div className="space-y-5">
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <SettingsStatusPill
-                    label="Meta app"
-                    active={Boolean(metaConfig.configured)}
-                    icon={Settings2}
-                    activeLabel="Configured"
-                    inactiveLabel="Not configured"
-                  />
+                <div className="grid gap-3 sm:grid-cols-2">
                   <SettingsStatusPill
                     label="WhatsApp number"
                     active={numbers.length > 0}
@@ -556,41 +532,6 @@ export default function SettingsPage() {
                     inactiveLabel="Not set up"
                   />
                 </div>
-
-                <SettingsPanel
-                  title="Meta developer app"
-                  description="Use your own Meta App ID and App Secret — each account connects with its own credentials."
-                  icon={Settings2}
-                  accent="sky"
-                  footer={
-                    <AppButton size="sm" onClick={() => setMetaModalOpen(true)}>
-                      {metaConfig.configured ? 'Update credentials' : 'Configure Meta app'}
-                    </AppButton>
-                  }
-                >
-                  {metaConfig.configured ? (
-                    <div className="rounded-2xl border border-sky-200/80 bg-gradient-to-r from-sky-50/90 to-theme-surface p-4 ring-1 ring-sky-100 dark:border-sky-800/40 dark:from-sky-950/30 dark:ring-sky-900/40">
-                      <p className="text-[11px] font-bold uppercase tracking-wide text-theme-muted">
-                        Meta App ID
-                      </p>
-                      <p className="mt-1 font-mono text-[15px] font-extrabold text-theme-fg">
-                        {metaConfig.appId}
-                      </p>
-                      <p className="mt-2 text-[12px] font-semibold text-sky-700 dark:text-sky-400">
-                        App secret saved · ready to connect WhatsApp
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="rounded-2xl border border-dashed border-theme-border bg-theme-subtle/40 px-4 py-8 text-center">
-                      <p className="text-[13px] font-medium text-theme-secondary">
-                        Add your Meta App ID and App Secret before connecting WhatsApp.
-                      </p>
-                      <AppButton className="mt-4" size="sm" onClick={() => setMetaModalOpen(true)}>
-                        Configure Meta app
-                      </AppButton>
-                    </div>
-                  )}
-                </SettingsPanel>
 
                 <SettingsPanel
                   title="WhatsApp connection"
@@ -648,9 +589,7 @@ export default function SettingsPage() {
                         No WhatsApp number connected yet
                       </p>
                       <p className="mt-1 text-[13px] font-medium text-theme-secondary">
-                        {metaConfig.configured
-                          ? 'Connect your business number to start messaging customers.'
-                          : 'Configure your Meta app first, then connect your business number.'}
+                        Click below to connect your business number via Facebook.
                       </p>
                       <AppButton
                         className="mt-5"
@@ -658,7 +597,7 @@ export default function SettingsPage() {
                         disabled={connecting}
                         loading={connecting}
                       >
-                        {metaConfig.configured ? 'Connect WhatsApp' : 'Configure Meta app first'}
+                        Connect WhatsApp
                       </AppButton>
                       <p className="mt-3 text-[11px] font-medium text-theme-muted">
                         After granting permissions, you will return here automatically.
@@ -1112,29 +1051,6 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
-
-      <MetaAppConfigModal
-        open={metaModalOpen}
-        onClose={() => setMetaModalOpen(false)}
-        initial={metaConfig}
-        onSaved={(config) => void handleMetaSaved(config)}
-        onRequestConnect={() => {
-          void (async () => {
-            try {
-              const redirectUri = `${window.location.origin}/settings/whatsapp/callback`;
-              const { data } = await whatsappApi.connectUrl(redirectUri);
-              const url = data.data.url as string | undefined;
-              if (!url) {
-                toastError('Could not start Facebook connect. Check App ID / Secret and try again.');
-                return;
-              }
-              beginWhatsAppOAuth(url);
-            } catch {
-              toastError('Could not start Facebook connect. Check App ID / Secret and try again.');
-            }
-          })();
-        }}
-      />
 
       <ConfirmDialog
         open={Boolean(disconnectTarget)}

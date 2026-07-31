@@ -115,8 +115,20 @@ export default function MetaAppConfigModal({
 
   const handleSave = async (e: React.FormEvent, connectAfter = false) => {
     e.preventDefault();
+
+    // No custom override → just connect with platform App ID (no save needed)
+    if (!showAdvanced || (!trimmedAppId && !appSecret.trim())) {
+      if (connectAfter && onRequestConnect) {
+        onClose();
+        onRequestConnect();
+        return;
+      }
+      onClose();
+      return;
+    }
+
     if (!trimmedAppId) {
-      toastError('Meta App ID is required');
+      toastError('Meta App ID is required when using Advanced override');
       return;
     }
     if (!/^\d+$/.test(trimmedAppId)) {
@@ -128,7 +140,7 @@ export default function MetaAppConfigModal({
       return;
     }
     if (!initial?.hasAppSecret && !appSecret.trim()) {
-      toastError('Meta App Secret is required');
+      toastError('Meta App Secret is required when using Advanced override');
       return;
     }
 
@@ -254,27 +266,53 @@ export default function MetaAppConfigModal({
               </p>
             </ModalSection>
 
-            <ModalSection step={3} title="App credentials" subtitle="From Meta App → Settings → Basic (use Copy icon)">
-              <AppInput
-                label="Meta App ID"
-                placeholder="e.g. 452611265899178"
-                value={appId}
-                onChange={(e) => setAppId(e.target.value.replace(/\s/g, ''))}
-                required
-              />
-              {trimmedAppId && !appIdLooksValid && (
-                <p className="text-[12px] font-semibold text-amber-700 dark:text-amber-400">
-                  App ID should be 10–20 digits only. Re-copy from Meta Settings → Basic.
+            <ModalSection step={3} title="App credentials" subtitle="Platform App is used by default — expand Advanced only to override">
+              <div className="mb-3 rounded-2xl border border-emerald-200/80 bg-gradient-to-r from-emerald-50/90 to-theme-surface p-4 ring-1 ring-emerald-100 dark:border-emerald-800/40 dark:from-emerald-950/30 dark:ring-emerald-900/40">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-theme-muted">
+                  Platform App ID
                 </p>
+                <p className="mt-1 text-[12px] font-semibold text-emerald-700 dark:text-emerald-400">
+                  Using Samyoj&apos;s platform App ID from server .env (recommended)
+                </p>
+                <p className="mt-2 text-[11px] font-medium text-theme-muted">
+                  Most users don&apos;t need to change this. Open Advanced only if you have your own Meta App.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowAdvanced(!showAdvanced)}
+                className="mb-3 flex items-center gap-1.5 text-[12px] font-semibold text-whatsapp-700 hover:text-whatsapp-800 dark:text-whatsapp-400 dark:hover:text-whatsapp-300"
+              >
+                <Settings2 className="h-3.5 w-3.5" />
+                {showAdvanced ? 'Hide advanced settings' : 'Advanced: Use your own Meta App'}
+              </button>
+
+              {showAdvanced && (
+                <div className="space-y-3 rounded-2xl border border-amber-200/70 bg-amber-50/40 p-4 dark:border-amber-800/40 dark:bg-amber-950/20">
+                  <p className="text-[11px] font-semibold text-amber-800 dark:text-amber-300">
+                    Only for developers with their own Meta App. Leave empty to keep using the platform App.
+                  </p>
+                  <AppInput
+                    label="Meta App ID (Override)"
+                    placeholder="e.g. 452611265899178"
+                    value={appId}
+                    onChange={(e) => setAppId(e.target.value.replace(/\s/g, ''))}
+                  />
+                  {trimmedAppId && !appIdLooksValid && (
+                    <p className="text-[12px] font-semibold text-amber-700 dark:text-amber-400">
+                      App ID should be 10–20 digits only. Re-copy from Meta Settings → Basic.
+                    </p>
+                  )}
+                  <AppInput
+                    label="Meta App Secret (Override)"
+                    type="password"
+                    placeholder={initial?.hasAppSecret ? '•••••••• (saved — leave blank to keep)' : 'Your app secret'}
+                    value={appSecret}
+                    onChange={(e) => setAppSecret(e.target.value)}
+                  />
+                </div>
               )}
-              <AppInput
-                label="Meta App Secret"
-                type="password"
-                placeholder={initial?.hasAppSecret ? '•••••••• (saved — leave blank to keep)' : 'Your app secret'}
-                value={appSecret}
-                onChange={(e) => setAppSecret(e.target.value)}
-                required={!initial?.hasAppSecret}
-              />
             </ModalSection>
           </div>
 

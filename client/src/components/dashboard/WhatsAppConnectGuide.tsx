@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { CheckCircle2, Link2, LogOut, Smartphone } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import AppButton from '../ui/AppButton';
 import { toastError, toastSuccess } from '../../utils/toast';
 import { whatsappApi } from '../../services/api';
@@ -13,31 +13,28 @@ interface WhatsappNumberRow {
 }
 
 export default function WhatsAppConnectGuide() {
-  const navigate = useNavigate();
   const [connectUrl, setConnectUrl] = useState('');
-  const [metaConfigured, setMetaConfigured] = useState(false);
   const [number, setNumber] = useState<WhatsappNumberRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
+
+  const loadConnectUrl = async () => {
+    try {
+      const redirectUri = `${window.location.origin}/settings/whatsapp/callback`;
+      const urlRes = await whatsappApi.connectUrl(redirectUri);
+      setConnectUrl(urlRes.data.data.url);
+    } catch {
+      setConnectUrl('');
+    }
+  };
+
   const load = useCallback(() => {
     setLoading(true);
-    Promise.all([whatsappApi.numbers(), whatsappApi.metaConfig()])
-      .then(async ([numbersRes, metaRes]) => {
+    Promise.all([whatsappApi.numbers(), loadConnectUrl()])
+      .then(([numbersRes]) => {
         const numbers = numbersRes.data.data as WhatsappNumberRow[];
         setNumber(numbers[0] ?? null);
-        setMetaConfigured(Boolean(metaRes.data.data.configured));
-        if (metaRes.data.data.configured) {
-          try {
-            const redirectUri = `${window.location.origin}/settings/whatsapp/callback`;
-            const urlRes = await whatsappApi.connectUrl(redirectUri);
-            setConnectUrl(urlRes.data.data.url);
-          } catch {
-            setConnectUrl('');
-          }
-        } else {
-          setConnectUrl('');
-        }
       })
       .catch(() => {
         setNumber(null);
@@ -72,20 +69,38 @@ export default function WhatsAppConnectGuide() {
   }, [load]);
 
   const handleConnect = () => {
-    if (!metaConfigured) {
-      navigate('/settings?tab=whatsapp');
+    const start = (url: string) => {
+      setConnecting(true);
+      const { mode, popup } = startWhatsAppOAuth(url);
+      if (mode === 'redirect') return;
+      const poll = window.setInterval(() => {
+        if (popup && popup.closed) {
+          window.clearInterval(poll);
+          setConnecting(false);
+        }
+      }, 500);
+    };
+
+    if (connectUrl) {
+      start(connectUrl);
       return;
     }
-    if (!connectUrl) return;
-    setConnecting(true);
-    const { mode, popup } = startWhatsAppOAuth(connectUrl);
-    if (mode === 'redirect') return;
-    const poll = window.setInterval(() => {
-      if (popup && popup.closed) {
-        window.clearInterval(poll);
-        setConnecting(false);
+
+    void (async () => {
+      try {
+        const redirectUri = `${window.location.origin}/settings/whatsapp/callback`;
+        const { data } = await whatsappApi.connectUrl(redirectUri);
+        const url = data.data.url;
+        if (!url) {
+          toastError('Could not start WhatsApp connection. Please try again.');
+          return;
+        }
+        setConnectUrl(url);
+        start(url);
+      } catch {
+        toastError('Could not start WhatsApp connection. Please try again.');
       }
-    }, 500);
+    })();
   };
 
   const handleDisconnect = async () => {
@@ -133,7 +148,7 @@ export default function WhatsAppConnectGuide() {
           </div>
           <div className="flex gap-2">
             <Link
-              to="/settings"
+              to="/settings?tab=whatsapp"
               className="inline-flex h-10 items-center rounded-xl border border-neutral-200 bg-white px-4 text-[13px] font-semibold text-neutral-700 hover:bg-neutral-50"
             >
               Settings
@@ -165,9 +180,7 @@ export default function WhatsAppConnectGuide() {
             <div>
               <h2 className="text-[15px] font-bold text-neutral-900">Connect WhatsApp</h2>
               <p className="mt-0.5 text-[13px] text-neutral-600">
-                {metaConfigured
-                  ? 'Sign in and pick your business number to get started.'
-                  : 'Configure your Meta app in Settings first, then connect your number.'}
+                Sign in with Facebook and pick your business number to get started.
               </p>
               <p className="mt-2 text-[12px] text-neutral-500">
                 Connect → Sign in → Choose number
@@ -181,7 +194,7 @@ export default function WhatsAppConnectGuide() {
             disabled={connecting}
             loading={connecting}
           >
-            {metaConfigured ? 'Connect WhatsApp' : 'Configure in Settings'}
+            Connect WhatsApp
           </AppButton>
         </div>
       </div>
