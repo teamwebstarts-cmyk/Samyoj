@@ -295,13 +295,24 @@ export default function SettingsPage() {
   };
 
   const handleConnect = () => {
-    if (!metaConfig.configured) {
-      setMetaModalOpen(true);
-      return;
-    }
+    // Platform App ID is configured in .env — allow direct connect
     if (!connectUrl) {
-      toastError('Facebook connect URL not ready. Open Configure Meta app, verify App ID, then try again.');
-      setMetaModalOpen(true);
+      // Generate connect URL (uses platform App ID from backend)
+      void (async () => {
+        try {
+          const redirectUri = `${window.location.origin}/settings/whatsapp/callback`;
+          const { data } = await whatsappApi.connectUrl(redirectUri);
+          const url = data.data.url;
+          if (!url) {
+            toastError('Facebook connect URL not ready. Please try again.');
+            return;
+          }
+          setConnectUrl(url);
+          beginWhatsAppOAuth(url);
+        } catch {
+          toastError('Facebook connect URL not ready. Please try again.');
+        }
+      })();
       return;
     }
     beginWhatsAppOAuth(connectUrl);

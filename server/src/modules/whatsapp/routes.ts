@@ -99,8 +99,8 @@ async function saveWhatsappConnection(
 }
 
 const metaConfigSchema = z.object({
-  appId: z.string().min(1),
-  appSecret: z.string().optional(),
+  appId: z.string().min(1).optional(), // Optional: normal users use platform App ID from .env
+  appSecret: z.string().optional(),     // Optional: normal users use platform secret from .env
 });
 
 const metaAdminGuard = [authenticate, requireOrg, loadOrgRole, requireOrgRole('OWNER', 'ADMIN')];

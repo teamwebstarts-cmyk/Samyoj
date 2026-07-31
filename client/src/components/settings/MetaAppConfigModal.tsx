@@ -66,6 +66,7 @@ export default function MetaAppConfigModal({
   const [appSecret, setAppSecret] = useState('');
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const redirectUri = useMemo(
     () =>

@@ -83,17 +83,19 @@ export async function resolveMetaCredentials(organizationId: string): Promise<Me
     ? decrypt(orgSettings.appSecretEncrypted)
     : orgSettings.appSecret;
 
+  // Priority 1: Per-org override (advanced users who want to use their own App)
   if (orgSettings.appId && appSecret) {
     return { appId: orgSettings.appId, appSecret };
   }
 
+  // Priority 2: Platform default (from .env — used by all normal users)
   if (config.meta.appId && config.meta.appSecret) {
     return { appId: config.meta.appId, appSecret: config.meta.appSecret };
   }
 
   throw new AppError(
     400,
-    'Meta app is not configured. Add your Meta App ID and App Secret in Settings → WhatsApp.'
+    'Meta app is not configured. Platform administrator must set META_APP_ID and META_APP_SECRET in server environment variables.'
   );
 }
 
