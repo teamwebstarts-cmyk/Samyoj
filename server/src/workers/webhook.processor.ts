@@ -28,6 +28,8 @@ function mapInboundMessageType(type: string | undefined): 'TEXT' | 'IMAGE' | 'DO
 }
 
 export async function processWebhookPayload(payload: Record<string, unknown>) {
+  const startTime = Date.now();
+
   if (payload.object !== 'whatsapp_business_account') return;
 
   for (const entry of (payload.entry as Array<Record<string, unknown>>) || []) {
@@ -49,6 +51,15 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
       }
 
       const orgId = whatsappNumber.organizationId;
+
+      const totalMessages = (value.messages as unknown[])?.length || 0;
+      const totalStatuses = (value.statuses as unknown[])?.length || 0;
+      log.info('Webhook processing started', {
+        organizationId: orgId,
+        phoneNumberId,
+        messageCount: totalMessages,
+        statusCount: totalStatuses,
+      });
 
       for (const status of (value.statuses as Array<Record<string, unknown>>) || []) {
         const metaMessageId = status.id as string;
@@ -79,6 +90,12 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
         });
 
         if (msg) {
+          log.info('Message status updated', {
+            messageId: msg.id,
+            metaMessageId,
+            status: status.status,
+            organizationId: orgId,
+          });
           emitToOrg(orgId, 'message:status', {
             messageId: msg.id,
             status: status.status,
@@ -91,10 +108,21 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
       }
 
       for (const msg of (value.messages as Array<Record<string, unknown>>) || []) {
+        const startMsgTime = Date.now();
+        const metaMessageId = msg.id as string;
+        const messageType = msg.type as string;
         const contactPhone = msg.from as string;
         const contacts = (value.contacts as Array<{ wa_id?: string; profile?: { name?: string } }>) || [];
         const contactEntry = contacts.find((c) => c.wa_id === contactPhone);
         const contactName = contactEntry?.profile?.name;
+
+        log.info('Processing inbound message', {
+          metaMessageId,
+          messageType,
+          contactPhone,
+          organizationId: orgId,
+          phoneNumberId,
+        });
 
         let contact = await prisma.contact.findUnique({
           where: {
@@ -173,17 +201,30 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
                 ? { ...parsed.metadata, orderPayload: parsed.orderPayload, isCatalogOrder: true }
                 : parsed.metadata;
 
-        let message = await prisma.message.create({
-          data: {
-            conversationId: conversation.id,
-            metaMessageId: msg.id as string,
-            direction: 'INBOUND',
-            type: inboundType,
-            content: parsed.content,
-            status: 'DELIVERED',
-            metadata: inboundMetadata as Prisma.InputJsonValue,
-          },
-        });
+        let message;
+        try {
+          message = await prisma.message.create({
+            data: {
+              conversationId: conversation.id,
+              metaMessageId: msg.id as string,
+              direction: 'INBOUND',
+              type: inboundType,
+              content: parsed.content,
+              status: 'DELIVERED',
+              metadata: inboundMetadata as Prisma.InputJsonValue,
+            },
+          });
+        } catch (err) {
+          // Meta may retry the same webhook; metaMessageId is unique.
+          if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+            log.info('Duplicate inbound message skipped (Meta retry)', {
+              metaMessageId,
+              organizationId: orgId,
+            });
+            continue;
+          }
+          throw err;
+        }
 
         if (parsed.metadata?.mediaId) {
           try {
@@ -210,6 +251,7 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
               source: 'webhook',
               action: 'Inbound media download failed',
               messageId: message.id,
+              organizationId: orgId,
             });
           }
         }
@@ -218,8 +260,13 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
 
         log.info('Saved inbound message', {
           messageId: message.id,
+          metaMessageId,
           contactPhone,
           organizationId: orgId,
+          conversationId: conversation.id,
+          messageType: inboundType,
+          hasMedia: Boolean(parsed.metadata?.mediaId),
+          processingTimeMs: Date.now() - startMsgTime,
         });
 
         emitToOrg(orgId, 'message:new', {
@@ -260,7 +307,12 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
               metadata: { inboundMessageId: message.id },
             });
           } catch (err) {
-            logError(err, { source: 'webhook', action: 'Catalog order creation failed' });
+            logError(err, {
+              source: 'webhook',
+              action: 'Catalog order creation failed',
+              messageId: message.id,
+              organizationId: orgId,
+            });
           }
         }
 
@@ -291,7 +343,12 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
               referral: parsed.referral,
             });
           } catch (err) {
-            logError(err, { source: 'webhook', action: 'CTWA referral handling failed' });
+            logError(err, {
+              source: 'webhook',
+              action: 'CTWA referral handling failed',
+              messageId: message.id,
+              organizationId: orgId,
+            });
           }
         }
 
@@ -310,6 +367,11 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
             '../modules/compliance/opt-out'
           );
           if (isOptOutMessage(textContent)) {
+            log.info('Opt-out detected in inbound message', {
+              messageId: message.id,
+              organizationId: orgId,
+              contactPhone,
+            });
             await handleOptOut(orgId, contact.id, conversation.id, whatsappNumber.id);
             continue;
           }
@@ -333,9 +395,27 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
           hasMedia,
           waFlowResponse: parsed.waFlowResponse,
         }).catch((err) =>
-          logError(err, { source: 'webhook', action: 'Automation processing failed' })
+          logError(err, {
+            source: 'webhook',
+            action: 'Automation processing failed',
+            messageId: message.id,
+            organizationId: orgId,
+          })
         );
+
+        log.info('Inbound message processing complete', {
+          messageId: message.id,
+          metaMessageId,
+          conversationId: conversation.id,
+          isNewConversation: isNew,
+          totalTimeMs: Date.now() - startMsgTime,
+        });
       }
+
+      log.info('Webhook processing complete', {
+        organizationId: orgId,
+        totalTimeMs: Date.now() - startTime,
+      });
     }
   }
 }

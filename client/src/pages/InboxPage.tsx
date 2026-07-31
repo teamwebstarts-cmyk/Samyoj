@@ -36,6 +36,7 @@ import api, { aiBotApi, billingApi, callingApi, cannedRepliesApi, inboxApi, team
 import { toastError, toastSuccess } from '../utils/toast';
 import { readNumberCache, writeNumberCache } from '../utils/whatsappNumberCache';
 import { useSocket } from '../hooks/useSocket';
+import ConnectionStatusIndicator from '../components/ui/ConnectionStatusIndicator';
 import { useAuth } from '../contexts/AuthContext';
 import type { AiBot, CannedReply, Conversation, ConversationLabel, Message, ServiceWindowInfo, TeamAgent } from '../types';
 
@@ -431,7 +432,7 @@ export default function InboxPage() {
     [selected, loadConversations]
   );
 
-  useSocket(handleSocketEvent);
+  const { state: socketState } = useSocket(handleSocketEvent);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -918,15 +919,22 @@ export default function InboxPage() {
                     )}
                   </div>
                 </div>
-                {unreadTotal > 0 && (
-                  <span className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-whatsapp-500 to-whatsapp-600 px-3 py-1 text-[11px] font-bold text-white shadow-[0_2px_8px_rgba(37,211,102,0.35)]">
-                    <span className="relative flex h-1.5 w-1.5">
-                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-60" />
-                      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-white" />
+                <div className="flex items-center gap-2">
+                  <ConnectionStatusIndicator
+                    status={socketState.status}
+                    reconnectAttempts={socketState.reconnectAttempts}
+                    totalDisconnects={socketState.totalDisconnects}
+                  />
+                  {unreadTotal > 0 && (
+                    <span className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-whatsapp-500 to-whatsapp-600 px-3 py-1 text-[11px] font-bold text-white shadow-[0_2px_8px_rgba(37,211,102,0.35)]">
+                      <span className="relative flex h-1.5 w-1.5">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-60" />
+                        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-white" />
+                      </span>
+                      {unreadTotal} unread
                     </span>
-                    {unreadTotal} unread
-                  </span>
-                )}
+                  )}
+                </div>
               </div>
               <SearchInput
                 ref={searchInputRef}

@@ -313,15 +313,18 @@ export default function SettingsPage() {
       if (!isWaOAuthMessage(event.data)) return;
       setConnecting(false);
       if (event.data.status === 'success') {
+        console.info('[wa-oauth] Popup reported success', event.data.phoneNumber);
         toastSuccess(event.data.message || 'WhatsApp connected');
         load();
         void refreshNumbers();
         return;
       }
       if (event.data.status === 'cancel') {
+        console.info('[wa-oauth] Popup cancelled');
         toastSuccess(event.data.message || 'Connection cancelled — you are still signed in.');
         return;
       }
+      console.error('[wa-oauth] Popup reported error', event.data.message);
       toastError(event.data.message || 'WhatsApp connection failed');
     };
     window.addEventListener('message', onMessage);

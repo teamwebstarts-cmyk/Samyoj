@@ -25,11 +25,12 @@ export function startWhatsAppOAuth(
   const popup = window.open(url, 'samyoj_meta_whatsapp_oauth', features);
 
   if (!popup || popup.closed) {
-    // Popup blocked — full redirect (tokens backed up in sessionStorage)
+    console.warn('[wa-oauth] Popup blocked — falling back to full-page redirect');
     window.location.href = url;
     return { mode: 'redirect', popup: null };
   }
 
+  console.info('[wa-oauth] Popup opened for Meta OAuth');
   popup.focus();
   return { mode: 'popup', popup };
 }

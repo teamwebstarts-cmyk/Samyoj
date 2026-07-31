@@ -4,14 +4,18 @@ import { AlertCircle, CheckCircle, Loader2, Smartphone } from 'lucide-react';
 import AppButton from '../components/ui/AppButton';
 import { useAuth } from '../contexts/AuthContext';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
-import { whatsappApi, type WhatsappPhoneOption } from '../services/api';
+import { whatsappApi, type WhatsappPhoneOption, type WhatsappConnectResult } from '../services/api';
 import { clearAuthBackup, restoreAuthBackupIfNeeded } from '../utils/authStorage';
+import { logError, normalizeError } from '../utils/errors';
 import { notifyOpenerAndClose } from '../utils/whatsappOAuth';
 
 type PageStatus = 'loading' | 'select' | 'connecting' | 'success' | 'error';
 
 const CODE_KEY = 'wa_oauth_code';
 const STATE_KEY = 'wa_oauth_state';
+
+/** Share one in-flight exchange across React Strict Mode double-mount. */
+const inflightExchanges = new Map<string, Promise<WhatsappConnectResult>>();
 
 function stashOAuthParams(code: string | null, state: string | null) {
   if (code) sessionStorage.setItem(CODE_KEY, code);
@@ -42,6 +46,34 @@ function finishInPopup(payload: {
   return false;
 }
 
+function exchangeCodeOnce(code: string, state: string): Promise<WhatsappConnectResult> {
+  const existing = inflightExchanges.get(code);
+  if (existing) {
+    console.info('[wa-oauth] Reusing in-flight code exchange (Strict Mode remount)');
+    return existing;
+  }
+
+  console.info('[wa-oauth] Starting code exchange', {
+    codePrefix: `${code.slice(0, 8)}…`,
+    hasState: Boolean(state),
+  });
+
+  const promise = whatsappApi
+    .completeConnect(code, state)
+    .then(({ data }) => data.data)
+    .finally(() => {
+      // Keep briefly so a remount within the same tick can still attach.
+      window.setTimeout(() => inflightExchanges.delete(code), 5_000);
+    });
+
+  inflightExchanges.set(code, promise);
+  return promise;
+}
+
+function isCodeAlreadyUsed(message: string) {
+  return /authorization code has been used|already completed/i.test(message);
+}
+
 export default function WhatsappCallbackPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -57,7 +89,6 @@ export default function WhatsappCallbackPage() {
   useEffect(() => {
     restoreAuthBackupIfNeeded();
 
-    // Persist immediately — ProtectedRoute/login must not lose Meta's code/state.
     const codeFromUrl = searchParams.get('code');
     const stateFromUrl = searchParams.get('state');
     const error = searchParams.get('error');
@@ -69,6 +100,11 @@ export default function WhatsappCallbackPage() {
       clearStashedOAuthParams();
       clearAuthBackup();
       const msg = errorDescription || error || 'Sign-in was cancelled.';
+      logError(msg, {
+        source: 'auth',
+        action: 'WhatsApp OAuth cancelled/rejected by Meta',
+        component: 'WhatsappCallbackPage',
+      });
       if (finishInPopup({ status: 'error', message: msg })) return;
       setStatus('error');
       setMessage(msg);
@@ -78,8 +114,8 @@ export default function WhatsappCallbackPage() {
     if (authLoading) return;
 
     if (!user) {
-      // Should rarely happen now (returnTo on ProtectedRoute), but keep a safety net.
       const returnTo = `/settings/whatsapp/callback${window.location.search}`;
+      console.info('[wa-oauth] Not signed in — redirecting to login with returnTo');
       navigate(`/login?returnTo=${encodeURIComponent(returnTo)}`, { replace: true });
       return;
     }
@@ -89,23 +125,31 @@ export default function WhatsappCallbackPage() {
     const state = stateFromUrl || stashed.state;
 
     if (!code || !state) {
-      // User closed Facebook / hit Back without completing — keep dashboard session
       const msg = 'WhatsApp connection was cancelled. Your dashboard session is still active.';
+      logError(msg, {
+        source: 'auth',
+        action: 'WhatsApp OAuth missing code/state',
+        component: 'WhatsappCallbackPage',
+      });
       if (finishInPopup({ status: 'cancel', message: msg })) return;
       setStatus('error');
       setMessage('Something went wrong. Please try connecting again from Settings.');
       return;
     }
 
-    let cancelled = false;
+    let alive = true;
 
-    whatsappApi
-      .completeConnect(code, state)
-      .then(({ data }) => {
-        if (cancelled) return;
+    exchangeCodeOnce(code, state)
+      .then((result) => {
+        if (!alive) return;
         clearStashedOAuthParams();
         clearAuthBackup();
-        const result = data.data;
+
+        console.info('[wa-oauth] Exchange succeeded', {
+          requiresSelection: Boolean(result.requiresSelection),
+          phoneNumber: result.phoneNumber,
+        });
+
         if (result.requiresSelection && result.phones?.length && result.pendingToken) {
           setPhones(result.phones);
           setPendingToken(result.pendingToken);
@@ -128,20 +172,39 @@ export default function WhatsappCallbackPage() {
         ) {
           return;
         }
-        setTimeout(() => navigate('/settings?tab=whatsapp', { replace: true }), 2500);
+        window.setTimeout(() => navigate('/settings?tab=whatsapp', { replace: true }), 1500);
       })
       .catch((err: unknown) => {
-        if (cancelled) return;
-        const msg =
-          (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
-            ?.error?.message || 'Failed to complete WhatsApp connection.';
+        if (!alive) return;
+        const normalized = logError(err, {
+          source: 'auth',
+          action: 'WhatsApp OAuth completeConnect failed',
+          component: 'WhatsappCallbackPage',
+        });
+        const msg = normalized.message || 'Failed to complete WhatsApp connection.';
+
+        // First mount may have already connected; treat duplicate code as success.
+        if (isCodeAlreadyUsed(msg)) {
+          console.info('[wa-oauth] Code already used — treating as success if connected');
+          clearStashedOAuthParams();
+          clearAuthBackup();
+          void refreshNumbers();
+          setStatus('success');
+          setMessage('WhatsApp connected successfully!');
+          if (finishInPopup({ status: 'success', message: 'WhatsApp connected successfully!' })) {
+            return;
+          }
+          window.setTimeout(() => navigate('/settings?tab=whatsapp', { replace: true }), 1500);
+          return;
+        }
+
         if (finishInPopup({ status: 'error', message: msg })) return;
         setStatus('error');
         setMessage(msg);
       });
 
     return () => {
-      cancelled = true;
+      alive = false;
     };
   }, [searchParams, navigate, user, authLoading, refreshNumbers]);
 
@@ -175,12 +238,15 @@ export default function WhatsappCallbackPage() {
       }
       setTimeout(() => navigate('/settings?tab=whatsapp', { replace: true }), 2500);
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
-          ?.error?.message || 'Failed to connect selected number.';
-      if (finishInPopup({ status: 'error', message: msg })) return;
+      const normalized = logError(err, {
+        source: 'auth',
+        action: 'WhatsApp selectConnect failed',
+        component: 'WhatsappCallbackPage',
+      });
+      const msg = normalizeError(err).message || 'Failed to connect selected number.';
+      if (finishInPopup({ status: 'error', message: normalized.message || msg })) return;
       setStatus('error');
-      setMessage(msg);
+      setMessage(normalized.message || msg);
     }
   };
 

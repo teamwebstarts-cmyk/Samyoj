@@ -15,7 +15,10 @@
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "tunnel": "bash ../scripts/ngrok-tunnel.sh",
+    "test:webhook": "bash ../scripts/test-webhook.sh",
+    "diagnose": "bash ../scripts/diagnose-webhook.sh"
   },
   "dependencies": {
     "@google-cloud/text-to-speech": "^5.8.0",

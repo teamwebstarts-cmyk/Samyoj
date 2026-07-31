@@ -10,6 +10,7 @@ import {
   signConnectOAuthState,
   verifyConnectOAuthState,
 } from './connect-oauth-state';
+import { mapWhatsAppOAuthError } from './oauth-errors';
 import {
   getOrgMetaSettings,
   resolveMetaCredentials,
@@ -73,18 +74,25 @@ async function saveWhatsappConnection(
     throw err;
   }
 
+  // Don't block Connect success on webhook registration — local/tunnel URLs often
+  // fail Meta's HTTPS callback check and made the OAuth popup look "stuck".
   let webhookConfigured = false;
   if (config.meta.webhookUrl) {
-    try {
-      await MetaWhatsAppService.configureWebhooks(
-        connection.wabaId,
-        connection.accessToken,
-        metaCredentials
-      );
-      webhookConfigured = true;
-    } catch (err) {
-      logError(err, { source: 'webhook', action: 'Webhook auto-config failed', organizationId: orgId });
-    }
+    void MetaWhatsAppService.configureWebhooks(
+      connection.wabaId,
+      connection.accessToken,
+      metaCredentials
+    )
+      .then(() => {
+        log.info('Webhook auto-configured after connect', { organizationId: orgId });
+      })
+      .catch((err) => {
+        logError(err, {
+          source: 'webhook',
+          action: 'Webhook auto-config failed',
+          organizationId: orgId,
+        });
+      });
   }
 
   return { whatsappNumber, webhookConfigured };
@@ -124,10 +132,15 @@ router.get(
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const userId = req.user!.userId;
-    const metaCredentials = await resolveMetaCredentials(orgId);
 
-    // Client sends the exact browser origin callback URL (critical for Codespaces /
-    // tunnels where localhost ≠ the public frontend URL Meta redirects to).
+    let metaCredentials;
+    try {
+      metaCredentials = await resolveMetaCredentials(orgId);
+    } catch (err) {
+      log.warn('connect-url blocked: Meta credentials missing', { organizationId: orgId, userId });
+      throw err;
+    }
+
     const redirectUri = resolveOAuthRedirectUri(
       typeof req.query.redirectUri === 'string' ? req.query.redirectUri : null
     );
@@ -138,6 +151,14 @@ router.get(
       redirectUri,
     });
     const url = MetaWhatsAppService.getEmbeddedSignupUrl(state, metaCredentials, redirectUri);
+
+    log.info('WhatsApp OAuth URL issued', {
+      organizationId: orgId,
+      userId,
+      redirectUri,
+      appId: metaCredentials.appId,
+    });
+
     sendSuccess(res, { url, state, redirectUri });
   })
 );
@@ -157,7 +178,12 @@ router.post(
     let oauthState;
     try {
       oauthState = verifyConnectOAuthState(state);
-    } catch {
+    } catch (err) {
+      log.warn('connect/callback invalid or expired state', {
+        organizationId: orgId,
+        userId,
+        error: err instanceof Error ? err.message : String(err),
+      });
       throw new AppError(
         400,
         'Connect session expired or invalid. Please connect WhatsApp again from Settings.'
@@ -165,16 +191,54 @@ router.post(
     }
 
     if (oauthState.organizationId !== orgId || oauthState.userId !== userId) {
+      log.warn('connect/callback state user mismatch', {
+        organizationId: orgId,
+        userId,
+        stateOrgId: oauthState.organizationId,
+        stateUserId: oauthState.userId,
+      });
       throw new AppError(403, 'OAuth state does not match the signed-in user');
     }
 
+    log.info('WhatsApp OAuth callback started', {
+      organizationId: orgId,
+      userId,
+      redirectUri: oauthState.redirectUri,
+      codePrefix: `${code.slice(0, 8)}…`,
+    });
+
     const metaCredentials = await resolveMetaCredentials(orgId);
-    const accessToken = await MetaWhatsAppService.exchangeCodeForAccessToken(
-      code,
-      metaCredentials,
-      oauthState.redirectUri
-    );
-    const phones = await MetaWhatsAppService.listAvailablePhoneNumbers(accessToken, metaCredentials);
+
+    let accessToken: string;
+    try {
+      accessToken = await MetaWhatsAppService.exchangeCodeForAccessToken(
+        code,
+        metaCredentials,
+        oauthState.redirectUri
+      );
+    } catch (err) {
+      logError(err, {
+        source: 'api',
+        action: 'WhatsApp OAuth token exchange failed',
+        organizationId: orgId,
+        userId,
+        redirectUri: oauthState.redirectUri,
+        appId: metaCredentials.appId,
+      });
+      throw mapWhatsAppOAuthError(err);
+    }
+
+    let phones;
+    try {
+      phones = await MetaWhatsAppService.listAvailablePhoneNumbers(accessToken, metaCredentials);
+    } catch (err) {
+      logError(err, {
+        source: 'api',
+        action: 'WhatsApp list phone numbers failed after OAuth',
+        organizationId: orgId,
+      });
+      throw mapWhatsAppOAuthError(err);
+    }
 
     if (phones.length === 0) {
       throw new AppError(400, 'No phone numbers found on your WhatsApp Business Account.');
@@ -187,6 +251,15 @@ router.post(
         phones[0].wabaId
       );
       const { whatsappNumber, webhookConfigured } = await saveWhatsappConnection(orgId, connection);
+
+      log.info('WhatsApp number connected via OAuth', {
+        organizationId: orgId,
+        userId,
+        phoneNumberId: whatsappNumber.phoneNumberId,
+        phoneNumber: whatsappNumber.phoneNumber,
+        webhookConfigured,
+      });
+
       return sendSuccess(res, {
         requiresSelection: false,
         id: whatsappNumber.id,
@@ -202,6 +275,12 @@ router.post(
       organizationId: orgId,
       userId,
       accessToken,
+    });
+
+    log.info('WhatsApp OAuth requires phone selection', {
+      organizationId: orgId,
+      userId,
+      phoneCount: phones.length,
     });
 
     sendSuccess(res, {
@@ -440,58 +519,247 @@ router.post(
   })
 );
 
-// Webhook verification (GET)
-router.get('/webhook', (req: Request, res: Response) => {
-  const mode = req.query['hub.mode'];
-  const token = req.query['hub.verify_token'];
-  const challenge = req.query['hub.challenge'];
+// =============================================================================
+// Webhook health tracker (in-memory, resets on restart)
+// =============================================================================
+interface WebhookHealthState {
+  totalReceived: number;
+  totalProcessed: number;
+  totalErrors: number;
+  lastReceivedAt: string | null;
+  lastError: string | null;
+  lastFbTraceId: string | null;
+}
 
-  if (mode === 'subscribe' && token === config.meta.verifyToken) {
-    return res.status(200).send(challenge);
+const webhookHealth: WebhookHealthState = {
+  totalReceived: 0,
+  totalProcessed: 0,
+  totalErrors: 0,
+  lastReceivedAt: null,
+  lastError: null,
+  lastFbTraceId: null,
+};
+
+function trackWebhookHealth(field: string, count: number) {
+  webhookHealth.totalReceived++;
+  webhookHealth.lastReceivedAt = new Date().toISOString();
+  webhookHealth.totalProcessed += count;
+}
+
+function trackWebhookError(err: unknown) {
+  webhookHealth.totalErrors++;
+  webhookHealth.lastError =
+    err instanceof Error ? err.message : String(err);
+}
+
+function extractFbTraceId(payload: Record<string, unknown>): string | null {
+  try {
+    const entry = (payload.entry as Array<Record<string, unknown>>)?.[0];
+    const change = (entry?.changes as Array<Record<string, unknown>>)?.[0];
+    const value = change?.value as Record<string, unknown>;
+    const fbtraceId =
+      value?.fbtrace_id as string | undefined;
+    return fbtraceId || null;
+  } catch {
+    return null;
   }
-  return res.status(403).send('Forbidden');
+}
+
+// =============================================================================
+// Webhook verification (GET) — Meta validates the callback URL
+// =============================================================================
+router.get('/webhook', (req: Request, res: Response) => {
+  const mode = req.query['hub.mode'] as string | undefined;
+  const token = req.query['hub.verify_token'] as string | undefined;
+  const challenge = req.query['hub.challenge'] as string | undefined;
+
+  const expectedToken = config.meta.verifyToken;
+
+  log.info('Webhook verification request received', {
+    mode,
+    tokenProvided: Boolean(token),
+    challengeProvided: Boolean(challenge),
+    source: 'webhook',
+  });
+
+  if (!mode || !token || !challenge) {
+    log.warn('Webhook verification missing required params', {
+      hasMode: Boolean(mode),
+      hasToken: Boolean(token),
+      hasChallenge: Boolean(challenge),
+      source: 'webhook',
+    });
+    return res.status(400).send('Missing hub.mode, hub.verify_token, or hub.challenge');
+  }
+
+  if (mode !== 'subscribe') {
+    log.warn('Webhook verification received unsupported mode', { mode, source: 'webhook' });
+    return res.status(400).send(`Unsupported mode: ${mode}`);
+  }
+
+  if (token !== expectedToken) {
+    log.warn('Webhook verification token mismatch', {
+      expectedTokenPrefix: `${expectedToken.slice(0, 6)}…`,
+      receivedTokenPrefix: `${token.slice(0, 6)}…`,
+      source: 'webhook',
+    });
+    return res.status(403).send('Forbidden — verify_token mismatch');
+  }
+
+  log.info('Webhook verified successfully — returning challenge', { source: 'webhook' });
+  res.status(200).send(challenge);
 });
 
-// Webhook events (POST) - queue immediately, never process inline
+// =============================================================================
+// Webhook health / status — for monitoring and debugging
+// =============================================================================
+router.get('/webhook/health', async (_req: Request, res: Response) => {
+  let queueDepth = -1;
+  try {
+    queueDepth = await webhookQueue.getWaitingCount();
+  } catch {
+    // Redis may be unreachable
+  }
+
+  sendSuccess(res, {
+    ...webhookHealth,
+    queueDepth,
+    webhookUrl: config.meta.webhookUrl,
+    verifyTokenConfigured: Boolean(config.meta.verifyToken),
+    appSecretConfigured: Boolean(config.meta.appSecret),
+  });
+});
+
+// =============================================================================
+// Webhook events (POST) — receive inbound messages, calls, and status updates
+// =============================================================================
 router.post('/webhook', async (req: Request, res: Response) => {
+  const requestId = `wh_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const startTime = Date.now();
+
+  // --- 1. Validate request body ---
+  if (!req.body || typeof req.body !== 'object') {
+    log.warn('Webhook received empty or malformed body', { requestId, source: 'webhook' });
+    return res.status(400).send('Malformed body');
+  }
+
+  const payload = req.body as Record<string, unknown>;
+  if (payload.object !== 'whatsapp_business_account') {
+    log.info('Webhook ignored — not a WhatsApp business account payload', {
+      requestId,
+      object: payload.object,
+      source: 'webhook',
+    });
+    // Always return 200 so Meta doesn't retry non-WABA payloads
+    return res.status(200).send('OK');
+  }
+
+  // --- 2. Extract webhook metadata ---
+  const entry = (payload.entry as Array<Record<string, unknown>>)?.[0];
+  const change = (entry?.changes as Array<Record<string, unknown>>)?.[0];
+  const field = change?.field as string | undefined;
+  const value = change?.value as Record<string, unknown> | undefined;
+  const messageCount = value?.messages ? (value.messages as unknown[]).length : 0;
+  const callCount = value?.calls ? (value.calls as unknown[]).length : 0;
+  const statusCount = value?.statuses ? (value.statuses as unknown[]).length : 0;
+  const fbtraceId = extractFbTraceId(payload);
+  if (fbtraceId) webhookHealth.lastFbTraceId = fbtraceId;
+
+  const metaPhoneNumberId = value?.metadata
+    ? (value.metadata as { phone_number_id?: string }).phone_number_id
+    : undefined;
+
+  log.info('Inbound webhook received', {
+    requestId,
+    field,
+    messageCount,
+    callCount,
+    statusCount,
+    phoneNumberId: metaPhoneNumberId,
+    fbtraceId,
+    source: 'webhook',
+  });
+
+  // --- 3. Signature validation ---
   const signature = req.headers['x-hub-signature-256'] as string;
-  const rawBody = req.rawBody || JSON.stringify(req.body);
+  const rawBody = req.rawBody || JSON.stringify(payload);
 
   if (config.nodeEnv === 'production') {
     const hasGlobalSecret = Boolean(config.meta.appSecret);
     if (!hasGlobalSecret && !signature) {
-      log.error('Webhook verification not configured — rejecting webhook', { source: 'webhook' });
+      log.error('Webhook signature verification not configured', { requestId, source: 'webhook' });
       return res.status(503).send('Webhook verification not configured');
     }
   }
 
   if (signature) {
-    const valid = await verifyWebhookSignatureForPayload(signature, rawBody, req.body);
-    if (!valid) {
-      log.warn('Invalid webhook signature', { source: 'webhook' });
-      return res.status(401).send('Invalid signature');
+    try {
+      const valid = await verifyWebhookSignatureForPayload(signature, rawBody, payload);
+      if (!valid) {
+        log.warn('Webhook signature invalid', {
+          requestId,
+          signaturePrefix: `${signature.slice(0, 16)}…`,
+          phoneNumberId: metaPhoneNumberId,
+          source: 'webhook',
+        });
+        return res.status(401).send('Invalid signature');
+      }
+    } catch (err) {
+      logError(err, {
+        source: 'webhook',
+        action: 'Webhook signature verification threw',
+        requestId,
+      });
+      return res.status(500).send('Signature verification error');
     }
   } else if (config.nodeEnv === 'production') {
+    log.warn('Webhook missing signature header', { requestId, source: 'webhook' });
     return res.status(401).send('Missing signature');
   }
 
+  // --- 4. Ack Meta immediately — process asynchronously ---
   res.status(200).send('EVENT_RECEIVED');
 
-  const field = req.body?.entry?.[0]?.changes?.[0]?.field;
-  const messageCount = req.body?.entry?.[0]?.changes?.[0]?.value?.messages?.length || 0;
-  const callCount = req.body?.entry?.[0]?.changes?.[0]?.value?.calls?.length || 0;
-  if (messageCount > 0 || callCount > 0) {
-    log.info('Received inbound webhook', { messageCount, callCount, field, source: 'webhook' });
+  // --- 5. Queue processing ---
+  const totalCount = messageCount + callCount + statusCount;
+  if (totalCount > 0) {
+    trackWebhookHealth(field || 'unknown', totalCount);
   }
 
   try {
-    await webhookQueue.add('process-webhook', { payload: req.body }, { attempts: 4 });
-  } catch (err) {
-    logError(err, { source: 'webhook', action: 'Queue failed, processing inline' });
-    const { processWebhookFields } = await import('../calling/call.processor');
-    processWebhookFields(req.body).catch((e) =>
-      logError(e, { source: 'webhook', action: 'Inline processing failed' })
+    const job = await webhookQueue.add(
+      'process-webhook',
+      { payload, requestId, receivedAt: new Date().toISOString() },
+      { attempts: 4 }
     );
+    log.info('Webhook queued for processing', {
+      requestId,
+      jobId: job.id,
+      field,
+      totalCount,
+      queueLatencyMs: Date.now() - startTime,
+      source: 'webhook',
+    });
+  } catch (err) {
+    trackWebhookError(err);
+    logError(err, {
+      source: 'webhook',
+      action: 'BullMQ queue add failed — processing inline',
+      requestId,
+    });
+    const { processWebhookFields } = await import('../calling/call.processor');
+    processWebhookFields(payload)
+      .then(() => {
+        log.info('Inline webhook processing completed', { requestId, source: 'webhook' });
+      })
+      .catch((e) => {
+        trackWebhookError(e);
+        logError(e, {
+          source: 'webhook',
+          action: 'Inline webhook processing failed',
+          requestId,
+        });
+      });
   }
 });
 
