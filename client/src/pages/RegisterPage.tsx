@@ -53,8 +53,7 @@ export default function RegisterPage() {
 
   return (
     <AuthLayout
-      eyebrow="Get started"
-      title="Create your account"
+      title="Create your account ✨"
       subtitle="Set up your workspace in minutes. Free to start, no credit card required."
     >
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -130,13 +129,13 @@ export default function RegisterPage() {
       </form>
 
       <AuthDivider label="or" />
-      <GoogleAuthButton onClick={signInWithGoogle} label="Sign up with Google" />
+      <GoogleAuthButton onClick={signInWithGoogle} label="Continue with Google" />
 
       <p className="mt-6 text-center text-[13px] text-theme-secondary">
         Already have an account?{' '}
         <Link
           to="/login"
-          className="font-semibold text-whatsapp-700 underline decoration-whatsapp-500/40 underline-offset-2 transition hover:decoration-whatsapp-500 dark:text-whatsapp-400"
+          className="font-semibold text-whatsapp-600 transition hover:text-whatsapp-700"
         >
           Sign in
         </Link>

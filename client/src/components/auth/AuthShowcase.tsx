@@ -1,227 +1,64 @@
-import {
-  BarChart3,
-  CheckCheck,
-  MessageSquare,
-  Send,
-  Shield,
-  Sparkles,
-  Users,
-  Zap,
-} from 'lucide-react';
+import { Cloud, Shield, ShieldCheck } from 'lucide-react';
+import authShowcaseHero from '../../assets/auth/auth-showcase-hero.png';
 import AuthBrand from './AuthBrand';
 
-const highlights = [
-  {
-    icon: MessageSquare,
-    title: 'Team inbox',
-    description: 'Assign, tag & reply together',
-  },
-  {
-    icon: Zap,
-    title: 'Automations',
-    description: 'Flows that run around the clock',
-  },
-  {
-    icon: Send,
-    title: 'Campaigns',
-    description: 'Broadcasts with templates',
-  },
+const trustItems = [
+  { icon: ShieldCheck, label: 'Meta Verified Partner' },
+  { icon: Shield, label: '256-bit Encryption' },
+  { icon: Cloud, label: '99.9% Uptime' },
 ];
 
 export default function AuthShowcase() {
   return (
-    <div className="relative flex h-screen flex-col overflow-hidden bg-[#011a14]">
-      {/* Background layers */}
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-whatsapp-900 via-[#022c22] to-[#011a14]" />
-      <div className="pointer-events-none absolute inset-0 showcase-grid" />
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_20%_0%,rgba(37,211,102,0.22),transparent_50%)]" />
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_80%_100%,rgba(18,140,126,0.15),transparent_45%)]" />
-      <div className="pointer-events-none absolute -left-20 top-1/4 h-72 w-72 rounded-full bg-whatsapp-500/20 blur-[100px] animate-pulse-soft" />
-      <div className="pointer-events-none absolute -right-16 bottom-1/4 h-64 w-64 rounded-full bg-emerald-400/10 blur-[90px] animate-float" />
+    <aside className="relative flex h-full min-h-screen flex-col overflow-hidden px-8 py-8 xl:px-12 xl:py-10">
+      <div className="pointer-events-none absolute -left-24 top-16 h-72 w-72 rounded-full bg-whatsapp-500/20 blur-[100px]" />
+      <div className="pointer-events-none absolute -right-20 bottom-24 h-80 w-80 rounded-full bg-emerald-400/15 blur-[110px]" />
+      <div className="pointer-events-none absolute left-1/3 top-1/2 h-48 w-48 -translate-y-1/2 rounded-full bg-whatsapp-500/10 blur-[80px]" />
 
-      <div className="relative flex min-h-0 flex-1 flex-col px-10 py-8 xl:px-14 xl:py-10">
-        {/* Header */}
-        <div className="flex items-center justify-between animate-fade-up">
-          <AuthBrand variant="light" />
-          <div className="hidden items-center gap-1.5 rounded-full border border-emerald-400/25 bg-emerald-950/40 px-3 py-1.5 backdrop-blur-md xl:flex">
-            <Shield className="h-3 w-3 text-emerald-300" />
-            <span className="text-[11px] font-semibold text-emerald-50">WhatsApp Business API</span>
-          </div>
-        </div>
-
-        {/* Hero copy */}
-        <div className="mt-8 max-w-lg shrink-0 animate-fade-up-delay xl:mt-10">
-          <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-emerald-400/35 bg-emerald-900/50 px-3 py-1">
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-300 opacity-60" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-300" />
-            </span>
-            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-200">
-              Live platform
-            </span>
-          </div>
-
-          <h2 className="text-[2rem] font-extrabold leading-[1.12] tracking-[-0.035em] text-white xl:text-[2.65rem]">
-            Turn every chat into
-            <br />
-            <span className="showcase-gradient-text">revenue & retention</span>
-          </h2>
-          <p className="showcase-text-body mt-4 max-w-md text-[15px] leading-relaxed">
-            The all-in-one WhatsApp workspace for support, marketing, and sales teams
-            who need speed at scale.
-          </p>
-        </div>
-
-        {/* Dashboard mock */}
-        <div className="relative mt-5 flex min-h-0 flex-1 flex-col xl:mt-6">
-          <div className="pointer-events-none absolute -inset-3 rounded-[2rem] bg-gradient-to-r from-whatsapp-500/20 via-emerald-500/10 to-transparent blur-2xl" />
-
-          <div className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-[1.35rem] border border-emerald-400/20 bg-[#0f2a24] shadow-showcase ring-1 ring-emerald-400/10 backdrop-blur-xl">
-            {/* Browser bar */}
-            <div className="flex items-center justify-between border-b border-emerald-400/15 bg-emerald-950/40 px-4 py-3">
-              <div className="flex items-center gap-2">
-                <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f57]" />
-                <span className="h-2.5 w-2.5 rounded-full bg-[#febc2e]" />
-                <span className="h-2.5 w-2.5 rounded-full bg-[#28c840]" />
-              </div>
-              <div className="flex items-center gap-2 rounded-lg bg-emerald-950/50 px-3 py-1 ring-1 ring-emerald-400/15">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-300 animate-pulse-soft" />
-                <span className="text-[10px] font-medium text-emerald-100">app.wa-platform.io/inbox</span>
-              </div>
-            </div>
-
-            <div className="grid min-h-0 flex-1 grid-cols-[118px_1fr]">
-              {/* Sidebar */}
-              <aside className="flex flex-col border-r border-emerald-400/10 bg-emerald-950/30 p-3">
-                <div className="mb-4 flex items-center gap-2">
-                  <div className="h-7 w-7 rounded-lg bg-emerald-500/30" />
-                  <div className="space-y-1">
-                    <div className="h-1.5 w-12 rounded bg-emerald-200/35" />
-                    <div className="h-1 w-8 rounded bg-emerald-200/20" />
-                  </div>
-                </div>
-                {[
-                  { icon: BarChart3, active: false },
-                  { icon: MessageSquare, active: true },
-                  { icon: Send, active: false },
-                  { icon: Users, active: false },
-                ].map(({ icon: Icon, active }, i) => (
-                  <div
-                    key={i}
-                    className={`mb-1 flex items-center gap-2 rounded-lg px-2 py-2 ${
-                      active
-                        ? 'bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-400/30'
-                        : 'text-emerald-200/50'
-                    }`}
-                  >
-                    <Icon className="h-3.5 w-3.5" />
-                    <div
-                      className={`h-1 rounded ${active ? 'w-10 bg-emerald-300/60' : 'w-8 bg-emerald-200/20'}`}
-                    />
-                  </div>
-                ))}
-              </aside>
-
-              {/* Main content */}
-              <div className="flex min-h-0 flex-1 flex-col p-3.5">
-                <div className="mb-3 flex shrink-0 items-center justify-between">
-                  <div>
-                    <p className="text-[12px] font-bold text-white">Inbox</p>
-                    <p className="showcase-text-muted text-[10px]">24 conversations · 3 unread</p>
-                  </div>
-                  <span className="rounded-md bg-emerald-500/25 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-200 ring-1 ring-emerald-400/25">
-                    Live
-                  </span>
-                </div>
-
-                {/* Chat messages */}
-                <div className="flex min-h-0 flex-1 flex-col justify-center space-y-2.5 py-2">
-                  <div className="flex justify-start">
-                    <div className="max-w-[78%] rounded-2xl rounded-bl-md bg-emerald-950/50 px-3 py-2 ring-1 ring-emerald-400/15">
-                      <p className="text-[10px] font-semibold text-emerald-100">Sarah K.</p>
-                      <p className="mt-0.5 text-[11px] text-emerald-50">Can I change my delivery slot?</p>
-                    </div>
-                  </div>
-                  <div className="flex justify-end">
-                    <div className="max-w-[78%] rounded-2xl rounded-br-md bg-emerald-700/70 px-3 py-2 ring-1 ring-emerald-400/30">
-                      <p className="text-[11px] font-medium text-white">
-                        Sure! Rescheduled to tomorrow 2–4 PM ✓
-                      </p>
-                      <div className="mt-1 flex items-center justify-end gap-1">
-                        <CheckCheck className="h-3 w-3 text-emerald-200" />
-                        <span className="text-[9px] font-medium text-emerald-100">Delivered</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex justify-start">
-                    <div className="max-w-[78%] rounded-2xl rounded-bl-md bg-emerald-950/50 px-3 py-2 ring-1 ring-emerald-400/10">
-                      <p className="text-[11px] text-emerald-50">Perfect, thank you! 🙌</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Quick stats row */}
-                <div className="mt-auto grid shrink-0 grid-cols-3 gap-1.5 pt-3">
-                  {[
-                    { label: 'Open', value: '24' },
-                    { label: 'Avg reply', value: '4m' },
-                    { label: 'CSAT', value: '4.9' },
-                  ].map(({ label, value }) => (
-                    <div
-                      key={label}
-                      className="rounded-lg bg-emerald-950/40 px-2 py-1.5 text-center ring-1 ring-emerald-400/15"
-                    >
-                      <p className="text-[11px] font-bold text-white">{value}</p>
-                      <p className="showcase-text-subtle text-[8px] uppercase tracking-wide">{label}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Shimmer overlay — reduced so text stays readable */}
-            <div className="pointer-events-none absolute inset-0 showcase-shimmer animate-shimmer opacity-20" />
-          </div>
-
-          {/* Floating highlight */}
-          <div className="absolute -right-2 top-12 animate-float-delayed rounded-xl border border-emerald-400/20 bg-[#0f2a24] px-4 py-3 shadow-showcase backdrop-blur-xl xl:-right-5 xl:top-14">
-            <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/20 ring-1 ring-emerald-400/25">
-                <Zap className="h-4 w-4 text-emerald-300" />
-              </div>
-              <div>
-                <p className="text-[9px] font-bold uppercase tracking-wider text-emerald-200">
-                  Automations
-                </p>
-                <p className="text-sm font-bold leading-tight text-white">Reply faster, 24/7</p>
-              </div>
-            </div>
-            <p className="mt-1.5 text-[10px] font-medium text-emerald-300">Flows, triggers & smart routing</p>
-          </div>
-        </div>
-
-        <div className="mt-3 shrink-0 overflow-hidden rounded-xl border border-emerald-400/20 bg-gradient-to-b from-emerald-950/50 to-emerald-950/20 shadow-[0_8px_32px_rgba(0,0,0,0.2)] backdrop-blur-sm">
-          <div className="flex items-center gap-2 border-b border-emerald-400/10 px-4 py-2.5">
-            <div className="flex h-5 w-5 items-center justify-center rounded-md bg-emerald-500/20">
-              <Sparkles className="h-3 w-3 text-emerald-300" />
-            </div>
-            <p className="text-[11px] font-semibold tracking-wide text-emerald-100">
-              One workspace for your entire WhatsApp operation
-            </p>
-          </div>
-          <div className="grid grid-cols-3 divide-x divide-emerald-400/10">
-            {highlights.map(({ icon: Icon, title, description }) => (
-              <div key={title} className="group px-3 py-3 text-center transition-colors hover:bg-emerald-500/5">
-                <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/15 ring-1 ring-emerald-400/20 transition group-hover:bg-emerald-500/25">
-                  <Icon className="h-3.5 w-3.5 text-emerald-300" />
-                </div>
-                <p className="text-[11px] font-bold text-white">{title}</p>
-                <p className="mt-0.5 text-[9px] leading-snug text-emerald-200/65">{description}</p>
-              </div>
-            ))}
-          </div>
+      <div className="relative flex items-center justify-between gap-4 animate-fade-up">
+        <AuthBrand variant="dark" />
+        <div className="hidden items-center gap-1.5 rounded-full border border-whatsapp-500/25 bg-white/80 px-3 py-1.5 shadow-sm backdrop-blur-md sm:flex">
+          <span className="flex h-4 w-4 items-center justify-center rounded-full bg-whatsapp-500 text-white">
+            <ShieldCheck className="h-2.5 w-2.5" strokeWidth={3} />
+          </span>
+          <span className="text-[11px] font-semibold text-theme-fg">WhatsApp Business API</span>
         </div>
       </div>
-    </div>
+
+      <div className="relative mt-8 max-w-xl shrink-0 animate-fade-up-delay xl:mt-10">
+        <h2 className="text-[2rem] font-extrabold leading-[1.12] tracking-[-0.035em] text-theme-fg xl:text-[2.65rem]">
+          Manage Conversations.
+          <br />
+          <span className="text-whatsapp-600">Drive Growth.</span>
+        </h2>
+        <p className="mt-4 max-w-md text-[15px] leading-relaxed text-theme-secondary">
+          The all-in-one WhatsApp automation &amp; CRM platform for support, sales, and marketing
+          teams.
+        </p>
+      </div>
+
+      <div className="relative mt-6 flex min-h-0 flex-1 items-center justify-center xl:mt-8">
+        <div className="pointer-events-none absolute inset-x-8 inset-y-4 rounded-[2.5rem] bg-gradient-to-b from-whatsapp-500/10 via-transparent to-transparent blur-2xl" />
+        <img
+          src={authShowcaseHero}
+          alt="Samyoj dashboard preview with AI agent, WhatsApp automation, and live conversation analytics"
+          className="relative z-[1] max-h-full w-full max-w-[560px] object-contain drop-shadow-[0_24px_60px_rgba(15,23,42,0.12)] animate-fade-up"
+          width={1254}
+          height={1254}
+          decoding="async"
+        />
+      </div>
+
+      <div className="relative mt-4 flex shrink-0 flex-wrap items-center gap-x-5 gap-y-2 border-t border-theme-border/70 pt-5 text-theme-muted">
+        {trustItems.map(({ icon: Icon, label }) => (
+          <div key={label} className="flex items-center gap-1.5">
+            <Icon className="h-3.5 w-3.5 text-whatsapp-600" strokeWidth={2.2} />
+            <span className="text-[11px] font-semibold tracking-wide text-theme-secondary">
+              {label}
+            </span>
+          </div>
+        ))}
+      </div>
+    </aside>
   );
 }

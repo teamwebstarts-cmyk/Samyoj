@@ -1,0 +1,47 @@
+---
+description: Always remember Samyoj WhatsApp connect + inbound webhook setup when running/testing the app
+alwaysApply: true
+---
+
+# Samyoj — WhatsApp + Dev Setup Memory (DO NOT FORGET)
+
+## When user asks to run / restart / setup / test the app
+
+**Always start ALL of these** (not just client/server):
+
+1. `docker compose up -d` (Postgres + Redis)
+2. `cd server && npm run dev` (API `:8000`)
+3. `cd client && npm run dev` (UI `:3000`)
+4. **Inbound tunnel** (required for Inbox replies):
+   - Prefer: `bash scripts/dev-tunnel.sh` (cloudflared — free, auto-updates `META_WEBHOOK_URL` + `setup-webhook`)
+   - Avoid: `npm run tunnel` on free ngrok (custom domain `samyoj-dev.ngrok-free.app` fails with ERR_NGROK_313)
+5. After tunnel updates `.env` → **restart API** so `config.meta.webhookUrl` reloads
+6. Verify: `curl -s http://localhost:8000/api/whatsapp/webhook/health` and public tunnel returns challenge `ping`
+
+## Product rule — WhatsApp Connect UI
+
+- **Normal users must NEVER see** Meta App ID, App Secret, `.env`, or "Advanced override" in Settings.
+- Platform credentials live only in `server/.env`: `META_APP_ID`, `META_APP_SECRET`.
+- User flow = **Connect WhatsApp** → Facebook OAuth → pick number. Nothing else.
+- Do not re-add App ID/Secret input fields unless the user explicitly asks for a developer-only override.
+
+## Outbound vs Inbound (critical)
+
+| Direction | Needs tunnel? | Symptom if broken |
+|-----------|---------------|-------------------|
+| Outbound (Samyoj → phone) | No | Works on localhost |
+| Inbound (phone → Inbox) | **Yes** public HTTPS | Inbox shows send, but **replies never arrive**; health `totalReceived: 0` |
+
+If user says "message receive nahi ho raha":
+1. Check tunnel process running (cloudflared)
+2. Check `META_WEBHOOK_URL` matches live tunnel URL
+3. Restart API after `.env` change
+4. Run/confirm `npm run setup-webhook` (or rely on `dev-tunnel.sh`)
+5. Ask user to send a **new** reply from phone to the business number
+6. Prefer infra fix over rewriting Inbox UI
+
+## Source of truth docs
+
+- `docs/WHATSAPP_CONNECT_DEVELOPER_GUIDE.md`
+- `docs/DEV_SETUP_CHECKLIST.md` (quick runbook)
+- `docs/audit/WHATSAPP_CONNECTION_FLOW_ANALYSIS.md`

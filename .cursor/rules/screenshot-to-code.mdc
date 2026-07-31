@@ -1,0 +1,19 @@
+---
+description: When the user shares UI screenshots, Figma exports, mockups, or asks to implement a design from an image, follow screenshot-to-code skill (analyze → visual spec → code → QA).
+globs: "**/*.{png,jpg,jpeg,webp,gif},**/ui design/**,**/docs/ui-specs/**"
+alwaysApply: false
+---
+
+# Screenshot / Design → Code
+
+If the user attaches or references UI images (screenshots, Figma exports, mockups, “ui design”, design PNGs) or asks to implement UI from a picture:
+
+1. **Load and follow** `.cursor/skills/screenshot-to-code/SKILL.md`
+2. **Read every image** with the Read tool before coding
+3. **Write a Visual Spec** before implementing — do not jump straight to JSX
+4. **Implement inside Samyoj** (`client/` React + Tailwind + existing UI primitives), not a standalone HTML prototype
+5. **Run Visual QA** and state a fidelity score 1–4; iterate until ≥ 3 or user accepts
+
+Do not paraphrase UI copy. Prefer existing components (`AppButton`, `PageShell`, theme tokens in `index.css`).
+
+If Figma MCP/skills apply and a Figma URL is given, use those for structure/tokens, then still finish Spec → Code → QA into this codebase.

@@ -1,4 +1,4 @@
-import { ArrowRight, Clock, Lock, Mail, Rocket, ShieldCheck } from 'lucide-react';
+import { ArrowRight, Lock, Mail, ShieldCheck } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import AuthButton from '../components/auth/AuthButton';
@@ -10,11 +10,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { useGoogleAuth } from '../hooks/useGoogleAuth';
 import { getErrorMessage } from '../utils/errors';
 import { toastError } from '../utils/toast';
-
-const highlights = [
-  { icon: Rocket, label: 'Free to start' },
-  { icon: Clock, label: 'Setup in minutes' },
-];
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -68,8 +63,8 @@ export default function LoginPage() {
 
   return (
     <AuthLayout
-      eyebrow={requires2FA ? 'Security' : 'Sign in'}
-      title={requires2FA ? 'Two-factor authentication' : 'Welcome back'}
+      eyebrow={requires2FA ? 'Security' : undefined}
+      title={requires2FA ? 'Two-factor authentication' : 'Welcome back 👋'}
       subtitle={
         requires2FA
           ? 'Enter the 6-digit code from your authenticator app to continue.'
@@ -162,20 +157,11 @@ export default function LoginPage() {
           <AuthDivider label="or" />
           <GoogleAuthButton onClick={signInWithGoogle} />
 
-          <div className="mt-6 flex items-center justify-center gap-5 text-theme-muted">
-            {highlights.map(({ icon: Icon, label }) => (
-              <div key={label} className="flex items-center gap-1.5">
-                <Icon className="h-3.5 w-3.5 shrink-0" />
-                <span className="text-xs">{label}</span>
-              </div>
-            ))}
-          </div>
-
           <p className="mt-6 text-center text-[13px] text-theme-secondary">
-            No account yet?{' '}
+            Don&apos;t have an account?{' '}
             <Link
               to="/register"
-              className="font-semibold text-whatsapp-700 underline decoration-whatsapp-500/40 underline-offset-2 transition hover:decoration-whatsapp-500 dark:text-whatsapp-400"
+              className="font-semibold text-whatsapp-600 transition hover:text-whatsapp-700"
             >
               Create one free
             </Link>

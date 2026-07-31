@@ -9,7 +9,7 @@ export default function AuthDivider({ label = 'or continue with email' }: AuthDi
         <div className="w-full border-t border-theme-border/70" />
       </div>
       <div className="relative flex justify-center">
-        <span className="bg-theme-bg px-3 text-xs text-theme-muted">
+        <span className="bg-white px-3 text-xs text-theme-muted">
           {label}
         </span>
       </div>
