@@ -14,6 +14,12 @@ This folder contains a comprehensive inventory of the entire Samyoj platform —
 | [DATABASE.md](./DATABASE.md) | All 48 Prisma models, 33 enums, relationships, multi-tenancy pattern |
 | [INFRASTRUCTURE.md](./INFRASTRUCTURE.md) | Stack, dependencies, Docker, CI/CD, env vars, scripts, testing |
 
+## Related operational handoffs (outside this folder)
+
+| File | What it covers |
+|------|----------------|
+| [../WHATSAPP_CONNECT_DEVELOPER_GUIDE.md](../WHATSAPP_CONNECT_DEVELOPER_GUIDE.md) | **AI agent + human handoff** for WhatsApp Connect OAuth + inbound webhooks (incidents, tunnels, diagnose commands, do/don’t) |
+
 ## Quick Stats
 
 | Metric | Count |

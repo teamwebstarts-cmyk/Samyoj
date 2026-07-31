@@ -1,447 +1,305 @@
-# WhatsApp Connect — Developer Guide & Incident Log
+# WhatsApp Connect + Inbound Webhooks — Agent & Developer Handoff
 
-> **Audience:** Any developer who needs to run, debug, or extend the Meta WhatsApp **Connect** flow in Samyoj.  
-> **Goal:** UI pe App ID/Secret → **Connect WhatsApp** → Meta allow → number connected. No silent DB seeding for day-to-day connect.
-
----
-
-## 1. Happy path (expected flow)
-
-```
-User (logged in)
-  → Settings → WhatsApp
-  → Configure Meta app (App ID + App Secret)   [once per org]
-  → Connect WhatsApp
-  → Backend GET /api/whatsapp/connect-url?redirectUri=<origin>/settings/whatsapp/callback
-  → Popup opens Meta OAuth
-  → User allows
-  → Meta redirects to: {origin}/settings/whatsapp/callback?code=...&state=...
-  → Frontend POST /api/whatsapp/connect/callback { code, state }
-  → Backend exchanges code (same redirect_uri + app secret)
-  → Saves whatsappNumber + token
-  → Popup posts success → Settings refreshes
-```
-
-**Critical rule:** The `redirect_uri` used when **opening** Meta OAuth must be **byte-identical** to the one used when **exchanging** the code.
+> **Who this is for:** next human developer **or** next AI agent continuing Samyoj WhatsApp work.  
+> **Read this first** before changing Connect OAuth, webhooks, ngrok/cloudflare, or Inbox inbound flow.  
+> **Last verified:** 2026-07-31 — ngrok live, Meta webhook registered, inbound webhooks receiving (`totalReceived` growing).
 
 ---
 
-## 2. Local URLs & Meta Console (developer only)
+## 0. TL;DR (30 seconds)
 
-| Item | Local value |
-|------|-------------|
-| Frontend | `http://localhost:3000` |
-| Backend | `http://localhost:8000` (Vite proxies `/api`) |
-| OAuth callback | `http://localhost:3000/settings/whatsapp/callback` |
+| Topic | Truth |
+|-------|--------|
+| Product goal | Settings → enter Meta App ID/Secret → **Connect WhatsApp** → Meta allow → number connected. Then Inbox shows **inbound** customer replies live. |
+| Outbound (Samyoj → phone) | Works on localhost (Graph API + access token). |
+| Inbound (phone → Samyoj) | Needs **public HTTPS** webhook. Localhost alone = **no Inbox replies**. |
+| Connect OAuth bugs | Fixed in code (redirectUri, Strict Mode code reuse, signed state, non-blocking webhook on connect). |
+| Inbound “not receiving” | Was **infra**, not Inbox UI: no public tunnel / wrong `META_WEBHOOK_URL` / Codespace port private. |
+| Current tunnel | **ngrok** → `META_WEBHOOK_URL` in `server/.env` (ephemeral free URL; changes if ngrok restarts). |
+| Diagnose | `cd server && npm run diagnose` then `npm run test:webhook` |
 
-**Meta Developer Console → Facebook Login → Settings → Valid OAuth Redirect URIs** must include that exact callback URL.
-
-Production example:
-
-`https://your-domain.com/settings/whatsapp/callback`
-
-End users do **not** touch Meta Console for redirect URIs — only the app owner / developer does.
+**Do not** re-seed WhatsApp tokens in DB for day-to-day Connect — use the UI Connect flow.
 
 ---
 
-## 3. What we faced (problems → cause → fix)
-
-### P1 — Meta allow ke baad Samyoj pe wapas nahi aate
-
-| | |
-|--|--|
-| **Symptom** | User stuck on Meta / Facebook after Allow |
-| **Cause** | Redirect URI Codespace public URL vs `localhost` mismatch; ya ProtectedRoute ne `?code=` drop kar diya jab login redirect hua |
-| **Fix** | Client hamesha `window.location.origin + /settings/whatsapp/callback` bheje; signed OAuth `state` me `redirectUri` store; callback route ProtectedRoute ke bahar / login `returnTo` preserve |
-| **Do** | Connect URL banate waqt browser origin se redirectUri bhejo |
-| **Don't** | Hardcode sirf `localhost` jab app Codespace/tunnel pe chal rahi ho |
-
-**Files:** `connect-oauth-state.ts`, `meta.service.ts`, `ProtectedRoute.tsx`, `LoginPage.tsx`, `WhatsappCallbackPage.tsx`
-
----
-
-### P2 — `Error validating client secret`
-
-| | |
-|--|--|
-| **Symptom** | Connect fails after Meta allow; API 400/502 with client secret error |
-| **Cause** | Org settings / `.env` me **galat App Secret** (dusre Meta app ka, ya typo) |
-| **Fix** | Meta → App → Settings → Basic → App Secret copy; Settings UI + `server/.env` dono sync |
-| **Do** | App ID aur Secret **same Meta app** se lo |
-| **Don't** | Dusre project ka secret paste karna; secret chat/logs me permanent chhodna (rotate later) |
-
-Server ab ye error ko clear message me map karta hai (`oauth-errors.ts`).
-
----
-
-### P3 — `authorization code has been used` + popup stuck
-
-| | |
-|--|--|
-| **Symptom** | Popup hang / error; kabhi pehle attempt pe already connected |
-| **Cause** | React Strict Mode double-mount → same `code` do baar exchange; pehla success discard (`cancelled=true`), doosra Meta pe fail |
-| **Fix** | Module-level `inflightExchanges` Map — ek code = ek shared Promise; “code used” ko success treat karo agar connect ho chuka |
-| **Do** | OAuth exchange ko remount-safe rakho |
-| **Don't** | Effect cleanup me in-flight success discard karo bina shared promise ke |
-
-**File:** `client/src/pages/WhatsappCallbackPage.tsx`
-
----
-
-### P4 — Connect bahut slow / stuck after success path
-
-| | |
-|--|--|
-| **Symptom** | Token exchange OK but UI wait karti rehti |
-| **Cause** | Webhook auto-subscribe Meta pe 404/timeout → request block |
-| **Fix** | Webhook configure **fire-and-forget** (connect response pe wait mat karo) |
-| **Do** | Connect ko fast path; webhook background |
-| **Don't** | User-facing connect ko Meta webhook HTTP pe block karo |
-
-**File:** `server/src/modules/whatsapp/routes.ts` (`saveWhatsappConnection`)
-
----
-
-### P5 — Send message Meta `#131005`
-
-| | |
-|--|--|
-| **Symptom** | Template/message fail; recipient not allowed |
-| **Cause** | Test number allowlist / Meta-side block on that recipient |
-| **Fix** | Verified test recipient use karo (e.g. working number in team allowlist) |
-| **Do** | Meta → WhatsApp → API Setup → “To” list me recipient add |
-| **Don't** | Assume har personal number test mode me kaam karega |
-
----
-
-### P6 — “24h window closed” after sending template
-
-| | |
-|--|--|
-| **Symptom** | Free-form / session reply fail after outbound template |
-| **Cause** | WhatsApp rule: customer-service window **inbound** se khulti hai; sirf OUTBOUND template window nahi kholta |
-| **Fix** | Expected behaviour — customer ko pehle message karna hoga / template hi use karo |
-| **Do** | Docs/UI me ye rule clear rakho |
-| **Don't** | Isse “our bug” samajh ke OAuth flow mat todo |
-
----
-
-### P7 — Session lost when Meta opens full-page
-
-| | |
-|--|--|
-| **Symptom** | After OAuth, user ko login dikhe; code lost feel |
-| **Cause** | Full redirect ne SPA memory wipe; JWT missing |
-| **Fix** | Prefer **popup** OAuth; `backupAuthBeforeOAuth` + `restoreAuthBackupIfNeeded`; login `returnTo` |
-| **Do** | Popup pehle try; blocked ho to redirect + auth backup |
-| **Don't** | Callback ko blind ProtectedRoute redirect without preserving query |
-
----
-
-## 4. Architecture notes (important pieces)
-
-| Piece | Role |
-|-------|------|
-| `GET /whatsapp/connect-url` | Issues Meta URL + signed `state` (org, user, redirectUri) |
-| `POST /whatsapp/connect/callback` | Verifies state, exchanges code, saves number |
-| `connect-oauth-state.ts` | HMAC-signed state; redirect URI allowlist |
-| `oauth-errors.ts` | Meta OAuth errors → actionable AppError messages |
-| `WhatsappCallbackPage` | Deduped exchange, popup postMessage, login returnTo |
-| Org Meta settings | App ID/Secret encrypted per org (UI Configure) |
-
-### Logging (debug tips)
-
-**Browser console** — filter `[wa-oauth]` or collapsed `✖ [AUTH]`:
-
-- Start / reuse exchange  
-- Success / cancel / Meta reject  
-- completeConnect failures  
-
-**Server logs** — module `whatsapp`:
-
-- `WhatsApp OAuth URL issued`  
-- `WhatsApp OAuth callback started`  
-- `token exchange failed` (with appId, redirectUri — **not** full secret/code)  
-- `WhatsApp number connected via OAuth`  
-
----
-
-## 5. Checklist — pehle ye verify karo
-
-1. [ ] User logged in (JWT present)  
-2. [ ] Settings → Meta App ID + Secret saved (`configured: true`)  
-3. [ ] Meta Console Valid OAuth Redirect URI = exact frontend callback  
-4. [ ] Frontend origin matches that URI (localhost vs Codespace)  
-5. [ ] App Secret matches **that** App ID  
-6. [ ] Popup allowed (or auth backup for full redirect)  
-7. [ ] After connect, Settings shows phone number  
-
----
-
-## 6. Common errors → what to do
-
-| Message / symptom | Action |
-|-------------------|--------|
-| Error validating client secret | Fix App Secret in UI + `.env` |
-| authorization code has been used | Refresh Settings; often already connected. Connect again if not |
-| Connect session expired or invalid | Click Connect again (state TTL) |
-| OAuth state does not match | Same user/org se Connect; don’t share popup across accounts |
-| redirect_uri mismatch | Add exact callback to Meta Valid OAuth Redirect URIs |
-| Meta credentials not configured | Configure Meta app in Settings first |
-| No phone numbers found | WABA pe number add / permissions check |
-| #131005 | Add recipient to Meta test allowlist |
-| 24h window | Wait for inbound or use approved template |
-
----
-
-## 7. What NOT to do
-
-- ❌ Connect ke liye har baar DB me token seed karna (UI flow broken samajh ke)  
-- ❌ `redirect_uri` exchange pe alag URL use karna vs authorize pe  
-- ❌ React Strict Mode ignore karke double POST assume “Meta bug”  
-- ❌ Webhook 404 ko connect failure banana  
-- ❌ App Secret public repo / screenshots me commit  
-- ❌ Production redirect URI miss karke sirf localhost Meta pe chhodna  
-
----
-
-## 8. Manual test script (5 minutes)
-
-1. Logout/login as org admin.  
-2. Settings → WhatsApp → Configure Meta → save App ID/Secret.  
-3. Connect WhatsApp → allow in popup.  
-4. Popup closes; toast success; number listed.  
-5. Disconnect → Connect again (second run).  
-6. (Optional) DevTools → Network: one `connect/callback` success.  
-7. Server log: `WhatsApp number connected via OAuth`.  
-
----
-
-## 9. Key files (quick map)
-
-```
-server/src/modules/whatsapp/
-  routes.ts                 # connect-url, callback, logging
-  meta.service.ts           # OAuth URL + token exchange
-  connect-oauth-state.ts    # signed state + redirect allowlist
-  oauth-errors.ts           # user-facing OAuth error mapping
-  org-meta.service.ts       # per-org App ID/Secret
-
-client/src/
-  pages/WhatsappCallbackPage.tsx
-  pages/SettingsPage.tsx
-  utils/whatsappOAuth.ts
-  components/ProtectedRoute.tsx
-  pages/LoginPage.tsx
-```
-
----
-
-## 10. Security notes
-
-- OAuth `state` is signed and bound to org + user + redirectUri.  
-- Never log full authorization codes or App Secrets.  
-- If a secret was shared in chat/email, **rotate** it in Meta and update org settings + `.env`.  
-- Webhooks still need a **public HTTPS** URL for inbound (ngrok / Codespace / prod); local-only verify can 404 — that must not block Connect.
-
----
-
-## 11. Why inbound messages do not appear (root cause)
-
-Outbound (Samyoj → customer) uses Meta Graph API with your access token — **works on localhost**.
-
-Inbound (customer → Samyoj) is different:
-
-```
-Customer WhatsApp
-  → Meta Cloud API
-  → HTTPS POST to META_WEBHOOK_URL
-  → Express /api/whatsapp/webhook
-  → BullMQ webhook-queue
-  → webhook.processor.ts (save Message + Conversation)
-  → Socket.IO emit message:new
-  → Inbox UI updates live
-```
-
-Meta **cannot** reach `http://localhost:8000`. Without a public HTTPS URL (ngrok / Cloudflare tunnel / production domain), replies never arrive — Inbox stays on “24-hour window closed” after you only sent a template.
-
-This is **not** an OAuth bug and **not** a UI bug.
-
----
-
-## 12. Webhook architecture
+## 1. System map (two separate pipelines)
 
 ```mermaid
-sequenceDiagram
-  participant Customer
-  participant Meta
-  participant Ngrok
-  participant Express
-  participant Redis
-  participant Worker
-  participant DB
-  participant SocketIO
-  participant Inbox
+flowchart LR
+  subgraph outbound [Outbound_works_on_localhost]
+    UI1[Inbox_or_Campaign] --> API1[Express]
+    API1 --> MetaGraph[Meta_Graph_API]
+    MetaGraph --> Phone1[Customer_phone]
+  end
 
-  Customer->>Meta: sends WhatsApp message
-  Meta->>Ngrok: POST /api/whatsapp/webhook
-  Ngrok->>Express: forward to localhost:8000
-  Express->>Express: verify signature, ACK 200
-  Express->>Redis: enqueue process-webhook
-  Redis->>Worker: job
-  Worker->>DB: Contact + Conversation + Message
-  Worker->>SocketIO: message:new
-  SocketIO->>Inbox: live update
+  subgraph inbound [Inbound_needs_public_HTTPS]
+    Phone2[Customer_phone] --> MetaWH[Meta_Cloud]
+    MetaWH --> Tunnel[ngrok_or_cloudflare]
+    Tunnel --> ExpressWH["POST_/api/whatsapp/webhook"]
+    ExpressWH --> RedisQ[BullMQ_webhook-queue]
+    RedisQ --> Worker[webhook.processor]
+    Worker --> DB[(Postgres)]
+    Worker --> Socket[Socket.IO]
+    Socket --> Inbox[Inbox_UI]
+  end
 ```
 
-### Verification handshake (Meta → GET)
+### Connect OAuth (separate from inbound)
 
-Meta calls:
+```
+Login → Settings → Meta App ID/Secret (org)
+  → GET /api/whatsapp/connect-url?redirectUri={origin}/settings/whatsapp/callback
+  → Meta OAuth popup
+  → GET /settings/whatsapp/callback?code&state
+  → POST /api/whatsapp/connect/callback {code,state}
+  → exchange code with SAME redirect_uri + App Secret
+  → save whatsappNumber + encrypted token
+```
 
-`GET /api/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=...&hub.challenge=...`
-
-Server must:
-
-1. Check `hub.mode === subscribe`
-2. Match `hub.verify_token` to `META_VERIFY_TOKEN`
-3. Return `hub.challenge` as **plain text** (HTTP 200)
-
-Wrong token → 403. Missing params → 400.
-
-### Health monitor
-
-`GET /api/whatsapp/webhook/health` returns:
-
-- `totalReceived` / `totalProcessed` / `totalErrors`
-- `lastReceivedAt`, `lastError`, `lastFbTraceId`
-- `queueDepth` (BullMQ waiting jobs)
-- whether webhook URL / verify token / app secret are configured
-
-Use this when debugging “messages not arriving”.
+**Rule:** authorize `redirect_uri` === token-exchange `redirect_uri` (byte-identical).
 
 ---
 
-## 13. ngrok setup (local / Codespace)
+## 2. Current runtime checklist (as of last session)
 
-### Prerequisites
+| Component | Expected | How to check |
+|-----------|----------|--------------|
+| API | `localhost:8000` | `curl -s http://localhost:8000/health` |
+| Client | `localhost:3000` | browser |
+| Postgres + Redis | Docker up | `docker compose up -d` |
+| Tunnel | ngrok → `:8000` | `curl -s http://127.0.0.1:4040/api/tunnels` |
+| Webhook env | matches ngrok public URL | `grep META_WEBHOOK_URL server/.env` |
+| Meta registration | subscribed | `cd server && npm run setup-webhook` |
+| Health | counters increment on real traffic | `GET /api/whatsapp/webhook/health` |
 
-1. ngrok account + auth token: `ngrok config add-authtoken <TOKEN>`
-2. Reserve a **free static domain** in [ngrok Domains](https://dashboard.ngrok.com/cloud-edge/domains) (Meta prefers a stable URL)
-3. Server listening on port 8000; Redis + Postgres up
+**Org test context (non-secret):**
 
-### Commands
+- Meta App: Groweasy (`META_APP_ID` in `.env`)
+- Test WA phone id: `META_PHONE_NUMBER_ID`
+- Working recipient for send tests: `917489739171` (Rohit)
+- Old recipient `919009785315` often blocked by Meta `#131005`
+
+Secrets live only in `server/.env` / org encrypted settings — **never paste App Secret / tokens into docs or commits**.
+
+---
+
+## 3. Commands cheat sheet
 
 ```bash
-# Terminal A — API
+# Infra
+cd /workspaces/Samyoj && docker compose up -d
+
+# API + client (separate terminals)
 cd server && npm run dev
+cd client && npm run dev
 
-# Terminal B — tunnel
+# Public webhook tunnel (ngrok — needs: ngrok config add-authtoken <token>)
 cd server && npm run tunnel
-# or: NGROK_DOMAIN=your-domain.ngrok-free.app npm run tunnel
-```
+# optional domain: NGROK_DOMAIN=your.ngrok-free.app npm run tunnel
 
-Default domain in script: `samyoj-dev.ngrok-free.app` — replace with **your** reserved domain.
+# Alternate tunnel (no ngrok account; URL changes each run)
+bash scripts/dev-tunnel.sh   # cloudflared → updates META_WEBHOOK_URL + setup-webhook
 
-### Meta Console
+# After tunnel URL changes
+cd server && npm run setup-webhook
+# restart API so config.meta.webhookUrl reloads from .env
 
-WhatsApp → Configuration → Edit:
-
-| Field | Value |
-|-------|--------|
-| Callback URL | `https://<your-domain>/api/whatsapp/webhook` |
-| Verify token | same as `META_VERIFY_TOKEN` in `.env` |
-
-Subscribe to at least: **messages**.
-
-Also set in `.env`:
-
-```
-META_WEBHOOK_URL=https://<your-domain>/api/whatsapp/webhook
-```
-
-After Connect, app can auto-register this URL via existing webhook configure path when `META_WEBHOOK_URL` is set.
-
-### Alternate: Cloudflare tunnel
-
-Repo already has [`scripts/dev-tunnel.sh`](../scripts/dev-tunnel.sh) (cloudflared). Same idea: public HTTPS → `:8000`. Prefer one tunnel type; don’t mix conflicting `META_WEBHOOK_URL` values.
-
----
-
-## 14. Automated webhook tests (POC)
-
-```bash
+# Diagnostics
+cd server && npm run diagnose
 cd server && npm run test:webhook
-# against ngrok:
-bash ../scripts/test-webhook.sh --ngrok
+# against current public URL:
+WEBHOOK_URL="$(grep META_WEBHOOK_URL server/.env | cut -d= -f2-)" \
+  HEALTH_URL="${WEBHOOK_URL%/webhook}/webhook/health" \
+  bash scripts/test-webhook.sh
 ```
 
-Covers:
+---
 
-1. Health endpoint  
-2. Wrong verify token → 403  
-3. Missing GET params → 400  
-4. Simulated inbound text  
-5. Simulated inbound image  
-6. Non-WABA payload → 200 (no Meta retry loop)  
-7. Empty JSON → 200  
-8. Button reply  
-9. Status update  
-10. Health counters increment  
-11. Correct verify token returns challenge  
+## 4. Incident log — everything we hit (symptom → cause → fix → do/don’t)
 
-**Do:** run this after any webhook/route change.  
-**Don’t:** assume UI alone proves inbound — health + server logs must show `Inbound webhook received` / `Saved inbound message`.
+### A. Connect / OAuth
+
+#### A1 — Stuck on Meta after Allow
+- **Symptom:** Allow ke baad Samyoj callback nahi.
+- **Cause:** Codespace URL vs `localhost` redirect mismatch; ProtectedRoute dropped `?code=`.
+- **Fix:** Dynamic `redirectUri` from `window.location.origin`; signed OAuth state stores redirectUri; login `returnTo`; callback outside blind protect.
+- **Files:** `server/src/modules/whatsapp/connect-oauth-state.ts`, `meta.service.ts`, `client/.../ProtectedRoute.tsx`, `LoginPage.tsx`, `WhatsappCallbackPage.tsx`
+- **Do:** Always pass browser-origin callback. **Don’t:** Hardcode only localhost when UI is on another origin.
+
+#### A2 — `Error validating client secret`
+- **Cause:** Wrong App Secret for App ID (env vs org UI).
+- **Fix:** Same Meta app’s secret in Settings UI + `.env`; mapped in `oauth-errors.ts`.
+- **Don’t:** Mix secrets across Meta apps; leave secrets in chat forever (rotate).
+
+#### A3 — `authorization code has been used` / popup stuck
+- **Cause:** React Strict Mode double-mount → two exchanges; first success discarded.
+- **Fix:** Module-level `inflightExchanges` Map; treat “code used” as success if already connected.
+- **File:** `client/src/pages/WhatsappCallbackPage.tsx`
+- **Don’t:** Cancel in-flight OAuth promise on remount without sharing the Promise.
+
+#### A4 — Connect slow / looks stuck after OAuth
+- **Cause:** Webhook auto-config blocked on Meta 404/timeout.
+- **Fix:** Webhook configure fire-and-forget after connect (`saveWhatsappConnection`).
+- **Don’t:** Block OAuth success on webhook registration.
+
+#### A5 — Session lost on full-page Meta redirect
+- **Fix:** Prefer popup OAuth; `backupAuthBeforeOAuth` / restore; `returnTo` on login.
+- **Files:** `client/src/utils/whatsappOAuth.ts`, `authStorage` helpers
+
+### B. Messaging / Inbox
+
+#### B1 — Template sent but “24h window closed”
+- **Cause:** Expected WhatsApp rule — session window opens on **INBOUND**, not outbound template alone.
+- **Fix:** Education / UI banner; customer must message first (or keep using templates).
+- **Don’t:** Treat as OAuth or webhook bug.
+
+#### B2 — Send fails Meta `#131005`
+- **Cause:** Recipient not in allowlist / Meta-side block.
+- **Fix:** Use verified test recipient; add number in Meta “To” list.
+- **Don’t:** Assume every personal number works in test mode.
+
+#### B3 — Customer replies never show in Inbox (main pain)
+- **Cause chain:**
+  1. Meta POSTs to `META_WEBHOOK_URL`
+  2. URL was Codespace **private** (HTTP 404) and/or ngrok not running and/or Cloudflare stopped
+  3. Express never saw POST → no DB inbound → Inbox empty
+- **Evidence:** Simulated `wamid.test_*` rows existed; real Meta traffic only appeared after public tunnel + `setup-webhook`. Browser opening webhook URL shows `Missing hub.mode...` — **normal** (not a bug).
+- **Fix:** Run public tunnel (ngrok preferred with auth); set `META_WEBHOOK_URL`; `npm run setup-webhook`; keep tunnel alive.
+- **Code hardening done:** richer GET/POST webhook logs, `/webhook/health`, duplicate `metaMessageId` skip (P2002), Socket reconnect + Inbox connection indicator.
+
+#### B4 — “Image unavailable” on simulated image webhook
+- **Cause:** Test payload had fake media id; download fails.
+- **Not** proof inbound pipeline is broken.
+
+### C. Tunnel tooling
+
+| Tool | When | Notes |
+|------|------|--------|
+| **ngrok** | Preferred once authtoken set | `npm run tunnel`; free URL changes unless reserved domain |
+| **cloudflared** (`scripts/dev-tunnel.sh`) | No ngrok account | Auto-updates `.env` + setup-webhook; URL ephemeral |
+| **Codespace port Public** | Optional | Often hard to find in UI; CLI visibility flaky; tunnel is more reliable |
+
+**Why Cloudflare was used first:** ngrok token missing + Codespace “Public” unclear → cloudflared worked immediately.  
+**Why switched to ngrok:** user provided authtoken → configured + Meta re-registered.
 
 ---
 
-## 15. Inbound logging cheat sheet
+## 5. Logging & how to debug fast
 
-| Log / signal | Meaning |
-|--------------|---------|
-| `Webhook verification request received` | Meta probing GET |
-| `Webhook verified successfully` | Handshake OK |
-| `Inbound webhook received` | POST arrived at Express |
-| `Webhook queued for processing` | BullMQ accepted job |
-| `No active WhatsApp number for inbound webhook` | `phone_number_id` mismatch / not connected |
-| `Processing inbound message` | Worker started |
-| `Saved inbound message` | DB write OK → should appear in Inbox |
-| `Duplicate inbound message skipped` | Meta retry; unique `metaMessageId` |
-| Health `totalReceived: 0` | Meta never hit your URL (tunnel/Meta config) |
+### Server (Winston / module logs)
+| Signal | Meaning |
+|--------|---------|
+| `WhatsApp OAuth URL issued` | Connect started |
+| `WhatsApp OAuth callback started` / `number connected` | Connect OK |
+| `Webhook verified successfully` | Meta GET handshake OK |
+| `Inbound webhook received` | Meta POST hit Express |
+| `Saved inbound message` | DB + should appear in Inbox |
+| `Duplicate inbound message skipped` | Meta retry; OK |
+| `No active WhatsApp number for inbound webhook` | `phone_number_id` mismatch |
+| Health `totalReceived: 0` | Tunnel/Meta URL wrong or Meta not subscribed |
 
-Browser: Inbox header shows Socket connection status (connected / connecting / disconnected).
+### Client
+- Console filter `[wa-oauth]` — Connect popup flow
+- Console `[socket]` — live Inbox connection
+- Inbox header connection dot — Socket status
+
+### Health API
+`GET /api/whatsapp/webhook/health` → `totalReceived`, `queueDepth`, `webhookUrl`, last error.
+
+### Browser myth
+Opening `https://<tunnel>/api/whatsapp/webhook` in Chrome →  
+`Missing hub.mode, hub.verify_token, or hub.challenge`  
+= **healthy GET handler**. Meta sends query params; browsers do not.
 
 ---
 
-## 16. Webhook do / don’t
+## 6. Key files (edit map)
+
+```
+docs/
+  WHATSAPP_CONNECT_DEVELOPER_GUIDE.md   ← this handoff (source of truth)
+
+scripts/
+  ngrok-tunnel.sh          # npm run tunnel
+  test-webhook.sh          # npm run test:webhook
+  diagnose-webhook.sh      # npm run diagnose
+  dev-tunnel.sh            # cloudflared alternative
+
+server/
+  .env                     # META_* (secrets — do not commit)
+  package.json             # tunnel | test:webhook | diagnose | setup-webhook
+  scripts/setup-webhook.ts
+  src/modules/whatsapp/
+    routes.ts              # connect-url, callback, GET/POST webhook, /webhook/health
+    oauth-errors.ts        # user-facing Meta OAuth errors
+    connect-oauth-state.ts # signed state + redirectUri
+    meta.service.ts        # OAuth + webhook register helpers
+    org-meta.service.ts    # per-org App ID/Secret
+  src/workers/webhook.processor.ts   # inbound persist + emit
+  src/modules/calling/call.processor.ts  # processWebhookFields router
+  src/config/queues.ts
+  src/realtime.ts
+
+client/
+  src/pages/WhatsappCallbackPage.tsx
+  src/pages/SettingsPage.tsx
+  src/pages/InboxPage.tsx
+  src/utils/whatsappOAuth.ts
+  src/hooks/useSocket.ts
+  src/components/ui/ConnectionStatusIndicator.tsx
+  src/components/ProtectedRoute.tsx
+  src/pages/LoginPage.tsx
+```
+
+---
+
+## 7. Runbook — “Inbox me reply nahi aa raha”
+
+1. `npm run diagnose` — fix every FAIL first.  
+2. Confirm tunnel process running (ngrok API `:4040` or cloudflared).  
+3. Confirm `META_WEBHOOK_URL` matches **current** public URL (restart API after `.env` change).  
+4. `npm run setup-webhook` — Meta must subscribe to this URL.  
+5. Watch logs while customer sends a message: need `Inbound webhook received` then `Saved inbound message`.  
+6. If only `statusCount` (sent/delivered) and no `messages[]` — outbound status works; wait for real inbound text from phone.  
+7. If Socket disconnected — Inbox may lag until reconnect (indicator in header).  
+8. Redis down → queue fails; processor may inline-fallback but campaigns/queues degraded.
+
+---
+
+## 8. Do / Don’t (hard rules)
 
 | Do | Don’t |
 |----|--------|
-| Keep tunnel running while testing inbound | Expect replies on pure localhost |
-| Match verify token exactly | Change token in Meta without updating `.env` |
-| Use reserved ngrok domain when possible | Point Meta at an expired random ngrok URL |
-| ACK 200 quickly; process async | Block Meta on heavy work before 200 |
-| Treat duplicate `metaMessageId` as success | Crash worker on Meta retries |
-| Check `/webhook/health` + Redis | Blame Inbox UI when queue/Redis is down |
+| Use UI Connect flow | Silently seed tokens every time |
+| Keep authorize & exchange `redirect_uri` identical | Change redirect only on one side |
+| Keep tunnel up while testing inbound | Expect Meta to hit localhost |
+| Update `.env` + `setup-webhook` after every new tunnel URL | Point Meta at dead ngrok/cloudflare URL |
+| Use `diagnose` / `test:webhook` after webhook changes | Assume UI alone proves inbound |
+| Rotate secrets shared in chat | Commit `.env` or paste App Secret in docs |
+| Treat 24h window as product rule | “Fix” it by breaking webhook code |
 
 ---
 
-## 17. Key files (webhook + tunnel)
+## 9. Instructions for the next AI agent
 
-```
-scripts/ngrok-tunnel.sh
-scripts/test-webhook.sh
-scripts/dev-tunnel.sh              # cloudflared alternative
+When user says inbound/connect broken:
 
-server/src/modules/whatsapp/routes.ts   # GET/POST webhook + /webhook/health
-server/src/workers/webhook.processor.ts # inbound persist + emit
-server/src/modules/calling/call.processor.ts  # processWebhookFields router
-server/src/config/queues.ts             # webhook-queue
-
-client/src/hooks/useSocket.ts
-client/src/components/ui/ConnectionStatusIndicator.tsx
-client/src/pages/InboxPage.tsx
-```
+1. Read **this file** and `server/.env` `META_WEBHOOK_URL` (do not print secrets).  
+2. Run `npm run diagnose` — prefer infra fixes over rewriting Inbox.  
+3. Confirm Connect vs Inbound: Connect = OAuth files; Inbound = tunnel + webhook routes + processor.  
+4. Do not remove Strict Mode dedupe, signed OAuth state, or fire-and-forget webhook-on-connect without a replacement.  
+5. After changing tunnel URL: update `.env` → `setup-webhook` → restart API → prove with phone message or `test:webhook`.  
+6. Prefer smallest fix; keep logging structured (`source: 'webhook' | 'auth'`).  
+7. Update **§2 Current runtime** in this doc when the live tunnel URL or approach changes.
 
 ---
 
-*Updated: Connect OAuth hardening + inbound webhook ngrok path, structured webhook logs, health endpoint, duplicate-safe processor, Socket reconnect status, POC test script.*
+## 10. Related docs
+
+- [docs/WHATSAPP_API_DOCUMENTATION.md](./WHATSAPP_API_DOCUMENTATION.md) — Meta API surface  
+- [docs/audit/README.md](./audit/README.md) — broader product audit index  
+- [docs/API.md](./API.md) — HTTP API overview  
+
+---
+
+*Handoff compiled from Connect OAuth hardening + inbound webhook tunnel work (Codespace private port, cloudflared then ngrok, health/diagnose/test scripts, Socket status, duplicate-safe processor).*
