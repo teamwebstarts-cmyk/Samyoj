@@ -7,9 +7,16 @@ interface AuthLayoutProps {
   subtitle: string;
   eyebrow?: string;
   children: ReactNode;
+  /** Tighter card for taller forms (register) */
+  compact?: boolean;
 }
 
-export default function AuthLayout({ title, subtitle, children }: AuthLayoutProps) {
+export default function AuthLayout({
+  title,
+  subtitle,
+  children,
+  compact = false,
+}: AuthLayoutProps) {
   return (
     <div className="relative flex h-[100dvh] w-full flex-col overflow-hidden bg-[#F7FAF8]">
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
@@ -22,33 +29,50 @@ export default function AuthLayout({ title, subtitle, children }: AuthLayoutProp
       <AuthTopBadge />
 
       <div className="relative z-10 flex min-h-0 flex-1">
-        <div className="hidden min-h-0 w-[56%] lg:block xl:w-[58%]">
+        <div className="hidden min-h-0 w-[60%] lg:block">
           <AuthShowcase />
         </div>
 
-        <div className="relative flex min-h-0 w-full flex-col lg:w-[44%] xl:w-[42%]">
-          <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-5 py-5 sm:px-8 xl:px-10">
-            <div className="mb-5 flex w-full max-w-[420px] justify-center lg:hidden">
+        <div className="relative flex min-h-0 w-full flex-col lg:w-[40%]">
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto overscroll-contain px-5 py-4 sm:px-8 xl:px-10">
+            <div className="mb-4 flex w-full max-w-[460px] shrink-0 justify-center lg:hidden">
               <AuthBrand />
             </div>
 
-            <div className="w-full max-w-[420px] rounded-[1.85rem] border border-slate-100/90 bg-white p-7 shadow-[0_20px_60px_rgba(15,23,42,0.1)] sm:p-8 xl:rounded-[2rem] xl:p-9">
-              <header className="mb-6">
-                <h1 className="text-[1.8rem] font-extrabold leading-[1.15] tracking-[-0.035em] text-slate-900 sm:text-[1.95rem]">
-                  {title}
-                </h1>
-                <p className="mt-2 text-[14px] font-medium leading-relaxed text-slate-500">
-                  {subtitle}
-                </p>
-              </header>
+            <div className="my-auto w-full max-w-[460px] py-2">
+              <div
+                className={`rounded-[1.85rem] border border-slate-100/90 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.1)] xl:rounded-[2rem] ${
+                  compact
+                    ? 'p-6 sm:p-7 xl:p-8'
+                    : 'p-7 sm:p-8 xl:p-9'
+                }`}
+              >
+                <header className={compact ? 'mb-4' : 'mb-6'}>
+                  <h1
+                    className={`font-extrabold leading-[1.15] tracking-[-0.035em] text-slate-900 ${
+                      compact
+                        ? 'text-[1.55rem] sm:text-[1.7rem]'
+                        : 'text-[1.8rem] sm:text-[1.95rem]'
+                    }`}
+                  >
+                    {title}
+                  </h1>
+                  <p
+                    className={`font-medium leading-relaxed text-slate-500 ${
+                      compact ? 'mt-1.5 text-[13px]' : 'mt-2 text-[14px]'
+                    }`}
+                  >
+                    {subtitle}
+                  </p>
+                </header>
 
-              {children}
+                {children}
+              </div>
+
+              <div className="mt-3 sm:mt-4">
+                <AuthTrustFooter />
+              </div>
             </div>
-          </div>
-
-          {/* Trust strip sits under the form column (design) */}
-          <div className="shrink-0 pb-3 lg:pb-4">
-            <AuthTrustFooter />
           </div>
         </div>
       </div>

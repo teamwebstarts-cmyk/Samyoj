@@ -1,105 +1,86 @@
-/** Custom auth marketing icons — matched to `ui design /image copy.png` */
+/** Custom auth marketing icons — clean SF-style vectors for AuthShowcase */
 
 type IconProps = {
   className?: string;
 };
 
-/** Chat bubble with smiley — Smart Automation / Conversations */
+/** Rounded chat bubble + soft smile */
 export function IconChatSmile({ className }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" className={className} aria-hidden fill="none">
       <path
-        d="M7.2 17.1c-1.7-1.15-2.85-3.05-2.85-5.2C4.35 7.85 7.55 4.85 12 4.85s7.65 3 7.65 7.05-3.2 7.05-7.65 7.05c-.9 0-1.75-.1-2.55-.28L5.15 20.35l2.05-3.25z"
+        d="M12 3.75c4.55 0 8.1 2.95 8.1 6.85 0 3.9-3.55 6.85-8.1 6.85-.72 0-1.42-.07-2.08-.2l-3.72 1.85.95-2.95C5.1 14.85 3.9 12.95 3.9 10.6 3.9 6.7 7.45 3.75 12 3.75Z"
         stroke="currentColor"
-        strokeWidth="1.85"
-        strokeLinecap="round"
+        strokeWidth="1.7"
         strokeLinejoin="round"
       />
-      <circle cx="9.25" cy="10.65" r="1.05" fill="currentColor" />
-      <circle cx="14.75" cy="10.65" r="1.05" fill="currentColor" />
+      <circle cx="9.2" cy="10.15" r="1.05" fill="currentColor" />
+      <circle cx="14.8" cy="10.15" r="1.05" fill="currentColor" />
       <path
-        d="M9.15 13.25c.9 1.05 1.95 1.55 2.85 1.55s1.95-.5 2.85-1.55"
+        d="M9.05 12.55c.95.95 2 1.4 2.95 1.4s2-.45 2.95-1.4"
         stroke="currentColor"
-        strokeWidth="1.85"
+        strokeWidth="1.7"
         strokeLinecap="round"
       />
     </svg>
   );
 }
 
-/** Three rounded bars ascending — Real-time Analytics */
+/** Soft ascending bars */
 export function IconBarChart({ className }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" className={className} aria-hidden>
-      <rect x="4.1" y="13.4" width="3.7" height="6.4" rx="1.4" fill="currentColor" />
-      <rect x="10.15" y="8.7" width="3.7" height="11.1" rx="1.4" fill="currentColor" />
-      <rect x="16.2" y="4.5" width="3.7" height="15.3" rx="1.4" fill="currentColor" />
+      <rect x="3.8" y="13.1" width="4" height="6.9" rx="1.55" fill="currentColor" />
+      <rect x="10" y="8.2" width="4" height="11.8" rx="1.55" fill="currentColor" />
+      <rect x="16.2" y="4" width="4" height="16" rx="1.55" fill="currentColor" />
     </svg>
   );
 }
 
-/** Three people — Team Collaboration */
+/** Clean 3-person team mark */
 export function IconTeam({ className }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" className={className} aria-hidden fill="none">
-      <circle
-        cx="7"
-        cy="8.15"
-        r="2"
-        stroke="currentColor"
-        strokeWidth="1.75"
-      />
+      <circle cx="7.1" cy="8" r="2.15" stroke="currentColor" strokeWidth="1.65" />
       <path
-        d="M3.55 16.7c.3-2.4 1.7-3.7 3.45-3.7s3.15 1.3 3.45 3.7"
+        d="M3.4 16.9c.25-2.35 1.7-3.55 3.7-3.55s3.45 1.2 3.7 3.55"
         stroke="currentColor"
-        strokeWidth="1.75"
+        strokeWidth="1.65"
         strokeLinecap="round"
       />
-      <circle
-        cx="17"
-        cy="8.15"
-        r="2"
-        stroke="currentColor"
-        strokeWidth="1.75"
-      />
+      <circle cx="16.9" cy="8" r="2.15" stroke="currentColor" strokeWidth="1.65" />
       <path
-        d="M13.55 16.7c.3-2.4 1.7-3.7 3.45-3.7s3.15 1.3 3.45 3.7"
+        d="M13.2 16.9c.25-2.35 1.7-3.55 3.7-3.55s3.45 1.2 3.7 3.55"
         stroke="currentColor"
-        strokeWidth="1.75"
+        strokeWidth="1.65"
         strokeLinecap="round"
       />
-      <circle
-        cx="12"
-        cy="9"
-        r="2.35"
-        stroke="currentColor"
-        strokeWidth="1.95"
-      />
+      <circle cx="12" cy="8.85" r="2.55" stroke="currentColor" strokeWidth="1.85" />
       <path
-        d="M7.5 18c.4-2.95 2.1-4.45 4.5-4.45S16.1 15.05 16.5 18"
+        d="M7.2 18.15c.35-2.85 2.05-4.25 4.8-4.25s4.45 1.4 4.8 4.25"
         stroke="currentColor"
-        strokeWidth="1.95"
+        strokeWidth="1.85"
         strokeLinecap="round"
       />
     </svg>
   );
 }
 
-/** Rising trend line with arrow — Customer Satisfaction */
+/** Smooth trend-up with arrow head */
 export function IconTrendUp({ className }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" className={className} aria-hidden fill="none">
       <path
-        d="M4 15.8 9.15 10.7l3.35 3.1L19.4 6.6"
+        d="M3.8 15.9 9.2 10.6l3.2 2.95L19.5 6.4"
         stroke="currentColor"
-        strokeWidth="2"
+        strokeWidth="1.9"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
       <path
-        d="M14.55 6.6H19.4v4.85"
+        d="M14.2 6.4h5.3v5.3"
         stroke="currentColor"
-        strokeWidth="2"
+        strokeWidth="1.9"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
@@ -107,26 +88,23 @@ export function IconTrendUp({ className }: IconProps) {
   );
 }
 
-/** Lightning bolt — Average Response Time */
+/** Filled lightning — clearer at small sizes */
 export function IconBolt({ className }: IconProps) {
   return (
-    <svg viewBox="0 0 24 24" className={className} aria-hidden fill="none">
+    <svg viewBox="0 0 24 24" className={className} aria-hidden>
       <path
-        d="M13.2 3.2 7.85 12.55h3.9L10.35 20.8l7.1-10.85h-3.85L16.8 3.2z"
-        stroke="currentColor"
-        strokeWidth="1.85"
-        strokeLinejoin="round"
-        strokeLinecap="round"
+        fill="currentColor"
+        d="M13.55 2.85c.28 0 .5.25.45.52l-1.35 6.98h4.55c.42 0 .66.48.4.82l-7.55 9.7c-.3.39-.9.1-.8-.38l1.45-7.12H6.45c-.42 0-.66-.48-.4-.82l6.75-9.45c.1-.14.25-.22.4-.25h.35z"
       />
     </svg>
   );
 }
 
-/** Four-point sparkle (filled concave star) */
+/** Four-point sparkle */
 export function IconSparkle({ className }: IconProps) {
   return (
     <svg viewBox="0 0 16 16" className={className} aria-hidden fill="currentColor">
-      <path d="M8 0.55c.3 2.4 1.1 4.15 2.65 5.35 1.2 1 2.95 1.7 4.7 2.05-2.4.3-4.15 1.1-5.35 2.65-1 1.2-1.7 2.95-2.05 4.7-.3-2.4-1.1-4.15-2.65-5.35C4.1 8.75 2.35 8.05.6 7.7c2.4-.3 4.15-1.1 5.35-2.65C7.05 3.85 7.7 2.1 8 .55z" />
+      <path d="M8 .5c.28 2.35 1.05 4.05 2.55 5.25C12 6.95 13.7 7.6 15.4 7.9c-2.35.28-4.05 1.05-5.25 2.55C8.95 11.95 8.3 13.65 8 15.4c-.28-2.35-1.05-4.05-2.55-5.25C4.05 8.95 2.35 8.3.6 8c2.35-.28 4.05-1.05 5.25-2.55C7.05 4.05 7.7 2.35 8 .5z" />
     </svg>
   );
 }

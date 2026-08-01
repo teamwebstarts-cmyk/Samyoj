@@ -1,4 +1,4 @@
-import { Cloud, Infinity as InfinityIcon, Lock, ShieldCheck } from 'lucide-react';
+import { Cloud, Lock, ShieldCheck } from 'lucide-react';
 import type { ComponentType } from 'react';
 import AuthBrand from './AuthBrand';
 import {
@@ -60,14 +60,6 @@ export default function AuthShowcase() {
         <div className="absolute right-[18%] top-[20%] h-40 w-40 rounded-full bg-whatsapp-400/25 blur-2xl" />
       </div>
 
-      {/* Floating WA accent over the soft photo */}
-      <div className="pointer-events-none absolute right-[18%] top-[28%] z-[5] hidden xl:block">
-        <div className="absolute -inset-6 rounded-full bg-whatsapp-400/30 blur-xl" />
-        <div className="relative flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-[#25D366] to-[#128C7E] text-white shadow-[0_12px_32px_rgba(37,211,102,0.45)] ring-4 ring-white/80">
-          <WhatsAppGlyph className="h-7 w-7" />
-        </div>
-      </div>
-
       <div className="relative z-10 flex h-full min-h-0 flex-col px-7 pb-4 pt-6 sm:px-8 xl:px-10 xl:pb-5 xl:pt-7">
         <AuthBrand />
 
@@ -89,8 +81,10 @@ export default function AuthShowcase() {
         <ul className="mt-7 w-full max-w-[min(100%,380px)] space-y-5 xl:mt-8 xl:space-y-6">
           {FEATURES.map(({ icon: Icon, title, description }) => (
             <li key={title} className="flex items-center gap-3.5 sm:gap-4">
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white/95 shadow-[0_6px_18px_rgba(15,23,42,0.08)] ring-1 ring-emerald-100 sm:h-[3.25rem] sm:w-[3.25rem]">
-                <Icon className="h-5 w-5 text-[#0A8954] sm:h-[22px] sm:w-[22px]" />
+              <span className="flex h-[3.35rem] w-[3.35rem] shrink-0 items-center justify-center rounded-full bg-white shadow-[0_8px_22px_rgba(15,23,42,0.09)] ring-1 ring-emerald-100/90 sm:h-14 sm:w-14">
+                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#E8F5EE] text-[#0A8954] sm:h-11 sm:w-11">
+                  <Icon className="h-5 w-5 sm:h-[22px] sm:w-[22px]" />
+                </span>
               </span>
               <div className="min-w-0">
                 <p className="text-[15px] font-bold leading-tight text-slate-900 sm:text-[16px]">
@@ -117,8 +111,8 @@ export default function AuthShowcase() {
                     index > 0 ? 'border-l border-slate-100' : ''
                   }`}
                 >
-                  <span className="mx-auto mb-2 flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-emerald-50 to-whatsapp-50 text-[#0A8954] ring-1 ring-emerald-100/80 sm:h-10 sm:w-10">
-                    <Icon className="h-[18px] w-[18px] sm:h-5 sm:w-5" />
+                  <span className="mx-auto mb-2.5 flex h-11 w-11 items-center justify-center rounded-full bg-[#EAF7F0] text-[#0A8954] shadow-[0_2px_8px_rgba(10,137,84,0.08)] sm:h-12 sm:w-12">
+                    <Icon className="h-5 w-5 sm:h-[22px] sm:w-[22px]" />
                   </span>
                   <p className="text-[clamp(15px,1.4vw,18px)] font-extrabold tracking-tight text-[#0A8954]">
                     {value}
@@ -158,44 +152,73 @@ export function AuthTopBadge() {
 
 export function AuthTrustFooter() {
   return (
-    <div className="relative z-20 shrink-0 px-4 pb-1 pt-0">
-      <div className="mx-auto flex w-full max-w-[420px] items-stretch justify-center gap-0 overflow-hidden rounded-2xl border border-slate-100/90 bg-white shadow-[0_8px_28px_rgba(15,23,42,0.06)]">
-        <div className="flex flex-1 items-center justify-center gap-2 px-3 py-2.5 sm:gap-2.5 sm:px-4 sm:py-3">
-          <InfinityIcon className="h-5 w-5 shrink-0 text-[#0668E1]" strokeWidth={2.35} />
+    <div className="relative z-20 w-full px-0">
+      <div className="flex w-full items-stretch overflow-hidden rounded-2xl border border-slate-100/90 bg-white shadow-[0_12px_36px_rgba(15,23,42,0.08)]">
+        {/* Meta */}
+        <div className="flex min-w-0 flex-1 items-center gap-2.5 px-3 py-3 sm:gap-2.5 sm:px-3.5 sm:py-3.5">
+          <svg
+            viewBox="0 0 36 24"
+            className="h-[18px] w-[26px] shrink-0 sm:h-5 sm:w-7"
+            aria-hidden
+          >
+            <path
+              fill="#0668E1"
+              fillRule="evenodd"
+              d="M12.2 4.2c2.15 0 3.95 1.45 5.05 3.55.95-1.85 2.65-3.55 5.05-3.55 3.55 0 6.2 3.15 6.2 7.55 0 4.7-3.05 8.85-7.4 8.85-1.95 0-3.55-.85-4.7-2.2-1.15 1.35-2.75 2.2-4.7 2.2-4.35 0-7.4-4.15-7.4-8.85 0-4.4 2.65-7.55 6.2-7.55zm5.05 9.85c.85 1.85 2.2 2.95 3.75 2.95 2.55 0 4.35-2.45 4.35-5.7 0-2.95-1.55-4.85-3.7-4.85-1.55 0-2.9 1.15-3.75 2.95v4.65h-.65zm-1.65 0V9.4c-.85-1.8-2.2-2.95-3.75-2.95-2.15 0-3.7 1.9-3.7 4.85 0 3.25 1.8 5.7 4.35 5.7 1.55 0 2.9-1.1 3.75-2.95h-.65z"
+            />
+          </svg>
           <div className="min-w-0 text-left">
-            <p className="text-[12px] font-bold leading-tight text-slate-900">Meta</p>
-            <p className="text-[10px] font-medium leading-tight text-slate-500">Verified Partner</p>
+            <p className="truncate text-[12px] font-bold leading-tight text-slate-900 sm:text-[12.5px]">
+              Meta
+            </p>
+            <p className="truncate text-[9.5px] font-medium leading-tight text-slate-500 sm:text-[10px]">
+              Verified Partner
+            </p>
           </div>
         </div>
-        <div className="w-px self-stretch bg-slate-100" />
-        <div className="flex flex-1 items-center justify-center gap-2 px-3 py-2.5 sm:gap-2.5 sm:px-4 sm:py-3">
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-[#0A8954] sm:h-8 sm:w-8">
-            <ShieldCheck className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={2.4} />
+
+        <div className="my-2.5 w-px shrink-0 bg-slate-100" />
+
+        {/* Encryption */}
+        <div className="flex min-w-0 flex-1 items-center gap-2 px-3 py-3 sm:gap-2.5 sm:px-3.5 sm:py-3.5">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#E8F5EE] text-[#0A8954]">
+            <ShieldCheck className="h-4 w-4" strokeWidth={2.25} />
           </span>
           <div className="min-w-0 text-left">
-            <p className="text-[12px] font-bold leading-tight text-slate-900">256-bit</p>
-            <p className="text-[10px] font-medium leading-tight text-slate-500">Encryption</p>
+            <p className="truncate text-[12px] font-bold leading-tight text-slate-900 sm:text-[12.5px]">
+              256-bit
+            </p>
+            <p className="truncate text-[9.5px] font-medium leading-tight text-slate-500 sm:text-[10px]">
+              Encryption
+            </p>
           </div>
         </div>
-        <div className="hidden w-px self-stretch bg-slate-100 min-[420px]:block" />
-        <div className="hidden flex-1 items-center justify-center gap-2.5 px-4 py-3 min-[420px]:flex">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-[#0A8954]">
-            <Cloud className="h-4 w-4" strokeWidth={2.4} />
+
+        <div className="my-2.5 w-px shrink-0 bg-slate-100" />
+
+        {/* Uptime */}
+        <div className="flex min-w-0 flex-1 items-center gap-2 px-3 py-3 sm:gap-2.5 sm:px-3.5 sm:py-3.5">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#E8F5EE] text-[#0A8954]">
+            <Cloud className="h-4 w-4" strokeWidth={2.25} />
           </span>
           <div className="min-w-0 text-left">
-            <p className="text-[12px] font-bold leading-tight text-slate-900">99.9%</p>
-            <p className="text-[10px] font-medium leading-tight text-slate-500">Uptime</p>
+            <p className="truncate text-[12px] font-bold leading-tight text-slate-900 sm:text-[12.5px]">
+              99.9%
+            </p>
+            <p className="truncate text-[9.5px] font-medium leading-tight text-slate-500 sm:text-[10px]">
+              Uptime
+            </p>
           </div>
         </div>
       </div>
 
-      <div className="mx-auto mt-2 flex max-w-[420px] items-center justify-center gap-3">
-        <span className="h-px max-w-[56px] flex-1 bg-gradient-to-r from-transparent to-emerald-200" />
-        <p className="flex shrink-0 items-center gap-1.5 text-[11px] font-medium text-slate-500">
-          <Lock className="h-3 w-3 text-[#0A8954]" />
+      <div className="mt-2 flex items-center justify-center gap-2.5 px-1">
+        <span className="h-px max-w-[48px] flex-1 bg-gradient-to-r from-transparent to-emerald-300/70" />
+        <p className="flex shrink-0 items-center gap-1.5 text-[10.5px] font-medium text-slate-500 sm:text-[11px]">
+          <Lock className="h-3 w-3 text-[#0A8954]" strokeWidth={2.3} />
           Your data is safe with enterprise-grade security
         </p>
-        <span className="h-px max-w-[56px] flex-1 bg-gradient-to-l from-transparent to-emerald-200" />
+        <span className="h-px max-w-[48px] flex-1 bg-gradient-to-l from-transparent to-emerald-300/70" />
       </div>
     </div>
   );
