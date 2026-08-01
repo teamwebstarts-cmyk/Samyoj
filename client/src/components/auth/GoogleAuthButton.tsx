@@ -34,7 +34,7 @@ export default function GoogleAuthButton({
     <button
       type="button"
       onClick={onClick}
-      className="flex h-[52px] w-full items-center justify-center gap-3 rounded-[16px] border border-[#E5E7EB] bg-white px-4 text-[14.5px] font-semibold tracking-[-0.01em] text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+      className="flex h-[56px] w-full items-center justify-center gap-3 rounded-[16px] border border-[#E5E7EB] bg-white px-4 text-[14.5px] font-semibold tracking-[-0.01em] text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
     >
       <GoogleIcon />
       <span>{label}</span>

@@ -1,6 +1,6 @@
 import { Building2, Lock, Mail, User } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import AuthButton from '../components/auth/AuthButton';
 import AuthDivider from '../components/auth/AuthDivider';
 import AuthInput from '../components/auth/AuthInput';
@@ -8,17 +8,22 @@ import AuthLayout from '../components/auth/AuthLayout';
 import GoogleAuthButton from '../components/auth/GoogleAuthButton';
 import { useAuth } from '../contexts/AuthContext';
 import { useGoogleAuth } from '../hooks/useGoogleAuth';
+import { authApi } from '../services/api';
 import { getErrorMessage } from '../utils/errors';
-import { toastError } from '../utils/toast';
+import { toastError, toastSuccess } from '../utils/toast';
 
 function getPasswordStrength(password: string) {
   if (!password) return { label: '', width: '0%', color: 'bg-neutral-200' };
-  if (password.length < 8) return { label: 'Too short', width: '25%', color: 'bg-red-400' };
-  if (password.length < 10) return { label: 'Fair', width: '50%', color: 'bg-amber-400' };
-  if (/[A-Z]/.test(password) && /[0-9]/.test(password)) {
-    return { label: 'Strong', width: '100%', color: 'bg-whatsapp-500' };
-  }
-  return { label: 'Good', width: '75%', color: 'bg-emerald-400' };
+  let score = 0;
+  if (password.length >= 8) score += 1;
+  if (password.length >= 12) score += 1;
+  if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score += 1;
+  if (/[0-9]/.test(password)) score += 1;
+  if (/[^A-Za-z0-9]/.test(password)) score += 1;
+  if (score <= 1) return { label: 'Weak', width: '25%', color: 'bg-red-400' };
+  if (score === 2) return { label: 'Fair', width: '45%', color: 'bg-amber-400' };
+  if (score === 3) return { label: 'Good', width: '70%', color: 'bg-emerald-400' };
+  return { label: 'Strong', width: '100%', color: 'bg-whatsapp-500' };
 }
 
 export default function RegisterPage() {
@@ -29,9 +34,10 @@ export default function RegisterPage() {
     companyName: '',
   });
   const [loading, setLoading] = useState(false);
+  const [pendingVerifyEmail, setPendingVerifyEmail] = useState<string | null>(null);
+  const [smtpConfigured, setSmtpConfigured] = useState(true);
   const { register } = useAuth();
   const { signInWithGoogle } = useGoogleAuth();
-  const navigate = useNavigate();
 
   const passwordStrength = useMemo(
     () => getPasswordStrength(form.password),
@@ -42,14 +48,54 @@ export default function RegisterPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      await register(form);
-      navigate('/');
+      const result = await register(form);
+      if (result.emailVerificationRequired) {
+        setPendingVerifyEmail(result.email);
+        setSmtpConfigured(result.smtpConfigured);
+        toastSuccess('Account created — verify your email to sign in');
+        return;
+      }
     } catch (err: unknown) {
       toastError(getErrorMessage(err, 'Registration failed'));
     } finally {
       setLoading(false);
     }
   };
+
+  if (pendingVerifyEmail) {
+    return (
+      <AuthLayout
+        compact
+        title="Check your email"
+        subtitle={`We sent a verification link to ${pendingVerifyEmail}. Verify before signing in.`}
+      >
+        {!smtpConfigured && (
+          <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-[13px] text-amber-900">
+            We&apos;re unable to send email right now. If you don&apos;t receive a verification link
+            within a few minutes, try resending below or contact support.
+          </p>
+        )}
+        <button
+          type="button"
+          className="mb-3 w-full text-[13px] font-semibold text-[#0A8954]"
+          onClick={() =>
+            void authApi
+              .resendVerification(pendingVerifyEmail)
+              .then(() => toastSuccess('Verification email resent. Check your inbox.'))
+              .catch((err) => toastError(getErrorMessage(err, 'Could not resend')))
+          }
+        >
+          Resend verification email
+        </button>
+        <Link
+          to="/login"
+          className="flex h-12 w-full items-center justify-center rounded-[14px] bg-[#0A8954] text-sm font-semibold text-white"
+        >
+          Go to sign in
+        </Link>
+      </AuthLayout>
+    );
+  }
 
   return (
     <AuthLayout
@@ -103,7 +149,7 @@ export default function RegisterPage() {
             onChange={(value) => setForm({ ...form, password: value })}
             placeholder="Min. 8 characters"
             autoComplete="new-password"
-            hint="Min. 8 chars"
+            hint="Upper + lower + number"
             required
             minLength={8}
           />

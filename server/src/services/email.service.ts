@@ -60,6 +60,19 @@ export async function sendPasswordResetEmail(email: string, resetUrl: string) {
   });
 }
 
+export async function sendEmailVerificationEmail(email: string, verifyUrl: string) {
+  return sendEmail({
+    to: email,
+    subject: 'Verify your email — Samyoj',
+    text: `Welcome to Samyoj.\n\nVerify your email to activate your account:\n${verifyUrl}\n\nThis link expires in 24 hours.`,
+    html: `<p>Welcome to <strong>Samyoj</strong>.</p><p><a href="${verifyUrl}">Verify your email</a></p><p>This link expires in 24 hours.</p>`,
+  });
+}
+
+export function isSmtpConfigured(): boolean {
+  return Boolean(config.email.smtpHost);
+}
+
 export async function sendTeamInviteEmail(
   email: string,
   inviteUrl: string,

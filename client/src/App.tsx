@@ -10,6 +10,7 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
+import VerifyEmailPage from './pages/VerifyEmailPage';
 import DashboardPage from './pages/DashboardPage';
 import InboxPage from './pages/InboxPage';
 import AutomationsPage from './pages/AutomationsPage';
@@ -49,6 +50,7 @@ export default function App() {
                 <Route path="/register" element={<RegisterPage />} />
                 <Route path="/forgot-password" element={<ForgotPasswordPage />} />
                 <Route path="/reset-password" element={<ResetPasswordPage />} />
+                <Route path="/verify-email" element={<VerifyEmailPage />} />
                 <Route path="/invite/:token" element={<AcceptInvitePage />} />
                 {/* Outside ProtectedRoute so Meta's ?code=&state= can be read/stashed
                     even before auth hydrates. Page itself requires a signed-in user. */}

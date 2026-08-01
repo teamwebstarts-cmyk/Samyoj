@@ -1,4 +1,3 @@
-import { Cloud, Lock, ShieldCheck } from 'lucide-react';
 import type { ComponentType } from 'react';
 import AuthBrand from './AuthBrand';
 import {
@@ -42,29 +41,44 @@ function WhatsAppGlyph({ className }: { className?: string }) {
   );
 }
 
+/** Soft shield with check — trust mark */
+function ShieldSecureIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} aria-hidden fill="none">
+      <path
+        d="M12 3.2 5.5 5.6v5.3c0 4.15 2.7 7.95 6.5 9.1 3.8-1.15 6.5-4.95 6.5-9.1V5.6L12 3.2Z"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinejoin="round"
+      />
+      <path
+        d="m8.7 11.6 2.25 2.25 4.35-4.5"
+        stroke="currentColor"
+        strokeWidth="1.85"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export default function AuthShowcase() {
   return (
     <div className="relative h-full min-h-0 overflow-hidden">
-      {/* Full soft background photo — no hard cutout / vignette mask */}
-      <div className="pointer-events-none absolute inset-0">
-        <img
-          src="/brand/auth-hero.png"
-          alt=""
-          className="h-full w-full object-cover object-[52%_30%]"
-        />
-        {/* Soft wash so image reads as atmosphere, not a clipped cutout */}
-        <div className="absolute inset-0 bg-gradient-to-r from-[#F7FAF8] from-[0%] via-[#F7FAF8]/92 via-[34%] to-[#F7FAF8]/15 to-[72%]" />
-        <div className="absolute inset-0 bg-gradient-to-b from-[#F7FAF8]/80 via-transparent to-[#F7FAF8]/70" />
-        <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-[#F7FAF8] via-[#F7FAF8]/75 to-transparent" />
-        <div className="absolute -left-10 top-20 h-64 w-64 rounded-full bg-emerald-200/30 blur-3xl" />
-        <div className="absolute right-[18%] top-[20%] h-40 w-40 rounded-full bg-whatsapp-400/25 blur-2xl" />
+      {/* Soft white frost only behind the text column — match “pura” design */}
+      <div className="pointer-events-none absolute inset-0" aria-hidden>
+        <div className="absolute inset-y-0 left-0 w-[72%] bg-gradient-to-r from-white/80 from-[0%] via-white/45 via-[55%] to-transparent to-[100%]" />
+        <div className="absolute inset-x-0 top-0 h-36 bg-gradient-to-b from-white/50 to-transparent" />
+        <div className="absolute inset-x-0 bottom-0 h-52 bg-gradient-to-t from-white/55 via-white/20 to-transparent" />
+        <div className="absolute left-[4%] top-[12%] h-[58%] w-[48%] rounded-[2.5rem] bg-white/35 blur-2xl" />
+        <div className="absolute bottom-[8%] left-[6%] h-40 w-[55%] rounded-full bg-white/40 blur-3xl" />
       </div>
 
       <div className="relative z-10 flex h-full min-h-0 flex-col px-7 pb-4 pt-6 sm:px-8 xl:px-10 xl:pb-5 xl:pt-7">
         <AuthBrand />
 
         <div className="mt-7 max-w-[min(100%,420px)] xl:mt-8">
-          <h2 className="text-[clamp(1.75rem,2.4vw,2.45rem)] font-extrabold leading-[1.1] tracking-[-0.035em] text-slate-900">
+          <h2 className="text-[clamp(1.75rem,2.4vw,2.45rem)] font-extrabold leading-[1.1] tracking-[-0.035em] text-slate-900 drop-shadow-[0_1px_0_rgba(255,255,255,0.6)]">
             Turn Conversations
             <br />
             <span className="text-[#0A8954]">
@@ -81,10 +95,9 @@ export default function AuthShowcase() {
         <ul className="mt-7 w-full max-w-[min(100%,380px)] space-y-5 xl:mt-8 xl:space-y-6">
           {FEATURES.map(({ icon: Icon, title, description }) => (
             <li key={title} className="flex items-center gap-3.5 sm:gap-4">
-              <span className="flex h-[3.35rem] w-[3.35rem] shrink-0 items-center justify-center rounded-full bg-white shadow-[0_8px_22px_rgba(15,23,42,0.09)] ring-1 ring-emerald-100/90 sm:h-14 sm:w-14">
-                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#E8F5EE] text-[#0A8954] sm:h-11 sm:w-11">
-                  <Icon className="h-5 w-5 sm:h-[22px] sm:w-[22px]" />
-                </span>
+              {/* Single mint circle like the full design mock */}
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#E8F5EE] text-[#0A8954] shadow-[0_4px_14px_rgba(10,137,84,0.12)] sm:h-[3.25rem] sm:w-[3.25rem]">
+                <Icon className="h-5 w-5 sm:h-[22px] sm:w-[22px]" />
               </span>
               <div className="min-w-0">
                 <p className="text-[15px] font-bold leading-tight text-slate-900 sm:text-[16px]">
@@ -111,8 +124,8 @@ export default function AuthShowcase() {
                     index > 0 ? 'border-l border-slate-100' : ''
                   }`}
                 >
-                  <span className="mx-auto mb-2.5 flex h-11 w-11 items-center justify-center rounded-full bg-[#EAF7F0] text-[#0A8954] shadow-[0_2px_8px_rgba(10,137,84,0.08)] sm:h-12 sm:w-12">
-                    <Icon className="h-5 w-5 sm:h-[22px] sm:w-[22px]" />
+                  <span className="mx-auto mb-2.5 flex h-12 w-12 items-center justify-center rounded-full bg-[#EAF7F0] text-[#0A8954] shadow-[0_2px_8px_rgba(10,137,84,0.08)] sm:h-14 sm:w-14">
+                    <Icon className="h-6 w-6 sm:h-7 sm:w-7" />
                   </span>
                   <p className="text-[clamp(15px,1.4vw,18px)] font-extrabold tracking-tight text-[#0A8954]">
                     {value}
@@ -141,84 +154,10 @@ export function AuthTopBadge() {
   return (
     <div className="pointer-events-none absolute left-1/2 top-3.5 z-30 hidden -translate-x-1/2 lg:flex">
       <div className="inline-flex items-center gap-1.5 rounded-full border border-emerald-100/90 bg-white/95 px-3.5 py-1.5 shadow-[0_4px_18px_rgba(15,23,42,0.07)] backdrop-blur">
-        <ShieldCheck className="h-3.5 w-3.5 text-[#0A8954]" strokeWidth={2.4} />
+        <ShieldSecureIcon className="h-3.5 w-3.5 text-[#0A8954]" />
         <span className="whitespace-nowrap text-[11px] font-semibold text-slate-700">
           Official WhatsApp Business Platform
         </span>
-      </div>
-    </div>
-  );
-}
-
-export function AuthTrustFooter() {
-  return (
-    <div className="relative z-20 w-full px-0">
-      <div className="flex w-full items-stretch overflow-hidden rounded-2xl border border-slate-100/90 bg-white shadow-[0_12px_36px_rgba(15,23,42,0.08)]">
-        {/* Meta */}
-        <div className="flex min-w-0 flex-1 items-center gap-2.5 px-3 py-3 sm:gap-2.5 sm:px-3.5 sm:py-3.5">
-          <svg
-            viewBox="0 0 36 24"
-            className="h-[18px] w-[26px] shrink-0 sm:h-5 sm:w-7"
-            aria-hidden
-          >
-            <path
-              fill="#0668E1"
-              fillRule="evenodd"
-              d="M12.2 4.2c2.15 0 3.95 1.45 5.05 3.55.95-1.85 2.65-3.55 5.05-3.55 3.55 0 6.2 3.15 6.2 7.55 0 4.7-3.05 8.85-7.4 8.85-1.95 0-3.55-.85-4.7-2.2-1.15 1.35-2.75 2.2-4.7 2.2-4.35 0-7.4-4.15-7.4-8.85 0-4.4 2.65-7.55 6.2-7.55zm5.05 9.85c.85 1.85 2.2 2.95 3.75 2.95 2.55 0 4.35-2.45 4.35-5.7 0-2.95-1.55-4.85-3.7-4.85-1.55 0-2.9 1.15-3.75 2.95v4.65h-.65zm-1.65 0V9.4c-.85-1.8-2.2-2.95-3.75-2.95-2.15 0-3.7 1.9-3.7 4.85 0 3.25 1.8 5.7 4.35 5.7 1.55 0 2.9-1.1 3.75-2.95h-.65z"
-            />
-          </svg>
-          <div className="min-w-0 text-left">
-            <p className="truncate text-[12px] font-bold leading-tight text-slate-900 sm:text-[12.5px]">
-              Meta
-            </p>
-            <p className="truncate text-[9.5px] font-medium leading-tight text-slate-500 sm:text-[10px]">
-              Verified Partner
-            </p>
-          </div>
-        </div>
-
-        <div className="my-2.5 w-px shrink-0 bg-slate-100" />
-
-        {/* Encryption */}
-        <div className="flex min-w-0 flex-1 items-center gap-2 px-3 py-3 sm:gap-2.5 sm:px-3.5 sm:py-3.5">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#E8F5EE] text-[#0A8954]">
-            <ShieldCheck className="h-4 w-4" strokeWidth={2.25} />
-          </span>
-          <div className="min-w-0 text-left">
-            <p className="truncate text-[12px] font-bold leading-tight text-slate-900 sm:text-[12.5px]">
-              256-bit
-            </p>
-            <p className="truncate text-[9.5px] font-medium leading-tight text-slate-500 sm:text-[10px]">
-              Encryption
-            </p>
-          </div>
-        </div>
-
-        <div className="my-2.5 w-px shrink-0 bg-slate-100" />
-
-        {/* Uptime */}
-        <div className="flex min-w-0 flex-1 items-center gap-2 px-3 py-3 sm:gap-2.5 sm:px-3.5 sm:py-3.5">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#E8F5EE] text-[#0A8954]">
-            <Cloud className="h-4 w-4" strokeWidth={2.25} />
-          </span>
-          <div className="min-w-0 text-left">
-            <p className="truncate text-[12px] font-bold leading-tight text-slate-900 sm:text-[12.5px]">
-              99.9%
-            </p>
-            <p className="truncate text-[9.5px] font-medium leading-tight text-slate-500 sm:text-[10px]">
-              Uptime
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-2 flex items-center justify-center gap-2.5 px-1">
-        <span className="h-px max-w-[48px] flex-1 bg-gradient-to-r from-transparent to-emerald-300/70" />
-        <p className="flex shrink-0 items-center gap-1.5 text-[10.5px] font-medium text-slate-500 sm:text-[11px]">
-          <Lock className="h-3 w-3 text-[#0A8954]" strokeWidth={2.3} />
-          Your data is safe with enterprise-grade security
-        </p>
-        <span className="h-px max-w-[48px] flex-1 bg-gradient-to-l from-transparent to-emerald-300/70" />
       </div>
     </div>
   );

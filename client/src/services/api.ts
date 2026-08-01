@@ -50,12 +50,8 @@ api.interceptors.response.use(
       const refreshToken = localStorage.getItem('refreshToken');
       if (refreshToken) {
         try {
-          const { data } = await axios.post(`${API_URL}/auth/refresh`, { refreshToken });
-          localStorage.setItem('accessToken', data.data.accessToken);
-          if (data.data.refreshToken) {
-            localStorage.setItem('refreshToken', data.data.refreshToken);
-          }
-          original.headers.Authorization = `Bearer ${data.data.accessToken}`;
+          const tokens = await refreshAccessTokenSingleFlight(refreshToken);
+          original.headers.Authorization = `Bearer ${tokens.accessToken}`;
           return api(original);
         } catch (refreshError) {
           logError(refreshError, {
@@ -64,7 +60,6 @@ api.interceptors.response.use(
             method: original.method?.toUpperCase(),
             url: original.url,
           });
-          // Only clear auth keys — do not wipe the whole localStorage
           localStorage.removeItem('accessToken');
           localStorage.removeItem('refreshToken');
           const returnTo = `${window.location.pathname}${window.location.search}`;
@@ -87,6 +82,26 @@ api.interceptors.response.use(
   }
 );
 
+let refreshPromise: Promise<{ accessToken: string; refreshToken: string }> | null = null;
+
+async function refreshAccessTokenSingleFlight(refreshToken: string) {
+  if (!refreshPromise) {
+    refreshPromise = axios
+      .post(`${API_URL}/auth/refresh`, { refreshToken })
+      .then(({ data }) => {
+        const accessToken = data.data.accessToken as string;
+        const nextRefresh = (data.data.refreshToken as string) || refreshToken;
+        localStorage.setItem('accessToken', accessToken);
+        localStorage.setItem('refreshToken', nextRefresh);
+        return { accessToken, refreshToken: nextRefresh };
+      })
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+  return refreshPromise;
+}
+
 export { getErrorMessage };
 
 export default api;
@@ -96,13 +111,17 @@ export const authApi = {
     api.post('/auth/register', data),
   login: (data: { email: string; password: string; totpCode?: string }) =>
     api.post('/auth/login', data),
-  googleUrl: () => api.get('/auth/oauth/google/url'),
-  microsoftUrl: () => api.get('/auth/oauth/microsoft/url'),
+  googleUrl: (returnTo?: string) =>
+    api.get('/auth/oauth/google/url', { params: returnTo ? { returnTo } : undefined }),
+  googleStatus: () => api.get('/auth/oauth/google/status'),
+  exchangeOAuthCode: (code: string) => api.post('/auth/oauth/exchange', { code }),
   me: () => api.get('/auth/me'),
   logout: (refreshToken: string) => api.post('/auth/logout', { refreshToken }),
   forgotPassword: (email: string) => api.post('/auth/forgot-password', { email }),
   resetPassword: (token: string, password: string) =>
     api.post('/auth/reset-password', { token, password }),
+  verifyEmail: (token: string) => api.post('/auth/verify-email', { token }),
+  resendVerification: (email: string) => api.post('/auth/resend-verification', { email }),
 };
 
 export const inboxApi = {
@@ -465,11 +484,6 @@ export const commerceApi = {
   order: (id: string) => api.get(`/commerce/orders/${id}`),
   updateStatus: (id: string, data: { status: string; statusNote?: string }) =>
     api.patch(`/commerce/orders/${id}/status`, data),
-};
-
-export const authApiOAuth = {
-  googleUrl: () => api.get('/auth/oauth/google/url'),
-  microsoftUrl: () => api.get('/auth/oauth/microsoft/url'),
 };
 
 export const teamApi = {

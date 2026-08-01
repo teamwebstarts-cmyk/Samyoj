@@ -1,6 +1,9 @@
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
 
+const ACCESS_ALGORITHMS: jwt.Algorithm[] = ['HS256'];
+const REFRESH_ALGORITHMS: jwt.Algorithm[] = ['HS256'];
+
 export interface JwtPayload {
   userId: string;
   email: string;
@@ -9,22 +12,28 @@ export interface JwtPayload {
 
 export function signAccessToken(payload: JwtPayload): string {
   return jwt.sign(payload, config.jwt.secret, {
+    algorithm: 'HS256',
     expiresIn: config.jwt.expiresIn as jwt.SignOptions['expiresIn'],
   });
 }
 
 export function signRefreshToken(payload: JwtPayload): string {
   return jwt.sign(payload, config.jwt.refreshSecret, {
+    algorithm: 'HS256',
     expiresIn: config.jwt.refreshExpiresIn as jwt.SignOptions['expiresIn'],
   });
 }
 
 export function verifyAccessToken(token: string): JwtPayload {
-  return jwt.verify(token, config.jwt.secret) as JwtPayload;
+  return jwt.verify(token, config.jwt.secret, {
+    algorithms: ACCESS_ALGORITHMS,
+  }) as JwtPayload;
 }
 
 export function verifyRefreshToken(token: string): JwtPayload {
-  return jwt.verify(token, config.jwt.refreshSecret) as JwtPayload;
+  return jwt.verify(token, config.jwt.refreshSecret, {
+    algorithms: REFRESH_ALGORITHMS,
+  }) as JwtPayload;
 }
 
 export function parseExpiry(expiry: string): Date {

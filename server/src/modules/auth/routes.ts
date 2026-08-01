@@ -1,108 +1,106 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
+import { Prisma } from '@prisma/client';
+import { z } from 'zod';
 import prisma from '../../config/database';
-import { signAccessToken, signRefreshToken, verifyRefreshToken, parseExpiry } from '../../utils/jwt';
+import { verifyRefreshToken } from '../../utils/jwt';
 import { authenticate } from '../../middleware/auth';
 import { AppError, sendSuccess, asyncHandler } from '../../utils/response';
 import { config } from '../../config';
-import { z } from 'zod';
 import { verifyTotp } from '../team/totp';
-import { sendPasswordResetEmail } from '../../services/email.service';
+import {
+  sendPasswordResetEmail,
+  sendEmailVerificationEmail,
+  isSmtpConfigured,
+} from '../../services/email.service';
 import oauthRoutes from './oauth.routes';
+import { passwordSchema } from './password-policy';
+import { createSession, rotateRefreshSession } from './session';
+import {
+  authLoginLimiter,
+  authRegisterLimiter,
+  authForgotLimiter,
+} from './rate-limit';
 
 const router = Router();
 
 router.use('/oauth', oauthRoutes);
 
 const registerSchema = z.object({
-  name: z.string().min(2),
-  email: z.string().email(),
-  password: z.string().min(8),
-  companyName: z.string().min(2),
+  name: z.string().min(2).max(100),
+  email: z.string().email().max(255),
+  password: passwordSchema,
+  companyName: z.string().min(2).max(120),
 });
 
 const loginSchema = z.object({
   email: z.string().email(),
-  password: z.string(),
+  password: z.string().min(1).max(128),
   totpCode: z.string().length(6).optional(),
 });
 
-async function createSession(
-  userId: string,
-  email: string,
-  organizationId: string | undefined,
-  req: Request
-) {
-  const payload = { userId, email, organizationId };
-  const accessToken = signAccessToken(payload);
-  const refreshToken = signRefreshToken(payload);
-
-  await prisma.refreshToken.create({
+async function issueEmailVerification(userId: string, email: string) {
+  const token = uuidv4();
+  await prisma.emailVerificationToken.create({
     data: {
-      token: refreshToken,
       userId,
-      expiresAt: parseExpiry(config.jwt.refreshExpiresIn),
-      userAgent: req.headers['user-agent']?.slice(0, 255) ?? null,
-      ipAddress: (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ?? req.ip ?? null,
+      token,
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
     },
   });
-
-  return { accessToken, refreshToken };
+  const verifyUrl = `${config.clientUrl}/verify-email?token=${token}`;
+  await sendEmailVerificationEmail(email, verifyUrl);
 }
 
 router.post(
   '/register',
+  authRegisterLimiter,
   asyncHandler(async (req: Request, res: Response) => {
     const data = registerSchema.parse(req.body);
-
-    const existing = await prisma.user.findUnique({ where: { email: data.email } });
-    if (existing) throw new AppError(409, 'Email already registered');
-
+    const email = data.email.toLowerCase().trim();
     const passwordHash = await bcrypt.hash(data.password, 12);
 
-    const result = await prisma.$transaction(async (tx) => {
-      const user = await tx.user.create({
-        data: {
-          name: data.name,
-          email: data.email,
-          passwordHash,
-          role: 'ADMIN',
-        },
-      });
+    let result: { user: { id: string; name: string; email: string; role: string }; org: { id: string; companyName: string } };
+    try {
+      result = await prisma.$transaction(async (tx) => {
+        const user = await tx.user.create({
+          data: {
+            name: data.name.trim(),
+            email,
+            passwordHash,
+            role: 'ADMIN',
+            emailVerifiedAt: null,
+          },
+        });
 
-      const org = await tx.organization.create({
-        data: { companyName: data.companyName },
-      });
+        const org = await tx.organization.create({
+          data: { companyName: data.companyName.trim() },
+        });
 
-      await tx.organizationUser.create({
-        data: {
-          organizationId: org.id,
-          userId: user.id,
-          role: 'OWNER',
-        },
-      });
+        await tx.organizationUser.create({
+          data: {
+            organizationId: org.id,
+            userId: user.id,
+            role: 'OWNER',
+          },
+        });
 
-      return { user, org };
+        return { user, org };
+      });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        // Anti-enumeration: same message as success-ish path would confuse; keep 409 but generic copy
+        throw new AppError(409, 'Unable to create account with that email');
+      }
+      throw err;
+    }
+
+    await issueEmailVerification(result.user.id, result.user.email).catch(() => {
+      // registration still succeeds; user can resend
     });
 
-    const payload = {
-      userId: result.user.id,
-      email: result.user.email,
-      organizationId: result.org.id,
-    };
-
-    const accessToken = signAccessToken(payload);
-    const refreshToken = signRefreshToken(payload);
-
-    await prisma.refreshToken.create({
-      data: {
-        token: refreshToken,
-        userId: result.user.id,
-        expiresAt: parseExpiry(config.jwt.refreshExpiresIn),
-      },
-    });
-
+    // Do not issue session tokens until email is verified (login after verify)
     sendSuccess(
       res,
       {
@@ -111,14 +109,17 @@ router.post(
           name: result.user.name,
           email: result.user.email,
           role: result.user.role,
+          emailVerified: false,
         },
         organization: {
           id: result.org.id,
           companyName: result.org.companyName,
           role: 'OWNER',
         },
-        accessToken,
-        refreshToken,
+        emailVerificationRequired: true,
+        smtpConfigured: isSmtpConfigured(),
+        message:
+          'Account created. Verify your email before signing in. Check your inbox for the verification link.',
       },
       201
     );
@@ -127,21 +128,37 @@ router.post(
 
 router.post(
   '/login',
+  authLoginLimiter,
   asyncHandler(async (req: Request, res: Response) => {
     const data = loginSchema.parse(req.body);
+    const email = data.email.toLowerCase().trim();
 
     const user = await prisma.user.findUnique({
-      where: { email: data.email },
+      where: { email },
       include: {
         organizations: {
           include: { organization: true },
           take: 1,
         },
+        oauthAccounts: { select: { provider: true }, take: 5 },
       },
     });
 
+    // Constant-ish failure path
     if (!user || !(await bcrypt.compare(data.password, user.passwordHash))) {
       throw new AppError(401, 'Invalid email or password');
+    }
+
+    if (!user.emailVerifiedAt) {
+      const hasGoogle = user.oauthAccounts.some((a) => a.provider === 'google');
+      if (!hasGoogle) {
+        sendSuccess(res, {
+          requiresEmailVerification: true,
+          email: user.email,
+          message: 'Verify your email before signing in. Check your inbox or resend the link.',
+        });
+        return;
+      }
     }
 
     const orgMembership = user.organizations[0];
@@ -175,14 +192,22 @@ router.post(
     }
 
     const { accessToken, refreshToken } = await createSession(
-      user.id,
-      user.email,
-      orgMembership?.organizationId,
+      {
+        userId: user.id,
+        email: user.email,
+        organizationId: orgMembership?.organizationId,
+      },
       req
     );
 
     sendSuccess(res, {
-      user: { id: user.id, name: user.name, email: user.email, role: user.role },
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        emailVerified: Boolean(user.emailVerifiedAt),
+      },
       organization: orgMembership
         ? {
             id: orgMembership.organization.id,
@@ -198,30 +223,23 @@ router.post(
 
 router.post(
   '/refresh',
+  authLoginLimiter,
   asyncHandler(async (req: Request, res: Response) => {
-    const { refreshToken } = req.body;
-    if (!refreshToken) throw new AppError(400, 'Refresh token required');
+    const { refreshToken } = z.object({ refreshToken: z.string().min(1) }).parse(req.body);
 
-    const stored = await prisma.refreshToken.findUnique({
-      where: { token: refreshToken },
-      include: { user: { include: { organizations: { take: 1 } } } },
-    });
-
-    if (!stored || stored.expiresAt < new Date() || stored.revokedAt) {
+    try {
+      verifyRefreshToken(refreshToken);
+    } catch {
       throw new AppError(401, 'Invalid refresh token');
     }
 
-    verifyRefreshToken(refreshToken);
+    const rotated = await rotateRefreshSession(refreshToken, req);
+    if (!rotated) throw new AppError(401, 'Invalid refresh token');
 
-    const orgMembership = stored.user.organizations[0];
-    const payload = {
-      userId: stored.user.id,
-      email: stored.user.email,
-      organizationId: orgMembership?.organizationId,
-    };
-
-    const accessToken = signAccessToken(payload);
-    sendSuccess(res, { accessToken });
+    sendSuccess(res, {
+      accessToken: rotated.accessToken,
+      refreshToken: rotated.refreshToken,
+    });
   })
 );
 
@@ -257,6 +275,7 @@ router.get(
       name: user.name,
       email: user.email,
       role: user.role,
+      emailVerified: Boolean(user.emailVerifiedAt),
       availability: membership?.availability ?? 'OFFLINE',
       twoFactorEnabled: membership?.twoFactorEnabled ?? false,
       organizations: user.organizations.map((o) => ({
@@ -269,19 +288,24 @@ router.get(
 );
 
 router.post('/logout', authenticate, async (req: Request, res: Response) => {
-  const { refreshToken } = req.body;
+  const { refreshToken } = req.body as { refreshToken?: string };
   if (refreshToken) {
-    await prisma.refreshToken.deleteMany({ where: { token: refreshToken } });
+    await prisma.refreshToken.updateMany({
+      where: { token: refreshToken, userId: req.user!.userId },
+      data: { revokedAt: new Date() },
+    });
   }
   sendSuccess(res, { message: 'Logged out' });
 });
 
 router.post(
   '/forgot-password',
+  authForgotLimiter,
   asyncHandler(async (req: Request, res: Response) => {
     const { email } = z.object({ email: z.string().email() }).parse(req.body);
+    const normalized = email.toLowerCase().trim();
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prisma.user.findUnique({ where: { email: normalized } });
     if (user) {
       const token = uuidv4();
       await prisma.passwordResetToken.create({
@@ -292,20 +316,22 @@ router.post(
         },
       });
       const resetUrl = `${config.clientUrl}/reset-password?token=${token}`;
-      await sendPasswordResetEmail(email, resetUrl);
+      await sendPasswordResetEmail(normalized, resetUrl);
     }
 
     sendSuccess(res, {
       message: 'If that email is registered, you will receive a reset link shortly.',
+      smtpConfigured: isSmtpConfigured(),
     });
   })
 );
 
 router.post(
   '/reset-password',
+  authForgotLimiter,
   asyncHandler(async (req: Request, res: Response) => {
     const { token, password } = z
-      .object({ token: z.string().uuid(), password: z.string().min(8) })
+      .object({ token: z.string().uuid(), password: passwordSchema })
       .parse(req.body);
 
     const resetToken = await prisma.passwordResetToken.findUnique({
@@ -322,16 +348,61 @@ router.post(
     await prisma.$transaction([
       prisma.user.update({
         where: { id: resetToken.userId },
-        data: { passwordHash },
+        data: { passwordHash, emailVerifiedAt: resetToken.user.emailVerifiedAt ?? new Date() },
       }),
       prisma.passwordResetToken.update({
         where: { id: resetToken.id },
         data: { usedAt: new Date() },
       }),
-      prisma.refreshToken.deleteMany({ where: { userId: resetToken.userId } }),
+      prisma.refreshToken.updateMany({
+        where: { userId: resetToken.userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
     ]);
 
     sendSuccess(res, { message: 'Password updated. You can sign in now.' });
+  })
+);
+
+router.post(
+  '/verify-email',
+  authForgotLimiter,
+  asyncHandler(async (req: Request, res: Response) => {
+    const { token } = z.object({ token: z.string().uuid() }).parse(req.body);
+
+    const row = await prisma.emailVerificationToken.findUnique({ where: { token } });
+    if (!row || row.usedAt || row.expiresAt < new Date()) {
+      throw new AppError(400, 'Invalid or expired verification link');
+    }
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: row.userId },
+        data: { emailVerifiedAt: new Date() },
+      }),
+      prisma.emailVerificationToken.update({
+        where: { id: row.id },
+        data: { usedAt: new Date() },
+      }),
+    ]);
+
+    sendSuccess(res, { message: 'Email verified. You can sign in now.' });
+  })
+);
+
+router.post(
+  '/resend-verification',
+  authForgotLimiter,
+  asyncHandler(async (req: Request, res: Response) => {
+    const { email } = z.object({ email: z.string().email() }).parse(req.body);
+    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } });
+    if (user && !user.emailVerifiedAt) {
+      await issueEmailVerification(user.id, user.email);
+    }
+    sendSuccess(res, {
+      message: 'If that email needs verification, a new link was sent.',
+      smtpConfigured: isSmtpConfigured(),
+    });
   })
 );
 

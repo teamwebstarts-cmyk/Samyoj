@@ -21,10 +21,23 @@ interface AuthContextType {
   availability: AgentAvailability | null;
   twoFactorEnabled: boolean;
   loading: boolean;
-  login: (email: string, password: string, totpCode?: string) => Promise<{ requires2FA?: boolean }>;
-  register: (data: { name: string; email: string; password: string; companyName: string }) => Promise<void>;
+  login: (
+    email: string,
+    password: string,
+    totpCode?: string
+  ) => Promise<{ requires2FA?: boolean; requiresEmailVerification?: boolean }>;
+  register: (data: {
+    name: string;
+    email: string;
+    password: string;
+    companyName: string;
+  }) => Promise<
+    | { emailVerificationRequired: true; email: string; smtpConfigured: boolean; message?: string }
+    | { emailVerificationRequired: false }
+  >;
   logout: () => void;
   setAvailability: (status: AgentAvailability) => Promise<void>;
+  refreshSession: () => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -191,6 +204,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (data.data.requires2FA) {
       return { requires2FA: true };
     }
+    if (data.data.requiresEmailVerification) {
+      return { requiresEmailVerification: true };
+    }
     setAuthTokens(data.data.accessToken, data.data.refreshToken);
     clearAuthBackup();
     applySession(
@@ -207,6 +223,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return {};
   };
 
+  const refreshSession = useCallback(async () => {
+    try {
+      const { data } = await authApi.me();
+      const org = data.data.organizations?.[0];
+      applySession(
+        setUser,
+        setOrganization,
+        setAvailabilityState,
+        setTwoFactorEnabled,
+        data.data,
+        org
+          ? {
+              id: org.id,
+              companyName: org.companyName,
+              role: org.role,
+            }
+          : null,
+        data.data.availability,
+        data.data.twoFactorEnabled
+      );
+      clearAuthBackup();
+      heartbeat();
+      return true;
+    } catch {
+      return false;
+    }
+  }, [heartbeat]);
+
   const register = async (formData: {
     name: string;
     email: string;
@@ -214,6 +258,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     companyName: string;
   }) => {
     const { data } = await authApi.register(formData);
+    // New accounts must verify email before a session is issued
+    if (data.data.emailVerificationRequired || !data.data.accessToken) {
+      return {
+        emailVerificationRequired: true as const,
+        email: data.data.user?.email as string,
+        smtpConfigured: Boolean(data.data.smtpConfigured),
+        message: data.data.message as string | undefined,
+      };
+    }
     setAuthTokens(data.data.accessToken, data.data.refreshToken);
     clearAuthBackup();
     applySession(
@@ -226,6 +279,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       'ONLINE',
       false
     );
+    return { emailVerificationRequired: false as const };
   };
 
   const logout = () => {
@@ -257,8 +311,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       register,
       logout,
       setAvailability,
+      refreshSession,
     }),
-    [user, organization, orgRole, canManageTeam, availability, twoFactorEnabled, loading, setAvailability]
+    [user, organization, orgRole, canManageTeam, availability, twoFactorEnabled, loading, setAvailability, refreshSession]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

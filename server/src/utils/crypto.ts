@@ -34,10 +34,3 @@ export function decrypt(encryptedText: string): string {
   decrypted += decipher.final('utf8');
   return decrypted;
 }
-
-export function hashPassword(password: string): string {
-  return crypto.createHash('sha256').update(password + config.jwt.secret).digest('hex');
-}
-
-// Use bcrypt in auth service instead - this is a fallback
-export { default as bcryptHash } from 'bcryptjs';

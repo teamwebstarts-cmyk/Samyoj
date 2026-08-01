@@ -155,13 +155,14 @@ enum CampaignStatus {
 }
 
 model User {
-  id           String   @id @default(uuid())
-  name         String
-  email        String   @unique
-  passwordHash String   @map("password_hash")
-  role         UserRole @default(AGENT)
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id              String    @id @default(uuid())
+  name            String
+  email           String    @unique
+  passwordHash    String    @map("password_hash")
+  emailVerifiedAt DateTime? @map("email_verified_at")
+  role            UserRole  @default(AGENT)
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
 
   organizations         OrganizationUser[]
   assignedConversations Conversation[]     @relation("AssignedAgent")
@@ -169,6 +170,7 @@ model User {
   internalNotes         InternalNote[]
   refreshTokens         RefreshToken[]
   passwordResetTokens   PasswordResetToken[]
+  emailVerificationTokens EmailVerificationToken[]
   sentInvites           TeamInvite[]       @relation("SentInvites")
   auditActions          TeamAuditLog[]     @relation("AuditActor")
   auditTargets          TeamAuditLog[]     @relation("AuditTarget")
@@ -177,6 +179,20 @@ model User {
   assignedTickets       Ticket[]           @relation("AssignedTickets")
 
   @@map("users")
+}
+
+model EmailVerificationToken {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  token     String    @unique
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("email_verification_tokens")
 }
 
 model PasswordResetToken {

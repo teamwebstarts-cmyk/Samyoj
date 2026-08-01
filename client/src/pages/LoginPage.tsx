@@ -8,49 +8,88 @@ import AuthLayout from '../components/auth/AuthLayout';
 import GoogleAuthButton from '../components/auth/GoogleAuthButton';
 import { useAuth } from '../contexts/AuthContext';
 import { useGoogleAuth } from '../hooks/useGoogleAuth';
+import { authApi } from '../services/api';
 import { getErrorMessage } from '../utils/errors';
-import { toastError } from '../utils/toast';
+import { setAuthTokens } from '../utils/authStorage';
+import { toastError, toastSuccess } from '../utils/toast';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [totpCode, setTotpCode] = useState('');
   const [requires2FA, setRequires2FA] = useState(false);
+  const [needsVerify, setNeedsVerify] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const [oauthLoading, setOauthLoading] = useState(false);
+  const { login, refreshSession } = useAuth();
   const { signInWithGoogle } = useGoogleAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-
-  useEffect(() => {
-    const oauth = searchParams.get('oauth');
-    const accessToken = searchParams.get('accessToken');
-    const refreshToken = searchParams.get('refreshToken');
-    if (oauth && accessToken && refreshToken) {
-      localStorage.setItem('accessToken', accessToken);
-      localStorage.setItem('refreshToken', refreshToken);
-      const returnTo = searchParams.get('returnTo');
-      navigate(
-        returnTo && returnTo.startsWith('/') && !returnTo.startsWith('//') ? returnTo : '/',
-        { replace: true }
-      );
-    }
-  }, [searchParams, navigate]);
 
   const safeReturnTo = (value: string | null): string | null => {
     if (!value || !value.startsWith('/') || value.startsWith('//')) return null;
     return value;
   };
 
+  useEffect(() => {
+    const oauth = searchParams.get('oauth');
+    const code = searchParams.get('code');
+    const reason = searchParams.get('reason');
+
+    if (oauth === 'error') {
+      if (reason) {
+        console.warn('[auth] Google OAuth redirect error:', reason);
+      }
+      toastError(
+        'Google sign-in was cancelled or could not be completed. Please try again or use email sign-in.'
+      );
+      navigate('/login', { replace: true });
+      return;
+    }
+
+    // Legacy URL tokens (migrate away) — still hydrate then strip from URL
+    const accessToken = searchParams.get('accessToken');
+    const refreshToken = searchParams.get('refreshToken');
+    if (oauth && accessToken && refreshToken) {
+      setAuthTokens(accessToken, refreshToken);
+      void refreshSession().then(() => {
+        navigate(safeReturnTo(searchParams.get('returnTo')) || '/', { replace: true });
+      });
+      return;
+    }
+
+    if (oauth === 'google' && code) {
+      setOauthLoading(true);
+      void authApi
+        .exchangeOAuthCode(code)
+        .then(async ({ data }) => {
+          setAuthTokens(data.data.accessToken, data.data.refreshToken);
+          await refreshSession();
+          navigate(safeReturnTo(searchParams.get('returnTo')) || '/', { replace: true });
+        })
+        .catch((err) => {
+          toastError(getErrorMessage(err, 'Google sign-in failed'));
+          navigate('/login', { replace: true });
+        })
+        .finally(() => setOauthLoading(false));
+    }
+  }, [searchParams, navigate, refreshSession]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setNeedsVerify(false);
     try {
       const result = await login(email, password, requires2FA ? totpCode : undefined);
       if (result.requires2FA) {
         setRequires2FA(true);
         toastError('Enter your authenticator code to continue');
+        return;
+      }
+      if (result.requiresEmailVerification) {
+        setNeedsVerify(true);
+        toastError('Verify your email before signing in');
         return;
       }
       navigate(safeReturnTo(searchParams.get('returnTo')) || '/');
@@ -61,6 +100,23 @@ export default function LoginPage() {
     }
   };
 
+  const resendVerification = async () => {
+    try {
+      await authApi.resendVerification(email);
+      toastSuccess('If verification is needed, a new email was sent. Check your inbox.');
+    } catch (err: unknown) {
+      toastError(getErrorMessage(err, 'Could not resend verification'));
+    }
+  };
+
+  if (oauthLoading) {
+    return (
+      <AuthLayout title="Signing you in…" subtitle="Finishing Google authentication.">
+        <p className="text-center text-sm text-slate-500">Please wait a moment.</p>
+      </AuthLayout>
+    );
+  }
+
   return (
     <AuthLayout
       title={requires2FA ? 'Two-factor authentication' : 'Welcome back 👋'}
@@ -70,7 +126,7 @@ export default function LoginPage() {
           : 'Sign in to continue to your workspace'
       }
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-5">
         {!requires2FA ? (
           <>
             <AuthInput
@@ -141,7 +197,23 @@ export default function LoginPage() {
           </>
         )}
 
-        <div className="pt-2">
+        {needsVerify && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-[13px] text-amber-900">
+            <p className="font-semibold">Email not verified</p>
+            <p className="mt-1 text-amber-800/90">
+              Check your inbox for the verification link, or resend it.
+            </p>
+            <button
+              type="button"
+              onClick={() => void resendVerification()}
+              className="mt-2 font-semibold text-[#0A8954] underline-offset-2 hover:underline"
+            >
+              Resend verification email
+            </button>
+          </div>
+        )}
+
+        <div className="pt-3">
           <AuthButton loading={loading} loadingText="Signing in...">
             <span className="flex items-center gap-2.5">
               {requires2FA ? 'Verify & sign in' : 'Sign in'}
@@ -154,9 +226,13 @@ export default function LoginPage() {
       {!requires2FA && (
         <>
           <AuthDivider label="or" />
-          <GoogleAuthButton onClick={signInWithGoogle} />
+          <GoogleAuthButton
+            onClick={() =>
+              void signInWithGoogle(safeReturnTo(searchParams.get('returnTo')) || undefined)
+            }
+          />
 
-          <p className="mt-6 text-center text-[13.5px] text-slate-600">
+          <p className="mt-7 text-center text-[13.5px] text-slate-600">
             Don&apos;t have an account?{' '}
             <Link
               to="/register"
