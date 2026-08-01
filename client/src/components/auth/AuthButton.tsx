@@ -5,9 +5,10 @@ interface AuthButtonProps {
   loading?: boolean;
   loadingText: string;
   children: ReactNode;
+  className?: string;
 }
 
-export default function AuthButton({ loading, loadingText, children }: AuthButtonProps) {
+export default function AuthButton({ loading, loadingText, children, className }: AuthButtonProps) {
   return (
     <AppButton
       type="submit"
@@ -15,6 +16,7 @@ export default function AuthButton({ loading, loadingText, children }: AuthButto
       size="xl"
       fullWidth
       loading={loading}
+      className={className}
     >
       {loading ? loadingText : children}
     </AppButton>

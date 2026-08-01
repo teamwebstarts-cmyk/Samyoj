@@ -5,9 +5,9 @@ interface AuthBrandProps {
   compact?: boolean;
 }
 
-/** Auth pages — always shows platform branding */
-export default function AuthBrand({ variant = 'dark', compact = false }: AuthBrandProps) {
-  return <PlatformBrand variant={variant} size={compact ? 'sm' : 'md'} />;
+/** Auth pages — real Samyoj wordmark logo */
+export default function AuthBrand({ compact = false }: AuthBrandProps) {
+  return <PlatformBrand wordmark size={compact ? 'sm' : 'md'} />;
 }
 
 export { PlatformBrand };

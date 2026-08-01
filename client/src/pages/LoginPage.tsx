@@ -1,4 +1,4 @@
-import { ArrowRight, Clock, Lock, Mail, Rocket, ShieldCheck } from 'lucide-react';
+import { ArrowRight, Lock, Mail, ShieldCheck } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import AuthButton from '../components/auth/AuthButton';
@@ -10,11 +10,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { useGoogleAuth } from '../hooks/useGoogleAuth';
 import { getErrorMessage } from '../utils/errors';
 import { toastError } from '../utils/toast';
-
-const highlights = [
-  { icon: Rocket, label: 'Free to start' },
-  { icon: Clock, label: 'Setup in minutes' },
-];
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -68,12 +63,11 @@ export default function LoginPage() {
 
   return (
     <AuthLayout
-      eyebrow={requires2FA ? 'Security' : 'Sign in'}
-      title={requires2FA ? 'Two-factor authentication' : 'Welcome back'}
+      title={requires2FA ? 'Two-factor authentication' : 'Welcome back 👋'}
       subtitle={
         requires2FA
           ? 'Enter the 6-digit code from your authenticator app to continue.'
-          : 'Access your team inbox, campaigns, and automations from one workspace.'
+          : 'Sign in to continue to your workspace.'
       }
     >
       <form onSubmit={handleSubmit} className="space-y-5">
@@ -81,7 +75,7 @@ export default function LoginPage() {
           <>
             <AuthInput
               id="email"
-              label="Work email"
+              label="Work Email"
               type="email"
               icon={Mail}
               value={email}
@@ -110,13 +104,13 @@ export default function LoginPage() {
                     type="checkbox"
                     checked={rememberMe}
                     onChange={(e) => setRememberMe(e.target.checked)}
-                    className="h-4 w-4 rounded border-theme-border text-whatsapp-600 focus:ring-whatsapp-500/25"
+                    className="h-4 w-4 rounded border-neutral-300 text-whatsapp-600 focus:ring-whatsapp-500/25"
                   />
-                  <span className="text-[12px] font-medium text-theme-secondary">Remember me</span>
+                  <span className="text-[12px] font-medium text-neutral-600">Remember me</span>
                 </label>
                 <Link
                   to="/forgot-password"
-                  className="text-[12px] font-semibold text-whatsapp-700 transition hover:text-whatsapp-600 dark:text-whatsapp-400 dark:hover:text-whatsapp-300"
+                  className="text-[12px] font-semibold text-whatsapp-600 transition hover:text-whatsapp-700"
                 >
                   Forgot password?
                 </Link>
@@ -140,7 +134,7 @@ export default function LoginPage() {
                 setRequires2FA(false);
                 setTotpCode('');
               }}
-              className="text-[12px] font-semibold text-theme-secondary transition hover:text-theme-fg"
+              className="text-[12px] font-semibold text-neutral-500 transition hover:text-neutral-800"
             >
               ← Back to password
             </button>
@@ -148,10 +142,10 @@ export default function LoginPage() {
         )}
 
         <div className="pt-1">
-          <AuthButton loading={loading} loadingText="Signing in...">
-            <span className="flex items-center gap-2">
-              {requires2FA ? 'Verify & sign in' : 'Sign in'}
-              <ArrowRight className="h-4 w-4" />
+          <AuthButton loading={loading} loadingText="Signing in..." className="!h-12 !rounded-xl">
+            <span className="flex w-full items-center justify-between gap-2 px-0.5">
+              <span>{requires2FA ? 'Verify & sign in' : 'Sign in'}</span>
+              <ArrowRight className="h-4 w-4 shrink-0" />
             </span>
           </AuthButton>
         </div>
@@ -162,20 +156,11 @@ export default function LoginPage() {
           <AuthDivider label="or" />
           <GoogleAuthButton onClick={signInWithGoogle} />
 
-          <div className="mt-6 flex items-center justify-center gap-5 text-theme-muted">
-            {highlights.map(({ icon: Icon, label }) => (
-              <div key={label} className="flex items-center gap-1.5">
-                <Icon className="h-3.5 w-3.5 shrink-0" />
-                <span className="text-xs">{label}</span>
-              </div>
-            ))}
-          </div>
-
-          <p className="mt-6 text-center text-[13px] text-theme-secondary">
-            No account yet?{' '}
+          <p className="mt-6 text-center text-[13px] text-neutral-600">
+            Don&apos;t have an account?{' '}
             <Link
               to="/register"
-              className="font-semibold text-whatsapp-700 underline decoration-whatsapp-500/40 underline-offset-2 transition hover:decoration-whatsapp-500 dark:text-whatsapp-400"
+              className="font-semibold text-whatsapp-600 underline decoration-whatsapp-500/40 underline-offset-2 transition hover:decoration-whatsapp-500"
             >
               Create one free
             </Link>

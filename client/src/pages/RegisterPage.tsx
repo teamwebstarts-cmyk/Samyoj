@@ -53,7 +53,6 @@ export default function RegisterPage() {
 
   return (
     <AuthLayout
-      eyebrow="Get started"
       title="Create your account"
       subtitle="Set up your workspace in minutes. Free to start, no credit card required."
     >
@@ -83,7 +82,7 @@ export default function RegisterPage() {
 
         <AuthInput
           id="email"
-          label="Work email"
+          label="Work Email"
           type="email"
           icon={Mail}
           value={form.email}
@@ -109,14 +108,14 @@ export default function RegisterPage() {
           />
           {form.password && (
             <div className="mt-2.5">
-              <div className="h-1 overflow-hidden rounded-full bg-neutral-100 dark:bg-neutral-800">
+              <div className="h-1 overflow-hidden rounded-full bg-neutral-100">
                 <div
                   className={`h-full rounded-full transition-all duration-300 ${passwordStrength.color}`}
                   style={{ width: passwordStrength.width }}
                 />
               </div>
-              <p className="mt-1.5 text-[11px] font-medium text-theme-muted">
-                Strength: <span className="text-theme-secondary">{passwordStrength.label}</span>
+              <p className="mt-1.5 text-[11px] font-medium text-neutral-500">
+                Strength: <span className="text-neutral-700">{passwordStrength.label}</span>
               </p>
             </div>
           )}
@@ -130,13 +129,13 @@ export default function RegisterPage() {
       </form>
 
       <AuthDivider label="or" />
-      <GoogleAuthButton onClick={signInWithGoogle} label="Sign up with Google" />
+      <GoogleAuthButton onClick={signInWithGoogle} label="Continue with Google" />
 
-      <p className="mt-6 text-center text-[13px] text-theme-secondary">
+      <p className="mt-6 text-center text-[13px] text-neutral-600">
         Already have an account?{' '}
         <Link
           to="/login"
-          className="font-semibold text-whatsapp-700 underline decoration-whatsapp-500/40 underline-offset-2 transition hover:decoration-whatsapp-500 dark:text-whatsapp-400"
+          className="font-semibold text-whatsapp-600 underline decoration-whatsapp-500/40 underline-offset-2 transition hover:decoration-whatsapp-500"
         >
           Sign in
         </Link>
