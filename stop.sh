@@ -42,6 +42,9 @@ stop_service() {
 stop_service client
 stop_service api
 stop_service tunnel
+# Safety net for orphaned tunnel agents
+pkill -f 'cloudflared tunnel --url' 2>/dev/null || true
+pkill -f 'ngrok http' 2>/dev/null || true
 rm -f "$RUN_DIR/tunnel-url" "$RUN_DIR/webhook-status"
 
 if [[ "${1:-}" == "--all" ]]; then

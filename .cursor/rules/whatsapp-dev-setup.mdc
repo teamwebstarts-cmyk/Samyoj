@@ -14,10 +14,11 @@ alwaysApply: true
 3. `cd server && npm run dev` (API `:8000` — done by scripts)
 4. `cd client && npm run dev` (UI `:3000` — done by scripts)
 5. **Inbound tunnel** (required for Inbox replies):
-   - `setup.sh` / `start.sh` auto-starts `scripts/dev-tunnel.sh` (ngrok)
-   - Avoid: `npm run tunnel` on free ngrok (custom domain `samyoj-dev.ngrok-free.app` fails with ERR_NGROK_313)
+   - `setup.sh` / `start.sh` auto-starts `scripts/dev-tunnel.sh` (ngrok preferred)
+   - If ngrok auth is missing, tunnel falls back to Cloudflare quick tunnel automatically
+   - Avoid: free ngrok custom domain `samyoj-dev.ngrok-free.app` (`ERR_NGROK_313`)
 6. The scripts wait for the tunnel URL, then start the API so `config.meta.webhookUrl` is current
-7. Verify: `curl -s http://localhost:8000/api/whatsapp/webhook/health` and public tunnel returns challenge `ping`
+7. Verify: `curl -s http://localhost:8000/api/whatsapp/webhook/health` and public tunnel returns challenge `ping` (use Node `fetch` if Codespace curl DNS fails)
 
 ## Product rule — WhatsApp Connect UI
 
@@ -34,7 +35,7 @@ alwaysApply: true
 | Inbound (phone → Inbox) | **Yes** public HTTPS | Inbox shows send, but **replies never arrive**; health `totalReceived: 0` |
 
 If user says "message receive nahi ho raha":
-1. Check ngrok tunnel process and `.run/logs/tunnel.log`
+1. Check ngrok/cloudflared tunnel process and `.run/logs/tunnel.log`
 2. Check `META_WEBHOOK_URL` matches live tunnel URL
 3. Restart API after `.env` change
 4. Run/confirm `npm run setup-webhook` (or rely on `dev-tunnel.sh`)

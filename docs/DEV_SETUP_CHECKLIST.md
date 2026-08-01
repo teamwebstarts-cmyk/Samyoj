@@ -30,9 +30,9 @@ bash stop.sh --all # also stop Postgres + Redis
 4. ✅ Starts Docker (Postgres + Redis) + waits for ready  
 5. ✅ `npm install` (server + client)  
 6. ✅ Prisma migrate  
-7. ✅ Validates the ngrok installation  
-8. ✅ Starts ngrok tunnel before API (updates `META_WEBHOOK_URL`)  
-9. ✅ Registers Meta webhook when a WhatsApp number is already connected  
+7. ✅ Starts public tunnel before API (ngrok preferred, Cloudflare fallback)  
+8. ✅ Verifies public webhook challenge (`ping`) before claiming success  
+9. ✅ Registers Meta webhook when a WhatsApp number is connected  
 10. ✅ Starts API + Client  
 
 ---
