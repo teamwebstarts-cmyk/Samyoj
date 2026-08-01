@@ -82,7 +82,7 @@ export default function RegisterPage() {
 
         <AuthInput
           id="email"
-          label="Work Email"
+          label="Work email"
           type="email"
           icon={Mail}
           value={form.email}
@@ -108,20 +108,20 @@ export default function RegisterPage() {
           />
           {form.password && (
             <div className="mt-2.5">
-              <div className="h-1 overflow-hidden rounded-full bg-neutral-100">
+              <div className="h-1 overflow-hidden rounded-full bg-slate-100">
                 <div
                   className={`h-full rounded-full transition-all duration-300 ${passwordStrength.color}`}
                   style={{ width: passwordStrength.width }}
                 />
               </div>
-              <p className="mt-1.5 text-[11px] font-medium text-neutral-500">
-                Strength: <span className="text-neutral-700">{passwordStrength.label}</span>
+              <p className="mt-1.5 text-[11px] font-medium text-slate-500">
+                Strength: <span className="text-slate-700">{passwordStrength.label}</span>
               </p>
             </div>
           )}
         </div>
 
-        <div className="pt-2">
+        <div className="pt-1">
           <AuthButton loading={loading} loadingText="Creating account...">
             Create account
           </AuthButton>
@@ -131,11 +131,11 @@ export default function RegisterPage() {
       <AuthDivider label="or" />
       <GoogleAuthButton onClick={signInWithGoogle} label="Continue with Google" />
 
-      <p className="mt-6 text-center text-[13px] text-neutral-600">
+      <p className="mt-6 text-center text-[13px] text-slate-600">
         Already have an account?{' '}
         <Link
           to="/login"
-          className="font-semibold text-whatsapp-600 underline decoration-whatsapp-500/40 underline-offset-2 transition hover:decoration-whatsapp-500"
+          className="font-semibold text-whatsapp-600 transition hover:text-whatsapp-700"
         >
           Sign in
         </Link>

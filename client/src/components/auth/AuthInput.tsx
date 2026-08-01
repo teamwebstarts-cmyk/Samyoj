@@ -40,8 +40,14 @@ export default function AuthInput({
       minLength={minLength}
       autoComplete={autoComplete}
       hint={hint}
-      inputSize="lg"
-      icon={Icon ? <Icon className="h-[17px] w-[17px]" /> : undefined}
+      inputSize="xl"
+      labelClassName="text-[13.5px] font-bold text-slate-800"
+      className="rounded-[14px] border-slate-200/90 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] placeholder:text-slate-400 focus:border-[#0A8954] focus:shadow-[0_0_0_4px_rgba(10,137,84,0.12)]"
+      icon={
+        Icon ? (
+          <Icon className="h-[18px] w-[18px] text-slate-400" strokeWidth={1.9} />
+        ) : undefined
+      }
     />
   );
 }

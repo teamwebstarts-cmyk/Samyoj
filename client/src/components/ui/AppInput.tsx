@@ -2,7 +2,7 @@ import type { InputHTMLAttributes, ReactNode } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { useState } from 'react';
 
-type AppInputSize = 'md' | 'lg';
+type AppInputSize = 'md' | 'lg' | 'xl';
 
 interface AppInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'size'> {
   label?: string;
@@ -10,11 +10,13 @@ interface AppInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'siz
   error?: string;
   icon?: ReactNode;
   inputSize?: AppInputSize;
+  labelClassName?: string;
 }
 
 const sizeClasses: Record<AppInputSize, string> = {
   md: 'h-11 text-body',
   lg: 'h-12 text-body',
+  xl: 'h-[52px] text-[14.5px]',
 };
 
 export default function AppInput({
@@ -23,6 +25,7 @@ export default function AppInput({
   error,
   icon,
   inputSize = 'md',
+  labelClassName,
   className = '',
   id,
   type,
@@ -37,7 +40,10 @@ export default function AppInput({
       {(label || hint) && (
         <div className="flex items-center justify-between gap-2">
           {label && (
-            <label htmlFor={id} className="text-label text-theme-secondary">
+            <label
+              htmlFor={id}
+              className={labelClassName || 'text-label text-theme-secondary'}
+            >
               {label}
             </label>
           )}
@@ -57,7 +63,7 @@ export default function AppInput({
             error
               ? 'border-red-300 focus:border-red-500 focus:shadow-[0_0_0_4px_rgba(239,68,68,0.12)] dark:border-red-500/40'
               : 'border-theme-border'
-          } ${icon ? 'pl-10' : 'px-3.5'} ${isPassword ? 'pr-10' : icon ? 'pr-3.5' : ''} ${className}`}
+          } ${icon ? 'pl-11' : 'px-3.5'} ${isPassword ? 'pr-11' : icon ? 'pr-3.5' : ''} ${className}`}
           {...props}
         />
         {isPassword && (
@@ -67,7 +73,7 @@ export default function AppInput({
             className="absolute right-2.5 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-md text-theme-muted transition hover:bg-theme-subtle hover:text-theme-fg"
             aria-label={showPassword ? 'Hide password' : 'Show password'}
           >
-            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            {showPassword ? <EyeOff className="h-[18px] w-[18px]" strokeWidth={1.9} /> : <Eye className="h-[18px] w-[18px]" strokeWidth={1.9} />}
           </button>
         )}
       </div>

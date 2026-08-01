@@ -67,15 +67,15 @@ export default function LoginPage() {
       subtitle={
         requires2FA
           ? 'Enter the 6-digit code from your authenticator app to continue.'
-          : 'Sign in to continue to your workspace.'
+          : 'Sign in to continue to your workspace'
       }
     >
-      <form onSubmit={handleSubmit} className="space-y-5">
+      <form onSubmit={handleSubmit} className="space-y-4">
         {!requires2FA ? (
           <>
             <AuthInput
               id="email"
-              label="Work Email"
+              label="Work email"
               type="email"
               icon={Mail}
               value={email}
@@ -85,7 +85,7 @@ export default function LoginPage() {
               required
             />
 
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               <AuthInput
                 id="password"
                 label="Password"
@@ -99,18 +99,18 @@ export default function LoginPage() {
               />
 
               <div className="flex items-center justify-between gap-3 pt-0.5">
-                <label className="flex cursor-pointer items-center gap-2">
+                <label className="flex cursor-pointer items-center gap-2.5">
                   <input
                     type="checkbox"
                     checked={rememberMe}
                     onChange={(e) => setRememberMe(e.target.checked)}
-                    className="h-4 w-4 rounded border-neutral-300 text-whatsapp-600 focus:ring-whatsapp-500/25"
+                    className="h-[17px] w-[17px] rounded-[5px] border-slate-300 text-[#0A8954] focus:ring-[#0A8954]/25"
                   />
-                  <span className="text-[12px] font-medium text-neutral-600">Remember me</span>
+                  <span className="text-[13px] font-medium text-slate-600">Remember me</span>
                 </label>
                 <Link
                   to="/forgot-password"
-                  className="text-[12px] font-semibold text-whatsapp-600 transition hover:text-whatsapp-700"
+                  className="text-[13px] font-semibold text-[#0A8954] transition hover:text-[#087A4A]"
                 >
                   Forgot password?
                 </Link>
@@ -134,18 +134,18 @@ export default function LoginPage() {
                 setRequires2FA(false);
                 setTotpCode('');
               }}
-              className="text-[12px] font-semibold text-neutral-500 transition hover:text-neutral-800"
+              className="text-[13px] font-semibold text-slate-500 transition hover:text-slate-800"
             >
               ← Back to password
             </button>
           </>
         )}
 
-        <div className="pt-1">
-          <AuthButton loading={loading} loadingText="Signing in..." className="!h-12 !rounded-xl">
-            <span className="flex w-full items-center justify-between gap-2 px-0.5">
-              <span>{requires2FA ? 'Verify & sign in' : 'Sign in'}</span>
-              <ArrowRight className="h-4 w-4 shrink-0" />
+        <div className="pt-2">
+          <AuthButton loading={loading} loadingText="Signing in...">
+            <span className="flex items-center gap-2.5">
+              {requires2FA ? 'Verify & sign in' : 'Sign in'}
+              <ArrowRight className="h-[18px] w-[18px]" strokeWidth={2.35} />
             </span>
           </AuthButton>
         </div>
@@ -156,11 +156,11 @@ export default function LoginPage() {
           <AuthDivider label="or" />
           <GoogleAuthButton onClick={signInWithGoogle} />
 
-          <p className="mt-6 text-center text-[13px] text-neutral-600">
+          <p className="mt-6 text-center text-[13.5px] text-slate-600">
             Don&apos;t have an account?{' '}
             <Link
               to="/register"
-              className="font-semibold text-whatsapp-600 underline decoration-whatsapp-500/40 underline-offset-2 transition hover:decoration-whatsapp-500"
+              className="font-semibold text-[#0A8954] underline-offset-2 transition hover:text-[#087A4A] hover:underline"
             >
               Create one free
             </Link>
