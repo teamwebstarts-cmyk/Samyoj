@@ -192,8 +192,8 @@ No Dockerfiles for server or client.
 
 | File | Purpose |
 |------|---------|
-| `scripts/dev-tunnel.sh` | Cloudflare tunnel for webhook exposure |
-| `scripts/ngrok-tunnel.sh` | ngrok tunnel alternative |
+| `scripts/dev-tunnel.sh` | ngrok tunnel + automatic webhook registration |
+| `scripts/ngrok-tunnel.sh` | compatibility wrapper for the ngrok tunnel |
 | `scripts/test-webhook.sh` | 11-test webhook integration suite |
 | `server/scripts/setup-webhook.ts` | Register webhook with Meta |
 

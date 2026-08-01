@@ -9,6 +9,7 @@ client/dist/
 server/dist/
 server/uploads/
 .bin/
+.run/
 server/.env.updated
 server/key.json
 server/secrets/

@@ -5,65 +5,45 @@
 
 ---
 
-## One-command mental model
+## One-command setup (first time)
 
+```bash
+bash setup.sh
+# Installs deps, configures .env, starts Docker + API + Client + tunnel
 ```
-Docker → API → Client → Tunnel (cloudflared) → API restart if .env changed → Test
+
+## Quick start (after first setup)
+
+```bash
+bash start.sh    # start all
+bash stop.sh     # stop all
+bash stop.sh --all # also stop Postgres + Redis
 ```
 
 ---
 
-## Full startup (copy-paste)
+## What setup.sh does automatically
 
-```bash
-# 1) Infra
-cd /workspaces/Samyoj && docker compose up -d
-
-# 2) API (terminal A)
-cd /workspaces/Samyoj/server && npm run dev
-
-# 3) Client (terminal B)
-cd /workspaces/Samyoj/client && npm run dev
-
-# 4) Public webhook tunnel (terminal C) — REQUIRED for inbound
-cd /workspaces/Samyoj && bash scripts/dev-tunnel.sh
-# This updates META_WEBHOOK_URL + registers Meta webhook
-
-# 5) Restart API after tunnel updates .env (so webhook URL reloads)
-# Stop terminal A, then again:
-cd /workspaces/Samyoj/server && npm run dev
-```
-
-Open: http://localhost:3000
+1. ✅ Prereqs check (Node 18+, Docker, npm)  
+2. ✅ Copies `.env.example` → `.env` if missing  
+3. ✅ Uses ngrok config/`NGROK_AUTHTOKEN`, or securely prompts once  
+4. ✅ Starts Docker (Postgres + Redis) + waits for ready  
+5. ✅ `npm install` (server + client)  
+6. ✅ Prisma migrate  
+7. ✅ Installs ngrok if missing  
+8. ✅ Starts ngrok tunnel (updates `META_WEBHOOK_URL`)  
+9. ✅ Registers Meta webhook  
+10. ✅ Starts API + Client  
 
 ---
 
-## Quick health checks
+## Do / Don't
 
-```bash
-curl -s http://localhost:8000/health
-curl -s http://localhost:8000/api/whatsapp/webhook/health
-# Expect: webhookUrl = current tunnel, after a phone reply totalReceived > 0
-```
-
-Tunnel verify (replace URL from `.env`):
-
-```bash
-WEBHOOK="$(grep '^META_WEBHOOK_URL=' server/.env | cut -d= -f2-)"
-TOKEN="$(grep '^META_VERIFY_TOKEN=' server/.env | cut -d= -f2-)"
-curl -s "${WEBHOOK}?hub.mode=subscribe&hub.verify_token=${TOKEN}&hub.challenge=ping"
-# Expect: ping
-```
-
----
-
-## Do / Don’t
-
-| Do | Don’t |
+| Do | Don't |
 |----|--------|
-| Use `bash scripts/dev-tunnel.sh` for free inbound | Expect Inbox replies on localhost alone |
-| Keep tunnel running while testing replies | Use free ngrok custom domain (`ERR_NGROK_313`) |
-| Restart API after `META_WEBHOOK_URL` changes | Show App ID / App Secret / `.env` in Settings UI |
+| Use `bash setup.sh` first time | Manually install deps every time |
+| Use `bash start.sh` after setup | Use free ngrok custom domain (`ERR_NGROK_313`) |
+| Keep tunnel running while testing replies | Show App ID / App Secret / `.env` in Settings UI |
 | Use Settings → **Connect WhatsApp** only | Re-add Meta credential forms for normal users |
 
 ---
@@ -75,8 +55,19 @@ In `server/.env` (never in UI):
 - `META_APP_ID`
 - `META_APP_SECRET`
 - `META_VERIFY_TOKEN`
+- `NGROK_AUTHTOKEN` (optional when ngrok is already authenticated locally)
 - `META_WEBHOOK_URL` (set by tunnel script)
 - `META_REDIRECT_URI=http://localhost:3000/settings/whatsapp/callback`
+
+---
+
+## Quick health checks
+
+```bash
+curl -s http://localhost:8000/health
+curl -s http://localhost:8000/api/whatsapp/webhook/health
+# Expect: webhookUrl = current tunnel, after a phone reply totalReceived > 0
+```
 
 ---
 
@@ -86,7 +77,7 @@ In `server/.env` (never in UI):
 |---------|-----|
 | Send works, reply never in Inbox | Start/fix tunnel + setup-webhook + restart API |
 | `totalReceived: 0` | Meta not hitting URL — dead tunnel / wrong `.env` |
-| ngrok custom domain error | Use cloudflared `dev-tunnel.sh` |
+| ngrok custom domain error | Use ngrok authtoken + `setup.sh` |
 | Connect asks for App ID | Bug — UI must only show Connect WhatsApp |
 
 ---
@@ -94,4 +85,5 @@ In `server/.env` (never in UI):
 ## Related
 
 - Agent rule: `.cursor/rules/whatsapp-dev-setup.mdc` (always apply)
-- Deep handoff: `docs/WHATSAPP_CONNECT_DEVELOPER_GUIDE.md`
+- Scripts: `setup.sh`, `start.sh`, `stop.sh` (project root)
+- Tunnel: `scripts/dev-tunnel.sh`

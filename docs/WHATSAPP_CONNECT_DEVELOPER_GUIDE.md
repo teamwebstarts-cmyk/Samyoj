@@ -89,20 +89,10 @@ Secrets live only in `server/.env` / org encrypted settings — **never paste Ap
 # Infra
 cd /workspaces/Samyoj && docker compose up -d
 
-# API + client (separate terminals)
-cd server && npm run dev
-cd client && npm run dev
-
-# Public webhook tunnel (ngrok — needs: ngrok config add-authtoken <token>)
-cd server && npm run tunnel
-# optional domain: NGROK_DOMAIN=your.ngrok-free.app npm run tunnel
-
-# Alternate tunnel (no ngrok account; URL changes each run)
-bash scripts/dev-tunnel.sh   # cloudflared → updates META_WEBHOOK_URL + setup-webhook
-
-# After tunnel URL changes
-cd server && npm run setup-webhook
-# restart API so config.meta.webhookUrl reloads from .env
+# First setup, then normal daily start/stop
+bash setup.sh
+bash start.sh
+bash stop.sh
 
 # Diagnostics
 cd server && npm run diagnose
@@ -175,12 +165,10 @@ WEBHOOK_URL="$(grep META_WEBHOOK_URL server/.env | cut -d= -f2-)" \
 
 | Tool | When | Notes |
 |------|------|--------|
-| **ngrok** | Preferred once authtoken set | `npm run tunnel`; free URL changes unless reserved domain |
-| **cloudflared** (`scripts/dev-tunnel.sh`) | No ngrok account | Auto-updates `.env` + setup-webhook; URL ephemeral |
+| **ngrok** (`scripts/dev-tunnel.sh`) | Local inbound webhook | Auto-updates `.env` + setup-webhook; free URL can change |
 | **Codespace port Public** | Optional | Often hard to find in UI; CLI visibility flaky; tunnel is more reliable |
 
-**Why Cloudflare was used first:** ngrok token missing + Codespace “Public” unclear → cloudflared worked immediately.  
-**Why switched to ngrok:** user provided authtoken → configured + Meta re-registered.
+The current supported local workflow uses ngrok. Cloudflare is not part of the setup scripts.
 
 ---
 
@@ -220,10 +208,10 @@ docs/
   WHATSAPP_CONNECT_DEVELOPER_GUIDE.md   ← this handoff (source of truth)
 
 scripts/
-  ngrok-tunnel.sh          # npm run tunnel
+  ngrok-tunnel.sh          # compatibility wrapper
   test-webhook.sh          # npm run test:webhook
   diagnose-webhook.sh      # npm run diagnose
-  dev-tunnel.sh            # cloudflared alternative
+  dev-tunnel.sh            # ngrok + automatic webhook setup
 
 server/
   .env                     # META_* (secrets — do not commit)
@@ -256,8 +244,8 @@ client/
 ## 7. Runbook — “Inbox me reply nahi aa raha”
 
 1. `npm run diagnose` — fix every FAIL first.  
-2. Confirm tunnel process running (ngrok API `:4040` or cloudflared).  
-3. Confirm `META_WEBHOOK_URL` matches **current** public URL (restart API after `.env` change).  
+2. Confirm ngrok is running (`.run/logs/tunnel.log` or local API `:4040`).  
+3. Confirm `META_WEBHOOK_URL` matches the **current** public URL.  
 4. `npm run setup-webhook` — Meta must subscribe to this URL.  
 5. Watch logs while customer sends a message: need `Inbound webhook received` then `Saved inbound message`.  
 6. If only `statusCount` (sent/delivered) and no `messages[]` — outbound status works; wait for real inbound text from phone.  
@@ -273,7 +261,7 @@ client/
 | Use UI Connect flow | Silently seed tokens every time |
 | Keep authorize & exchange `redirect_uri` identical | Change redirect only on one side |
 | Keep tunnel up while testing inbound | Expect Meta to hit localhost |
-| Update `.env` + `setup-webhook` after every new tunnel URL | Point Meta at dead ngrok/cloudflare URL |
+| Let `start.sh` update `.env` + register each new tunnel URL | Point Meta at a dead tunnel URL |
 | Use `diagnose` / `test:webhook` after webhook changes | Assume UI alone proves inbound |
 | Rotate secrets shared in chat | Commit `.env` or paste App Secret in docs |
 | Treat 24h window as product rule | “Fix” it by breaking webhook code |
@@ -288,7 +276,7 @@ When user says inbound/connect broken:
 2. Run `npm run diagnose` — prefer infra fixes over rewriting Inbox.  
 3. Confirm Connect vs Inbound: Connect = OAuth files; Inbound = tunnel + webhook routes + processor.  
 4. Do not remove Strict Mode dedupe, signed OAuth state, or fire-and-forget webhook-on-connect without a replacement.  
-5. After changing tunnel URL: update `.env` → `setup-webhook` → restart API → prove with phone message or `test:webhook`.  
+5. Use `start.sh` so tunnel URL updates before API startup; then prove with a phone message or `test:webhook`.  
 6. Prefer smallest fix; keep logging structured (`source: 'webhook' | 'auth'`).  
 7. Update **§2 Current runtime** in this doc when the live tunnel URL or approach changes.
 
@@ -302,4 +290,4 @@ When user says inbound/connect broken:
 
 ---
 
-*Handoff compiled from Connect OAuth hardening + inbound webhook tunnel work (Codespace private port, cloudflared then ngrok, health/diagnose/test scripts, Socket status, duplicate-safe processor).*
+*Handoff compiled from Connect OAuth hardening + inbound webhook tunnel work, health/diagnose/test scripts, Socket status, and duplicate-safe processing.*
