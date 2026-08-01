@@ -33,12 +33,12 @@ Legend:
 | Feature | Status | Backend | Frontend | Notes |
 |---------|--------|---------|----------|-------|
 | Meta Embedded Signup OAuth | DONE | `/api/whatsapp/connect-url` | `WhatsappCallbackPage` | Full OAuth flow |
-| Manual connect (direct token) | DONE | `/api/whatsapp/connect` | Settings | |
+| Manual connect (direct token) | LEGACY — REMOVE | `/api/whatsapp/connect` | Not exposed | Security hardening required |
 | Multi-number support | DONE | `WhatsappNumber` model | `NumberSwitcher` | Per-number state caching |
 | Disconnect number | DONE | `DELETE /api/whatsapp/numbers/:id` | Settings | |
 | Webhook auto-setup | DONE | `/api/whatsapp/setup-webhook` | Automatic on connect | |
 | Webhook health check | DONE | `/api/whatsapp/webhook-status` | Settings | |
-| Meta App ID/Secret config | DONE | `PATCH /api/whatsapp/meta-config` | `MetaAppConfigModal` | Per-org Meta app |
+| Meta App ID/Secret config | SERVER LEGACY — REMOVE | `PATCH /api/whatsapp/meta-config` | Not exposed | Platform credentials only |
 | Quality rating tracking | DONE | Worker (24h poll) | `QualityRatingBanner` | |
 
 ---

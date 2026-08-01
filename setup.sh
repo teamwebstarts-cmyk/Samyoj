@@ -15,12 +15,26 @@ env_value() {
   grep -m1 "^$1=" server/.env 2>/dev/null | cut -d= -f2- || true
 }
 
+set_env_value() {
+  ENV_KEY="$1" ENV_VALUE="$2" ENV_FILE="$ROOT_DIR/server/.env" node <<'NODE'
+const fs = require('node:fs');
+const file = process.env.ENV_FILE;
+const key = process.env.ENV_KEY;
+const value = process.env.ENV_VALUE;
+const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
+const index = lines.findIndex((line) => line.startsWith(`${key}=`));
+if (index >= 0) lines[index] = `${key}=${value}`;
+else lines.push(`${key}=${value}`);
+fs.writeFileSync(file, lines.join('\n'));
+NODE
+}
+
 info "Checking prerequisites..."
 for command_name in node npm docker curl; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required but not installed."
 done
-NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
-[[ "$NODE_MAJOR" -ge 18 ]] || fail "Node.js 18+ is required (found $(node --version))."
+node -e 'const [major, minor] = process.versions.node.split(".").map(Number); process.exit(major > 20 || (major === 20 && minor >= 19) ? 0 : 1)' ||
+  fail "Node.js 20.19+ is required (found $(node --version))."
 docker compose version >/dev/null 2>&1 || fail "Docker Compose v2 is required."
 docker info >/dev/null 2>&1 || fail "Docker is installed but not running."
 ok "Node $(node --version), npm $(npm --version), and Docker are ready"
@@ -33,10 +47,34 @@ for dir in server client; do
     ok "Created $dir/.env"
   fi
 done
+chmod 600 server/.env client/.env
+
+for key in JWT_SECRET JWT_REFRESH_SECRET ENCRYPTION_KEY META_VERIFY_TOKEN; do
+  value="$(env_value "$key")"
+  if [[ -z "$value" || "$value" == replace-* ]]; then
+    generated="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')"
+    set_env_value "$key" "$generated"
+    ok "Generated $key"
+  fi
+done
+
+META_APP_ID="$(env_value META_APP_ID)"
+if [[ -z "$META_APP_ID" || "$META_APP_ID" == your_* ]]; then
+  read -r -p "Meta App ID: " META_APP_ID
+  [[ "$META_APP_ID" =~ ^[0-9]+$ ]] || fail "Meta App ID must contain digits only."
+  set_env_value META_APP_ID "$META_APP_ID"
+fi
+
+META_APP_SECRET="$(env_value META_APP_SECRET)"
+if [[ -z "$META_APP_SECRET" || "$META_APP_SECRET" == your_* ]]; then
+  read -r -s -p "Meta App Secret: " META_APP_SECRET
+  echo
+  [[ -n "$META_APP_SECRET" ]] || fail "Meta App Secret is required."
+  set_env_value META_APP_SECRET "$META_APP_SECRET"
+fi
 
 if ! command -v ngrok >/dev/null 2>&1; then
-  info "Installing ngrok..."
-  npm install --global ngrok || fail "ngrok installation failed. Install it from https://ngrok.com/download and retry."
+  fail "Official ngrok CLI is required. Install it from https://ngrok.com/download and retry."
 fi
 ok "$(ngrok version)"
 
@@ -60,7 +98,7 @@ if [[ "$NGROK_CONFIGURED" != true ]]; then
 fi
 ok "ngrok authentication is configured"
 
-for key in META_APP_ID META_APP_SECRET META_VERIFY_TOKEN; do
+for key in META_APP_ID META_APP_SECRET META_VERIFY_TOKEN ENCRYPTION_KEY; do
   value="$(env_value "$key")"
   if [[ -z "$value" || "$value" == your_* || "$value" == replace-* ]]; then
     fail "$key must be configured in server/.env."
@@ -70,27 +108,26 @@ done
 info "Starting PostgreSQL and Redis..."
 docker compose up -d
 for attempt in {1..30}; do
-  docker exec whatsapp_postgres pg_isready -U postgres >/dev/null 2>&1 && break
+  docker compose exec -T postgres pg_isready -U postgres >/dev/null 2>&1 && break
   sleep 1
 done
-docker exec whatsapp_postgres pg_isready -U postgres >/dev/null 2>&1 || fail "PostgreSQL did not become ready."
+docker compose exec -T postgres pg_isready -U postgres >/dev/null 2>&1 || fail "PostgreSQL did not become ready."
 for attempt in {1..15}; do
-  docker exec whatsapp_redis redis-cli ping >/dev/null 2>&1 && break
+  docker compose exec -T redis redis-cli ping >/dev/null 2>&1 && break
   sleep 1
 done
-docker exec whatsapp_redis redis-cli ping >/dev/null 2>&1 || fail "Redis did not become ready."
+docker compose exec -T redis redis-cli ping >/dev/null 2>&1 || fail "Redis did not become ready."
 ok "PostgreSQL and Redis are ready"
 
 info "Installing application dependencies..."
-npm install
-npm --prefix server install
-npm --prefix client install
+npm ci
+npm --prefix server ci
+npm --prefix client ci
 ok "Dependencies installed"
 
-info "Generating Prisma client and applying migrations..."
+info "Generating Prisma client..."
 npm --prefix server run db:generate
-(cd server && npx prisma migrate deploy)
-ok "Database is ready"
+ok "Prisma client generated"
 
 info "Starting Samyoj..."
 bash "$ROOT_DIR/start.sh"

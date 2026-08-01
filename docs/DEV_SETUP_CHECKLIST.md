@@ -24,15 +24,15 @@ bash stop.sh --all # also stop Postgres + Redis
 
 ## What setup.sh does automatically
 
-1. ✅ Prereqs check (Node 18+, Docker, npm)  
-2. ✅ Copies `.env.example` → `.env` if missing  
+1. ✅ Prereqs check (Node 20.19+, Docker, npm, official ngrok CLI)  
+2. ✅ Copies `.env.example` → `.env` and generates local JWT/encryption secrets  
 3. ✅ Uses ngrok config/`NGROK_AUTHTOKEN`, or securely prompts once  
 4. ✅ Starts Docker (Postgres + Redis) + waits for ready  
 5. ✅ `npm install` (server + client)  
 6. ✅ Prisma migrate  
-7. ✅ Installs ngrok if missing  
-8. ✅ Starts ngrok tunnel (updates `META_WEBHOOK_URL`)  
-9. ✅ Registers Meta webhook  
+7. ✅ Validates the ngrok installation  
+8. ✅ Starts ngrok tunnel before API (updates `META_WEBHOOK_URL`)  
+9. ✅ Registers Meta webhook when a WhatsApp number is already connected  
 10. ✅ Starts API + Client  
 
 ---

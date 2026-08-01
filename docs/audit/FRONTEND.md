@@ -88,8 +88,8 @@
 ### Team (11)
 `TeamMembersTab`, `TeamMemberCard`, `TeamInvitesTab`, `TeamDepartmentsTab`, `TeamRolesTab`, `TeamAuditTab`, `TeamSecurityPanel`, `TeamSettingsTab`, `AvailabilityBadge`, `RoleBadge`
 
-### Settings (9)
-`SettingsPanel`, `SettingsSidebar`, `SettingsReadinessBanner`, `SettingsInsightCards`, `SettingsStatusPill`, `SettingsStat`, `MetaAppConfigModal`, `CannedRepliesPanel`, `IntegrationsPanel`
+### Settings (8)
+`SettingsPanel`, `SettingsSidebar`, `SettingsReadinessBanner`, `SettingsInsightCards`, `SettingsStatusPill`, `SettingsStat`, `CannedRepliesPanel`, `IntegrationsPanel`
 
 ### Dashboard (5)
 `StatCard`, `RingMetric`, `QuickActionTile`, `DashboardSkeleton`, `WhatsAppConnectGuide`

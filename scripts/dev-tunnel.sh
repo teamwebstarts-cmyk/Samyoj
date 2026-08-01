@@ -26,9 +26,7 @@ fail()  { echo -e "${RED}[✗]${NC} $*"; exit 1; }
 
 # ── Check ngrok ────────────────────────────────────────────────────────────────
 if ! command -v ngrok >/dev/null 2>&1; then
-  warn "ngrok not found — installing globally via npm..."
-  npm install -g ngrok || fail "Failed to install ngrok. Install manually: https://ngrok.com/download"
-  ok "ngrok installed"
+  fail "Official ngrok CLI is required. Install it from https://ngrok.com/download"
 fi
 
 # ── Configure optional token from server/.env ─────────────────────────────────
@@ -71,14 +69,20 @@ update_webhook() {
     return
   fi
 
-  # Update META_WEBHOOK_URL in .env
-  if grep -q '^META_WEBHOOK_URL=' "$ENV_FILE"; then
-    sed -i "s|^META_WEBHOOK_URL=.*|META_WEBHOOK_URL=${webhook_url}|" "$ENV_FILE"
-  else
-    echo "META_WEBHOOK_URL=${webhook_url}" >> "$ENV_FILE"
-  fi
+  ENV_FILE="$ENV_FILE" WEBHOOK_URL="$webhook_url" node <<'NODE'
+const fs = require('node:fs');
+const file = process.env.ENV_FILE;
+const value = process.env.WEBHOOK_URL;
+const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
+const index = lines.findIndex((line) => line.startsWith('META_WEBHOOK_URL='));
+if (index >= 0) lines[index] = `META_WEBHOOK_URL=${value}`;
+else lines.push(`META_WEBHOOK_URL=${value}`);
+fs.writeFileSync(file, lines.join('\n'));
+NODE
 
   ok "Updated server/.env: META_WEBHOOK_URL=${webhook_url}"
+  echo "$tunnel_url" > "$ROOT_DIR/.run/tunnel-url"
+  echo "pending" > "$ROOT_DIR/.run/webhook-status"
 
   # Wait for tunnel to be live, then register webhook
   local verify_token
@@ -93,6 +97,7 @@ update_webhook() {
   local attempt=1
   while [[ "$attempt" -le 5 ]]; do
     if (cd "$ROOT_DIR/server" && npm run setup-webhook); then
+      echo "ready" > "$ROOT_DIR/.run/webhook-status"
       ok "Webhook registered. Incoming messages should work now."
       return
     fi
@@ -143,7 +148,6 @@ done
 
 [[ "$TUNNEL_URL" == https://* ]] || fail "ngrok did not provide a public HTTPS URL."
 ok "Public URL: $TUNNEL_URL"
-echo "$TUNNEL_URL" > "$ROOT_DIR/.run/tunnel-url"
 update_webhook "$TUNNEL_URL"
 
 wait "$NGROK_PID"

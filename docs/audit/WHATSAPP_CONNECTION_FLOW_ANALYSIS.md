@@ -20,14 +20,13 @@
 
 ## 1. CURRENT FLOW IN SAMYOJ (UPDATED)
 
-### 1.1 Three Connection Methods
+### 1.1 Supported Connection Method
 
-Samyoj now supports **two** ways to connect a WhatsApp number:
+Samyoj exposes one user-facing way to connect a WhatsApp number:
 
 | Method | Who Uses It | Flow |
 |--------|-------------|------|
-| **Platform App ID (Default)** | Normal users (recommended) | Uses Samyoj's platform Meta App — no App ID input needed |
-| **Custom App ID (Advanced)** | Developers / advanced users | Override platform App ID with their own via "Advanced" toggle |
+| **Connect WhatsApp** | All users | Uses Samyoj's platform Meta App — no App ID/Secret input |
 
 ### 1.2 Normal User Flow (Platform App ID) — UPDATED STATE
 
@@ -40,7 +39,7 @@ Step 1: User signs up on Samyoj
 
 Step 2: User goes to Settings → WhatsApp
   → Sees "Connect WhatsApp" button (NO App ID/Secret input needed)
-  → Platform App ID is pre-configured by admin (in .env)
+  → Platform credentials are already configured by the operator
   → Clicks "Connect WhatsApp"
 
 Step 3: Meta OAuth popup
@@ -71,15 +70,10 @@ Step 6: User can now send/receive messages
   → Inbound: needs public HTTPS webhook
 ```
 
-### 1.3 Advanced Users (Custom App ID)
+### 1.3 Custom Meta Apps
 
-Advanced users who want to use their own Meta App:
-```
-Step 1: Go to Settings → WhatsApp → "Advanced settings"
-Step 2: Toggle "Use your own Meta App"
-Step 3: Enter custom App ID + App Secret
-Step 4: Save → Connect (uses custom App ID)
-```
+Custom App ID/Secret entry is intentionally not exposed in the product UI.
+Developers use the same **Connect WhatsApp** flow as every other user.
 
 ---
 
@@ -311,10 +305,9 @@ return `https://www.facebook.com/${config.meta.apiVersion}/dialog/oauth?${params
 
 | File | Change |
 |------|--------|
-| `MetaAppConfigModal.tsx` | App ID/Secret inputs hidden behind "Advanced" toggle |
-| `MetaAppConfigModal.tsx` | Shows "Using platform App ID" by default |
+| `MetaAppConfigModal.tsx` | Removed; credential configuration is not exposed in the product UI |
 | `SettingsPage.tsx` | `handleConnect()` no longer requires `metaConfig.configured` |
-| `SettingsPage.tsx` | "Meta developer app" panel shows platform status |
+| `SettingsPage.tsx` | No platform credential or developer-app details are rendered |
 | `SettingsPage.tsx` | "Connect WhatsApp" button always visible (no App ID required) |
 
 ### 5.3 New User Flow (After Changes)
@@ -526,8 +519,7 @@ Step 3: Tests
 - ✅ Token encryption (AES-256-GCM)
 - ✅ Webhook processing (BullMQ queue)
 - ✅ Multi-number support
-- ✅ Advanced mode for developers who want custom App ID
-- ✅ "Advanced" toggle in MetaAppConfigModal (hidden by default)
+- ✅ No App ID, App Secret, environment, or advanced-override UI is exposed
 
 ### What's Still Needed for Production
 - ❌ Webhook URL depends on ngrok (needs production URL)

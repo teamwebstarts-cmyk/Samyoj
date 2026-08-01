@@ -4,6 +4,7 @@
   "description": "WhatsApp Automation Platform API",
   "main": "dist/index.js",
   "scripts": {
+    "postinstall": "prisma generate",
     "dev": "tsx watch src/index.ts",
     "dev:worker": "tsx watch src/workers/index.ts",
     "setup-webhook": "tsx scripts/setup-webhook.ts",

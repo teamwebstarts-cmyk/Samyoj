@@ -42,7 +42,7 @@ stop_service() {
 stop_service client
 stop_service api
 stop_service tunnel
-rm -f "$RUN_DIR/tunnel-url"
+rm -f "$RUN_DIR/tunnel-url" "$RUN_DIR/webhook-status"
 
 if [[ "${1:-}" == "--all" ]]; then
   info "Stopping PostgreSQL and Redis..."

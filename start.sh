@@ -34,13 +34,32 @@ start_process() {
 [[ -f server/.env ]] || fail "server/.env is missing. Run bash setup.sh first."
 [[ -d server/node_modules && -d client/node_modules ]] ||
   fail "Dependencies are missing. Run bash setup.sh first."
+ENCRYPTION_KEY="$(grep -m1 '^ENCRYPTION_KEY=' server/.env | cut -d= -f2- || true)"
+[[ "$ENCRYPTION_KEY" =~ ^[0-9a-fA-F]{64}$ ]] ||
+  fail "ENCRYPTION_KEY must be exactly 64 hexadecimal characters. Run bash setup.sh."
 
 info "Starting Docker containers..."
 docker compose up -d
+for attempt in {1..30}; do
+  docker compose exec -T postgres pg_isready -U postgres >/dev/null 2>&1 && break
+  sleep 1
+done
+docker compose exec -T postgres pg_isready -U postgres >/dev/null 2>&1 ||
+  fail "PostgreSQL did not become ready."
+for attempt in {1..15}; do
+  docker compose exec -T redis redis-cli ping >/dev/null 2>&1 && break
+  sleep 1
+done
+docker compose exec -T redis redis-cli ping >/dev/null 2>&1 ||
+  fail "Redis did not become ready."
 ok "Docker containers running"
 
+info "Applying pending database migrations..."
+(cd server && npx prisma migrate deploy)
+ok "Database schema is current"
+
 if ! is_running tunnel; then
-  rm -f "$RUN_DIR/tunnel-url"
+  rm -f "$RUN_DIR/tunnel-url" "$RUN_DIR/webhook-status"
   info "Starting ngrok tunnel..."
   start_process tunnel "bash scripts/dev-tunnel.sh"
   for attempt in {1..35}; do
@@ -82,5 +101,6 @@ ok "All services started."
 echo "  Open: http://localhost:3000"
 echo "  API:  http://localhost:8000"
 echo "  Webhook: $(cat "$RUN_DIR/tunnel-url")/api/whatsapp/webhook"
+echo "  Webhook registration: $(cat "$RUN_DIR/webhook-status" 2>/dev/null || echo pending)"
 echo "  Logs: .run/logs/"
 echo "  Stop: bash stop.sh"
