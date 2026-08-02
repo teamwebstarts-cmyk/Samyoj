@@ -12,8 +12,8 @@ import {
   Settings2,
   Sparkles,
   Ticket,
-  Users,
   UsersRound,
+  UserPlus,
   Workflow,
   Zap,
 } from 'lucide-react';
@@ -63,7 +63,7 @@ export const NAV_SECTIONS: NavSection[] = [
         hidden: true,
       },
       { to: '/commerce', icon: Package, label: 'Orders' },
-      { to: '/contacts', icon: Users, label: 'Contacts' },
+      { to: '/contacts', icon: UserPlus, label: 'Contacts' },
     ],
   },
   {
@@ -97,7 +97,7 @@ export const NAV_SECTIONS: NavSection[] = [
 export const MOBILE_BOTTOM_NAV: NavItem[] = [
   { to: '/inbox', icon: MessageSquare, label: 'Inbox' },
   { to: '/campaigns', icon: Send, label: 'Campaigns' },
-  { to: '/contacts', icon: Users, label: 'Contacts' },
+  { to: '/contacts', icon: UserPlus, label: 'Contacts' },
   { to: '/automations', icon: Zap, label: 'Automate' },
 ];
 
