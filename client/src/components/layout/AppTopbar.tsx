@@ -1,34 +1,19 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
-  Bot,
-  ClipboardList,
-  CreditCard,
-  LayoutDashboard,
-  LayoutGrid,
-  LineChart,
+  ChevronDown,
   LogOut,
   Menu,
-  MessageSquare,
-  Package,
-  Phone,
   Search,
-  Send,
   Settings2,
-  Sparkles,
-  Ticket,
-  Users,
-  UsersRound,
-  Workflow,
-  type LucideIcon,
 } from 'lucide-react';
-import { useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { getPageMeta } from '../../config/pageMeta';
-// import ThemeToggle from '../ui/ThemeToggle';
+import { useAuth } from '../../contexts/AuthContext';
+import type { OrgRole } from '../../types';
 import GlobalSearch, { useGlobalSearchShortcut } from './GlobalSearch';
 import NotificationCenter from './NotificationCenter';
 import NumberSwitcher, { NumberSwitcherMobile } from './NumberSwitcher';
 import { PAGE_GUTTER_X } from '../ui/PageShell';
-import { PLATFORM_NAME } from './PlatformBrand';
 
 interface AppTopbarProps {
   companyName?: string;
@@ -37,144 +22,196 @@ interface AppTopbarProps {
   onLogout?: () => void;
 }
 
-const PAGE_ICONS: Array<{ prefix: string; icon: LucideIcon; exact?: boolean }> = [
-  { prefix: '/', icon: LayoutDashboard, exact: true },
-  { prefix: '/inbox', icon: MessageSquare },
-  { prefix: '/calls', icon: Phone },
-  { prefix: '/automations', icon: Workflow },
-  { prefix: '/ai-bot', icon: Bot },
-  { prefix: '/campaigns', icon: Send },
-  { prefix: '/templates', icon: ClipboardList },
-  { prefix: '/content-studio', icon: Sparkles },
-  { prefix: '/commerce', icon: Package },
-  { prefix: '/contacts', icon: Users },
-  { prefix: '/tickets', icon: Ticket },
-  { prefix: '/team', icon: UsersRound },
-  { prefix: '/reports', icon: LineChart },
-  { prefix: '/billing', icon: CreditCard },
-  { prefix: '/settings', icon: Settings2 },
-];
+function roleLabel(role: OrgRole | null | undefined): string {
+  if (role === 'OWNER') return 'Owner';
+  if (role === 'ADMIN') return 'Admin';
+  if (role === 'AGENT') return 'Agent';
+  return 'Member';
+}
 
-function getPageIcon(pathname: string): LucideIcon {
-  const match = PAGE_ICONS.find(({ prefix, exact }) =>
-    exact ? pathname === prefix : pathname.startsWith(prefix)
-  );
-  return match?.icon ?? LayoutGrid;
+function useIsApplePlatform() {
+  const [isApple, setIsApple] = useState(true);
+  useEffect(() => {
+    const ua = navigator.userAgent || '';
+    const platform = (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData
+      ?.platform;
+    setIsApple(/Mac|iPhone|iPad|iPod/i.test(platform || navigator.platform || ua));
+  }, []);
+  return isApple;
 }
 
 export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout }: AppTopbarProps) {
   const { pathname } = useLocation();
+  const { orgRole } = useAuth();
   const { title, description } = getPageMeta(pathname);
-  const PageIcon = getPageIcon(pathname);
   const initial = userName?.charAt(0).toUpperCase() || 'U';
-  const firstName = userName?.split(' ')[0] || 'there';
-  const workspace = companyName || PLATFORM_NAME;
+  const roleText = roleLabel(orgRole);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+  const isApple = useIsApplePlatform();
 
   useGlobalSearchShortcut(() => setSearchOpen(true));
+
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    const onPointerDown = (e: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setUserMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [userMenuOpen]);
+
+  const subtitle = (description || '').replace(/\.$/, '');
 
   return (
     <>
       <header className="topbar-glass sticky top-0 z-30 shrink-0">
-      <div className={`flex min-h-[64px] items-center gap-3 py-2.5 lg:gap-4 lg:py-0 ${PAGE_GUTTER_X}`}>
-        {onMenuOpen && (
-          <button
-            type="button"
-            onClick={onMenuOpen}
-            className="topbar-icon-btn md:hidden"
-            aria-label="Open menu"
-          >
-            <Menu className="h-5 w-5" strokeWidth={2} />
-          </button>
-        )}
+        <div
+          className={`flex min-h-[72px] items-center gap-3 py-3 lg:min-h-[76px] lg:gap-5 lg:py-3.5 ${PAGE_GUTTER_X}`}
+        >
+          {onMenuOpen && (
+            <button
+              type="button"
+              onClick={onMenuOpen}
+              className="topbar-icon-btn md:hidden"
+              aria-label="Open menu"
+            >
+              <Menu className="h-5 w-5" strokeWidth={2} />
+            </button>
+          )}
 
-        {/* Page context */}
-        <div className="flex min-w-0 flex-1 items-center gap-3">
-          <div className="topbar-page-icon hidden sm:flex">
-            <PageIcon className="h-[18px] w-[18px]" strokeWidth={2.25} />
-          </div>
-
+          {/* Left — page title + live + subtitle */}
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <h1 className="truncate text-[15px] font-extrabold tracking-tight text-theme-fg lg:text-[17px]">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="truncate text-[18px] font-bold leading-none tracking-tight text-neutral-900 sm:text-[20px] dark:text-theme-fg">
                 {title}
               </h1>
-              <span className="hidden rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700 ring-1 ring-emerald-100 lg:inline-flex dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20">
+              <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.06em] text-emerald-700 ring-1 ring-emerald-100/90 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20">
                 Live
               </span>
             </div>
-            <p className="truncate text-[11px] font-medium text-theme-secondary lg:text-[12px]">
-              <span className="lg:hidden">{description}</span>
-              <span className="hidden lg:inline">
-                {description}
-                <span className="mx-1.5 text-theme-muted">·</span>
-                <span className="text-theme-muted">
-                  {firstName} @ {workspace}
-                </span>
-              </span>
-            </p>
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div className="flex shrink-0 items-center gap-2 lg:gap-2.5">
-          <NumberSwitcherMobile />
-          <NumberSwitcher />
-
-          <button
-            type="button"
-            onClick={() => setSearchOpen(true)}
-            className="topbar-icon-btn hidden sm:flex"
-            aria-label="Search"
-            title="Search (⌘K)"
-          >
-            <Search className="h-[17px] w-[17px]" strokeWidth={2} />
-          </button>
-
-          <NotificationCenter />
-
-          {/* <ThemeToggle variant="compact" /> */}
-
-          <div className="topbar-divider hidden h-8 w-px sm:block" />
-
-          <div className="topbar-user-chip hidden sm:flex">
-            <div className="relative shrink-0">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-whatsapp-500 to-emerald-600 text-[12px] font-extrabold text-white shadow-[0_2px_10px_rgba(37,211,102,0.35)]">
-                {initial}
-              </div>
-              <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-theme-surface bg-emerald-400 shadow-sm" />
-            </div>
-            <div className="hidden min-w-0 md:block">
-              <p className="max-w-[160px] truncate text-[13px] font-bold leading-tight text-theme-fg">
-                {userName || 'User'}
+            {subtitle ? (
+              <p className="mt-1 truncate text-[12px] font-medium leading-snug text-neutral-500 sm:text-[13px] dark:text-theme-secondary">
+                {subtitle}
               </p>
-              <p className="max-w-[160px] truncate text-[11px] font-medium leading-tight text-theme-muted">
-                {workspace}
-              </p>
-            </div>
+            ) : null}
           </div>
 
-          {/* Mobile avatar only */}
-          <div className="relative sm:hidden">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-whatsapp-500 to-emerald-600 text-[12px] font-extrabold text-white shadow-[0_2px_10px_rgba(37,211,102,0.35)]">
-              {initial}
-            </div>
-            <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-theme-surface bg-emerald-400" />
-          </div>
+          {/* Right — search, notifications, profile */}
+          <div className="flex shrink-0 items-center gap-2 sm:gap-2.5 lg:gap-3">
+            <NumberSwitcherMobile />
+            <NumberSwitcher />
 
-          {onLogout && (
+            {/* Search — design pill; opens command palette */}
             <button
               type="button"
-              onClick={onLogout}
-              className="topbar-icon-btn topbar-icon-btn--danger"
-              aria-label="Log out"
-              title="Log out"
+              onClick={() => setSearchOpen(true)}
+              className="topbar-search hidden min-w-0 items-center gap-2.5 md:flex"
+              aria-label="Search anything"
             >
-              <LogOut className="h-[17px] w-[17px]" strokeWidth={2} />
+              <Search className="h-4 w-4 shrink-0 text-neutral-400" strokeWidth={2} />
+              <span className="min-w-0 flex-1 truncate text-left text-[13px] font-medium text-neutral-400">
+                Search anything...
+              </span>
+              <span className="flex shrink-0 items-center gap-1" aria-hidden>
+                <kbd className="topbar-kbd">{isApple ? '⌘' : 'Ctrl'}</kbd>
+                <kbd className="topbar-kbd">K</kbd>
+              </span>
             </button>
-          )}
+
+            <button
+              type="button"
+              onClick={() => setSearchOpen(true)}
+              className="topbar-icon-btn md:hidden"
+              aria-label="Search"
+              title="Search (⌘K)"
+            >
+              <Search className="h-[17px] w-[17px]" strokeWidth={2} />
+            </button>
+
+            <NotificationCenter />
+
+            {/* User profile chip */}
+            <div className="relative" ref={userMenuRef}>
+              <button
+                type="button"
+                onClick={() => setUserMenuOpen((v) => !v)}
+                className="topbar-user-chip"
+                aria-label="Account menu"
+                aria-expanded={userMenuOpen}
+                aria-haspopup="menu"
+              >
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#16a34a] text-[13px] font-bold text-white sm:h-9 sm:w-9 sm:text-[14px]">
+                  {initial}
+                </span>
+                <span className="hidden min-w-0 text-left sm:block">
+                  <span className="block max-w-[140px] truncate text-[13px] font-bold leading-tight text-neutral-900 dark:text-theme-fg lg:max-w-[180px]">
+                    {userName || 'User'}
+                  </span>
+                  <span className="mt-0.5 block max-w-[140px] truncate text-[11.5px] font-medium leading-tight text-neutral-500 dark:text-theme-muted lg:max-w-[180px]">
+                    {roleText}
+                    {companyName ? (
+                      <span className="sr-only"> · {companyName}</span>
+                    ) : null}
+                  </span>
+                </span>
+                <ChevronDown
+                  className={`hidden h-4 w-4 shrink-0 text-neutral-400 transition sm:block ${
+                    userMenuOpen ? 'rotate-180' : ''
+                  }`}
+                  strokeWidth={2}
+                />
+              </button>
+
+              {userMenuOpen && (
+                <div
+                  role="menu"
+                  className="absolute right-0 top-[calc(100%+8px)] z-50 w-[220px] overflow-hidden rounded-2xl border border-neutral-200/90 bg-white p-1.5 shadow-lg dark:border-theme-border dark:bg-theme-surface"
+                >
+                  <div className="border-b border-neutral-100 px-3 py-2.5 dark:border-theme-border sm:hidden">
+                    <p className="truncate text-[13px] font-bold text-neutral-900 dark:text-theme-fg">
+                      {userName || 'User'}
+                    </p>
+                    <p className="truncate text-[11.5px] font-medium text-neutral-500">{roleText}</p>
+                  </div>
+                  <Link
+                    to="/settings"
+                    role="menuitem"
+                    onClick={() => setUserMenuOpen(false)}
+                    className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-neutral-800 transition hover:bg-neutral-50 dark:text-theme-fg dark:hover:bg-theme-subtle"
+                  >
+                    <Settings2 className="h-4 w-4 text-neutral-500" />
+                    Settings
+                  </Link>
+                  {onLogout && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setUserMenuOpen(false);
+                        onLogout();
+                      }}
+                      className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-[13px] font-semibold text-rose-700 transition hover:bg-rose-50 dark:hover:bg-rose-500/10"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      Log out
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
-      </div>
       </header>
       <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
     </>
