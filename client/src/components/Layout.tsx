@@ -59,8 +59,8 @@ export default function Layout() {
     <CallNotificationProvider>
       <div className="flex h-[100dvh] overflow-hidden platform-gradient">
         <aside
-          className={`sidebar-glass hidden shrink-0 overflow-hidden transition-[width] duration-[250ms] ease-in-out md:block ${
-            effectiveCollapsed ? 'w-[80px]' : 'w-[280px]'
+          className={`sidebar-glass hidden shrink-0 overflow-hidden transition-[width] duration-[250ms] ease-[cubic-bezier(0.22,1,0.36,1)] md:block ${
+            effectiveCollapsed ? 'w-[76px]' : 'w-[260px]'
           }`}
         >
           <Sidebar
@@ -105,7 +105,7 @@ export default function Layout() {
           {!hideTopbar && <QualityRatingBanner />}
 
           <main
-            className={`platform-gradient-subtle flex-1 overflow-auto ${
+            className={`app-main-scroll platform-gradient-subtle flex-1 overflow-auto ${
               showBottomNav ? 'pb-[calc(4rem+env(safe-area-inset-bottom,0px))] md:pb-0' : ''
             }`}
           >
