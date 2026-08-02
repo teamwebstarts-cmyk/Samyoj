@@ -31,10 +31,9 @@ router.get(
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
 
-    const [whatsappNumbers, templateCount, contacts, teamMembers, testMessage, approvedTemplate] =
+    const [whatsappNumbers, contacts, teamMembers, testMessage, contentTemplates, campaignsWithTemplate] =
       await Promise.all([
         prisma.whatsappNumber.count({ where: { organizationId: orgId, isActive: true } }),
-        prisma.campaign.count({ where: { organizationId: orgId } }),
         prisma.contact.count({ where: { organizationId: orgId } }),
         prisma.organizationUser.count({ where: { organizationId: orgId } }),
         prisma.message.count({
@@ -43,10 +42,21 @@ router.get(
             conversation: { organizationId: orgId },
           },
         }),
+        prisma.contentDraft.count({
+          where: {
+            organizationId: orgId,
+            OR: [
+              { metaTemplateName: { not: null } },
+              { metaTemplateStatus: { not: null } },
+            ],
+          },
+        }),
         prisma.campaign.count({
           where: { organizationId: orgId, templateName: { not: '' } },
         }),
       ]);
+
+    const hasTemplateSignal = contentTemplates > 0 || campaignsWithTemplate > 0;
 
     const steps: OnboardingStep[] = [
       {
@@ -58,9 +68,9 @@ router.get(
       },
       {
         id: 'approve_template',
-        title: 'Create or sync a template',
-        description: 'Have at least one template ready for outbound messages',
-        completed: approvedTemplate > 0 || templateCount > 0,
+        title: 'Add a message template',
+        description: 'Create a template in Content Studio or use one in a campaign',
+        completed: hasTemplateSignal,
         href: '/templates',
       },
       {
@@ -89,7 +99,14 @@ router.get(
       isReady,
       completedCount,
       totalSteps: steps.length,
-      stats: { whatsappNumbers, templateCount, contacts, teamMembers, testMessage, approvedTemplate },
+      stats: {
+        whatsappNumbers,
+        templateCount: contentTemplates + campaignsWithTemplate,
+        contacts,
+        teamMembers,
+        testMessage,
+        approvedTemplate: contentTemplates + campaignsWithTemplate,
+      },
     });
   })
 );
