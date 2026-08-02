@@ -42,6 +42,8 @@ router.get(
       messagesFailedPrev,
       activeConversations,
       totalContacts,
+      periodMessages,
+      periodContacts,
     ] = await Promise.all([
       prisma.message.count({ where: outboundIn(since) }),
       // Latest status is exclusive (READ replaces DELIVERED on the row)
@@ -74,7 +76,59 @@ router.get(
         where: { organizationId: orgId, status: 'OPEN', ...conversationFilter(numberId) },
       }),
       prisma.contact.count({ where: { organizationId: orgId, ...contactsForNumberFilter(numberId) } }),
+      // Daily time-series breakdown for real sparkline charts
+      prisma.message.findMany({
+        where: outboundIn(since),
+        select: {
+          createdAt: true,
+          status: true,
+          conversationId: true,
+        },
+      }),
+      prisma.contact.findMany({
+        where: { organizationId: orgId, ...contactsForNumberFilter(numberId) },
+        select: { createdAt: true },
+      }),
     ]);
+
+    // Build `days` daily buckets from (days - 1) days ago to today
+    const dailySeries = [];
+    const now = new Date();
+
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+      const dayEnd = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+
+      const dateLabel = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+      // Messages in this day
+      const dayMsgs = periodMessages.filter(
+        (m) => m.createdAt >= dayStart && m.createdAt <= dayEnd
+      );
+      const daySent = dayMsgs.length;
+      const dayDelivered = dayMsgs.filter(
+        (m) => m.status === 'DELIVERED' || m.status === 'READ'
+      ).length;
+      const dayRead = dayMsgs.filter((m) => m.status === 'READ').length;
+
+      const dayDeliveryRate = daySent ? Number(((dayDelivered / daySent) * 100).toFixed(1)) : 0;
+      const dayReadRate = daySent ? Number(((dayRead / daySent) * 100).toFixed(1)) : 0;
+      const dayActiveConvs = new Set(dayMsgs.map((m) => m.conversationId)).size;
+      const dayTotalContacts = periodContacts.filter(
+        (c) => new Date(c.createdAt || 0) <= dayEnd
+      ).length;
+
+      dailySeries.push({
+        date: dateLabel,
+        messagesSent: daySent,
+        deliveryRate: dayDeliveryRate,
+        readRate: dayReadRate,
+        activeConversations: dayActiveConvs,
+        totalContacts: dayTotalContacts,
+      });
+    }
 
     // Funnel: "delivered" = reached device (still DELIVERED or progressed to READ)
     const messagesDelivered = messagesDeliveredOnly + messagesRead;
@@ -113,6 +167,7 @@ router.get(
         activeConversations: null,
         totalContacts: null,
       },
+      dailySeries,
     });
   })
 );
@@ -377,6 +432,264 @@ router.get(
     templates.sort((a, b) => b.sent - a.sent);
 
     sendSuccess(res, { periodDays: days, templates });
+  })
+);
+
+/**
+ * Recent workspace activity feed for dashboard —
+ * real inbound messages, campaigns, automations, and AI usage (no mock rows).
+ */
+router.get(
+  '/activity',
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const numberId = req.activeWhatsappNumberId;
+    const limit = Math.min(12, Math.max(1, parseInt((req.query.limit as string) || '4', 10)));
+    const since = daysAgo(30);
+    const convScope = { organizationId: orgId, ...conversationFilter(numberId) };
+
+    type FeedItem = {
+      id: string;
+      type: 'message' | 'campaign' | 'automation' | 'ai' | 'agent';
+      title: string;
+      subtitle: string;
+      href: string;
+      createdAt: string;
+    };
+
+    const [inboundMsgs, campaigns, automationLogs, aiLogs, agentOutbound] = await Promise.all([
+      prisma.message.findMany({
+        where: {
+          direction: 'INBOUND',
+          createdAt: { gte: since },
+          conversation: convScope,
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 8,
+        select: {
+          id: true,
+          content: true,
+          createdAt: true,
+          conversationId: true,
+          conversation: {
+            select: {
+              contact: { select: { phone: true, name: true } },
+            },
+          },
+        },
+      }),
+      prisma.campaign.findMany({
+        where: {
+          organizationId: orgId,
+          status: { in: ['RUNNING', 'COMPLETED', 'SCHEDULED', 'PAUSED'] },
+          updatedAt: { gte: since },
+          ...(numberId ? { whatsappNumberId: numberId } : {}),
+        },
+        orderBy: { updatedAt: 'desc' },
+        take: 6,
+        select: {
+          id: true,
+          name: true,
+          status: true,
+          sentCount: true,
+          updatedAt: true,
+        },
+      }),
+      prisma.automationLog.findMany({
+        where: {
+          organizationId: orgId,
+          createdAt: { gte: since },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 6,
+        select: {
+          id: true,
+          action: true,
+          triggerType: true,
+          status: true,
+          createdAt: true,
+          flowId: true,
+          automationId: true,
+        },
+      }),
+      prisma.aiUsageLog.findMany({
+        where: {
+          organizationId: orgId,
+          createdAt: { gte: since },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 6,
+        select: {
+          id: true,
+          action: true,
+          botId: true,
+          conversationId: true,
+          createdAt: true,
+        },
+      }),
+      // Agent / user outbound replies (human-handled conversations)
+      prisma.message.findMany({
+        where: {
+          direction: 'OUTBOUND',
+          createdAt: { gte: since },
+          conversation: {
+            ...convScope,
+            assignedAgentId: { not: null },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 6,
+        select: {
+          id: true,
+          content: true,
+          createdAt: true,
+          conversationId: true,
+          conversation: {
+            select: {
+              assignedAgent: { select: { name: true } },
+              contact: { select: { phone: true, name: true } },
+            },
+          },
+        },
+      }),
+    ]);
+
+    const botIds = [...new Set(aiLogs.map((l) => l.botId).filter(Boolean))] as string[];
+    const bots =
+      botIds.length > 0
+        ? await prisma.aiBot.findMany({
+            where: { id: { in: botIds }, organizationId: orgId },
+            select: { id: true, name: true },
+          })
+        : [];
+    const botName = new Map(bots.map((b) => [b.id, b.name]));
+
+    const automationIds = [
+      ...new Set(automationLogs.map((l) => l.automationId).filter(Boolean)),
+    ] as string[];
+    const automations =
+      automationIds.length > 0
+        ? await prisma.automation.findMany({
+            where: { id: { in: automationIds }, organizationId: orgId },
+            select: { id: true, name: true },
+          })
+        : [];
+    const automationName = new Map(automations.map((a) => [a.id, a.name]));
+
+    const formatPhone = (phone?: string | null) => {
+      if (!phone) return 'a contact';
+      const d = phone.replace(/\D/g, '');
+      if (d.length >= 10) {
+        const local = d.slice(-10);
+        return `+${d.slice(0, -10) || '91'} ${local.slice(0, 5)} ${local.slice(5)}`;
+      }
+      return phone;
+    };
+
+    const feed: FeedItem[] = [];
+
+    for (const m of inboundMsgs) {
+      const contact = m.conversation.contact;
+      const who = contact.name?.trim() || formatPhone(contact.phone);
+      const preview = (m.content || '').replace(/\s+/g, ' ').trim().slice(0, 48);
+      feed.push({
+        id: `msg-${m.id}`,
+        type: 'message',
+        title: 'New message received',
+        subtitle: preview ? `from ${who} · ${preview}${preview.length >= 48 ? '…' : ''}` : `from ${who}`,
+        href: `/inbox?conversation=${m.conversationId}`,
+        createdAt: m.createdAt.toISOString(),
+      });
+    }
+
+    for (const c of campaigns) {
+      const statusLabel =
+        c.status === 'COMPLETED'
+          ? 'Campaign sent'
+          : c.status === 'RUNNING'
+            ? 'Campaign running'
+            : c.status === 'PAUSED'
+              ? 'Campaign paused'
+              : 'Campaign scheduled';
+      feed.push({
+        id: `camp-${c.id}`,
+        type: 'campaign',
+        title: statusLabel,
+        subtitle:
+          c.sentCount > 0
+            ? `${c.name} · ${c.sentCount.toLocaleString()} sent`
+            : c.name,
+        href: '/campaigns',
+        createdAt: c.updatedAt.toISOString(),
+      });
+    }
+
+    for (const log of automationLogs) {
+      const name =
+        (log.automationId && automationName.get(log.automationId)) ||
+        log.action ||
+        log.triggerType ||
+        'Automation';
+      feed.push({
+        id: `auto-${log.id}`,
+        type: 'automation',
+        title: 'Automation triggered',
+        subtitle: name,
+        href: '/automations',
+        createdAt: log.createdAt.toISOString(),
+      });
+    }
+
+    for (const log of aiLogs) {
+      const name = (log.botId && botName.get(log.botId)) || 'AI bot';
+      feed.push({
+        id: `ai-${log.id}`,
+        type: 'ai',
+        title: 'AI reply generated',
+        subtitle: `${name}${log.action ? ` · ${log.action}` : ''}`,
+        href: log.conversationId
+          ? `/inbox?conversation=${log.conversationId}`
+          : '/ai-bots',
+        createdAt: log.createdAt.toISOString(),
+      });
+    }
+
+    for (const m of agentOutbound) {
+      const agent = m.conversation.assignedAgent?.name || 'Agent';
+      const contact = m.conversation.contact;
+      const who = contact.name?.trim() || formatPhone(contact.phone);
+      feed.push({
+        id: `agent-${m.id}`,
+        type: 'agent',
+        title: 'Agent replied',
+        subtitle: `${agent} → ${who}`,
+        href: `/inbox?conversation=${m.conversationId}`,
+        createdAt: m.createdAt.toISOString(),
+      });
+    }
+
+    feed.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    // Prefer diversity across types while keeping newest-first order
+    const picked: FeedItem[] = [];
+    const seenTypes = new Set<string>();
+    for (const item of feed) {
+      if (picked.length >= limit) break;
+      if (!seenTypes.has(item.type)) {
+        picked.push(item);
+        seenTypes.add(item.type);
+      }
+    }
+    for (const item of feed) {
+      if (picked.length >= limit) break;
+      if (!picked.some((p) => p.id === item.id)) {
+        picked.push(item);
+      }
+    }
+
+    picked.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    sendSuccess(res, { items: picked.slice(0, limit) });
   })
 );
 
