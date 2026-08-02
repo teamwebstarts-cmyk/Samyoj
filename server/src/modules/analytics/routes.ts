@@ -146,6 +146,13 @@ router.get(
       return Number((((current - previous) / previous) * 100).toFixed(1));
     };
 
+    /** Rate deltas as percentage points (50% → 55% = +5), not relative %. */
+    const ratePointDelta = (current: number, previous: number): number | null => {
+      if (previous === 0 && current === 0) return 0;
+      if (previous === 0) return null;
+      return Number((current - previous).toFixed(1));
+    };
+
     sendSuccess(res, {
       days,
       messagesSent,
@@ -161,8 +168,8 @@ router.get(
       totalContacts,
       deltas: {
         messagesSent: pctDelta(messagesSent, messagesSentPrev),
-        deliveryRate: pctDelta(deliveryRate, prevDeliveryRate),
-        readRate: pctDelta(readRate, prevReadRate),
+        deliveryRate: ratePointDelta(deliveryRate, prevDeliveryRate),
+        readRate: ratePointDelta(readRate, prevReadRate),
         failedMessages: pctDelta(messagesFailed, messagesFailedPrev),
         activeConversations: null,
         totalContacts: null,
