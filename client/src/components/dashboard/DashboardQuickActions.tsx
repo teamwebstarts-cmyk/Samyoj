@@ -117,11 +117,11 @@ function ActionTile({
         {icon}
       </div>
 
-      <p className="text-[12.5px] sm:text-[13.5px] md:text-[14px] font-bold text-neutral-900 tracking-tight">
+      <p className="line-clamp-1 text-[12px] font-bold tracking-tight text-neutral-900 sm:text-[13px] md:text-[13.5px] xl:text-[14px]">
         {label}
       </p>
 
-      <p className="mt-0.5 sm:mt-1 text-[10.5px] sm:text-[11.5px] md:text-[12px] font-medium text-neutral-500 leading-tight max-w-[120px] line-clamp-2">
+      <p className="mt-0.5 line-clamp-2 max-w-[100px] text-[10px] font-medium leading-tight text-neutral-500 sm:mt-1 sm:max-w-[120px] sm:text-[11px] md:text-[11.5px]">
         {desc}
       </p>
     </div>
