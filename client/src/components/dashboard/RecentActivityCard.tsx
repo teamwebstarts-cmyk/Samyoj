@@ -188,14 +188,14 @@ export default function RecentActivityCard({
                 </IconWell>
 
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[13px] font-bold leading-snug text-neutral-900 transition-colors group-hover:text-emerald-700 sm:text-[13.5px]">
+                  <p className="truncate text-[12.5px] font-bold leading-snug text-neutral-900 transition-colors group-hover:text-emerald-700 sm:text-[13px]">
                     {item.title}
                   </p>
-                  <p className="mt-0.5 truncate text-[12px] font-medium text-neutral-500">
+                  <p className="mt-0.5 truncate text-[11px] font-medium text-neutral-500 sm:text-[11.5px]">
                     {item.subtitle}
                   </p>
                   {when ? (
-                    <p className="mt-1 text-[11.5px] font-medium tabular-nums text-neutral-400">
+                    <p className="mt-1 text-[11px] font-medium tabular-nums text-neutral-400 sm:text-[11.5px]">
                       {when}
                     </p>
                   ) : null}
