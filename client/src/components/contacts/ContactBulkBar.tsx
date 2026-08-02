@@ -34,7 +34,7 @@ export default function ContactBulkBar({
   return (
     <div
       className={`pointer-events-none fixed bottom-0 right-0 z-40 flex justify-center page-gutter-x pb-[calc(1rem+env(safe-area-inset-bottom,0px)+4rem)] sm:pb-6 md:pb-6 ${
-        forceCollapsed ? 'md:left-[80px]' : 'md:left-[80px] lg:left-[280px]'
+        forceCollapsed ? 'md:left-[76px]' : 'md:left-[76px] lg:left-[260px]'
       } left-0`}
     >
       <div className="pointer-events-auto mx-auto w-full max-w-6xl overflow-hidden rounded-2xl border border-sky-200/80 bg-theme-surface/95 shadow-[0_8px_32px_rgba(14,165,233,0.18),0_2px_8px_rgba(15,23,42,0.08)] backdrop-blur-xl dark:border-sky-800/50 dark:shadow-[0_8px_32px_rgba(0,0,0,0.45)]">
