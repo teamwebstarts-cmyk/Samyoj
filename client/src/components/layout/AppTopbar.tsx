@@ -177,9 +177,8 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
                   </span>
                 </span>
                 <ChevronDown
-                  className={`hidden h-4 w-4 shrink-0 text-neutral-400 transition sm:block ${
-                    userMenuOpen ? 'rotate-180' : ''
-                  }`}
+                  className={`hidden h-4 w-4 shrink-0 text-neutral-400 transition sm:block ${userMenuOpen ? 'rotate-180' : ''
+                    }`}
                   strokeWidth={2}
                 />
               </button>
