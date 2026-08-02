@@ -1,84 +1,146 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  ArrowUpRight,
   FileText,
   LifeBuoy,
   LineChart,
-  MessageSquare,
   MoreHorizontal,
   PhoneCall,
-  Send,
-  Users,
-  Zap,
+  Scan,
 } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
-import IconWell, { type IconWellAccent } from './icons/IconWell';
+import IconWell from './icons/IconWell';
+import {
+  InboxTileSvg,
+  CampaignsTileSvg,
+  ContactsSvg,
+  AutomationsTileSvg,
+} from './icons/DashboardIcons';
 
-interface ActionItem {
+interface ActionTileProps {
   to: string;
   label: string;
   desc: string;
-  icon: LucideIcon;
-  accent: IconWellAccent;
+  icon: ReactNode;
+  bgClass: string;
+  wellClass: string;
+  isDashed?: boolean;
+  onClick?: () => void;
 }
 
-/** Soft tint wells + outline icons — matches mock (not solid gradient chips). */
-const PRIMARY: ActionItem[] = [
+const PRIMARY_ACTIONS = [
   {
     to: '/inbox',
     label: 'Inbox',
     desc: 'Reply to customers',
-    icon: MessageSquare,
-    accent: 'emerald',
+    icon: <InboxTileSvg className="h-6 w-6 text-emerald-600" />,
+    bgClass: 'bg-emerald-50/40 border-emerald-100/70 hover:border-emerald-200 hover:bg-emerald-50/70',
+    wellClass: 'bg-emerald-100/80 text-emerald-600',
   },
   {
     to: '/campaigns',
     label: 'Campaigns',
-    desc: 'Reach your audience',
-    icon: Send,
-    accent: 'violet',
+    desc: 'Send messages to many',
+    icon: <CampaignsTileSvg className="h-6 w-6 text-violet-600" />,
+    bgClass: 'bg-violet-50/40 border-violet-100/70 hover:border-violet-200 hover:bg-violet-50/70',
+    wellClass: 'bg-violet-100/80 text-violet-600',
   },
   {
     to: '/contacts',
     label: 'Contacts',
-    desc: 'Customers & pipeline',
-    icon: Users,
-    accent: 'sky',
+    desc: 'Manage your customers',
+    icon: <ContactsSvg className="h-6 w-6 text-sky-600" />,
+    bgClass: 'bg-sky-50/40 border-sky-100/70 hover:border-sky-200 hover:bg-sky-50/70',
+    wellClass: 'bg-sky-100/80 text-sky-600',
   },
   {
     to: '/automations',
     label: 'Automations',
-    desc: 'Auto-replies & flows',
-    icon: Zap,
-    accent: 'amber',
+    desc: 'Set up auto replies',
+    icon: <AutomationsTileSvg className="h-6 w-6 text-amber-600" />,
+    bgClass: 'bg-amber-50/40 border-amber-100/70 hover:border-amber-200 hover:bg-amber-50/70',
+    wellClass: 'bg-amber-100/80 text-amber-600',
   },
 ];
 
-const MORE: ActionItem[] = [
-  { to: '/templates', label: 'Templates', desc: 'Approved messages', icon: FileText, accent: 'slate' },
-  { to: '/calls', label: 'Calls', desc: 'Voice calling', icon: PhoneCall, accent: 'slate' },
-  { to: '/tickets', label: 'Tickets', desc: 'Support issues', icon: LifeBuoy, accent: 'slate' },
-  { to: '/reports', label: 'Reports', desc: 'Deep analytics', icon: LineChart, accent: 'slate' },
+const MORE_MENU_ITEMS = [
+  {
+    to: '/templates',
+    label: 'Templates',
+    desc: 'Approved messages',
+    icon: FileText,
+    accent: 'slate' as const,
+  },
+  {
+    to: '/calls',
+    label: 'Calls',
+    desc: 'Voice calling',
+    icon: PhoneCall,
+    accent: 'slate' as const,
+  },
+  {
+    to: '/tickets',
+    label: 'Tickets',
+    desc: 'Support issues',
+    icon: LifeBuoy,
+    accent: 'slate' as const,
+  },
+  {
+    to: '/reports',
+    label: 'Reports',
+    desc: 'Deep analytics',
+    icon: LineChart,
+    accent: 'slate' as const,
+  },
 ];
 
-function Tile({ item }: { item: ActionItem }) {
-  const Icon = item.icon;
-  return (
-    <Link
-      to={item.to}
-      className="group relative overflow-hidden rounded-2xl border border-neutral-100 bg-white p-3.5 transition hover:-translate-y-0.5 hover:shadow-panel sm:p-4"
+function ActionTile({
+  to,
+  label,
+  desc,
+  icon,
+  bgClass,
+  wellClass,
+  isDashed = false,
+  onClick,
+}: ActionTileProps) {
+  const content = (
+    <div
+      className={`group flex h-full flex-col items-center justify-center text-center p-2.5 sm:p-3.5 md:p-4 rounded-2xl sm:rounded-3xl border transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xs ${
+        isDashed
+          ? 'border-dashed border-neutral-300 bg-neutral-50/30 hover:border-neutral-400 hover:bg-neutral-50/70'
+          : bgClass
+      }`}
     >
-      <div className="flex items-start justify-between gap-2">
-        <IconWell accent={item.accent} size="md">
-          <Icon className="h-[18px] w-[18px]" strokeWidth={2} />
-        </IconWell>
-        <ArrowUpRight className="h-4 w-4 text-neutral-300 transition group-hover:text-neutral-500" />
+      <div
+        className={`flex h-10 w-10 sm:h-12 sm:w-12 md:h-14 md:w-14 items-center justify-center rounded-xl sm:rounded-2xl mb-2 sm:mb-3 transition-transform duration-200 group-hover:scale-105 ${wellClass}`}
+      >
+        {icon}
       </div>
-      <p className="mt-2.5 text-[13px] font-bold text-neutral-900">{item.label}</p>
-      <p className="mt-0.5 text-[11px] font-medium text-neutral-500">{item.desc}</p>
-    </Link>
+
+      <p className="text-[12.5px] sm:text-[13.5px] md:text-[14px] font-bold text-neutral-900 tracking-tight">
+        {label}
+      </p>
+
+      <p className="mt-0.5 sm:mt-1 text-[10.5px] sm:text-[11.5px] md:text-[12px] font-medium text-neutral-500 leading-tight max-w-[120px] line-clamp-2">
+        {desc}
+      </p>
+    </div>
   );
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className="w-full text-left"
+        aria-label="More quick actions"
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return <Link to={to}>{content}</Link>;
 }
 
 export default function DashboardQuickActions() {
@@ -102,44 +164,56 @@ export default function DashboardQuickActions() {
   }, [open]);
 
   return (
-    <section>
-      <div className="mb-2.5 flex items-end justify-between px-0.5">
-        <div>
-          <h2 className="text-[14px] font-extrabold tracking-tight text-neutral-900 sm:text-[15px]">
+    <section className="dashboard-card flex flex-col rounded-2xl sm:rounded-3xl p-3.5 sm:p-4 md:p-5 bg-white border border-neutral-100/90 shadow-xs">
+      {/* Card Header: Icon + Title + Subtitle */}
+      <div className="flex items-center gap-2.5">
+        <IconWell accent="emerald" size="sm" round>
+          <Scan className="h-4 w-4 stroke-[2.2]" />
+        </IconWell>
+        <div className="min-w-0">
+          <h2 className="text-[14px] sm:text-[15px] md:text-[16px] font-bold text-neutral-900 tracking-tight">
             Quick actions
           </h2>
-          <p className="mt-0.5 text-[12px] font-medium text-neutral-500">Jump into your day</p>
+          <p className="text-[11.5px] sm:text-[12px] font-medium text-neutral-500">
+            Jump to what you do most
+          </p>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5 sm:gap-3">
-        {PRIMARY.map((item) => (
-          <Tile key={item.to} item={item} />
+
+      {/* 2 → 3 → 5 tiles across breakpoints; no orphan blank cells */}
+      <div className="mt-3 sm:mt-4 grid grid-cols-2 gap-2 min-[480px]:grid-cols-3 md:grid-cols-5 sm:gap-2.5 md:gap-3">
+        {PRIMARY_ACTIONS.map((item) => (
+          <ActionTile
+            key={item.to}
+            to={item.to}
+            label={item.label}
+            desc={item.desc}
+            icon={item.icon}
+            bgClass={item.bgClass}
+            wellClass={item.wellClass}
+          />
         ))}
-        <div className="relative" ref={ref}>
-          <button
-            type="button"
+
+        {/* 5th Tile: "More" with Dashed Border */}
+        <div className="relative col-span-1" ref={ref}>
+          <ActionTile
+            to="#"
+            label="More"
+            desc="Explore all features"
+            icon={<MoreHorizontal className="h-5 w-5 sm:h-6 sm:w-6 text-neutral-600 stroke-[2.2]" />}
+            bgClass=""
+            wellClass="bg-neutral-100 text-neutral-600"
+            isDashed
             onClick={() => setOpen((o) => !o)}
-            className="group flex h-full w-full flex-col overflow-hidden rounded-2xl border border-neutral-100 bg-white p-3.5 text-left transition hover:-translate-y-0.5 hover:shadow-panel sm:p-4"
-            aria-expanded={open}
-            aria-haspopup="menu"
-            aria-label="More quick actions"
-          >
-            <div className="flex items-start justify-between gap-2">
-              <IconWell accent="slate" size="md">
-                <MoreHorizontal className="h-[18px] w-[18px]" strokeWidth={2} />
-              </IconWell>
-              <ArrowUpRight className="h-4 w-4 text-neutral-300" />
-            </div>
-            <p className="mt-2.5 text-[13px] font-bold text-neutral-900">More</p>
-            <p className="mt-0.5 text-[11px] font-medium text-neutral-500">Templates & more</p>
-          </button>
+          />
+
           {open && (
             <div
               role="menu"
               aria-label="More quick actions"
-              className="absolute bottom-full left-0 z-20 mb-2 w-[min(100%,220px)] rounded-xl border border-neutral-200 bg-white p-1 shadow-lg sm:left-auto sm:right-0"
+              className="absolute bottom-full left-0 z-20 mb-2 w-[min(100vw-2rem,220px)] rounded-2xl border border-neutral-200/80 bg-white p-1.5 shadow-lg sm:left-auto sm:right-0 dark:bg-neutral-900 dark:border-neutral-800"
             >
-              {MORE.map((item) => {
+              {MORE_MENU_ITEMS.map((item) => {
                 const Icon = item.icon;
                 return (
                   <Link
@@ -147,13 +221,15 @@ export default function DashboardQuickActions() {
                     to={item.to}
                     role="menuitem"
                     onClick={() => setOpen(false)}
-                    className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 transition hover:bg-neutral-50"
+                    className="flex items-center gap-2.5 rounded-xl px-2.5 py-2 transition hover:bg-neutral-50 dark:hover:bg-neutral-800"
                   >
                     <IconWell accent={item.accent} size="sm">
-                      <Icon className="h-4 w-4" strokeWidth={2} />
+                      <Icon className="h-4 w-4 stroke-[2]" />
                     </IconWell>
                     <span>
-                      <span className="block text-[12.5px] font-bold text-neutral-900">{item.label}</span>
+                      <span className="block text-[12.5px] font-bold text-neutral-900 dark:text-white">
+                        {item.label}
+                      </span>
                       <span className="block text-[11px] text-neutral-500">{item.desc}</span>
                     </span>
                   </Link>
