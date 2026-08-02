@@ -414,6 +414,8 @@ export const analyticsApi = {
     api.get('/analytics/leaderboard', { params: days ? { days: String(days) } : {} }),
   templates: (days?: number) =>
     api.get('/analytics/templates', { params: days ? { days: String(days) } : {} }),
+  activity: (limit = 4) =>
+    api.get('/analytics/activity', { params: { limit: String(limit) } }),
 };
 
 export const billingApi = {
