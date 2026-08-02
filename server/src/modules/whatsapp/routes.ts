@@ -127,8 +127,7 @@ router.patch(
 
 router.get(
   '/connect-url',
-  authenticate,
-  requireOrg,
+  ...metaAdminGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const userId = req.user!.userId;
@@ -363,8 +362,7 @@ const connectSchema = z.object({
 
 router.post(
   '/connect',
-  authenticate,
-  requireOrg,
+  ...metaAdminGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const data = connectSchema.parse(req.body);
     const orgId = req.user!.organizationId!;
@@ -396,8 +394,7 @@ router.post(
 
 router.delete(
   '/numbers/:id',
-  authenticate,
-  requireOrg,
+  ...metaAdminGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const id = String(req.params.id);
@@ -450,19 +447,30 @@ router.get(
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const metaCredentials = await resolveMetaCredentials(orgId);
-    const number = await prisma.whatsappNumber.findFirst({
-      where: { organizationId: orgId, isActive: true },
-    });
+    const headerId =
+      typeof req.headers['x-whatsapp-number-id'] === 'string'
+        ? req.headers['x-whatsapp-number-id']
+        : undefined;
+    const number = headerId
+      ? await prisma.whatsappNumber.findFirst({
+          where: { id: headerId, organizationId: orgId, isActive: true },
+        })
+      : await prisma.whatsappNumber.findFirst({
+          where: { organizationId: orgId, isActive: true },
+          orderBy: { updatedAt: 'desc' },
+        });
     if (!number) {
       return sendSuccess(res, {
         connected: false,
         webhookUrl: config.meta.webhookUrl || null,
         subscribed: false,
+        statusCheckFailed: false,
       });
     }
 
     const accessToken = MetaWhatsAppService.decryptToken(number.accessToken);
-    let subscribed = false;
+    let subscribed: boolean | null = null;
+    let statusCheckFailed = false;
     try {
       const status = await MetaWhatsAppService.getWebhookStatus(
         number.wabaId,
@@ -471,6 +479,7 @@ router.get(
       );
       subscribed = status.subscribed;
     } catch (err) {
+      statusCheckFailed = true;
       logError(err, { source: 'webhook', action: 'Webhook status check failed', organizationId: orgId });
     }
 
@@ -480,20 +489,29 @@ router.get(
       wabaId: number.wabaId,
       webhookUrl: config.meta.webhookUrl || null,
       subscribed,
+      statusCheckFailed,
     });
   })
 );
 
 router.post(
   '/setup-webhook',
-  authenticate,
-  requireOrg,
+  ...metaAdminGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const metaCredentials = await resolveMetaCredentials(orgId);
-    const number = await prisma.whatsappNumber.findFirst({
-      where: { organizationId: orgId, isActive: true },
-    });
+    const headerId =
+      typeof req.headers['x-whatsapp-number-id'] === 'string'
+        ? req.headers['x-whatsapp-number-id']
+        : undefined;
+    const number = headerId
+      ? await prisma.whatsappNumber.findFirst({
+          where: { id: headerId, organizationId: orgId, isActive: true },
+        })
+      : await prisma.whatsappNumber.findFirst({
+          where: { organizationId: orgId, isActive: true },
+          orderBy: { updatedAt: 'desc' },
+        });
     if (!number) throw new AppError(400, 'Connect a WhatsApp number first');
 
     const accessToken = MetaWhatsAppService.decryptToken(number.accessToken);
