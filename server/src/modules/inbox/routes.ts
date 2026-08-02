@@ -26,6 +26,27 @@ const router = Router();
 router.use(authenticate, requireOrg, resolveActiveWhatsappNumber);
 
 router.get(
+  '/unread-total',
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const numberId = req.activeWhatsappNumberId;
+
+    const where: Prisma.ConversationWhereInput = {
+      organizationId: orgId,
+      ...conversationFilter(numberId),
+      OR: [{ snoozedUntil: null }, { snoozedUntil: { lte: new Date() } }],
+    };
+
+    const result = await prisma.conversation.aggregate({
+      where,
+      _sum: { unreadCount: true },
+    });
+
+    sendSuccess(res, { total: result._sum.unreadCount ?? 0 });
+  })
+);
+
+router.get(
   '/',
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;

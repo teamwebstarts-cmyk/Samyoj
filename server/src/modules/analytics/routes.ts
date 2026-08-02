@@ -18,47 +18,57 @@ router.get(
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const numberId = req.activeWhatsappNumberId;
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const rawDays = parseInt((req.query.days as string) || '7', 10);
+    const days = [7, 14, 30].includes(rawDays) ? rawDays : 7;
+    const since = daysAgo(days);
+    const previousSince = daysAgo(days * 2);
     const convScope = { organizationId: orgId, ...conversationFilter(numberId) };
+
+    const outboundIn = (from: Date, to?: Date) => ({
+      direction: 'OUTBOUND' as const,
+      createdAt: to ? { gte: from, lt: to } : { gte: from },
+      conversation: convScope,
+    });
 
     const [
       messagesSent,
-      messagesDelivered,
+      messagesDeliveredOnly,
       messagesRead,
       messagesFailed,
+      messagesPending,
+      messagesSentPrev,
+      messagesDeliveredReachedPrev,
+      messagesReadPrev,
+      messagesFailedPrev,
       activeConversations,
       totalContacts,
     ] = await Promise.all([
+      prisma.message.count({ where: outboundIn(since) }),
+      // Latest status is exclusive (READ replaces DELIVERED on the row)
+      prisma.message.count({
+        where: { ...outboundIn(since), status: 'DELIVERED' },
+      }),
+      prisma.message.count({
+        where: { ...outboundIn(since), status: 'READ' },
+      }),
+      prisma.message.count({
+        where: { ...outboundIn(since), status: 'FAILED' },
+      }),
+      prisma.message.count({
+        where: { ...outboundIn(since), status: { in: ['PENDING', 'SENT'] } },
+      }),
+      prisma.message.count({ where: outboundIn(previousSince, since) }),
       prisma.message.count({
         where: {
-          direction: 'OUTBOUND',
-          createdAt: { gte: thirtyDaysAgo },
-          conversation: convScope,
+          ...outboundIn(previousSince, since),
+          status: { in: ['DELIVERED', 'READ'] },
         },
       }),
       prisma.message.count({
-        where: {
-          direction: 'OUTBOUND',
-          status: 'DELIVERED',
-          createdAt: { gte: thirtyDaysAgo },
-          conversation: convScope,
-        },
+        where: { ...outboundIn(previousSince, since), status: 'READ' },
       }),
       prisma.message.count({
-        where: {
-          direction: 'OUTBOUND',
-          status: 'READ',
-          createdAt: { gte: thirtyDaysAgo },
-          conversation: convScope,
-        },
-      }),
-      prisma.message.count({
-        where: {
-          direction: 'OUTBOUND',
-          status: 'FAILED',
-          createdAt: { gte: thirtyDaysAgo },
-          conversation: convScope,
-        },
+        where: { ...outboundIn(previousSince, since), status: 'FAILED' },
       }),
       prisma.conversation.count({
         where: { organizationId: orgId, status: 'OPEN', ...conversationFilter(numberId) },
@@ -66,13 +76,43 @@ router.get(
       prisma.contact.count({ where: { organizationId: orgId, ...contactsForNumberFilter(numberId) } }),
     ]);
 
+    // Funnel: "delivered" = reached device (still DELIVERED or progressed to READ)
+    const messagesDelivered = messagesDeliveredOnly + messagesRead;
+
+    const rate = (part: number, whole: number) =>
+      whole ? Number(((part / whole) * 100).toFixed(1)) : 0;
+
+    const deliveryRate = rate(messagesDelivered, messagesSent);
+    const readRate = rate(messagesRead, messagesSent);
+    const prevDeliveryRate = rate(messagesDeliveredReachedPrev, messagesSentPrev);
+    const prevReadRate = rate(messagesReadPrev, messagesSentPrev);
+
+    const pctDelta = (current: number, previous: number): number | null => {
+      if (previous === 0) return current === 0 ? 0 : null;
+      return Number((((current - previous) / previous) * 100).toFixed(1));
+    };
+
     sendSuccess(res, {
+      days,
       messagesSent,
-      deliveryRate: messagesSent ? ((messagesDelivered / messagesSent) * 100).toFixed(1) : '0',
-      readRate: messagesSent ? ((messagesRead / messagesSent) * 100).toFixed(1) : '0',
+      messagesDelivered,
+      messagesDeliveredOnly,
+      messagesRead,
+      messagesFailed,
+      messagesPending,
+      deliveryRate: String(deliveryRate),
+      readRate: String(readRate),
       failedMessages: messagesFailed,
       activeConversations,
       totalContacts,
+      deltas: {
+        messagesSent: pctDelta(messagesSent, messagesSentPrev),
+        deliveryRate: pctDelta(deliveryRate, prevDeliveryRate),
+        readRate: pctDelta(readRate, prevReadRate),
+        failedMessages: pctDelta(messagesFailed, messagesFailedPrev),
+        activeConversations: null,
+        totalContacts: null,
+      },
     });
   })
 );

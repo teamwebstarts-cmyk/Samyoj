@@ -791,12 +791,28 @@ export interface CampaignAnalytics {
 }
 
 export interface AnalyticsOverview {
+  days?: number;
   messagesSent: number;
+  /** Funnel: DELIVERED + READ (reached device) */
+  messagesDelivered?: number;
+  /** Exclusive: still at DELIVERED (not yet read) */
+  messagesDeliveredOnly?: number;
+  messagesRead?: number;
+  messagesFailed?: number;
+  messagesPending?: number;
   deliveryRate: string;
   readRate: string;
   failedMessages: number;
   activeConversations: number;
   totalContacts: number;
+  deltas?: {
+    messagesSent: number | null;
+    deliveryRate: number | null;
+    readRate: number | null;
+    failedMessages: number | null;
+    activeConversations: number | null;
+    totalContacts: number | null;
+  };
 }
 
 export interface TemplateButton {

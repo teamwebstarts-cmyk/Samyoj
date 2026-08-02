@@ -1,24 +1,24 @@
 import { useState } from 'react';
 import {
-  BarChart3,
   Bot,
+  ClipboardList,
   CreditCard,
-  FileText,
-  Headset,
+  LayoutDashboard,
   LayoutGrid,
-  LifeBuoy,
   LineChart,
   LogOut,
   Menu,
   MessageSquare,
-  PhoneCall,
+  Package,
+  Phone,
   Search,
   Send,
-  Settings,
-  ShoppingBag,
+  Settings2,
   Sparkles,
+  Ticket,
   Users,
-  Zap,
+  UsersRound,
+  Workflow,
   type LucideIcon,
 } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
@@ -38,21 +38,21 @@ interface AppTopbarProps {
 }
 
 const PAGE_ICONS: Array<{ prefix: string; icon: LucideIcon; exact?: boolean }> = [
-  { prefix: '/', icon: BarChart3, exact: true },
+  { prefix: '/', icon: LayoutDashboard, exact: true },
   { prefix: '/inbox', icon: MessageSquare },
-  { prefix: '/calls', icon: PhoneCall },
-  { prefix: '/automations', icon: Zap },
+  { prefix: '/calls', icon: Phone },
+  { prefix: '/automations', icon: Workflow },
   { prefix: '/ai-bot', icon: Bot },
   { prefix: '/campaigns', icon: Send },
-  { prefix: '/templates', icon: FileText },
+  { prefix: '/templates', icon: ClipboardList },
   { prefix: '/content-studio', icon: Sparkles },
-  { prefix: '/commerce', icon: ShoppingBag },
+  { prefix: '/commerce', icon: Package },
   { prefix: '/contacts', icon: Users },
-  { prefix: '/tickets', icon: LifeBuoy },
-  { prefix: '/team', icon: Headset },
+  { prefix: '/tickets', icon: Ticket },
+  { prefix: '/team', icon: UsersRound },
   { prefix: '/reports', icon: LineChart },
   { prefix: '/billing', icon: CreditCard },
-  { prefix: '/settings', icon: Settings },
+  { prefix: '/settings', icon: Settings2 },
 ];
 
 function getPageIcon(pathname: string): LucideIcon {
@@ -81,7 +81,7 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
           <button
             type="button"
             onClick={onMenuOpen}
-            className="topbar-icon-btn lg:hidden"
+            className="topbar-icon-btn md:hidden"
             aria-label="Open menu"
           >
             <Menu className="h-5 w-5" strokeWidth={2} />

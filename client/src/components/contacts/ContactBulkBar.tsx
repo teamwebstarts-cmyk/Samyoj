@@ -1,4 +1,5 @@
 import { CheckSquare, Send, Tag, Trash2, UserCheck, UserX, X } from 'lucide-react';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { useSidebarCollapsed } from '../../hooks/useSidebarCollapsed';
 import AppButton from '../ui/AppButton';
 import { messagingConsent } from '../../utils/plainLanguage';
@@ -25,13 +26,15 @@ export default function ContactBulkBar({
   busy,
 }: ContactBulkBarProps) {
   const { collapsed } = useSidebarCollapsed();
+  const breakpoint = useBreakpoint();
+  const forceCollapsed = breakpoint === 'md' || collapsed;
 
   if (!selectedCount) return null;
 
   return (
     <div
-      className={`pointer-events-none fixed bottom-0 right-0 z-40 flex justify-center page-gutter-x pb-[calc(1rem+env(safe-area-inset-bottom,0px)+4rem)] sm:pb-6 lg:pb-6 ${
-        collapsed ? 'lg:left-[72px]' : 'lg:left-[260px]'
+      className={`pointer-events-none fixed bottom-0 right-0 z-40 flex justify-center page-gutter-x pb-[calc(1rem+env(safe-area-inset-bottom,0px)+4rem)] sm:pb-6 md:pb-6 ${
+        forceCollapsed ? 'md:left-[80px]' : 'md:left-[80px] lg:left-[280px]'
       } left-0`}
     >
       <div className="pointer-events-auto mx-auto w-full max-w-6xl overflow-hidden rounded-2xl border border-sky-200/80 bg-theme-surface/95 shadow-[0_8px_32px_rgba(14,165,233,0.18),0_2px_8px_rgba(15,23,42,0.08)] backdrop-blur-xl dark:border-sky-800/50 dark:shadow-[0_8px_32px_rgba(0,0,0,0.45)]">

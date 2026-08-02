@@ -24,7 +24,7 @@ export function PlatformLogo({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
     <div
       className={`flex shrink-0 items-center justify-center bg-whatsapp-600 text-white shadow-[0_2px_10px_rgba(37,211,102,0.35)] ${sizes[size]}`}
     >
-      <MessageCircle className={iconSizes[size]} strokeWidth={2.2} />
+      <MessageCircle className={iconSizes[size]} strokeWidth={1.8} />
     </div>
   );
 }
@@ -51,7 +51,7 @@ export function PlatformBrand({
   if (collapsed) {
     return (
       <div className="flex justify-center">
-        <PlatformLogo size="md" />
+        <PlatformLogo size={size === 'sm' ? 'sm' : 'md'} />
       </div>
     );
   }

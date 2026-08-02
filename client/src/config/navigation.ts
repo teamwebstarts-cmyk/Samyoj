@@ -1,19 +1,20 @@
 import type { LucideIcon } from 'lucide-react';
 import {
-  BarChart3,
   Bot,
+  ClipboardList,
   CreditCard,
-  FileText,
-  Headset,
-  LifeBuoy,
+  LayoutDashboard,
   LineChart,
   MessageSquare,
-  PhoneCall,
+  Package,
+  Phone,
   Send,
-  Settings,
-  ShoppingBag,
+  Settings2,
   Sparkles,
+  Ticket,
   Users,
+  UsersRound,
+  Workflow,
   Zap,
 } from 'lucide-react';
 import type { OrgRole } from '../types';
@@ -39,22 +40,21 @@ export interface NavSection {
 const ADMIN_ROLES: OrgRole[] = ['OWNER', 'ADMIN'];
 const SUPERVISOR_PLUS: OrgRole[] = ['OWNER', 'ADMIN', 'SUPERVISOR'];
 
+/**
+ * Icon choices aligned to glass mock + SaaS conventions:
+ * home grid, chat, phone, bot, flow, send, doc, package, people, ticket, chart, team, card, gear.
+ */
 export const NAV_SECTIONS: NavSection[] = [
   {
     label: 'Main',
     items: [
-      { to: '/', icon: BarChart3, label: 'Dashboard', end: true },
+      { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true },
       { to: '/inbox', icon: MessageSquare, label: 'Inbox' },
-      { to: '/calls', icon: PhoneCall, label: 'Calls' },
-    ],
-  },
-  {
-    label: 'Grow',
-    items: [
-      { to: '/automations', icon: Zap, label: 'Automations' },
+      { to: '/calls', icon: Phone, label: 'Calls' },
       { to: '/ai-bot', icon: Bot, label: 'AI Bots', hideForRoles: ['AGENT'] },
+      { to: '/automations', icon: Workflow, label: 'Automations' },
       { to: '/campaigns', icon: Send, label: 'Campaigns' },
-      { to: '/templates', icon: FileText, label: 'Templates' },
+      { to: '/templates', icon: ClipboardList, label: 'Templates' },
       {
         to: '/content-studio',
         icon: Sparkles,
@@ -62,13 +62,13 @@ export const NAV_SECTIONS: NavSection[] = [
         hideForRoles: ['AGENT'],
         hidden: true,
       },
-      { to: '/commerce', icon: ShoppingBag, label: 'Orders' },
+      { to: '/commerce', icon: Package, label: 'Orders' },
       { to: '/contacts', icon: Users, label: 'Contacts' },
     ],
   },
   {
     label: 'Support',
-    items: [{ to: '/tickets', icon: LifeBuoy, label: 'Tickets' }],
+    items: [{ to: '/tickets', icon: Ticket, label: 'Tickets' }],
   },
   {
     label: 'Insights',
@@ -79,7 +79,7 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       {
         to: '/team',
-        icon: Headset,
+        icon: UsersRound,
         label: 'Team',
         showForRoles: SUPERVISOR_PLUS,
       },
@@ -89,7 +89,7 @@ export const NAV_SECTIONS: NavSection[] = [
         label: 'Billing',
         showForRoles: ADMIN_ROLES,
       },
-      { to: '/settings', icon: Settings, label: 'Settings' },
+      { to: '/settings', icon: Settings2, label: 'Settings' },
     ],
   },
 ];
@@ -102,16 +102,16 @@ export const MOBILE_BOTTOM_NAV: NavItem[] = [
 ];
 
 export const MOBILE_MORE_ITEMS: NavItem[] = [
-  { to: '/', icon: BarChart3, label: 'Dashboard', end: true },
-  { to: '/calls', icon: PhoneCall, label: 'Calls' },
-  { to: '/tickets', icon: LifeBuoy, label: 'Tickets' },
-  { to: '/commerce', icon: ShoppingBag, label: 'Orders' },
+  { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true },
+  { to: '/calls', icon: Phone, label: 'Calls' },
   { to: '/ai-bot', icon: Bot, label: 'AI Bots', hideForRoles: ['AGENT'] },
-  { to: '/templates', icon: FileText, label: 'Templates' },
+  { to: '/templates', icon: ClipboardList, label: 'Templates' },
+  { to: '/tickets', icon: Ticket, label: 'Tickets' },
+  { to: '/commerce', icon: Package, label: 'Orders' },
   { to: '/reports', icon: LineChart, label: 'Reports' },
-  { to: '/team', icon: Headset, label: 'Team', showForRoles: SUPERVISOR_PLUS },
+  { to: '/team', icon: UsersRound, label: 'Team', showForRoles: SUPERVISOR_PLUS },
   { to: '/billing', icon: CreditCard, label: 'Billing', showForRoles: ADMIN_ROLES },
-  { to: '/settings', icon: Settings, label: 'Settings' },
+  { to: '/settings', icon: Settings2, label: 'Settings' },
 ];
 
 /** Legacy route — redirects to contacts pipeline tab */

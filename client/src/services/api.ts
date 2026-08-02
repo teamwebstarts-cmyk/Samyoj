@@ -126,6 +126,7 @@ export const authApi = {
 
 export const inboxApi = {
   list: (params?: Record<string, string>) => api.get('/inbox', { params }),
+  unreadTotal: () => api.get('/inbox/unread-total'),
   start: (data: { phone: string; name?: string }) => api.post('/inbox/start', data),
   get: (id: string) => api.get(`/inbox/${id}`),
   messages: (id: string) => api.get(`/inbox/${id}/messages`),
@@ -406,7 +407,8 @@ export const templateApi = {
 };
 
 export const analyticsApi = {
-  overview: () => api.get('/analytics/overview'),
+  overview: (days?: number) =>
+    api.get('/analytics/overview', { params: days ? { days: String(days) } : {} }),
   reports: (days?: number) => api.get('/analytics/reports', { params: days ? { days: String(days) } : {} }),
   leaderboard: (days?: number) =>
     api.get('/analytics/leaderboard', { params: days ? { days: String(days) } : {} }),

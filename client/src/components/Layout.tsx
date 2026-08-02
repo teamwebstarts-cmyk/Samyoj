@@ -1,6 +1,8 @@
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useBreakpoint } from '../hooks/useBreakpoint';
+import { useInboxUnreadTotal } from '../hooks/useInboxUnreadTotal';
 import { useSidebarCollapsed } from '../hooks/useSidebarCollapsed';
 import { isBuilderRoute, shouldShowMobileBottomNav } from '../config/pageMeta';
 import AppTopbar from './layout/AppTopbar';
@@ -17,8 +19,14 @@ export default function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const { collapsed, toggle } = useSidebarCollapsed();
+  const breakpoint = useBreakpoint();
+  const { total: inboxUnread, refresh: refreshInboxUnread } = useInboxUnreadTotal();
 
-  const showBottomNav = shouldShowMobileBottomNav(pathname);
+  const isMobile = breakpoint === 'xs' || breakpoint === 'sm';
+  const isTablet = breakpoint === 'md';
+  const isDesktop = breakpoint === 'lg' || breakpoint === 'xl';
+  const effectiveCollapsed = isTablet || collapsed;
+  const showBottomNav = isMobile && shouldShowMobileBottomNav(pathname);
   const hideTopbar = isBuilderRoute(pathname);
 
   const handleLogout = () => {
@@ -38,36 +46,45 @@ export default function Layout() {
     setMobileOpen(false);
   }, [pathname]);
 
+  useEffect(() => {
+    void refreshInboxUnread();
+  }, [pathname, refreshInboxUnread]);
+
   const sidebarProps = {
-    onLogout: handleLogout,
     onNavigate: () => setMobileOpen(false),
+    inboxUnread,
   };
 
   return (
     <CallNotificationProvider>
       <div className="flex h-[100dvh] overflow-hidden platform-gradient">
         <aside
-          className={`hidden shrink-0 border-r border-theme-border bg-theme-surface transition-[width] duration-300 ease-in-out lg:block ${
-            collapsed ? 'w-[72px]' : 'w-[260px]'
+          className={`sidebar-glass hidden shrink-0 overflow-hidden transition-[width] duration-[250ms] ease-in-out md:block ${
+            effectiveCollapsed ? 'w-[80px]' : 'w-[280px]'
           }`}
         >
-          <Sidebar {...sidebarProps} collapsed={collapsed} collapsible onToggleCollapse={toggle} />
+          <Sidebar
+            {...sidebarProps}
+            collapsed={effectiveCollapsed}
+            collapsible={isDesktop}
+            onToggleCollapse={isDesktop ? toggle : undefined}
+          />
         </aside>
 
         <div
-          className={`fixed inset-0 z-50 lg:hidden ${mobileOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}
+          className={`fixed inset-0 z-50 md:hidden ${mobileOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}
           aria-hidden={!mobileOpen}
         >
           <button
             type="button"
-            className={`absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300 dark:bg-black/70 ${
+            className={`absolute inset-0 bg-black/50 backdrop-blur-[12px] transition-opacity duration-[250ms] dark:bg-black/70 ${
               mobileOpen ? 'opacity-100' : 'opacity-0'
             }`}
             onClick={() => setMobileOpen(false)}
             aria-label="Close menu overlay"
           />
           <aside
-            className={`absolute left-0 top-0 h-full w-[min(300px,90vw)] shadow-panel transition-transform duration-300 ease-out ${
+            className={`sidebar-glass absolute left-0 top-0 h-full w-[min(320px,90vw)] overflow-hidden transition-transform duration-[250ms] ease-out ${
               mobileOpen ? 'translate-x-0' : '-translate-x-full'
             }`}
           >
@@ -80,7 +97,7 @@ export default function Layout() {
             <AppTopbar
               companyName={organization?.companyName}
               userName={user?.name}
-              onMenuOpen={showBottomNav ? undefined : () => setMobileOpen(true)}
+              onMenuOpen={isMobile ? () => setMobileOpen(true) : undefined}
               onLogout={handleLogout}
             />
           )}
@@ -89,7 +106,7 @@ export default function Layout() {
 
           <main
             className={`platform-gradient-subtle flex-1 overflow-auto ${
-              showBottomNav ? 'pb-[calc(4rem+env(safe-area-inset-bottom,0px))] lg:pb-0' : ''
+              showBottomNav ? 'pb-[calc(4rem+env(safe-area-inset-bottom,0px))] md:pb-0' : ''
             }`}
           >
             <Outlet />

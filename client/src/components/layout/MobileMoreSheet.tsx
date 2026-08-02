@@ -30,7 +30,7 @@ export default function MobileMoreSheet({ open, onClose }: MobileMoreSheetProps)
   if (!open || typeof document === 'undefined') return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[70] lg:hidden" role="presentation">
+    <div className="fixed inset-0 z-[70] md:hidden" role="presentation">
       <button
         type="button"
         className="absolute inset-0 bg-black/50 backdrop-blur-sm dark:bg-black/70"
