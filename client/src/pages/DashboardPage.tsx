@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { AlertCircle } from 'lucide-react';
 import DashboardSkeleton from '../components/dashboard/DashboardSkeleton';
-import WhatsAppConnectGuide from '../components/dashboard/WhatsAppConnectGuide';
+import WhatsAppConnectGuide, {
+  type WhatsAppGuideStatus,
+} from '../components/dashboard/WhatsAppConnectGuide';
 import NeedsAttentionCard from '../components/dashboard/NeedsAttentionCard';
 import DashboardKpiCard from '../components/dashboard/DashboardKpiCard';
 import MessagePerformanceDonut from '../components/dashboard/MessagePerformanceDonut';
@@ -80,8 +82,17 @@ export default function DashboardPage() {
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [activityLoading, setActivityLoading] = useState(true);
   const [activityError, setActivityError] = useState(false);
+  const [waStatus, setWaStatus] = useState<WhatsAppGuideStatus>({
+    connected: false,
+    incomingEnabled: null,
+    statusReady: false,
+  });
   const statsReqId = useRef(0);
   const hasStatsRef = useRef(false);
+
+  const onWaStatusChange = useCallback((status: WhatsAppGuideStatus) => {
+    setWaStatus(status);
+  }, []);
 
   const loadStats = (period: PeriodDays = days) => {
     const reqId = ++statsReqId.current;
@@ -140,8 +151,13 @@ export default function DashboardPage() {
           setCampaignsError(true);
           return;
         }
+        const partialFail =
+          scheduledResult.status === 'rejected' || draftResult.status === 'rejected';
         setCampaigns(pickUpcoming([...scheduled, ...drafts]));
         setCampaignsError(false);
+        if (partialFail) {
+          toastError('Some campaign lists could not load. Showing what we could.');
+        }
       })
       .finally(() => setCampaignsLoading(false));
 
@@ -154,7 +170,7 @@ export default function DashboardPage() {
           setOnboardingError(false);
         } else {
           setOnboarding(null);
-          setOnboardingError(false);
+          setOnboardingError(true);
         }
       })
       .catch(() => {
@@ -202,7 +218,7 @@ export default function DashboardPage() {
   return (
     <PageShell>
       <div className="space-y-3 pb-5 sm:space-y-4 sm:pb-6">
-        <WhatsAppConnectGuide />
+        <WhatsAppConnectGuide onStatusChange={onWaStatusChange} />
 
         {loading && !stats ? (
           <DashboardSkeleton />
@@ -228,6 +244,8 @@ export default function DashboardPage() {
                 <NeedsAttentionCard
                   openChats={stats.activeConversations}
                   failedMessages={stats.failedMessages}
+                  isConnected={waStatus.statusReady ? waStatus.connected : null}
+                  incomingEnabled={waStatus.statusReady ? waStatus.incomingEnabled : null}
                 />
               </div>
 
@@ -246,7 +264,7 @@ export default function DashboardPage() {
                     <select
                       value={days}
                       onChange={(e) => setDays(Number(e.target.value) as PeriodDays)}
-                      disabled={refreshing && loading}
+                      disabled={refreshing}
                       className="rounded-lg border border-neutral-200 bg-white px-2 py-1.5 text-[11.5px] sm:px-2.5 sm:text-[12px] font-semibold text-neutral-800 shadow-sm focus:border-whatsapp-500 focus:outline-none focus:ring-2 focus:ring-whatsapp-500/20 disabled:opacity-60"
                     >
                       <option value={7}>Last 7 days</option>
@@ -255,7 +273,7 @@ export default function DashboardPage() {
                     </select>
                   </label>
                 </div>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-2.5 lg:grid-cols-3 xl:grid-cols-5 xl:gap-2.5">
+                <div className="grid grid-cols-2 gap-2 md:grid-cols-3 md:gap-2.5 xl:grid-cols-5 xl:gap-2.5">
                   <DashboardKpiCard
                     label="Messages sent"
                     value={stats.messagesSent.toLocaleString()}
@@ -311,7 +329,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Row 2: Performance + Campaigns — 2-col from md */}
-            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-3 lg:mt-4 lg:gap-4">
+            <div className="mt-3 grid grid-cols-1 gap-3 lg:mt-4 lg:grid-cols-2 lg:gap-4">
               <MessagePerformanceDonut
                 messagesSent={stats.messagesSent}
                 messagesDelivered={stats.messagesDelivered ?? 0}
@@ -380,8 +398,11 @@ export default function DashboardPage() {
               </div>
               <div className="min-w-0 lg:col-span-2">
                 <AiSuggestionCard
-                  readRate={`${stats.readRate}%`}
+                  readRate={stats.readRate}
                   readRateDelta={stats.deltas?.readRate}
+                  messagesSent={stats.messagesSent}
+                  failedMessages={stats.failedMessages}
+                  openChats={stats.activeConversations}
                 />
               </div>
             </div>
