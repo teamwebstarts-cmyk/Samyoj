@@ -177,7 +177,7 @@ export default function UpcomingCampaignsCard({
                 Launch your first campaign
               </h3>
               <p className="mt-1 text-[12px] font-medium leading-relaxed text-neutral-600">
-                Broadcast targeted WhatsApp messages to thousands of customers at once with high open rates.
+                Broadcast WhatsApp messages to your contacts with delivery and read tracking.
               </p>
             </div>
           </div>
@@ -186,7 +186,7 @@ export default function UpcomingCampaignsCard({
           <div className="mt-3.5 grid grid-cols-2 gap-2 pt-2 border-t border-emerald-100/60 text-[11.5px] font-semibold text-neutral-700">
             <div className="flex items-center gap-1.5">
               <Zap className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-              <span>Up to 98% open rate</span>
+              <span>Delivery tracking</span>
             </div>
             <div className="flex items-center gap-1.5">
               <Calendar className="h-3.5 w-3.5 text-sky-600 shrink-0" />
