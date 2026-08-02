@@ -26,25 +26,25 @@ export default function NumberSwitcher() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex max-w-[220px] items-center gap-2 rounded-xl border border-whatsapp-200/80 bg-whatsapp-50/90 px-3 py-2 text-left transition hover:border-whatsapp-300 hover:bg-whatsapp-50 dark:border-whatsapp-500/25 dark:bg-whatsapp-500/10 dark:hover:bg-whatsapp-500/15"
+        className="flex h-[2.625rem] max-w-[200px] items-center gap-2 rounded-[0.875rem] border border-[#e5e7eb] bg-white px-2.5 text-left transition hover:border-[#d1d5db] hover:bg-[#fafafa] dark:border-theme-border dark:bg-theme-surface dark:hover:bg-theme-subtle lg:max-w-[220px]"
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label="Switch WhatsApp business number"
         title="Switch business number"
       >
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-whatsapp-500 text-white shadow-[0_2px_8px_rgba(37,211,102,0.35)]">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#16a34a] text-white">
           <Phone className="h-3.5 w-3.5" strokeWidth={2.25} />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[11px] font-semibold uppercase tracking-wide text-whatsapp-700/80 dark:text-whatsapp-300/80">
-            Business number
+          <span className="block truncate text-[10px] font-semibold uppercase tracking-wide text-neutral-400">
+            Number
           </span>
-          <span className="block truncate text-[13px] font-bold text-theme-fg">
+          <span className="block truncate text-[12.5px] font-bold leading-tight text-neutral-900 dark:text-theme-fg">
             {formatPhoneDisplay(activeNumber.phoneNumber)}
           </span>
         </span>
         <ChevronDown
-          className={`h-4 w-4 shrink-0 text-theme-muted transition ${open ? 'rotate-180' : ''}`}
+          className={`h-4 w-4 shrink-0 text-neutral-400 transition ${open ? 'rotate-180' : ''}`}
         />
       </button>
 
