@@ -1,12 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import {
-  AlertCircle,
-  Eye,
-  FileText,
-  MessageSquare,
-  ShieldCheck,
-  Users,
-} from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import DashboardSkeleton from '../components/dashboard/DashboardSkeleton';
 import WhatsAppConnectGuide from '../components/dashboard/WhatsAppConnectGuide';
 import NeedsAttentionCard from '../components/dashboard/NeedsAttentionCard';
@@ -15,6 +8,15 @@ import MessagePerformanceDonut from '../components/dashboard/MessagePerformanceD
 import UpcomingCampaignsCard from '../components/dashboard/UpcomingCampaignsCard';
 import GettingStartedCard from '../components/dashboard/GettingStartedCard';
 import DashboardQuickActions from '../components/dashboard/DashboardQuickActions';
+import RecentActivityCard from '../components/dashboard/RecentActivityCard';
+import AiSuggestionCard from '../components/dashboard/AiSuggestionCard';
+import {
+  MessagesSentSvg,
+  DeliveryRateSvg,
+  ReadRateSvg,
+  ActiveChatsSvg,
+  ContactsSvg,
+} from '../components/dashboard/icons/DashboardIcons';
 import PageShell from '../components/ui/PageShell';
 import EmptyState from '../components/ui/EmptyState';
 import AppButton from '../components/ui/AppButton';
@@ -22,6 +24,7 @@ import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 import { analyticsApi, campaignApi, onboardingApi } from '../services/api';
 import { toastError } from '../utils/toast';
 import type { AnalyticsOverview, Campaign } from '../types';
+import type { ActivityItem } from '../components/dashboard/RecentActivityCard';
 
 type PeriodDays = 7 | 14 | 30;
 
@@ -74,6 +77,9 @@ export default function DashboardPage() {
   const [campaignsError, setCampaignsError] = useState(false);
   const [onboarding, setOnboarding] = useState<OnboardingStatus | null>(null);
   const [onboardingError, setOnboardingError] = useState(false);
+  const [activity, setActivity] = useState<ActivityItem[]>([]);
+  const [activityLoading, setActivityLoading] = useState(true);
+  const [activityError, setActivityError] = useState(false);
   const statsReqId = useRef(0);
   const hasStatsRef = useRef(false);
 
@@ -155,6 +161,22 @@ export default function DashboardPage() {
         setOnboarding(null);
         setOnboardingError(true);
       });
+
+    setActivityLoading(true);
+    setActivityError(false);
+    analyticsApi
+      .activity(4)
+      .then(({ data }) => {
+        const payload = data?.data as { items?: ActivityItem[] } | undefined;
+        const list = Array.isArray(payload?.items) ? payload!.items! : [];
+        setActivity(list);
+        setActivityError(false);
+      })
+      .catch(() => {
+        setActivity([]);
+        setActivityError(true);
+      })
+      .finally(() => setActivityLoading(false));
   };
 
   useEffect(() => {
@@ -175,7 +197,7 @@ export default function DashboardPage() {
   const showChecklist =
     onboarding && onboarding.totalSteps > 0 && onboarding.completedCount < onboarding.totalSteps;
 
-  const periodLabel = `vs prior ${days}d`;
+  const periodLabel = `vs last ${days}d`;
 
   return (
     <PageShell>
@@ -198,17 +220,20 @@ export default function DashboardPage() {
           />
         ) : stats ? (
           <div className={refreshing ? 'opacity-70 transition-opacity' : undefined}>
-            <div className="grid gap-3 lg:grid-cols-12 lg:gap-4">
-              <div className="lg:col-span-4 xl:col-span-3">
+            {/* Row 1: Needs attention + Key metrics
+                Mobile: stack. Tablet/lg: side-by-side without stretch gaps.
+                KPI 5-up only at xl where width is enough. */}
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-12 lg:items-start lg:gap-3 xl:gap-4">
+              <div className="min-w-0 lg:col-span-4">
                 <NeedsAttentionCard
                   openChats={stats.activeConversations}
                   failedMessages={stats.failedMessages}
                 />
               </div>
 
-              <div className="lg:col-span-8 xl:col-span-9">
+              <div className="min-w-0 lg:col-span-8">
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-0.5">
-                  <p className="text-[12px] font-bold uppercase tracking-wide text-neutral-500">
+                  <p className="text-[11px] sm:text-[12px] font-bold uppercase tracking-wide text-neutral-500">
                     Key metrics
                     {refreshing && (
                       <span className="ml-2 font-semibold normal-case text-neutral-400">
@@ -222,7 +247,7 @@ export default function DashboardPage() {
                       value={days}
                       onChange={(e) => setDays(Number(e.target.value) as PeriodDays)}
                       disabled={refreshing && loading}
-                      className="rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-[12px] font-semibold text-neutral-800 shadow-sm focus:border-whatsapp-500 focus:outline-none focus:ring-2 focus:ring-whatsapp-500/20 disabled:opacity-60"
+                      className="rounded-lg border border-neutral-200 bg-white px-2 py-1.5 text-[11.5px] sm:px-2.5 sm:text-[12px] font-semibold text-neutral-800 shadow-sm focus:border-whatsapp-500 focus:outline-none focus:ring-2 focus:ring-whatsapp-500/20 disabled:opacity-60"
                     >
                       <option value={7}>Last 7 days</option>
                       <option value={14}>Last 14 days</option>
@@ -230,15 +255,16 @@ export default function DashboardPage() {
                     </select>
                   </label>
                 </div>
-                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-5 sm:gap-3">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-2.5 lg:grid-cols-3 xl:grid-cols-5 xl:gap-2.5">
                   <DashboardKpiCard
                     label="Messages sent"
                     value={stats.messagesSent.toLocaleString()}
                     delta={stats.deltas?.messagesSent}
                     deltaLabel={periodLabel}
                     to="/reports"
-                    icon={FileText}
+                    customIcon={<MessagesSentSvg className="h-4 w-4 sm:h-5 sm:w-5" />}
                     accent="emerald"
+                    dataPoints={stats.dailySeries?.map((d) => d.messagesSent)}
                   />
                   <DashboardKpiCard
                     label="Delivery rate"
@@ -246,8 +272,9 @@ export default function DashboardPage() {
                     delta={stats.deltas?.deliveryRate}
                     deltaLabel={periodLabel}
                     to="/reports"
-                    icon={ShieldCheck}
+                    customIcon={<DeliveryRateSvg className="h-4 w-4 sm:h-5 sm:w-5" />}
                     accent="emerald"
+                    dataPoints={stats.dailySeries?.map((d) => d.deliveryRate)}
                   />
                   <DashboardKpiCard
                     label="Read rate"
@@ -255,8 +282,9 @@ export default function DashboardPage() {
                     delta={stats.deltas?.readRate}
                     deltaLabel={periodLabel}
                     to="/reports"
-                    icon={Eye}
+                    customIcon={<ReadRateSvg className="h-4 w-4 sm:h-5 sm:w-5" />}
                     accent="sky"
+                    dataPoints={stats.dailySeries?.map((d) => d.readRate)}
                   />
                   <DashboardKpiCard
                     label="Active chats"
@@ -264,8 +292,9 @@ export default function DashboardPage() {
                     delta={stats.deltas?.activeConversations}
                     deltaLabel={periodLabel}
                     to="/inbox"
-                    icon={MessageSquare}
+                    customIcon={<ActiveChatsSvg className="h-4 w-4 sm:h-5 sm:w-5" />}
                     accent="violet"
+                    dataPoints={stats.dailySeries?.map((d) => d.activeConversations)}
                   />
                   <DashboardKpiCard
                     label="Contacts"
@@ -273,14 +302,16 @@ export default function DashboardPage() {
                     delta={stats.deltas?.totalContacts}
                     deltaLabel={periodLabel}
                     to="/contacts"
-                    icon={Users}
+                    customIcon={<ContactsSvg className="h-4 w-4 sm:h-5 sm:w-5" />}
                     accent="amber"
+                    dataPoints={stats.dailySeries?.map((d) => d.totalContacts)}
                   />
                 </div>
               </div>
             </div>
 
-            <div className="mt-3 grid gap-3 lg:mt-4 lg:grid-cols-2 lg:gap-4">
+            {/* Row 2: Performance + Campaigns — 2-col from md */}
+            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-3 lg:mt-4 lg:gap-4">
               <MessagePerformanceDonut
                 messagesSent={stats.messagesSent}
                 messagesDelivered={stats.messagesDelivered ?? 0}
@@ -290,6 +321,7 @@ export default function DashboardPage() {
                 messagesPending={stats.messagesPending ?? 0}
                 deliveryRate={stats.deliveryRate}
                 readRate={stats.readRate}
+                periodLabel={`Last ${days} days`}
               />
               <UpcomingCampaignsCard
                 campaigns={campaigns}
@@ -299,16 +331,17 @@ export default function DashboardPage() {
               />
             </div>
 
+            {/* Row 3: Quick actions + Getting started */}
             <div
-              className={`mt-3 grid gap-3 lg:mt-4 lg:gap-4 ${
-                showChecklist || onboardingError ? 'lg:grid-cols-5' : 'grid-cols-1'
+              className={`mt-3 grid grid-cols-1 gap-3 lg:mt-4 lg:gap-4 ${
+                showChecklist || onboardingError ? 'lg:grid-cols-5 lg:items-start' : ''
               }`}
             >
-              <div className={showChecklist || onboardingError ? 'lg:col-span-3' : undefined}>
+              <div className={`min-w-0 ${showChecklist || onboardingError ? 'lg:col-span-3' : ''}`}>
                 <DashboardQuickActions />
               </div>
               {showChecklist && onboarding && (
-                <div className="lg:col-span-2">
+                <div className="min-w-0 lg:col-span-2">
                   <GettingStartedCard
                     steps={onboarding.steps}
                     completedCount={onboarding.completedCount}
@@ -317,8 +350,8 @@ export default function DashboardPage() {
                 </div>
               )}
               {onboardingError && !showChecklist && (
-                <div className="lg:col-span-2">
-                  <div className="dashboard-card flex h-full flex-col justify-center rounded-2xl border-amber-100 bg-amber-50/40 p-4">
+                <div className="min-w-0 lg:col-span-2">
+                  <div className="dashboard-card flex flex-col justify-center rounded-2xl border-amber-100 bg-amber-50/40 p-4">
                     <p className="text-[13px] font-bold text-neutral-900">Couldn&apos;t load checklist</p>
                     <p className="mt-0.5 text-[12px] text-neutral-600">
                       Setup steps are temporarily unavailable.
@@ -333,6 +366,24 @@ export default function DashboardPage() {
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* Row 4: Activity + AI — stack until lg */}
+            <div className="mt-3 grid grid-cols-1 gap-3 lg:mt-4 lg:grid-cols-5 lg:items-start lg:gap-4">
+              <div className="min-w-0 lg:col-span-3">
+                <RecentActivityCard
+                  items={activity}
+                  loading={activityLoading}
+                  error={activityError}
+                  onRetry={() => loadSideData()}
+                />
+              </div>
+              <div className="min-w-0 lg:col-span-2">
+                <AiSuggestionCard
+                  readRate={`${stats.readRate}%`}
+                  readRateDelta={stats.deltas?.readRate}
+                />
+              </div>
             </div>
           </div>
         ) : null}
