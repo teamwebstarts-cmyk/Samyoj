@@ -5,6 +5,7 @@ import { getVisibleNavSections } from '../../config/navigation';
 import { useAuth } from '../../contexts/AuthContext';
 import { PlatformBrand } from './PlatformBrand';
 import WhatsAppStatusCard from './WhatsAppStatusCard';
+import { SidebarFlyoutTip, tipProps, useSidebarFlyoutTip } from './SidebarFlyoutTip';
 
 interface SidebarProps {
   collapsed?: boolean;
@@ -15,6 +16,14 @@ interface SidebarProps {
   showClose?: boolean;
   inboxUnread?: number;
 }
+
+/** Abbreviated section titles keep header height when collapsed so icons never jump up. */
+const SECTION_SHORT: Record<string, string> = {
+  Main: 'MA',
+  Support: 'SUPP',
+  Insights: 'INS',
+  Account: 'ACC',
+};
 
 function formatBadge(count: number): string {
   if (count <= 0) return '';
@@ -29,6 +38,8 @@ function NavItem({
   collapsed,
   onNavigate,
   badge,
+  onShowTip,
+  onHideTip,
 }: {
   to: string;
   icon: LucideIcon;
@@ -37,22 +48,27 @@ function NavItem({
   collapsed?: boolean;
   onNavigate?: () => void;
   badge?: number;
+  onShowTip: (text: string, el: HTMLElement) => void;
+  onHideTip: () => void;
 }) {
   const badgeLabel = formatBadge(badge ?? 0);
+  const tipText = badgeLabel ? `${label} · ${badgeLabel}` : label;
+  const flyout = tipProps(!!collapsed, tipText, onShowTip, onHideTip);
 
   return (
     <NavLink
       to={to}
       end={end}
-      onClick={onNavigate}
-      title={collapsed ? (badgeLabel ? `${label} (${badgeLabel})` : label) : undefined}
+      onClick={() => {
+        onHideTip();
+        onNavigate?.();
+      }}
       aria-label={badgeLabel ? `${label}, ${badgeLabel} unread` : label}
+      {...flyout}
       className={({ isActive }) =>
         [
-          'sidebar-nav-item group relative box-border flex items-center border transition-[background-color,color,box-shadow,border-color,transform,font-weight] duration-[180ms] ease-out',
-          collapsed
-            ? 'h-12 w-12 justify-center rounded-2xl'
-            : 'h-12 w-full gap-3.5 rounded-2xl px-4 text-[15px] font-medium',
+          'sidebar-nav-item group relative box-border flex h-10 w-full items-center rounded-xl border pl-2.5 pr-2.5 text-[13.5px] font-medium',
+          'transition-[background-color,color,box-shadow,border-color] duration-200 ease-out',
           isActive ? 'sidebar-nav-item--active' : 'sidebar-nav-item--idle',
         ].join(' ')
       }
@@ -61,34 +77,46 @@ function NavItem({
         <>
           <span
             className={[
-              'sidebar-nav-icon flex shrink-0 items-center justify-center transition-transform duration-[180ms] ease-out',
-              isActive ? 'h-[34px] w-[34px] rounded-[10px]' : 'h-5 w-5',
-              !collapsed && !isActive ? 'group-hover:translate-x-0.5 group-hover:scale-105' : '',
-              collapsed && !isActive ? 'group-hover:scale-105' : '',
+              'sidebar-nav-icon relative z-[1] flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
+              !isActive ? 'group-hover:scale-[1.04]' : '',
             ].join(' ')}
+            style={{ transition: 'transform 200ms ease, background-color 200ms ease' }}
           >
             <Icon
-              className={isActive ? 'h-[18px] w-[18px] text-white' : 'h-5 w-5'}
-              strokeWidth={1.8}
+              className={isActive ? 'h-[16px] w-[16px] text-white' : 'h-[17px] w-[17px]'}
+              strokeWidth={isActive ? 2 : 1.75}
             />
-          </span>
-          {!collapsed && (
-            <>
-              <span className="min-w-0 flex-1 truncate transition-[font-weight] duration-[180ms] group-hover:font-semibold">
-                {label}
+            {badgeLabel ? (
+              <span
+                className={[
+                  'sidebar-nav-badge absolute -right-0.5 -top-0.5 z-[2] inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold tabular-nums',
+                  'transition-opacity duration-200 ease-out',
+                  collapsed ? 'opacity-100' : 'pointer-events-none opacity-0',
+                ].join(' ')}
+                aria-hidden={!collapsed}
+              >
+                {badgeLabel}
               </span>
-              {badgeLabel ? (
-                <span className="sidebar-nav-badge inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-semibold tabular-nums">
-                  {badgeLabel}
-                </span>
-              ) : null}
-            </>
-          )}
-          {collapsed && badgeLabel ? (
-            <span className="sidebar-nav-badge absolute -right-0.5 -top-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold tabular-nums">
-              {badgeLabel}
+            ) : null}
+          </span>
+
+          <span
+            className={[
+              'sidebar-label ml-2.5 flex min-w-0 flex-1 items-center gap-2 overflow-hidden whitespace-nowrap',
+              'transition-[opacity,margin] duration-200 ease-out',
+              collapsed ? 'pointer-events-none ml-0 w-0 opacity-0' : 'opacity-100',
+            ].join(' ')}
+            aria-hidden={collapsed}
+          >
+            <span className="min-w-0 flex-1 truncate transition-[font-weight] duration-200 group-hover:font-semibold">
+              {label}
             </span>
-          ) : null}
+            {badgeLabel ? (
+              <span className="sidebar-nav-badge inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 text-[10.5px] font-semibold tabular-nums">
+                {badgeLabel}
+              </span>
+            ) : null}
+          </span>
         </>
       )}
     </NavLink>
@@ -98,26 +126,72 @@ function NavItem({
 function CollapseButton({
   collapsed,
   onToggle,
+  onShowTip,
+  onHideTip,
 }: {
   collapsed: boolean;
   onToggle: () => void;
+  onShowTip: (text: string, el: HTMLElement) => void;
+  onHideTip: () => void;
 }) {
+  const label = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
+  const flyout = tipProps(true, label, onShowTip, onHideTip);
+
   return (
     <button
       type="button"
-      onClick={onToggle}
-      title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-      aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+      onClick={() => {
+        onHideTip();
+        onToggle();
+      }}
+      aria-label={label}
       aria-expanded={!collapsed}
-      className="sidebar-collapse-btn flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
+      {...flyout}
+      className={[
+        'sidebar-collapse-btn flex shrink-0 items-center justify-center rounded-full',
+        collapsed ? 'h-7 w-7' : 'h-8 w-8',
+      ].join(' ')}
     >
       <ChevronsLeft
-        className={`h-4 w-4 transition-transform duration-[250ms] ease-out ${
-          collapsed ? 'rotate-180' : 'rotate-0'
+        className={`transition-transform duration-[250ms] ease-out ${
+          collapsed ? 'h-3.5 w-3.5 rotate-180' : 'h-4 w-4 rotate-0'
         }`}
         strokeWidth={1.8}
       />
     </button>
+  );
+}
+
+function SectionTitle({ label, collapsed }: { label: string; collapsed: boolean }) {
+  const short = SECTION_SHORT[label] ?? label.slice(0, 3).toUpperCase();
+
+  return (
+    <p
+      className={[
+        'relative mb-1.5 flex h-4 shrink-0 items-center overflow-hidden whitespace-nowrap',
+        'text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500',
+        collapsed ? 'px-2.5 tracking-[0.08em]' : 'px-2.5 tracking-[0.14em]',
+      ].join(' ')}
+    >
+      <span
+        className={[
+          'transition-opacity duration-200 ease-out',
+          collapsed ? 'pointer-events-none absolute opacity-0' : 'opacity-100',
+        ].join(' ')}
+        aria-hidden={collapsed}
+      >
+        {label}
+      </span>
+      <span
+        className={[
+          'transition-opacity duration-200 ease-out',
+          collapsed ? 'opacity-100' : 'pointer-events-none absolute opacity-0',
+        ].join(' ')}
+        aria-hidden={!collapsed}
+      >
+        {short}
+      </span>
+    </p>
   );
 }
 
@@ -132,89 +206,78 @@ export default function Sidebar({
 }: SidebarProps) {
   const { orgRole } = useAuth();
   const navSections = getVisibleNavSections(orgRole);
+  // Tip enabled whenever collapsed (nav labels) or always for collapse button
+  const { tip, onShowTip, onHideTip } = useSidebarFlyoutTip(true);
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div
+      className={[
+        'sidebar-rail flex h-full min-h-0 flex-col',
+        collapsed ? 'sidebar-rail--collapsed' : 'sidebar-rail--expanded',
+      ].join(' ')}
+    >
       <div
-        className={`flex shrink-0 items-center border-b border-theme-border/70 ${
-          collapsed ? 'flex-col justify-center gap-2.5 px-2 py-3.5' : 'h-16 justify-between gap-2 px-5'
-        }`}
+        className={[
+          'relative z-[2] flex shrink-0 items-center border-b border-emerald-100/60',
+          collapsed ? 'h-14 gap-0.5 pl-1.5 pr-1' : 'h-14 pl-3 pr-2.5',
+        ].join(' ')}
       >
-        {collapsed ? (
-          <>
-            <PlatformBrand collapsed size="sm" />
-            {collapsible && onToggleCollapse && (
-              <CollapseButton collapsed onToggle={onToggleCollapse} />
-            )}
-          </>
-        ) : (
-          <>
-            <PlatformBrand />
-            <div className="flex items-center gap-1.5">
-              {collapsible && onToggleCollapse && (
-                <CollapseButton collapsed={false} onToggle={onToggleCollapse} />
-              )}
-              {showClose && onClose && (
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="sidebar-collapse-btn flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
-                  aria-label="Close menu"
-                >
-                  <X className="h-4 w-4" strokeWidth={1.8} />
-                </button>
-              )}
-            </div>
-          </>
+        <PlatformBrand collapsed={collapsed} size={collapsed ? 'sm' : 'md'} />
+
+        {showClose && onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="sidebar-collapse-btn ml-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
+            aria-label="Close menu"
+          >
+            <X className="h-4 w-4" strokeWidth={1.8} />
+          </button>
+        )}
+
+        {collapsible && onToggleCollapse && (
+          <div className={collapsed ? 'shrink-0' : 'ml-auto shrink-0'}>
+            <CollapseButton
+              collapsed={collapsed}
+              onToggle={onToggleCollapse}
+              onShowTip={onShowTip}
+              onHideTip={onHideTip}
+            />
+          </div>
         )}
       </div>
 
       <nav
-        className={`min-h-0 flex-1 overflow-y-auto overflow-x-hidden ${
-          collapsed ? 'px-2 py-3' : 'px-4 py-4'
-        }`}
+        className="sidebar-scroll relative z-[2] min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-2 py-2.5"
         aria-label="Primary"
       >
-        {collapsed ? (
-          <div className="flex flex-col items-center gap-3">
-            {navSections.flatMap(({ items }) =>
-              items.map((item) => (
-                <NavItem
-                  key={item.to}
-                  {...item}
-                  collapsed
-                  onNavigate={onNavigate}
-                  badge={item.to === '/inbox' ? inboxUnread : undefined}
-                />
-              )),
-            )}
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {navSections.map(({ label, items }) => (
-              <div key={label}>
-                <p className="mb-2.5 px-4 text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 dark:text-slate-500">
-                  {label}
-                </p>
-                <div className="flex flex-col gap-3">
-                  {items.map((item) => (
-                    <NavItem
-                      key={item.to}
-                      {...item}
-                      onNavigate={onNavigate}
-                      badge={item.to === '/inbox' ? inboxUnread : undefined}
-                    />
-                  ))}
-                </div>
+        <div className="flex flex-col gap-3.5">
+          {navSections.map(({ label, items }) => (
+            <div key={label}>
+              <SectionTitle label={label} collapsed={collapsed} />
+              <div className="flex flex-col gap-1">
+                {items.map((item) => (
+                  <NavItem
+                    key={item.to}
+                    {...item}
+                    collapsed={collapsed}
+                    onNavigate={onNavigate}
+                    badge={item.to === '/inbox' ? inboxUnread : undefined}
+                    onShowTip={onShowTip}
+                    onHideTip={onHideTip}
+                  />
+                ))}
               </div>
-            ))}
-          </div>
-        )}
+            </div>
+          ))}
+        </div>
       </nav>
 
-      <div className={`shrink-0 border-t border-theme-border/70 ${collapsed ? 'p-2.5' : 'p-5'}`}>
+      <div className="relative z-[2] shrink-0 border-t border-emerald-100/60 p-2">
         <WhatsAppStatusCard collapsed={collapsed} onNavigate={onNavigate} />
       </div>
+
+      <SidebarFlyoutTip tip={tip} />
     </div>
   );
 }
