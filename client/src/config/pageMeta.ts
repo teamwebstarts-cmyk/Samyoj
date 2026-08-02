@@ -6,7 +6,7 @@ export interface PageMeta {
 export const PAGE_META: Record<string, PageMeta> = {
   '/': {
     title: 'Dashboard',
-    description: "Here's your WhatsApp workspace at a glance.",
+    description: "Here's your WhatsApp workspace at a glance",
   },
   '/inbox': {
     title: 'Inbox',
