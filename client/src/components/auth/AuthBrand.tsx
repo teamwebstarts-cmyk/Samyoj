@@ -1,3 +1,5 @@
+import { PLATFORM_LOGO_SRC } from '../layout/PlatformBrand';
+
 /** Auth pages — Samyoj logo with soft white blend into mint canvas */
 export default function AuthBrand({ compact = false }: { compact?: boolean }) {
   return (
@@ -12,7 +14,7 @@ export default function AuthBrand({ compact = false }: { compact?: boolean }) {
         className="pointer-events-none absolute -inset-x-3 -inset-y-2 rounded-xl bg-white/70 blur-[6px]"
       />
       <img
-        src="/brand/samyoj-logo.jpeg"
+        src={PLATFORM_LOGO_SRC}
         alt="Samyoj — WhatsApp Automation & CRM"
         className={`relative z-10 ${compact ? 'h-9' : 'h-11'} w-auto max-w-full object-contain object-left`}
       />
