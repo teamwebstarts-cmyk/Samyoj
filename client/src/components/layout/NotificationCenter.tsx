@@ -51,9 +51,9 @@ export default function NotificationCenter({ unreadInbox = 0 }: NotificationCent
         aria-label="Notifications"
         title="Notifications"
       >
-        <Bell className="h-[17px] w-[17px]" strokeWidth={2} />
+        <Bell className="h-[18px] w-[18px]" strokeWidth={1.9} />
         {count > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">
+          <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold leading-none text-white shadow-sm ring-2 ring-white dark:ring-theme-surface">
             {count > 9 ? '9+' : count}
           </span>
         )}
