@@ -29,6 +29,15 @@ function roleLabel(role: OrgRole | null | undefined): string {
   return 'Member';
 }
 
+function nameInitials(name?: string): string {
+  if (!name?.trim()) return 'U';
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[0][0] ?? ''}${parts[parts.length - 1][0] ?? ''}`.toUpperCase();
+  }
+  return parts[0].slice(0, 2).toUpperCase();
+}
+
 function useIsApplePlatform() {
   const [isApple, setIsApple] = useState(true);
   useEffect(() => {
@@ -44,7 +53,7 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
   const { pathname } = useLocation();
   const { orgRole } = useAuth();
   const { title, description } = getPageMeta(pathname);
-  const initial = userName?.charAt(0).toUpperCase() || 'U';
+  const initials = nameInitials(userName);
   const roleText = roleLabel(orgRole);
   const [searchOpen, setSearchOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -108,7 +117,7 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
           </div>
 
           {/* Right — search, notifications, profile */}
-          <div className="flex shrink-0 items-center gap-2 sm:gap-2.5 lg:gap-3">
+          <div className="flex shrink-0 items-center gap-3 sm:gap-3.5 lg:gap-4">
             <NumberSwitcherMobile />
             <NumberSwitcher />
 
@@ -116,16 +125,18 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
             <button
               type="button"
               onClick={() => setSearchOpen(true)}
-              className="topbar-search hidden min-w-0 items-center gap-2.5 md:flex"
+              className="topbar-search hidden min-w-0 items-center gap-3 md:flex"
               aria-label="Search anything"
             >
-              <Search className="h-4 w-4 shrink-0 text-neutral-400" strokeWidth={2} />
-              <span className="min-w-0 flex-1 truncate text-left text-[13px] font-medium text-neutral-400">
+              <Search className="h-[17px] w-[17px] shrink-0 text-neutral-400" strokeWidth={2} />
+              <span className="min-w-0 flex-1 truncate text-left text-[13.5px] font-medium text-neutral-400">
                 Search anything...
               </span>
-              <span className="flex shrink-0 items-center gap-1" aria-hidden>
-                <kbd className="topbar-kbd">{isApple ? '⌘' : 'Ctrl'}</kbd>
-                <kbd className="topbar-kbd">K</kbd>
+              <span className="topbar-kbd-group" aria-hidden>
+                <kbd className={`topbar-kbd ${isApple ? 'topbar-kbd--mod' : 'topbar-kbd--ctrl'}`}>
+                  {isApple ? '⌘' : 'Ctrl'}
+                </kbd>
+                <kbd className="topbar-kbd topbar-kbd--key">K</kbd>
               </span>
             </button>
 
@@ -151,14 +162,14 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
                 aria-expanded={userMenuOpen}
                 aria-haspopup="menu"
               >
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#16a34a] text-[13px] font-bold text-white sm:h-9 sm:w-9 sm:text-[14px]">
-                  {initial}
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#16a34a] text-[12px] font-bold tracking-wide text-white sm:h-10 sm:w-10 sm:text-[13px]">
+                  {initials}
                 </span>
-                <span className="hidden min-w-0 text-left sm:block">
-                  <span className="block max-w-[140px] truncate text-[13px] font-bold leading-tight text-neutral-900 dark:text-theme-fg lg:max-w-[180px]">
+                <span className="hidden min-w-0 flex-1 text-left sm:block">
+                  <span className="block max-w-[160px] truncate text-[13.5px] font-bold leading-tight text-neutral-900 dark:text-theme-fg md:max-w-[190px] lg:max-w-[220px]">
                     {userName || 'User'}
                   </span>
-                  <span className="mt-0.5 block max-w-[140px] truncate text-[11.5px] font-medium leading-tight text-neutral-500 dark:text-theme-muted lg:max-w-[180px]">
+                  <span className="mt-0.5 block max-w-[160px] truncate text-[12px] font-medium leading-tight text-neutral-500 dark:text-theme-muted md:max-w-[190px] lg:max-w-[220px]">
                     {roleText}
                     {companyName ? (
                       <span className="sr-only"> · {companyName}</span>
