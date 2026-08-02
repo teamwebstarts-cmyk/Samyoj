@@ -73,18 +73,44 @@ function qualityMeta(tone: QualityTone) {
   return null;
 }
 
-export default function WhatsAppConnectGuide() {
+export type WhatsAppGuideStatus = {
+  connected: boolean;
+  incomingEnabled: boolean | null;
+  statusReady: boolean;
+};
+
+interface WhatsAppConnectGuideProps {
+  onStatusChange?: (status: WhatsAppGuideStatus) => void;
+}
+
+export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnectGuideProps = {}) {
   const { activeNumber, refreshNumbers } = useWhatsAppNumber();
   const [connectUrl, setConnectUrl] = useState('');
   const [number, setNumber] = useState<WhatsappNumberRow | null>(null);
   const [qualityRating, setQualityRating] = useState<string | null>(null);
   const [webhookSubscribed, setWebhookSubscribed] = useState<boolean | null>(null);
+  const [webhookCheckFailed, setWebhookCheckFailed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [enablingIncoming, setEnablingIncoming] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+
+  const emitStatus = useCallback(
+    (
+      nextNumber: WhatsappNumberRow | null,
+      subscribed: boolean | null,
+      ready: boolean
+    ) => {
+      onStatusChange?.({
+        connected: Boolean(nextNumber),
+        incomingEnabled: subscribed,
+        statusReady: ready,
+      });
+    },
+    [onStatusChange]
+  );
 
   const loadConnectUrl = async () => {
     try {
@@ -104,10 +130,10 @@ export default function WhatsAppConnectGuide() {
     Promise.all([
       whatsappApi.numbers(),
       loadConnectUrl(),
-      billingApi.usage().catch(() => null),
-      whatsappApi.webhookStatus().catch(() => null),
+      billingApi.usage().then((r) => ({ ok: true as const, r })).catch(() => ({ ok: false as const })),
+      whatsappApi.webhookStatus().then((r) => ({ ok: true as const, r })).catch(() => ({ ok: false as const })),
     ])
-      .then(([numbersRes, , usageRes, webhookRes]) => {
+      .then(([numbersRes, , usageResult, webhookResult]) => {
         const numbers = parseNumbers(numbersRes.data?.data);
         const preferred =
           (preferredId && numbers.find((n) => n.id === preferredId)) ||
@@ -117,8 +143,8 @@ export default function WhatsAppConnectGuide() {
         setNumber(preferred);
         setLoadError(false);
 
-        if (usageRes && preferred) {
-          const usage = usageRes.data?.data as BillingUsage | undefined;
+        if (usageResult.ok && preferred) {
+          const usage = usageResult.r.data?.data as BillingUsage | undefined;
           const ratings = usage?.qualityRatings || [];
           const preferredDigits = preferred.phoneNumber.replace(/\D/g, '');
           const match = ratings.find(
@@ -129,11 +155,32 @@ export default function WhatsAppConnectGuide() {
           setQualityRating(null);
         }
 
-        if (webhookRes?.data?.data && typeof webhookRes.data.data === 'object') {
-          const status = webhookRes.data.data as { subscribed?: boolean };
-          setWebhookSubscribed(Boolean(status.subscribed));
+        if (webhookResult.ok && webhookResult.r.data?.data && typeof webhookResult.r.data.data === 'object') {
+          const status = webhookResult.r.data.data as {
+            subscribed?: boolean | null;
+            statusCheckFailed?: boolean;
+          };
+          setWebhookCheckFailed(Boolean(status.statusCheckFailed));
+          if (status.statusCheckFailed) {
+            setWebhookSubscribed(null);
+          } else if (typeof status.subscribed === 'boolean') {
+            setWebhookSubscribed(status.subscribed);
+          } else {
+            setWebhookSubscribed(null);
+          }
+          emitStatus(
+            preferred,
+            status.statusCheckFailed
+              ? null
+              : typeof status.subscribed === 'boolean'
+                ? status.subscribed
+                : null,
+            true
+          );
         } else {
+          setWebhookCheckFailed(Boolean(preferred));
           setWebhookSubscribed(null);
+          emitStatus(preferred, null, true);
         }
       })
       .catch(() => {
@@ -141,11 +188,13 @@ export default function WhatsAppConnectGuide() {
         setConnectUrl('');
         setQualityRating(null);
         setWebhookSubscribed(null);
+        setWebhookCheckFailed(false);
         setLoadError(true);
+        emitStatus(null, null, true);
         toastError('Could not load WhatsApp connection status.');
       })
       .finally(() => setLoading(false));
-  }, [activeNumber?.id]);
+  }, [activeNumber?.id, emitStatus]);
 
   useEffect(() => {
     load();
@@ -225,6 +274,8 @@ export default function WhatsAppConnectGuide() {
       if (payload?.subscribed || payload?.callbackUrl) {
         toastSuccess('Incoming messages are now enabled.');
         setWebhookSubscribed(true);
+        setWebhookCheckFailed(false);
+        emitStatus(number, true, true);
       } else {
         toastSuccess('WhatsApp is linked. You can send messages now.');
       }
@@ -253,6 +304,8 @@ export default function WhatsAppConnectGuide() {
       setNumber(null);
       setQualityRating(null);
       setWebhookSubscribed(null);
+      setWebhookCheckFailed(false);
+      emitStatus(null, null, true);
       await refreshNumbers({ silent: true });
       await loadConnectUrl();
       toastSuccess('WhatsApp disconnected');
@@ -302,10 +355,11 @@ export default function WhatsAppConnectGuide() {
     const quality = normalizeQuality(qualityRating);
     const qMeta = qualityMeta(quality);
     const incomingOn = webhookSubscribed === true;
-    const incomingOff = webhookSubscribed === false;
+    const incomingOff = webhookSubscribed === false && !webhookCheckFailed;
+    const incomingUnknown = webhookCheckFailed || (webhookSubscribed === null && !incomingOff);
     const needsAction = incomingOff || quality === 'YELLOW' || quality === 'RED';
 
-    const cardClass = incomingOff
+    const cardClass = incomingOff || incomingUnknown
       ? 'border-amber-200/90 bg-gradient-to-r from-amber-50/80 via-white to-white'
       : quality === 'RED'
         ? 'border-rose-100/90 bg-gradient-to-r from-rose-50/50 via-white to-white'
@@ -316,6 +370,8 @@ export default function WhatsAppConnectGuide() {
     let statusLine: string;
     if (incomingOff) {
       statusLine = 'Connected · Customer replies are not reaching Inbox yet';
+    } else if (incomingUnknown) {
+      statusLine = "Connected · Couldn't verify incoming status — try Enable incoming or refresh";
     } else if (incomingOn && qMeta?.hint) {
       statusLine = `Live · ${qMeta.hint}`;
     } else if (incomingOn) {
@@ -325,7 +381,10 @@ export default function WhatsAppConnectGuide() {
     }
 
     return (
-      <section aria-label="WhatsApp connection">
+      <section
+        aria-label="WhatsApp connection"
+        className={menuOpen ? 'relative z-50' : 'relative z-10'}
+      >
         <div
           className={`dashboard-card flex flex-col gap-3 rounded-2xl p-3.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:p-4 ${cardClass}`}
         >
@@ -345,8 +404,8 @@ export default function WhatsAppConnectGuide() {
             </div>
 
             <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                <h2 className="truncate text-[14px] font-extrabold tracking-tight text-neutral-900 sm:text-[15px]">
+              <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">
+                <h2 className="max-w-[11rem] truncate text-[13.5px] font-extrabold tracking-tight text-neutral-900 sm:max-w-[14rem] sm:text-[15px] md:max-w-[12rem] lg:max-w-none">
                   {phone}
                 </h2>
                 {incomingOn && (
@@ -359,6 +418,11 @@ export default function WhatsAppConnectGuide() {
                   <span className="inline-flex items-center gap-1 rounded-full border border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-900">
                     <Inbox className="h-3 w-3" strokeWidth={2.4} />
                     Inbox offline
+                  </span>
+                )}
+                {incomingUnknown && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-900">
+                    Check inbound
                   </span>
                 )}
                 {qMeta && quality !== 'GREEN' && (
@@ -377,7 +441,7 @@ export default function WhatsAppConnectGuide() {
                 )}
               </div>
 
-              <p className="mt-0.5 text-[12px] font-medium leading-snug text-neutral-500 sm:text-[12.5px]">
+              <p className="mt-0.5 line-clamp-2 text-[11.5px] font-medium leading-snug text-neutral-500 sm:text-[12.5px]">
                 {statusLine}
                 {incomingOff && (
                   <>
@@ -388,6 +452,18 @@ export default function WhatsAppConnectGuide() {
                     >
                       Details
                     </Link>
+                  </>
+                )}
+                {incomingUnknown && (
+                  <>
+                    {' '}
+                    <button
+                      type="button"
+                      onClick={() => load()}
+                      className="font-semibold text-whatsapp-700 hover:underline"
+                    >
+                      Refresh
+                    </button>
                   </>
                 )}
                 {(quality === 'YELLOW' || quality === 'RED') && !incomingOff && (
@@ -402,8 +478,8 @@ export default function WhatsAppConnectGuide() {
             </div>
           </div>
 
-          <div className="relative flex w-full shrink-0 flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap sm:justify-end">
-            {incomingOff && (
+          <div className="relative z-20 flex w-full shrink-0 flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap sm:justify-end">
+            {(incomingOff || incomingUnknown) && (
               <AppButton
                 type="button"
                 className="min-h-9 flex-1 sm:flex-none sm:min-h-10"
@@ -444,15 +520,15 @@ export default function WhatsAppConnectGuide() {
               <>
                 <button
                   type="button"
-                  className="fixed inset-0 z-10 cursor-default"
+                  className="fixed inset-0 z-40 cursor-default"
                   aria-label="Close menu"
                   onClick={() => setMenuOpen(false)}
                 />
                 <div
                   role="menu"
-                  className="absolute right-0 top-full z-20 mt-1.5 min-w-[180px] rounded-xl border border-neutral-200 bg-white p-1 shadow-lg"
+                  className="absolute right-0 top-full z-50 mt-1.5 min-w-[180px] rounded-xl border border-neutral-200 bg-white p-1 shadow-lg"
                 >
-                  {incomingOff && (
+                {(incomingOff || incomingUnknown) && (
                     <button
                       type="button"
                       role="menuitem"
