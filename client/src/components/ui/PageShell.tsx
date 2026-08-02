@@ -19,4 +19,4 @@ export default function PageShell({ children, fullBleed = false, inbox = false, 
 }
 
 /** Shared horizontal gutters — keep topbar aligned with page content */
-export const PAGE_GUTTER_X = 'px-4 sm:px-6 lg:px-8';
+export const PAGE_GUTTER_X = 'px-3 sm:px-4 lg:px-6';
