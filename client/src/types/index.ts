@@ -790,6 +790,15 @@ export interface CampaignAnalytics {
   topErrors: Array<{ message: string; count: number }>;
 }
 
+export interface DailyAnalyticsPoint {
+  date: string;
+  messagesSent: number;
+  deliveryRate: number;
+  readRate: number;
+  activeConversations: number;
+  totalContacts: number;
+}
+
 export interface AnalyticsOverview {
   days?: number;
   messagesSent: number;
@@ -813,6 +822,7 @@ export interface AnalyticsOverview {
     activeConversations: number | null;
     totalContacts: number | null;
   };
+  dailySeries?: DailyAnalyticsPoint[];
 }
 
 export interface TemplateButton {
