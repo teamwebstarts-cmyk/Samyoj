@@ -27,8 +27,14 @@ import { analyticsApi, campaignApi, onboardingApi } from '../services/api';
 import { toastError } from '../utils/toast';
 import type { AnalyticsOverview, Campaign } from '../types';
 import type { ActivityItem } from '../components/dashboard/RecentActivityCard';
+import {
+  buildDashboardDemoStats,
+  DASHBOARD_DEMO_CAMPAIGNS,
+  shouldUseDashboardDemoCampaigns,
+  shouldUseDashboardDemoStats,
+} from '../fixtures/dashboardDemo';
 
-type PeriodDays = 7 | 14 | 30;
+const DASHBOARD_PERIOD_DAYS = 7;
 
 interface OnboardingStatus {
   steps: Array<{
@@ -70,7 +76,6 @@ function extractCampaigns(payload: unknown): Campaign[] {
 
 export default function DashboardPage() {
   const [stats, setStats] = useState<AnalyticsOverview | null>(null);
-  const [days, setDays] = useState<PeriodDays>(7);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -94,13 +99,13 @@ export default function DashboardPage() {
     setWaStatus(status);
   }, []);
 
-  const loadStats = (period: PeriodDays = days) => {
+  const loadStats = () => {
     const reqId = ++statsReqId.current;
     if (hasStatsRef.current) setRefreshing(true);
     else setLoading(true);
 
     analyticsApi
-      .overview(period)
+      .overview(DASHBOARD_PERIOD_DAYS)
       .then(({ data }) => {
         if (reqId !== statsReqId.current) return;
         const payload = data?.data;
@@ -196,24 +201,30 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    loadStats(days);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when period changes
-  }, [days]);
-
-  useEffect(() => {
+    loadStats();
     loadSideData();
   }, []);
 
   useOnActiveNumberChange(({ isInitial }) => {
     if (isInitial) return;
-    loadStats(days);
+    loadStats();
     loadSideData();
   });
 
   const showChecklist =
     onboarding && onboarding.totalSteps > 0 && onboarding.completedCount < onboarding.totalSteps;
 
-  const periodLabel = `vs last ${days}d`;
+  const periodLabel = `vs last ${DASHBOARD_PERIOD_DAYS}d`;
+
+  // DEV-only: when live metrics/campaigns are empty, showcase realistic fixture data
+  const useDemoStats = shouldUseDashboardDemoStats(stats);
+  const displayStats =
+    useDemoStats && stats ? buildDashboardDemoStats(DASHBOARD_PERIOD_DAYS) : stats;
+  const useDemoCampaigns = shouldUseDashboardDemoCampaigns(campaigns, {
+    loading: campaignsLoading,
+    error: campaignsError,
+  });
+  const displayCampaigns = useDemoCampaigns ? DASHBOARD_DEMO_CAMPAIGNS : campaigns;
 
   return (
     <PageShell>
@@ -229,12 +240,12 @@ export default function DashboardPage() {
             title="Could not load dashboard"
             description="Something went wrong while loading your numbers. Please try again."
             action={
-              <AppButton type="button" onClick={() => loadStats(days)}>
+              <AppButton type="button" onClick={() => loadStats()}>
                 Retry
               </AppButton>
             }
           />
-        ) : stats ? (
+        ) : displayStats ? (
           <div className={refreshing ? 'opacity-70 transition-opacity' : undefined}>
             {/* Row 1: Needs attention + metrics
                 Mobile: stack. lg+: stretch so Needs attention matches metrics column height.
@@ -242,84 +253,64 @@ export default function DashboardPage() {
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-12 lg:items-stretch lg:gap-3 xl:gap-4">
               <div className="min-w-0 lg:col-span-4 lg:h-full">
                 <NeedsAttentionCard
-                  openChats={stats.activeConversations}
-                  failedMessages={stats.failedMessages}
+                  openChats={displayStats.activeConversations}
+                  failedMessages={displayStats.failedMessages}
                   isConnected={waStatus.statusReady ? waStatus.connected : null}
                   incomingEnabled={waStatus.statusReady ? waStatus.incomingEnabled : null}
                 />
               </div>
 
-              <div className="min-w-0 lg:col-span-8">
-                <div className="mb-2 flex flex-wrap items-center justify-end gap-2 px-0.5">
-                  {refreshing && (
-                    <span className="mr-auto text-[11px] font-semibold text-neutral-400 sm:text-[12px]">
-                      Updating…
-                    </span>
-                  )}
-                  <label className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-neutral-600">
-                    <span className="sr-only">Time range</span>
-                    <select
-                      value={days}
-                      onChange={(e) => setDays(Number(e.target.value) as PeriodDays)}
-                      disabled={refreshing}
-                      className="rounded-lg border border-neutral-200 bg-white px-2 py-1.5 text-[11.5px] sm:px-2.5 sm:text-[12px] font-semibold text-neutral-800 shadow-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400/20 disabled:opacity-60"
-                    >
-                      <option value={7}>Last 7 days</option>
-                      <option value={14}>Last 14 days</option>
-                      <option value={30}>Last 30 days</option>
-                    </select>
-                  </label>
-                </div>
-                <div className="grid grid-cols-2 gap-2 md:grid-cols-3 md:gap-2.5 xl:grid-cols-5 xl:gap-2.5">
+              <div className="flex min-w-0 flex-col lg:col-span-8 lg:h-full">
+                <div className="grid min-h-0 flex-1 grid-cols-2 auto-rows-fr gap-2 md:grid-cols-3 md:gap-2.5 xl:grid-cols-5 xl:gap-2.5">
                   <DashboardKpiCard
                     label="Messages sent"
-                    value={stats.messagesSent.toLocaleString()}
-                    delta={stats.deltas?.messagesSent}
+                    value={displayStats.messagesSent.toLocaleString()}
+                    delta={displayStats.deltas?.messagesSent}
                     deltaLabel={periodLabel}
                     to="/reports"
                     customIcon={<MessagesSentSvg className="h-4 w-4 sm:h-5 sm:w-5" />}
                     accent="emerald"
-                    dataPoints={stats.dailySeries?.map((d) => d.messagesSent)}
+                    dataPoints={displayStats.dailySeries?.map((d) => d.messagesSent)}
                   />
                   <DashboardKpiCard
                     label="Delivery rate"
-                    value={`${stats.deliveryRate}%`}
-                    delta={stats.deltas?.deliveryRate}
+                    value={`${displayStats.deliveryRate}%`}
+                    delta={displayStats.deltas?.deliveryRate}
                     deltaLabel={periodLabel}
                     to="/reports"
                     customIcon={<DeliveryRateSvg className="h-4 w-4 sm:h-5 sm:w-5" />}
                     accent="emerald"
-                    dataPoints={stats.dailySeries?.map((d) => d.deliveryRate)}
+                    dataPoints={displayStats.dailySeries?.map((d) => d.deliveryRate)}
                   />
                   <DashboardKpiCard
                     label="Read rate"
-                    value={`${stats.readRate}%`}
-                    delta={stats.deltas?.readRate}
+                    value={`${displayStats.readRate}%`}
+                    delta={displayStats.deltas?.readRate}
                     deltaLabel={periodLabel}
                     to="/reports"
                     customIcon={<ReadRateSvg className="h-4 w-4 sm:h-5 sm:w-5" />}
                     accent="sky"
-                    dataPoints={stats.dailySeries?.map((d) => d.readRate)}
+                    dataPoints={displayStats.dailySeries?.map((d) => d.readRate)}
                   />
                   <DashboardKpiCard
                     label="Active chats"
-                    value={stats.activeConversations.toLocaleString()}
-                    delta={stats.deltas?.activeConversations}
+                    value={displayStats.activeConversations.toLocaleString()}
+                    delta={displayStats.deltas?.activeConversations}
                     deltaLabel={periodLabel}
                     to="/inbox"
                     customIcon={<ActiveChatsSvg className="h-4 w-4 sm:h-5 sm:w-5" />}
                     accent="violet"
-                    dataPoints={stats.dailySeries?.map((d) => d.activeConversations)}
+                    dataPoints={displayStats.dailySeries?.map((d) => d.activeConversations)}
                   />
                   <DashboardKpiCard
                     label="Contacts"
-                    value={stats.totalContacts.toLocaleString()}
-                    delta={stats.deltas?.totalContacts}
+                    value={displayStats.totalContacts.toLocaleString()}
+                    delta={displayStats.deltas?.totalContacts}
                     deltaLabel={periodLabel}
                     to="/contacts"
                     customIcon={<ContactsSvg className="h-4 w-4 sm:h-5 sm:w-5" />}
                     accent="amber"
-                    dataPoints={stats.dailySeries?.map((d) => d.totalContacts)}
+                    dataPoints={displayStats.dailySeries?.map((d) => d.totalContacts)}
                   />
                 </div>
               </div>
@@ -328,18 +319,18 @@ export default function DashboardPage() {
             {/* Row 2: Performance + Campaigns — 2-col from md; stretch for equal card height */}
             <div className="mt-3 grid grid-cols-1 gap-3 lg:mt-4 lg:grid-cols-2 lg:items-stretch lg:gap-4">
               <MessagePerformanceDonut
-                messagesSent={stats.messagesSent}
-                messagesDelivered={stats.messagesDelivered ?? 0}
-                messagesDeliveredOnly={stats.messagesDeliveredOnly}
-                messagesRead={stats.messagesRead ?? 0}
-                messagesFailed={stats.messagesFailed ?? stats.failedMessages}
-                messagesPending={stats.messagesPending ?? 0}
-                deliveryRate={stats.deliveryRate}
-                readRate={stats.readRate}
-                periodLabel={`Last ${days} days`}
+                messagesSent={displayStats.messagesSent}
+                messagesDelivered={displayStats.messagesDelivered ?? 0}
+                messagesDeliveredOnly={displayStats.messagesDeliveredOnly}
+                messagesRead={displayStats.messagesRead ?? 0}
+                messagesFailed={displayStats.messagesFailed ?? displayStats.failedMessages}
+                messagesPending={displayStats.messagesPending ?? 0}
+                deliveryRate={displayStats.deliveryRate}
+                readRate={displayStats.readRate}
+                periodLabel={`Last ${DASHBOARD_PERIOD_DAYS} days`}
               />
               <UpcomingCampaignsCard
-                campaigns={campaigns}
+                campaigns={displayCampaigns}
                 loading={campaignsLoading}
                 error={campaignsError}
                 onRetry={() => loadSideData()}
@@ -395,11 +386,11 @@ export default function DashboardPage() {
               </div>
               <div className="min-w-0 lg:col-span-2">
                 <AiSuggestionCard
-                  readRate={stats.readRate}
-                  readRateDelta={stats.deltas?.readRate}
-                  messagesSent={stats.messagesSent}
-                  failedMessages={stats.failedMessages}
-                  openChats={stats.activeConversations}
+                  readRate={displayStats.readRate}
+                  readRateDelta={displayStats.deltas?.readRate}
+                  messagesSent={displayStats.messagesSent}
+                  failedMessages={displayStats.failedMessages}
+                  openChats={displayStats.activeConversations}
                 />
               </div>
             </div>

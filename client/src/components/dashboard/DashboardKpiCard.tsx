@@ -61,7 +61,7 @@ export default function DashboardKpiCard({
   return (
     <Link
       to={to}
-      className="dashboard-card group relative flex min-w-0 flex-col items-center justify-between overflow-hidden rounded-2xl border border-neutral-100/90 bg-white px-1.5 pb-0 pt-3 text-center transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md sm:rounded-3xl sm:px-2 sm:pt-3.5 xl:px-2.5 xl:pt-4"
+      className="dashboard-card group relative flex h-full min-w-0 flex-col items-center justify-between overflow-hidden rounded-2xl border border-neutral-100/90 bg-white px-1.5 pb-0 pt-3 text-center transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md sm:rounded-3xl sm:px-2 sm:pt-3.5 xl:px-2.5 xl:pt-4"
     >
       <div className="flex w-full flex-col items-center px-0.5">
         <IconWell accent={accent} size="md" className="mb-0.5 scale-90 shadow-xs sm:scale-95 xl:scale-100">
