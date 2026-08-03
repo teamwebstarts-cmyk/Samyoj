@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { LayoutTemplate, Send, X } from 'lucide-react';
 import AppButton from '../ui/AppButton';
 import AppInput from '../ui/AppInput';
 import AppSelect from '../ui/AppSelect';
-import { WhatsAppTemplatePreview, getTemplateParts } from './WhatsAppPreview';
+import { ComposerPreviewPane, WhatsAppTemplatePreview, getTemplateParts } from './WhatsAppPreview';
 import {
   getFilledTemplatePreview,
   templateNeedsHeaderMedia,

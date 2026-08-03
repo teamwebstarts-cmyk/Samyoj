@@ -1,5 +1,28 @@
 import { AlertCircle, Check, CheckCheck, ClipboardCopy, Clock, ExternalLink, List, Phone } from 'lucide-react';
 import type { ReactNode } from 'react';
+
+/** Split-pane preview column for inbox composers (Template / Interactive). */
+export function ComposerPreviewPane({
+  subtitle,
+  children,
+  className = '',
+}: {
+  subtitle: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={`flex min-h-0 flex-col overflow-hidden ${className}`}>
+      <div className="flex shrink-0 items-center justify-between border-b border-theme-border/60 bg-theme-surface/80 px-3 py-1.5">
+        <p className="text-[10px] font-bold uppercase tracking-wide text-theme-muted">Preview</p>
+        <p className="truncate text-[10px] font-medium text-theme-muted">{subtitle}</p>
+      </div>
+      <div className="flex min-h-0 flex-1 items-start justify-end overflow-y-auto overscroll-contain p-3 wa-chat-surface wa-chat-surface-compact">
+        {children}
+      </div>
+    </div>
+  );
+}
 import type { MessageTemplate, TemplateButton, TemplateLibraryEntry } from '../../types';
 import { getTemplateButtons } from '../../utils/templateForm';
 
