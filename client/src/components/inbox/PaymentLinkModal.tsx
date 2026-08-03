@@ -89,7 +89,7 @@ export default function PaymentLinkModal({
           A Razorpay link is generated and sent as a message in this conversation.
         </p>
 
-        <div className="flex justify-end gap-2 pt-1">
+        <div className="flex justify-end gap-2 border-t border-theme-border/60 pt-3.5">
           <AppButton variant="secondary" onClick={onClose} disabled={submitting}>
             Cancel
           </AppButton>

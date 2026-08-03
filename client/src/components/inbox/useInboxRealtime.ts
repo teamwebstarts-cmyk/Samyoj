@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, type Dispatch, type MutableRefObject, t
 import type { Socket } from 'socket.io-client';
 import { inboxApi } from '../../services/api';
 import { useSocket, type SocketState } from '../../hooks/useSocket';
-import { toastSuccess } from '../../utils/toast';
 import type { Conversation, Message, ServiceWindowInfo } from '../../types';
+import { emitChatNotice } from './chatNoticeBus';
 
 interface RealtimeDeps {
   selectedRef: MutableRefObject<Conversation | null>;
@@ -197,11 +197,14 @@ export function useInboxRealtime({
         if (openId === payload.conversationId) {
           setSelected((prev) => (prev ? patch(prev) : prev));
           if (isHandoff) {
-            toastSuccess(
-              payload.assignedAgent
+            emitChatNotice(payload.conversationId, {
+              kind: 'handoff',
+              message: payload.assignedAgent
                 ? `Handed off to ${payload.assignedAgent.name}`
-                : 'Customer handed off to your team'
-            );
+                : 'Customer handed off to your team',
+              icon: 'users',
+              tone: 'orange',
+            });
           }
         }
       }

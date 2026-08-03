@@ -60,11 +60,6 @@ export default function ComposerModeHeader({
             >
               <Icon size={14} strokeWidth={2} className="shrink-0" />
               <span>{tab.label}</span>
-              {tab.id === 'template' && replyLocked && (
-                <span className="ml-0.5 hidden rounded-full bg-amber-100/90 px-1.5 py-0.5 text-[9px] font-semibold text-amber-800 ring-1 ring-amber-200/80 sm:inline dark:bg-amber-900/45 dark:text-amber-200 dark:ring-amber-800/50">
-                  24h closed
-                </span>
-              )}
               {selected && (
                 <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-whatsapp-500" />
               )}

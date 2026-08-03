@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { billingApi, inboxApi, ticketApi } from '../../services/api';
-import { toastError, toastSuccess } from '../../utils/toast';
+import { toastError } from '../../utils/toast';
 import type { TicketFormValues } from './CreateTicketModal';
 import type { PaymentLinkFormValues } from './PaymentLinkModal';
 import type { Conversation, Message, ServiceWindowInfo } from '../../types';
@@ -30,7 +30,6 @@ export function useInboxModals({ selected, serviceWindow, appendSentMessage, set
       await ticketApi.fromConversation(selected.id, { ...values });
       setTicketConversationIds((prev) => new Set(prev).add(selected.id));
       setTicketModalOpen(false);
-      toastSuccess('Ticket created — view in Tickets');
     } catch {
       toastError('Could not create ticket');
     } finally {
@@ -54,7 +53,6 @@ export function useInboxModals({ selected, serviceWindow, appendSentMessage, set
       });
       appendSentMessage(selected.id, data.data as Message);
       setPaymentModalOpen(false);
-      toastSuccess('Payment link sent');
     } catch (err: unknown) {
       toastError(extractError(err, 'Could not send payment link'));
     } finally {

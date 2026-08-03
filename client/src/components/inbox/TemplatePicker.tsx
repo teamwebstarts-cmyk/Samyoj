@@ -171,7 +171,6 @@ function createStyles(isDark: boolean): StylesConfig<TemplatePickerOption, false
     menuList: (base) => ({
       ...base,
       padding: 6,
-      maxHeight: 260,
     }),
     option: (base, state) => ({
       ...base,
@@ -261,7 +260,8 @@ export default function TemplatePicker({
         }}
         menuPortalTarget={typeof document !== 'undefined' ? document.body : null}
         menuPosition="fixed"
-        menuPlacement="auto"
+        menuPlacement="top"
+        maxMenuHeight={280}
         menuShouldScrollIntoView={false}
         classNamePrefix="template-picker"
         classNames={{

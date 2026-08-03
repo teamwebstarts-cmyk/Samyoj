@@ -36,9 +36,9 @@ import { usePaneWidths } from '../hooks/usePaneWidths';
 import { useAuth } from '../contexts/AuthContext';
 import PaneHandle from '../components/inbox/PaneHandle';
 import KeyboardShortcutsOverlay from '../components/inbox/KeyboardShortcutsOverlay';
+import { InboxGlassTipProvider } from '../components/inbox/ComposerGlassTip';
 import { cannedRepliesApi, inboxApi, teamApi, ticketApi } from '../services/api';
 import { setOpenConversationId } from '../utils/inboxNotifications';
-import { toastSuccess } from '../utils/toast';
 import type {
   CannedReply,
   Conversation,
@@ -124,6 +124,8 @@ export default function InboxPage() {
   const [exportTarget, setExportTarget] = useState<Conversation | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; conversationId: string } | null>(null);
   const [detailsOverlay, setDetailsOverlay] = useState<{ open: boolean; section?: PanelSection }>({ open: false });
+  const [detailsPanelOpen, setDetailsPanelOpen] = useState(false);
+  const [detailsFocusSection, setDetailsFocusSection] = useState<PanelSection | undefined>();
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -205,10 +207,67 @@ export default function InboxPage() {
     },
   });
 
+  const toggleDetails = useCallback((section?: PanelSection) => {
+    if (!selectedRef.current) return;
+    const mobile = window.matchMedia('(max-width: 767px)').matches;
+    if (mobile) {
+      setDetailsOverlay((prev) => {
+        const nextOpen = !prev.open;
+        // Keep panelOpen in sync immediately so the sheet doesn't wait a frame
+        // on the details panel's overlay→open effect.
+        setDetailsPanelOpen(nextOpen);
+        if (nextOpen && section) setDetailsFocusSection(section);
+        if (!nextOpen) setDetailsFocusSection(undefined);
+        return {
+          open: nextOpen,
+          section: section ?? prev.section,
+        };
+      });
+      return;
+    }
+    // Desktop / tablet: docked panel only — never leave mobile overlay stuck.
+    setDetailsOverlay({ open: false });
+    setDetailsPanelOpen((prev) => {
+      const next = !prev;
+      if (next && section) setDetailsFocusSection(section);
+      if (!next) setDetailsFocusSection(undefined);
+      return next;
+    });
+  }, []);
+
+  // Keep overlay vs docked state aligned when the viewport crosses the md breakpoint.
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+    const sync = () => {
+      if (mq.matches) {
+        // Desktop → mobile: migrate an open docked panel into the sheet overlay.
+        setDetailsPanelOpen((wasOpen) => {
+          if (wasOpen) {
+            setDetailsOverlay((prev) =>
+              prev.open ? prev : { open: true, section: prev.section }
+            );
+          }
+          return wasOpen;
+        });
+        return;
+      }
+      // Mobile → desktop: migrate open overlay into the docked panel.
+      setDetailsOverlay((prev) => {
+        if (!prev.open) return prev;
+        setDetailsPanelOpen(true);
+        if (prev.section) setDetailsFocusSection(prev.section);
+        return { open: false, section: prev.section };
+      });
+    };
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
+
   useInboxKeyboardShortcuts({
     onFocusSearch: () => searchInputRef.current?.focus(),
     onCloseChat: () => setSelected(null),
-    onOpenDetails: () => selectedRef.current && setDetailsOverlay({ open: true }),
+    onOpenDetails: () => toggleDetails(),
     onOpenShortcutsOverlay: () => setShortcutsOpen(true),
     onFocusComposer: () => {
       if (!selectedRef.current) return;
@@ -291,6 +350,13 @@ export default function InboxPage() {
     }
   }, [selected?.id, serviceWindow?.open]);
 
+  // Reset details chrome when switching chats (panel also resets via conversationId).
+  useEffect(() => {
+    setDetailsOverlay({ open: false });
+    setDetailsPanelOpen(false);
+    setDetailsFocusSection(undefined);
+  }, [selected?.id]);
+
   const handleOpenConversation = useCallback(
     async (conv: Conversation) => {
       resetComposer();
@@ -339,7 +405,6 @@ export default function InboxPage() {
     const conversation = data.data as Conversation;
     upsertConversation(conversation, true);
     setNewChatOpen(false);
-    toastSuccess('Chat started');
     await handleOpenConversation(conversation);
   };
 
@@ -438,6 +503,7 @@ export default function InboxPage() {
   };
 
   return (
+    <InboxGlassTipProvider>
     <PageShell inbox>
       <a
         href="#inbox-thread"
@@ -578,6 +644,9 @@ export default function InboxPage() {
                   onStatusChange={(status) => void handleStatusChange(status)}
                   onConvertToTicket={() => setTicketModalOpen(true)}
                   onExport={() => setExportTarget(selected)}
+                  onCreateCampaign={() => navigate(`/campaigns?contacts=${selected.contact.id}`)}
+                  detailsOpen={detailsPanelOpen || detailsOverlay.open}
+                  onToggleDetails={() => toggleDetails()}
                   onContextMenu={(event) => openChatContextMenu(event, selected)}
                   onReloadThread={() => void handleOpenConversation(selected)}
                   onLoadEarlier={() => void loadEarlierMessages()}
@@ -612,8 +681,8 @@ export default function InboxPage() {
                   onOpenTemplateMode={() => setTemplateMode(true)}
                 />
 
-                {/* R4: vertical drag handle between thread and details rail (lg+). */}
-                <div className="hidden lg:flex">
+                {/* R4: vertical drag handle between thread and details rail (md+). */}
+                <div className="hidden md:flex">
                   <PaneHandle
                     side="right"
                     width={paneWidths.widths.right}
@@ -629,7 +698,7 @@ export default function InboxPage() {
                   currentUserId={user?.id}
                   assigning={assigning}
                   botIsLive={botIsLive}
-                  botToggling={botToggling}
+                  cannedReplies={cannedReplies}
                   onNotesChange={(notes: InternalNote[]) =>
                     setSelected((prev) => (prev ? { ...prev, internalNotes: notes } : prev))
                   }
@@ -640,12 +709,16 @@ export default function InboxPage() {
                     setSelected((prev) => (prev ? { ...prev, contact } : prev))
                   }
                   onAssign={(agentId) => void handleAssignAgent(agentId)}
-                  onToggleBot={() => void handleToggleBot()}
-                  onCreateCampaign={() => navigate(`/campaigns?contacts=${selected.contact.id}`)}
-                  onCreateTicket={() => setTicketModalOpen(true)}
-                  onExport={() => setExportTarget(selected)}
-                  onSnoozeUntil={(untilIso, label) => void handleSnooze(untilIso, label)}
-                  onUnsnooze={() => void handleUnsnooze()}
+                  onApplyQuickReply={(reply) => {
+                    // Ensure reply composer is visible (not template/interactive).
+                    setTemplateMode(false);
+                    setInteractiveOpen(false);
+                    setDraft(reply.content);
+                    requestAnimationFrame(() => composerInputRef.current?.focus());
+                  }}
+                  panelOpen={detailsPanelOpen}
+                  onPanelOpenChange={setDetailsPanelOpen}
+                  focusSection={detailsFocusSection}
                   overlayOpen={detailsOverlay.open}
                   overlaySection={detailsOverlay.section}
                   onOverlayClose={() => setDetailsOverlay({ open: false })}
@@ -718,5 +791,6 @@ export default function InboxPage() {
 
       <KeyboardShortcutsOverlay open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
     </PageShell>
+    </InboxGlassTipProvider>
   );
 }

@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   ArrowLeft,
+  BarChart3,
   Bell,
   Bot,
   CheckCircle2,
@@ -10,6 +11,7 @@ import {
   LifeBuoy,
   Mail,
   MoreVertical,
+  PanelRight,
   Phone,
   Search,
   Star,
@@ -20,6 +22,7 @@ import ContactAvatar from './ContactAvatar';
 import AssignAgentPopover from './AssignAgentPopover';
 import SnoozePopover from './SnoozePopover';
 import { ServiceWindowBadge } from './ServiceWindowBanner';
+import { useGlassTipProps } from './ComposerGlassTip';
 import type { PresenceViewer } from './useConversationPresence';
 import type { Conversation, ServiceWindowInfo, TeamAgent } from '../../types';
 import { FOCUS_RING_CLASS } from '../../hooks/inboxA11y';
@@ -46,6 +49,9 @@ interface ChatHeaderProps {
   onStatusChange: (status: string) => void;
   onConvertToTicket: () => void;
   onExport: () => void;
+  onCreateCampaign: () => void;
+  detailsOpen: boolean;
+  onToggleDetails: () => void;
 }
 
 function HeaderIconButton({
@@ -53,6 +59,7 @@ function HeaderIconButton({
   onClick,
   disabled,
   active,
+  pressed,
   dot,
   className = '',
   children,
@@ -61,17 +68,20 @@ function HeaderIconButton({
   onClick?: () => void;
   disabled?: boolean;
   active?: boolean;
+  pressed?: boolean;
   dot?: boolean;
   className?: string;
   children: React.ReactNode;
 }) {
+  const tipFor = useGlassTipProps();
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      title={label}
       aria-label={label}
+      aria-pressed={pressed}
+      {...tipFor(label)}
       className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border transition disabled:cursor-not-allowed disabled:opacity-45 ${FOCUS_RING_CLASS} ${
         active
           ? 'border-whatsapp-500/50 bg-whatsapp-500/10 text-whatsapp-700 dark:text-whatsapp-400'
@@ -98,7 +108,6 @@ function PresenceRow({ viewers }: { viewers: PresenceViewer[] }) {
         {viewers.slice(0, 3).map((viewer) => (
           <span
             key={viewer.id}
-            title={viewer.name}
             className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-100 text-[8px] font-bold text-emerald-700 ring-1 ring-white dark:bg-emerald-950/60 dark:text-emerald-300 dark:ring-neutral-900"
           >
             {viewer.name.slice(0, 1).toUpperCase()}
@@ -131,7 +140,11 @@ export default function ChatHeader({
   onStatusChange,
   onConvertToTicket,
   onExport,
+  onCreateCampaign,
+  detailsOpen,
+  onToggleDetails,
 }: ChatHeaderProps) {
+  const tipFor = useGlassTipProps();
   const [menuOpen, setMenuOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [snoozeOpen, setSnoozeOpen] = useState(false);
@@ -277,13 +290,25 @@ export default function ChatHeader({
               Export chat
             </button>
 
+            <button
+              type="button"
+              onClick={() => {
+                onCreateCampaign();
+                setMenuOpen(false);
+              }}
+              className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] text-theme-fg transition hover:bg-theme-subtle ${FOCUS_RING_CLASS}`}
+            >
+              <BarChart3 className="h-4 w-4 text-orange-600" />
+              Create campaign
+            </button>
+
             {/* "Mark as unread" is a planned feature. Surfacing it disabled with
                 a tooltip is more honest than silently omitting it. */}
             <button
               type="button"
               disabled
-              title="Coming soon — API support in progress"
               aria-label="Mark as unread (coming soon)"
+              {...tipFor('Coming soon — API support in progress')}
               className="flex w-full cursor-not-allowed items-center gap-2 px-3 py-2.5 text-left text-[13px] text-theme-muted opacity-60"
             >
               <Mail className="h-4 w-4 text-theme-muted" />
@@ -420,10 +445,10 @@ export default function ChatHeader({
               setMenuOpen((v) => !v);
               setAssignOpen(false);
             }}
-            title="More actions"
             aria-label="More actions"
             aria-expanded={menuOpen}
             aria-haspopup="menu"
+            {...tipFor('More actions')}
             className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-theme-border bg-theme-surface text-theme-secondary transition hover:bg-theme-subtle hover:text-theme-fg ${FOCUS_RING_CLASS} ${
               menuOpen ? 'border-theme-fg/20 bg-theme-subtle text-theme-fg' : ''
             }`}
@@ -432,6 +457,15 @@ export default function ChatHeader({
           </button>
           {overflowMenu}
         </div>
+
+        <HeaderIconButton
+          label={detailsOpen ? 'Hide customer details' : 'Show customer details'}
+          onClick={onToggleDetails}
+          active={detailsOpen}
+          pressed={detailsOpen}
+        >
+          <PanelRight className="h-4 w-4" strokeWidth={2.1} />
+        </HeaderIconButton>
       </div>
     </div>
   );

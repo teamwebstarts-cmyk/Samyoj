@@ -7,8 +7,24 @@ import { AppError, sendSuccess, asyncHandler, paramId } from '../../utils/respon
 
 const router = Router();
 
+/** Trim, strip leading `/` (users often paste `/thanks` from help copy), lowercase. */
+function normalizeShortcut(raw: string): string {
+  return raw.trim().replace(/^\/+/, '').toLowerCase();
+}
+
+const shortcutField = z
+  .string()
+  .transform(normalizeShortcut)
+  .pipe(
+    z
+      .string()
+      .min(1, 'Shortcut is required')
+      .max(30, 'Shortcut must be 30 characters or fewer')
+      .regex(/^[a-z0-9_-]+$/, 'Use letters, numbers, - or _ only')
+  );
+
 const cannedReplySchema = z.object({
-  shortcut: z.string().min(1).max(30).regex(/^[a-z0-9_-]+$/i),
+  shortcut: shortcutField,
   title: z.string().min(1).max(100),
   content: z.string().min(1).max(4000),
 });
@@ -55,7 +71,7 @@ router.post(
     const reply = await prisma.cannedReply.create({
       data: {
         organizationId: orgId,
-        shortcut: data.shortcut.toLowerCase(),
+        shortcut: data.shortcut,
         title: data.title.trim(),
         content: data.content,
       },
@@ -83,7 +99,7 @@ router.patch(
     const reply = await prisma.cannedReply.update({
       where: { id },
       data: {
-        ...(data.shortcut !== undefined ? { shortcut: data.shortcut.toLowerCase() } : {}),
+        ...(data.shortcut !== undefined ? { shortcut: data.shortcut } : {}),
         ...(data.title !== undefined ? { title: data.title.trim() } : {}),
         ...(data.content !== undefined ? { content: data.content } : {}),
       },

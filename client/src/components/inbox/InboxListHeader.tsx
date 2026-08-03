@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type Ref } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type Ref } from 'react';
+import { createPortal } from 'react-dom';
 import {
   AlertTriangle,
   CheckSquare,
@@ -14,9 +15,14 @@ import {
 } from 'lucide-react';
 import InboxSelect, { type InboxSelectOption } from './InboxSelect';
 import SearchInput from '../ui/SearchInput';
+import { useGlassTipProps } from './ComposerGlassTip';
 import { FOCUS_RING_CLASS } from '../../hooks/inboxA11y';
 import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
 import type { InboundHealth } from '../../hooks/useWebhookHealth';
+
+const EXTRA_MENU_WIDTH = 220;
+const EXTRA_MENU_GAP = 8;
+const EXTRA_MENU_FALLBACK_HEIGHT = 180;
 
 export type ListChip = 'all' | 'unread' | 'favourites';
 
@@ -85,10 +91,15 @@ export default function InboxListHeader({
   inboundHealth = { state: 'unknown' as const },
   onRetryHealth,
 }: InboxListHeaderProps) {
+  const tipFor = useGlassTipProps();
   const [filtersRowOpen, setFiltersRowOpen] = useState(true);
   const [extraOpen, setExtraOpen] = useState(false);
+  const [extraPos, setExtraPos] = useState<{ top?: number; bottom?: number; right: number } | null>(
+    null
+  );
   const [menuOpen, setMenuOpen] = useState(false);
-  const extraRef = useRef<HTMLDivElement>(null);
+  const extraBtnRef = useRef<HTMLButtonElement>(null);
+  const extraMenuRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const { hasConnectedNumber, loading: numberLoading } = useWhatsAppNumber();
 
@@ -101,18 +112,67 @@ export default function InboxListHeader({
     if (selectionMode) setMenuOpen(false);
   }, [selectionMode]);
 
+  useLayoutEffect(() => {
+    if (!extraOpen || !extraBtnRef.current) {
+      setExtraPos(null);
+      return;
+    }
+    const place = () => {
+      const btn = extraBtnRef.current;
+      if (!btn) return;
+      const rect = btn.getBoundingClientRect();
+      const menuH = extraMenuRef.current?.offsetHeight ?? EXTRA_MENU_FALLBACK_HEIGHT;
+      const spaceBelow = window.innerHeight - rect.bottom - EXTRA_MENU_GAP;
+      const spaceAbove = rect.top - EXTRA_MENU_GAP;
+      const flipUp = spaceBelow < menuH && spaceAbove > spaceBelow;
+      const right = Math.min(
+        Math.max(EXTRA_MENU_GAP, window.innerWidth - rect.right),
+        Math.max(EXTRA_MENU_GAP, window.innerWidth - EXTRA_MENU_WIDTH - EXTRA_MENU_GAP)
+      );
+      if (flipUp) {
+        setExtraPos({
+          bottom: Math.max(EXTRA_MENU_GAP, window.innerHeight - rect.top + EXTRA_MENU_GAP),
+          right,
+        });
+      } else {
+        setExtraPos({ top: rect.bottom + EXTRA_MENU_GAP, right });
+      }
+    };
+    place();
+    const raf = window.requestAnimationFrame(place);
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.cancelAnimationFrame(raf);
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [extraOpen]);
+
   useEffect(() => {
     if (!extraOpen && !menuOpen) return;
     const onDoc = (e: MouseEvent) => {
-      if (extraRef.current && !extraRef.current.contains(e.target as Node)) {
-        setExtraOpen(false);
+      const target = e.target as Node;
+      if (extraOpen) {
+        const inBtn = extraBtnRef.current?.contains(target);
+        const inMenu = extraMenuRef.current?.contains(target);
+        if (!inBtn && !inMenu) setExtraOpen(false);
       }
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+      if (menuOpen && menuRef.current && !menuRef.current.contains(target)) {
         setMenuOpen(false);
       }
     };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (extraOpen) setExtraOpen(false);
+      if (menuOpen) setMenuOpen(false);
+    };
     document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey);
+    };
   }, [extraOpen, menuOpen]);
 
   return (
@@ -177,7 +237,7 @@ export default function InboxListHeader({
               type="button"
               onClick={onToggleSelectionMode}
               aria-label="Cancel selection"
-              title="Cancel selection"
+              {...tipFor('Cancel selection')}
               data-testid="inbox-cancel-selection"
               className={squareBtn()}
             >
@@ -190,6 +250,7 @@ export default function InboxListHeader({
                 onClick={() => setMenuOpen((v) => !v)}
                 aria-expanded={menuOpen}
                 aria-label="List options"
+                {...tipFor('List options')}
                 className={squareBtn(menuOpen)}
               >
                 <LayoutGrid className="h-4 w-4" strokeWidth={2.25} />
@@ -251,7 +312,7 @@ export default function InboxListHeader({
             onClick={() => setFiltersRowOpen((v) => !v)}
             aria-expanded={filtersRowOpen}
             aria-label="Toggle filters"
-            title="Toggle filters"
+            {...tipFor('Toggle filters')}
             data-testid="inbox-filter-toggle"
             className={squareBtn(filtersRowOpen || anyFilterActive)}
           >
@@ -284,45 +345,62 @@ export default function InboxListHeader({
               menuMinWidth={220}
               onChange={(e) => onAgentFilterChange(e.target.value)}
             />
-            <div className="relative shrink-0" ref={extraRef}>
+            <div className="relative shrink-0">
               <button
+                ref={extraBtnRef}
                 type="button"
                 onClick={() => setExtraOpen((v) => !v)}
                 aria-expanded={extraOpen}
+                aria-haspopup="menu"
                 aria-label="Extra filters"
-                title="Extra filters"
+                {...tipFor('Extra filters')}
                 data-testid="inbox-extra-filters"
                 className={squareBtn(extraOpen || extraActive)}
               >
                 <SlidersHorizontal className="h-4 w-4" strokeWidth={2.25} />
               </button>
-              {extraOpen && (
-                <div className="absolute right-0 top-full z-30 mt-2 w-[220px] space-y-1 rounded-2xl border border-theme-border bg-theme-surface p-2 shadow-panel">
-                  <p className="px-2 pb-1 pt-1 text-[10px] font-bold uppercase tracking-wide text-theme-muted">
-                    Extra filters
-                  </p>
-                  <ExtraToggle
-                    active={chip === 'unread'}
-                    icon={CircleDot}
-                    label="Unread only"
-                    onClick={() => onChipChange(chip === 'unread' ? 'all' : 'unread')}
-                  />
-                  <ExtraToggle
-                    active={chip === 'favourites'}
-                    icon={Star}
-                    label="Favourites"
-                    onClick={() => onChipChange(chip === 'favourites' ? 'all' : 'favourites')}
-                  />
-                  <ExtraToggle
-                    active={slaFilter === 'breached'}
-                    icon={Timer}
-                    label="SLA breached"
-                    onClick={() =>
-                      onSlaFilterChange(slaFilter === 'breached' ? '' : 'breached')
-                    }
-                  />
-                </div>
-              )}
+              {extraOpen &&
+                extraPos &&
+                createPortal(
+                  <div
+                    ref={extraMenuRef}
+                    role="menu"
+                    aria-label="Extra filters"
+                    data-testid="inbox-extra-filters-menu"
+                    style={{
+                      top: extraPos.top,
+                      bottom: extraPos.bottom,
+                      right: extraPos.right,
+                      width: EXTRA_MENU_WIDTH,
+                    }}
+                    className="fixed z-[80] space-y-1 rounded-2xl border border-theme-border bg-theme-surface p-2 shadow-panel"
+                  >
+                    <p className="px-2 pb-1 pt-1 text-[10px] font-bold uppercase tracking-wide text-theme-muted">
+                      Extra filters
+                    </p>
+                    <ExtraToggle
+                      active={chip === 'unread'}
+                      icon={CircleDot}
+                      label="Unread only"
+                      onClick={() => onChipChange(chip === 'unread' ? 'all' : 'unread')}
+                    />
+                    <ExtraToggle
+                      active={chip === 'favourites'}
+                      icon={Star}
+                      label="Favourites"
+                      onClick={() => onChipChange(chip === 'favourites' ? 'all' : 'favourites')}
+                    />
+                    <ExtraToggle
+                      active={slaFilter === 'breached'}
+                      icon={Timer}
+                      label="SLA breached"
+                      onClick={() =>
+                        onSlaFilterChange(slaFilter === 'breached' ? '' : 'breached')
+                      }
+                    />
+                  </div>,
+                  document.body
+                )}
             </div>
           </div>
         )}
@@ -341,6 +419,7 @@ function InboundStatusDot({
   numberLoading: boolean;
   inboundHealth: InboundHealth;
 }) {
+  const tipFor = useGlassTipProps();
   type Tone = 'green' | 'pending' | 'red';
   let tone: Tone = 'pending';
   let label = 'WhatsApp inbound status unknown';
@@ -373,10 +452,10 @@ function InboundStatusDot({
   return (
     <span
       className="relative inline-flex h-2 w-2 shrink-0"
-      title={label}
       aria-label={label}
       data-testid="inbound-health-pill"
       role="status"
+      {...tipFor(label, 'below')}
     >
       {tone === 'green' && (
         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-45 motion-reduce:animate-none" />

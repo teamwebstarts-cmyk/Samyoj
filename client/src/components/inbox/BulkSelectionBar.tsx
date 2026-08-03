@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { AlarmClock, CheckCircle2, Loader2, UserPlus, X } from 'lucide-react';
 import AssignAgentPopover from './AssignAgentPopover';
 import SnoozePopover from './SnoozePopover';
+import { useGlassTipProps } from './ComposerGlassTip';
 import { FOCUS_RING_CLASS } from '../../hooks/inboxA11y';
 import type { TeamAgent } from '../../types';
 
@@ -32,6 +33,7 @@ export default function BulkSelectionBar({
   onSnoozeUntil,
   onClear,
 }: BulkSelectionBarProps) {
+  const tipFor = useGlassTipProps();
   const [assignOpen, setAssignOpen] = useState(false);
   const [snoozeOpen, setSnoozeOpen] = useState(false);
   const assignBtnRef = useRef<HTMLButtonElement>(null);
@@ -53,9 +55,9 @@ export default function BulkSelectionBar({
           ref={assignBtnRef}
           type="button"
           disabled={busy}
-          title="Assign"
           aria-label="Assign"
           aria-expanded={assignOpen}
+          {...tipFor('Assign')}
           onClick={() => {
             setAssignOpen((v) => !v);
             setSnoozeOpen(false);
@@ -84,8 +86,8 @@ export default function BulkSelectionBar({
         <button
           type="button"
           disabled={busy}
-          title="Close"
           aria-label="Close"
+          {...tipFor('Close')}
           onClick={onCloseChats}
           className={`${ACTION_BTN} ${FOCUS_RING_CLASS}`}
         >
@@ -97,9 +99,9 @@ export default function BulkSelectionBar({
           ref={snoozeBtnRef}
           type="button"
           disabled={busy}
-          title="Snooze"
           aria-label="Snooze"
           aria-expanded={snoozeOpen}
+          {...tipFor('Snooze')}
           onClick={() => {
             setSnoozeOpen((v) => !v);
             setAssignOpen(false);
@@ -124,8 +126,8 @@ export default function BulkSelectionBar({
         <button
           type="button"
           onClick={onClear}
-          title="Clear selection"
           aria-label="Clear selection"
+          {...tipFor('Clear selection')}
           className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-theme-muted transition hover:bg-theme-subtle hover:text-theme-fg ${FOCUS_RING_CLASS}`}
         >
           <X className="h-4 w-4" strokeWidth={2.25} />

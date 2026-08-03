@@ -2,6 +2,9 @@ import { toastInbox, type InboxToastIcon } from '../../utils/toast';
 
 export type ChatNoticeTone = 'lavender' | 'amber' | 'orange';
 
+/** Icons for in-chat notices; toastInbox fallback only supports bot/star. */
+export type ChatNoticePayloadIcon = InboxToastIcon | 'users' | 'flow' | 'alert';
+
 export type ChatNoticePayload = {
   kind:
     | 'bot-on'
@@ -9,10 +12,11 @@ export type ChatNoticePayload = {
     | 'favorite-on'
     | 'favorite-off'
     | 'media-limit'
-    | 'send-error';
+    | 'send-error'
+    | 'handoff';
   message: string;
   tone?: ChatNoticeTone;
-  icon?: InboxToastIcon;
+  icon?: ChatNoticePayloadIcon;
   actionLabel?: string;
   onAction?: () => void;
 };
@@ -29,8 +33,9 @@ const handlers = new Map<string, Set<Handler>>();
 export function emitChatNotice(conversationId: string, payload: ChatNoticePayload) {
   const set = handlers.get(conversationId);
   if (!set || set.size === 0) {
+    const fallbackIcon: InboxToastIcon = payload.icon === 'star' ? 'star' : 'bot';
     toastInbox(payload.message, {
-      icon: payload.icon,
+      icon: fallbackIcon,
       actionLabel: payload.actionLabel,
       onAction: payload.onAction,
     });

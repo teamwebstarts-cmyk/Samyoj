@@ -522,41 +522,55 @@
     filter: drop-shadow(-1px 0 0 rgba(52, 211, 153, 0.35));
   }
 
-  /* Composer toolbar glass tip (replaces native black title tooltips) */
+  /* Inbox glass tip — soft light surface (replaces native black title tooltips) */
+  .inbox-glass-tip,
   .composer-glass-tip {
     position: fixed;
     z-index: 90;
     pointer-events: none;
-    transform: translate(-50%, -100%);
+    max-width: min(280px, calc(100vw - 24px));
     padding: 0.35rem 0.65rem;
     border-radius: 0.65rem;
-    border: 1px solid rgba(255, 255, 255, 0.55);
+    border: 1px solid rgba(226, 232, 240, 0.95);
     background: linear-gradient(
       165deg,
-      rgba(255, 255, 255, 0.88) 0%,
-      rgba(248, 250, 252, 0.78) 100%
+      rgba(255, 255, 255, 0.94) 0%,
+      rgba(248, 250, 252, 0.88) 100%
     );
     color: #334155;
     font-size: 11.5px;
     font-weight: 650;
     letter-spacing: -0.01em;
-    line-height: 1.2;
+    line-height: 1.25;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     box-shadow:
-      0 1px 0 rgba(255, 255, 255, 0.85) inset,
+      0 1px 0 rgba(255, 255, 255, 0.9) inset,
       0 8px 22px rgba(15, 23, 42, 0.1),
       0 1px 3px rgba(15, 23, 42, 0.06);
-    animation: composer-glass-tip-in 140ms ease-out both;
   }
 
+  .inbox-glass-tip--above,
+  .composer-glass-tip {
+    transform: translate(-50%, -100%);
+    animation: inbox-glass-tip-in-above 140ms ease-out both;
+  }
+
+  .inbox-glass-tip--below {
+    transform: translate(-50%, 0);
+    animation: inbox-glass-tip-in-below 140ms ease-out both;
+  }
+
+  .dark .inbox-glass-tip,
   .dark .composer-glass-tip {
     border-color: rgba(255, 255, 255, 0.12);
     background: linear-gradient(
       165deg,
-      rgba(30, 41, 59, 0.92) 0%,
-      rgba(15, 23, 42, 0.88) 100%
+      rgba(30, 41, 59, 0.94) 0%,
+      rgba(15, 23, 42, 0.9) 100%
     );
     color: #e2e8f0;
     box-shadow:
@@ -564,7 +578,7 @@
       0 10px 28px rgba(0, 0, 0, 0.45);
   }
 
-  @keyframes composer-glass-tip-in {
+  @keyframes inbox-glass-tip-in-above {
     from {
       opacity: 0;
       transform: translate(-50%, calc(-100% + 4px));
@@ -575,7 +589,19 @@
     }
   }
 
+  @keyframes inbox-glass-tip-in-below {
+    from {
+      opacity: 0;
+      transform: translate(-50%, -4px);
+    }
+    to {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
+    .inbox-glass-tip,
     .composer-glass-tip {
       animation: none;
     }
@@ -1199,11 +1225,25 @@
 
   @keyframes slideIn {
     from {
+      opacity: 0.92;
       transform: translateX(100%);
     }
 
     to {
+      opacity: 1;
       transform: translateX(0);
+    }
+  }
+
+  @keyframes slideOut {
+    from {
+      opacity: 1;
+      transform: translateX(0);
+    }
+
+    to {
+      opacity: 0.96;
+      transform: translateX(100%);
     }
   }
 
@@ -1217,13 +1257,30 @@
     }
   }
 
+  @keyframes modalFadeOut {
+    from {
+      opacity: 1;
+    }
+
+    to {
+      opacity: 0;
+    }
+  }
+
   .modal-backdrop {
     position: absolute;
     inset: 0;
     background: rgba(15, 23, 42, 0.52);
     backdrop-filter: blur(6px);
     -webkit-backdrop-filter: blur(6px);
-    animation: modalFadeIn 0.2s ease-out;
+  }
+
+  .modal-backdrop--enter {
+    animation: modalFadeIn 220ms ease-out both;
+  }
+
+  .modal-backdrop--exit {
+    animation: modalFadeOut 200ms ease-in both;
   }
 
   .dark .modal-backdrop {
@@ -1243,13 +1300,50 @@
     box-shadow:
       -12px 0 40px rgba(15, 23, 42, 0.12),
       var(--shadow-panel);
-    animation: slideIn 0.25s ease-out;
+    will-change: transform, opacity;
+  }
+
+  .modal-panel--enter {
+    animation: slideIn 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .modal-panel--exit {
+    animation: slideOut 220ms cubic-bezier(0.4, 0, 1, 1) both;
   }
 
   .dark .modal-panel {
     box-shadow:
       -12px 0 48px rgba(0, 0, 0, 0.45),
       var(--shadow-panel);
+  }
+
+  /* New chat form — soft staggered enter after panel slide */
+  @keyframes newChatFieldIn {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .new-chat-form__item {
+    animation: newChatFieldIn 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .new-chat-form__item:nth-child(1) {
+    animation-delay: 40ms;
+  }
+
+  .new-chat-form__item:nth-child(2) {
+    animation-delay: 80ms;
+  }
+
+  .new-chat-form__item:nth-child(3) {
+    animation-delay: 120ms;
   }
 
   .modal-panel__header,
@@ -1702,11 +1796,34 @@
     animation: inboxThreadEnter 200ms ease-out both;
   }
 
-  /* M4 — modal / popover enter+exit (200/150ms) */
+  /* M4 — modal / popover enter+exit (200/150ms)
+     Mobile: bottom-sheet rise. Desktop (sm+): soft scale pop. */
+  @keyframes inboxModalEnterMobile {
+    from {
+      opacity: 0;
+      transform: translateY(12px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  @keyframes inboxModalExitMobile {
+    from {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: translateY(8px) scale(0.98);
+    }
+  }
+
   @keyframes inboxModalEnter {
     from {
       opacity: 0;
-      transform: scale(0.95) translateY(2px);
+      transform: scale(0.96) translateY(4px);
     }
     to {
       opacity: 1;
@@ -1721,16 +1838,26 @@
     }
     to {
       opacity: 0;
-      transform: scale(0.95) translateY(2px);
+      transform: scale(0.96) translateY(2px);
     }
   }
 
   .inbox-modal-enter {
-    animation: inboxModalEnter 200ms ease-out both;
+    animation: inboxModalEnterMobile 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
   }
 
   .inbox-modal-exit {
-    animation: inboxModalExit 150ms ease-in forwards;
+    animation: inboxModalExitMobile 150ms ease-in forwards;
+  }
+
+  @media (min-width: 640px) {
+    .inbox-modal-enter {
+      animation-name: inboxModalEnter;
+    }
+
+    .inbox-modal-exit {
+      animation-name: inboxModalExit;
+    }
   }
 
   /* M5 — new conversation row slide-in (220ms ease-out, -8px → 0) */
@@ -1886,7 +2013,12 @@
     .inbox-interactive-panel,
     .inbox-thread-fadein,
     .inbox-thread-enter,
-    .inbox-skeleton-fadeout {
+    .inbox-skeleton-fadeout,
+    .modal-panel--enter,
+    .modal-panel--exit,
+    .modal-backdrop--enter,
+    .modal-backdrop--exit,
+    .new-chat-form__item {
       animation: none !important;
     }
   }

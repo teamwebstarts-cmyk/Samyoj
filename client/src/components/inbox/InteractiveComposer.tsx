@@ -293,7 +293,7 @@ export default function InteractiveComposer({
       onKeyDown={onFormKeyDown}
     >
       <div className="flex min-h-0 flex-1 flex-col md:flex-row md:divide-x md:divide-violet-200/40 dark:md:divide-violet-900/30">
-        <div className="inbox-composer-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-2 pt-2.5 sm:px-4 md:max-w-[50%] md:flex-[0_0_48%] md:pb-3">
+        <div className="inbox-composer-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-2 pt-2.5 sm:px-4 md:max-w-[60%] md:flex-[0_0_60%] md:pb-3">
           <div className="mb-2.5">
             <InteractiveTypeSwitcher
               mode={mode}
@@ -367,31 +367,33 @@ export default function InteractiveComposer({
                 </div>
                 <div className="grid gap-2 sm:grid-cols-3">
                   {buttons.map((btn, index) => (
-                    <div key={btn.id} className="relative">
-                      <AppInput
-                        label={`Button ${index + 1}`}
-                        hint={charHint(btn.title, LIMITS.buttonTitle)}
-                        value={btn.title}
-                        onChange={(e) => {
-                          const title = e.target.value.slice(0, LIMITS.buttonTitle);
-                          setButtons((prev) =>
-                            prev.map((entry, idx) => (idx === index ? { ...entry, title } : entry))
-                          );
-                        }}
-                        placeholder="Label"
-                        className={COMPACT_INPUT}
-                        labelClassName={COMPACT_LABEL}
-                      />
+                    <div key={btn.id} className="flex items-end gap-1">
+                      <div className="min-w-0 flex-1">
+                        <AppInput
+                          label={`Button ${index + 1}`}
+                          hint={charHint(btn.title, LIMITS.buttonTitle)}
+                          value={btn.title}
+                          onChange={(e) => {
+                            const title = e.target.value.slice(0, LIMITS.buttonTitle);
+                            setButtons((prev) =>
+                              prev.map((entry, idx) => (idx === index ? { ...entry, title } : entry))
+                            );
+                          }}
+                          placeholder="Label"
+                          className={COMPACT_INPUT}
+                          labelClassName={COMPACT_LABEL}
+                        />
+                      </div>
                       {buttons.length > 1 && (
                         <button
                           type="button"
                           onClick={() =>
                             setButtons((prev) => prev.filter((_, idx) => idx !== index))
                           }
-                          className="absolute right-0 top-0 rounded p-0.5 text-neutral-400 transition hover:text-red-600"
+                          className="mb-0.5 shrink-0 rounded-lg p-2 text-neutral-400 transition hover:bg-red-50 hover:text-red-600"
                           aria-label={`Remove button ${index + 1}`}
                         >
-                          <Trash2 className="h-3 w-3" />
+                          <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       )}
                     </div>
@@ -584,7 +586,7 @@ export default function InteractiveComposer({
 
         <ComposerPreviewPane
           subtitle={activeMode.label}
-          className="hidden md:flex md:min-h-0 md:flex-[0_0_52%]"
+          className="hidden md:flex md:min-h-0 md:flex-[0_0_40%]"
         >
           <MemoizedInteractivePreview model={previewModel} />
         </ComposerPreviewPane>

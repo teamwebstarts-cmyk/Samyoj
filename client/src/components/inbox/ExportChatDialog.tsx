@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Download, FileJson, FileText, Loader2 } from 'lucide-react';
 import InboxModal from './InboxModal';
 import { inboxApi } from '../../services/api';
-import { toastError, toastSuccess } from '../../utils/toast';
+import { toastError } from '../../utils/toast';
 import { FOCUS_RING_CLASS, useAutoFocus } from '../../hooks/inboxA11y';
 
 interface ExportChatDialogProps {
@@ -56,7 +56,6 @@ export default function ExportChatDialog({
       anchor.click();
       anchor.remove();
       URL.revokeObjectURL(url);
-      toastSuccess('Chat exported');
       onClose();
     } catch {
       toastError('Could not export this chat');

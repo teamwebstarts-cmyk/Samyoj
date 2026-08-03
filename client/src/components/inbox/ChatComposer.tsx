@@ -16,10 +16,7 @@ import {
 import type { CannedReply } from '../../types';
 import { VOICE_MAX_SECONDS } from './mediaLimits';
 import { emitChatNotice } from './chatNoticeBus';
-import ComposerGlassTip, {
-  composerTipProps,
-  useComposerGlassTip,
-} from './ComposerGlassTip';
+import { composerTipProps, useInboxGlassTip } from './ComposerGlassTip';
 
 export interface PendingAttachment {
   file: File;
@@ -108,7 +105,7 @@ export default function ChatComposer({
   // shows PENDING on the bubble; keeping the Send spinner made WhatsApp UX feel broken.
   void _sending;
 
-  const { tip, onShowTip, onHideTip } = useComposerGlassTip();
+  const { onShowTip, onHideTip } = useInboxGlassTip();
   const tipFor = (label: string) => composerTipProps(label, onShowTip, onHideTip);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -617,10 +614,10 @@ export default function ChatComposer({
             </button>
             <button
               type="button"
-              className={`${toolBtn} border border-neutral-200/80 dark:border-neutral-700/60`}
+              className={toolBtn}
               aria-label="Quick replies"
               disabled={cannedReplies.length === 0 || recording}
-              {...tipFor('Quick replies')}
+              {...tipFor('Quick replies (also in Details)')}
               onClick={() => {
                 setCannedOpen((v) => !v);
                 setAttachMenuOpen(false);
@@ -629,7 +626,7 @@ export default function ChatComposer({
                 textareaRef.current?.focus();
               }}
             >
-              <Zap size={16} strokeWidth={2.25} />
+              <Zap size={16} strokeWidth={2} />
             </button>
             {canRecord && (
               <button
@@ -647,10 +644,10 @@ export default function ChatComposer({
           <div className="flex shrink-0 items-center gap-1.5 pl-1">
             <button
               type="button"
-              className={`${toolBtn} border border-neutral-200/80 font-semibold dark:border-neutral-700/60`}
+              className={`${toolBtn} text-[13px] font-semibold text-neutral-400 hover:text-neutral-700 dark:text-neutral-500 dark:hover:text-neutral-200`}
               aria-label="Quick replies"
               disabled={recording}
-              {...tipFor('Quick replies')}
+              {...tipFor('Type / for quick replies')}
               onClick={() => {
                 onChange(value.startsWith('/') ? value : `/${value}`);
                 setCannedOpen(true);
@@ -735,7 +732,6 @@ export default function ChatComposer({
           </div>
         </div>
       </div>
-      <ComposerGlassTip tip={tip} />
     </form>
   );
 }

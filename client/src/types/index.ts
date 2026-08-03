@@ -322,6 +322,7 @@ export interface Conversation {
   id: string;
   status: string;
   unreadCount: number;
+  createdAt?: string;
   lastMessageAt?: string;
   botActive?: boolean;
   botHandoffAt?: string | null;

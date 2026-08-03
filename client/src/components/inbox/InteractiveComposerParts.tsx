@@ -91,7 +91,7 @@ type TypeSwitcherProps = {
   onModeChange: (mode: InteractiveComposerMode) => void;
   /** @deprecated use `size="compact"` */
   compact?: boolean;
-  size?: 'compact' | 'default' | 'header';
+  size?: 'compact' | 'default' | 'form' | 'header';
   className?: string;
 };
 
@@ -102,19 +102,19 @@ export function InteractiveTypeSwitcher({
   size,
   className = '',
 }: TypeSwitcherProps) {
-  const resolvedSize = size ?? (compact ? 'compact' : 'default');
+  const resolvedSize = size === 'header' ? 'form' : (size ?? (compact ? 'compact' : 'default'));
 
   const containerClass =
-    resolvedSize === 'header'
-      ? 'gap-1 rounded-2xl p-1 bg-violet-50/90 ring-violet-300/50 dark:bg-violet-950/40 dark:ring-violet-700/50'
+    resolvedSize === 'form'
+      ? 'gap-1 rounded-xl p-1 bg-violet-50/80 ring-violet-200/70 dark:bg-violet-950/35 dark:ring-violet-800/45'
       : 'gap-0.5 rounded-xl p-0.5 bg-white/70 ring-violet-200/60 dark:bg-neutral-900/60 dark:ring-violet-800/50';
 
   const buttonClass = (selected: boolean) => {
-    if (resolvedSize === 'header') {
-      return `inline-flex shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-1 sm:gap-2 sm:px-3 sm:py-2 sm:text-[12px] ${
+    if (resolvedSize === 'form') {
+      return `inline-flex shrink-0 items-center gap-1.5 rounded-[10px] px-2.5 py-1.5 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-1 ${
         selected
-          ? 'bg-gradient-to-b from-violet-600 to-violet-700 text-white shadow-md ring-1 ring-violet-500/40'
-          : 'text-violet-800 hover:bg-white/80 dark:text-violet-100 dark:hover:bg-violet-900/45'
+          ? 'bg-gradient-to-b from-violet-600 to-violet-700 text-white shadow-sm ring-1 ring-violet-500/30'
+          : 'text-violet-700 hover:bg-white/80 dark:text-violet-200 dark:hover:bg-violet-900/35'
       }`;
     }
     if (resolvedSize === 'compact') {
@@ -132,25 +132,13 @@ export function InteractiveTypeSwitcher({
   };
 
   const iconClass =
-    resolvedSize === 'header'
-      ? 'h-3.5 w-3.5 sm:h-4 sm:w-4'
-      : resolvedSize === 'compact'
-        ? 'h-2.5 w-2.5'
-        : 'h-3 w-3';
+    resolvedSize === 'form' ? 'h-3.5 w-3.5' : resolvedSize === 'compact' ? 'h-2.5 w-2.5' : 'h-3 w-3';
 
   const labelClass =
-    resolvedSize === 'header'
-      ? 'inline'
-      : resolvedSize === 'compact'
-        ? 'hidden min-[400px]:inline'
-        : 'hidden sm:inline';
+    resolvedSize === 'form' ? 'inline' : resolvedSize === 'compact' ? 'hidden min-[400px]:inline' : 'hidden sm:inline';
 
   const shortClass =
-    resolvedSize === 'header'
-      ? 'hidden'
-      : resolvedSize === 'compact'
-        ? 'min-[400px]:hidden'
-        : 'sm:hidden';
+    resolvedSize === 'form' ? 'hidden' : resolvedSize === 'compact' ? 'min-[400px]:hidden' : 'sm:hidden';
 
   return (
     <div

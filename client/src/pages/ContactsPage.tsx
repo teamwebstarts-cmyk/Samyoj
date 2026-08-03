@@ -166,6 +166,34 @@ export default function ContactsPage() {
 
   loadRef.current = load;
 
+  // Deep-link from Inbox “View full contact”
+  useEffect(() => {
+    const id = searchParams.get('highlight');
+    if (!id) return;
+    let cancelled = false;
+    contactApi
+      .get(id)
+      .then(({ data }) => {
+        if (cancelled) return;
+        const contact = (data.data?.contact ?? data.data) as Contact;
+        if (!contact?.id) return;
+        setDetailContact(contact);
+        setDetailOpen(true);
+        setSearchParams(
+          (prev) => {
+            const next = new URLSearchParams(prev);
+            next.delete('highlight');
+            return next;
+          },
+          { replace: true }
+        );
+      })
+      .catch(console.error);
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams, setSearchParams]);
+
   useOnActiveNumberChange(({ numberId, previousNumberId, isInitial }) => {
     if (isInitial) return;
 

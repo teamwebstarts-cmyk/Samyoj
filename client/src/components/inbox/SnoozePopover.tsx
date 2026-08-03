@@ -7,7 +7,7 @@ import { computeFixedPopoverPosition, type PopoverCoords } from './inboxPopoverP
 interface SnoozePopoverProps {
   snoozedUntil?: string | null;
   /**
-   * Anchor element for fixed portal positioning (ChatHeader / QuickActions / bulk bar).
+   * Anchor element for fixed portal positioning (ChatHeader / bulk bar).
    * Optional: when omitted the popover stays unpositioned (invisible) until a ref is provided.
    * Accepts button/div refs via `HTMLElement | null` for React useRef covariance.
    */

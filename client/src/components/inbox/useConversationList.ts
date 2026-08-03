@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { inboxApi } from '../../services/api';
-import { toastSuccess } from '../../utils/toast';
 import type { Conversation } from '../../types';
 import type { ListChip } from './InboxListHeader';
 
@@ -61,10 +60,6 @@ export function useConversationList({
   const conversationsRef = useRef<Conversation[]>([]);
   conversationsRef.current = conversations;
 
-  // Map of conversationId → snoozedUntil ISO string seen in the previous snapshot.
-  const prevSnoozedRef = useRef<Map<string, string>>(new Map());
-  const snoozeToastFiredRef = useRef<Set<string>>(new Set());
-
   const load = useCallback(async () => {
     const requestId = ++requestRef.current;
     setLoading(true);
@@ -105,36 +100,6 @@ export function useConversationList({
   useEffect(() => {
     void load();
   }, [load]);
-
-  // Detect snooze expiries
-  useEffect(() => {
-    const now = Date.now();
-    const prev = prevSnoozedRef.current;
-    const next = new Map<string, string>();
-    for (const c of conversations) {
-      const until = c.snoozedUntil;
-      if (until && new Date(until).getTime() > now) {
-        next.set(c.id, until);
-      }
-    }
-    for (const [id, untilIso] of prev.entries()) {
-      const stillSnoozed = next.has(id) && next.get(id) === untilIso;
-      if (stillSnoozed) continue;
-      const fired = snoozeToastFiredRef.current.has(id);
-      if (fired) {
-        if (!next.has(id)) snoozeToastFiredRef.current.delete(id);
-        continue;
-      }
-      const conv =
-        conversations.find((c) => c.id === id) ||
-        conversationsRef.current.find((c) => c.id === id);
-      if (!conv) continue;
-      const name = conv.contact?.name || conv.contact?.phone || 'A chat';
-      toastSuccess(`Snoozed chat from ${name} is back`);
-      snoozeToastFiredRef.current.add(id);
-    }
-    prevSnoozedRef.current = next;
-  }, [conversations]);
 
   const pageCount = Math.max(1, Math.ceil(total / pageSize) || 1);
   const start = total === 0 ? 0 : (page - 1) * pageSize + 1;

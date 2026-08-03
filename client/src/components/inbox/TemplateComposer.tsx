@@ -20,12 +20,19 @@ interface TemplateComposerProps {
   }) => void;
   sending: boolean;
   onCancel: () => void;
+  /** Show a compact 24h-window hint inside the form body (not a duplicate page title). */
+  windowClosed?: boolean;
 }
 
 /** Session cache so reopening Template tab doesn’t flash empty / re-fetch every time. */
 let approvedTemplatesCache: MessageTemplate[] | null = null;
 
-export default function TemplateComposer({ onSend, sending, onCancel }: TemplateComposerProps) {
+export default function TemplateComposer({
+  onSend,
+  sending,
+  onCancel,
+  windowClosed,
+}: TemplateComposerProps) {
   const [templates, setTemplates] = useState<MessageTemplate[]>(() => approvedTemplatesCache ?? []);
   const [loading, setLoading] = useState(() => !approvedTemplatesCache);
   const [templateName, setTemplateName] = useState(
@@ -156,8 +163,13 @@ export default function TemplateComposer({ onSend, sending, onCancel }: Template
     >
       <div className="flex min-h-0 flex-1 flex-col md:flex-row md:divide-x md:divide-theme-border/60">
         {/* Left: inputs — sole scroll region on desktop; includes mobile preview in same scroll */}
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-2 pt-2.5 sm:px-4 md:max-w-[50%] md:flex-[0_0_48%] md:pb-3">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-2 pt-2.5 sm:px-4 md:max-w-[60%] md:flex-[0_0_60%] md:pb-3">
           <div className="space-y-3">
+            {windowClosed && (
+              <p className="rounded-lg bg-amber-50/90 px-2.5 py-1.5 text-[11px] font-medium text-amber-900 ring-1 ring-amber-200/70 dark:bg-amber-950/40 dark:text-amber-200 dark:ring-amber-800/45">
+                24-hour reply window is closed — send an approved template to restart the conversation.
+              </p>
+            )}
             <TemplatePicker
               templates={templates}
               value={templateName}
@@ -238,7 +250,7 @@ export default function TemplateComposer({ onSend, sending, onCancel }: Template
         {previewCard && selected && (
           <ComposerPreviewPane
             subtitle={selected.name}
-            className="hidden md:flex md:min-h-0 md:flex-[0_0_52%]"
+            className="hidden md:flex md:min-h-0 md:flex-[0_0_40%]"
           >
             {previewCard}
           </ComposerPreviewPane>

@@ -74,6 +74,9 @@ interface ChatThreadProps {
   onStatusChange: (status: string) => void;
   onConvertToTicket: () => void;
   onExport: () => void;
+  onCreateCampaign: () => void;
+  detailsOpen: boolean;
+  onToggleDetails: () => void;
   onContextMenu: (event: React.MouseEvent) => void;
   onReloadThread: () => void;
   onLoadEarlier: () => void;
@@ -137,6 +140,9 @@ export default function ChatThread({
   onStatusChange,
   onConvertToTicket,
   onExport,
+  onCreateCampaign,
+  detailsOpen,
+  onToggleDetails,
   onContextMenu,
   onReloadThread,
   onLoadEarlier,
@@ -609,6 +615,9 @@ export default function ChatThread({
         onStatusChange={onStatusChange}
         onConvertToTicket={onConvertToTicket}
         onExport={onExport}
+        onCreateCampaign={onCreateCampaign}
+        detailsOpen={detailsOpen}
+        onToggleDetails={onToggleDetails}
       />
 
       <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -627,6 +636,11 @@ export default function ChatThread({
           <ChatNoticeStack notices={stackedNotices} onDismiss={dismissNotice} />
         </div>
 
+      <span className="sr-only" role="status" aria-live="assertive" aria-atomic="true">
+        {announceText}
+      </span>
+      {/* Jump FAB lives in this thread-only wrapper so it sits above the composer, not over it. */}
+      <div className="relative min-h-0 flex-1">
       {scrolledUp && !composerBlocksJump && (
         <button
           type="button"
@@ -637,7 +651,7 @@ export default function ChatThread({
               : 'Scroll to latest messages'
           }
           data-testid="jump-to-latest"
-          className="pointer-events-auto absolute bottom-24 right-3 z-20 flex h-10 w-10 items-center justify-center rounded-full border border-theme-border/80 bg-theme-surface text-theme-secondary shadow-[0_2px_10px_rgba(15,23,42,0.14)] backdrop-blur-sm transition hover:bg-theme-surface hover:text-theme-fg hover:shadow-[0_4px_14px_rgba(15,23,42,0.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-whatsapp-500 focus-visible:ring-offset-2 sm:right-4 dark:shadow-[0_2px_12px_rgba(0,0,0,0.45)]"
+          className="pointer-events-auto absolute bottom-3 right-3 z-20 flex h-10 w-10 items-center justify-center rounded-full border border-theme-border/80 bg-theme-surface text-theme-secondary shadow-[0_2px_10px_rgba(15,23,42,0.14)] backdrop-blur-sm transition hover:bg-theme-surface hover:text-theme-fg hover:shadow-[0_4px_14px_rgba(15,23,42,0.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-whatsapp-500 focus-visible:ring-offset-2 sm:bottom-4 sm:right-4 dark:shadow-[0_2px_12px_rgba(0,0,0,0.45)]"
         >
           <ArrowDown className="h-5 w-5" strokeWidth={2.25} aria-hidden="true" />
           {newCount > 0 && (
@@ -650,13 +664,10 @@ export default function ChatThread({
           )}
         </button>
       )}
-      <span className="sr-only" role="status" aria-live="assertive" aria-atomic="true">
-        {announceText}
-      </span>
       {threadLoading ? (
         <ThreadSkeleton />
       ) : threadError ? (
-        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+        <div className="flex min-h-0 h-full flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
           <p className="text-[14px] font-bold text-theme-fg">Could not load this chat</p>
           <p className="text-[12.5px] text-theme-muted">
             The conversation could not be opened. Check your connection and try again.
@@ -678,7 +689,7 @@ export default function ChatThread({
           aria-atomic="false"
           aria-relevant="additions"
           aria-label={`Conversation with ${conversation.contact?.name ?? 'customer'}`}
-          className={`inbox-chat-bg min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-4 ${firstThreadReveal ? 'inbox-thread-fadein' : ''}`}
+          className={`inbox-chat-bg h-full min-h-0 overflow-y-auto px-3 py-3 sm:px-4 ${firstThreadReveal ? 'inbox-thread-fadein' : ''}`}
         >
           {loadingEarlier && (
             <div className="flex justify-center gap-2 pb-2 pt-1" aria-hidden>
@@ -748,6 +759,7 @@ export default function ChatThread({
           </div>
         </div>
       )}
+      </div>
 
       {threadLoading ? (
         <ComposerSkeleton />
@@ -773,8 +785,6 @@ export default function ChatThread({
           <ComposerModeHeader
             active={interactiveOpen ? 'interactive' : templateMode ? 'template' : 'reply'}
             replyLocked={!windowOpen}
-            interactiveMode={interactiveOpen ? interactiveMode : undefined}
-            onInteractiveModeChange={interactiveOpen ? setInteractiveMode : undefined}
             onChange={(tab) => {
               if (tab === 'reply') {
                 onCancelTemplate();
@@ -797,6 +807,7 @@ export default function ChatThread({
               <InteractiveComposer
                 open={interactiveOpen}
                 mode={interactiveMode}
+                onModeChange={setInteractiveMode}
                 onClose={onCloseInteractive}
                 sending={sending}
                 serviceWindow={serviceWindow!}
@@ -805,7 +816,12 @@ export default function ChatThread({
             </div>
           ) : templateMode ? (
             <div className="sticky bottom-0 z-30 shrink-0 bg-white/95 backdrop-blur-md dark:bg-neutral-950/95">
-              <TemplateComposer onSend={onSendTemplate} sending={sending} onCancel={onCancelTemplate} />
+              <TemplateComposer
+                onSend={onSendTemplate}
+                sending={sending}
+                onCancel={onCancelTemplate}
+                windowClosed={!windowOpen}
+              />
             </div>
           ) : windowOpen ? (
             <ChatComposer

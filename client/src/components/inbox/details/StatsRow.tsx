@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { inboxApi } from '../../../services/api';
 import type { ConversationStats } from '../../../types';
 
@@ -14,16 +15,37 @@ function formatAvgFirstResponse(minutes: number | null): string {
   return rest > 0 ? `${hours}h ${rest}m` : `${hours}h`;
 }
 
-function StatChip({ value, label, title }: { value: string; label: string; title?: string }) {
-  return (
-    <div
-      title={title}
-      className="flex min-w-0 flex-col items-center gap-0.5 rounded-xl border border-theme-border px-2 py-2.5"
-    >
+function StatChip({
+  value,
+  label,
+  title,
+  href,
+}: {
+  value: string;
+  label: string;
+  title?: string;
+  href?: string;
+}) {
+  const className =
+    'flex min-w-0 flex-col items-center gap-0.5 rounded-xl border border-theme-border/70 bg-white/40 px-2 py-2.5 dark:bg-neutral-950/30';
+  const body = (
+    <>
       <span className="truncate text-[14px] font-extrabold tabular-nums text-theme-fg">{value}</span>
       <span className="truncate text-[9.5px] font-bold uppercase tracking-wide text-theme-muted">
         {label}
       </span>
+    </>
+  );
+  if (href) {
+    return (
+      <Link title={title} to={href} className={`${className} transition hover:border-whatsapp-300/80`}>
+        {body}
+      </Link>
+    );
+  }
+  return (
+    <div title={title} className={className}>
+      {body}
     </div>
   );
 }
@@ -54,7 +76,7 @@ export default function StatsRow({ conversationId }: StatsRowProps) {
 
   if (!stats) {
     return (
-      <div className="mx-4 mb-4 grid grid-cols-3 gap-2">
+      <div className="mx-3.5 mb-3.5 grid grid-cols-3 gap-2">
         {[0, 1, 2].map((i) => (
           <div key={i} className="inbox-skeleton-shimmer h-[54px] rounded-xl" />
         ))}
@@ -63,9 +85,14 @@ export default function StatsRow({ conversationId }: StatsRowProps) {
   }
 
   return (
-    <div className="mx-4 mb-4 grid grid-cols-3 gap-2">
+    <div className="mx-3.5 mb-3.5 grid grid-cols-3 gap-2">
       <StatChip value={String(stats.totalChats)} label="Total Chats" />
-      <StatChip value={String(stats.openTickets)} label="Open Tickets" />
+      <StatChip
+        value={String(stats.openTickets)}
+        label="Open Tickets"
+        href={stats.openTickets > 0 ? '/tickets' : undefined}
+        title={stats.openTickets > 0 ? 'Open tickets for this contact' : undefined}
+      />
       <StatChip
         value={formatAvgFirstResponse(stats.avgFirstResponseMinutes)}
         label="First response"

@@ -8,6 +8,11 @@ import SectionCard from '../ui/SectionCard';
 import SlideOver, { SlideOverFooter } from '../ui/SlideOver';
 import { cannedRepliesApi } from '../../services/api';
 import type { CannedReply } from '../../types';
+import { getErrorMessage } from '../../utils/errors';
+import {
+  normalizeCannedShortcut,
+  validateCannedShortcut,
+} from '../../utils/cannedReplyShortcut';
 import { toastError, toastSuccess } from '../../utils/toast';
 
 export default function CannedRepliesPanel() {
@@ -17,6 +22,7 @@ export default function CannedRepliesPanel() {
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState<CannedReply | null>(null);
   const [form, setForm] = useState({ shortcut: '', title: '', content: '' });
+  const [shortcutError, setShortcutError] = useState<string | null>(null);
 
   const load = () => {
     cannedRepliesApi
@@ -31,33 +37,65 @@ export default function CannedRepliesPanel() {
   const openCreate = () => {
     setEditing(null);
     setForm({ shortcut: '', title: '', content: '' });
+    setShortcutError(null);
     setOpen(true);
   };
 
   const openEdit = (reply: CannedReply) => {
     setEditing(reply);
     setForm({ shortcut: reply.shortcut, title: reply.title, content: reply.content });
+    setShortcutError(null);
     setOpen(true);
+  };
+
+  const handleShortcutChange = (value: string) => {
+    // Strip a pasted leading `/` immediately so the field matches help copy.
+    const cleaned = value.replace(/^\/+/, '');
+    setForm((f) => ({ ...f, shortcut: cleaned }));
+    if (shortcutError) {
+      setShortcutError(validateCannedShortcut(cleaned));
+    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    const shortcut = normalizeCannedShortcut(form.shortcut);
+    const nextError = validateCannedShortcut(form.shortcut);
+    if (nextError) {
+      setShortcutError(nextError);
+      return;
+    }
+    if (!form.title.trim() || !form.content.trim()) {
+      toastError('Title and message are required');
+      return;
+    }
+
+    const payload = {
+      shortcut,
+      title: form.title.trim(),
+      content: form.content,
+    };
+
     setSaving(true);
+    setShortcutError(null);
     try {
       if (editing) {
-        await cannedRepliesApi.update(editing.id, form);
+        await cannedRepliesApi.update(editing.id, payload);
         toastSuccess('Reply updated');
       } else {
-        await cannedRepliesApi.create(form);
+        await cannedRepliesApi.create(payload);
         toastSuccess('Reply created');
       }
       setOpen(false);
       load();
     } catch (err: unknown) {
-      toastError(
-        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
-          ?.message || 'Failed to save reply'
-      );
+      const message = getErrorMessage(err, 'Failed to save reply');
+      if (/shortcut/i.test(message)) {
+        setShortcutError(
+          message.replace(/^shortcut:\s*/i, '') || 'Use letters, numbers, - or _ only'
+        );
+      }
+      toastError(message);
     } finally {
       setSaving(false);
     }
@@ -91,8 +129,12 @@ export default function CannedRepliesPanel() {
           icon={Zap}
           compact
           title="No quick replies yet"
-          description="Save message shortcuts like /thanks or /hours — your team can type them in any chat."
-          steps={['Tap Add reply above', 'Pick a short keyword like "thanks"', 'Type /thanks in chat to insert it instantly']}
+          description="Save a keyword like thanks or hours — your team types /thanks in any chat to insert it."
+          steps={[
+            'Tap Add reply above',
+            'Enter a keyword without the slash (e.g. thanks)',
+            'Type /thanks in chat to insert it instantly',
+          ]}
         />
       ) : (
         <div className="space-y-2">
@@ -123,11 +165,15 @@ export default function CannedRepliesPanel() {
         <form id="slideover-form" onSubmit={(e) => void handleSave(e)} className="space-y-4">
           <AppInput
             label="Shortcut"
-            hint="Letters, numbers, dash, underscore — used as /shortcut"
+            hint="No slash — used in chat as /shortcut"
             value={form.shortcut}
-            onChange={(e) => setForm((f) => ({ ...f, shortcut: e.target.value }))}
+            onChange={(e) => handleShortcutChange(e.target.value)}
+            onBlur={() => setShortcutError(validateCannedShortcut(form.shortcut))}
             placeholder="thanks"
+            error={shortcutError ?? undefined}
             required
+            autoComplete="off"
+            spellCheck={false}
           />
           <AppInput
             label="Title"

@@ -1,7 +1,7 @@
 import { useState, type Dispatch, type SetStateAction } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { callingApi, inboxApi } from '../../services/api';
-import { toastError, toastSuccess } from '../../utils/toast';
+import { toastError } from '../../utils/toast';
 import { emitChatNotice } from './chatNoticeBus';
 import type { Conversation } from '../../types';
 
@@ -44,7 +44,6 @@ export function useConversationActions({
       const { data } = await inboxApi.assign(targetId, agentId);
       const updated = data.data as Conversation;
       upsertConversation({ id: targetId, assignedAgent: updated.assignedAgent } as Conversation);
-      toastSuccess(agentId ? 'Agent assigned' : 'Agent unassigned');
     } catch (err: unknown) {
       toastError(extractError(err, 'Failed to assign agent'));
     } finally {
@@ -59,7 +58,6 @@ export function useConversationActions({
       const { data } = await inboxApi.setStatus(targetId, status);
       const updated = data.data as Conversation;
       upsertConversation({ id: targetId, status: updated.status } as Conversation);
-      toastSuccess('Status updated');
     } catch (err: unknown) {
       toastError(extractError(err, 'Failed to update status'));
     }
@@ -111,7 +109,6 @@ export function useConversationActions({
         conversationId: selected.id,
         phone: selected.contact.phone,
       });
-      toastSuccess('Calling…');
       const callId = (data.data as { call?: { id: string } })?.call?.id;
       if (callId) navigate(`/calls/${callId}`);
     } catch (err: unknown) {
@@ -121,13 +118,12 @@ export function useConversationActions({
     }
   };
 
-  const handleSnooze = async (untilIso: string, label?: string, conversationId?: string) => {
+  const handleSnooze = async (untilIso: string, _label?: string, conversationId?: string) => {
     const targetId = conversationId || selected?.id;
     if (!targetId) return;
     try {
       await inboxApi.snooze(targetId, untilIso);
       upsertConversation({ id: targetId, status: 'SNOOZED', snoozedUntil: untilIso } as Conversation);
-      toastSuccess(label ? `Snoozed — ${label}` : 'Conversation snoozed');
       if (selected?.id === targetId) setSelected(null);
     } catch (err: unknown) {
       toastError(extractError(err, 'Could not snooze conversation'));
@@ -140,7 +136,6 @@ export function useConversationActions({
     try {
       await inboxApi.unsnooze(targetId);
       upsertConversation({ id: targetId, status: 'OPEN', snoozedUntil: null } as Conversation);
-      toastSuccess('Conversation unsnoozed');
     } catch (err: unknown) {
       toastError(extractError(err, 'Could not unsnooze conversation'));
     }
@@ -203,8 +198,6 @@ export function useConversationActions({
       }
       if (result.failed.length > 0) {
         toastError(`${result.updated} updated · ${result.failed.length} failed`);
-      } else {
-        toastSuccess(`${result.updated} conversation${result.updated === 1 ? '' : 's'} updated`);
       }
       return result;
     } catch (err: unknown) {
