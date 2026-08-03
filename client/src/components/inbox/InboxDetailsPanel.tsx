@@ -51,7 +51,39 @@ type PanelSection =
   | 'tags'
   | 'automations';
 
-type DetailsTab = 'details' | 'activity';
+type DetailsTab =
+  | 'details'
+  | 'activity'
+  | 'labels'
+  | 'notes'
+  | 'replies'
+  | 'tags'
+  | 'automations';
+
+const SECTION_TO_TAB: Record<PanelSection, DetailsTab> = {
+  profile: 'details',
+  stats: 'activity',
+  labels: 'labels',
+  notes: 'notes',
+  quickReplies: 'replies',
+  tags: 'tags',
+  automations: 'automations',
+};
+
+const DETAILS_TABS: ReadonlyArray<{
+  id: DetailsTab;
+  label: string;
+  shortLabel: string;
+  icon: typeof User;
+}> = [
+  { id: 'details', label: 'Details', shortLabel: 'Details', icon: User },
+  { id: 'activity', label: 'Activity', shortLabel: 'Activity', icon: Activity },
+  { id: 'labels', label: 'Labels', shortLabel: 'Labels', icon: Tag },
+  { id: 'notes', label: 'Notes', shortLabel: 'Notes', icon: StickyNote },
+  { id: 'replies', label: 'Quick replies', shortLabel: 'Replies', icon: Zap },
+  { id: 'tags', label: 'Tags', shortLabel: 'Tags', icon: Hash },
+  { id: 'automations', label: 'Automations', shortLabel: 'Bots', icon: Bot },
+];
 
 interface InboxDetailsPanelProps {
   conversation: Conversation;
@@ -70,7 +102,7 @@ interface InboxDetailsPanelProps {
   /** Controlled docked panel open (≥ md). */
   panelOpen: boolean;
   onPanelOpenChange: (open: boolean) => void;
-  /** Section to scroll into view when opening. */
+  /** Tab / section to open when focusing the panel. */
   focusSection?: PanelSection;
   overlayOpen?: boolean;
   overlaySection?: PanelSection;
@@ -191,6 +223,7 @@ export default function InboxDetailsPanel({
   const [addingTag, setAddingTag] = useState(false);
   const [showTagInput, setShowTagInput] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const tabListRef = useRef<HTMLDivElement>(null);
   const noteInputRef = useRef<HTMLTextAreaElement>(null);
   const labelsSectionRef = useRef<HTMLDivElement>(null);
 
@@ -248,30 +281,46 @@ export default function InboxDetailsPanel({
     };
   }, [labelsPickerOpen]);
 
-  const scrollToSection = (section?: PanelSection) => {
+  /** Scroll the tab chip into the strip only — never use scrollIntoView (it can
+   * shift overflow-hidden ancestors and clip the trailing close control). */
+  const scrollTabIntoStrip = (tab: DetailsTab) => {
+    const list = tabListRef.current;
+    const el = list?.querySelector<HTMLElement>(`[data-tab="${tab}"]`);
+    if (!list || !el) return;
+    const listRect = list.getBoundingClientRect();
+    const elRect = el.getBoundingClientRect();
+    const pad = 8;
+    if (elRect.left < listRect.left + pad) {
+      list.scrollLeft -= listRect.left + pad - elRect.left;
+    } else if (elRect.right > listRect.right - pad) {
+      list.scrollLeft += elRect.right - (listRect.right - pad);
+    }
+  };
+
+  const switchToTab = (section?: PanelSection) => {
     if (!section) return;
-    setDetailsTab(section === 'stats' ? 'activity' : 'details');
+    const tab = SECTION_TO_TAB[section];
+    setDetailsTab(tab);
     requestAnimationFrame(() => {
-      scrollRef.current
-        ?.querySelector(`[data-section="${section}"]`)
-        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      scrollRef.current?.scrollTo({ top: 0 });
+      scrollTabIntoStrip(tab);
     });
   };
 
   useEffect(() => {
     if (!overlayOpen) return;
     onPanelOpenChange(true);
-    scrollToSection(overlaySection);
+    switchToTab(overlaySection);
   }, [overlayOpen, overlaySection]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!panelOpen || !focusSection) return;
-    scrollToSection(focusSection);
+    switchToTab(focusSection);
   }, [panelOpen, focusSection]);
 
   const openPanel = (section?: PanelSection) => {
     onPanelOpenChange(true);
-    scrollToSection(section);
+    switchToTab(section);
   };
 
   const closePanel = () => {
@@ -397,48 +446,58 @@ export default function InboxDetailsPanel({
   const tagCount = contact.tags?.length ?? 0;
 
   const panelShellClass =
-    'flex flex-col border-theme-border/80 bg-white/70 shadow-[-8px_0_32px_rgba(15,23,42,0.06)] backdrop-blur-xl dark:border-neutral-800/70 dark:bg-neutral-950/70 dark:shadow-[-8px_0_32px_rgba(0,0,0,0.35)]';
+    '@container flex flex-col border-theme-border/80 bg-white/70 shadow-[-8px_0_32px_rgba(15,23,42,0.06)] backdrop-blur-xl dark:border-neutral-800/70 dark:bg-neutral-950/70 dark:shadow-[-8px_0_32px_rgba(0,0,0,0.35)]';
 
   const panelBody = (
     <>
-      <div className="flex shrink-0 items-center justify-between border-b border-white/50 px-3 pt-2.5 dark:border-white/5">
-        <div className="flex items-end gap-4 px-1" role="tablist" aria-label="Details panel">
-          {(
-            [
-              { id: 'details' as const, label: 'Details' },
-              { id: 'activity' as const, label: 'Activity' },
-            ] as const
-          ).map((tab) => {
-            const active = detailsTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => setDetailsTab(tab.id)}
-                className={`relative pb-2.5 text-[13px] font-bold tracking-tight transition ${
-                  active
-                    ? 'text-theme-fg'
-                    : 'text-theme-muted hover:text-theme-secondary'
-                }`}
-              >
-                {tab.label}
-                {active && (
-                  <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-whatsapp-500" />
-                )}
-              </button>
-            );
-          })}
-        </div>
-        <button
-          type="button"
-          onClick={closePanel}
-          className="mb-1.5 flex h-7 w-7 items-center justify-center rounded-lg text-neutral-400 transition hover:bg-white/70 hover:text-neutral-600 dark:hover:bg-neutral-800"
-          aria-label="Close details panel"
+      <div className="flex min-w-0 shrink-0 items-stretch gap-0 border-b border-white/50 dark:border-white/5">
+        <div
+          ref={tabListRef}
+          className="inbox-composer-scroll min-w-0 flex-1 overflow-x-auto overscroll-x-contain px-2 pt-2"
+          role="tablist"
+          aria-label="Details panel"
         >
-          <X className="h-4 w-4" />
-        </button>
+          <div className="flex w-max items-end gap-0.5 px-0.5 sm:gap-1">
+            {DETAILS_TABS.map((tab) => {
+              const active = detailsTab === tab.id;
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  data-tab={tab.id}
+                  aria-selected={active}
+                  aria-label={tab.label}
+                  onClick={() => setDetailsTab(tab.id)}
+                  {...tipFor(tab.label)}
+                  className={`relative flex shrink-0 items-center gap-1 px-2 pb-2.5 pt-1 text-[12px] font-bold tracking-tight transition sm:gap-1.5 sm:px-2.5 sm:text-[13px] ${
+                    active
+                      ? 'text-theme-fg'
+                      : 'text-theme-muted hover:text-theme-secondary'
+                  }`}
+                >
+                  <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={2.25} />
+                  <span className="hidden @[300px]:inline">{tab.shortLabel}</span>
+                  {active && (
+                    <span className="absolute inset-x-1 -bottom-px h-0.5 rounded-full bg-whatsapp-500 sm:inset-x-1.5" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div className="relative z-10 flex shrink-0 items-start border-l border-white/50 bg-white/40 px-1.5 pt-2 dark:border-white/10 dark:bg-neutral-950/40">
+          <button
+            type="button"
+            onClick={closePanel}
+            className="mb-1.5 flex h-8 w-8 items-center justify-center rounded-lg text-neutral-500 transition hover:bg-white/80 hover:text-neutral-800 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-100"
+            aria-label="Close details panel"
+            {...tipFor('Hide details')}
+          >
+            <X className="h-4 w-4" strokeWidth={2.25} />
+          </button>
+        </div>
       </div>
 
       <div ref={scrollRef} className="inbox-composer-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain">
@@ -446,31 +505,34 @@ export default function InboxDetailsPanel({
           <ConversationActivity conversation={conversation} botIsLive={botIsLive} />
         ) : (
           <div className="space-y-2.5 px-3 py-3">
-            <DetailsSectionCard data-section="profile" className="!p-0 overflow-hidden">
-              <ProfileCard
-                contact={contact}
-                conversation={conversation}
-                assignedAgent={conversation.assignedAgent}
-                onChangeAssignee={toggleAssignList}
-              />
-              {assignListOpen && (
-                <div className="relative mx-4 mb-4">
-                  <AssignAgentPopover
-                    agents={agents}
-                    currentUserId={currentUserId}
-                    selectedAgentId={conversation.assignedAgent?.id}
-                    disabled={assigning}
-                    placement="inline"
-                    onSelect={(agentId) => {
-                      onAssign(agentId);
-                      setAssignListOpen(false);
-                    }}
-                    onClose={() => setAssignListOpen(false)}
-                  />
-                </div>
-              )}
-            </DetailsSectionCard>
+            {detailsTab === 'details' && (
+              <DetailsSectionCard data-section="profile" className="!p-0 overflow-hidden">
+                <ProfileCard
+                  contact={contact}
+                  conversation={conversation}
+                  assignedAgent={conversation.assignedAgent}
+                  onChangeAssignee={toggleAssignList}
+                />
+                {assignListOpen && (
+                  <div className="relative mx-4 mb-4">
+                    <AssignAgentPopover
+                      agents={agents}
+                      currentUserId={currentUserId}
+                      selectedAgentId={conversation.assignedAgent?.id}
+                      disabled={assigning}
+                      placement="inline"
+                      onSelect={(agentId) => {
+                        onAssign(agentId);
+                        setAssignListOpen(false);
+                      }}
+                      onClose={() => setAssignListOpen(false)}
+                    />
+                  </div>
+                )}
+              </DetailsSectionCard>
+            )}
 
+            {detailsTab === 'labels' && (
             <DetailsSectionCard data-section="labels">
               <div ref={labelsSectionRef}>
                 <DetailsSectionHeader
@@ -605,7 +667,9 @@ export default function InboxDetailsPanel({
                 )}
               </div>
             </DetailsSectionCard>
+            )}
 
+            {detailsTab === 'notes' && (
             <DetailsSectionCard data-section="notes">
               <DetailsSectionHeader
                 icon={<StickyNote className="h-3.5 w-3.5" strokeWidth={2.25} />}
@@ -710,12 +774,16 @@ export default function InboxDetailsPanel({
                 </div>
               )}
             </DetailsSectionCard>
+            )}
 
+            {detailsTab === 'replies' && (
             <QuickRepliesSection
               replies={cannedReplies}
               onSelect={(reply) => onApplyQuickReply?.(reply)}
             />
+            )}
 
+            {detailsTab === 'tags' && (
             <DetailsSectionCard data-section="tags">
               <DetailsSectionHeader
                 icon={<Hash className="h-3.5 w-3.5" strokeWidth={2.25} />}
@@ -793,7 +861,9 @@ export default function InboxDetailsPanel({
                 )}
               </div>
             </DetailsSectionCard>
+            )}
 
+            {detailsTab === 'automations' && (
             <DetailsSectionCard data-section="automations">
               <DetailsSectionHeader
                 icon={<Bot className="h-3.5 w-3.5" strokeWidth={2.25} />}
@@ -801,6 +871,7 @@ export default function InboxDetailsPanel({
               />
               <AutomationsSection conversation={conversation} botIsLive={botIsLive} />
             </DetailsSectionCard>
+            )}
           </div>
         )}
       </div>
@@ -819,7 +890,7 @@ export default function InboxDetailsPanel({
           onClick={closePanel}
         />
         <aside
-          className={`fixed inset-x-0 bottom-0 z-50 max-h-[75dvh] rounded-t-2xl border shadow-2xl md:hidden ${panelShellClass}`}
+          className={`fixed inset-x-0 bottom-0 z-50 max-h-[75dvh] overflow-hidden rounded-t-2xl border shadow-2xl md:hidden ${panelShellClass}`}
         >
           <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-neutral-300/80 dark:bg-neutral-600" />
           {panelBody}
@@ -919,8 +990,9 @@ export default function InboxDetailsPanel({
 
   return (
     <aside
-      className={`hidden shrink-0 border-l md:flex ${panelShellClass}`}
+      className={`hidden min-w-0 shrink-0 overflow-hidden border-l md:flex ${panelShellClass}`}
       style={panelWidth ? { width: panelWidth } : undefined}
+      aria-label="Conversation details"
     >
       {panelBody}
     </aside>
