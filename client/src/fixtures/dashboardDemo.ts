@@ -20,20 +20,17 @@ export function isDashboardStatsEmpty(stats: AnalyticsOverview): boolean {
   );
 }
 
+/** DEV: always prefer fixture stats once overview has loaded (ignore sparse live data). */
 export function shouldUseDashboardDemoStats(stats: AnalyticsOverview | null): boolean {
-  return isDashboardDemoEnabled() && !!stats && isDashboardStatsEmpty(stats);
+  return isDashboardDemoEnabled() && !!stats;
 }
 
+/** DEV: always prefer fixture campaigns for UI preview (prod never forces demo). */
 export function shouldUseDashboardDemoCampaigns(
-  campaigns: Campaign[],
-  opts: { loading?: boolean; error?: boolean } = {}
+  _campaigns?: Campaign[],
+  _opts?: { loading?: boolean; error?: boolean }
 ): boolean {
-  return (
-    isDashboardDemoEnabled() &&
-    !opts.loading &&
-    !opts.error &&
-    campaigns.length === 0
-  );
+  return isDashboardDemoEnabled();
 }
 
 function isoDaysFromNow(daysAhead: number, hour = 10, minute = 0): string {

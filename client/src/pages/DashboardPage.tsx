@@ -216,14 +216,11 @@ export default function DashboardPage() {
 
   const periodLabel = `vs last ${DASHBOARD_PERIOD_DAYS}d`;
 
-  // DEV-only: when live metrics/campaigns are empty, showcase realistic fixture data
+  // DEV-only: always showcase fixture data for UI preview (prod uses live API only)
   const useDemoStats = shouldUseDashboardDemoStats(stats);
   const displayStats =
     useDemoStats && stats ? buildDashboardDemoStats(DASHBOARD_PERIOD_DAYS) : stats;
-  const useDemoCampaigns = shouldUseDashboardDemoCampaigns(campaigns, {
-    loading: campaignsLoading,
-    error: campaignsError,
-  });
+  const useDemoCampaigns = shouldUseDashboardDemoCampaigns(campaigns);
   const displayCampaigns = useDemoCampaigns ? DASHBOARD_DEMO_CAMPAIGNS : campaigns;
 
   return (
@@ -247,6 +244,11 @@ export default function DashboardPage() {
           />
         ) : displayStats ? (
           <div className={refreshing ? 'opacity-70 transition-opacity' : undefined}>
+            {useDemoStats ? (
+              <p className="mb-2 text-[11px] font-medium tracking-wide text-slate-400">
+                Demo preview
+              </p>
+            ) : null}
             {/* Row 1: Needs attention + metrics
                 Mobile: stack. lg+: stretch so Needs attention matches metrics column height.
                 KPI 5-up at xl; 3-up at md so five cards wrap cleanly. */}
