@@ -207,6 +207,11 @@ export interface MessageMetadata {
   caption?: string;
   mediaPath?: string;
   size?: number;
+  isSticker?: boolean;
+  replyToMessageId?: string;
+  replyToMetaId?: string;
+  replyPreview?: string;
+  reactions?: Array<{ emoji: string; from: string }>;
   buttons?: InteractiveButton[];
   buttonReplyId?: string;
   isButtonReply?: boolean;
@@ -224,6 +229,7 @@ export interface MessageMetadata {
   waFlow?: boolean;
   contacts?: Array<{ name: string; phone: string; email?: string }>;
   location?: { latitude: number; longitude: number; name?: string; address?: string };
+  isVoice?: boolean;
 }
 
 export interface SendMediaPayload {
@@ -231,6 +237,8 @@ export interface SendMediaPayload {
   mediaPath?: string;
   mimeType: string;
   filename?: string;
+  /** True when recorded as a WhatsApp voice note. */
+  voice?: boolean;
 }
 
 export interface TemplateParams {
@@ -242,7 +250,9 @@ export interface TemplateParams {
 
 export interface SendMessagePayload {
   content?: string;
-  type?: 'TEXT' | 'TEMPLATE' | 'IMAGE' | 'VIDEO' | 'DOCUMENT' | 'AUDIO' | 'INTERACTIVE';
+  type?: 'TEXT' | 'TEMPLATE' | 'IMAGE' | 'VIDEO' | 'DOCUMENT' | 'AUDIO' | 'INTERACTIVE' | 'REACTION';
+  replyToMessageId?: string;
+  reaction?: { messageId: string; emoji: string };
   templateName?: string;
   templateLanguage?: string;
   templateParams?: TemplateParams;
@@ -512,6 +522,28 @@ export interface OrgMetaSettings {
   hasAppSecret?: boolean;
   configured?: boolean;
   usingPlatform?: boolean;
+}
+
+export interface WebhookStatus {
+  connected: boolean;
+  phoneNumber?: string;
+  wabaId?: string;
+  webhookUrl?: string | null;
+  subscribed?: boolean | null;
+  statusCheckFailed: boolean;
+}
+
+export interface WebhookHealth {
+  totalReceived: number;
+  totalProcessed: number;
+  totalErrors: number;
+  lastReceivedAt?: string | null;
+  lastError?: string | null;
+  lastFbTraceId?: string | null;
+  queueDepth?: number;
+  webhookUrl?: string;
+  verifyTokenConfigured?: boolean;
+  appSecretConfigured?: boolean;
 }
 
 export interface AiUsageSummary {

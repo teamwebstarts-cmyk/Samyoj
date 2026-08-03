@@ -1,17 +1,20 @@
-import { AlertCircle, Check, CheckCheck, ClipboardCopy, ExternalLink, List, Phone } from 'lucide-react';
+import { AlertCircle, Check, CheckCheck, ClipboardCopy, Clock, ExternalLink, List, Phone } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { MessageTemplate, TemplateButton, TemplateLibraryEntry } from '../../types';
 import { getTemplateButtons } from '../../utils/templateForm';
 
 export type WhatsAppBubbleDirection = 'inbound' | 'outbound';
 
-type MessageStatus = 'sent' | 'delivered' | 'read' | 'failed';
+type MessageStatus = 'pending' | 'sent' | 'delivered' | 'read' | 'failed';
 
 export function StatusIcon({ status, compact }: { status?: MessageStatus; compact?: boolean }) {
   const size = compact ? 'h-2.5 w-2.5' : 'h-3 w-3';
 
   if (status === 'failed') {
     return <AlertCircle className={`${size} text-red-500`} strokeWidth={2.5} />;
+  }
+  if (status === 'pending') {
+    return <Clock className={`${size} text-[#8696a0]`} strokeWidth={2.5} />;
   }
   if (status === 'read') {
     return <CheckCheck className={`${size} text-[#53bdeb]`} strokeWidth={2.5} />;

@@ -1,6 +1,8 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { X, type LucideIcon } from 'lucide-react';
+import { FOCUS_RING_CLASS, useFocusTrap } from '../../hooks/inboxA11y';
+import { useModalTransition } from '../../hooks/useModalTransition';
 
 interface InboxModalProps {
   open: boolean;
@@ -22,10 +24,21 @@ export default function InboxModal({
   iconClassName,
   children,
 }: InboxModalProps) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  // M4: enter+exit transitions. We extend the close lifecycle by ~150ms so
+  // the exiting scale-down can play before the modal is unmounted.
+  const { mounted, phase } = useModalTransition(open);
+
+  useFocusTrap({
+    ref: dialogRef,
+    active: mounted,
+    onEscape: onClose,
+  });
+
   useEffect(() => {
-    if (!open) return;
+    if (!mounted) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape' && open) onClose();
     };
     document.body.style.overflow = 'hidden';
     window.addEventListener('keydown', onKey);
@@ -33,23 +46,28 @@ export default function InboxModal({
       document.body.style.overflow = '';
       window.removeEventListener('keydown', onKey);
     };
-  }, [open, onClose]);
+  }, [mounted, open, onClose]);
 
-  if (!open || typeof document === 'undefined') return null;
+  if (!mounted || typeof document === 'undefined') return null;
+  const animClass = phase === 'leaving' ? 'inbox-modal-exit' : 'inbox-modal-enter';
 
   return createPortal(
     <div className="fixed inset-0 z-[80] flex items-end justify-center p-4 sm:items-center">
       <button
         type="button"
-        className="absolute inset-0 bg-black/45 backdrop-blur-[4px] dark:bg-black/65"
+        className={`absolute inset-0 bg-black/45 backdrop-blur-[4px] dark:bg-black/65 transition-opacity duration-200 ${
+          phase === 'leaving' ? 'opacity-0' : 'opacity-100'
+        }`}
         onClick={onClose}
         aria-label="Close dialog"
       />
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="relative w-full max-w-[400px] overflow-hidden rounded-2xl border border-theme-border bg-theme-surface shadow-[0_24px_80px_rgba(15,23,42,0.18)] dark:shadow-[0_24px_80px_rgba(0,0,0,0.45)]"
+        tabIndex={-1}
+        className={`relative w-full max-w-[400px] overflow-hidden rounded-2xl border border-theme-border bg-theme-surface shadow-[0_24px_80px_rgba(15,23,42,0.18)] dark:shadow-[0_24px_80px_rgba(0,0,0,0.45)] focus:outline-none ${animClass}`}
       >
         <div className="flex items-center gap-3 border-b border-theme-border/70 px-5 py-4">
           <span
@@ -65,7 +83,7 @@ export default function InboxModal({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-theme-muted transition hover:bg-theme-subtle hover:text-theme-fg"
+            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-theme-muted transition hover:bg-theme-subtle hover:text-theme-fg ${FOCUS_RING_CLASS}`}
           >
             <X className="h-4 w-4" />
           </button>

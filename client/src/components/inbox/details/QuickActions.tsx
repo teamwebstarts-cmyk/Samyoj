@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState, type RefObject } from 'react';
 import { BarChart3, Bell, Download, LifeBuoy, UserPlus, type LucideIcon } from 'lucide-react';
 import SnoozePopover from '../SnoozePopover';
 
@@ -17,14 +17,17 @@ function ActionRow({
   label,
   iconClassName,
   onClick,
+  buttonRef,
 }: {
   icon: LucideIcon;
   label: string;
   iconClassName: string;
   onClick: () => void;
+  buttonRef?: RefObject<HTMLButtonElement>;
 }) {
   return (
     <button
+      ref={buttonRef}
       type="button"
       onClick={onClick}
       className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left transition hover:bg-theme-subtle"
@@ -49,6 +52,7 @@ export default function QuickActions({
   onUnsnooze,
 }: QuickActionsProps) {
   const [snoozeOpen, setSnoozeOpen] = useState(false);
+  const snoozeBtnRef = useRef<HTMLButtonElement>(null);
   const isSnoozed = Boolean(snoozedUntil && new Date(snoozedUntil).getTime() > Date.now());
 
   return (
@@ -82,11 +86,14 @@ export default function QuickActions({
           icon={Bell}
           label={isSnoozed ? 'Snoozed — manage' : 'Snooze Chat'}
           iconClassName="bg-indigo-100 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300"
+          buttonRef={snoozeBtnRef}
           onClick={() => setSnoozeOpen((v) => !v)}
         />
         {snoozeOpen && (
           <SnoozePopover
+            anchorRef={snoozeBtnRef}
             snoozedUntil={snoozedUntil}
+            prefer="above"
             onSnooze={onSnooze}
             onUnsnooze={onUnsnooze}
             onClose={() => setSnoozeOpen(false)}

@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { LifeBuoy } from 'lucide-react';
 import InboxModal from './InboxModal';
 import AppButton from '../ui/AppButton';
 import AppInput from '../ui/AppInput';
 import AppTextarea from '../ui/AppTextarea';
+import { FOCUS_RING_CLASS, useAutoFocus } from '../../hooks/inboxA11y';
 
 export interface TicketFormValues {
   title: string;
@@ -36,6 +37,9 @@ export default function CreateTicketModal({
   const [title, setTitle] = useState(defaultTitle);
   const [priority, setPriority] = useState<TicketFormValues['priority']>('MEDIUM');
   const [description, setDescription] = useState('');
+  const titleInputRef = useRef<HTMLInputElement>(null);
+
+  useAutoFocus(titleInputRef, open);
 
   useEffect(() => {
     if (open) {
@@ -71,7 +75,7 @@ export default function CreateTicketModal({
           onChange={(e) => setTitle(e.target.value)}
           placeholder="What does the customer need?"
           required
-          autoFocus
+          ref={titleInputRef}
         />
 
         <div className="space-y-1.5">
@@ -83,7 +87,7 @@ export default function CreateTicketModal({
                 type="button"
                 onClick={() => setPriority(p.value)}
                 aria-pressed={priority === p.value}
-                className={`rounded-lg px-2 py-2 text-[12px] font-bold transition ${
+                className={`rounded-lg px-2 py-2 text-[12px] font-bold transition ${FOCUS_RING_CLASS} ${
                   priority === p.value
                     ? 'bg-violet-600 text-white shadow-sm'
                     : 'bg-theme-subtle text-theme-secondary hover:text-theme-fg'

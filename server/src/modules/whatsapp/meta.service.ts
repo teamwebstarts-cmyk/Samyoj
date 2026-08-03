@@ -10,7 +10,9 @@ export interface InteractiveButton {
 
 export interface SendMessagePayload {
   to: string;
-  type: 'text' | 'template' | 'image' | 'document' | 'video' | 'audio' | 'interactive' | 'location' | 'contacts';
+  type: 'text' | 'template' | 'image' | 'document' | 'video' | 'audio' | 'interactive' | 'location' | 'contacts' | 'reaction';
+  context?: { message_id: string };
+  reaction?: { message_id: string; emoji: string };
   text?: { body: string };
   template?: {
     name: string;
@@ -20,7 +22,7 @@ export interface SendMessagePayload {
   image?: { link: string; caption?: string };
   document?: { link: string; caption?: string; filename?: string };
   video?: { link: string; caption?: string };
-  audio?: { link: string };
+  audio?: { link: string; voice?: boolean };
   location?: {
     latitude: number;
     longitude: number;
@@ -673,11 +675,16 @@ export class MetaWhatsAppService {
         recipient_type: 'individual',
         to: payload.to,
         type: payload.type,
+        ...(payload.context && { context: payload.context }),
+        ...(payload.reaction && { reaction: payload.reaction }),
         ...(payload.text && { text: payload.text }),
         ...(payload.template && { template: payload.template }),
         ...(payload.image && { image: payload.image }),
         ...(payload.document && { document: payload.document }),
         ...(payload.video && { video: payload.video }),
+        ...(payload.audio && { audio: payload.audio }),
+        ...(payload.location && { location: payload.location }),
+        ...(payload.contacts && { contacts: payload.contacts }),
         ...(payload.interactive && { interactive: payload.interactive }),
       }),
     });

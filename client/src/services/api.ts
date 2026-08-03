@@ -230,7 +230,10 @@ export const whatsappApi = {
   connect: (data: Record<string, string>) => api.post('/whatsapp/connect', data),
   numbers: () => api.get('/whatsapp/numbers'),
   disconnect: (id: string) => api.delete(`/whatsapp/numbers/${id}`),
-  webhookStatus: () => api.get('/whatsapp/webhook-status'),
+  webhookStatus: () =>
+    api.get<{ data: import('../types').WebhookStatus }>('/whatsapp/webhook-status'),
+  webhookHealth: () =>
+    api.get<{ data: import('../types').WebhookHealth }>('/whatsapp/webhook/health'),
   setupWebhook: () => api.post('/whatsapp/setup-webhook'),
 };
 

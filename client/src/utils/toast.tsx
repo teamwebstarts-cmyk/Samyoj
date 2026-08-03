@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import toast, { Toaster, type ToastOptions } from 'react-hot-toast';
+import { Bot, Star } from 'lucide-react';
 
 function isDark() {
   return typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
@@ -107,6 +108,55 @@ export function toastWarning(message: string) {
   });
 }
 
+/**
+ * M10 — animated count-up toast: 0 → target over ~400ms.
+ * Used for "N new messages" style announcements. Falls back to a plain
+ * info toast when reduced-motion is requested or target <= 1.
+ */
+export function toastCountUp(target: number, prefix: string, suffix: string) {
+  const fullText = `${target} ${suffix}`;
+  const reducedMotion =
+    typeof window !== 'undefined' &&
+    window.matchMedia &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reducedMotion || target <= 1) {
+    return toastInfo(`${prefix ? prefix + ' ' : ''}${fullText}`);
+  }
+  let rafId = 0;
+  const toastId = toast(
+    (t: { visible: boolean }) => {
+      if (!t.visible) return <span>{`0 ${suffix}`}</span>;
+      const start = performance.now();
+      const tick = () => {
+        const elapsed = performance.now() - start;
+        const progress = Math.min(1, elapsed / 400);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        const value = Math.round(eased * target);
+        const node = document.querySelector(`[data-toast-count="${toastId}"]`);
+        if (node) node.textContent = `${value} ${suffix}`;
+        if (progress < 1) rafId = requestAnimationFrame(tick);
+      };
+      rafId = requestAnimationFrame(tick);
+      return (
+        <span>
+          {prefix ? `${prefix} ` : ''}
+          <span data-toast-count={toastId}>{`0 ${suffix}`}</span>
+        </span>
+      );
+    },
+    {
+      ...sharedOptions,
+      position: getToastPosition(),
+      style: baseStyle(),
+      duration: 3500,
+    }
+  );
+  return () => {
+    cancelAnimationFrame(rafId);
+    toast.dismiss(toastId);
+  };
+}
+
 export function toastValidationErrors(errors: string[]) {
   if (!errors.length) return;
   const message =
@@ -114,6 +164,64 @@ export function toastValidationErrors(errors: string[]) {
       ? errors[0]
       : `Please fix the following:\n${errors.map((e) => `• ${e}`).join('\n')}`;
   return toastError(message, { duration: 6000 });
+}
+
+export type InboxToastIcon = 'bot' | 'star';
+
+/**
+ * Soft lavender Inbox toast matching the mock AI banner (icon tile + short copy).
+ * Auto-dismisses in ~2.5s. Optional action (e.g. "View flow") only when provided.
+ */
+export function toastInbox(
+  message: string,
+  options?: {
+    icon?: InboxToastIcon;
+    actionLabel?: string;
+    onAction?: () => void;
+    duration?: number;
+  }
+) {
+  const iconKind = options?.icon ?? 'bot';
+  const Icon = iconKind === 'star' ? Star : Bot;
+
+  return toast.custom(
+    (t) => (
+      <div
+        role="status"
+        className={`pointer-events-auto flex max-w-[360px] items-center gap-2.5 rounded-xl border border-violet-200/70 bg-gradient-to-r from-violet-50 to-purple-50/90 px-3 py-2.5 shadow-[0_10px_28px_rgba(109,40,217,0.12)] transition dark:border-violet-800/50 dark:from-violet-950/80 dark:to-purple-950/70 ${
+          t.visible ? 'opacity-100' : 'opacity-0'
+        }`}
+      >
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700 ring-1 ring-violet-200/70 dark:bg-violet-900/60 dark:text-violet-200 dark:ring-violet-700/50">
+          <Icon
+            className="h-4 w-4"
+            strokeWidth={2.2}
+            fill={iconKind === 'star' ? 'currentColor' : 'none'}
+            aria-hidden
+          />
+        </span>
+        <p className="min-w-0 flex-1 text-[13px] font-semibold leading-snug text-violet-950 dark:text-violet-100">
+          {message}
+        </p>
+        {options?.actionLabel && options.onAction ? (
+          <button
+            type="button"
+            onClick={() => {
+              options.onAction?.();
+              toast.dismiss(t.id);
+            }}
+            className="shrink-0 rounded-lg px-2 py-1 text-[12px] font-bold text-violet-700 transition hover:bg-violet-100/80 dark:text-violet-200 dark:hover:bg-violet-900/50"
+          >
+            {options.actionLabel}
+          </button>
+        ) : null}
+      </div>
+    ),
+    {
+      duration: options?.duration ?? 2500,
+      position: getToastPosition(),
+    }
+  );
 }
 
 export function AppToaster() {

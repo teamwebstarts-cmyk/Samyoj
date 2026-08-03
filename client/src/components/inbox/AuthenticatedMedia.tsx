@@ -227,12 +227,21 @@ export function AuthenticatedAudio({ messageId, className = '' }: AuthenticatedA
 interface AuthenticatedDocumentProps {
   messageId: string;
   filename?: string;
+  sizeLabel?: string;
   className?: string;
   onClick?: (url: string) => void;
 }
 
-export function AuthenticatedDocument({ messageId, filename, className = '', onClick }: AuthenticatedDocumentProps) {
+export function AuthenticatedDocument({
+  messageId,
+  filename,
+  sizeLabel,
+  className = '',
+  onClick,
+}: AuthenticatedDocumentProps) {
   const { url, loading, error, retry } = useAuthenticatedMediaUrl(messageId);
+  const isPdf = /\.pdf$/i.test(filename || '') || /pdf/i.test(filename || '');
+  const ext = (filename?.split('.').pop() || 'FILE').toUpperCase().slice(0, 4);
 
   const handleOpen = () => {
     if (!url) return;
@@ -250,15 +259,29 @@ export function AuthenticatedDocument({ messageId, filename, className = '', onC
       disabled={loading || (!error && !url)}
       className={`flex w-full items-center gap-3 rounded-lg bg-[#f0f2f5]/80 px-3 py-2.5 text-left transition hover:bg-[#e9edef] disabled:cursor-not-allowed dark:bg-neutral-800/70 dark:hover:bg-neutral-800 ${className}`}
     >
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-[#008069] shadow-sm dark:bg-neutral-900">
-        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-5 w-5" strokeWidth={2} />}
+      <div
+        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg shadow-sm ${
+          isPdf
+            ? 'bg-red-50 text-red-600 dark:bg-red-950/50 dark:text-red-300'
+            : 'bg-white text-[#008069] dark:bg-neutral-900'
+        }`}
+      >
+        {loading ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <FileText className="h-5 w-5" strokeWidth={2} />
+        )}
       </div>
       <div className="min-w-0 flex-1">
         <p className="truncate text-[13px] font-semibold text-[#111b21] dark:text-neutral-100">
           {filename || 'Document'}
         </p>
         <p className="text-[11px] text-[#667781] dark:text-neutral-400">
-          {loading ? 'Loading...' : error ? 'Unavailable — tap to retry' : 'Tap to view'}
+          {loading
+            ? 'Loading...'
+            : error
+              ? 'Unavailable — tap to retry'
+              : [sizeLabel, isPdf ? 'PDF' : ext].filter(Boolean).join(' · ') || 'Tap to view'}
         </p>
       </div>
     </button>

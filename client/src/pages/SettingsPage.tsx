@@ -59,13 +59,6 @@ interface WhatsappNumber {
   createdAt: string;
 }
 
-interface WebhookStatus {
-  connected: boolean;
-  phoneNumber?: string;
-  webhookUrl?: string | null;
-  subscribed: boolean;
-}
-
 function formatHour(hour: number) {
   const normalized = hour === 24 ? 0 : hour;
   const period = normalized >= 12 ? 'PM' : 'AM';
@@ -91,7 +84,7 @@ export default function SettingsPage() {
   }, [tabFromUrl]);
   const [numbers, setNumbers] = useState<WhatsappNumber[]>([]);
   const [connectUrl, setConnectUrl] = useState('');
-  const [webhookStatus, setWebhookStatus] = useState<WebhookStatus | null>(null);
+  const [webhookStatus, setWebhookStatus] = useState<import('../types').WebhookStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null);

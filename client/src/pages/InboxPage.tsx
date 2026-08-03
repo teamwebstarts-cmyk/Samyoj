@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MessageSquarePlus } from 'lucide-react';
 import MediaViewer from '../components/inbox/MediaViewer';
 import ChatContextMenu from '../components/inbox/ChatContextMenu';
 import ChatPlaceholder from '../components/inbox/ChatPlaceholder';
@@ -12,7 +11,12 @@ import InboxDetailsPanel, { type PanelSection } from '../components/inbox/InboxD
 import CreateTicketModal from '../components/inbox/CreateTicketModal';
 import PaymentLinkModal from '../components/inbox/PaymentLinkModal';
 import ExportChatDialog from '../components/inbox/ExportChatDialog';
-import { useConversationList } from '../components/inbox/useConversationList';
+import {
+  readStoredPageSize,
+  useConversationList,
+  writeStoredPageSize,
+  type PageSize,
+} from '../components/inbox/useConversationList';
 import { useConversationThread } from '../components/inbox/useConversationThread';
 import { useInboxRealtime } from '../components/inbox/useInboxRealtime';
 import { useInboxSender } from '../components/inbox/useInboxSender';
@@ -27,7 +31,11 @@ import PageShell from '../components/ui/PageShell';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useInboxKeyboardShortcuts } from '../hooks/useInboxKeyboardShortcuts';
 import { useInboxUnreadTotal } from '../hooks/useInboxUnreadTotal';
+import { useWebhookHealth } from '../hooks/useWebhookHealth';
+import { usePaneWidths } from '../hooks/usePaneWidths';
 import { useAuth } from '../contexts/AuthContext';
+import PaneHandle from '../components/inbox/PaneHandle';
+import KeyboardShortcutsOverlay from '../components/inbox/KeyboardShortcutsOverlay';
 import { cannedRepliesApi, inboxApi, teamApi, ticketApi } from '../services/api';
 import { setOpenConversationId } from '../utils/inboxNotifications';
 import { toastSuccess } from '../utils/toast';
@@ -41,7 +49,7 @@ import type {
 } from '../types';
 
 const statusFilterOptions: InboxSelectOption[] = [
-  { value: '', label: 'All chats' },
+  { value: '', label: 'All status' },
   { value: 'OPEN', label: 'Open', dotColor: '#22c55e' },
   { value: 'PENDING', label: 'Pending', dotColor: '#f59e0b' },
   { value: 'CLOSED', label: 'Closed', dotColor: '#94a3b8' },
@@ -56,7 +64,13 @@ export default function InboxPage() {
   const [chip, setChip] = useState<ListChip>('all');
   const [statusFilter, setStatusFilter] = useState('');
   const [agentFilter, setAgentFilter] = useState('');
+  const [slaFilter, setSlaFilter] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<PageSize>(() => readStoredPageSize());
   const debouncedSearch = useDebouncedValue(search);
+
+  // R4: drag-resizable left/right panes with localStorage persistence.
+  const paneWidths = usePaneWidths();
 
   const {
     conversations,
@@ -64,23 +78,26 @@ export default function InboxPage() {
     setConversations,
     total,
     setTotal,
-    hasMore,
-    setHasMore,
     loading: listLoading,
     setLoading: setListLoading,
-    loadingMore: listLoadingMore,
     error: listError,
     load: loadConversations,
-    nextCursorRef,
+    pageCount,
+    rangeStart,
+    rangeEnd,
   } = useConversationList({
     search: debouncedSearch,
     chip,
     statusFilter,
     agentFilter,
+    slaFilter,
     userId: user?.id,
+    page,
+    pageSize,
   });
 
   const { total: unreadTotal, refresh: refreshUnread } = useInboxUnreadTotal();
+  const { health: inboundHealth, refresh: refreshInboundHealth } = useWebhookHealth(true);
   const {
     selected,
     setSelected,
@@ -110,9 +127,11 @@ export default function InboxPage() {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const composerInputRef = useRef<HTMLTextAreaElement>(null);
   const {
     mediaViewer,
     openMediaViewer,
@@ -165,19 +184,36 @@ export default function InboxPage() {
     setSending,
     attachment,
     retryingId,
+    replyTo,
+    setReplyTo,
     resetComposer,
     removeAttachment,
     handleAttach,
     handleSend,
     handleSendTemplate,
+    handleReact,
     sendPayload,
     handleRetryMessage,
-  } = useInboxSender({ selected, serviceWindow, appendSentMessage, setMessages });
+  } = useInboxSender({
+    selected,
+    serviceWindow,
+    appendSentMessage,
+    setMessages,
+    onWindowClosed: () => {
+      setInteractiveOpen(false);
+      setTemplateMode(true);
+    },
+  });
 
   useInboxKeyboardShortcuts({
     onFocusSearch: () => searchInputRef.current?.focus(),
     onCloseChat: () => setSelected(null),
     onOpenDetails: () => selectedRef.current && setDetailsOverlay({ open: true }),
+    onOpenShortcutsOverlay: () => setShortcutsOpen(true),
+    onFocusComposer: () => {
+      if (!selectedRef.current) return;
+      composerInputRef.current?.focus();
+    },
     enabled: true,
   });
 
@@ -191,7 +227,7 @@ export default function InboxPage() {
     upsertConversation,
     markConversationRead,
     refreshUnread,
-    reloadList: () => void loadConversations(true),
+    reloadList: () => void loadConversations(),
   });
 
   const viewers = useConversationPresence({
@@ -246,6 +282,15 @@ export default function InboxPage() {
     return () => setOpenConversationId(null);
   }, [selected?.id]);
 
+  // When the 24h window is closed, force Template tab (honest UX).
+  useEffect(() => {
+    if (!selected) return;
+    if (serviceWindow && serviceWindow.open === false) {
+      setInteractiveOpen(false);
+      setTemplateMode(true);
+    }
+  }, [selected?.id, serviceWindow?.open]);
+
   const handleOpenConversation = useCallback(
     async (conv: Conversation) => {
       resetComposer();
@@ -266,22 +311,25 @@ export default function InboxPage() {
   useInboxNumberCache({
     conversations,
     total,
-    hasMore,
     search,
     chip,
     statusFilter,
     agentFilter,
-    nextCursorRef,
+    slaFilter,
+    page,
+    pageSize,
     resetThread,
     setConversations,
     setTotal,
-    setHasMore,
     setSearch,
     setChip,
     setStatusFilter,
     setAgentFilter,
+    setSlaFilter,
+    setPage,
+    setPageSize,
     setListLoading,
-    reloadList: () => void loadConversations(true),
+    reloadList: () => void loadConversations(),
   });
 
   useInboxDeepLink({ upsertConversation, openConversation: handleOpenConversation });
@@ -347,6 +395,42 @@ export default function InboxPage() {
     [agents, user]
   );
 
+  // Clamp page if filters shrink the result set below the current page.
+  useEffect(() => {
+    if (page > pageCount) setPage(pageCount);
+  }, [page, pageCount]);
+
+  const handlePageSizeChange = useCallback((size: PageSize) => {
+    writeStoredPageSize(size);
+    setPage(1);
+    setPageSize(size);
+  }, []);
+
+  const handleStatusFilterChange = useCallback((value: string) => {
+    setPage(1);
+    setStatusFilter(value);
+  }, []);
+
+  const handleAgentFilterChange = useCallback((value: string) => {
+    setPage(1);
+    setAgentFilter(value);
+  }, []);
+
+  const handleSlaFilterChange = useCallback((value: string) => {
+    setPage(1);
+    setSlaFilter(value);
+  }, []);
+
+  const handleChipChange = useCallback((next: ListChip) => {
+    setPage(1);
+    setChip(next);
+  }, []);
+
+  const handleSearchChange = useCallback((value: string) => {
+    setPage(1);
+    setSearch(value);
+  }, []);
+
   const openChatContextMenu = (event: React.MouseEvent, conversation: Conversation) => {
     event.preventDefault();
     event.stopPropagation();
@@ -355,88 +439,110 @@ export default function InboxPage() {
 
   return (
     <PageShell inbox className="!h-[calc(100dvh-60px)] !max-h-[calc(100dvh-60px)] !min-h-0 !overflow-hidden">
+      <a
+        href="#inbox-thread"
+        className="skip-to-content focus:not-sr-only"
+      >
+        Skip to conversation
+      </a>
       <div className="flex h-full min-h-0 flex-1 overflow-hidden">
         <div className="inbox-shell flex h-full min-h-0 w-full flex-1 flex-row overflow-hidden md:rounded-2xl">
           {/* LEFT — chat list */}
           <div
-            className={`inbox-sidebar relative flex h-full min-h-0 w-full flex-col md:w-[340px] lg:w-[360px] ${
+            className={`inbox-sidebar relative flex h-full min-h-0 w-full flex-col md:w-auto lg:w-auto ${
               selected ? 'hidden md:flex' : 'flex'
             }`}
+            style={paneWidths.leftRailProps.style}
           >
             <InboxListHeader
               search={search}
-              onSearchChange={setSearch}
+              onSearchChange={handleSearchChange}
               searchInputRef={searchInputRef}
               chip={chip}
-              onChipChange={setChip}
+              onChipChange={handleChipChange}
+              conversationTotal={total}
               unreadTotal={unreadTotal}
               statusFilter={statusFilter}
               agentFilter={agentFilter}
-              onStatusFilterChange={setStatusFilter}
-              onAgentFilterChange={setAgentFilter}
+              slaFilter={slaFilter}
+              onStatusFilterChange={handleStatusFilterChange}
+              onAgentFilterChange={handleAgentFilterChange}
+              onSlaFilterChange={handleSlaFilterChange}
               statusOptions={statusFilterOptions}
               agentOptions={agentFilterOptions}
               agentOptionsSearchable={agents.length > 4}
-              socketState={socketState}
               selectionMode={selectionMode}
               onToggleSelectionMode={() =>
                 selectionMode ? clearSelection() : setSelectionMode(true)
               }
               onNewChat={() => setNewChatOpen(true)}
-              onRefresh={() => void loadConversations(true)}
+              onRefresh={() => void loadConversations()}
+              inboundHealth={inboundHealth}
+              onRetryHealth={() => void refreshInboundHealth()}
             />
 
             <ConversationList
               conversations={conversations}
               selectedId={selected?.id}
               loading={listLoading}
-              loadingMore={listLoadingMore}
-              hasMore={hasMore}
               error={listError}
-              filtered={Boolean(search || statusFilter || agentFilter || chip !== 'all')}
+              filtered={Boolean(
+                search || statusFilter || agentFilter || slaFilter || chip !== 'all'
+              )}
               ticketConversationIds={ticketConversationIds}
               selectionMode={selectionMode}
               selectedIds={selectedIds}
               agents={agents}
               currentUserId={user?.id}
               bulkBusy={bulkBusy}
+              page={page}
+              pageCount={pageCount}
+              pageSize={pageSize}
+              total={total}
+              rangeStart={rangeStart}
+              rangeEnd={rangeEnd}
+              onPageChange={setPage}
+              onPageSizeChange={handlePageSizeChange}
               onToggleSelect={toggleSelect}
               onBulkAssign={(agent) =>
                 void runBulk({ action: 'assign', agentId: agent.id }, agent)
               }
               onBulkClose={() => void runBulk({ action: 'status', status: 'CLOSED' })}
-              onBulkSnooze={() =>
+              onBulkSnooze={(untilIso) =>
                 void runBulk({
                   action: 'snooze',
-                  snoozedUntil: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+                  snoozedUntil: untilIso,
                 })
               }
               onClearSelection={clearSelection}
-              onRetry={() => void loadConversations(true)}
-              onLoadMore={() => void loadConversations(false)}
+              onRetry={() => void loadConversations()}
               onSelect={(conv) => void handleOpenConversation(conv)}
               onContextMenu={openChatContextMenu}
               onNewChat={() => setNewChatOpen(true)}
             />
+          </div>
 
-            <button
-              type="button"
-              onClick={() => setNewChatOpen(true)}
-              className="inbox-fab absolute bottom-5 right-4 z-20 flex h-12 w-12 items-center justify-center rounded-full text-white transition hover:scale-105 active:scale-95"
-              aria-label="New chat"
-            >
-              <MessageSquarePlus className="h-5 w-5" strokeWidth={2.25} />
-            </button>
+          {/* R4: vertical drag handle between left rail and thread (md+). */}
+          <div className="hidden md:flex">
+            <PaneHandle
+              side="left"
+              width={paneWidths.widths.left}
+              ariaLabel="Resize chat list"
+              onResize={paneWidths.leftRailProps.onResize}
+            />
           </div>
 
           {/* CENTER + RIGHT — thread and customer details */}
           <div
-            className={`inbox-chat-pane flex h-full min-h-0 min-w-0 flex-col overflow-hidden ${
+            className={`inbox-chat-pane flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden ${
               !selected ? 'hidden md:flex' : 'flex'
             }`}
           >
             {selected ? (
-              <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+              <div
+                key={selected.id}
+                className="inbox-thread-enter flex min-h-0 min-w-0 flex-1 overflow-hidden motion-reduce:animate-none"
+              >
                 <ChatThread
                   conversation={selected}
                   serviceWindow={serviceWindow}
@@ -459,7 +565,9 @@ export default function InboxPage() {
                   draft={draft}
                   attachment={attachment}
                   cannedReplies={cannedReplies}
+                  replyToMessage={replyTo}
                   messagesEndRef={messagesEndRef}
+                  composerInputRef={composerInputRef}
                   onBack={() => setSelected(null)}
                   onCallBack={() => void handleCallBack()}
                   onSnoozeUntil={(untilIso, label) => void handleSnooze(untilIso, label)}
@@ -475,6 +583,12 @@ export default function InboxPage() {
                   onLoadEarlier={() => void loadEarlierMessages()}
                   onOpenMedia={openMediaViewer}
                   onRetryMessage={(msg) => void handleRetryMessage(msg)}
+                  onReplyMessage={(msg) => {
+                    setReplyTo(msg);
+                    composerInputRef.current?.focus();
+                  }}
+                  onReactMessage={(msg, emoji) => void handleReact(msg, emoji)}
+                  onClearReply={() => setReplyTo(null)}
                   onMergeMessages={handleMergeMessages}
                   onDraftChange={setDraft}
                   onSubmitMessage={(e) => void handleSend(e)}
@@ -493,6 +607,16 @@ export default function InboxPage() {
                   onCancelTemplate={() => setTemplateMode(false)}
                   onOpenTemplateMode={() => setTemplateMode(true)}
                 />
+
+                {/* R4: vertical drag handle between thread and details rail (lg+). */}
+                <div className="hidden lg:flex">
+                  <PaneHandle
+                    side="right"
+                    width={paneWidths.widths.right}
+                    ariaLabel="Resize details panel"
+                    onResize={paneWidths.rightRailProps.onResize}
+                  />
+                </div>
 
                 <InboxDetailsPanel
                   conversation={selected}
@@ -521,6 +645,7 @@ export default function InboxPage() {
                   overlayOpen={detailsOverlay.open}
                   overlaySection={detailsOverlay.section}
                   onOverlayClose={() => setDetailsOverlay({ open: false })}
+                  panelWidth={paneWidths.widths.right}
                 />
               </div>
             ) : (
@@ -586,6 +711,8 @@ export default function InboxPage() {
         }
         onClose={() => setExportTarget(null)}
       />
+
+      <KeyboardShortcutsOverlay open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
     </PageShell>
   );
 }

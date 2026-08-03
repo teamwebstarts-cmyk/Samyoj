@@ -3,6 +3,61 @@
 @tailwind utilities;
 
 @layer base {
+  /* Global focus-visible fallback for any interactive element that
+     doesn't already supply its own. Two-tone ring ensures ≥3:1 contrast
+     on light and dark surfaces. */
+  :focus-visible {
+    outline: 2px solid #087f5b; /* Samyoj dark green */
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px rgba(8, 127, 91, 0.18);
+  }
+
+  /* Skip-to-content link: hidden until focused, then a chunky green button
+     pinned to the top-left so keyboard users can bypass the sidebar. */
+  .skip-to-content {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    z-index: 100;
+    padding: 0.5rem 1rem;
+    border-radius: 0 0 0.5rem 0.5rem;
+    background: #087f5b;
+    color: #fff;
+    font-weight: 700;
+    font-size: 0.8125rem;
+    text-decoration: none;
+    box-shadow: 0 6px 20px rgba(8, 127, 91, 0.35);
+  }
+  .skip-to-content:focus,
+  .skip-to-content:focus-visible {
+    left: 0;
+    outline: 3px solid #ffffff;
+    outline-offset: 2px;
+  }
+
+  /* Inputs, textareas, and selects get the ring on the element itself,
+     so we suppress the duplicate outline+shadow on the input and let
+     the border-color ring do the work (already wired in AppInput). */
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    outline: none;
+    box-shadow: none;
+  }
+
+  /* Globally honor prefers-reduced-motion: stop every loop and shorten
+     every transition to a near-instant value. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
   :root {
     --color-bg: #f8fafc;
     --color-bg-muted: #f1f5f9;
@@ -957,6 +1012,10 @@
   }
 
   .inbox-shell {
+    /* Scoped Inbox font preview — see docs/audit/INBOX_FONT_POC.md */
+    --inbox-font-sans: 'Plus Jakarta Sans', system-ui, sans-serif;
+    font-family: var(--inbox-font-sans);
+    -webkit-font-smoothing: antialiased;
     border-radius: 1.25rem;
     border: 1px solid var(--color-border);
     background: var(--color-surface);
@@ -978,6 +1037,7 @@
     position: relative;
     z-index: 1;
     flex-shrink: 0;
+    overflow-x: hidden;
     background-color: #ffffff;
     border-right: 1px solid var(--color-border);
   }
@@ -1020,19 +1080,6 @@
 
   .inbox-status-banner {
     @apply flex items-center justify-center gap-2 px-4 py-2 text-center text-[12px] font-medium;
-  }
-
-  .inbox-fab {
-    background: linear-gradient(135deg, #25d366 0%, #128c7e 100%);
-    box-shadow:
-      0 4px 16px rgba(37, 211, 102, 0.4),
-      0 0 0 1px rgba(255, 255, 255, 0.15) inset;
-  }
-
-  .inbox-fab:hover {
-    box-shadow:
-      0 6px 24px rgba(37, 211, 102, 0.5),
-      0 0 0 1px rgba(255, 255, 255, 0.2) inset;
   }
 
   @keyframes inboxShimmer {
@@ -1236,6 +1283,245 @@
 
   .context-menu-panel {
     animation: inboxSelectMenuIn 160ms ease-out;
+  }
+
+  /* === P1 motion vocabulary additions ===================================== */
+
+  /* M1 — bubble enter: 8px translate + opacity, ease-out 180ms */
+  @keyframes inboxBubbleIn {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .inbox-bubble-enter {
+    animation: inboxBubbleIn 180ms ease-out both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .inbox-bubble-enter {
+      animation: none !important;
+    }
+  }
+
+  /* M3 — skeleton → content cross-fade (120ms swap) */
+  @keyframes inboxFadeOut {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+
+  @keyframes inboxFadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  .inbox-skeleton-fadeout {
+    animation: inboxFadeOut 150ms ease-out forwards;
+  }
+
+  .inbox-thread-fadein {
+    animation: inboxFadeIn 200ms ease-out both;
+  }
+
+  /* Conversation switch — soft rise into place (layout-stable) */
+  @keyframes inboxThreadEnter {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .inbox-thread-enter {
+    animation: inboxThreadEnter 200ms ease-out both;
+  }
+
+  /* M4 — modal / popover enter+exit (200/150ms) */
+  @keyframes inboxModalEnter {
+    from {
+      opacity: 0;
+      transform: scale(0.95) translateY(2px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+
+  @keyframes inboxModalExit {
+    from {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+    to {
+      opacity: 0;
+      transform: scale(0.95) translateY(2px);
+    }
+  }
+
+  .inbox-modal-enter {
+    animation: inboxModalEnter 200ms ease-out both;
+  }
+
+  .inbox-modal-exit {
+    animation: inboxModalExit 150ms ease-in forwards;
+  }
+
+  /* M5 — new conversation row slide-in (220ms ease-out, -8px → 0) */
+  @keyframes inboxRowInsert {
+    from {
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .inbox-row-insert {
+    animation: inboxRowInsert 220ms ease-out both;
+  }
+
+  /* M8 — chip scale pulse on activation (180ms) */
+  @keyframes inboxChipPulse {
+    0% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.04);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+
+  .inbox-chip-pulse {
+    animation: inboxChipPulse 180ms ease-out both;
+  }
+
+  /* M9 — send button: success scale punch (160ms) + failure shake (320ms) */
+  @keyframes inboxSendPunch {
+    0% {
+      transform: scale(1);
+    }
+    40% {
+      transform: scale(1.15);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+
+  @keyframes inboxSendShake {
+    0% {
+      transform: translateX(0);
+    }
+    20% {
+      transform: translateX(-4px);
+    }
+    40% {
+      transform: translateX(4px);
+    }
+    60% {
+      transform: translateX(-4px);
+    }
+    80% {
+      transform: translateX(4px);
+    }
+    100% {
+      transform: translateX(0);
+    }
+  }
+
+  .inbox-send-punch {
+    animation: inboxSendPunch 160ms ease-out both;
+  }
+
+  .inbox-send-shake {
+    animation: inboxSendShake 320ms ease-in-out both;
+  }
+
+  /* M11 — window countdown tick indicator (800ms opacity fade) */
+  @keyframes inboxTickFade {
+    0% {
+      opacity: 0.4;
+    }
+    50% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0.4;
+    }
+  }
+
+  .inbox-tick-indicator {
+    animation: inboxTickFade 800ms ease-in-out;
+  }
+
+  /* Service window badge — subtle glass pulse (amber/rose urgency only) */
+  @keyframes inboxSwBadgePulse {
+    0%,
+    100% {
+      filter: brightness(1);
+    }
+    50% {
+      filter: brightness(1.1);
+    }
+  }
+
+  /* M12 — conversation row hover preview card (220ms after 400ms delay) */
+  @keyframes inboxPreviewIn {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .inbox-row-preview {
+    animation: inboxPreviewIn 200ms ease-out both;
+    transition-delay: 400ms;
+  }
+
+  /* R4 — drag handle cursor */
+  .inbox-pane-handle {
+    cursor: col-resize;
+    touch-action: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .inbox-modal-enter,
+    .inbox-modal-exit,
+    .inbox-row-insert,
+    .inbox-chip-pulse,
+    .inbox-send-punch,
+    .inbox-send-shake,
+    .inbox-row-preview,
+    .inbox-thread-fadein,
+    .inbox-thread-enter,
+    .inbox-skeleton-fadeout {
+      animation: none !important;
+    }
   }
 
   .wa-chat-surface {

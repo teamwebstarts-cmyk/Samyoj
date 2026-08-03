@@ -36,7 +36,7 @@ Health signal:
 | `setup.sh` | First-time deps, secrets, docker, then `start.sh` |
 | `start.sh` | Docker → tunnel → API (after URL) → challenge → client |
 | `stop.sh` | Stop client/api/tunnel; `--all` also docker |
-| `scripts/dev-tunnel.sh` | ngrok → cloudflared fallback + env + setup-webhook |
+| `scripts/dev-tunnel.sh` | ngrok only + env + setup-webhook (fails if auth missing) |
 | `server/scripts/setup-webhook.ts` | Register callback with Meta |
 | `server/src/modules/whatsapp/org-meta.service.ts` | Platform credential resolve/sanitize |
 | `server/src/modules/whatsapp/routes.ts` | OAuth, webhook GET/POST, health |
@@ -59,7 +59,7 @@ Interakt / Wati / AiSensy style: user never enters App ID/Secret. Platform Meta 
 ## Codespace notes
 
 - Port “Public” via `gh codespace ports` is flaky; prefer tunnel scripts.
-- `curl` may not resolve `*.trycloudflare.com`; Node `fetch` often works.
+- `curl` may fail public tunnel DNS in Codespaces; Node `fetch` often works.
 - `setup-webhook.ts` retries reachability and is a good secondary verifier.
 
 ## Do / Don’t

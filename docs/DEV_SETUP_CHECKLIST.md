@@ -55,7 +55,7 @@ In `server/.env` (never in UI):
 - `META_APP_ID`
 - `META_APP_SECRET`
 - `META_VERIFY_TOKEN`
-- `NGROK_AUTHTOKEN` (optional when ngrok is already authenticated locally)
+- `NGROK_AUTHTOKEN` (required for inbound tunnel; or ngrok already authenticated locally)
 - `META_WEBHOOK_URL` (set by tunnel script)
 - `META_REDIRECT_URI=http://localhost:3000/settings/whatsapp/callback`
 

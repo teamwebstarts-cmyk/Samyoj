@@ -50,7 +50,7 @@ Runtime checks when reviewing live/inbound claims:
 ```bash
 curl -s http://localhost:8000/health
 curl -s http://localhost:8000/api/whatsapp/webhook/health
-# Prefer Node fetch for trycloudflare.com challenge in Codespaces
+# Prefer Node fetch for public tunnel challenge in Codespaces
 ```
 
 ## Product / architecture truths (fail review if violated)

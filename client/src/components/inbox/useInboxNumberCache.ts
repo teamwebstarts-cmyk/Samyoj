@@ -1,7 +1,7 @@
-import type { MutableRefObject } from 'react';
 import { useOnActiveNumberChange } from '../../hooks/useOnActiveNumberChange';
 import { readNumberCache, writeNumberCache } from '../../utils/whatsappNumberCache';
 import type { ListChip } from './InboxListHeader';
+import type { PageSize } from './useConversationList';
 import type { Conversation } from '../../types';
 
 const INBOX_CACHE_KEY = 'inbox';
@@ -9,31 +9,35 @@ const INBOX_CACHE_KEY = 'inbox';
 export type InboxNumberCache = {
   conversations: Conversation[];
   total: number;
-  nextCursor: string | null;
-  hasMore: boolean;
   search: string;
   chip: ListChip;
   statusFilter: string;
   agentFilter: string;
+  slaFilter: string;
+  page: number;
+  pageSize: PageSize;
 };
 
 interface NumberCacheDeps {
   conversations: Conversation[];
   total: number;
-  hasMore: boolean;
   search: string;
   chip: ListChip;
   statusFilter: string;
   agentFilter: string;
-  nextCursorRef: MutableRefObject<string | null>;
+  slaFilter: string;
+  page: number;
+  pageSize: PageSize;
   resetThread: () => void;
   setConversations: (conversations: Conversation[]) => void;
   setTotal: (total: number) => void;
-  setHasMore: (hasMore: boolean) => void;
   setSearch: (search: string) => void;
   setChip: (chip: ListChip) => void;
   setStatusFilter: (status: string) => void;
   setAgentFilter: (agent: string) => void;
+  setSlaFilter: (sla: string) => void;
+  setPage: (page: number) => void;
+  setPageSize: (size: PageSize) => void;
   setListLoading: (loading: boolean) => void;
   reloadList: () => void;
 }
@@ -43,20 +47,23 @@ export function useInboxNumberCache(deps: NumberCacheDeps) {
   const {
     conversations,
     total,
-    hasMore,
     search,
     chip,
     statusFilter,
     agentFilter,
-    nextCursorRef,
+    slaFilter,
+    page,
+    pageSize,
     resetThread,
     setConversations,
     setTotal,
-    setHasMore,
     setSearch,
     setChip,
     setStatusFilter,
     setAgentFilter,
+    setSlaFilter,
+    setPage,
+    setPageSize,
     setListLoading,
     reloadList,
   } = deps;
@@ -67,12 +74,13 @@ export function useInboxNumberCache(deps: NumberCacheDeps) {
       writeNumberCache(INBOX_CACHE_KEY, previousNumberId, {
         conversations,
         total,
-        nextCursor: nextCursorRef.current,
-        hasMore,
         search,
         chip,
         statusFilter,
         agentFilter,
+        slaFilter,
+        page,
+        pageSize,
       } satisfies InboxNumberCache);
     }
     const cached = readNumberCache<InboxNumberCache>(INBOX_CACHE_KEY, numberId);
@@ -80,15 +88,17 @@ export function useInboxNumberCache(deps: NumberCacheDeps) {
     if (cached) {
       setConversations(cached.conversations);
       setTotal(cached.total);
-      setHasMore(cached.hasMore);
-      nextCursorRef.current = cached.nextCursor;
       setSearch(cached.search);
       setChip(cached.chip);
       setStatusFilter(cached.statusFilter);
       setAgentFilter(cached.agentFilter);
+      setSlaFilter(cached.slaFilter ?? '');
+      setPage(cached.page ?? 1);
+      if (cached.pageSize) setPageSize(cached.pageSize);
       setListLoading(false);
       return;
     }
+    setPage(1);
     reloadList();
   });
 }

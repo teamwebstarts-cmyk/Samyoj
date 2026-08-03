@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { IndianRupee } from 'lucide-react';
 import InboxModal from './InboxModal';
 import AppButton from '../ui/AppButton';
 import AppInput from '../ui/AppInput';
+import { useAutoFocus } from '../../hooks/inboxA11y';
 
 export interface PaymentLinkFormValues {
   amountInr: number;
@@ -27,6 +28,8 @@ export default function PaymentLinkModal({
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('Payment request');
   const [error, setError] = useState('');
+  const amountInputRef = useRef<HTMLInputElement>(null);
+  useAutoFocus(amountInputRef, open);
 
   useEffect(() => {
     if (open) {
@@ -72,7 +75,7 @@ export default function PaymentLinkModal({
           error={error || undefined}
           icon={<IndianRupee className="h-4 w-4" />}
           required
-          autoFocus
+          ref={amountInputRef}
         />
 
         <AppInput

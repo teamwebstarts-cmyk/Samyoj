@@ -1,7 +1,7 @@
 # WhatsApp Connect + Inbound Webhooks — Agent & Developer Handoff
 
 > **Who this is for:** next human developer **or** next AI agent continuing Samyoj WhatsApp work.  
-> **Read this first** before changing Connect OAuth, webhooks, ngrok/cloudflare, or Inbox inbound flow.  
+> **Read this first** before changing Connect OAuth, webhooks, ngrok, or Inbox inbound flow.  
 > **Last verified:** 2026-07-31 — ngrok live, Meta webhook registered, inbound webhooks receiving (`totalReceived` growing).
 
 ---
@@ -34,7 +34,7 @@ flowchart LR
 
   subgraph inbound [Inbound_needs_public_HTTPS]
     Phone2[Customer_phone] --> MetaWH[Meta_Cloud]
-    MetaWH --> Tunnel[ngrok_or_cloudflare]
+    MetaWH --> Tunnel[ngrok]
     Tunnel --> ExpressWH["POST_/api/whatsapp/webhook"]
     ExpressWH --> RedisQ[BullMQ_webhook-queue]
     RedisQ --> Worker[webhook.processor]

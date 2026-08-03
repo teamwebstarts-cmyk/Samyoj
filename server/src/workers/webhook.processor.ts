@@ -64,13 +64,29 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
       for (const status of (value.statuses as Array<Record<string, unknown>>) || []) {
         const metaMessageId = status.id as string;
         const statusValue = (status.status as string)?.toUpperCase();
+        if (!statusValue) continue;
+
+        const STATUS_RANK: Record<string, number> = {
+          PENDING: 0,
+          SENT: 1,
+          DELIVERED: 2,
+          READ: 3,
+          FAILED: 4,
+        };
 
         const existingMsg = await prisma.message.findFirst({
           where: { metaMessageId },
-          select: { id: true, metadata: true },
+          select: { id: true, status: true, metadata: true },
         });
+        if (!existingMsg) continue;
 
-        const existingMeta = (existingMsg?.metadata as Record<string, unknown>) || {};
+        const currentRank = STATUS_RANK[existingMsg.status] ?? -1;
+        const nextRank = STATUS_RANK[statusValue] ?? -1;
+        // Don't regress ticks (e.g. sent after read). FAILED can overwrite; retry resets separately.
+        const shouldUpdateStatus =
+          statusValue === 'FAILED' || nextRank >= currentRank;
+
+        const existingMeta = (existingMsg.metadata as Record<string, unknown>) || {};
         const statusMeta: Record<string, unknown> = { ...existingMeta };
         if (status.pricing) statusMeta.pricing = status.pricing;
         if (status.errors) statusMeta.errors = status.errors;
@@ -79,7 +95,7 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
         await prisma.message.updateMany({
           where: { metaMessageId },
           data: {
-            status: statusValue as never,
+            ...(shouldUpdateStatus ? { status: statusValue as never } : {}),
             metadata: statusMeta as Prisma.InputJsonValue,
           },
         });
@@ -89,16 +105,16 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
           include: { conversation: true },
         });
 
-        if (msg) {
+        if (msg && shouldUpdateStatus) {
           log.info('Message status updated', {
             messageId: msg.id,
             metaMessageId,
-            status: status.status,
+            status: statusValue,
             organizationId: orgId,
           });
           emitToOrg(orgId, 'message:status', {
             messageId: msg.id,
-            status: status.status,
+            status: statusValue,
             conversationId: msg.conversationId,
           });
         }
@@ -123,6 +139,40 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
           organizationId: orgId,
           phoneNumberId,
         });
+
+        const parsed = parseInboundMessage(msg);
+        if (parsed.reaction) {
+          const target = await prisma.message.findFirst({
+            where: {
+              metaMessageId: parsed.reaction.messageId,
+              conversation: { organizationId: orgId, whatsappNumberId: whatsappNumber.id },
+            },
+          });
+          if (target) {
+            const targetMetadata = (target.metadata as Record<string, unknown>) || {};
+            const existingReactions = Array.isArray(targetMetadata.reactions)
+              ? (targetMetadata.reactions as Array<Record<string, unknown>>)
+              : [];
+            const from = contactPhone || 'customer';
+            const reactions = existingReactions.filter((reaction) => reaction.from !== from);
+            if (parsed.reaction.emoji) {
+              reactions.push({ emoji: parsed.reaction.emoji, from });
+            }
+            const updated = await prisma.message.update({
+              where: { id: target.id },
+              data: {
+                metadata: { ...targetMetadata, reactions } as Prisma.InputJsonValue,
+              },
+            });
+            emitToOrg(orgId, 'message:reaction', {
+              conversationId: target.conversationId,
+              messageId: target.id,
+              reactions,
+              metadata: updated.metadata,
+            });
+          }
+          continue;
+        }
 
         let contact = await prisma.contact.findUnique({
           where: {
@@ -188,18 +238,38 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
           });
         }
 
-        const parsed = parseInboundMessage(msg);
-
         const inboundType = mapInboundMessageType(msg.type as string | undefined);
-        const inboundMetadata = parsed.waFlowResponse
-          ? { ...parsed.metadata, waFlowResponse: parsed.waFlowResponse, isWaFlowReply: true }
+        let inboundMetadata: Record<string, unknown> | undefined = parsed.waFlowResponse
+          ? { ...(parsed.metadata as Record<string, unknown> | undefined), waFlowResponse: parsed.waFlowResponse, isWaFlowReply: true }
           : parsed.buttonReplyId
-            ? { ...parsed.metadata, buttonReplyId: parsed.buttonReplyId, isButtonReply: true }
+            ? { ...(parsed.metadata as Record<string, unknown> | undefined), buttonReplyId: parsed.buttonReplyId, isButtonReply: true }
             : parsed.referral
-              ? { ...parsed.metadata, referral: parsed.referral, isCtwaReferral: true }
+              ? { ...(parsed.metadata as Record<string, unknown> | undefined), referral: parsed.referral, isCtwaReferral: true }
               : parsed.orderPayload
-                ? { ...parsed.metadata, orderPayload: parsed.orderPayload, isCatalogOrder: true }
-                : parsed.metadata;
+                ? { ...(parsed.metadata as Record<string, unknown> | undefined), orderPayload: parsed.orderPayload, isCatalogOrder: true }
+                : parsed.metadata
+                  ? { ...(parsed.metadata as Record<string, unknown>) }
+                  : undefined;
+
+        if (parsed.replyToMetaId) {
+          const replyTarget = await prisma.message.findFirst({
+            where: {
+              conversationId: conversation.id,
+              metaMessageId: parsed.replyToMetaId,
+            },
+            select: { id: true, content: true },
+          });
+          inboundMetadata = {
+            ...(inboundMetadata || {}),
+            replyToMetaId: parsed.replyToMetaId,
+            ...(replyTarget
+              ? {
+                  replyToMessageId: replyTarget.id,
+                  replyPreview: replyTarget.content.slice(0, 160),
+                }
+              : {}),
+          };
+        }
 
         let message;
         try {
@@ -241,7 +311,7 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
               where: { id: message.id },
               data: {
                 metadata: {
-                  ...parsed.metadata,
+                  ...(inboundMetadata || {}),
                   ...stored,
                 },
               },

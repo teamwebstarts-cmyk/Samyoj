@@ -2,7 +2,7 @@ import { ArrowLeft, Bot, MessageSquare, Search, Users } from 'lucide-react';
 import InboxEmptyIcon from './InboxEmptyIcon';
 
 const features = [
-  { icon: Search, label: 'Search', hint: 'Press / to find chats' },
+  { icon: Search, label: 'Search', hint: 'Press R to find chats' },
   { icon: Bot, label: 'AI bot', hint: 'Auto-replies enabled' },
   { icon: Users, label: 'Team', hint: 'Assign & collaborate' },
 ];

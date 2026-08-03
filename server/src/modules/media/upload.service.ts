@@ -2,7 +2,13 @@ import { randomUUID } from 'crypto';
 import { getPublicMediaUrl } from './storage-adapter';
 import { saveMediaBuffer } from './storage';
 
-const MAX_MEDIA_BYTES = 16 * 1024 * 1024;
+/** Meta Cloud API practical limits (bytes). */
+const LIMITS = {
+  IMAGE: 5 * 1024 * 1024,
+  VIDEO: 16 * 1024 * 1024,
+  AUDIO: 16 * 1024 * 1024,
+  DOCUMENT: 100 * 1024 * 1024,
+} as const;
 
 const ALLOWED_MIME_PREFIXES = ['image/', 'video/', 'audio/', 'application/pdf'];
 
@@ -19,8 +25,12 @@ export function validateMediaUpload(mimeType: string, size: number): void {
   if (!ALLOWED_MIME_PREFIXES.some((p) => base.startsWith(p))) {
     throw new Error('Unsupported file type. Allowed: images, videos, audio, and PDF documents.');
   }
-  if (size > MAX_MEDIA_BYTES) {
-    throw new Error('File too large. Maximum size is 16 MB.');
+  const type = mimeToMessageType(base);
+  const max = LIMITS[type];
+  if (size > max) {
+    const label =
+      type === 'IMAGE' ? '5 MB' : type === 'DOCUMENT' ? '100 MB' : '16 MB';
+    throw new Error(`File too large. Maximum size for ${type.toLowerCase()} is ${label}.`);
   }
 }
 
@@ -29,7 +39,13 @@ export async function storeOutboundMedia(options: {
   buffer: Buffer;
   mimeType: string;
   filename?: string;
-}): Promise<{ mediaPath: string; publicUrl: string; mimeType: string; size: number; messageType: 'IMAGE' | 'VIDEO' | 'DOCUMENT' | 'AUDIO' }> {
+}): Promise<{
+  mediaPath: string;
+  publicUrl: string;
+  mimeType: string;
+  size: number;
+  messageType: 'IMAGE' | 'VIDEO' | 'DOCUMENT' | 'AUDIO';
+}> {
   validateMediaUpload(options.mimeType, options.buffer.length);
 
   const uploadId = randomUUID();

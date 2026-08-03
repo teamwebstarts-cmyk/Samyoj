@@ -14,9 +14,12 @@ function formatAvgFirstResponse(minutes: number | null): string {
   return rest > 0 ? `${hours}h ${rest}m` : `${hours}h`;
 }
 
-function StatChip({ value, label }: { value: string; label: string }) {
+function StatChip({ value, label, title }: { value: string; label: string; title?: string }) {
   return (
-    <div className="flex min-w-0 flex-col items-center gap-0.5 rounded-xl border border-theme-border px-2 py-2.5">
+    <div
+      title={title}
+      className="flex min-w-0 flex-col items-center gap-0.5 rounded-xl border border-theme-border px-2 py-2.5"
+    >
       <span className="truncate text-[14px] font-extrabold tabular-nums text-theme-fg">{value}</span>
       <span className="truncate text-[9.5px] font-bold uppercase tracking-wide text-theme-muted">
         {label}
@@ -65,7 +68,8 @@ export default function StatsRow({ conversationId }: StatsRowProps) {
       <StatChip value={String(stats.openTickets)} label="Open Tickets" />
       <StatChip
         value={formatAvgFirstResponse(stats.avgFirstResponseMinutes)}
-        label="Avg First Response"
+        label="First response"
+        title="Average time from customer message to first agent reply"
       />
     </div>
   );

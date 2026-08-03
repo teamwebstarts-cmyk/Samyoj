@@ -2,11 +2,11 @@
 name: samyoj-whatsapp-dev
 description: >-
   Run, debug, and harden Samyoj WhatsApp Cloud API local development: setup/start/stop
-  scripts, ngrok/cloudflared inbound tunnels, Meta webhook registration, Connect WhatsApp
+  scripts, ngrok-only inbound tunnels, Meta webhook registration, Connect WhatsApp
   OAuth (platform App ID only), and Inbox inbound failures (totalReceived: 0). Use when
   the user asks to run/restart/setup Samyoj, fix Inbox not receiving messages, configure
   Meta webhooks/tunnels, simplify WhatsApp Connect UX, or work on META_WEBHOOK_URL /
-  META_APP_ID / ngrok / cloudflared.
+  META_APP_ID / ngrok.
 ---
 
 # Samyoj WhatsApp + Local Dev
@@ -18,7 +18,7 @@ description: >-
 3. User flow = **Connect WhatsApp** → Facebook OAuth → pick number.
 4. **Inbound needs a public HTTPS tunnel.** Outbound works on localhost without one.
 5. Prefer infra fix over rewriting Inbox UI when replies are missing.
-6. **Never invent** ngrok authtokens or Meta secrets. Ask the user or use Cloudflare fallback.
+6. **Never invent** ngrok authtokens or Meta secrets. Ask the user. Do **not** fall back to Cloudflare.
 
 ## Run / restart checklist
 
@@ -72,7 +72,7 @@ When user says message receive nahi ho raha / Inbox empty for new replies:
 
 ### Challenge verification (Codespace)
 
-Shell `curl` may fail DNS for `*.trycloudflare.com`. Use Node `fetch`:
+Shell `curl` may fail DNS for public tunnel hosts in Codespaces. Use Node `fetch`:
 
 ```bash
 VERIFY_URL="$WEBHOOK_URL?hub.mode=subscribe&hub.verify_token=$META_VERIFY_TOKEN&hub.challenge=ping" \
@@ -85,12 +85,12 @@ Expect exact body: `ping`.
 
 `scripts/dev-tunnel.sh`:
 
-1. Prefer **ngrok** when `NGROK_AUTHTOKEN` is in `server/.env` or `~/.config/ngrok/ngrok.yml`
-2. If ngrok cannot start → **Cloudflare quick tunnel fallback** (no account)
+1. **Always ngrok** — requires `NGROK_AUTHTOKEN` in `server/.env` or authtoken in `~/.config/ngrok/ngrok.yml`
+2. If ngrok cannot start → **fail clearly** (no Cloudflare / cloudflared fallback)
 3. Write `META_WEBHOOK_URL` **before** publishing `.run/tunnel-url` (avoid API race)
 4. Then register webhook when possible
 
-Avoid free ngrok reserved domain `samyoj-dev.ngrok-free.app` → `ERR_NGROK_313`.
+Avoid free ngrok reserved domain `samyoj-dev.ngrok-free.app` → `ERR_NGROK_313`. Use a random ngrok URL.
 
 Do not use the vulnerable `ngrok` npm package; use the official ngrok CLI.
 

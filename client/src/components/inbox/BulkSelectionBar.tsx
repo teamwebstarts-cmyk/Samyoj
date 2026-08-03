@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { AlarmClock, CheckCircle2, Loader2, UserPlus, X } from 'lucide-react';
 import AssignAgentPopover from './AssignAgentPopover';
+import SnoozePopover from './SnoozePopover';
+import { FOCUS_RING_CLASS } from '../../hooks/inboxA11y';
 import type { TeamAgent } from '../../types';
 
 interface BulkSelectionBarProps {
@@ -10,9 +12,14 @@ interface BulkSelectionBarProps {
   busy: boolean;
   onAssign: (agent: { id: string; name: string }) => void;
   onCloseChats: () => void;
-  onSnoozeOneHour: () => void;
+  onSnoozeUntil: (untilIso: string, label: string) => void;
   onClear: () => void;
 }
+
+const ACTION_BTN =
+  `inline-flex h-8 w-8 shrink-0 items-center justify-center gap-1 rounded-full border border-theme-border ` +
+  `px-0 text-[11px] font-bold text-theme-secondary transition hover:bg-theme-subtle hover:text-theme-fg ` +
+  `disabled:opacity-50 @[300px]:w-auto @[300px]:gap-1.5 @[300px]:px-2.5`;
 
 /** Sticky bar at the top of the chat list while conversations are selected. */
 export default function BulkSelectionBar({
@@ -22,38 +29,49 @@ export default function BulkSelectionBar({
   busy,
   onAssign,
   onCloseChats,
-  onSnoozeOneHour,
+  onSnoozeUntil,
   onClear,
 }: BulkSelectionBarProps) {
   const [assignOpen, setAssignOpen] = useState(false);
+  const [snoozeOpen, setSnoozeOpen] = useState(false);
+  const assignBtnRef = useRef<HTMLButtonElement>(null);
+  const snoozeBtnRef = useRef<HTMLButtonElement>(null);
 
   return (
-    <div className="sticky top-0 z-20 flex shrink-0 items-center gap-1.5 border-b border-neutral-100 bg-theme-surface/95 px-3 py-2 backdrop-blur-md dark:border-neutral-800/80">
-      <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-whatsapp-500 px-1.5 text-[11px] font-bold text-white">
+    <div className="@container inbox-modal-enter sticky top-0 z-40 flex shrink-0 items-center gap-1 border-b border-neutral-100 bg-theme-surface/95 px-2 py-2 backdrop-blur-md dark:border-neutral-800/80 motion-reduce:animate-none @[300px]:gap-1.5 @[300px]:px-3">
+      <span
+        aria-label={`${count} selected`}
+        className="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-whatsapp-500 px-1.5 text-[11px] font-bold text-white"
+      >
         {count}
       </span>
-      <span className="mr-1 hidden text-[12px] font-semibold text-theme-secondary sm:inline">
-        selected
-      </span>
 
-      {busy && <Loader2 className="h-3.5 w-3.5 animate-spin text-theme-muted" />}
+      {busy && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-theme-muted" />}
 
-      <div className="relative ml-auto">
+      <div className="ml-auto flex min-w-0 items-center gap-1 @[300px]:gap-1.5">
         <button
+          ref={assignBtnRef}
           type="button"
           disabled={busy}
-          onClick={() => setAssignOpen((v) => !v)}
+          title="Assign"
+          aria-label="Assign"
           aria-expanded={assignOpen}
-          className="inline-flex h-8 items-center gap-1.5 rounded-full border border-theme-border px-2.5 text-[11.5px] font-bold text-theme-secondary transition hover:bg-theme-subtle hover:text-theme-fg disabled:opacity-50"
+          onClick={() => {
+            setAssignOpen((v) => !v);
+            setSnoozeOpen(false);
+          }}
+          className={`${ACTION_BTN} ${FOCUS_RING_CLASS}`}
         >
           <UserPlus className="h-3.5 w-3.5 text-emerald-600" strokeWidth={2.25} />
-          Assign
+          <span className="hidden @[300px]:inline">Assign</span>
         </button>
         {assignOpen && (
           <AssignAgentPopover
             agents={agents}
             currentUserId={currentUserId}
             disabled={busy}
+            placement="below"
+            anchorRef={assignBtnRef}
             onSelect={(agentId) => {
               if (!agentId) return;
               const agent = agents.find((a) => a.id === agentId);
@@ -62,36 +80,57 @@ export default function BulkSelectionBar({
             onClose={() => setAssignOpen(false)}
           />
         )}
+
+        <button
+          type="button"
+          disabled={busy}
+          title="Close"
+          aria-label="Close"
+          onClick={onCloseChats}
+          className={`${ACTION_BTN} ${FOCUS_RING_CLASS}`}
+        >
+          <CheckCircle2 className="h-3.5 w-3.5 text-neutral-500" strokeWidth={2.25} />
+          <span className="hidden @[300px]:inline">Close</span>
+        </button>
+
+        <button
+          ref={snoozeBtnRef}
+          type="button"
+          disabled={busy}
+          title="Snooze"
+          aria-label="Snooze"
+          aria-expanded={snoozeOpen}
+          onClick={() => {
+            setSnoozeOpen((v) => !v);
+            setAssignOpen(false);
+          }}
+          className={`${ACTION_BTN} ${FOCUS_RING_CLASS}`}
+        >
+          <AlarmClock className="h-3.5 w-3.5 text-indigo-500" strokeWidth={2.25} />
+          <span className="hidden @[300px]:inline">Snooze</span>
+        </button>
+        {snoozeOpen && (
+          <SnoozePopover
+            anchorRef={snoozeBtnRef}
+            onSnooze={(untilIso, label) => {
+              onSnoozeUntil(untilIso, label);
+              setSnoozeOpen(false);
+            }}
+            onUnsnooze={() => setSnoozeOpen(false)}
+            onClose={() => setSnoozeOpen(false)}
+          />
+        )}
+
+        <button
+          type="button"
+          onClick={onClear}
+          title="Clear selection"
+          aria-label="Clear selection"
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-theme-muted transition hover:bg-theme-subtle hover:text-theme-fg ${FOCUS_RING_CLASS}`}
+        >
+          <X className="h-4 w-4" strokeWidth={2.25} />
+        </button>
       </div>
-
-      <button
-        type="button"
-        disabled={busy}
-        onClick={onCloseChats}
-        className="inline-flex h-8 items-center gap-1.5 rounded-full border border-theme-border px-2.5 text-[11.5px] font-bold text-theme-secondary transition hover:bg-theme-subtle hover:text-theme-fg disabled:opacity-50"
-      >
-        <CheckCircle2 className="h-3.5 w-3.5 text-neutral-500" strokeWidth={2.25} />
-        Close
-      </button>
-
-      <button
-        type="button"
-        disabled={busy}
-        onClick={onSnoozeOneHour}
-        className="inline-flex h-8 items-center gap-1.5 rounded-full border border-theme-border px-2.5 text-[11.5px] font-bold text-theme-secondary transition hover:bg-theme-subtle hover:text-theme-fg disabled:opacity-50"
-      >
-        <AlarmClock className="h-3.5 w-3.5 text-indigo-500" strokeWidth={2.25} />
-        Snooze 1h
-      </button>
-
-      <button
-        type="button"
-        onClick={onClear}
-        aria-label="Clear selection"
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-theme-muted transition hover:bg-theme-subtle hover:text-theme-fg"
-      >
-        <X className="h-4 w-4" strokeWidth={2.25} />
-      </button>
     </div>
   );
 }

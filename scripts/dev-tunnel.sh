@@ -4,15 +4,14 @@ set -euo pipefail
 # =============================================================================
 # Samyoj — Public webhook tunnel (required for inbound WhatsApp)
 # =============================================================================
-# Prefer ngrok when authenticated. If ngrok cannot start, fall back to a
-# temporary Cloudflare quick tunnel so Inbox replies keep working in local/dev.
+# ALWAYS uses ngrok. No Cloudflare / cloudflared fallback.
+# Fails clearly if ngrok CLI or NGROK_AUTHTOKEN is missing.
 #
 # Usage:  bash scripts/dev-tunnel.sh
 # =============================================================================
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="$ROOT_DIR/server/.env"
-BIN_DIR="$ROOT_DIR/.bin"
 PORT="${TUNNEL_PORT:-8000}"
 TARGET="http://localhost:${PORT}"
 RUN_DIR="$ROOT_DIR/.run"
@@ -25,7 +24,7 @@ ok()    { echo -e "${GREEN}[✓]${NC} $*"; }
 warn()  { echo -e "${YELLOW}[!]${NC} $*"; }
 fail()  { echo -e "${RED}[✗]${NC} $*"; exit 1; }
 
-mkdir -p "$BIN_DIR" "$LOG_DIR"
+mkdir -p "$LOG_DIR"
 
 write_env_webhook() {
   local webhook_url="$1"
@@ -50,7 +49,6 @@ wait_for_tunnel() {
 
   info "Waiting for tunnel to be reachable (up to ${max_attempts}s)..."
   while [[ "$attempt" -le "$max_attempts" ]]; do
-    # Use Node (not curl) — Codespace DNS sometimes fails for curl on trycloudflare.com
     local body
     body="$(
       VERIFY_URL="$verify_url" node <<'NODE' 2>/dev/null || true
@@ -118,87 +116,47 @@ publish_tunnel() {
   fi
 }
 
-ensure_cloudflared() {
-  if command -v cloudflared >/dev/null 2>&1; then
-    command -v cloudflared
-    return
-  fi
-  local binary="$BIN_DIR/cloudflared"
-  if [[ -x "$binary" ]]; then
-    echo "$binary"
-    return
-  fi
-
-  local arch asset
-  arch="$(uname -m)"
-  case "$arch" in
-    x86_64|amd64) asset="cloudflared-linux-amd64" ;;
-    aarch64|arm64) asset="cloudflared-linux-arm64" ;;
-    *) fail "Unsupported architecture for cloudflared fallback: $arch" ;;
-  esac
-
-  info "Downloading cloudflared fallback (${asset})..."
-  curl -fsSL "https://github.com/cloudflare/cloudflared/releases/latest/download/${asset}" -o "$binary"
-  chmod +x "$binary"
-  echo "$binary"
-}
-
-start_cloudflared() {
-  local cloudflared
-  cloudflared="$(ensure_cloudflared)"
-  info "Starting Cloudflare quick tunnel fallback → ${TARGET}"
-  warn "Add NGROK_AUTHTOKEN to server/.env to prefer ngrok next time."
-
-  local cf_log="$LOG_DIR/cloudflared.log"
-  "$cloudflared" tunnel --url "$TARGET" >"$cf_log" 2>&1 &
-  local cf_pid=$!
-  trap 'kill '"$cf_pid"' 2>/dev/null || true' EXIT INT TERM
-
-  local tunnel_url=""
-  for attempt in {1..40}; do
-    if ! kill -0 "$cf_pid" 2>/dev/null; then
-      warn "cloudflared exited before opening a tunnel:"
-      tail -n 30 "$cf_log" 2>/dev/null || true
-      exit 1
-    fi
-    tunnel_url="$(
-      grep -Eo 'https://[a-zA-Z0-9-]+\.trycloudflare\.com' "$cf_log" 2>/dev/null | tail -n 1 || true
-    )"
-    [[ "$tunnel_url" == https://* ]] && break
-    sleep 1
-  done
-
-  [[ "$tunnel_url" == https://* ]] || fail "cloudflared did not provide a public HTTPS URL."
-  ok "Public URL: $tunnel_url"
-  publish_tunnel "$tunnel_url"
-  wait "$cf_pid"
-}
-
-start_ngrok() {
-  command -v ngrok >/dev/null 2>&1 || return 1
+ensure_ngrok_auth() {
+  [[ -f "$ENV_FILE" ]] || fail "server/.env not found. Add NGROK_AUTHTOKEN and retry."
 
   local token
   token="$(grep -m1 '^NGROK_AUTHTOKEN=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- || true)"
+  # Also accept NGROK_AUTH_TOKEN alias if present
+  if [[ -z "$token" ]]; then
+    token="$(grep -m1 '^NGROK_AUTH_TOKEN=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- || true)"
+  fi
+
   if [[ -n "$token" ]]; then
-    ngrok config add-authtoken "$token" >/dev/null 2>&1 || true
+    if ! ngrok config add-authtoken "$token" >/dev/null 2>&1; then
+      fail "ngrok rejected NGROK_AUTHTOKEN from server/.env. Check the token and retry."
+    fi
+    return 0
   fi
 
-  if ! grep -q 'authtoken:' "$HOME/.config/ngrok/ngrok.yml" 2>/dev/null; then
-    warn "ngrok is not authenticated."
-    return 1
+  if grep -q 'authtoken:' "$HOME/.config/ngrok/ngrok.yml" 2>/dev/null; then
+    return 0
   fi
 
+  fail "NGROK_AUTHTOKEN missing. Add it to server/.env (from https://dashboard.ngrok.com/get-started/your-authtoken). Cloudflare fallback is disabled."
+}
+
+start_ngrok() {
+  command -v ngrok >/dev/null 2>&1 || fail "Official ngrok CLI is required. Install from https://ngrok.com/download"
+
+  ensure_ngrok_auth
+
+  # Random ngrok URL only — do NOT use reserved free domain samyoj-dev.ngrok-free.app (ERR_NGROK_313)
   info "Starting ngrok tunnel → ${TARGET}"
   local ngrok_log="$LOG_DIR/ngrok-agent.log"
   ngrok http "$PORT" --log=stdout >"$ngrok_log" 2>&1 &
   local ngrok_pid=$!
 
   local tunnel_url=""
-  for attempt in {1..25}; do
+  for attempt in {1..40}; do
     if ! kill -0 "$ngrok_pid" 2>/dev/null; then
       warn "ngrok exited before opening a tunnel:"
-      tail -n 20 "$ngrok_log" 2>/dev/null || true
-      return 1
+      tail -n 30 "$ngrok_log" 2>/dev/null || true
+      fail "ngrok failed to start. See .run/logs/ngrok-agent.log"
     fi
     tunnel_url="$(
       curl -fsS http://127.0.0.1:4040/api/tunnels 2>/dev/null |
@@ -220,8 +178,12 @@ start_ngrok() {
   if [[ "$tunnel_url" != https://* ]]; then
     kill "$ngrok_pid" 2>/dev/null || true
     wait "$ngrok_pid" 2>/dev/null || true
-    warn "ngrok did not provide a public HTTPS URL."
-    return 1
+    fail "ngrok did not provide a public HTTPS URL. See .run/logs/ngrok-agent.log"
+  fi
+
+  if [[ "$tunnel_url" == *"samyoj-dev.ngrok-free.app"* ]]; then
+    kill "$ngrok_pid" 2>/dev/null || true
+    fail "Refusing reserved free domain samyoj-dev.ngrok-free.app (ERR_NGROK_313). Use a random ngrok URL."
   fi
 
   trap 'kill '"$ngrok_pid"' 2>/dev/null || true' EXIT INT TERM
@@ -230,9 +192,4 @@ start_ngrok() {
   wait "$ngrok_pid"
 }
 
-if start_ngrok; then
-  exit 0
-fi
-
-warn "Falling back to Cloudflare quick tunnel so inbound WhatsApp keeps working."
-start_cloudflared
+start_ngrok

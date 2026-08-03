@@ -129,7 +129,7 @@ info "Verifying public webhook challenge..."
 CHALLENGE_OK=false
 VERIFY_URL="${WEBHOOK_URL}?hub.mode=subscribe&hub.verify_token=${VERIFY_TOKEN}&hub.challenge=ping"
 for attempt in {1..60}; do
-  # Node fetch is more reliable than curl for trycloudflare.com DNS in Codespaces
+  # Node fetch is more reliable than curl for public tunnel DNS in Codespaces
   BODY="$(
     VERIFY_URL="$VERIFY_URL" node <<'NODE' 2>/dev/null || true
 const url = process.env.VERIFY_URL;

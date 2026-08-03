@@ -14,7 +14,7 @@ Use as a working sheet. Mark only after evidence.
 
 ## Inbound webhook
 
-- [ ] Tunnel process running (ngrok or cloudflared)
+- [ ] Tunnel process running (ngrok only)
 - [ ] `META_WEBHOOK_URL` non-empty and matches tunnel
 - [ ] API health `webhookUrl` matches `.env`
 - [ ] Public challenge body is exactly `ping`
@@ -29,7 +29,7 @@ Use as a working sheet. Mark only after evidence.
 - [ ] `npm ci` + Prisma generate on install
 - [ ] Docker ports on `127.0.0.1`
 - [ ] No fabricated `NGROK_AUTHTOKEN`
-- [ ] cloudflared fallback only when ngrok unavailable
+- [ ] No cloudflared/Cloudflare fallback (ngrok required)
 - [ ] Challenge verify uses Node fetch in Codespace
 
 ## Security / tenancy

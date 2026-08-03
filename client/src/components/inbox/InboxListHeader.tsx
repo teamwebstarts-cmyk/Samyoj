@@ -1,12 +1,24 @@
 import { useEffect, useRef, useState, type Ref } from 'react';
-import { CheckSquare, ListFilter, MessageSquarePlus, MoreVertical, Plus, RefreshCw } from 'lucide-react';
-import WhatsAppLogo from './WhatsAppLogo';
+import {
+  AlertTriangle,
+  CheckSquare,
+  Filter,
+  LayoutGrid,
+  Plus,
+  RefreshCw,
+  SlidersHorizontal,
+  Star,
+  CircleDot,
+  Timer,
+  X,
+} from 'lucide-react';
 import InboxSelect, { type InboxSelectOption } from './InboxSelect';
 import SearchInput from '../ui/SearchInput';
-import ConnectionStatusIndicator from '../ui/ConnectionStatusIndicator';
-import type { SocketState } from '../../hooks/useSocket';
+import { FOCUS_RING_CLASS } from '../../hooks/inboxA11y';
+import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
+import type { InboundHealth } from '../../hooks/useWebhookHealth';
 
-export type ListChip = 'all' | 'unread' | 'favourites' | 'sla';
+export type ListChip = 'all' | 'unread' | 'favourites';
 
 interface InboxListHeaderProps {
   search: string;
@@ -14,19 +26,39 @@ interface InboxListHeaderProps {
   searchInputRef?: Ref<HTMLInputElement>;
   chip: ListChip;
   onChipChange: (chip: ListChip) => void;
+  conversationTotal: number;
   unreadTotal: number;
   statusFilter: string;
   agentFilter: string;
+  slaFilter: string;
   onStatusFilterChange: (value: string) => void;
   onAgentFilterChange: (value: string) => void;
+  onSlaFilterChange: (value: string) => void;
   statusOptions: InboxSelectOption[];
   agentOptions: InboxSelectOption[];
   agentOptionsSearchable: boolean;
-  socketState: SocketState;
   selectionMode: boolean;
   onToggleSelectionMode: () => void;
   onNewChat: () => void;
   onRefresh: () => void;
+  inboundHealth?: InboundHealth;
+  onRetryHealth: () => void;
+}
+
+const squareBtn = (active = false) =>
+  `flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition ${FOCUS_RING_CLASS} ${
+    active
+      ? 'border-whatsapp-500/50 bg-whatsapp-500/10 text-whatsapp-700 dark:text-whatsapp-400'
+      : 'border-theme-border bg-theme-surface text-theme-secondary hover:bg-theme-subtle hover:text-theme-fg'
+  }`;
+
+function formatCountLine(conversationTotal: number, unreadTotal: number) {
+  const conversations =
+    conversationTotal === 1
+      ? `${conversationTotal.toLocaleString()} conversation`
+      : `${conversationTotal.toLocaleString()} conversations`;
+  const unread = `${unreadTotal.toLocaleString()} unread`;
+  return `${conversations} · ${unread}`;
 }
 
 export default function InboxListHeader({
@@ -35,32 +67,45 @@ export default function InboxListHeader({
   searchInputRef,
   chip,
   onChipChange,
+  conversationTotal,
   unreadTotal,
   statusFilter,
   agentFilter,
+  slaFilter,
   onStatusFilterChange,
   onAgentFilterChange,
+  onSlaFilterChange,
   statusOptions,
   agentOptions,
   agentOptionsSearchable,
-  socketState,
   selectionMode,
   onToggleSelectionMode,
   onNewChat,
   onRefresh,
+  inboundHealth = { state: 'unknown' as const },
+  onRetryHealth,
 }: InboxListHeaderProps) {
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filtersRowOpen, setFiltersRowOpen] = useState(true);
+  const [extraOpen, setExtraOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const filtersRef = useRef<HTMLDivElement>(null);
+  const extraRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const { hasConnectedNumber, loading: numberLoading } = useWhatsAppNumber();
 
-  const advancedActive = Boolean(statusFilter || agentFilter);
+  const isConnected = hasConnectedNumber && !numberLoading;
+  const statusOrAgentActive = Boolean(statusFilter || agentFilter);
+  const extraActive = chip !== 'all' || Boolean(slaFilter);
+  const anyFilterActive = statusOrAgentActive || extraActive;
 
   useEffect(() => {
-    if (!filtersOpen && !menuOpen) return;
+    if (selectionMode) setMenuOpen(false);
+  }, [selectionMode]);
+
+  useEffect(() => {
+    if (!extraOpen && !menuOpen) return;
     const onDoc = (e: MouseEvent) => {
-      if (filtersRef.current && !filtersRef.current.contains(e.target as Node)) {
-        setFiltersOpen(false);
+      if (extraRef.current && !extraRef.current.contains(e.target as Node)) {
+        setExtraOpen(false);
       }
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setMenuOpen(false);
@@ -68,196 +113,311 @@ export default function InboxListHeader({
     };
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
-  }, [filtersOpen, menuOpen]);
+  }, [extraOpen, menuOpen]);
 
   return (
     <div className="shrink-0 border-b border-neutral-100 px-4 pb-3 pt-4 dark:border-neutral-800/80">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-gradient-to-br from-whatsapp-400 to-whatsapp-600 text-white shadow-[0_2px_8px_rgba(37,211,102,0.35)]">
-            <WhatsAppLogo size={20} />
+      {inboundHealth?.state === 'unhealthy' && (
+        <div
+          role="alert"
+          data-testid="inbound-health-banner"
+          className="mb-3 flex items-start gap-2.5 rounded-xl border border-red-300/80 bg-red-50/95 px-3 py-2.5 text-red-900 shadow-[0_2px_8px_rgba(220,38,38,0.08)] dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-100"
+        >
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-400" />
+          <div className="min-w-0 flex-1 text-[12px] leading-snug">
+            <p className="font-bold">
+              {isConnected
+                ? 'Inbound messages are not arriving.'
+                : 'WhatsApp is not connected.'}
+            </p>
+            <p className="mt-0.5 text-red-800/85 dark:text-red-200/85">
+              {isConnected
+                ? inboundHealth?.reason
+                : 'Connect a WhatsApp number to start receiving messages.'}
+            </p>
+            {isConnected && (
+              <p className="mt-1 text-[11px] font-medium text-red-700/85 dark:text-red-300/80">
+                Outbound still works on localhost; the public tunnel or Meta webhook subscription is
+                the usual cause.
+              </p>
+            )}
           </div>
-          <h2 className="text-[18px] font-bold tracking-tight text-theme-fg">Chats</h2>
+          <button
+            type="button"
+            onClick={onRetryHealth}
+            className={`shrink-0 rounded-md border border-red-300/80 px-2 py-1 text-[10.5px] font-bold uppercase tracking-wide text-red-700 transition hover:bg-red-100 dark:border-red-500/40 dark:text-red-200 dark:hover:bg-red-900/40 ${FOCUS_RING_CLASS}`}
+          >
+            Retry
+          </button>
+        </div>
+      )}
+      {/* Row 1 — title + counts + actions */}
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1 overflow-hidden">
+          <div className="flex items-center gap-2">
+            <h2 className="text-[18px] font-bold tracking-tight text-theme-fg">Inbox</h2>
+            <InboundStatusDot
+              isConnected={isConnected}
+              numberLoading={numberLoading}
+              inboundHealth={inboundHealth}
+            />
+          </div>
+          {/* Single text node + nowrap: never stack "0 / conversations / · 0 / unread" when the pane is tight. */}
+          <p
+            className="mt-0.5 min-h-[1.125rem] truncate whitespace-nowrap text-[12px] font-medium leading-[1.125rem] text-theme-muted"
+            title={formatCountLine(conversationTotal, unreadTotal)}
+          >
+            {formatCountLine(conversationTotal, unreadTotal)}
+          </p>
         </div>
 
-        <div className="flex items-center gap-1.5">
-          <ConnectionStatusIndicator
-            status={socketState.status}
-            reconnectAttempts={socketState.reconnectAttempts}
-            totalDisconnects={socketState.totalDisconnects}
-          />
-          <div className="relative" ref={filtersRef}>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {selectionMode ? (
             <button
               type="button"
-              onClick={() => setFiltersOpen((v) => !v)}
-              aria-expanded={filtersOpen}
-              className={`inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-[12px] font-semibold transition ${
-                advancedActive
-                  ? 'border-whatsapp-500/50 bg-whatsapp-500/10 text-whatsapp-700 dark:text-whatsapp-400'
-                  : 'border-theme-border bg-theme-surface text-theme-secondary hover:bg-theme-subtle'
-              }`}
+              onClick={onToggleSelectionMode}
+              aria-label="Cancel selection"
+              title="Cancel selection"
+              data-testid="inbox-cancel-selection"
+              className={squareBtn()}
             >
-              <ListFilter className="h-3.5 w-3.5" strokeWidth={2.25} />
-              Filters
-              {advancedActive && (
-                <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-whatsapp-500 px-1 text-[9px] font-bold text-white">
-                  {(statusFilter ? 1 : 0) + (agentFilter ? 1 : 0)}
-                </span>
+              <X className="h-4 w-4" strokeWidth={2.25} />
+            </button>
+          ) : (
+            <div className="relative" ref={menuRef}>
+              <button
+                type="button"
+                onClick={() => setMenuOpen((v) => !v)}
+                aria-expanded={menuOpen}
+                aria-label="List options"
+                className={squareBtn(menuOpen)}
+              >
+                <LayoutGrid className="h-4 w-4" strokeWidth={2.25} />
+              </button>
+              {menuOpen && (
+                <div className="absolute right-0 top-full z-30 mt-1 min-w-[180px] overflow-hidden rounded-xl border border-theme-border bg-theme-surface py-1 shadow-panel">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onToggleSelectionMode();
+                    }}
+                    className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] text-theme-fg transition hover:bg-theme-subtle ${FOCUS_RING_CLASS}`}
+                  >
+                    <CheckSquare className="h-4 w-4 text-theme-muted" />
+                    Select chats
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onRefresh();
+                    }}
+                    className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] text-theme-fg transition hover:bg-theme-subtle ${FOCUS_RING_CLASS}`}
+                  >
+                    <RefreshCw className="h-4 w-4 text-theme-muted" />
+                    Refresh list
+                  </button>
+                </div>
               )}
-            </button>
-            {filtersOpen && (
-              <div className="absolute right-0 top-full z-30 mt-2 w-[260px] space-y-2 rounded-2xl border border-theme-border bg-theme-surface p-3 shadow-panel">
-                <p className="text-[10px] font-bold uppercase tracking-wide text-theme-muted">
-                  Refine chat list
-                </p>
-                <InboxSelect
-                  variant="filter"
-                  value={statusFilter}
-                  placeholder="All chats"
-                  isSearchable={false}
-                  options={statusOptions}
-                  ariaLabel="Filter by chat status"
-                  onChange={(e) => onStatusFilterChange(e.target.value)}
-                />
-                <InboxSelect
-                  variant="filter"
-                  value={agentFilter}
-                  placeholder="All agents"
-                  isSearchable={agentOptionsSearchable}
-                  options={agentOptions}
-                  ariaLabel="Filter by assigned agent"
-                  onChange={(e) => onAgentFilterChange(e.target.value)}
-                />
-              </div>
-            )}
-          </div>
+            </div>
+          )}
 
-          <div className="relative" ref={menuRef}>
-            <button
-              type="button"
-              onClick={() => setMenuOpen((v) => !v)}
-              aria-expanded={menuOpen}
-              aria-label="Chat list options"
-              className="flex h-9 w-9 items-center justify-center rounded-full text-theme-secondary transition hover:bg-theme-subtle"
-            >
-              <MoreVertical className="h-4 w-4" strokeWidth={2.25} />
-            </button>
-            {menuOpen && (
-              <div className="absolute right-0 top-full z-30 mt-1 min-w-[180px] overflow-hidden rounded-xl border border-theme-border bg-theme-surface py-1 shadow-panel">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onNewChat();
-                  }}
-                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] text-theme-fg transition hover:bg-theme-subtle"
-                >
-                  <MessageSquarePlus className="h-4 w-4 text-whatsapp-600" />
-                  New chat
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onToggleSelectionMode();
-                  }}
-                  aria-pressed={selectionMode}
-                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] text-theme-fg transition hover:bg-theme-subtle"
-                >
-                  <CheckSquare
-                    className={`h-4 w-4 ${selectionMode ? 'text-whatsapp-600' : 'text-theme-muted'}`}
-                  />
-                  {selectionMode ? 'Exit select mode' : 'Select chats'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onRefresh();
-                  }}
-                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] text-theme-fg transition hover:bg-theme-subtle"
-                >
-                  <RefreshCw className="h-4 w-4 text-theme-muted" />
-                  Refresh list
-                </button>
-              </div>
-            )}
-          </div>
+          <button
+            type="button"
+            onClick={onNewChat}
+            data-testid="inbox-new-chat"
+            className={`inline-flex h-9 items-center gap-1.5 rounded-lg bg-gradient-to-br from-whatsapp-500 to-whatsapp-600 px-3 text-[12.5px] font-bold text-white shadow-[0_2px_8px_rgba(37,211,102,0.35)] transition hover:brightness-105 active:scale-[0.98] ${FOCUS_RING_CLASS}`}
+          >
+            <Plus className="h-3.5 w-3.5" strokeWidth={2.75} />
+            New chat
+          </button>
         </div>
       </div>
 
-      <SearchInput
-        ref={searchInputRef}
-        value={search}
-        onChange={onSearchChange}
-        placeholder="Search conversations"
-        className="[&_input]:!h-10 [&_input]:rounded-lg [&_input]:!bg-theme-subtle/70 [&_input]:!shadow-none"
-      />
+      {/* Sub-header divider — separates title/actions from search + filters */}
+      <div className="mt-3 border-t border-neutral-100 pt-3 dark:border-neutral-800/80">
+        {/* Row 2 — search + funnel */}
+        <div className="flex items-center gap-2">
+          <SearchInput
+            ref={searchInputRef}
+            value={search}
+            onChange={onSearchChange}
+            placeholder="Search by name or phone..."
+            className="min-w-0 flex-1 [&_input]:!h-9 [&_input]:rounded-lg [&_input]:!bg-theme-surface [&_input]:!shadow-none"
+          />
+          <button
+            type="button"
+            onClick={() => setFiltersRowOpen((v) => !v)}
+            aria-expanded={filtersRowOpen}
+            aria-label="Toggle filters"
+            title="Toggle filters"
+            data-testid="inbox-filter-toggle"
+            className={squareBtn(filtersRowOpen || anyFilterActive)}
+          >
+            <Filter className="h-4 w-4" strokeWidth={2.25} />
+          </button>
+        </div>
 
-      <div className="mt-3 flex items-center gap-2 overflow-x-auto pb-0.5">
-        <button
-          type="button"
-          onClick={() => onChipChange('all')}
-          aria-pressed={chip === 'all'}
-          className={`shrink-0 rounded-full px-3.5 py-1.5 text-[12px] font-bold transition ${
-            chip === 'all'
-              ? 'bg-gradient-to-br from-whatsapp-500 to-whatsapp-600 text-white shadow-[0_2px_8px_rgba(37,211,102,0.35)]'
-              : 'bg-theme-subtle text-theme-secondary hover:text-theme-fg'
-          }`}
-        >
-          All
-        </button>
-        <button
-          type="button"
-          onClick={() => onChipChange('unread')}
-          aria-pressed={chip === 'unread'}
-          className={`shrink-0 rounded-full px-3.5 py-1.5 text-[12px] font-bold transition ${
-            chip === 'unread'
-              ? 'bg-gradient-to-br from-whatsapp-500 to-whatsapp-600 text-white shadow-[0_2px_8px_rgba(37,211,102,0.35)]'
-              : 'bg-theme-subtle text-theme-secondary hover:text-theme-fg'
-          }`}
-        >
-          Unread{unreadTotal > 0 ? ` ${unreadTotal}` : ''}
-        </button>
-        <button
-          type="button"
-          onClick={() => onChipChange('favourites')}
-          aria-pressed={chip === 'favourites'}
-          className={`shrink-0 rounded-full px-3.5 py-1.5 text-[12px] font-bold transition ${
-            chip === 'favourites'
-              ? 'bg-gradient-to-br from-whatsapp-500 to-whatsapp-600 text-white shadow-[0_2px_8px_rgba(37,211,102,0.35)]'
-              : 'bg-theme-subtle text-theme-secondary hover:text-theme-fg'
-          }`}
-        >
-          Favourites
-        </button>
-        <button
-          type="button"
-          onClick={() => onChipChange('sla')}
-          aria-pressed={chip === 'sla'}
-          title="Conversations past their first-response SLA"
-          className={`shrink-0 rounded-full px-3.5 py-1.5 text-[12px] font-bold transition ${
-            chip === 'sla'
-              ? 'bg-gradient-to-br from-red-500 to-rose-600 text-white shadow-[0_2px_8px_rgba(239,68,68,0.35)]'
-              : 'bg-theme-subtle text-theme-secondary hover:text-theme-fg'
-          }`}
-        >
-          SLA
-        </button>
-        <button
-          type="button"
-          onClick={() => setFiltersOpen((v) => !v)}
-          title="Add a filter"
-          aria-label="Add a filter"
-          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition ${
-            advancedActive
-              ? 'border-whatsapp-500/50 text-whatsapp-600'
-              : 'border-theme-border text-theme-muted hover:border-whatsapp-500/40 hover:text-whatsapp-600'
-          }`}
-        >
-          <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
-        </button>
+        {/* Row 3 — status / agents / extra (compact closed controls; menus stay wide via portal) */}
+        {filtersRowOpen && (
+          <div className="mt-2.5 grid grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)_auto] items-center gap-2 overflow-x-hidden">
+            <InboxSelect
+              variant="filter"
+              value={statusFilter}
+              placeholder="All status"
+              isSearchable={false}
+              options={statusOptions}
+              ariaLabel="Filter by chat status"
+              className="min-w-0"
+              menuMinWidth={168}
+              onChange={(e) => onStatusFilterChange(e.target.value)}
+            />
+            <InboxSelect
+              variant="filter"
+              value={agentFilter}
+              placeholder="All agents"
+              isSearchable={agentOptionsSearchable}
+              options={agentOptions}
+              ariaLabel="Filter by assigned agent"
+              className="min-w-0"
+              menuMinWidth={220}
+              onChange={(e) => onAgentFilterChange(e.target.value)}
+            />
+            <div className="relative shrink-0" ref={extraRef}>
+              <button
+                type="button"
+                onClick={() => setExtraOpen((v) => !v)}
+                aria-expanded={extraOpen}
+                aria-label="Extra filters"
+                title="Extra filters"
+                data-testid="inbox-extra-filters"
+                className={squareBtn(extraOpen || extraActive)}
+              >
+                <SlidersHorizontal className="h-4 w-4" strokeWidth={2.25} />
+              </button>
+              {extraOpen && (
+                <div className="absolute right-0 top-full z-30 mt-2 w-[220px] space-y-1 rounded-2xl border border-theme-border bg-theme-surface p-2 shadow-panel">
+                  <p className="px-2 pb-1 pt-1 text-[10px] font-bold uppercase tracking-wide text-theme-muted">
+                    Extra filters
+                  </p>
+                  <ExtraToggle
+                    active={chip === 'unread'}
+                    icon={CircleDot}
+                    label="Unread only"
+                    onClick={() => onChipChange(chip === 'unread' ? 'all' : 'unread')}
+                  />
+                  <ExtraToggle
+                    active={chip === 'favourites'}
+                    icon={Star}
+                    label="Favourites"
+                    onClick={() => onChipChange(chip === 'favourites' ? 'all' : 'favourites')}
+                  />
+                  <ExtraToggle
+                    active={slaFilter === 'breached'}
+                    icon={Timer}
+                    label="SLA breached"
+                    onClick={() =>
+                      onSlaFilterChange(slaFilter === 'breached' ? '' : 'breached')
+                    }
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
+  );
+}
+
+/** Compact inbound signal next to the Inbox title — single dot, no chrome text. */
+function InboundStatusDot({
+  isConnected,
+  numberLoading,
+  inboundHealth,
+}: {
+  isConnected: boolean;
+  numberLoading: boolean;
+  inboundHealth: InboundHealth;
+}) {
+  type Tone = 'green' | 'pending' | 'red';
+  let tone: Tone = 'pending';
+  let label = 'WhatsApp inbound status unknown';
+
+  // Pending until number + health are known — never flash red/"error" on first paint.
+  if (numberLoading || inboundHealth.state === 'loading' || inboundHealth.state === 'unknown') {
+    tone = 'pending';
+    label =
+      numberLoading || inboundHealth.state === 'loading'
+        ? 'Checking WhatsApp inbound…'
+        : 'WhatsApp inbound status unknown';
+  } else if (!isConnected || inboundHealth.state === 'unhealthy') {
+    tone = 'red';
+    label =
+      inboundHealth.state === 'unhealthy'
+        ? inboundHealth.reason || 'WhatsApp inbound disconnected'
+        : 'WhatsApp not connected';
+  } else if (inboundHealth.state === 'ok') {
+    tone = 'green';
+    label = 'WhatsApp inbound connected';
+  }
+
+  const colorClass =
+    tone === 'green'
+      ? 'bg-emerald-500'
+      : tone === 'red'
+        ? 'bg-red-500'
+        : 'bg-neutral-300 dark:bg-neutral-600';
+
+  return (
+    <span
+      className="relative inline-flex h-2 w-2 shrink-0"
+      title={label}
+      aria-label={label}
+      data-testid="inbound-health-pill"
+      role="status"
+    >
+      {tone === 'green' && (
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-45 motion-reduce:animate-none" />
+      )}
+      <span className={`relative inline-flex h-2 w-2 rounded-full ${colorClass}`} />
+    </span>
+  );
+}
+
+function ExtraToggle({
+  active,
+  icon: Icon,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  icon: typeof Star;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[13px] font-semibold transition ${FOCUS_RING_CLASS} ${
+        active
+          ? 'bg-whatsapp-500/10 text-whatsapp-800 dark:text-whatsapp-300'
+          : 'text-theme-fg hover:bg-theme-subtle'
+      }`}
+    >
+      <Icon
+        className={`h-3.5 w-3.5 ${active ? 'text-whatsapp-600' : 'text-theme-muted'}`}
+        strokeWidth={2.25}
+      />
+      {label}
+      {active && (
+        <span className="ml-auto text-[10px] font-bold uppercase tracking-wide text-whatsapp-600">
+          On
+        </span>
+      )}
+    </button>
   );
 }

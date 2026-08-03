@@ -1,8 +1,19 @@
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { createPortal } from 'react-dom';
 import { AlarmClockCheck, BellOff, CalendarClock, Clock } from 'lucide-react';
+import { FOCUS_RING_CLASS, useAutoFocus, useFocusTrap } from '../../hooks/inboxA11y';
+import { computeFixedPopoverPosition, type PopoverCoords } from './inboxPopoverPosition';
 
 interface SnoozePopoverProps {
   snoozedUntil?: string | null;
+  /**
+   * Anchor element for fixed portal positioning (ChatHeader / QuickActions / bulk bar).
+   * Optional: when omitted the popover stays unpositioned (invisible) until a ref is provided.
+   * Accepts button/div refs via `HTMLElement | null` for React useRef covariance.
+   */
+  anchorRef?: RefObject<HTMLElement | null>;
+  /** Preferred open direction; flips when near viewport edges. Default `below`. */
+  prefer?: 'above' | 'below';
   onSnooze: (untilIso: string, label: string) => void;
   onUnsnooze: () => void;
   onClose: () => void;
@@ -29,6 +40,8 @@ const PRESETS: Preset[] = [
   },
 ];
 
+const PANEL_WIDTH = 240;
+
 function formatUntil(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleString([], {
@@ -42,12 +55,49 @@ function formatUntil(iso: string): string {
 /** Snooze duration picker: 1h / 4h / tomorrow 9 AM / custom, plus Unsnooze when already snoozed. */
 export default function SnoozePopover({
   snoozedUntil,
+  anchorRef,
+  prefer = 'below',
   onSnooze,
   onUnsnooze,
   onClose,
 }: SnoozePopoverProps) {
   const [customValue, setCustomValue] = useState('');
+  const [coords, setCoords] = useState<PopoverCoords | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const customInputRef = useRef<HTMLInputElement>(null);
   const isSnoozed = Boolean(snoozedUntil && new Date(snoozedUntil).getTime() > Date.now());
+
+  useFocusTrap({ ref: containerRef, active: true, onEscape: onClose });
+  // Don't autofocus on mount — let user browse presets. Only auto-focus the custom
+  // date field once they tab into the "Custom" group.
+  useAutoFocus(customInputRef, false);
+
+  useLayoutEffect(() => {
+    if (!anchorRef?.current) {
+      setCoords(null);
+      return;
+    }
+
+    const place = () => {
+      const anchor = anchorRef.current;
+      if (!anchor) return;
+      const rect = anchor.getBoundingClientRect();
+      const height = containerRef.current?.offsetHeight ?? 260;
+      setCoords(
+        computeFixedPopoverPosition(rect, { width: PANEL_WIDTH, height }, { prefer })
+      );
+    };
+
+    place();
+    const raf = requestAnimationFrame(place);
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [anchorRef, prefer, isSnoozed, customValue]);
 
   const pick = (preset: Preset) => {
     onSnooze(preset.resolve().toISOString(), preset.label);
@@ -62,15 +112,28 @@ export default function SnoozePopover({
     onClose();
   };
 
-  return (
+  return createPortal(
     <>
       <button
         type="button"
         aria-label="Close snooze picker"
-        className="fixed inset-0 z-30 cursor-default"
+        className="fixed inset-0 z-[70] cursor-default"
         onClick={onClose}
       />
-      <div className="absolute right-0 top-full z-40 mt-1.5 w-[240px] overflow-hidden rounded-xl border border-theme-border bg-theme-surface py-1.5 shadow-panel">
+      <div
+        ref={containerRef}
+        role="dialog"
+        aria-label="Snooze conversation"
+        tabIndex={-1}
+        style={
+          coords
+            ? { top: coords.top, left: coords.left, width: PANEL_WIDTH }
+            : undefined
+        }
+        className={`inbox-modal-enter fixed z-[80] overflow-hidden rounded-xl border border-theme-border bg-white/90 py-1.5 shadow-lg backdrop-blur-md focus:outline-none motion-reduce:animate-none dark:bg-neutral-900/90 ${
+          coords ? 'visible' : 'invisible'
+        }`}
+      >
         <p className="px-3 pb-1.5 pt-1 text-[10px] font-bold uppercase tracking-wide text-theme-muted">
           Snooze until
         </p>
@@ -82,7 +145,7 @@ export default function SnoozePopover({
               onUnsnooze();
               onClose();
             }}
-            className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] font-semibold text-indigo-700 transition hover:bg-theme-subtle dark:text-indigo-300"
+            className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] font-semibold text-indigo-700 transition hover:bg-theme-subtle dark:text-indigo-300 ${FOCUS_RING_CLASS}`}
           >
             <BellOff className="h-4 w-4 shrink-0" />
             <span className="min-w-0">
@@ -99,7 +162,7 @@ export default function SnoozePopover({
             key={preset.id}
             type="button"
             onClick={() => pick(preset)}
-            className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] text-theme-fg transition hover:bg-theme-subtle"
+            className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] text-theme-fg transition hover:bg-theme-subtle ${FOCUS_RING_CLASS}`}
           >
             <Clock className="h-4 w-4 shrink-0 text-theme-muted" />
             {preset.label}
@@ -113,23 +176,26 @@ export default function SnoozePopover({
           </label>
           <div className="mt-1.5 flex items-center gap-1.5">
             <input
+              ref={customInputRef}
               type="datetime-local"
               value={customValue}
               onChange={(e) => setCustomValue(e.target.value)}
-              className="min-w-0 flex-1 rounded-lg border border-theme-border bg-theme-surface px-2 py-1.5 text-[12px] text-theme-fg focus:border-whatsapp-500/50 focus:outline-none"
+              aria-label="Custom snooze time"
+              className={`min-w-0 flex-1 rounded-lg border border-theme-border bg-theme-surface/80 px-2 py-1.5 text-[12px] text-theme-fg focus:border-whatsapp-500/50 focus:outline-none ${FOCUS_RING_CLASS}`}
             />
             <button
               type="button"
               disabled={!customValue}
               onClick={submitCustom}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-white transition hover:bg-indigo-700 disabled:opacity-40"
               aria-label="Snooze until custom time"
+              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-white transition hover:bg-indigo-700 disabled:opacity-40 ${FOCUS_RING_CLASS}`}
             >
               <AlarmClockCheck className="h-4 w-4" strokeWidth={2.25} />
             </button>
           </div>
         </div>
       </div>
-    </>
+    </>,
+    document.body
   );
 }

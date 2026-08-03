@@ -72,6 +72,9 @@ interface DeliverMessageInput {
   };
   mediaUrl?: string;
   mediaCaption?: string;
+  contextMessageId?: string;
+  /** When true, Meta treats AUDIO as a WhatsApp voice note. */
+  voiceNote?: boolean;
 }
 
 export async function deliverOutboundMessage(input: DeliverMessageInput) {
@@ -80,6 +83,9 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
 
   try {
     let result;
+    const context = input.contextMessageId
+      ? { context: { message_id: input.contextMessageId } }
+      : {};
     if (input.type === 'TEMPLATE' && input.templateName) {
       let components: unknown[] = [];
       if (input.templateParams) {
@@ -110,31 +116,38 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
       result = await MetaWhatsAppService.sendMessage(
         input.phoneNumberId,
         accessToken,
-        buildInteractivePayload(phone, interactiveOpts)
+        { ...buildInteractivePayload(phone, interactiveOpts), ...context }
       );
     } else if (input.type === 'IMAGE' && input.mediaUrl) {
       result = await MetaWhatsAppService.sendMessage(input.phoneNumberId, accessToken, {
         to: phone,
         type: 'image',
         image: { link: input.mediaUrl, caption: input.mediaCaption || input.content },
+        ...context,
       });
     } else if (input.type === 'DOCUMENT' && input.mediaUrl) {
       result = await MetaWhatsAppService.sendMessage(input.phoneNumberId, accessToken, {
         to: phone,
         type: 'document',
         document: { link: input.mediaUrl, caption: input.mediaCaption || input.content },
+        ...context,
       });
     } else if (input.type === 'VIDEO' && input.mediaUrl) {
       result = await MetaWhatsAppService.sendMessage(input.phoneNumberId, accessToken, {
         to: phone,
         type: 'video',
         video: { link: input.mediaUrl, caption: input.mediaCaption || input.content },
+        ...context,
       });
     } else if (input.type === 'AUDIO' && input.mediaUrl) {
       result = await MetaWhatsAppService.sendMessage(input.phoneNumberId, accessToken, {
         to: phone,
         type: 'audio',
-        audio: { link: input.mediaUrl },
+        audio: {
+          link: input.mediaUrl,
+          ...(input.voiceNote ? { voice: true } : {}),
+        },
+        ...context,
       });
     } else if (input.type === 'LOCATION' && input.location) {
       result = await MetaWhatsAppService.sendMessage(input.phoneNumberId, accessToken, {
@@ -158,6 +171,7 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
       result = await MetaWhatsAppService.sendMessage(input.phoneNumberId, accessToken, {
         to: phone,
         type: 'interactive',
+        ...context,
         interactive: {
           type: 'flow',
           body: { text: input.waFlow.body || 'Please complete the form' },
@@ -181,6 +195,7 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
         to: phone,
         type: 'text',
         text: { body: input.content },
+        ...context,
       });
     }
 

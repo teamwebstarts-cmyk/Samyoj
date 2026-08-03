@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Download, FileJson, FileText, Loader2 } from 'lucide-react';
 import InboxModal from './InboxModal';
 import { inboxApi } from '../../services/api';
 import { toastError, toastSuccess } from '../../utils/toast';
+import { FOCUS_RING_CLASS, useAutoFocus } from '../../hooks/inboxA11y';
 
 interface ExportChatDialogProps {
   open: boolean;
@@ -28,6 +29,12 @@ export default function ExportChatDialog({
 }: ExportChatDialogProps) {
   const [format, setFormat] = useState<ExportFormat>('txt');
   const [exporting, setExporting] = useState(false);
+  const firstFormatRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (open) setFormat('txt');
+  }, [open]);
+  // Auto-focus the first format option (txt) when the dialog opens.
+  useAutoFocus(firstFormatRef, open);
 
   const handleExport = async () => {
     if (exporting) return;
@@ -88,13 +95,14 @@ export default function ExportChatDialog({
       iconClassName="bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300"
     >
       <div className="space-y-2">
-        {options.map((option) => (
+        {options.map((option, idx) => (
           <button
             key={option.value}
+            ref={idx === 0 ? firstFormatRef : null}
             type="button"
             onClick={() => setFormat(option.value)}
             aria-pressed={format === option.value}
-            className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition ${
+            className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition ${FOCUS_RING_CLASS} ${
               format === option.value
                 ? 'border-sky-500/60 bg-sky-50/70 dark:bg-sky-950/30'
                 : 'border-theme-border hover:bg-theme-subtle'
@@ -117,7 +125,7 @@ export default function ExportChatDialog({
         type="button"
         onClick={() => void handleExport()}
         disabled={exporting}
-        className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-sky-600 px-3 py-2.5 text-[13px] font-bold text-white transition hover:bg-sky-700 disabled:opacity-60"
+        className={`mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-sky-600 px-3 py-2.5 text-[13px] font-bold text-white transition hover:bg-sky-700 disabled:opacity-60 ${FOCUS_RING_CLASS}`}
       >
         {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
         {exporting ? 'Preparing…' : 'Download'}

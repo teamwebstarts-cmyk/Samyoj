@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Bot,
-  Check,
   Plus,
   SlidersHorizontal,
   StickyNote,
@@ -17,6 +16,7 @@ import ProfileCard from './details/ProfileCard';
 import QuickActions from './details/QuickActions';
 import AutomationsSection from './details/AutomationsSection';
 import StatsRow from './details/StatsRow';
+import AssignAgentPopover from './AssignAgentPopover';
 import { contactApi, inboxApi, labelsApi } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import type {
@@ -52,6 +52,8 @@ interface InboxDetailsPanelProps {
   overlayOpen?: boolean;
   overlaySection?: PanelSection;
   onOverlayClose?: () => void;
+  /** Optional explicit width (px) for the lg+ side-rail layout (R4). */
+  panelWidth?: number;
 }
 
 function SectionHeader({
@@ -92,6 +94,7 @@ export default function InboxDetailsPanel({
   overlayOpen = false,
   overlaySection,
   onOverlayClose,
+  panelWidth,
 }: InboxDetailsPanelProps) {
   const conversationId = conversation.id;
   const labels = conversation.labels ?? [];
@@ -270,49 +273,16 @@ export default function InboxDetailsPanel({
         <div data-section="profile">
           <ProfileCard contact={contact} onAssignAgent={toggleAssignList} />
           {assignListOpen && (
-            <div className="mx-4 mb-4 overflow-hidden rounded-xl border border-theme-border">
-              {currentUserId && agents.some((a) => a.id === currentUserId) && (
-                <button
-                  type="button"
-                  disabled={assigning}
-                  onClick={() => onAssign(currentUserId)}
-                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-[12.5px] font-semibold text-theme-fg transition hover:bg-theme-subtle disabled:opacity-50"
-                >
-                  Assign to me
-                  {conversation.assignedAgent?.id === currentUserId && (
-                    <Check className="ml-auto h-3.5 w-3.5 text-whatsapp-600" />
-                  )}
-                </button>
-              )}
-              {agents
-                .filter((a) => a.id !== currentUserId)
-                .map((agent) => (
-                  <button
-                    key={agent.id}
-                    type="button"
-                    disabled={assigning}
-                    onClick={() => onAssign(agent.id)}
-                    className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-[12.5px] text-theme-fg transition hover:bg-theme-subtle disabled:opacity-50"
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate font-semibold">{agent.name}</span>
-                      <span className="block truncate text-[10.5px] text-theme-muted">
-                        {agent.email}
-                      </span>
-                    </span>
-                    {conversation.assignedAgent?.id === agent.id && (
-                      <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-whatsapp-600" />
-                    )}
-                  </button>
-                ))}
-              <button
-                type="button"
-                disabled={assigning || !conversation.assignedAgent}
-                onClick={() => onAssign(null)}
-                className="flex w-full items-center gap-2 border-t border-theme-border/60 px-3 py-2.5 text-left text-[12.5px] font-semibold text-theme-secondary transition hover:bg-theme-subtle disabled:opacity-50"
-              >
-                Unassign
-              </button>
+            <div className="relative mx-4 mb-4">
+              <AssignAgentPopover
+                agents={agents}
+                currentUserId={currentUserId}
+                selectedAgentId={conversation.assignedAgent?.id}
+                disabled={assigning}
+                placement="inline"
+                onSelect={(agentId) => onAssign(agentId)}
+                onClose={() => setAssignListOpen(false)}
+              />
             </div>
           )}
           <StatsRow conversationId={conversationId} />
@@ -585,7 +555,7 @@ export default function InboxDetailsPanel({
 
   if (!panelOpen) {
     return (
-      <aside className="hidden w-11 shrink-0 flex-col items-center gap-1 border-l border-neutral-100 bg-white/80 py-3 lg:flex dark:border-neutral-800/80 dark:bg-neutral-950/80">
+      <aside className="hidden w-11 shrink-0 flex-col items-center gap-1 border-l border-neutral-100 bg-white/80 py-3 md:flex lg:flex dark:border-neutral-800/80 dark:bg-neutral-950/80">
         <button
           type="button"
           onClick={() => openPanel('profile')}
@@ -649,7 +619,10 @@ export default function InboxDetailsPanel({
   }
 
   return (
-    <aside className="hidden w-80 shrink-0 flex-col border-l border-neutral-100 bg-white/95 shadow-[-4px_0_24px_rgba(15,23,42,0.04)] lg:flex dark:border-neutral-800/80 dark:bg-neutral-950/95">
+    <aside
+      className="hidden shrink-0 flex-col border-l border-neutral-100 bg-white/95 shadow-[-4px_0_24px_rgba(15,23,42,0.04)] lg:flex dark:border-neutral-800/80 dark:bg-neutral-950/95"
+      style={panelWidth ? { width: panelWidth } : undefined}
+    >
       {panelBody}
     </aside>
   );

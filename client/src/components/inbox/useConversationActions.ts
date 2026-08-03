@@ -2,6 +2,7 @@ import { useState, type Dispatch, type SetStateAction } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { callingApi, inboxApi } from '../../services/api';
 import { toastError, toastSuccess } from '../../utils/toast';
+import { emitChatNotice } from './chatNoticeBus';
 import type { Conversation } from '../../types';
 
 interface ActionsDeps {
@@ -81,7 +82,19 @@ export function useConversationActions({
         botHandoffAt: updated.botHandoffAt,
         activeBot: updated.activeBot,
       } as Conversation);
-      toastSuccess(turningOn ? 'AI bot resumed' : 'AI bot paused');
+      const flowId = updated.activeFlow?.flowId || target.activeFlow?.flowId;
+      emitChatNotice(targetId, {
+        kind: turningOn ? 'bot-on' : 'bot-off',
+        message: turningOn ? 'AI bot is on' : 'AI bot is off',
+        icon: 'bot',
+        tone: turningOn ? 'lavender' : 'amber',
+        ...(turningOn && flowId
+          ? {
+              actionLabel: 'View flow',
+              onAction: () => navigate(`/automations/flows/${flowId}`),
+            }
+          : {}),
+      });
     } catch (err: unknown) {
       toastError(extractError(err, 'Failed to update bot'));
     } finally {
@@ -138,6 +151,12 @@ export function useConversationActions({
     if (!target || !targetId) return;
     const next = !target.isFavorite;
     upsertConversation({ id: targetId, isFavorite: next } as Conversation);
+    emitChatNotice(targetId, {
+      kind: next ? 'favorite-on' : 'favorite-off',
+      message: next ? 'Added to favourites' : 'Removed from favourites',
+      icon: 'star',
+      tone: 'amber',
+    });
     try {
       await inboxApi.favorite(targetId, next);
     } catch (err: unknown) {

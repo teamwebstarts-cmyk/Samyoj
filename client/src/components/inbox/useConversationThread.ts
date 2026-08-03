@@ -106,7 +106,10 @@ export function useConversationThread({ setConversations, refreshUnread }: Threa
         const msgs = (msgRes.data.data.messages ?? []) as Message[];
         setMessages(msgs);
         setServiceWindow(msgRes.data.data.serviceWindow ?? undefined);
-        setHasEarlier(msgs.length >= MESSAGE_PAGE_LIMIT);
+        const hasMoreFlag = msgRes.data.data.hasMore;
+        setHasEarlier(
+          typeof hasMoreFlag === 'boolean' ? hasMoreFlag : msgs.length >= MESSAGE_PAGE_LIMIT
+        );
         const full = convRes.data.data as Conversation;
         setSelected((prev) => (prev?.id === conv.id ? { ...prev, ...full } : prev));
       } catch (err) {
@@ -132,7 +135,10 @@ export function useConversationThread({ setConversations, refreshUnread }: Threa
       });
       const older = (data.data.messages ?? []) as Message[];
       setMessages((prev) => [...older.filter((o) => !prev.some((m) => m.id === o.id)), ...prev]);
-      setHasEarlier(older.length >= MESSAGE_PAGE_LIMIT);
+      const hasMoreFlag = data.data.hasMore;
+      setHasEarlier(
+        typeof hasMoreFlag === 'boolean' ? hasMoreFlag : older.length >= MESSAGE_PAGE_LIMIT
+      );
     } catch {
       toastError('Could not load earlier messages');
     } finally {

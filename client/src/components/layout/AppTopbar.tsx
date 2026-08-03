@@ -9,6 +9,7 @@ import {
 import { Link, useLocation } from 'react-router-dom';
 import { getPageMeta } from '../../config/pageMeta';
 import { useAuth } from '../../contexts/AuthContext';
+import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
 import type { OrgRole } from '../../types';
 import GlobalSearch, { useGlobalSearchShortcut } from './GlobalSearch';
 import NotificationCenter from './NotificationCenter';
@@ -52,6 +53,7 @@ function useIsApplePlatform() {
 export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout }: AppTopbarProps) {
   const { pathname } = useLocation();
   const { orgRole } = useAuth();
+  const { hasConnectedNumber, loading: numbersLoading } = useWhatsAppNumber();
   const { title, description } = getPageMeta(pathname);
   const initials = nameInitials(userName);
   const roleText = roleLabel(orgRole);
@@ -59,6 +61,9 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const isApple = useIsApplePlatform();
+  // Live = WhatsApp number linked (after numbers finish loading). Not a socket
+  // heartbeat — topbar has no inbox socket; match NumberSwitcher / Inbox header.
+  const showLive = !numbersLoading && hasConnectedNumber;
 
   useGlobalSearchShortcut(() => setSearchOpen(true));
 
@@ -105,12 +110,17 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
               <h1 className="truncate text-[18px] font-bold leading-none tracking-tight text-neutral-900 sm:text-[20px] dark:text-theme-fg">
                 {title}
               </h1>
-              <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.06em] text-emerald-700 ring-1 ring-emerald-100/90 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20">
-                Live
-              </span>
+              {showLive ? (
+                <span
+                  className="inline-flex h-5 items-center rounded-full bg-emerald-50 px-2 text-[10px] font-bold uppercase tracking-[0.06em] text-emerald-700 ring-1 ring-emerald-100/90 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20 motion-reduce:animate-none"
+                  title="WhatsApp connected — live updates available"
+                >
+                  Live
+                </span>
+              ) : null}
             </div>
             {subtitle ? (
-              <p className="mt-1 truncate text-[12px] font-medium leading-snug text-neutral-500 sm:text-[13px] dark:text-theme-secondary">
+              <p className="mt-1 truncate text-[12px] font-semibold leading-snug text-neutral-700 sm:text-[13px] dark:text-neutral-300">
                 {subtitle}
               </p>
             ) : null}

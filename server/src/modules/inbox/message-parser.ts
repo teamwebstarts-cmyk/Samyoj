@@ -1,7 +1,9 @@
 import type { MessageMediaMetadata } from '../media/download.service';
 
-interface ParsedInboundMessage {
+export interface ParsedInboundMessage {
   content: string;
+  replyToMetaId?: string;
+  reaction?: { messageId: string; emoji: string };
   buttonReplyId?: string;
   waFlowResponse?: Record<string, unknown>;
   referral?: Record<string, unknown>;
@@ -10,11 +12,21 @@ interface ParsedInboundMessage {
     productItems: Array<{ product_retailer_id: string; quantity: number; item_price?: number; currency?: string }>;
     text?: string;
   };
-  metadata?: MessageMediaMetadata;
+  metadata?: MessageMediaMetadata & { isSticker?: boolean };
 }
 
-export function parseInboundMessage(msg: Record<string, unknown>): ParsedInboundMessage {
+function parseInboundContent(msg: Record<string, unknown>): ParsedInboundMessage {
   const msgType = (msg.type as string | undefined)?.toLowerCase() || 'text';
+
+  if (msgType === 'reaction') {
+    const reaction = msg.reaction as { message_id?: string; emoji?: string } | undefined;
+    return {
+      content: reaction?.emoji || '',
+      ...(reaction?.message_id
+        ? { reaction: { messageId: reaction.message_id, emoji: reaction.emoji || '' } }
+        : {}),
+    };
+  }
 
   if (msgType === 'text') {
     const textBody = (msg.text as { body?: string } | undefined)?.body || '';
@@ -133,9 +145,16 @@ export function parseInboundMessage(msg: Record<string, unknown>): ParsedInbound
         mimeType: media.mime_type,
         filename,
         caption: caption || undefined,
+        ...(msgType === 'sticker' ? { isSticker: true } : {}),
       },
     };
   }
 
   return { content: `[${msgType}]` };
+}
+
+export function parseInboundMessage(msg: Record<string, unknown>): ParsedInboundMessage {
+  const parsed = parseInboundContent(msg);
+  const replyToMetaId = (msg.context as { id?: string } | undefined)?.id;
+  return replyToMetaId ? { ...parsed, replyToMetaId } : parsed;
 }

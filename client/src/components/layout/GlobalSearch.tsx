@@ -15,12 +15,13 @@ import {
   Users,
   Search,
   X,
+  Zap,
   type LucideIcon,
 } from 'lucide-react';
 import { contactApi, commerceApi, leadApi, ticketApi } from '../../services/api';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 
-type ResultType = 'contact' | 'ticket' | 'lead' | 'order' | 'page';
+type ResultType = 'contact' | 'ticket' | 'lead' | 'order' | 'page' | 'action';
 
 interface SearchResult {
   id: string;
@@ -28,6 +29,8 @@ interface SearchResult {
   title: string;
   subtitle?: string;
   href: string;
+  /** Optional icon override (for action results). */
+  Icon?: LucideIcon;
 }
 
 interface JumpLink {
@@ -72,6 +75,12 @@ const TYPE_META: Record<
     label: 'Page',
     group: 'Pages',
     accent: 'bg-neutral-100 text-neutral-700 ring-neutral-200 dark:bg-neutral-800 dark:text-neutral-200 dark:ring-neutral-700',
+  },
+  action: {
+    icon: Zap,
+    label: 'Action',
+    group: 'Quick actions',
+    accent: 'bg-indigo-50 text-indigo-700 ring-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-300 dark:ring-indigo-500/20',
   },
 };
 

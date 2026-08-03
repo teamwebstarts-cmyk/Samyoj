@@ -1,6 +1,7 @@
 import { Check, Clock, GitBranch, LifeBuoy } from 'lucide-react';
 import ContactAvatar from './ContactAvatar';
 import { formatListTime, getMessagePreview } from './inboxUtils';
+import { FOCUS_RING_CLASS } from '../../hooks/inboxA11y';
 import type { Conversation } from '../../types';
 
 interface ConversationItemProps {
@@ -12,13 +13,33 @@ interface ConversationItemProps {
   selectable?: boolean;
   checked?: boolean;
   onToggleSelect?: () => void;
+  currentUserId?: string;
 }
 
-const statusDot: Record<string, string> = {
-  OPEN: 'bg-emerald-500',
-  PENDING: 'bg-amber-500',
-  CLOSED: 'bg-neutral-400',
-  SNOOZED: 'bg-indigo-500',
+const STATUS_META: Record<
+  string,
+  { label: string; pill: string }
+> = {
+  OPEN: {
+    label: 'Open',
+    pill:
+      'bg-emerald-500/15 text-emerald-800 ring-emerald-500/25 backdrop-blur-sm dark:bg-emerald-400/15 dark:text-emerald-200 dark:ring-emerald-400/30',
+  },
+  PENDING: {
+    label: 'Pending',
+    pill:
+      'bg-amber-500/15 text-amber-800 ring-amber-500/30 backdrop-blur-sm dark:bg-amber-400/15 dark:text-amber-200 dark:ring-amber-400/35',
+  },
+  CLOSED: {
+    label: 'Closed',
+    pill:
+      'bg-neutral-500/10 text-neutral-700 ring-neutral-400/25 backdrop-blur-sm dark:bg-neutral-400/10 dark:text-neutral-300 dark:ring-neutral-500/30',
+  },
+  SNOOZED: {
+    label: 'Snoozed',
+    pill:
+      'bg-indigo-500/15 text-indigo-800 ring-indigo-500/30 backdrop-blur-sm dark:bg-blue-400/15 dark:text-indigo-200 dark:ring-indigo-400/35',
+  },
 };
 
 function slaBadge(conversation: Conversation) {
@@ -55,54 +76,77 @@ export default function ConversationItem({
   selectable = false,
   checked = false,
   onToggleSelect,
+  currentUserId,
 }: ConversationItemProps) {
   const { contact, unreadCount, lastMessageAt, messages, assignedAgent, activeFlow, status } =
     conversation;
   const preview = getMessagePreview(messages?.[0]);
   const hasUnread = unreadCount > 0;
-  const dotColor = statusDot[status] || 'bg-neutral-300';
+  const meta = STATUS_META[status] || STATUS_META.CLOSED;
+
+  const agentLabel = assignedAgent
+    ? currentUserId && assignedAgent.id === currentUserId
+      ? 'You'
+      : assignedAgent.name
+    : null;
 
   return (
     <button
       type="button"
       onClick={onSelect}
       onContextMenu={onContextMenu}
-      className={`group relative flex w-full items-center gap-3 px-4 py-3 text-left transition-colors duration-150 ${
+      aria-current={selected ? 'true' : undefined}
+      className={`group relative flex w-full items-start gap-3 rounded-2xl border px-3 py-3 text-left transition-[background-color,box-shadow,border-color] duration-150 active:scale-[0.995] motion-reduce:active:scale-100 sm:px-4 ${FOCUS_RING_CLASS} ${
         checked
-          ? 'bg-whatsapp-500/10 dark:bg-whatsapp-500/15'
+          ? 'border-transparent bg-whatsapp-500/10 dark:bg-whatsapp-500/15'
           : selected
-            ? 'bg-emerald-100/70 dark:bg-emerald-950/40'
-            : 'bg-white hover:bg-neutral-50 dark:bg-neutral-950 dark:hover:bg-neutral-900/60'
+            ? 'border-emerald-200/70 bg-emerald-50/80 shadow-[0_2px_14px_rgba(16,185,129,0.12),0_0_0_1px_rgba(255,255,255,0.55)_inset] backdrop-blur-sm dark:border-emerald-500/30 dark:bg-emerald-950/40 dark:shadow-[0_2px_16px_rgba(0,0,0,0.35)]'
+            : 'border-transparent bg-theme-surface hover:bg-neutral-50/80 dark:hover:bg-neutral-900/45'
       }`}
     >
-      <span
-        role="checkbox"
-        aria-checked={checked}
-        aria-label="Select conversation"
-        onClick={(e) => {
-          e.stopPropagation();
-          onToggleSelect?.();
-        }}
-        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition ${
-          checked
-            ? 'border-whatsapp-600 bg-whatsapp-500 text-white opacity-100'
-            : selectable
-              ? 'border-neutral-300 bg-white opacity-100 dark:border-neutral-600 dark:bg-neutral-900'
-              : 'border-neutral-300 bg-white opacity-0 group-hover:opacity-100 dark:border-neutral-600 dark:bg-neutral-900'
-        }`}
-      >
-        {checked && <Check className="h-3 w-3" strokeWidth={3} />}
-      </span>
+      {selectable && (
+        <span
+          role="checkbox"
+          aria-checked={checked}
+          aria-label="Select conversation"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              e.stopPropagation();
+              onToggleSelect?.();
+            }
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleSelect?.();
+          }}
+          className={`mt-2.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition ${FOCUS_RING_CLASS} ${
+            checked
+              ? 'border-whatsapp-600 bg-whatsapp-500 text-white'
+              : 'border-neutral-300 bg-white dark:border-neutral-600 dark:bg-neutral-900'
+          }`}
+        >
+          {checked && <Check className="h-3 w-3" strokeWidth={3} />}
+        </span>
+      )}
 
-      <ContactAvatar name={contact.name} phone={contact.phone} size="sm" shape="circle" />
+      <ContactAvatar
+        name={contact.name}
+        phone={contact.phone}
+        size="sm"
+        shape="circle"
+        presence={
+          status === 'OPEN' || status === 'PENDING' || status === 'CLOSED' || status === 'SNOOZED'
+            ? status
+            : 'CLOSED'
+        }
+        presenceLabel={meta.label}
+      />
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-1.5">
-            <span
-              className={`h-1.5 w-1.5 shrink-0 rounded-full ${dotColor}`}
-              title={status}
-            />
             <span
               className={`truncate text-[14px] leading-tight ${
                 hasUnread ? 'font-bold text-theme-fg' : 'font-semibold text-theme-fg'
@@ -123,15 +167,31 @@ export default function ConversationItem({
             </span>
           )}
         </div>
-        <div className="mt-0.5 flex items-center justify-between gap-2">
-          <p
-            className={`truncate text-[12.5px] leading-snug ${
-              hasUnread ? 'font-semibold text-theme-fg' : 'text-theme-muted'
-            }`}
-          >
-            {preview}
-          </p>
-          <div className="flex shrink-0 items-center gap-1">
+
+        <p
+          className={`mt-0.5 truncate text-[12.5px] leading-snug ${
+            hasUnread ? 'font-medium text-theme-secondary' : 'text-theme-muted'
+          }`}
+        >
+          {preview}
+        </p>
+
+        <div className="mt-1.5 flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
+            <span
+              className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide ring-1 ring-inset ${meta.pill}`}
+            >
+              {meta.label}
+            </span>
+            {agentLabel && (
+              <>
+                <span
+                  className="mx-0.5 h-3 w-px shrink-0 bg-neutral-200/90 dark:bg-neutral-700/90"
+                  aria-hidden
+                />
+                <span className="truncate text-[11px] font-medium text-theme-muted">{agentLabel}</span>
+              </>
+            )}
             {slaBadge(conversation)}
             {hasTicket && (
               <span
@@ -150,19 +210,68 @@ export default function ConversationItem({
                 <span className="truncate">{activeFlow.currentStepLabel || 'Flow'}</span>
               </span>
             )}
-            {assignedAgent && (
-              <span className="hidden max-w-[72px] truncate rounded-md bg-neutral-100/90 px-1.5 py-0.5 text-[10px] font-medium text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400 lg:inline">
-                {assignedAgent.name.split(' ')[0]}
-              </span>
-            )}
-            {hasUnread && (
-              <span className="flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-whatsapp-400 to-whatsapp-600 px-1 text-[10px] font-bold text-white shadow-[0_2px_6px_rgba(37,211,102,0.4)]">
-                {unreadCount > 99 ? '99+' : unreadCount}
-              </span>
-            )}
           </div>
+
+          {hasUnread && (
+            <span className="flex h-[18px] min-w-[18px] shrink-0 items-center justify-center self-end rounded-full bg-gradient-to-br from-whatsapp-400 to-whatsapp-600 px-1 text-[10px] font-bold text-white shadow-[0_2px_6px_rgba(37,211,102,0.4)]">
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </span>
+          )}
         </div>
       </div>
+
+      <ConversationPreviewHover
+        contactName={contact.name}
+        contactPhone={contact.phone}
+        lastMessage={preview}
+        preview={preview}
+        lastMessageAt={lastMessageAt}
+        status={status}
+      />
     </button>
+  );
+}
+
+function useHoverPreviewAllowed() {
+  if (typeof window === 'undefined') return false;
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const isTouch = window.matchMedia('(hover: none)').matches;
+  return !reducedMotion && !isTouch;
+}
+
+function ConversationPreviewHover({
+  contactName,
+  contactPhone,
+  lastMessage,
+  preview,
+  lastMessageAt,
+  status,
+}: {
+  contactName?: string;
+  contactPhone?: string;
+  lastMessage: string;
+  preview: string;
+  lastMessageAt?: string;
+  status: string;
+}) {
+  const allowed = useHoverPreviewAllowed();
+  if (!allowed) return null;
+  const time = lastMessageAt ? new Date(lastMessageAt).toLocaleString() : '';
+  return (
+    <div
+      role="presentation"
+      className="inbox-row-preview pointer-events-none invisible absolute right-3 top-full z-30 mt-1 w-[280px] rounded-xl border border-theme-border bg-theme-surface/95 p-3 text-[12px] text-theme-fg opacity-0 shadow-panel ring-1 ring-black/5 backdrop-blur transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+      data-testid="conversation-preview"
+    >
+      <p className="truncate text-[12.5px] font-bold text-theme-fg">{contactName || contactPhone}</p>
+      {contactName && contactPhone && (
+        <p className="truncate text-[10.5px] font-medium text-theme-muted">{contactPhone}</p>
+      )}
+      <p className="mt-1.5 line-clamp-3 text-[11.5px] text-theme-secondary">{lastMessage || preview}</p>
+      <p className="mt-1.5 flex items-center gap-2 text-[10px] uppercase tracking-wide text-theme-muted">
+        <span>{status}</span>
+        {time && <span>· {time}</span>}
+      </p>
+    </div>
   );
 }

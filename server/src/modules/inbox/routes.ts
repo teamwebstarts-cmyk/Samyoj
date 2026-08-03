@@ -113,7 +113,20 @@ router.get(
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const numberId = req.activeWhatsappNumberId;
-    const { status, search, assignedTo, cursor, page, limit, favorite, sla, unread } = req.query;
+    const {
+      status,
+      search,
+      assignedTo,
+      cursor,
+      page,
+      limit,
+      favorite,
+      sla,
+      unread,
+      unreplied,
+      hasOpenTicket,
+      botActive,
+    } = req.query;
 
     const where: Record<string, unknown> = { organizationId: orgId, ...conversationFilter(numberId) };
     if (unread === 'true') where.unreadCount = { gt: 0 };
@@ -139,6 +152,21 @@ router.get(
         ],
       };
     }
+    if (botActive === 'true') where.botActive = true;
+    if (botActive === 'false') where.botActive = false;
+    if (hasOpenTicket === 'true') {
+      where.contact = {
+        ...((where.contact as Record<string, unknown>) ?? {}),
+        tickets: {
+          some: { status: { notIn: ['RESOLVED', 'CLOSED'] } },
+        },
+      };
+    }
+    // "Unreplied" means the latest message is inbound (no outbound reply yet).
+    // Implemented as a post-filter against the joined latest message so the
+    // query stays compatible with the existing (lastMessageAt desc, id desc)
+    // ordering — see the post-process block below.
+    const wantUnreplied = unreplied === 'true';
 
     // Legacy `page` keeps offset pagination for old clients; otherwise keyset
     // paginate on (lastMessageAt desc, id desc) using the last row id as cursor.
@@ -209,10 +237,21 @@ router.get(
       return { ...rest, activeFlow };
     });
 
+    const filtered = wantUnreplied
+      ? enriched.filter((c) => {
+          const latest = (c as { messages?: Array<{ direction?: string }> }).messages?.[0];
+          return Boolean(latest && latest.direction === 'INBOUND');
+        })
+      : enriched;
+
+    // Recompute total so the filter is honest with the client: if a chip says
+    // "Unreplied", the `total` field reflects the filtered subset.
+    const totalFiltered = wantUnreplied ? filtered.length : total;
+
     sendSuccess(res, {
-      conversations: enriched,
-      nextCursor,
-      total,
+      conversations: filtered,
+      nextCursor: wantUnreplied ? null : nextCursor,
+      total: totalFiltered,
       ...(isLegacyPage ? { page: pageNum } : {}),
     });
   })
@@ -383,6 +422,7 @@ router.post(
         couponCode?: string;
       };
       interactive?: InteractiveMessageOptions;
+      replyToMetaId?: string;
     };
 
     let mediaUrl: string | undefined;
@@ -421,6 +461,7 @@ router.post(
       mediaUrl,
       mediaCaption: sendMetadata.caption,
       interactive: sendMetadata.interactive,
+      contextMessageId: message.type !== 'TEMPLATE' ? sendMetadata.replyToMetaId : undefined,
     });
 
     sendSuccess(res, sentMessage);
@@ -579,6 +620,9 @@ router.get(
     });
     if (!conversation) throw new AppError(404, 'Conversation not found');
 
+    const limitNum = parseInt(limit as string, 10);
+    const take = Math.min(Math.max(Number.isFinite(limitNum) ? limitNum : 50, 1), 100);
+
     let messages = await prisma.message.findMany({
       where: {
         conversationId: id,
@@ -586,8 +630,10 @@ router.get(
         ...(q ? { content: { contains: q as string, mode: 'insensitive' as const } } : {}),
       },
       orderBy: { createdAt: 'desc' },
-      take: parseInt(limit as string),
+      take: take + 1,
     });
+    const hasMore = messages.length > take;
+    if (hasMore) messages = messages.slice(0, take);
 
     const templateNames = new Set<string>();
     for (const msg of messages) {
@@ -637,6 +683,7 @@ router.get(
 
     sendSuccess(res, {
       messages: messages.reverse(),
+      hasMore,
       serviceWindow: {
         open: serviceWindowOpen,
         lastInboundAt: windowOpensAt?.toISOString() ?? null,
@@ -726,6 +773,7 @@ const mediaPayloadSchema = z
     mediaPath: z.string().min(1).optional(),
     mimeType: z.string().min(1),
     filename: z.string().optional(),
+    voice: z.boolean().optional(),
   })
   .refine((m) => Boolean(m.data || m.mediaPath), {
     message: 'Either data or mediaPath is required',
@@ -783,8 +831,15 @@ const sendMessageSchema = z
   .object({
     content: z.string().optional(),
     type: z
-      .enum(['TEXT', 'TEMPLATE', 'IMAGE', 'VIDEO', 'DOCUMENT', 'AUDIO', 'INTERACTIVE'])
+      .enum(['TEXT', 'TEMPLATE', 'IMAGE', 'VIDEO', 'DOCUMENT', 'AUDIO', 'INTERACTIVE', 'REACTION'])
       .default('TEXT'),
+    replyToMessageId: z.string().optional(),
+    reaction: z
+      .object({
+        messageId: z.string().min(1),
+        emoji: z.string().max(16),
+      })
+      .optional(),
     templateName: z.string().optional(),
     templateLanguage: z.string().optional(),
     templateParams: templateParamsSchema,
@@ -814,6 +869,9 @@ const sendMessageSchema = z
           path: ['interactive', 'listSections'],
         });
       }
+    }
+    if (data.type === 'REACTION' && !data.reaction) {
+      ctx.addIssue({ code: 'custom', message: 'Reaction payload required', path: ['reaction'] });
     }
     if (data.type === 'TEXT' && !data.content?.trim()) {
       ctx.addIssue({ code: 'custom', message: 'Message content required', path: ['content'] });
@@ -846,7 +904,7 @@ router.post(
       conversation.cs24hWindowOpensAt
     );
     const isMediaType = ['IMAGE', 'VIDEO', 'DOCUMENT', 'AUDIO'].includes(data.type);
-    if ((data.type === 'TEXT' || data.type === 'INTERACTIVE' || isMediaType) && !isWithin24HourWindow(windowOpensAt)) {
+    if ((data.type === 'TEXT' || data.type === 'INTERACTIVE' || data.type === 'REACTION' || isMediaType) && !isWithin24HourWindow(windowOpensAt)) {
       throw new AppError(
         400,
         '24-hour window expired. Use an approved template message.'
@@ -859,6 +917,65 @@ router.post(
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Invalid interactive message';
         throw new AppError(400, message);
+      }
+    }
+
+    if (data.type === 'REACTION' && data.reaction) {
+      const target = await prisma.message.findFirst({
+        where: { id: data.reaction.messageId, conversationId: conversation.id },
+      });
+      if (!target?.metaMessageId) {
+        throw new AppError(400, 'The selected message cannot be reacted to');
+      }
+
+      const accessToken = MetaWhatsAppService.decryptToken(conversation.whatsappNumber.accessToken);
+      await MetaWhatsAppService.sendMessage(
+        conversation.whatsappNumber.phoneNumberId,
+        accessToken,
+        {
+          to: conversation.contact.phone.replace(/\D/g, ''),
+          type: 'reaction',
+          reaction: { message_id: target.metaMessageId, emoji: data.reaction.emoji },
+        }
+      );
+
+      const targetMetadata = (target.metadata as Record<string, unknown>) || {};
+      const existingReactions = Array.isArray(targetMetadata.reactions)
+        ? (targetMetadata.reactions as Array<Record<string, unknown>>)
+        : [];
+      const updated = await prisma.message.update({
+        where: { id: target.id },
+        data: {
+          metadata: {
+            ...targetMetadata,
+            reactions: [
+              ...existingReactions.filter((reaction) => reaction.from !== 'agent'),
+              { emoji: data.reaction.emoji, from: 'agent' },
+            ],
+          } as Prisma.InputJsonValue,
+        },
+      });
+      emitToOrg(orgId, 'message:reaction', {
+        conversationId: conversation.id,
+        messageId: updated.id,
+        reactions: (updated.metadata as { reactions?: unknown } | null)?.reactions ?? [],
+        metadata: updated.metadata,
+      });
+      sendSuccess(res, updated, 201);
+      return;
+    }
+
+    let replyTarget:
+      | { id: string; metaMessageId: string | null; content: string }
+      | null = null;
+    if (data.replyToMessageId) {
+      replyTarget = await prisma.message.findFirst({
+        where: { id: data.replyToMessageId, conversationId: conversation.id },
+        select: { id: true, metaMessageId: true, content: true },
+      });
+      if (!replyTarget) throw new AppError(404, 'Reply message not found');
+      if (!replyTarget.metaMessageId) {
+        throw new AppError(400, 'The selected message cannot be replied to yet');
       }
     }
 
@@ -894,6 +1011,9 @@ router.post(
           mediaPath: relativePath,
           size: buffer.length,
           caption: mediaCaption,
+          ...(data.media.filename?.startsWith('voice-note-') || data.media.voice
+            ? { isVoice: true }
+            : {}),
         };
       } else if (data.media.data) {
         let buffer: Buffer;
@@ -920,6 +1040,9 @@ router.post(
           mediaPath: stored.mediaPath,
           size: stored.size,
           caption: mediaCaption,
+          ...(data.media.filename?.startsWith('voice-note-') || data.media.voice
+            ? { isVoice: true }
+            : {}),
         };
       } else {
         throw new AppError(400, 'Media payload required');
@@ -967,17 +1090,26 @@ router.post(
       };
     }
 
+    if (replyTarget?.metaMessageId && data.type !== 'TEMPLATE') {
+      messageMetadata = {
+        ...(messageMetadata || {}),
+        replyToMessageId: replyTarget.id,
+        replyToMetaId: replyTarget.metaMessageId,
+        replyPreview: replyTarget.content.slice(0, 160),
+      };
+    }
+
     const message = await prisma.message.create({
       data: {
         conversationId: conversation.id,
         direction: 'OUTBOUND',
-        type: isMediaType
+        type: (isMediaType
           ? data.type
           : data.type === 'TEMPLATE'
             ? 'TEMPLATE'
             : data.type === 'INTERACTIVE'
               ? 'INTERACTIVE'
-              : 'TEXT',
+              : 'TEXT') as 'TEXT' | 'TEMPLATE' | 'IMAGE' | 'VIDEO' | 'DOCUMENT' | 'AUDIO' | 'INTERACTIVE',
         content: messageContent,
         status: 'PENDING',
         metadata: messageMetadata as Prisma.InputJsonValue,
@@ -1006,6 +1138,11 @@ router.post(
       mediaUrl,
       mediaCaption,
       interactive: interactiveOpts,
+      voiceNote: Boolean(
+        (messageMetadata as { isVoice?: boolean } | undefined)?.isVoice
+      ),
+      contextMessageId:
+        data.type !== 'TEMPLATE' ? replyTarget?.metaMessageId || undefined : undefined,
     });
 
     const { dispatchOrgWebhook } = await import('../integrations/dispatch');

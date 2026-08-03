@@ -68,7 +68,20 @@ export function useInboxRealtime({
         void refreshUnread();
         if (openId === payload.conversationId && payload.message) {
           const msg = payload.message;
-          setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === msg.id)) return prev;
+            // Drop matching optimistic rows so socket ack doesn't double-render.
+            const withoutOptimistic = prev.filter((m) => {
+              if (!m.id.startsWith('optimistic-')) return true;
+              if (m.direction !== msg.direction || m.type !== msg.type) return true;
+              const sameContent = (m.content || '') === (msg.content || '');
+              const ageMs = Math.abs(
+                new Date(msg.createdAt).getTime() - new Date(m.createdAt).getTime()
+              );
+              return !(sameContent && ageMs < 60_000);
+            });
+            return [...withoutOptimistic, msg];
+          });
           if (msg.direction === 'INBOUND') {
             markConversationRead(payload.conversationId);
             // Server stays the source of truth for the 24h window — silent refresh.
@@ -86,7 +99,28 @@ export function useInboxRealtime({
 
       if (event === 'message:status' && openId === payload.conversationId) {
         setMessages((prev) =>
-          prev.map((m) => (m.id === payload.messageId ? { ...m, status: payload.status || m.status } : m))
+          prev.map((m) =>
+            m.id === payload.messageId
+              ? { ...m, status: (payload.status || m.status).toUpperCase() }
+              : m
+          )
+        );
+        return;
+      }
+
+      if (event === 'message:reaction' && openId === payload.conversationId && payload.messageId) {
+        const raw = payload as {
+          reactions?: Array<{ emoji: string; from: string }>;
+          metadata?: { reactions?: Array<{ emoji: string; from: string }> };
+        };
+        const reactions = raw.reactions ?? raw.metadata?.reactions;
+        if (!reactions) return;
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === payload.messageId
+              ? { ...m, metadata: { ...m.metadata, reactions } }
+              : m
+          )
         );
         return;
       }

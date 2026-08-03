@@ -36,12 +36,14 @@ interface InboxSelectProps {
   isSearchable?: boolean;
   className?: string;
   ariaLabel?: string;
+  /** Menu portal min-width (px); defaults to control width, can be wider for long labels. */
+  menuMinWidth?: number;
 }
 
 function OptionDot({ color }: { color: string }) {
   return (
     <span
-      className="inline-flex h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-white"
+      className="inline-flex h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-white dark:ring-neutral-900"
       style={{ backgroundColor: color }}
     />
   );
@@ -58,7 +60,7 @@ function OptionAvatar({
   unassigned?: boolean;
   compact?: boolean;
 }) {
-  const sizeClass = compact ? 'h-7 w-7 text-[9px] rounded-lg' : 'h-8 w-8 text-[10px] rounded-xl';
+  const sizeClass = compact ? 'h-6 w-6 text-[9px] rounded-md' : 'h-8 w-8 text-[10px] rounded-xl';
 
   if (unassigned) {
     return (
@@ -88,25 +90,30 @@ function formatOptionLabel(
 
   if (option.dotColor) {
     return (
-      <div className="flex items-center gap-2.5">
+      <div className="flex min-w-0 items-center gap-2" title={option.label}>
         <OptionDot color={option.dotColor} />
-        <span className="text-[13px] font-semibold text-neutral-800">{option.label}</span>
+        <span className="min-w-0 truncate text-[13px] font-semibold text-neutral-800 dark:text-neutral-100">
+          {option.label}
+        </span>
       </div>
     );
   }
 
   if (option.avatarKey || (option.value === '' && option.description)) {
     return (
-      <div className={`flex items-center gap-2.5 ${inMenu ? 'py-0.5' : ''}`}>
+      <div
+        className={`flex min-w-0 items-center gap-2 ${inMenu ? 'py-0.5' : ''}`}
+        title={option.label}
+      >
         <OptionAvatar
           label={option.label}
           avatarKey={option.avatarKey}
           unassigned={!option.value}
           compact={!inMenu}
         />
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1 overflow-hidden">
           <p
-            className={`truncate ${inMenu ? 'text-[13px] font-semibold text-neutral-900' : 'text-[13px] font-semibold text-neutral-800'}`}
+            className={`truncate ${inMenu ? 'text-[13px] font-semibold text-neutral-900 dark:text-neutral-100' : 'text-[13px] font-semibold text-neutral-800 dark:text-neutral-100'}`}
           >
             {option.label}
           </p>
@@ -123,15 +130,24 @@ function formatOptionLabel(
     );
   }
 
-  return <span className="text-[13px] font-semibold text-neutral-800">{option.label}</span>;
+  return (
+    <span
+      className="block min-w-0 truncate text-[13px] font-semibold text-neutral-800 dark:text-neutral-100"
+      title={option.label}
+    >
+      {option.label}
+    </span>
+  );
 }
 
 function createStyles(
   variant: InboxSelectVariant,
   hasSelection: boolean,
-  isDark: boolean
+  isDark: boolean,
+  menuMinWidth?: number
 ): StylesConfig<InboxSelectOption, false, GroupBase<InboxSelectOption>> {
   const isAssign = variant === 'assign';
+  const isFilter = variant === 'filter';
   const controlHeight = isAssign ? 40 : 38;
   const baseStyles = createSelectStyles(isDark);
   const surface = isDark ? '#151d2b' : '#ffffff';
@@ -140,10 +156,16 @@ function createStyles(
 
   return {
     ...baseStyles,
+    container: (base) => ({
+      ...base,
+      width: '100%',
+      minWidth: 0,
+    }),
     control: (base, state) => ({
       ...(typeof baseStyles.control === 'function' ? baseStyles.control(base, state) : base),
       minHeight: controlHeight,
       height: isAssign ? controlHeight : base.height,
+      minWidth: 0,
       borderRadius: 12,
       borderColor: state.isFocused
         ? '#128C7E'
@@ -166,18 +188,33 @@ function createStyles(
     }),
     valueContainer: (base) => ({
       ...base,
-      padding: isAssign ? '0 8px 0 4px' : '0 10px 0 12px',
+      // Compact closed control so filter row fits ~300–380px sidebars
+      padding: isAssign ? '0 8px 0 4px' : isFilter ? '0 4px 0 8px' : '0 8px 0 10px',
+      flexWrap: 'nowrap',
+      overflow: 'hidden',
+      minWidth: 0,
     }),
     placeholder: (base) => ({
       ...base,
       color: isDark ? '#64748b' : '#9ca3af',
       fontSize: 13,
       fontWeight: 500,
+      whiteSpace: 'nowrap',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
     }),
     singleValue: (base) => ({
       ...base,
       color: isDark ? '#f1f5f9' : '#171717',
       margin: 0,
+      maxWidth: '100%',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      whiteSpace: 'nowrap',
+      position: 'static',
+      transform: 'none',
+      // Give closed control more room for "Snoozed" / agent first names
+      ...(isFilter ? { fontSize: 13, fontWeight: 600 } : {}),
     }),
     input: (base) => ({
       ...base,
@@ -190,8 +227,9 @@ function createStyles(
     dropdownIndicator: (base, state) => ({
       ...base,
       color: state.isFocused ? '#128C7E' : '#94a3b8',
-      paddingRight: isAssign ? 10 : 8,
-      paddingLeft: 4,
+      paddingRight: isAssign ? 10 : 6,
+      paddingLeft: 2,
+      flexShrink: 0,
       transition: 'transform 160ms ease, color 160ms ease',
       transform: state.selectProps.menuIsOpen ? 'rotate(180deg)' : undefined,
       '&:hover': { color: '#128C7E' },
@@ -204,6 +242,9 @@ function createStyles(
       ...base,
       borderRadius: 16,
       overflow: 'hidden',
+      minWidth: menuMinWidth ?? base.minWidth,
+      width: 'max-content',
+      maxWidth: 320,
       border: `1px solid ${isDark ? 'rgba(51, 65, 85, 0.65)' : 'rgba(229, 231, 235, 0.95)'}`,
       backgroundColor: surface,
       boxShadow: isDark
@@ -216,6 +257,7 @@ function createStyles(
       ...base,
       padding: 6,
       maxHeight: 280,
+      minWidth: menuMinWidth,
     }),
     option: (base, state) => ({
       ...base,
@@ -253,6 +295,7 @@ export default function InboxSelect({
   isSearchable,
   className = '',
   ariaLabel,
+  menuMinWidth,
 }: InboxSelectProps) {
   const autoId = useId();
   const selected = options.find((option) => option.value === value) ?? null;
@@ -260,8 +303,8 @@ export default function InboxSelect({
   const { resolved } = useTheme();
   const hasSelection = Boolean(value);
   const styles = useMemo(
-    () => createStyles(variant, hasSelection, resolved === 'dark'),
-    [variant, hasSelection, resolved]
+    () => createStyles(variant, hasSelection, resolved === 'dark', menuMinWidth),
+    [variant, hasSelection, resolved, menuMinWidth]
   );
 
   const emitChange = (nextValue: string) => {
@@ -302,7 +345,7 @@ export default function InboxSelect({
   }, [loading]);
 
   return (
-    <div className={className}>
+    <div className={`min-w-0 ${className}`.trim()}>
       <Select<InboxSelectOption, false>
         inputId={autoId}
         instanceId={autoId}

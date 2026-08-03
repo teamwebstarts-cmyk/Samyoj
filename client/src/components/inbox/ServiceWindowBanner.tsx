@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Clock, Lock } from 'lucide-react';
 import { formatWindowExpiry } from './inboxUtils';
@@ -8,36 +9,97 @@ interface ServiceWindowBannerProps {
   compact?: boolean;
 }
 
+const COUNTDOWN_TICK_MS = 60_000;
+const MS_IN_HOUR = 1000 * 60 * 60;
+
+/**
+ * Forces a re-render every 60s so the "Nh Nm left" countdown in
+ * `formatWindowExpiry` stays accurate while the user is on the Inbox page
+ * without depending on a new serviceWindow payload.
+ */
+function useCountdownTick(active: boolean) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!active) return;
+    const id = setInterval(() => {
+      setTick((n) => n + 1);
+    }, COUNTDOWN_TICK_MS);
+    return () => clearInterval(id);
+  }, [active]);
+}
+
+type WindowTone = 'calm' | 'mid' | 'urgent' | 'closed';
+
+function getWindowTone(serviceWindow: ServiceWindowInfo): WindowTone {
+  if (!serviceWindow.open) return 'closed';
+  if (!serviceWindow.expiresAt) return 'calm';
+  const remainingMs = new Date(serviceWindow.expiresAt).getTime() - Date.now();
+  if (remainingMs <= 0) return 'closed';
+  if (remainingMs < MS_IN_HOUR) return 'urgent';
+  if (remainingMs < 12 * MS_IN_HOUR) return 'mid';
+  return 'calm';
+}
+
+/** Glass pills — translucent + blur + soft border/shadow; height matches ChatHeader h-9 icons. */
+const TONE_PILL: Record<WindowTone, string> = {
+  calm:
+    'border-emerald-400/35 bg-emerald-500/[0.12] text-emerald-900 shadow-[0_1px_4px_rgba(16,185,129,0.14),inset_0_1px_0_rgba(255,255,255,0.45)] backdrop-blur-md dark:border-emerald-400/25 dark:bg-emerald-400/10 dark:text-emerald-200 dark:shadow-[0_1px_6px_rgba(16,185,129,0.12),inset_0_1px_0_rgba(255,255,255,0.06)]',
+  mid: 'border-amber-400/40 bg-amber-500/[0.14] text-amber-950 shadow-[0_1px_6px_rgba(245,158,11,0.2),inset_0_1px_0_rgba(255,255,255,0.45)] backdrop-blur-md dark:border-amber-400/30 dark:bg-amber-400/12 dark:text-amber-100 dark:shadow-[0_1px_8px_rgba(245,158,11,0.16),inset_0_1px_0_rgba(255,255,255,0.06)]',
+  urgent:
+    'border-rose-400/45 bg-rose-500/[0.16] text-rose-950 shadow-[0_1px_8px_rgba(244,63,94,0.24),inset_0_1px_0_rgba(255,255,255,0.4)] backdrop-blur-md dark:border-rose-400/35 dark:bg-rose-400/15 dark:text-rose-100 dark:shadow-[0_1px_10px_rgba(244,63,94,0.22),inset_0_1px_0_rgba(255,255,255,0.06)]',
+  closed:
+    'border-rose-400/45 bg-rose-500/[0.16] text-rose-950 shadow-[0_1px_8px_rgba(244,63,94,0.24),inset_0_1px_0_rgba(255,255,255,0.4)] backdrop-blur-md dark:border-rose-400/35 dark:bg-rose-400/15 dark:text-rose-100 dark:shadow-[0_1px_10px_rgba(244,63,94,0.22),inset_0_1px_0_rgba(255,255,255,0.06)]',
+};
+
+const TONE_ICON: Record<WindowTone, string> = {
+  calm: 'text-emerald-600 dark:text-emerald-400',
+  mid: 'text-amber-600 dark:text-amber-300',
+  urgent: 'text-rose-600 dark:text-rose-300',
+  closed: 'text-rose-600 dark:text-rose-300',
+};
+
+/** Subtle pulse only when time is scarce — skipped under prefers-reduced-motion. */
+const TONE_PULSE: Record<WindowTone, string> = {
+  calm: '',
+  mid: 'motion-safe:animate-[inboxSwBadgePulse_2.8s_ease-in-out_infinite]',
+  urgent: 'motion-safe:animate-[inboxSwBadgePulse_1.6s_ease-in-out_infinite]',
+  closed: 'motion-safe:animate-[inboxSwBadgePulse_1.6s_ease-in-out_infinite]',
+};
+
+const BADGE_BASE =
+  'relative hidden h-9 max-w-[14rem] shrink-0 items-center gap-2 overflow-hidden rounded-[10px] border px-3 sm:inline-flex';
+
 export default function ServiceWindowBanner({ serviceWindow, compact }: ServiceWindowBannerProps) {
+  useCountdownTick(true);
   if (serviceWindow.open) return null;
 
   if (compact) {
     return (
-      <div className="border-t border-amber-200/80 bg-amber-50/95 px-3 py-2">
-        <p className="text-center text-caption font-semibold text-amber-900">
-          Reply window closed — use a template
+      <div className="border-t border-rose-200/80 bg-rose-50/95 px-3 py-2 dark:border-rose-900/50 dark:bg-rose-950/30">
+        <p className="text-center text-caption font-semibold text-rose-900 dark:text-rose-200">
+          Window closed — use a template
         </p>
       </div>
     );
   }
 
   return (
-    <div className="border-t border-amber-200/80 bg-gradient-to-r from-amber-50/95 to-orange-50/60 px-3 py-3 sm:px-4">
+    <div className="border-t border-amber-200/80 bg-gradient-to-r from-amber-50/95 to-orange-50/60 px-3 py-3 sm:px-4 dark:from-amber-950/30 dark:to-orange-950/20">
       <div className="flex gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700 ring-1 ring-amber-200/60">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700 ring-1 ring-amber-200/60 dark:bg-amber-950/50 dark:text-amber-300 dark:ring-amber-800/40">
           <Lock className="h-4 w-4" strokeWidth={2.25} />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-[13px] font-bold text-amber-950">Reply window closed</p>
-          <p className="mt-0.5 text-[12px] font-medium leading-relaxed text-amber-900/85">
+          <p className="text-[13px] font-bold text-amber-950 dark:text-amber-100">Reply window closed</p>
+          <p className="mt-0.5 text-[12px] font-medium leading-relaxed text-amber-900/85 dark:text-amber-200/80">
             You can only send free-text replies within 24 hours of the customer&apos;s last message.
             {serviceWindow.windowOpensAt || serviceWindow.lastInboundAt
               ? ' Wait for them to message again, or send an approved template.'
               : ' Ask them to message you first, or send an approved template.'}
           </p>
-          <p className="mt-2 text-[12px] font-medium text-amber-900/85">
+          <p className="mt-2 text-[12px] font-medium text-amber-900/85 dark:text-amber-200/80">
             Tap <strong>Template</strong> below, or{' '}
-            <Link to="/campaigns" className="font-bold text-whatsapp-700 hover:text-whatsapp-800">
+            <Link to="/campaigns" className="font-bold text-whatsapp-700 hover:text-whatsapp-800 dark:text-whatsapp-400">
               start a campaign
             </Link>
             .
@@ -49,25 +111,37 @@ export default function ServiceWindowBanner({ serviceWindow, compact }: ServiceW
 }
 
 export function ServiceWindowBadge({ serviceWindow }: ServiceWindowBannerProps) {
-  if (serviceWindow.open) {
+  useCountdownTick(serviceWindow.open);
+  const tone = getWindowTone(serviceWindow);
+
+  if (tone === 'closed') {
     return (
-      <div className="hidden shrink-0 items-center gap-1.5 rounded-full border border-emerald-200/80 bg-emerald-50/90 px-2.5 py-1 sm:flex">
-        <span className="relative flex h-1.5 w-1.5">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-whatsapp-500 opacity-50" />
-          <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-whatsapp-500" />
-        </span>
-        <Clock className="h-3 w-3 text-whatsapp-600" />
-        <span className="text-[10px] font-bold uppercase tracking-wide text-whatsapp-700">
-          {formatWindowExpiry(serviceWindow.expiresAt) || 'Can reply'}
+      <div
+        title="Reply window closed — template required"
+        role="status"
+        className={`${BADGE_BASE} ${TONE_PILL.closed} ${TONE_PULSE.closed}`}
+      >
+        <Lock className={`h-3.5 w-3.5 shrink-0 ${TONE_ICON.closed}`} strokeWidth={2.25} aria-hidden />
+        <span className="truncate text-[12.5px] font-semibold leading-none tracking-wide">
+          Closed — template
         </span>
       </div>
     );
   }
 
+  const expiry = formatWindowExpiry(serviceWindow.expiresAt);
+  const label = expiry || 'Open';
+
   return (
-    <div className="hidden shrink-0 items-center gap-1.5 rounded-full border border-amber-200/80 bg-amber-50/90 px-2.5 py-1 sm:flex">
-      <Lock className="h-3 w-3 text-amber-700" />
-      <span className="text-[10px] font-bold uppercase tracking-wide text-amber-800">Use template</span>
+    <div
+      title="24-hour WhatsApp reply window"
+      role="status"
+      className={`${BADGE_BASE} ${TONE_PILL[tone]} ${TONE_PULSE[tone]}`}
+    >
+      <Clock className={`h-3.5 w-3.5 shrink-0 ${TONE_ICON[tone]}`} strokeWidth={2.25} aria-hidden />
+      <span className="min-w-0 truncate text-[12.5px] font-semibold tabular-nums leading-none tracking-wide">
+        {label}
+      </span>
     </div>
   );
 }

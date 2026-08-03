@@ -95,6 +95,7 @@ if [[ "$NGROK_CONFIGURED" != true ]]; then
   echo
   [[ -n "$NGROK_AUTH_TOKEN" ]] || fail "No ngrok authtoken was provided."
   ngrok config add-authtoken "$NGROK_AUTH_TOKEN" >/dev/null || fail "ngrok rejected the token."
+  set_env_value NGROK_AUTHTOKEN "$NGROK_AUTH_TOKEN"
 fi
 ok "ngrok authentication is configured"
 

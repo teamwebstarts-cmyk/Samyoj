@@ -2,7 +2,7 @@ import { Reply } from 'lucide-react';
 import type { InteractiveButton, MessageMetadata } from '../../types';
 import { StatusIcon, WhatsAppInteractiveCard } from './WhatsAppPreview';
 
-type MessageStatus = 'sent' | 'delivered' | 'read' | 'failed';
+type MessageStatus = 'pending' | 'sent' | 'delivered' | 'read' | 'failed';
 
 interface InteractiveMessageCardProps {
   body: string;
