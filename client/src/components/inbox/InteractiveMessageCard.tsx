@@ -36,19 +36,19 @@ export default function InteractiveMessageCard({
     return (
       <div className={`flex ${isOutbound ? 'justify-end' : 'justify-start'}`}>
         <div
-          className={`max-w-[85%] rounded-lg px-3 py-2 shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] sm:max-w-[75%] ${
+          className={`max-w-[75%] rounded-lg px-3 py-2 shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] wa-msg-font sm:max-w-[65%] ${
             isOutbound
-              ? 'rounded-br-[2px] bg-[#d9fdd3] text-[#111b21]'
-              : 'rounded-bl-[2px] bg-white text-[#111b21]'
+              ? 'rounded-br-[2px] wa-bubble-sent'
+              : 'rounded-bl-[2px] wa-bubble-received'
           }`}
         >
-          <div className="mb-1 flex items-center gap-1.5 text-[11px] font-medium text-[#008069]">
+          <div className="mb-1 flex items-center gap-1.5 text-[11px] font-medium wa-accent-text">
             <Reply className="h-3 w-3" strokeWidth={2.5} />
             <span>Selected option</span>
           </div>
-          <p className="whitespace-pre-wrap break-words text-[13.5px] leading-[1.35]">{body}</p>
+          <p className="wa-msg-body whitespace-pre-wrap break-words">{body}</p>
           <div className="mt-0.5 flex items-end justify-end gap-1">
-            <span className="text-[11px] tabular-nums text-[#667781]">{time}</span>
+            <span className="text-[11px] tabular-nums wa-timestamp">{time}</span>
             {isOutbound && status && <StatusIcon status={status} />}
           </div>
         </div>

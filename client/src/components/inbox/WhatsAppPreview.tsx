@@ -8,18 +8,32 @@ export function ComposerPreviewPane({
   subtitle,
   children,
   className = '',
+  /** When true, preview body may scroll (e.g. very tall template). Default: no inner scroll — parent column owns scrolling. */
+  scrollable = false,
+  /** Optional slot (e.g. interactive type switcher) rendered in the header row. */
+  headerExtra,
 }: {
-  subtitle: string;
+  subtitle?: string;
   children: ReactNode;
   className?: string;
+  scrollable?: boolean;
+  headerExtra?: ReactNode;
 }) {
   return (
     <div className={`flex min-h-0 flex-col overflow-hidden ${className}`}>
-      <div className="flex shrink-0 items-center justify-between border-b border-theme-border/60 bg-theme-surface/80 px-3 py-1.5">
-        <p className="text-[10px] font-bold uppercase tracking-wide text-theme-muted">Preview</p>
-        <p className="truncate text-[10px] font-medium text-theme-muted">{subtitle}</p>
+      <div className="flex shrink-0 items-center gap-2 border-b border-violet-200/40 bg-white/50 px-2.5 py-1.5 backdrop-blur-sm dark:border-violet-900/30 dark:bg-violet-950/20">
+        <p className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-theme-muted">Preview</p>
+        {headerExtra ? (
+          <div className="flex min-w-0 flex-1 items-center justify-end overflow-x-auto">{headerExtra}</div>
+        ) : subtitle ? (
+          <p className="ml-auto truncate text-[10px] font-medium text-theme-muted">{subtitle}</p>
+        ) : null}
       </div>
-      <div className="flex min-h-0 flex-1 items-start justify-end overflow-y-auto overscroll-contain p-3 wa-chat-surface wa-chat-surface-compact">
+      <div
+        className={`flex min-h-0 flex-1 items-center justify-end p-3 wa-chat-surface wa-chat-surface-compact ${
+          scrollable ? 'overflow-y-auto overscroll-contain' : 'overflow-hidden'
+        }`}
+      >
         {children}
       </div>
     </div>

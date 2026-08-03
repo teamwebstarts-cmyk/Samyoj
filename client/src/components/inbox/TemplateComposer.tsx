@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { LayoutTemplate, Send, X } from 'lucide-react';
+import { Send } from 'lucide-react';
 import AppButton from '../ui/AppButton';
 import AppInput from '../ui/AppInput';
-import AppSelect from '../ui/AppSelect';
+import TemplatePicker from './TemplatePicker';
 import { ComposerPreviewPane, WhatsAppTemplatePreview, getTemplateParts } from './WhatsAppPreview';
 import {
   getFilledTemplatePreview,
@@ -122,14 +122,7 @@ export default function TemplateComposer({ onSend, sending, onCancel }: Template
 
   if (loading) {
     return (
-      <div className="border-t border-amber-200/80 bg-gradient-to-b from-amber-50/95 to-theme-surface px-3 py-3 sm:px-4 dark:from-amber-950/30">
-        <div className="mb-3 flex items-center gap-2">
-          <div className="inbox-skeleton-shimmer h-8 w-8 rounded-lg" />
-          <div className="space-y-1.5">
-            <div className="inbox-skeleton-shimmer h-3.5 w-28 rounded" />
-            <div className="inbox-skeleton-shimmer h-2.5 w-36 rounded" />
-          </div>
-        </div>
+      <div className="bg-theme-surface px-3 py-3 sm:px-4">
         <div className="inbox-skeleton-shimmer mb-2 h-3 w-24 rounded" />
         <div className="inbox-skeleton-shimmer h-11 w-full rounded-xl" />
         <div className="mt-3 flex justify-end gap-2">
@@ -142,9 +135,9 @@ export default function TemplateComposer({ onSend, sending, onCancel }: Template
 
   if (!templates.length) {
     return (
-      <div className="border-t border-amber-200/80 bg-gradient-to-r from-amber-50/95 to-orange-50/60 px-4 py-4 dark:from-amber-950/30 dark:to-orange-950/20">
-        <p className="text-[13px] font-bold text-amber-950">No approved templates</p>
-        <p className="mt-1 text-[12px] text-amber-900/85">
+      <div className="bg-theme-surface px-4 py-4">
+        <p className="text-[13px] font-bold text-theme-fg">No approved templates</p>
+        <p className="mt-1 text-[12px] text-theme-secondary">
           Create and get a template approved under Templates to message outside the 24-hour window.
         </p>
         <AppButton type="button" variant="ghost" size="sm" className="mt-2" onClick={onCancel}>
@@ -159,43 +152,16 @@ export default function TemplateComposer({ onSend, sending, onCancel }: Template
   return (
     <form
       onSubmit={handleSubmit}
-      className="flex max-h-[min(58vh,520px)] flex-col border-t border-amber-200/80 bg-gradient-to-b from-amber-50/95 to-theme-surface dark:from-amber-950/30"
+      className="flex max-h-[min(62vh,560px)] flex-col bg-theme-surface"
     >
-      <div className="flex shrink-0 items-center justify-between gap-2 px-3 pb-2 pt-3 sm:px-4">
-        <div className="flex min-w-0 items-center gap-2">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
-            <LayoutTemplate className="h-4 w-4" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-[13px] font-bold text-amber-950 dark:text-amber-200">Send template</p>
-            <p className="truncate text-[11px] font-medium text-amber-800/80 dark:text-amber-400">
-              24-hour window closed
-            </p>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="shrink-0 rounded-lg p-1.5 text-amber-700 transition hover:bg-amber-100/80 dark:text-amber-300 dark:hover:bg-amber-900/40"
-          aria-label="Cancel template send"
-        >
-          <X size={16} />
-        </button>
-      </div>
-
       <div className="flex min-h-0 flex-1 flex-col md:flex-row md:divide-x md:divide-theme-border/60">
         {/* Left: inputs — sole scroll region on desktop; includes mobile preview in same scroll */}
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-2 sm:px-4 md:max-w-[50%] md:flex-[0_0_48%] md:pb-3">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-2 pt-2.5 sm:px-4 md:max-w-[50%] md:flex-[0_0_48%] md:pb-3">
           <div className="space-y-3">
-            <AppSelect
-              label="Approved template"
+            <TemplatePicker
+              templates={templates}
               value={templateName}
-              options={templates.map((t) => ({
-                value: t.name,
-                label: `${t.name} (${t.language})`,
-              }))}
-              onChange={(e) => handleTemplateChange(e.target.value)}
-              isSearchable
+              onChange={handleTemplateChange}
             />
 
             {hasVars && (
@@ -279,7 +245,7 @@ export default function TemplateComposer({ onSend, sending, onCancel }: Template
         )}
       </div>
 
-      <div className="flex shrink-0 items-center justify-end gap-2 border-t border-amber-200/60 bg-theme-surface/95 px-3 py-2.5 backdrop-blur-sm sm:px-4 dark:border-amber-900/40">
+      <div className="flex shrink-0 items-center justify-end gap-2 border-t border-theme-border/80 bg-theme-surface/95 px-3 py-2.5 backdrop-blur-sm sm:px-4">
         <AppButton type="button" variant="ghost" size="sm" onClick={onCancel}>
           Cancel
         </AppButton>

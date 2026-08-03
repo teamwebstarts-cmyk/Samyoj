@@ -67,8 +67,8 @@ export default function FlowPhoneMockup({
               <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white/70 text-2xl shadow-sm">
                 💬
               </div>
-              <p className="mt-3 text-[13px] font-semibold text-[#3b4a54]">Add a step to preview</p>
-              <p className="mt-1 text-[11px] leading-relaxed text-[#667781]">
+              <p className="mt-3 text-[13px] font-semibold text-chat-text">Add a step to preview</p>
+              <p className="mt-1 text-[11px] leading-relaxed text-chat-timestamp">
                 Your auto-replies will appear here like on WhatsApp.
               </p>
             </div>
@@ -133,12 +133,12 @@ export default function FlowPhoneMockup({
 
         {/* Composer */}
         <div className="flow-phone-device__composer">
-          <Smile className="h-5 w-5 shrink-0 text-[#8696a0]" strokeWidth={2} />
-          <div className="h-9 min-w-0 flex-1 rounded-full bg-white px-4 text-[12px] leading-9 text-[#8696a0]">
+          <Smile className="h-5 w-5 shrink-0 text-chat-tick" strokeWidth={2} />
+          <div className="h-9 min-w-0 flex-1 rounded-full bg-chat-input-bg px-4 text-[12px] leading-9 text-chat-timestamp">
             Message
           </div>
-          <Paperclip className="h-5 w-5 shrink-0 text-[#8696a0]" strokeWidth={2} />
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#008069] text-[13px] text-white">
+          <Paperclip className="h-5 w-5 shrink-0 text-chat-tick" strokeWidth={2} />
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-chat-accent text-[13px] text-white">
             ➤
           </div>
         </div>

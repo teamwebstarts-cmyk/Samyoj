@@ -4,9 +4,10 @@ import { LayoutTemplate, Lock, ArrowDown } from 'lucide-react';
 import ChatHeader from './ChatHeader';
 import ThreadSkeleton from './ThreadSkeleton';
 import MessageBubble, { DateDivider } from './MessageBubble';
-import ChatComposer, { ComposerSkeleton, ComposerTabs, type PendingAttachment } from './ChatComposer';
+import ChatComposer, { ComposerSkeleton, type PendingAttachment } from './ChatComposer';
+import ComposerModeHeader from './ComposerModeHeader';
 import TemplateComposer from './TemplateComposer';
-import InteractiveComposer from './InteractiveComposer';
+import InteractiveComposer, { type InteractiveComposerMode } from './InteractiveComposer';
 import SearchInChatBar from './SearchInChatBar';
 import ChatNoticeStack, { type ChatNoticeItem } from './ChatNoticeStack';
 import {
@@ -161,6 +162,13 @@ export default function ChatThread({
   const navigate = useNavigate();
   const messageGroups = useMemo(() => groupMessagesByDate(messages), [messages]);
   const windowOpen = serviceWindow?.open === true;
+  const [interactiveMode, setInteractiveMode] = useState<InteractiveComposerMode>('reply');
+
+  useEffect(() => {
+    if (interactiveOpen) {
+      setInteractiveMode(windowOpen ? 'reply' : 'copy_code');
+    }
+  }, [interactiveOpen, windowOpen]);
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -762,9 +770,11 @@ export default function ChatThread({
               </span>
             </div>
           )}
-          <ComposerTabs
+          <ComposerModeHeader
             active={interactiveOpen ? 'interactive' : templateMode ? 'template' : 'reply'}
             replyLocked={!windowOpen}
+            interactiveMode={interactiveOpen ? interactiveMode : undefined}
+            onInteractiveModeChange={interactiveOpen ? setInteractiveMode : undefined}
             onChange={(tab) => {
               if (tab === 'reply') {
                 onCancelTemplate();
@@ -777,11 +787,16 @@ export default function ChatThread({
                 onCancelTemplate();
               }
             }}
+            onClose={() => {
+              onCancelTemplate();
+              onCloseInteractive();
+            }}
           />
           {interactiveOpen && windowOpen ? (
-            <div className="sticky bottom-0 z-30 shrink-0 border-t border-neutral-100/80 bg-white/95 backdrop-blur-md dark:border-neutral-800/80 dark:bg-neutral-950/95">
+            <div className="sticky bottom-0 z-30 shrink-0 bg-white/95 backdrop-blur-md dark:bg-neutral-950/95">
               <InteractiveComposer
                 open={interactiveOpen}
+                mode={interactiveMode}
                 onClose={onCloseInteractive}
                 sending={sending}
                 serviceWindow={serviceWindow!}
@@ -789,7 +804,7 @@ export default function ChatThread({
               />
             </div>
           ) : templateMode ? (
-            <div className="sticky bottom-0 z-30 shrink-0 border-t border-neutral-100/80 bg-white/95 backdrop-blur-md dark:border-neutral-800/80 dark:bg-neutral-950/95">
+            <div className="sticky bottom-0 z-30 shrink-0 bg-white/95 backdrop-blur-md dark:bg-neutral-950/95">
               <TemplateComposer onSend={onSendTemplate} sending={sending} onCancel={onCancelTemplate} />
             </div>
           ) : windowOpen ? (

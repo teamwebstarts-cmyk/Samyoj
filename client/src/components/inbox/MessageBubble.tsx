@@ -126,8 +126,8 @@ function BubbleTail({ outbound }: { outbound: boolean }) {
       viewBox="0 0 8 13"
       className={`absolute bottom-0 h-[13px] w-2 ${
         outbound
-          ? '-right-2 text-[color:var(--wa-bubble-sent)]'
-          : '-left-2 -scale-x-100 text-[color:var(--wa-bubble-received)]'
+          ? '-right-2 text-[color:var(--bubble-sent)]'
+          : '-left-2 -scale-x-100 text-[color:var(--bubble-received)]'
       }`}
       aria-hidden="true"
       fill="currentColor"
@@ -139,7 +139,7 @@ function BubbleTail({ outbound }: { outbound: boolean }) {
 
 function MediaUnavailable({ label }: { label: string }) {
   return (
-    <div className="flex items-center justify-center bg-[#f0f2f5] px-3 py-6 text-[12px] text-[#667781] dark:bg-neutral-800 dark:text-neutral-400">
+    <div className="flex items-center justify-center bg-black/[0.04] px-3 py-6 text-[12px] wa-timestamp dark:bg-white/[0.06]">
       {label}
     </div>
   );
@@ -357,8 +357,8 @@ export default function MessageBubble({
   };
 
   const quoteStrip = replyPreview ? (
-    <div className="mb-1.5 rounded-md border-l-[3px] border-[#008069] bg-black/[0.06] px-2 py-1 dark:bg-white/10">
-      <p className="line-clamp-2 text-[12px] leading-snug text-[#54656f] dark:text-neutral-300">
+    <div className="mb-1.5 rounded-md border-l-[3px] border-chat-accent bg-black/[0.06] px-2 py-1 dark:bg-white/10">
+      <p className="line-clamp-2 text-[12px] leading-snug text-chat-timestamp">
         {replyPreview}
       </p>
     </div>
@@ -520,7 +520,7 @@ export default function MessageBubble({
   // duplicating "AI Bot" here. Keep a subtle "You · time" only for agent outbound.
   const senderHeader =
     isOutbound && grouping.first && !isAutomation ? (
-      <p className="mb-0.5 text-[11px] font-semibold leading-none text-[#008069] dark:text-emerald-300">
+      <p className="mb-0.5 text-[11px] font-semibold leading-none wa-accent-text">
         You{time ? ` · ${time}` : ''}
       </p>
     ) : null;
@@ -530,7 +530,7 @@ export default function MessageBubble({
   if (isInteractive || (buttons && buttons.length > 0)) {
     return (
       <div {...bubbleShellProps} className={`flex ${wrapperAlign} ${bubbleShellProps.className}`} data-message-id={message.id}>
-        <div className={`relative max-w-[85%] rounded-[14px] sm:max-w-[65%] ${activeRing}`}>
+        <div className={`relative max-w-[75%] rounded-lg sm:max-w-[65%] ${activeRing}`}>
           {actionMenu}
           {quoteStrip}
           <InteractiveMessageCard
@@ -556,7 +556,7 @@ export default function MessageBubble({
         className={`flex ${wrapperAlign} ${bubbleShellProps.className}`}
         data-message-id={message.id}
       >
-        <div className={`relative max-w-[85%] rounded-[14px] sm:max-w-[65%] ${activeRing}`}>
+        <div className={`relative max-w-[75%] rounded-lg sm:max-w-[65%] ${activeRing}`}>
           {actionMenu}
           {quoteStrip}
           <WhatsAppBubble
@@ -588,7 +588,7 @@ export default function MessageBubble({
         className={`flex ${wrapperAlign} ${bubbleShellProps.className}`}
         data-message-id={message.id}
       >
-        <div className={`relative max-w-[85%] rounded-[14px] sm:max-w-[65%] ${activeRing}`}>
+        <div className={`relative max-w-[75%] rounded-lg sm:max-w-[65%] ${activeRing}`}>
           {actionMenu}
           {quoteStrip}
           <WhatsAppBubble
@@ -655,10 +655,10 @@ export default function MessageBubble({
           className={`flex ${wrapperAlign} ${bubbleShellProps.className}`}
           data-message-id={message.id}
         >
-          <div className={`relative max-w-[85%] sm:max-w-[65%] ${isSticker ? 'max-w-[160px]' : ''}`}>
+          <div className={`relative max-w-[75%] sm:max-w-[65%] ${isSticker ? 'max-w-[160px]' : ''}`}>
             {actionMenu}
             <div
-              className={`relative overflow-hidden text-[#111b21] shadow-[0_1px_1px_rgba(11,20,26,0.12)] dark:text-neutral-100 ${
+              className={`relative overflow-hidden shadow-[0_1px_1px_rgba(11,20,26,0.12)] wa-msg-font ${
                 isSticker ? 'bg-transparent shadow-none' : bubbleTone
               } ${isSticker ? 'rounded-xl' : radius} ${activeRing} ${
                 isSticker ? 'p-0' : isVisual ? 'p-1' : 'p-1.5'
@@ -675,7 +675,7 @@ export default function MessageBubble({
                 )}
               </div>
               {caption && !isSticker && (
-                <p className="whitespace-pre-wrap break-words px-1.5 pb-1 pt-1.5 text-[14px] leading-snug">
+                <p className="wa-msg-body whitespace-pre-wrap break-words px-1.5 pb-1 pt-1.5">
                   {highlightText(caption, highlightQuery)}
                 </p>
               )}
@@ -704,16 +704,16 @@ export default function MessageBubble({
       className={`flex ${wrapperAlign} ${bubbleShellProps.className}`}
       data-message-id={message.id}
     >
-      <div className="relative max-w-[85%] sm:max-w-[65%]">
+      <div className="relative max-w-[75%] sm:max-w-[65%]">
         {actionMenu}
         <div
-          className={`relative px-3 py-2 text-[#111b21] shadow-[0_1px_1px_rgba(11,20,26,0.10)] dark:text-neutral-100 ${bubbleTone} ${radius} ${activeRing}`}
+          className={`relative px-3 py-2 shadow-[0_1px_1px_rgba(11,20,26,0.10)] wa-msg-font ${bubbleTone} ${radius} ${activeRing}`}
         >
           {grouping.last && <BubbleTail outbound={isOutbound} />}
           {senderHeader}
           {quoteStrip}
           <div className="flex flex-wrap items-end gap-x-2">
-            <p className="whitespace-pre-wrap break-words text-[14px] leading-snug">
+            <p className="wa-msg-body whitespace-pre-wrap break-words">
               {highlightText(message.content, highlightQuery)}
             </p>
             <span className="ml-auto -mb-0.5">{metaRow()}</span>
@@ -755,7 +755,7 @@ function FailedRetryRow({
 export function DateDivider({ label }: { label: string }) {
   return (
     <div className="flex items-center justify-center py-3" role="separator">
-      <span className="rounded-full bg-[#e9edef]/95 px-3.5 py-1 text-[11.5px] font-semibold tracking-wide text-[#54656f] shadow-[0_1px_1px_rgba(11,20,26,0.06)] dark:bg-neutral-800/90 dark:text-neutral-300">
+      <span className="rounded-full bg-chat-bubble-received/95 px-3.5 py-1 text-[11.5px] font-semibold tracking-wide text-chat-timestamp shadow-[0_1px_1px_rgba(11,20,26,0.06)]">
         {label}
       </span>
     </div>

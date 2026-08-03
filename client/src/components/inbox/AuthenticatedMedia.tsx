@@ -83,11 +83,11 @@ function useAuthenticatedMediaUrl(messageId: string | undefined) {
 function MediaError({ label, onRetry }: { label: string; onRetry: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center gap-1.5 bg-[#f0f2f5] px-3 py-6 dark:bg-neutral-800">
-      <span className="text-[12px] text-[#667781] dark:text-neutral-400">{label}</span>
+      <span className="text-[12px] text-chat-timestamp">{label}</span>
       <button
         type="button"
         onClick={onRetry}
-        className="text-[11px] font-bold text-[#008069] underline underline-offset-2"
+        className="text-[11px] font-bold text-chat-accent underline underline-offset-2"
       >
         Retry
       </button>
@@ -108,7 +108,7 @@ export function AuthenticatedImage({ messageId, alt = 'Image', className = '', o
   if (loading) {
     return (
       <div className={`flex min-h-[120px] items-center justify-center bg-[#f0f2f5] dark:bg-neutral-800 ${className}`}>
-        <Loader2 className="h-5 w-5 animate-spin text-[#8696a0]" />
+        <Loader2 className="h-5 w-5 animate-spin text-chat-tick" />
       </div>
     );
   }
@@ -204,8 +204,8 @@ export function AuthenticatedAudio({ messageId, className = '' }: AuthenticatedA
   if (loading) {
     return (
       <div className={`flex items-center gap-2 px-1 py-2 ${className}`}>
-        <Loader2 className="h-4 w-4 animate-spin text-[#8696a0]" />
-        <span className="text-[12px] text-[#667781]">Loading audio...</span>
+        <Loader2 className="h-4 w-4 animate-spin text-chat-tick" />
+        <span className="text-[12px] text-chat-timestamp">Loading audio...</span>
       </div>
     );
   }
@@ -213,8 +213,8 @@ export function AuthenticatedAudio({ messageId, className = '' }: AuthenticatedA
   if (error || !url) {
     return (
       <p className={`px-1 py-2 text-[12px] ${className}`}>
-        <span className="text-[#667781]">Voice message unavailable · </span>
-        <button type="button" onClick={retry} className="font-bold text-[#008069] underline underline-offset-2">
+        <span className="text-chat-timestamp">Voice message unavailable · </span>
+        <button type="button" onClick={retry} className="font-bold text-chat-accent underline underline-offset-2">
           Retry
         </button>
       </p>
@@ -263,7 +263,7 @@ export function AuthenticatedDocument({
         className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg shadow-sm ${
           isPdf
             ? 'bg-red-50 text-red-600 dark:bg-red-950/50 dark:text-red-300'
-            : 'bg-white text-[#008069] dark:bg-neutral-900'
+            : 'bg-chat-bubble-received text-chat-accent'
         }`}
       >
         {loading ? (
@@ -273,10 +273,10 @@ export function AuthenticatedDocument({
         )}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[13px] font-semibold text-[#111b21] dark:text-neutral-100">
+        <p className="truncate text-[13px] font-semibold text-chat-text">
           {filename || 'Document'}
         </p>
-        <p className="text-[11px] text-[#667781] dark:text-neutral-400">
+        <p className="text-[11px] text-chat-timestamp">
           {loading
             ? 'Loading...'
             : error

@@ -27,56 +27,13 @@ export interface PendingAttachment {
   type: 'IMAGE' | 'VIDEO' | 'DOCUMENT' | 'AUDIO';
 }
 
-export type ComposerTab = 'reply' | 'template' | 'interactive';
-
-interface ComposerTabsProps {
-  active: ComposerTab;
-  replyLocked?: boolean;
-  onChange: (tab: ComposerTab) => void;
-}
+export type { ComposerTab } from './ComposerModeHeader';
 
 const COMMON_EMOJIS = [
   '😀', '😁', '😂', '🤣', '😊', '😍', '🥰', '😘', '😎', '🤔',
   '👍', '👎', '👏', '🙏', '🔥', '✨', '🎉', '❤️', '💯', '✅',
   '😢', '😭', '😮', '😴', '🤝', '💪', '🙌', '⭐', '📌', '📎',
 ];
-
-export function ComposerTabs({ active, replyLocked, onChange }: ComposerTabsProps) {
-  const tabs: { id: ComposerTab; label: string; locked?: boolean }[] = [
-    { id: 'reply', label: 'Reply', locked: replyLocked },
-    { id: 'template', label: 'Template' },
-    { id: 'interactive', label: 'Interactive', locked: replyLocked },
-  ];
-  return (
-    <div
-      className="flex items-center gap-4 border-b border-neutral-100 px-3 pt-1 sm:px-4 dark:border-neutral-800/80"
-      role="tablist"
-      aria-label="Composer mode"
-    >
-      {tabs.map((tab) => {
-        const selected = active === tab.id;
-        return (
-          <button
-            key={tab.id}
-            type="button"
-            role="tab"
-            aria-selected={selected}
-            disabled={tab.locked}
-            onClick={() => onChange(tab.id)}
-            className={`relative pb-2 pt-1.5 text-[13px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${
-              selected ? 'text-whatsapp-600 dark:text-whatsapp-400' : 'text-theme-muted hover:text-theme-fg'
-            }`}
-          >
-            {tab.label}
-            {selected && (
-              <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-whatsapp-500" />
-            )}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
 
 interface ChatComposerProps {
   value: string;
@@ -416,7 +373,7 @@ export default function ChatComposer({
               className="h-14 w-14 shrink-0 rounded-lg object-cover"
             />
           ) : (
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-[#e9edef] text-[#008069] dark:bg-neutral-800">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-chat-bubble-received text-chat-accent dark:bg-neutral-800">
               {attachment.type === 'VIDEO' ? <Image className="h-6 w-6" /> : <FileText className="h-6 w-6" />}
             </div>
           )}
@@ -519,7 +476,7 @@ export default function ChatComposer({
         </>
       )}
 
-      <div className="rounded-2xl border border-neutral-200/80 bg-white ring-1 ring-neutral-100 transition focus-within:border-whatsapp-500/40 focus-within:ring-whatsapp-500/15 dark:border-neutral-700/60 dark:bg-neutral-900/60 dark:ring-neutral-800">
+      <div className="rounded-2xl border border-chat-input-border bg-chat-input-bg ring-1 ring-chat-input-border/40 transition focus-within:border-chat-accent/40 focus-within:ring-chat-accent/15">
         <textarea
           ref={textareaRef}
           rows={1}
@@ -586,7 +543,7 @@ export default function ChatComposer({
                       onClick={() => openFilePicker('image/*')}
                       className={menuItem}
                     >
-                      <Image size={16} className="text-[#008069]" />
+                      <Image size={16} className="text-chat-accent" />
                       Photo
                     </button>
                     <button
@@ -595,7 +552,7 @@ export default function ChatComposer({
                       onClick={() => openFilePicker('video/*')}
                       className={menuItem}
                     >
-                      <Image size={16} className="text-[#008069]" />
+                      <Image size={16} className="text-chat-accent" />
                       Video
                     </button>
                     <button
@@ -604,7 +561,7 @@ export default function ChatComposer({
                       onClick={() => openFilePicker('application/pdf,.pdf')}
                       className={menuItem}
                     >
-                      <FileText size={16} className="text-[#008069]" />
+                      <FileText size={16} className="text-chat-accent" />
                       PDF
                     </button>
                     {onPaymentLink && (
@@ -617,7 +574,7 @@ export default function ChatComposer({
                         }}
                         className={menuItem}
                       >
-                        <IndianRupee size={16} className="text-[#008069]" />
+                        <IndianRupee size={16} className="text-chat-accent" />
                         Payment link
                       </button>
                     )}
