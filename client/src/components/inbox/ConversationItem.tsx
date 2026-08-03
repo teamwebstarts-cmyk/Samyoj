@@ -1,6 +1,12 @@
-import { Check, Clock, GitBranch, LifeBuoy } from 'lucide-react';
+import { Check, Clock, GitBranch, LifeBuoy, Star } from 'lucide-react';
 import ContactAvatar from './ContactAvatar';
+import { useGlassTipProps } from './ComposerGlassTip';
+import {
+  softStatusPillClassName,
+  softStatusPillStyle,
+} from './details/DetailsSectionCard';
 import { formatListTime, getMessagePreview } from './inboxUtils';
+import { useTheme } from '../../contexts/ThemeContext';
 import { FOCUS_RING_CLASS } from '../../hooks/inboxA11y';
 import type { Conversation } from '../../types';
 
@@ -16,38 +22,19 @@ interface ConversationItemProps {
   currentUserId?: string;
 }
 
-const STATUS_META: Record<
-  string,
-  { label: string; pill: string }
-> = {
-  OPEN: {
-    label: 'Open',
-    pill:
-      'bg-emerald-500/15 text-emerald-800 ring-emerald-500/25 backdrop-blur-sm dark:bg-emerald-400/15 dark:text-emerald-200 dark:ring-emerald-400/30',
-  },
-  PENDING: {
-    label: 'Pending',
-    pill:
-      'bg-amber-500/15 text-amber-800 ring-amber-500/30 backdrop-blur-sm dark:bg-amber-400/15 dark:text-amber-200 dark:ring-amber-400/35',
-  },
-  CLOSED: {
-    label: 'Closed',
-    pill:
-      'bg-neutral-500/10 text-neutral-700 ring-neutral-400/25 backdrop-blur-sm dark:bg-neutral-400/10 dark:text-neutral-300 dark:ring-neutral-500/30',
-  },
-  SNOOZED: {
-    label: 'Snoozed',
-    pill:
-      'bg-indigo-500/15 text-indigo-800 ring-indigo-500/30 backdrop-blur-sm dark:bg-blue-400/15 dark:text-indigo-200 dark:ring-indigo-400/35',
-  },
+const STATUS_LABEL: Record<string, string> = {
+  OPEN: 'Open',
+  PENDING: 'Pending',
+  CLOSED: 'Closed',
+  SNOOZED: 'Snoozed',
 };
 
-function slaBadge(conversation: Conversation) {
+function slaBadge(conversation: Conversation, tipFor: ReturnType<typeof useGlassTipProps>) {
   if (conversation.slaBreached) {
     return (
       <span
         className="inline-flex items-center gap-0.5 rounded-md bg-red-100/90 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-red-700 dark:bg-red-950/50 dark:text-red-300"
-        title="First-response SLA breached"
+        {...tipFor('First-response SLA breached')}
       >
         SLA
       </span>
@@ -58,7 +45,7 @@ function slaBadge(conversation: Conversation) {
     return (
       <span
         className="inline-flex items-center gap-0.5 rounded-md bg-amber-100/90 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-700 dark:bg-amber-950/50 dark:text-amber-300"
-        title="First response due within the hour"
+        {...tipFor('First response due within the hour')}
       >
         <Clock className="h-2.5 w-2.5 shrink-0" />
       </span>
@@ -78,11 +65,14 @@ export default function ConversationItem({
   onToggleSelect,
   currentUserId,
 }: ConversationItemProps) {
+  const tipFor = useGlassTipProps();
+  const { resolved: themeResolved } = useTheme();
   const { contact, unreadCount, lastMessageAt, messages, assignedAgent, activeFlow, status } =
     conversation;
   const preview = getMessagePreview(messages?.[0]);
   const hasUnread = unreadCount > 0;
-  const meta = STATUS_META[status] || STATUS_META.CLOSED;
+  const statusLabel = STATUS_LABEL[status] || STATUS_LABEL.CLOSED;
+  const statusPillStyle = softStatusPillStyle(status, { dark: themeResolved === 'dark' });
 
   const agentLabel = assignedAgent
     ? currentUserId && assignedAgent.id === currentUserId
@@ -96,7 +86,7 @@ export default function ConversationItem({
       onClick={onSelect}
       onContextMenu={onContextMenu}
       aria-current={selected ? 'true' : undefined}
-      className={`group relative flex w-full items-start gap-3 rounded-2xl border px-3 py-3 text-left transition-[background-color,box-shadow,border-color] duration-150 active:scale-[0.995] motion-reduce:active:scale-100 sm:px-4 ${FOCUS_RING_CLASS} ${
+      className={`group relative flex w-full items-start gap-3 rounded-xl border px-3 py-3 text-left transition-[background-color,box-shadow,border-color] duration-150 active:scale-[0.995] motion-reduce:active:scale-100 sm:px-4 ${FOCUS_RING_CLASS} ${
         checked
           ? 'border-transparent bg-whatsapp-500/10 dark:bg-whatsapp-500/15'
           : selected
@@ -141,19 +131,28 @@ export default function ConversationItem({
             ? status
             : 'CLOSED'
         }
-        presenceLabel={meta.label}
+        presenceLabel={statusLabel}
       />
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-1.5">
-            <span
-              className={`truncate text-[14px] leading-tight ${
-                hasUnread ? 'font-bold text-theme-fg' : 'font-semibold text-theme-fg'
-              }`}
-            >
+            <span className="truncate text-[15px] font-bold leading-tight text-theme-fg">
               {contact.name || contact.phone}
             </span>
+            {conversation.isFavorite && (
+              <span
+                className="inline-flex shrink-0"
+                aria-label="Favourited"
+                {...tipFor('Favourited')}
+              >
+                <Star
+                  className="h-3 w-3 fill-amber-400 text-amber-500 dark:fill-amber-400 dark:text-amber-400"
+                  strokeWidth={2}
+                  aria-hidden
+                />
+              </span>
+            )}
           </div>
           {lastMessageAt && (
             <span
@@ -178,10 +177,8 @@ export default function ConversationItem({
 
         <div className="mt-1.5 flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
-            <span
-              className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide ring-1 ring-inset ${meta.pill}`}
-            >
-              {meta.label}
+            <span className={softStatusPillClassName} style={statusPillStyle}>
+              {statusLabel}
             </span>
             {agentLabel && (
               <>
@@ -192,11 +189,11 @@ export default function ConversationItem({
                 <span className="truncate text-[11px] font-medium text-theme-muted">{agentLabel}</span>
               </>
             )}
-            {slaBadge(conversation)}
+            {slaBadge(conversation, tipFor)}
             {hasTicket && (
               <span
                 className="inline-flex items-center gap-0.5 rounded-md bg-violet-100/90 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-violet-700 dark:bg-violet-900/40 dark:text-violet-300"
-                title="Has open ticket"
+                {...tipFor('Has open ticket')}
               >
                 <LifeBuoy className="h-2.5 w-2.5 shrink-0" />
               </span>
@@ -204,7 +201,7 @@ export default function ConversationItem({
             {activeFlow && (
               <span
                 className="inline-flex max-w-[90px] items-center gap-0.5 truncate rounded-md bg-violet-100/90 px-1.5 py-0.5 text-[9px] font-semibold text-violet-700 dark:bg-violet-900/40 dark:text-violet-300"
-                title={activeFlow.currentStepLabel || 'Active flow'}
+                {...tipFor(activeFlow.currentStepLabel || 'Active flow')}
               >
                 <GitBranch className="h-2.5 w-2.5 shrink-0" />
                 <span className="truncate">{activeFlow.currentStepLabel || 'Flow'}</span>

@@ -22,6 +22,7 @@ import {
 import InteractiveMessageCard from './InteractiveMessageCard';
 import MediaViewer, { type MediaViewerItem } from './MediaViewer';
 import { WhatsAppBubble } from './WhatsAppPreview';
+import { useGlassTipProps } from './ComposerGlassTip';
 import type { Message } from '../../types';
 
 const ACTION_MENU_WIDTH = 160;
@@ -91,6 +92,85 @@ function highlightText(text: string, query?: string): ReactNode {
     cursor = idx + needle.length;
   }
   return parts;
+}
+
+/** Collapsed max height (~12×21px LH) — WhatsApp-like band ~220–280px. */
+const MSG_COLLAPSE_MAX_PX = 252;
+
+/**
+ * Plain-text / caption body with WhatsApp-style Read more / Read less when tall.
+ * Per-instance state — expanding one bubble does not expand others.
+ */
+function CollapsibleMessageText({
+  children,
+  className = '',
+  endMeta,
+}: {
+  children: ReactNode;
+  className?: string;
+  /** Timestamp / ticks — inline for short text, footer row when collapsed. */
+  endMeta?: ReactNode;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  /** null = not measured yet — keep max-height so tall messages don't flash full height */
+  const [overflows, setOverflows] = useState<boolean | null>(null);
+  const textRef = useRef<HTMLParagraphElement>(null);
+
+  useLayoutEffect(() => {
+    const el = textRef.current;
+    if (!el) return;
+
+    const measure = () => {
+      setOverflows(el.scrollHeight > MSG_COLLAPSE_MAX_PX + 2);
+    };
+
+    measure();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+    ro?.observe(el);
+    return () => ro?.disconnect();
+  }, [children]);
+
+  const showToggle = overflows === true;
+  const constrain = !expanded && overflows !== false;
+
+  return (
+    <div
+      className={
+        showToggle
+          ? 'flex min-w-0 w-full flex-col items-stretch'
+          : 'flex min-w-0 flex-wrap items-end gap-x-2'
+      }
+    >
+      <div
+        className={`relative min-w-0 ${showToggle ? 'w-full' : ''} ${
+          constrain ? 'wa-msg-body-collapse' : ''
+        }`}
+      >
+        <p ref={textRef} className={`wa-msg-body whitespace-pre-wrap break-words ${className}`}>
+          {children}
+        </p>
+        {constrain && showToggle ? <div className="wa-msg-body-fade" aria-hidden /> : null}
+      </div>
+      {showToggle ? (
+        <div className="mt-0.5 flex w-full items-end justify-between gap-2">
+          <button
+            type="button"
+            className="wa-msg-read-more shrink-0 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--chat-accent)]/45 focus-visible:ring-offset-1"
+            aria-expanded={expanded}
+            onClick={(e) => {
+              e.stopPropagation();
+              setExpanded((v) => !v);
+            }}
+          >
+            {expanded ? 'Read less' : 'Read more'}
+          </button>
+          {endMeta ? <span className="ml-auto -mb-0.5">{endMeta}</span> : null}
+        </div>
+      ) : endMeta ? (
+        <span className="ml-auto -mb-0.5">{endMeta}</span>
+      ) : null}
+    </div>
+  );
 }
 
 type TickStatus = 'pending' | 'sent' | 'delivered' | 'read' | 'failed';
@@ -221,6 +301,7 @@ export default function MessageBubble({
   isActiveMatch,
   animateEnter = false,
 }: MessageBubbleProps) {
+  const tipFor = useGlassTipProps();
   const [localViewer, setLocalViewer] = useState<MediaViewerItem | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [reactOpen, setReactOpen] = useState(false);
@@ -371,7 +452,7 @@ export default function MessageBubble({
           <span
             key={`${r.emoji}-${r.from}-${i}`}
             className="inline-flex items-center rounded-full border border-neutral-200/80 bg-white px-1.5 py-0.5 text-[12px] shadow-sm dark:border-neutral-700 dark:bg-neutral-900"
-            title={r.from}
+            {...tipFor(r.from)}
           >
             {r.emoji}
           </span>
@@ -527,12 +608,13 @@ export default function MessageBubble({
 
   const wrapperAlign = isOutbound ? 'justify-end' : 'justify-start';
 
-  if (isInteractive || (buttons && buttons.length > 0)) {
+  if (isInteractive || (buttons && buttons.length > 0) || isButtonReply) {
     return (
       <div {...bubbleShellProps} className={`flex ${wrapperAlign} ${bubbleShellProps.className}`} data-message-id={message.id}>
         <div className={`relative max-w-[75%] rounded-lg sm:max-w-[65%] ${activeRing}`}>
           {actionMenu}
-          {quoteStrip}
+          {/* Button replies nest reply-to inside the Selected option card (WA-style); skip outer strip. */}
+          {!isButtonReply && quoteStrip}
           <InteractiveMessageCard
             body={message.content}
             buttons={buttons}
@@ -540,6 +622,7 @@ export default function MessageBubble({
             time={time ?? formatMessageTime(message.createdAt)}
             status={isOutbound ? tickStatus : undefined}
             isButtonReply={isButtonReply}
+            replyPreview={isButtonReply ? replyPreview : undefined}
             metadata={message.metadata}
           />
           {reactionChips}
@@ -675,9 +758,9 @@ export default function MessageBubble({
                 )}
               </div>
               {caption && !isSticker && (
-                <p className="wa-msg-body whitespace-pre-wrap break-words px-1.5 pb-1 pt-1.5">
+                <CollapsibleMessageText className="px-1.5 pb-1 pt-1.5">
                   {highlightText(caption, highlightQuery)}
-                </p>
+                </CollapsibleMessageText>
               )}
               {!isVisual && !isSticker && (time || isOutbound) && (
                 <div className="flex justify-end px-1 pb-0.5">{metaRow()}</div>
@@ -712,12 +795,9 @@ export default function MessageBubble({
           {grouping.last && <BubbleTail outbound={isOutbound} />}
           {senderHeader}
           {quoteStrip}
-          <div className="flex flex-wrap items-end gap-x-2">
-            <p className="wa-msg-body whitespace-pre-wrap break-words">
-              {highlightText(message.content, highlightQuery)}
-            </p>
-            <span className="ml-auto -mb-0.5">{metaRow()}</span>
-          </div>
+          <CollapsibleMessageText endMeta={metaRow()}>
+            {highlightText(message.content, highlightQuery)}
+          </CollapsibleMessageText>
         </div>
         {reactionChips}
         <FailedRetryRow show={isFailed} retrying={retrying} onRetry={() => onRetry?.(message)} />

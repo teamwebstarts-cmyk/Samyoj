@@ -228,7 +228,14 @@ export function useInboxRealtime({
   useEffect(() => {
     const prev = prevStatusRef.current;
     prevStatusRef.current = socketState.status;
-    if (socketState.status === 'connected' && prev !== 'connected' && prev !== 'connecting') {
+    // Catch up after a real disconnect. Reconnect goes disconnected → connecting
+    // → connected, so excluding `connecting` previously skipped every reconnect
+    // and left the open thread stale until a hard refresh.
+    if (
+      socketState.status === 'connected' &&
+      prev !== 'connected' &&
+      socketState.totalDisconnects > 0
+    ) {
       reloadList();
       const openId = selectedRef.current?.id;
       if (openId) {
@@ -241,7 +248,14 @@ export function useInboxRealtime({
           .catch(() => undefined);
       }
     }
-  }, [socketState.status, reloadList, selectedRef, setMessages, setServiceWindow]);
+  }, [
+    socketState.status,
+    socketState.totalDisconnects,
+    reloadList,
+    selectedRef,
+    setMessages,
+    setServiceWindow,
+  ]);
 
   return { socketState, socketRef };
 }

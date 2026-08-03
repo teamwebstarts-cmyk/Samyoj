@@ -1,4 +1,5 @@
 import { getAvatarGradient, getInitials } from './inboxUtils';
+import { useGlassTipProps, useInboxGlassTipActive } from './ComposerGlassTip';
 
 /** Built-in presence / conversation-status pip tones (no invented customer online). */
 export type AvatarPresence =
@@ -81,6 +82,8 @@ export default function ContactAvatar({
   presenceLabel,
   showStatus = true,
 }: ContactAvatarProps) {
+  const tipFor = useGlassTipProps();
+  const glassTips = useInboxGlassTipActive();
   const key = name || phone;
   const gradient = getAvatarGradient(key);
   const initials = getInitials(name, phone);
@@ -91,8 +94,9 @@ export default function ContactAvatar({
   return (
     <div
       className="relative shrink-0"
-      title={statusLabel}
+      title={!glassTips ? statusLabel : undefined}
       aria-label={statusLabel ? `${name || phone}, ${statusLabel}` : undefined}
+      {...(glassTips && statusLabel ? tipFor(statusLabel) : {})}
     >
       <div
         className={`flex items-center justify-center bg-gradient-to-br font-bold text-white shadow-[0_2px_10px_rgba(15,23,42,0.12)] ring-2 ring-white/80 dark:ring-neutral-800/80 ${gradient} ${sizes[size]} ${shapes[shape][size]}`}
@@ -103,7 +107,6 @@ export default function ContactAvatar({
       {meta && statusLabel && (
         <span
           className={`absolute bottom-0 right-0 translate-x-[10%] translate-y-[10%] rounded-full border-2 border-white dark:border-neutral-900 ${meta.color} ${statusDotSizes[size]}`}
-          title={statusLabel}
           aria-hidden
         />
       )}

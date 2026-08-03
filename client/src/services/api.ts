@@ -87,19 +87,35 @@ let refreshPromise: Promise<{ accessToken: string; refreshToken: string }> | nul
 async function refreshAccessTokenSingleFlight(refreshToken: string) {
   if (!refreshPromise) {
     refreshPromise = axios
-      .post(`${API_URL}/auth/refresh`, { refreshToken })
-      .then(({ data }) => {
-        const accessToken = data.data.accessToken as string;
-        const nextRefresh = (data.data.refreshToken as string) || refreshToken;
-        localStorage.setItem('accessToken', accessToken);
-        localStorage.setItem('refreshToken', nextRefresh);
-        return { accessToken, refreshToken: nextRefresh };
-      })
-      .finally(() => {
-        refreshPromise = null;
-      });
+    .post(`${API_URL}/auth/refresh`, { refreshToken })
+    .then(({ data }) => {
+      const accessToken = data.data.accessToken as string;
+      const nextRefresh = (data.data.refreshToken as string) || refreshToken;
+      localStorage.setItem('accessToken', accessToken);
+      localStorage.setItem('refreshToken', nextRefresh);
+      return { accessToken, refreshToken: nextRefresh };
+    })
+    .finally(() => {
+      refreshPromise = null;
+    });
   }
   return refreshPromise;
+}
+
+/**
+ * Refresh the access JWT (single-flight). Used by Socket.IO when the 15m
+ * access token expires — HTTP already refreshes via the axios interceptor,
+ * but the socket must refresh explicitly or realtime dies until page reload.
+ */
+export async function ensureFreshAccessToken(): Promise<string | null> {
+  const refreshToken = localStorage.getItem('refreshToken');
+  if (!refreshToken) return localStorage.getItem('accessToken');
+  try {
+    const tokens = await refreshAccessTokenSingleFlight(refreshToken);
+    return tokens.accessToken;
+  } catch {
+    return null;
+  }
 }
 
 export { getErrorMessage };

@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
+  Activity,
   Bot,
   Hash,
   Plus,
@@ -20,11 +21,16 @@ import {
   DetailsSectionCard,
   DetailsSectionHeader,
   detailsAddLinkClassName,
+  softLabelPillClassName,
+  softLabelPillCloseClassName,
+  softLabelPillPickerClassName,
   softLabelPillStyle,
 } from './details/DetailsSectionCard';
 import AssignAgentPopover from './AssignAgentPopover';
+import { useGlassTipProps } from './ComposerGlassTip';
 import { contactApi, inboxApi, labelsApi } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import type {
   CannedReply,
   Contact,
@@ -83,6 +89,63 @@ function formatNoteMeta(note: InternalNote): string {
   return `${who} · ${when}`;
 }
 
+/** ~7 lines at 12.5px / leading-relaxed — WhatsApp-style collapse band for notes. */
+const NOTE_COLLAPSE_MAX_PX = 140;
+
+/** Plain note body with Read more / Read less when tall. Per-note expand state. */
+function CollapsibleNoteText({ content }: { content: string }) {
+  const [expanded, setExpanded] = useState(false);
+  /** null = not measured yet — keep max-height so tall notes don't flash full height */
+  const [overflows, setOverflows] = useState<boolean | null>(null);
+  const textRef = useRef<HTMLParagraphElement>(null);
+
+  useLayoutEffect(() => {
+    const el = textRef.current;
+    if (!el) return;
+
+    const measure = () => {
+      setOverflows(el.scrollHeight > NOTE_COLLAPSE_MAX_PX + 2);
+    };
+
+    measure();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+    ro?.observe(el);
+    return () => ro?.disconnect();
+  }, [content]);
+
+  const showToggle = overflows === true;
+  const constrain = !expanded && overflows !== false;
+
+  return (
+    <div className="min-w-0 flex-1">
+      <div className={`relative min-w-0 ${constrain ? 'max-h-[140px] overflow-hidden' : ''}`}>
+        <p
+          ref={textRef}
+          className="whitespace-pre-wrap break-words text-[12.5px] leading-relaxed text-theme-fg"
+        >
+          {content}
+        </p>
+        {constrain && showToggle ? (
+          <div
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-b from-transparent to-slate-100 dark:to-neutral-900"
+            aria-hidden
+          />
+        ) : null}
+      </div>
+      {showToggle ? (
+        <button
+          type="button"
+          className="mt-0.5 text-[12px] font-semibold text-whatsapp-700 transition hover:underline dark:text-whatsapp-400"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((v) => !v)}
+        >
+          {expanded ? 'Read less' : 'Read more'}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 export default function InboxDetailsPanel({
   conversation,
   notes,
@@ -104,6 +167,9 @@ export default function InboxDetailsPanel({
   onOverlayClose,
   panelWidth,
 }: InboxDetailsPanelProps) {
+  const tipFor = useGlassTipProps();
+  const { resolved: themeResolved } = useTheme();
+  const pillDark = themeResolved === 'dark';
   const conversationId = conversation.id;
   const labels = conversation.labels ?? [];
   const contact = conversation.contact;
@@ -433,11 +499,14 @@ export default function InboxDetailsPanel({
                 />
                 <div className="flex flex-wrap gap-1.5">
                   {labels.map((l) => {
-                    const style = softLabelPillStyle(l.label.color);
+                    const style = softLabelPillStyle(l.label.color, {
+                      seed: l.label.id || l.label.name,
+                      dark: pillDark,
+                    });
                     return (
                       <span
                         key={l.label.id}
-                        className="inline-flex max-w-full items-center gap-0.5 rounded-full border py-1 pl-2.5 pr-1 text-[11.5px] font-semibold"
+                        className={softLabelPillClassName}
                         style={style}
                       >
                         <span className="truncate">{l.label.name}</span>
@@ -445,11 +514,10 @@ export default function InboxDetailsPanel({
                           type="button"
                           onClick={() => void handleRemoveLabel(l.label.id)}
                           aria-label={`Remove ${l.label.name}`}
-                          title={`Remove ${l.label.name}`}
-                          className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full opacity-80 transition hover:bg-black/10 hover:opacity-100 focus-visible:bg-black/10 focus-visible:opacity-100 focus-visible:outline-none dark:hover:bg-white/15"
-                          style={{ color: style.color }}
+                          {...tipFor(`Remove ${l.label.name}`)}
+                          className={softLabelPillCloseClassName}
                         >
-                          <X className="h-3 w-3" strokeWidth={2.5} />
+                          <X className="h-3.5 w-3.5" strokeWidth={2.25} />
                         </button>
                       </span>
                     );
@@ -467,16 +535,23 @@ export default function InboxDetailsPanel({
                   <div className="mt-2.5 space-y-2 border-t border-theme-border/60 pt-2.5">
                     {availableLabels.length > 0 ? (
                       <div className="flex flex-wrap gap-1.5">
-                        {availableLabels.map((label) => (
-                          <button
-                            key={label.id}
-                            type="button"
-                            onClick={() => void handleAddLabel(label.id)}
-                            className="rounded-full border border-theme-border bg-theme-subtle/60 px-2.5 py-1 text-[11px] font-bold text-theme-secondary transition hover:border-whatsapp-300 hover:text-theme-fg"
-                          >
-                            {label.name}
-                          </button>
-                        ))}
+                        {availableLabels.map((label) => {
+                          const style = softLabelPillStyle(label.color, {
+                            seed: label.id || label.name,
+                            dark: pillDark,
+                          });
+                          return (
+                            <button
+                              key={label.id}
+                              type="button"
+                              onClick={() => void handleAddLabel(label.id)}
+                              className={softLabelPillPickerClassName}
+                              style={style}
+                            >
+                              {label.name}
+                            </button>
+                          );
+                        })}
                       </div>
                     ) : (
                       <p className="text-[12px] text-theme-muted">
@@ -534,7 +609,7 @@ export default function InboxDetailsPanel({
             <DetailsSectionCard data-section="notes">
               <DetailsSectionHeader
                 icon={<StickyNote className="h-3.5 w-3.5" strokeWidth={2.25} />}
-                title="Team notes"
+                title="Notes"
                 action={
                   <button type="button" onClick={openNoteComposer} className={detailsAddLinkClassName()}>
                     + Add note
@@ -577,7 +652,7 @@ export default function InboxDetailsPanel({
 
               {notes.length === 0 && !showNoteComposer && !noteText.trim() && (
                 <div className="rounded-xl border border-dashed border-theme-border/80 bg-slate-50/70 px-3 py-3 text-center dark:bg-neutral-950/40">
-                  <p className="text-[12px] font-semibold text-theme-fg">No team notes yet</p>
+                  <p className="text-[12px] font-semibold text-theme-fg">No notes yet</p>
                   <p className="mt-0.5 text-[11px] text-theme-muted">
                     Leave context for the next agent on this chat.
                   </p>
@@ -594,9 +669,7 @@ export default function InboxDetailsPanel({
                         className="rounded-xl border border-slate-200/80 bg-slate-100/70 p-3 dark:border-neutral-700/60 dark:bg-neutral-900/55"
                       >
                         <div className="flex items-start gap-2">
-                          <p className="min-w-0 flex-1 text-[12.5px] leading-relaxed text-theme-fg">
-                            {note.content}
-                          </p>
+                          <CollapsibleNoteText content={note.content} />
                           {canDelete &&
                             (confirmDeleteNoteId === note.id ? (
                               <span className="flex shrink-0 items-center gap-1">
@@ -621,6 +694,7 @@ export default function InboxDetailsPanel({
                                 type="button"
                                 onClick={() => setConfirmDeleteNoteId(note.id)}
                                 aria-label="Delete note"
+                                {...tipFor('Delete note')}
                                 className="shrink-0 rounded-md p-1 text-slate-400 transition hover:bg-white/70 hover:text-red-600 dark:hover:bg-neutral-800"
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
@@ -659,22 +733,26 @@ export default function InboxDetailsPanel({
                 }
               />
               <div className="flex flex-wrap gap-1.5">
-                {(contact.tags ?? []).map((tag) => (
-                  <span
-                    key={tag}
-                    className="inline-flex items-center gap-1 rounded-full bg-sky-100/90 px-2.5 py-1 text-[11.5px] font-semibold text-sky-800 dark:bg-sky-950/40 dark:text-sky-300"
-                  >
-                    {tag}
-                    <button
-                      type="button"
-                      onClick={() => void handleRemoveTag(tag)}
-                      aria-label={`Remove ${tag}`}
-                      className="text-sky-600/70 transition hover:text-sky-800 dark:hover:text-sky-200"
+                {(contact.tags ?? []).map((tag) => {
+                  const style = softLabelPillStyle(null, { seed: tag, dark: pillDark });
+                  return (
+                    <span
+                      key={tag}
+                      className={softLabelPillClassName}
+                      style={style}
                     >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </span>
-                ))}
+                      <span className="truncate">{tag}</span>
+                      <button
+                        type="button"
+                        onClick={() => void handleRemoveTag(tag)}
+                        aria-label={`Remove ${tag}`}
+                        className={softLabelPillCloseClassName}
+                      >
+                        <X className="h-3.5 w-3.5" strokeWidth={2.25} />
+                      </button>
+                    </span>
+                  );
+                })}
                 {(contact.tags ?? []).length === 0 && !showTagInput && (
                   <p className="w-full text-[12px] text-theme-muted">No tags yet</p>
                 )}
@@ -751,73 +829,87 @@ export default function InboxDetailsPanel({
   }
 
   if (!panelOpen) {
+    const unread = conversation.unreadCount ?? 0;
+    const railBtn =
+      'relative flex h-9 w-9 items-center justify-center rounded-xl transition';
+    const railBadge =
+      'absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold text-white';
+
     return (
-      <aside className="hidden w-11 shrink-0 flex-col items-center gap-1 border-l border-white/40 bg-white/55 py-3 backdrop-blur-md md:flex dark:border-neutral-800/80 dark:bg-neutral-950/70">
+      <aside
+        className="hidden w-11 shrink-0 flex-col items-center gap-1 border-l border-white/40 bg-white/55 py-3 backdrop-blur-md md:flex dark:border-neutral-800/80 dark:bg-neutral-950/70"
+        aria-label="Conversation details shortcuts"
+      >
         <button
           type="button"
+          aria-label="Customer details"
           onClick={() => openPanel('profile')}
-          title="Customer details"
-          className="flex h-9 w-9 items-center justify-center rounded-xl text-emerald-600 transition hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+          className={`${railBtn} text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40`}
+          {...tipFor('Customer details', 'left')}
         >
           <User className="h-4 w-4" />
         </button>
         <button
           type="button"
+          aria-label={unread > 0 ? `Activity, ${unread} unread` : 'Activity'}
+          onClick={() => openPanel('stats')}
+          className={`${railBtn} text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/40`}
+          {...tipFor('Activity', 'left')}
+        >
+          <Activity className="h-4 w-4" strokeWidth={2.25} />
+          {unread > 0 && (
+            <span className={`${railBadge} bg-orange-600`}>{unread > 9 ? '9+' : unread}</span>
+          )}
+        </button>
+        <button
+          type="button"
+          aria-label={labels.length > 0 ? `Labels, ${labels.length}` : 'Labels'}
           onClick={() => openPanel('labels')}
-          title="Labels"
-          className="relative flex h-9 w-9 items-center justify-center rounded-xl text-violet-600 transition hover:bg-violet-50 dark:hover:bg-violet-950/40"
+          className={`${railBtn} text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-950/40`}
+          {...tipFor('Labels', 'left')}
         >
           <Tag className="h-4 w-4" />
           {labels.length > 0 && (
-            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-violet-600 px-1 text-[9px] font-bold text-white">
-              {labels.length}
-            </span>
+            <span className={`${railBadge} bg-violet-600`}>{labels.length}</span>
           )}
         </button>
         <button
           type="button"
+          aria-label={notes.length > 0 ? `Notes, ${notes.length}` : 'Notes'}
           onClick={() => openPanel('notes')}
-          title="Team notes"
-          className="relative flex h-9 w-9 items-center justify-center rounded-xl text-amber-600 transition hover:bg-amber-50 dark:hover:bg-amber-950/40"
+          className={`${railBtn} text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40`}
+          {...tipFor('Notes', 'left')}
         >
           <StickyNote className="h-4 w-4" />
           {notes.length > 0 && (
-            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-600 px-1 text-[9px] font-bold text-white">
-              {notes.length}
-            </span>
+            <span className={`${railBadge} bg-amber-600`}>{notes.length}</span>
           )}
         </button>
         <button
           type="button"
+          aria-label="Quick replies"
           onClick={() => openPanel('quickReplies')}
-          title="Quick replies"
-          className="relative flex h-9 w-9 items-center justify-center rounded-xl text-violet-600 transition hover:bg-violet-50 dark:hover:bg-violet-950/40"
+          className={`${railBtn} text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-950/40`}
+          {...tipFor('Quick replies', 'left')}
         >
           <Zap className="h-4 w-4" />
-          {cannedReplies.length > 0 && (
-            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-violet-600 px-1 text-[9px] font-bold text-white">
-              {Math.min(cannedReplies.length, 9)}
-            </span>
-          )}
         </button>
         <button
           type="button"
+          aria-label={tagCount > 0 ? `Tags, ${tagCount}` : 'Tags'}
           onClick={() => openPanel('tags')}
-          title="Tags"
-          className="relative flex h-9 w-9 items-center justify-center rounded-xl text-sky-600 transition hover:bg-sky-50 dark:hover:bg-sky-950/40"
+          className={`${railBtn} text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-950/40`}
+          {...tipFor('Tags', 'left')}
         >
           <Hash className="h-4 w-4" />
-          {tagCount > 0 && (
-            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-sky-600 px-1 text-[9px] font-bold text-white">
-              {tagCount}
-            </span>
-          )}
+          {tagCount > 0 && <span className={`${railBadge} bg-sky-600`}>{tagCount}</span>}
         </button>
         <button
           type="button"
+          aria-label="Active automations"
           onClick={() => openPanel('automations')}
-          title="Active automations"
-          className="flex h-9 w-9 items-center justify-center rounded-xl text-emerald-600 transition hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+          className={`${railBtn} text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40`}
+          {...tipFor('Active automations', 'left')}
         >
           <Bot className="h-4 w-4" />
         </button>

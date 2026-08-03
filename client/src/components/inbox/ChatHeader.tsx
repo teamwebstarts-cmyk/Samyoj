@@ -364,9 +364,24 @@ export default function ChatHeader({
       />
 
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[15px] font-bold tracking-tight text-theme-fg">
-          {contact.name || contact.phone}
-        </p>
+        <div className="flex min-w-0 items-center gap-1.5">
+          <p className="truncate text-[15px] font-bold tracking-tight text-theme-fg">
+            {contact.name || contact.phone}
+          </p>
+          {isFavorite && (
+            <span
+              className="inline-flex shrink-0"
+              aria-label="Favourited"
+              {...tipFor('Favourited')}
+            >
+              <Star
+                className="h-3.5 w-3.5 fill-amber-400 text-amber-500 dark:fill-amber-400 dark:text-amber-400"
+                strokeWidth={2}
+                aria-hidden
+              />
+            </span>
+          )}
+        </div>
         <p className="hidden truncate text-[12.5px] font-medium text-theme-muted sm:block">
           {contact.phone}
         </p>

@@ -24,6 +24,7 @@ import {
 } from './inboxUtils';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { useReducedMotion } from '../../hooks/inboxA11y';
+import { useGlassTipProps } from './ComposerGlassTip';
 import { inboxApi } from '../../services/api';
 import type { MediaViewerItem } from './MediaViewer';
 import type { PresenceViewer } from './useConversationPresence';
@@ -166,6 +167,7 @@ export default function ChatThread({
   onOpenTemplateMode,
 }: ChatThreadProps) {
   const navigate = useNavigate();
+  const tipFor = useGlassTipProps();
   const messageGroups = useMemo(() => groupMessagesByDate(messages), [messages]);
   const windowOpen = serviceWindow?.open === true;
   const [interactiveMode, setInteractiveMode] = useState<InteractiveComposerMode>('reply');
@@ -650,6 +652,7 @@ export default function ChatThread({
               ? `Scroll to ${newCount} new ${newCount === 1 ? 'message' : 'messages'}`
               : 'Scroll to latest messages'
           }
+          {...tipFor(newCount > 0 ? `${newCount} new` : 'Jump to latest')}
           data-testid="jump-to-latest"
           className="pointer-events-auto absolute bottom-3 right-3 z-20 flex h-10 w-10 items-center justify-center rounded-full border border-theme-border/80 bg-theme-surface text-theme-secondary shadow-[0_2px_10px_rgba(15,23,42,0.14)] backdrop-blur-sm transition hover:bg-theme-surface hover:text-theme-fg hover:shadow-[0_4px_14px_rgba(15,23,42,0.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-whatsapp-500 focus-visible:ring-offset-2 sm:bottom-4 sm:right-4 dark:shadow-[0_2px_12px_rgba(0,0,0,0.45)]"
         >

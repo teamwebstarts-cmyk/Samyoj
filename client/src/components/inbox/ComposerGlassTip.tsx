@@ -11,7 +11,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 
-export type TipPlacement = 'above' | 'below';
+export type TipPlacement = 'above' | 'below' | 'left' | 'right';
 
 export type ComposerTipState = {
   text: string;
@@ -27,6 +27,9 @@ export type GlassTipApi = {
 
 const InboxGlassTipContext = createContext<GlassTipApi | null>(null);
 
+/** Horizontal room needed to center a short glass label without clipping. */
+const CENTER_EDGE_PX = 120;
+
 function resolveTip(
   text: string,
   el: HTMLElement,
@@ -34,9 +37,34 @@ function resolveTip(
 ): NonNullable<ComposerTipState> {
   const r = el.getBoundingClientRect();
   let placement = preferred;
-  // Flip when the preferred side would clip near the viewport edge.
+
+  // Vertical flip when preferred above/below would clip near the viewport edge.
   if (preferred === 'above' && r.top < 36) placement = 'below';
   if (preferred === 'below' && window.innerHeight - r.bottom < 36) placement = 'above';
+
+  // Centered above/below tips clip at left/right viewport edges — shift to the open side.
+  if (placement === 'above' || placement === 'below') {
+    const centerX = r.left + r.width / 2;
+    if (window.innerWidth - centerX < CENTER_EDGE_PX) placement = 'left';
+    else if (centerX < CENTER_EDGE_PX) placement = 'right';
+  }
+
+  if (placement === 'left') {
+    return {
+      text,
+      top: r.top + r.height / 2,
+      left: r.left - 8,
+      placement,
+    };
+  }
+  if (placement === 'right') {
+    return {
+      text,
+      top: r.top + r.height / 2,
+      left: r.right + 8,
+      placement,
+    };
+  }
 
   return {
     text,
@@ -109,6 +137,11 @@ export function InboxGlassTipProvider({ children }: { children: ReactNode }) {
 export function useInboxGlassTip(): GlassTipApi {
   const ctx = useContext(InboxGlassTipContext);
   return ctx ?? { onShowTip: () => undefined, onHideTip: () => undefined };
+}
+
+/** True when rendered under `InboxGlassTipProvider`. */
+export function useInboxGlassTipActive(): boolean {
+  return useContext(InboxGlassTipContext) !== null;
 }
 
 /** Hover/focus handlers for a short glass label (no native title). */

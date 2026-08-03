@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown } from 'lucide-react';
 import { FOCUS_RING_CLASS } from '../../hooks/inboxA11y';
+import { useGlassTipProps } from './ComposerGlassTip';
 import { PAGE_SIZE_OPTIONS, type PageSize } from './useConversationList';
 
 interface PageSizeSelectProps {
@@ -11,6 +12,7 @@ interface PageSizeSelectProps {
 }
 
 export default function PageSizeSelect({ value, onChange, className = '' }: PageSizeSelectProps) {
+  const tipFor = useGlassTipProps();
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(() => PAGE_SIZE_OPTIONS.indexOf(value));
   const [menuPos, setMenuPos] = useState<{ bottom: number; left: number } | null>(null);
@@ -158,7 +160,7 @@ export default function PageSizeSelect({ value, onChange, className = '' }: Page
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? listId : undefined}
-        title="Rows per page"
+        {...tipFor('Rows per page')}
         onClick={() => setOpen((v) => !v)}
         onKeyDown={onTriggerKeyDown}
         className={`inline-flex h-7 items-center gap-1 rounded-lg border border-theme-border bg-theme-surface px-1.5 text-[11px] font-semibold tabular-nums text-theme-fg transition hover:bg-theme-subtle ${FOCUS_RING_CLASS}`}

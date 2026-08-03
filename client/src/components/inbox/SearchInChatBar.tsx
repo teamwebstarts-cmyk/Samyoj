@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { ChevronDown, ChevronUp, Loader2, Search, X } from 'lucide-react';
+import { useGlassTipProps } from './ComposerGlassTip';
 import { FOCUS_RING_CLASS } from '../../hooks/inboxA11y';
 import { useModalTransition } from '../../hooks/useModalTransition';
 
@@ -30,6 +31,7 @@ export default function SearchInChatBar({
   onPrev,
   onClose,
 }: SearchInChatBarProps) {
+  const tipFor = useGlassTipProps();
   const inputRef = useRef<HTMLInputElement>(null);
   const { mounted, phase } = useModalTransition(open, 150);
 
@@ -92,6 +94,7 @@ export default function SearchInChatBar({
         onClick={onPrev}
         disabled={matchCount === 0}
         aria-label="Previous match"
+        {...tipFor('Previous')}
         className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-theme-border text-theme-secondary transition hover:bg-theme-subtle disabled:opacity-40 ${FOCUS_RING_CLASS}`}
       >
         <ChevronUp className="h-4 w-4" strokeWidth={2.25} />
@@ -101,6 +104,7 @@ export default function SearchInChatBar({
         onClick={onNext}
         disabled={matchCount === 0}
         aria-label="Next match"
+        {...tipFor('Next')}
         className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-theme-border text-theme-secondary transition hover:bg-theme-subtle disabled:opacity-40 ${FOCUS_RING_CLASS}`}
       >
         <ChevronDown className="h-4 w-4" strokeWidth={2.25} />
@@ -109,6 +113,7 @@ export default function SearchInChatBar({
         type="button"
         onClick={onClose}
         aria-label="Close search"
+        {...tipFor('Close')}
         className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-theme-muted transition hover:bg-theme-subtle hover:text-theme-fg ${FOCUS_RING_CLASS}`}
       >
         <X className="h-4 w-4" strokeWidth={2.25} />

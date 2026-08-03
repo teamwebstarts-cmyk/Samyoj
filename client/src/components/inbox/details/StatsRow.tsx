@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { inboxApi } from '../../../services/api';
+import { useGlassTipProps } from '../ComposerGlassTip';
 import type { ConversationStats } from '../../../types';
 
 interface StatsRowProps {
@@ -26,6 +27,8 @@ function StatChip({
   title?: string;
   href?: string;
 }) {
+  const tipFor = useGlassTipProps();
+  const tip = title ? tipFor(title) : {};
   const className =
     'flex min-w-0 flex-col items-center gap-0.5 rounded-xl border border-theme-border/70 bg-white/40 px-2 py-2.5 dark:bg-neutral-950/30';
   const body = (
@@ -38,13 +41,13 @@ function StatChip({
   );
   if (href) {
     return (
-      <Link title={title} to={href} className={`${className} transition hover:border-whatsapp-300/80`}>
+      <Link to={href} className={`${className} transition hover:border-whatsapp-300/80`} {...tip}>
         {body}
       </Link>
     );
   }
   return (
-    <div title={title} className={className}>
+    <div className={className} {...tip}>
       {body}
     </div>
   );

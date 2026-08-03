@@ -526,7 +526,7 @@
   .inbox-glass-tip,
   .composer-glass-tip {
     position: fixed;
-    z-index: 90;
+    z-index: 120;
     pointer-events: none;
     max-width: min(280px, calc(100vw - 24px));
     padding: 0.35rem 0.65rem;
@@ -564,6 +564,17 @@
     animation: inbox-glass-tip-in-below 140ms ease-out both;
   }
 
+  /* Side tips for right-edge rails (and left-edge chrome) — paint into open chat area */
+  .inbox-glass-tip--left {
+    transform: translate(-100%, -50%);
+    animation: inbox-glass-tip-in-left 140ms ease-out both;
+  }
+
+  .inbox-glass-tip--right {
+    transform: translate(0, -50%);
+    animation: inbox-glass-tip-in-right 140ms ease-out both;
+  }
+
   .dark .inbox-glass-tip,
   .dark .composer-glass-tip {
     border-color: rgba(255, 255, 255, 0.12);
@@ -597,6 +608,28 @@
     to {
       opacity: 1;
       transform: translate(-50%, 0);
+    }
+  }
+
+  @keyframes inbox-glass-tip-in-left {
+    from {
+      opacity: 0;
+      transform: translate(calc(-100% + 4px), -50%);
+    }
+    to {
+      opacity: 1;
+      transform: translate(-100%, -50%);
+    }
+  }
+
+  @keyframes inbox-glass-tip-in-right {
+    from {
+      opacity: 0;
+      transform: translate(-4px, -50%);
+    }
+    to {
+      opacity: 1;
+      transform: translate(0, -50%);
     }
   }
 
@@ -1443,6 +1476,7 @@
     color: var(--chat-text);
     --bubble-edge: var(--bubble-sent-border);
     --bubble-hover: var(--bubble-sent-hover);
+    --wa-msg-fade: var(--bubble-sent);
   }
 
   .wa-bubble-received {
@@ -1450,11 +1484,13 @@
     color: var(--chat-text);
     --bubble-edge: var(--bubble-received-border);
     --bubble-hover: var(--bubble-received-hover);
+    --wa-msg-fade: var(--bubble-received);
   }
 
   .wa-bubble-failed {
     background-color: var(--bubble-failed);
     color: var(--chat-text);
+    --wa-msg-fade: var(--bubble-failed);
   }
 
   .wa-msg-font {
@@ -1467,6 +1503,37 @@
     line-height: 21px;
     font-weight: 400;
     letter-spacing: 0;
+  }
+
+  /* ~12 lines at 21px LH — within WhatsApp-ish 220–280px collapse band */
+  .wa-msg-body-collapse {
+    max-height: 252px;
+    overflow: hidden;
+  }
+
+  .wa-msg-body-fade {
+    pointer-events: none;
+    position: absolute;
+    inset-inline: 0;
+    bottom: 0;
+    height: 3.5rem;
+    background: linear-gradient(
+      to bottom,
+      transparent 0%,
+      var(--wa-msg-fade, var(--bubble-received)) 88%
+    );
+  }
+
+  .wa-msg-read-more {
+    color: var(--chat-accent);
+    font-size: 13.5px;
+    font-weight: 600;
+    line-height: 1.25;
+    letter-spacing: 0.01em;
+  }
+
+  .wa-msg-read-more:hover {
+    text-decoration: underline;
   }
 
   .wa-timestamp {
@@ -1674,8 +1741,8 @@
   .inbox-placeholder-bg {
     background-color: var(--chat-bg);
     background-image:
-      radial-gradient(ellipse 75% 55% at 85% 15%, rgba(37, 211, 102, 0.08), transparent 52%),
-      radial-gradient(ellipse 65% 50% at 10% 90%, rgba(99, 102, 241, 0.05), transparent 48%),
+      radial-gradient(ellipse 70% 50% at 88% 12%, rgba(37, 211, 102, 0.1), transparent 55%),
+      radial-gradient(ellipse 60% 45% at 8% 88%, rgba(18, 140, 126, 0.06), transparent 50%),
       var(--chat-wallpaper-wash),
       var(--chat-wallpaper);
     background-size:
@@ -1695,18 +1762,41 @@
     background-color: var(--chat-bg);
     background-image:
       linear-gradient(rgba(11, 20, 26, 0.55), rgba(11, 20, 26, 0.55)),
-      radial-gradient(ellipse 75% 55% at 85% 15%, rgba(37, 211, 102, 0.1), transparent 52%),
+      radial-gradient(ellipse 70% 50% at 88% 12%, rgba(37, 211, 102, 0.12), transparent 55%),
+      radial-gradient(ellipse 55% 40% at 10% 90%, rgba(18, 140, 126, 0.08), transparent 50%),
       var(--chat-wallpaper);
     background-size:
+      100% 100%,
       100% 100%,
       100% 100%,
       var(--chat-wallpaper-size);
     background-position:
       center,
       center,
+      center,
       0 0;
-    background-repeat: no-repeat, no-repeat, repeat;
+    background-repeat: no-repeat, no-repeat, no-repeat, repeat;
     background-blend-mode: multiply;
+  }
+
+  /* Empty chat pane — stage + tip cards enter */
+  @keyframes inboxPlaceholderIn {
+    from {
+      opacity: 0;
+      transform: translateY(14px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .inbox-placeholder-enter {
+    animation: inboxPlaceholderIn 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .inbox-placeholder-card {
+    animation: inboxPlaceholderIn 380ms cubic-bezier(0.16, 1, 0.3, 1) both;
   }
 
   .inbox-select__menu-portal .inbox-select__menu {
@@ -2014,6 +2104,8 @@
     .inbox-thread-fadein,
     .inbox-thread-enter,
     .inbox-skeleton-fadeout,
+    .inbox-placeholder-enter,
+    .inbox-placeholder-card,
     .modal-panel--enter,
     .modal-panel--exit,
     .modal-backdrop--enter,

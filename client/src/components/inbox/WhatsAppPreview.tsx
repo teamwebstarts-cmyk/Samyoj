@@ -452,13 +452,29 @@ function InteractiveActionButton({
   label: string;
   icon?: ReactNode;
   compact?: boolean;
-  variant?: 'session' | 'template';
+  /** `detached` = WhatsApp session reply buttons (separate white cards). `attached` = fused footer (copy-code). */
+  variant?: 'session' | 'template' | 'detached' | 'attached';
 }) {
+  if (variant === 'detached' || variant === 'session') {
+    return (
+      <div
+        role="presentation"
+        className={`wa-bubble-action flex w-full cursor-default select-none items-center justify-center gap-2 rounded-lg border border-[color:var(--bubble-received-border)] bg-[color:var(--bubble-received)] font-medium shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] ${
+          compact ? 'px-2.5 py-2 text-[13px]' : 'px-3 py-2.5 text-[14px]'
+        }`}
+      >
+        {icon}
+        <span>{label}</span>
+      </div>
+    );
+  }
+
   const shellClass = variant === 'template' ? 'wa-bubble-received' : 'wa-bubble-sent';
 
   return (
     <div
-      className={`wa-bubble-action flex w-full items-center justify-center gap-2 border-t py-2.5 font-medium ${shellClass} ${
+      role="presentation"
+      className={`wa-bubble-action flex w-full cursor-default select-none items-center justify-center gap-2 border-t py-2.5 font-medium ${shellClass} ${
         compact ? 'text-[13px]' : 'text-[14px]'
       }`}
     >
@@ -554,75 +570,79 @@ export function WhatsAppInteractiveCard({
   return (
     <div className={`flex ${isOutbound ? 'justify-end' : 'justify-start'}`}>
       <div
-        className={`overflow-hidden rounded-lg shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] wa-msg-font ${
+        className={`flex w-full flex-col gap-1.5 wa-msg-font ${
           compact ? 'max-w-[280px]' : 'max-w-[min(100%,340px)]'
-        } ${isOutbound ? 'rounded-br-[2px]' : 'rounded-bl-[2px]'}`}
+        }`}
       >
-        <div className={`${compact ? 'px-2.5 pt-2.5 pb-1' : 'px-3.5 pt-3 pb-1.5'} ${shellClass}`}>
-          {header && (
-            <p className={`mb-1 font-semibold leading-snug ${compact ? 'text-[13px]' : 'text-[15px]'}`}>
-              {header}
-            </p>
-          )}
-          <p
-            className={`whitespace-pre-wrap break-words ${
-              compact ? 'text-[12.5px] leading-[1.45]' : 'wa-msg-body'
-            }`}
-          >
-            {body}
-          </p>
-          {footer && (
-            <p className={`mt-2 leading-snug wa-timestamp ${compact ? 'text-[10px]' : 'text-[12px]'}`}>
-              {footer}
-            </p>
-          )}
-          {mode === 'list' && totalRows > 0 && (
-            <div
-              className={`mt-2 rounded-lg border border-[color:var(--bubble-received-border)] bg-[color:var(--bubble-received)]/80 p-2 ${
-                compact ? 'text-[10px]' : 'text-[11px]'
+        <div
+          className={`overflow-hidden rounded-lg shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] ${shellClass} ${
+            isOutbound ? 'rounded-br-[2px]' : 'rounded-bl-[2px]'
+          }`}
+        >
+          <div className={compact ? 'px-2.5 pt-2.5 pb-1' : 'px-3.5 pt-3 pb-1.5'}>
+            {header && (
+              <p className={`mb-1 font-semibold leading-snug ${compact ? 'text-[13px]' : 'text-[15px]'}`}>
+                {header}
+              </p>
+            )}
+            <p
+              className={`whitespace-pre-wrap break-words ${
+                compact ? 'text-[12.5px] leading-[1.45]' : 'wa-msg-body'
               }`}
             >
-              <p className="mb-1 font-semibold wa-timestamp">List preview</p>
-              {listSections.map((section, sectionIndex) => (
-                <div
-                  key={sectionIndex}
-                  className={
-                    sectionIndex > 0
-                      ? 'mt-2 border-t border-[color:var(--bubble-received-border)] pt-2'
-                      : ''
-                  }
-                >
-                  {section.title && <p className="font-semibold">{section.title}</p>}
-                  {section.rows.map((row) => (
-                    <div key={row.id} className="mt-1">
-                      <p className="font-medium">{row.title}</p>
-                      {row.description && <p className="wa-timestamp">{row.description}</p>}
-                    </div>
-                  ))}
-                </div>
-              ))}
+              {body}
+            </p>
+            {footer && (
+              <p className={`mt-2 leading-snug wa-timestamp ${compact ? 'text-[10px]' : 'text-[12px]'}`}>
+                {footer}
+              </p>
+            )}
+            {mode === 'list' && totalRows > 0 && (
+              <div
+                className={`mt-2 rounded-lg border border-[color:var(--bubble-received-border)] bg-[color:var(--bubble-received)]/80 p-2 ${
+                  compact ? 'text-[10px]' : 'text-[11px]'
+                }`}
+              >
+                <p className="mb-1 font-semibold wa-timestamp">List preview</p>
+                {listSections.map((section, sectionIndex) => (
+                  <div
+                    key={sectionIndex}
+                    className={
+                      sectionIndex > 0
+                        ? 'mt-2 border-t border-[color:var(--bubble-received-border)] pt-2'
+                        : ''
+                    }
+                  >
+                    {section.title && <p className="font-semibold">{section.title}</p>}
+                    {section.rows.map((row) => (
+                      <div key={row.id} className="mt-1">
+                        <p className="font-medium">{row.title}</p>
+                        {row.description && <p className="wa-timestamp">{row.description}</p>}
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="flex justify-end gap-1 pt-0.5">
+              <span className={`tabular-nums wa-timestamp ${compact ? 'text-[9px]' : 'text-[11px]'}`}>
+                {time}
+              </span>
+              {isOutbound && <StatusIcon status={status} compact={compact} />}
             </div>
-          )}
-          <div className={`flex justify-end gap-1 ${compact ? 'pt-0.5' : 'pt-0.5'}`}>
-            <span className={`tabular-nums wa-timestamp ${compact ? 'text-[9px]' : 'text-[11px]'}`}>
-              {time}
-            </span>
-            {isOutbound && <StatusIcon status={status} compact={compact} />}
           </div>
         </div>
 
         {actionButtons.length > 0 && (
-          <div className={`border-t border-[color:var(--bubble-edge)] ${shellClass}`}>
+          <div className="flex w-full flex-col gap-1.5" aria-hidden="true">
             {actionButtons.map((btn, index) => (
-              <div
+              <InteractiveActionButton
                 key={`${btn.id}-${index}`}
-                className={`wa-bubble-action flex w-full items-center justify-center gap-2 border-b py-2.5 font-medium last:border-b-0 ${
-                  compact ? 'text-[13px]' : 'text-[14px]'
-                }`}
-              >
-                {index === 0 ? ctaIcon : null}
-                <span>{btn.title}</span>
-              </div>
+                label={btn.title}
+                icon={index === 0 ? ctaIcon : undefined}
+                compact={compact}
+                variant="detached"
+              />
             ))}
           </div>
         )}

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Clock, Lock } from 'lucide-react';
 import { formatWindowExpiry } from './inboxUtils';
+import { useGlassTipProps } from './ComposerGlassTip';
 import type { ServiceWindowInfo } from '../../types';
 
 interface ServiceWindowBannerProps {
@@ -112,13 +113,14 @@ export default function ServiceWindowBanner({ serviceWindow, compact }: ServiceW
 
 export function ServiceWindowBadge({ serviceWindow }: ServiceWindowBannerProps) {
   useCountdownTick(serviceWindow.open);
+  const tipFor = useGlassTipProps();
   const tone = getWindowTone(serviceWindow);
 
   if (tone === 'closed') {
     return (
       <div
-        title="Reply window closed — template required"
         role="status"
+        {...tipFor('Reply window closed — template required')}
         className={`${BADGE_BASE} ${TONE_PILL.closed} ${TONE_PULSE.closed}`}
       >
         <Lock className={`h-3.5 w-3.5 shrink-0 ${TONE_ICON.closed}`} strokeWidth={2.25} aria-hidden />
@@ -134,8 +136,8 @@ export function ServiceWindowBadge({ serviceWindow }: ServiceWindowBannerProps) 
 
   return (
     <div
-      title="24-hour WhatsApp reply window"
       role="status"
+      {...tipFor('24-hour WhatsApp reply window')}
       className={`${BADGE_BASE} ${TONE_PILL[tone]} ${TONE_PULSE[tone]}`}
     >
       <Clock className={`h-3.5 w-3.5 shrink-0 ${TONE_ICON[tone]}`} strokeWidth={2.25} aria-hidden />

@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { logError } from '../utils/errors';
 import { socketBaseUrl } from '../services/utils';
+import { ensureFreshAccessToken } from '../services/api';
+import { getAccessToken, getRefreshToken } from '../utils/authStorage';
 
 export type SocketConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
@@ -10,6 +12,15 @@ export interface SocketState {
   lastConnectedAt: Date | null;
   reconnectAttempts: number;
   totalDisconnects: number;
+}
+
+function isAuthConnectError(err: Error): boolean {
+  const msg = err?.message || '';
+  return (
+    msg === 'Invalid token' ||
+    msg === 'Authentication required' ||
+    /jwt expired|jwt malformed|invalid token|unauthorized/i.test(msg)
+  );
 }
 
 /**
@@ -39,15 +50,25 @@ export function useSocket(onEvent?: (event: string, data: unknown) => void) {
   }, []);
 
   useEffect(() => {
-    const token = localStorage.getItem('accessToken');
-    if (!token) return;
+    // Need at least a refresh token — access JWT may already be expired (15m).
+    if (!getAccessToken() && !getRefreshToken()) return;
 
     setState((prev) => ({ ...prev, status: 'connecting' }));
 
+    let disposed = false;
+    let authRefreshInFlight = false;
+    let reconnectAttempts = 0;
+
     const socket = io(socketBaseUrl, {
-      auth: { token },
+      // Read the latest access token on every handshake/reconnect. A static
+      // string captured at mount stays expired after the axios interceptor
+      // refreshes localStorage — that killed Inbox realtime after ~15m.
+      auth: (cb) => {
+        cb({ token: getAccessToken() || '' });
+      },
       withCredentials: true,
-      transports: ['websocket'],
+      // Prefer websocket; allow polling if the Codespace/Vite proxy blocks WS.
+      transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
@@ -56,8 +77,6 @@ export function useSocket(onEvent?: (event: string, data: unknown) => void) {
     });
 
     socketRef.current = socket;
-
-    let reconnectAttempts = 0;
 
     socket.on('connect', () => {
       console.info('[socket] Connected', { id: socket.id });
@@ -127,12 +146,34 @@ export function useSocket(onEvent?: (event: string, data: unknown) => void) {
         source: 'socket',
         action: 'Connection failed',
       });
+
+      if (!isAuthConnectError(err) || authRefreshInFlight || disposed) return;
+
+      authRefreshInFlight = true;
+      void ensureFreshAccessToken()
+        .then((fresh) => {
+          if (disposed || !fresh) return;
+          // Next handshake reads the new token via the auth callback.
+          if (!socket.connected) {
+            socket.connect();
+          }
+        })
+        .catch((refreshErr) => {
+          logError(refreshErr, {
+            source: 'socket',
+            action: 'Token refresh after auth failure',
+          });
+        })
+        .finally(() => {
+          authRefreshInFlight = false;
+        });
     });
 
     // Register real-time event handlers via the stable callback
     const events = [
       'message:new',
       'message:status',
+      'message:reaction',
       'call:incoming',
       'call:ring',
       'call:ring_timeout',
@@ -161,6 +202,7 @@ export function useSocket(onEvent?: (event: string, data: unknown) => void) {
     }
 
     return () => {
+      disposed = true;
       socketRef.current = null;
       socket.removeAllListeners();
       socket.disconnect();

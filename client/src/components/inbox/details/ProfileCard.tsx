@@ -2,6 +2,7 @@ import { Copy, ExternalLink, Mail, Phone, ShieldAlert, ShieldCheck, UserPlus } f
 import { Link } from 'react-router-dom';
 import { useState } from 'react';
 import ContactAvatar from '../ContactAvatar';
+import { useGlassTipProps } from '../ComposerGlassTip';
 import type { Contact, Conversation } from '../../../types';
 
 interface ProfileCardProps {
@@ -56,6 +57,7 @@ export default function ProfileCard({
   assignedAgent,
   onChangeAssignee,
 }: ProfileCardProps) {
+  const tipFor = useGlassTipProps();
   const optedIn = contact.optedIn !== false;
   const status = STATUS_LABEL[conversation.status] || conversation.status;
   const sla = slaMeta(conversation);
@@ -84,7 +86,8 @@ export default function ProfileCard({
           <button
             type="button"
             onClick={() => void copyPhone()}
-            title={copied ? 'Copied' : 'Copy phone'}
+            aria-label={copied ? 'Copied' : 'Copy phone'}
+            {...tipFor(copied ? 'Copied' : 'Copy phone')}
             className="mt-0.5 inline-flex max-w-full items-center gap-1 truncate text-[12px] font-medium text-theme-muted transition hover:text-theme-fg"
           >
             <Phone className="h-3 w-3 shrink-0" />
@@ -110,7 +113,7 @@ export default function ProfileCard({
               ? 'bg-emerald-50 text-emerald-700 ring-emerald-200/80 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-800/50'
               : 'bg-red-50 text-red-700 ring-red-200/80 dark:bg-red-950/40 dark:text-red-300 dark:ring-red-800/50'
           }`}
-          title={optedIn ? 'Contact opted in for WhatsApp' : 'Contact opted out'}
+          {...tipFor(optedIn ? 'Contact opted in for WhatsApp' : 'Contact opted out')}
         >
           {optedIn ? <ShieldCheck className="h-3 w-3" /> : <ShieldAlert className="h-3 w-3" />}
           {optedIn ? 'Opted in' : 'Opted out'}
@@ -118,7 +121,7 @@ export default function ProfileCard({
         {sla && (
           <span
             className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${sla.className}`}
-            title={sla.title}
+            {...tipFor(sla.title)}
           >
             {sla.label}
           </span>

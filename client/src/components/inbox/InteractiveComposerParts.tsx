@@ -3,6 +3,7 @@ import { Copy, ExternalLink, List, MousePointerClick, Phone, Plus, Ticket, Trash
 import { Link } from 'react-router-dom';
 import AppInput from '../ui/AppInput';
 import { WhatsAppInteractivePreview } from './WhatsAppPreview';
+import { useGlassTipProps } from './ComposerGlassTip';
 import type { InteractiveComposerMode } from './InteractiveComposerTypes';
 
 export type { InteractiveComposerMode };
@@ -102,6 +103,7 @@ export function InteractiveTypeSwitcher({
   size,
   className = '',
 }: TypeSwitcherProps) {
+  const tipFor = useGlassTipProps();
   const resolvedSize = size === 'header' ? 'form' : (size ?? (compact ? 'compact' : 'default'));
 
   const containerClass =
@@ -156,7 +158,8 @@ export function InteractiveTypeSwitcher({
             role="tab"
             aria-selected={selected}
             onClick={() => onModeChange(entry.id)}
-            title={entry.hint}
+            aria-label={entry.hint}
+            {...tipFor(entry.hint)}
             className={buttonClass(selected)}
           >
             <Icon className={iconClass} strokeWidth={2.25} aria-hidden />

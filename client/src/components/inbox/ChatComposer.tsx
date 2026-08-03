@@ -113,7 +113,6 @@ export default function ChatComposer({
   const textareaRef = inputRef ?? localTextareaRef;
   const [attachMenuOpen, setAttachMenuOpen] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
-  const [cannedOpen, setCannedOpen] = useState(false);
   const [sendMenuOpen, setSendMenuOpen] = useState(false);
   const [sendAnim, setSendAnim] = useState<'punch' | 'shake' | null>(null);
   const [shortcutIndex, setShortcutIndex] = useState(0);
@@ -136,19 +135,38 @@ export default function ChatComposer({
     el.style.height = `${Math.min(el.scrollHeight, 144)}px`;
   }, [value, textareaRef]);
 
+  // Slash menu is open only while the draft is exactly a slash command (`/`, `/thanks`, …).
+  // Empty drafts or normal text must never keep the picker visible.
   const shortcutMatch = value.match(/^\/([a-z0-9_-]*)$/i);
   const filteredReplies = useMemo(() => {
-    if (!shortcutMatch && !cannedOpen) return [];
-    const q = shortcutMatch ? shortcutMatch[1].toLowerCase() : '';
+    if (!shortcutMatch) return [];
+    const q = shortcutMatch[1].toLowerCase();
     const list = q
       ? cannedReplies.filter((r) => r.shortcut.startsWith(q) || r.title.toLowerCase().includes(q))
       : cannedReplies;
     return list.slice(0, 8);
-  }, [cannedReplies, shortcutMatch, cannedOpen]);
+  }, [cannedReplies, shortcutMatch]);
+
+  const slashMenuOpen = filteredReplies.length > 0;
 
   useEffect(() => {
     setShortcutIndex(0);
-  }, [filteredReplies.length, value]);
+  }, [filteredReplies.length, shortcutMatch?.[1]]);
+
+  /** Open slash picker by ensuring draft is a slash command; close by clearing a slash-only draft. */
+  const toggleSlashMenu = () => {
+    if (shortcutMatch) {
+      onChange('');
+      setShortcutIndex(0);
+    } else {
+      // Empty → `/`; normal text → `/text`; invalid `/…` draft → reset to `/`.
+      onChange(!value || value.startsWith('/') ? '/' : `/${value}`);
+    }
+    setAttachMenuOpen(false);
+    setEmojiOpen(false);
+    setSendMenuOpen(false);
+    textareaRef.current?.focus();
+  };
 
   useEffect(
     () => () => {
@@ -160,15 +178,18 @@ export default function ChatComposer({
 
   // Esc closes popovers from anywhere in the composer.
   useEffect(() => {
-    if (!attachMenuOpen && !emojiOpen && !cannedOpen && !sendMenuOpen) return;
+    if (!attachMenuOpen && !emojiOpen && !slashMenuOpen && !sendMenuOpen) return;
     const onKey = (e: globalThis.KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        closeAllMenus([setAttachMenuOpen, setEmojiOpen, setCannedOpen, setSendMenuOpen]);
+      if (e.key !== 'Escape') return;
+      if (shortcutMatch) {
+        onChange('');
+        setShortcutIndex(0);
       }
+      closeAllMenus([setAttachMenuOpen, setEmojiOpen, setSendMenuOpen]);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [attachMenuOpen, emojiOpen, cannedOpen, sendMenuOpen]);
+  }, [attachMenuOpen, emojiOpen, slashMenuOpen, sendMenuOpen, shortcutMatch, onChange]);
 
   const stopRecording = (cancel = false) => {
     const recorder = mediaRecorderRef.current;
@@ -281,7 +302,7 @@ export default function ChatComposer({
 
   const applyCanned = (reply: CannedReply) => {
     onChange(reply.content);
-    setCannedOpen(false);
+    setShortcutIndex(0);
     textareaRef.current?.focus();
   };
 
@@ -324,7 +345,11 @@ export default function ChatComposer({
       triggerSend(e);
     }
     if (e.key === 'Escape') {
-      closeAllMenus([setEmojiOpen, setAttachMenuOpen, setCannedOpen, setSendMenuOpen]);
+      if (shortcutMatch) {
+        onChange('');
+        setShortcutIndex(0);
+      }
+      closeAllMenus([setEmojiOpen, setAttachMenuOpen, setSendMenuOpen]);
     }
   };
 
@@ -419,7 +444,7 @@ export default function ChatComposer({
 
       <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileSelect} />
 
-      {(filteredReplies.length > 0 || cannedOpen) && filteredReplies.length > 0 && (
+      {slashMenuOpen && (
         <div className="absolute bottom-full left-3 right-3 z-40 mb-2 max-h-48 overflow-y-auto rounded-xl border border-theme-border bg-theme-surface py-1 shadow-panel sm:left-4 sm:right-4">
           {filteredReplies.map((reply, i) => (
             <button
@@ -616,15 +641,10 @@ export default function ChatComposer({
               type="button"
               className={toolBtn}
               aria-label="Quick replies"
+              aria-expanded={slashMenuOpen}
               disabled={cannedReplies.length === 0 || recording}
               {...tipFor('Quick replies (also in Details)')}
-              onClick={() => {
-                setCannedOpen((v) => !v);
-                setAttachMenuOpen(false);
-                setEmojiOpen(false);
-                if (!value.startsWith('/')) onChange('/');
-                textareaRef.current?.focus();
-              }}
+              onClick={toggleSlashMenu}
             >
               <Zap size={16} strokeWidth={2} />
             </button>
@@ -646,15 +666,10 @@ export default function ChatComposer({
               type="button"
               className={`${toolBtn} text-[13px] font-semibold text-neutral-400 hover:text-neutral-700 dark:text-neutral-500 dark:hover:text-neutral-200`}
               aria-label="Quick replies"
-              disabled={recording}
+              aria-expanded={slashMenuOpen}
+              disabled={recording || cannedReplies.length === 0}
               {...tipFor('Type / for quick replies')}
-              onClick={() => {
-                onChange(value.startsWith('/') ? value : `/${value}`);
-                setCannedOpen(true);
-                setAttachMenuOpen(false);
-                setEmojiOpen(false);
-                textareaRef.current?.focus();
-              }}
+              onClick={toggleSlashMenu}
             >
               /
             </button>
