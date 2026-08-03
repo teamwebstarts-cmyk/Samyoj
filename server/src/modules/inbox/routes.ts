@@ -1,7 +1,9 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../../config/database';
-import { authenticate, requireOrg } from '../../middleware/auth';
+import { config } from '../../config';
+import { authenticate, requireOrg, loadOrgRole } from '../../middleware/auth';
 import { AppError, sendSuccess, asyncHandler, paramId } from '../../utils/response';
+import logger from '../../utils/logger';
 import { phoneFieldSchema } from '../../utils/phone';
 import {
   MetaWhatsAppService,
@@ -10,8 +12,8 @@ import {
 } from '../whatsapp/meta.service';
 import { getOrgWhatsappContext } from '../whatsapp/context';
 import { resolveActiveWhatsappNumber, conversationFilter } from '../whatsapp/active-number';
-import { deliverOutboundMessage } from '../messages/send.service';
-import { validateInteractive } from '../messages/interactive';
+import { deliverOutboundMessage, type DeliverMessageType } from '../messages/send.service';
+import { validateInteractive, type InteractiveMessageOptions } from '../messages/interactive';
 import { getMessageMediaBuffer, type MessageMediaMetadata } from '../media/download.service';
 import { storeOutboundMedia } from '../media/upload.service';
 import { emitToOrg } from '../../realtime';
@@ -20,8 +22,68 @@ import { z } from 'zod';
 import { parseActiveFlow } from '../flows/flow-state';
 import type { FlowNode } from '../flows/types';
 import { resolveCs24hWindowOpensAt } from './service-window';
+import { buildSignedMediaPath, verifyMediaSignature, MEDIA_URL_TTL_SECONDS } from './media-url';
 
 const router = Router();
+
+async function streamMessageMedia(
+  res: Response,
+  organizationId: string,
+  messageId: string,
+  metadata: MessageMediaMetadata,
+  cacheSeconds?: number
+) {
+  const { buffer, mimeType, filename } = await getMessageMediaBuffer({
+    organizationId,
+    messageId,
+    metadata,
+  });
+
+  res.setHeader('Content-Type', mimeType);
+  res.setHeader('Content-Length', buffer.length);
+  if (cacheSeconds) {
+    res.setHeader('Cache-Control', `private, max-age=${cacheSeconds}`);
+  }
+  if (filename) {
+    res.setHeader('Content-Disposition', `inline; filename="${filename.replace(/"/g, '')}"`);
+  }
+  res.send(buffer);
+}
+
+// Token-scoped, expiring media proxy. Registered before the auth middleware so
+// signed URLs work in <img>/<audio> tags; requests without exp+sig fall through
+// to the authenticated blob handler below.
+router.get(
+  '/messages/:messageId/media',
+  asyncHandler(async (req: Request, res: Response, next) => {
+    const { exp, sig } = req.query;
+    if (!exp || !sig) return next();
+
+    const messageId = req.params.messageId as string;
+    if (!verifyMediaSignature(messageId, parseInt(exp as string, 10), sig as string)) {
+      throw new AppError(401, 'Invalid or expired media token');
+    }
+
+    const message = await prisma.message.findFirst({
+      where: { id: messageId },
+      include: { conversation: { select: { organizationId: true } } },
+    });
+    if (!message) throw new AppError(404, 'Message not found');
+
+    const metadata = message.metadata as MessageMediaMetadata | null;
+    if (!metadata?.mediaId && !metadata?.mediaPath) {
+      throw new AppError(404, 'No media attached to this message');
+    }
+
+    await streamMessageMedia(
+      res,
+      message.conversation.organizationId,
+      message.id,
+      metadata || {},
+      MEDIA_URL_TTL_SECONDS
+    );
+  })
+);
 
 router.use(authenticate, requireOrg, resolveActiveWhatsappNumber);
 
@@ -51,9 +113,10 @@ router.get(
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const numberId = req.activeWhatsappNumberId;
-    const { status, search, assignedTo, page = '1', limit = '20' } = req.query;
+    const { status, search, assignedTo, cursor, page, limit, favorite, sla, unread } = req.query;
 
     const where: Record<string, unknown> = { organizationId: orgId, ...conversationFilter(numberId) };
+    if (unread === 'true') where.unreadCount = { gt: 0 };
     if (status === 'SNOOZED') {
       where.snoozedUntil = { gt: new Date() };
     } else {
@@ -61,6 +124,13 @@ router.get(
       where.OR = [{ snoozedUntil: null }, { snoozedUntil: { lte: new Date() } }];
     }
     if (assignedTo) where.assignedAgentId = assignedTo;
+    if (favorite === 'true') where.isFavorite = true;
+    if (sla === 'breached') {
+      where.slaBreached = true;
+    } else if (sla === 'due-soon') {
+      where.slaBreached = false;
+      where.slaDueAt = { gt: new Date(), lte: new Date(Date.now() + 60 * 60 * 1000) };
+    }
     if (search) {
       where.contact = {
         OR: [
@@ -70,24 +140,43 @@ router.get(
       };
     }
 
-    const skip = (parseInt(page as string) - 1) * parseInt(limit as string);
+    // Legacy `page` keeps offset pagination for old clients; otherwise keyset
+    // paginate on (lastMessageAt desc, id desc) using the last row id as cursor.
+    const isLegacyPage = cursor === undefined && page !== undefined;
+    const limitNum = parseInt(limit as string, 10);
+    const take = Math.min(Math.max(Number.isFinite(limitNum) ? limitNum : isLegacyPage ? 20 : 30, 1), 100);
+    const pageNum = Math.max(parseInt((page as string) || '1', 10) || 1, 1);
 
-    const [conversations, total] = await Promise.all([
-      prisma.conversation.findMany({
-        where,
-        include: {
-          contact: true,
-          assignedAgent: { select: { id: true, name: true } },
-          activeBot: { select: { id: true, name: true } },
-          messages: { orderBy: { createdAt: 'desc' }, take: 1 },
-          labels: { include: { label: true } },
-        },
-        orderBy: { lastMessageAt: 'desc' },
-        skip,
-        take: parseInt(limit as string),
-      }),
+    const findArgs: Prisma.ConversationFindManyArgs = {
+      where,
+      include: {
+        contact: true,
+        assignedAgent: { select: { id: true, name: true } },
+        activeBot: { select: { id: true, name: true } },
+        messages: { orderBy: { createdAt: 'desc' }, take: 1 },
+        labels: { include: { label: true } },
+      },
+      orderBy: [{ lastMessageAt: 'desc' }, { id: 'desc' }],
+      take: isLegacyPage ? take : take + 1,
+    };
+    if (isLegacyPage) {
+      findArgs.skip = (pageNum - 1) * take;
+    } else if (cursor) {
+      findArgs.cursor = { id: cursor as string };
+      findArgs.skip = 1;
+    }
+
+    const [rows, total] = await Promise.all([
+      prisma.conversation.findMany(findArgs),
       prisma.conversation.count({ where }),
     ]);
+
+    let nextCursor: string | null = null;
+    const conversations = rows;
+    if (!isLegacyPage && conversations.length > take) {
+      conversations.pop();
+      nextCursor = conversations[conversations.length - 1]?.id ?? null;
+    }
 
     const flowIds = [
       ...new Set(
@@ -120,7 +209,12 @@ router.get(
       return { ...rest, activeFlow };
     });
 
-    sendSuccess(res, { conversations: enriched, total, page: parseInt(page as string) });
+    sendSuccess(res, {
+      conversations: enriched,
+      nextCursor,
+      total,
+      ...(isLegacyPage ? { page: pageNum } : {}),
+    });
   })
 );
 
@@ -200,18 +294,136 @@ router.get(
       throw new AppError(404, 'No media attached to this message');
     }
 
-    const { buffer, mimeType, filename } = await getMessageMediaBuffer({
-      organizationId: orgId,
-      messageId: message.id,
-      metadata: metadata || {},
+    await streamMessageMedia(res, orgId, message.id, metadata || {});
+  })
+);
+
+router.get(
+  '/messages/:messageId/media-url',
+  asyncHandler(async (req: Request, res: Response) => {
+    const messageId = req.params.messageId as string;
+    const orgId = req.user!.organizationId!;
+
+    const message = await prisma.message.findFirst({
+      where: {
+        id: messageId,
+        conversation: { organizationId: orgId },
+      },
     });
 
-    res.setHeader('Content-Type', mimeType);
-    res.setHeader('Content-Length', buffer.length);
-    if (filename) {
-      res.setHeader('Content-Disposition', `inline; filename="${filename.replace(/"/g, '')}"`);
+    if (!message) throw new AppError(404, 'Message not found');
+
+    const metadata = message.metadata as MessageMediaMetadata | null;
+    if (!metadata?.mediaId && !metadata?.mediaPath) {
+      throw new AppError(404, 'No media attached to this message');
     }
-    res.send(buffer);
+
+    const { path, expiresAt } = buildSignedMediaPath(message.id);
+    sendSuccess(res, {
+      url: `${config.serverUrl}${path}`,
+      path,
+      expiresAt,
+      mimeType: metadata?.mimeType ?? null,
+      filename: metadata?.filename ?? null,
+    });
+  })
+);
+
+const RETRYABLE_TYPES = ['TEXT', 'TEMPLATE', 'IMAGE', 'VIDEO', 'DOCUMENT', 'AUDIO', 'INTERACTIVE'];
+
+router.post(
+  '/messages/:messageId/retry',
+  asyncHandler(async (req: Request, res: Response) => {
+    const messageId = req.params.messageId as string;
+    const orgId = req.user!.organizationId!;
+
+    const message = await prisma.message.findFirst({
+      where: {
+        id: messageId,
+        conversation: { organizationId: orgId },
+      },
+      include: {
+        conversation: { include: { contact: true, whatsappNumber: true } },
+      },
+    });
+
+    if (!message) throw new AppError(404, 'Message not found');
+    if (message.direction !== 'OUTBOUND' || message.status !== 'FAILED') {
+      throw new AppError(400, 'Only failed outbound messages can be retried');
+    }
+    if (!RETRYABLE_TYPES.includes(message.type)) {
+      throw new AppError(400, `Messages of type ${message.type} cannot be retried`);
+    }
+
+    const conversation = message.conversation;
+    if (!conversation.whatsappNumber) throw new AppError(400, 'No WhatsApp number connected');
+
+    if (message.type !== 'TEMPLATE') {
+      const windowOpensAt = await resolveCs24hWindowOpensAt(
+        conversation.id,
+        conversation.cs24hWindowOpensAt
+      );
+      if (!isWithin24HourWindow(windowOpensAt)) {
+        throw new AppError(400, '24-hour window expired. Use an approved template message.');
+      }
+    }
+
+    const { error: _previousError, ...sendMetadata } = (message.metadata || {}) as Record<
+      string,
+      unknown
+    > & {
+      mediaPath?: string;
+      caption?: string;
+      templateName?: string;
+      templateLanguage?: string;
+      templateParams?: {
+        body?: string[];
+        header?: string[];
+        headerMediaUrl?: string;
+        couponCode?: string;
+      };
+      interactive?: InteractiveMessageOptions;
+    };
+
+    let mediaUrl: string | undefined;
+    if (['IMAGE', 'VIDEO', 'DOCUMENT', 'AUDIO'].includes(message.type)) {
+      if (!sendMetadata.mediaPath) {
+        throw new AppError(400, 'Original media is no longer available for retry');
+      }
+      const { getPublicMediaUrl } = await import('../media/storage-adapter');
+      mediaUrl = getPublicMediaUrl(sendMetadata.mediaPath);
+    }
+
+    await prisma.message.update({
+      where: { id: message.id },
+      data: { status: 'PENDING', metadata: sendMetadata as Prisma.InputJsonValue },
+    });
+    emitToOrg(orgId, 'message:status', {
+      messageId: message.id,
+      status: 'PENDING',
+      conversationId: conversation.id,
+    });
+
+    const sentMessage = await deliverOutboundMessage({
+      organizationId: orgId,
+      messageId: message.id,
+      phoneNumberId: conversation.whatsappNumber.phoneNumberId,
+      encryptedToken: conversation.whatsappNumber.accessToken,
+      to: conversation.contact.phone,
+      content:
+        message.type === 'TEMPLATE'
+          ? sendMetadata.templateName || message.content
+          : message.content,
+      type: message.type as DeliverMessageType,
+      templateName: sendMetadata.templateName,
+      templateLanguage: sendMetadata.templateLanguage || 'en_US',
+      templateParams: sendMetadata.templateParams,
+      mediaUrl,
+      mediaCaption: sendMetadata.caption,
+      interactive: sendMetadata.interactive,
+    });
+
+    sendSuccess(res, sentMessage);
   })
 );
 
@@ -249,9 +461,117 @@ router.get(
 );
 
 router.get(
+  '/:id/stats',
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const id = paramId(req);
+
+    const conversation = await prisma.conversation.findFirst({
+      where: { id, organizationId: orgId },
+      select: { id: true, contactId: true },
+    });
+    if (!conversation) throw new AppError(404, 'Conversation not found');
+
+    const contactScope = { organizationId: orgId, contactId: conversation.contactId };
+
+    const [totalChats, openTickets, respondedConversations] = await Promise.all([
+      prisma.conversation.count({ where: contactScope }),
+      prisma.ticket.count({
+        where: { ...contactScope, status: { notIn: ['RESOLVED', 'CLOSED'] } },
+      }),
+      prisma.conversation.findMany({
+        where: { ...contactScope, firstResponseAt: { not: null } },
+        select: { createdAt: true, firstResponseAt: true },
+      }),
+    ]);
+
+    let avgFirstResponseMinutes: number | null = null;
+    if (respondedConversations.length > 0) {
+      const totalMs = respondedConversations.reduce(
+        (sum, c) => sum + (c.firstResponseAt!.getTime() - c.createdAt.getTime()),
+        0
+      );
+      avgFirstResponseMinutes = Math.round(totalMs / respondedConversations.length / 60000);
+    }
+
+    sendSuccess(res, { totalChats, openTickets, avgFirstResponseMinutes });
+  })
+);
+
+router.get(
+  '/:id/export',
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const id = paramId(req);
+    const format = req.query.format === 'json' ? 'json' : 'txt';
+
+    const conversation = await prisma.conversation.findFirst({
+      where: { id, organizationId: orgId },
+      include: {
+        contact: { select: { name: true, phone: true } },
+        assignedAgent: { select: { name: true } },
+        messages: { orderBy: { createdAt: 'asc' } },
+      },
+    });
+    if (!conversation) throw new AppError(404, 'Conversation not found');
+
+    const senderName = (direction: 'INBOUND' | 'OUTBOUND') =>
+      direction === 'OUTBOUND'
+        ? conversation.assignedAgent?.name || 'Agent'
+        : conversation.contact.name || 'Customer';
+
+    const phone = conversation.contact.phone.replace(/\D/g, '') || 'unknown';
+    const date = new Date().toISOString().slice(0, 10);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="chat-${phone}-${date}.${format}"`
+    );
+
+    if (format === 'json') {
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.send(
+        JSON.stringify(
+          {
+            conversation: {
+              id: conversation.id,
+              status: conversation.status,
+              contact: conversation.contact,
+              createdAt: conversation.createdAt,
+            },
+            messages: conversation.messages.map((m) => ({
+              id: m.id,
+              direction: m.direction,
+              type: m.type,
+              status: m.status,
+              sender: senderName(m.direction),
+              content: m.content,
+              createdAt: m.createdAt,
+            })),
+          },
+          null,
+          2
+        )
+      );
+      return;
+    }
+
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const lines = conversation.messages.map((m) => {
+      const d = m.createdAt;
+      const ts = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      const content = m.type === 'TEXT' ? m.content : `[${m.type}] ${m.content}`;
+      return `[${ts}] ${senderName(m.direction)}: ${content}`;
+    });
+
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.send(lines.join('\n') + '\n');
+  })
+);
+
+router.get(
   '/:id/messages',
   asyncHandler(async (req: Request, res: Response) => {
-    const { before, limit = '50' } = req.query;
+    const { before, limit = '50', q } = req.query;
 
     const id = paramId(req);
     const conversation = await prisma.conversation.findFirst({
@@ -263,6 +583,7 @@ router.get(
       where: {
         conversationId: id,
         ...(before ? { createdAt: { lt: new Date(before as string) } } : {}),
+        ...(q ? { content: { contains: q as string, mode: 'insensitive' as const } } : {}),
       },
       orderBy: { createdAt: 'desc' },
       take: parseInt(limit as string),
@@ -312,10 +633,7 @@ router.get(
       ? new Date(windowOpensAt.getTime() + 24 * 60 * 60 * 1000)
       : null;
 
-    await prisma.conversation.update({
-      where: { id },
-      data: { unreadCount: 0 },
-    });
+    // Unread is only cleared via POST /:id/read — GET stays side-effect free.
 
     sendSuccess(res, {
       messages: messages.reverse(),
@@ -326,6 +644,79 @@ router.get(
         windowOpensAt: windowOpensAt?.toISOString() ?? null,
       },
     });
+  })
+);
+
+router.post(
+  '/:id/read',
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const id = paramId(req);
+
+    const conversation = await prisma.conversation.findFirst({
+      where: { id, organizationId: orgId },
+      select: { id: true },
+    });
+    if (!conversation) throw new AppError(404, 'Conversation not found');
+
+    await prisma.conversation.update({
+      where: { id },
+      data: { unreadCount: 0 },
+    });
+
+    emitToOrg(orgId, 'conversation:read', { conversationId: id, unreadCount: 0 });
+
+    // Fire-and-forget: mark recent inbound messages as read on Meta so the
+    // customer sees blue ticks. A Meta failure must never fail this endpoint.
+    void (async () => {
+      try {
+        const full = await prisma.conversation.findFirst({
+          where: { id, organizationId: orgId },
+          include: {
+            whatsappNumber: { select: { phoneNumberId: true, accessToken: true } },
+          },
+        });
+        const whatsappNumber = full?.whatsappNumber;
+        if (!whatsappNumber) return;
+
+        const unreadInbound = await prisma.message.findMany({
+          where: {
+            conversationId: id,
+            direction: 'INBOUND',
+            status: { not: 'READ' },
+            metaMessageId: { not: null },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 25,
+          select: { id: true, metaMessageId: true },
+        });
+        if (unreadInbound.length === 0) return;
+
+        const accessToken = MetaWhatsAppService.decryptToken(whatsappNumber.accessToken);
+        await Promise.all(
+          unreadInbound.map((m) =>
+            MetaWhatsAppService.markAsRead(
+              whatsappNumber.phoneNumberId,
+              accessToken,
+              m.metaMessageId!
+            )
+          )
+        );
+
+        await prisma.message.updateMany({
+          where: { id: { in: unreadInbound.map((m) => m.id) } },
+          data: { status: 'READ' },
+        });
+      } catch (err) {
+        logger.error('Meta markAsRead failed', {
+          source: 'inbox',
+          conversationId: id,
+          error: err instanceof Error ? err.message : err,
+        });
+      }
+    })();
+
+    sendSuccess(res, { conversationId: id, unreadCount: 0 });
   })
 );
 
@@ -659,6 +1050,13 @@ router.patch(
       conversationId: conversation.id,
       assignedAgent: conversation.assignedAgent,
     });
+    emitToOrg(orgId, 'conversation:updated', {
+      conversationId: conversation.id,
+      patch: {
+        assignedAgentId: conversation.assignedAgentId,
+        assignedAgent: conversation.assignedAgent,
+      },
+    });
 
     if (agentId) {
       const { notifyAssignment } = await import('../../services/notification.service');
@@ -728,6 +1126,14 @@ router.patch(
       botHandoffAt: conversation.botHandoffAt,
       activeBot: conversation.activeBot,
     });
+    emitToOrg(orgId, 'conversation:updated', {
+      conversationId: conversation.id,
+      patch: {
+        botActive: conversation.botActive,
+        botHandoffAt: conversation.botHandoffAt,
+        activeBot: conversation.activeBot,
+      },
+    });
 
     sendSuccess(res, conversation);
   })
@@ -749,6 +1155,11 @@ router.patch(
       },
     });
 
+    emitToOrg(orgId, 'conversation:snooze', {
+      conversationId: conversation.id,
+      snoozedUntil: conversation.snoozedUntil,
+    });
+
     sendSuccess(res, conversation);
   })
 );
@@ -768,14 +1179,179 @@ router.delete(
       },
     });
 
+    emitToOrg(orgId, 'conversation:snooze', {
+      conversationId: conversation.id,
+      snoozedUntil: null,
+    });
+
     sendSuccess(res, conversation);
   })
 );
 
+const bulkSchema = z
+  .object({
+    conversationIds: z.array(z.string().min(1)).min(1).max(50),
+    action: z.enum(['assign', 'status', 'snooze', 'unsnooze']),
+    agentId: z.string().min(1).optional(),
+    status: z.enum(['OPEN', 'PENDING', 'CLOSED']).optional(),
+    snoozedUntil: z.string().datetime().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.action === 'assign' && !data.agentId) {
+      ctx.addIssue({ code: 'custom', message: 'agentId required for assign', path: ['agentId'] });
+    }
+    if (data.action === 'status' && !data.status) {
+      ctx.addIssue({ code: 'custom', message: 'status required for status action', path: ['status'] });
+    }
+    if (data.action === 'snooze' && !data.snoozedUntil) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'snoozedUntil required for snooze',
+        path: ['snoozedUntil'],
+      });
+    }
+  });
+
+router.post(
+  '/bulk',
+  asyncHandler(async (req: Request, res: Response) => {
+    const data = bulkSchema.parse(req.body);
+    const orgId = req.user!.organizationId!;
+    const numberId = req.activeWhatsappNumberId;
+
+    // Org-scope-validate ALL ids up front so a cross-org id can never slip through.
+    const owned = await prisma.conversation.findMany({
+      where: { id: { in: data.conversationIds }, organizationId: orgId, ...conversationFilter(numberId) },
+      select: { id: true },
+    });
+    const ownedIds = new Set(owned.map((c) => c.id));
+    const invalidIds = data.conversationIds.filter((id) => !ownedIds.has(id));
+    if (invalidIds.length > 0) {
+      throw new AppError(400, `Invalid conversation ids: ${invalidIds.join(', ')}`);
+    }
+
+    let assignedAgent: { id: string; name: string } | null = null;
+    if (data.action === 'assign') {
+      const membership = await prisma.organizationUser.findUnique({
+        where: {
+          organizationId_userId: { organizationId: orgId, userId: data.agentId! },
+        },
+        include: { user: { select: { id: true, name: true } } },
+      });
+      if (!membership) throw new AppError(400, 'Agent is not a team member');
+      assignedAgent = membership.user;
+    }
+
+    // Per-row updates keep partial success possible; each row write is atomic.
+    const results = await Promise.allSettled(
+      data.conversationIds.map(async (conversationId) => {
+        switch (data.action) {
+          case 'assign': {
+            await prisma.conversation.update({
+              where: { id: conversationId },
+              data: { assignedAgentId: data.agentId! },
+            });
+            emitToOrg(orgId, 'conversation:assigned', { conversationId, assignedAgent });
+            emitToOrg(orgId, 'conversation:updated', {
+              conversationId,
+              patch: { assignedAgentId: data.agentId, assignedAgent },
+            });
+            break;
+          }
+          case 'status': {
+            const conversation = await prisma.conversation.update({
+              where: { id: conversationId },
+              data: { status: data.status! },
+            });
+            emitToOrg(orgId, 'conversation:status', {
+              conversationId,
+              status: conversation.status,
+            });
+            if (conversation.status === 'CLOSED') {
+              const { dispatchOrgWebhook } = await import('../integrations/dispatch');
+              void dispatchOrgWebhook(orgId, 'conversation.closed', {
+                conversationId,
+                status: conversation.status,
+                contactId: conversation.contactId,
+              });
+            }
+            break;
+          }
+          case 'snooze': {
+            const snoozedUntil = new Date(data.snoozedUntil!);
+            await prisma.conversation.update({
+              where: { id: conversationId },
+              data: { snoozedUntil },
+            });
+            emitToOrg(orgId, 'conversation:snooze', { conversationId, snoozedUntil });
+            break;
+          }
+          case 'unsnooze': {
+            await prisma.conversation.update({
+              where: { id: conversationId },
+              data: { snoozedUntil: null },
+            });
+            emitToOrg(orgId, 'conversation:snooze', { conversationId, snoozedUntil: null });
+            break;
+          }
+        }
+        return conversationId;
+      })
+    );
+
+    const failed = results
+      .map((r, i) => ({ r, id: data.conversationIds[i] }))
+      .filter((x) => x.r.status === 'rejected')
+      .map((x) => ({
+        id: x.id,
+        reason:
+          x.r.status === 'rejected'
+            ? x.r.reason instanceof Error
+              ? x.r.reason.message
+              : 'Update failed'
+            : '',
+      }));
+
+    sendSuccess(res, { updated: results.length - failed.length, failed });
+  })
+);
+
+const favoriteSchema = z.object({
+  isFavorite: z.boolean(),
+});
+
+router.patch(
+  '/:id/favorite',
+  asyncHandler(async (req: Request, res: Response) => {
+    const { isFavorite } = favoriteSchema.parse(req.body);
+    const orgId = req.user!.organizationId!;
+    const id = paramId(req);
+
+    const conversation = await prisma.conversation.update({
+      where: { id, organizationId: orgId },
+      data: { isFavorite },
+    });
+
+    emitToOrg(orgId, 'conversation:updated', {
+      conversationId: conversation.id,
+      patch: { isFavorite: conversation.isFavorite },
+    });
+
+    sendSuccess(res, conversation);
+  })
+);
+
+const updateStatusSchema = z.object({
+  status: z.enum(['OPEN', 'PENDING', 'CLOSED', 'SNOOZED']),
+});
+
 router.patch(
   '/:id/status',
   asyncHandler(async (req: Request, res: Response) => {
-    const { status } = req.body;
+    const { status } = updateStatusSchema.parse(req.body);
+    if (status === 'SNOOZED') {
+      throw new AppError(400, 'Snooze is managed via PATCH /:id/snooze');
+    }
 
     const id = paramId(req);
     const orgId = req.user!.organizationId!;
@@ -785,6 +1361,11 @@ router.patch(
         organizationId: orgId,
       },
       data: { status },
+    });
+
+    emitToOrg(orgId, 'conversation:status', {
+      conversationId: conversation.id,
+      status: conversation.status,
     });
 
     if (status === 'CLOSED') {
@@ -816,6 +1397,29 @@ router.post(
     });
 
     sendSuccess(res, note, 201);
+  })
+);
+
+router.delete(
+  '/notes/:noteId',
+  loadOrgRole,
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const noteId = req.params.noteId as string;
+
+    const note = await prisma.internalNote.findFirst({
+      where: { id: noteId, conversation: { organizationId: orgId } },
+    });
+    if (!note) throw new AppError(404, 'Note not found');
+
+    const isAuthor = note.userId === req.user!.userId;
+    const isAdmin = req.orgRole === 'ADMIN' || req.orgRole === 'OWNER';
+    if (!isAuthor && !isAdmin) {
+      throw new AppError(403, 'Only the note author or an admin can delete this note');
+    }
+
+    await prisma.internalNote.delete({ where: { id: note.id } });
+    res.status(204).end();
   })
 );
 

@@ -1,11 +1,49 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { FileText, Loader2, Play } from 'lucide-react';
 import api from '../../services/api';
+
+/**
+ * Session-level media URL cache. Prefers the cacheable URL from
+ * GET /inbox/messages/:id/media-url; falls back to an authenticated blob
+ * fetch (object URL) when the endpoint is missing or the URL has expired.
+ */
+const mediaCache = new Map<string, Promise<string>>();
+
+async function resolveMediaUrl(messageId: string): Promise<string> {
+  try {
+    const { data } = await api.get(`/inbox/messages/${messageId}/media-url`);
+    const url = (data?.data?.url ?? data?.url) as string | undefined;
+    if (typeof url === 'string' && url) return url;
+    throw new Error('media-url endpoint returned no url');
+  } catch {
+    const { data } = await api.get(`/inbox/messages/${messageId}/media`, {
+      responseType: 'blob',
+    });
+    return URL.createObjectURL(data);
+  }
+}
+
+export function getMediaUrl(messageId: string): Promise<string> {
+  let cached = mediaCache.get(messageId);
+  if (!cached) {
+    cached = resolveMediaUrl(messageId);
+    mediaCache.set(messageId, cached);
+    cached.catch(() => {
+      mediaCache.delete(messageId);
+    });
+  }
+  return cached;
+}
+
+export function evictMediaUrl(messageId: string) {
+  mediaCache.delete(messageId);
+}
 
 function useAuthenticatedMediaUrl(messageId: string | undefined) {
   const [url, setUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(Boolean(messageId));
   const [error, setError] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     if (!messageId) {
@@ -14,18 +52,13 @@ function useAuthenticatedMediaUrl(messageId: string | undefined) {
       return;
     }
 
-    let objectUrl: string | null = null;
     let cancelled = false;
-
     setLoading(true);
     setError(false);
 
-    api
-      .get(`/inbox/messages/${messageId}/media`, { responseType: 'blob' })
-      .then(({ data }) => {
-        if (cancelled) return;
-        objectUrl = URL.createObjectURL(data);
-        setUrl(objectUrl);
+    getMediaUrl(messageId)
+      .then((resolved) => {
+        if (!cancelled) setUrl(resolved);
       })
       .catch(() => {
         if (!cancelled) setError(true);
@@ -36,11 +69,30 @@ function useAuthenticatedMediaUrl(messageId: string | undefined) {
 
     return () => {
       cancelled = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
+  }, [messageId, attempt]);
+
+  const retry = useCallback(() => {
+    if (messageId) evictMediaUrl(messageId);
+    setAttempt((n) => n + 1);
   }, [messageId]);
 
-  return { url, loading, error };
+  return { url, loading, error, retry };
+}
+
+function MediaError({ label, onRetry }: { label: string; onRetry: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center gap-1.5 bg-[#f0f2f5] px-3 py-6 dark:bg-neutral-800">
+      <span className="text-[12px] text-[#667781] dark:text-neutral-400">{label}</span>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="text-[11px] font-bold text-[#008069] underline underline-offset-2"
+      >
+        Retry
+      </button>
+    </div>
+  );
 }
 
 interface AuthenticatedImageProps {
@@ -51,22 +103,18 @@ interface AuthenticatedImageProps {
 }
 
 export function AuthenticatedImage({ messageId, alt = 'Image', className = '', onClick }: AuthenticatedImageProps) {
-  const { url, loading, error } = useAuthenticatedMediaUrl(messageId);
+  const { url, loading, error, retry } = useAuthenticatedMediaUrl(messageId);
 
   if (loading) {
     return (
-      <div className={`flex min-h-[120px] items-center justify-center bg-[#f0f2f5] ${className}`}>
+      <div className={`flex min-h-[120px] items-center justify-center bg-[#f0f2f5] dark:bg-neutral-800 ${className}`}>
         <Loader2 className="h-5 w-5 animate-spin text-[#8696a0]" />
       </div>
     );
   }
 
   if (error || !url) {
-    return (
-      <div className={`flex items-center justify-center bg-[#f0f2f5] px-3 py-6 text-[12px] text-[#667781] ${className}`}>
-        Image unavailable
-      </div>
-    );
+    return <MediaError label="Image unavailable" onRetry={retry} />;
   }
 
   return (
@@ -80,6 +128,10 @@ export function AuthenticatedImage({ messageId, alt = 'Image', className = '', o
         alt={alt}
         className="block max-h-72 w-full object-cover transition group-hover:brightness-95"
         loading="lazy"
+        onError={() => {
+          evictMediaUrl(messageId);
+          retry();
+        }}
       />
       {onClick && (
         <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 transition group-hover:bg-black/10">
@@ -99,7 +151,7 @@ interface AuthenticatedVideoProps {
 }
 
 export function AuthenticatedVideo({ messageId, className = '', onClick }: AuthenticatedVideoProps) {
-  const { url, loading, error } = useAuthenticatedMediaUrl(messageId);
+  const { url, loading, error, retry } = useAuthenticatedMediaUrl(messageId);
 
   if (loading) {
     return (
@@ -111,8 +163,8 @@ export function AuthenticatedVideo({ messageId, className = '', onClick }: Authe
 
   if (error || !url) {
     return (
-      <div className={`flex items-center justify-center bg-[#111b21] px-3 py-8 text-[12px] text-white/70 ${className}`}>
-        Video unavailable
+      <div className={`bg-[#111b21] ${className}`}>
+        <MediaError label="Video unavailable" onRetry={retry} />
       </div>
     );
   }
@@ -147,7 +199,7 @@ interface AuthenticatedAudioProps {
 }
 
 export function AuthenticatedAudio({ messageId, className = '' }: AuthenticatedAudioProps) {
-  const { url, loading, error } = useAuthenticatedMediaUrl(messageId);
+  const { url, loading, error, retry } = useAuthenticatedMediaUrl(messageId);
 
   if (loading) {
     return (
@@ -159,7 +211,14 @@ export function AuthenticatedAudio({ messageId, className = '' }: AuthenticatedA
   }
 
   if (error || !url) {
-    return <p className={`px-1 py-2 text-[12px] text-[#667781] ${className}`}>Voice message unavailable</p>;
+    return (
+      <p className={`px-1 py-2 text-[12px] ${className}`}>
+        <span className="text-[#667781]">Voice message unavailable · </span>
+        <button type="button" onClick={retry} className="font-bold text-[#008069] underline underline-offset-2">
+          Retry
+        </button>
+      </p>
+    );
   }
 
   return <audio src={url} controls className={`w-full min-w-[220px] ${className}`} preload="metadata" />;
@@ -173,7 +232,7 @@ interface AuthenticatedDocumentProps {
 }
 
 export function AuthenticatedDocument({ messageId, filename, className = '', onClick }: AuthenticatedDocumentProps) {
-  const { url, loading, error } = useAuthenticatedMediaUrl(messageId);
+  const { url, loading, error, retry } = useAuthenticatedMediaUrl(messageId);
 
   const handleOpen = () => {
     if (!url) return;
@@ -187,19 +246,19 @@ export function AuthenticatedDocument({ messageId, filename, className = '', onC
   return (
     <button
       type="button"
-      onClick={handleOpen}
-      disabled={loading || error || !url}
-      className={`flex w-full items-center gap-3 rounded-lg bg-[#f0f2f5]/80 px-3 py-2.5 text-left transition hover:bg-[#e9edef] disabled:cursor-not-allowed ${className}`}
+      onClick={error ? retry : handleOpen}
+      disabled={loading || (!error && !url)}
+      className={`flex w-full items-center gap-3 rounded-lg bg-[#f0f2f5]/80 px-3 py-2.5 text-left transition hover:bg-[#e9edef] disabled:cursor-not-allowed dark:bg-neutral-800/70 dark:hover:bg-neutral-800 ${className}`}
     >
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-[#008069] shadow-sm">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-[#008069] shadow-sm dark:bg-neutral-900">
         {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-5 w-5" strokeWidth={2} />}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[13px] font-semibold text-[#111b21]">
+        <p className="truncate text-[13px] font-semibold text-[#111b21] dark:text-neutral-100">
           {filename || 'Document'}
         </p>
-        <p className="text-[11px] text-[#667781]">
-          {loading ? 'Loading...' : error ? 'Unavailable' : 'Tap to view'}
+        <p className="text-[11px] text-[#667781] dark:text-neutral-400">
+          {loading ? 'Loading...' : error ? 'Unavailable — tap to retry' : 'Tap to view'}
         </p>
       </div>
     </button>

@@ -269,10 +269,28 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
           processingTimeMs: Date.now() - startMsgTime,
         });
 
+        const conversationSummary = await prisma.conversation.findUnique({
+          where: { id: conversation.id },
+          select: { id: true, lastMessageAt: true, unreadCount: true },
+        });
+
         emitToOrg(orgId, 'message:new', {
           conversationId: conversation.id,
           message,
           contact,
+          conversation: conversationSummary
+            ? {
+                ...conversationSummary,
+                lastMessage: {
+                  id: message.id,
+                  direction: message.direction,
+                  type: message.type,
+                  content: message.content,
+                  status: message.status,
+                  createdAt: message.createdAt,
+                },
+              }
+            : undefined,
         });
 
         const { dispatchOrgWebhook } = await import('../modules/integrations/dispatch');

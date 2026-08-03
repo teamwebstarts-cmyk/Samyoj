@@ -190,9 +190,27 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
       data: { metaMessageId, status: 'SENT' },
     });
 
+    const conversation = await prisma.conversation.findUnique({
+      where: { id: message.conversationId },
+      select: { id: true, lastMessageAt: true, unreadCount: true },
+    });
+
     emitToOrg(input.organizationId, 'message:new', {
       conversationId: message.conversationId,
       message,
+      conversation: conversation
+        ? {
+            ...conversation,
+            lastMessage: {
+              id: message.id,
+              direction: message.direction,
+              type: message.type,
+              content: message.content,
+              status: message.status,
+              createdAt: message.createdAt,
+            },
+          }
+        : undefined,
     });
     emitToOrg(input.organizationId, 'message:status', {
       messageId: input.messageId,
@@ -204,11 +222,20 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Failed to send message';
 
+    // Merge the error into existing metadata so send params (mediaPath,
+    // templateName, interactive, …) survive for POST /inbox/messages/:id/retry.
+    const existing = await prisma.message.findUnique({
+      where: { id: input.messageId },
+      select: { metadata: true },
+    });
     const message = await prisma.message.update({
       where: { id: input.messageId },
       data: {
         status: 'FAILED',
-        metadata: { error: errorMessage },
+        metadata: {
+          ...((existing?.metadata as Record<string, unknown>) || {}),
+          error: errorMessage,
+        },
       },
     });
 

@@ -545,6 +545,7 @@ model Conversation {
   slaDueAt        DateTime?          @map("sla_due_at")
   slaBreached     Boolean            @default(false) @map("sla_breached")
   snoozedUntil    DateTime?          @map("snoozed_until")
+  isFavorite      Boolean            @default(false) @map("is_favorite")
   createdAt       DateTime           @default(now()) @map("created_at")
   updatedAt       DateTime           @updatedAt @map("updated_at")
 

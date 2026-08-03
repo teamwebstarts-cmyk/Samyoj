@@ -1,8 +1,11 @@
 import { useMemo } from 'react';
 import {
+  AlarmClock,
+  BellOff,
   Bot,
   CheckCircle2,
   Clock,
+  Download,
   PauseCircle,
   PlayCircle,
   UserMinus,
@@ -27,6 +30,22 @@ interface ChatContextMenuProps {
   onAssign: (agentId: string | null) => void;
   onToggleBot: () => void;
   onStatusChange: (status: string) => void;
+  onSnoozeUntil: (untilIso: string, label: string) => void;
+  onUnsnooze: () => void;
+  onExport: () => void;
+}
+
+function snoozePresets(): { id: string; label: string; until: string }[] {
+  const in1h = new Date(Date.now() + 60 * 60 * 1000);
+  const in4h = new Date(Date.now() + 4 * 60 * 60 * 1000);
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(9, 0, 0, 0);
+  return [
+    { id: 'snooze-1h', label: 'Snooze 1 hour', until: in1h.toISOString() },
+    { id: 'snooze-4h', label: 'Snooze 4 hours', until: in4h.toISOString() },
+    { id: 'snooze-tomorrow', label: 'Snooze until tomorrow, 9:00 AM', until: tomorrow.toISOString() },
+  ];
 }
 
 export default function ChatContextMenu({
@@ -43,6 +62,9 @@ export default function ChatContextMenu({
   onAssign,
   onToggleBot,
   onStatusChange,
+  onSnoozeUntil,
+  onUnsnooze,
+  onExport,
 }: ChatContextMenuProps) {
   const items = useMemo<ContextMenuItem[]>(() => {
     if (!conversation) return [];
@@ -85,6 +107,29 @@ export default function ChatContextMenu({
     }
 
     const status = conversation.status;
+    const isSnoozed = Boolean(
+      conversation.snoozedUntil && new Date(conversation.snoozedUntil).getTime() > Date.now()
+    ) || status === 'SNOOZED';
+
+    const snoozeChildren: ContextMenuItem[] = snoozePresets().map((preset) => ({
+      id: preset.id,
+      label: preset.label,
+      icon: AlarmClock,
+      onClick: () =>
+        onSnoozeUntil(
+          preset.until,
+          preset.label.replace(/^Snooze /, '').replace(/^until /, 'until ')
+        ),
+      checked: false,
+    }));
+    if (isSnoozed) {
+      snoozeChildren.push({
+        id: 'unsnooze',
+        label: 'Unsnooze',
+        icon: BellOff,
+        onClick: onUnsnooze,
+      });
+    }
 
     return [
       {
@@ -93,6 +138,20 @@ export default function ChatContextMenu({
         description: conversation.assignedAgent?.name || 'No agent assigned',
         icon: UserPlus,
         children: assignChildren,
+      },
+      {
+        id: 'snooze',
+        label: isSnoozed ? 'Snoozed' : 'Snooze',
+        description: isSnoozed ? 'Pick a new time or unsnooze' : 'Hide until later',
+        icon: AlarmClock,
+        children: snoozeChildren,
+      },
+      {
+        id: 'export',
+        label: 'Export chat',
+        description: 'Download transcript',
+        icon: Download,
+        onClick: onExport,
       },
       {
         id: 'bot-toggle',
@@ -138,8 +197,11 @@ export default function ChatContextMenu({
     conversation,
     currentUserId,
     onAssign,
+    onExport,
+    onSnoozeUntil,
     onStatusChange,
     onToggleBot,
+    onUnsnooze,
   ]);
 
   if (!conversation) return null;

@@ -4,6 +4,7 @@ import prisma from '../../config/database';
 import { authenticate, requireOrg } from '../../middleware/auth';
 import { loadPermissions, requirePermission } from '../../middleware/permissions';
 import { AppError, sendSuccess, asyncHandler, paramId } from '../../utils/response';
+import { emitToOrg } from '../../realtime';
 
 const router = Router();
 
@@ -131,6 +132,10 @@ router.post(
       where: { conversationId },
       include: { label: true },
     });
+    emitToOrg(orgId, 'conversation:updated', {
+      conversationId,
+      patch: { labels },
+    });
     sendSuccess(res, { labels });
   })
 );
@@ -158,6 +163,10 @@ router.delete(
     const labels = await prisma.conversationLabel.findMany({
       where: { conversationId },
       include: { label: true },
+    });
+    emitToOrg(orgId, 'conversation:updated', {
+      conversationId,
+      patch: { labels },
     });
     sendSuccess(res, { labels });
   })

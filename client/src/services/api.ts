@@ -129,7 +129,11 @@ export const inboxApi = {
   unreadTotal: () => api.get('/inbox/unread-total'),
   start: (data: { phone: string; name?: string }) => api.post('/inbox/start', data),
   get: (id: string) => api.get(`/inbox/${id}`),
-  messages: (id: string) => api.get(`/inbox/${id}/messages`),
+  messages: (id: string, params?: Record<string, string>) =>
+    api.get(`/inbox/${id}/messages`, { params }),
+  markRead: (id: string) => api.post(`/inbox/${id}/read`),
+  mediaUrl: (messageId: string) => api.get(`/inbox/messages/${messageId}/media-url`),
+  retryMessage: (messageId: string) => api.post(`/inbox/messages/${messageId}/retry`),
   send: (id: string, payload: string | import('../types').SendMessagePayload) =>
     api.post(
       `/inbox/${id}/messages`,
@@ -144,6 +148,23 @@ export const inboxApi = {
   setStatus: (id: string, status: string) => api.patch(`/inbox/${id}/status`, { status }),
   snooze: (id: string, until: string) => api.patch(`/inbox/${id}/snooze`, { until }),
   unsnooze: (id: string) => api.delete(`/inbox/${id}/snooze`),
+  favorite: (id: string, isFavorite: boolean) =>
+    api.patch(`/inbox/${id}/favorite`, { isFavorite }),
+  stats: (id: string) => api.get<{ data: import('../types').ConversationStats }>(`/inbox/${id}/stats`),
+  exportChat: (id: string, format: 'txt' | 'json') =>
+    api.get(`/inbox/${id}/export`, { params: { format }, responseType: 'blob' }),
+  deleteNote: (noteId: string) => api.delete(`/inbox/notes/${noteId}`),
+  bulk: (data: {
+    conversationIds: string[];
+    action: 'assign' | 'status' | 'snooze' | 'unsnooze';
+    agentId?: string;
+    status?: 'OPEN' | 'PENDING' | 'CLOSED';
+    snoozedUntil?: string;
+  }) =>
+    api.post<{ data: { updated: number; failed: Array<{ id: string; reason: string }> } }>(
+      '/inbox/bulk',
+      data
+    ),
   addNote: (id: string, content: string) => api.post(`/inbox/${id}/notes`, { content }),
   uploadMedia: (data: { mimeType: string; data: string; filename?: string }) =>
     api.post('/media/upload', data),

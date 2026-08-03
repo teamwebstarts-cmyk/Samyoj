@@ -1,155 +1,154 @@
-import { useEffect, useState } from 'react';
-import { ChevronDown, Clock, LifeBuoy, MessageSquareText, Plus, StickyNote, Tag, X } from 'lucide-react';
-import AppButton from '../ui/AppButton';
+import { useEffect, useRef, useState } from 'react';
+import {
+  Bot,
+  Check,
+  Plus,
+  SlidersHorizontal,
+  StickyNote,
+  Tag,
+  Trash2,
+  User,
+  X,
+  Zap,
+} from 'lucide-react';
 import AppInput from '../ui/AppInput';
 import AppTextarea from '../ui/AppTextarea';
-import { cannedRepliesApi, inboxApi, labelsApi } from '../../services/api';
-import type { CannedReply, ConversationLabel, InternalNote, InboxLabel } from '../../types';
+import ProfileCard from './details/ProfileCard';
+import QuickActions from './details/QuickActions';
+import AutomationsSection from './details/AutomationsSection';
+import StatsRow from './details/StatsRow';
+import { contactApi, inboxApi, labelsApi } from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
+import type {
+  Contact,
+  Conversation,
+  ConversationLabel,
+  InboxLabel,
+  InternalNote,
+  TeamAgent,
+} from '../../types';
 import { toastError, toastSuccess } from '../../utils/toast';
 
-type PanelSection = 'labels' | 'notes' | 'quickReplies';
+type PanelSection = 'profile' | 'labels' | 'actions' | 'notes' | 'attributes' | 'automations';
 
 interface InboxDetailsPanelProps {
-  conversationId: string;
-  labels?: ConversationLabel[];
+  conversation: Conversation;
+  notes: InternalNote[];
+  agents: TeamAgent[];
+  currentUserId?: string;
+  assigning: boolean;
+  botIsLive: boolean;
+  botToggling: boolean;
+  onNotesChange: (notes: InternalNote[]) => void;
   onLabelsChange: (labels: ConversationLabel[]) => void;
+  onContactChange: (contact: Contact) => void;
+  onAssign: (agentId: string | null) => void;
+  onToggleBot: () => void;
+  onCreateCampaign: () => void;
+  onCreateTicket: () => void;
+  onExport: () => void;
+  onSnoozeUntil: (untilIso: string, label: string) => void;
+  onUnsnooze: () => void;
   overlayOpen?: boolean;
   overlaySection?: PanelSection;
   onOverlayClose?: () => void;
-  onConvertToTicket?: () => void;
-  onSnooze?: (hours: number) => void;
 }
 
-function SectionToggle({
-  icon: Icon,
+function SectionHeader({
   title,
-  subtitle,
-  count,
-  open,
-  onToggle,
-  accent,
-  children,
+  action,
 }: {
-  icon: typeof Tag;
   title: string;
-  subtitle?: string;
-  count?: number;
-  open: boolean;
-  onToggle: () => void;
-  accent: 'violet' | 'amber' | 'sky';
-  children: React.ReactNode;
+  action?: React.ReactNode;
 }) {
-  const accentClasses = {
-    violet: { icon: 'text-violet-600', badge: 'bg-violet-100 text-violet-700' },
-    amber: { icon: 'text-amber-600', badge: 'bg-amber-100 text-amber-700' },
-    sky: { icon: 'text-sky-600', badge: 'bg-sky-100 text-sky-700' },
-  }[accent];
-
   return (
-    <div className="border-b border-neutral-100 last:border-b-0">
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={open}
-        className="flex w-full items-center gap-2 px-3 py-2.5 text-left transition hover:bg-neutral-50"
-      >
-        <Icon className={`h-4 w-4 shrink-0 ${accentClasses.icon}`} />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <p className="text-[12px] font-bold text-neutral-800">{title}</p>
-            {count != null && count > 0 && (
-              <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums ${accentClasses.badge}`}>
-                {count}
-              </span>
-            )}
-          </div>
-          {!open && subtitle && (
-            <p className="truncate text-[10px] text-neutral-500">{subtitle}</p>
-          )}
-        </div>
-        <ChevronDown
-          className={`h-4 w-4 shrink-0 text-neutral-400 transition ${open ? 'rotate-180' : ''}`}
-        />
-      </button>
-      {open && <div className="px-3 pb-3">{children}</div>}
+    <div className="mb-2 flex items-center justify-between">
+      <p className="text-[11px] font-extrabold uppercase tracking-[0.08em] text-theme-muted">
+        {title}
+      </p>
+      {action}
     </div>
   );
 }
 
 export default function InboxDetailsPanel({
-  conversationId,
-  labels = [],
+  conversation,
+  notes,
+  agents,
+  currentUserId,
+  assigning,
+  botIsLive,
+  botToggling,
+  onNotesChange,
   onLabelsChange,
+  onContactChange,
+  onAssign,
+  onToggleBot,
+  onCreateCampaign,
+  onCreateTicket,
+  onExport,
+  onSnoozeUntil,
+  onUnsnooze,
   overlayOpen = false,
   overlaySection,
   onOverlayClose,
-  onConvertToTicket,
-  onSnooze,
 }: InboxDetailsPanelProps) {
-  const [notes, setNotes] = useState<InternalNote[]>([]);
+  const conversationId = conversation.id;
+  const labels = conversation.labels ?? [];
+  const contact = conversation.contact;
+  const { canManageTeam } = useAuth();
+
   const [noteText, setNoteText] = useState('');
   const [savingNote, setSavingNote] = useState(false);
+  const [confirmDeleteNoteId, setConfirmDeleteNoteId] = useState<string | null>(null);
+  const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null);
   const [allLabels, setAllLabels] = useState<InboxLabel[]>([]);
   const [newLabelName, setNewLabelName] = useState('');
   const [creatingLabel, setCreatingLabel] = useState(false);
   const [showNewLabel, setShowNewLabel] = useState(false);
+  const [labelsPickerOpen, setLabelsPickerOpen] = useState(false);
+  const [assignListOpen, setAssignListOpen] = useState(false);
+  const [newTag, setNewTag] = useState('');
+  const [addingTag, setAddingTag] = useState(false);
+  const [showTagInput, setShowTagInput] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
-  const [labelsOpen, setLabelsOpen] = useState(true);
-  const [notesOpen, setNotesOpen] = useState(false);
-  const [quickRepliesOpen, setQuickRepliesOpen] = useState(false);
-  const [cannedReplies, setCannedReplies] = useState<CannedReply[]>([]);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    inboxApi
-      .get(conversationId)
-      .then(({ data }) => setNotes(data.data.internalNotes || []))
+    labelsApi
+      .list()
+      .then(({ data }) => setAllLabels(data.data.labels))
       .catch(console.error);
-    labelsApi.list().then(({ data }) => setAllLabels(data.data.labels)).catch(console.error);
-    cannedRepliesApi.list().then(({ data }) => setCannedReplies(data.data.replies)).catch(console.error);
-  }, [conversationId]);
+  }, []);
 
   useEffect(() => {
     setPanelOpen(false);
-    setLabelsOpen(true);
-    setNotesOpen(false);
-    setQuickRepliesOpen(false);
-    setNoteText('');
+    setAssignListOpen(false);
+    setLabelsPickerOpen(false);
     setShowNewLabel(false);
+    setShowTagInput(false);
+    setNoteText('');
+    setConfirmDeleteNoteId(null);
   }, [conversationId]);
 
+  const scrollToSection = (section?: PanelSection) => {
+    if (!section) return;
+    requestAnimationFrame(() => {
+      scrollRef.current
+        ?.querySelector(`[data-section="${section}"]`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
+
   useEffect(() => {
-    if (!overlayOpen || !overlaySection) return;
+    if (!overlayOpen) return;
     setPanelOpen(true);
-    if (overlaySection === 'labels') {
-      setLabelsOpen(true);
-      setNotesOpen(false);
-      setQuickRepliesOpen(false);
-    } else if (overlaySection === 'notes') {
-      setNotesOpen(true);
-      setLabelsOpen(false);
-      setQuickRepliesOpen(false);
-    } else if (overlaySection === 'quickReplies') {
-      setQuickRepliesOpen(true);
-      setLabelsOpen(false);
-      setNotesOpen(false);
-    }
+    scrollToSection(overlaySection);
   }, [overlayOpen, overlaySection]);
 
   const openPanel = (section?: PanelSection) => {
     setPanelOpen(true);
-    if (section === 'labels') {
-      setLabelsOpen(true);
-      setNotesOpen(false);
-      setQuickRepliesOpen(false);
-    } else if (section === 'notes') {
-      setNotesOpen(true);
-      setLabelsOpen(false);
-      setQuickRepliesOpen(false);
-    } else if (section === 'quickReplies') {
-      setQuickRepliesOpen(true);
-      setLabelsOpen(false);
-      setNotesOpen(false);
-    }
+    scrollToSection(section);
   };
 
   const closePanel = () => {
@@ -157,22 +156,14 @@ export default function InboxDetailsPanel({
     onOverlayClose?.();
   };
 
-  const labelSummary =
-    labels.length > 0
-      ? labels.map((l) => l.label.name).join(', ')
-      : 'No labels yet';
-
-  const latestNotePreview = notes[0]?.content;
-
   const handleAddNote = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!noteText.trim()) return;
     setSavingNote(true);
     try {
       const { data } = await inboxApi.addNote(conversationId, noteText.trim());
-      setNotes((prev) => [data.data, ...prev]);
+      onNotesChange([data.data, ...notes]);
       setNoteText('');
-      setNotesOpen(true);
       toastSuccess('Note added');
     } catch {
       toastError('Failed to add note');
@@ -181,16 +172,27 @@ export default function InboxDetailsPanel({
     }
   };
 
+  const handleDeleteNote = async (noteId: string) => {
+    setDeletingNoteId(noteId);
+    try {
+      await inboxApi.deleteNote(noteId);
+      onNotesChange(notes.filter((n) => n.id !== noteId));
+      toastSuccess('Note deleted');
+    } catch {
+      toastError('Could not delete note');
+    } finally {
+      setDeletingNoteId(null);
+      setConfirmDeleteNoteId(null);
+    }
+  };
+
   const handleToggleLabel = async (labelId: string) => {
     const attached = labels.some((l) => l.label.id === labelId);
     try {
-      if (attached) {
-        const { data } = await labelsApi.removeFromConversation(conversationId, labelId);
-        onLabelsChange(data.data.labels);
-      } else {
-        const { data } = await labelsApi.addToConversation(conversationId, labelId);
-        onLabelsChange(data.data.labels);
-      }
+      const { data } = attached
+        ? await labelsApi.removeFromConversation(conversationId, labelId)
+        : await labelsApi.addToConversation(conversationId, labelId);
+      onLabelsChange(data.data.labels);
     } catch {
       toastError('Failed to update label');
     }
@@ -212,128 +214,355 @@ export default function InboxDetailsPanel({
     }
   };
 
+  const handleAddTag = async () => {
+    const tag = newTag.trim();
+    if (!tag || addingTag) return;
+    const tags = contact.tags ?? [];
+    if (tags.includes(tag)) {
+      setNewTag('');
+      setShowTagInput(false);
+      return;
+    }
+    setAddingTag(true);
+    try {
+      const nextTags = [...tags, tag];
+      const { data } = await contactApi.update(contact.id, { tags: nextTags });
+      const updated = (data.data?.contact ?? data.data) as Partial<Contact> | undefined;
+      onContactChange({ ...contact, ...updated, tags: updated?.tags ?? nextTags });
+      setNewTag('');
+      setShowTagInput(false);
+      toastSuccess('Attribute added');
+    } catch {
+      toastError('Failed to add attribute');
+    } finally {
+      setAddingTag(false);
+    }
+  };
+
+  const handleRemoveTag = async (tag: string) => {
+    const nextTags = (contact.tags ?? []).filter((t) => t !== tag);
+    try {
+      const { data } = await contactApi.update(contact.id, { tags: nextTags });
+      const updated = (data.data?.contact ?? data.data) as Partial<Contact> | undefined;
+      onContactChange({ ...contact, ...updated, tags: updated?.tags ?? nextTags });
+    } catch {
+      toastError('Failed to remove attribute');
+    }
+  };
+
+  const toggleAssignList = () => setAssignListOpen((v) => !v);
+
   const panelBody = (
     <>
-      <div className="flex shrink-0 items-center justify-between border-b border-neutral-100 px-3 py-2.5">
-        <p className="text-[12px] font-extrabold text-neutral-800">Chat details</p>
+      <div className="flex shrink-0 items-center justify-between border-b border-neutral-100 px-4 py-3 dark:border-neutral-800/80">
+        <p className="text-[14px] font-extrabold tracking-tight text-theme-fg">Customer Details</p>
         <button
           type="button"
           onClick={closePanel}
-          className="flex h-7 w-7 items-center justify-center rounded-lg text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-600"
+          className="flex h-7 w-7 items-center justify-center rounded-lg text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-600 dark:hover:bg-neutral-800"
           aria-label="Close details panel"
         >
           <X className="h-4 w-4" />
         </button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <SectionToggle
-          icon={Tag}
-          title="Labels"
-          subtitle={labelSummary}
-          count={labels.length}
-          open={labelsOpen}
-          onToggle={() => setLabelsOpen((prev) => !prev)}
-          accent="violet"
-        >
-          <div className="flex flex-wrap gap-1.5">
-            {allLabels.map((label) => {
-              const active = labels.some((l) => l.label.id === label.id);
-              return (
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        <div data-section="profile">
+          <ProfileCard contact={contact} onAssignAgent={toggleAssignList} />
+          {assignListOpen && (
+            <div className="mx-4 mb-4 overflow-hidden rounded-xl border border-theme-border">
+              {currentUserId && agents.some((a) => a.id === currentUserId) && (
                 <button
-                  key={label.id}
                   type="button"
-                  onClick={() => void handleToggleLabel(label.id)}
-                  className={`rounded-full px-2.5 py-1 text-[11px] font-bold transition ${
-                    active ? 'text-white shadow-sm' : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
-                  }`}
-                  style={active ? { backgroundColor: label.color } : undefined}
+                  disabled={assigning}
+                  onClick={() => onAssign(currentUserId)}
+                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-[12.5px] font-semibold text-theme-fg transition hover:bg-theme-subtle disabled:opacity-50"
                 >
-                  {label.name}
+                  Assign to me
+                  {conversation.assignedAgent?.id === currentUserId && (
+                    <Check className="ml-auto h-3.5 w-3.5 text-whatsapp-600" />
+                  )}
                 </button>
-              );
-            })}
-            {showNewLabel ? (
-              <div className="flex w-full items-center gap-1 pt-1">
-                <AppInput
-                  value={newLabelName}
-                  onChange={(e) => setNewLabelName(e.target.value)}
-                  placeholder="Label name"
-                  className="flex-1"
-                />
-                <AppButton size="sm" loading={creatingLabel} onClick={() => void handleCreateLabel()}>
-                  Add
-                </AppButton>
-                <button type="button" onClick={() => setShowNewLabel(false)} className="text-neutral-400">
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            ) : (
+              )}
+              {agents
+                .filter((a) => a.id !== currentUserId)
+                .map((agent) => (
+                  <button
+                    key={agent.id}
+                    type="button"
+                    disabled={assigning}
+                    onClick={() => onAssign(agent.id)}
+                    className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-[12.5px] text-theme-fg transition hover:bg-theme-subtle disabled:opacity-50"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate font-semibold">{agent.name}</span>
+                      <span className="block truncate text-[10.5px] text-theme-muted">
+                        {agent.email}
+                      </span>
+                    </span>
+                    {conversation.assignedAgent?.id === agent.id && (
+                      <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-whatsapp-600" />
+                    )}
+                  </button>
+                ))}
               <button
                 type="button"
-                onClick={() => setShowNewLabel(true)}
-                className="inline-flex items-center gap-1 rounded-full border border-dashed border-neutral-300 px-2.5 py-1 text-[11px] font-semibold text-neutral-500 hover:border-violet-300 hover:text-violet-700"
+                disabled={assigning || !conversation.assignedAgent}
+                onClick={() => onAssign(null)}
+                className="flex w-full items-center gap-2 border-t border-theme-border/60 px-3 py-2.5 text-left text-[12.5px] font-semibold text-theme-secondary transition hover:bg-theme-subtle disabled:opacity-50"
               >
-                <Plus className="h-3 w-3" /> New
+                Unassign
               </button>
+            </div>
+          )}
+          <StatsRow conversationId={conversationId} />
+        </div>
+
+        <div data-section="labels" className="border-t border-neutral-100 px-4 py-4 dark:border-neutral-800/80">
+          <SectionHeader
+            title="Labels"
+            action={
+              <button
+                type="button"
+                onClick={() => setLabelsPickerOpen((v) => !v)}
+                className="text-[12px] font-bold text-whatsapp-700 transition hover:text-whatsapp-800 dark:text-whatsapp-400"
+              >
+                {labelsPickerOpen ? 'Done' : 'Add'}
+              </button>
+            }
+          />
+          <div className="flex flex-wrap gap-1.5">
+            {labels.map((l) => (
+              <span
+                key={l.label.id}
+                className="inline-flex items-center gap-1.5 rounded-full border border-theme-border px-2.5 py-1 text-[11.5px] font-semibold text-theme-fg"
+              >
+                <span
+                  className="h-2 w-2 rounded-full"
+                  style={{ backgroundColor: l.label.color }}
+                />
+                {l.label.name}
+              </span>
+            ))}
+            {labels.length === 0 && !labelsPickerOpen && (
+              <p className="text-[12px] text-theme-muted">No labels yet</p>
             )}
           </div>
-        </SectionToggle>
+          {labelsPickerOpen && (
+            <div className="mt-2.5 space-y-2">
+              <div className="flex flex-wrap gap-1.5">
+                {allLabels.map((label) => {
+                  const active = labels.some((l) => l.label.id === label.id);
+                  return (
+                    <button
+                      key={label.id}
+                      type="button"
+                      onClick={() => void handleToggleLabel(label.id)}
+                      aria-pressed={active}
+                      className={`rounded-full px-2.5 py-1 text-[11px] font-bold transition ${
+                        active
+                          ? 'text-white shadow-sm'
+                          : 'bg-theme-subtle text-theme-secondary hover:text-theme-fg'
+                      }`}
+                      style={active ? { backgroundColor: label.color } : undefined}
+                    >
+                      {label.name}
+                    </button>
+                  );
+                })}
+              </div>
+              {showNewLabel ? (
+                <div className="flex items-center gap-1.5">
+                  <AppInput
+                    value={newLabelName}
+                    onChange={(e) => setNewLabelName(e.target.value)}
+                    placeholder="Label name"
+                    className="flex-1"
+                  />
+                  <button
+                    type="button"
+                    disabled={creatingLabel || !newLabelName.trim()}
+                    onClick={() => void handleCreateLabel()}
+                    className="rounded-lg bg-violet-600 px-3 py-2 text-[12px] font-bold text-white transition hover:bg-violet-700 disabled:opacity-50"
+                  >
+                    Add
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowNewLabel(false)}
+                    className="text-neutral-400 hover:text-neutral-600"
+                    aria-label="Cancel new label"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowNewLabel(true)}
+                  className="inline-flex items-center gap-1 rounded-full border border-dashed border-neutral-300 px-2.5 py-1 text-[11px] font-semibold text-neutral-500 transition hover:border-violet-300 hover:text-violet-700 dark:border-neutral-700"
+                >
+                  <Plus className="h-3 w-3" /> New label
+                </button>
+              )}
+            </div>
+          )}
+        </div>
 
-        <SectionToggle
-          icon={StickyNote}
-          title="Team notes"
-          subtitle={latestNotePreview || 'Only your team can see these'}
-          count={notes.length}
-          open={notesOpen}
-          onToggle={() => setNotesOpen((prev) => !prev)}
-          accent="amber"
-        >
-          <p className="mb-2 text-[10px] text-neutral-500">Not visible to the customer.</p>
+        <div data-section="actions" className="border-t border-neutral-100 px-3 py-4 dark:border-neutral-800/80">
+          <div className="px-1">
+            <SectionHeader title="Quick Actions" />
+          </div>
+          <QuickActions
+            onAssignAgent={toggleAssignList}
+            onCreateCampaign={onCreateCampaign}
+            onCreateTicket={onCreateTicket}
+            onExport={onExport}
+            snoozedUntil={conversation.snoozedUntil}
+            onSnooze={onSnoozeUntil}
+            onUnsnooze={onUnsnooze}
+          />
+        </div>
+
+        <div data-section="notes" className="border-t border-neutral-100 px-4 py-4 dark:border-neutral-800/80">
+          <SectionHeader title="Notes" />
           <form onSubmit={(e) => void handleAddNote(e)} className="space-y-2">
             <AppTextarea
               value={noteText}
               onChange={(e) => setNoteText(e.target.value)}
-              placeholder="Add a note..."
+              placeholder="Add a note — only your team can see it"
               rows={2}
             />
-            <AppButton type="submit" size="sm" loading={savingNote} disabled={!noteText.trim()}>
-              Save note
-            </AppButton>
+            {noteText.trim() && (
+              <button
+                type="submit"
+                disabled={savingNote}
+                className="rounded-lg bg-amber-500 px-3 py-1.5 text-[12px] font-bold text-white transition hover:bg-amber-600 disabled:opacity-50"
+              >
+                {savingNote ? 'Saving…' : 'Save note'}
+              </button>
+            )}
           </form>
           {notes.length > 0 && (
-            <div className="mt-3 max-h-40 space-y-2 overflow-y-auto">
-              {notes.map((note) => (
-                <div key={note.id} className="rounded-lg border border-amber-100 bg-amber-50/60 p-2.5">
-                  <p className="text-[11px] leading-relaxed text-neutral-800">{note.content}</p>
-                  <p className="mt-1 text-[10px] font-medium text-neutral-500">
-                    {note.user?.name || 'Agent'} · {new Date(note.createdAt).toLocaleString()}
-                  </p>
-                </div>
-              ))}
+            <div className="mt-3 space-y-2">
+              {notes.map((note) => {
+                const canDelete = note.user?.id === currentUserId || canManageTeam;
+                return (
+                  <div
+                    key={note.id}
+                    className="group rounded-xl border border-amber-200/70 bg-amber-50/80 p-3 dark:border-amber-500/20 dark:bg-amber-950/30"
+                  >
+                    <div className="flex items-start gap-2">
+                      <p className="min-w-0 flex-1 text-[12px] leading-relaxed text-neutral-800 dark:text-neutral-200">
+                        {note.content}
+                      </p>
+                      {canDelete &&
+                        (confirmDeleteNoteId === note.id ? (
+                          <span className="flex shrink-0 items-center gap-1">
+                            <button
+                              type="button"
+                              disabled={deletingNoteId === note.id}
+                              onClick={() => void handleDeleteNote(note.id)}
+                              className="rounded-md bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white transition hover:bg-red-700 disabled:opacity-50"
+                            >
+                              {deletingNoteId === note.id ? '…' : 'Delete'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteNoteId(null)}
+                              className="rounded-md px-1 py-0.5 text-[10px] font-bold text-theme-muted transition hover:text-theme-fg"
+                            >
+                              Cancel
+                            </button>
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteNoteId(note.id)}
+                            aria-label="Delete note"
+                            className="shrink-0 rounded-md p-1 text-amber-700/50 opacity-0 transition hover:bg-amber-100 hover:text-red-600 group-hover:opacity-100 dark:hover:bg-amber-900/40"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        ))}
+                    </div>
+                    <p className="mt-1.5 text-[10.5px] font-medium text-amber-800/80 dark:text-amber-300/70">
+                      Added by {note.user?.name || 'Agent'} on{' '}
+                      {new Date(note.createdAt).toLocaleDateString([], {
+                        month: 'short',
+                        day: 'numeric',
+                      })}
+                    </p>
+                  </div>
+                );
+              })}
             </div>
           )}
-        </SectionToggle>
+        </div>
 
-        {cannedReplies.length > 0 && (
-          <SectionToggle
-            icon={MessageSquareText}
-            title="Quick replies"
-            subtitle="Type /shortcut in the composer"
-            open={quickRepliesOpen}
-            onToggle={() => setQuickRepliesOpen((prev) => !prev)}
-            accent="sky"
-          >
-            <div className="max-h-36 space-y-1 overflow-y-auto">
-              {cannedReplies.slice(0, 8).map((r) => (
-                <div key={r.id} className="rounded-lg bg-neutral-50 px-2.5 py-1.5 text-[11px]">
-                  <span className="font-bold text-violet-700">/{r.shortcut}</span>
-                  <span className="text-neutral-500"> — {r.title}</span>
-                </div>
-              ))}
-            </div>
-          </SectionToggle>
-        )}
+        <div data-section="attributes" className="border-t border-neutral-100 px-4 py-4 dark:border-neutral-800/80">
+          <SectionHeader title="Custom Attributes" />
+          <div className="flex flex-wrap gap-1.5">
+            {(contact.tags ?? []).map((tag) => (
+              <span
+                key={tag}
+                className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2.5 py-1 text-[11.5px] font-semibold text-sky-800 dark:bg-sky-950/40 dark:text-sky-300"
+              >
+                {tag}
+                <button
+                  type="button"
+                  onClick={() => void handleRemoveTag(tag)}
+                  aria-label={`Remove ${tag}`}
+                  className="text-sky-600/70 transition hover:text-sky-800 dark:hover:text-sky-200"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+            {showTagInput ? (
+              <span className="flex w-full items-center gap-1.5 pt-1">
+                <AppInput
+                  value={newTag}
+                  onChange={(e) => setNewTag(e.target.value)}
+                  placeholder="e.g. vip, high-intent"
+                  className="flex-1"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      void handleAddTag();
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  disabled={addingTag || !newTag.trim()}
+                  onClick={() => void handleAddTag()}
+                  className="rounded-lg bg-sky-600 px-3 py-2 text-[12px] font-bold text-white transition hover:bg-sky-700 disabled:opacity-50"
+                >
+                  Add
+                </button>
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowTagInput(true)}
+                className="inline-flex items-center gap-1 rounded-full border border-dashed border-neutral-300 px-2.5 py-1 text-[11px] font-semibold text-neutral-500 transition hover:border-sky-300 hover:text-sky-700 dark:border-neutral-700"
+              >
+                <Plus className="h-3 w-3" /> Add Attribute
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div data-section="automations" className="border-t border-neutral-100 px-4 py-4 dark:border-neutral-800/80">
+          <SectionHeader title="Active Automations" />
+          <AutomationsSection
+            conversation={conversation}
+            botIsLive={botIsLive}
+            botToggling={botToggling}
+            onToggleBot={onToggleBot}
+          />
+        </div>
       </div>
     </>
   );
@@ -356,12 +585,20 @@ export default function InboxDetailsPanel({
 
   if (!panelOpen) {
     return (
-      <aside className="hidden w-11 shrink-0 flex-col items-center gap-1 border-l border-neutral-100 bg-white/80 py-3 lg:flex">
+      <aside className="hidden w-11 shrink-0 flex-col items-center gap-1 border-l border-neutral-100 bg-white/80 py-3 lg:flex dark:border-neutral-800/80 dark:bg-neutral-950/80">
+        <button
+          type="button"
+          onClick={() => openPanel('profile')}
+          title="Customer details"
+          className="flex h-9 w-9 items-center justify-center rounded-xl text-emerald-600 transition hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+        >
+          <User className="h-4 w-4" />
+        </button>
         <button
           type="button"
           onClick={() => openPanel('labels')}
           title="Labels"
-          className="relative flex h-9 w-9 items-center justify-center rounded-xl text-violet-600 transition hover:bg-violet-50"
+          className="relative flex h-9 w-9 items-center justify-center rounded-xl text-violet-600 transition hover:bg-violet-50 dark:hover:bg-violet-950/40"
         >
           <Tag className="h-4 w-4" />
           {labels.length > 0 && (
@@ -372,9 +609,17 @@ export default function InboxDetailsPanel({
         </button>
         <button
           type="button"
+          onClick={() => openPanel('actions')}
+          title="Quick actions"
+          className="flex h-9 w-9 items-center justify-center rounded-xl text-orange-600 transition hover:bg-orange-50 dark:hover:bg-orange-950/40"
+        >
+          <Zap className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
           onClick={() => openPanel('notes')}
-          title="Team notes"
-          className="relative flex h-9 w-9 items-center justify-center rounded-xl text-amber-600 transition hover:bg-amber-50"
+          title="Notes"
+          className="relative flex h-9 w-9 items-center justify-center rounded-xl text-amber-600 transition hover:bg-amber-50 dark:hover:bg-amber-950/40"
         >
           <StickyNote className="h-4 w-4" />
           {notes.length > 0 && (
@@ -383,42 +628,28 @@ export default function InboxDetailsPanel({
             </span>
           )}
         </button>
-        {cannedReplies.length > 0 && (
-          <button
-            type="button"
-            onClick={() => openPanel('quickReplies')}
-            title="Quick replies"
-            className="flex h-9 w-9 items-center justify-center rounded-xl text-sky-600 transition hover:bg-sky-50"
-          >
-            <MessageSquareText className="h-4 w-4" />
-          </button>
-        )}
-        {onConvertToTicket && (
-          <button
-            type="button"
-            onClick={onConvertToTicket}
-            title="Convert to ticket"
-            className="flex h-9 w-9 items-center justify-center rounded-xl text-sky-600 transition hover:bg-sky-50"
-          >
-            <LifeBuoy className="h-4 w-4" />
-          </button>
-        )}
-        {onSnooze && (
-          <button
-            type="button"
-            onClick={() => onSnooze(2)}
-            title="Snooze 2 hours"
-            className="flex h-9 w-9 items-center justify-center rounded-xl text-indigo-600 transition hover:bg-indigo-50"
-          >
-            <Clock className="h-4 w-4" />
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => openPanel('attributes')}
+          title="Custom attributes"
+          className="flex h-9 w-9 items-center justify-center rounded-xl text-sky-600 transition hover:bg-sky-50 dark:hover:bg-sky-950/40"
+        >
+          <SlidersHorizontal className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          onClick={() => openPanel('automations')}
+          title="Active automations"
+          className="flex h-9 w-9 items-center justify-center rounded-xl text-emerald-600 transition hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+        >
+          <Bot className="h-4 w-4" />
+        </button>
       </aside>
     );
   }
 
   return (
-    <aside className="hidden w-72 shrink-0 flex-col border-l border-neutral-100 bg-white/95 shadow-[-4px_0_24px_rgba(15,23,42,0.04)] lg:flex">
+    <aside className="hidden w-80 shrink-0 flex-col border-l border-neutral-100 bg-white/95 shadow-[-4px_0_24px_rgba(15,23,42,0.04)] lg:flex dark:border-neutral-800/80 dark:bg-neutral-950/95">
       {panelBody}
     </aside>
   );

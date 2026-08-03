@@ -81,9 +81,27 @@ export async function recordOutboundInConversation(input: RecordOutboundInput) {
     data: { lastMessageAt: new Date() },
   });
 
+  const conversationSummary = await prisma.conversation.findUnique({
+    where: { id: conversation.id },
+    select: { id: true, lastMessageAt: true, unreadCount: true },
+  });
+
   emitToOrg(input.organizationId, 'message:new', {
     conversationId: conversation.id,
     message,
+    conversation: conversationSummary
+      ? {
+          ...conversationSummary,
+          lastMessage: {
+            id: message.id,
+            direction: message.direction,
+            type: message.type,
+            content: message.content,
+            status: message.status,
+            createdAt: message.createdAt,
+          },
+        }
+      : undefined,
   });
 
   return { message, conversation, contact };

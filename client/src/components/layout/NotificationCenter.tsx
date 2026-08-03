@@ -3,6 +3,14 @@ import { Link } from 'react-router-dom';
 import { Bell, LifeBuoy, MessageSquare } from 'lucide-react';
 import { ticketApi } from '../../services/api';
 import { isSlaBreached, type TicketItem } from '../tickets/TicketCard';
+import { useSocket } from '../../hooks/useSocket';
+import {
+  dismissInboxNotification,
+  getOpenConversationId,
+  pushInboxNotification,
+  useInboxMessageNotifications,
+} from '../../utils/inboxNotifications';
+import type { Conversation, Message } from '../../types';
 
 interface NotificationCenterProps {
   /** Unread inbox count passed from parent if available */
@@ -13,6 +21,7 @@ export default function NotificationCenter({ unreadInbox = 0 }: NotificationCent
   const [open, setOpen] = useState(false);
   const [tickets, setTickets] = useState<TicketItem[]>([]);
   const ref = useRef<HTMLDivElement>(null);
+  const messageAlerts = useInboxMessageNotifications();
 
   const load = useCallback(() => {
     ticketApi
@@ -27,6 +36,34 @@ export default function NotificationCenter({ unreadInbox = 0 }: NotificationCent
     return () => clearInterval(interval);
   }, [load]);
 
+  // Background-message alerts: only when the tab is hidden or a different
+  // conversation is open — the open thread already surfaces new messages.
+  useSocket((event, data) => {
+    if (event !== 'message:new') return;
+    const payload = data as {
+      conversationId?: string;
+      conversation?: Conversation;
+      contact?: Conversation['contact'];
+      message?: Message;
+    };
+    const conversationId = payload.conversationId ?? payload.conversation?.id;
+    if (!conversationId || payload.message?.direction !== 'INBOUND') return;
+    const openId = getOpenConversationId();
+    const differentChatOpen = openId !== null && openId !== conversationId;
+    if (!document.hidden && !differentChatOpen) return;
+    // Inbound webhook emits a top-level contact; conversation summaries may not have one.
+    const contact = payload.contact ?? payload.conversation?.contact;
+    const content = payload.message?.content ?? '';
+    pushInboxNotification({
+      conversationId,
+      contactName: contact?.name || contact?.phone || 'New message',
+      preview:
+        payload.message && payload.message.type !== 'TEXT'
+          ? `[${payload.message.type.toLowerCase()}] ${content}`.trim()
+          : content.slice(0, 80),
+    });
+  });
+
   useEffect(() => {
     if (!open) return;
     const onClick = (e: MouseEvent) => {
@@ -37,7 +74,7 @@ export default function NotificationCenter({ unreadInbox = 0 }: NotificationCent
   }, [open]);
 
   const breached = tickets.filter(isSlaBreached);
-  const count = breached.length + (unreadInbox > 0 ? 1 : 0);
+  const count = breached.length + messageAlerts.length + (unreadInbox > 0 ? 1 : 0);
 
   return (
     <div className="relative" ref={ref}>
@@ -65,6 +102,28 @@ export default function NotificationCenter({ unreadInbox = 0 }: NotificationCent
             <p className="text-label font-extrabold text-theme-fg">Notifications</p>
           </div>
           <div className="max-h-80 overflow-y-auto p-2">
+            {messageAlerts.map((alert) => (
+              <Link
+                key={alert.conversationId}
+                to={`/inbox?conversation=${alert.conversationId}`}
+                onClick={() => {
+                  dismissInboxNotification(alert.conversationId);
+                  setOpen(false);
+                }}
+                className="flex items-start gap-3 rounded-xl px-3 py-2.5 transition hover:bg-theme-subtle"
+              >
+                <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-whatsapp-600" />
+                <div className="min-w-0">
+                  <p className="truncate text-[13px] font-bold text-theme-fg">
+                    New message from {alert.contactName}
+                  </p>
+                  {alert.preview && (
+                    <p className="truncate text-caption text-theme-muted">{alert.preview}</p>
+                  )}
+                </div>
+              </Link>
+            ))}
+
             {unreadInbox > 0 && (
               <Link
                 to="/inbox"

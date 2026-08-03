@@ -318,11 +318,22 @@ export interface Conversation {
   botHandoffReason?: string | null;
   activeBot?: { id: string; name: string } | null;
   activeFlow?: ActiveFlowInfo | null;
+  isFavorite?: boolean;
+  snoozedUntil?: string | null;
+  slaDueAt?: string | null;
+  slaBreached?: boolean;
+  firstResponseAt?: string | null;
   contact: Contact;
   assignedAgent?: { id: string; name: string };
   messages?: Message[];
   labels?: ConversationLabel[];
   internalNotes?: InternalNote[];
+}
+
+export interface ConversationStats {
+  totalChats: number;
+  openTickets: number;
+  avgFirstResponseMinutes: number | null;
 }
 
 export interface BillingPlan {

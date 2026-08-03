@@ -47,6 +47,7 @@ import publicApiRoutes from './modules/public-api/routes';
 import leadRoutes from './modules/leads/routes';
 import ticketRoutes from './modules/tickets/routes';
 import { setRealtimeIO } from './realtime';
+import { registerPresenceHandlers, startPresenceSweeper } from './modules/inbox/presence';
 import { initTelemetry } from './config/telemetry';
 
 const app = express();
@@ -79,6 +80,8 @@ io.use((socket, next) => {
   }
 });
 
+startPresenceSweeper(io);
+
 io.on('connection', (socket) => {
   const user = socket.data.user;
   if (user.organizationId) {
@@ -87,6 +90,8 @@ io.on('connection', (socket) => {
   if (user.userId) {
     socket.join(`user:${user.userId}`);
   }
+
+  registerPresenceHandlers(io, socket);
 
   socket.on('join:conversation', (conversationId: string) => {
     socket.join(`conversation:${conversationId}`);
