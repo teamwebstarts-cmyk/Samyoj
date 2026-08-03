@@ -48,7 +48,7 @@ export default function NeedsAttentionCard({
     return (
       <section
         aria-label="Needs attention"
-        className="dashboard-card flex h-auto flex-col justify-between rounded-2xl sm:rounded-3xl border border-emerald-100/90 bg-gradient-to-b from-emerald-50/80 via-teal-50/30 to-emerald-50/50 p-3 sm:p-3.5 md:p-4 shadow-xs"
+        className="dashboard-card flex h-full flex-col justify-between rounded-2xl sm:rounded-3xl border border-emerald-100/90 bg-gradient-to-b from-emerald-50/80 via-teal-50/30 to-emerald-50/50 p-3 sm:p-3.5 md:p-4 shadow-xs"
       >
         <div>
           <div className="mb-2.5 flex items-center justify-between gap-2">
@@ -151,7 +151,7 @@ export default function NeedsAttentionCard({
     return (
       <section
         aria-label="Needs attention"
-        className="dashboard-card flex h-auto flex-col justify-between rounded-2xl border border-neutral-100/90 bg-white p-3 shadow-xs sm:rounded-3xl sm:p-3.5 md:p-4"
+        className="dashboard-card flex h-full flex-col justify-between rounded-2xl border border-neutral-100/90 bg-white p-3 shadow-xs sm:rounded-3xl sm:p-3.5 md:p-4"
       >
         <div className="mb-2 flex items-center gap-2.5">
           <div className="flex h-7 w-7 items-center justify-center rounded-xl border border-neutral-200 bg-neutral-50 text-neutral-500">
@@ -170,7 +170,7 @@ export default function NeedsAttentionCard({
   return (
     <section
       aria-label="Needs attention"
-      className="dashboard-card flex h-auto flex-col justify-between rounded-2xl sm:rounded-3xl border border-rose-100/90 bg-[#fff5f5]/90 p-3 sm:p-3.5 md:p-4 shadow-xs"
+      className="dashboard-card flex h-full flex-col justify-between rounded-2xl sm:rounded-3xl border border-rose-100/90 bg-[#fff5f5]/90 p-3 sm:p-3.5 md:p-4 shadow-xs"
     >
       <div>
         <div className="mb-2.5 flex items-center justify-between gap-2">

@@ -30,33 +30,40 @@ export default function MessagePerformanceDonut({
   readRate,
   periodLabel = 'Last 7 days',
 }: MessagePerformanceDonutProps) {
-  // Funnel: deliveredReached = DELIVERED + READ. Exclusive delivered-only for legend.
+  // Exclusive status buckets (API latest-status counts; read ⊈ delivered on the ring).
+  // Delivered = still DELIVERED (not read); Read / Failed / Pending|SENT are separate.
   const deliveredReached = messagesDelivered;
   const deliveredOnly =
     typeof messagesDeliveredOnly === 'number'
       ? messagesDeliveredOnly
       : Math.max(0, deliveredReached - messagesRead);
 
-  const delPctNum = messagesSent ? (deliveredReached / messagesSent) * 100 : 0;
+  const deliveredOnlyPctNum = messagesSent ? (deliveredOnly / messagesSent) * 100 : 0;
   const readPctNum = messagesSent ? (messagesRead / messagesSent) * 100 : 0;
   const failPctNum = messagesSent ? (messagesFailed / messagesSent) * 100 : 0;
   const pendPctNum = messagesSent ? (messagesPending / messagesSent) * 100 : 0;
-  const deliveredOnlyPctNum = messagesSent ? (deliveredOnly / messagesSent) * 100 : 0;
 
-  const R_OUTER = 66;
-  const C_OUTER = 2 * Math.PI * R_OUTER;
-  const R_INNER = 52;
-  const C_INNER = 2 * Math.PI * R_INNER;
+  const R = 58;
+  const C = 2 * Math.PI * R;
 
-  const delLen = (Math.min(100, delPctNum) / 100) * C_OUTER;
-  const failLen = (Math.min(100, failPctNum) / 100) * C_OUTER;
-  const pendLen = (Math.min(100, pendPctNum) / 100) * C_OUTER;
+  // Single ring segments in legend order; lengths from exclusive % of total sent.
+  const segments = [
+    { key: 'delivered', color: '#25D366', pct: Math.min(100, Math.max(0, deliveredOnlyPctNum)) },
+    { key: 'read', color: '#3B82F6', pct: Math.min(100, Math.max(0, readPctNum)) },
+    { key: 'failed', color: '#EF4444', pct: Math.min(100, Math.max(0, failPctNum)) },
+    { key: 'pending', color: '#8B5CF6', pct: Math.min(100, Math.max(0, pendPctNum)) },
+  ];
 
-  const offsetDel = 0;
-  const offsetFail = -delLen;
-  const offsetPend = -(delLen + failLen);
-
-  const readLen = (Math.min(100, readPctNum) / 100) * C_INNER;
+  let runningOffset = 0;
+  const ringArcs = segments
+    .map((seg) => {
+      const len = (seg.pct / 100) * C;
+      if (len <= 0) return null;
+      const dashoffset = -runningOffset;
+      runningOffset += len;
+      return { ...seg, len, dashoffset };
+    })
+    .filter((a): a is NonNullable<typeof a> => a !== null);
 
   const legend = [
     {
@@ -105,7 +112,7 @@ export default function MessagePerformanceDonut({
   const centerReadHint = readRate ? `Read ${readRate}%` : null;
 
   return (
-    <section className="dashboard-card flex h-auto flex-col rounded-2xl sm:rounded-3xl p-3.5 sm:p-4 md:p-5 bg-white border border-neutral-100/90 shadow-xs">
+    <section className="dashboard-card flex h-full flex-col rounded-2xl sm:rounded-3xl p-3.5 sm:p-4 md:p-5 bg-white border border-neutral-100/90 shadow-xs">
       <div>
         <div className="flex items-center gap-2.5 min-w-0">
           <IconWell accent="emerald" size="sm" round>
@@ -117,7 +124,7 @@ export default function MessagePerformanceDonut({
             </h2>
             <span
               className="hidden text-neutral-400 sm:inline"
-              title="Reached = delivered or read. Legend rows are exclusive buckets."
+              title="Segments are exclusive latest statuses: Delivered (unread), Read, Failed, Pending. Reached/Read rates in the center are funnel summaries."
             >
               <Info className="h-4 w-4 shrink-0 stroke-[1.8]" aria-hidden />
             </span>
@@ -127,72 +134,28 @@ export default function MessagePerformanceDonut({
       </div>
 
       <div className="mt-3 flex min-h-0 flex-1 flex-col items-stretch gap-4 sm:mt-4 lg:flex-row lg:gap-5">
-        {/* Donut — sized so center copy never sits on the rings */}
         <div className="relative mx-auto flex h-[168px] w-[168px] shrink-0 items-center justify-center self-center sm:h-[180px] sm:w-[180px] md:h-[188px] md:w-[188px] lg:mx-0 lg:h-[200px] lg:w-[200px]">
           <svg
             viewBox="0 0 160 160"
             className="h-full w-full -rotate-90 transform overflow-visible"
             aria-hidden="true"
           >
-            <circle cx="80" cy="80" r={R_OUTER} fill="none" stroke="#f1f5f9" strokeWidth="7" />
+            <circle cx="80" cy="80" r={R} fill="none" stroke="#f1f5f9" strokeWidth="12" />
 
-            {delLen > 0 && (
+            {ringArcs.map((arc) => (
               <circle
+                key={arc.key}
                 cx="80"
                 cy="80"
-                r={R_OUTER}
+                r={R}
                 fill="none"
-                stroke="#25D366"
-                strokeWidth="7"
-                strokeDasharray={`${delLen} ${C_OUTER - delLen}`}
-                strokeDashoffset={offsetDel}
+                stroke={arc.color}
+                strokeWidth="12"
+                strokeDasharray={`${arc.len} ${C - arc.len}`}
+                strokeDashoffset={arc.dashoffset}
                 strokeLinecap="butt"
               />
-            )}
-
-            {failLen > 0 && (
-              <circle
-                cx="80"
-                cy="80"
-                r={R_OUTER}
-                fill="none"
-                stroke="#EF4444"
-                strokeWidth="7"
-                strokeDasharray={`${failLen} ${C_OUTER - failLen}`}
-                strokeDashoffset={offsetFail}
-                strokeLinecap="butt"
-              />
-            )}
-
-            {pendLen > 0 && (
-              <circle
-                cx="80"
-                cy="80"
-                r={R_OUTER}
-                fill="none"
-                stroke="#8B5CF6"
-                strokeWidth="7"
-                strokeDasharray={`${pendLen} ${C_OUTER - pendLen}`}
-                strokeDashoffset={offsetPend}
-                strokeLinecap="butt"
-              />
-            )}
-
-            <circle cx="80" cy="80" r={R_INNER} fill="none" stroke="#f8fafc" strokeWidth="5" />
-
-            {readLen > 0 && (
-              <circle
-                cx="80"
-                cy="80"
-                r={R_INNER}
-                fill="none"
-                stroke="#3B82F6"
-                strokeWidth="7"
-                strokeDasharray={`${readLen} ${C_INNER - readLen}`}
-                strokeDashoffset={0}
-                strokeLinecap="round"
-              />
-            )}
+            ))}
           </svg>
 
           <div className="pointer-events-none absolute inset-[22%] flex flex-col items-center justify-center text-center sm:inset-[24%]">
@@ -211,7 +174,6 @@ export default function MessagePerformanceDonut({
           </div>
         </div>
 
-        {/* Legend — taller rows, fill leftover height, capped width for precision layout */}
         <div className="flex min-w-0 w-full max-w-none flex-1 flex-col justify-stretch gap-0">
           {legend.map((item, index) => (
             <div

@@ -63,11 +63,11 @@ const AppInput = forwardRef<HTMLInputElement, AppInputProps>(function AppInput(
           ref={ref}
           id={id}
           type={inputType}
-          className={`w-full rounded-xl border bg-theme-surface text-theme-fg shadow-input transition placeholder:text-theme-muted focus:border-whatsapp-600 focus:outline-none focus:shadow-input-focus disabled:opacity-60 dark:focus:border-whatsapp-500 ${sizeClasses[inputSize]} ${
+          className={`w-full rounded-xl border bg-theme-surface text-theme-fg shadow-input transition placeholder:text-theme-muted focus:border-slate-400 focus:outline-none focus:shadow-input-focus disabled:opacity-60 dark:focus:border-slate-500 ${sizeClasses[inputSize]} ${
             error
               ? 'border-red-300 focus:border-red-500 focus:shadow-[0_0_0_4px_rgba(239,68,68,0.12)] dark:border-red-500/40'
               : 'border-theme-border'
-          } ${icon ? 'pl-11' : 'px-3.5'} ${isPassword ? 'pr-11' : icon ? 'pr-3.5' : ''} ${className} ${FOCUS_RING_CLASS}`}
+          } ${icon ? 'pl-11' : 'px-3.5'} ${isPassword ? 'pr-11' : icon ? 'pr-3.5' : ''} ${className}`}
           {...props}
         />
         {isPassword && (

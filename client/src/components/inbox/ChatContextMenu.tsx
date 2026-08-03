@@ -4,12 +4,16 @@ import {
   BellOff,
   Bot,
   CheckCircle2,
+  CheckSquare,
   Clock,
   Download,
+  ListChecks,
   PauseCircle,
   PlayCircle,
+  Square,
   UserMinus,
   UserPlus,
+  X,
   XCircle,
 } from 'lucide-react';
 import ContextMenu, { type ContextMenuItem } from '../ui/ContextMenu';
@@ -26,6 +30,8 @@ interface ChatContextMenuProps {
   botIsLive: boolean;
   assigning: boolean;
   botToggling: boolean;
+  selectionMode: boolean;
+  isConversationSelected: boolean;
   onClose: () => void;
   onAssign: (agentId: string | null) => void;
   onToggleBot: () => void;
@@ -33,6 +39,10 @@ interface ChatContextMenuProps {
   onSnoozeUntil: (untilIso: string, label: string) => void;
   onUnsnooze: () => void;
   onExport: () => void;
+  onSelectThis: () => void;
+  onDeselectThis: () => void;
+  onSelectAll: () => void;
+  onClearSelection: () => void;
 }
 
 function snoozePresets(): { id: string; label: string; until: string }[] {
@@ -58,6 +68,8 @@ export default function ChatContextMenu({
   botIsLive,
   assigning,
   botToggling,
+  selectionMode,
+  isConversationSelected,
   onClose,
   onAssign,
   onToggleBot,
@@ -65,6 +77,10 @@ export default function ChatContextMenu({
   onSnoozeUntil,
   onUnsnooze,
   onExport,
+  onSelectThis,
+  onDeselectThis,
+  onSelectAll,
+  onClearSelection,
 }: ChatContextMenuProps) {
   const items = useMemo<ContextMenuItem[]>(() => {
     if (!conversation) return [];
@@ -131,7 +147,45 @@ export default function ChatContextMenu({
       });
     }
 
+    const selectionItems: ContextMenuItem[] = [
+      isConversationSelected
+        ? {
+            id: 'deselect-this',
+            label: 'Deselect this chat',
+            description: 'Remove from selection',
+            icon: Square,
+            onClick: onDeselectThis,
+          }
+        : {
+            id: 'select-this',
+            label: selectionMode ? 'Add to selection' : 'Select this chat',
+            description: selectionMode
+              ? 'Include this chat in the current selection'
+              : 'Enter selection mode with this chat',
+            icon: CheckSquare,
+            onClick: onSelectThis,
+          },
+      {
+        id: 'select-all',
+        label: 'Select all in list',
+        description: 'Select every chat currently shown',
+        icon: ListChecks,
+        onClick: onSelectAll,
+      },
+    ];
+    if (selectionMode) {
+      selectionItems.push({
+        id: 'cancel-selection',
+        label: 'Cancel selection',
+        description: 'Clear selection and exit',
+        icon: X,
+        onClick: onClearSelection,
+      });
+    }
+
     return [
+      ...selectionItems,
+      { id: 'sep-selection', label: '', separator: true },
       {
         id: 'assign',
         label: 'Assign to',
@@ -196,12 +250,18 @@ export default function ChatContextMenu({
     botToggling,
     conversation,
     currentUserId,
+    isConversationSelected,
     onAssign,
+    onClearSelection,
+    onDeselectThis,
     onExport,
+    onSelectAll,
+    onSelectThis,
     onSnoozeUntil,
     onStatusChange,
     onToggleBot,
     onUnsnooze,
+    selectionMode,
   ]);
 
   if (!conversation) return null;

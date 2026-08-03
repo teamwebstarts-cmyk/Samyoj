@@ -253,7 +253,7 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
                 aria-expanded={userMenuOpen}
                 aria-haspopup="menu"
               >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#16a34a] text-[12px] font-bold tracking-wide text-white sm:h-10 sm:w-10 sm:text-[13px]">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.625rem] bg-[#16a34a] text-[12px] font-bold tracking-wide text-white sm:h-10 sm:w-10 sm:text-[13px]">
                   {initials}
                 </span>
                 <span className="hidden min-w-0 flex-1 text-left sm:block">

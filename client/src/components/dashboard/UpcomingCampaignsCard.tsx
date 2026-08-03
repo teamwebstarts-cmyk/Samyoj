@@ -114,9 +114,9 @@ export default function UpcomingCampaignsCard({
   onRetry,
 }: UpcomingCampaignsCardProps) {
   return (
-    <section className="dashboard-card flex h-auto flex-col justify-between rounded-2xl sm:rounded-3xl p-3.5 sm:p-4 md:p-5 lg:p-6 bg-white border border-neutral-100/90 shadow-xs">
+    <section className="dashboard-card flex h-full flex-col rounded-2xl sm:rounded-3xl p-3.5 sm:p-4 md:p-5 lg:p-6 bg-white border border-neutral-100/90 shadow-xs">
       {/* Card Header: Icon + Title + Info + View All Link */}
-      <div className="flex items-start sm:items-center justify-between gap-2 sm:gap-3">
+      <div className="flex shrink-0 items-start sm:items-center justify-between gap-2 sm:gap-3">
         <div className="flex min-w-0 items-center gap-2 sm:gap-2.5">
           <IconWell accent="emerald" size="sm" round>
             <CalendarCheck className="h-4 w-4 stroke-[2.2]" />
@@ -145,7 +145,7 @@ export default function UpcomingCampaignsCard({
           ))}
         </div>
       ) : error ? (
-        <div className="my-4 flex flex-col items-center text-center justify-center rounded-2xl border border-dashed border-amber-200 bg-amber-50/40 px-4 py-6">
+        <div className="my-4 flex flex-1 flex-col items-center justify-center text-center rounded-2xl border border-dashed border-amber-200 bg-amber-50/40 px-4 py-6">
           <IconWell accent="amber" size="md">
             <Send className="h-4 w-4" strokeWidth={2} />
           </IconWell>
@@ -166,42 +166,43 @@ export default function UpcomingCampaignsCard({
           )}
         </div>
       ) : campaigns.length === 0 ? (
-        /* Rich Engaging Empty State for First-Time / Blank Screen */
-        <div className="my-3 flex flex-col justify-between rounded-2xl border border-emerald-100/90 bg-gradient-to-br from-emerald-50/70 via-teal-50/30 to-sky-50/40 p-4 sm:p-5">
-          <div className="flex items-start gap-3.5">
-            <IconWell accent="emerald" size="lg" className="shadow-xs shrink-0">
-              <Megaphone className="h-5 w-5 stroke-[2]" />
-            </IconWell>
-            <div className="min-w-0">
-              <h3 className="text-[14px] font-extrabold text-neutral-900 tracking-tight">
-                Launch your first campaign
-              </h3>
-              <p className="mt-1 text-[12px] font-medium leading-relaxed text-neutral-600">
-                Broadcast WhatsApp messages to your contacts with delivery and read tracking.
-              </p>
+        /* Empty state: vertically centered in card body below header */
+        <div className="mt-3 flex min-h-0 flex-1 flex-col justify-center">
+          <div className="flex flex-col rounded-2xl border border-emerald-100/90 bg-gradient-to-br from-emerald-50/70 via-teal-50/30 to-sky-50/40 p-4 sm:p-5">
+            <div className="flex items-start gap-3.5">
+              <IconWell accent="emerald" size="lg" className="shadow-xs shrink-0">
+                <Megaphone className="h-5 w-5 stroke-[2]" />
+              </IconWell>
+              <div className="min-w-0">
+                <h3 className="text-[14px] font-extrabold text-neutral-900 tracking-tight">
+                  Launch your first campaign
+                </h3>
+                <p className="mt-1 text-[12px] font-medium leading-relaxed text-neutral-600">
+                  Broadcast WhatsApp messages to your contacts with delivery and read tracking.
+                </p>
+              </div>
             </div>
-          </div>
 
-          {/* Key Campaign Benefits */}
-          <div className="mt-3.5 grid grid-cols-2 gap-2 pt-2 border-t border-emerald-100/60 text-[11.5px] font-semibold text-neutral-700">
-            <div className="flex items-center gap-1.5">
-              <Zap className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-              <span>Delivery tracking</span>
+            <div className="mt-3.5 grid grid-cols-2 gap-2 border-t border-emerald-100/60 pt-2 text-[11.5px] font-semibold text-neutral-700">
+              <div className="flex items-center gap-1.5">
+                <Zap className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                <span>Delivery tracking</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Calendar className="h-3.5 w-3.5 shrink-0 text-sky-600" />
+                <span>Smart scheduling</span>
+              </div>
             </div>
-            <div className="flex items-center gap-1.5">
-              <Calendar className="h-3.5 w-3.5 text-sky-600 shrink-0" />
-              <span>Smart scheduling</span>
-            </div>
-          </div>
 
-          <div className="mt-4 pt-1">
-            <Link
-              to="/campaigns"
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-whatsapp-600 px-4 py-2 text-[12.5px] font-bold text-white shadow-md shadow-whatsapp-600/20 transition hover:bg-whatsapp-700"
-            >
-              Create Campaign
-              <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
+            <div className="mt-4 pt-1">
+              <Link
+                to="/campaigns"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-whatsapp-600 px-4 py-2 text-[12.5px] font-bold text-white shadow-md shadow-whatsapp-600/20 transition hover:bg-whatsapp-700"
+              >
+                Create Campaign
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
           </div>
         </div>
       ) : (

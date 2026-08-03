@@ -26,8 +26,10 @@ export function createSelectStyles(
   const muted = cssVar('--color-text-muted', isDark ? '#64748b' : '#64748b');
   const border = cssVar('--color-border', isDark ? 'rgba(51, 65, 85, 0.65)' : 'rgba(226, 232, 240, 0.85)');
   const borderHover = cssVar('--color-border-strong', isDark ? '#475569' : '#d1d5db');
-  const focusBorder = '#128C7E';
-  const focusRing = isDark ? '0 0 0 3px rgba(37, 211, 102, 0.2)' : '0 0 0 3px rgba(37, 211, 102, 0.15)';
+  const focusBorder = isDark ? '#64748b' : '#94a3b8';
+  const focusRing = isDark
+    ? '0 0 0 3px rgba(148, 163, 184, 0.18)'
+    : '0 0 0 3px rgba(100, 116, 139, 0.14)';
   const menuShadow = cssVar('--shadow-panel', isDark
     ? '0 12px 32px rgba(0, 0, 0, 0.45)'
     : '0 12px 32px rgba(15, 23, 42, 0.12)');

@@ -168,7 +168,9 @@ function createStyles(
       minWidth: 0,
       borderRadius: 12,
       borderColor: state.isFocused
-        ? '#128C7E'
+        ? isDark
+          ? '#64748b'
+          : '#94a3b8'
         : isAssign && hasSelection
           ? assignBorder
           : isDark
@@ -176,14 +178,22 @@ function createStyles(
             : 'rgba(229, 231, 235, 0.95)',
       backgroundColor: isAssign && hasSelection ? assignBg : surface,
       boxShadow: state.isFocused
-        ? '0 0 0 3px rgba(37, 211, 102, 0.14), 0 4px 14px rgba(15, 23, 42, 0.06)'
+        ? isDark
+          ? '0 0 0 3px rgba(148, 163, 184, 0.18), 0 4px 14px rgba(15, 23, 42, 0.06)'
+          : '0 0 0 3px rgba(100, 116, 139, 0.14), 0 4px 14px rgba(15, 23, 42, 0.06)'
         : isAssign && hasSelection
           ? '0 2px 10px rgba(37, 211, 102, 0.08)'
           : '0 1px 2px rgba(15, 23, 42, 0.04)',
       cursor: state.isDisabled ? 'not-allowed' : 'pointer',
       transition: 'border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease',
       '&:hover': {
-        borderColor: state.isFocused ? '#128C7E' : isAssign && hasSelection ? '#6ee7b7' : '#d1d5db',
+        borderColor: state.isFocused
+          ? isDark
+            ? '#64748b'
+            : '#94a3b8'
+          : isAssign && hasSelection
+            ? '#6ee7b7'
+            : '#d1d5db',
       },
     }),
     valueContainer: (base) => ({
@@ -226,13 +236,13 @@ function createStyles(
     indicatorSeparator: () => ({ display: 'none' }),
     dropdownIndicator: (base, state) => ({
       ...base,
-      color: state.isFocused ? '#128C7E' : '#94a3b8',
+      color: state.isFocused ? (isDark ? '#94a3b8' : '#64748b') : '#94a3b8',
       paddingRight: isAssign ? 10 : 6,
       paddingLeft: 2,
       flexShrink: 0,
       transition: 'transform 160ms ease, color 160ms ease',
       transform: state.selectProps.menuIsOpen ? 'rotate(180deg)' : undefined,
-      '&:hover': { color: '#128C7E' },
+      '&:hover': { color: isDark ? '#94a3b8' : '#64748b' },
     }),
     menuPortal: (base) => ({
       ...base,

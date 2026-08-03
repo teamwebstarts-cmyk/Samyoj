@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   Activity,
-  Bot,
   Hash,
   Plus,
   StickyNote,
@@ -9,14 +8,11 @@ import {
   Trash2,
   User,
   X,
-  Zap,
 } from 'lucide-react';
 import AppInput from '../ui/AppInput';
 import AppTextarea from '../ui/AppTextarea';
 import ProfileCard from './details/ProfileCard';
-import AutomationsSection from './details/AutomationsSection';
 import ConversationActivity from './details/ConversationActivity';
-import QuickRepliesSection from './details/QuickRepliesSection';
 import {
   DetailsSectionCard,
   DetailsSectionHeader,
@@ -32,7 +28,6 @@ import { contactApi, inboxApi, labelsApi } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import type {
-  CannedReply,
   Contact,
   Conversation,
   ConversationLabel,
@@ -46,28 +41,17 @@ type PanelSection =
   | 'profile'
   | 'labels'
   | 'notes'
-  | 'quickReplies'
   | 'stats'
-  | 'tags'
-  | 'automations';
+  | 'tags';
 
-type DetailsTab =
-  | 'details'
-  | 'activity'
-  | 'labels'
-  | 'notes'
-  | 'replies'
-  | 'tags'
-  | 'automations';
+type DetailsTab = 'overview' | 'notes' | 'activity';
 
 const SECTION_TO_TAB: Record<PanelSection, DetailsTab> = {
-  profile: 'details',
+  profile: 'overview',
   stats: 'activity',
-  labels: 'labels',
+  labels: 'overview',
   notes: 'notes',
-  quickReplies: 'replies',
-  tags: 'tags',
-  automations: 'automations',
+  tags: 'overview',
 };
 
 const DETAILS_TABS: ReadonlyArray<{
@@ -76,13 +60,9 @@ const DETAILS_TABS: ReadonlyArray<{
   shortLabel: string;
   icon: typeof User;
 }> = [
-  { id: 'details', label: 'Details', shortLabel: 'Details', icon: User },
-  { id: 'activity', label: 'Activity', shortLabel: 'Activity', icon: Activity },
-  { id: 'labels', label: 'Labels', shortLabel: 'Labels', icon: Tag },
+  { id: 'overview', label: 'Overview', shortLabel: 'Overview', icon: User },
   { id: 'notes', label: 'Notes', shortLabel: 'Notes', icon: StickyNote },
-  { id: 'replies', label: 'Quick replies', shortLabel: 'Replies', icon: Zap },
-  { id: 'tags', label: 'Tags', shortLabel: 'Tags', icon: Hash },
-  { id: 'automations', label: 'Automations', shortLabel: 'Bots', icon: Bot },
+  { id: 'activity', label: 'Activity', shortLabel: 'Activity', icon: Activity },
 ];
 
 interface InboxDetailsPanelProps {
@@ -92,13 +72,10 @@ interface InboxDetailsPanelProps {
   currentUserId?: string;
   assigning: boolean;
   botIsLive: boolean;
-  cannedReplies?: CannedReply[];
   onNotesChange: (notes: InternalNote[]) => void;
   onLabelsChange: (labels: ConversationLabel[]) => void;
   onContactChange: (contact: Contact) => void;
   onAssign: (agentId: string | null) => void;
-  /** Insert a canned reply into the composer (same as `/` picker). */
-  onApplyQuickReply?: (reply: CannedReply) => void;
   /** Controlled docked panel open (≥ md). */
   panelOpen: boolean;
   onPanelOpenChange: (open: boolean) => void;
@@ -185,12 +162,10 @@ export default function InboxDetailsPanel({
   currentUserId,
   assigning,
   botIsLive,
-  cannedReplies = [],
   onNotesChange,
   onLabelsChange,
   onContactChange,
   onAssign,
-  onApplyQuickReply,
   panelOpen,
   onPanelOpenChange,
   focusSection,
@@ -207,7 +182,7 @@ export default function InboxDetailsPanel({
   const contact = conversation.contact;
   const { canManageTeam } = useAuth();
 
-  const [detailsTab, setDetailsTab] = useState<DetailsTab>('details');
+  const [detailsTab, setDetailsTab] = useState<DetailsTab>('overview');
   const [noteText, setNoteText] = useState('');
   const [showNoteComposer, setShowNoteComposer] = useState(false);
   const [savingNote, setSavingNote] = useState(false);
@@ -252,7 +227,7 @@ export default function InboxDetailsPanel({
     setShowNoteComposer(false);
     setNoteText('');
     setConfirmDeleteNoteId(null);
-    setDetailsTab('details');
+    setDetailsTab('overview');
   }, [conversationId]); // eslint-disable-line react-hooks/exhaustive-deps -- reset only on conversation change
 
   useEffect(() => {
@@ -302,8 +277,15 @@ export default function InboxDetailsPanel({
     const tab = SECTION_TO_TAB[section];
     setDetailsTab(tab);
     requestAnimationFrame(() => {
-      scrollRef.current?.scrollTo({ top: 0 });
       scrollTabIntoStrip(tab);
+      if (tab === 'overview' && section !== 'profile') {
+        const el = scrollRef.current?.querySelector<HTMLElement>(
+          `[data-section="${section}"]`
+        );
+        el?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      } else {
+        scrollRef.current?.scrollTo({ top: 0 });
+      }
     });
   };
 
@@ -503,10 +485,116 @@ export default function InboxDetailsPanel({
       <div ref={scrollRef} className="inbox-composer-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain">
         {detailsTab === 'activity' ? (
           <ConversationActivity conversation={conversation} botIsLive={botIsLive} />
+        ) : detailsTab === 'notes' ? (
+          <div className="space-y-2.5 px-3 py-3">
+            <DetailsSectionCard data-section="notes">
+              <DetailsSectionHeader
+                icon={<StickyNote className="h-3.5 w-3.5" strokeWidth={2.25} />}
+                title="Notes"
+                action={
+                  <button type="button" onClick={openNoteComposer} className={detailsAddLinkClassName()}>
+                    + Add note
+                  </button>
+                }
+              />
+
+              {(showNoteComposer || noteText.trim()) && (
+                <form onSubmit={(e) => void handleAddNote(e)} className="mb-2.5 space-y-2">
+                  <AppTextarea
+                    ref={noteInputRef}
+                    value={noteText}
+                    onChange={(e) => setNoteText(e.target.value)}
+                    placeholder="Add a note — only your team can see it"
+                    rows={2}
+                  />
+                  <div className="flex items-center gap-2">
+                    {noteText.trim() && (
+                      <button
+                        type="submit"
+                        disabled={savingNote}
+                        className="rounded-lg bg-whatsapp-600 px-3 py-1.5 text-[12px] font-bold text-white transition hover:bg-whatsapp-700 disabled:opacity-50"
+                      >
+                        {savingNote ? 'Saving…' : 'Save note'}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowNoteComposer(false);
+                        setNoteText('');
+                      }}
+                      className="text-[12px] font-semibold text-theme-muted transition hover:text-theme-fg"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {notes.length === 0 && !showNoteComposer && !noteText.trim() && (
+                <div className="rounded-xl border border-dashed border-theme-border/80 bg-slate-50/70 px-3 py-3 text-center dark:bg-neutral-950/40">
+                  <p className="text-[12px] font-semibold text-theme-fg">No notes yet</p>
+                  <p className="mt-0.5 text-[11px] text-theme-muted">
+                    Leave context for the next agent on this chat.
+                  </p>
+                </div>
+              )}
+
+              {notes.length > 0 && (
+                <div className="space-y-2">
+                  {notes.map((note) => {
+                    const canDelete = note.user?.id === currentUserId || canManageTeam;
+                    return (
+                      <div
+                        key={note.id}
+                        className="rounded-xl border border-slate-200/80 bg-slate-100/70 p-3 dark:border-neutral-700/60 dark:bg-neutral-900/55"
+                      >
+                        <div className="flex items-start gap-2">
+                          <CollapsibleNoteText content={note.content} />
+                          {canDelete &&
+                            (confirmDeleteNoteId === note.id ? (
+                              <span className="flex shrink-0 items-center gap-1">
+                                <button
+                                  type="button"
+                                  disabled={deletingNoteId === note.id}
+                                  onClick={() => void handleDeleteNote(note.id)}
+                                  className="rounded-md bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white transition hover:bg-red-700 disabled:opacity-50"
+                                >
+                                  {deletingNoteId === note.id ? '…' : 'Delete'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmDeleteNoteId(null)}
+                                  className="rounded-md px-1 py-0.5 text-[10px] font-bold text-theme-muted transition hover:text-theme-fg"
+                                >
+                                  Cancel
+                                </button>
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteNoteId(note.id)}
+                                aria-label="Delete note"
+                                {...tipFor('Delete note')}
+                                className="shrink-0 rounded-md p-1 text-slate-400 transition hover:bg-white/70 hover:text-red-600 dark:hover:bg-neutral-800"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            ))}
+                        </div>
+                        <p className="mt-1.5 text-[10.5px] font-medium text-theme-muted">
+                          {formatNoteMeta(note)}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </DetailsSectionCard>
+          </div>
         ) : (
           <div className="space-y-2.5 px-3 py-3">
-            {detailsTab === 'details' && (
-              <DetailsSectionCard data-section="profile" className="!p-0 overflow-hidden">
+            <DetailsSectionCard data-section="profile" className="!p-0 overflow-hidden">
                 <ProfileCard
                   contact={contact}
                   conversation={conversation}
@@ -530,9 +618,7 @@ export default function InboxDetailsPanel({
                   </div>
                 )}
               </DetailsSectionCard>
-            )}
 
-            {detailsTab === 'labels' && (
             <DetailsSectionCard data-section="labels">
               <div ref={labelsSectionRef}>
                 <DetailsSectionHeader
@@ -667,123 +753,7 @@ export default function InboxDetailsPanel({
                 )}
               </div>
             </DetailsSectionCard>
-            )}
 
-            {detailsTab === 'notes' && (
-            <DetailsSectionCard data-section="notes">
-              <DetailsSectionHeader
-                icon={<StickyNote className="h-3.5 w-3.5" strokeWidth={2.25} />}
-                title="Notes"
-                action={
-                  <button type="button" onClick={openNoteComposer} className={detailsAddLinkClassName()}>
-                    + Add note
-                  </button>
-                }
-              />
-
-              {(showNoteComposer || noteText.trim()) && (
-                <form onSubmit={(e) => void handleAddNote(e)} className="mb-2.5 space-y-2">
-                  <AppTextarea
-                    ref={noteInputRef}
-                    value={noteText}
-                    onChange={(e) => setNoteText(e.target.value)}
-                    placeholder="Add a note — only your team can see it"
-                    rows={2}
-                  />
-                  <div className="flex items-center gap-2">
-                    {noteText.trim() && (
-                      <button
-                        type="submit"
-                        disabled={savingNote}
-                        className="rounded-lg bg-whatsapp-600 px-3 py-1.5 text-[12px] font-bold text-white transition hover:bg-whatsapp-700 disabled:opacity-50"
-                      >
-                        {savingNote ? 'Saving…' : 'Save note'}
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowNoteComposer(false);
-                        setNoteText('');
-                      }}
-                      className="text-[12px] font-semibold text-theme-muted transition hover:text-theme-fg"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </form>
-              )}
-
-              {notes.length === 0 && !showNoteComposer && !noteText.trim() && (
-                <div className="rounded-xl border border-dashed border-theme-border/80 bg-slate-50/70 px-3 py-3 text-center dark:bg-neutral-950/40">
-                  <p className="text-[12px] font-semibold text-theme-fg">No notes yet</p>
-                  <p className="mt-0.5 text-[11px] text-theme-muted">
-                    Leave context for the next agent on this chat.
-                  </p>
-                </div>
-              )}
-
-              {notes.length > 0 && (
-                <div className="space-y-2">
-                  {notes.map((note) => {
-                    const canDelete = note.user?.id === currentUserId || canManageTeam;
-                    return (
-                      <div
-                        key={note.id}
-                        className="rounded-xl border border-slate-200/80 bg-slate-100/70 p-3 dark:border-neutral-700/60 dark:bg-neutral-900/55"
-                      >
-                        <div className="flex items-start gap-2">
-                          <CollapsibleNoteText content={note.content} />
-                          {canDelete &&
-                            (confirmDeleteNoteId === note.id ? (
-                              <span className="flex shrink-0 items-center gap-1">
-                                <button
-                                  type="button"
-                                  disabled={deletingNoteId === note.id}
-                                  onClick={() => void handleDeleteNote(note.id)}
-                                  className="rounded-md bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white transition hover:bg-red-700 disabled:opacity-50"
-                                >
-                                  {deletingNoteId === note.id ? '…' : 'Delete'}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setConfirmDeleteNoteId(null)}
-                                  className="rounded-md px-1 py-0.5 text-[10px] font-bold text-theme-muted transition hover:text-theme-fg"
-                                >
-                                  Cancel
-                                </button>
-                              </span>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => setConfirmDeleteNoteId(note.id)}
-                                aria-label="Delete note"
-                                {...tipFor('Delete note')}
-                                className="shrink-0 rounded-md p-1 text-slate-400 transition hover:bg-white/70 hover:text-red-600 dark:hover:bg-neutral-800"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            ))}
-                        </div>
-                        <p className="mt-1.5 text-[10.5px] font-medium text-theme-muted">
-                          {formatNoteMeta(note)}
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </DetailsSectionCard>
-            )}
-
-            {detailsTab === 'replies' && (
-            <QuickRepliesSection
-              replies={cannedReplies}
-              onSelect={(reply) => onApplyQuickReply?.(reply)}
-            />
-            )}
-
-            {detailsTab === 'tags' && (
             <DetailsSectionCard data-section="tags">
               <DetailsSectionHeader
                 icon={<Hash className="h-3.5 w-3.5" strokeWidth={2.25} />}
@@ -861,17 +831,6 @@ export default function InboxDetailsPanel({
                 )}
               </div>
             </DetailsSectionCard>
-            )}
-
-            {detailsTab === 'automations' && (
-            <DetailsSectionCard data-section="automations">
-              <DetailsSectionHeader
-                icon={<Bot className="h-3.5 w-3.5" strokeWidth={2.25} />}
-                title="Active Automations"
-              />
-              <AutomationsSection conversation={conversation} botIsLive={botIsLive} />
-            </DetailsSectionCard>
-            )}
           </div>
         )}
       </div>
@@ -908,7 +867,7 @@ export default function InboxDetailsPanel({
 
     return (
       <aside
-        className="hidden w-11 shrink-0 flex-col items-center gap-1 border-l border-white/40 bg-white/55 py-3 backdrop-blur-md md:flex dark:border-neutral-800/80 dark:bg-neutral-950/70"
+        className="inbox-composer-scroll hidden w-11 shrink-0 flex-col items-center gap-1 overflow-y-auto overscroll-contain border-l border-white/40 bg-white/55 py-3 backdrop-blur-md md:flex dark:border-neutral-800/80 dark:bg-neutral-950/70"
         aria-label="Conversation details shortcuts"
       >
         <button
@@ -958,15 +917,6 @@ export default function InboxDetailsPanel({
         </button>
         <button
           type="button"
-          aria-label="Quick replies"
-          onClick={() => openPanel('quickReplies')}
-          className={`${railBtn} text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-950/40`}
-          {...tipFor('Quick replies', 'left')}
-        >
-          <Zap className="h-4 w-4" />
-        </button>
-        <button
-          type="button"
           aria-label={tagCount > 0 ? `Tags, ${tagCount}` : 'Tags'}
           onClick={() => openPanel('tags')}
           className={`${railBtn} text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-950/40`}
@@ -974,15 +924,6 @@ export default function InboxDetailsPanel({
         >
           <Hash className="h-4 w-4" />
           {tagCount > 0 && <span className={`${railBadge} bg-sky-600`}>{tagCount}</span>}
-        </button>
-        <button
-          type="button"
-          aria-label="Active automations"
-          onClick={() => openPanel('automations')}
-          className={`${railBtn} text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40`}
-          {...tipFor('Active automations', 'left')}
-        >
-          <Bot className="h-4 w-4" />
         </button>
       </aside>
     );

@@ -37,9 +37,10 @@ import { useAuth } from '../contexts/AuthContext';
 import PaneHandle from '../components/inbox/PaneHandle';
 import KeyboardShortcutsOverlay from '../components/inbox/KeyboardShortcutsOverlay';
 import { InboxGlassTipProvider } from '../components/inbox/ComposerGlassTip';
-import { cannedRepliesApi, inboxApi, teamApi, ticketApi } from '../services/api';
+import { cannedRepliesApi, aiBotApi, inboxApi, teamApi, ticketApi } from '../services/api';
 import { setOpenConversationId } from '../utils/inboxNotifications';
 import type {
+  AiBot,
   CannedReply,
   Conversation,
   ConversationLabel,
@@ -47,14 +48,6 @@ import type {
   Message,
   TeamAgent,
 } from '../types';
-
-const statusFilterOptions: InboxSelectOption[] = [
-  { value: '', label: 'All status' },
-  { value: 'OPEN', label: 'Open', dotColor: '#22c55e' },
-  { value: 'PENDING', label: 'Pending', dotColor: '#f59e0b' },
-  { value: 'CLOSED', label: 'Closed', dotColor: '#94a3b8' },
-  { value: 'SNOOZED', label: 'Snoozed', dotColor: '#6366f1' },
-];
 
 export default function InboxPage() {
   const { user } = useAuth();
@@ -64,7 +57,6 @@ export default function InboxPage() {
   const [chip, setChip] = useState<ListChip>('all');
   const [statusFilter, setStatusFilter] = useState('');
   const [agentFilter, setAgentFilter] = useState('');
-  const [slaFilter, setSlaFilter] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<PageSize>(() => readStoredPageSize());
   const debouncedSearch = useDebouncedValue(search);
@@ -90,7 +82,6 @@ export default function InboxPage() {
     chip,
     statusFilter,
     agentFilter,
-    slaFilter,
     userId: user?.id,
     page,
     pageSize,
@@ -117,6 +108,8 @@ export default function InboxPage() {
   } = useConversationThread({ setConversations, refreshUnread });
 
   const [agents, setAgents] = useState<TeamAgent[]>([]);
+  const [aiBots, setAiBots] = useState<AiBot[]>([]);
+  const [aiBotsLoading, setAiBotsLoading] = useState(true);
   const [cannedReplies, setCannedReplies] = useState<CannedReply[]>([]);
   const [templateMode, setTemplateMode] = useState(false);
   const [interactiveOpen, setInteractiveOpen] = useState(false);
@@ -299,10 +292,12 @@ export default function InboxPage() {
   const {
     assigning,
     botToggling,
+    botAssigning,
     callingBack,
     handleAssignAgent,
     handleStatusChange,
     handleToggleBot,
+    handleSetActiveBot,
     handleCallBack,
     handleSnooze,
     handleUnsnooze,
@@ -325,6 +320,12 @@ export default function InboxPage() {
   useEffect(() => {
     teamApi.agents().then(({ data }) => setAgents(data.data.agents)).catch(console.error);
     cannedRepliesApi.list().then(({ data }) => setCannedReplies(data.data.replies)).catch(console.error);
+    setAiBotsLoading(true);
+    aiBotApi
+      .list()
+      .then(({ data }) => setAiBots((data.data?.bots ?? []) as AiBot[]))
+      .catch(() => setAiBots([]))
+      .finally(() => setAiBotsLoading(false));
     ticketApi.list().then((res) => {
       const ids = new Set<string>();
       for (const t of res.data.data.tickets || []) {
@@ -381,7 +382,6 @@ export default function InboxPage() {
     chip,
     statusFilter,
     agentFilter,
-    slaFilter,
     page,
     pageSize,
     resetThread,
@@ -391,7 +391,6 @@ export default function InboxPage() {
     setChip,
     setStatusFilter,
     setAgentFilter,
-    setSlaFilter,
     setPage,
     setPageSize,
     setListLoading,
@@ -409,14 +408,39 @@ export default function InboxPage() {
   };
 
   const toggleSelect = useCallback((conversationId: string) => {
-    setSelectionMode(true);
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(conversationId)) next.delete(conversationId);
       else next.add(conversationId);
+      setSelectionMode(next.size > 0);
       return next;
     });
   }, []);
+
+  const selectConversation = useCallback((conversationId: string) => {
+    setSelectionMode(true);
+    setSelectedIds((prev) => {
+      if (prev.has(conversationId)) return prev;
+      const next = new Set(prev);
+      next.add(conversationId);
+      return next;
+    });
+  }, []);
+
+  const deselectConversation = useCallback((conversationId: string) => {
+    setSelectedIds((prev) => {
+      if (!prev.has(conversationId)) return prev;
+      const next = new Set(prev);
+      next.delete(conversationId);
+      if (next.size === 0) setSelectionMode(false);
+      return next;
+    });
+  }, []);
+
+  const selectAllVisible = useCallback(() => {
+    setSelectionMode(true);
+    setSelectedIds(new Set(conversations.map((c) => c.id)));
+  }, [conversations]);
 
   const clearSelection = useCallback(() => {
     setSelectionMode(false);
@@ -481,11 +505,6 @@ export default function InboxPage() {
     setAgentFilter(value);
   }, []);
 
-  const handleSlaFilterChange = useCallback((value: string) => {
-    setPage(1);
-    setSlaFilter(value);
-  }, []);
-
   const handleChipChange = useCallback((next: ListChip) => {
     setPage(1);
     setChip(next);
@@ -530,17 +549,12 @@ export default function InboxPage() {
               unreadTotal={unreadTotal}
               statusFilter={statusFilter}
               agentFilter={agentFilter}
-              slaFilter={slaFilter}
               onStatusFilterChange={handleStatusFilterChange}
               onAgentFilterChange={handleAgentFilterChange}
-              onSlaFilterChange={handleSlaFilterChange}
-              statusOptions={statusFilterOptions}
               agentOptions={agentFilterOptions}
               agentOptionsSearchable={agents.length > 4}
               selectionMode={selectionMode}
-              onToggleSelectionMode={() =>
-                selectionMode ? clearSelection() : setSelectionMode(true)
-              }
+              onCancelSelection={clearSelection}
               onNewChat={() => setNewChatOpen(true)}
               onRefresh={() => void loadConversations()}
               inboundHealth={inboundHealth}
@@ -553,7 +567,7 @@ export default function InboxPage() {
               loading={listLoading}
               error={listError}
               filtered={Boolean(
-                search || statusFilter || agentFilter || slaFilter || chip !== 'all'
+                search || statusFilter || agentFilter || chip !== 'all'
               )}
               ticketConversationIds={ticketConversationIds}
               selectionMode={selectionMode}
@@ -620,6 +634,9 @@ export default function InboxPage() {
                   retryingId={retryingId}
                   botIsLive={botIsLive}
                   botToggling={botToggling}
+                  botAssigning={botAssigning}
+                  bots={aiBots}
+                  botsLoading={aiBotsLoading}
                   callingBack={callingBack}
                   assigning={assigning}
                   agents={agents}
@@ -639,6 +656,7 @@ export default function InboxPage() {
                   onSnoozeUntil={(untilIso, label) => void handleSnooze(untilIso, label)}
                   onUnsnooze={() => void handleUnsnooze()}
                   onToggleBot={() => void handleToggleBot()}
+                  onSetActiveBot={(botId) => void handleSetActiveBot(botId)}
                   onToggleFavorite={() => void handleToggleFavorite()}
                   onAssign={(agentId) => void handleAssignAgent(agentId)}
                   onStatusChange={(status) => void handleStatusChange(status)}
@@ -698,7 +716,6 @@ export default function InboxPage() {
                   currentUserId={user?.id}
                   assigning={assigning}
                   botIsLive={botIsLive}
-                  cannedReplies={cannedReplies}
                   onNotesChange={(notes: InternalNote[]) =>
                     setSelected((prev) => (prev ? { ...prev, internalNotes: notes } : prev))
                   }
@@ -709,13 +726,6 @@ export default function InboxPage() {
                     setSelected((prev) => (prev ? { ...prev, contact } : prev))
                   }
                   onAssign={(agentId) => void handleAssignAgent(agentId)}
-                  onApplyQuickReply={(reply) => {
-                    // Ensure reply composer is visible (not template/interactive).
-                    setTemplateMode(false);
-                    setInteractiveOpen(false);
-                    setDraft(reply.content);
-                    requestAnimationFrame(() => composerInputRef.current?.focus());
-                  }}
                   panelOpen={detailsPanelOpen}
                   onPanelOpenChange={setDetailsPanelOpen}
                   focusSection={detailsFocusSection}
@@ -758,6 +768,10 @@ export default function InboxPage() {
         botIsLive={contextMenuBotIsLive}
         assigning={assigning}
         botToggling={botToggling}
+        selectionMode={selectionMode}
+        isConversationSelected={Boolean(
+          contextMenuConversation && selectedIds.has(contextMenuConversation.id)
+        )}
         onClose={() => setContextMenu(null)}
         onAssign={(agentId) => void handleAssignAgent(agentId, contextMenuConversation?.id)}
         onToggleBot={() => void handleToggleBot(contextMenuConversation?.id)}
@@ -767,6 +781,14 @@ export default function InboxPage() {
         }
         onUnsnooze={() => void handleUnsnooze(contextMenuConversation?.id)}
         onExport={() => setExportTarget(contextMenuConversation)}
+        onSelectThis={() => {
+          if (contextMenuConversation) selectConversation(contextMenuConversation.id);
+        }}
+        onDeselectThis={() => {
+          if (contextMenuConversation) deselectConversation(contextMenuConversation.id);
+        }}
+        onSelectAll={selectAllVisible}
+        onClearSelection={clearSelection}
       />
 
       <CreateTicketModal

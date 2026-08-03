@@ -22,6 +22,7 @@ export function useConversationActions({
   const navigate = useNavigate();
   const [assigning, setAssigning] = useState(false);
   const [botToggling, setBotToggling] = useState(false);
+  const [botAssigning, setBotAssigning] = useState(false);
   const [callingBack, setCallingBack] = useState(false);
 
   const extractError = (err: unknown, fallback: string) =>
@@ -97,6 +98,49 @@ export function useConversationActions({
       toastError(extractError(err, 'Failed to update bot'));
     } finally {
       setBotToggling(false);
+    }
+  };
+
+  /**
+   * Assign which AI bot handles this conversation.
+   * If the bot is paused/handed-off, also enable live so pick+on is one gesture.
+   */
+  const handleSetActiveBot = async (activeBotId: string | null, conversationId?: string) => {
+    const { id: targetId, conversation: target } = findTarget(conversationId);
+    if (!target || !targetId) return;
+    const sameBot = (target.activeBot?.id ?? null) === activeBotId;
+    const needsEnable = target.botActive === false || Boolean(target.botHandoffAt);
+    if (sameBot && !needsEnable) return;
+    setBotAssigning(true);
+    try {
+      const payload =
+        needsEnable
+          ? { activeBotId, active: true as const, resetHandoff: true as const }
+          : { activeBotId };
+      const { data } = await inboxApi.setBot(targetId, payload);
+      const updated = data.data as Conversation;
+      upsertConversation({
+        id: targetId,
+        activeBot: updated.activeBot,
+        botActive: updated.botActive,
+        botHandoffAt: updated.botHandoffAt,
+      } as Conversation);
+      emitChatNotice(targetId, {
+        kind: 'bot-switch',
+        message: updated.activeBot?.name
+          ? needsEnable
+            ? `${updated.activeBot.name} enabled`
+            : `Chatbot set to ${updated.activeBot.name}`
+          : needsEnable
+            ? 'Default chatbot enabled'
+            : 'Using org default chatbot',
+        icon: 'bot',
+        tone: 'lavender',
+      });
+    } catch (err: unknown) {
+      toastError(extractError(err, 'Failed to switch chatbot'));
+    } finally {
+      setBotAssigning(false);
     }
   };
 
@@ -209,10 +253,12 @@ export function useConversationActions({
   return {
     assigning,
     botToggling,
+    botAssigning,
     callingBack,
     handleAssignAgent,
     handleStatusChange,
     handleToggleBot,
+    handleSetActiveBot,
     handleCallBack,
     handleSnooze,
     handleUnsnooze,

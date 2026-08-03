@@ -181,7 +181,7 @@ export default function SnoozePopover({
               value={customValue}
               onChange={(e) => setCustomValue(e.target.value)}
               aria-label="Custom snooze time"
-              className={`min-w-0 flex-1 rounded-lg border border-theme-border bg-theme-surface/80 px-2 py-1.5 text-[12px] text-theme-fg focus:border-whatsapp-500/50 focus:outline-none ${FOCUS_RING_CLASS}`}
+              className="min-w-0 flex-1 rounded-lg border border-theme-border bg-theme-surface/80 px-2 py-1.5 text-[12px] text-theme-fg focus:border-slate-400 focus:outline-none focus:shadow-input-focus dark:focus:border-slate-500"
             />
             <button
               type="button"

@@ -498,7 +498,7 @@ export default function ChatComposer({
         </>
       )}
 
-      <div className="rounded-2xl border border-chat-input-border bg-chat-input-bg ring-1 ring-chat-input-border/40 transition focus-within:border-chat-accent/40 focus-within:ring-chat-accent/15">
+      <div className="rounded-2xl border border-chat-input-border bg-chat-input-bg ring-1 ring-chat-input-border/40 transition focus-within:border-slate-400/70 focus-within:ring-slate-400/15 dark:focus-within:border-slate-500/60 dark:focus-within:ring-slate-500/15">
         <textarea
           ref={textareaRef}
           rows={1}

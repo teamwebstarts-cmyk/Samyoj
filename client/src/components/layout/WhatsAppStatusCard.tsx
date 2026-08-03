@@ -35,7 +35,7 @@ export default function WhatsAppStatusCard({
     return (
       <div className={`sidebar-wa-card ${collapsed ? 'sidebar-wa-card--collapsed' : ''}`}>
         <div className="flex items-center gap-2.5 p-2">
-          <div className="h-9 w-9 shrink-0 animate-pulse rounded-full bg-emerald-100/80 dark:bg-emerald-500/20" />
+          <div className="h-9 w-9 shrink-0 animate-pulse rounded-lg bg-emerald-100/80 dark:bg-emerald-500/20" />
           <div
             className={`min-w-0 flex-1 space-y-1.5 overflow-hidden transition-[opacity,max-width] duration-200 ${
               collapsed ? 'max-w-0 opacity-0' : 'opacity-100'
@@ -69,7 +69,7 @@ export default function WhatsAppStatusCard({
         className="sidebar-wa-card sidebar-wa-card--collapsed group relative flex items-center justify-center p-1.5"
       >
         <span
-          className={`relative flex h-9 w-9 items-center justify-center rounded-full transition-transform duration-200 group-hover:scale-[1.04] ${
+          className={`relative flex h-9 w-9 items-center justify-center rounded-lg transition-transform duration-200 group-hover:scale-[1.04] ${
             hasConnectedNumber
               ? 'bg-[#25D366] text-white shadow-[0_6px_16px_rgba(37,211,102,0.35)]'
               : 'bg-white text-[#25D366] ring-1 ring-emerald-200 dark:bg-emerald-500/15 dark:ring-emerald-500/30'
@@ -94,7 +94,7 @@ export default function WhatsAppStatusCard({
         className="sidebar-wa-card sidebar-wa-card--connected group block p-2.5"
       >
         <div className="flex items-center gap-2.5">
-          <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#25D366] text-white shadow-[0_6px_16px_rgba(37,211,102,0.28)] transition-transform duration-200 group-hover:scale-[1.03]">
+          <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#25D366] text-white shadow-[0_6px_16px_rgba(37,211,102,0.28)] transition-transform duration-200 group-hover:scale-[1.03]">
             <WhatsAppGlyph className="h-5 w-5" />
             <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)] dark:border-[#0f1a14]" />
           </span>
@@ -119,7 +119,7 @@ export default function WhatsAppStatusCard({
 
   return (
     <div className="sidebar-wa-card sidebar-wa-card--setup p-3.5 text-center">
-      <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-white text-[#25D366] shadow-[0_6px_18px_rgba(37,211,102,0.2)] ring-1 ring-emerald-100 dark:bg-emerald-500/10 dark:ring-emerald-500/25">
+      <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-lg bg-white text-[#25D366] shadow-[0_6px_18px_rgba(37,211,102,0.2)] ring-1 ring-emerald-100 dark:bg-emerald-500/10 dark:ring-emerald-500/25">
         <WhatsAppGlyph className="h-5 w-5" />
       </div>
       <p className="mt-2.5 text-[13px] font-bold tracking-tight text-theme-fg">

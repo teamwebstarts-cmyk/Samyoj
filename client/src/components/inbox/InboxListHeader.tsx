@@ -2,15 +2,11 @@ import { useEffect, useLayoutEffect, useRef, useState, type Ref } from 'react';
 import { createPortal } from 'react-dom';
 import {
   AlertTriangle,
-  CheckSquare,
+  CircleDot,
   Filter,
-  LayoutGrid,
   Plus,
   RefreshCw,
-  SlidersHorizontal,
   Star,
-  CircleDot,
-  Timer,
   X,
 } from 'lucide-react';
 import InboxSelect, { type InboxSelectOption } from './InboxSelect';
@@ -20,11 +16,22 @@ import { FOCUS_RING_CLASS } from '../../hooks/inboxA11y';
 import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
 import type { InboundHealth } from '../../hooks/useWebhookHealth';
 
-const EXTRA_MENU_WIDTH = 220;
-const EXTRA_MENU_GAP = 8;
-const EXTRA_MENU_FALLBACK_HEIGHT = 180;
+const FILTERS_MENU_WIDTH = 280;
+const FILTERS_MENU_GAP = 8;
+const FILTERS_MENU_FALLBACK_HEIGHT = 260;
 
 export type ListChip = 'all' | 'unread' | 'favourites';
+
+const STATUS_CHIPS: Array<{
+  value: string;
+  label: string;
+  color?: string;
+}> = [
+  { value: '', label: 'All' },
+  { value: 'OPEN', label: 'Open', color: 'bg-emerald-500' },
+  { value: 'PENDING', label: 'Pending', color: 'bg-amber-500' },
+  { value: 'CLOSED', label: 'Closed', color: 'bg-neutral-400' },
+];
 
 interface InboxListHeaderProps {
   search: string;
@@ -36,15 +43,12 @@ interface InboxListHeaderProps {
   unreadTotal: number;
   statusFilter: string;
   agentFilter: string;
-  slaFilter: string;
   onStatusFilterChange: (value: string) => void;
   onAgentFilterChange: (value: string) => void;
-  onSlaFilterChange: (value: string) => void;
-  statusOptions: InboxSelectOption[];
   agentOptions: InboxSelectOption[];
   agentOptionsSearchable: boolean;
   selectionMode: boolean;
-  onToggleSelectionMode: () => void;
+  onCancelSelection: () => void;
   onNewChat: () => void;
   onRefresh: () => void;
   inboundHealth?: InboundHealth;
@@ -77,65 +81,64 @@ export default function InboxListHeader({
   unreadTotal,
   statusFilter,
   agentFilter,
-  slaFilter,
   onStatusFilterChange,
   onAgentFilterChange,
-  onSlaFilterChange,
-  statusOptions,
   agentOptions,
   agentOptionsSearchable,
   selectionMode,
-  onToggleSelectionMode,
+  onCancelSelection,
   onNewChat,
   onRefresh,
   inboundHealth = { state: 'unknown' as const },
   onRetryHealth,
 }: InboxListHeaderProps) {
   const tipFor = useGlassTipProps();
-  const [filtersRowOpen, setFiltersRowOpen] = useState(true);
-  const [extraOpen, setExtraOpen] = useState(false);
-  const [extraPos, setExtraPos] = useState<{ top?: number; bottom?: number; right: number } | null>(
-    null
-  );
-  const [menuOpen, setMenuOpen] = useState(false);
-  const extraBtnRef = useRef<HTMLButtonElement>(null);
-  const extraMenuRef = useRef<HTMLDivElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filtersPos, setFiltersPos] = useState<{
+    top?: number;
+    bottom?: number;
+    right: number;
+  } | null>(null);
+  const filtersBtnRef = useRef<HTMLButtonElement>(null);
+  const filtersMenuRef = useRef<HTMLDivElement>(null);
   const { hasConnectedNumber, loading: numberLoading } = useWhatsAppNumber();
 
   const isConnected = hasConnectedNumber && !numberLoading;
-  const statusOrAgentActive = Boolean(statusFilter || agentFilter);
-  const extraActive = chip !== 'all' || Boolean(slaFilter);
-  const anyFilterActive = statusOrAgentActive || extraActive;
+  const unreadActive = chip === 'unread';
+  const popoverFiltersActive = Boolean(agentFilter) || chip === 'favourites';
+  const anyFilterActive = unreadActive || Boolean(statusFilter) || popoverFiltersActive;
 
-  useEffect(() => {
-    if (selectionMode) setMenuOpen(false);
-  }, [selectionMode]);
+  const clearAllFilters = () => {
+    onStatusFilterChange('');
+    onAgentFilterChange('');
+    onChipChange('all');
+    setFiltersOpen(false);
+  };
 
   useLayoutEffect(() => {
-    if (!extraOpen || !extraBtnRef.current) {
-      setExtraPos(null);
+    if (!filtersOpen || !filtersBtnRef.current) {
+      setFiltersPos(null);
       return;
     }
     const place = () => {
-      const btn = extraBtnRef.current;
+      const btn = filtersBtnRef.current;
       if (!btn) return;
       const rect = btn.getBoundingClientRect();
-      const menuH = extraMenuRef.current?.offsetHeight ?? EXTRA_MENU_FALLBACK_HEIGHT;
-      const spaceBelow = window.innerHeight - rect.bottom - EXTRA_MENU_GAP;
-      const spaceAbove = rect.top - EXTRA_MENU_GAP;
+      const menuH = filtersMenuRef.current?.offsetHeight ?? FILTERS_MENU_FALLBACK_HEIGHT;
+      const spaceBelow = window.innerHeight - rect.bottom - FILTERS_MENU_GAP;
+      const spaceAbove = rect.top - FILTERS_MENU_GAP;
       const flipUp = spaceBelow < menuH && spaceAbove > spaceBelow;
       const right = Math.min(
-        Math.max(EXTRA_MENU_GAP, window.innerWidth - rect.right),
-        Math.max(EXTRA_MENU_GAP, window.innerWidth - EXTRA_MENU_WIDTH - EXTRA_MENU_GAP)
+        Math.max(FILTERS_MENU_GAP, window.innerWidth - rect.right),
+        Math.max(FILTERS_MENU_GAP, window.innerWidth - FILTERS_MENU_WIDTH - FILTERS_MENU_GAP)
       );
       if (flipUp) {
-        setExtraPos({
-          bottom: Math.max(EXTRA_MENU_GAP, window.innerHeight - rect.top + EXTRA_MENU_GAP),
+        setFiltersPos({
+          bottom: Math.max(FILTERS_MENU_GAP, window.innerHeight - rect.top + FILTERS_MENU_GAP),
           right,
         });
       } else {
-        setExtraPos({ top: rect.bottom + EXTRA_MENU_GAP, right });
+        setFiltersPos({ top: rect.bottom + FILTERS_MENU_GAP, right });
       }
     };
     place();
@@ -147,25 +150,20 @@ export default function InboxListHeader({
       window.removeEventListener('resize', place);
       window.removeEventListener('scroll', place, true);
     };
-  }, [extraOpen]);
+  }, [filtersOpen, agentFilter, chip]);
 
   useEffect(() => {
-    if (!extraOpen && !menuOpen) return;
+    if (!filtersOpen) return;
     const onDoc = (e: MouseEvent) => {
       const target = e.target as Node;
-      if (extraOpen) {
-        const inBtn = extraBtnRef.current?.contains(target);
-        const inMenu = extraMenuRef.current?.contains(target);
-        if (!inBtn && !inMenu) setExtraOpen(false);
-      }
-      if (menuOpen && menuRef.current && !menuRef.current.contains(target)) {
-        setMenuOpen(false);
-      }
+      const inBtn = filtersBtnRef.current?.contains(target);
+      const inMenu = filtersMenuRef.current?.contains(target);
+      // react-select menus portal to body — don't close when interacting with them
+      const inSelectMenu = (target as Element).closest?.('.inbox-select__menu-portal');
+      if (!inBtn && !inMenu && !inSelectMenu) setFiltersOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      if (extraOpen) setExtraOpen(false);
-      if (menuOpen) setMenuOpen(false);
+      if (e.key === 'Escape') setFiltersOpen(false);
     };
     document.addEventListener('mousedown', onDoc);
     document.addEventListener('keydown', onKey);
@@ -173,7 +171,7 @@ export default function InboxListHeader({
       document.removeEventListener('mousedown', onDoc);
       document.removeEventListener('keydown', onKey);
     };
-  }, [extraOpen, menuOpen]);
+  }, [filtersOpen]);
 
   return (
     <div className="shrink-0 border-b border-neutral-100 px-4 pb-3 pt-4 dark:border-neutral-800/80">
@@ -211,7 +209,7 @@ export default function InboxListHeader({
           </button>
         </div>
       )}
-      {/* Row 1 — title + counts + actions */}
+
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1 overflow-hidden">
           <div className="flex items-center gap-2">
@@ -222,7 +220,6 @@ export default function InboxListHeader({
               inboundHealth={inboundHealth}
             />
           </div>
-          {/* Single text node + nowrap: never stack "0 / conversations / · 0 / unread" when the pane is tight. */}
           <p
             className="mt-0.5 min-h-[1.125rem] truncate whitespace-nowrap text-[12px] font-medium leading-[1.125rem] text-theme-muted"
             title={formatCountLine(conversationTotal, unreadTotal)}
@@ -235,7 +232,7 @@ export default function InboxListHeader({
           {selectionMode ? (
             <button
               type="button"
-              onClick={onToggleSelectionMode}
+              onClick={onCancelSelection}
               aria-label="Cancel selection"
               {...tipFor('Cancel selection')}
               data-testid="inbox-cancel-selection"
@@ -244,44 +241,16 @@ export default function InboxListHeader({
               <X className="h-4 w-4" strokeWidth={2.25} />
             </button>
           ) : (
-            <div className="relative" ref={menuRef}>
-              <button
-                type="button"
-                onClick={() => setMenuOpen((v) => !v)}
-                aria-expanded={menuOpen}
-                aria-label="List options"
-                {...tipFor('List options')}
-                className={squareBtn(menuOpen)}
-              >
-                <LayoutGrid className="h-4 w-4" strokeWidth={2.25} />
-              </button>
-              {menuOpen && (
-                <div className="absolute right-0 top-full z-30 mt-1 min-w-[180px] overflow-hidden rounded-xl border border-theme-border bg-theme-surface py-1 shadow-panel">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMenuOpen(false);
-                      onToggleSelectionMode();
-                    }}
-                    className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] text-theme-fg transition hover:bg-theme-subtle ${FOCUS_RING_CLASS}`}
-                  >
-                    <CheckSquare className="h-4 w-4 text-theme-muted" />
-                    Select chats
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMenuOpen(false);
-                      onRefresh();
-                    }}
-                    className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] text-theme-fg transition hover:bg-theme-subtle ${FOCUS_RING_CLASS}`}
-                  >
-                    <RefreshCw className="h-4 w-4 text-theme-muted" />
-                    Refresh list
-                  </button>
-                </div>
-              )}
-            </div>
+            <button
+              type="button"
+              onClick={onRefresh}
+              aria-label="Refresh list"
+              {...tipFor('Refresh list')}
+              data-testid="inbox-refresh-list"
+              className={squareBtn()}
+            >
+              <RefreshCw className="h-4 w-4" strokeWidth={2.25} />
+            </button>
           )}
 
           <button
@@ -296,9 +265,7 @@ export default function InboxListHeader({
         </div>
       </div>
 
-      {/* Sub-header divider — separates title/actions from search + filters */}
       <div className="mt-3 border-t border-neutral-100 pt-3 dark:border-neutral-800/80">
-        {/* Row 2 — search + funnel */}
         <div className="flex items-center gap-2">
           <SearchInput
             ref={searchInputRef}
@@ -309,107 +276,132 @@ export default function InboxListHeader({
           />
           <button
             type="button"
-            onClick={() => setFiltersRowOpen((v) => !v)}
-            aria-expanded={filtersRowOpen}
-            aria-label="Toggle filters"
-            {...tipFor('Toggle filters')}
-            data-testid="inbox-filter-toggle"
-            className={squareBtn(filtersRowOpen || anyFilterActive)}
+            onClick={() => onChipChange(unreadActive ? 'all' : 'unread')}
+            aria-pressed={unreadActive}
+            aria-label={unreadActive ? 'Show all chats' : 'Unread only'}
+            {...tipFor(unreadActive ? 'Show all chats' : 'Unread only')}
+            data-testid="inbox-unread-toggle"
+            className={squareBtn(unreadActive)}
           >
-            <Filter className="h-4 w-4" strokeWidth={2.25} />
+            <CircleDot className="h-4 w-4" strokeWidth={2.25} />
           </button>
-        </div>
-
-        {/* Row 3 — status / agents / extra (compact closed controls; menus stay wide via portal) */}
-        {filtersRowOpen && (
-          <div className="mt-2.5 grid grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)_auto] items-center gap-2 overflow-x-hidden">
-            <InboxSelect
-              variant="filter"
-              value={statusFilter}
-              placeholder="All status"
-              isSearchable={false}
-              options={statusOptions}
-              ariaLabel="Filter by chat status"
-              className="min-w-0"
-              menuMinWidth={168}
-              onChange={(e) => onStatusFilterChange(e.target.value)}
-            />
-            <InboxSelect
-              variant="filter"
-              value={agentFilter}
-              placeholder="All agents"
-              isSearchable={agentOptionsSearchable}
-              options={agentOptions}
-              ariaLabel="Filter by assigned agent"
-              className="min-w-0"
-              menuMinWidth={220}
-              onChange={(e) => onAgentFilterChange(e.target.value)}
-            />
-            <div className="relative shrink-0">
-              <button
-                ref={extraBtnRef}
-                type="button"
-                onClick={() => setExtraOpen((v) => !v)}
-                aria-expanded={extraOpen}
-                aria-haspopup="menu"
-                aria-label="Extra filters"
-                {...tipFor('Extra filters')}
-                data-testid="inbox-extra-filters"
-                className={squareBtn(extraOpen || extraActive)}
-              >
-                <SlidersHorizontal className="h-4 w-4" strokeWidth={2.25} />
-              </button>
-              {extraOpen &&
-                extraPos &&
-                createPortal(
-                  <div
-                    ref={extraMenuRef}
-                    role="menu"
-                    aria-label="Extra filters"
-                    data-testid="inbox-extra-filters-menu"
-                    style={{
-                      top: extraPos.top,
-                      bottom: extraPos.bottom,
-                      right: extraPos.right,
-                      width: EXTRA_MENU_WIDTH,
-                    }}
-                    className="fixed z-[80] space-y-1 rounded-2xl border border-theme-border bg-theme-surface p-2 shadow-panel"
-                  >
-                    <p className="px-2 pb-1 pt-1 text-[10px] font-bold uppercase tracking-wide text-theme-muted">
-                      Extra filters
+          <div className="relative shrink-0">
+            <button
+              ref={filtersBtnRef}
+              type="button"
+              onClick={() => setFiltersOpen((v) => !v)}
+              aria-expanded={filtersOpen}
+              aria-haspopup="dialog"
+              aria-label="Filters"
+              {...tipFor('Filters')}
+              data-testid="inbox-filter-toggle"
+              className={squareBtn(filtersOpen || popoverFiltersActive)}
+            >
+              <Filter className="h-4 w-4" strokeWidth={2.25} />
+            </button>
+            {filtersOpen &&
+              filtersPos &&
+              createPortal(
+                <div
+                  ref={filtersMenuRef}
+                  role="dialog"
+                  aria-label="Inbox filters"
+                  data-testid="inbox-filters-menu"
+                  style={{
+                    top: filtersPos.top,
+                    bottom: filtersPos.bottom,
+                    right: filtersPos.right,
+                    width: FILTERS_MENU_WIDTH,
+                  }}
+                  className="fixed z-[80] space-y-3 rounded-2xl border border-theme-border bg-theme-surface p-3 shadow-panel"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-theme-muted">
+                      Filters
                     </p>
-                    <ExtraToggle
-                      active={chip === 'unread'}
-                      icon={CircleDot}
-                      label="Unread only"
-                      onClick={() => onChipChange(chip === 'unread' ? 'all' : 'unread')}
+                    {anyFilterActive && (
+                      <button
+                        type="button"
+                        onClick={clearAllFilters}
+                        data-testid="inbox-clear-filters"
+                        className={`text-[11px] font-semibold text-whatsapp-700 transition hover:underline dark:text-whatsapp-400 ${FOCUS_RING_CLASS}`}
+                      >
+                        Clear all
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-[11px] font-semibold text-theme-muted">
+                      Agent
+                    </label>
+                    <InboxSelect
+                      variant="filter"
+                      value={agentFilter}
+                      placeholder="All agents"
+                      isSearchable={agentOptionsSearchable}
+                      options={agentOptions}
+                      ariaLabel="Filter by assigned agent"
+                      className="min-w-0 w-full"
+                      menuMinWidth={240}
+                      onChange={(e) => onAgentFilterChange(e.target.value)}
                     />
+                  </div>
+
+                  <div className="space-y-1 border-t border-theme-border/70 pt-2">
+                    <p className="px-0.5 pb-1 text-[10px] font-bold uppercase tracking-wide text-theme-muted">
+                      More
+                    </p>
                     <ExtraToggle
                       active={chip === 'favourites'}
                       icon={Star}
                       label="Favourites"
                       onClick={() => onChipChange(chip === 'favourites' ? 'all' : 'favourites')}
                     />
-                    <ExtraToggle
-                      active={slaFilter === 'breached'}
-                      icon={Timer}
-                      label="SLA breached"
-                      onClick={() =>
-                        onSlaFilterChange(slaFilter === 'breached' ? '' : 'breached')
-                      }
-                    />
-                  </div>,
-                  document.body
-                )}
-            </div>
+                  </div>
+                </div>,
+                document.body
+              )}
           </div>
-        )}
+        </div>
+
+        <div
+          role="tablist"
+          aria-label="Filter by status"
+          className="mt-2.5 flex items-center gap-1 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          {STATUS_CHIPS.map((item) => {
+            const active = statusFilter === item.value;
+            return (
+              <button
+                key={item.value || 'all'}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                data-testid={`inbox-status-chip-${item.value || 'all'}`}
+                onClick={() => onStatusFilterChange(item.value)}
+                className={`inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[11.5px] font-semibold transition ${FOCUS_RING_CLASS} ${
+                  active
+                    ? 'bg-whatsapp-500/12 text-whatsapp-800 underline decoration-whatsapp-500/70 decoration-2 underline-offset-[5px] dark:text-whatsapp-300'
+                    : 'text-theme-secondary hover:bg-theme-subtle hover:text-theme-fg'
+                }`}
+              >
+                {item.color && (
+                  <span
+                    aria-hidden
+                    className={`h-2 w-2 shrink-0 rounded-sm ${item.color}`}
+                  />
+                )}
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
 }
 
-/** Compact inbound signal next to the Inbox title — single dot, no chrome text. */
 function InboundStatusDot({
   isConnected,
   numberLoading,
@@ -424,7 +416,6 @@ function InboundStatusDot({
   let tone: Tone = 'pending';
   let label = 'WhatsApp inbound status unknown';
 
-  // Pending until number + health are known — never flash red/"error" on first paint.
   if (numberLoading || inboundHealth.state === 'loading' || inboundHealth.state === 'unknown') {
     tone = 'pending';
     label =

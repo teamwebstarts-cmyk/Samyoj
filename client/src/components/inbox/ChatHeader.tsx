@@ -12,7 +12,9 @@ import {
   Mail,
   MoreVertical,
   PanelRight,
+  PauseCircle,
   Phone,
+  PlayCircle,
   Search,
   Star,
   UserPlus,
@@ -20,11 +22,12 @@ import {
 } from 'lucide-react';
 import ContactAvatar from './ContactAvatar';
 import AssignAgentPopover from './AssignAgentPopover';
+import BotPickerPopover from './BotPickerPopover';
 import SnoozePopover from './SnoozePopover';
 import { ServiceWindowBadge } from './ServiceWindowBanner';
 import { useGlassTipProps } from './ComposerGlassTip';
 import type { PresenceViewer } from './useConversationPresence';
-import type { Conversation, ServiceWindowInfo, TeamAgent } from '../../types';
+import type { AiBot, Conversation, ServiceWindowInfo, TeamAgent } from '../../types';
 import { FOCUS_RING_CLASS } from '../../hooks/inboxA11y';
 
 interface ChatHeaderProps {
@@ -33,6 +36,9 @@ interface ChatHeaderProps {
   serviceWindow: ServiceWindowInfo | undefined;
   botIsLive: boolean;
   botToggling: boolean;
+  botAssigning?: boolean;
+  bots?: AiBot[];
+  botsLoading?: boolean;
   callingBack: boolean;
   assigning: boolean;
   agents: TeamAgent[];
@@ -43,6 +49,7 @@ interface ChatHeaderProps {
   onSnoozeUntil: (untilIso: string, label: string) => void;
   onUnsnooze: () => void;
   onToggleBot: () => void;
+  onSetActiveBot?: (botId: string | null) => void;
   onToggleFavorite: () => void;
   onToggleSearch: () => void;
   onAssign: (agentId: string | null) => void;
@@ -124,6 +131,9 @@ export default function ChatHeader({
   serviceWindow,
   botIsLive,
   botToggling,
+  botAssigning = false,
+  bots = [],
+  botsLoading = false,
   callingBack: _callingBack,
   assigning,
   agents,
@@ -134,6 +144,7 @@ export default function ChatHeader({
   onSnoozeUntil,
   onUnsnooze,
   onToggleBot,
+  onSetActiveBot,
   onToggleFavorite,
   onToggleSearch,
   onAssign,
@@ -148,12 +159,14 @@ export default function ChatHeader({
   const [menuOpen, setMenuOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [snoozeOpen, setSnoozeOpen] = useState(false);
+  const [botMenuOpen, setBotMenuOpen] = useState(false);
   const [starPulse, setStarPulse] = useState(false);
   const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuPanelRef = useRef<HTMLDivElement>(null);
   const menuBtnRef = useRef<HTMLButtonElement>(null);
   const snoozeRef = useRef<HTMLDivElement>(null);
+  const botBtnRef = useRef<HTMLButtonElement>(null);
 
   useLayoutEffect(() => {
     if (!menuOpen || !menuBtnRef.current) {
@@ -411,7 +424,10 @@ export default function ChatHeader({
         <div className="relative" ref={snoozeRef}>
           <HeaderIconButton
             label={isSnoozed ? 'Snoozed — manage snooze' : 'Snooze conversation'}
-            onClick={() => setSnoozeOpen((v) => !v)}
+            onClick={() => {
+              setSnoozeOpen((v) => !v);
+              setBotMenuOpen(false);
+            }}
             dot={isSnoozed}
           >
             <Bell className="h-4 w-4" strokeWidth={2.1} />
@@ -445,13 +461,80 @@ export default function ChatHeader({
         </HeaderIconButton>
 
         <HeaderIconButton
-          label={botIsLive ? 'AI bot on — click to pause' : 'AI bot off — click to enable'}
-          onClick={onToggleBot}
+          label={botIsLive ? 'Pause AI bot' : 'Enable AI bot'}
+          onClick={() => {
+            setBotMenuOpen(false);
+            setSnoozeOpen(false);
+            setMenuOpen(false);
+            onToggleBot();
+          }}
           disabled={botToggling}
           active={botIsLive}
+          pressed={botIsLive}
+          className={
+            botIsLive
+              ? ''
+              : 'text-theme-muted hover:text-theme-fg'
+          }
         >
-          <Bot className="h-4 w-4" strokeWidth={2.1} />
+          {botIsLive ? (
+            <PauseCircle className="h-4 w-4" strokeWidth={2.1} />
+          ) : (
+            <PlayCircle className="h-4 w-4" strokeWidth={2.1} />
+          )}
         </HeaderIconButton>
+
+        <div className="relative">
+          <button
+            ref={botBtnRef}
+            type="button"
+            onClick={() => {
+              setBotMenuOpen((v) => !v);
+              setSnoozeOpen(false);
+              setMenuOpen(false);
+            }}
+            disabled={botAssigning}
+            aria-label={
+              conversation.activeBot?.name
+                ? `Choose chatbot · ${conversation.activeBot.name}`
+                : 'Choose chatbot'
+            }
+            aria-expanded={botMenuOpen}
+            aria-haspopup="dialog"
+            {...tipFor(
+              conversation.activeBot?.name
+                ? `Chatbot · ${conversation.activeBot.name}`
+                : 'Choose chatbot'
+            )}
+            className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border transition disabled:cursor-not-allowed disabled:opacity-45 ${FOCUS_RING_CLASS} ${
+              botMenuOpen
+                ? 'border-whatsapp-500/50 bg-whatsapp-500/10 text-whatsapp-700 dark:text-whatsapp-400'
+                : 'border-theme-border bg-theme-surface text-theme-secondary hover:bg-theme-subtle hover:text-theme-fg'
+            }`}
+          >
+            <Bot className="h-4 w-4" strokeWidth={2.1} />
+            {botIsLive && (
+              <span
+                className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-whatsapp-500 ring-2 ring-white dark:ring-neutral-900"
+                aria-hidden
+              />
+            )}
+          </button>
+          {botMenuOpen && (
+            <BotPickerPopover
+              bots={bots}
+              loading={botsLoading}
+              activeBotId={conversation.activeBot?.id ?? null}
+              botIsLive={botIsLive}
+              botAssigning={botAssigning}
+              anchorRef={botBtnRef}
+              onSelectBot={(botId) => {
+                onSetActiveBot?.(botId);
+              }}
+              onClose={() => setBotMenuOpen(false)}
+            />
+          )}
+        </div>
 
         <div className="relative" ref={menuRef}>
           <button
@@ -460,6 +543,7 @@ export default function ChatHeader({
             onClick={() => {
               setMenuOpen((v) => !v);
               setAssignOpen(false);
+              setBotMenuOpen(false);
             }}
             aria-label="More actions"
             aria-expanded={menuOpen}

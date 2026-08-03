@@ -3,7 +3,6 @@ import { Clock3, MessageCircle, User } from 'lucide-react';
 import AppInput from '../ui/AppInput';
 import { toastError } from '../../utils/toast';
 import SlideOver, { SlideOverFooter } from '../ui/SlideOver';
-import { FOCUS_RING_CLASS } from '../../hooks/inboxA11y';
 import { PHONE_PLACEHOLDER, validatePhone } from '../../utils/phone';
 
 interface NewChatSlideOverProps {
@@ -101,11 +100,11 @@ export default function NewChatSlideOver({ open, onClose, onStart }: NewChatSlid
               placeholder={PHONE_PLACEHOLDER}
               aria-invalid={phoneError ? true : undefined}
               aria-describedby={`${phoneId}-hint${phoneError ? ` ${phoneId}-error` : ''}`}
-              className={`h-11 w-full rounded-xl border bg-theme-surface pl-[3.25rem] pr-3.5 text-body tabular-nums text-theme-fg shadow-input transition placeholder:text-theme-muted focus:border-whatsapp-600 focus:outline-none focus:shadow-input-focus disabled:opacity-60 dark:focus:border-whatsapp-500 ${
+              className={`h-11 w-full rounded-xl border bg-theme-surface pl-[3.25rem] pr-3.5 text-body tabular-nums text-theme-fg shadow-input transition placeholder:text-theme-muted focus:border-slate-400 focus:outline-none focus:shadow-input-focus disabled:opacity-60 dark:focus:border-slate-500 ${
                 phoneError
                   ? 'border-red-300 focus:border-red-500 focus:shadow-[0_0_0_4px_rgba(239,68,68,0.12)] dark:border-red-500/40'
                   : 'border-theme-border'
-              } ${FOCUS_RING_CLASS}`}
+              }`}
             />
           </div>
 

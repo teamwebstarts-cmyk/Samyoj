@@ -105,15 +105,23 @@ function createStyles(isDark: boolean): StylesConfig<TemplatePickerOption, false
       height: 36,
       minWidth: 0,
       borderRadius: 10,
-      borderColor: state.isFocused ? '#128C7E' : border,
+      borderColor: state.isFocused ? (isDark ? '#64748b' : '#94a3b8') : border,
       backgroundColor: surface,
       boxShadow: state.isFocused
-        ? '0 0 0 3px rgba(37, 211, 102, 0.14), 0 1px 2px rgba(15, 23, 42, 0.04)'
+        ? isDark
+          ? '0 0 0 3px rgba(148, 163, 184, 0.18), 0 1px 2px rgba(15, 23, 42, 0.04)'
+          : '0 0 0 3px rgba(100, 116, 139, 0.14), 0 1px 2px rgba(15, 23, 42, 0.04)'
         : '0 1px 2px rgba(15, 23, 42, 0.03)',
       cursor: state.isDisabled ? 'not-allowed' : 'pointer',
       transition: 'border-color 160ms ease, box-shadow 160ms ease',
       '&:hover': {
-        borderColor: state.isFocused ? '#128C7E' : isDark ? '#475569' : '#d1d5db',
+        borderColor: state.isFocused
+          ? isDark
+            ? '#64748b'
+            : '#94a3b8'
+          : isDark
+            ? '#475569'
+            : '#d1d5db',
       },
     }),
     valueContainer: (base) => ({
@@ -147,13 +155,13 @@ function createStyles(isDark: boolean): StylesConfig<TemplatePickerOption, false
     indicatorSeparator: () => ({ display: 'none' }),
     dropdownIndicator: (base, state) => ({
       ...base,
-      color: state.isFocused ? '#128C7E' : '#94a3b8',
+      color: state.isFocused ? (isDark ? '#94a3b8' : '#64748b') : '#94a3b8',
       paddingRight: 8,
       paddingLeft: 2,
       flexShrink: 0,
       transition: 'transform 160ms ease, color 160ms ease',
       transform: state.selectProps.menuIsOpen ? 'rotate(180deg)' : undefined,
-      '&:hover': { color: '#128C7E' },
+      '&:hover': { color: isDark ? '#94a3b8' : '#64748b' },
     }),
     menuPortal: (base) => ({ ...base, zIndex: 9999 }),
     menu: (base) => ({

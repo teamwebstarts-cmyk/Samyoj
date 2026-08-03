@@ -29,6 +29,7 @@ import { inboxApi } from '../../services/api';
 import type { MediaViewerItem } from './MediaViewer';
 import type { PresenceViewer } from './useConversationPresence';
 import type {
+  AiBot,
   CannedReply,
   Conversation,
   Message,
@@ -51,6 +52,9 @@ interface ChatThreadProps {
   retryingId: string | null;
   botIsLive: boolean;
   botToggling: boolean;
+  botAssigning?: boolean;
+  bots?: AiBot[];
+  botsLoading?: boolean;
   callingBack: boolean;
   assigning: boolean;
   agents: TeamAgent[];
@@ -70,6 +74,7 @@ interface ChatThreadProps {
   onSnoozeUntil: (untilIso: string, label: string) => void;
   onUnsnooze: () => void;
   onToggleBot: () => void;
+  onSetActiveBot?: (botId: string | null) => void;
   onToggleFavorite: () => void;
   onAssign: (agentId: string | null) => void;
   onStatusChange: (status: string) => void;
@@ -117,6 +122,9 @@ export default function ChatThread({
   retryingId,
   botIsLive,
   botToggling,
+  botAssigning = false,
+  bots = [],
+  botsLoading = false,
   callingBack,
   assigning,
   agents,
@@ -136,6 +144,7 @@ export default function ChatThread({
   onSnoozeUntil,
   onUnsnooze,
   onToggleBot,
+  onSetActiveBot,
   onToggleFavorite,
   onAssign,
   onStatusChange,
@@ -601,6 +610,9 @@ export default function ChatThread({
         serviceWindow={serviceWindow}
         botIsLive={botIsLive}
         botToggling={botToggling}
+        botAssigning={botAssigning}
+        bots={bots}
+        botsLoading={botsLoading}
         callingBack={callingBack}
         assigning={assigning}
         agents={agents}
@@ -611,6 +623,7 @@ export default function ChatThread({
         onSnoozeUntil={onSnoozeUntil}
         onUnsnooze={onUnsnooze}
         onToggleBot={onToggleBot}
+        onSetActiveBot={onSetActiveBot}
         onToggleFavorite={onToggleFavorite}
         onToggleSearch={toggleSearch}
         onAssign={onAssign}

@@ -22,7 +22,7 @@ const AppTextarea = forwardRef<HTMLTextAreaElement, AppTextareaProps>(
         <textarea
           ref={ref}
           id={id}
-          className={`w-full rounded-xl border border-theme-border bg-theme-surface px-3.5 py-2.5 text-[14px] text-theme-fg shadow-input transition placeholder:text-theme-muted focus:border-whatsapp-600 focus:outline-none focus:shadow-input-focus disabled:opacity-60 dark:focus:border-whatsapp-500 ${className}`}
+          className={`w-full rounded-xl border border-theme-border bg-theme-surface px-3.5 py-2.5 text-[14px] text-theme-fg shadow-input transition placeholder:text-theme-muted focus:border-slate-400 focus:outline-none focus:shadow-input-focus disabled:opacity-60 dark:focus:border-slate-500 ${className}`}
           {...props}
         />
       </div>

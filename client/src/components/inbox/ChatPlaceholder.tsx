@@ -187,7 +187,7 @@ export default function ChatPlaceholder({
                   <TipCard
                     icon={Filter}
                     title="Filter the list"
-                    hint="Unread, status, assigned agent, and SLA filters sit above the chat list."
+                    hint="Unread, status chips, and agent filters sit above the chat list."
                     delayMs={200}
                   />
                   <TipCard

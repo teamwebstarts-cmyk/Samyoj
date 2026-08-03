@@ -236,11 +236,11 @@ export default function DashboardPage() {
           />
         ) : stats ? (
           <div className={refreshing ? 'opacity-70 transition-opacity' : undefined}>
-            {/* Row 1: Needs attention + Key metrics
-                Mobile: stack. Tablet/lg: side-by-side without stretch gaps.
-                KPI 5-up only at xl where width is enough. */}
-            <div className="grid grid-cols-1 gap-3 lg:grid-cols-12 lg:items-start lg:gap-3 xl:gap-4">
-              <div className="min-w-0 lg:col-span-4">
+            {/* Row 1: Needs attention + metrics
+                Mobile: stack. lg+: stretch so Needs attention matches metrics column height.
+                KPI 5-up at xl; 3-up at md so five cards wrap cleanly. */}
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-12 lg:items-stretch lg:gap-3 xl:gap-4">
+              <div className="min-w-0 lg:col-span-4 lg:h-full">
                 <NeedsAttentionCard
                   openChats={stats.activeConversations}
                   failedMessages={stats.failedMessages}
@@ -250,22 +250,19 @@ export default function DashboardPage() {
               </div>
 
               <div className="min-w-0 lg:col-span-8">
-                <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-0.5">
-                  <p className="text-[11px] sm:text-[12px] font-bold uppercase tracking-wide text-neutral-500">
-                    Key metrics
-                    {refreshing && (
-                      <span className="ml-2 font-semibold normal-case text-neutral-400">
-                        Updating…
-                      </span>
-                    )}
-                  </p>
+                <div className="mb-2 flex flex-wrap items-center justify-end gap-2 px-0.5">
+                  {refreshing && (
+                    <span className="mr-auto text-[11px] font-semibold text-neutral-400 sm:text-[12px]">
+                      Updating…
+                    </span>
+                  )}
                   <label className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-neutral-600">
                     <span className="sr-only">Time range</span>
                     <select
                       value={days}
                       onChange={(e) => setDays(Number(e.target.value) as PeriodDays)}
                       disabled={refreshing}
-                      className="rounded-lg border border-neutral-200 bg-white px-2 py-1.5 text-[11.5px] sm:px-2.5 sm:text-[12px] font-semibold text-neutral-800 shadow-sm focus:border-whatsapp-500 focus:outline-none focus:ring-2 focus:ring-whatsapp-500/20 disabled:opacity-60"
+                      className="rounded-lg border border-neutral-200 bg-white px-2 py-1.5 text-[11.5px] sm:px-2.5 sm:text-[12px] font-semibold text-neutral-800 shadow-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400/20 disabled:opacity-60"
                     >
                       <option value={7}>Last 7 days</option>
                       <option value={14}>Last 14 days</option>
@@ -328,8 +325,8 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Row 2: Performance + Campaigns — 2-col from md */}
-            <div className="mt-3 grid grid-cols-1 gap-3 lg:mt-4 lg:grid-cols-2 lg:gap-4">
+            {/* Row 2: Performance + Campaigns — 2-col from md; stretch for equal card height */}
+            <div className="mt-3 grid grid-cols-1 gap-3 lg:mt-4 lg:grid-cols-2 lg:items-stretch lg:gap-4">
               <MessagePerformanceDonut
                 messagesSent={stats.messagesSent}
                 messagesDelivered={stats.messagesDelivered ?? 0}

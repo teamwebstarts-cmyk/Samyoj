@@ -32,7 +32,6 @@ interface ListFilters {
   chip: ListChip;
   statusFilter: string;
   agentFilter: string;
-  slaFilter: string;
   userId?: string;
   page: number;
   pageSize: PageSize;
@@ -46,7 +45,6 @@ export function useConversationList({
   chip,
   statusFilter,
   agentFilter,
-  slaFilter,
   userId,
   page,
   pageSize,
@@ -73,7 +71,6 @@ export function useConversationList({
       if (statusFilter) params.status = statusFilter;
       if (chip === 'unread') params.unread = 'true';
       if (chip === 'favourites') params.favorite = 'true';
-      if (slaFilter) params.sla = slaFilter;
       if (agentFilter === '__mine__' && userId) params.assignedTo = userId;
       else if (agentFilter && agentFilter !== '__mine__') params.assignedTo = agentFilter;
 
@@ -95,7 +92,7 @@ export function useConversationList({
         setLoading(false);
       }
     }
-  }, [search, chip, statusFilter, agentFilter, slaFilter, userId, page, pageSize]);
+  }, [search, chip, statusFilter, agentFilter, userId, page, pageSize]);
 
   useEffect(() => {
     void load();

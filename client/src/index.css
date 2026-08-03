@@ -71,7 +71,7 @@
     --color-accent-glow: rgba(37, 211, 102, 0.08);
     --color-accent-glow-strong: rgba(37, 211, 102, 0.14);
     --shadow-input: 0 0 0 1px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
-    --shadow-input-focus: 0 0 0 1px rgba(18, 140, 126, 0.65), 0 0 0 4px rgba(18, 140, 126, 0.18);
+    --shadow-input-focus: 0 0 0 1px rgba(100, 116, 139, 0.45), 0 0 0 4px rgba(100, 116, 139, 0.14);
     --shadow-panel: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
     --shadow-theme: 0 1px 3px rgba(15, 23, 42, 0.06);
     --gradient-body:
@@ -135,7 +135,7 @@
     --color-accent-glow: rgba(37, 211, 102, 0.1);
     --color-accent-glow-strong: rgba(37, 211, 102, 0.16);
     --shadow-input: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 1px 2px rgba(0, 0, 0, 0.25);
-    --shadow-input-focus: 0 0 0 1px rgba(37, 211, 102, 0.55), 0 0 0 4px rgba(37, 211, 102, 0.15);
+    --shadow-input-focus: 0 0 0 1px rgba(148, 163, 184, 0.4), 0 0 0 4px rgba(148, 163, 184, 0.12);
     --shadow-panel: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px rgba(0, 0, 0, 0.45);
     --shadow-theme: 0 1px 3px rgba(0, 0, 0, 0.35);
     --gradient-body:
@@ -711,8 +711,8 @@
 
   .topbar-search:focus-visible {
     outline: none;
-    border-color: rgba(37, 211, 102, 0.55);
-    box-shadow: 0 0 0 3px rgba(37, 211, 102, 0.12);
+    border-color: rgba(100, 116, 139, 0.55);
+    box-shadow: 0 0 0 3px rgba(100, 116, 139, 0.14);
   }
 
   .dark .topbar-search {

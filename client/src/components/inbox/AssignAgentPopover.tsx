@@ -138,7 +138,7 @@ export default function AssignAgentPopover({
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search by name or email"
               aria-label="Search agents"
-              className={`w-full rounded-lg border border-theme-border bg-theme-surface/80 py-1.5 pl-7 pr-2 text-[12px] text-theme-fg focus:border-whatsapp-500/50 focus:outline-none ${FOCUS_RING_CLASS}`}
+              className="w-full rounded-lg border border-theme-border bg-theme-surface/80 py-1.5 pl-7 pr-2 text-[12px] text-theme-fg focus:border-slate-400 focus:outline-none focus:shadow-input-focus dark:focus:border-slate-500"
             />
           </div>
         </div>

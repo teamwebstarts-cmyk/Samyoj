@@ -9,6 +9,7 @@ export type ChatNoticePayload = {
   kind:
     | 'bot-on'
     | 'bot-off'
+    | 'bot-switch'
     | 'favorite-on'
     | 'favorite-off'
     | 'media-limit'

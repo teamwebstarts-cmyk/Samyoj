@@ -13,7 +13,6 @@ export type InboxNumberCache = {
   chip: ListChip;
   statusFilter: string;
   agentFilter: string;
-  slaFilter: string;
   page: number;
   pageSize: PageSize;
 };
@@ -25,7 +24,6 @@ interface NumberCacheDeps {
   chip: ListChip;
   statusFilter: string;
   agentFilter: string;
-  slaFilter: string;
   page: number;
   pageSize: PageSize;
   resetThread: () => void;
@@ -35,7 +33,6 @@ interface NumberCacheDeps {
   setChip: (chip: ListChip) => void;
   setStatusFilter: (status: string) => void;
   setAgentFilter: (agent: string) => void;
-  setSlaFilter: (sla: string) => void;
   setPage: (page: number) => void;
   setPageSize: (size: PageSize) => void;
   setListLoading: (loading: boolean) => void;
@@ -51,7 +48,6 @@ export function useInboxNumberCache(deps: NumberCacheDeps) {
     chip,
     statusFilter,
     agentFilter,
-    slaFilter,
     page,
     pageSize,
     resetThread,
@@ -61,7 +57,6 @@ export function useInboxNumberCache(deps: NumberCacheDeps) {
     setChip,
     setStatusFilter,
     setAgentFilter,
-    setSlaFilter,
     setPage,
     setPageSize,
     setListLoading,
@@ -78,7 +73,6 @@ export function useInboxNumberCache(deps: NumberCacheDeps) {
         chip,
         statusFilter,
         agentFilter,
-        slaFilter,
         page,
         pageSize,
       } satisfies InboxNumberCache);
@@ -92,7 +86,6 @@ export function useInboxNumberCache(deps: NumberCacheDeps) {
       setChip(cached.chip);
       setStatusFilter(cached.statusFilter);
       setAgentFilter(cached.agentFilter);
-      setSlaFilter(cached.slaFilter ?? '');
       setPage(cached.page ?? 1);
       if (cached.pageSize) setPageSize(cached.pageSize);
       setListLoading(false);
