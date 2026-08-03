@@ -551,25 +551,22 @@
       0 1px 2px rgba(15, 23, 42, 0.05);
   }
 
+  /* Placement is absolute top/left from JS — transforms only for entrance motion. */
   .inbox-glass-tip--above,
   .composer-glass-tip {
-    transform: translate(-50%, -100%);
     animation: inbox-glass-tip-in-above 150ms ease-out both;
   }
 
   .inbox-glass-tip--below {
-    transform: translate(-50%, 0);
     animation: inbox-glass-tip-in-below 150ms ease-out both;
   }
 
   /* Side tips for right-edge rails (and left-edge chrome) — paint into open chat area */
   .inbox-glass-tip--left {
-    transform: translate(-100%, -50%);
     animation: inbox-glass-tip-in-left 150ms ease-out both;
   }
 
   .inbox-glass-tip--right {
-    transform: translate(0, -50%);
     animation: inbox-glass-tip-in-right 150ms ease-out both;
   }
 
@@ -599,44 +596,44 @@
   @keyframes inbox-glass-tip-in-above {
     from {
       opacity: 0;
-      transform: translate(-50%, calc(-100% + 5px));
+      transform: translateY(5px);
     }
     to {
       opacity: 1;
-      transform: translate(-50%, -100%);
+      transform: translateY(0);
     }
   }
 
   @keyframes inbox-glass-tip-in-below {
     from {
       opacity: 0;
-      transform: translate(-50%, -5px);
+      transform: translateY(-5px);
     }
     to {
       opacity: 1;
-      transform: translate(-50%, 0);
+      transform: translateY(0);
     }
   }
 
   @keyframes inbox-glass-tip-in-left {
     from {
       opacity: 0;
-      transform: translate(calc(-100% + 5px), -50%);
+      transform: translateX(5px);
     }
     to {
       opacity: 1;
-      transform: translate(-100%, -50%);
+      transform: translateX(0);
     }
   }
 
   @keyframes inbox-glass-tip-in-right {
     from {
       opacity: 0;
-      transform: translate(-5px, -50%);
+      transform: translateX(-5px);
     }
     to {
       opacity: 1;
-      transform: translate(0, -50%);
+      transform: translateX(0);
     }
   }
 

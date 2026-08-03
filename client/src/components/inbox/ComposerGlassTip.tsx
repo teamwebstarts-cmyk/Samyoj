@@ -20,8 +20,8 @@ export type TipTone = 'default' | 'onDark';
 
 export type ComposerTipState = {
   text: string;
-  top: number;
-  left: number;
+  /** Trigger icon/button rect at show time (viewport coords). */
+  trigger: { top: number; left: number; right: number; bottom: number; width: number; height: number };
   placement: TipPlacement;
   tone: TipTone;
 } | null;
@@ -52,6 +52,8 @@ const InboxGlassTipContext = createContext<GlassTipApi | null>(null);
 /** Half of tip max-width + gutter — used to flip centered tips near viewport edges. */
 const CENTER_EDGE_PX = 148;
 const VIEWPORT_PAD = 10;
+/** Clear gap between icon edge and tip — never sit on the cursor/icon. */
+const TIP_GAP_PX = 12;
 
 function resolveTip(
   text: string,
@@ -63,6 +65,7 @@ function resolveTip(
   let placement = preferred;
 
   // Vertical flip when preferred above/below would clip near the viewport edge.
+  // Explicit left/right (e.g. details rail) are never flipped to centered placements.
   if (preferred === 'above' && r.top < 44) placement = 'below';
   if (preferred === 'below' && window.innerHeight - r.bottom < 44) placement = 'above';
 
@@ -73,62 +76,62 @@ function resolveTip(
     else if (centerX < CENTER_EDGE_PX) placement = 'right';
   }
 
-  if (placement === 'left') {
-    return {
-      text,
-      top: r.top + r.height / 2,
-      left: r.left - 10,
-      placement,
-      tone,
-    };
-  }
-  if (placement === 'right') {
-    return {
-      text,
-      top: r.top + r.height / 2,
-      left: r.right + 10,
-      placement,
-      tone,
-    };
-  }
-
   return {
     text,
-    top: placement === 'above' ? r.top - 10 : r.bottom + 10,
-    left: r.left + r.width / 2,
+    trigger: {
+      top: r.top,
+      left: r.left,
+      right: r.right,
+      bottom: r.bottom,
+      width: r.width,
+      height: r.height,
+    },
     placement,
     tone,
   };
 }
 
-/** After mount, clamp so wrapped tips stay fully inside the viewport. */
-function clampTipPosition(
-  el: HTMLElement,
+/**
+ * Place tip by absolute top-left pixels (no CSS % translate for placement).
+ * Side tips sit fully beside the icon with TIP_GAP_PX clearance.
+ */
+function placeTipPixels(
+  tipEl: HTMLElement,
   tip: NonNullable<ComposerTipState>
 ): { top: number; left: number } {
-  const rect = el.getBoundingClientRect();
-  let { top, left } = tip;
+  const w = tipEl.offsetWidth;
+  const h = tipEl.offsetHeight;
+  const { trigger: t, placement } = tip;
+  const gap = TIP_GAP_PX;
   const pad = VIEWPORT_PAD;
 
-  if (tip.placement === 'left' || tip.placement === 'right') {
-    const halfH = rect.height / 2;
-    top = Math.min(Math.max(top, halfH + pad), window.innerHeight - halfH - pad);
-    if (tip.placement === 'left') {
-      // transform: translate(-100%, -50%) → visual left = left - width
-      if (left - rect.width < pad) left = rect.width + pad;
-    } else if (left + rect.width > window.innerWidth - pad) {
-      left = window.innerWidth - pad - rect.width;
-    }
-  } else {
-    const halfW = rect.width / 2;
-    left = Math.min(Math.max(left, halfW + pad), window.innerWidth - halfW - pad);
-    if (tip.placement === 'above') {
-      // transform: translate(-50%, -100%) → visual top = top - height
-      if (top - rect.height < pad) top = rect.height + pad;
-    } else if (top + rect.height > window.innerHeight - pad) {
-      top = window.innerHeight - pad - rect.height;
-    }
+  let top: number;
+  let left: number;
+
+  switch (placement) {
+    case 'left':
+      // Tip’s right edge = icon.left − gap; vertically centered on icon.
+      left = t.left - gap - w;
+      top = t.top + t.height / 2 - h / 2;
+      break;
+    case 'right':
+      left = t.right + gap;
+      top = t.top + t.height / 2 - h / 2;
+      break;
+    case 'above':
+      left = t.left + t.width / 2 - w / 2;
+      top = t.top - gap - h;
+      break;
+    case 'below':
+    default:
+      left = t.left + t.width / 2 - w / 2;
+      top = t.bottom + gap;
+      break;
   }
+
+  // Clamp fully inside viewport (may reduce gap near edges, never center on icon).
+  left = Math.min(Math.max(left, pad), window.innerWidth - w - pad);
+  top = Math.min(Math.max(top, pad), window.innerHeight - h - pad);
 
   return { top, left };
 }
@@ -146,23 +149,26 @@ export default function ComposerGlassTip({ tip }: { tip: ComposerTipState }) {
       setCoords(null);
       return;
     }
-    setCoords({ top: tip.top, left: tip.left });
     const node = ref.current;
     if (!node) return;
-    setCoords(clampTipPosition(node, tip));
+    setCoords(placeTipPixels(node, tip));
   }, [tip]);
 
   if (!tip || typeof document === 'undefined') return null;
 
-  const pos = coords ?? { top: tip.top, left: tip.left };
-
   const toneClass = tip.tone === 'onDark' ? ' inbox-glass-tip--on-dark' : '';
+  // Hide until measured so we never flash an unplaced tip over the icon.
+  const placed = coords !== null;
 
   return createPortal(
     <div
       ref={ref}
       className={`inbox-glass-tip inbox-glass-tip--${tip.placement}${toneClass}`}
-      style={{ top: pos.top, left: pos.left }}
+      style={{
+        top: coords?.top ?? 0,
+        left: coords?.left ?? 0,
+        visibility: placed ? 'visible' : 'hidden',
+      }}
       role="tooltip"
     >
       {tip.text}
