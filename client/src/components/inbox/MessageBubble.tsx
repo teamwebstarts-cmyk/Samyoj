@@ -109,15 +109,15 @@ export function MessageTicks({ status, className = '' }: { status: TickStatus; c
     return <AlertCircle className={`h-3 w-3 text-red-500 ${className}`} strokeWidth={2.5} />;
   }
   if (status === 'pending') {
-    return <Clock className={`h-3 w-3 text-[#8696a0] ${className}`} strokeWidth={2.5} aria-label="Pending" />;
+    return <Clock className={`h-3 w-3 wa-tick ${className}`} strokeWidth={2.5} aria-label="Pending" />;
   }
   if (status === 'read') {
-    return <CheckCheck className={`h-3 w-3 text-[#53bdeb] ${className}`} strokeWidth={2.5} />;
+    return <CheckCheck className={`h-3 w-3 wa-tick-read ${className}`} strokeWidth={2.5} />;
   }
   if (status === 'delivered') {
-    return <CheckCheck className={`h-3 w-3 text-[#8696a0] ${className}`} strokeWidth={2.5} />;
+    return <CheckCheck className={`h-3 w-3 wa-tick ${className}`} strokeWidth={2.5} />;
   }
-  return <Check className={`h-3 w-3 text-[#8696a0] ${className}`} strokeWidth={2.5} />;
+  return <Check className={`h-3 w-3 wa-tick ${className}`} strokeWidth={2.5} />;
 }
 
 function BubbleTail({ outbound }: { outbound: boolean }) {
@@ -126,8 +126,8 @@ function BubbleTail({ outbound }: { outbound: boolean }) {
       viewBox="0 0 8 13"
       className={`absolute bottom-0 h-[13px] w-2 ${
         outbound
-          ? '-right-2 text-[#D9FDD3] dark:text-[#005c4b]'
-          : '-left-2 -scale-x-100 text-white dark:text-neutral-900'
+          ? '-right-2 text-[color:var(--wa-bubble-sent)]'
+          : '-left-2 -scale-x-100 text-[color:var(--wa-bubble-received)]'
       }`}
       aria-hidden="true"
       fill="currentColor"
@@ -624,13 +624,13 @@ export default function MessageBubble({
 
   const bubbleTone = isOutbound
     ? isFailed
-      ? 'bg-[#ffeaea] dark:bg-red-950/50'
-      : 'bg-[#D9FDD3] dark:bg-[#005c4b]'
-    : 'bg-white ring-1 ring-neutral-200/90 dark:bg-neutral-900 dark:ring-neutral-700/60';
+      ? 'wa-bubble-failed'
+      : 'wa-bubble-sent'
+    : 'wa-bubble-received';
 
   const radius = [
-    'rounded-[14px]',
-    grouping.last ? (isOutbound ? 'rounded-br-[4px]' : 'rounded-bl-[4px]') : '',
+    'rounded-[8px]',
+    grouping.last ? (isOutbound ? 'rounded-br-[2px]' : 'rounded-bl-[2px]') : '',
     !grouping.first ? (isOutbound ? 'rounded-tr-[6px]' : 'rounded-tl-[6px]') : '',
   ].join(' ');
 
@@ -638,7 +638,7 @@ export default function MessageBubble({
     time || isOutbound ? (
       <span
         className={`inline-flex shrink-0 items-center gap-1 ${
-          onImage ? 'text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.6)]' : 'text-[#667781] dark:text-neutral-400'
+          onImage ? 'text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.6)]' : 'wa-timestamp'
         }`}
       >
         {time && <span className="text-[10.5px] tabular-nums">{time}</span>}

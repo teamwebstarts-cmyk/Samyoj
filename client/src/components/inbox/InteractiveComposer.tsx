@@ -306,9 +306,26 @@ export default function InteractiveComposer({
     }
   };
 
+  const previewCard = (
+    <WhatsAppInteractivePreview
+      mode={mode}
+      header={header || undefined}
+      body={previewBody}
+      footer={footer || undefined}
+      buttons={validButtons}
+      ctaLabel={ctaLabel}
+      listButtonLabel={listButtonLabel}
+      listSections={listSections}
+      couponCode={couponCode || undefined}
+      compact
+      direction="outbound"
+      showSurface={false}
+    />
+  );
+
   return (
     <div
-      className="flex max-h-[min(56vh,480px)] flex-col border-t border-violet-200/70 bg-gradient-to-b from-violet-50/95 to-theme-surface dark:from-violet-950/35 dark:to-theme-surface"
+      className="flex max-h-[min(58vh,520px)] flex-col border-t border-violet-200/70 bg-gradient-to-b from-violet-50/95 to-theme-surface dark:from-violet-950/35 dark:to-theme-surface"
       onKeyDown={onFormKeyDown}
     >
       {/* Header */}
@@ -367,9 +384,10 @@ export default function InteractiveComposer({
         })}
       </div>
 
-      {/* Scrollable body */}
-      <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto overscroll-contain px-3 pb-2 sm:px-4">
-        <div key={mode} className="inbox-interactive-panel space-y-2.5">
+      {/* Split body: inputs left, preview right (desktop) */}
+      <div className="flex min-h-0 flex-1 flex-col md:flex-row md:divide-x md:divide-theme-border/60">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-2 sm:px-4 md:max-w-[50%] md:flex-[0_0_48%] md:pb-3">
+          <div key={mode} className="inbox-interactive-panel space-y-2.5">
           {mode !== 'copy_code' && (
             <>
               <div className="grid gap-2 sm:grid-cols-2">
@@ -794,33 +812,24 @@ export default function InteractiveComposer({
               )}
             </div>
           )}
+
+            {/* Mobile: preview below inputs, no inner scroll */}
+            <ComposerPreviewPane
+              subtitle={activeMode.label}
+              className="overflow-hidden rounded-xl border border-theme-border/80 md:hidden"
+            >
+              {previewCard}
+            </ComposerPreviewPane>
+          </div>
         </div>
 
-        {/* Live preview */}
-        <div className="overflow-hidden rounded-xl border border-violet-100/90 bg-[#efeae2] [background-image:radial-gradient(circle_at_1px_1px,rgba(0,0,0,0.04)_1px,transparent_0)] [background-size:14px_14px] dark:border-violet-900/40 dark:bg-neutral-900/60">
-          <div className="flex items-center justify-between border-b border-black/5 px-2.5 py-1.5 dark:border-white/5">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-theme-muted">
-              Preview
-            </p>
-            <p className="truncate text-[10px] font-medium text-theme-muted">{activeMode.label}</p>
-          </div>
-          <div className="max-h-[132px] overflow-y-auto overscroll-contain p-2.5">
-            <WhatsAppInteractivePreview
-              mode={mode}
-              header={header || undefined}
-              body={previewBody}
-              footer={footer || undefined}
-              buttons={validButtons}
-              ctaLabel={ctaLabel}
-              listButtonLabel={listButtonLabel}
-              listSections={listSections}
-              couponCode={couponCode || undefined}
-              compact
-              direction="outbound"
-              showSurface={false}
-            />
-          </div>
-        </div>
+        {/* Right: sticky live preview (desktop only) */}
+        <ComposerPreviewPane
+          subtitle={activeMode.label}
+          className="hidden md:flex md:min-h-0 md:flex-[0_0_52%]"
+        >
+          {previewCard}
+        </ComposerPreviewPane>
       </div>
 
       {/* Sticky actions */}

@@ -1,5 +1,7 @@
 import { AlertCircle, Check, CheckCheck, ClipboardCopy, Clock, ExternalLink, List, Phone } from 'lucide-react';
 import type { ReactNode } from 'react';
+import type { MessageTemplate, TemplateButton, TemplateLibraryEntry } from '../../types';
+import { getTemplateButtons } from '../../utils/templateForm';
 
 /** Split-pane preview column for inbox composers (Template / Interactive). */
 export function ComposerPreviewPane({
@@ -23,8 +25,6 @@ export function ComposerPreviewPane({
     </div>
   );
 }
-import type { MessageTemplate, TemplateButton, TemplateLibraryEntry } from '../../types';
-import { getTemplateButtons } from '../../utils/templateForm';
 
 export type WhatsAppBubbleDirection = 'inbound' | 'outbound';
 
@@ -83,7 +83,7 @@ export function WhatsAppBubble({
     <div className={`flex ${isOutbound ? 'justify-end' : 'justify-start'} ${className}`}>
       <div
         className={`relative max-w-full shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] wa-msg-font ${
-          compact ? 'max-w-[220px]' : 'max-w-[85%] sm:max-w-[75%]'
+          compact ? 'max-w-[220px]' : 'max-w-[75%] sm:max-w-[65%]'
         } ${
           hasMedia ? 'overflow-hidden p-0' : compact ? 'px-2 py-1.5' : 'px-3 py-2'
         } ${
@@ -244,7 +244,7 @@ export function WhatsAppTemplateCard({
         </div>
 
         {buttons.length > 0 && (
-          <div className="border-t border-[color:var(--wa-bubble-edge)]">
+          <div className="border-t border-[color:var(--bubble-edge)]">
             {buttons.map((btn, i) => (
               <button
                 key={`${btn.type}-${btn.text}-${i}`}
@@ -564,7 +564,7 @@ export function WhatsAppInteractiveCard({
           )}
           {mode === 'list' && totalRows > 0 && (
             <div
-              className={`mt-2 rounded-lg border border-[color:var(--wa-bubble-received-border)] bg-[color:var(--wa-bubble-received)]/80 p-2 ${
+              className={`mt-2 rounded-lg border border-[color:var(--bubble-received-border)] bg-[color:var(--bubble-received)]/80 p-2 ${
                 compact ? 'text-[10px]' : 'text-[11px]'
               }`}
             >
@@ -574,7 +574,7 @@ export function WhatsAppInteractiveCard({
                   key={sectionIndex}
                   className={
                     sectionIndex > 0
-                      ? 'mt-2 border-t border-[color:var(--wa-bubble-received-border)] pt-2'
+                      ? 'mt-2 border-t border-[color:var(--bubble-received-border)] pt-2'
                       : ''
                   }
                 >
@@ -598,7 +598,7 @@ export function WhatsAppInteractiveCard({
         </div>
 
         {actionButtons.length > 0 && (
-          <div className={`border-t border-[color:var(--wa-bubble-edge)] ${shellClass}`}>
+          <div className={`border-t border-[color:var(--bubble-edge)] ${shellClass}`}>
             {actionButtons.map((btn, index) => (
               <div
                 key={`${btn.id}-${index}`}
