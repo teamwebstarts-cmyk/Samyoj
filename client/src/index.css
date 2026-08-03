@@ -522,77 +522,84 @@
     filter: drop-shadow(-1px 0 0 rgba(52, 211, 153, 0.35));
   }
 
-  /* Inbox glass tip — soft light surface (replaces native black title tooltips) */
+  /* Inbox glass tip — polished light surface (replaces native black title tooltips) */
   .inbox-glass-tip,
   .composer-glass-tip {
     position: fixed;
-    z-index: 120;
+    z-index: 260;
     pointer-events: none;
-    max-width: min(280px, calc(100vw - 24px));
-    padding: 0.35rem 0.65rem;
-    border-radius: 0.65rem;
-    border: 1px solid rgba(226, 232, 240, 0.95);
-    background: linear-gradient(
-      165deg,
-      rgba(255, 255, 255, 0.94) 0%,
-      rgba(248, 250, 252, 0.88) 100%
-    );
-    color: #334155;
-    font-size: 11.5px;
-    font-weight: 650;
-    letter-spacing: -0.01em;
-    line-height: 1.25;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    box-sizing: border-box;
+    max-width: min(260px, calc(100vw - 20px));
+    padding: 0.5rem 0.75rem;
+    border-radius: 10px;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    background: rgba(255, 255, 255, 0.94);
+    color: #0f172a;
+    font-size: 12.5px;
+    font-weight: 600;
+    letter-spacing: -0.011em;
+    line-height: 1.4;
+    text-align: center;
+    white-space: normal;
+    overflow-wrap: break-word;
+    word-break: normal;
+    backdrop-filter: blur(16px) saturate(1.15);
+    -webkit-backdrop-filter: blur(16px) saturate(1.15);
     box-shadow:
-      0 1px 0 rgba(255, 255, 255, 0.9) inset,
-      0 8px 22px rgba(15, 23, 42, 0.1),
-      0 1px 3px rgba(15, 23, 42, 0.06);
+      0 0 0 1px rgba(255, 255, 255, 0.65) inset,
+      0 4px 14px rgba(15, 23, 42, 0.1),
+      0 1px 2px rgba(15, 23, 42, 0.05);
   }
 
   .inbox-glass-tip--above,
   .composer-glass-tip {
     transform: translate(-50%, -100%);
-    animation: inbox-glass-tip-in-above 140ms ease-out both;
+    animation: inbox-glass-tip-in-above 150ms ease-out both;
   }
 
   .inbox-glass-tip--below {
     transform: translate(-50%, 0);
-    animation: inbox-glass-tip-in-below 140ms ease-out both;
+    animation: inbox-glass-tip-in-below 150ms ease-out both;
   }
 
   /* Side tips for right-edge rails (and left-edge chrome) — paint into open chat area */
   .inbox-glass-tip--left {
     transform: translate(-100%, -50%);
-    animation: inbox-glass-tip-in-left 140ms ease-out both;
+    animation: inbox-glass-tip-in-left 150ms ease-out both;
   }
 
   .inbox-glass-tip--right {
     transform: translate(0, -50%);
-    animation: inbox-glass-tip-in-right 140ms ease-out both;
+    animation: inbox-glass-tip-in-right 150ms ease-out both;
   }
 
   .dark .inbox-glass-tip,
   .dark .composer-glass-tip {
     border-color: rgba(255, 255, 255, 0.12);
-    background: linear-gradient(
-      165deg,
-      rgba(30, 41, 59, 0.94) 0%,
-      rgba(15, 23, 42, 0.9) 100%
-    );
-    color: #e2e8f0;
+    background: rgba(24, 24, 27, 0.94);
+    color: #f4f4f5;
     box-shadow:
-      0 1px 0 rgba(255, 255, 255, 0.06) inset,
-      0 10px 28px rgba(0, 0, 0, 0.45);
+      0 0 0 1px rgba(255, 255, 255, 0.06) inset,
+      0 8px 24px rgba(0, 0, 0, 0.45),
+      0 1px 2px rgba(0, 0, 0, 0.25);
+  }
+
+  /* Always-light tip for dark overlays (MediaViewer, etc.) */
+  .inbox-glass-tip--on-dark,
+  .dark .inbox-glass-tip--on-dark {
+    border-color: rgba(15, 23, 42, 0.1);
+    background: rgba(255, 255, 255, 0.96);
+    color: #0f172a;
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.7) inset,
+      0 6px 18px rgba(0, 0, 0, 0.35),
+      0 1px 2px rgba(0, 0, 0, 0.2);
   }
 
   @keyframes inbox-glass-tip-in-above {
     from {
       opacity: 0;
-      transform: translate(-50%, calc(-100% + 4px));
+      transform: translate(-50%, calc(-100% + 5px));
     }
     to {
       opacity: 1;
@@ -603,7 +610,7 @@
   @keyframes inbox-glass-tip-in-below {
     from {
       opacity: 0;
-      transform: translate(-50%, -4px);
+      transform: translate(-50%, -5px);
     }
     to {
       opacity: 1;
@@ -614,7 +621,7 @@
   @keyframes inbox-glass-tip-in-left {
     from {
       opacity: 0;
-      transform: translate(calc(-100% + 4px), -50%);
+      transform: translate(calc(-100% + 5px), -50%);
     }
     to {
       opacity: 1;
@@ -625,7 +632,7 @@
   @keyframes inbox-glass-tip-in-right {
     from {
       opacity: 0;
-      transform: translate(-4px, -50%);
+      transform: translate(-5px, -50%);
     }
     to {
       opacity: 1;

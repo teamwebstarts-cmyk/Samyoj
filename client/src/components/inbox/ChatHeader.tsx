@@ -308,7 +308,7 @@ export default function ChatHeader({
               type="button"
               disabled
               aria-label="Mark as unread (coming soon)"
-              {...tipFor('Coming soon — API support in progress')}
+              {...tipFor('Coming soon — API support in progress', 'left')}
               className="flex w-full cursor-not-allowed items-center gap-2 px-3 py-2.5 text-left text-[13px] text-theme-muted opacity-60"
             >
               <Mail className="h-4 w-4 text-theme-muted" />
@@ -350,6 +350,7 @@ export default function ChatHeader({
         className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-theme-border bg-theme-surface text-theme-secondary transition hover:bg-theme-subtle md:hidden ${FOCUS_RING_CLASS}`}
         onClick={onBack}
         aria-label="Back to conversations"
+        {...tipFor('Back', 'right')}
       >
         <ArrowLeft size={17} strokeWidth={2.25} />
       </button>

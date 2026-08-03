@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ChevronDown,
   LogOut,
@@ -15,6 +16,9 @@ import GlobalSearch, { useGlobalSearchShortcut } from './GlobalSearch';
 import NotificationCenter from './NotificationCenter';
 import NumberSwitcher, { NumberSwitcherMobile } from './NumberSwitcher';
 import { PAGE_GUTTER_X } from '../ui/PageShell';
+
+const USER_MENU_WIDTH = 220;
+const USER_MENU_GAP = 12;
 
 interface AppTopbarProps {
   companyName?: string;
@@ -59,6 +63,8 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
   const roleText = roleLabel(orgRole);
   const [searchOpen, setSearchOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [userMenuPos, setUserMenuPos] = useState<{ top: number; right: number } | null>(null);
+  const userTriggerRef = useRef<HTMLButtonElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const isApple = useIsApplePlatform();
   // Live = WhatsApp number linked (after numbers finish loading). Not a socket
@@ -67,12 +73,39 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
 
   useGlobalSearchShortcut(() => setSearchOpen(true));
 
+  useLayoutEffect(() => {
+    if (!userMenuOpen || !userTriggerRef.current) {
+      setUserMenuPos(null);
+      return;
+    }
+    const place = () => {
+      const btn = userTriggerRef.current;
+      if (!btn) return;
+      const rect = btn.getBoundingClientRect();
+      const right = Math.min(
+        Math.max(USER_MENU_GAP, window.innerWidth - rect.right),
+        Math.max(USER_MENU_GAP, window.innerWidth - USER_MENU_WIDTH - USER_MENU_GAP)
+      );
+      setUserMenuPos({ top: rect.bottom + USER_MENU_GAP, right });
+    };
+    place();
+    const raf = window.requestAnimationFrame(place);
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.cancelAnimationFrame(raf);
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [userMenuOpen]);
+
   useEffect(() => {
     if (!userMenuOpen) return;
     const onPointerDown = (e: MouseEvent) => {
-      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
-        setUserMenuOpen(false);
-      }
+      const target = e.target as Node;
+      if (userTriggerRef.current?.contains(target)) return;
+      if (userMenuRef.current?.contains(target)) return;
+      setUserMenuOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setUserMenuOpen(false);
@@ -87,9 +120,56 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
 
   const subtitle = (description || '').replace(/\.$/, '');
 
+  const userMenu =
+    userMenuOpen && userMenuPos
+      ? createPortal(
+          <div
+            ref={userMenuRef}
+            role="menu"
+            style={{
+              top: userMenuPos.top,
+              right: userMenuPos.right,
+              width: USER_MENU_WIDTH,
+            }}
+            className="fixed z-[80] overflow-hidden rounded-2xl border border-neutral-200/90 bg-white p-1.5 shadow-lg dark:border-theme-border dark:bg-theme-surface"
+          >
+            <div className="border-b border-neutral-100 px-3 py-2.5 dark:border-theme-border sm:hidden">
+              <p className="truncate text-[13px] font-bold text-neutral-900 dark:text-theme-fg">
+                {userName || 'User'}
+              </p>
+              <p className="truncate text-[11.5px] font-medium text-neutral-500">{roleText}</p>
+            </div>
+            <Link
+              to="/settings"
+              role="menuitem"
+              onClick={() => setUserMenuOpen(false)}
+              className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-neutral-800 transition hover:bg-neutral-50 dark:text-theme-fg dark:hover:bg-theme-subtle"
+            >
+              <Settings2 className="h-4 w-4 text-neutral-500" />
+              Settings
+            </Link>
+            {onLogout && (
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setUserMenuOpen(false);
+                  onLogout();
+                }}
+                className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-[13px] font-semibold text-rose-700 transition hover:bg-rose-50 dark:hover:bg-rose-500/10"
+              >
+                <LogOut className="h-4 w-4" />
+                Log out
+              </button>
+            )}
+          </div>,
+          document.body
+        )
+      : null;
+
   return (
     <>
-      <header className="topbar-glass sticky top-0 z-30 shrink-0">
+      <header className="topbar-glass sticky top-0 z-40 shrink-0">
         <div
           className={`flex min-h-[72px] items-center gap-3 py-3 lg:min-h-[76px] lg:gap-5 lg:py-3.5 ${PAGE_GUTTER_X}`}
         >
@@ -162,9 +242,10 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
 
             <NotificationCenter />
 
-            {/* User profile chip */}
-            <div className="relative" ref={userMenuRef}>
+            {/* User profile chip — menu portaled to body so it clears inbox chrome */}
+            <div className="relative">
               <button
+                ref={userTriggerRef}
                 type="button"
                 onClick={() => setUserMenuOpen((v) => !v)}
                 className="topbar-user-chip"
@@ -192,47 +273,11 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
                   strokeWidth={2}
                 />
               </button>
-
-              {userMenuOpen && (
-                <div
-                  role="menu"
-                  className="absolute right-0 top-[calc(100%+8px)] z-50 w-[220px] overflow-hidden rounded-2xl border border-neutral-200/90 bg-white p-1.5 shadow-lg dark:border-theme-border dark:bg-theme-surface"
-                >
-                  <div className="border-b border-neutral-100 px-3 py-2.5 dark:border-theme-border sm:hidden">
-                    <p className="truncate text-[13px] font-bold text-neutral-900 dark:text-theme-fg">
-                      {userName || 'User'}
-                    </p>
-                    <p className="truncate text-[11.5px] font-medium text-neutral-500">{roleText}</p>
-                  </div>
-                  <Link
-                    to="/settings"
-                    role="menuitem"
-                    onClick={() => setUserMenuOpen(false)}
-                    className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-neutral-800 transition hover:bg-neutral-50 dark:text-theme-fg dark:hover:bg-theme-subtle"
-                  >
-                    <Settings2 className="h-4 w-4 text-neutral-500" />
-                    Settings
-                  </Link>
-                  {onLogout && (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => {
-                        setUserMenuOpen(false);
-                        onLogout();
-                      }}
-                      className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-[13px] font-semibold text-rose-700 transition hover:bg-rose-50 dark:hover:bg-rose-500/10"
-                    >
-                      <LogOut className="h-4 w-4" />
-                      Log out
-                    </button>
-                  )}
-                </div>
-              )}
             </div>
           </div>
         </div>
       </header>
+      {userMenu}
       <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
     </>
   );

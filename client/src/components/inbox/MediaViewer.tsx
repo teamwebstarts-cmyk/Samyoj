@@ -1,5 +1,6 @@
 import { useEffect, useCallback } from 'react';
 import { X, Download, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useGlassTipProps } from './ComposerGlassTip';
 
 export interface MediaViewerItem {
   messageId: string;
@@ -25,6 +26,7 @@ export default function MediaViewer({
   hasPrev,
   hasNext,
 }: MediaViewerProps) {
+  const tipFor = useGlassTipProps();
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (!item) return;
@@ -77,6 +79,7 @@ export default function MediaViewer({
             }}
             className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20"
             aria-label="Download"
+            {...tipFor('Download', { placement: 'below', tone: 'onDark' })}
           >
             <Download size={18} />
           </button>
@@ -88,6 +91,7 @@ export default function MediaViewer({
             }}
             className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20"
             aria-label="Close"
+            {...tipFor('Close', { placement: 'below', tone: 'onDark' })}
           >
             <X size={20} />
           </button>
@@ -103,6 +107,7 @@ export default function MediaViewer({
           }}
           className="absolute left-3 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20 sm:left-6"
           aria-label="Previous"
+          {...tipFor('Previous', { placement: 'right', tone: 'onDark' })}
         >
           <ChevronLeft size={24} />
         </button>
@@ -117,6 +122,7 @@ export default function MediaViewer({
           }}
           className="absolute right-3 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20 sm:right-6"
           aria-label="Next"
+          {...tipFor('Next', { placement: 'left', tone: 'onDark' })}
         >
           <ChevronRight size={24} />
         </button>

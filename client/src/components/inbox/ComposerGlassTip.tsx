@@ -3,7 +3,9 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
+  useRef,
   useState,
   type FocusEvent,
   type MouseEvent,
@@ -13,34 +15,56 @@ import { createPortal } from 'react-dom';
 
 export type TipPlacement = 'above' | 'below' | 'left' | 'right';
 
+/** `onDark` forces light chrome (e.g. MediaViewer black overlay). */
+export type TipTone = 'default' | 'onDark';
+
 export type ComposerTipState = {
   text: string;
   top: number;
   left: number;
   placement: TipPlacement;
+  tone: TipTone;
 } | null;
 
+export type GlassTipShowOptions = {
+  placement?: TipPlacement;
+  tone?: TipTone;
+};
+
 export type GlassTipApi = {
-  onShowTip: (text: string, el: HTMLElement, placement?: TipPlacement) => void;
+  onShowTip: (text: string, el: HTMLElement, options?: TipPlacement | GlassTipShowOptions) => void;
   onHideTip: () => void;
 };
 
+function normalizeShowOptions(
+  options?: TipPlacement | GlassTipShowOptions
+): { placement: TipPlacement; tone: TipTone } {
+  if (!options) return { placement: 'above', tone: 'default' };
+  if (typeof options === 'string') return { placement: options, tone: 'default' };
+  return {
+    placement: options.placement ?? 'above',
+    tone: options.tone ?? 'default',
+  };
+}
+
 const InboxGlassTipContext = createContext<GlassTipApi | null>(null);
 
-/** Horizontal room needed to center a short glass label without clipping. */
-const CENTER_EDGE_PX = 120;
+/** Half of tip max-width + gutter — used to flip centered tips near viewport edges. */
+const CENTER_EDGE_PX = 148;
+const VIEWPORT_PAD = 10;
 
 function resolveTip(
   text: string,
   el: HTMLElement,
-  preferred: TipPlacement = 'above'
+  preferred: TipPlacement = 'above',
+  tone: TipTone = 'default'
 ): NonNullable<ComposerTipState> {
   const r = el.getBoundingClientRect();
   let placement = preferred;
 
   // Vertical flip when preferred above/below would clip near the viewport edge.
-  if (preferred === 'above' && r.top < 36) placement = 'below';
-  if (preferred === 'below' && window.innerHeight - r.bottom < 36) placement = 'above';
+  if (preferred === 'above' && r.top < 44) placement = 'below';
+  if (preferred === 'below' && window.innerHeight - r.bottom < 44) placement = 'above';
 
   // Centered above/below tips clip at left/right viewport edges — shift to the open side.
   if (placement === 'above' || placement === 'below') {
@@ -53,25 +77,60 @@ function resolveTip(
     return {
       text,
       top: r.top + r.height / 2,
-      left: r.left - 8,
+      left: r.left - 10,
       placement,
+      tone,
     };
   }
   if (placement === 'right') {
     return {
       text,
       top: r.top + r.height / 2,
-      left: r.right + 8,
+      left: r.right + 10,
       placement,
+      tone,
     };
   }
 
   return {
     text,
-    top: placement === 'above' ? r.top - 8 : r.bottom + 8,
+    top: placement === 'above' ? r.top - 10 : r.bottom + 10,
     left: r.left + r.width / 2,
     placement,
+    tone,
   };
+}
+
+/** After mount, clamp so wrapped tips stay fully inside the viewport. */
+function clampTipPosition(
+  el: HTMLElement,
+  tip: NonNullable<ComposerTipState>
+): { top: number; left: number } {
+  const rect = el.getBoundingClientRect();
+  let { top, left } = tip;
+  const pad = VIEWPORT_PAD;
+
+  if (tip.placement === 'left' || tip.placement === 'right') {
+    const halfH = rect.height / 2;
+    top = Math.min(Math.max(top, halfH + pad), window.innerHeight - halfH - pad);
+    if (tip.placement === 'left') {
+      // transform: translate(-100%, -50%) → visual left = left - width
+      if (left - rect.width < pad) left = rect.width + pad;
+    } else if (left + rect.width > window.innerWidth - pad) {
+      left = window.innerWidth - pad - rect.width;
+    }
+  } else {
+    const halfW = rect.width / 2;
+    left = Math.min(Math.max(left, halfW + pad), window.innerWidth - halfW - pad);
+    if (tip.placement === 'above') {
+      // transform: translate(-50%, -100%) → visual top = top - height
+      if (top - rect.height < pad) top = rect.height + pad;
+    } else if (top + rect.height > window.innerHeight - pad) {
+      top = window.innerHeight - pad - rect.height;
+    }
+  }
+
+  return { top, left };
 }
 
 /**
@@ -79,12 +138,31 @@ function resolveTip(
  * Short labels preferred — no native black browser `title` chrome.
  */
 export default function ComposerGlassTip({ tip }: { tip: ComposerTipState }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!tip) {
+      setCoords(null);
+      return;
+    }
+    setCoords({ top: tip.top, left: tip.left });
+    const node = ref.current;
+    if (!node) return;
+    setCoords(clampTipPosition(node, tip));
+  }, [tip]);
+
   if (!tip || typeof document === 'undefined') return null;
+
+  const pos = coords ?? { top: tip.top, left: tip.left };
+
+  const toneClass = tip.tone === 'onDark' ? ' inbox-glass-tip--on-dark' : '';
 
   return createPortal(
     <div
-      className={`inbox-glass-tip inbox-glass-tip--${tip.placement}`}
-      style={{ top: tip.top, left: tip.left }}
+      ref={ref}
+      className={`inbox-glass-tip inbox-glass-tip--${tip.placement}${toneClass}`}
+      style={{ top: pos.top, left: pos.left }}
       role="tooltip"
     >
       {tip.text}
@@ -98,13 +176,17 @@ export function useComposerGlassTip() {
 
   const onHideTip = useCallback(() => setTip(null), []);
 
-  const onShowTip = useCallback((text: string, el: HTMLElement, placement: TipPlacement = 'above') => {
-    if (!text) {
-      setTip(null);
-      return;
-    }
-    setTip(resolveTip(text, el, placement));
-  }, []);
+  const onShowTip = useCallback(
+    (text: string, el: HTMLElement, options?: TipPlacement | GlassTipShowOptions) => {
+      if (!text) {
+        setTip(null);
+        return;
+      }
+      const { placement, tone } = normalizeShowOptions(options);
+      setTip(resolveTip(text, el, placement, tone));
+    },
+    []
+  );
 
   useEffect(() => {
     if (!tip) return;
@@ -147,15 +229,15 @@ export function useInboxGlassTipActive(): boolean {
 /** Hover/focus handlers for a short glass label (no native title). */
 export function composerTipProps(
   text: string,
-  onShowTip: (text: string, el: HTMLElement, placement?: TipPlacement) => void,
+  onShowTip: GlassTipApi['onShowTip'],
   onHideTip: () => void,
-  placement: TipPlacement = 'above'
+  options: TipPlacement | GlassTipShowOptions = 'above'
 ) {
   if (!text) return {};
   return {
-    onMouseEnter: (e: MouseEvent<HTMLElement>) => onShowTip(text, e.currentTarget, placement),
+    onMouseEnter: (e: MouseEvent<HTMLElement>) => onShowTip(text, e.currentTarget, options),
     onMouseLeave: onHideTip,
-    onFocus: (e: FocusEvent<HTMLElement>) => onShowTip(text, e.currentTarget, placement),
+    onFocus: (e: FocusEvent<HTMLElement>) => onShowTip(text, e.currentTarget, options),
     onBlur: onHideTip,
   };
 }
@@ -164,8 +246,8 @@ export function composerTipProps(
 export function useGlassTipProps() {
   const { onShowTip, onHideTip } = useInboxGlassTip();
   return useCallback(
-    (text: string, placement: TipPlacement = 'above') =>
-      composerTipProps(text, onShowTip, onHideTip, placement),
+    (text: string, options: TipPlacement | GlassTipShowOptions = 'above') =>
+      composerTipProps(text, onShowTip, onHideTip, options),
     [onShowTip, onHideTip]
   );
 }

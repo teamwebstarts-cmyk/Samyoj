@@ -643,7 +643,7 @@ export default function ChatComposer({
               aria-label="Quick replies"
               aria-expanded={slashMenuOpen}
               disabled={cannedReplies.length === 0 || recording}
-              {...tipFor('Quick replies (also in Details)')}
+              {...tipFor('Quick replies · also in Details')}
               onClick={toggleSlashMenu}
             >
               <Zap size={16} strokeWidth={2} />
