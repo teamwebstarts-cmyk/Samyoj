@@ -1,9 +1,9 @@
-import { Bot, GitBranch, Star, Users, X } from 'lucide-react';
+import { AlertTriangle, Bot, GitBranch, Star, Users, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { FOCUS_RING_CLASS } from '../../hooks/inboxA11y';
 import type { ChatNoticeTone } from './chatNoticeBus';
 
-export type ChatNoticeIcon = 'bot' | 'star' | 'users' | 'flow';
+export type ChatNoticeIcon = 'bot' | 'star' | 'users' | 'flow' | 'alert';
 
 export interface ChatNoticeItem {
   id: string;
@@ -54,7 +54,15 @@ const TONE_ACTION: Record<ChatNoticeTone, string> = {
 
 function NoticeIcon({ icon, tone }: { icon: ChatNoticeIcon; tone: ChatNoticeTone }) {
   const Icon =
-    icon === 'star' ? Star : icon === 'users' ? Users : icon === 'flow' ? GitBranch : Bot;
+    icon === 'star'
+      ? Star
+      : icon === 'users'
+        ? Users
+        : icon === 'flow'
+          ? GitBranch
+          : icon === 'alert'
+            ? AlertTriangle
+            : Bot;
   return (
     <span
       className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ring-1 ${TONE_ICON[tone]}`}

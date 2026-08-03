@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import {
   AlertCircle,
   Check,
@@ -10,7 +11,8 @@ import {
   RotateCcw,
   SmilePlus,
 } from 'lucide-react';
-import { formatMessageTime, getAutomationSourceLabel, messageHasMedia } from './inboxUtils';
+import { formatMessageTime, getAutomationDividerLabel, messageHasMedia } from './inboxUtils';
+import { computeFixedPopoverPosition, type PopoverCoords } from './inboxPopoverPosition';
 import {
   AuthenticatedAudio,
   AuthenticatedDocument,
@@ -21,6 +23,21 @@ import InteractiveMessageCard from './InteractiveMessageCard';
 import MediaViewer, { type MediaViewerItem } from './MediaViewer';
 import { WhatsAppBubble } from './WhatsAppPreview';
 import type { Message } from '../../types';
+
+const ACTION_MENU_WIDTH = 160;
+const REACT_MENU_WIDTH = 232;
+/** Prefer opening above when this close to the bottom of the thread/viewport. */
+const FLIP_NEAR_BOTTOM_PX = 168;
+
+function preferMenuPlacement(anchor: DOMRect): 'above' | 'below' {
+  const thread = document.getElementById('inbox-thread');
+  if (thread) {
+    const threadBottom = thread.getBoundingClientRect().bottom;
+    if (threadBottom - anchor.bottom < FLIP_NEAR_BOTTOM_PX) return 'above';
+  }
+  if (window.innerHeight - anchor.bottom < FLIP_NEAR_BOTTOM_PX) return 'above';
+  return 'below';
+}
 
 export interface BubbleGrouping {
   /** First bubble of a consecutive same-sender run. */
@@ -207,7 +224,12 @@ export default function MessageBubble({
   const [localViewer, setLocalViewer] = useState<MediaViewerItem | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [reactOpen, setReactOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState<PopoverCoords | null>(null);
+  const [reactPos, setReactPos] = useState<PopoverCoords | null>(null);
   const longPressTimer = useRef<number | null>(null);
+  const menuBtnRef = useRef<HTMLButtonElement>(null);
+  const menuPanelRef = useRef<HTMLDivElement>(null);
+  const reactPanelRef = useRef<HTMLDivElement>(null);
   const activeRing = isActiveMatch ? 'ring-2 ring-amber-400/90 dark:ring-amber-500/70' : '';
   const isOutbound = message.direction === 'OUTBOUND';
   const reducedMotion =
@@ -224,7 +246,7 @@ export default function MessageBubble({
   const isLocation = type === 'LOCATION';
   const buttons = message.metadata?.buttons;
   const isButtonReply = message.metadata?.isButtonReply;
-  const automationLabel = isOutbound ? getAutomationSourceLabel(message.metadata) : null;
+  const isAutomation = isOutbound && Boolean(getAutomationDividerLabel(message.metadata));
   const tickStatus = mapStatus(message.status);
   const isFailed = isOutbound && tickStatus === 'failed';
   const time = grouping.last ? formatMessageTime(message.createdAt) : undefined;
@@ -232,6 +254,11 @@ export default function MessageBubble({
   const reactions = message.metadata?.reactions || [];
 
   const openMedia = onOpenMedia || setLocalViewer;
+
+  const closeMenus = () => {
+    setMenuOpen(false);
+    setReactOpen(false);
+  };
 
   const clearLongPress = () => {
     if (longPressTimer.current) {
@@ -242,13 +269,91 @@ export default function MessageBubble({
 
   useEffect(() => () => clearLongPress(), []);
 
+  useLayoutEffect(() => {
+    if (!menuOpen || !menuBtnRef.current) {
+      setMenuPos(null);
+      return;
+    }
+    const place = () => {
+      const anchor = menuBtnRef.current;
+      if (!anchor) return;
+      const rect = anchor.getBoundingClientRect();
+      const height = menuPanelRef.current?.offsetHeight ?? 148;
+      setMenuPos(
+        computeFixedPopoverPosition(
+          rect,
+          { width: ACTION_MENU_WIDTH, height },
+          { prefer: preferMenuPlacement(rect), gap: 6 }
+        )
+      );
+    };
+    place();
+    const raf = requestAnimationFrame(place);
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [menuOpen, isFailed, onReply, onReact, onRetry]);
+
+  useLayoutEffect(() => {
+    if (!reactOpen || !menuBtnRef.current) {
+      setReactPos(null);
+      return;
+    }
+    const place = () => {
+      const anchor = menuBtnRef.current;
+      if (!anchor) return;
+      const rect = anchor.getBoundingClientRect();
+      const height = reactPanelRef.current?.offsetHeight ?? 48;
+      setReactPos(
+        computeFixedPopoverPosition(
+          rect,
+          { width: REACT_MENU_WIDTH, height },
+          { prefer: preferMenuPlacement(rect), gap: 6 }
+        )
+      );
+    };
+    place();
+    const raf = requestAnimationFrame(place);
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [reactOpen]);
+
+  useEffect(() => {
+    if (!menuOpen && !reactOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (menuBtnRef.current?.contains(target)) return;
+      if (menuPanelRef.current?.contains(target)) return;
+      if (reactPanelRef.current?.contains(target)) return;
+      closeMenus();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeMenus();
+    };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [menuOpen, reactOpen]);
+
   const copyText = async () => {
     try {
       await navigator.clipboard.writeText(message.content || '');
     } catch {
       /* ignore */
     }
-    setMenuOpen(false);
+    closeMenus();
   };
 
   const quoteStrip = replyPreview ? (
@@ -274,96 +379,122 @@ export default function MessageBubble({
       </div>
     ) : null;
 
+  const portaledMenu =
+    menuOpen && menuPos
+      ? createPortal(
+          <div
+            ref={menuPanelRef}
+            role="menu"
+            style={{ top: menuPos.top, left: menuPos.left, width: ACTION_MENU_WIDTH }}
+            className="fixed z-[80] overflow-hidden rounded-xl border border-theme-border bg-theme-surface py-1 shadow-panel"
+          >
+            {onReply && (
+              <button
+                type="button"
+                role="menuitem"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12.5px] hover:bg-theme-subtle"
+                onClick={() => {
+                  onReply(message);
+                  closeMenus();
+                }}
+              >
+                <Reply className="h-3.5 w-3.5" /> Reply
+              </button>
+            )}
+            <button
+              type="button"
+              role="menuitem"
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12.5px] hover:bg-theme-subtle"
+              onClick={() => void copyText()}
+            >
+              <Copy className="h-3.5 w-3.5" /> Copy
+            </button>
+            {onReact && (
+              <button
+                type="button"
+                role="menuitem"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12.5px] hover:bg-theme-subtle"
+                onClick={() => {
+                  setMenuOpen(false);
+                  setReactOpen(true);
+                }}
+              >
+                <SmilePlus className="h-3.5 w-3.5" /> React
+              </button>
+            )}
+            {isFailed && onRetry && (
+              <button
+                type="button"
+                role="menuitem"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12.5px] text-red-600 hover:bg-theme-subtle"
+                onClick={() => {
+                  onRetry(message);
+                  closeMenus();
+                }}
+              >
+                <RotateCcw className="h-3.5 w-3.5" /> Retry
+              </button>
+            )}
+          </div>,
+          document.body
+        )
+      : null;
+
+  const portaledReact =
+    reactOpen && onReact && reactPos
+      ? createPortal(
+          <div
+            ref={reactPanelRef}
+            role="menu"
+            aria-label="Quick reactions"
+            style={{ top: reactPos.top, left: reactPos.left }}
+            className="fixed z-[80] flex gap-1 rounded-full border border-theme-border bg-theme-surface px-2 py-1.5 shadow-panel"
+          >
+            {QUICK_REACTIONS.map((emoji) => (
+              <button
+                key={emoji}
+                type="button"
+                className="flex h-8 w-8 items-center justify-center rounded-full text-[16px] hover:bg-theme-subtle"
+                onClick={() => {
+                  onReact(message, emoji);
+                  closeMenus();
+                }}
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>,
+          document.body
+        )
+      : null;
+
   const actionMenu = (
     <div
       className={`absolute top-0 z-10 ${isOutbound ? 'left-0 -translate-x-full pr-1' : 'right-0 translate-x-full pl-1'} ${
         menuOpen || reactOpen ? 'opacity-100' : 'opacity-0 group-hover/bubble:opacity-100 focus-within:opacity-100'
       } transition-opacity`}
     >
-      <div className="relative">
-        <button
-          type="button"
-          aria-label="Message actions"
-          className="flex h-7 w-7 items-center justify-center rounded-full bg-theme-surface/95 text-theme-muted shadow-sm ring-1 ring-theme-border hover:text-theme-fg"
-          onClick={(e) => {
-            e.stopPropagation();
-            setMenuOpen((v) => !v);
+      <button
+        ref={menuBtnRef}
+        type="button"
+        aria-label="Message actions"
+        aria-expanded={menuOpen || reactOpen}
+        aria-haspopup="menu"
+        className="flex h-7 w-7 items-center justify-center rounded-full bg-theme-surface/95 text-theme-muted shadow-sm ring-1 ring-theme-border hover:text-theme-fg"
+        onClick={(e) => {
+          e.stopPropagation();
+          if (menuOpen || reactOpen) {
+            closeMenus();
+          } else {
             setReactOpen(false);
-          }}
-        >
-          <MoreVertical className="h-3.5 w-3.5" />
-        </button>
-        {menuOpen && (
-          <>
-            <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-            <div className="absolute top-8 z-20 w-40 overflow-hidden rounded-xl border border-theme-border bg-theme-surface py-1 shadow-panel">
-              {onReply && (
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12.5px] hover:bg-theme-subtle"
-                  onClick={() => {
-                    onReply(message);
-                    setMenuOpen(false);
-                  }}
-                >
-                  <Reply className="h-3.5 w-3.5" /> Reply
-                </button>
-              )}
-              <button
-                type="button"
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12.5px] hover:bg-theme-subtle"
-                onClick={() => void copyText()}
-              >
-                <Copy className="h-3.5 w-3.5" /> Copy
-              </button>
-              {onReact && (
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12.5px] hover:bg-theme-subtle"
-                  onClick={() => {
-                    setReactOpen(true);
-                    setMenuOpen(false);
-                  }}
-                >
-                  <SmilePlus className="h-3.5 w-3.5" /> React
-                </button>
-              )}
-              {isFailed && onRetry && (
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12.5px] text-red-600 hover:bg-theme-subtle"
-                  onClick={() => {
-                    onRetry(message);
-                    setMenuOpen(false);
-                  }}
-                >
-                  <RotateCcw className="h-3.5 w-3.5" /> Retry
-                </button>
-              )}
-            </div>
-          </>
-        )}
-        {reactOpen && onReact && (
-          <>
-            <div className="fixed inset-0 z-10" onClick={() => setReactOpen(false)} />
-            <div className="absolute top-8 z-20 flex gap-1 rounded-full border border-theme-border bg-theme-surface px-2 py-1.5 shadow-panel">
-              {QUICK_REACTIONS.map((emoji) => (
-                <button
-                  key={emoji}
-                  type="button"
-                  className="flex h-8 w-8 items-center justify-center rounded-full text-[16px] hover:bg-theme-subtle"
-                  onClick={() => {
-                    onReact(message, emoji);
-                    setReactOpen(false);
-                  }}
-                >
-                  {emoji}
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-      </div>
+            setMenuOpen(true);
+          }
+        }}
+      >
+        <MoreVertical className="h-3.5 w-3.5" />
+      </button>
+      {portaledMenu}
+      {portaledReact}
     </div>
   );
 
@@ -371,37 +502,26 @@ export default function MessageBubble({
     className: `group/bubble relative ${enterClass}`,
     onContextMenu: (e: React.MouseEvent) => {
       e.preventDefault();
+      setReactOpen(false);
       setMenuOpen(true);
     },
     onTouchStart: () => {
       clearLongPress();
-      longPressTimer.current = window.setTimeout(() => setMenuOpen(true), 450);
+      longPressTimer.current = window.setTimeout(() => {
+        setReactOpen(false);
+        setMenuOpen(true);
+      }, 450);
     },
     onTouchEnd: clearLongPress,
     onTouchMove: clearLongPress,
   };
 
-  const sourceBadge = automationLabel ? (
-    <span className="mb-1 inline-flex rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold text-violet-800 dark:bg-violet-950/50 dark:text-violet-300">
-      {automationLabel}
-    </span>
-  ) : null;
-
-  const outboundSenderLabel = isOutbound
-    ? automationLabel
-      ? automationLabel.startsWith('Flow:')
-        ? 'AI Bot'
-        : automationLabel.startsWith('Quick reply:') || automationLabel.startsWith('Auto:')
-          ? 'AI Bot'
-          : automationLabel
-      : 'You'
-    : null;
-
+  // Automation runs use a centered DateDivider-style pill in ChatThread — avoid
+  // duplicating "AI Bot" here. Keep a subtle "You · time" only for agent outbound.
   const senderHeader =
-    isOutbound && grouping.first ? (
+    isOutbound && grouping.first && !isAutomation ? (
       <p className="mb-0.5 text-[11px] font-semibold leading-none text-[#008069] dark:text-emerald-300">
-        {outboundSenderLabel}
-        {time ? ` · ${time}` : ''}
+        You{time ? ` · ${time}` : ''}
       </p>
     ) : null;
 
@@ -412,7 +532,6 @@ export default function MessageBubble({
       <div {...bubbleShellProps} className={`flex ${wrapperAlign} ${bubbleShellProps.className}`} data-message-id={message.id}>
         <div className={`relative max-w-[85%] rounded-[14px] sm:max-w-[65%] ${activeRing}`}>
           {actionMenu}
-          {sourceBadge}
           {quoteStrip}
           <InteractiveMessageCard
             body={message.content}
@@ -439,7 +558,6 @@ export default function MessageBubble({
       >
         <div className={`relative max-w-[85%] rounded-[14px] sm:max-w-[65%] ${activeRing}`}>
           {actionMenu}
-          {sourceBadge}
           {quoteStrip}
           <WhatsAppBubble
             direction={isOutbound ? 'outbound' : 'inbound'}
@@ -472,7 +590,6 @@ export default function MessageBubble({
       >
         <div className={`relative max-w-[85%] rounded-[14px] sm:max-w-[65%] ${activeRing}`}>
           {actionMenu}
-          {sourceBadge}
           {quoteStrip}
           <WhatsAppBubble
             direction={isOutbound ? 'outbound' : 'inbound'}
@@ -540,7 +657,6 @@ export default function MessageBubble({
         >
           <div className={`relative max-w-[85%] sm:max-w-[65%] ${isSticker ? 'max-w-[160px]' : ''}`}>
             {actionMenu}
-            {sourceBadge}
             <div
               className={`relative overflow-hidden text-[#111b21] shadow-[0_1px_1px_rgba(11,20,26,0.12)] dark:text-neutral-100 ${
                 isSticker ? 'bg-transparent shadow-none' : bubbleTone
@@ -590,7 +706,6 @@ export default function MessageBubble({
     >
       <div className="relative max-w-[85%] sm:max-w-[65%]">
         {actionMenu}
-        {sourceBadge}
         <div
           className={`relative px-3 py-2 text-[#111b21] shadow-[0_1px_1px_rgba(11,20,26,0.10)] dark:text-neutral-100 ${bubbleTone} ${radius} ${activeRing}`}
         >

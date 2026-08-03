@@ -6,6 +6,7 @@ export default {
     extend: {
       fontFamily: {
         sans: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+        chat: ['var(--chat-font)'],
       },
       fontSize: {
         display: ['1.5rem', { lineHeight: '1.25', fontWeight: '800' }],
@@ -40,6 +41,23 @@ export default {
           700: '#075E54',
           800: '#064e45',
           900: '#022c22',
+        },
+        chat: {
+          bg: 'var(--chat-bg)',
+          'bubble-sent': 'var(--bubble-sent)',
+          'bubble-received': 'var(--bubble-received)',
+          'bubble-failed': 'var(--bubble-failed)',
+          'bubble-sent-border': 'var(--bubble-sent-border)',
+          'bubble-received-border': 'var(--bubble-received-border)',
+          'bubble-sent-hover': 'var(--bubble-sent-hover)',
+          'bubble-received-hover': 'var(--bubble-received-hover)',
+          text: 'var(--chat-text)',
+          timestamp: 'var(--chat-timestamp)',
+          tick: 'var(--chat-tick)',
+          'tick-read': 'var(--chat-tick-read)',
+          'input-bg': 'var(--chat-input-bg)',
+          'input-border': 'var(--chat-input-border)',
+          accent: 'var(--chat-accent)',
         },
       },
       boxShadow: {

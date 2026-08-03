@@ -14,15 +14,15 @@ export function StatusIcon({ status, compact }: { status?: MessageStatus; compac
     return <AlertCircle className={`${size} text-red-500`} strokeWidth={2.5} />;
   }
   if (status === 'pending') {
-    return <Clock className={`${size} text-[#8696a0]`} strokeWidth={2.5} />;
+    return <Clock className={`${size} wa-tick`} strokeWidth={2.5} />;
   }
   if (status === 'read') {
-    return <CheckCheck className={`${size} text-[#53bdeb]`} strokeWidth={2.5} />;
+    return <CheckCheck className={`${size} wa-tick-read`} strokeWidth={2.5} />;
   }
   if (status === 'delivered') {
-    return <CheckCheck className={`${size} text-[#8696a0]`} strokeWidth={2.5} />;
+    return <CheckCheck className={`${size} wa-tick`} strokeWidth={2.5} />;
   }
-  return <Check className={`${size} text-[#8696a0]`} strokeWidth={2.5} />;
+  return <Check className={`${size} wa-tick`} strokeWidth={2.5} />;
 }
 
 interface WhatsAppBubbleProps {
@@ -53,23 +53,22 @@ export function WhatsAppBubble({
 }: WhatsAppBubbleProps) {
   const isOutbound = direction === 'outbound';
   const isFailed = status === 'failed';
-  const textSize = compact ? 'text-[11px]' : 'text-[13.5px]';
   const metaSize = compact ? 'text-[9px]' : 'text-[11px]';
   const hasMedia = Boolean(children);
 
   return (
     <div className={`flex ${isOutbound ? 'justify-end' : 'justify-start'} ${className}`}>
       <div
-        className={`relative max-w-full shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] ${
+        className={`relative max-w-full shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] wa-msg-font ${
           compact ? 'max-w-[220px]' : 'max-w-[85%] sm:max-w-[75%]'
         } ${
           hasMedia ? 'overflow-hidden p-0' : compact ? 'px-2 py-1.5' : 'px-3 py-2'
         } ${
           isOutbound
             ? isFailed
-              ? 'rounded-lg rounded-br-[2px] bg-[#ffeaea] text-[#111b21]'
-              : 'rounded-lg rounded-br-[2px] bg-[#d9fdd3] text-[#111b21]'
-            : 'rounded-lg rounded-bl-[2px] bg-white text-[#111b21]'
+              ? 'rounded-lg rounded-br-[2px] wa-bubble-failed'
+              : 'rounded-lg rounded-br-[2px] wa-bubble-sent'
+            : 'rounded-lg rounded-bl-[2px] wa-bubble-received'
         }`}
       >
         {hasMedia && <div className={mediaClassName}>{children}</div>}
@@ -83,11 +82,13 @@ export function WhatsAppBubble({
             )}
 
             {content && (
-              <p className={`whitespace-pre-wrap break-words leading-[1.35] ${textSize}`}>{content}</p>
+              <p className={`whitespace-pre-wrap break-words ${compact ? 'text-[11px] leading-[1.35]' : 'wa-msg-body'}`}>
+                {content}
+              </p>
             )}
 
             {footer && (
-              <p className={`mt-1 leading-snug text-[#8696a0] ${compact ? 'text-[9px]' : 'text-[11px]'}`}>
+              <p className={`mt-1 leading-snug wa-timestamp ${compact ? 'text-[9px]' : 'text-[11px]'}`}>
                 {footer}
               </p>
             )}
@@ -97,7 +98,7 @@ export function WhatsAppBubble({
         {!hasMedia && !content && !header && !footer && children}
 
         <div className={`flex items-end justify-end gap-1 ${hasMedia ? 'px-3 pb-2' : 'mt-0.5'}`}>
-          <span className={`${metaSize} font-normal tabular-nums text-[#667781]`}>{time}</span>
+          <span className={`${metaSize} font-normal tabular-nums wa-timestamp`}>{time}</span>
           {isOutbound && <StatusIcon status={status} compact={compact} />}
         </div>
       </div>
@@ -126,8 +127,8 @@ export function WhatsAppChatSurface({
 }
 
 function ButtonIcon({ type }: { type: string }) {
-  if (type === 'URL') return <ExternalLink className="h-3.5 w-3.5 text-[#008069]" strokeWidth={2.25} />;
-  if (type === 'PHONE_NUMBER') return <Phone className="h-3.5 w-3.5 text-[#008069]" strokeWidth={2.25} />;
+  if (type === 'URL') return <ExternalLink className="h-3.5 w-3.5 wa-accent-text" strokeWidth={2.25} />;
+  if (type === 'PHONE_NUMBER') return <Phone className="h-3.5 w-3.5 wa-accent-text" strokeWidth={2.25} />;
   return null;
 }
 
@@ -145,7 +146,7 @@ function MediaHeaderPlaceholder({ format, compact }: { format: string; compact?:
   );
 }
 
-/** WhatsApp template message card (white bubble + stacked action buttons). */
+/** WhatsApp template message card (outbound green / inbound white + stacked action buttons). */
 export function WhatsAppTemplateCard({
   header,
   headerFormat,
@@ -156,6 +157,8 @@ export function WhatsAppTemplateCard({
   compact = false,
   className = '',
   time = '12:30',
+  direction = 'outbound',
+  status = 'delivered',
 }: {
   header?: string;
   headerFormat?: string;
@@ -166,16 +169,20 @@ export function WhatsAppTemplateCard({
   compact?: boolean;
   className?: string;
   time?: string;
+  direction?: WhatsAppBubbleDirection;
+  status?: MessageStatus;
 }) {
+  const isOutbound = direction === 'outbound';
   const hasMediaHeader =
     headerFormat && headerFormat !== 'TEXT' && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerFormat);
+  const shellClass = isOutbound ? 'wa-bubble-sent' : 'wa-bubble-received';
 
   return (
-    <div className={`flex justify-end ${className}`}>
+    <div className={`flex ${isOutbound ? 'justify-end' : 'justify-start'} ${className}`}>
       <div
-        className={`overflow-hidden rounded-lg bg-white text-[#111b21] shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] ${
-          compact ? 'w-full max-w-[280px]' : 'w-full max-w-[min(100%,340px)]'
-        }`}
+        className={`overflow-hidden rounded-lg shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] wa-msg-font ${
+          isOutbound ? 'rounded-br-[2px]' : 'rounded-bl-[2px]'
+        } ${shellClass} ${compact ? 'w-full max-w-[280px]' : 'w-full max-w-[min(100%,340px)]'}`}
       >
         {hasMediaHeader && (
           headerMediaUrl && headerFormat === 'IMAGE' ? (
@@ -188,7 +195,7 @@ export function WhatsAppTemplateCard({
         <div className={compact ? 'px-2.5 pt-2.5 pb-1' : 'px-3.5 pt-3 pb-1.5'}>
           {header && (
             <p
-              className={`font-semibold leading-snug text-[#111b21] ${
+              className={`font-semibold leading-snug ${
                 compact ? 'text-[13px]' : 'text-[15px]'
               }`}
             >
@@ -196,15 +203,15 @@ export function WhatsAppTemplateCard({
             </p>
           )}
           <p
-            className={`whitespace-pre-wrap break-words leading-[1.45] text-[#111b21] ${
-              compact ? 'text-[12.5px]' : 'text-[14.5px]'
+            className={`whitespace-pre-wrap break-words ${
+              compact ? 'text-[12.5px] leading-[1.45]' : 'wa-msg-body'
             } ${header ? 'mt-1' : ''}`}
           >
             {body}
           </p>
           {footer && (
             <p
-              className={`mt-2 leading-snug text-[#8696a0] ${
+              className={`mt-2 leading-snug wa-timestamp ${
                 compact ? 'text-[10px]' : 'text-[12px]'
               }`}
             >
@@ -214,14 +221,14 @@ export function WhatsAppTemplateCard({
         </div>
 
         {buttons.length > 0 && (
-          <div className="border-t border-[#e9edef]">
+          <div className="border-t border-[color:var(--wa-bubble-edge)]">
             {buttons.map((btn, i) => (
               <button
                 key={`${btn.type}-${btn.text}-${i}`}
                 type="button"
-                className={`flex w-full items-center justify-center gap-2 border-[#e9edef] bg-white py-3 text-[#008069] transition hover:bg-[#f5f6f6] ${
-                  i < buttons.length - 1 ? 'border-b' : ''
-                } ${compact ? 'py-2.5 text-[13px]' : 'text-[14px] font-medium'}`}
+                className={`wa-bubble-action flex w-full items-center justify-center gap-2 border-b py-3 transition last:border-b-0 ${shellClass} ${
+                  compact ? 'py-2.5 text-[13px]' : 'text-[14px] font-medium'
+                }`}
               >
                 <ButtonIcon type={btn.type} />
                 <span>{btn.text || btn.type}</span>
@@ -230,10 +237,11 @@ export function WhatsAppTemplateCard({
           </div>
         )}
 
-        <div className={`flex justify-end gap-1 ${compact ? 'px-2 pb-1.5 pt-0.5' : 'px-3 pb-2 pt-0.5'}`}>
-          <span className={`tabular-nums text-[#667781] ${compact ? 'text-[9px]' : 'text-[11px]'}`}>
+        <div className={`flex items-end justify-end gap-1 ${compact ? 'px-2 pb-1.5 pt-0.5' : 'px-3 pb-2 pt-0.5'}`}>
+          <span className={`tabular-nums wa-timestamp ${compact ? 'text-[9px]' : 'text-[11px]'}`}>
             {time}
           </span>
+          {isOutbound && <StatusIcon status={status} compact={compact} />}
         </div>
       </div>
     </div>
@@ -332,6 +340,9 @@ interface WhatsAppTemplatePreviewProps {
   buttons?: TemplateButton[];
   variant?: 'default' | 'compact' | 'inline';
   className?: string;
+  direction?: WhatsAppBubbleDirection;
+  status?: MessageStatus;
+  showSurface?: boolean;
 }
 
 export function WhatsAppTemplatePreview({
@@ -343,20 +354,31 @@ export function WhatsAppTemplatePreview({
   buttons = [],
   variant = 'default',
   className = '',
+  direction = 'outbound',
+  status = 'delivered',
+  showSurface = true,
 }: WhatsAppTemplatePreviewProps) {
   const compact = variant === 'compact' || variant === 'inline';
 
+  const card = (
+    <WhatsAppTemplateCard
+      header={header}
+      headerFormat={headerFormat}
+      headerMediaUrl={headerMediaUrl}
+      body={body}
+      footer={footer}
+      buttons={buttons}
+      compact={compact}
+      direction={direction}
+      status={status}
+    />
+  );
+
+  if (!showSurface) return <div className={className}>{card}</div>;
+
   return (
     <WhatsAppChatSurface compact={compact} className={className}>
-      <WhatsAppTemplateCard
-        header={header}
-        headerFormat={headerFormat}
-        headerMediaUrl={headerMediaUrl}
-        body={body}
-        footer={footer}
-        buttons={buttons}
-        compact={compact}
-      />
+      {card}
     </WhatsAppChatSurface>
   );
 }

@@ -102,6 +102,24 @@
     --table-sticky-bg: #ffffff;
     --table-sticky-header: #f8fafc;
     --table-sticky-shadow: -8px 0 16px -12px rgba(15, 23, 42, 0.18);
+
+    /* WhatsApp chat surface tokens — switch in .dark (no -dark suffixes) */
+    --chat-bg: #efeae2;
+    --bubble-sent: #d9fdd3;
+    --bubble-received: #ffffff;
+    --chat-text: #111b21;
+    --chat-timestamp: #667781;
+    --chat-tick: #667781;
+    --chat-tick-read: #53bdeb;
+    --chat-input-bg: #ffffff;
+    --chat-input-border: #d1d7db;
+    --chat-accent: #00a884;
+    --bubble-failed: #ffeaea;
+    --bubble-sent-border: #c5e8c0;
+    --bubble-received-border: #e9edef;
+    --bubble-sent-hover: #cfe9ca;
+    --bubble-received-hover: #f5f6f6;
+    --chat-font: Roboto, 'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif;
   }
 
   .dark {
@@ -148,6 +166,23 @@
     --table-sticky-bg: #151d2b;
     --table-sticky-header: #111827;
     --table-sticky-shadow: -8px 0 16px -12px rgba(0, 0, 0, 0.45);
+
+    /* WhatsApp chat surface tokens (dark) */
+    --chat-bg: #0b141a;
+    --bubble-sent: #005c4b;
+    --bubble-received: #202c33;
+    --chat-text: #e9edef;
+    --chat-timestamp: #8696a0;
+    --chat-tick: #8696a0;
+    --chat-tick-read: #53bdeb;
+    --chat-input-bg: #202c33;
+    --chat-input-border: #2a3942;
+    --chat-accent: #00a884;
+    --bubble-failed: #5c2b2b;
+    --bubble-sent-border: #064e45;
+    --bubble-received-border: #2a3942;
+    --bubble-sent-hover: #026457;
+    --bubble-received-hover: #1d282f;
   }
 
   html.theme-transition,
@@ -485,6 +520,65 @@
   .dark .sidebar-flyout-tip__arrow {
     border-right-color: #12261c;
     filter: drop-shadow(-1px 0 0 rgba(52, 211, 153, 0.35));
+  }
+
+  /* Composer toolbar glass tip (replaces native black title tooltips) */
+  .composer-glass-tip {
+    position: fixed;
+    z-index: 90;
+    pointer-events: none;
+    transform: translate(-50%, -100%);
+    padding: 0.35rem 0.65rem;
+    border-radius: 0.65rem;
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    background: linear-gradient(
+      165deg,
+      rgba(255, 255, 255, 0.88) 0%,
+      rgba(248, 250, 252, 0.78) 100%
+    );
+    color: #334155;
+    font-size: 11.5px;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+    white-space: nowrap;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.85) inset,
+      0 8px 22px rgba(15, 23, 42, 0.1),
+      0 1px 3px rgba(15, 23, 42, 0.06);
+    animation: composer-glass-tip-in 140ms ease-out both;
+  }
+
+  .dark .composer-glass-tip {
+    border-color: rgba(255, 255, 255, 0.12);
+    background: linear-gradient(
+      165deg,
+      rgba(30, 41, 59, 0.92) 0%,
+      rgba(15, 23, 42, 0.88) 100%
+    );
+    color: #e2e8f0;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.06) inset,
+      0 10px 28px rgba(0, 0, 0, 0.45);
+  }
+
+  @keyframes composer-glass-tip-in {
+    from {
+      opacity: 0;
+      transform: translate(-50%, calc(-100% + 4px));
+    }
+    to {
+      opacity: 1;
+      transform: translate(-50%, -100%);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .composer-glass-tip {
+      animation: none;
+    }
   }
 
   .dark .sidebar-flyout-tip__label {
@@ -1007,8 +1101,10 @@
     @apply mx-auto flex h-full min-h-[calc(100dvh-60px)] w-full max-w-[1600px] flex-col page-gutter-x py-3 sm:py-4 lg:py-5;
   }
 
+  /* Fills Layout main (flex-1 + overflow-hidden on /inbox). Do NOT use
+     100dvh-60px — topbar is ~72–76px, so that calc overflows and scrolls main. */
   .page-shell-inbox {
-    @apply mx-auto flex h-full min-h-[calc(100dvh-60px)] w-full max-w-[1600px] flex-col page-gutter-x py-3 sm:py-4 lg:py-5;
+    @apply mx-auto flex h-full min-h-0 w-full max-w-[1600px] flex-1 flex-col overflow-hidden page-gutter-x py-3 sm:py-4 lg:py-5;
   }
 
   .inbox-shell {
@@ -1211,57 +1307,203 @@
     background-color: var(--color-bg-muted);
   }
 
+  /* Tiled doodle wallpaper — fixed tile size so chat pane resizes keep density */
+  :root {
+    --chat-wallpaper: image-set(
+      url('/chat-bg.webp') type('image/webp'),
+      url('/chat-bg.jpg') type('image/jpeg')
+    );
+    --chat-wallpaper-size: 640px auto;
+    --chat-wallpaper-wash: linear-gradient(rgba(239, 234, 226, 0.22), rgba(239, 234, 226, 0.22));
+  }
+
+  @media (max-width: 640px) {
+    :root {
+      --chat-wallpaper-size: 480px auto;
+    }
+  }
+
   .inbox-chat-bg {
-    background-color: #f5f3ef;
-    background-image: url('/chat-bg.jpg');
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
+    background-color: var(--chat-bg);
+    background-image: var(--chat-wallpaper-wash), var(--chat-wallpaper);
+    background-size: auto, var(--chat-wallpaper-size);
+    background-position: center, 0 0;
+    background-repeat: no-repeat, repeat;
+    font-family: var(--chat-font);
   }
 
   .dark .inbox-chat-bg {
-    background-color: #0b141a;
+    background-color: var(--chat-bg);
     background-image:
       linear-gradient(rgba(11, 20, 26, 0.72), rgba(11, 20, 26, 0.72)),
-      url('/chat-bg.jpg');
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
+      var(--chat-wallpaper);
+    background-size: auto, var(--chat-wallpaper-size);
+    background-position: center, 0 0;
+    background-repeat: no-repeat, repeat;
     background-blend-mode: multiply;
   }
 
+  /* Shared WhatsApp bubble / tick utilities (thread + template + interactive previews) */
+  .wa-bubble-sent {
+    background-color: var(--bubble-sent);
+    color: var(--chat-text);
+    --bubble-edge: var(--bubble-sent-border);
+    --bubble-hover: var(--bubble-sent-hover);
+  }
+
+  .wa-bubble-received {
+    background-color: var(--bubble-received);
+    color: var(--chat-text);
+    --bubble-edge: var(--bubble-received-border);
+    --bubble-hover: var(--bubble-received-hover);
+  }
+
+  .wa-bubble-failed {
+    background-color: var(--bubble-failed);
+    color: var(--chat-text);
+  }
+
+  .wa-msg-font {
+    font-family: var(--chat-font);
+  }
+
+  .wa-msg-body {
+    font-family: var(--chat-font);
+    font-size: 16px;
+    line-height: 21px;
+    font-weight: 400;
+    letter-spacing: 0;
+  }
+
+  .wa-timestamp {
+    color: var(--chat-timestamp);
+  }
+
+  .wa-tick {
+    color: var(--chat-tick);
+  }
+
+  .wa-tick-read {
+    color: var(--chat-tick-read);
+  }
+
+  .wa-accent-text {
+    color: var(--chat-accent);
+  }
+
+  .wa-bubble-action {
+    border-color: var(--bubble-edge, var(--bubble-received-border));
+    color: var(--chat-accent);
+  }
+
+  .wa-bubble-action:hover {
+    background-color: var(--bubble-hover, transparent);
+  }
+
+  /* Ultra-thin chat thread scrollbar — minimal chrome, track stays invisible */
+  #inbox-thread,
+  .inbox-chat-bg {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+
+  #inbox-thread:hover,
+  #inbox-thread:focus-within,
+  .inbox-chat-bg:hover,
+  .inbox-chat-bg:focus-within {
+    scrollbar-color: rgba(148, 163, 184, 0.55) transparent;
+  }
+
+  .dark #inbox-thread:hover,
+  .dark #inbox-thread:focus-within,
+  .dark .inbox-chat-bg:hover,
+  .dark .inbox-chat-bg:focus-within {
+    scrollbar-color: rgba(148, 163, 184, 0.4) transparent;
+  }
+
+  #inbox-thread::-webkit-scrollbar,
+  .inbox-chat-bg::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+
+  #inbox-thread::-webkit-scrollbar-track,
+  .inbox-chat-bg::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  #inbox-thread::-webkit-scrollbar-thumb,
+  .inbox-chat-bg::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 999px;
+  }
+
+  #inbox-thread:hover::-webkit-scrollbar-thumb,
+  #inbox-thread:focus-within::-webkit-scrollbar-thumb,
+  .inbox-chat-bg:hover::-webkit-scrollbar-thumb,
+  .inbox-chat-bg:focus-within::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.5);
+  }
+
+  .dark #inbox-thread:hover::-webkit-scrollbar-thumb,
+  .dark #inbox-thread:focus-within::-webkit-scrollbar-thumb,
+  .dark .inbox-chat-bg:hover::-webkit-scrollbar-thumb,
+  .dark .inbox-chat-bg:focus-within::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.38);
+  }
+
+  #inbox-thread::-webkit-scrollbar-thumb:active,
+  .inbox-chat-bg::-webkit-scrollbar-thumb:active {
+    background: rgba(100, 116, 139, 0.65);
+  }
+
+  .dark #inbox-thread::-webkit-scrollbar-thumb:active,
+  .dark .inbox-chat-bg::-webkit-scrollbar-thumb:active {
+    background: rgba(148, 163, 184, 0.55);
+  }
+
+  #inbox-thread::-webkit-scrollbar-button,
+  .inbox-chat-bg::-webkit-scrollbar-button {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+
   .inbox-placeholder-bg {
-    background-color: #f5f3ef;
+    background-color: var(--chat-bg);
     background-image:
       radial-gradient(ellipse 75% 55% at 85% 15%, rgba(37, 211, 102, 0.08), transparent 52%),
       radial-gradient(ellipse 65% 50% at 10% 90%, rgba(99, 102, 241, 0.05), transparent 48%),
-      url('/chat-bg.jpg');
+      var(--chat-wallpaper-wash),
+      var(--chat-wallpaper);
     background-size:
       100% 100%,
       100% 100%,
-      cover;
+      auto,
+      var(--chat-wallpaper-size);
     background-position:
       center,
       center,
-      center;
-    background-repeat: no-repeat;
+      center,
+      0 0;
+    background-repeat: no-repeat, no-repeat, no-repeat, repeat;
   }
 
   .dark .inbox-placeholder-bg {
-    background-color: #0b141a;
+    background-color: var(--chat-bg);
     background-image:
       linear-gradient(rgba(11, 20, 26, 0.55), rgba(11, 20, 26, 0.55)),
       radial-gradient(ellipse 75% 55% at 85% 15%, rgba(37, 211, 102, 0.1), transparent 52%),
-      url('/chat-bg.jpg');
+      var(--chat-wallpaper);
     background-size:
       100% 100%,
       100% 100%,
-      cover;
+      var(--chat-wallpaper-size);
     background-position:
       center,
       center,
-      center;
-    background-repeat: no-repeat;
+      0 0;
+    background-repeat: no-repeat, no-repeat, repeat;
     background-blend-mode: multiply;
   }
 
@@ -1503,6 +1745,22 @@
     transition-delay: 400ms;
   }
 
+  /* Interactive composer — type panel enter */
+  @keyframes inboxInteractivePanelIn {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .inbox-interactive-panel {
+    animation: inboxInteractivePanelIn 160ms ease-out both;
+  }
+
   /* R4 — drag handle cursor */
   .inbox-pane-handle {
     cursor: col-resize;
@@ -1517,6 +1775,7 @@
     .inbox-send-punch,
     .inbox-send-shake,
     .inbox-row-preview,
+    .inbox-interactive-panel,
     .inbox-thread-fadein,
     .inbox-thread-enter,
     .inbox-skeleton-fadeout {
@@ -1527,22 +1786,23 @@
   .wa-chat-surface {
     border-radius: 0.75rem;
     border: 1px solid rgba(17, 27, 33, 0.06);
-    background-color: #f5f3ef;
-    background-image: url('/chat-bg.jpg');
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
+    background-color: var(--chat-bg);
+    background-image: var(--chat-wallpaper-wash), var(--chat-wallpaper);
+    background-size: auto, var(--chat-wallpaper-size);
+    background-position: center, 0 0;
+    background-repeat: no-repeat, repeat;
     padding: 0.75rem;
+    font-family: var(--chat-font);
   }
 
   .dark .wa-chat-surface {
-    background-color: #0b141a;
+    background-color: var(--chat-bg);
     background-image:
       linear-gradient(rgba(11, 20, 26, 0.65), rgba(11, 20, 26, 0.65)),
-      url('/chat-bg.jpg');
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
+      var(--chat-wallpaper);
+    background-size: auto, var(--chat-wallpaper-size);
+    background-position: center, 0 0;
+    background-repeat: no-repeat, repeat;
     border-color: rgba(255, 255, 255, 0.06);
   }
 
@@ -1589,11 +1849,11 @@
     overflow-x: hidden;
     overscroll-behavior: contain;
     padding: 0.625rem 0.5rem;
-    background-color: #efeae2;
-    background-image: url('/chat-bg.jpg');
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
+    background-color: var(--chat-bg);
+    background-image: var(--chat-wallpaper-wash), var(--chat-wallpaper);
+    background-size: auto, var(--chat-wallpaper-size);
+    background-position: center, 0 0;
+    background-repeat: no-repeat, repeat;
     -webkit-overflow-scrolling: touch;
   }
 
@@ -1623,13 +1883,13 @@
   }
 
   .dark .flow-phone-device__chat {
-    background-color: #0b141a;
+    background-color: var(--chat-bg);
     background-image:
       linear-gradient(rgba(11, 20, 26, 0.72), rgba(11, 20, 26, 0.72)),
-      url('/chat-bg.jpg');
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
+      var(--chat-wallpaper);
+    background-size: auto, var(--chat-wallpaper-size);
+    background-position: center, 0 0;
+    background-repeat: no-repeat, repeat;
     background-blend-mode: multiply;
   }
 }
@@ -1923,24 +2183,6 @@
 
   .bg-sky-100 {
     background-color: rgba(12, 74, 110, 0.4);
-  }
-
-  /* Preserve WhatsApp chat authenticity */
-  .inbox-chat-bg .bg-white,
-  .wa-chat-surface .bg-white,
-  .inbox-chat-bg .bg-\[\#d9fdd3\],
-  .wa-chat-surface .bg-\[\#d9fdd3\] {
-    background-color: #ffffff;
-  }
-
-  .inbox-chat-bg .bg-\[\#d9fdd3\],
-  .wa-chat-surface .bg-\[\#d9fdd3\] {
-    background-color: #d9fdd3;
-  }
-
-  .inbox-chat-bg .text-\[\#111b21\],
-  .wa-chat-surface .text-\[\#111b21\] {
-    color: #111b21;
   }
 
   /* React-select portals */

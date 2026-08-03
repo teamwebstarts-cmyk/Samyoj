@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useBreakpoint } from '../hooks/useBreakpoint';
 import { useInboxUnreadTotal } from '../hooks/useInboxUnreadTotal';
 import { useSidebarCollapsed } from '../hooks/useSidebarCollapsed';
-import { isBuilderRoute, shouldShowMobileBottomNav } from '../config/pageMeta';
+import { isBuilderRoute, isInboxRoute, shouldShowMobileBottomNav } from '../config/pageMeta';
 import AppTopbar from './layout/AppTopbar';
 import Sidebar from './layout/Sidebar';
 import MobileBottomNav from './layout/MobileBottomNav';
@@ -28,6 +28,7 @@ export default function Layout() {
   const effectiveCollapsed = isTablet || collapsed;
   const showBottomNav = isMobile && shouldShowMobileBottomNav(pathname);
   const hideTopbar = isBuilderRoute(pathname);
+  const lockMainScroll = isInboxRoute(pathname);
 
   const handleLogout = () => {
     logout();
@@ -105,7 +106,11 @@ export default function Layout() {
           {!hideTopbar && <QualityRatingBanner />}
 
           <main
-            className={`app-main-scroll platform-gradient-subtle flex-1 overflow-auto ${
+            className={`app-main-scroll platform-gradient-subtle flex-1 min-h-0 ${
+              lockMainScroll
+                ? 'flex flex-col overflow-hidden'
+                : 'overflow-auto'
+            } ${
               showBottomNav ? 'pb-[calc(4rem+env(safe-area-inset-bottom,0px))] md:pb-0' : ''
             }`}
           >

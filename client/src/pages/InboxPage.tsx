@@ -438,7 +438,7 @@ export default function InboxPage() {
   };
 
   return (
-    <PageShell inbox className="!h-[calc(100dvh-60px)] !max-h-[calc(100dvh-60px)] !min-h-0 !overflow-hidden">
+    <PageShell inbox>
       <a
         href="#inbox-thread"
         className="skip-to-content focus:not-sr-only"
@@ -592,13 +592,17 @@ export default function InboxPage() {
                   onMergeMessages={handleMergeMessages}
                   onDraftChange={setDraft}
                   onSubmitMessage={(e) => void handleSend(e)}
+                  onSendAndClose={async (e) => {
+                    const ok = await handleSend(e);
+                    if (ok) void handleStatusChange('CLOSED');
+                  }}
                   onAttach={handleAttach}
                   onRemoveAttachment={removeAttachment}
                   onPaymentLink={() => setPaymentModalOpen(true)}
                   onOpenInteractive={() => setInteractiveOpen(true)}
                   onCloseInteractive={() => setInteractiveOpen(false)}
                   onSendInteractive={async (payload) => {
-                    await sendPayload(payload, 'Interactive message sent');
+                    await sendPayload(payload);
                   }}
                   onSendTemplate={async (payload) => {
                     const ok = await handleSendTemplate(payload);

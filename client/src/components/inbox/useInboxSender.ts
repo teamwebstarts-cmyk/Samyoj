@@ -1,9 +1,13 @@
 import { useCallback, useState, type Dispatch, type SetStateAction } from 'react';
 import { inboxApi } from '../../services/api';
-import { toastError, toastSuccess } from '../../utils/toast';
+import { toastError } from '../../utils/toast';
 import { useDraft } from './useDraft';
+import { MEDIA_LIMITS, MEDIA_LIMIT_LABELS } from './mediaLimits';
+import { emitChatNotice } from './chatNoticeBus';
 import type { PendingAttachment } from './ChatComposer';
 import type { Conversation, Message, SendMessagePayload, ServiceWindowInfo } from '../../types';
+
+export { MEDIA_LIMITS, MEDIA_LIMIT_LABELS, VOICE_MAX_SECONDS } from './mediaLimits';
 
 interface SenderDeps {
   selected: Conversation | null;
@@ -15,6 +19,37 @@ interface SenderDeps {
 
 function makeOptimisticId() {
   return `optimistic-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+interface SendPayloadOptions {
+  /** When true (default for templates/interactive), lock composer with sending spinner. */
+  lockComposer?: boolean;
+}
+
+function noticeMediaLimit(conversationId: string | undefined, message: string) {
+  if (!conversationId) {
+    toastError(message);
+    return;
+  }
+  emitChatNotice(conversationId, {
+    kind: 'media-limit',
+    message,
+    tone: 'amber',
+    icon: 'star',
+  });
+}
+
+/** Chat-local error notice (failed send / upload / retry) — not a global dashboard toast. */
+function noticeSendError(conversationId: string | undefined, message: string) {
+  if (!conversationId) {
+    toastError(message);
+    return;
+  }
+  emitChatNotice(conversationId, {
+    kind: 'send-error',
+    message,
+    tone: 'orange',
+  });
 }
 
 /** Composer state + send/upload/retry logic for the open conversation. */
@@ -46,39 +81,44 @@ export function useInboxSender({
     });
   }, []);
 
-  const handleAttach = useCallback((file: File) => {
-    const type = file.type.startsWith('image/')
-      ? 'IMAGE'
-      : file.type.startsWith('video/')
-        ? 'VIDEO'
-        : file.type.startsWith('audio/')
-          ? 'AUDIO'
-          : 'DOCUMENT';
-    const limits = {
-      IMAGE: 5 * 1024 * 1024,
-      VIDEO: 16 * 1024 * 1024,
-      AUDIO: 16 * 1024 * 1024,
-      DOCUMENT: 100 * 1024 * 1024,
-    } as const;
-    const max = limits[type];
-    if (file.size > max) {
-      const label =
-        type === 'IMAGE' ? '5 MB' : type === 'DOCUMENT' ? '100 MB' : '16 MB';
-      toastError(`${type === 'IMAGE' ? 'Images' : type === 'DOCUMENT' ? 'Documents' : 'Media'} must be under ${label}`);
-      return;
-    }
-    if (type === 'DOCUMENT' && !/pdf/i.test(file.type) && !/\.pdf$/i.test(file.name)) {
-      toastError('Only PDF documents are supported for WhatsApp');
-      return;
-    }
-    const previewUrl = type === 'IMAGE' ? URL.createObjectURL(file) : undefined;
-    setAttachment({ file, previewUrl, type });
-  }, []);
+  const handleAttach = useCallback(
+    (file: File) => {
+      const type = file.type.startsWith('image/')
+        ? 'IMAGE'
+        : file.type.startsWith('video/')
+          ? 'VIDEO'
+          : file.type.startsWith('audio/')
+            ? 'AUDIO'
+            : 'DOCUMENT';
+      const max = MEDIA_LIMITS[type];
+      if (file.size > max) {
+        const label = MEDIA_LIMIT_LABELS[type];
+        const noun =
+          type === 'IMAGE'
+            ? 'Photo'
+            : type === 'VIDEO'
+              ? 'Video'
+              : type === 'AUDIO'
+                ? 'Audio'
+                : 'PDF';
+        noticeMediaLimit(selected?.id, `${noun} must be under ${label}`);
+        return;
+      }
+      if (type === 'DOCUMENT' && !/pdf/i.test(file.type) && !/\.pdf$/i.test(file.name)) {
+        noticeMediaLimit(selected?.id, 'Only PDF documents are supported');
+        return;
+      }
+      const previewUrl = type === 'IMAGE' ? URL.createObjectURL(file) : undefined;
+      setAttachment({ file, previewUrl, type });
+    },
+    [selected?.id]
+  );
 
   const sendPayload = useCallback(
-    async (payload: SendMessagePayload, successToast: string, optimisticId?: string) => {
+    async (payload: SendMessagePayload, optimisticId?: string, options?: SendPayloadOptions) => {
       if (!selected) return false;
-      setSending(true);
+      const lockComposer = options?.lockComposer !== false;
+      if (lockComposer) setSending(true);
       try {
         const { data } = await inboxApi.send(selected.id, payload);
         const sent = data.data as Message;
@@ -92,7 +132,7 @@ export function useInboxSender({
         } else {
           appendSentMessage(selected.id, sent);
         }
-        toastSuccess(successToast);
+        // No global success toast — the outbound bubble / status is enough.
         return true;
       } catch (err: unknown) {
         if (optimisticId) {
@@ -131,13 +171,13 @@ export function useInboxSender({
               /re-engagement/.test(haystack)));
         if (isWindowClosed) {
           onWindowClosed?.();
-          toastError('24h window closed — switch to a template');
+          noticeSendError(selected.id, '24h window closed — switch to a template');
         } else {
-          toastError(msgText);
+          noticeSendError(selected.id, msgText);
         }
         return false;
       } finally {
-        setSending(false);
+        if (lockComposer) setSending(false);
       }
     },
     [selected, appendSentMessage, onWindowClosed, setMessages]
@@ -171,16 +211,23 @@ export function useInboxSender({
     return { mediaPath: (upRes.data as { mediaPath: string }).mediaPath, mimeType, filename };
   };
 
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selected || !serviceWindow?.open) return;
-    if (!draft.trim() && !attachment) return;
+  /**
+   * WhatsApp-like send: optimistic PENDING bubble + clear composer immediately.
+   * Status lives on the bubble clock — do not lock the Send button with a spinner.
+   */
+  const handleSend = async (e?: React.FormEvent): Promise<boolean> => {
+    e?.preventDefault();
+    if (!selected || !serviceWindow?.open) return false;
+    if (!draft.trim() && !attachment) return false;
 
+    const text = draft.trim();
+    const pendingAttachment = attachment;
+    const pendingReply = replyTo;
     const optimisticId = makeOptimisticId();
-    const replyMeta = replyTo
+    const replyMeta = pendingReply
       ? {
-          replyToMessageId: replyTo.id,
-          replyPreview: (replyTo.content || `[${replyTo.type}]`).slice(0, 120),
+          replyToMessageId: pendingReply.id,
+          replyPreview: (pendingReply.content || `[${pendingReply.type}]`).slice(0, 120),
         }
       : undefined;
 
@@ -188,50 +235,60 @@ export function useInboxSender({
       id: optimisticId,
       conversationId: selected.id,
       direction: 'OUTBOUND',
-      type: attachment?.type || 'TEXT',
-      content: draft.trim() || attachment?.file.name || '',
+      type: pendingAttachment?.type || 'TEXT',
+      content: text || pendingAttachment?.file.name || '',
       status: 'PENDING',
       metadata: replyMeta || null,
       createdAt: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, optimistic]);
 
+    // Clear composer immediately (WhatsApp-style) — before upload/HTTP.
+    clearDraft();
+    removeAttachment();
+    setReplyTo(null);
+
     let payload: SendMessagePayload;
-    if (attachment) {
-      setSending(true);
+    if (pendingAttachment) {
       try {
-        const uploaded = await uploadAttachment(attachment.file);
+        const uploaded = await uploadAttachment(pendingAttachment.file);
         payload = {
-          type: attachment.type,
-          content: draft.trim() || undefined,
+          type: pendingAttachment.type,
+          content: text || undefined,
           media: {
             mediaPath: uploaded.mediaPath,
             mimeType: uploaded.mimeType,
             filename: uploaded.filename,
             voice: uploaded.filename?.startsWith('voice-note-') || undefined,
           },
-          ...(replyTo ? { replyToMessageId: replyTo.id } : {}),
+          ...(pendingReply ? { replyToMessageId: pendingReply.id } : {}),
         };
       } catch {
-        toastError('Upload failed');
-        setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
-        setSending(false);
-        return;
+        noticeSendError(selected.id, 'Upload failed');
+        setMessages((prev) =>
+          prev.map((m) => (m.id === optimisticId ? { ...m, status: 'FAILED' } : m))
+        );
+        // Restore composer so the agent can fix/retry without re-picking the file.
+        if (text) setDraft(text);
+        if (pendingAttachment) {
+          const previewUrl =
+            pendingAttachment.type === 'IMAGE'
+              ? URL.createObjectURL(pendingAttachment.file)
+              : undefined;
+          setAttachment({ ...pendingAttachment, previewUrl });
+        }
+        return false;
       }
-      setSending(false);
     } else {
       payload = {
-        content: draft.trim(),
-        ...(replyTo ? { replyToMessageId: replyTo.id } : {}),
+        content: text,
+        ...(pendingReply ? { replyToMessageId: pendingReply.id } : {}),
       };
     }
 
-    const ok = await sendPayload(payload, attachment ? 'Media sent' : 'Message sent', optimisticId);
-    if (ok) {
-      clearDraft();
-      removeAttachment();
-      setReplyTo(null);
-    }
+    return sendPayload(payload, optimisticId, {
+      lockComposer: false,
+    });
   };
 
   const handleSendTemplate = async (payload: {
@@ -239,15 +296,12 @@ export function useInboxSender({
     templateLanguage: string;
     templateParams?: { body?: string[]; header?: string[]; headerMediaUrl?: string };
   }) =>
-    sendPayload(
-      {
-        type: 'TEMPLATE',
-        templateName: payload.templateName,
-        templateLanguage: payload.templateLanguage,
-        templateParams: payload.templateParams,
-      },
-      'Template sent'
-    );
+    sendPayload({
+      type: 'TEMPLATE',
+      templateName: payload.templateName,
+      templateLanguage: payload.templateLanguage,
+      templateParams: payload.templateParams,
+    });
 
   const handleReact = async (message: Message, emoji: string) => {
     if (!selected) return;
@@ -292,14 +346,14 @@ export function useInboxSender({
           };
         })
       );
-      toastError('Could not send reaction');
+      noticeSendError(selected.id, 'Could not send reaction');
     }
   };
 
   const handleRetryMessage = async (message: Message) => {
     if (retryingId) return;
     if (message.id.startsWith('optimistic-')) {
-      toastError('Original send failed — try composing again');
+      noticeSendError(selected?.id, 'Original send failed — try composing again');
       return;
     }
     setRetryingId(message.id);
@@ -310,11 +364,14 @@ export function useInboxSender({
       if (updated?.id) {
         setMessages((prev) => prev.map((m) => (m.id === message.id ? { ...m, ...updated } : m)));
       }
-      toastSuccess('Message re-queued');
+      // Status on the bubble is enough — no success toast.
     } catch (err: unknown) {
       setMessages((prev) => prev.map((m) => (m.id === message.id ? { ...m, status: 'FAILED' } : m)));
       const status = (err as { response?: { status?: number } })?.response?.status;
-      toastError(status === 404 ? 'Retry is not available yet' : 'Retry failed');
+      noticeSendError(
+        selected?.id,
+        status === 404 ? 'Retry is not available yet' : 'Retry failed'
+      );
     } finally {
       setRetryingId(null);
     }

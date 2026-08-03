@@ -1,16 +1,40 @@
 import type { Message, MessageMetadata } from '../../types';
 
-export function getAutomationSourceLabel(metadata?: MessageMetadata | null): string | null {
+/** Title-case / clean tokens like `AI_CHATBOT` → `AI Bot` for thread dividers. */
+function humanizeAutomationToken(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return 'AI Bot';
+  const normalized = trimmed.toUpperCase().replace(/[\s-]+/g, '_');
+  if (normalized === 'AI_CHATBOT' || normalized === 'CHATBOT' || normalized === 'AI_BOT') {
+    return 'AI Bot';
+  }
+  return trimmed
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/**
+ * Short centered-thread label for an automation/outbound bot message.
+ * Returns null for agent/manual outbound (or messages without automation source).
+ */
+export function getAutomationDividerLabel(metadata?: MessageMetadata | null): string | null {
   if (!metadata?.source) return null;
   if (metadata.source === 'flow') {
-    return metadata.flowName ? `Flow: ${metadata.flowName}` : 'Automation flow';
+    return metadata.flowName ? humanizeAutomationToken(metadata.flowName) : 'AI Bot';
   }
   if (metadata.source === 'automation') {
-    if (metadata.automationName) return `Quick reply: ${metadata.automationName}`;
-    if (metadata.triggerType) return `Auto: ${metadata.triggerType}`;
-    return 'Quick reply';
+    if (metadata.automationName) return humanizeAutomationToken(metadata.automationName);
+    if (metadata.triggerType) return humanizeAutomationToken(metadata.triggerType);
+    return 'AI Bot';
   }
   return null;
+}
+
+/** @deprecated Prefer getAutomationDividerLabel — kept for any older call sites. */
+export function getAutomationSourceLabel(metadata?: MessageMetadata | null): string | null {
+  return getAutomationDividerLabel(metadata);
 }
 
 const AVATAR_GRADIENTS = [

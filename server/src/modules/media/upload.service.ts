@@ -2,12 +2,15 @@ import { randomUUID } from 'crypto';
 import { getPublicMediaUrl } from './storage-adapter';
 import { saveMediaBuffer } from './storage';
 
-/** Meta Cloud API practical limits (bytes). */
+/**
+ * Upload limits (bytes).
+ * Image/video/audio match Meta Cloud API; documents capped at 30MB (product preference; Meta allows 100MB).
+ */
 const LIMITS = {
   IMAGE: 5 * 1024 * 1024,
   VIDEO: 16 * 1024 * 1024,
   AUDIO: 16 * 1024 * 1024,
-  DOCUMENT: 100 * 1024 * 1024,
+  DOCUMENT: 30 * 1024 * 1024,
 } as const;
 
 const ALLOWED_MIME_PREFIXES = ['image/', 'video/', 'audio/', 'application/pdf'];
@@ -29,7 +32,7 @@ export function validateMediaUpload(mimeType: string, size: number): void {
   const max = LIMITS[type];
   if (size > max) {
     const label =
-      type === 'IMAGE' ? '5 MB' : type === 'DOCUMENT' ? '100 MB' : '16 MB';
+      type === 'IMAGE' ? '5 MB' : type === 'DOCUMENT' ? '30 MB' : '16 MB';
     throw new Error(`File too large. Maximum size for ${type.toLowerCase()} is ${label}.`);
   }
 }

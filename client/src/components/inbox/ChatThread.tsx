@@ -15,8 +15,14 @@ import {
   subscribeChatNotice,
   type ChatNoticePayload,
 } from './chatNoticeBus';
-import { formatDateDivider, formatHandoffReason, groupMessagesByDate } from './inboxUtils';
+import {
+  formatDateDivider,
+  formatHandoffReason,
+  getAutomationDividerLabel,
+  groupMessagesByDate,
+} from './inboxUtils';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
+import { useReducedMotion } from '../../hooks/inboxA11y';
 import { inboxApi } from '../../services/api';
 import type { MediaViewerItem } from './MediaViewer';
 import type { PresenceViewer } from './useConversationPresence';
@@ -78,6 +84,8 @@ interface ChatThreadProps {
   onMergeMessages: (found: Message[]) => void;
   onDraftChange: (value: string) => void;
   onSubmitMessage: (e: React.FormEvent) => void;
+  /** After a successful send, mark the conversation CLOSED. */
+  onSendAndClose?: (e: React.FormEvent) => void;
   onAttach: (file: File) => void;
   onRemoveAttachment: () => void;
   onPaymentLink: () => void;
@@ -139,6 +147,7 @@ export default function ChatThread({
   onMergeMessages,
   onDraftChange,
   onSubmitMessage,
+  onSendAndClose,
   onAttach,
   onRemoveAttachment,
   onPaymentLink,
@@ -170,12 +179,19 @@ export default function ChatThread({
 
   const pushEphemeral = useCallback((payload: ChatNoticePayload) => {
     const id = `e-${payload.kind}-${Date.now()}`;
+    const isAlert = payload.kind === 'media-limit' || payload.kind === 'send-error';
     const item: ChatNoticeItem = {
       id,
       kind: payload.kind,
       variant: 'ephemeral',
-      tone: payload.tone ?? (payload.icon === 'star' ? 'amber' : 'lavender'),
-      icon: payload.icon ?? 'bot',
+      tone:
+        payload.tone ??
+        (isAlert || payload.icon === 'star'
+          ? payload.kind === 'send-error'
+            ? 'orange'
+            : 'amber'
+          : 'lavender'),
+      icon: isAlert ? 'alert' : payload.icon ?? 'bot',
       message: payload.message,
       ...(payload.actionLabel && payload.onAction
         ? { action: { label: payload.actionLabel, onClick: payload.onAction } }
@@ -424,7 +440,9 @@ export default function ChatThread({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchOpen, activeMatchId]);
 
-  // M2: floating "↓ N new" pill when scrolled up & new messages arrive.
+  // WhatsApp-style jump-to-latest control when scrolled up; badge when new msgs arrive.
+  // Hide while Template / Interactive composers occupy the sticky bottom (FAB would overlap).
+  const composerBlocksJump = templateMode || interactiveOpen;
   const [newCount, setNewCount] = useState(0);
   const [scrolledUp, setScrolledUp] = useState(false);
   const prevMsgIdsRef = useRef<Set<string>>(new Set());
@@ -432,14 +450,21 @@ export default function ChatThread({
   const [animateIds, setAnimateIds] = useState<Set<string>>(new Set());
   const [announceText, setAnnounceText] = useState('');
   const scrollAnchorRef = useRef<{ height: number; top: number } | null>(null);
+  const reducedMotion = useReducedMotion();
+  const scrollBehavior = reducedMotion ? 'auto' : 'smooth';
+
+  const scrollToLatest = useCallback(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: scrollBehavior });
+    setNewCount(0);
+  }, [messagesEndRef, scrollBehavior]);
 
   // Keep the thread pinned to the latest message — except while searching
-  // or when the user has scrolled up (then the "N new" pill owns the scroll).
+  // or when the user has scrolled up (then the jump control owns the scroll).
   useEffect(() => {
     if (searchOpen || scrolledUp) return;
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: scrollBehavior });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages.length, conversation.id, searchOpen, scrolledUp]);
+  }, [messages.length, conversation.id, searchOpen, scrolledUp, scrollBehavior]);
 
   useEffect(() => {
     const currentIds = new Set(messages.map((m) => m.id));
@@ -594,19 +619,27 @@ export default function ChatThread({
           <ChatNoticeStack notices={stackedNotices} onDismiss={dismissNotice} />
         </div>
 
-      {newCount > 0 && scrolledUp && (
+      {scrolledUp && !composerBlocksJump && (
         <button
           type="button"
-          onClick={() => {
-            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-            setNewCount(0);
-          }}
-          aria-label={`Scroll to ${newCount} new ${newCount === 1 ? 'message' : 'messages'}`}
-          data-testid="new-messages-pill"
-          className="pointer-events-auto absolute bottom-24 left-1/2 z-20 -translate-x-1/2 inline-flex items-center gap-1.5 rounded-full border border-theme-border bg-theme-surface/95 px-3 py-1.5 text-[11.5px] font-bold text-theme-fg shadow-md backdrop-blur transition hover:bg-theme-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-whatsapp-500 focus-visible:ring-offset-2"
+          onClick={scrollToLatest}
+          aria-label={
+            newCount > 0
+              ? `Scroll to ${newCount} new ${newCount === 1 ? 'message' : 'messages'}`
+              : 'Scroll to latest messages'
+          }
+          data-testid="jump-to-latest"
+          className="pointer-events-auto absolute bottom-24 right-3 z-20 flex h-10 w-10 items-center justify-center rounded-full border border-theme-border/80 bg-theme-surface text-theme-secondary shadow-[0_2px_10px_rgba(15,23,42,0.14)] backdrop-blur-sm transition hover:bg-theme-surface hover:text-theme-fg hover:shadow-[0_4px_14px_rgba(15,23,42,0.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-whatsapp-500 focus-visible:ring-offset-2 sm:right-4 dark:shadow-[0_2px_12px_rgba(0,0,0,0.45)]"
         >
-          <ArrowDown className="h-3 w-3" strokeWidth={2.5} aria-hidden="true" />
-          {newCount} new {newCount === 1 ? 'message' : 'messages'}
+          <ArrowDown className="h-5 w-5" strokeWidth={2.25} aria-hidden="true" />
+          {newCount > 0 && (
+            <span
+              className="absolute -right-0.5 -top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-whatsapp-500 px-1 text-[10px] font-bold leading-none text-white shadow-sm ring-2 ring-theme-surface"
+              aria-hidden="true"
+            >
+              {newCount > 99 ? '99+' : newCount}
+            </span>
+          )}
         </button>
       )}
       <span className="sr-only" role="status" aria-live="assertive" aria-atomic="true">
@@ -669,8 +702,20 @@ export default function ChatThread({
                   const prevMsg = group.messages[i - 1];
                   const nextMsg = group.messages[i + 1];
                   const first = !prevMsg || prevMsg.direction !== msg.direction;
+                  const automationLabel =
+                    msg.direction === 'OUTBOUND' ? getAutomationDividerLabel(msg.metadata) : null;
+                  const prevAutomationLabel =
+                    prevMsg?.direction === 'OUTBOUND'
+                      ? getAutomationDividerLabel(prevMsg.metadata)
+                      : null;
+                  // One centered pill per consecutive automation run (like day dividers).
+                  const showAutomationDivider =
+                    Boolean(automationLabel) && automationLabel !== prevAutomationLabel;
                   return (
-                    <div key={msg.id} className={first ? 'mt-2 first:mt-0' : 'mt-0.5'}>
+                    <div key={msg.id} className={first || showAutomationDivider ? 'mt-2 first:mt-0' : 'mt-0.5'}>
+                      {showAutomationDivider && automationLabel ? (
+                        <DateDivider label={automationLabel} />
+                      ) : null}
                       <MessageBubble
                         message={msg}
                         grouping={{
@@ -734,7 +779,7 @@ export default function ChatThread({
             }}
           />
           {interactiveOpen && windowOpen ? (
-            <div className="sticky bottom-0 z-10 shrink-0 border-t border-neutral-100/80 bg-white/95 backdrop-blur-md dark:border-neutral-800/80 dark:bg-neutral-950/95">
+            <div className="sticky bottom-0 z-30 shrink-0 border-t border-neutral-100/80 bg-white/95 backdrop-blur-md dark:border-neutral-800/80 dark:bg-neutral-950/95">
               <InteractiveComposer
                 open={interactiveOpen}
                 onClose={onCloseInteractive}
@@ -744,7 +789,7 @@ export default function ChatThread({
               />
             </div>
           ) : templateMode ? (
-            <div className="sticky bottom-0 z-10 shrink-0 border-t border-neutral-100/80 bg-white/95 backdrop-blur-md dark:border-neutral-800/80 dark:bg-neutral-950/95">
+            <div className="sticky bottom-0 z-30 shrink-0 border-t border-neutral-100/80 bg-white/95 backdrop-blur-md dark:border-neutral-800/80 dark:bg-neutral-950/95">
               <TemplateComposer onSend={onSendTemplate} sending={sending} onCancel={onCancelTemplate} />
             </div>
           ) : windowOpen ? (
@@ -752,6 +797,7 @@ export default function ChatThread({
               value={draft}
               onChange={onDraftChange}
               onSubmit={onSubmitMessage}
+              onSendAndClose={onSendAndClose}
               onAttach={onAttach}
               attachment={attachment}
               onRemoveAttachment={onRemoveAttachment}
@@ -759,6 +805,7 @@ export default function ChatThread({
               cannedReplies={cannedReplies}
               onPaymentLink={onPaymentLink}
               onInteractive={onOpenInteractive}
+              conversationId={conversation.id}
               inputRef={composerInputRef}
               replyToPreview={
                 replyToMessage

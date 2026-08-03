@@ -98,6 +98,11 @@ export function isBuilderRoute(pathname: string): boolean {
   );
 }
 
+/** Inbox fills the viewport under the topbar — main must not page-scroll. */
+export function isInboxRoute(pathname: string): boolean {
+  return pathname === '/inbox' || pathname.startsWith('/inbox/');
+}
+
 export function shouldShowMobileBottomNav(pathname: string): boolean {
   return !isBuilderRoute(pathname);
 }

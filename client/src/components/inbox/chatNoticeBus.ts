@@ -3,7 +3,13 @@ import { toastInbox, type InboxToastIcon } from '../../utils/toast';
 export type ChatNoticeTone = 'lavender' | 'amber' | 'orange';
 
 export type ChatNoticePayload = {
-  kind: 'bot-on' | 'bot-off' | 'favorite-on' | 'favorite-off';
+  kind:
+    | 'bot-on'
+    | 'bot-off'
+    | 'favorite-on'
+    | 'favorite-off'
+    | 'media-limit'
+    | 'send-error';
   message: string;
   tone?: ChatNoticeTone;
   icon?: InboxToastIcon;

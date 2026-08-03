@@ -17,7 +17,7 @@ router.post(
     const data = z
       .object({
         mimeType: z.string().min(1),
-        size: z.number().int().positive().max(100 * 1024 * 1024),
+        size: z.number().int().positive().max(30 * 1024 * 1024),
         filename: z.string().optional(),
       })
       .parse(req.body);
