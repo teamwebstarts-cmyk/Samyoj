@@ -440,16 +440,13 @@ function InteractiveActionButton({
   compact?: boolean;
   variant?: 'session' | 'template';
 }) {
-  const sessionStyles =
-    'border-[#c5e8c0] bg-[#d9fdd3] text-[#008069]';
-  const templateStyles =
-    'border-[#e9edef] bg-white text-[#008069]';
+  const shellClass = variant === 'template' ? 'wa-bubble-received' : 'wa-bubble-sent';
 
   return (
     <div
-      className={`flex w-full items-center justify-center gap-2 border-t py-2.5 font-medium ${
-        variant === 'template' ? templateStyles : sessionStyles
-      } ${compact ? 'text-[13px]' : 'text-[14px]'}`}
+      className={`wa-bubble-action flex w-full items-center justify-center gap-2 border-t py-2.5 font-medium ${shellClass} ${
+        compact ? 'text-[13px]' : 'text-[14px]'
+      }`}
     >
       {icon}
       <span>{label}</span>
@@ -474,13 +471,13 @@ export function WhatsAppInteractiveCard({
   status = 'delivered',
 }: Omit<WhatsAppInteractivePreviewProps, 'className' | 'showSurface'>) {
   const isOutbound = direction === 'outbound';
-  const shellClass = isOutbound ? 'bg-[#d9fdd3]' : 'bg-white';
+  const shellClass = isOutbound ? 'wa-bubble-sent' : 'wa-bubble-received';
 
   if (mode === 'copy_code') {
     return (
       <div className={`flex ${isOutbound ? 'justify-end' : 'justify-start'}`}>
         <div
-          className={`overflow-hidden rounded-lg bg-white text-[#111b21] shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] ${
+          className={`overflow-hidden rounded-lg wa-bubble-received shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] wa-msg-font ${
             compact ? 'w-full max-w-[280px]' : 'w-full max-w-[min(100%,340px)]'
           }`}
         >
@@ -491,14 +488,14 @@ export function WhatsAppInteractiveCard({
               </p>
             )}
             <p
-              className={`whitespace-pre-wrap break-words leading-[1.45] ${
-                compact ? 'text-[12.5px]' : 'text-[14.5px]'
+              className={`whitespace-pre-wrap break-words ${
+                compact ? 'text-[12.5px] leading-[1.45]' : 'wa-msg-body'
               } ${header ? 'mt-1' : ''}`}
             >
               {body}
             </p>
             {footer && (
-              <p className={`mt-2 leading-snug text-[#8696a0] ${compact ? 'text-[10px]' : 'text-[12px]'}`}>
+              <p className={`mt-2 leading-snug wa-timestamp ${compact ? 'text-[10px]' : 'text-[12px]'}`}>
                 {footer}
               </p>
             )}
@@ -510,7 +507,7 @@ export function WhatsAppInteractiveCard({
             variant="template"
           />
           <div className={`flex justify-end gap-1 ${compact ? 'px-2 pb-1.5 pt-0.5' : 'px-3 pb-2 pt-0.5'}`}>
-            <span className={`tabular-nums text-[#667781] ${compact ? 'text-[9px]' : 'text-[11px]'}`}>
+            <span className={`tabular-nums wa-timestamp ${compact ? 'text-[9px]' : 'text-[11px]'}`}>
               {time}
             </span>
             {isOutbound && <StatusIcon status={status} compact={compact} />}
@@ -543,7 +540,7 @@ export function WhatsAppInteractiveCard({
   return (
     <div className={`flex ${isOutbound ? 'justify-end' : 'justify-start'}`}>
       <div
-        className={`overflow-hidden rounded-lg shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] ${
+        className={`overflow-hidden rounded-lg shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] wa-msg-font ${
           compact ? 'max-w-[280px]' : 'max-w-[min(100%,340px)]'
         } ${isOutbound ? 'rounded-br-[2px]' : 'rounded-bl-[2px]'}`}
       >
@@ -554,31 +551,38 @@ export function WhatsAppInteractiveCard({
             </p>
           )}
           <p
-            className={`whitespace-pre-wrap break-words leading-[1.45] text-[#111b21] ${
-              compact ? 'text-[12.5px]' : 'text-[14.5px]'
+            className={`whitespace-pre-wrap break-words ${
+              compact ? 'text-[12.5px] leading-[1.45]' : 'wa-msg-body'
             }`}
           >
             {body}
           </p>
           {footer && (
-            <p className={`mt-2 leading-snug text-[#8696a0] ${compact ? 'text-[10px]' : 'text-[12px]'}`}>
+            <p className={`mt-2 leading-snug wa-timestamp ${compact ? 'text-[10px]' : 'text-[12px]'}`}>
               {footer}
             </p>
           )}
           {mode === 'list' && totalRows > 0 && (
-            <div className={`mt-2 rounded-lg border border-[#e9edef] bg-white/80 p-2 ${compact ? 'text-[10px]' : 'text-[11px]'}`}>
-              <p className="mb-1 font-semibold text-[#667781]">List preview</p>
+            <div
+              className={`mt-2 rounded-lg border border-[color:var(--wa-bubble-received-border)] bg-[color:var(--wa-bubble-received)]/80 p-2 ${
+                compact ? 'text-[10px]' : 'text-[11px]'
+              }`}
+            >
+              <p className="mb-1 font-semibold wa-timestamp">List preview</p>
               {listSections.map((section, sectionIndex) => (
-                <div key={sectionIndex} className={sectionIndex > 0 ? 'mt-2 border-t border-[#e9edef] pt-2' : ''}>
-                  {section.title && (
-                    <p className="font-semibold text-[#111b21]">{section.title}</p>
-                  )}
+                <div
+                  key={sectionIndex}
+                  className={
+                    sectionIndex > 0
+                      ? 'mt-2 border-t border-[color:var(--wa-bubble-received-border)] pt-2'
+                      : ''
+                  }
+                >
+                  {section.title && <p className="font-semibold">{section.title}</p>}
                   {section.rows.map((row) => (
                     <div key={row.id} className="mt-1">
-                      <p className="font-medium text-[#111b21]">{row.title}</p>
-                      {row.description && (
-                        <p className="text-[#667781]">{row.description}</p>
-                      )}
+                      <p className="font-medium">{row.title}</p>
+                      {row.description && <p className="wa-timestamp">{row.description}</p>}
                     </div>
                   ))}
                 </div>
@@ -586,7 +590,7 @@ export function WhatsAppInteractiveCard({
             </div>
           )}
           <div className={`flex justify-end gap-1 ${compact ? 'pt-0.5' : 'pt-0.5'}`}>
-            <span className={`tabular-nums text-[#667781] ${compact ? 'text-[9px]' : 'text-[11px]'}`}>
+            <span className={`tabular-nums wa-timestamp ${compact ? 'text-[9px]' : 'text-[11px]'}`}>
               {time}
             </span>
             {isOutbound && <StatusIcon status={status} compact={compact} />}
@@ -594,13 +598,13 @@ export function WhatsAppInteractiveCard({
         </div>
 
         {actionButtons.length > 0 && (
-          <div className={`border-t border-[#e9edef] ${shellClass}`}>
+          <div className={`border-t border-[color:var(--wa-bubble-edge)] ${shellClass}`}>
             {actionButtons.map((btn, index) => (
               <div
                 key={`${btn.id}-${index}`}
-                className={`flex w-full items-center justify-center gap-2 border-[#c5e8c0] py-2.5 font-medium text-[#008069] ${
-                  index < actionButtons.length - 1 ? 'border-b' : ''
-                } ${compact ? 'text-[13px]' : 'text-[14px]'}`}
+                className={`wa-bubble-action flex w-full items-center justify-center gap-2 border-b py-2.5 font-medium last:border-b-0 ${
+                  compact ? 'text-[13px]' : 'text-[14px]'
+                }`}
               >
                 {index === 0 ? ctaIcon : null}
                 <span>{btn.title}</span>

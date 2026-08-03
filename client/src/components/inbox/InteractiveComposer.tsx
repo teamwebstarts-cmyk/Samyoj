@@ -15,7 +15,7 @@ import AppButton from '../ui/AppButton';
 import AppInput from '../ui/AppInput';
 import AppSelect from '../ui/AppSelect';
 import AppTextarea from '../ui/AppTextarea';
-import { WhatsAppInteractivePreview } from './WhatsAppPreview';
+import { WhatsAppInteractivePreview, ComposerPreviewPane } from './WhatsAppPreview';
 import { templateApi } from '../../services/api';
 import { getTemplateButtons } from '../../utils/templateForm';
 import type { MessageTemplate, SendMessagePayload, ServiceWindowInfo } from '../../types';

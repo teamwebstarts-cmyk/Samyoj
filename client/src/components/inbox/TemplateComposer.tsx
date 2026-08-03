@@ -25,28 +25,6 @@ interface TemplateComposerProps {
 /** Session cache so reopening Template tab doesn’t flash empty / re-fetch every time. */
 let approvedTemplatesCache: MessageTemplate[] | null = null;
 
-function ComposerPreviewPane({
-  subtitle,
-  children,
-  className = '',
-}: {
-  subtitle: string;
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <div className={`flex min-h-0 flex-col overflow-hidden ${className}`}>
-      <div className="flex shrink-0 items-center justify-between border-b border-theme-border/60 bg-theme-surface/80 px-3 py-1.5">
-        <p className="text-[10px] font-bold uppercase tracking-wide text-theme-muted">Preview</p>
-        <p className="truncate text-[10px] font-medium text-theme-muted">{subtitle}</p>
-      </div>
-      <div className="flex min-h-0 flex-1 items-start justify-end overflow-y-auto overscroll-contain p-3 wa-chat-surface wa-chat-surface-compact">
-        {children}
-      </div>
-    </div>
-  );
-}
-
 export default function TemplateComposer({ onSend, sending, onCancel }: TemplateComposerProps) {
   const [templates, setTemplates] = useState<MessageTemplate[]>(() => approvedTemplatesCache ?? []);
   const [loading, setLoading] = useState(() => !approvedTemplatesCache);
