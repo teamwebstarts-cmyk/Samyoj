@@ -1,4 +1,4 @@
-import { Calendar } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, Calendar } from 'lucide-react';
 
 interface LiveMetricsHeroProps {
   messagesSent: number;
@@ -10,25 +10,38 @@ interface LiveMetricsHeroProps {
 }
 
 function parseRate(value: string): number {
-  const n = parseFloat(value);
+  const n = parseFloat(String(value).replace(/%/g, ''));
   return Number.isFinite(n) ? n : 0;
 }
 
-function formatDelta(delta: number | null | undefined): {
-  text: string;
+function formatRateDisplay(value: string): string {
+  const n = parseRate(value);
+  if (Number.isInteger(n)) return `${n}%`;
+  return `${n.toFixed(1)}%`;
+}
+
+function formatDeltaPoints(
+  delta: number | null | undefined,
+  periodDays: number
+): {
+  percent: string;
+  period: string;
   tone: 'up' | 'down' | 'muted';
 } {
+  const period = `vs last ${periodDays} days`;
   if (typeof delta !== 'number' || !Number.isFinite(delta)) {
-    return { text: '—', tone: 'muted' };
+    return { percent: '0%', period, tone: 'muted' };
   }
-  if (delta === 0) {
-    return { text: `0% vs last 7 days`, tone: 'muted' };
+  const rounded = Math.round(delta * 10) / 10;
+  const abs = Math.abs(rounded);
+  const percent = Number.isInteger(abs) ? `${abs}%` : `${abs.toFixed(1)}%`;
+  if (rounded === 0) {
+    return { percent: '0%', period, tone: 'muted' };
   }
-  const abs = Math.abs(delta);
-  const arrow = delta > 0 ? '↑' : '↓';
   return {
-    text: `${arrow} ${abs}% vs last 7 days`,
-    tone: delta > 0 ? 'up' : 'down',
+    percent,
+    period,
+    tone: rounded > 0 ? 'up' : 'down',
   };
 }
 
@@ -36,30 +49,45 @@ function MiniMetricCard({
   label,
   value,
   delta,
+  periodDays,
 }: {
   label: string;
   value: string;
   delta: number | null | undefined;
+  periodDays: number;
 }) {
-  const formatted = formatDelta(delta);
+  const formatted = formatDeltaPoints(delta, periodDays);
+  const percentTone =
+    formatted.tone === 'up'
+      ? 'text-emerald-600'
+      : formatted.tone === 'down'
+        ? 'text-rose-500'
+        : 'text-neutral-400';
+
   return (
-    <div className="flex min-w-0 flex-1 flex-col rounded-xl border border-neutral-100/90 bg-white px-3.5 py-3 shadow-xs sm:rounded-2xl sm:px-4 sm:py-3.5">
-      <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-neutral-500 sm:text-[10.5px]">
+    <div className="flex min-w-0 flex-1 flex-col items-center justify-center rounded-2xl border border-neutral-100/90 bg-white px-3 py-3.5 text-center shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_20px_rgba(15,23,42,0.04)] sm:rounded-[1.15rem] sm:px-4 sm:py-4">
+      <p className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-neutral-700 sm:text-[10.5px]">
         {label}
       </p>
-      <p className="mt-1.5 text-[1.5rem] font-extrabold leading-none tracking-tight tabular-nums text-neutral-950 sm:text-[1.75rem] md:text-[1.85rem]">
+      <p className="mt-2 text-[1.65rem] font-extrabold leading-none tracking-tight tabular-nums text-neutral-950 sm:text-[1.85rem] md:text-[2rem]">
         {value}
       </p>
-      <p
-        className={`mt-2 text-[11px] font-semibold leading-tight tabular-nums sm:text-[11.5px] ${
-          formatted.tone === 'up'
-            ? 'text-emerald-600'
-            : formatted.tone === 'down'
-              ? 'text-rose-600'
-              : 'text-neutral-400'
-        }`}
-      >
-        {formatted.text}
+      <p className="mt-2.5 inline-flex items-center justify-center gap-0.5 text-[11px] leading-none sm:text-[11.5px]">
+        {formatted.tone === 'up' ? (
+          <ArrowUpRight
+            className={`h-3.5 w-3.5 shrink-0 ${percentTone}`}
+            strokeWidth={2.5}
+            aria-hidden
+          />
+        ) : formatted.tone === 'down' ? (
+          <ArrowDownRight
+            className={`h-3.5 w-3.5 shrink-0 ${percentTone}`}
+            strokeWidth={2.5}
+            aria-hidden
+          />
+        ) : null}
+        <span className={`font-bold tabular-nums ${percentTone}`}>{formatted.percent}</span>
+        <span className="font-medium text-neutral-400">{formatted.period}</span>
       </p>
     </div>
   );
@@ -82,8 +110,12 @@ export default function LiveMetricsHero({
     Number.isFinite(deliveryDelta) &&
     typeof readRateDelta === 'number' &&
     Number.isFinite(readRateDelta)
-      ? Math.round((deliveryDelta + readRateDelta) / 2)
-      : null;
+      ? Math.round(((deliveryDelta + readRateDelta) / 2) * 10) / 10
+      : typeof deliveryDelta === 'number' && Number.isFinite(deliveryDelta)
+        ? deliveryDelta
+        : typeof readRateDelta === 'number' && Number.isFinite(readRateDelta)
+          ? readRateDelta
+          : null;
 
   return (
     <section
@@ -120,21 +152,24 @@ export default function LiveMetricsHero({
             </p>
           </div>
 
-          <div className="grid w-full grid-cols-1 gap-2.5 sm:grid-cols-3 sm:gap-3 lg:w-auto lg:min-w-[min(100%,28rem)] lg:max-w-xl xl:min-w-[32rem]">
+          <div className="grid w-full grid-cols-1 gap-2.5 sm:grid-cols-3 sm:gap-3 lg:w-auto lg:min-w-[min(100%,30rem)] lg:max-w-2xl xl:min-w-[34rem]">
             <MiniMetricCard
               label="Delivery"
-              value={`${deliveryRate}%`}
+              value={formatRateDisplay(deliveryRate)}
               delta={deliveryDelta}
+              periodDays={periodDays}
             />
             <MiniMetricCard
               label="Read rate"
-              value={`${readRate}%`}
+              value={formatRateDisplay(readRate)}
               delta={readRateDelta}
+              periodDays={periodDays}
             />
             <MiniMetricCard
               label="Health score"
               value={`${healthScore}%`}
               delta={healthDelta}
+              periodDays={periodDays}
             />
           </div>
         </div>

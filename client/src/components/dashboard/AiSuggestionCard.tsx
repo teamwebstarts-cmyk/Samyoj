@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, Lightbulb } from 'lucide-react';
-import IconWell from './icons/IconWell';
+import { ArrowRight, Info } from 'lucide-react';
 import { AiBotMascotIllustrationSvg } from './icons/CardIllustrations';
 
 interface WorkspaceTipCardProps {
@@ -28,10 +27,11 @@ function buildTip(props: WorkspaceTipCardProps): {
       body: (
         <>
           You have{' '}
-          <strong className="font-extrabold text-emerald-800">
-            {openChats} open chat{openChats === 1 ? '' : 's'}
-          </strong>
-          . Reply from Inbox to keep customers from waiting.
+          <strong className="font-extrabold text-neutral-900">
+            {openChats} open chat{openChats === 1 ? '' : 's'}.
+          </strong>{' '}
+          Reply from <strong className="font-extrabold text-neutral-900">Inbox</strong> to keep
+          customers happy.
         </>
       ),
       cta: { label: 'Open Inbox', to: '/inbox' },
@@ -56,8 +56,8 @@ function buildTip(props: WorkspaceTipCardProps): {
     return {
       body: (
         <>
-          No outbound messages in this period yet. Send a campaign or reply in Inbox to start tracking
-          delivery and read rates.
+          No outbound messages in this period yet. Send a campaign or reply in Inbox to start
+          tracking delivery and read rates.
         </>
       ),
       cta: { label: 'Create campaign', to: '/campaigns' },
@@ -69,14 +69,14 @@ function buildTip(props: WorkspaceTipCardProps): {
     return {
       body: (
         <>
-            Your read rate is{' '}
-            <strong className="font-extrabold text-emerald-800">
-              {Math.abs(delta)} pts {higher ? 'higher' : 'lower'}
-            </strong>{' '}
-            than the previous period (now {rateNum}%).{' '}
-            {higher
-              ? 'Keep the momentum with a short follow-up to recent contacts.'
-              : 'Try a clearer template or follow up with contacts who did not read.'}
+          Your read rate is{' '}
+          <strong className="font-extrabold text-emerald-800">
+            {Math.abs(delta)} pts {higher ? 'higher' : 'lower'}
+          </strong>{' '}
+          than the previous period (now {rateNum}%).{' '}
+          {higher
+            ? 'Keep the momentum with a short follow-up to recent contacts.'
+            : 'Try a clearer template or follow up with contacts who did not read.'}
         </>
       ),
       cta: { label: 'Create campaign', to: '/campaigns' },
@@ -89,8 +89,8 @@ function buildTip(props: WorkspaceTipCardProps): {
         <>
           Current read rate is{' '}
           <strong className="font-extrabold text-emerald-800">{rateNum}%</strong> across{' '}
-          {sent.toLocaleString()} sent message{sent === 1 ? '' : 's'}. Re-engage quiet contacts with a
-          focused campaign.
+          {sent.toLocaleString()} sent message{sent === 1 ? '' : 's'}. Re-engage quiet contacts with
+          a focused campaign.
         </>
       ),
       cta: { label: 'Create campaign', to: '/campaigns' },
@@ -108,40 +108,34 @@ export default function AiSuggestionCard(props: WorkspaceTipCardProps) {
   const tip = buildTip(props);
 
   return (
-    <section aria-label="Workspace tip" className="h-auto">
-      <div className="dashboard-card relative flex h-auto flex-col justify-between overflow-hidden rounded-2xl sm:rounded-3xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50/90 via-teal-50/40 to-emerald-100/50 p-3.5 sm:p-4 md:p-5 shadow-xs">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2 sm:gap-2.5">
-            <IconWell accent="emerald" size="sm" round>
-              <Lightbulb className="h-4 w-4 stroke-[2.2]" />
-            </IconWell>
-            <h2 className="truncate text-[14px] sm:text-[15px] md:text-[16px] font-bold tracking-tight text-neutral-900">
-              Workspace tip
-            </h2>
-          </div>
-          <span className="shrink-0 rounded-full bg-white/80 px-2 sm:px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-emerald-800 border border-emerald-200/80">
-            Based on your data
+    <section aria-label="Workspace tip" className="h-full">
+      <div className="dashboard-card relative flex h-full flex-col overflow-hidden rounded-2xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50/90 via-teal-50/40 to-emerald-100/50 p-3 shadow-xs sm:rounded-3xl sm:p-3.5">
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+            <Info className="h-4 w-4 stroke-[2.2]" />
           </span>
+          <h2 className="truncate text-[14px] font-bold tracking-tight text-neutral-900 sm:text-[15px]">
+            Workspace tip
+          </h2>
         </div>
 
-        <div className="my-2.5 sm:my-3 flex items-center justify-between gap-2 sm:gap-3">
-          <p className="min-w-0 flex-1 text-[12px] sm:text-[12.5px] md:text-[13px] font-medium leading-relaxed text-neutral-700">
-            {tip.body}
-          </p>
-
-          <div className="hidden shrink-0 items-center justify-center md:flex -mr-1">
-            <AiBotMascotIllustrationSvg className="h-20 w-20 lg:h-24 lg:w-24 xl:h-28 xl:w-28" />
+        <div className="mt-2.5 flex min-h-0 flex-1 items-center gap-2 sm:gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-[12.5px] font-medium leading-relaxed text-neutral-700 sm:text-[13px]">
+              {tip.body}
+            </p>
+            <Link
+              to={tip.cta.to}
+              className="mt-3 inline-flex items-center justify-center gap-1.5 rounded-xl bg-whatsapp-600 px-3.5 py-2 text-[12px] font-bold text-white shadow-md shadow-whatsapp-600/20 transition hover:bg-whatsapp-700 sm:text-[12.5px]"
+            >
+              {tip.cta.label}
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
           </div>
-        </div>
 
-        <div className="pt-0.5">
-          <Link
-            to={tip.cta.to}
-            className="inline-flex w-full sm:w-auto items-center justify-center gap-1.5 rounded-xl bg-whatsapp-600 px-3.5 sm:px-4 py-2 text-[12px] sm:text-[12.5px] font-bold text-white shadow-md shadow-whatsapp-600/20 transition hover:bg-whatsapp-700"
-          >
-            {tip.cta.label}
-            <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
+          <div className="hidden shrink-0 items-center justify-center sm:flex">
+            <AiBotMascotIllustrationSvg className="h-16 w-16 lg:h-[4.75rem] lg:w-[4.75rem]" />
+          </div>
         </div>
       </div>
     </section>

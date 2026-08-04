@@ -390,7 +390,7 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
         >
           <div className="flex min-w-0 items-start gap-3 sm:items-center">
             <div className="relative shrink-0">
-              <IconWell accent="whatsapp" size="lg" round>
+              <IconWell accent="whatsapp" size="lg">
                 <WhatsAppGlyph className="h-5 w-5 sm:h-[22px] sm:w-[22px]" />
               </IconWell>
               {incomingOn && !needsAction && (
@@ -573,7 +573,7 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
       <div className="dashboard-card rounded-2xl border border-neutral-100/90 bg-white p-3.5 sm:p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <div className="flex gap-3">
-            <IconWell accent="whatsapp" size="lg" round>
+            <IconWell accent="whatsapp" size="lg">
               <WhatsAppGlyph className="h-5 w-5 sm:h-[22px] sm:w-[22px]" />
             </IconWell>
             <div>

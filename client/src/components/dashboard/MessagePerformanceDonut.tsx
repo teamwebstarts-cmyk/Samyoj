@@ -28,8 +28,6 @@ export default function MessagePerformanceDonut({
   messagesPending,
   periodLabel = 'Last 7 days',
 }: MessagePerformanceDonutProps) {
-  // Exclusive status buckets (API latest-status counts; read ⊈ delivered on the ring).
-  // Delivered = still DELIVERED (not read); Read / Failed / Pending|SENT are separate.
   const deliveredReached = messagesDelivered;
   const deliveredOnly =
     typeof messagesDeliveredOnly === 'number'
@@ -41,10 +39,10 @@ export default function MessagePerformanceDonut({
   const failPctNum = messagesSent ? (messagesFailed / messagesSent) * 100 : 0;
   const pendPctNum = messagesSent ? (messagesPending / messagesSent) * 100 : 0;
 
-  const R = 58;
+  const R = 54;
   const C = 2 * Math.PI * R;
+  const stroke = 14;
 
-  // Single ring segments in legend order; lengths from exclusive % of total sent.
   const segments = [
     { key: 'delivered', color: '#25D366', pct: Math.min(100, Math.max(0, deliveredOnlyPctNum)) },
     { key: 'read', color: '#3B82F6', pct: Math.min(100, Math.max(0, readPctNum)) },
@@ -107,36 +105,44 @@ export default function MessagePerformanceDonut({
   ];
 
   return (
-    <section className="dashboard-card flex h-full flex-col rounded-2xl sm:rounded-3xl p-3.5 sm:p-4 md:p-5 bg-white border border-neutral-100/90 shadow-xs">
-      <div>
-        <div className="flex items-center gap-2.5 min-w-0">
+    <section className="dashboard-card flex h-full flex-col rounded-2xl border border-neutral-100/90 bg-white p-3 shadow-xs sm:rounded-3xl sm:p-3.5">
+      <div className="shrink-0">
+        <div className="flex min-w-0 items-center gap-2">
           <IconWell accent="emerald" size="sm" round>
-            <Phone className="h-4 w-4 stroke-[2.2]" />
+            <Phone className="h-3.5 w-3.5 stroke-[2.2]" />
           </IconWell>
           <div className="flex min-w-0 items-center gap-1.5">
-            <h2 className="truncate text-[14px] sm:text-[15px] md:text-[16px] font-bold text-neutral-900 tracking-tight">
+            <h2 className="truncate text-[14px] font-bold tracking-tight text-neutral-900 sm:text-[15px]">
               Message performance
             </h2>
             <span
               className="hidden text-neutral-400 sm:inline"
               title="Segments are exclusive latest statuses: Delivered (unread), Read, Failed, Pending."
             >
-              <Info className="h-4 w-4 shrink-0 stroke-[1.8]" aria-hidden />
+              <Info className="h-3.5 w-3.5 shrink-0 stroke-[1.8]" aria-hidden />
             </span>
           </div>
         </div>
-        <p className="mt-0.5 ml-10 text-[11.5px] sm:text-[12px] font-medium text-neutral-500">{periodLabel}</p>
+        <p className="ml-9 mt-0.5 text-[11px] font-medium text-neutral-500 sm:text-[11.5px]">
+          {periodLabel}
+        </p>
       </div>
 
-      <div className="mt-3 flex min-h-0 flex-1 flex-col items-stretch gap-4 sm:mt-4 lg:flex-row lg:gap-5">
-        <div className="relative mx-auto flex h-[168px] w-[168px] shrink-0 items-center justify-center self-center sm:h-[180px] sm:w-[180px] md:h-[188px] md:w-[188px] lg:mx-0 lg:h-[200px] lg:w-[200px]">
+      <div className="mt-3 flex min-h-0 flex-1 flex-col items-center justify-center gap-4 lg:flex-row lg:items-center lg:justify-start lg:gap-4">
+        <div className="relative flex h-[128px] w-[128px] shrink-0 items-center justify-center sm:h-[136px] sm:w-[136px]">
           <svg
             viewBox="0 0 160 160"
-            className="h-full w-full -rotate-90 transform overflow-visible"
+            className="h-full w-full -rotate-90 transform"
             aria-hidden="true"
           >
-            <circle cx="80" cy="80" r={R} fill="none" stroke="#f1f5f9" strokeWidth="12" />
-
+            <circle
+              cx="80"
+              cy="80"
+              r={R}
+              fill="none"
+              stroke="#F1F5F9"
+              strokeWidth={stroke}
+            />
             {ringArcs.map((arc) => (
               <circle
                 key={arc.key}
@@ -145,66 +151,54 @@ export default function MessagePerformanceDonut({
                 r={R}
                 fill="none"
                 stroke={arc.color}
-                strokeWidth="12"
+                strokeWidth={stroke}
                 strokeDasharray={`${arc.len} ${C - arc.len}`}
                 strokeDashoffset={arc.dashoffset}
                 strokeLinecap="butt"
               />
             ))}
           </svg>
-
-          <div className="pointer-events-none absolute inset-[22%] flex flex-col items-center justify-center text-center sm:inset-[24%]">
-            <span className="text-[1.35rem] font-extrabold leading-none tracking-tight text-neutral-900 tabular-nums sm:text-[1.5rem] lg:text-[1.65rem]">
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
+            <span className="text-[1.35rem] font-extrabold leading-none tracking-tight tabular-nums text-neutral-900">
               {messagesSent.toLocaleString()}
             </span>
-            <span className="mt-1 text-[10.5px] font-medium leading-none text-neutral-500 sm:text-[11px]">
+            <span className="mt-1 text-[10px] font-medium leading-none text-neutral-500">
               Total sent
             </span>
           </div>
         </div>
 
-        <div className="flex min-w-0 w-full max-w-none flex-1 flex-col justify-stretch gap-0">
-          {legend.map((item, index) => (
-            <div
-              key={item.key}
-              className={`flex min-h-[40px] flex-1 items-center justify-between gap-2 px-0.5 sm:min-h-[44px] lg:min-h-[48px] lg:gap-3 ${
-                index < legend.length - 1 ? 'border-b border-neutral-100' : ''
-              }`}
-            >
-              <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-2.5">
-                <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${item.color}`} />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span
-                      className="truncate text-[12px] font-semibold text-neutral-800 sm:text-[12.5px] lg:text-[13.5px]"
-                      title={item.labelFull}
-                    >
-                      {item.label}
-                    </span>
-                    <span className="shrink-0 whitespace-nowrap text-[12px] font-bold tabular-nums text-neutral-900 sm:text-[12.5px] lg:text-[13.5px]">
-                      {item.value}{' '}
-                      <span className="text-[11px] font-medium text-neutral-500 sm:text-[12px] lg:text-[12.5px]">
-                        ({item.pct})
-                      </span>
-                    </span>
-                  </div>
-                  <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-neutral-100 sm:mt-1.5">
-                    <div
-                      className={`h-full rounded-full ${item.bar} transition-[width] duration-300`}
-                      style={{ width: `${Math.max(item.share > 0 ? 2 : 0, item.share)}%` }}
-                    />
-                  </div>
-                </div>
+        <ul className="m-0 w-full min-w-0 list-none space-y-2 p-0 lg:max-w-[220px] lg:flex-1">
+          {legend.map((item) => (
+            <li key={item.key} className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className={`h-2 w-2 shrink-0 rounded-full ${item.color}`} aria-hidden />
+                <span
+                  className="min-w-0 flex-1 truncate text-[12px] font-semibold text-neutral-800"
+                  title={item.labelFull}
+                >
+                  {item.label}
+                </span>
+                <span className="shrink-0 text-right text-[12px] font-bold tabular-nums text-neutral-900">
+                  {item.value}
+                  <span className="ml-1 font-medium text-neutral-500">({item.pct})</span>
+                </span>
               </div>
-            </div>
+              <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-neutral-100">
+                <div
+                  className={`h-full rounded-full ${item.bar} transition-[width] duration-300`}
+                  style={{ width: `${Math.max(item.share > 0 ? 3 : 0, item.share)}%` }}
+                />
+              </div>
+            </li>
           ))}
-        </div>
+        </ul>
       </div>
 
-      <div className="mt-3 pt-1">
+      <div className="mt-auto pt-2.5">
         <Link
           to="/reports"
-          className="inline-flex items-center gap-1 text-[12.5px] font-bold text-emerald-600 hover:text-emerald-700 hover:underline transition-colors"
+          className="inline-flex items-center gap-1 text-[12px] font-bold text-emerald-600 transition-colors hover:text-emerald-700 hover:underline"
         >
           View full report
           <ArrowRight className="h-3.5 w-3.5" />

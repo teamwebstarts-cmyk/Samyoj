@@ -52,7 +52,7 @@ function pickUpcoming(campaigns: Campaign[]): Campaign[] {
   const drafts = campaigns
     .filter((c) => c.status === 'DRAFT')
     .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-  return [...upcomingScheduled, ...drafts].slice(0, 4);
+  return [...upcomingScheduled, ...drafts].slice(0, 3);
 }
 
 function extractCampaigns(payload: unknown): Campaign[] {
@@ -268,7 +268,7 @@ export default function DashboardPage() {
               periodDays={DASHBOARD_PERIOD_DAYS}
             />
 
-            <div className="mt-3 grid grid-cols-1 gap-3 lg:mt-4 lg:grid-cols-3 lg:items-stretch lg:gap-4">
+            <div className="mt-3 grid grid-cols-1 gap-3 lg:mt-3.5 lg:grid-cols-3 lg:items-stretch lg:gap-3">
               <NeedsAttentionCard
                 openChats={stats.activeConversations}
                 failedMessages={stats.failedMessages}
@@ -330,8 +330,8 @@ export default function DashboardPage() {
               )}
             </div>
 
-            <div className="mt-3 grid grid-cols-1 gap-3 lg:mt-4 lg:grid-cols-5 lg:items-start lg:gap-4">
-              <div className="min-w-0 lg:col-span-3">
+            <div className="mt-3 grid grid-cols-1 gap-3 lg:mt-3.5 lg:grid-cols-5 lg:items-stretch lg:gap-3">
+              <div className="min-w-0 lg:col-span-3 lg:h-full">
                 <RecentActivityCard
                   items={activity}
                   loading={activityLoading}
@@ -339,7 +339,7 @@ export default function DashboardPage() {
                   onRetry={() => loadSideData()}
                 />
               </div>
-              <div className="min-w-0 lg:col-span-2">
+              <div className="min-w-0 lg:col-span-2 lg:h-full">
                 <AiSuggestionCard
                   readRate={stats.readRate}
                   readRateDelta={stats.deltas?.readRate}
