@@ -169,17 +169,17 @@ export default function UpcomingCampaignsCard({
           )}
         </div>
       ) : campaigns.length === 0 ? (
-        <div className="mt-2.5 flex min-h-0 flex-1 flex-col items-center justify-center px-3 text-center">
-          <CampaignEmptyIllustrationSvg className="h-[5.5rem] w-[5.5rem] sm:h-24 sm:w-24" />
-          <h3 className="mt-3 text-[14px] font-bold tracking-tight text-neutral-900 sm:text-[15px]">
+        <div className="mt-2.5 flex min-h-0 flex-1 flex-col items-center justify-center px-2 text-center">
+          <CampaignEmptyIllustrationSvg className="h-16 w-16 sm:h-[4.5rem] sm:w-[4.5rem]" />
+          <h3 className="mt-2 text-[13px] font-bold tracking-tight text-neutral-900 sm:text-[13.5px]">
             No campaigns yet
           </h3>
-          <p className="mt-1 max-w-[260px] text-[12px] font-medium leading-snug text-neutral-500 sm:text-[12.5px]">
+          <p className="mt-0.5 max-w-[220px] text-[11.5px] font-medium leading-snug text-neutral-500">
             Create your first campaign to reach your audience.
           </p>
           <Link
             to="/campaigns"
-            className="mt-4 inline-flex items-center justify-center gap-1.5 rounded-xl bg-whatsapp-500 px-4 py-2.5 text-[13px] font-bold tracking-tight text-white shadow-[0_4px_14px_rgba(37,211,102,0.35)] transition duration-200 hover:bg-[#1ebe57] hover:shadow-[0_6px_16px_rgba(37,211,102,0.32)] active:scale-[0.98]"
+            className="mt-3 inline-flex items-center justify-center gap-1.5 rounded-xl bg-whatsapp-500 px-3.5 py-2 text-[12.5px] font-bold tracking-tight text-white shadow-[0_4px_14px_rgba(37,211,102,0.3)] transition duration-200 hover:bg-[#1ebe57] active:scale-[0.98]"
           >
             Create Campaign
             <Plus className="h-3.5 w-3.5 stroke-[2.5]" />

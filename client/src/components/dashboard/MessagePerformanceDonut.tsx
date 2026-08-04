@@ -51,7 +51,7 @@ export default function MessagePerformanceDonut({
 
   const R = 54;
   const C = 2 * Math.PI * R;
-  const stroke = 14;
+  const stroke = 16;
 
   const segments = [
     { key: 'delivered', color: '#25D366', pct: Math.min(100, Math.max(0, deliveredOnlyPctNum)) },
@@ -152,18 +152,18 @@ export default function MessagePerformanceDonut({
       </div>
 
       {isEmpty ? (
-        <div className="mt-2.5 flex min-h-0 flex-1 flex-col items-center justify-center px-3 py-4 text-center sm:py-5">
-          <MessagePerformanceEmptyIllustrationSvg className="h-[5.5rem] w-[5.5rem] sm:h-24 sm:w-24" />
-          <h3 className="mt-3 text-[13.5px] font-bold tracking-tight text-neutral-900 sm:text-[14px]">
+        <div className="mt-2.5 flex min-h-0 flex-1 flex-col items-center justify-center px-2 text-center">
+          <MessagePerformanceEmptyIllustrationSvg className="h-16 w-16 sm:h-[4.5rem] sm:w-[4.5rem]" />
+          <h3 className="mt-2 text-[13px] font-bold tracking-tight text-neutral-900 sm:text-[13.5px]">
             No data yet
           </h3>
-          <p className="mt-1 max-w-[220px] text-[12px] font-medium leading-snug text-neutral-500">
-            Start sending messages to see performance insights here.
+          <p className="mt-0.5 max-w-[200px] text-[11.5px] font-medium leading-snug text-neutral-500">
+            Start sending messages to see performance here.
           </p>
         </div>
       ) : (
-        <div className="mt-3 flex min-h-0 flex-1 flex-col items-center justify-center gap-4 lg:flex-row lg:items-center lg:justify-start lg:gap-4">
-          <div className="relative flex h-[128px] w-[128px] shrink-0 items-center justify-center sm:h-[136px] sm:w-[136px]">
+        <div className="mt-3 flex min-h-0 flex-1 flex-col items-center justify-center gap-4 sm:gap-5 lg:flex-row lg:items-center lg:gap-3">
+          <div className="relative mx-auto aspect-square w-[min(100%,10.5rem)] shrink-0 sm:w-[min(100%,11rem)] lg:mx-0 lg:w-[10.5rem] xl:w-[11.25rem]">
             <svg
               viewBox="0 0 160 160"
               className="h-full w-full -rotate-90 transform"
@@ -193,32 +193,32 @@ export default function MessagePerformanceDonut({
               ))}
             </svg>
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-              <span className="text-[1.35rem] font-extrabold leading-none tracking-tight tabular-nums text-neutral-900">
+              <span className="text-[1.55rem] font-extrabold leading-none tracking-tight tabular-nums text-neutral-900 sm:text-[1.75rem]">
                 {messagesSent.toLocaleString()}
               </span>
-              <span className="mt-1 text-[10px] font-medium leading-none text-neutral-500">
+              <span className="mt-1.5 text-[11px] font-medium leading-none text-neutral-500">
                 Total sent
               </span>
             </div>
           </div>
 
-          <ul className="m-0 w-full min-w-0 list-none space-y-2 p-0 lg:max-w-[220px] lg:flex-1">
+          <ul className="m-0 w-full min-w-0 flex-1 list-none space-y-2.5 overflow-visible p-0 lg:min-w-[11.5rem]">
             {legend.map((item) => (
               <li key={item.key} className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className={`h-2 w-2 shrink-0 rounded-full ${item.color}`} aria-hidden />
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${item.color}`} aria-hidden />
                   <span
-                    className="min-w-0 flex-1 truncate text-[12px] font-semibold text-neutral-800"
+                    className="min-w-0 flex-1 truncate text-[12.5px] font-semibold text-neutral-800 sm:text-[13px]"
                     title={item.labelFull}
                   >
                     {item.label}
                   </span>
-                  <span className="shrink-0 text-right text-[12px] font-bold tabular-nums text-neutral-900">
+                  <span className="shrink-0 whitespace-nowrap text-right text-[12px] font-bold tabular-nums text-neutral-900 sm:text-[12.5px]">
                     {item.value}
                     <span className="ml-1 font-medium text-neutral-500">({item.pct})</span>
                   </span>
                 </div>
-                <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-neutral-100">
+                <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-neutral-100">
                   <div
                     className={`h-full rounded-full ${item.bar} transition-[width] duration-300`}
                     style={{ width: `${Math.max(item.share > 0 ? 3 : 0, item.share)}%` }}

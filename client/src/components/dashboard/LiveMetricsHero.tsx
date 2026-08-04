@@ -247,7 +247,7 @@ export default function LiveMetricsHero({
             <p className="text-[13px] font-semibold text-neutral-600 sm:text-[14px]">
               Total messages sent
             </p>
-            <p className="mt-1 text-[2.75rem] font-black leading-none tracking-tight tabular-nums text-neutral-950 sm:text-[3.25rem] md:text-[3.5rem]">
+            <p className="mt-1 pl-3 text-[2.75rem] font-black leading-none tracking-tight tabular-nums text-neutral-950 sm:pl-4 sm:text-[3.25rem] md:pl-5 md:text-[3.5rem]">
               {messagesSent.toLocaleString()}
             </p>
             <p className="mt-2.5 max-w-md text-[12.5px] font-medium leading-relaxed text-neutral-500 sm:text-[13px]">
