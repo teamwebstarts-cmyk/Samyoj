@@ -91,7 +91,7 @@ const TONE = {
 } as const;
 
 function StepIcon({ tone }: { tone: StepTone }) {
-  const cls = 'h-[18px] w-[18px]';
+  const cls = 'h-5 w-5 sm:h-[22px] sm:w-[22px]';
   if (tone === 'green') return <WhatsAppGlyph className={cls} />;
   if (tone === 'purple') return <Store className={cls} strokeWidth={2.1} />;
   if (tone === 'blue') return <Bot className={cls} strokeWidth={2.1} />;
@@ -101,7 +101,7 @@ function StepIcon({ tone }: { tone: StepTone }) {
 function StepConnector() {
   return (
     <div
-      className="pointer-events-none absolute -right-2.5 top-8 z-20 hidden w-5 items-center justify-center lg:flex xl:-right-3 xl:w-6"
+      className="pointer-events-none absolute -right-2.5 top-10 z-20 hidden w-5 items-center justify-center lg:flex xl:-right-3 xl:w-6"
       aria-hidden
     >
       <span className="flex w-full items-center text-neutral-300">
@@ -128,42 +128,42 @@ export default function PreConnectSteps({
 
   return (
     <section id="preconnect-steps" aria-label="Get started in 4 easy steps" className="scroll-mt-20">
-      <h3 className="text-[16px] font-bold tracking-tight text-neutral-900 sm:text-[18px]">
-        Get started in 4 easy steps
-      </h3>
-
-      <div className="mt-3 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(280px,340px)] lg:items-stretch lg:gap-4">
-        {/* One parent card wrapping all 4 steps */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(240px,280px)] lg:items-stretch lg:gap-4">
+        {/* One parent card: heading + 4 steps */}
         <div className="rounded-2xl border border-neutral-100 bg-white p-3 shadow-[0_4px_12px_rgba(15,23,42,0.05)] sm:p-3.5 md:p-4">
-          <div className="grid grid-cols-1 gap-2.5 min-[640px]:grid-cols-2 lg:grid-cols-4 lg:gap-4 xl:gap-5">
+          <h3 className="mb-3 text-[16px] font-bold tracking-tight text-neutral-900 sm:mb-3.5 sm:text-[18px]">
+            Get started in 4 easy steps
+          </h3>
+
+          <div className="grid grid-cols-1 gap-3 min-[640px]:grid-cols-2 lg:grid-cols-4 lg:gap-3 xl:gap-4">
             {STEPS.map((step, index) => {
               const t = TONE[step.tone];
-              const ctaClass = `mt-3 inline-flex w-full items-center justify-center gap-1 rounded-lg px-2.5 py-2 text-[12px] font-bold transition sm:text-[12.5px] ${t.btn} disabled:opacity-60`;
+              const ctaClass = `mt-3 inline-flex w-auto max-w-full items-center justify-center gap-1 self-start rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition sm:text-[11.5px] ${t.btn} disabled:opacity-60`;
 
               return (
                 <div key={step.n} className="relative min-w-0">
                   {index < STEPS.length - 1 && <StepConnector />}
 
-                  <article className="relative z-10 flex h-full flex-col rounded-xl border border-neutral-100/90 bg-neutral-50/40 p-3 sm:p-3.5">
-                    <div className="mb-2 flex items-center gap-2">
+                  <article className="relative z-10 flex h-full flex-col rounded-xl border border-neutral-100/90 bg-neutral-50/40 p-2.5 sm:p-3">
+                    <div className="mb-3 flex items-center gap-2.5">
                       <span
-                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${t.iconWell}`}
+                        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl sm:h-12 sm:w-12 ${t.iconWell}`}
                       >
                         <StepIcon tone={step.tone} />
                       </span>
                       <span
-                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${t.badge}`}
+                        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold sm:h-7 sm:w-7 sm:text-[12px] ${t.badge}`}
                       >
                         {step.n}
                       </span>
                     </div>
-                    <h4 className="text-[13px] font-bold leading-snug text-neutral-900 sm:text-[13.5px]">
+                    <h4 className="mt-0.5 text-[14px] font-extrabold leading-snug text-neutral-900 sm:text-[15px]">
                       {step.title}
                     </h4>
-                    <p className="mt-1 line-clamp-3 text-[11.5px] font-medium leading-snug text-neutral-500 sm:text-[12px]">
+                    <p className="mt-1.5 line-clamp-3 text-[11.5px] font-medium leading-snug text-neutral-500 sm:text-[12px]">
                       {step.description}
                     </p>
-                    <div className="mt-auto">
+                    <div className="mt-auto flex justify-start pt-1">
                       {step.kind === 'connect' ? (
                         <button
                           type="button"

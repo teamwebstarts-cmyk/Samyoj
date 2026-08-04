@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { inboxApi } from '../services/api';
+import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { useOnActiveNumberChange } from './useOnActiveNumberChange';
 
 function parseTotal(payload: unknown): number {
@@ -12,16 +13,22 @@ function parseTotal(payload: unknown): number {
 
 /** Fetches org unread total for the sidebar badge. Polls + refreshes on focus / number switch. */
 export function useInboxUnreadTotal() {
+  const { hasConnectedNumber, loading: numbersLoading } = useWhatsAppNumber();
   const [total, setTotal] = useState(0);
 
   const refresh = useCallback(async () => {
+    if (numbersLoading) return;
+    if (!hasConnectedNumber) {
+      setTotal(0);
+      return;
+    }
     try {
       const { data } = await inboxApi.unreadTotal();
       setTotal(parseTotal(data));
     } catch {
       // Keep last known count on transient failures
     }
-  }, []);
+  }, [hasConnectedNumber, numbersLoading]);
 
   useEffect(() => {
     void refresh();

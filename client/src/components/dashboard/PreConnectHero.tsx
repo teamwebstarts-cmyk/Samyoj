@@ -52,7 +52,7 @@ export default function PreConnectHero({
   return (
     <section
       aria-label="Welcome"
-      className="relative overflow-hidden rounded-2xl border border-neutral-100/90 p-4 shadow-[0_12px_40px_rgba(15,23,42,0.06)] sm:rounded-[1.25rem] sm:p-5 md:rounded-2xl md:p-6 lg:min-h-[460px] lg:p-8 xl:min-h-[500px] xl:p-9"
+      className="relative overflow-hidden rounded-2xl border border-neutral-100/90 p-3 shadow-[0_12px_40px_rgba(15,23,42,0.06)] sm:rounded-[1.25rem] sm:p-4 md:rounded-2xl md:p-5 lg:p-4 xl:p-5"
       style={{
         background:
           'linear-gradient(115deg, #f0fdf6 0%, #ffffff 38%, #faf5ff 72%, #fff1f2 100%)',
@@ -81,7 +81,7 @@ export default function PreConnectHero({
       />
 
       <div className="relative grid grid-cols-1 gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(260px,1.05fr)_minmax(260px,300px)] lg:items-center lg:gap-1 xl:gap-1.5">
-        <div className="flex min-w-0 flex-col justify-center lg:py-2">
+        <div className="flex min-w-0 flex-col justify-center py-2 sm:py-2.5 lg:py-3">
           <p className="text-[14px] font-semibold text-neutral-600 sm:text-[15px]">
             Welcome to Samyoj{name ? `, ${name}` : ''}! <span aria-hidden>👋</span>
           </p>
@@ -118,7 +118,7 @@ export default function PreConnectHero({
             </button>
           </div>
 
-          <ul className="mt-6 grid grid-cols-1 gap-4 min-[420px]:grid-cols-3 sm:mt-7 sm:gap-5">
+          <ul className="mt-8 grid grid-cols-1 gap-4 min-[420px]:grid-cols-3 sm:mt-9 sm:gap-5 lg:mt-10">
             {TRUST.map((t) => {
               const Icon = t.icon;
               return (
@@ -177,17 +177,17 @@ export default function PreConnectHero({
             </div>
           </div>
 
-          {/* Quick Actions — soft pink glow behind only */}
-          <div className="relative min-w-0 self-stretch">
+          {/* Quick Actions — soft pink glow behind; align top */}
+          <div className="relative min-w-0 self-start pt-0 lg:pt-0">
             <span
-              className="pointer-events-none absolute -inset-5 rounded-[2rem] bg-gradient-to-br from-rose-200/50 via-fuchsia-100/40 to-orange-100/30 blur-2xl"
+              className="pointer-events-none absolute -inset-2 rounded-[1.75rem] bg-gradient-to-br from-rose-200/40 via-fuchsia-100/30 to-orange-100/25 blur-xl"
               aria-hidden
             />
             <span
-              className="pointer-events-none absolute -right-3 top-1/2 h-40 w-40 -translate-y-1/2 rounded-full bg-rose-200/40 blur-3xl"
+              className="pointer-events-none absolute -right-2 top-1/2 h-32 w-32 -translate-y-1/2 rounded-full bg-rose-200/30 blur-2xl"
               aria-hidden
             />
-            <div className="relative h-full">
+            <div className="relative">
               <PreConnectQuickActions onExploreFeatures={onExploreFeatures} />
             </div>
           </div>

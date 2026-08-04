@@ -56,18 +56,25 @@ export async function resolveActiveWhatsappNumber(
   }
 }
 
+/** Match nothing — used when no WhatsApp number is connected (never leak org-wide data). */
+const EMPTY_ID_FILTER = { id: { in: [] as string[] } } as const;
+
+/**
+ * Scope conversations to the active connected number.
+ * When disconnected (`numberId` missing), return an empty match — do NOT fall back to all org rows.
+ */
 export function conversationFilter(numberId: string | undefined): Prisma.ConversationWhereInput {
-  if (!numberId) return {};
+  if (!numberId) return EMPTY_ID_FILTER;
   return { whatsappNumberId: numberId };
 }
 
 export function contactsForNumberFilter(numberId: string | undefined): Prisma.ContactWhereInput {
-  if (!numberId) return {};
+  if (!numberId) return EMPTY_ID_FILTER;
   return { conversations: { some: { whatsappNumberId: numberId } } };
 }
 
 export function leadsForNumberFilter(numberId: string | undefined): Prisma.LeadWhereInput {
-  if (!numberId) return {};
+  if (!numberId) return EMPTY_ID_FILTER;
   return {
     OR: [
       { contactId: null },
@@ -79,7 +86,7 @@ export function leadsForNumberFilter(numberId: string | undefined): Prisma.LeadW
 }
 
 export function ticketsForNumberFilter(numberId: string | undefined): Prisma.TicketWhereInput {
-  if (!numberId) return {};
+  if (!numberId) return EMPTY_ID_FILTER;
   return {
     OR: [
       { conversation: { whatsappNumberId: numberId } },
@@ -92,7 +99,7 @@ export function ticketsForNumberFilter(numberId: string | undefined): Prisma.Tic
 }
 
 export function ordersForNumberFilter(numberId: string | undefined): Prisma.OrderWhereInput {
-  if (!numberId) return {};
+  if (!numberId) return EMPTY_ID_FILTER;
   return {
     OR: [
       { conversation: { whatsappNumberId: numberId } },
@@ -102,6 +109,6 @@ export function ordersForNumberFilter(numberId: string | undefined): Prisma.Orde
 }
 
 export function messagesForNumberFilter(numberId: string | undefined): Prisma.MessageWhereInput {
-  if (!numberId) return {};
+  if (!numberId) return EMPTY_ID_FILTER;
   return { conversation: { whatsappNumberId: numberId } };
 }

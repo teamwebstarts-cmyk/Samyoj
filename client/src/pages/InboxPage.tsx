@@ -34,6 +34,7 @@ import { useInboxUnreadTotal } from '../hooks/useInboxUnreadTotal';
 import { useWebhookHealth } from '../hooks/useWebhookHealth';
 import { usePaneWidths } from '../hooks/usePaneWidths';
 import { useAuth } from '../contexts/AuthContext';
+import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import PaneHandle from '../components/inbox/PaneHandle';
 import KeyboardShortcutsOverlay from '../components/inbox/KeyboardShortcutsOverlay';
 import { InboxGlassTipProvider } from '../components/inbox/ComposerGlassTip';
@@ -52,6 +53,7 @@ import type {
 export default function InboxPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { hasConnectedNumber, loading: numbersLoading } = useWhatsAppNumber();
 
   const [search, setSearch] = useState('');
   const [chip, setChip] = useState<ListChip>('all');
@@ -374,6 +376,12 @@ export default function InboxPage() {
     setServiceWindow(undefined);
     setTemplateMode(false);
   }, [setSelected, setMessages, setServiceWindow]);
+
+  // Disconnected = blank inbox: no orphan chats, no open thread from a past number.
+  useEffect(() => {
+    if (numbersLoading || hasConnectedNumber) return;
+    resetThread();
+  }, [numbersLoading, hasConnectedNumber, resetThread]);
 
   useInboxNumberCache({
     conversations,

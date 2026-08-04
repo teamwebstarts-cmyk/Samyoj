@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { inboxApi } from '../../services/api';
+import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
 import type { Conversation } from '../../types';
 import type { ListChip } from './InboxListHeader';
 
@@ -39,6 +40,7 @@ interface ListFilters {
 
 /**
  * Conversation list with classic page + limit pagination (GET /inbox?page&limit).
+ * Only loads when a WhatsApp number is connected — disconnected orgs see an empty inbox.
  */
 export function useConversationList({
   search,
@@ -49,6 +51,7 @@ export function useConversationList({
   page,
   pageSize,
 }: ListFilters) {
+  const { hasConnectedNumber, loading: numbersLoading } = useWhatsAppNumber();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -60,6 +63,21 @@ export function useConversationList({
 
   const load = useCallback(async () => {
     const requestId = ++requestRef.current;
+
+    // Wait for number context; never show another number's / orphan chats while disconnected.
+    if (numbersLoading) {
+      setLoading(true);
+      setError(false);
+      return;
+    }
+    if (!hasConnectedNumber) {
+      setConversations([]);
+      setTotal(0);
+      setError(false);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(false);
     try {
@@ -92,7 +110,17 @@ export function useConversationList({
         setLoading(false);
       }
     }
-  }, [search, chip, statusFilter, agentFilter, userId, page, pageSize]);
+  }, [
+    search,
+    chip,
+    statusFilter,
+    agentFilter,
+    userId,
+    page,
+    pageSize,
+    hasConnectedNumber,
+    numbersLoading,
+  ]);
 
   useEffect(() => {
     void load();
