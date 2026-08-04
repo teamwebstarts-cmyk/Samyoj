@@ -78,9 +78,6 @@ interface ChatThreadProps {
   onToggleFavorite: () => void;
   onAssign: (agentId: string | null) => void;
   onStatusChange: (status: string) => void;
-  onConvertToTicket: () => void;
-  onExport: () => void;
-  onCreateCampaign: () => void;
   onContextMenu: (event: React.MouseEvent) => void;
   onReloadThread: () => void;
   onLoadEarlier: () => void;
@@ -146,9 +143,6 @@ export default function ChatThread({
   onToggleFavorite,
   onAssign,
   onStatusChange,
-  onConvertToTicket,
-  onExport,
-  onCreateCampaign,
   onContextMenu,
   onReloadThread,
   onLoadEarlier,

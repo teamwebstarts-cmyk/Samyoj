@@ -322,7 +322,7 @@ export default function ChatHeader({
         name={contact.name}
         phone={contact.phone}
         size="sm"
-        shape="circle"
+        shape="squircle"
         presence={avatarPresence}
         presenceLabel={avatarPresenceLabel}
       />

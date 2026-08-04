@@ -660,9 +660,6 @@ export default function InboxPage() {
                   onToggleFavorite={() => void handleToggleFavorite()}
                   onAssign={(agentId) => void handleAssignAgent(agentId)}
                   onStatusChange={(status) => void handleStatusChange(status)}
-                  onConvertToTicket={() => setTicketModalOpen(true)}
-                  onExport={() => setExportTarget(selected)}
-                  onCreateCampaign={() => navigate(`/campaigns?contacts=${selected.contact.id}`)}
                   onContextMenu={(event) => openChatContextMenu(event, selected)}
                   onReloadThread={() => void handleOpenConversation(selected)}
                   onLoadEarlier={() => void loadEarlierMessages()}

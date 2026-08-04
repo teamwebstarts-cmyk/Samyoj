@@ -4,10 +4,10 @@ import {
   BarChart3,
   Download,
   Hash,
-  LifeBuoy,
   Plus,
   StickyNote,
   Tag,
+  Ticket,
   Trash2,
   User,
   UserPlus,
@@ -507,7 +507,7 @@ export default function InboxDetailsPanel({
         className={`${btn} text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-950/40`}
         {...tipFor('Convert to ticket', opts.tipSide)}
       >
-        <LifeBuoy className="h-4 w-4" strokeWidth={iconStroke} />
+        <Ticket className="h-4 w-4" strokeWidth={iconStroke} />
       </button>
       <button
         type="button"
