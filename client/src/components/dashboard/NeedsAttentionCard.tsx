@@ -37,10 +37,10 @@ function MetricRow({
   const urgent = count > 0;
 
   return (
-    <div className="flex min-h-[4.25rem] flex-col gap-2 rounded-xl border border-neutral-100/90 bg-white px-3 py-2.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:min-h-[4.5rem] sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-3.5 sm:py-3">
-      <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
+    <div className="flex flex-col gap-1.5 rounded-xl border border-neutral-100/90 bg-white px-2.5 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-2 sm:px-3 sm:py-2.5">
+      <div className="flex min-w-0 items-center gap-2">
         <span
-          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
             iconAccent === 'emerald'
               ? 'bg-emerald-50 text-emerald-600'
               : 'bg-rose-50 text-rose-600'
@@ -49,17 +49,17 @@ function MetricRow({
           {icon}
         </span>
         <div className="min-w-0">
-          <p className="text-[13px] font-bold leading-snug text-neutral-900 sm:text-[13.5px]">
+          <p className="text-[12.5px] font-bold leading-snug text-neutral-900 sm:text-[13px]">
             {title}
           </p>
-          <p className="mt-0.5 truncate text-[11px] font-medium leading-snug text-neutral-500 sm:text-[11.5px]">
+          <p className="mt-0.5 truncate text-[10.5px] font-medium leading-snug text-neutral-500 sm:text-[11px]">
             {subtitle}
           </p>
         </div>
       </div>
-      <div className="flex shrink-0 items-center gap-2.5 self-end sm:gap-3 sm:self-auto">
+      <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
         <span
-          className={`inline-flex h-8 min-w-8 items-center justify-center rounded-full px-2.5 text-[13px] font-extrabold tabular-nums ring-1 ${
+          className={`inline-flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-[12px] font-extrabold tabular-nums ring-1 ${
             urgent
               ? 'bg-rose-50 text-rose-600 ring-rose-100/80'
               : 'bg-neutral-50 text-neutral-500 ring-neutral-100'
@@ -69,10 +69,10 @@ function MetricRow({
         </span>
         <Link
           to={to}
-          className="inline-flex items-center gap-1 rounded-xl border border-neutral-200/90 bg-white px-3.5 py-2 text-[12px] font-bold text-neutral-800 shadow-sm transition hover:bg-neutral-50"
+          className="inline-flex items-center gap-0.5 rounded-lg border border-neutral-200/90 bg-white px-2.5 py-1.5 text-[11px] font-bold text-neutral-800 transition hover:bg-neutral-50 sm:text-[11.5px]"
         >
           {cta}
-          <ArrowRight className="h-3.5 w-3.5 text-neutral-500" strokeWidth={2.25} />
+          <ArrowRight className="h-3 w-3 text-neutral-500" strokeWidth={2.25} />
         </Link>
       </div>
     </div>
@@ -91,26 +91,26 @@ function AlertRow({
   cta: string;
 }) {
   return (
-    <div className="flex min-h-[4.25rem] flex-col gap-2 rounded-xl border border-amber-100/80 bg-white px-3 py-2.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:min-h-[4.5rem] sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-3.5 sm:py-3">
-      <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+    <div className="flex flex-col gap-1.5 rounded-xl border border-amber-100/80 bg-white px-2.5 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-2 sm:px-3 sm:py-2.5">
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
           <WifiOff className="h-3.5 w-3.5 stroke-[2.2]" />
         </span>
         <div className="min-w-0">
-          <p className="text-[13px] font-bold leading-snug text-neutral-900 sm:text-[13.5px]">
+          <p className="text-[12.5px] font-bold leading-snug text-neutral-900 sm:text-[13px]">
             {title}
           </p>
-          <p className="mt-0.5 truncate text-[11px] font-medium leading-snug text-neutral-500 sm:text-[11.5px]">
+          <p className="mt-0.5 truncate text-[10.5px] font-medium leading-snug text-neutral-500 sm:text-[11px]">
             {subtitle}
           </p>
         </div>
       </div>
       <Link
         to={to}
-        className="inline-flex shrink-0 items-center gap-1 self-end rounded-xl border border-neutral-200/90 bg-white px-3.5 py-2 text-[12px] font-bold text-neutral-800 shadow-sm transition hover:bg-neutral-50 sm:self-auto"
+        className="inline-flex shrink-0 items-center gap-0.5 self-end rounded-lg border border-neutral-200/90 bg-white px-2.5 py-1.5 text-[11px] font-bold text-neutral-800 transition hover:bg-neutral-50 sm:self-auto sm:text-[11.5px]"
       >
         {cta}
-        <ArrowRight className="h-3.5 w-3.5 text-neutral-500" strokeWidth={2.25} />
+        <ArrowRight className="h-3 w-3 text-neutral-500" strokeWidth={2.25} />
       </Link>
     </div>
   );
@@ -156,8 +156,8 @@ export default function NeedsAttentionCard({
           </div>
         </div>
         <div className="flex flex-1 flex-col justify-center gap-2">
-          <div className="h-[4.25rem] animate-pulse rounded-xl bg-neutral-50" />
-          <div className="h-[4.25rem] animate-pulse rounded-xl bg-neutral-50" />
+          <div className="h-14 animate-pulse rounded-xl bg-neutral-50" />
+          <div className="h-14 animate-pulse rounded-xl bg-neutral-50" />
         </div>
       </section>
     );
@@ -179,25 +179,23 @@ export default function NeedsAttentionCard({
   return (
     <section
       aria-label="Needs attention"
-      className={`${CARD} ${
-        calm
-          ? 'border-neutral-100/90 bg-white'
-          : hasConnectionAlerts && !hasMetricAlerts
-            ? 'border-amber-100/90 bg-amber-50/40'
-            : 'border-rose-100/90 bg-[#fff5f5]/90'
-      }`}
+      className={`${CARD} ${calm
+        ? 'border-neutral-100/90 bg-white'
+        : hasConnectionAlerts && !hasMetricAlerts
+          ? 'border-amber-100/90 bg-amber-50/40'
+          : 'border-rose-100/90 bg-[#fff5f5]/90'
+        }`}
     >
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="mb-2.5 flex shrink-0 items-start justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2.5">
             <div
-              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${
-                calm
-                  ? 'bg-emerald-50 text-emerald-600'
-                  : hasConnectionAlerts && !hasMetricAlerts
-                    ? 'bg-amber-100 text-amber-700'
-                    : 'bg-rose-100 text-rose-600'
-              }`}
+              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${calm
+                ? 'bg-emerald-50 text-emerald-600'
+                : hasConnectionAlerts && !hasMetricAlerts
+                  ? 'bg-amber-100 text-amber-700'
+                  : 'bg-rose-100 text-rose-600'
+                }`}
             >
               {calm ? (
                 <ShieldCheck className="h-4 w-4 stroke-[2.2]" />
@@ -210,26 +208,24 @@ export default function NeedsAttentionCard({
                 Needs attention
               </h2>
               <p
-                className={`truncate text-[11px] font-medium ${
-                  calm
-                    ? 'text-emerald-800/80'
-                    : hasConnectionAlerts && !hasMetricAlerts
-                      ? 'text-amber-800/80'
-                      : 'text-rose-800/70'
-                }`}
+                className={`truncate text-[11px] font-medium ${calm
+                  ? 'text-emerald-800/80'
+                  : hasConnectionAlerts && !hasMetricAlerts
+                    ? 'text-amber-800/80'
+                    : 'text-rose-800/70'
+                  }`}
               >
                 {headerHint}
               </p>
             </div>
           </div>
           <span
-            className={`inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-[10.5px] font-bold ring-1 ${
-              calm
-                ? 'bg-emerald-50 text-emerald-800 ring-emerald-100/90'
-                : hasConnectionAlerts && !hasMetricAlerts
-                  ? 'bg-amber-50 text-amber-800 ring-amber-100/90'
-                  : 'bg-rose-50 text-rose-600 ring-rose-100/90'
-            }`}
+            className={`inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-[10.5px] font-bold ring-1 ${calm
+              ? 'bg-emerald-50 text-emerald-800 ring-emerald-100/90'
+              : hasConnectionAlerts && !hasMetricAlerts
+                ? 'bg-amber-50 text-amber-800 ring-amber-100/90'
+                : 'bg-rose-50 text-rose-600 ring-rose-100/90'
+              }`}
           >
             {alertCount} alert{alertCount === 1 ? '' : 's'}
           </span>

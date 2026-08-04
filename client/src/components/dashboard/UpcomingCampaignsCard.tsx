@@ -210,11 +210,10 @@ export default function UpcomingCampaignsCard({
                           {c.name}
                         </span>
                         <span
-                          className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10.5px] font-semibold sm:px-2 sm:text-[11px] ${
-                            isScheduled
-                              ? 'bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-300'
-                              : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400'
-                          }`}
+                          className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10.5px] font-semibold sm:px-2 sm:text-[11px] ${isScheduled
+                            ? 'bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-300'
+                            : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400'
+                            }`}
                         >
                           {isScheduled ? 'Scheduled' : 'Draft'}
                         </span>

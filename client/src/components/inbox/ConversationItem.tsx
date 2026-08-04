@@ -86,12 +86,12 @@ export default function ConversationItem({
       onClick={onSelect}
       onContextMenu={onContextMenu}
       aria-current={selected ? 'true' : undefined}
-      className={`group relative flex w-full items-start gap-3 rounded-xl border px-3 py-3 text-left transition-[background-color,box-shadow,border-color] duration-150 active:scale-[0.995] motion-reduce:active:scale-100 sm:px-4 ${FOCUS_RING_CLASS} ${
+      className={`group relative flex w-full items-start gap-3 px-3 py-3 text-left sm:px-4 ${FOCUS_RING_CLASS} ${
         checked
-          ? 'border-whatsapp-500/20 bg-whatsapp-500/10 dark:border-whatsapp-400/25 dark:bg-whatsapp-400/12'
+          ? 'bg-whatsapp-500/10 dark:bg-whatsapp-400/12'
           : selected
-            ? 'border-emerald-200/70 bg-emerald-50/80 shadow-[0_2px_14px_rgba(16,185,129,0.12),0_0_0_1px_rgba(255,255,255,0.55)_inset] backdrop-blur-sm dark:border-emerald-400/25 dark:bg-emerald-500/10 dark:shadow-[0_2px_16px_rgba(16,185,129,0.12)]'
-            : 'border-transparent bg-theme-surface hover:bg-neutral-50/80 dark:hover:bg-neutral-900/45'
+            ? 'bg-neutral-100 dark:bg-neutral-800/70'
+            : 'bg-transparent hover:bg-neutral-50 dark:hover:bg-neutral-900/40'
       }`}
     >
       {selectable && (

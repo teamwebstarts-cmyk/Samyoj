@@ -27,6 +27,8 @@ function tryParseOrigin(value: string): URL | null {
  * - CLIENT_URL / META_REDIRECT_URI from env
  * - localhost / 127.0.0.1 (local + Codespace port-forward)
  * - *.app.github.dev / *.githubpreview.dev (Codespaces)
+ * - ngrok share tunnels (*.ngrok-free.dev / *.ngrok-free.app / *.ngrok.io)
+ * - Current META_WEBHOOK_URL origin (combined UI+API share proxy)
  */
 export function isAllowedOAuthRedirectUri(redirectUri: string): boolean {
   const parsed = tryParseOrigin(redirectUri);
@@ -39,12 +41,22 @@ export function isAllowedOAuthRedirectUri(redirectUri: string): boolean {
   if (client) allowedOrigins.add(client.origin);
   const configured = tryParseOrigin(config.meta.redirectUri);
   if (configured) allowedOrigins.add(configured.origin);
+  // Same public host used for inbound webhook + shared UI preview.
+  const webhook = tryParseOrigin(config.meta.webhookUrl || '');
+  if (webhook) allowedOrigins.add(webhook.origin);
 
   if (allowedOrigins.has(parsed.origin)) return true;
 
   const host = parsed.hostname;
   if (host === 'localhost' || host === '127.0.0.1') return true;
   if (host.endsWith('.app.github.dev') || host.endsWith('.githubpreview.dev')) return true;
+  if (
+    host.endsWith('.ngrok-free.dev') ||
+    host.endsWith('.ngrok-free.app') ||
+    host.endsWith('.ngrok.io')
+  ) {
+    return true;
+  }
 
   return false;
 }

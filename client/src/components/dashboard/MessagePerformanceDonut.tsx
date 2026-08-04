@@ -51,7 +51,7 @@ export default function MessagePerformanceDonut({
 
   const R = 54;
   const C = 2 * Math.PI * R;
-  const stroke = 16;
+  const stroke = 14;
 
   const segments = [
     { key: 'delivered', color: '#25D366', pct: Math.min(100, Math.max(0, deliveredOnlyPctNum)) },
@@ -162,8 +162,8 @@ export default function MessagePerformanceDonut({
           </p>
         </div>
       ) : (
-        <div className="mt-3 flex min-h-0 flex-1 flex-col items-center justify-center gap-4 sm:gap-5 lg:flex-row lg:items-center lg:gap-3">
-          <div className="relative mx-auto aspect-square w-[min(100%,10.5rem)] shrink-0 sm:w-[min(100%,11rem)] lg:mx-0 lg:w-[10.5rem] xl:w-[11.25rem]">
+        <div className="mt-3 flex min-h-0 flex-1 flex-col items-center justify-center gap-3 sm:gap-3.5 lg:flex-row lg:items-center lg:justify-between lg:gap-2.5">
+          <div className="relative mx-auto aspect-square w-[min(100%,8.25rem)] shrink-0 sm:w-[min(100%,8.75rem)] lg:mx-0 lg:w-[8.5rem] xl:w-[9rem]">
             <svg
               viewBox="0 0 160 160"
               className="h-full w-full -rotate-90 transform"
@@ -193,32 +193,32 @@ export default function MessagePerformanceDonut({
               ))}
             </svg>
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-              <span className="text-[1.55rem] font-extrabold leading-none tracking-tight tabular-nums text-neutral-900 sm:text-[1.75rem]">
+              <span className="text-[1.25rem] font-extrabold leading-none tracking-tight tabular-nums text-neutral-900 sm:text-[1.35rem]">
                 {messagesSent.toLocaleString()}
               </span>
-              <span className="mt-1.5 text-[11px] font-medium leading-none text-neutral-500">
+              <span className="mt-1 text-[10px] font-medium leading-none text-neutral-500">
                 Total sent
               </span>
             </div>
           </div>
 
-          <ul className="m-0 w-full min-w-0 flex-1 list-none space-y-2.5 overflow-visible p-0 lg:min-w-[11.5rem]">
+          <ul className="m-0 w-full max-w-[12.5rem] min-w-0 list-none space-y-2 overflow-visible p-0 sm:max-w-[13rem] lg:ml-auto lg:w-[48%] lg:max-w-[11.5rem] lg:shrink-0">
             {legend.map((item) => (
               <li key={item.key} className="min-w-0">
-                <div className="flex min-w-0 items-center gap-2">
-                  <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${item.color}`} aria-hidden />
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <span className={`h-2 w-2 shrink-0 rounded-full ${item.color}`} aria-hidden />
                   <span
-                    className="min-w-0 flex-1 truncate text-[12.5px] font-semibold text-neutral-800 sm:text-[13px]"
+                    className="min-w-0 flex-1 truncate text-[11.5px] font-semibold text-neutral-800 sm:text-[12px]"
                     title={item.labelFull}
                   >
                     {item.label}
                   </span>
-                  <span className="shrink-0 whitespace-nowrap text-right text-[12px] font-bold tabular-nums text-neutral-900 sm:text-[12.5px]">
+                  <span className="shrink-0 whitespace-nowrap text-right text-[11px] font-bold tabular-nums text-neutral-900 sm:text-[11.5px]">
                     {item.value}
-                    <span className="ml-1 font-medium text-neutral-500">({item.pct})</span>
+                    <span className="ml-0.5 font-medium text-neutral-500">({item.pct})</span>
                   </span>
                 </div>
-                <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-neutral-100">
+                <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-neutral-100">
                   <div
                     className={`h-full rounded-full ${item.bar} transition-[width] duration-300`}
                     style={{ width: `${Math.max(item.share > 0 ? 3 : 0, item.share)}%` }}

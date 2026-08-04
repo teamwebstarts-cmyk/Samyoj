@@ -299,9 +299,8 @@ export default function DashboardPage() {
             </div>
 
             <div
-              className={`mt-3 grid grid-cols-1 gap-3 lg:mt-4 lg:gap-4 ${
-                showChecklist || onboardingError ? 'lg:grid-cols-5 lg:items-start' : ''
-              }`}
+              className={`mt-3 grid grid-cols-1 gap-3 lg:mt-4 lg:gap-4 ${showChecklist || onboardingError ? 'lg:grid-cols-5 lg:items-start' : ''
+                }`}
             >
               <div className={`min-w-0 ${showChecklist || onboardingError ? 'lg:col-span-3' : ''}`}>
                 <DashboardQuickActions />

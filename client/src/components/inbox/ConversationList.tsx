@@ -259,11 +259,7 @@ export default function ConversationList({
             return (
               <div
                 key={conv.id}
-                className={`${
-                  isSelected
-                    ? 'px-2 py-1'
-                    : 'border-b border-neutral-100/80 dark:border-neutral-800/60'
-                } ${insertClass}`}
+                className={`border-b border-neutral-100/80 dark:border-neutral-800/60 ${insertClass}`}
               >
                 <ConversationItem
                   conversation={conv}

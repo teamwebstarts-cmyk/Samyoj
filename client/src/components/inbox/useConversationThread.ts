@@ -91,6 +91,7 @@ export function useConversationThread({ setConversations, refreshUnread }: Threa
 
   const openConversation = useCallback(
     async (conv: Conversation) => {
+      const requestId = conv.id;
       setSelected(conv);
       setThreadError(false);
       setThreadLoading(true);
@@ -103,20 +104,35 @@ export function useConversationThread({ setConversations, refreshUnread }: Threa
           inboxApi.messages(conv.id),
           inboxApi.get(conv.id),
         ]);
-        const msgs = (msgRes.data.data.messages ?? []) as Message[];
+        // Ignore stale responses if user switched chats mid-flight.
+        if (selectedRef.current?.id !== requestId) return;
+
+        const payload = msgRes.data?.data;
+        const msgs = (payload?.messages ?? []) as Message[];
         setMessages(msgs);
-        setServiceWindow(msgRes.data.data.serviceWindow ?? undefined);
-        const hasMoreFlag = msgRes.data.data.hasMore;
+        setServiceWindow(payload?.serviceWindow ?? undefined);
+        const hasMoreFlag = payload?.hasMore;
         setHasEarlier(
           typeof hasMoreFlag === 'boolean' ? hasMoreFlag : msgs.length >= MESSAGE_PAGE_LIMIT
         );
-        const full = convRes.data.data as Conversation;
-        setSelected((prev) => (prev?.id === conv.id ? { ...prev, ...full } : prev));
+        const full = (convRes.data?.data ?? null) as Conversation | null;
+        if (full) {
+          setSelected((prev) => (prev?.id === conv.id ? { ...prev, ...full } : prev));
+        }
       } catch (err) {
+        const aborted =
+          (err as { code?: string; name?: string; message?: string })?.code === 'ERR_CANCELED' ||
+          (err as { name?: string })?.name === 'CanceledError' ||
+          (err as { message?: string })?.message === 'canceled';
+        if (aborted) return;
+        // Only surface error if this chat is still selected.
+        if (selectedRef.current?.id !== requestId) return;
         console.error(err);
         setThreadError(true);
       } finally {
-        setThreadLoading(false);
+        if (selectedRef.current?.id === requestId) {
+          setThreadLoading(false);
+        }
       }
       markConversationRead(conv.id);
     },
