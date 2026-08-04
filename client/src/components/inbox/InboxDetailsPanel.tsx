@@ -1,12 +1,16 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import {
   Activity,
+  BarChart3,
+  Download,
   Hash,
+  LifeBuoy,
   Plus,
   StickyNote,
   Tag,
   Trash2,
   User,
+  UserPlus,
   X,
 } from 'lucide-react';
 import AppInput from '../ui/AppInput';
@@ -76,6 +80,9 @@ interface InboxDetailsPanelProps {
   onLabelsChange: (labels: ConversationLabel[]) => void;
   onContactChange: (contact: Contact) => void;
   onAssign: (agentId: string | null) => void;
+  onConvertToTicket: () => void;
+  onExport: () => void;
+  onCreateCampaign: () => void;
   /** Controlled docked panel open (≥ md). */
   panelOpen: boolean;
   onPanelOpenChange: (open: boolean) => void;
@@ -166,6 +173,9 @@ export default function InboxDetailsPanel({
   onLabelsChange,
   onContactChange,
   onAssign,
+  onConvertToTicket,
+  onExport,
+  onCreateCampaign,
   panelOpen,
   onPanelOpenChange,
   focusSection,
@@ -194,10 +204,14 @@ export default function InboxDetailsPanel({
   const [showNewLabel, setShowNewLabel] = useState(false);
   const [labelsPickerOpen, setLabelsPickerOpen] = useState(false);
   const [assignListOpen, setAssignListOpen] = useState(false);
+  const [headerAssignOpen, setHeaderAssignOpen] = useState(false);
+  const [railAssignOpen, setRailAssignOpen] = useState(false);
   const [newTag, setNewTag] = useState('');
   const [addingTag, setAddingTag] = useState(false);
   const [showTagInput, setShowTagInput] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const railAssignRef = useRef<HTMLButtonElement>(null);
+  const headerAssignRef = useRef<HTMLButtonElement>(null);
   const tabListRef = useRef<HTMLDivElement>(null);
   const noteInputRef = useRef<HTMLTextAreaElement>(null);
   const labelsSectionRef = useRef<HTMLDivElement>(null);
@@ -221,6 +235,8 @@ export default function InboxDetailsPanel({
   useEffect(() => {
     onPanelOpenChange(false);
     setAssignListOpen(false);
+    setHeaderAssignOpen(false);
+    setRailAssignOpen(false);
     setLabelsPickerOpen(false);
     setShowNewLabel(false);
     setShowTagInput(false);
@@ -426,9 +442,94 @@ export default function InboxDetailsPanel({
 
   const toggleAssignList = () => setAssignListOpen((v) => !v);
   const tagCount = contact.tags?.length ?? 0;
+  const assignedId = conversation.assignedAgent?.id;
+  const iconStroke = 1.9;
 
   const panelShellClass =
     '@container flex flex-col border-theme-border/80 bg-white/70 shadow-[-8px_0_32px_rgba(15,23,42,0.06)] backdrop-blur-xl dark:border-neutral-800/70 dark:bg-neutral-950/70 dark:shadow-[-8px_0_32px_rgba(0,0,0,0.35)]';
+
+  const actionBtnClass =
+    'relative flex h-9 w-9 items-center justify-center rounded-xl transition disabled:cursor-not-allowed disabled:opacity-45';
+
+  const renderQuickActions = (opts: {
+    assignRef: RefObject<HTMLButtonElement>;
+    assignOpen: boolean;
+    setAssignOpen: (open: boolean) => void;
+    tipSide: 'left' | 'below';
+    popoverPrefer: 'above' | 'below';
+    compact?: boolean;
+  }) => {
+    const btn = opts.compact
+      ? 'relative flex h-8 w-8 items-center justify-center rounded-lg transition disabled:cursor-not-allowed disabled:opacity-45'
+      : actionBtnClass;
+    return (
+    <>
+      <button
+        ref={opts.assignRef}
+        type="button"
+        aria-label={
+          conversation.assignedAgent?.name
+            ? `Assign agent · ${conversation.assignedAgent.name}`
+            : 'Assign agent'
+        }
+        aria-expanded={opts.assignOpen}
+        disabled={assigning}
+        onClick={() => opts.setAssignOpen(!opts.assignOpen)}
+        className={`${btn} text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40`}
+        {...tipFor(
+          conversation.assignedAgent?.name
+            ? `Assign · ${conversation.assignedAgent.name}`
+            : 'Assign agent',
+          opts.tipSide
+        )}
+      >
+        <UserPlus className="h-4 w-4" strokeWidth={iconStroke} />
+      </button>
+      {opts.assignOpen && (
+        <AssignAgentPopover
+          agents={agents}
+          currentUserId={currentUserId}
+          selectedAgentId={assignedId}
+          disabled={assigning}
+          placement={opts.popoverPrefer}
+          anchorRef={opts.assignRef}
+          onSelect={(agentId) => {
+            onAssign(agentId);
+            opts.setAssignOpen(false);
+          }}
+          onClose={() => opts.setAssignOpen(false)}
+        />
+      )}
+      <button
+        type="button"
+        aria-label="Convert to ticket"
+        onClick={onConvertToTicket}
+        className={`${btn} text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-950/40`}
+        {...tipFor('Convert to ticket', opts.tipSide)}
+      >
+        <LifeBuoy className="h-4 w-4" strokeWidth={iconStroke} />
+      </button>
+      <button
+        type="button"
+        aria-label="Export chat"
+        onClick={onExport}
+        className={`${btn} text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-950/40`}
+        {...tipFor('Export chat', opts.tipSide)}
+      >
+        <Download className="h-4 w-4" strokeWidth={iconStroke} />
+      </button>
+      <button
+        type="button"
+        aria-label="Create campaign"
+        onClick={onCreateCampaign}
+        className={`${btn} text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/40`}
+        {...tipFor('Create campaign', opts.tipSide)}
+      >
+        <BarChart3 className="h-4 w-4" strokeWidth={iconStroke} />
+      </button>
+    </>
+    );
+  };
 
   const panelBody = (
     <>
@@ -459,7 +560,7 @@ export default function InboxDetailsPanel({
                       : 'text-theme-muted hover:text-theme-secondary'
                   }`}
                 >
-                  <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={2.25} />
+                  <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={iconStroke} />
                   <span className="hidden @[300px]:inline">{tab.shortLabel}</span>
                   {active && (
                     <span className="absolute inset-x-1 -bottom-px h-0.5 rounded-full bg-whatsapp-500 sm:inset-x-1.5" />
@@ -469,15 +570,24 @@ export default function InboxDetailsPanel({
             })}
           </div>
         </div>
-        <div className="relative z-10 flex shrink-0 items-start border-l border-white/50 bg-white/40 px-1.5 pt-2 dark:border-white/10 dark:bg-neutral-950/40">
+        <div className="relative z-10 flex shrink-0 items-center gap-0.5 border-l border-white/50 bg-white/40 px-1.5 dark:border-white/10 dark:bg-neutral-950/40">
+          {renderQuickActions({
+            assignRef: headerAssignRef,
+            assignOpen: headerAssignOpen,
+            setAssignOpen: setHeaderAssignOpen,
+            tipSide: 'below',
+            popoverPrefer: 'below',
+            compact: true,
+          })}
+          <span className="mx-0.5 h-4 w-px shrink-0 bg-theme-border/70" aria-hidden />
           <button
             type="button"
             onClick={closePanel}
-            className="mb-1.5 flex h-8 w-8 items-center justify-center rounded-lg text-neutral-500 transition hover:bg-white/80 hover:text-neutral-800 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-100"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-500 transition hover:bg-white/80 hover:text-neutral-800 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-100"
             aria-label="Close details panel"
             {...tipFor('Hide details')}
           >
-            <X className="h-4 w-4" strokeWidth={2.25} />
+            <X className="h-4 w-4" strokeWidth={iconStroke} />
           </button>
         </div>
       </div>
@@ -877,7 +987,7 @@ export default function InboxDetailsPanel({
           className={`${railBtn} text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40`}
           {...tipFor('Customer details', 'left')}
         >
-          <User className="h-4 w-4" />
+          <User className="h-4 w-4" strokeWidth={iconStroke} />
         </button>
         <button
           type="button"
@@ -886,7 +996,7 @@ export default function InboxDetailsPanel({
           className={`${railBtn} text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/40`}
           {...tipFor('Activity', 'left')}
         >
-          <Activity className="h-4 w-4" strokeWidth={2.25} />
+          <Activity className="h-4 w-4" strokeWidth={iconStroke} />
           {unread > 0 && (
             <span className={`${railBadge} bg-orange-600`}>{unread > 9 ? '9+' : unread}</span>
           )}
@@ -898,7 +1008,7 @@ export default function InboxDetailsPanel({
           className={`${railBtn} text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-950/40`}
           {...tipFor('Labels', 'left')}
         >
-          <Tag className="h-4 w-4" />
+          <Tag className="h-4 w-4" strokeWidth={iconStroke} />
           {labels.length > 0 && (
             <span className={`${railBadge} bg-violet-600`}>{labels.length}</span>
           )}
@@ -910,7 +1020,7 @@ export default function InboxDetailsPanel({
           className={`${railBtn} text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40`}
           {...tipFor('Notes', 'left')}
         >
-          <StickyNote className="h-4 w-4" />
+          <StickyNote className="h-4 w-4" strokeWidth={iconStroke} />
           {notes.length > 0 && (
             <span className={`${railBadge} bg-amber-600`}>{notes.length}</span>
           )}
@@ -922,9 +1032,21 @@ export default function InboxDetailsPanel({
           className={`${railBtn} text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-950/40`}
           {...tipFor('Tags', 'left')}
         >
-          <Hash className="h-4 w-4" />
+          <Hash className="h-4 w-4" strokeWidth={iconStroke} />
           {tagCount > 0 && <span className={`${railBadge} bg-sky-600`}>{tagCount}</span>}
         </button>
+
+        <span className="my-1.5 h-px w-6 shrink-0 bg-theme-border/80" aria-hidden />
+
+        <div className="flex flex-col items-center gap-1">
+          {renderQuickActions({
+            assignRef: railAssignRef,
+            assignOpen: railAssignOpen,
+            setAssignOpen: setRailAssignOpen,
+            tipSide: 'left',
+            popoverPrefer: 'above',
+          })}
+        </div>
       </aside>
     );
   }

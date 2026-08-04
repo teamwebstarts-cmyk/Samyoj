@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from 'react';
-import { Clock3, MessageCircle, User } from 'lucide-react';
+import { MessageCircle, User } from 'lucide-react';
 import AppInput from '../ui/AppInput';
 import { toastError } from '../../utils/toast';
 import SlideOver, { SlideOverFooter } from '../ui/SlideOver';
@@ -75,12 +75,9 @@ export default function NewChatSlideOver({ open, onClose, onStart }: NewChatSlid
     >
       <form id="slideover-form" onSubmit={handleSubmit} className="new-chat-form space-y-5">
         <div className="new-chat-form__item space-y-1.5">
-          <div className="flex items-baseline justify-between gap-2">
-            <label htmlFor={phoneId} className="text-label text-theme-secondary">
-              Phone number
-            </label>
-            <span className="text-caption text-theme-muted">Required</span>
-          </div>
+          <label htmlFor={phoneId} className="text-label text-theme-secondary">
+            Phone number
+          </label>
 
           <div className="relative">
             <span
@@ -99,7 +96,7 @@ export default function NewChatSlideOver({ open, onClose, onStart }: NewChatSlid
               onChange={(e) => handlePhoneChange(e.target.value)}
               placeholder={PHONE_PLACEHOLDER}
               aria-invalid={phoneError ? true : undefined}
-              aria-describedby={`${phoneId}-hint${phoneError ? ` ${phoneId}-error` : ''}`}
+              aria-describedby={phoneError ? `${phoneId}-error` : undefined}
               className={`h-11 w-full rounded-xl border bg-theme-surface pl-[3.25rem] pr-3.5 text-body tabular-nums text-theme-fg shadow-input transition placeholder:text-theme-muted focus:border-slate-400 focus:outline-none focus:shadow-input-focus disabled:opacity-60 dark:focus:border-slate-500 ${
                 phoneError
                   ? 'border-red-300 focus:border-red-500 focus:shadow-[0_0_0_4px_rgba(239,68,68,0.12)] dark:border-red-500/40'
@@ -108,9 +105,6 @@ export default function NewChatSlideOver({ open, onClose, onStart }: NewChatSlid
             />
           </div>
 
-          <p id={`${phoneId}-hint`} className="text-caption leading-relaxed text-theme-muted">
-            Country code + number — type digits only (e.g. {PHONE_PLACEHOLDER})
-          </p>
           {phoneError && (
             <p id={`${phoneId}-error`} className="text-caption font-medium text-red-600 dark:text-red-400">
               {phoneError}
@@ -121,33 +115,12 @@ export default function NewChatSlideOver({ open, onClose, onStart }: NewChatSlid
         <div className="new-chat-form__item">
           <AppInput
             label="Contact name"
-            hint="Optional"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="How should we show them?"
+            placeholder="Name"
             autoComplete="name"
             icon={<User className="h-4 w-4" />}
           />
-        </div>
-
-        <div
-          className="new-chat-form__item new-chat-callout rounded-2xl border border-theme-border/80 bg-theme-subtle/55 px-3.5 py-3.5 backdrop-blur-[6px] dark:bg-theme-subtle/40"
-          role="note"
-        >
-          <div className="flex items-start gap-3">
-            <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-whatsapp-500/10 text-whatsapp-700 ring-1 ring-whatsapp-500/15 dark:bg-whatsapp-500/15 dark:text-whatsapp-300 dark:ring-whatsapp-400/20">
-              <Clock3 className="h-4 w-4" strokeWidth={2.1} />
-            </span>
-            <div className="min-w-0 space-y-1">
-              <p className="text-[13px] font-semibold tracking-tight text-theme-fg">
-                24-hour messaging window
-              </p>
-              <p className="text-[12.5px] leading-relaxed text-theme-secondary">
-                If the customer hasn&apos;t messaged you recently, free-text replies may be blocked.
-                Use an approved template when the window is closed.
-              </p>
-            </div>
-          </div>
         </div>
       </form>
     </SlideOver>

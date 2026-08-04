@@ -663,8 +663,6 @@ export default function InboxPage() {
                   onConvertToTicket={() => setTicketModalOpen(true)}
                   onExport={() => setExportTarget(selected)}
                   onCreateCampaign={() => navigate(`/campaigns?contacts=${selected.contact.id}`)}
-                  detailsOpen={detailsPanelOpen || detailsOverlay.open}
-                  onToggleDetails={() => toggleDetails()}
                   onContextMenu={(event) => openChatContextMenu(event, selected)}
                   onReloadThread={() => void handleOpenConversation(selected)}
                   onLoadEarlier={() => void loadEarlierMessages()}
@@ -726,6 +724,9 @@ export default function InboxPage() {
                     setSelected((prev) => (prev ? { ...prev, contact } : prev))
                   }
                   onAssign={(agentId) => void handleAssignAgent(agentId)}
+                  onConvertToTicket={() => setTicketModalOpen(true)}
+                  onExport={() => setExportTarget(selected)}
+                  onCreateCampaign={() => navigate(`/campaigns?contacts=${selected.contact.id}`)}
                   panelOpen={detailsPanelOpen}
                   onPanelOpenChange={setDetailsPanelOpen}
                   focusSection={detailsFocusSection}

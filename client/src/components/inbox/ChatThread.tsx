@@ -81,8 +81,6 @@ interface ChatThreadProps {
   onConvertToTicket: () => void;
   onExport: () => void;
   onCreateCampaign: () => void;
-  detailsOpen: boolean;
-  onToggleDetails: () => void;
   onContextMenu: (event: React.MouseEvent) => void;
   onReloadThread: () => void;
   onLoadEarlier: () => void;
@@ -151,8 +149,6 @@ export default function ChatThread({
   onConvertToTicket,
   onExport,
   onCreateCampaign,
-  detailsOpen,
-  onToggleDetails,
   onContextMenu,
   onReloadThread,
   onLoadEarlier,
@@ -258,18 +254,10 @@ export default function ChatThread({
 
   // When a sticky condition ends, clear its session dismiss so it can reappear.
   useEffect(() => {
-    const showBotLive = botIsLive && !conversation.botHandoffAt && !conversation.activeFlow;
-    if (!showBotLive) setNoticeDismissed(conversation.id, 'bot-live', false);
-    if (botIsLive) setNoticeDismissed(conversation.id, 'bot-paused', false);
     if (!conversation.botHandoffAt) setNoticeDismissed(conversation.id, 'handoff', false);
     if (!conversation.activeFlow) setNoticeDismissed(conversation.id, 'flow', false);
     setStickyDismissTick((n) => n + 1);
-  }, [
-    conversation.id,
-    botIsLive,
-    conversation.botHandoffAt,
-    conversation.activeFlow,
-  ]);
+  }, [conversation.id, conversation.botHandoffAt, conversation.activeFlow]);
 
   const stickyNotices = useMemo((): ChatNoticeItem[] => {
     void stickyDismissTick;
@@ -292,22 +280,6 @@ export default function ChatThread({
             {conversation.assignedAgent ? ` · ${conversation.assignedAgent.name}` : ''}
           </span>
         ),
-      });
-    }
-
-    if (
-      botIsLive &&
-      !conversation.botHandoffAt &&
-      !conversation.activeFlow &&
-      !isNoticeDismissed(cid, 'bot-live')
-    ) {
-      items.push({
-        id: 'sticky-bot-live',
-        kind: 'bot-live',
-        variant: 'sticky',
-        tone: 'lavender',
-        icon: 'bot',
-        message: <span className="min-w-0 truncate">AI bot is handling this conversation</span>,
       });
     }
 
@@ -342,29 +314,6 @@ export default function ChatThread({
       });
     }
 
-    if (!botIsLive && !isNoticeDismissed(cid, 'bot-paused')) {
-      items.push({
-        id: 'sticky-bot-paused',
-        kind: 'bot-paused',
-        variant: 'sticky',
-        tone: 'amber',
-        icon: 'bot',
-        message: (
-          <span className="min-w-0">
-            AI bot paused.{' '}
-            <button
-              type="button"
-              onClick={onToggleBot}
-              className="font-bold underline decoration-amber-400/60 underline-offset-2 hover:no-underline"
-            >
-              Turn on
-            </button>{' '}
-            to auto-reply.
-          </span>
-        ),
-      });
-    }
-
     return items;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -374,8 +323,6 @@ export default function ChatThread({
     conversation.botHandoffReason,
     conversation.assignedAgent,
     conversation.activeFlow,
-    botIsLive,
-    onToggleBot,
     navigate,
   ]);
 
@@ -628,11 +575,6 @@ export default function ChatThread({
         onToggleSearch={toggleSearch}
         onAssign={onAssign}
         onStatusChange={onStatusChange}
-        onConvertToTicket={onConvertToTicket}
-        onExport={onExport}
-        onCreateCampaign={onCreateCampaign}
-        detailsOpen={detailsOpen}
-        onToggleDetails={onToggleDetails}
       />
 
       <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">

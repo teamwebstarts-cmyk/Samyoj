@@ -1,7 +1,7 @@
 import { useState, type Dispatch, type SetStateAction } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { callingApi, inboxApi } from '../../services/api';
-import { toastError } from '../../utils/toast';
+import { toastError, toastInbox } from '../../utils/toast';
 import { emitChatNotice } from './chatNoticeBus';
 import type { Conversation } from '../../types';
 
@@ -82,11 +82,8 @@ export function useConversationActions({
         activeBot: updated.activeBot,
       } as Conversation);
       const flowId = updated.activeFlow?.flowId || target.activeFlow?.flowId;
-      emitChatNotice(targetId, {
-        kind: turningOn ? 'bot-on' : 'bot-off',
-        message: turningOn ? 'AI bot is on' : 'AI bot is off',
+      toastInbox(turningOn ? 'AI bot is on' : 'AI bot is off', {
         icon: 'bot',
-        tone: turningOn ? 'lavender' : 'amber',
         ...(turningOn && flowId
           ? {
               actionLabel: 'View flow',
@@ -125,18 +122,16 @@ export function useConversationActions({
         botActive: updated.botActive,
         botHandoffAt: updated.botHandoffAt,
       } as Conversation);
-      emitChatNotice(targetId, {
-        kind: 'bot-switch',
-        message: updated.activeBot?.name
+      toastInbox(
+        updated.activeBot?.name
           ? needsEnable
             ? `${updated.activeBot.name} enabled`
             : `Chatbot set to ${updated.activeBot.name}`
           : needsEnable
             ? 'Default chatbot enabled'
             : 'Using org default chatbot',
-        icon: 'bot',
-        tone: 'lavender',
-      });
+        { icon: 'bot' }
+      );
     } catch (err: unknown) {
       toastError(extractError(err, 'Failed to switch chatbot'));
     } finally {

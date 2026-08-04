@@ -2,16 +2,12 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   ArrowLeft,
-  BarChart3,
   Bell,
   Bot,
   CheckCircle2,
   Clock,
-  Download,
-  LifeBuoy,
   Mail,
   MoreVertical,
-  PanelRight,
   PauseCircle,
   Phone,
   PlayCircle,
@@ -54,11 +50,6 @@ interface ChatHeaderProps {
   onToggleSearch: () => void;
   onAssign: (agentId: string | null) => void;
   onStatusChange: (status: string) => void;
-  onConvertToTicket: () => void;
-  onExport: () => void;
-  onCreateCampaign: () => void;
-  detailsOpen: boolean;
-  onToggleDetails: () => void;
 }
 
 function HeaderIconButton({
@@ -149,11 +140,6 @@ export default function ChatHeader({
   onToggleSearch,
   onAssign,
   onStatusChange,
-  onConvertToTicket,
-  onExport,
-  onCreateCampaign,
-  detailsOpen,
-  onToggleDetails,
 }: ChatHeaderProps) {
   const tipFor = useGlassTipProps();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -278,42 +264,6 @@ export default function ChatHeader({
                 />
               </div>
             )}
-
-            <button
-              type="button"
-              onClick={() => {
-                onConvertToTicket();
-                setMenuOpen(false);
-              }}
-              className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] text-theme-fg transition hover:bg-theme-subtle ${FOCUS_RING_CLASS}`}
-            >
-              <LifeBuoy className="h-4 w-4 text-violet-600" />
-              Convert to ticket
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                onExport();
-                setMenuOpen(false);
-              }}
-              className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] text-theme-fg transition hover:bg-theme-subtle ${FOCUS_RING_CLASS}`}
-            >
-              <Download className="h-4 w-4 text-sky-600" />
-              Export chat
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                onCreateCampaign();
-                setMenuOpen(false);
-              }}
-              className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] text-theme-fg transition hover:bg-theme-subtle ${FOCUS_RING_CLASS}`}
-            >
-              <BarChart3 className="h-4 w-4 text-orange-600" />
-              Create campaign
-            </button>
 
             {/* "Mark as unread" is a planned feature. Surfacing it disabled with
                 a tooltip is more honest than silently omitting it. */}
@@ -557,15 +507,6 @@ export default function ChatHeader({
           </button>
           {overflowMenu}
         </div>
-
-        <HeaderIconButton
-          label={detailsOpen ? 'Hide customer details' : 'Show customer details'}
-          onClick={onToggleDetails}
-          active={detailsOpen}
-          pressed={detailsOpen}
-        >
-          <PanelRight className="h-4 w-4" strokeWidth={2.1} />
-        </HeaderIconButton>
       </div>
     </div>
   );
