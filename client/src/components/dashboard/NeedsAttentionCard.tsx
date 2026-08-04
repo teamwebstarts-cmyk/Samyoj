@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -17,6 +18,63 @@ interface NeedsAttentionCardProps {
   isConnected?: boolean | null;
   /** true = inbound subscribed; false = off; null = unknown / check failed */
   incomingEnabled?: boolean | null;
+}
+
+function MetricRow({
+  title,
+  subtitle,
+  count,
+  countTone,
+  to,
+  cta,
+  icon,
+  iconAccent,
+}: {
+  title: string;
+  subtitle: string;
+  count: number;
+  countTone: 'emerald' | 'rose';
+  to: string;
+  cta: string;
+  icon: ReactNode;
+  iconAccent: 'emerald' | 'rose';
+}) {
+  const badgeClass =
+    countTone === 'emerald'
+      ? 'border-emerald-100/80 bg-emerald-50 text-emerald-700'
+      : 'border-rose-100/80 bg-rose-50 text-rose-600';
+
+  return (
+    <div className="flex flex-col gap-2 rounded-xl border border-neutral-100/90 bg-white px-2.5 py-2 shadow-2xs sm:flex-row sm:items-center sm:justify-between sm:gap-2.5 sm:px-3 sm:py-2.5">
+      <div className="flex min-w-0 items-center gap-2.5">
+        <IconWell accent={iconAccent} size="sm" round>
+          {icon}
+        </IconWell>
+        <div className="min-w-0">
+          <p className="text-[12.5px] font-bold leading-snug text-neutral-900 sm:text-[13px]">
+            {title}
+          </p>
+          <p className="truncate text-[10.5px] font-medium text-neutral-500 sm:text-[11px]">
+            {subtitle}
+          </p>
+        </div>
+      </div>
+      <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
+        <span
+          className={`inline-flex min-w-[26px] items-center justify-center rounded-lg border px-2 py-0.5 text-[13px] font-extrabold tabular-nums ${badgeClass}`}
+        >
+          {count}
+        </span>
+        <Link
+          to={to}
+          className="inline-flex items-center gap-1 rounded-lg border border-neutral-200 bg-white px-2.5 py-1 text-[11.5px] font-bold text-neutral-800 hover:bg-neutral-50"
+        >
+          {cta}
+          <ArrowRight className="h-3 w-3 text-neutral-500" />
+        </Link>
+      </div>
+    </div>
+  );
 }
 
 export default function NeedsAttentionCard({
@@ -138,7 +196,7 @@ export default function NeedsAttentionCard({
             to="/reports"
             className="inline-flex items-center gap-1 text-[12px] font-bold text-emerald-600 hover:text-emerald-700 hover:underline"
           >
-            View reports
+            View all alerts
             <ArrowRight className="h-3.5 w-3.5" />
           </Link>
         </div>
@@ -238,65 +296,27 @@ export default function NeedsAttentionCard({
             </div>
           )}
 
-          {openChats > 0 && (
-            <div className="flex flex-col gap-2 rounded-xl border border-neutral-100/90 bg-white px-2.5 py-2 shadow-2xs sm:flex-row sm:items-center sm:justify-between sm:gap-2.5 sm:px-3 sm:py-2.5">
-              <div className="flex min-w-0 items-center gap-2.5">
-                <IconWell accent="emerald" size="sm" round>
-                  <OpenChatsWaitingSvg className="h-4 w-4" />
-                </IconWell>
-                <div className="min-w-0">
-                  <p className="text-[12.5px] font-bold leading-snug text-neutral-900 sm:text-[13px]">
-                    Open chats
-                  </p>
-                  <p className="truncate text-[10.5px] font-medium text-neutral-500 sm:text-[11px]">
-                    Conversations still marked open
-                  </p>
-                </div>
-              </div>
-              <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
-                <span className="inline-flex min-w-[26px] items-center justify-center rounded-lg border border-rose-100/80 bg-rose-50 px-2 py-0.5 text-[13px] font-extrabold tabular-nums text-rose-600">
-                  {openChats}
-                </span>
-                <Link
-                  to="/inbox"
-                  className="inline-flex items-center gap-1 rounded-lg border border-neutral-200 bg-white px-2.5 py-1 text-[11.5px] font-bold text-neutral-800 hover:bg-neutral-50"
-                >
-                  Open Inbox
-                  <ArrowRight className="h-3 w-3 text-neutral-500" />
-                </Link>
-              </div>
-            </div>
-          )}
+          <MetricRow
+            title="Open chats"
+            subtitle="Customers waiting for reply"
+            count={openChats}
+            countTone="emerald"
+            to="/inbox"
+            cta="Open Inbox"
+            iconAccent="emerald"
+            icon={<OpenChatsWaitingSvg className="h-4 w-4" />}
+          />
 
-          {failedMessages > 0 && (
-            <div className="flex flex-col gap-2 rounded-xl border border-neutral-100/90 bg-white px-2.5 py-2 shadow-2xs sm:flex-row sm:items-center sm:justify-between sm:gap-2.5 sm:px-3 sm:py-2.5">
-              <div className="flex min-w-0 items-center gap-2.5">
-                <IconWell accent="rose" size="sm" round>
-                  <FailedMessagesSvg className="h-4 w-4" />
-                </IconWell>
-                <div className="min-w-0">
-                  <p className="text-[12.5px] font-bold leading-snug text-neutral-900 sm:text-[13px]">
-                    Failed messages
-                  </p>
-                  <p className="truncate text-[10.5px] font-medium text-neutral-500 sm:text-[11px]">
-                    Messages failed to deliver
-                  </p>
-                </div>
-              </div>
-              <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
-                <span className="inline-flex min-w-[26px] items-center justify-center rounded-lg border border-rose-100/80 bg-rose-50 px-2 py-0.5 text-[13px] font-extrabold tabular-nums text-rose-600">
-                  {failedMessages}
-                </span>
-                <Link
-                  to="/reports"
-                  className="inline-flex items-center gap-1 rounded-lg border border-neutral-200 bg-white px-2.5 py-1 text-[11.5px] font-bold text-neutral-800 hover:bg-neutral-50"
-                >
-                  View Failures
-                  <ArrowRight className="h-3 w-3 text-neutral-500" />
-                </Link>
-              </div>
-            </div>
-          )}
+          <MetricRow
+            title="Failed messages"
+            subtitle="Messages failed to deliver"
+            count={failedMessages}
+            countTone="rose"
+            to="/reports"
+            cta="View Failures"
+            iconAccent="rose"
+            icon={<FailedMessagesSvg className="h-4 w-4" />}
+          />
         </div>
       </div>
 
@@ -305,7 +325,7 @@ export default function NeedsAttentionCard({
           to="/reports"
           className="inline-flex items-center gap-1 text-[12px] font-bold text-emerald-600 hover:text-emerald-700 hover:underline"
         >
-          View reports
+          View all alerts
           <ArrowRight className="h-3.5 w-3.5" />
         </Link>
       </div>

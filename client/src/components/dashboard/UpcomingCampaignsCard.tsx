@@ -3,7 +3,6 @@ import {
   ArrowRight,
   Bell,
   Calendar,
-  CalendarCheck,
   Clock,
   Gift,
   Info,
@@ -119,7 +118,7 @@ export default function UpcomingCampaignsCard({
       <div className="flex shrink-0 items-start sm:items-center justify-between gap-2 sm:gap-3">
         <div className="flex min-w-0 items-center gap-2 sm:gap-2.5">
           <IconWell accent="emerald" size="sm" round>
-            <CalendarCheck className="h-4 w-4 stroke-[2.2]" />
+            <Megaphone className="h-4 w-4 stroke-[2.2]" />
           </IconWell>
           <div className="flex min-w-0 items-center gap-1.5">
             <h2 className="truncate text-[14px] sm:text-[15px] md:text-[16px] font-bold text-neutral-900 tracking-tight">
@@ -140,7 +139,7 @@ export default function UpcomingCampaignsCard({
       {/* Main Content Area */}
       {loading ? (
         <div className="my-4 space-y-3">
-          {Array.from({ length: 3 }).map((_, i) => (
+          {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="h-14 animate-pulse rounded-2xl bg-neutral-100/80" />
           ))}
         </div>
@@ -208,7 +207,7 @@ export default function UpcomingCampaignsCard({
       ) : (
         /* Campaign List Rows (Matches image-006bf22f-203b-45df-8b74-768e9c32ebb4.png exactly) */
         <ul className="my-2 space-y-1 divide-y divide-neutral-100/80">
-          {campaigns.slice(0, 3).map((c, idx) => {
+          {campaigns.slice(0, 4).map((c, idx) => {
             const visual = getCampaignVisual(c, idx);
             const Icon = visual.icon;
             const isScheduled = c.status === 'SCHEDULED';

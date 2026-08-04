@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 360" fill="none" aria-hidden="true">
+  <defs>
+    <linearGradient id="screen" x1="80" y1="40" x2="440" y2="280" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ECFDF5"/>
+      <stop offset="1" stop-color="#F0FDFA"/>
+    </linearGradient>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="12" stdDeviation="18" flood-color="#0F172A" flood-opacity="0.12"/>
+    </filter>
+  </defs>
+  <rect x="48" y="28" width="424" height="268" rx="18" fill="#E8EEF2" filter="url(#soft)"/>
+  <rect x="60" y="40" width="400" height="236" rx="10" fill="url(#screen)"/>
+  <rect x="88" y="68" width="344" height="180" rx="12" fill="#FFFFFF" stroke="#E5E7EB"/>
+  <rect x="108" y="92" width="120" height="14" rx="7" fill="#D1FAE5"/>
+  <rect x="108" y="118" width="200" height="10" rx="5" fill="#E5E7EB"/>
+  <rect x="108" y="138" width="160" height="10" rx="5" fill="#F3F4F6"/>
+  <circle cx="260" cy="190" r="36" fill="#25D366" opacity="0.95"/>
+  <path d="M252 190 L258 196 L270 182" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="170" y="248" fill="#6B7280" font-family="system-ui,sans-serif" font-size="13" font-weight="600">What is WhatsApp Business API?</text>
+  <rect x="120" y="296" width="280" height="16" rx="4" fill="#CBD5E1"/>
+  <rect x="200" y="312" width="120" height="8" rx="4" fill="#94A3B8"/>
+</svg>

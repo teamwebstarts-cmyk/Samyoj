@@ -4,35 +4,26 @@ import DashboardSkeleton from '../components/dashboard/DashboardSkeleton';
 import WhatsAppConnectGuide, {
   type WhatsAppGuideStatus,
 } from '../components/dashboard/WhatsAppConnectGuide';
+import PreConnectDashboard, {
+  PreConnectSkeleton,
+} from '../components/dashboard/PreConnectDashboard';
+import LiveMetricsHero from '../components/dashboard/LiveMetricsHero';
 import NeedsAttentionCard from '../components/dashboard/NeedsAttentionCard';
-import DashboardKpiCard from '../components/dashboard/DashboardKpiCard';
 import MessagePerformanceDonut from '../components/dashboard/MessagePerformanceDonut';
 import UpcomingCampaignsCard from '../components/dashboard/UpcomingCampaignsCard';
 import GettingStartedCard from '../components/dashboard/GettingStartedCard';
 import DashboardQuickActions from '../components/dashboard/DashboardQuickActions';
 import RecentActivityCard from '../components/dashboard/RecentActivityCard';
 import AiSuggestionCard from '../components/dashboard/AiSuggestionCard';
-import {
-  MessagesSentSvg,
-  DeliveryRateSvg,
-  ReadRateSvg,
-  ActiveChatsSvg,
-  ContactsSvg,
-} from '../components/dashboard/icons/DashboardIcons';
 import PageShell from '../components/ui/PageShell';
 import EmptyState from '../components/ui/EmptyState';
 import AppButton from '../components/ui/AppButton';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
+import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { analyticsApi, campaignApi, onboardingApi } from '../services/api';
 import { toastError } from '../utils/toast';
 import type { AnalyticsOverview, Campaign } from '../types';
 import type { ActivityItem } from '../components/dashboard/RecentActivityCard';
-import {
-  buildDashboardDemoStats,
-  DASHBOARD_DEMO_CAMPAIGNS,
-  shouldUseDashboardDemoCampaigns,
-  shouldUseDashboardDemoStats,
-} from '../fixtures/dashboardDemo';
 
 const DASHBOARD_PERIOD_DAYS = 7;
 
@@ -61,7 +52,7 @@ function pickUpcoming(campaigns: Campaign[]): Campaign[] {
   const drafts = campaigns
     .filter((c) => c.status === 'DRAFT')
     .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-  return [...upcomingScheduled, ...drafts].slice(0, 3);
+  return [...upcomingScheduled, ...drafts].slice(0, 4);
 }
 
 function extractCampaigns(payload: unknown): Campaign[] {
@@ -75,6 +66,7 @@ function extractCampaigns(payload: unknown): Campaign[] {
 }
 
 export default function DashboardPage() {
+  const { hasConnectedNumber, loading: numbersLoading } = useWhatsAppNumber();
   const [stats, setStats] = useState<AnalyticsOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -94,12 +86,16 @@ export default function DashboardPage() {
   });
   const statsReqId = useRef(0);
   const hasStatsRef = useRef(false);
+  const liveDataLoaded = useRef(false);
 
   const onWaStatusChange = useCallback((status: WhatsAppGuideStatus) => {
     setWaStatus(status);
   }, []);
 
-  const loadStats = () => {
+  const connectionReady = waStatus.statusReady || !numbersLoading;
+  const isConnected = waStatus.statusReady ? waStatus.connected : hasConnectedNumber;
+
+  const loadStats = useCallback(() => {
     const reqId = ++statsReqId.current;
     if (hasStatsRef.current) setRefreshing(true);
     else setLoading(true);
@@ -130,12 +126,11 @@ export default function DashboardPage() {
         setLoading(false);
         setRefreshing(false);
       });
-  };
+  }, []);
 
-  const loadSideData = () => {
+  const loadSideData = useCallback(() => {
     setCampaignsLoading(true);
     setCampaignsError(false);
-    // Prefer status-scoped fetches so SCHEDULED/DRAFT aren't buried under COMPLETED rows
     Promise.allSettled([
       campaignApi.list({ status: 'SCHEDULED', limit: '20' }),
       campaignApi.list({ status: 'DRAFT', limit: '20' }),
@@ -198,15 +193,24 @@ export default function DashboardPage() {
         setActivityError(true);
       })
       .finally(() => setActivityLoading(false));
-  };
+  }, []);
 
+  // Only load Live Metrics data when connected — avoid empty metrics flash on pre-connect.
   useEffect(() => {
+    if (!connectionReady) return;
+    if (!isConnected) {
+      liveDataLoaded.current = false;
+      return;
+    }
+    if (liveDataLoaded.current) return;
+    liveDataLoaded.current = true;
     loadStats();
     loadSideData();
-  }, []);
+  }, [connectionReady, isConnected, loadStats, loadSideData]);
 
   useOnActiveNumberChange(({ isInitial }) => {
     if (isInitial) return;
+    if (!isConnected) return;
     loadStats();
     loadSideData();
   });
@@ -214,14 +218,25 @@ export default function DashboardPage() {
   const showChecklist =
     onboarding && onboarding.totalSteps > 0 && onboarding.completedCount < onboarding.totalSteps;
 
-  const periodLabel = `vs last ${DASHBOARD_PERIOD_DAYS}d`;
+  if (!connectionReady) {
+    return (
+      <PageShell>
+        <div className="space-y-3 pb-5 sm:space-y-4 sm:pb-6">
+          <PreConnectSkeleton />
+        </div>
+      </PageShell>
+    );
+  }
 
-  // DEV-only: always showcase fixture data for UI preview (prod uses live API only)
-  const useDemoStats = shouldUseDashboardDemoStats(stats);
-  const displayStats =
-    useDemoStats && stats ? buildDashboardDemoStats(DASHBOARD_PERIOD_DAYS) : stats;
-  const useDemoCampaigns = shouldUseDashboardDemoCampaigns(campaigns);
-  const displayCampaigns = useDemoCampaigns ? DASHBOARD_DEMO_CAMPAIGNS : campaigns;
+  if (!isConnected) {
+    return (
+      <PageShell>
+        <div className="space-y-3 pb-5 sm:space-y-4 sm:pb-6">
+          <PreConnectDashboard />
+        </div>
+      </PageShell>
+    );
+  }
 
   return (
     <PageShell>
@@ -242,104 +257,43 @@ export default function DashboardPage() {
               </AppButton>
             }
           />
-        ) : displayStats ? (
+        ) : stats ? (
           <div className={refreshing ? 'opacity-70 transition-opacity' : undefined}>
-            {useDemoStats ? (
-              <p className="mb-2 text-[11px] font-medium tracking-wide text-slate-400">
-                Demo preview
-              </p>
-            ) : null}
-            {/* Row 1: Needs attention + metrics
-                Mobile: stack. lg+: stretch so Needs attention matches metrics column height.
-                KPI 5-up at xl; 3-up at md so five cards wrap cleanly. */}
-            <div className="grid grid-cols-1 gap-3 lg:grid-cols-12 lg:items-stretch lg:gap-3 xl:gap-4">
-              <div className="min-w-0 lg:col-span-4 lg:h-full">
-                <NeedsAttentionCard
-                  openChats={displayStats.activeConversations}
-                  failedMessages={displayStats.failedMessages}
-                  isConnected={waStatus.statusReady ? waStatus.connected : null}
-                  incomingEnabled={waStatus.statusReady ? waStatus.incomingEnabled : null}
-                />
-              </div>
+            <LiveMetricsHero
+              messagesSent={stats.messagesSent}
+              deliveryRate={stats.deliveryRate}
+              readRate={stats.readRate}
+              deliveryDelta={stats.deltas?.deliveryRate}
+              readRateDelta={stats.deltas?.readRate}
+              periodDays={DASHBOARD_PERIOD_DAYS}
+            />
 
-              <div className="flex min-w-0 flex-col lg:col-span-8 lg:h-full">
-                <div className="grid min-h-0 flex-1 grid-cols-2 auto-rows-fr gap-2 md:grid-cols-3 md:gap-2.5 xl:grid-cols-5 xl:gap-2.5">
-                  <DashboardKpiCard
-                    label="Messages sent"
-                    value={displayStats.messagesSent.toLocaleString()}
-                    delta={displayStats.deltas?.messagesSent}
-                    deltaLabel={periodLabel}
-                    to="/reports"
-                    customIcon={<MessagesSentSvg className="h-4 w-4 sm:h-5 sm:w-5" />}
-                    accent="emerald"
-                    dataPoints={displayStats.dailySeries?.map((d) => d.messagesSent)}
-                  />
-                  <DashboardKpiCard
-                    label="Delivery rate"
-                    value={`${displayStats.deliveryRate}%`}
-                    delta={displayStats.deltas?.deliveryRate}
-                    deltaLabel={periodLabel}
-                    to="/reports"
-                    customIcon={<DeliveryRateSvg className="h-4 w-4 sm:h-5 sm:w-5" />}
-                    accent="emerald"
-                    dataPoints={displayStats.dailySeries?.map((d) => d.deliveryRate)}
-                  />
-                  <DashboardKpiCard
-                    label="Read rate"
-                    value={`${displayStats.readRate}%`}
-                    delta={displayStats.deltas?.readRate}
-                    deltaLabel={periodLabel}
-                    to="/reports"
-                    customIcon={<ReadRateSvg className="h-4 w-4 sm:h-5 sm:w-5" />}
-                    accent="sky"
-                    dataPoints={displayStats.dailySeries?.map((d) => d.readRate)}
-                  />
-                  <DashboardKpiCard
-                    label="Active chats"
-                    value={displayStats.activeConversations.toLocaleString()}
-                    delta={displayStats.deltas?.activeConversations}
-                    deltaLabel={periodLabel}
-                    to="/inbox"
-                    customIcon={<ActiveChatsSvg className="h-4 w-4 sm:h-5 sm:w-5" />}
-                    accent="violet"
-                    dataPoints={displayStats.dailySeries?.map((d) => d.activeConversations)}
-                  />
-                  <DashboardKpiCard
-                    label="Contacts"
-                    value={displayStats.totalContacts.toLocaleString()}
-                    delta={displayStats.deltas?.totalContacts}
-                    deltaLabel={periodLabel}
-                    to="/contacts"
-                    customIcon={<ContactsSvg className="h-4 w-4 sm:h-5 sm:w-5" />}
-                    accent="amber"
-                    dataPoints={displayStats.dailySeries?.map((d) => d.totalContacts)}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Row 2: Performance + Campaigns — 2-col from md; stretch for equal card height */}
-            <div className="mt-3 grid grid-cols-1 gap-3 lg:mt-4 lg:grid-cols-2 lg:items-stretch lg:gap-4">
+            <div className="mt-3 grid grid-cols-1 gap-3 lg:mt-4 lg:grid-cols-3 lg:items-stretch lg:gap-4">
+              <NeedsAttentionCard
+                openChats={stats.activeConversations}
+                failedMessages={stats.failedMessages}
+                isConnected={waStatus.statusReady ? waStatus.connected : null}
+                incomingEnabled={waStatus.statusReady ? waStatus.incomingEnabled : null}
+              />
               <MessagePerformanceDonut
-                messagesSent={displayStats.messagesSent}
-                messagesDelivered={displayStats.messagesDelivered ?? 0}
-                messagesDeliveredOnly={displayStats.messagesDeliveredOnly}
-                messagesRead={displayStats.messagesRead ?? 0}
-                messagesFailed={displayStats.messagesFailed ?? displayStats.failedMessages}
-                messagesPending={displayStats.messagesPending ?? 0}
-                deliveryRate={displayStats.deliveryRate}
-                readRate={displayStats.readRate}
+                messagesSent={stats.messagesSent}
+                messagesDelivered={stats.messagesDelivered ?? 0}
+                messagesDeliveredOnly={stats.messagesDeliveredOnly}
+                messagesRead={stats.messagesRead ?? 0}
+                messagesFailed={stats.messagesFailed ?? stats.failedMessages}
+                messagesPending={stats.messagesPending ?? 0}
+                deliveryRate={stats.deliveryRate}
+                readRate={stats.readRate}
                 periodLabel={`Last ${DASHBOARD_PERIOD_DAYS} days`}
               />
               <UpcomingCampaignsCard
-                campaigns={displayCampaigns}
+                campaigns={campaigns}
                 loading={campaignsLoading}
                 error={campaignsError}
                 onRetry={() => loadSideData()}
               />
             </div>
 
-            {/* Row 3: Quick actions + Getting started */}
             <div
               className={`mt-3 grid grid-cols-1 gap-3 lg:mt-4 lg:gap-4 ${
                 showChecklist || onboardingError ? 'lg:grid-cols-5 lg:items-start' : ''
@@ -376,7 +330,6 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {/* Row 4: Activity + AI — stack until lg */}
             <div className="mt-3 grid grid-cols-1 gap-3 lg:mt-4 lg:grid-cols-5 lg:items-start lg:gap-4">
               <div className="min-w-0 lg:col-span-3">
                 <RecentActivityCard
@@ -388,11 +341,11 @@ export default function DashboardPage() {
               </div>
               <div className="min-w-0 lg:col-span-2">
                 <AiSuggestionCard
-                  readRate={displayStats.readRate}
-                  readRateDelta={displayStats.deltas?.readRate}
-                  messagesSent={displayStats.messagesSent}
-                  failedMessages={displayStats.failedMessages}
-                  openChats={displayStats.activeConversations}
+                  readRate={stats.readRate}
+                  readRateDelta={stats.deltas?.readRate}
+                  messagesSent={stats.messagesSent}
+                  failedMessages={stats.failedMessages}
+                  openChats={stats.activeConversations}
                 />
               </div>
             </div>

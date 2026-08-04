@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   ChevronDown,
+  CircleHelp,
   LogOut,
   Menu,
   Search,
@@ -67,9 +68,11 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
   const userTriggerRef = useRef<HTMLButtonElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const isApple = useIsApplePlatform();
+  const isDashboard = pathname === '/' || pathname === '';
   // Live = WhatsApp number linked (after numbers finish loading). Not a socket
   // heartbeat — topbar has no inbox socket; match NumberSwitcher / Inbox header.
   const showLive = !numbersLoading && hasConnectedNumber;
+  const showNotConnected = !numbersLoading && !hasConnectedNumber;
 
   useGlobalSearchShortcut(() => setSearchOpen(true));
 
@@ -118,7 +121,11 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
     };
   }, [userMenuOpen]);
 
-  const subtitle = (description || '').replace(/\.$/, '');
+  const subtitle = (
+    isDashboard && showNotConnected
+      ? "Let's get you started with WhatsApp Business"
+      : description || ''
+  ).replace(/\.$/, '');
 
   const userMenu =
     userMenuOpen && userMenuPos
@@ -197,6 +204,13 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
                 >
                   Live
                 </span>
+              ) : showNotConnected ? (
+                <span
+                  className="inline-flex h-5 items-center rounded-full bg-[#FFF1E8] px-2.5 text-[11px] font-bold text-[#E67E22] ring-1 ring-[#FFD8BF]/90 dark:bg-orange-500/15 dark:text-orange-300 dark:ring-orange-500/25"
+                  title="WhatsApp is not connected"
+                >
+                  Not connected
+                </span>
               ) : null}
             </div>
             {subtitle ? (
@@ -206,10 +220,18 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
             ) : null}
           </div>
 
-          {/* Right — search, notifications, profile */}
+          {/* Right — help, search, notifications, profile */}
           <div className="flex shrink-0 items-center gap-3 sm:gap-3.5 lg:gap-4">
             <NumberSwitcherMobile />
             <NumberSwitcher />
+
+            <Link
+              to="/settings?tab=setup"
+              className="hidden items-center gap-1.5 text-[13px] font-semibold text-neutral-600 transition hover:text-neutral-900 sm:inline-flex dark:text-neutral-300 dark:hover:text-theme-fg"
+            >
+              <CircleHelp className="h-4 w-4 text-neutral-400" strokeWidth={2} />
+              Help Center
+            </Link>
 
             {/* Search — design pill; opens command palette */}
             <button

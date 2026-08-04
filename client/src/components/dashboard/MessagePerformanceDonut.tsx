@@ -26,8 +26,6 @@ export default function MessagePerformanceDonut({
   messagesRead,
   messagesFailed,
   messagesPending,
-  deliveryRate,
-  readRate,
   periodLabel = 'Last 7 days',
 }: MessagePerformanceDonutProps) {
   // Exclusive status buckets (API latest-status counts; read ⊈ delivered on the ring).
@@ -108,9 +106,6 @@ export default function MessagePerformanceDonut({
     },
   ];
 
-  const centerDelivery = deliveryRate ? `${deliveryRate}%` : pct(deliveredReached, messagesSent);
-  const centerReadHint = readRate ? `Read ${readRate}%` : null;
-
   return (
     <section className="dashboard-card flex h-full flex-col rounded-2xl sm:rounded-3xl p-3.5 sm:p-4 md:p-5 bg-white border border-neutral-100/90 shadow-xs">
       <div>
@@ -124,7 +119,7 @@ export default function MessagePerformanceDonut({
             </h2>
             <span
               className="hidden text-neutral-400 sm:inline"
-              title="Segments are exclusive latest statuses: Delivered (unread), Read, Failed, Pending. Reached/Read rates in the center are funnel summaries."
+              title="Segments are exclusive latest statuses: Delivered (unread), Read, Failed, Pending."
             >
               <Info className="h-4 w-4 shrink-0 stroke-[1.8]" aria-hidden />
             </span>
@@ -162,15 +157,9 @@ export default function MessagePerformanceDonut({
             <span className="text-[1.35rem] font-extrabold leading-none tracking-tight text-neutral-900 tabular-nums sm:text-[1.5rem] lg:text-[1.65rem]">
               {messagesSent.toLocaleString()}
             </span>
-            <span className="mt-0.5 text-[10px] font-medium leading-none text-neutral-500 sm:text-[10.5px]">
+            <span className="mt-1 text-[10.5px] font-medium leading-none text-neutral-500 sm:text-[11px]">
               Total sent
             </span>
-            {(centerDelivery || centerReadHint) && (
-              <div className="mt-1.5 space-y-0.5 text-[9.5px] font-semibold leading-tight text-neutral-500 sm:text-[10px]">
-                {centerDelivery ? <p className="whitespace-nowrap">Reached {centerDelivery}</p> : null}
-                {centerReadHint ? <p className="whitespace-nowrap">{centerReadHint}</p> : null}
-              </div>
-            )}
           </div>
         </div>
 
