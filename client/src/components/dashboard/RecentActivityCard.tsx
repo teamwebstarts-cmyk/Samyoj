@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom';
-import { ArrowRight, Bot, CheckCircle2, MessageSquare, Send, UserRound, Zap } from 'lucide-react';
+import { ArrowRight, Bot, CheckCircle2, Clock, Send, UserRound, Zap } from 'lucide-react';
 import IconWell, { type IconWellAccent } from './icons/IconWell';
 import WhatsAppGlyph from './icons/WhatsAppGlyph';
+import { ActivityEmptyIllustrationSvg } from './icons/CardIllustrations';
 import type { ReactNode } from 'react';
 
 export type ActivityType = 'message' | 'campaign' | 'template' | 'automation' | 'ai' | 'agent';
@@ -76,27 +77,35 @@ export default function RecentActivityCard({
   onRetry,
 }: RecentActivityCardProps) {
   const visible = items.slice(0, 4);
+  const isEmpty = !loading && !error && visible.length === 0;
 
   return (
     <section className="dashboard-card flex h-full flex-col rounded-2xl border border-neutral-100/90 bg-white p-3 shadow-xs sm:rounded-3xl sm:p-3.5">
       <div className="flex shrink-0 items-center justify-between gap-2">
-        <h2 className="text-[14px] font-bold tracking-tight text-neutral-900 sm:text-[15px]">
-          Recent activity
-        </h2>
-        <Link
-          to="/inbox"
-          className="inline-flex shrink-0 items-center gap-1 text-[12px] font-bold text-emerald-600 transition-colors hover:text-emerald-700 hover:underline sm:text-[12.5px]"
-        >
-          View all
-          <ArrowRight className="h-3.5 w-3.5" />
-        </Link>
+        <div className="flex min-w-0 items-center gap-2 sm:gap-2.5">
+          <IconWell accent="slate" size="sm">
+            <Clock className="h-4 w-4 stroke-[2.2]" />
+          </IconWell>
+          <h2 className="text-[14px] font-bold tracking-tight text-neutral-900 sm:text-[15px]">
+            Recent activity
+          </h2>
+        </div>
+        {!isEmpty && !loading && !error ? (
+          <Link
+            to="/inbox"
+            className="inline-flex shrink-0 items-center gap-1 text-[12px] font-bold text-emerald-600 transition-colors hover:text-emerald-700 hover:underline sm:text-[12.5px]"
+          >
+            View all
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        ) : null}
       </div>
 
       {loading ? (
         <div className="mt-3 grid min-h-0 flex-1 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 lg:gap-2">
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="flex min-w-0 items-start gap-2.5">
-              <div className="h-9 w-9 shrink-0 animate-pulse rounded-full bg-neutral-100" />
+              <div className="h-9 w-9 shrink-0 animate-pulse rounded-xl bg-neutral-100" />
               <div className="min-w-0 flex-1 space-y-2 pt-0.5">
                 <div className="h-3 w-[90%] animate-pulse rounded bg-neutral-100" />
                 <div className="h-2.5 w-[70%] animate-pulse rounded bg-neutral-100" />
@@ -121,14 +130,14 @@ export default function RecentActivityCard({
             </button>
           )}
         </div>
-      ) : visible.length === 0 ? (
+      ) : isEmpty ? (
         <div className="mt-3 flex min-h-0 flex-1 flex-col items-center justify-center px-2 text-center">
-          <IconWell accent="emerald" size="md" round>
-            <MessageSquare className="h-4 w-4" strokeWidth={2} />
-          </IconWell>
-          <p className="mt-2.5 text-[13px] font-bold text-neutral-900">No recent activity yet</p>
-          <p className="mt-1 max-w-[260px] text-[11.5px] font-medium text-neutral-500">
-            Customer messages, campaigns, automations, and AI replies will show up here.
+          <ActivityEmptyIllustrationSvg className="h-[4.5rem] w-[4.5rem] sm:h-20 sm:w-20" />
+          <p className="mt-2 text-[13px] font-bold text-neutral-900 sm:text-[13.5px]">
+            No activity yet
+          </p>
+          <p className="mt-1 max-w-[240px] text-[12px] font-medium text-neutral-500">
+            Your recent activity will appear here.
           </p>
         </div>
       ) : (
@@ -143,7 +152,7 @@ export default function RecentActivityCard({
                 to={item.href}
                 className="group flex min-w-0 items-start gap-2.5 rounded-xl p-1 transition hover:bg-neutral-50/80"
               >
-                <IconWell accent={meta.accent} size="sm" round className="mt-0.5 shrink-0">
+                <IconWell accent={meta.accent} size="sm" className="mt-0.5 shrink-0">
                   {meta.icon}
                 </IconWell>
                 <div className="min-w-0 flex-1">

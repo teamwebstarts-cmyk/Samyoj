@@ -15,7 +15,7 @@
   <rect x="108" y="118" width="200" height="10" rx="5" fill="#E5E7EB"/>
   <rect x="108" y="138" width="160" height="10" rx="5" fill="#F3F4F6"/>
   <circle cx="260" cy="190" r="36" fill="#25D366" opacity="0.95"/>
-  <path d="M252 190 L258 196 L270 182" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M250 176 L250 204 L278 190 Z" fill="white"/>
   <text x="170" y="248" fill="#6B7280" font-family="system-ui,sans-serif" font-size="13" font-weight="600">What is WhatsApp Business API?</text>
   <rect x="120" y="296" width="280" height="16" rx="4" fill="#CBD5E1"/>
   <rect x="200" y="312" width="120" height="8" rx="4" fill="#94A3B8"/>

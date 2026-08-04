@@ -332,7 +332,7 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
       <section aria-label="WhatsApp connection">
         <div className="dashboard-card flex flex-col gap-3 rounded-2xl border-amber-100 bg-amber-50/40 p-3.5 sm:flex-row sm:items-center sm:justify-between sm:p-4">
           <div className="flex items-start gap-3">
-            <IconWell accent="amber" size="lg" round>
+            <IconWell accent="amber" size="lg">
               <AlertCircle className="h-5 w-5" strokeWidth={2} />
             </IconWell>
             <div>

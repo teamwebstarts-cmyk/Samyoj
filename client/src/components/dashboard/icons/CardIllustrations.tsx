@@ -2,7 +2,145 @@
  * Custom vector illustrations for Dashboard Cards:
  * 1. ChecklistIllustrationSvg — layered mint backdrop + detailed plant + clipboard
  * 2. AiBotMascotIllustrationSvg — soft glow backdrop + detailed friendly AI bot
+ * 3. ActivityEmptyIllustrationSvg — soft document + notification bell (empty activity)
+ * 4. MessagePerformanceEmptyIllustrationSvg — mint disc + polished analytics chart
+ * 5. CampaignEmptyIllustrationSvg — mint disc + branded megaphone
  */
+
+/** Soft mint circle with a polished analytics chart — empty Message performance. */
+export function MessagePerformanceEmptyIllustrationSvg({
+  className = 'h-24 w-24',
+}: {
+  className?: string;
+}) {
+  return (
+    <svg viewBox="0 0 128 128" fill="none" className={className} aria-hidden="true">
+      <defs>
+        <radialGradient id="mpEmptyGlow" cx="50%" cy="45%" r="55%">
+          <stop stopColor="#A7F3D0" stopOpacity="0.9" />
+          <stop offset="0.55" stopColor="#D1FAE5" stopOpacity="0.65" />
+          <stop offset="1" stopColor="#ECFDF5" stopOpacity="0.2" />
+        </radialGradient>
+        <linearGradient id="mpEmptyCard" x1="34" y1="28" x2="94" y2="100" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#FFFFFF" />
+          <stop offset="1" stopColor="#F0FDF4" />
+        </linearGradient>
+        <linearGradient id="mpEmptyLine" x1="40" y1="86" x2="90" y2="46" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#34D399" />
+          <stop offset="1" stopColor="#059669" />
+        </linearGradient>
+        <linearGradient id="mpEmptyBar" x1="0" y1="0" x2="0" y2="1">
+          <stop stopColor="#6EE7B7" />
+          <stop offset="1" stopColor="#10B981" />
+        </linearGradient>
+        <filter id="mpEmptyShadow" x="-20%" y="-10%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="3" stdDeviation="3.5" floodColor="#0F172A" floodOpacity="0.08" />
+        </filter>
+      </defs>
+
+      <circle cx="64" cy="64" r="56" fill="url(#mpEmptyGlow)" />
+
+      {/* Floating chart card */}
+      <g filter="url(#mpEmptyShadow)">
+        <rect x="30" y="32" width="68" height="64" rx="14" fill="url(#mpEmptyCard)" />
+        <rect x="30" y="32" width="68" height="64" rx="14" stroke="#A7F3D0" strokeOpacity="0.7" />
+      </g>
+
+      {/* Mini bars */}
+      <rect x="40" y="74" width="8" height="12" rx="2.5" fill="url(#mpEmptyBar)" opacity="0.45" />
+      <rect x="52" y="64" width="8" height="22" rx="2.5" fill="url(#mpEmptyBar)" opacity="0.65" />
+      <rect x="64" y="54" width="8" height="32" rx="2.5" fill="url(#mpEmptyBar)" opacity="0.85" />
+      <rect x="76" y="46" width="8" height="40" rx="2.5" fill="#059669" />
+
+      {/* Trend line over bars */}
+      <path
+        d="M40 72 L52 62 L64 58 L76 48 L88 42"
+        fill="none"
+        stroke="url(#mpEmptyLine)"
+        strokeWidth="2.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      {[
+        [40, 72],
+        [52, 62],
+        [64, 58],
+        [76, 48],
+        [88, 42],
+      ].map(([cx, cy], i) => (
+        <g key={i}>
+          <circle cx={cx} cy={cy} r="4.25" fill="#FFFFFF" />
+          <circle cx={cx} cy={cy} r="2.6" fill="#059669" />
+        </g>
+      ))}
+
+      {/* Accent spark */}
+      <circle cx="94" cy="38" r="3" fill="#34D399" opacity="0.85" />
+      <circle cx="34" cy="44" r="2" fill="#A7F3D0" />
+    </svg>
+  );
+}
+
+/** Soft mint circle with a light paper-plane send mark — empty Upcoming campaigns. */
+export function CampaignEmptyIllustrationSvg({
+  className = 'h-24 w-24',
+}: {
+  className?: string;
+}) {
+  return (
+    <svg viewBox="0 0 128 128" fill="none" className={className} aria-hidden="true">
+      <defs>
+        <radialGradient id="campEmptyGlow" cx="50%" cy="45%" r="55%">
+          <stop stopColor="#BBF7D0" stopOpacity="0.85" />
+          <stop offset="0.55" stopColor="#DCFCE7" stopOpacity="0.55" />
+          <stop offset="1" stopColor="#F0FDF4" stopOpacity="0.15" />
+        </radialGradient>
+        <linearGradient id="campPlane" x1="36" y1="40" x2="96" y2="88" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#6EE7B7" />
+          <stop offset="1" stopColor="#34D399" />
+        </linearGradient>
+        <linearGradient id="campWing" x1="52" y1="56" x2="88" y2="80" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#A7F3D0" />
+          <stop offset="1" stopColor="#10B981" />
+        </linearGradient>
+        <filter id="campEmptyShadow" x="-20%" y="-10%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="2" stdDeviation="2.5" floodColor="#0F172A" floodOpacity="0.06" />
+        </filter>
+      </defs>
+
+      <circle cx="64" cy="64" r="56" fill="url(#campEmptyGlow)" />
+      <circle cx="64" cy="64" r="44" fill="#FFFFFF" opacity="0.45" />
+
+      <g filter="url(#campEmptyShadow)">
+        {/* Soft paper plane */}
+        <path
+          d="M34 62 L94 40 L72 88 L62 70 L34 62 Z"
+          fill="url(#campPlane)"
+          opacity="0.95"
+        />
+        <path
+          d="M62 70 L72 88 L78 66 L62 70 Z"
+          fill="url(#campWing)"
+        />
+        <path
+          d="M34 62 L62 70 L94 40"
+          fill="none"
+          stroke="#ECFDF5"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          opacity="0.7"
+        />
+      </g>
+
+      {/* Light trail dots */}
+      <circle cx="28" cy="70" r="2.5" fill="#A7F3D0" />
+      <circle cx="22" cy="76" r="1.75" fill="#BBF7D0" opacity="0.8" />
+      <circle cx="98" cy="36" r="2.25" fill="#6EE7B7" opacity="0.7" />
+      <circle cx="104" cy="44" r="1.5" fill="#A7F3D0" />
+    </svg>
+  );
+}
 
 export function ChecklistIllustrationSvg({ className = 'h-28 w-28' }: { className?: string }) {
   return (
@@ -133,6 +271,70 @@ export function ChecklistIllustrationSvg({ className = 'h-28 w-28' }: { classNam
         {/* Pending row */}
         <circle cx="22" cy="104" r="6.5" fill="none" stroke="#CBD5E1" strokeWidth="2" />
         <rect x="34" y="101" width="30" height="5" rx="2.5" fill="#E2E8F0" />
+      </g>
+    </svg>
+  );
+}
+
+/** Soft gray document with a small bell badge — empty Recent activity. */
+export function ActivityEmptyIllustrationSvg({ className = 'h-20 w-20' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 120 120" fill="none" className={className} aria-hidden="true">
+      <defs>
+        <linearGradient id="actDoc" x1="30" y1="18" x2="90" y2="100" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#F8FAFC" />
+          <stop offset="1" stopColor="#E2E8F0" />
+        </linearGradient>
+        <linearGradient id="actBell" x1="78" y1="78" x2="108" y2="108" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#F1F5F9" />
+          <stop offset="1" stopColor="#CBD5E1" />
+        </linearGradient>
+        <filter id="actShadow" x="-20%" y="-10%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="3" stdDeviation="3.5" floodColor="#0F172A" floodOpacity="0.08" />
+        </filter>
+      </defs>
+
+      {/* Soft ambient disc */}
+      <circle cx="58" cy="56" r="42" fill="#F1F5F9" opacity="0.85" />
+      <circle cx="58" cy="56" r="32" fill="#E2E8F0" opacity="0.35" />
+
+      {/* Document */}
+      <g filter="url(#actShadow)">
+        <rect
+          x="34"
+          y="22"
+          width="48"
+          height="62"
+          rx="8"
+          fill="url(#actDoc)"
+          stroke="#CBD5E1"
+          strokeWidth="1.75"
+        />
+        {/* Folded corner */}
+        <path d="M70 22 V34 H82" fill="#F8FAFC" stroke="#CBD5E1" strokeWidth="1.5" strokeLinejoin="round" />
+        <path d="M70 22 L82 34 H74 C71.8 34 70 32.2 70 30 V22Z" fill="#E2E8F0" />
+        {/* Lines */}
+        <rect x="44" y="42" width="28" height="3.5" rx="1.75" fill="#CBD5E1" />
+        <rect x="44" y="51" width="22" height="3.5" rx="1.75" fill="#E2E8F0" />
+        <rect x="44" y="60" width="26" height="3.5" rx="1.75" fill="#E2E8F0" />
+        <rect x="44" y="69" width="16" height="3.5" rx="1.75" fill="#E2E8F0" />
+      </g>
+
+      {/* Bell badge overlapping bottom-right */}
+      <g filter="url(#actShadow)">
+        <circle cx="86" cy="86" r="16" fill="url(#actBell)" stroke="#E2E8F0" strokeWidth="1.5" />
+        <path
+          d="M86 76.5 C82.8 76.5 80.5 79.2 80.5 82.5 V85.2 C80.5 86.1 80.1 86.9 79.5 87.5 L78.2 88.8 C77.6 89.4 78 90.5 78.9 90.5 H93.1 C94 90.5 94.4 89.4 93.8 88.8 L92.5 87.5 C91.9 86.9 91.5 86.1 91.5 85.2 V82.5 C91.5 79.2 89.2 76.5 86 76.5 Z"
+          fill="#94A3B8"
+        />
+        <path
+          d="M83.8 91.2 C84.4 92.4 85.2 93 86 93 C86.8 93 87.6 92.4 88.2 91.2"
+          fill="none"
+          stroke="#64748B"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+        />
+        <circle cx="86" cy="74.8" r="1.6" fill="#94A3B8" />
       </g>
     </svg>
   );

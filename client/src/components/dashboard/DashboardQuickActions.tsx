@@ -32,7 +32,7 @@ const PRIMARY_ACTIONS = [
     to: '/inbox',
     label: 'Inbox',
     desc: 'Reply to customers',
-    icon: <InboxTileSvg className="h-4 w-4 text-emerald-600" />,
+    icon: <InboxTileSvg className="h-[18px] w-[18px] text-emerald-600" />,
     bgClass: 'bg-emerald-50/50 border-emerald-100/80 hover:border-emerald-200 hover:bg-emerald-50/80',
     wellClass: 'bg-emerald-100 text-emerald-600',
   },
@@ -40,7 +40,7 @@ const PRIMARY_ACTIONS = [
     to: '/campaigns',
     label: 'Campaigns',
     desc: 'Send messages',
-    icon: <CampaignsTileSvg className="h-4 w-4 text-violet-600" />,
+    icon: <CampaignsTileSvg className="h-[18px] w-[18px] text-violet-600" />,
     bgClass: 'bg-violet-50/50 border-violet-100/80 hover:border-violet-200 hover:bg-violet-50/80',
     wellClass: 'bg-violet-100 text-violet-600',
   },
@@ -48,7 +48,7 @@ const PRIMARY_ACTIONS = [
     to: '/contacts',
     label: 'Contacts',
     desc: 'Manage customers',
-    icon: <ContactsSvg className="h-4 w-4 text-sky-600" />,
+    icon: <ContactsSvg className="h-[18px] w-[18px] text-sky-600" />,
     bgClass: 'bg-sky-50/50 border-sky-100/80 hover:border-sky-200 hover:bg-sky-50/80',
     wellClass: 'bg-sky-100 text-sky-600',
   },
@@ -56,7 +56,7 @@ const PRIMARY_ACTIONS = [
     to: '/automations',
     label: 'Automations',
     desc: 'Set up auto replies',
-    icon: <AutomationsTileSvg className="h-4 w-4 text-amber-600" />,
+    icon: <AutomationsTileSvg className="h-[18px] w-[18px] text-amber-600" />,
     bgClass: 'bg-amber-50/50 border-amber-100/80 hover:border-amber-200 hover:bg-amber-50/80',
     wellClass: 'bg-amber-100 text-amber-600',
   },
@@ -105,14 +105,14 @@ function ActionTile({
 }: ActionTileProps) {
   const content = (
     <div
-      className={`group flex h-full min-h-0 items-center gap-2 rounded-xl border px-2 py-1.5 transition hover:shadow-xs sm:gap-2.5 sm:px-2.5 sm:py-2 ${
+      className={`group flex h-full min-h-[72px] items-center gap-2 rounded-xl border px-2 py-3 transition hover:shadow-xs sm:min-h-[76px] sm:gap-2.5 sm:px-2.5 sm:py-3.5 ${
         isDashed
           ? 'border-dashed border-neutral-300 bg-neutral-50/40 hover:border-neutral-400 hover:bg-neutral-50/80'
           : bgClass
       }`}
     >
       <div
-        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition group-hover:scale-105 sm:h-9 sm:w-9 ${wellClass}`}
+        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition group-hover:scale-105 sm:h-11 sm:w-11 ${wellClass}`}
       >
         {icon}
       </div>
@@ -192,7 +192,7 @@ export default function DashboardQuickActions() {
             to="#"
             label="More"
             desc="Explore all features"
-            icon={<MoreHorizontal className="h-4 w-4 text-neutral-600 stroke-[2.2]" />}
+            icon={<MoreHorizontal className="h-[18px] w-[18px] text-neutral-600 stroke-[2.2]" />}
             bgClass=""
             wellClass="bg-neutral-100 text-neutral-600"
             isDashed

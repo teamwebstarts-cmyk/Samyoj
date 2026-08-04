@@ -227,7 +227,7 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
 
             <Link
               to="/settings?tab=setup"
-              className="hidden items-center gap-1.5 text-[13px] font-semibold text-neutral-600 transition hover:text-neutral-900 sm:inline-flex dark:text-neutral-300 dark:hover:text-theme-fg"
+              className="hidden shrink-0 whitespace-nowrap items-center gap-1.5 text-[13px] font-semibold text-neutral-600 transition hover:text-neutral-900 sm:inline-flex dark:text-neutral-300 dark:hover:text-theme-fg"
             >
               <CircleHelp className="h-4 w-4 text-neutral-400" strokeWidth={2} />
               Help Center
@@ -275,7 +275,7 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
                 aria-expanded={userMenuOpen}
                 aria-haspopup="menu"
               >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.625rem] bg-[#16a34a] text-[12px] font-bold tracking-wide text-white sm:h-10 sm:w-10 sm:text-[13px]">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.625rem] bg-whatsapp-500 text-[12px] font-bold tracking-wide text-white sm:h-10 sm:w-10 sm:text-[13px]">
                   {initials}
                 </span>
                 <span className="hidden min-w-0 flex-1 text-left sm:block">

@@ -7,7 +7,9 @@ import WhatsAppConnectGuide, {
 import PreConnectDashboard, {
   PreConnectSkeleton,
 } from '../components/dashboard/PreConnectDashboard';
-import LiveMetricsHero from '../components/dashboard/LiveMetricsHero';
+import LiveMetricsHero, {
+  type LiveMetricsPeriodDays,
+} from '../components/dashboard/LiveMetricsHero';
 import NeedsAttentionCard from '../components/dashboard/NeedsAttentionCard';
 import MessagePerformanceDonut from '../components/dashboard/MessagePerformanceDonut';
 import UpcomingCampaignsCard from '../components/dashboard/UpcomingCampaignsCard';
@@ -25,7 +27,7 @@ import { toastError } from '../utils/toast';
 import type { AnalyticsOverview, Campaign } from '../types';
 import type { ActivityItem } from '../components/dashboard/RecentActivityCard';
 
-const DASHBOARD_PERIOD_DAYS = 7;
+const DEFAULT_PERIOD_DAYS: LiveMetricsPeriodDays = 7;
 
 interface OnboardingStatus {
   steps: Array<{
@@ -67,6 +69,7 @@ function extractCampaigns(payload: unknown): Campaign[] {
 
 export default function DashboardPage() {
   const { hasConnectedNumber, loading: numbersLoading } = useWhatsAppNumber();
+  const [periodDays, setPeriodDays] = useState<LiveMetricsPeriodDays>(DEFAULT_PERIOD_DAYS);
   const [stats, setStats] = useState<AnalyticsOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -101,7 +104,7 @@ export default function DashboardPage() {
     else setLoading(true);
 
     analyticsApi
-      .overview(DASHBOARD_PERIOD_DAYS)
+      .overview(periodDays)
       .then(({ data }) => {
         if (reqId !== statsReqId.current) return;
         const payload = data?.data;
@@ -126,7 +129,7 @@ export default function DashboardPage() {
         setLoading(false);
         setRefreshing(false);
       });
-  }, []);
+  }, [periodDays]);
 
   const loadSideData = useCallback(() => {
     setCampaignsLoading(true);
@@ -195,17 +198,18 @@ export default function DashboardPage() {
       .finally(() => setActivityLoading(false));
   }, []);
 
-  // Only load Live Metrics data when connected — avoid empty metrics flash on pre-connect.
+  // Load / refresh Live Metrics when connected (and whenever period changes via loadStats).
   useEffect(() => {
     if (!connectionReady) return;
     if (!isConnected) {
       liveDataLoaded.current = false;
       return;
     }
-    if (liveDataLoaded.current) return;
-    liveDataLoaded.current = true;
     loadStats();
-    loadSideData();
+    if (!liveDataLoaded.current) {
+      liveDataLoaded.current = true;
+      loadSideData();
+    }
   }, [connectionReady, isConnected, loadStats, loadSideData]);
 
   useOnActiveNumberChange(({ isInitial }) => {
@@ -265,7 +269,8 @@ export default function DashboardPage() {
               readRate={stats.readRate}
               deliveryDelta={stats.deltas?.deliveryRate}
               readRateDelta={stats.deltas?.readRate}
-              periodDays={DASHBOARD_PERIOD_DAYS}
+              periodDays={periodDays}
+              onPeriodChange={setPeriodDays}
             />
 
             <div className="mt-3 grid grid-cols-1 gap-3 lg:mt-3.5 lg:grid-cols-3 lg:items-stretch lg:gap-3">
@@ -282,9 +287,8 @@ export default function DashboardPage() {
                 messagesRead={stats.messagesRead ?? 0}
                 messagesFailed={stats.messagesFailed ?? stats.failedMessages}
                 messagesPending={stats.messagesPending ?? 0}
-                deliveryRate={stats.deliveryRate}
-                readRate={stats.readRate}
-                periodLabel={`Last ${DASHBOARD_PERIOD_DAYS} days`}
+                periodDays={periodDays}
+                onPeriodChange={setPeriodDays}
               />
               <UpcomingCampaignsCard
                 campaigns={campaigns}
