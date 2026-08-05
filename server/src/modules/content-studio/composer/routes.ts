@@ -4,7 +4,7 @@ import { z } from 'zod';
 import prisma from '../../../config/database';
 import { authenticate, requireOrg } from '../../../middleware/auth';
 import { AppError, sendSuccess, asyncHandler, paramId } from '../../../utils/response';
-import { createChatCompletion, isAiConfigured } from '../../ai/azure-openai.service';
+import { createChatCompletion, isAiConfigured } from '../../ai/chat-completion.service';
 import { assertBudget, recordUsage } from '../shared/cost-guard';
 import { policyGuard } from '../shared/policy-guard';
 
@@ -100,7 +100,7 @@ router.post(
         where: { id: job.id },
         data: {
           status: policy.safe ? 'SUCCEEDED' : 'BLOCKED_BY_POLICY',
-          modelUsed: 'azure-openai',
+          modelUsed: result.provider === 'azure' ? 'azure-openai' : 'sarvam',
           costCents: Math.ceil(tokens * 0.001),
           meta: { draftId: draft.id, policyReasons: policy.reasons },
         },

@@ -4,9 +4,9 @@ interface CallSystemStatusProps {
   whatsappConnected: boolean;
   callingEnabled: boolean;
   phoneNumber?: string | null;
-  deepgram?: boolean;
-  googleTts?: boolean;
-  azureOpenAI?: boolean;
+  sarvamStt?: boolean;
+  sarvamTts?: boolean;
+  brainProvider?: 'sarvam' | 'azure' | null;
   aiAutoAnswer?: boolean;
   voiceReady?: boolean;
 }
@@ -31,21 +31,21 @@ const checks = [
     label: 'Speech recognition',
     detail: 'Understands caller voice',
     icon: Mic,
-    ok: (s: CallSystemStatusProps) => Boolean(s.deepgram),
+    ok: (s: CallSystemStatusProps) => Boolean(s.sarvamStt),
   },
   {
     key: 'speak',
     label: 'Voice response',
     detail: 'Natural AI speech',
     icon: Volume2,
-    ok: (s: CallSystemStatusProps) => Boolean(s.googleTts),
+    ok: (s: CallSystemStatusProps) => Boolean(s.sarvamTts),
   },
   {
     key: 'brain',
     label: 'AI assistant',
     detail: 'Answers like your bot',
     icon: Bot,
-    ok: (s: CallSystemStatusProps) => Boolean(s.azureOpenAI),
+    ok: (s: CallSystemStatusProps) => Boolean(s.brainProvider),
   },
   {
     key: 'auto',

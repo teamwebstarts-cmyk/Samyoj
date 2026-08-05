@@ -17,9 +17,9 @@ interface CallOverviewPanelProps {
     whatsappConnected: boolean;
     callingEnabled: boolean;
     phoneNumber?: string | null;
-    deepgram?: boolean;
-    googleTts?: boolean;
-    azureOpenAI?: boolean;
+    sarvamStt?: boolean;
+    sarvamTts?: boolean;
+    brainProvider?: 'sarvam' | 'azure' | null;
     aiAutoAnswer?: boolean;
     voiceReady?: boolean;
   };
@@ -85,9 +85,9 @@ export default function CallOverviewPanel({ status, liveCount, callStats, hasCal
               whatsappConnected={status.whatsappConnected}
               callingEnabled={status.callingEnabled}
               phoneNumber={status.phoneNumber}
-              deepgram={status.deepgram}
-              googleTts={status.googleTts}
-              azureOpenAI={status.azureOpenAI}
+              sarvamStt={status.sarvamStt}
+              sarvamTts={status.sarvamTts}
+              brainProvider={status.brainProvider}
               aiAutoAnswer={status.aiAutoAnswer}
               voiceReady={status.voiceReady}
             />

@@ -46,9 +46,9 @@ interface CallingStatus {
   activeCalls: number;
   whatsappConnected: boolean;
   phoneNumber?: string | null;
-  deepgram?: boolean;
-  googleTts?: boolean;
-  azureOpenAI?: boolean;
+  sarvamStt?: boolean;
+  sarvamTts?: boolean;
+  brainProvider?: 'sarvam' | 'azure' | null;
   callingEnabled?: boolean;
   enableHints?: string[];
   voiceReady?: boolean;
