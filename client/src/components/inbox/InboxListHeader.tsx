@@ -413,12 +413,6 @@ export default function InboxListHeader({
                     : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700'
                 }`}
               >
-                {item.color && (
-                  <span
-                    aria-hidden
-                    className={`h-2 w-2 shrink-0 rounded-sm ${item.color}`}
-                  />
-                )}
                 {item.label}
               </button>
             );
