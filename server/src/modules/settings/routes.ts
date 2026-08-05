@@ -31,6 +31,7 @@ const businessHoursSchema = z.object({
 });
 
 const aiSettingsSchema = z.object({
+  brainProvider: z.enum(['sarvam', 'azure']).optional(),
   useCustomConfig: z.boolean().optional(),
   endpoint: z.string().url().optional().or(z.literal('')),
   apiKey: z.string().optional(),

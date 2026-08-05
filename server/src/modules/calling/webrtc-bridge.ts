@@ -1,6 +1,6 @@
 import wrtc from '@roamhq/wrtc';
 import { createModuleLogger } from '../../utils/logger';
-import { pcmBytesToInt16 } from './google-tts.service';
+import { pcmBytesToInt16 } from './audio-utils';
 
 const log = createModuleLogger('webrtc-bridge');
 

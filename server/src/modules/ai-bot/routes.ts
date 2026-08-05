@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import prisma from '../../config/database';
+import { config } from '../../config';
 import { authenticate, requireOrg, loadOrgRole, requireOrgRole } from '../../middleware/auth';
 import { AppError, asyncHandler, paramId, sendSuccess } from '../../utils/response';
 import {
@@ -12,7 +13,7 @@ import {
 } from '../ai/bot.service';
 import { generateBotReply } from '../ai/chatbot.service';
 import { getBotAnalytics } from '../ai/analytics';
-import { isAiConfiguredForOrg } from '../ai/org-ai.service';
+import { isAiConfiguredForOrg, getOrgAiSettings, resolveAiConfig } from '../ai/org-ai.service';
 import { upsertKnowledgeEmbedding } from '../ai/knowledge.service';
 import { ingestUrlKnowledge, ingestPdfKnowledge } from '../ai/knowledge-ingest.service';
 import {
@@ -93,6 +94,24 @@ router.get(
       activeBots: activeBots.length,
       totalBots: bots.length,
       azureConfigured: azureOk,
+    });
+  })
+);
+
+router.get(
+  '/provider-status',
+  ...readGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const orgSettings = await getOrgAiSettings(orgId);
+    const cfg = await resolveAiConfig(orgId);
+
+    sendSuccess(res, {
+      activeProvider: cfg?.provider ?? null,
+      platformProvider: config.ai.brainProvider,
+      orgOverride: orgSettings.brainProvider ?? null,
+      source: cfg?.source ?? null,
+      configured: Boolean(cfg),
     });
   })
 );

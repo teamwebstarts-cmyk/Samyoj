@@ -8,7 +8,7 @@ const log = createModuleLogger('sarvam-stt');
 const SARVAM_STT_REALTIME = 'wss://api.sarvam.ai/speech-to-text-realtime/ws';
 
 export function isSarvamSttConfigured(): boolean {
-  return Boolean(config.calling.sarvamApiKey);
+  return Boolean(config.sarvam.apiKey);
 }
 
 interface SarvamRealtimeMessage {
@@ -55,16 +55,16 @@ export class SarvamStreamTranscriber {
   }
 
   async connect(options?: SarvamSttConnectOptions): Promise<void> {
-    const apiKey = config.calling.sarvamApiKey;
+    const apiKey = config.sarvam.apiKey;
     if (!apiKey) throw new Error('Sarvam API key not configured');
 
     this.connectOptions = options || {};
     const language =
       this.connectOptions.language ||
-      config.calling.sarvamSttLanguage ||
+      config.sarvam.sttLanguage ||
       'auto';
-    const mode = this.connectOptions.mode || config.calling.sarvamSttMode || 'codemix';
-    const sampleRate = this.connectOptions.sampleRate || config.calling.sarvamSampleRate || 16000;
+    const mode = this.connectOptions.mode || config.sarvam.sttMode || 'codemix';
+    const sampleRate = this.connectOptions.sampleRate || config.sarvam.sampleRate || 16000;
     const streamType = this.connectOptions.streamType || 'fast';
     const prompt = this.connectOptions.prompt?.trim();
 

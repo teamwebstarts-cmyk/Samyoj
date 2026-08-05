@@ -335,6 +335,7 @@ export const callingApi = {
 
 export const aiBotApi = {
   status: () => api.get('/ai-bot/status'),
+  providerStatus: () => api.get('/ai-bot/provider-status'),
   list: () => api.get('/ai-bot'),
   get: (id: string) => api.get(`/ai-bot/${id}`),
   create: (data: Record<string, unknown>) => api.post('/ai-bot', data),

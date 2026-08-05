@@ -13,7 +13,7 @@ export interface SynthesizedAudio {
 }
 
 export function isSarvamTtsConfigured(): boolean {
-  return Boolean(config.calling.sarvamApiKey);
+  return Boolean(config.sarvam.apiKey);
 }
 
 /**
@@ -25,16 +25,16 @@ export async function synthesizeSpeechSarvam(
   text: string,
   options?: { speaker?: string; language?: string; pace?: number }
 ): Promise<SynthesizedAudio> {
-  const apiKey = config.calling.sarvamApiKey;
+  const apiKey = config.sarvam.apiKey;
   if (!apiKey) throw new Error('Sarvam API key not configured');
 
   const trimmed = text.trim();
   if (!trimmed) throw new Error('Empty text for TTS');
 
-  const speaker = options?.speaker || config.calling.sarvamTtsSpeaker || 'shubh';
-  const language = options?.language || config.calling.sarvamSttLanguage || 'hi-IN';
+  const speaker = options?.speaker || config.sarvam.ttsSpeaker || 'shubh';
+  const language = options?.language || config.sarvam.sttLanguage || 'hi-IN';
   const pace = Math.min(2, Math.max(0.5, options?.pace ?? 1.1));
-  const model = config.calling.sarvamTtsModel || 'bulbul:v3';
+  const model = config.sarvam.ttsModel || 'bulbul:v3';
   const sourceSampleRate = 24000;
   const targetRate = 48000;
 
@@ -167,15 +167,15 @@ export async function previewSpeechSarvam(
   text: string,
   options?: { speaker?: string; language?: string }
 ): Promise<{ audioBase64: string; contentType: string; speaker: string; language: string }> {
-  const apiKey = config.calling.sarvamApiKey;
+  const apiKey = config.sarvam.apiKey;
   if (!apiKey) throw new Error('Sarvam API key not configured');
 
-  const speaker = options?.speaker || config.calling.sarvamTtsSpeaker || 'shubh';
+  const speaker = options?.speaker || config.sarvam.ttsSpeaker || 'shubh';
   const language =
     !options?.language || options.language === 'unknown' || options.language === 'auto'
       ? 'hi-IN'
       : options.language;
-  const model = config.calling.sarvamTtsModel || 'bulbul:v3';
+  const model = config.sarvam.ttsModel || 'bulbul:v3';
 
   const res = await fetch(SARVAM_TTS_REST, {
     method: 'POST',

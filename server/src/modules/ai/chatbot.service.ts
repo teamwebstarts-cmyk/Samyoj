@@ -2,7 +2,7 @@ import prisma from '../../config/database';
 import { Prisma } from '@prisma/client';
 import type { AiBot, Contact } from '@prisma/client';
 import { emitToOrg } from '../../realtime';
-import { createChatCompletion } from './azure-openai.service';
+import { createChatCompletion } from './chat-completion.service';
 import { formatKnowledgeContext, searchKnowledgeBase, type KnowledgeMatch } from './knowledge.service';
 import { checkRateLimit } from './rate-limit.service';
 import { isAiConfiguredForOrg } from './org-ai.service';
@@ -35,6 +35,8 @@ export interface GenerateBotReplyInput {
   botId?: string;
   channel?: 'text' | 'voice';
   testMode?: boolean;
+  /** Optional function-calling tools (e.g. voice request_human / schedule_callback). */
+  tools?: import('./chat-completion.service').ChatCompletionTool[];
 }
 
 export interface GenerateBotReplyResult {
@@ -48,6 +50,8 @@ export interface GenerateBotReplyResult {
   totalTokens?: number;
   assignedAgent?: { id: string; name: string } | null;
   knowledgeMatches?: KnowledgeMatch[];
+  /** Populated when the brain returns a function call (voice calling). */
+  toolCalls?: import('./chat-completion.service').ToolCallResult[];
 }
 
 function detectHandoff(message: string, bot: AiBot): boolean {
@@ -63,7 +67,7 @@ async function buildConversationMessages(
   knowledge: KnowledgeMatch[],
   channel: 'text' | 'voice' = 'text',
   testMode = false
-): Promise<import('./azure-openai.service').ChatMessage[]> {
+): Promise<import('./chat-completion.service').ChatMessage[]> {
   const history = testMode
     ? []
     : await prisma.message.findMany({
@@ -85,7 +89,7 @@ async function buildConversationMessages(
       : 'Reply in the same language the customer uses. Keep it short.',
   ].filter(Boolean);
 
-  const messages: import('./azure-openai.service').ChatMessage[] = [{ role: 'system', content: systemParts.join('\n\n') }];
+  const messages: import('./chat-completion.service').ChatMessage[] = [{ role: 'system', content: systemParts.join('\n\n') }];
 
   for (const msg of history.reverse()) {
     if (!msg.content?.trim()) continue;
@@ -226,7 +230,21 @@ export async function generateBotReply(
       organizationId: input.organizationId,
       botId: bot.id,
       conversationId: input.conversationId,
+      tools: input.tools,
     });
+
+    // Function calling: brain asked for a tool — return it so callers can act.
+    if (completion.toolCalls?.length) {
+      return {
+        reply: null,
+        handoff: false,
+        botId: bot.id,
+        botName: bot.name,
+        totalTokens: completion.usage?.totalTokens,
+        toolCalls: completion.toolCalls,
+        ...(input.testMode ? { knowledgeMatches } : {}),
+      };
+    }
 
     const validation = validateOutboundReply(completion.content);
     if (!validation.safe) {

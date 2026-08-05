@@ -4,86 +4,88 @@ import { createModuleLogger } from '../../utils/logger';
 import { emitToOrg } from '../../realtime';
 import { generateBotReply, performHandoff } from '../ai/chatbot.service';
 import { MetaCallingService } from './meta-calling.service';
-import { DeepgramStreamTranscriber } from './deepgram.stt';
 import { SarvamStreamTranscriber, isSarvamSttConfigured } from './sarvam.stt';
-import { synthesizeSpeech } from './google-tts.service';
 import { synthesizeSpeechSarvam, isSarvamTtsConfigured } from './sarvam.tts';
-import { config } from '../../config';
 import { WhatsAppWebRtcBridge } from './webrtc-bridge';
 import { handleLiveTransfer } from './call.processor';
 import { publishCallEventMessage } from './call-event-message';
 import type { ActiveCallContext, TranscriptEntry } from './types';
+import type { ToolCallResult } from '../ai/sarvam-chat.service';
 
 const log = createModuleLogger('ai-voice-agent');
 
-/** Check if a specific voice STT provider is configured. */
-function isVoiceSttConfigured(): boolean {
-  if (shouldUseSarvam()) return isSarvamSttConfigured();
-  return Boolean(config.calling.deepgramApiKey);
-}
-
-/** Check if a specific voice TTS provider is configured. */
-function isVoiceTtsConfigured(): boolean {
-  if (shouldUseSarvam()) return isSarvamTtsConfigured();
-  return Boolean(config.calling.googleCredentialsPath);
-}
-
-function shouldUseSarvam(): boolean {
-  return config.calling.voiceProvider === 'sarvam';
-}
-
-interface VoiceToolCall {
-  name: string;
-  args: Record<string, unknown>;
-}
+/** Voice tool definitions sent to Sarvam for function calling. */
+const VOICE_TOOLS = [
+  {
+    type: 'function' as const,
+    function: {
+      name: 'request_human',
+      description:
+        'Call this when the caller explicitly asks to speak with a human, agent, person, manager, or team. Also call when you cannot help with their request.',
+      parameters: {
+        type: 'object',
+        properties: {
+          reason: { type: 'string', description: 'Why the caller needs a human' },
+          urgency: { type: 'string', enum: ['normal', 'urgent'], description: 'How urgent the request is' },
+        },
+        required: ['reason'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'schedule_callback',
+      description:
+        'Call this when the caller asks for a callback, wants to be called later, or asks to schedule a call.',
+      parameters: {
+        type: 'object',
+        properties: {
+          when: { type: 'string', description: 'When the caller wants to be called back (e.g. "tomorrow morning", "in 2 hours")' },
+        },
+        required: ['when'],
+      },
+    },
+  },
+];
 
 export class AiVoiceCallSession {
   private bridge: WhatsAppWebRtcBridge | null = null;
-  private transcriber: DeepgramStreamTranscriber | SarvamStreamTranscriber | null = null;
+  private transcriber: SarvamStreamTranscriber | null = null;
   private transcript: TranscriptEntry[] = [];
   private processing = false;
   private speaking = false;
   private ended = false;
   private readonly ctx: ActiveCallContext;
-  private readonly useSarvam: boolean;
 
   constructor(ctx: ActiveCallContext) {
     this.ctx = ctx;
-    this.useSarvam = shouldUseSarvam();
   }
 
   async start(sdpOffer: string): Promise<void> {
+    if (!isSarvamSttConfigured() || !isSarvamTtsConfigured()) {
+      throw new Error('Sarvam voice is not configured. Set SARVAM_API_KEY in server/.env.');
+    }
+
     this.bridge = new WhatsAppWebRtcBridge();
 
-    if (this.useSarvam) {
-      this.transcriber = new SarvamStreamTranscriber({
-        onFinal: (text) => {
-          void this.handleUserSpeech(text);
-        },
-        onSpeechStart: () => {
-          // Signal barge-in intent; full interrupt = close TTS socket on next speak turn
-          if (this.speaking) this.speaking = false;
-        },
-        onError: (err) => {
-          log.error('Sarvam transcriber error during call', { callId: this.ctx.callId, error: err.message });
-        },
-      });
-      await this.transcriber.connect({
-        language: this.ctx.sttLanguage || undefined,
-        mode: this.ctx.sttMode || undefined,
-        prompt: this.ctx.sttPrompt || undefined,
-      });
-    } else {
-      this.transcriber = new DeepgramStreamTranscriber({
-        onFinal: (text) => {
-          void this.handleUserSpeech(text);
-        },
-        onError: (err) => {
-          log.error('Transcriber error during call', { callId: this.ctx.callId, error: err.message });
-        },
-      });
-      await this.transcriber.connect();
-    }
+    this.transcriber = new SarvamStreamTranscriber({
+      onFinal: (text) => {
+        void this.handleUserSpeech(text);
+      },
+      onSpeechStart: () => {
+        // Signal barge-in intent; full interrupt = close TTS socket on next speak turn
+        if (this.speaking) this.speaking = false;
+      },
+      onError: (err) => {
+        log.error('Sarvam transcriber error during call', { callId: this.ctx.callId, error: err.message });
+      },
+    });
+    await this.transcriber.connect({
+      language: this.ctx.sttLanguage || undefined,
+      mode: this.ctx.sttMode || undefined,
+      prompt: this.ctx.sttPrompt || undefined,
+    });
 
     this.bridge.setAudioHandler((samples, sampleRate) => {
       if (this.ended || this.speaking || !this.transcriber) return;
@@ -140,6 +142,7 @@ export class AiVoiceCallSession {
         inboundMessage: trimmed,
         channel: 'voice',
         botId: this.ctx.aiBotId ?? undefined,
+        tools: VOICE_TOOLS,
       });
 
       if (result.skipped && !result.reply) {
@@ -161,10 +164,9 @@ export class AiVoiceCallSession {
         return;
       }
 
-      // Check for voice tool calls (LLM function calling)
-      const toolCall = (result as unknown as Record<string, unknown>).tool_call as VoiceToolCall | undefined;
-      if (toolCall) {
-        await this.handleToolCall(toolCall);
+      // Function calling: Sarvam returned a tool call
+      if (result.toolCalls?.length) {
+        await this.handleToolCall(result.toolCalls[0]);
         return;
       }
 
@@ -191,44 +193,32 @@ export class AiVoiceCallSession {
   }
 
   /**
-   * Dispatch LLM voice tool calls: request_human, schedule_callback, etc.
+   * Dispatch Sarvam function-call results: request_human, schedule_callback.
    */
-  private async handleToolCall(tool: VoiceToolCall): Promise<void> {
+  private async handleToolCall(tool: ToolCallResult): Promise<void> {
     log.info('Voice tool call', { callId: this.ctx.callId, tool: tool.name });
 
     switch (tool.name) {
       case 'request_human': {
-        const reason = (tool.args.reason as string) || 'Customer requested human';
-        const urgency = (tool.args.urgency as string) || 'normal';
-        const preferTeam = tool.args.preferTeam as string | undefined;
+        const reason = (tool.arguments.reason as string) || 'Customer requested human';
 
         await this.speak(
           'Please hold — let me connect you with our team.',
           'assistant'
         );
 
-        await this.performHandoffAndTransfer('TOOL_REQUEST_HUMAN', reason, { preferTeam });
+        await this.performHandoffAndTransfer('TOOL_REQUEST_HUMAN', reason);
         break;
       }
 
       case 'schedule_callback': {
-        const when = (tool.args.when as string) || 'as soon as possible';
+        const when = (tool.arguments.when as string) || 'as soon as possible';
         await this.performHandoffAndTransfer('SCHEDULE_CALLBACK', `Schedule callback: ${when}`);
         await this.speak(
           `I've noted your request. Someone from our team will call you ${when}. They'll also message you here on WhatsApp.`,
           'assistant'
         );
         await this.end('scheduled_callback');
-        break;
-      }
-
-      case 'assign_conversation': {
-        await this.performHandoffAndTransfer('ASSIGN_ONLY', 'AI assigned conversation from tool');
-        await this.speak(
-          'I have assigned this to our team. Someone will message you on WhatsApp shortly.',
-          'assistant'
-        );
-        await this.end('assigned');
         break;
       }
 
@@ -307,15 +297,10 @@ export class AiVoiceCallSession {
     await this.appendTranscript(role, text);
 
     try {
-      const audio = this.useSarvam
-        ? await synthesizeSpeechSarvam(text, {
-            speaker: this.ctx.ttsVoice,
-            language: this.ctx.ttsLanguage,
-          })
-        : await synthesizeSpeech(text, {
-            voice: this.ctx.ttsVoice,
-            language: this.ctx.ttsLanguage,
-          });
+      const audio = await synthesizeSpeechSarvam(text, {
+        speaker: this.ctx.ttsVoice,
+        language: this.ctx.ttsLanguage,
+      });
       await this.bridge.playPcm(audio.samples, audio.sampleRate);
     } finally {
       this.speaking = false;

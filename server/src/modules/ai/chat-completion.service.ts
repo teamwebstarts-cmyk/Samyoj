@@ -3,30 +3,23 @@ import { AppError } from '../../utils/response';
 import { createModuleLogger } from '../../utils/logger';
 import { checkOrgTokenQuota, recordAiUsage, resolveAiConfig } from './org-ai.service';
 import { createSarvamChatCompletion } from './sarvam-chat.service';
-import type { ChatCompletionTool, ToolCallResult } from './sarvam-chat.service';
+import type {
+  ChatMessage,
+  ChatCompletionOptions,
+  ChatCompletionResult,
+  ChatCompletionTool,
+  ToolCallResult,
+} from './sarvam-chat.service';
 
 const log = createModuleLogger('chat-completion');
 
-export type { ChatMessage, ChatCompletionOptions, ChatCompletionResult, ChatCompletionTool, ToolCallResult } from './sarvam-chat.service';
-
-export interface ChatCompletionOptions {
-  messages: ChatMessage[];
-  temperature?: number;
-  maxTokens?: number;
-  organizationId?: string;
-  botId?: string;
-  conversationId?: string;
-  tools?: ChatCompletionTool[];
-  toolChoice?: 'auto' | 'none';
-}
-
-export interface ChatCompletionResult {
-  content: string;
-  finishReason: string | null;
-  usage?: { promptTokens: number; completionTokens: number; totalTokens: number };
-  /** Populated when tools fire on Sarvam */
-  toolCalls?: ToolCallResult[];
-}
+export type {
+  ChatMessage,
+  ChatCompletionOptions,
+  ChatCompletionResult,
+  ChatCompletionTool,
+  ToolCallResult,
+} from './sarvam-chat.service';
 
 export async function isAiConfigured(organizationId?: string): Promise<boolean> {
   if (organizationId) {
@@ -124,5 +117,5 @@ async function createAzureCompletion(
     });
   }
 
-  return { content, finishReason: body.choices?.[0]?.finish_reason || null, usage };
+  return { content, finishReason: body.choices?.[0]?.finish_reason || null, usage, provider: 'azure' };
 }

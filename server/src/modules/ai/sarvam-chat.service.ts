@@ -48,7 +48,7 @@ export interface ChatCompletionResult {
   usage?: TokenUsage;
   /** Populated when tools are present and model requests a function call. */
   toolCalls?: ToolCallResult[];
-  provider: 'sarvam';
+  provider: 'sarvam' | 'azure';
 }
 
 /** Streaming chunk delivered during SSE iteration. */

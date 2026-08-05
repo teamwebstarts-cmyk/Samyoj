@@ -387,6 +387,7 @@ export default function SettingsPage() {
     setSavingAi(true);
     try {
       const payload: Record<string, unknown> = {
+        brainProvider: aiSettings.brainProvider ?? 'sarvam',
         useCustomConfig: aiSettings.useCustomConfig,
         endpoint: aiSettings.endpoint || '',
         deployment: aiSettings.deployment,
@@ -795,6 +796,54 @@ export default function SettingsPage() {
                   </AppButton>
                 }
               >
+                <div className="mb-5">
+                  <p className="mb-2 text-[13px] font-semibold text-theme-fg">Smart reply engine</p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {(
+                      [
+                        {
+                          value: 'sarvam',
+                          title: 'Sarvam (recommended)',
+                          desc: 'India-first, fast & affordable for chat + voice',
+                        },
+                        {
+                          value: 'azure',
+                          title: 'Azure OpenAI',
+                          desc: 'Legacy option — only if your org needs it',
+                        },
+                      ] as const
+                    ).map((opt) => {
+                      const selected = (aiSettings.brainProvider ?? 'sarvam') === opt.value;
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() =>
+                            setAiSettings((prev) => ({ ...prev, brainProvider: opt.value }))
+                          }
+                          className={`rounded-2xl border px-4 py-3 text-left transition ${
+                            selected
+                              ? 'border-indigo-400/60 bg-indigo-50/60 ring-1 ring-inset ring-indigo-400/30 dark:border-indigo-500/50 dark:bg-indigo-950/30'
+                              : 'border-theme-border bg-theme-subtle/40 hover:bg-theme-surface'
+                          }`}
+                        >
+                          <p className="flex items-center gap-2 text-[13px] font-bold text-theme-fg">
+                            <span
+                              className={`h-3 w-3 rounded-full border-2 ${
+                                selected
+                                  ? 'border-indigo-500 bg-indigo-500'
+                                  : 'border-theme-border'
+                              }`}
+                            />
+                            {opt.title}
+                          </p>
+                          <p className="mt-1 text-[11px] text-theme-muted">{opt.desc}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
                 <label className="mb-5 flex cursor-pointer items-center gap-3 rounded-2xl border border-theme-border bg-theme-subtle/40 px-4 py-3.5 transition hover:border-indigo-300/50 dark:hover:border-indigo-500/30">
                   <input
                     type="checkbox"

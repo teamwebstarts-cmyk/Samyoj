@@ -523,6 +523,7 @@ export interface BotTestResult {
 }
 
 export interface OrgAiSettings {
+  brainProvider?: 'sarvam' | 'azure';
   useCustomConfig?: boolean;
   endpoint?: string;
   deployment?: string;
