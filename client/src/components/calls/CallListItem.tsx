@@ -35,12 +35,12 @@ function StatusBadge({ status }: { status: string }) {
         : tone === 'completed'
           ? 'bg-sky-50 text-sky-700 ring-sky-200/80'
           : tone === 'failed'
-            ? 'bg-neutral-100 text-neutral-600 ring-neutral-200'
+            ? 'bg-amber-50 text-amber-700 ring-amber-200/80'
             : 'bg-neutral-100 text-neutral-600 ring-neutral-200';
 
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${classes}`}
+      className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${classes}`}
     >
       {tone === 'live' && (
         <span className="relative flex h-1.5 w-1.5">
@@ -69,11 +69,7 @@ export default function CallListItem({
   name,
   phone,
   status,
-  handler,
   durationSeconds,
-  preview,
-  botName,
-  agentName,
   createdAt,
   selected,
   onSelect,
@@ -81,20 +77,17 @@ export default function CallListItem({
   const active = isActiveCallStatus(status);
   const displayName = name || formatPhoneDisplay(phone);
   const duration = formatDuration(durationSeconds ?? (active ? 0 : 0));
-  const previewText = preview && preview !== 'No conversation yet' ? preview : null;
-  const handlerLabel =
-    handler === 'AI' ? (botName ? `AI · ${botName}` : 'AI') : handler === 'AGENT' ? 'Agent' : null;
 
   return (
     <button
       type="button"
       onClick={onSelect}
-      className={`group relative flex w-full items-center gap-3 px-3 py-3 text-left transition-colors sm:px-4 ${
+      className={`group relative flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors sm:px-4 ${
         selected
-          ? 'bg-emerald-50/80 dark:bg-emerald-950/25'
+          ? 'bg-emerald-50/90 ring-1 ring-inset ring-emerald-200/70 dark:bg-emerald-950/30 dark:ring-emerald-900/60'
           : active
-            ? 'bg-emerald-50/40 hover:bg-emerald-50/60 dark:bg-emerald-950/10'
-            : 'bg-white hover:bg-neutral-50 dark:bg-neutral-950 dark:hover:bg-neutral-900/60'
+            ? 'bg-emerald-50/40 hover:bg-emerald-50/70 dark:bg-emerald-950/10'
+            : 'bg-white hover:bg-neutral-100 dark:bg-neutral-950 dark:hover:bg-neutral-900/60'
       }`}
     >
       {selected && (
@@ -104,49 +97,36 @@ export default function CallListItem({
       <ContactAvatar name={name || undefined} phone={phone} size="sm" active={active} />
 
       <div className="min-w-0 flex-1">
-        <p
-          className={`truncate text-[13px] ${
-            active ? 'font-extrabold text-neutral-900 dark:text-neutral-100' : 'font-bold text-neutral-800 dark:text-neutral-200'
-          }`}
-        >
-          {displayName}
-        </p>
-        <p className="mt-0.5 truncate text-[12px] font-medium text-neutral-500">
-          {formatPhoneDisplay(phone)}
-        </p>
-        {previewText && (
-          <p className="mt-0.5 hidden truncate text-[11px] font-medium text-neutral-400 sm:block">
-            {previewText}
-          </p>
-        )}
-      </div>
-
-      <div className="hidden shrink-0 sm:block">
-        <div className="flex flex-col items-end gap-1">
+        <p className="flex items-center gap-2">
+          <span
+            className={`truncate text-[14px] leading-snug tracking-tight ${
+              active ? 'font-extrabold text-neutral-900 dark:text-neutral-50' : 'font-extrabold text-neutral-900 dark:text-neutral-100'
+            }`}
+          >
+            {displayName}
+          </span>
           <StatusBadge status={status} />
-          {handlerLabel && <span className="text-[10px] font-bold text-neutral-400">{handlerLabel}</span>}
-        </div>
-      </div>
-
-      <div className="flex w-[72px] shrink-0 flex-col items-end gap-0.5 sm:w-[80px]">
-        <span className="text-[11px] font-semibold tabular-nums text-neutral-500">
-          {formatCallTime(createdAt)}
-        </span>
-        <span
-          className={`inline-flex items-center gap-1 text-[11px] font-semibold tabular-nums ${
-            active ? 'text-emerald-600' : 'text-neutral-400'
-          }`}
-        >
-          {duration}
-          {active ? (
-            <WaveIcon className="h-3 w-3 text-emerald-500" />
-          ) : (
-            <Phone className="h-3 w-3 text-neutral-300" strokeWidth={2} />
-          )}
-        </span>
-        <span className="sm:hidden">
-          <StatusBadge status={status} />
-        </span>
+          <span className="ml-auto shrink-0 text-[11px] font-semibold tabular-nums text-neutral-500">
+            {formatCallTime(createdAt)}
+          </span>
+        </p>
+        <p className="mt-0.5 flex items-baseline justify-between gap-2">
+          <span className="truncate text-[12px] font-medium text-neutral-500">
+            {formatPhoneDisplay(phone)}
+          </span>
+          <span
+            className={`inline-flex shrink-0 items-center gap-1 text-[11px] font-semibold tabular-nums ${
+              active ? 'text-emerald-600' : 'text-neutral-500'
+            }`}
+          >
+            {duration}
+            {active ? (
+              <WaveIcon className="h-3 w-3 text-emerald-500" />
+            ) : (
+              <Phone className="h-3 w-3 text-neutral-600 dark:text-neutral-400" strokeWidth={2.25} />
+            )}
+          </span>
+        </p>
       </div>
     </button>
   );

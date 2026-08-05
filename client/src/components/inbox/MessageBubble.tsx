@@ -476,11 +476,15 @@ export default function MessageBubble({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') closeMenus();
     };
+    // Auto-dismiss when the thread scrolls (popup is portaled, so it won't move with scroll).
+    const onScroll = () => closeMenus();
     document.addEventListener('mousedown', onDoc);
     document.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', onScroll, true);
     return () => {
       document.removeEventListener('mousedown', onDoc);
       document.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', onScroll, true);
     };
   }, [menuOpen, reactOpen]);
 
@@ -651,6 +655,14 @@ export default function MessageBubble({
   // WhatsApp dims non-selected bubbles while multi-select is active.
   const selectionDim = selectMode && !selected ? 'opacity-45' : 'transition-opacity duration-150';
 
+  const openMenuFromClick = (clientX: number, clientY: number) => {
+    setReactOpen(false);
+    const left = Math.max(8, Math.min(clientX - ACTION_MENU_WIDTH / 2, window.innerWidth - ACTION_MENU_WIDTH - 8));
+    const top = clientY + 8;
+    setMenuPos({ top: Math.min(top, window.innerHeight - 172), left });
+    setMenuOpen(true);
+  };
+
   const bubbleShellProps = {
     className: `group/bubble relative ${enterClass} ${selectionDim} ${
       selectMode && selected ? 'ring-2 ring-whatsapp-500/40 ring-offset-1 ring-offset-transparent' : ''
@@ -658,15 +670,21 @@ export default function MessageBubble({
     onClick: selectMode
       ? (e: React.MouseEvent) => {
           e.preventDefault();
+          e.stopPropagation();
           onToggleSelect?.(message);
         }
-      : undefined,
+      : (e: React.MouseEvent) => {
+          e.preventDefault();
+          e.stopPropagation();
+          clearLongPress();
+          openMenuFromClick(e.clientX, e.clientY);
+        },
     onContextMenu: selectMode
       ? undefined
       : (e: React.MouseEvent) => {
           e.preventDefault();
-          setReactOpen(false);
-          setMenuOpen(true);
+          e.stopPropagation();
+          openMenuFromClick(e.clientX, e.clientY);
         },
     onTouchStart: selectMode
       ? undefined

@@ -90,10 +90,13 @@ export default function ConversationItem({
         checked
           ? 'bg-whatsapp-500/10 dark:bg-whatsapp-400/12'
           : selected
-            ? 'bg-neutral-100 dark:bg-neutral-800/70'
+            ? 'bg-emerald-50/90 ring-1 ring-inset ring-emerald-200/70 dark:bg-emerald-950/30 dark:ring-emerald-900/60'
             : 'bg-transparent hover:bg-neutral-50 dark:hover:bg-neutral-900/40'
       }`}
     >
+      {selected && !checked && (
+        <span className="absolute bottom-0 left-0 top-0 w-[3px] bg-emerald-500" />
+      )}
       {selectable && (
         <span
           role="checkbox"

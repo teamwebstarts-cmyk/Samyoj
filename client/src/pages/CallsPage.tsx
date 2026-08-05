@@ -211,23 +211,28 @@ export default function CallsPage() {
     void loadCalls({ skeleton: true });
   }, [page, search, chip, loadCalls]);
 
-  const loadCallDetail = useCallback(async (callId: string, opts?: { syncNotes?: boolean }) => {
-    try {
-      const { data } = await callingApi.get(callId);
-      const parsed = parseCall(data.data as CallRecord);
-      setCalls((prev) => {
-        const exists = prev.some((c) => c.id === callId);
-        return exists ? prev.map((c) => (c.id === callId ? parsed : c)) : [parsed, ...prev];
-      });
-      if (opts?.syncNotes !== false) {
-        setNotes((parsed.metadata as { notes?: string })?.notes || '');
-        setNotesDirty(false);
+  const loadCallDetail = useCallback(
+    async (callId: string, opts?: { syncNotes?: boolean }) => {
+      try {
+        const { data } = await callingApi.get(callId);
+        const parsed = parseCall(data.data as CallRecord);
+        setCalls((prev) => {
+          const exists = prev.some((c) => c.id === callId);
+          return exists ? prev.map((c) => (c.id === callId ? parsed : c)) : [parsed, ...prev];
+        });
+        // Only overwrite the notes box when explicitly asked (save/select/deep-link).
+        // The 3s live poll must never clobber unsaved edits.
+        if (opts?.syncNotes === true) {
+          setNotes((parsed.metadata as { notes?: string })?.notes || '');
+          setNotesDirty(false);
+        }
+        return parsed;
+      } catch {
+        return null;
       }
-      return parsed;
-    } catch {
-      return null;
-    }
-  }, []);
+    },
+    []
+  );
 
   loadRef.current = load;
 
@@ -272,6 +277,7 @@ export default function CallsPage() {
   useEffect(() => {
     if (routeCallId) {
       setSelectedCallId(routeCallId);
+      setNotes('');
       setNotesDirty(false);
       void loadCallDetail(routeCallId, { syncNotes: true });
     }
@@ -336,9 +342,9 @@ export default function CallsPage() {
   useEffect(() => {
     if (!selectedCallId || !selectedCall || !isActiveCallStatus(selectedCall.status)) return;
 
-    void loadCallDetail(selectedCallId, { syncNotes: !notesDirtyRef.current });
+    void loadCallDetail(selectedCallId);
     const timer = setInterval(() => {
-      void loadCallDetail(selectedCallId, { syncNotes: !notesDirtyRef.current });
+      void loadCallDetail(selectedCallId);
     }, 3000);
     return () => clearInterval(timer);
   }, [selectedCallId, selectedCall?.status, loadCallDetail, selectedCall]);
@@ -346,6 +352,7 @@ export default function CallsPage() {
   const handleSelectCall = useCallback(
     (call: CallRecord) => {
       setSelectedCallId(call.id);
+      setNotes('');
       setNotesDirty(false);
       navigate(`/calls/${call.id}`);
       void loadCallDetail(call.id, { syncNotes: true });

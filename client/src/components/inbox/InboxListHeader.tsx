@@ -409,8 +409,8 @@ export default function InboxListHeader({
                 onClick={() => onStatusFilterChange(item.value)}
                 className={`inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[11.5px] font-semibold transition ${FOCUS_RING_CLASS} ${
                   active
-                    ? 'bg-whatsapp-500/12 text-whatsapp-800 underline decoration-whatsapp-500/70 decoration-2 underline-offset-[5px] dark:text-whatsapp-300'
-                    : 'text-theme-secondary hover:bg-theme-subtle hover:text-theme-fg'
+                    ? 'bg-whatsapp-600 text-white shadow-[0_1px_3px_rgba(37,211,102,0.3)] dark:bg-whatsapp-500 dark:text-white'
+                    : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700'
                 }`}
               >
                 {item.color && (

@@ -1,4 +1,5 @@
 import { Filter, Search } from 'lucide-react';
+import { FOCUS_RING_CLASS } from '../../hooks/inboxA11y';
 
 interface CallFiltersBarProps {
   search: string;
@@ -8,13 +9,13 @@ interface CallFiltersBarProps {
   onChipChange: (value: string) => void;
 }
 
-const CHIPS: Array<{ value: string; label: string }> = [
+const CHIPS: Array<{ value: string; label: string; color?: string }> = [
   { value: '', label: 'All' },
-  { value: 'live', label: 'Live' },
-  { value: 'missed', label: 'Missed' },
-  { value: 'ai', label: 'AI' },
-  { value: 'human', label: 'Human' },
-  { value: 'out', label: 'Out' },
+  { value: 'live', label: 'Live', color: 'bg-emerald-500' },
+  { value: 'missed', label: 'Missed', color: 'bg-red-500' },
+  { value: 'ai', label: 'AI', color: 'bg-violet-500' },
+  { value: 'human', label: 'Human', color: 'bg-sky-500' },
+  { value: 'out', label: 'Out', color: 'bg-amber-500' },
 ];
 
 export default function CallFiltersBar({
@@ -51,7 +52,7 @@ export default function CallFiltersBar({
         </button>
       </div>
 
-      <div className="mt-2.5 -mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="mt-2.5 -mx-1 flex gap-1 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {CHIPS.map((c) => {
           const active = chip === c.value;
           return (
@@ -59,12 +60,18 @@ export default function CallFiltersBar({
               key={c.value || 'all'}
               type="button"
               onClick={() => onChipChange(c.value)}
-              className={`shrink-0 rounded-full px-3 py-1.5 text-[12px] font-bold transition-colors ${
+              className={`inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[11.5px] font-semibold transition ${FOCUS_RING_CLASS} ${
                 active
-                  ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/20'
+                  ? 'bg-whatsapp-600 text-white shadow-[0_1px_3px_rgba(37,211,102,0.3)] dark:bg-whatsapp-500 dark:text-white'
                   : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700'
               }`}
             >
+              {c.color && (
+                <span
+                  aria-hidden
+                  className={`h-2 w-2 shrink-0 rounded-sm ${c.color}`}
+                />
+              )}
               {c.label}
             </button>
           );

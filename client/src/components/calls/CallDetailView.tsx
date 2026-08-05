@@ -206,7 +206,7 @@ export default function CallDetailView({
         <div className="relative flex shrink-0 items-center gap-1.5 sm:gap-2" ref={moreRef}>
           {conversationId ? (
             <Link to={`/inbox?conversation=${conversationId}`}>
-              <AppButton variant="secondary" size="sm">
+              <AppButton variant="primary" size="sm">
                 <MessageSquare className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Open chat</span>
               </AppButton>
@@ -278,28 +278,54 @@ export default function CallDetailView({
         </div>
       </div>
 
-      <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-neutral-200 bg-white px-3 py-2 text-[11px] font-medium text-neutral-500 sm:px-4 dark:border-neutral-800 dark:bg-neutral-950">
-        <span className="inline-flex items-center gap-1">
-          {inbound ? <PhoneIncoming className="h-3.5 w-3.5" /> : <PhoneOutgoing className="h-3.5 w-3.5" />}
-          {inbound ? 'Inbound call' : 'Outbound call'}
+      <div className="grid shrink-0 grid-cols-2 gap-x-4 gap-y-2 border-b border-neutral-200 bg-white px-3 py-2.5 text-[12px] font-medium text-neutral-500 sm:flex sm:flex-wrap sm:items-center sm:px-4 dark:border-neutral-800 dark:bg-neutral-950">
+        <span className="inline-flex items-center gap-1.5">
+          {inbound ? (
+            <PhoneIncoming className="h-3.5 w-3.5 text-neutral-700 dark:text-neutral-300" strokeWidth={2.25} />
+          ) : (
+            <PhoneOutgoing className="h-3.5 w-3.5 text-neutral-700 dark:text-neutral-300" strokeWidth={2.25} />
+          )}
+          <span>
+            <span className="font-bold text-neutral-900 dark:text-neutral-100">Type</span>
+            <span className="text-neutral-300 dark:text-neutral-600">:</span>
+            <span className="font-semibold text-neutral-700 dark:text-neutral-200">
+              {inbound ? 'Inbound call' : 'Outbound call'}
+            </span>
+          </span>
         </span>
-        <span className="inline-flex items-center gap-1">
-          <Clock3 className="h-3.5 w-3.5" />
-          Started {formatCallTime(createdAt)}
+        <span className="inline-flex items-center gap-1.5">
+          <Clock3 className="h-3.5 w-3.5 text-neutral-700 dark:text-neutral-300" strokeWidth={2.25} />
+          <span>
+            <span className="font-bold text-neutral-900 dark:text-neutral-100">Started</span>
+            <span className="text-neutral-300 dark:text-neutral-600">:</span>
+            <span className="font-semibold text-neutral-700 dark:text-neutral-200">
+              {formatCallTime(createdAt)}
+            </span>
+          </span>
         </span>
         {handlerLabel && (
-          <span className="inline-flex items-center gap-1">
+          <span className="inline-flex items-center gap-1.5">
             {agentName || handler === 'AGENT' ? (
-              <User className="h-3.5 w-3.5" />
+              <User className="h-3.5 w-3.5 text-neutral-700 dark:text-neutral-300" strokeWidth={2.25} />
             ) : (
-              <Bot className="h-3.5 w-3.5" />
+              <Bot className="h-3.5 w-3.5 text-neutral-700 dark:text-neutral-300" strokeWidth={2.25} />
             )}
-            {handlerLabel}
+            <span>
+              <span className="font-bold text-neutral-900 dark:text-neutral-100">Handler</span>
+              <span className="text-neutral-300 dark:text-neutral-600">:</span>
+              <span className="font-semibold text-neutral-700 dark:text-neutral-200">{handlerLabel}</span>
+            </span>
           </span>
         )}
-        <span className="inline-flex items-center gap-1">
-          <Timer className="h-3.5 w-3.5" />
-          Duration {formatDuration(active ? liveElapsed : durationSeconds)}
+        <span className="inline-flex items-center gap-1.5">
+          <Timer className="h-3.5 w-3.5 text-neutral-700 dark:text-neutral-300" strokeWidth={2.25} />
+          <span>
+            <span className="font-bold text-neutral-900 dark:text-neutral-100">Duration</span>
+            <span className="text-neutral-300 dark:text-neutral-600">:</span>
+            <span className="font-semibold text-neutral-700 dark:text-neutral-200">
+              {formatDuration(active ? liveElapsed : durationSeconds)}
+            </span>
+          </span>
         </span>
       </div>
 

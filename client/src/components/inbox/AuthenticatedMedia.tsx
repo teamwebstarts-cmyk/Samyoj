@@ -459,7 +459,7 @@ function formatAudioClock(secs: number) {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-/** Soft waveform bars — decorative, WhatsApp-like density without looking sparse. */
+/** Soft waveform bars — WhatsApp keeps the whole wave in its green family, idle or playing. */
 function SoftWaveform({
   active,
   progress,
@@ -479,18 +479,22 @@ function SoftWaveform({
         const hash = ((i * 17) % 10) / 10;
         const h = Math.round((0.28 + envelope * (0.35 + hash * 0.45)) * 100);
         const filled = t * 100 <= progress;
+        // Unplayed bars stay in the accent family (soft tint), never black/grey.
         const filledCls = outbound
           ? active
             ? 'bg-[#008069]'
-            : 'bg-[#008069]/75'
+            : 'bg-[#008069]'
           : active
             ? 'bg-whatsapp-600 dark:bg-whatsapp-400'
-            : 'bg-whatsapp-500/80';
+            : 'bg-whatsapp-600 dark:bg-whatsapp-400';
+        const idleCls = outbound
+          ? 'bg-[#008069]/30'
+          : 'bg-whatsapp-500/30 dark:bg-whatsapp-400/30';
         return (
           <span
             key={i}
             className={`w-[2.5px] rounded-full transition-colors duration-150 ${
-              filled ? filledCls : outbound ? 'bg-[#008069]/22' : 'bg-black/14 dark:bg-white/20'
+              filled ? filledCls : idleCls
             }`}
             style={{ height: `${h}%` }}
           />
