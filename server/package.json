@@ -22,7 +22,6 @@
     "diagnose": "bash ../scripts/diagnose-webhook.sh"
   },
   "dependencies": {
-    "@google-cloud/text-to-speech": "^5.8.0",
     "@prisma/client": "^6.3.0",
     "@roamhq/wrtc": "^0.8.0",
     "@sentry/node": "^9.5.0",
