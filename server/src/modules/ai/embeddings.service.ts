@@ -6,7 +6,7 @@ import type { ResolvedAiConfig } from './types';
 const log = createModuleLogger('embeddings');
 
 function getEmbeddingsUrl(cfg: ResolvedAiConfig): string {
-  return `${cfg.endpoint}/openai/deployments/${cfg.embeddingDeployment}/embeddings?api-version=${cfg.apiVersion}`;
+  return `${cfg.embeddingEndpoint}/openai/deployments/${cfg.embeddingDeployment}/embeddings?api-version=${cfg.apiVersion}`;
 }
 
 export function cosineSimilarity(a: number[], b: number[]): number {
@@ -41,7 +41,7 @@ export async function createEmbedding(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'api-key': cfg.apiKey,
+      'api-key': cfg.embeddingApiKey,
     },
     body: JSON.stringify({ input }),
   });

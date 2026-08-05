@@ -40,6 +40,11 @@ export interface ChatCompletionOptions {
   toolChoice?: 'auto' | 'none';
   /** Stream mode — returns SSE reader instead of full response. */
   stream?: boolean;
+  /** Optional per-call provider overrides (used when an org uses a custom endpoint/key). */
+  endpoint?: string;
+  apiKey?: string;
+  model?: string;
+  timeoutMs?: number;
 }
 
 export interface ChatCompletionResult {
@@ -145,17 +150,22 @@ export async function* streamSarvamChatCompletion(
 export async function createSarvamChatCompletion(
   options: ChatCompletionOptions
 ): Promise<ChatCompletionResult> {
-  if (!config.sarvam.apiKey) {
+  const apiKey = options.apiKey || config.sarvam.apiKey;
+  const endpoint = options.endpoint || config.sarvam.chatEndpoint;
+  const model = options.model || config.sarvam.chatModel;
+  const timeoutMs = options.timeoutMs || config.sarvam.chatTimeoutMs;
+
+  if (!apiKey) {
     throw new AppError(503, 'Sarvam AI is not configured');
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), config.sarvam.chatTimeoutMs);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   const start = Date.now();
   try {
     const payload: Record<string, unknown> = {
-      model: config.sarvam.chatModel,
+      model,
       messages: options.messages,
       temperature: options.temperature ?? 0.7,
       max_tokens: options.maxTokens ?? 500,
@@ -165,12 +175,12 @@ export async function createSarvamChatCompletion(
       payload.tool_choice = options.toolChoice ?? 'auto';
     }
 
-    const response = await fetch(`${config.sarvam.chatEndpoint}/chat/completions`, {
+    const response = await fetch(`${endpoint}/chat/completions`, {
       method: 'POST',
       signal: controller.signal,
       headers: {
         'Content-Type': 'application/json',
-        'api-subscription-key': config.sarvam.apiKey,
+        'api-subscription-key': apiKey,
       },
       body: JSON.stringify(payload),
     });

@@ -54,6 +54,10 @@ export async function createChatCompletion(
     const result = await createSarvamChatCompletion({
       ...options,
       tools: options.tools,
+      // Pass resolved org config through so custom endpoint/key/model are honored.
+      endpoint: cfg.endpoint,
+      apiKey: cfg.apiKey,
+      model: cfg.deployment,
     });
 
     log.debug('Chat completion via Sarvam', { durationMs: Date.now() - start, tokens: result.usage?.totalTokens });

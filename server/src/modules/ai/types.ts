@@ -16,9 +16,13 @@ export interface OrgAiSettings {
 export interface ResolvedAiConfig {
   /** Which brain serves this request. */
   provider: BrainProvider;
+  /** Chat/brain endpoint + key. */
   endpoint: string;
   apiKey: string;
   deployment: string;
+  /** Embeddings always use Azure (Sarvam has no vector API). */
+  embeddingEndpoint: string;
+  embeddingApiKey: string;
   embeddingDeployment: string;
   apiVersion: string;
   source: 'org' | 'global';

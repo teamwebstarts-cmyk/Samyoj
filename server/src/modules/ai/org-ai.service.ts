@@ -85,6 +85,8 @@ export async function resolveAiConfig(organizationId: string): Promise<ResolvedA
       endpoint: orgSettings.endpoint.replace(/\/$/, ''),
       apiKey,
       deployment: orgSettings.deployment || 'gpt-35-turbo',
+      embeddingEndpoint: config.azure.endpoint || orgSettings.endpoint.replace(/\/$/, ''),
+      embeddingApiKey: config.azure.apiKey || apiKey,
       embeddingDeployment:
         orgSettings.embeddingDeployment || getDefaultEmbeddingDeployment(),
       apiVersion: orgSettings.apiVersion || '2024-12-01-preview',
@@ -99,8 +101,10 @@ export async function resolveAiConfig(organizationId: string): Promise<ResolvedA
       endpoint: config.sarvam.chatEndpoint,
       apiKey: config.sarvam.apiKey,
       deployment: config.sarvam.chatModel,
+      embeddingEndpoint: config.azure.endpoint,
+      embeddingApiKey: config.azure.apiKey,
       embeddingDeployment: getDefaultEmbeddingDeployment(),
-      apiVersion: '',
+      apiVersion: config.azure.apiVersion,
       source: 'global',
     };
   }
@@ -112,6 +116,8 @@ export async function resolveAiConfig(organizationId: string): Promise<ResolvedA
       endpoint: config.azure.endpoint,
       apiKey: config.azure.apiKey,
       deployment: config.azure.deployment,
+      embeddingEndpoint: config.azure.endpoint,
+      embeddingApiKey: config.azure.apiKey,
       embeddingDeployment: getDefaultEmbeddingDeployment(),
       apiVersion: config.azure.apiVersion,
       source: 'global',
