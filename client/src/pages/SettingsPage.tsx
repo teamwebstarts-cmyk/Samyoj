@@ -85,6 +85,7 @@ export default function SettingsPage() {
   const [numbers, setNumbers] = useState<WhatsappNumber[]>([]);
   const [connectUrl, setConnectUrl] = useState('');
   const [webhookStatus, setWebhookStatus] = useState<import('../types').WebhookStatus | null>(null);
+  const [webhookHealth, setWebhookHealth] = useState<import('../types').WebhookHealth | null>(null);
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
@@ -129,16 +130,18 @@ export default function SettingsPage() {
     Promise.all([
       whatsappApi.numbers(),
       whatsappApi.webhookStatus(),
+      whatsappApi.webhookHealth().catch(() => null),
       settingsApi.get(),
       settingsApi.aiUsage(),
       aiBotApi.list(),
       teamApi.list(),
       onboardingApi.readiness(),
     ])
-      .then(async ([numbersRes, webhookRes, settingsRes, usageRes, botsRes, teamRes, readinessRes]) => {
+      .then(async ([numbersRes, webhookRes, healthRes, settingsRes, usageRes, botsRes, teamRes, readinessRes]) => {
         setNumbers(numbersRes.data.data);
         await loadConnectUrl();
         setWebhookStatus(webhookRes.data.data);
+        setWebhookHealth(healthRes ? healthRes.data.data : null);
         const hours = settingsRes.data.data.businessHours;
         if (hours) {
           setBusinessHours(hours);
@@ -655,13 +658,40 @@ export default function SettingsPage() {
                       </div>
 
                       {webhookStatus.webhookUrl ? (
-                        <div className="rounded-2xl border border-theme-border bg-theme-subtle/50 p-4">
-                          <p className="text-[11px] font-bold uppercase tracking-wide text-theme-muted">
-                            Connection status
-                          </p>
-                          <p className="mt-2 text-[12px] font-medium text-theme-fg">
-                            Connected and receiving messages.
-                          </p>
+                        <div className="space-y-3">
+                          <div className="rounded-2xl border border-theme-border bg-theme-subtle/50 p-4">
+                            <p className="text-[11px] font-bold uppercase tracking-wide text-theme-muted">
+                              Connection status
+                            </p>
+                            <p className="mt-2 text-[12px] font-medium text-theme-fg">
+                              {webhookHealth && webhookHealth.totalReceived > 0
+                                ? `Receiving messages · ${webhookHealth.totalReceived.toLocaleString()} inbound processed`
+                                : 'Webhook URL configured. Waiting for the next customer message.'}
+                            </p>
+                            {webhookHealth?.lastReceivedAt && (
+                              <p className="mt-1 text-[11px] text-theme-muted">
+                                Last inbound:{' '}
+                                {new Date(webhookHealth.lastReceivedAt).toLocaleString()}
+                              </p>
+                            )}
+                          </div>
+
+                          {(webhookHealth?.lastError || (webhookHealth?.totalErrors ?? 0) > 0) && (
+                            <div className="rounded-2xl border border-orange-200/80 bg-orange-50/90 p-4 dark:border-orange-900/40 dark:bg-orange-950/30">
+                              <p className="text-[11px] font-bold uppercase tracking-wide text-orange-800 dark:text-orange-200">
+                                Last inbound error
+                              </p>
+                              <p className="mt-2 text-[12px] font-medium text-orange-950 dark:text-orange-100">
+                                {webhookHealth?.lastError ||
+                                  `${webhookHealth?.totalErrors ?? 0} webhook error(s) recorded`}
+                              </p>
+                              {webhookHealth?.lastFbTraceId && (
+                                <p className="mt-1 break-all font-mono text-[10px] text-orange-800/80 dark:text-orange-300/80">
+                                  fbtrace: {webhookHealth.lastFbTraceId}
+                                </p>
+                              )}
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <AppAlert variant="info">

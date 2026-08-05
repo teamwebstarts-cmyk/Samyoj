@@ -47,6 +47,7 @@ interface ChatHeaderProps {
   onToggleBot: () => void;
   onSetActiveBot?: (botId: string | null) => void;
   onToggleFavorite: () => void;
+  onMarkUnread: () => void;
   onToggleSearch: () => void;
   onAssign: (agentId: string | null) => void;
   onStatusChange: (status: string) => void;
@@ -125,18 +126,19 @@ export default function ChatHeader({
   botAssigning = false,
   bots = [],
   botsLoading = false,
-  callingBack: _callingBack,
+  callingBack,
   assigning,
   agents,
   currentUserId,
   viewers,
   onBack,
-  onCallBack: _onCallBack,
+  onCallBack,
   onSnoozeUntil,
   onUnsnooze,
   onToggleBot,
   onSetActiveBot,
   onToggleFavorite,
+  onMarkUnread,
   onToggleSearch,
   onAssign,
   onStatusChange,
@@ -265,20 +267,16 @@ export default function ChatHeader({
               </div>
             )}
 
-            {/* "Mark as unread" is a planned feature. Surfacing it disabled with
-                a tooltip is more honest than silently omitting it. */}
             <button
               type="button"
-              disabled
-              aria-label="Mark as unread (coming soon)"
-              {...tipFor('Coming soon — API support in progress', 'left')}
-              className="flex w-full cursor-not-allowed items-center gap-2 px-3 py-2.5 text-left text-[13px] text-theme-muted opacity-60"
+              onClick={() => {
+                onMarkUnread();
+                setMenuOpen(false);
+              }}
+              className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] text-theme-fg transition hover:bg-theme-subtle ${FOCUS_RING_CLASS}`}
             >
               <Mail className="h-4 w-4 text-theme-muted" />
               Mark as unread
-              <span className="ml-auto rounded-full bg-theme-subtle px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-theme-muted">
-                Soon
-              </span>
             </button>
 
             <div className="my-1 border-t border-theme-border/60" />
@@ -360,9 +358,9 @@ export default function ChatHeader({
         )}
 
         <HeaderIconButton
-          label="Calling coming soon"
-          disabled
-          className="opacity-45 grayscale"
+          label="Start a call"
+          onClick={onCallBack}
+          disabled={callingBack}
         >
           <Phone className="h-4 w-4" strokeWidth={2.1} />
         </HeaderIconButton>

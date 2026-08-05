@@ -1,12 +1,15 @@
 import type { MessageType } from '@prisma/client';
 import prisma from '../../config/database';
 import { AppError } from '../../utils/response';
-import { MetaWhatsAppService } from '../whatsapp/meta.service';
+import { MetaWhatsAppService, extractMetaErrorFields } from '../whatsapp/meta.service';
 import { getOrgWhatsappContext } from '../whatsapp/context';
 import { buildTemplateComponents } from '../campaigns/template-params';
 import { emitToOrg } from '../../realtime';
 import { buildInteractivePayload, type InteractiveMessageOptions } from './interactive';
 import { normalizePhone } from '../../utils/phone';
+import { createModuleLogger } from '../../utils/logger';
+
+const log = createModuleLogger('messages');
 
 export type DeliverMessageType =
   | 'TEXT'
@@ -235,14 +238,27 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
 
     return message;
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Failed to send message';
+    const { message: errorMessage, metaCode, metaSubcode, fbtraceId } = extractMetaErrorFields(error);
 
     // Merge the error into existing metadata so send params (mediaPath,
     // templateName, interactive, …) survive for POST /inbox/messages/:id/retry.
     const existing = await prisma.message.findUnique({
       where: { id: input.messageId },
-      select: { metadata: true },
+      select: { metadata: true, conversationId: true },
     });
+
+    log.error('Outbound Meta send failed', {
+      source: 'inbox',
+      organizationId: input.organizationId,
+      conversationId: existing?.conversationId,
+      messageId: input.messageId,
+      type: input.type,
+      metaCode,
+      metaSubcode,
+      fbtraceId,
+      error: errorMessage,
+    });
+
     const message = await prisma.message.update({
       where: { id: input.messageId },
       data: {
@@ -250,6 +266,9 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
         metadata: {
           ...((existing?.metadata as Record<string, unknown>) || {}),
           error: errorMessage,
+          ...(metaCode !== undefined ? { metaCode } : {}),
+          ...(metaSubcode !== undefined ? { metaSubcode } : {}),
+          ...(fbtraceId ? { fbtraceId } : {}),
         },
       },
     });
@@ -258,6 +277,8 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
       messageId: input.messageId,
       status: 'FAILED',
       error: errorMessage,
+      metaCode,
+      fbtraceId,
       conversationId: message.conversationId,
     });
 

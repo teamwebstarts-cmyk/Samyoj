@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { inboxApi } from '../../services/api';
 import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
+import { buildInboxListParams } from '../../utils/inboxListParams';
 import type { Conversation } from '../../types';
 import type { ListChip } from './InboxListHeader';
 
@@ -81,16 +82,15 @@ export function useConversationList({
     setLoading(true);
     setError(false);
     try {
-      const params: Record<string, string> = {
-        page: String(page),
-        limit: String(pageSize),
-      };
-      if (search) params.search = search;
-      if (statusFilter) params.status = statusFilter;
-      if (chip === 'unread') params.unread = 'true';
-      if (chip === 'favourites') params.favorite = 'true';
-      if (agentFilter === '__mine__' && userId) params.assignedTo = userId;
-      else if (agentFilter && agentFilter !== '__mine__') params.assignedTo = agentFilter;
+      const params = buildInboxListParams({
+        page,
+        pageSize,
+        search,
+        chip,
+        statusFilter,
+        agentFilter,
+        userId,
+      });
 
       const { data } = await inboxApi.list(params);
       if (requestId !== requestRef.current) return;

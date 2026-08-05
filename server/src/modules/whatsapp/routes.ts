@@ -404,16 +404,14 @@ router.delete(
     });
     if (!number) throw new AppError(404, 'WhatsApp number not found');
 
-    await prisma.$transaction(async (tx) => {
-      await tx.conversation.updateMany({
-        where: { organizationId: orgId, whatsappNumberId: id },
-        data: { whatsappNumberId: null },
-      });
-      await tx.call.updateMany({
-        where: { organizationId: orgId, whatsappNumberId: id },
-        data: { whatsappNumberId: null },
-      });
-      await tx.whatsappNumber.delete({ where: { id } });
+    // Soft-deactivate: keep the row + conversation/call links so reconnecting the
+    // same Meta phoneNumberId restores Inbox history (saveWhatsappConnection upserts).
+    await prisma.whatsappNumber.update({
+      where: { id },
+      data: {
+        isActive: false,
+        accessToken: MetaWhatsAppService.encryptToken(''),
+      },
     });
 
     sendSuccess(res, { disconnected: true });
@@ -426,7 +424,7 @@ router.get(
   requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
     const numbers = await prisma.whatsappNumber.findMany({
-      where: { organizationId: req.user!.organizationId! },
+      where: { organizationId: req.user!.organizationId!, isActive: true },
       select: {
         id: true,
         phoneNumber: true,

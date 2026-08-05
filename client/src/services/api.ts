@@ -148,6 +148,7 @@ export const inboxApi = {
   messages: (id: string, params?: Record<string, string>) =>
     api.get(`/inbox/${id}/messages`, { params }),
   markRead: (id: string) => api.post(`/inbox/${id}/read`),
+  markUnread: (id: string) => api.post(`/inbox/${id}/unread`),
   mediaUrl: (messageId: string) => api.get(`/inbox/messages/${messageId}/media-url`),
   retryMessage: (messageId: string) => api.post(`/inbox/messages/${messageId}/retry`),
   send: (id: string, payload: string | import('../types').SendMessagePayload) =>

@@ -143,7 +143,47 @@ export interface CreateTemplatePayload {
 }
 
 interface GraphError {
-  error?: { message?: string; code?: number };
+  error?: { message?: string; code?: number; error_subcode?: number; fbtrace_id?: string };
+}
+
+/** Structured Meta Graph failures — preserve code + fbtrace for Inbox/server logs. */
+export class MetaApiError extends Error {
+  readonly metaCode?: number;
+  readonly metaSubcode?: number;
+  readonly fbtraceId?: string;
+
+  constructor(
+    message: string,
+    opts?: { metaCode?: number; metaSubcode?: number; fbtraceId?: string }
+  ) {
+    super(message);
+    this.name = 'MetaApiError';
+    this.metaCode = opts?.metaCode;
+    this.metaSubcode = opts?.metaSubcode;
+    this.fbtraceId = opts?.fbtraceId;
+  }
+}
+
+export function extractMetaErrorFields(error: unknown): {
+  message: string;
+  metaCode?: number;
+  metaSubcode?: number;
+  fbtraceId?: string;
+} {
+  if (error instanceof MetaApiError) {
+    return {
+      message: error.message,
+      metaCode: error.metaCode,
+      metaSubcode: error.metaSubcode,
+      fbtraceId: error.fbtraceId,
+    };
+  }
+  const message = error instanceof Error ? error.message : 'Failed to send message';
+  const codeMatch = message.match(/\(\#(\d+)\)/);
+  return {
+    message,
+    metaCode: codeMatch ? Number(codeMatch[1]) : undefined,
+  };
 }
 
 export interface MetaCredentials {
@@ -692,6 +732,9 @@ export class MetaWhatsAppService {
     if (!res.ok) {
       const errBody = await res.text();
       let message = `Send message failed: ${errBody}`;
+      let metaCode: number | undefined;
+      let metaSubcode: number | undefined;
+      let fbtraceId: string | undefined;
       try {
         const parsed = JSON.parse(errBody) as GraphError;
         if (parsed.error?.message) {
@@ -701,10 +744,13 @@ export class MetaWhatsAppService {
               ' Link your WhatsApp account in Settings (reconnect) so this app can send messages on your behalf.';
           }
         }
+        metaCode = parsed.error?.code;
+        metaSubcode = parsed.error?.error_subcode;
+        fbtraceId = parsed.error?.fbtrace_id;
       } catch {
         /* use raw body */
       }
-      throw new Error(message);
+      throw new MetaApiError(message, { metaCode, metaSubcode, fbtraceId });
     }
     return res.json() as Promise<{ messages: { id: string }[] }>;
   }

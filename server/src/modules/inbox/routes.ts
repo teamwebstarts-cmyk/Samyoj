@@ -11,7 +11,7 @@ import {
   isWithin24HourWindow,
 } from '../whatsapp/meta.service';
 import { getOrgWhatsappContext } from '../whatsapp/context';
-import { resolveActiveWhatsappNumber, conversationFilter } from '../whatsapp/active-number';
+import { resolveActiveWhatsappNumber, conversationFilter, scopedConversationWhere, scopedConversationParent, ticketsForNumberFilter } from '../whatsapp/active-number';
 import { deliverOutboundMessage, type DeliverMessageType } from '../messages/send.service';
 import { validateInteractive, type InteractiveMessageOptions } from '../messages/interactive';
 import { getMessageMediaBuffer, type MessageMediaMetadata } from '../media/download.service';
@@ -23,6 +23,7 @@ import { parseActiveFlow } from '../flows/flow-state';
 import type { FlowNode } from '../flows/types';
 import { resolveCs24hWindowOpensAt } from './service-window';
 import { buildSignedMediaPath, verifyMediaSignature, MEDIA_URL_TTL_SECONDS } from './media-url';
+import { nextUnreadCount } from './unread';
 
 const router = Router();
 
@@ -322,7 +323,7 @@ router.get(
     const message = await prisma.message.findFirst({
       where: {
         id: messageId,
-        conversation: { organizationId: orgId },
+        conversation: scopedConversationParent(orgId, req.activeWhatsappNumberId),
       },
     });
 
@@ -346,7 +347,7 @@ router.get(
     const message = await prisma.message.findFirst({
       where: {
         id: messageId,
-        conversation: { organizationId: orgId },
+        conversation: scopedConversationParent(orgId, req.activeWhatsappNumberId),
       },
     });
 
@@ -379,7 +380,7 @@ router.post(
     const message = await prisma.message.findFirst({
       where: {
         id: messageId,
-        conversation: { organizationId: orgId },
+        conversation: scopedConversationParent(orgId, req.activeWhatsappNumberId),
       },
       include: {
         conversation: { include: { contact: true, whatsappNumber: true } },
@@ -473,10 +474,11 @@ router.get(
   asyncHandler(async (req: Request, res: Response) => {
     const id = paramId(req);
     const conversation = await prisma.conversation.findFirst({
-      where: {
+      where: scopedConversationWhere(
+        req.user!.organizationId!,
         id,
-        organizationId: req.user!.organizationId!,
-      },
+        req.activeWhatsappNumberId
+      ),
       include: {
         contact: true,
         assignedAgent: { select: { id: true, name: true } },
@@ -490,13 +492,6 @@ router.get(
     });
 
     if (!conversation) throw new AppError(404, 'Conversation not found');
-    if (
-      req.activeWhatsappNumberId &&
-      conversation.whatsappNumberId &&
-      conversation.whatsappNumberId !== req.activeWhatsappNumberId
-    ) {
-      throw new AppError(404, 'Conversation not found');
-    }
     sendSuccess(res, conversation);
   })
 );
@@ -508,17 +503,27 @@ router.get(
     const id = paramId(req);
 
     const conversation = await prisma.conversation.findFirst({
-      where: { id, organizationId: orgId },
+      where: scopedConversationWhere(orgId, id, req.activeWhatsappNumberId),
       select: { id: true, contactId: true },
     });
     if (!conversation) throw new AppError(404, 'Conversation not found');
 
-    const contactScope = { organizationId: orgId, contactId: conversation.contactId };
+    const numberId = req.activeWhatsappNumberId;
+    const contactScope = {
+      organizationId: orgId,
+      contactId: conversation.contactId,
+      ...conversationFilter(numberId),
+    };
+    const ticketScope = {
+      organizationId: orgId,
+      contactId: conversation.contactId,
+      ...ticketsForNumberFilter(numberId),
+    };
 
     const [totalChats, openTickets, respondedConversations] = await Promise.all([
       prisma.conversation.count({ where: contactScope }),
       prisma.ticket.count({
-        where: { ...contactScope, status: { notIn: ['RESOLVED', 'CLOSED'] } },
+        where: { ...ticketScope, status: { notIn: ['RESOLVED', 'CLOSED'] } },
       }),
       prisma.conversation.findMany({
         where: { ...contactScope, firstResponseAt: { not: null } },
@@ -547,7 +552,7 @@ router.get(
     const format = req.query.format === 'json' ? 'json' : 'txt';
 
     const conversation = await prisma.conversation.findFirst({
-      where: { id, organizationId: orgId },
+      where: scopedConversationWhere(orgId, id, req.activeWhatsappNumberId),
       include: {
         contact: { select: { name: true, phone: true } },
         assignedAgent: { select: { name: true } },
@@ -616,7 +621,11 @@ router.get(
 
     const id = paramId(req);
     const conversation = await prisma.conversation.findFirst({
-      where: { id, organizationId: req.user!.organizationId! },
+      where: scopedConversationWhere(
+        req.user!.organizationId!,
+        id,
+        req.activeWhatsappNumberId
+      ),
     });
     if (!conversation) throw new AppError(404, 'Conversation not found');
 
@@ -701,7 +710,7 @@ router.post(
     const id = paramId(req);
 
     const conversation = await prisma.conversation.findFirst({
-      where: { id, organizationId: orgId },
+      where: scopedConversationWhere(orgId, id, req.activeWhatsappNumberId),
       select: { id: true },
     });
     if (!conversation) throw new AppError(404, 'Conversation not found');
@@ -718,13 +727,13 @@ router.post(
     void (async () => {
       try {
         const full = await prisma.conversation.findFirst({
-          where: { id, organizationId: orgId },
+          where: scopedConversationWhere(orgId, id, req.activeWhatsappNumberId),
           include: {
             whatsappNumber: { select: { phoneNumberId: true, accessToken: true } },
           },
         });
         const whatsappNumber = full?.whatsappNumber;
-        if (!whatsappNumber) return;
+        if (!whatsappNumber?.accessToken) return;
 
         const unreadInbound = await prisma.message.findMany({
           where: {
@@ -764,6 +773,34 @@ router.post(
     })();
 
     sendSuccess(res, { conversationId: id, unreadCount: 0 });
+  })
+);
+
+/** Mark conversation unread for the agent list (CRM-local; does not call Meta). */
+router.post(
+  '/:id/unread',
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const id = paramId(req);
+
+    const owned = await prisma.conversation.findFirst({
+      where: scopedConversationWhere(orgId, id, req.activeWhatsappNumberId),
+      select: { id: true, unreadCount: true },
+    });
+    if (!owned) throw new AppError(404, 'Conversation not found');
+
+    const unreadCount = nextUnreadCount(owned.unreadCount);
+    const conversation = await prisma.conversation.update({
+      where: { id },
+      data: { unreadCount },
+    });
+
+    emitToOrg(orgId, 'conversation:updated', {
+      conversationId: id,
+      patch: { unreadCount: conversation.unreadCount },
+    });
+
+    sendSuccess(res, { conversationId: id, unreadCount: conversation.unreadCount });
   })
 );
 
@@ -889,7 +926,7 @@ router.post(
     const orgId = req.user!.organizationId!;
 
     const conversation = await prisma.conversation.findFirst({
-      where: { id, organizationId: orgId },
+      where: scopedConversationWhere(orgId, id, req.activeWhatsappNumberId),
       include: {
         contact: true,
         whatsappNumber: true,
@@ -897,7 +934,9 @@ router.post(
     });
 
     if (!conversation) throw new AppError(404, 'Conversation not found');
-    if (!conversation.whatsappNumber) throw new AppError(400, 'No WhatsApp number connected');
+    if (!conversation.whatsappNumber?.isActive) {
+      throw new AppError(400, 'No WhatsApp number connected');
+    }
 
     const windowOpensAt = await resolveCs24hWindowOpensAt(
       conversation.id,
@@ -1171,10 +1210,15 @@ router.patch(
       if (!membership) throw new AppError(400, 'Agent is not a team member');
     }
 
+    const existing = await prisma.conversation.findFirst({
+      where: scopedConversationWhere(orgId, id, req.activeWhatsappNumberId),
+      select: { id: true },
+    });
+    if (!existing) throw new AppError(404, 'Conversation not found');
+
     const conversation = await prisma.conversation.update({
       where: {
         id,
-        organizationId: orgId,
       },
       data: { assignedAgentId: agentId || null },
       include: {
@@ -1247,8 +1291,14 @@ router.patch(
       data.activeBotId = activeBotId || null;
     }
 
+    const owned = await prisma.conversation.findFirst({
+      where: scopedConversationWhere(orgId, id, req.activeWhatsappNumberId),
+      select: { id: true },
+    });
+    if (!owned) throw new AppError(404, 'Conversation not found');
+
     const conversation = await prisma.conversation.update({
-      where: { id, organizationId: orgId },
+      where: { id },
       data: data as Prisma.ConversationUpdateInput,
       include: {
         contact: { select: { id: true, name: true, phone: true } },
@@ -1283,8 +1333,14 @@ router.patch(
     const id = paramId(req);
     const { until } = z.object({ until: z.string().datetime() }).parse(req.body);
 
+    const owned = await prisma.conversation.findFirst({
+      where: scopedConversationWhere(orgId, id, req.activeWhatsappNumberId),
+      select: { id: true },
+    });
+    if (!owned) throw new AppError(404, 'Conversation not found');
+
     const conversation = await prisma.conversation.update({
-      where: { id, organizationId: orgId },
+      where: { id },
       data: { snoozedUntil: new Date(until) },
       include: {
         contact: true,
@@ -1307,8 +1363,14 @@ router.delete(
     const orgId = req.user!.organizationId!;
     const id = paramId(req);
 
+    const owned = await prisma.conversation.findFirst({
+      where: scopedConversationWhere(orgId, id, req.activeWhatsappNumberId),
+      select: { id: true },
+    });
+    if (!owned) throw new AppError(404, 'Conversation not found');
+
     const conversation = await prisma.conversation.update({
-      where: { id, organizationId: orgId },
+      where: { id },
       data: { snoozedUntil: null },
       include: {
         contact: true,
@@ -1464,8 +1526,14 @@ router.patch(
     const orgId = req.user!.organizationId!;
     const id = paramId(req);
 
+    const owned = await prisma.conversation.findFirst({
+      where: scopedConversationWhere(orgId, id, req.activeWhatsappNumberId),
+      select: { id: true },
+    });
+    if (!owned) throw new AppError(404, 'Conversation not found');
+
     const conversation = await prisma.conversation.update({
-      where: { id, organizationId: orgId },
+      where: { id },
       data: { isFavorite },
     });
 
@@ -1492,11 +1560,14 @@ router.patch(
 
     const id = paramId(req);
     const orgId = req.user!.organizationId!;
+    const owned = await prisma.conversation.findFirst({
+      where: scopedConversationWhere(orgId, id, req.activeWhatsappNumberId),
+      select: { id: true },
+    });
+    if (!owned) throw new AppError(404, 'Conversation not found');
+
     const conversation = await prisma.conversation.update({
-      where: {
-        id,
-        organizationId: orgId,
-      },
+      where: { id },
       data: { status },
     });
 
@@ -1524,9 +1595,17 @@ router.post(
     const { content } = req.body;
     if (!content) throw new AppError(400, 'Note content required');
 
+    const orgId = req.user!.organizationId!;
+    const id = paramId(req);
+    const owned = await prisma.conversation.findFirst({
+      where: scopedConversationWhere(orgId, id, req.activeWhatsappNumberId),
+      select: { id: true },
+    });
+    if (!owned) throw new AppError(404, 'Conversation not found');
+
     const note = await prisma.internalNote.create({
       data: {
-        conversationId: paramId(req),
+        conversationId: id,
         userId: req.user!.userId,
         content,
       },
@@ -1545,7 +1624,10 @@ router.delete(
     const noteId = req.params.noteId as string;
 
     const note = await prisma.internalNote.findFirst({
-      where: { id: noteId, conversation: { organizationId: orgId } },
+      where: {
+        id: noteId,
+        conversation: scopedConversationParent(orgId, req.activeWhatsappNumberId),
+      },
     });
     if (!note) throw new AppError(404, 'Note not found');
 

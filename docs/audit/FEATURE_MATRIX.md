@@ -47,14 +47,14 @@ Legend:
 
 | Feature | Status | Backend | Frontend | Notes |
 |---------|--------|---------|----------|-------|
-| Conversation list | DONE | `GET /api/inbox/` | `InboxPage` | Paginated, filterable |
-| Chat view with messages | DONE | `GET /api/inbox/:id/messages` | `MessageBubble` | |
+| Conversation list | DONE | `GET /api/inbox/` | `InboxPage` | Paginated, filterable; number-scoped; disconnected = empty |
+| Chat view with messages | DONE | `GET /api/inbox/:id/messages` | `MessageBubble` | Load-earlier supported |
 | Send text message | DONE | `POST /api/inbox/:id/messages` | `ChatComposer` | |
 | Send template message | DONE | Template type | `TemplateComposer` | |
 | Send interactive message | DONE | Interactive type | `InteractiveComposer` | Buttons, lists, CTA |
 | Send image/video/doc/audio | DONE | Media types | `ChatComposer` file picker | |
 | Real-time message delivery | DONE | Socket.IO `message:new` | Live updates | |
-| Message status tracking | DONE | Socket.IO `message:status` | Status icons | Sent/delivered/read/failed |
+| Message status tracking | DONE | Socket.IO `message:status` | Status icons | Sent/delivered/read/failed; Meta code logged |
 | Service window (24h) | DONE | `cs24hWindowOpensAt` field | `ServiceWindowBanner` | |
 | Conversation assignment | DONE | `PATCH /api/inbox/:id/assign` | `InboxDetailsPanel` | |
 | Conversation status | DONE | `PATCH /api/inbox/:id/status` | Filters | Open/Pending/Closed |
@@ -68,6 +68,10 @@ Legend:
 | Context menu | DONE | — | `ChatContextMenu` | Right-click actions |
 | Keyboard shortcuts | DONE | — | `useInboxKeyboardShortcuts` | R=search, Esc=close, D=details |
 | Payment link sending | DONE | `POST /api/billing/create-payment-link` | `ChatComposer` | Razorpay integration |
+| Mark as read (Meta) | DONE | `POST /api/inbox/:id/read` | Auto on open | Blue ticks to customer |
+| Mark as unread (CRM) | API READY | `POST /api/inbox/:id/unread` | — | Backend only; UI not wired (no fake Soon) |
+| Composer drafts | DONE | — | `useDraft` | sessionStorage per conversation |
+| Disconnect / reconnect history | DONE | Soft `isActive:false` | Settings | Same Meta `phoneNumberId` restores chats |
 
 ---
 

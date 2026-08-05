@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { inboxApi } from '../../services/api';
 import { toastError } from '../../utils/toast';
+import { logError } from '../../utils/errors';
 import type { Conversation, Message, ServiceWindowInfo } from '../../types';
 
 const MESSAGE_PAGE_LIMIT = 50;
@@ -77,9 +78,8 @@ export function useConversationThread({ setConversations, refreshUnread }: Threa
 
   const markConversationRead = useCallback(
     (conversationId: string) => {
-      inboxApi.markRead(conversationId).catch(() => {
-        // Endpoint may 404 while the backend contract lands — unread is still
-        // cleared locally and via the legacy GET behavior.
+      inboxApi.markRead(conversationId).catch((err) => {
+        logError(err, { source: 'inbox', action: 'markRead', conversationId });
       });
       setConversations((prev) =>
         prev.map((c) => (c.id === conversationId ? { ...c, unreadCount: 0 } : c))

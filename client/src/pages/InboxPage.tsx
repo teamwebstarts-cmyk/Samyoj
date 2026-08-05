@@ -304,6 +304,7 @@ export default function InboxPage() {
     handleSnooze,
     handleUnsnooze,
     handleToggleFavorite,
+    handleMarkUnread,
     handleBulk,
   } = useConversationActions({ conversations, selected, setSelected, upsertConversation });
 
@@ -666,6 +667,9 @@ export default function InboxPage() {
                   onToggleBot={() => void handleToggleBot()}
                   onSetActiveBot={(botId) => void handleSetActiveBot(botId)}
                   onToggleFavorite={() => void handleToggleFavorite()}
+                  onMarkUnread={() => {
+                    void handleMarkUnread().then(() => void refreshUnread());
+                  }}
                   onAssign={(agentId) => void handleAssignAgent(agentId)}
                   onStatusChange={(status) => void handleStatusChange(status)}
                   onContextMenu={(event) => openChatContextMenu(event, selected)}

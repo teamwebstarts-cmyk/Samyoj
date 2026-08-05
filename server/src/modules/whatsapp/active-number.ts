@@ -112,3 +112,36 @@ export function messagesForNumberFilter(numberId: string | undefined): Prisma.Me
   if (!numberId) return EMPTY_ID_FILTER;
   return { conversation: { whatsappNumberId: numberId } };
 }
+
+/**
+ * Single-conversation lookups must use the same number scope as the list.
+ * No active number → match nothing (disconnected Inbox stays blank even by id).
+ */
+export function scopedConversationWhere(
+  organizationId: string,
+  conversationId: string,
+  activeWhatsappNumberId: string | undefined
+): Prisma.ConversationWhereInput {
+  if (!activeWhatsappNumberId) {
+    return { organizationId, ...EMPTY_ID_FILTER };
+  }
+  return {
+    id: conversationId,
+    organizationId,
+    whatsappNumberId: activeWhatsappNumberId,
+  };
+}
+
+/** Scope nested `conversation: { … }` filters (media, retry, notes). */
+export function scopedConversationParent(
+  organizationId: string,
+  activeWhatsappNumberId: string | undefined
+): Prisma.ConversationWhereInput {
+  if (!activeWhatsappNumberId) {
+    return { organizationId, ...EMPTY_ID_FILTER };
+  }
+  return {
+    organizationId,
+    whatsappNumberId: activeWhatsappNumberId,
+  };
+}

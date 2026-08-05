@@ -199,6 +199,21 @@ export function useConversationActions({
     }
   };
 
+  const handleMarkUnread = async (conversationId?: string) => {
+    const { id: targetId } = findTarget(conversationId);
+    if (!targetId) return;
+    try {
+      const { data } = await inboxApi.markUnread(targetId);
+      const unreadCount =
+        (data.data as { unreadCount?: number } | undefined)?.unreadCount ?? 1;
+      upsertConversation({ id: targetId, unreadCount } as Conversation);
+      if (selected?.id === targetId) setSelected(null);
+      toastInbox('Marked as unread', { icon: 'star' });
+    } catch (err: unknown) {
+      toastError(extractError(err, 'Could not mark as unread'));
+    }
+  };
+
   const handleBulk = async (
     payload: {
       action: 'assign' | 'status' | 'snooze' | 'unsnooze';
@@ -258,6 +273,7 @@ export function useConversationActions({
     handleSnooze,
     handleUnsnooze,
     handleToggleFavorite,
+    handleMarkUnread,
     handleBulk,
   };
 }

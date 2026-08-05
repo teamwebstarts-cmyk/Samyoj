@@ -1,6 +1,6 @@
 import { AxiosError, isAxiosError } from 'axios';
 
-export type ClientErrorSource = 'api' | 'react' | 'socket' | 'auth' | 'ui' | 'global';
+export type ClientErrorSource = 'api' | 'react' | 'socket' | 'auth' | 'ui' | 'global' | 'inbox';
 
 export interface ClientErrorContext {
   source?: ClientErrorSource;

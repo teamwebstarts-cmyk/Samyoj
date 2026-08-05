@@ -2,8 +2,15 @@ import { useCallback, useEffect, useRef, type Dispatch, type MutableRefObject, t
 import type { Socket } from 'socket.io-client';
 import { inboxApi } from '../../services/api';
 import { useSocket, type SocketState } from '../../hooks/useSocket';
+import { logError } from '../../utils/errors';
 import type { Conversation, Message, ServiceWindowInfo } from '../../types';
 import { emitChatNotice } from './chatNoticeBus';
+
+function softCatch(action: string, conversationId?: string) {
+  return (err: unknown) => {
+    logError(err, { source: 'inbox', action, conversationId });
+  };
+}
 
 interface RealtimeDeps {
   selectedRef: MutableRefObject<Conversation | null>;
@@ -63,7 +70,7 @@ export function useInboxRealtime({
           inboxApi
             .get(payload.conversationId)
             .then(({ data: res }) => upsertConversation(res.data as Conversation, true))
-            .catch(() => undefined);
+            .catch(softCatch('realtime.fetchConversation', payload.conversationId));
         }
         void refreshUnread();
         if (openId === payload.conversationId && payload.message) {
@@ -91,7 +98,7 @@ export function useInboxRealtime({
                 const win = res.data.serviceWindow as ServiceWindowInfo | undefined;
                 if (win) setServiceWindow(win);
               })
-              .catch(() => undefined);
+              .catch(softCatch('realtime.refreshServiceWindow', payload.conversationId));
           }
         }
         return;
@@ -170,7 +177,7 @@ export function useInboxRealtime({
           inboxApi
             .get(payload.conversationId)
             .then(({ data: res }) => upsertConversation(res.data as Conversation))
-            .catch(() => undefined);
+            .catch(softCatch('realtime.conversationUpdated', payload.conversationId));
         }
         return;
       }
@@ -245,7 +252,7 @@ export function useInboxRealtime({
             setMessages((data.data.messages ?? []) as Message[]);
             setServiceWindow(data.data.serviceWindow ?? undefined);
           })
-          .catch(() => undefined);
+          .catch(softCatch('realtime.reconnectCatchUp', openId));
       }
     }
   }, [

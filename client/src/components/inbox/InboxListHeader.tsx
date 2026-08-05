@@ -2,11 +2,14 @@ import { useEffect, useLayoutEffect, useRef, useState, type Ref } from 'react';
 import { createPortal } from 'react-dom';
 import {
   AlertTriangle,
+  Bot,
   CircleDot,
   Filter,
+  MessageCircleWarning,
   Plus,
   RefreshCw,
   Star,
+  Ticket,
   X,
 } from 'lucide-react';
 import InboxSelect, { type InboxSelectOption } from './InboxSelect';
@@ -18,9 +21,9 @@ import type { InboundHealth } from '../../hooks/useWebhookHealth';
 
 const FILTERS_MENU_WIDTH = 280;
 const FILTERS_MENU_GAP = 8;
-const FILTERS_MENU_FALLBACK_HEIGHT = 260;
+const FILTERS_MENU_FALLBACK_HEIGHT = 360;
 
-export type ListChip = 'all' | 'unread' | 'favourites';
+export type ListChip = 'all' | 'unread' | 'favourites' | 'unreplied' | 'hasTicket' | 'botActive';
 
 const STATUS_CHIPS: Array<{
   value: string;
@@ -105,7 +108,12 @@ export default function InboxListHeader({
 
   const isConnected = hasConnectedNumber && !numberLoading;
   const unreadActive = chip === 'unread';
-  const popoverFiltersActive = Boolean(agentFilter) || chip === 'favourites';
+  const popoverFiltersActive =
+    Boolean(agentFilter) ||
+    chip === 'favourites' ||
+    chip === 'unreplied' ||
+    chip === 'hasTicket' ||
+    chip === 'botActive';
   const anyFilterActive = unreadActive || Boolean(statusFilter) || popoverFiltersActive;
 
   const clearAllFilters = () => {
@@ -358,6 +366,24 @@ export default function InboxListHeader({
                       label="Favourites"
                       onClick={() => onChipChange(chip === 'favourites' ? 'all' : 'favourites')}
                     />
+                    <ExtraToggle
+                      active={chip === 'unreplied'}
+                      icon={MessageCircleWarning}
+                      label="Unreplied"
+                      onClick={() => onChipChange(chip === 'unreplied' ? 'all' : 'unreplied')}
+                    />
+                    <ExtraToggle
+                      active={chip === 'hasTicket'}
+                      icon={Ticket}
+                      label="Open ticket"
+                      onClick={() => onChipChange(chip === 'hasTicket' ? 'all' : 'hasTicket')}
+                    />
+                    <ExtraToggle
+                      active={chip === 'botActive'}
+                      icon={Bot}
+                      label="Bot active"
+                      onClick={() => onChipChange(chip === 'botActive' ? 'all' : 'botActive')}
+                    />
                   </div>
                 </div>,
                 document.body
@@ -368,6 +394,7 @@ export default function InboxListHeader({
         <div
           role="tablist"
           aria-label="Filter by status"
+          aria-live="polite"
           className="mt-2.5 flex items-center gap-1 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {STATUS_CHIPS.map((item) => {

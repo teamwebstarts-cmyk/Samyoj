@@ -76,6 +76,7 @@ interface ChatThreadProps {
   onToggleBot: () => void;
   onSetActiveBot?: (botId: string | null) => void;
   onToggleFavorite: () => void;
+  onMarkUnread: () => void;
   onAssign: (agentId: string | null) => void;
   onStatusChange: (status: string) => void;
   onContextMenu: (event: React.MouseEvent) => void;
@@ -141,6 +142,7 @@ export default function ChatThread({
   onToggleBot,
   onSetActiveBot,
   onToggleFavorite,
+  onMarkUnread,
   onAssign,
   onStatusChange,
   onContextMenu,
@@ -566,6 +568,7 @@ export default function ChatThread({
         onToggleBot={onToggleBot}
         onSetActiveBot={onSetActiveBot}
         onToggleFavorite={onToggleFavorite}
+        onMarkUnread={onMarkUnread}
         onToggleSearch={toggleSearch}
         onAssign={onAssign}
         onStatusChange={onStatusChange}
