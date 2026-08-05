@@ -9,13 +9,13 @@ interface CallFiltersBarProps {
   onChipChange: (value: string) => void;
 }
 
-const CHIPS: Array<{ value: string; label: string; color?: string }> = [
+const CHIPS: Array<{ value: string; label: string }> = [
   { value: '', label: 'All' },
-  { value: 'live', label: 'Live', color: 'bg-emerald-500' },
-  { value: 'missed', label: 'Missed', color: 'bg-red-500' },
-  { value: 'ai', label: 'AI', color: 'bg-violet-500' },
-  { value: 'human', label: 'Human', color: 'bg-sky-500' },
-  { value: 'out', label: 'Out', color: 'bg-amber-500' },
+  { value: 'live', label: 'Live' },
+  { value: 'missed', label: 'Missed' },
+  { value: 'ai', label: 'AI' },
+  { value: 'human', label: 'Human' },
+  { value: 'out', label: 'Out' },
 ];
 
 export default function CallFiltersBar({
@@ -66,12 +66,6 @@ export default function CallFiltersBar({
                 : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700'
             }`}
           >
-              {c.color && (
-                <span
-                  aria-hidden
-                  className={`h-2 w-2 shrink-0 rounded-sm ${c.color}`}
-                />
-              )}
               {c.label}
             </button>
           );
