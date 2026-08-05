@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { FileText, Loader2, Mic, Play } from 'lucide-react';
+import { FileText, Loader2, Play } from 'lucide-react';
 import api from '../../services/api';
 import { resolveWaDocumentKind, waDocumentBadge, waDocumentTone } from './waDocumentChrome';
 
@@ -565,7 +565,7 @@ export function AuthenticatedAudio({
 
   return (
     <div
-      className={`flex min-w-[268px] max-w-[320px] items-center gap-2 px-1 py-1 ${className}`}
+      className={`flex min-w-[240px] max-w-[320px] items-center gap-2.5 px-0.5 py-1 ${className}`}
     >
       <audio
         ref={audioRef}
@@ -623,17 +623,6 @@ export function AuthenticatedAudio({
           <span className="text-[11px] tabular-nums leading-none text-chat-timestamp">{clock}</span>
           {endMeta ? <span className="shrink-0 -mb-px">{endMeta}</span> : null}
         </div>
-      </div>
-
-      <div
-        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${
-          outbound
-            ? 'bg-white/55 text-[#008069] dark:bg-emerald-950/40 dark:text-emerald-300'
-            : 'bg-[#dfe5e7] text-[#54656f] dark:bg-neutral-700 dark:text-neutral-200'
-        }`}
-        aria-hidden
-      >
-        <Mic className="h-[18px] w-[18px]" strokeWidth={2.1} />
       </div>
     </div>
   );
