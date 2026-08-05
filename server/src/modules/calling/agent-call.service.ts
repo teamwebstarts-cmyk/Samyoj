@@ -8,6 +8,7 @@ import {
   getPendingCallByCallId,
   removePendingCall,
   registerActiveCall,
+  resolvePendingCallAccessToken,
 } from './session-store';
 import { publishCallEventMessage } from './call-event-message';
 
@@ -31,16 +32,19 @@ export async function acceptCallWithAgentAnswer(params: {
     (await getPendingCall(call.metaCallId)) ?? (await getPendingCallByCallId(params.callId));
   if (!pending) throw new Error('Call signaling expired — try again on the next call');
 
+  const accessToken = await resolvePendingCallAccessToken(pending);
+  if (!accessToken) throw new Error('WhatsApp number no longer available for this call');
+
   await MetaCallingService.preAccept(
     pending.phoneNumberId,
-    pending.accessToken,
+    accessToken,
     pending.metaCallId,
     params.sdpAnswer
   );
 
   await MetaCallingService.accept(
     pending.phoneNumberId,
-    pending.accessToken,
+    accessToken,
     pending.metaCallId,
     params.sdpAnswer
   );
@@ -83,11 +87,14 @@ export async function declineCallAsAgent(params: {
     (await getPendingCall(call.metaCallId)) ?? (await getPendingCallByCallId(params.callId));
   if (pending) {
     try {
-      await MetaCallingService.reject(
-        pending.phoneNumberId,
-        pending.accessToken,
-        pending.metaCallId
-      );
+      const accessToken = await resolvePendingCallAccessToken(pending);
+      if (accessToken) {
+        await MetaCallingService.reject(
+          pending.phoneNumberId,
+          accessToken,
+          pending.metaCallId
+        );
+      }
     } catch {
       // Meta may have already ended the call
     }

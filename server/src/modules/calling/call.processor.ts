@@ -101,6 +101,7 @@ async function startAiSession(params: {
   contact: { id: string };
   phoneNumberId: string;
   accessToken: string;
+  whatsappNumberId?: string;
   fromPhone: string;
   toPhone: string;
   direction: string;
@@ -112,6 +113,7 @@ async function startAiSession(params: {
   ttsLanguage?: string;
   sttPrompt?: string;
   sttMode?: string;
+  sttLanguage?: string;
 }): Promise<void> {
   const session = new AiVoiceCallSession({
     callId: params.callRecord.id,
@@ -121,6 +123,7 @@ async function startAiSession(params: {
     contactId: params.contact.id,
     phoneNumberId: params.phoneNumberId,
     accessToken: params.accessToken,
+    whatsappNumberId: params.whatsappNumberId,
     fromPhone: params.fromPhone,
     toPhone: params.toPhone,
     direction: params.direction as 'USER_INITIATED' | 'BUSINESS_INITIATED',
@@ -131,6 +134,7 @@ async function startAiSession(params: {
     ttsLanguage: params.ttsLanguage,
     sttPrompt: params.sttPrompt,
     sttMode: params.sttMode,
+    sttLanguage: params.sttLanguage,
   });
 
   registerCallSession(params.callRecord.metaCallId, session);
@@ -186,6 +190,7 @@ async function ringAgentsForCall(params: {
   conversation: { id: string };
   contact: { id: string; name?: string | null };
   phoneNumberId: string;
+  whatsappNumberId?: string;
   accessToken: string;
   fromPhone: string;
   toPhone: string;
@@ -203,7 +208,7 @@ async function ringAgentsForCall(params: {
     conversationId: params.conversation.id,
     contactId: params.contact.id,
     phoneNumberId: params.phoneNumberId,
-    accessToken: params.accessToken,
+    whatsappNumberId: params.whatsappNumberId,
     fromPhone: params.fromPhone,
     toPhone: params.toPhone,
     direction: params.direction as 'USER_INITIATED' | 'BUSINESS_INITIATED',
@@ -248,6 +253,7 @@ async function ringAgentsForCall(params: {
           contact: params.contact,
           phoneNumberId: params.phoneNumberId,
           accessToken: params.accessToken,
+          whatsappNumberId: params.whatsappNumberId,
           fromPhone: params.fromPhone,
           toPhone: params.toPhone,
           direction: params.direction,
@@ -261,6 +267,7 @@ async function ringAgentsForCall(params: {
           ttsLanguage: resolveEffectiveVoiceConfig(params.settings).ttsLanguage,
           sttPrompt: resolveEffectiveVoiceConfig(params.settings).sarvamSttPrompt || undefined,
           sttMode: resolveEffectiveVoiceConfig(params.settings).sarvamMode,
+          sttLanguage: resolveEffectiveVoiceConfig(params.settings).sarvamSttLanguage || undefined,
         });
         return;
       }
@@ -425,6 +432,7 @@ async function handleCallConnect(
       conversation,
       contact,
       phoneNumberId,
+      whatsappNumberId,
       accessToken,
       fromPhone,
       toPhone,
@@ -453,6 +461,7 @@ async function handleCallConnect(
     contact,
     phoneNumberId,
     accessToken,
+    whatsappNumberId,
     fromPhone,
     toPhone,
     direction,
@@ -466,6 +475,7 @@ async function handleCallConnect(
     ttsLanguage: voice.ttsLanguage,
     sttPrompt: voice.sarvamSttPrompt || undefined,
     sttMode: voice.sarvamMode,
+    sttLanguage: voice.sarvamSttLanguage || undefined,
   });
 }
 
@@ -631,6 +641,7 @@ export async function handleLiveTransfer(params: {
   conversation: { id: string };
   contact: { id: string; name?: string | null };
   phoneNumberId: string;
+  whatsappNumberId?: string;
   accessToken: string;
   fromPhone: string;
   toPhone: string;
@@ -665,7 +676,7 @@ export async function handleLiveTransfer(params: {
     conversationId: params.conversation.id,
     contactId: params.contact.id,
     phoneNumberId: params.phoneNumberId,
-    accessToken: params.accessToken,
+    whatsappNumberId: params.whatsappNumberId,
     fromPhone: params.fromPhone,
     toPhone: params.toPhone,
     direction: params.direction as 'USER_INITIATED' | 'BUSINESS_INITIATED',

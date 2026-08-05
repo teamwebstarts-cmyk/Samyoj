@@ -280,6 +280,12 @@ These are **client UX** changes on top of the existing calling backend; they do 
 | Warm transfer | Deferred by product docs |
 | Docs lag | Some lines in `CALLS_SHIP_DOCUMENT.md` still say Sarvam not integrated / Inbox Call coming soon — **code has moved past that**; trust this report + code |
 
+**Resolved since first audit (2026-08-05):**
+- Voice settings → runtime wiring complete on **both** AI answer paths (`call.processor.ts` direct + ring-timeout) — `ttsVoice`, `ttsLanguage`, `sarvamMode`, `sarvamSttPrompt`, and now a dedicated `sttLanguage` all flow into the AI session (`types.ts` `ActiveCallContext`).
+- `transferMode` honored — live transfer only when `liveTransferEnabled && transferMode === 'live'`; message-only falls back to end + WhatsApp handoff (`ai-voice-agent.ts` `performHandoffAndTransfer`).
+- Sarvam STT key sent via `api-subscription-key` header, not URL query string (`sarvam.stt.ts`).
+- **Security:** decrypted Meta tokens are no longer stored in Redis pending calls. `PendingCallSignaling` stores `whatsappNumberId`; the token is re-derived from the DB on demand via `resolvePendingCallAccessToken` (`session-store.ts`, used by `agent-call.service.ts` accept/decline).
+
 ### 8.3 Env readiness (operators)
 
 Voice “configured” needs:

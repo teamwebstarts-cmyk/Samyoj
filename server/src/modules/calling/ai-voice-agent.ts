@@ -69,7 +69,7 @@ export class AiVoiceCallSession {
         },
       });
       await this.transcriber.connect({
-        language: this.ctx.ttsLanguage || undefined,
+        language: this.ctx.sttLanguage || undefined,
         mode: this.ctx.sttMode || undefined,
         prompt: this.ctx.sttPrompt || undefined,
       });
@@ -279,6 +279,7 @@ export class AiVoiceCallSession {
           conversation: { id: this.ctx.conversationId },
           contact: { id: this.ctx.contactId },
           phoneNumberId: this.ctx.phoneNumberId,
+          whatsappNumberId: this.ctx.whatsappNumberId,
           accessToken: this.ctx.accessToken,
           fromPhone: this.ctx.fromPhone,
           toPhone: this.ctx.toPhone,

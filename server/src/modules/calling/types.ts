@@ -34,6 +34,7 @@ export interface ActiveCallContext {
   contactId: string;
   phoneNumberId: string;
   accessToken: string;
+  whatsappNumberId?: string;
   fromPhone: string;
   toPhone: string;
   direction: 'USER_INITIATED' | 'BUSINESS_INITIATED';
@@ -45,4 +46,6 @@ export interface ActiveCallContext {
   /** Sarvam STT terminology hint (not the bot brain prompt). */
   sttPrompt?: string;
   sttMode?: string;
+  /** Sarvam STT language (independent of TTS language). */
+  sttLanguage?: string;
 }

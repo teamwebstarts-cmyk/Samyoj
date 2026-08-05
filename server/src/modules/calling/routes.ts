@@ -602,7 +602,7 @@ router.post(
         conversationId: conversation?.id || updatedCall.conversationId || '',
         contactId: contact.id,
         phoneNumberId: number.phoneNumberId,
-        accessToken,
+        whatsappNumberId: number.id,
         fromPhone: number.phoneNumber,
         toPhone: contact.phone,
         direction: 'BUSINESS_INITIATED',

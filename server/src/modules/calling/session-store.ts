@@ -21,7 +21,8 @@ export interface PendingCallSignaling {
   conversationId: string;
   contactId: string;
   phoneNumberId: string;
-  accessToken: string;
+  /** Internal whatsapp number id (encrypted token stays in DB, never Redis). */
+  whatsappNumberId?: string;
   fromPhone: string;
   toPhone: string;
   direction: 'USER_INITIATED' | 'BUSINESS_INITIATED';
@@ -93,6 +94,25 @@ export async function getPendingCall(metaCallId: string): Promise<PendingCallSig
   } catch {
     return null;
   }
+}
+
+/**
+ * Resolve a WhatsApp number's decrypted Meta token for a pending call.
+ * The token is never stored in Redis — it is re-derived from the DB each time.
+ */
+export async function resolvePendingCallAccessToken(
+  pending: PendingCallSignaling
+): Promise<string | null> {
+  const prisma = (await import('../../config/database')).default;
+  const where = pending.whatsappNumberId
+    ? { id: pending.whatsappNumberId }
+    : { phoneNumberId: pending.phoneNumberId };
+  const number = await prisma.whatsappNumber.findFirst({
+    where: { ...where, organizationId: pending.organizationId },
+  });
+  if (!number) return null;
+  const { MetaWhatsAppService } = await import('../whatsapp/meta.service');
+  return MetaWhatsAppService.decryptToken(number.accessToken);
 }
 
 export async function getPendingCallByCallId(callId: string): Promise<PendingCallSignaling | null> {
