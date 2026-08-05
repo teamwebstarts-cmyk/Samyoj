@@ -11,6 +11,7 @@ import { synthesizeSpeechSarvam, isSarvamTtsConfigured } from './sarvam.tts';
 import { config } from '../../config';
 import { WhatsAppWebRtcBridge } from './webrtc-bridge';
 import { handleLiveTransfer } from './call.processor';
+import { publishCallEventMessage } from './call-event-message';
 import type { ActiveCallContext, TranscriptEntry } from './types';
 
 const log = createModuleLogger('ai-voice-agent');
@@ -59,9 +60,18 @@ export class AiVoiceCallSession {
         onFinal: (text) => {
           void this.handleUserSpeech(text);
         },
+        onSpeechStart: () => {
+          // Signal barge-in intent; full interrupt = close TTS socket on next speak turn
+          if (this.speaking) this.speaking = false;
+        },
         onError: (err) => {
           log.error('Sarvam transcriber error during call', { callId: this.ctx.callId, error: err.message });
         },
+      });
+      await this.transcriber.connect({
+        language: this.ctx.ttsLanguage || undefined,
+        mode: this.ctx.sttMode || undefined,
+        prompt: this.ctx.sttPrompt || undefined,
       });
     } else {
       this.transcriber = new DeepgramStreamTranscriber({
@@ -72,9 +82,8 @@ export class AiVoiceCallSession {
           log.error('Transcriber error during call', { callId: this.ctx.callId, error: err.message });
         },
       });
+      await this.transcriber.connect();
     }
-
-    await this.transcriber.connect();
 
     this.bridge.setAudioHandler((samples, sampleRate) => {
       if (this.ended || this.speaking || !this.transcriber) return;
@@ -390,6 +399,8 @@ export class AiVoiceCallSession {
         endedAt: new Date(),
       },
     });
+
+    void publishCallEventMessage(this.ctx.callId);
 
     log.info('AI voice call session ended', { callId: this.ctx.callId, reason });
   }

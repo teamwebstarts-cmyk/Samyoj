@@ -4,77 +4,109 @@ import { createModuleLogger } from '../../utils/logger';
 
 const log = createModuleLogger('sarvam-stt');
 
-const SARVAM_STT_BASE = 'wss://api.sarvam.ai/speech-to-text/ws';
+/** Official realtime STT (partials + VAD) — not the legacy /speech-to-text/ws path. */
+const SARVAM_STT_REALTIME = 'wss://api.sarvam.ai/speech-to-text-realtime/ws';
 
 export function isSarvamSttConfigured(): boolean {
   return Boolean(config.calling.sarvamApiKey);
 }
 
-interface SarvamTranscriptMessage {
+interface SarvamRealtimeMessage {
+  event?: string;
   type?: string;
-  partial?: string;
+  text?: string;
   transcript?: string;
+  partial?: string;
+  language?: string;
+  code?: string | number;
   message?: string;
-  is_final?: boolean;
-  speakers?: Array<{ speaker_label: string; text: string; confidence: number }>;
+  is_fatal?: boolean;
 }
 
 export interface SarvamTranscriptHandler {
   onPartial?: (text: string) => void;
   onFinal: (text: string) => void;
   onError?: (error: Error) => void;
+  onSpeechStart?: () => void;
+  onSpeechEnd?: () => void;
 }
 
+export interface SarvamSttConnectOptions {
+  language?: string;
+  mode?: string;
+  prompt?: string;
+  sampleRate?: number;
+  streamType?: 'fast' | 'balanced' | 'simulated';
+}
+
+/**
+ * Sarvam Saaras v3 realtime streaming STT for WhatsApp voice calls.
+ * @see https://docs.sarvam.ai/api/api-guides-tutorials/speech-to-text/realtime-api
+ */
 export class SarvamStreamTranscriber {
   private ws: WebSocket | null = null;
   private closed = false;
   private readonly handlers: SarvamTranscriptHandler;
   private pingInterval: ReturnType<typeof setInterval> | null = null;
+  private connectOptions: SarvamSttConnectOptions = {};
 
   constructor(handlers: SarvamTranscriptHandler) {
     this.handlers = handlers;
   }
 
-  async connect(): Promise<void> {
+  async connect(options?: SarvamSttConnectOptions): Promise<void> {
     const apiKey = config.calling.sarvamApiKey;
     if (!apiKey) throw new Error('Sarvam API key not configured');
 
-    const model = config.calling.sarvamSttModel || 'saaras:v3-realtime';
-    const mode = config.calling.sarvamSttMode || 'codemix';
-    const language = config.calling.sarvamSttLanguage || 'unknown';
+    this.connectOptions = options || {};
+    const language =
+      this.connectOptions.language ||
+      config.calling.sarvamSttLanguage ||
+      'auto';
+    const mode = this.connectOptions.mode || config.calling.sarvamSttMode || 'codemix';
+    const sampleRate = this.connectOptions.sampleRate || config.calling.sarvamSampleRate || 16000;
+    const streamType = this.connectOptions.streamType || 'fast';
+    const prompt = this.connectOptions.prompt?.trim();
 
-    const url = new URL(SARVAM_STT_BASE);
-    url.searchParams.set('api_key', apiKey);
-    url.searchParams.set('model', model);
+    const url = new URL(SARVAM_STT_REALTIME);
+    url.searchParams.set('model', 'saaras:v3-realtime');
+    url.searchParams.set('language_code', language === 'unknown' ? 'auto' : language);
     url.searchParams.set('mode', mode);
-    // Sarvam uses `language_code` param
-    if (language && language !== 'unknown') {
-      url.searchParams.set('language_code', language);
-    }
+    url.searchParams.set('stream_type', streamType);
+    url.searchParams.set('encoding', 'linear16');
+    url.searchParams.set('sample_rate', String(sampleRate === 8000 ? 8000 : 16000));
+    url.searchParams.set('endpointing', 'vad');
+    if (prompt) url.searchParams.set('prompt', prompt.slice(0, 500));
 
-    this.ws = new WebSocket(url.toString());
+    this.ws = new WebSocket(url.toString(), {
+      headers: {
+        'api-subscription-key': apiKey,
+      },
+    });
     this.closed = false;
 
     return new Promise<void>((resolve, reject) => {
       if (!this.ws) return reject(new Error('No WebSocket'));
 
-      this.ws.onopen = () => {
-        log.info('Sarvam STT WebSocket connected', { model, mode, language });
+      const failTimer = setTimeout(() => {
+        reject(new Error('Sarvam STT connect timed out'));
+      }, 12_000);
 
-        // Keep alive to avoid idle close (~60s)
+      this.ws.onopen = () => {
+        clearTimeout(failTimer);
+        log.info('Sarvam STT realtime connected', { language, mode, streamType, sampleRate });
         this.pingInterval = setInterval(() => {
           if (this.ws?.readyState === WebSocket.OPEN) {
-            this.ws.ping();
+            this.ws.send(JSON.stringify({ event: 'ping' }));
           }
-        }, 30_000);
-
+        }, 25_000);
         resolve();
       };
 
       this.ws.onmessage = (event) => {
         if (this.closed) return;
         try {
-          const msg = JSON.parse(event.data as string) as SarvamTranscriptMessage;
+          const msg = JSON.parse(String(event.data)) as SarvamRealtimeMessage;
           this.handleMessage(msg);
         } catch (err) {
           log.warn('Sarvam STT unparseable message', { error: String(err) });
@@ -82,12 +114,17 @@ export class SarvamStreamTranscriber {
       };
 
       this.ws.onerror = (err) => {
-        const e = new Error(`Sarvam STT WebSocket error: ${(err as unknown as { message?: string }).message || 'unknown'}`);
+        clearTimeout(failTimer);
+        const e = new Error(
+          `Sarvam STT WebSocket error: ${(err as unknown as { message?: string }).message || 'unknown'}`
+        );
         log.error('Sarvam STT error', { error: e.message });
         this.handlers.onError?.(e);
+        reject(e);
       };
 
       this.ws.onclose = (ev) => {
+        clearTimeout(failTimer);
         log.info('Sarvam STT WebSocket closed', { code: ev.code, reason: ev.reason });
         if (this.pingInterval) {
           clearInterval(this.pingInterval);
@@ -97,37 +134,59 @@ export class SarvamStreamTranscriber {
     });
   }
 
-  private handleMessage(msg: SarvamTranscriptMessage): void {
-    if (msg.type === 'error' || msg.message) {
-      this.handlers.onError?.(new Error(msg.message || 'Sarvam STT error'));
+  private handleMessage(msg: SarvamRealtimeMessage): void {
+    const event = msg.event || msg.type;
+
+    if (event === 'error' || msg.is_fatal) {
+      this.handlers.onError?.(new Error(msg.message || `Sarvam STT error ${msg.code || ''}`));
       return;
     }
 
-    // saaras:v3-realtime sends partial results
-    if (msg.partial) {
-      this.handlers.onPartial?.(msg.partial);
+    if (event === 'vad.speech_start') {
+      this.handlers.onSpeechStart?.();
+      return;
+    }
+    if (event === 'vad.speech_end') {
+      this.handlers.onSpeechEnd?.();
+      return;
     }
 
-    // final transcript
-    if (msg.is_final && msg.transcript) {
-      this.handlers.onFinal(msg.transcript);
-    } else if (msg.transcript && typeof msg.is_final === 'undefined') {
-      // saaras:v3 (non-realtime) sends transcript directly
-      this.handlers.onFinal(msg.transcript);
+    if (event === 'transcript.partial' && msg.text) {
+      this.handlers.onPartial?.(msg.text);
+      return;
     }
 
-    if (msg.speakers) {
-      const text = msg.speakers.map((s) => s.text).join(' ');
-      if (text) this.handlers.onFinal(text);
+    if (event === 'transcript.final' && msg.text) {
+      this.handlers.onFinal(msg.text);
+      return;
     }
+
+    // Legacy fallback shapes (should not appear on realtime endpoint)
+    if (msg.partial) this.handlers.onPartial?.(msg.partial);
+    if (msg.transcript) this.handlers.onFinal(msg.transcript);
   }
 
-  sendPcm(samples: Int16Array, sampleRate: number): void {
+  sendPcm(samples: Int16Array, _sampleRate: number): void {
     if (this.closed || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
 
-    // Sarvam expects pcm_s16le or wav. Send raw PCM buffer.
     const buffer = Buffer.from(samples.buffer, samples.byteOffset, samples.byteLength);
-    this.ws.send(buffer);
+    this.ws.send(
+      JSON.stringify({
+        event: 'audio_input',
+        audio: buffer.toString('base64'),
+      })
+    );
+  }
+
+  /** Optional mid-call terminology hint (applied at next utterance). */
+  updatePrompt(prompt: string): void {
+    if (this.closed || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    this.ws.send(
+      JSON.stringify({
+        event: 'config.update',
+        prompt: prompt.slice(0, 500),
+      })
+    );
   }
 
   close(): void {
@@ -141,6 +200,7 @@ export class SarvamStreamTranscriber {
 
     try {
       if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify({ event: 'end' }));
         this.ws.close(1000, 'client close');
       }
     } catch {

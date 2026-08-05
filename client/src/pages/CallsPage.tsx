@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
-import { BarChart3, BookOpen, HelpCircle, Settings, X } from 'lucide-react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { HelpCircle, Settings } from 'lucide-react';
 import { callingApi } from '../services/api';
 import { useSocket } from '../hooks/useSocket';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
@@ -9,6 +9,7 @@ import CallFiltersBar from '../components/calls/CallFiltersBar';
 import CallListItem from '../components/calls/CallListItem';
 import { CallsListEmpty, CallsSelectEmpty } from '../components/calls/CallPlaceholder';
 import CallsPageHeader from '../components/calls/CallsPageHeader';
+import CallsRailPanel from '../components/calls/CallsRailPanel';
 import CallsSetupSheet from '../components/calls/CallsSetupSheet';
 import {
   isActiveCallStatus,
@@ -16,10 +17,9 @@ import {
   transcriptPreview,
 } from '../components/calls/callUtils';
 import { toastError, toastSuccess } from '../utils/toast';
-import LoadingState from '../components/ui/LoadingState';
+import CallsPageSkeleton, { CallsListSkeleton } from '../components/calls/CallsPageSkeleton';
 import PageShell from '../components/ui/PageShell';
 import Pagination from '../components/ui/Pagination';
-import AppButton from '../components/ui/AppButton';
 import { readNumberCache, writeNumberCache } from '../utils/whatsappNumberCache';
 
 interface CallRecord {
@@ -70,7 +70,7 @@ type CallsNumberCache = {
   railPanel: string | null;
 };
 
-type RailPanel = 'settings' | 'insights' | 'help' | null;
+type RailPanel = 'settings' | 'help' | null;
 
 /** Map UI chip → API list params. */
 function chipToParams(chip: string): { status?: string; handler?: string; direction?: string } {
@@ -101,6 +101,7 @@ export default function CallsPage() {
   const [calls, setCalls] = useState<CallRecord[]>([]);
   const [status, setStatus] = useState<CallingStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const [listLoading, setListLoading] = useState(false);
   const [enabling, setEnabling] = useState(false);
   const [ending, setEnding] = useState(false);
   const [savingNotes, setSavingNotes] = useState(false);
@@ -142,25 +143,39 @@ export default function CallsPage() {
   };
   notesDirtyRef.current = notesDirty;
 
-  const loadCalls = useCallback(async () => {
+  const pageRef = useRef(page);
+  const searchRef = useRef(search);
+  const chipRef = useRef(chip);
+  pageRef.current = page;
+  searchRef.current = search;
+  chipRef.current = chip;
+
+  const loadCalls = useCallback(async (opts?: { skeleton?: boolean }) => {
     const params: Record<string, string> = {
-      page: String(page),
+      page: String(pageRef.current),
       limit: String(PAGE_SIZE),
     };
-    if (search.trim()) params.search = search.trim();
-    const mapped = chipToParams(chip);
+    const q = searchRef.current.trim();
+    if (q) params.search = q;
+    const mapped = chipToParams(chipRef.current);
     if (mapped.status) params.status = mapped.status;
     if (mapped.handler) params.handler = mapped.handler;
     if (mapped.direction) params.direction = mapped.direction;
 
-    const { data } = await callingApi.list(params);
-    const payload = data.data as {
-      items: CallRecord[];
-      pagination: { total: number };
-    };
-    setCalls(payload.items.map(parseCall));
-    setTotalCalls(payload.pagination.total);
-  }, [page, search, chip]);
+    const showSkeleton = opts?.skeleton === true;
+    if (showSkeleton) setListLoading(true);
+    try {
+      const { data } = await callingApi.list(params);
+      const payload = data.data as {
+        items: CallRecord[];
+        pagination: { total: number };
+      };
+      setCalls(payload.items.map(parseCall));
+      setTotalCalls(payload.pagination.total);
+    } finally {
+      if (showSkeleton) setListLoading(false);
+    }
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -186,6 +201,15 @@ export default function CallsPage() {
       setLoading(false);
     }
   }, [loadCalls]);
+
+  const filtersBootstrapped = useRef(false);
+  useEffect(() => {
+    if (!filtersBootstrapped.current) {
+      filtersBootstrapped.current = true;
+      return;
+    }
+    void loadCalls({ skeleton: true });
+  }, [page, search, chip, loadCalls]);
 
   const loadCallDetail = useCallback(async (callId: string, opts?: { syncNotes?: boolean }) => {
     try {
@@ -223,7 +247,9 @@ export default function CallsPage() {
       setChip(cached.chip ?? '');
       setSelectedCallId(cached.selectedCallId);
       setNotes(cached.notes);
-      setRailPanel(cached.railPanel as RailPanel);
+      setRailPanel(
+        cached.railPanel === 'settings' || cached.railPanel === 'help' ? cached.railPanel : null
+      );
       setLoading(false);
       return;
     }
@@ -358,7 +384,7 @@ export default function CallsPage() {
   if (loading) {
     return (
       <PageShell>
-        <LoadingState label="Loading calls..." />
+        <CallsPageSkeleton />
       </PageShell>
     );
   }
@@ -372,6 +398,7 @@ export default function CallsPage() {
         isReady={isReady}
         liveCount={liveCount}
         callsToday={callsToday}
+        missedCount={insights?.missed ?? 0}
         onOpenSetup={() => setSetupSheetOpen(true)}
       />
 
@@ -408,7 +435,9 @@ export default function CallsPage() {
           />
 
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            {calls.length === 0 ? (
+            {listLoading ? (
+              <CallsListSkeleton />
+            ) : calls.length === 0 ? (
               <CallsListEmpty />
             ) : (
               <>
@@ -495,86 +524,11 @@ export default function CallsPage() {
 
         {/* Rail side panel — visible from md so tablet Settings icon isn't a dead control */}
         {railPanel && (
-          <div className="absolute inset-y-0 right-[72px] z-20 flex w-[min(100%,300px)] flex-col border-l border-neutral-200 bg-white shadow-xl dark:border-neutral-800 dark:bg-neutral-950 md:static md:z-0 md:w-[260px] md:shadow-none lg:w-[280px]">
-            <div className="flex items-center justify-between border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
-              <p className="text-[13px] font-extrabold text-theme-fg">
-                {railPanel === 'settings' ? 'Customize' : railPanel === 'insights' ? 'Insights' : 'Help'}
-              </p>
-              <button
-                type="button"
-                className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800"
-                onClick={() => setRailPanel(null)}
-                aria-label="Close panel"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto p-4">
-              {railPanel === 'settings' && (
-                <div className="space-y-3">
-                  <p className="text-[12px] font-medium leading-relaxed text-theme-muted">
-                    Who answers, greetings, and call behavior live in Settings → Calling.
-                  </p>
-                  <Link to="/settings?tab=calling">
-                    <AppButton className="w-full" size="sm">
-                      <Settings className="h-3.5 w-3.5" />
-                      Open call settings
-                    </AppButton>
-                  </Link>
-                  <Link to="/ai-bot">
-                    <AppButton variant="secondary" className="w-full" size="sm">
-                      <BookOpen className="h-3.5 w-3.5" />
-                      Edit AI personality
-                    </AppButton>
-                  </Link>
-                  <button
-                    type="button"
-                    className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-left text-[12px] font-semibold text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-200"
-                    onClick={() => {
-                      setSetupSheetOpen(true);
-                      setRailPanel(null);
-                    }}
-                  >
-                    Setup checklist
-                  </button>
-                </div>
-              )}
-              {railPanel === 'insights' && (
-                <div className="space-y-3">
-                  <InsightStat label="Live now" value={String(liveCount)} />
-                  <InsightStat label="Today" value={String(insights?.today ?? callsToday)} />
-                  <InsightStat label="Missed (7d)" value={String(insights?.missed ?? '—')} />
-                  <InsightStat label="AI handled (7d)" value={String(insights?.aiAnswered ?? '—')} />
-                  <p className="pt-1 text-[11px] font-medium text-theme-muted">
-                    Use Live / Missed / AI / Human chips to filter the list.
-                  </p>
-                </div>
-              )}
-              {railPanel === 'help' && (
-                <div className="space-y-3 text-[12px] font-medium leading-relaxed text-theme-secondary">
-                  <p>
-                    <span className="font-bold text-theme-fg">Outbound</span> — call from Inbox without a tunnel.
-                  </p>
-                  <p>
-                    <span className="font-bold text-theme-fg">Inbound</span> — callers need calling enabled on your WhatsApp number.
-                  </p>
-                  <p>
-                    Train answers on <Link className="font-bold text-emerald-700 underline" to="/ai-bot">AI Bots → Train</Link> so voice and chat share one brain.
-                  </p>
-                  <button
-                    type="button"
-                    className="text-[12px] font-bold text-emerald-700 underline"
-                    onClick={() => {
-                      setSetupSheetOpen(true);
-                      setRailPanel(null);
-                    }}
-                  >
-                    Open setup guide
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
+          <CallsRailPanel
+            panel={railPanel}
+            onClose={() => setRailPanel(null)}
+            onOpenSetup={() => setSetupSheetOpen(true)}
+          />
         )}
 
         {/* Customize rail — desktop only */}
@@ -586,12 +540,6 @@ export default function CallsPage() {
             onClick={() => toggleRail('settings')}
           />
           <RailIconButton
-            icon={BarChart3}
-            label="Insights"
-            active={railPanel === 'insights'}
-            onClick={() => toggleRail('insights')}
-          />
-          <RailIconButton
             icon={HelpCircle}
             label="Help"
             active={railPanel === 'help'}
@@ -600,15 +548,6 @@ export default function CallsPage() {
         </div>
       </div>
     </PageShell>
-  );
-}
-
-function InsightStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border border-neutral-200 bg-neutral-50/80 px-3 py-2.5 dark:border-neutral-700 dark:bg-neutral-900/50">
-      <p className="text-[10px] font-bold uppercase tracking-wide text-neutral-500">{label}</p>
-      <p className="mt-0.5 text-lg font-extrabold tabular-nums text-theme-fg">{value}</p>
-    </div>
   );
 }
 

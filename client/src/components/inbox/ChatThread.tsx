@@ -38,7 +38,7 @@ import type {
   TeamAgent,
 } from '../../types';
 
-const EPHEMERAL_MS = 2500;
+const EPHEMERAL_MS = 3500;
 const NOTICE_EXIT_MS = 150;
 
 interface ChatThreadProps {
@@ -224,7 +224,7 @@ export default function ChatThread({
             ? 'orange'
             : 'amber'
           : 'lavender'),
-      icon: isAlert ? 'alert' : payload.icon ?? 'bot',
+      icon: (isAlert ? 'alert' : payload.icon ?? 'bot') as ChatNoticeItem['icon'],
       message: payload.message,
       ...(payload.actionLabel && payload.onAction
         ? { action: { label: payload.actionLabel, onClick: payload.onAction } }

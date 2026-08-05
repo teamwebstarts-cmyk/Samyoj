@@ -3,7 +3,7 @@ import { toastInbox, type InboxToastIcon } from '../../utils/toast';
 export type ChatNoticeTone = 'lavender' | 'amber' | 'orange';
 
 /** Icons for in-chat notices; toastInbox fallback only supports bot/star. */
-export type ChatNoticePayloadIcon = InboxToastIcon | 'users' | 'flow' | 'alert';
+export type ChatNoticePayloadIcon = InboxToastIcon | 'users' | 'flow' | 'alert' | 'phone';
 
 export type ChatNoticePayload = {
   kind:
@@ -14,7 +14,8 @@ export type ChatNoticePayload = {
     | 'favorite-off'
     | 'media-limit'
     | 'send-error'
-    | 'handoff';
+    | 'handoff'
+    | 'calling';
   message: string;
   tone?: ChatNoticeTone;
   icon?: ChatNoticePayloadIcon;

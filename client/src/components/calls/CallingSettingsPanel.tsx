@@ -18,6 +18,7 @@ import AppButton from '../ui/AppButton';
 import AppInput from '../ui/AppInput';
 import AppSelect from '../ui/AppSelect';
 import AppTextarea from '../ui/AppTextarea';
+import { CallingSettingsSkeleton } from './CallsPageSkeleton';
 import { aiBotApi, callingApi } from '../../services/api';
 import { toastError, toastSuccess } from '../../utils/toast';
 
@@ -37,6 +38,7 @@ interface CallingSettings {
   sarvamSttLanguage?: string | null;
   sarvamTtsSpeaker?: string | null;
   sarvamMode?: 'codemix' | 'transcribe';
+  sarvamSttPrompt?: string | null;
   liveTransferEnabled?: boolean;
   transferMode?: 'live' | 'message_only';
 }
@@ -60,6 +62,7 @@ const defaultSettings: CallingSettings = {
   transferMode: 'message_only',
   sarvamTtsSpeaker: 'shubh',
   sarvamSttLanguage: 'hi-IN',
+  sarvamSttPrompt: null,
 };
 
 const SARVAM_SPEAKERS = [
@@ -150,6 +153,7 @@ export default function CallingSettingsPanel() {
   const [bots, setBots] = useState<Array<{ id: string; name: string }>>([]);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [previewing, setPreviewing] = useState(false);
 
   useEffect(() => {
     if (sectionParam && SECTIONS.some((s) => s.id === sectionParam)) {
@@ -189,6 +193,24 @@ export default function CallingSettingsPanel() {
     }
   }
 
+  async function handlePreviewVoice() {
+    setPreviewing(true);
+    try {
+      const { data } = await callingApi.previewVoice({
+        text: settings.aiGreeting || DEFAULT_GREETING,
+        speaker: settings.sarvamTtsSpeaker || 'shubh',
+        language: settings.sarvamSttLanguage || 'hi-IN',
+      });
+      const payload = data.data as { audioBase64: string; contentType: string };
+      const audio = new Audio(`data:${payload.contentType};base64,${payload.audioBase64}`);
+      await audio.play();
+    } catch {
+      toastError('Could not play preview. Check that Sarvam is configured on the server.');
+    } finally {
+      setPreviewing(false);
+    }
+  }
+
   function handleReset() {
     if (!window.confirm('Reset calling settings to defaults? Unsaved edits will be lost.')) return;
     setSettings(defaultSettings);
@@ -198,7 +220,7 @@ export default function CallingSettingsPanel() {
     setSettings(baseline);
   }
 
-  if (loading) return null;
+  if (loading) return <CallingSettingsSkeleton />;
 
   return (
     <SettingsPanel
@@ -470,7 +492,7 @@ export default function CallingSettingsPanel() {
           )}
 
           {section === 'voice' && (
-            <SectionFrame title="Voice & language" subtitle="How your AI sounds on WhatsApp calls.">
+            <SectionFrame title="Voice & language" subtitle="How your AI sounds on WhatsApp calls (Sarvam Bulbul + Saaras).">
               <AppSelect
                 label="Language"
                 value={settings.sarvamSttLanguage || 'hi-IN'}
@@ -497,6 +519,29 @@ export default function CallingSettingsPanel() {
                     </button>
                   );
                 })}
+              </div>
+              <AppTextarea
+                className="mt-4"
+                label="Words Sarvam should recognize"
+                hint="Terminology hint for speech recognition — not bot personality"
+                value={settings.sarvamSttPrompt || ''}
+                onChange={(e) => setSettings((s) => ({ ...s, sarvamSttPrompt: e.target.value || null }))}
+                rows={2}
+                placeholder="e.g. Samyoj, Pune clinic, Diwali offer"
+              />
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <AppButton
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  loading={previewing}
+                  onClick={() => void handlePreviewVoice()}
+                >
+                  Play greeting preview
+                </AppButton>
+                <p className="text-[11px] font-medium text-theme-muted">
+                  Uses your greeting text + selected speaker. Platform Sarvam key — no key in this screen.
+                </p>
               </div>
             </SectionFrame>
           )}

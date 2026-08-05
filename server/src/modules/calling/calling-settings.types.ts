@@ -21,6 +21,8 @@ export interface CallingSettings {
   sarvamSttLanguage: string | null;
   sarvamTtsSpeaker: string | null;
   sarvamMode: 'codemix' | 'transcribe';
+  /** Optional terminology hints for Saaras final transcript (brand names, etc.). */
+  sarvamSttPrompt: string | null;
   liveTransferEnabled: boolean;
   transferMode: TransferMode;
 }
@@ -47,6 +49,7 @@ export const DEFAULT_CALLING_SETTINGS: CallingSettings = {
   sarvamSttLanguage: null,
   sarvamTtsSpeaker: null,
   sarvamMode: 'codemix',
+  sarvamSttPrompt: null,
   liveTransferEnabled: false,
   transferMode: 'message_only',
 };

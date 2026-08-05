@@ -8,6 +8,10 @@ import {
   Copy,
   Info,
   MoreVertical,
+  Phone,
+  PhoneIncoming,
+  PhoneMissed,
+  PhoneOff,
   Reply,
   RotateCcw,
   SmilePlus,
@@ -240,7 +244,9 @@ function MediaUnavailable({ label }: { label: string }) {
 
 function renderMediaContent(
   message: Message,
-  onMediaClick?: (item: MediaViewerItem) => void
+  onMediaClick?: (item: MediaViewerItem) => void,
+  audioEndMeta?: ReactNode,
+  audioOutbound?: boolean
 ) {
   const type = message.type?.toUpperCase();
   const hasMedia = messageHasMedia(message);
@@ -305,7 +311,13 @@ function renderMediaContent(
       );
     }
     case 'AUDIO':
-      return <AuthenticatedAudio messageId={message.id} />;
+      return (
+        <AuthenticatedAudio
+          messageId={message.id}
+          endMeta={audioEndMeta}
+          outbound={audioOutbound}
+        />
+      );
     case 'DOCUMENT':
       return (
         <AuthenticatedDocument
@@ -363,6 +375,7 @@ export default function MessageBubble({
     animateEnter && !reducedMotion ? 'inbox-bubble-enter motion-reduce:animate-none' : '';
   const type = message.type?.toUpperCase();
   const isSticker = Boolean(message.metadata?.isSticker);
+  const isCallEvent = Boolean(message.metadata?.isCallEvent) || message.content === '[call]';
   const isMediaMessage = ['IMAGE', 'VIDEO', 'AUDIO', 'DOCUMENT'].includes(type);
   const isInteractive = type === 'INTERACTIVE';
   const isContactCard = type === 'CONTACTS';
@@ -702,6 +715,10 @@ export default function MessageBubble({
   /** Size to content; cap against the thread — never `min-w-0` (that collapsed short texts to 1 letter wide). */
   const bubbleMaxClass = 'w-fit max-w-[min(100%,75%)] sm:max-w-[min(100%,65%)]';
 
+  if (isCallEvent) {
+    return <CallEventPill message={message} />;
+  }
+
   if (isInteractive || (buttons && buttons.length > 0) || isButtonReply) {
     return (
       <div className={rowClass} data-message-id={message.id}>
@@ -796,28 +813,6 @@ export default function MessageBubble({
     );
   }
 
-  const mediaContent = isMediaMessage ? renderMediaContent(message, openMedia) : null;
-  let caption: string | undefined;
-  if (isMediaMessage && message.content) {
-    const filename = message.metadata?.filename?.trim();
-    const body = message.content.trim();
-    const placeholders = new Set(['[image]', '[video]', '[audio]', '[voice]', '[document]', '[sticker]']);
-    const isFilenameOnly =
-      Boolean(filename && body === filename) ||
-      /^voice-note-\d+\.(webm|ogg|opus|mp3|m4a|wav)$/i.test(body) ||
-      // Older outbound rows stored the raw upload name as content with no real caption.
-      (['IMAGE', 'VIDEO', 'AUDIO'].includes(type || '') &&
-        !message.metadata?.caption &&
-        /\.(png|jpe?g|gif|webp|bmp|svg|mp4|mov|webm|ogg|mp3|m4a|aac|pdf)$/i.test(body));
-    if (placeholders.has(body.toLowerCase()) || isFilenameOnly) {
-      caption = undefined;
-    } else if (type === 'DOCUMENT' && filename && body === filename) {
-      caption = undefined;
-    } else {
-      caption = message.content;
-    }
-  }
-
   const bubbleTone = isOutbound
     ? isFailed
       ? 'wa-bubble-failed'
@@ -841,6 +836,35 @@ export default function MessageBubble({
         {isOutbound && <MessageTicks status={tickStatus} className={onImage ? '[&_svg]:drop-shadow' : ''} />}
       </span>
     ) : null;
+
+  const mediaContent = isMediaMessage
+    ? renderMediaContent(
+        message,
+        openMedia,
+        type === 'AUDIO' ? metaRow() : undefined,
+        isOutbound
+      )
+    : null;
+  let caption: string | undefined;
+  if (isMediaMessage && message.content) {
+    const filename = message.metadata?.filename?.trim();
+    const body = message.content.trim();
+    const placeholders = new Set(['[image]', '[video]', '[audio]', '[voice]', '[document]', '[sticker]']);
+    const isFilenameOnly =
+      Boolean(filename && body === filename) ||
+      /^voice-note-\d+\.(webm|ogg|opus|mp3|m4a|wav)$/i.test(body) ||
+      // Older outbound rows stored the raw upload name as content with no real caption.
+      (['IMAGE', 'VIDEO', 'AUDIO'].includes(type || '') &&
+        !message.metadata?.caption &&
+        /\.(png|jpe?g|gif|webp|bmp|svg|mp4|mov|webm|ogg|mp3|m4a|aac|pdf)$/i.test(body));
+    if (placeholders.has(body.toLowerCase()) || isFilenameOnly) {
+      caption = undefined;
+    } else if (type === 'DOCUMENT' && filename && body === filename) {
+      caption = undefined;
+    } else {
+      caption = message.content;
+    }
+  }
 
   if (isUnsupported) {
     const kind =
@@ -935,7 +959,7 @@ export default function MessageBubble({
                     {highlightText(caption, highlightQuery)}
                   </CollapsibleMessageText>
                 )}
-                {!isVisual && !isSticker && (time || isOutbound) && (
+                {!isVisual && !isSticker && type !== 'AUDIO' && (time || isOutbound) && (
                   <div className="flex justify-end px-1 pb-0.5 whitespace-nowrap">{metaRow()}</div>
                 )}
               </div>
@@ -1013,6 +1037,49 @@ export function DateDivider({ label }: { label: string }) {
     <div className="flex items-center justify-center py-3" role="separator">
       <span className="rounded-full bg-chat-bubble-received/95 px-3.5 py-1 text-[11.5px] font-semibold tracking-wide text-chat-timestamp shadow-[0_1px_1px_rgba(11,20,26,0.06)]">
         {label}
+      </span>
+    </div>
+  );
+}
+
+function CallEventPill({ message }: { message: Message }) {
+  const meta = message.metadata;
+  const tone = meta?.callTone || (meta?.callStatus === 'COMPLETED' ? 'completed' : 'missed');
+  const label =
+    message.content && message.content !== '[call]'
+      ? message.content
+      : tone === 'completed'
+        ? 'Voice call'
+        : 'Missed voice call';
+  const time = formatMessageTime(message.createdAt);
+  const Icon =
+    tone === 'completed'
+      ? message.direction === 'INBOUND'
+        ? PhoneIncoming
+        : Phone
+      : tone === 'failed'
+        ? PhoneOff
+        : PhoneMissed;
+
+  const color =
+    tone === 'completed'
+      ? 'text-emerald-700 dark:text-emerald-400'
+      : tone === 'failed'
+        ? 'text-amber-700 dark:text-amber-400'
+        : 'text-red-600 dark:text-red-400';
+
+  return (
+    <div
+      className="flex items-center justify-center py-2.5"
+      role="status"
+      data-message-id={message.id}
+    >
+      <span
+        className={`inline-flex max-w-[min(100%,320px)] items-center gap-1.5 rounded-full bg-chat-bubble-received/95 px-3 py-1 text-[11.5px] font-semibold tracking-wide shadow-[0_1px_1px_rgba(11,20,26,0.06)] ${color}`}
+      >
+        <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={2.25} />
+        <span className="truncate">{label}</span>
+        {time ? <span className="font-medium text-chat-timestamp/80">· {time}</span> : null}
       </span>
     </div>
   );

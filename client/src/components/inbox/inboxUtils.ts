@@ -193,6 +193,12 @@ export function getMessagePreview(message?: Pick<Message, 'type' | 'content' | '
   const type = message.type?.toUpperCase();
   const meta = message.metadata;
 
+  if (message.metadata?.isCallEvent || message.content === '[call]') {
+    return message.content && message.content !== '[call]'
+      ? message.content
+      : 'Voice call';
+  }
+
   if (isUnsupportedMessageContent(message.content, meta)) {
     const kind = meta?.unsupportedType || unsupportedTypeFromContent(message.content);
     return describeUnsupportedMessage(kind).title;

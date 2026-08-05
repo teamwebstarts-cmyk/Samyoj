@@ -140,8 +140,16 @@ export function useConversationActions({
   };
 
   const handleCallBack = async () => {
-    if (!selected) return;
+    if (!selected || callingBack) return;
+    const contactLabel = selected.contact.name?.trim() || selected.contact.phone || 'contact';
     setCallingBack(true);
+    emitChatNotice(selected.id, {
+      kind: 'calling',
+      message: `Calling ${contactLabel}…`,
+      tone: 'lavender',
+      icon: 'phone',
+    });
+    toastSuccess(`Calling ${contactLabel}…`);
     try {
       // Meta requires per-user call permission before outbound (BIC).
       try {
@@ -174,7 +182,19 @@ export function useConversationActions({
         phone: selected.contact.phone,
       });
       const callId = (data.data as { call?: { id: string } })?.call?.id;
-      if (callId) navigate(`/calls/${callId}`);
+      if (callId) {
+        emitChatNotice(selected.id, {
+          kind: 'calling',
+          message: `Connecting to ${contactLabel}…`,
+          tone: 'lavender',
+          icon: 'phone',
+          actionLabel: 'Open call',
+          onAction: () => navigate(`/calls/${callId}`),
+        });
+        navigate(`/calls/${callId}`);
+        return;
+      }
+      toastError('Call started but no call page was returned.');
     } catch (err: unknown) {
       const body = (err as { response?: { data?: { error?: { code?: string; message?: string } } } })
         ?.response?.data?.error;

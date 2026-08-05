@@ -14,6 +14,7 @@ import { decideCallRoute, resolveCallBot } from './routing.service';
 import { getOrgCallingSettings, resolveEffectiveVoiceConfig } from './settings.service';
 import { triggerCallCompletedFlow } from '../flows/engine';
 import { handleMissedCallFollowUp } from './missed-call.service';
+import { publishCallEventMessage } from './call-event-message';
 import {
   getPendingCall,
   registerActiveCall,
@@ -82,6 +83,7 @@ async function markCallMissed(
   });
 
   emitToOrg(orgId, 'call:updated', { callId, status: 'MISSED', reason });
+  void publishCallEventMessage(callId);
 
   void handleMissedCallFollowUp({
     organizationId: orgId,
@@ -108,6 +110,8 @@ async function startAiSession(params: {
   greeting?: string;
   ttsVoice?: string;
   ttsLanguage?: string;
+  sttPrompt?: string;
+  sttMode?: string;
 }): Promise<void> {
   const session = new AiVoiceCallSession({
     callId: params.callRecord.id,
@@ -125,6 +129,8 @@ async function startAiSession(params: {
     consentMessage: params.consentMessage,
     ttsVoice: params.ttsVoice,
     ttsLanguage: params.ttsLanguage,
+    sttPrompt: params.sttPrompt,
+    sttMode: params.sttMode,
   });
 
   registerCallSession(params.callRecord.metaCallId, session);
@@ -153,6 +159,7 @@ async function startAiSession(params: {
       callId: params.callRecord.id,
       status: 'FAILED',
     });
+    void publishCallEventMessage(params.callRecord.id);
     try {
       await MetaCallingService.reject(
         params.phoneNumberId,
@@ -252,6 +259,8 @@ async function ringAgentsForCall(params: {
           greeting: resolveEffectiveVoiceConfig(params.settings).aiGreeting,
           ttsVoice: resolveEffectiveVoiceConfig(params.settings).ttsVoice,
           ttsLanguage: resolveEffectiveVoiceConfig(params.settings).ttsLanguage,
+          sttPrompt: resolveEffectiveVoiceConfig(params.settings).sarvamSttPrompt || undefined,
+          sttMode: resolveEffectiveVoiceConfig(params.settings).sarvamMode,
         });
         return;
       }
@@ -435,6 +444,8 @@ async function handleCallConnect(
     return;
   }
 
+  const voice = resolveEffectiveVoiceConfig(settings);
+
   await startAiSession({
     orgId,
     callRecord,
@@ -450,7 +461,11 @@ async function handleCallConnect(
     consentMessage: settings.recordingConsentEnabled
       ? settings.recordingConsentMessage
       : undefined,
-    greeting: settings.aiGreeting,
+    greeting: voice.aiGreeting,
+    ttsVoice: voice.ttsVoice,
+    ttsLanguage: voice.ttsLanguage,
+    sttPrompt: voice.sarvamSttPrompt || undefined,
+    sttMode: voice.sarvamMode,
   });
 }
 
@@ -496,6 +511,7 @@ async function handleCallTerminate(orgId: string, call: CallWebhookEntry): Promi
     status,
     durationSeconds: duration,
   });
+  void publishCallEventMessage(existing.id);
 
   if (existing.status === 'RINGING' && status === 'TERMINATED') {
     void handleMissedCallFollowUp({

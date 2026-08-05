@@ -33,16 +33,39 @@ async function streamMessageMedia(
   messageId: string,
   metadata: MessageMediaMetadata,
   cacheSeconds?: number,
-  asAttachment = false
+  asAttachment = false,
+  playbackFormat?: string
 ) {
-  const { buffer, mimeType, filename } = await getMessageMediaBuffer({
+  let { buffer, mimeType, filename } = await getMessageMediaBuffer({
     organizationId,
     messageId,
     metadata,
   });
 
+  // WhatsApp voice notes are OGG/Opus — many browsers (Safari/iOS) cannot play them in <audio>.
+  // Serve an MP3 copy for Inbox playback; keep the original on disk for Meta/outbound.
+  const wantBrowserPlayback =
+    playbackFormat === 'mp3' ||
+    playbackFormat === 'browser' ||
+    playbackFormat === '1';
+  if (wantBrowserPlayback) {
+    const { ensureBrowserAudio, needsBrowserAudioTranscode } = await import('../media/audio-transcode');
+    if (needsBrowserAudioTranscode(mimeType, filename)) {
+      const converted = await ensureBrowserAudio({ buffer, mimeType, filename });
+      buffer = converted.buffer;
+      mimeType = converted.mimeType;
+      filename = converted.filename;
+    }
+  } else {
+    const base = (mimeType || '').split(';')[0].trim().toLowerCase();
+    if (base === 'audio/ogg' || base === 'audio/opus') {
+      mimeType = 'audio/ogg; codecs=opus';
+    }
+  }
+
   res.setHeader('Content-Type', mimeType);
   res.setHeader('Content-Length', buffer.length);
+  res.setHeader('Accept-Ranges', 'bytes');
   // Allow SPA (often a different origin in local/dev) to embed signed media.
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   if (cacheSeconds) {
@@ -87,7 +110,8 @@ router.get(
       message.id,
       metadata || {},
       MEDIA_URL_TTL_SECONDS,
-      req.query.download === '1'
+      req.query.download === '1',
+      typeof req.query.playback === 'string' ? req.query.playback : undefined
     );
   })
 );
@@ -346,7 +370,8 @@ router.get(
       message.id,
       metadata || {},
       undefined,
-      req.query.download === '1'
+      req.query.download === '1',
+      typeof req.query.playback === 'string' ? req.query.playback : undefined
     );
   })
 );
@@ -649,6 +674,37 @@ router.get(
       ),
     });
     if (!conversation) throw new AppError(404, 'Conversation not found');
+
+    // Ensure finished WhatsApp calls appear as centered chat pills (idempotent).
+    try {
+      const { publishCallEventMessage } = await import('../calling/call-event-message');
+      const terminalCalls = await prisma.call.findMany({
+        where: {
+          conversationId: id,
+          status: { in: ['COMPLETED', 'MISSED', 'REJECTED', 'FAILED', 'TERMINATED'] },
+        },
+        select: { id: true },
+        take: 100,
+        orderBy: { createdAt: 'desc' },
+      });
+      if (terminalCalls.length > 0) {
+        const existing = await prisma.message.findMany({
+          where: {
+            conversationId: id,
+            metaMessageId: { in: terminalCalls.map((c) => `call:${c.id}`) },
+          },
+          select: { metaMessageId: true },
+        });
+        const have = new Set(existing.map((m) => m.metaMessageId));
+        await Promise.all(
+          terminalCalls
+            .filter((c) => !have.has(`call:${c.id}`))
+            .map((c) => publishCallEventMessage(c.id))
+        );
+      }
+    } catch {
+      /* call pills are best-effort */
+    }
 
     const limitNum = parseInt(limit as string, 10);
     const take = Math.min(Math.max(Number.isFinite(limitNum) ? limitNum : 50, 1), 100);

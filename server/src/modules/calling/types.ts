@@ -42,4 +42,7 @@ export interface ActiveCallContext {
   consentMessage?: string;
   ttsVoice?: string;
   ttsLanguage?: string;
+  /** Sarvam STT terminology hint (not the bot brain prompt). */
+  sttPrompt?: string;
+  sttMode?: string;
 }

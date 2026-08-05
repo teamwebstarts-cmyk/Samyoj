@@ -9,6 +9,7 @@ This folder contains a comprehensive inventory of the entire Samyoj platform —
 | File | What it covers |
 |------|----------------|
 | [FEATURE_MATRIX.md](./FEATURE_MATRIX.md) | **Start here** — feature-by-feature status (what's built, what's partial, what's missing) |
+| [CALLS_AI_BOT_CONNECTION_REPORT.md](./CALLS_AI_BOT_CONNECTION_REPORT.md) | **Chat AI ↔ Voice calling** — shared AiBot brain, what’s built, how channels connect (2026-08-05) |
 | [BACKEND.md](./BACKEND.md) | All 30 server modules, 150+ API endpoints, workers, middleware, services |
 | [FRONTEND.md](./FRONTEND.md) | All 20+ pages, 150+ components, state management, real-time features |
 | [DATABASE.md](./DATABASE.md) | All 48 Prisma models, 33 enums, relationships, multi-tenancy pattern |

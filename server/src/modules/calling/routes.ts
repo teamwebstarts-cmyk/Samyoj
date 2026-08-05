@@ -16,7 +16,7 @@ import { isAzureOpenAIConfigured } from '../ai/azure-openai.service';
 import { isDeepgramConfigured } from './deepgram.stt';
 import { isGoogleTtsConfigured } from './google-tts.service';
 import { isSarvamSttConfigured } from './sarvam.stt';
-import { isSarvamTtsConfigured } from './sarvam.tts';
+import { isSarvamTtsConfigured, previewSpeechSarvam } from './sarvam.tts';
 import { config } from '../../config';
 import { getOrgCallingSettings, saveOrgCallingSettings } from './settings.service';
 import { getOrgActiveCallCount, storePendingCall } from './session-store';
@@ -28,6 +28,7 @@ import { logTeamAudit } from '../team/audit';
 import { WhatsAppWebRtcBridge } from './webrtc-bridge';
 import { emitToOrg } from '../../realtime';
 import { resolveActiveWhatsappNumber } from '../whatsapp/active-number';
+import { publishCallEventMessage } from './call-event-message';
 
 const router = Router();
 
@@ -66,6 +67,7 @@ const callingSettingsSchema = z.object({
   sarvamSttLanguage: z.string().nullable().optional(),
   sarvamTtsSpeaker: z.string().nullable().optional(),
   sarvamMode: z.enum(['codemix', 'transcribe']).optional(),
+  sarvamSttPrompt: z.string().max(500).nullable().optional(),
   liveTransferEnabled: z.boolean().optional(),
   transferMode: z.enum(['live', 'message_only']).optional(),
 });
@@ -289,6 +291,38 @@ router.patch(
     });
 
     sendSuccess(res, saved);
+  })
+);
+
+/** Preview Bulbul TTS for Customize → Voice (platform Sarvam key; no org key). */
+router.post(
+  '/voice/preview',
+  ...memberGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    if (!isSarvamTtsConfigured()) {
+      throw new AppError(400, 'Sarvam voice is not configured on this server yet.');
+    }
+    const body = z
+      .object({
+        text: z.string().min(1).max(500),
+        speaker: z.string().max(40).optional(),
+        language: z.string().max(20).optional(),
+      })
+      .parse(req.body);
+
+    try {
+      const preview = await previewSpeechSarvam(body.text, {
+        speaker: body.speaker,
+        language: body.language,
+      });
+      sendSuccess(res, preview);
+    } catch (err) {
+      throw new AppError(
+        502,
+        err instanceof Error ? err.message : 'Could not preview voice',
+        'SARVAM_PREVIEW_FAILED'
+      );
+    }
   })
 );
 
@@ -747,6 +781,7 @@ router.post(
     });
 
     emitToOrg(orgId, 'call:updated', { callId: id, status: 'TERMINATED' });
+    void publishCallEventMessage(call.id);
 
     await logTeamAudit({
       organizationId: orgId,

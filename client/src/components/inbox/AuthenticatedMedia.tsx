@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { FileText, Loader2, Play } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { FileText, Loader2, Mic, Play } from 'lucide-react';
 import api from '../../services/api';
 import { resolveWaDocumentKind, waDocumentBadge, waDocumentTone } from './waDocumentChrome';
 
@@ -434,23 +434,104 @@ export function AuthenticatedVideo({
 interface AuthenticatedAudioProps {
   messageId: string;
   className?: string;
+  /** Timestamp / ticks shown bottom-right (WhatsApp voice note layout). */
+  endMeta?: ReactNode;
+  outbound?: boolean;
 }
 
-export function AuthenticatedAudio({ messageId, className = '' }: AuthenticatedAudioProps) {
-  const { url, loading, error, retry } = useAuthenticatedMediaUrl(messageId);
+function withPlaybackMp3(url: string): string {
+  try {
+    if (url.startsWith('blob:')) return url;
+    const base = url.startsWith('http') ? undefined : window.location.origin;
+    const parsed = new URL(url, base);
+    parsed.searchParams.set('playback', 'mp3');
+    return `${parsed.pathname}${parsed.search}`;
+  } catch {
+    const join = url.includes('?') ? '&' : '?';
+    return `${url}${join}playback=mp3`;
+  }
+}
+
+function formatAudioClock(secs: number) {
+  if (!Number.isFinite(secs) || secs < 0) return '0:00';
+  const m = Math.floor(secs / 60);
+  const s = Math.floor(secs % 60);
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+/** Soft waveform bars — decorative, WhatsApp-like density without looking sparse. */
+function SoftWaveform({
+  active,
+  progress,
+  outbound,
+}: {
+  active: boolean;
+  progress: number;
+  outbound: boolean;
+}) {
+  const bars = 32;
+  return (
+    <div className="flex h-7 flex-1 items-center gap-[2.5px]" aria-hidden>
+      {Array.from({ length: bars }).map((_, i) => {
+        const t = i / (bars - 1);
+        // Gentle envelope so edges are shorter (WA-style).
+        const envelope = 0.35 + 0.65 * Math.sin(Math.PI * t);
+        const hash = ((i * 17) % 10) / 10;
+        const h = Math.round((0.28 + envelope * (0.35 + hash * 0.45)) * 100);
+        const filled = t * 100 <= progress;
+        const filledCls = outbound
+          ? active
+            ? 'bg-[#008069]'
+            : 'bg-[#008069]/75'
+          : active
+            ? 'bg-whatsapp-600 dark:bg-whatsapp-400'
+            : 'bg-whatsapp-500/80';
+        return (
+          <span
+            key={i}
+            className={`w-[2.5px] rounded-full transition-colors duration-150 ${
+              filled ? filledCls : outbound ? 'bg-[#008069]/22' : 'bg-black/14 dark:bg-white/20'
+            }`}
+            style={{ height: `${h}%` }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+export function AuthenticatedAudio({
+  messageId,
+  className = '',
+  endMeta,
+  outbound = false,
+}: AuthenticatedAudioProps) {
+  const { url, loading, error, retry, failSoft } = useAuthenticatedMediaUrl(messageId);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const trackRef = useRef<HTMLButtonElement | null>(null);
+  const [playing, setPlaying] = useState(false);
+  const [current, setCurrent] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const playbackSrc = url ? withPlaybackMp3(url) : null;
+
+  useEffect(() => {
+    setPlaying(false);
+    setCurrent(0);
+    setDuration(0);
+  }, [playbackSrc]);
 
   if (loading && !url) {
     return (
-      <div className={`flex items-center gap-2 px-1 py-2 ${className}`}>
+      <div className={`flex min-w-[260px] items-center gap-2.5 px-1.5 py-2 ${className}`}>
         <Loader2 className="h-4 w-4 animate-spin text-chat-tick" />
-        <span className="text-[12px] text-chat-timestamp">Loading audio...</span>
+        <span className="text-[12px] text-chat-timestamp">Loading voice note...</span>
       </div>
     );
   }
 
-  if (error || !url) {
+  if (error || !playbackSrc) {
     return (
-      <p className={`px-1 py-2 text-[12px] ${className}`}>
+      <p className={`px-1.5 py-2 text-[12px] ${className}`}>
         <span className="text-chat-timestamp">Voice message unavailable · </span>
         <button type="button" onClick={retry} className="font-bold text-chat-accent underline underline-offset-2">
           Retry
@@ -459,7 +540,103 @@ export function AuthenticatedAudio({ messageId, className = '' }: AuthenticatedA
     );
   }
 
-  return <audio src={url} controls className={`w-full min-w-[220px] ${className}`} preload="metadata" />;
+  const toggle = () => {
+    const el = audioRef.current;
+    if (!el) return;
+    if (el.paused) {
+      void el.play().catch(() => failSoft());
+    } else {
+      el.pause();
+    }
+  };
+
+  const seekFromClientX = (clientX: number) => {
+    const el = audioRef.current;
+    const track = trackRef.current;
+    if (!el || !track || !duration) return;
+    const rect = track.getBoundingClientRect();
+    const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    el.currentTime = ratio * duration;
+    setCurrent(el.currentTime);
+  };
+
+  const progress = duration > 0 ? Math.min(100, (current / duration) * 100) : 0;
+  const clock = formatAudioClock(playing || current > 0.15 ? current : duration || 0);
+
+  return (
+    <div
+      className={`flex min-w-[268px] max-w-[320px] items-center gap-2 px-1 py-1 ${className}`}
+    >
+      <audio
+        ref={audioRef}
+        src={playbackSrc}
+        preload="metadata"
+        onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || 0)}
+        onDurationChange={(e) => setDuration(e.currentTarget.duration || 0)}
+        onTimeUpdate={(e) => setCurrent(e.currentTarget.currentTime || 0)}
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onEnded={() => {
+          setPlaying(false);
+          setCurrent(0);
+        }}
+        onError={failSoft}
+      />
+
+      <button
+        type="button"
+        onClick={toggle}
+        aria-label={playing ? 'Pause voice note' : 'Play voice note'}
+        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white shadow-[0_1px_2px_rgba(11,20,26,0.10)] transition hover:brightness-105 active:scale-[0.97] ${
+          outbound ? 'bg-[#00a884]' : 'bg-whatsapp-500'
+        }`}
+      >
+        {playing ? (
+          <span className="flex h-3.5 w-3.5 items-center justify-center gap-[3px]">
+            <span className="h-full w-[3px] rounded-sm bg-white" />
+            <span className="h-full w-[3px] rounded-sm bg-white" />
+          </span>
+        ) : (
+          <Play className="h-4 w-4 translate-x-[1px]" fill="currentColor" strokeWidth={0} />
+        )}
+      </button>
+
+      <div className="min-w-0 flex-1 pt-0.5">
+        <button
+          ref={trackRef}
+          type="button"
+          aria-label="Seek voice note"
+          className="relative flex w-full cursor-pointer items-center py-0.5"
+          onClick={(e) => seekFromClientX(e.clientX)}
+        >
+          <SoftWaveform active={playing} progress={progress} outbound={outbound} />
+          <span
+            className={`pointer-events-none absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full shadow-sm ring-2 ${
+              outbound
+                ? 'bg-[#008069] ring-[#d9fdd3] dark:ring-[#005c4b]'
+                : 'bg-whatsapp-600 ring-white dark:ring-[#202c33]'
+            }`}
+            style={{ left: `calc(${progress}% - 6px)` }}
+          />
+        </button>
+        <div className="mt-1 flex items-end justify-between gap-2 pr-0.5">
+          <span className="text-[11px] tabular-nums leading-none text-chat-timestamp">{clock}</span>
+          {endMeta ? <span className="shrink-0 -mb-px">{endMeta}</span> : null}
+        </div>
+      </div>
+
+      <div
+        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${
+          outbound
+            ? 'bg-white/55 text-[#008069] dark:bg-emerald-950/40 dark:text-emerald-300'
+            : 'bg-[#dfe5e7] text-[#54656f] dark:bg-neutral-700 dark:text-neutral-200'
+        }`}
+        aria-hidden
+      >
+        <Mic className="h-[18px] w-[18px]" strokeWidth={2.1} />
+      </div>
+    </div>
+  );
 }
 
 interface AuthenticatedDocumentProps {

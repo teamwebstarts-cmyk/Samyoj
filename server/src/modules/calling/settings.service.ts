@@ -79,6 +79,7 @@ export function resolveEffectiveVoiceConfig(settings: CallingSettings) {
     sarvamSttLanguage: settings.sarvamSttLanguage,
     sarvamTtsSpeaker: settings.sarvamTtsSpeaker,
     sarvamMode: settings.sarvamMode,
+    sarvamSttPrompt: settings.sarvamSttPrompt,
     liveTransferEnabled: settings.liveTransferEnabled,
     transferMode: settings.transferMode,
   };

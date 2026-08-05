@@ -237,6 +237,13 @@ export interface MessageMetadata {
   unsupportedType?: string;
   metaErrorCode?: number;
   metaErrorTitle?: string;
+  /** Centered WhatsApp-style call notice in the thread. */
+  isCallEvent?: boolean;
+  callId?: string;
+  callStatus?: string;
+  callDirection?: string;
+  durationSeconds?: number;
+  callTone?: 'missed' | 'completed' | 'failed';
 }
 
 export interface SendMediaPayload {

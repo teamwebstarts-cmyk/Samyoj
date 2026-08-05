@@ -135,3 +135,98 @@ export async function ensureWhatsAppAudio(options: {
     await rm(dir, { recursive: true, force: true }).catch(() => undefined);
   }
 }
+
+/** WhatsApp inbound voice notes are OGG/Opus — Safari and some clients can't play them in <audio>. */
+export function needsBrowserAudioTranscode(mimeType?: string, filename?: string): boolean {
+  const mime = baseMime(mimeType);
+  const name = (filename || '').toLowerCase();
+  if (mime === 'audio/mpeg' || mime === 'audio/mp4' || mime === 'audio/aac' || mime === 'audio/wav') {
+    return false;
+  }
+  return (
+    mime === 'audio/ogg' ||
+    mime === 'audio/opus' ||
+    mime === 'application/ogg' ||
+    mime === 'audio/amr' ||
+    mime === 'audio/webm' ||
+    name.endsWith('.ogg') ||
+    name.endsWith('.opus') ||
+    name.endsWith('.oga') ||
+    name.endsWith('.amr') ||
+    name.endsWith('.webm')
+  );
+}
+
+/**
+ * Transcode WhatsApp OGG/Opus (etc.) to MP3 so Inbox <audio> works in every browser.
+ */
+export async function ensureBrowserAudio(options: {
+  buffer: Buffer;
+  mimeType?: string;
+  filename?: string;
+}): Promise<TranscodeAudioResult> {
+  const mime = baseMime(options.mimeType) || 'application/octet-stream';
+  const filename = options.filename || 'audio.bin';
+
+  if (!needsBrowserAudioTranscode(mime, filename)) {
+    return {
+      buffer: options.buffer,
+      mimeType: mime.startsWith('audio/') ? mime : 'audio/mpeg',
+      filename,
+      converted: false,
+    };
+  }
+
+  const bin = await resolveFfmpegPath();
+  if (!bin) {
+    log.warn('ffmpeg unavailable — cannot convert voice note for browser playback');
+    return { buffer: options.buffer, mimeType: mime, filename, converted: false };
+  }
+
+  const dir = await mkdtemp(path.join(tmpdir(), 'samyoj-play-'));
+  const inputExt = filename.includes('.') ? path.extname(filename) : '.ogg';
+  const inputPath = path.join(dir, `in${inputExt || '.ogg'}`);
+  const outputPath = path.join(dir, 'out.mp3');
+  const outName = filename.replace(/\.[^.]+$/, '') || 'voice-note';
+  const outFilename = `${outName}.mp3`;
+
+  try {
+    await writeFile(inputPath, options.buffer);
+    await runFfmpeg(bin, [
+      '-y',
+      '-i',
+      inputPath,
+      '-vn',
+      '-c:a',
+      'libmp3lame',
+      '-b:a',
+      '48k',
+      '-ar',
+      '24000',
+      '-ac',
+      '1',
+      '-f',
+      'mp3',
+      outputPath,
+    ]);
+    const converted = await readFile(outputPath);
+    if (converted.length < 64) {
+      throw new Error('Converted playback audio too small');
+    }
+    return {
+      buffer: converted,
+      mimeType: 'audio/mpeg',
+      filename: outFilename,
+      converted: true,
+    };
+  } catch (err) {
+    log.warn('Browser audio transcode failed', {
+      error: err instanceof Error ? err.message : String(err),
+      mime,
+      filename,
+    });
+    return { buffer: options.buffer, mimeType: mime, filename, converted: false };
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => undefined);
+  }
+}

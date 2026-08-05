@@ -315,6 +315,8 @@ export const callingApi = {
   status: () => api.get('/calling/status'),
   settings: () => api.get('/calling/settings'),
   updateSettings: (data: Record<string, unknown>) => api.patch('/calling/settings', data),
+  previewVoice: (data: { text: string; speaker?: string; language?: string }) =>
+    api.post('/calling/voice/preview', data),
   enable: () => api.post('/calling/enable'),
   disable: () => api.post('/calling/disable'),
   analytics: (days = 30) => api.get('/calling/analytics', { params: { days: String(days) } }),

@@ -9,6 +9,7 @@ import {
   removePendingCall,
   registerActiveCall,
 } from './session-store';
+import { publishCallEventMessage } from './call-event-message';
 
 const log = createModuleLogger('agent-call');
 
@@ -93,10 +94,20 @@ export async function declineCallAsAgent(params: {
     await removePendingCall(call.metaCallId);
   }
 
+  await prisma.call.update({
+    where: { id: call.id },
+    data: { status: 'REJECTED', handler: 'AGENT', endedAt: new Date(), assignedAgentId: params.agentId },
+  });
+
   emitToOrg(params.organizationId, 'call:declined', {
     callId: params.callId,
     agentId: params.agentId,
   });
+  emitToOrg(params.organizationId, 'call:updated', {
+    callId: params.callId,
+    status: 'REJECTED',
+  });
+  void publishCallEventMessage(call.id);
 
   log.info('Agent declined call', { callId: params.callId, agentId: params.agentId });
 }

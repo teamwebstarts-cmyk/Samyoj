@@ -17,6 +17,7 @@ import {
   Star,
   UserPlus,
   XCircle,
+  Loader2,
 } from 'lucide-react';
 import ContactAvatar from './ContactAvatar';
 import AssignAgentPopover from './AssignAgentPopover';
@@ -394,11 +395,16 @@ export default function ChatHeader({
         )}
 
         <HeaderIconButton
-          label="Start a call"
+          label={callingBack ? 'Starting call…' : 'Start a call'}
           onClick={onCallBack}
           disabled={callingBack}
+          active={callingBack}
         >
-          <Phone className="h-4 w-4" strokeWidth={2.1} />
+          {callingBack ? (
+            <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2.1} />
+          ) : (
+            <Phone className="h-4 w-4" strokeWidth={2.1} />
+          )}
         </HeaderIconButton>
 
         <HeaderIconButton label="Search in this chat" onClick={onToggleSearch}>
