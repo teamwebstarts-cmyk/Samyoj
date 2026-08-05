@@ -12,9 +12,6 @@ import {
   CALLING_ENABLE_HINTS,
 } from './meta-calling.service';
 import { endCallSession, getActiveSessionCount } from './call-session.manager';
-import { isAzureOpenAIConfigured } from '../ai/azure-openai.service';
-import { isDeepgramConfigured } from './deepgram.stt';
-import { isGoogleTtsConfigured } from './google-tts.service';
 import { isSarvamSttConfigured } from './sarvam.stt';
 import { isSarvamTtsConfigured, previewSpeechSarvam } from './sarvam.tts';
 import { config } from '../../config';
@@ -116,12 +113,9 @@ router.get(
     const activeCalls = Math.max(redisActive, localActive);
 
     sendSuccess(res, {
-      configured: isCallingConfigured() && isAzureOpenAIConfigured(),
-      deepgram: isDeepgramConfigured(),
-      googleTts: isGoogleTtsConfigured(),
+      configured: isCallingConfigured() && Boolean(config.sarvam.apiKey),
       sarvamStt: isSarvamSttConfigured(),
       sarvamTts: isSarvamTtsConfigured(),
-      azureOpenAI: isAzureOpenAIConfigured(),
       voiceProvider: config.calling.voiceProvider,
       aiAutoAnswer: callingSettings.aiAutoAnswer,
       activeCalls,
@@ -133,8 +127,9 @@ router.get(
       voiceReady:
         Boolean(number) &&
         isCallingConfigured() &&
-        isAzureOpenAIConfigured() &&
+        Boolean(config.sarvam.apiKey) &&
         MetaCallingService.isCallingEnabled(callingSettingsMeta),
+      brainProvider: config.ai.brainProvider,
       orgCallingSettings: callingSettings,
     });
   })

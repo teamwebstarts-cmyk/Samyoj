@@ -2,9 +2,10 @@ import prisma from '../../config/database';
 import { config } from '../../config';
 import { decrypt, encrypt } from '../../utils/crypto';
 import { AppError } from '../../utils/response';
-import type { OrgAiSettings, ResolvedAiConfig, TokenUsage } from './types';
+import type { OrgAiSettings, ResolvedAiConfig, TokenUsage, BrainProvider } from './types';
 
 export function getDefaultEmbeddingDeployment(): string {
+  // Azure embeddings still needed — Sarvam has no vector API
   return process.env.AZURE_OPENAI_EMBEDDING_DEPLOYMENT || 'text-embedding-ada-002';
 }
 
@@ -59,9 +60,20 @@ export function sanitizeSettingsForClient(settings: OrgAiSettings): OrgAiSetting
   } as OrgAiSettings & { hasApiKey?: boolean };
 }
 
+/**
+ * Resolve the active brain provider for this org.
+ * Priority: org override → platform config → sarvam (default).
+ */
+function resolveOrgBrainProvider(orgSettings: OrgAiSettings): BrainProvider {
+  if (orgSettings.brainProvider) return orgSettings.brainProvider;
+  return config.ai.brainProvider;
+}
+
 export async function resolveAiConfig(organizationId: string): Promise<ResolvedAiConfig | null> {
   const orgSettings = await getOrgAiSettings(organizationId);
+  const provider = resolveOrgBrainProvider(orgSettings);
 
+  // Org-level custom config (Azure or any custom endpoint)
   if (orgSettings.useCustomConfig && orgSettings.endpoint) {
     const apiKey = orgSettings.apiKeyEncrypted
       ? decrypt(orgSettings.apiKeyEncrypted)
@@ -69,23 +81,39 @@ export async function resolveAiConfig(organizationId: string): Promise<ResolvedA
     if (!apiKey) return null;
 
     return {
+      provider,
       endpoint: orgSettings.endpoint.replace(/\/$/, ''),
       apiKey,
-      deployment: orgSettings.deployment || config.azureOpenAI.deployment,
+      deployment: orgSettings.deployment || 'gpt-35-turbo',
       embeddingDeployment:
         orgSettings.embeddingDeployment || getDefaultEmbeddingDeployment(),
-      apiVersion: orgSettings.apiVersion || config.azureOpenAI.apiVersion,
+      apiVersion: orgSettings.apiVersion || '2024-12-01-preview',
       source: 'org',
     };
   }
 
-  if (config.azureOpenAI.endpoint && config.azureOpenAI.apiKey) {
+  // Sarvam is the platform default brain
+  if (provider === 'sarvam' && config.sarvam.apiKey) {
     return {
-      endpoint: config.azureOpenAI.endpoint,
-      apiKey: config.azureOpenAI.apiKey,
-      deployment: config.azureOpenAI.deployment,
+      provider: 'sarvam',
+      endpoint: config.sarvam.chatEndpoint,
+      apiKey: config.sarvam.apiKey,
+      deployment: config.sarvam.chatModel,
       embeddingDeployment: getDefaultEmbeddingDeployment(),
-      apiVersion: config.azureOpenAI.apiVersion,
+      apiVersion: '',
+      source: 'global',
+    };
+  }
+
+  // Azure fallback (legacy, kept for embeddings only)
+  if (config.azure.endpoint && config.azure.apiKey) {
+    return {
+      provider: 'azure',
+      endpoint: config.azure.endpoint,
+      apiKey: config.azure.apiKey,
+      deployment: config.azure.deployment,
+      embeddingDeployment: getDefaultEmbeddingDeployment(),
+      apiVersion: config.azure.apiVersion,
       source: 'global',
     };
   }

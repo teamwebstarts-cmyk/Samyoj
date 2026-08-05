@@ -1,4 +1,8 @@
+export type BrainProvider = 'sarvam' | 'azure';
+
 export interface OrgAiSettings {
+  /** Per-org brain provider override. Defaults to platform AI_BRAIN_PROVIDER (sarvam). */
+  brainProvider?: BrainProvider;
   useCustomConfig?: boolean;
   endpoint?: string;
   apiKey?: string;
@@ -10,6 +14,8 @@ export interface OrgAiSettings {
 }
 
 export interface ResolvedAiConfig {
+  /** Which brain serves this request. */
+  provider: BrainProvider;
   endpoint: string;
   apiKey: string;
   deployment: string;

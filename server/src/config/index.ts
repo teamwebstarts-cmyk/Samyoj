@@ -5,6 +5,11 @@ const defaultPort = 8000;
 const defaultBaseUrl = `http://localhost:${defaultPort}`;
 const defaultClientUrl = 'http://localhost:3000';
 
+function resolveBrainProvider(): 'sarvam' | 'azure' {
+  const v = (process.env.AI_BRAIN_PROVIDER || 'sarvam').toLowerCase();
+  return v === 'azure' ? 'azure' : 'sarvam';
+}
+
 export const config = {
   port: parseInt(process.env.PORT || String(defaultPort), 10),
   nodeEnv: process.env.NODE_ENV || 'development',
@@ -37,28 +42,35 @@ export const config = {
     webhookUrl: process.env.META_WEBHOOK_URL || '',
   },
   encryptionKey: process.env.ENCRYPTION_KEY || '',
-  azureOpenAI: {
+  /** AI brain configuration — Sarvam is the default brain provider. */
+  ai: {
+    /** 'sarvam' | 'azure' — platform-wide brain provider. Org override via OrgAiSettings.brainProvider. */
+    brainProvider: resolveBrainProvider(),
+  },
+  /** Sarvam AI — one vendor for chat brain + voice STT/TTS. */
+  sarvam: {
+    apiKey: process.env.SARVAM_API_KEY || '',
+    chatModel: process.env.SARVAM_CHAT_MODEL || 'sarvam-105b',
+    chatTimeoutMs: parseInt(process.env.SARVAM_CHAT_TIMEOUT_MS || '30000', 10),
+    /** Chat completions endpoint — OpenAI-compatible. */
+    chatEndpoint: process.env.SARVAM_CHAT_ENDPOINT || 'https://api.sarvam.ai/v1',
+    sttModel: process.env.SARVAM_STT_MODEL || 'saaras:v3-realtime',
+    sttMode: (process.env.SARVAM_STT_MODE || 'codemix') as 'codemix' | 'transcribe',
+    sttLanguage: process.env.SARVAM_STT_LANGUAGE || 'hi-IN',
+    ttsModel: process.env.SARVAM_TTS_MODEL || 'bulbul:v3',
+    ttsSpeaker: process.env.SARVAM_TTS_SPEAKER || 'shubh',
+    sampleRate: parseInt(process.env.SARVAM_SAMPLE_RATE || '16000', 10),
+  },
+  /** Legacy Azure config — kept only for embeddings (Sarvam has no vector API). */
+  azure: {
     endpoint: (process.env.AZURE_OPENAI_ENDPOINT || '').replace(/\/$/, ''),
     apiKey: process.env.AZURE_OPENAI_API_KEY || '',
     deployment: process.env.AZURE_OPENAI_DEPLOYMENT || 'gpt-35-turbo',
     apiVersion: process.env.AZURE_OPENAI_API_VERSION || '2024-12-01-preview',
   },
   calling: {
-    deepgramApiKey: process.env.DEEPGRAM_API_KEY || '',
-    deepgramLanguage: process.env.DEEPGRAM_LANGUAGE || 'hi',
-    deepgramSampleRate: parseInt(process.env.DEEPGRAM_SAMPLE_RATE || '48000', 10),
-    googleCredentialsPath: process.env.GOOGLE_APPLICATION_CREDENTIALS || 'key.json',
-    googleTtsVoice: process.env.GOOGLE_TTS_VOICE || 'en-IN-Neural2-A',
-    googleTtsLanguage: process.env.GOOGLE_TTS_LANGUAGE || 'en-IN',
-    /** Voice provider: 'sarvam' (Sarvam STT+TTS) or 'deepgram_google' (legacy). Default: 'deepgram_google'. */
-    voiceProvider: (process.env.CALLING_VOICE_PROVIDER || 'deepgram_google') as 'sarvam' | 'deepgram_google',
-    sarvamApiKey: process.env.SARVAM_API_KEY || '',
-    sarvamSttModel: process.env.SARVAM_STT_MODEL || 'saaras:v3-realtime',
-    sarvamSttMode: process.env.SARVAM_STT_MODE || 'codemix',
-    sarvamSttLanguage: process.env.SARVAM_STT_LANGUAGE || 'hi-IN',
-    sarvamTtsModel: process.env.SARVAM_TTS_MODEL || 'bulbul:v3',
-    sarvamTtsSpeaker: process.env.SARVAM_TTS_SPEAKER || 'shubh',
-    sarvamSampleRate: parseInt(process.env.SARVAM_SAMPLE_RATE || '16000', 10),
+    /** Voice provider — always sarvam. Legacy deepgram_google removed. */
+    voiceProvider: 'sarvam' as const,
     aiAutoAnswer: process.env.CALLING_AI_AUTO_ANSWER !== 'false',
     aiGreeting:
       process.env.CALLING_AI_GREETING ||

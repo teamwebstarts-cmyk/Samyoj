@@ -311,8 +311,5 @@ export class MetaCallingService {
 }
 
 export function isCallingConfigured(): boolean {
-  if (config.calling.voiceProvider === 'sarvam') {
-    return isSarvamSttConfigured() && isSarvamTtsConfigured();
-  }
-  return Boolean(config.calling.deepgramApiKey && config.calling.googleCredentialsPath);
+  return isSarvamSttConfigured() && isSarvamTtsConfigured();
 }

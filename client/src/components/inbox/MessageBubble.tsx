@@ -720,7 +720,7 @@ export default function MessageBubble({
         }`}
       >
         {selected ? <Check className="h-3 w-3" strokeWidth={3} /> : null}
-      </span>
+    </span>
     </button>
   ) : null;
 
@@ -731,7 +731,7 @@ export default function MessageBubble({
       <p className="mb-0.5 text-[11px] font-semibold leading-none wa-accent-text">
         You{time ? ` · ${time}` : ''}
       </p>
-    ) : null;
+  ) : null;
 
   const wrapperAlign = isOutbound ? 'justify-end' : 'justify-start';
   // Keep sender/receiver sides intact in select mode — only the checkbox moves.
@@ -752,16 +752,16 @@ export default function MessageBubble({
             {actionMenu}
             {/* Button replies nest reply-to inside the Selected option card (WA-style); skip outer strip. */}
             {!isButtonReply && quoteStrip}
-            <InteractiveMessageCard
-              body={message.content}
-              buttons={buttons}
-              direction={isOutbound ? 'outbound' : 'inbound'}
-              time={time ?? formatMessageTime(message.createdAt)}
-              status={isOutbound ? tickStatus : undefined}
-              isButtonReply={isButtonReply}
+          <InteractiveMessageCard
+            body={message.content}
+            buttons={buttons}
+            direction={isOutbound ? 'outbound' : 'inbound'}
+            time={time ?? formatMessageTime(message.createdAt)}
+            status={isOutbound ? tickStatus : undefined}
+            isButtonReply={isButtonReply}
               replyPreview={isButtonReply ? replyPreview : undefined}
-              metadata={message.metadata}
-            />
+            metadata={message.metadata}
+          />
             {reactionChips}
           </div>
         </div>
@@ -781,21 +781,21 @@ export default function MessageBubble({
           <div className={`relative rounded-lg ${activeRing}`}>
             {actionMenu}
             {quoteStrip}
-            <WhatsAppBubble
-              direction={isOutbound ? 'outbound' : 'inbound'}
-              time={time ?? formatMessageTime(message.createdAt)}
-              status={isOutbound ? tickStatus : undefined}
-            >
+          <WhatsAppBubble
+            direction={isOutbound ? 'outbound' : 'inbound'}
+            time={time ?? formatMessageTime(message.createdAt)}
+            status={isOutbound ? tickStatus : undefined}
+          >
               <div className="rounded-lg bg-white px-3 py-2.5 shadow-sm dark:bg-neutral-900">
                 <p className="text-[13px] font-bold text-neutral-800 dark:text-neutral-100">
-                  {contact?.name || message.content || 'Contact'}
-                </p>
-                {contact?.phone && (
-                  <p className="mt-0.5 text-[12px] text-neutral-500">{contact.phone}</p>
-                )}
-                {contact?.email && <p className="text-[11px] text-neutral-400">{contact.email}</p>}
-              </div>
-            </WhatsAppBubble>
+                {contact?.name || message.content || 'Contact'}
+              </p>
+              {contact?.phone && (
+                <p className="mt-0.5 text-[12px] text-neutral-500">{contact.phone}</p>
+              )}
+              {contact?.email && <p className="text-[11px] text-neutral-400">{contact.email}</p>}
+            </div>
+          </WhatsAppBubble>
             {reactionChips}
           </div>
         </div>
@@ -815,21 +815,21 @@ export default function MessageBubble({
           <div className={`relative rounded-lg ${activeRing}`}>
             {actionMenu}
             {quoteStrip}
-            <WhatsAppBubble
-              direction={isOutbound ? 'outbound' : 'inbound'}
-              content={message.content}
-              time={time ?? formatMessageTime(message.createdAt)}
-              status={isOutbound ? tickStatus : undefined}
-            >
+          <WhatsAppBubble
+            direction={isOutbound ? 'outbound' : 'inbound'}
+            content={message.content}
+            time={time ?? formatMessageTime(message.createdAt)}
+            status={isOutbound ? tickStatus : undefined}
+          >
               <div className="overflow-hidden rounded-lg bg-white shadow-sm dark:bg-neutral-900">
-                <div className="px-2.5 py-2">
+              <div className="px-2.5 py-2">
                   <p className="text-[12px] font-semibold text-neutral-800 dark:text-neutral-100">
-                    {loc?.name || 'Location'}
-                  </p>
-                  {loc?.address && <p className="text-[10px] text-neutral-500">{loc.address}</p>}
-                </div>
+                  {loc?.name || 'Location'}
+                </p>
+                {loc?.address && <p className="text-[10px] text-neutral-500">{loc.address}</p>}
               </div>
-            </WhatsAppBubble>
+            </div>
+          </WhatsAppBubble>
             {reactionChips}
           </div>
         </div>
@@ -971,28 +971,28 @@ export default function MessageBubble({
                     isSticker ? 'overflow-visible' : 'overflow-hidden rounded-[10px]'
                   }`}
                 >
-                  {mediaContent}
+                {mediaContent}
                   {!isSticker && isVisual && (time || isOutbound) && (
-                    <span className="pointer-events-none absolute bottom-1.5 right-1.5 rounded-full bg-black/45 px-1.5 py-0.5 backdrop-blur-[2px]">
-                      {metaRow(true)}
-                    </span>
-                  )}
-                </div>
-                {caption && !isSticker && (
-                  <CollapsibleMessageText className="px-1.5 pb-1 pt-1.5">
-                    {highlightText(caption, highlightQuery)}
-                  </CollapsibleMessageText>
-                )}
-                {!isVisual && !isSticker && type !== 'AUDIO' && (time || isOutbound) && (
-                  <div className="flex justify-end px-1 pb-0.5 whitespace-nowrap">{metaRow()}</div>
+                  <span className="pointer-events-none absolute bottom-1.5 right-1.5 rounded-full bg-black/45 px-1.5 py-0.5 backdrop-blur-[2px]">
+                    {metaRow(true)}
+                  </span>
                 )}
               </div>
+                {caption && !isSticker && (
+                  <CollapsibleMessageText className="px-1.5 pb-1 pt-1.5">
+                  {highlightText(caption, highlightQuery)}
+                  </CollapsibleMessageText>
+              )}
+                {!isVisual && !isSticker && type !== 'AUDIO' && (time || isOutbound) && (
+                  <div className="flex justify-end px-1 pb-0.5 whitespace-nowrap">{metaRow()}</div>
+              )}
+            </div>
               {reactionChips}
-              <FailedRetryRow
-                show={isFailed}
-                retrying={retrying}
-                onRetry={() => onRetry?.(message)}
-              />
+            <FailedRetryRow
+              show={isFailed}
+              retrying={retrying}
+              onRetry={() => onRetry?.(message)}
+            />
             </div>
           </div>
         </div>
@@ -1014,8 +1014,8 @@ export default function MessageBubble({
           {actionMenu}
           <div
             className={`relative px-3 py-2 shadow-[0_1px_1px_rgba(11,20,26,0.10)] wa-msg-font ${bubbleTone} ${radius} ${activeRing}`}
-          >
-            {grouping.last && <BubbleTail outbound={isOutbound} />}
+        >
+          {grouping.last && <BubbleTail outbound={isOutbound} />}
             {senderHeader}
             {quoteStrip}
             <CollapsibleMessageText endMeta={metaRow()}>

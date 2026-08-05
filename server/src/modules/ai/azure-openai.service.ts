@@ -2,14 +2,12 @@ import { config } from '../../config';
 import { AppError } from '../../utils/response';
 import { createModuleLogger } from '../../utils/logger';
 import { checkOrgTokenQuota, recordAiUsage, resolveAiConfig } from './org-ai.service';
-import type { ResolvedAiConfig } from './types';
+import { createSarvamChatCompletion } from './sarvam-chat.service';
+import type { ChatCompletionTool, ToolCallResult } from './sarvam-chat.service';
 
-const log = createModuleLogger('azure-openai');
+const log = createModuleLogger('chat-completion');
 
-export interface ChatMessage {
-  role: 'system' | 'user' | 'assistant';
-  content: string;
-}
+export type { ChatMessage, ChatCompletionOptions, ChatCompletionResult, ChatCompletionTool, ToolCallResult } from './sarvam-chat.service';
 
 export interface ChatCompletionOptions {
   messages: ChatMessage[];
@@ -18,24 +16,16 @@ export interface ChatCompletionOptions {
   organizationId?: string;
   botId?: string;
   conversationId?: string;
+  tools?: ChatCompletionTool[];
+  toolChoice?: 'auto' | 'none';
 }
 
 export interface ChatCompletionResult {
   content: string;
   finishReason: string | null;
-  usage?: {
-    promptTokens: number;
-    completionTokens: number;
-    totalTokens: number;
-  };
-}
-
-function getChatCompletionsUrl(cfg: ResolvedAiConfig, deployment: string): string {
-  return `${cfg.endpoint}/openai/deployments/${deployment}/chat/completions?api-version=${cfg.apiVersion}`;
-}
-
-export function isAzureOpenAIConfigured(): boolean {
-  return Boolean(config.azureOpenAI.endpoint && config.azureOpenAI.apiKey);
+  usage?: { promptTokens: number; completionTokens: number; totalTokens: number };
+  /** Populated when tools fire on Sarvam */
+  toolCalls?: ToolCallResult[];
 }
 
 export async function isAiConfigured(organizationId?: string): Promise<boolean> {
@@ -43,9 +33,13 @@ export async function isAiConfigured(organizationId?: string): Promise<boolean> 
     const { isAiConfiguredForOrg } = await import('./org-ai.service');
     return isAiConfiguredForOrg(organizationId);
   }
-  return isAzureOpenAIConfigured();
+  return Boolean(config.sarvam.apiKey || config.azure.apiKey);
 }
 
+/**
+ * Single entry point for ALL chat completions — chat bot + voice calling.
+ * Routes to Sarvam by default; Azure kept only for embeddings/fallback.
+ */
 export async function createChatCompletion(
   options: ChatCompletionOptions
 ): Promise<ChatCompletionResult> {
@@ -57,11 +51,35 @@ export async function createChatCompletion(
 
   const cfg = await resolveAiConfig(options.organizationId);
   if (!cfg) {
-    throw new AppError(503, 'Azure OpenAI is not configured');
+    throw new AppError(503, 'No AI brain configured. Set SARVAM_API_KEY in server/.env.');
   }
 
-  const url = getChatCompletionsUrl(cfg, cfg.deployment);
   const start = Date.now();
+
+  // Sarvam brain — all chat + voice
+  if (cfg.provider === 'sarvam') {
+    const result = await createSarvamChatCompletion({
+      ...options,
+      tools: options.tools,
+    });
+
+    log.debug('Chat completion via Sarvam', { durationMs: Date.now() - start, tokens: result.usage?.totalTokens });
+    return result;
+  }
+
+  // Azure fallback — legacy path
+  const result = await createAzureCompletion(options, cfg);
+
+  log.debug('Chat completion via Azure (fallback)', { durationMs: Date.now() - start, tokens: result.usage?.totalTokens });
+  return result;
+}
+
+/** Legacy Azure completion. Kept for orgs that explicitly set provider=azure. */
+async function createAzureCompletion(
+  options: ChatCompletionOptions,
+  cfg: { endpoint: string; apiKey: string; deployment: string; apiVersion: string }
+): Promise<ChatCompletionResult> {
+  const url = `${cfg.endpoint}/openai/deployments/${cfg.deployment}/chat/completions?api-version=${cfg.apiVersion}`;
 
   const response = await fetch(url, {
     method: 'POST',
@@ -84,11 +102,6 @@ export async function createChatCompletion(
 
   if (!response.ok) {
     const message = body.error?.message || `Azure OpenAI request failed (${response.status})`;
-    log.error('Chat completion failed', {
-      status: response.status,
-      error: body.error,
-      durationMs: Date.now() - start,
-    });
     throw new AppError(502, message);
   }
 
@@ -98,14 +111,10 @@ export async function createChatCompletion(
   }
 
   const usage = body.usage
-    ? {
-        promptTokens: body.usage.prompt_tokens || 0,
-        completionTokens: body.usage.completion_tokens || 0,
-        totalTokens: body.usage.total_tokens || 0,
-      }
+    ? { promptTokens: body.usage.prompt_tokens || 0, completionTokens: body.usage.completion_tokens || 0, totalTokens: body.usage.total_tokens || 0 }
     : undefined;
 
-  if (usage) {
+  if (usage && options.organizationId) {
     await recordAiUsage({
       organizationId: options.organizationId,
       botId: options.botId,
@@ -115,15 +124,5 @@ export async function createChatCompletion(
     });
   }
 
-  log.debug('Chat completion success', {
-    durationMs: Date.now() - start,
-    tokens: usage?.totalTokens,
-    source: cfg.source,
-  });
-
-  return {
-    content,
-    finishReason: body.choices?.[0]?.finish_reason || null,
-    usage,
-  };
+  return { content, finishReason: body.choices?.[0]?.finish_reason || null, usage };
 }
