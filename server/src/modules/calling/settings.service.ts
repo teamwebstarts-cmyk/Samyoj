@@ -63,11 +63,23 @@ export async function saveOrgCallingSettings(
 }
 
 export function resolveEffectiveVoiceConfig(settings: CallingSettings) {
+  const useSarvam = Boolean(settings.sarvamTtsSpeaker) || config.calling.voiceProvider === 'sarvam';
   return {
-    ttsVoice: settings.ttsVoice || config.calling.googleTtsVoice,
-    ttsLanguage: settings.ttsLanguage || config.calling.googleTtsLanguage,
+    ttsVoice:
+      (useSarvam ? settings.sarvamTtsSpeaker : null) ||
+      settings.ttsVoice ||
+      config.calling.googleTtsVoice,
+    ttsLanguage:
+      settings.sarvamSttLanguage ||
+      settings.ttsLanguage ||
+      config.calling.googleTtsLanguage,
     deepgramLanguage: settings.deepgramLanguage || config.calling.deepgramLanguage,
     aiGreeting: settings.aiGreeting,
     aiAutoAnswer: settings.aiAutoAnswer,
+    sarvamSttLanguage: settings.sarvamSttLanguage,
+    sarvamTtsSpeaker: settings.sarvamTtsSpeaker,
+    sarvamMode: settings.sarvamMode,
+    liveTransferEnabled: settings.liveTransferEnabled,
+    transferMode: settings.transferMode,
   };
 }

@@ -6,10 +6,12 @@ import {
   CheckCheck,
   Clock,
   Copy,
+  Info,
   MoreVertical,
   Reply,
   RotateCcw,
   SmilePlus,
+  Trash2,
 } from 'lucide-react';
 import { formatMessageTime, getAutomationDividerLabel, messageHasMedia } from './inboxUtils';
 import { computeFixedPopoverPosition, type PopoverCoords } from './inboxPopoverPosition';
@@ -24,6 +26,11 @@ import InteractiveMessageCard from './InteractiveMessageCard';
 import MediaViewer, { type MediaViewerItem } from './MediaViewer';
 import { WhatsAppBubble } from './WhatsAppPreview';
 import { useGlassTipProps } from './ComposerGlassTip';
+import {
+  describeUnsupportedMessage,
+  isUnsupportedMessageContent,
+  unsupportedTypeFromContent,
+} from './unsupportedMessage';
 import type { Message } from '../../types';
 
 const ACTION_MENU_WIDTH = 160;
@@ -55,6 +62,11 @@ interface MessageBubbleProps {
   onRetry?: (message: Message) => void;
   onReply?: (message: Message) => void;
   onReact?: (message: Message, emoji: string) => void;
+  onDelete?: (message: Message) => void;
+  /** WhatsApp-style multi-select mode */
+  selectMode?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (message: Message) => void;
   retrying?: boolean;
   /** Case-insensitive search term — matched text gets an amber highlight. */
   highlightQuery?: string;
@@ -138,12 +150,12 @@ function CollapsibleMessageText({
     <div
       className={
         showToggle
-          ? 'flex min-w-0 w-full flex-col items-stretch'
-          : 'flex min-w-0 flex-wrap items-end gap-x-2'
+          ? 'flex w-full min-w-0 flex-col items-stretch'
+          : 'inline-flex max-w-full flex-wrap items-end gap-x-2'
       }
     >
       <div
-        className={`relative min-w-0 ${showToggle ? 'w-full' : ''} ${
+        className={`relative ${showToggle ? 'min-w-0 w-full' : 'min-w-0 max-w-full'} ${
           constrain ? 'wa-msg-body-collapse' : ''
         }`}
       >
@@ -165,10 +177,10 @@ function CollapsibleMessageText({
           >
             {expanded ? 'Read less' : 'Read more'}
           </button>
-          {endMeta ? <span className="ml-auto -mb-0.5">{endMeta}</span> : null}
+          {endMeta ? <span className="ml-auto -mb-0.5 shrink-0 whitespace-nowrap">{endMeta}</span> : null}
         </div>
       ) : endMeta ? (
-        <span className="ml-auto -mb-0.5">{endMeta}</span>
+        <span className="ml-auto -mb-0.5 shrink-0 whitespace-nowrap">{endMeta}</span>
       ) : null}
     </div>
   );
@@ -255,6 +267,7 @@ function renderMediaContent(
       type: type as MediaViewerItem['type'],
       url,
       filename: message.metadata?.filename,
+      mimeType: message.metadata?.mimeType,
       loopMuted: kind === 'gif',
     });
   };
@@ -298,6 +311,7 @@ function renderMediaContent(
         <AuthenticatedDocument
           messageId={message.id}
           filename={message.metadata?.filename || message.content || 'Document'}
+          mimeType={message.metadata?.mimeType}
           sizeLabel={
             typeof message.metadata?.size === 'number'
               ? message.metadata.size < 1024 * 1024
@@ -320,6 +334,10 @@ export default function MessageBubble({
   onRetry,
   onReply,
   onReact,
+  onDelete,
+  selectMode = false,
+  selected = false,
+  onToggleSelect,
   retrying,
   highlightQuery,
   isActiveMatch,
@@ -349,6 +367,7 @@ export default function MessageBubble({
   const isInteractive = type === 'INTERACTIVE';
   const isContactCard = type === 'CONTACTS';
   const isLocation = type === 'LOCATION';
+  const isUnsupported = isUnsupportedMessageContent(message.content, message.metadata);
   const buttons = message.metadata?.buttons;
   const isButtonReply = message.metadata?.isButtonReply;
   const isAutomation = isOutbound && Boolean(getAutomationDividerLabel(message.metadata));
@@ -401,7 +420,7 @@ export default function MessageBubble({
       window.removeEventListener('resize', place);
       window.removeEventListener('scroll', place, true);
     };
-  }, [menuOpen, isFailed, onReply, onReact, onRetry]);
+  }, [menuOpen, isFailed, onReply, onReact, onRetry, onDelete]);
 
   useLayoutEffect(() => {
     if (!reactOpen || !menuBtnRef.current) {
@@ -540,6 +559,19 @@ export default function MessageBubble({
                 <RotateCcw className="h-3.5 w-3.5" /> Retry
               </button>
             )}
+            {onDelete && (
+              <button
+                type="button"
+                role="menuitem"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12.5px] text-red-600 hover:bg-theme-subtle"
+                onClick={() => {
+                  onDelete(message);
+                  closeMenus();
+                }}
+              >
+                <Trash2 className="h-3.5 w-3.5" /> Delete
+              </button>
+            )}
           </div>,
           document.body
         )
@@ -573,7 +605,7 @@ export default function MessageBubble({
         )
       : null;
 
-  const actionMenu = (
+  const actionMenu = selectMode ? null : (
     <div
       className={`absolute top-0 z-10 ${isOutbound ? 'left-0 -translate-x-full pr-1' : 'right-0 translate-x-full pl-1'} ${
         menuOpen || reactOpen ? 'opacity-100' : 'opacity-0 group-hover/bubble:opacity-100 focus-within:opacity-100'
@@ -604,22 +636,57 @@ export default function MessageBubble({
   );
 
   const bubbleShellProps = {
-    className: `group/bubble relative ${enterClass}`,
-    onContextMenu: (e: React.MouseEvent) => {
-      e.preventDefault();
-      setReactOpen(false);
-      setMenuOpen(true);
-    },
-    onTouchStart: () => {
-      clearLongPress();
-      longPressTimer.current = window.setTimeout(() => {
-        setReactOpen(false);
-        setMenuOpen(true);
-      }, 450);
-    },
-    onTouchEnd: clearLongPress,
-    onTouchMove: clearLongPress,
+    className: `group/bubble relative ${enterClass} ${
+      selectMode && selected ? 'ring-2 ring-whatsapp-500/40 ring-offset-1 ring-offset-transparent' : ''
+    }`,
+    onClick: selectMode
+      ? (e: React.MouseEvent) => {
+          e.preventDefault();
+          onToggleSelect?.(message);
+        }
+      : undefined,
+    onContextMenu: selectMode
+      ? undefined
+      : (e: React.MouseEvent) => {
+          e.preventDefault();
+          setReactOpen(false);
+          setMenuOpen(true);
+        },
+    onTouchStart: selectMode
+      ? undefined
+      : () => {
+          clearLongPress();
+          longPressTimer.current = window.setTimeout(() => {
+            setReactOpen(false);
+            setMenuOpen(true);
+          }, 450);
+        },
+    onTouchEnd: selectMode ? undefined : clearLongPress,
+    onTouchMove: selectMode ? undefined : clearLongPress,
   };
+
+  const selectCheck = selectMode ? (
+    <button
+      type="button"
+      aria-label={selected ? 'Deselect message' : 'Select message'}
+      aria-pressed={selected}
+      onClick={(e) => {
+        e.stopPropagation();
+        onToggleSelect?.(message);
+      }}
+      className="mb-1 flex h-6 w-6 shrink-0 items-center justify-center self-center"
+    >
+      <span
+        className={`flex h-5 w-5 items-center justify-center rounded-full border-2 transition ${
+          selected
+            ? 'border-whatsapp-500 bg-whatsapp-500 text-white'
+            : 'border-theme-muted bg-theme-surface/80'
+        }`}
+      >
+        {selected ? <Check className="h-3 w-3" strokeWidth={3} /> : null}
+      </span>
+    </button>
+  ) : null;
 
   // Automation runs use a centered DateDivider-style pill in ChatThread — avoid
   // duplicating "AI Bot" here. Keep a subtle "You · time" only for agent outbound.
@@ -631,25 +698,31 @@ export default function MessageBubble({
     ) : null;
 
   const wrapperAlign = isOutbound ? 'justify-end' : 'justify-start';
+  const rowClass = `flex items-end gap-2 ${selectMode ? 'justify-start' : wrapperAlign}`;
+  /** Size to content; cap against the thread — never `min-w-0` (that collapsed short texts to 1 letter wide). */
+  const bubbleMaxClass = 'w-fit max-w-[min(100%,75%)] sm:max-w-[min(100%,65%)]';
 
   if (isInteractive || (buttons && buttons.length > 0) || isButtonReply) {
     return (
-      <div {...bubbleShellProps} className={`flex ${wrapperAlign} ${bubbleShellProps.className}`} data-message-id={message.id}>
-        <div className={`relative max-w-[75%] rounded-lg sm:max-w-[65%] ${activeRing}`}>
-          {actionMenu}
-          {/* Button replies nest reply-to inside the Selected option card (WA-style); skip outer strip. */}
-          {!isButtonReply && quoteStrip}
-          <InteractiveMessageCard
-            body={message.content}
-            buttons={buttons}
-            direction={isOutbound ? 'outbound' : 'inbound'}
-            time={time ?? formatMessageTime(message.createdAt)}
-            status={isOutbound ? tickStatus : undefined}
-            isButtonReply={isButtonReply}
-            replyPreview={isButtonReply ? replyPreview : undefined}
-            metadata={message.metadata}
-          />
-          {reactionChips}
+      <div className={rowClass} data-message-id={message.id}>
+        {selectCheck}
+        <div {...bubbleShellProps} className={`${bubbleMaxClass} ${bubbleShellProps.className}`}>
+          <div className={`relative rounded-lg ${activeRing}`}>
+            {actionMenu}
+            {/* Button replies nest reply-to inside the Selected option card (WA-style); skip outer strip. */}
+            {!isButtonReply && quoteStrip}
+            <InteractiveMessageCard
+              body={message.content}
+              buttons={buttons}
+              direction={isOutbound ? 'outbound' : 'inbound'}
+              time={time ?? formatMessageTime(message.createdAt)}
+              status={isOutbound ? tickStatus : undefined}
+              isButtonReply={isButtonReply}
+              replyPreview={isButtonReply ? replyPreview : undefined}
+              metadata={message.metadata}
+            />
+            {reactionChips}
+          </div>
         </div>
       </div>
     );
@@ -658,30 +731,32 @@ export default function MessageBubble({
   if (isContactCard) {
     const contact = message.metadata?.contacts?.[0];
     return (
-      <div
-        {...bubbleShellProps}
-        className={`flex ${wrapperAlign} ${bubbleShellProps.className}`}
-        data-message-id={message.id}
-      >
-        <div className={`relative max-w-[75%] rounded-lg sm:max-w-[65%] ${activeRing}`}>
-          {actionMenu}
-          {quoteStrip}
-          <WhatsAppBubble
-            direction={isOutbound ? 'outbound' : 'inbound'}
-            time={time ?? formatMessageTime(message.createdAt)}
-            status={isOutbound ? tickStatus : undefined}
-          >
-            <div className="rounded-lg bg-white px-3 py-2.5 shadow-sm dark:bg-neutral-900">
-              <p className="text-[13px] font-bold text-neutral-800 dark:text-neutral-100">
-                {contact?.name || message.content || 'Contact'}
-              </p>
-              {contact?.phone && (
-                <p className="mt-0.5 text-[12px] text-neutral-500">{contact.phone}</p>
-              )}
-              {contact?.email && <p className="text-[11px] text-neutral-400">{contact.email}</p>}
-            </div>
-          </WhatsAppBubble>
-          {reactionChips}
+      <div className={rowClass} data-message-id={message.id}>
+        {selectCheck}
+        <div
+          {...bubbleShellProps}
+          className={`${bubbleMaxClass} ${bubbleShellProps.className}`}
+        >
+          <div className={`relative rounded-lg ${activeRing}`}>
+            {actionMenu}
+            {quoteStrip}
+            <WhatsAppBubble
+              direction={isOutbound ? 'outbound' : 'inbound'}
+              time={time ?? formatMessageTime(message.createdAt)}
+              status={isOutbound ? tickStatus : undefined}
+            >
+              <div className="rounded-lg bg-white px-3 py-2.5 shadow-sm dark:bg-neutral-900">
+                <p className="text-[13px] font-bold text-neutral-800 dark:text-neutral-100">
+                  {contact?.name || message.content || 'Contact'}
+                </p>
+                {contact?.phone && (
+                  <p className="mt-0.5 text-[12px] text-neutral-500">{contact.phone}</p>
+                )}
+                {contact?.email && <p className="text-[11px] text-neutral-400">{contact.email}</p>}
+              </div>
+            </WhatsAppBubble>
+            {reactionChips}
+          </div>
         </div>
       </div>
     );
@@ -690,30 +765,32 @@ export default function MessageBubble({
   if (isLocation) {
     const loc = message.metadata?.location;
     return (
-      <div
-        {...bubbleShellProps}
-        className={`flex ${wrapperAlign} ${bubbleShellProps.className}`}
-        data-message-id={message.id}
-      >
-        <div className={`relative max-w-[75%] rounded-lg sm:max-w-[65%] ${activeRing}`}>
-          {actionMenu}
-          {quoteStrip}
-          <WhatsAppBubble
-            direction={isOutbound ? 'outbound' : 'inbound'}
-            content={message.content}
-            time={time ?? formatMessageTime(message.createdAt)}
-            status={isOutbound ? tickStatus : undefined}
-          >
-            <div className="overflow-hidden rounded-lg bg-white shadow-sm dark:bg-neutral-900">
-              <div className="px-2.5 py-2">
-                <p className="text-[12px] font-semibold text-neutral-800 dark:text-neutral-100">
-                  {loc?.name || 'Location'}
-                </p>
-                {loc?.address && <p className="text-[10px] text-neutral-500">{loc.address}</p>}
+      <div className={rowClass} data-message-id={message.id}>
+        {selectCheck}
+        <div
+          {...bubbleShellProps}
+          className={`${bubbleMaxClass} ${bubbleShellProps.className}`}
+        >
+          <div className={`relative rounded-lg ${activeRing}`}>
+            {actionMenu}
+            {quoteStrip}
+            <WhatsAppBubble
+              direction={isOutbound ? 'outbound' : 'inbound'}
+              content={message.content}
+              time={time ?? formatMessageTime(message.createdAt)}
+              status={isOutbound ? tickStatus : undefined}
+            >
+              <div className="overflow-hidden rounded-lg bg-white shadow-sm dark:bg-neutral-900">
+                <div className="px-2.5 py-2">
+                  <p className="text-[12px] font-semibold text-neutral-800 dark:text-neutral-100">
+                    {loc?.name || 'Location'}
+                  </p>
+                  {loc?.address && <p className="text-[10px] text-neutral-500">{loc.address}</p>}
+                </div>
               </div>
-            </div>
-          </WhatsAppBubble>
-          {reactionChips}
+            </WhatsAppBubble>
+            {reactionChips}
+          </div>
         </div>
       </div>
     );
@@ -722,7 +799,19 @@ export default function MessageBubble({
   const mediaContent = isMediaMessage ? renderMediaContent(message, openMedia) : null;
   let caption: string | undefined;
   if (isMediaMessage && message.content) {
-    if (type === 'DOCUMENT' && message.content === message.metadata?.filename) {
+    const filename = message.metadata?.filename?.trim();
+    const body = message.content.trim();
+    const placeholders = new Set(['[image]', '[video]', '[audio]', '[voice]', '[document]', '[sticker]']);
+    const isFilenameOnly =
+      Boolean(filename && body === filename) ||
+      /^voice-note-\d+\.(webm|ogg|opus|mp3|m4a|wav)$/i.test(body) ||
+      // Older outbound rows stored the raw upload name as content with no real caption.
+      (['IMAGE', 'VIDEO', 'AUDIO'].includes(type || '') &&
+        !message.metadata?.caption &&
+        /\.(png|jpe?g|gif|webp|bmp|svg|mp4|mov|webm|ogg|mp3|m4a|aac|pdf)$/i.test(body));
+    if (placeholders.has(body.toLowerCase()) || isFilenameOnly) {
+      caption = undefined;
+    } else if (type === 'DOCUMENT' && filename && body === filename) {
       caption = undefined;
     } else {
       caption = message.content;
@@ -744,58 +833,119 @@ export default function MessageBubble({
   const metaRow = (onImage = false) =>
     time || isOutbound ? (
       <span
-        className={`inline-flex shrink-0 items-center gap-1 ${
+        className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap ${
           onImage ? 'text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.6)]' : 'wa-timestamp'
         }`}
       >
-        {time && <span className="text-[10.5px] tabular-nums">{time}</span>}
+        {time && <span className="text-[10.5px] tabular-nums whitespace-nowrap">{time}</span>}
         {isOutbound && <MessageTicks status={tickStatus} className={onImage ? '[&_svg]:drop-shadow' : ''} />}
       </span>
     ) : null;
+
+  if (isUnsupported) {
+    const kind =
+      message.metadata?.unsupportedType ||
+      unsupportedTypeFromContent(message.content) ||
+      'unsupported';
+    const { title, detail } = describeUnsupportedMessage(kind);
+    return (
+      <div className={rowClass} data-message-id={message.id}>
+        {selectCheck}
+        <div
+          {...bubbleShellProps}
+          className={`w-fit max-w-[min(100%,85%)] sm:max-w-[min(100%,75%)] ${bubbleShellProps.className}`}
+        >
+          <div className={`relative ${activeRing}`}>
+            {actionMenu}
+            {quoteStrip}
+            <div
+              className={`relative overflow-hidden shadow-[0_1px_1px_rgba(11,20,26,0.10)] wa-msg-font ${bubbleTone} ${radius}`}
+            >
+              {grouping.last && <BubbleTail outbound={isOutbound} />}
+              <div className="flex gap-2.5 px-3 py-2.5">
+                <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
+                  <Info className="h-4 w-4" strokeWidth={2} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13px] font-semibold text-chat-text">{title}</p>
+                  <p className="mt-0.5 text-[11.5px] leading-snug text-chat-timestamp">{detail}</p>
+                  <p className="mt-1.5 text-[10.5px] text-chat-timestamp/90">
+                    Customer sent this in WhatsApp. Meta Cloud API does not expose it to businesses.
+                  </p>
+                  {(time || isOutbound) && (
+                    <div className="mt-1.5 flex justify-end">{metaRow()}</div>
+                  )}
+                </div>
+              </div>
+            </div>
+            {reactionChips}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (mediaContent) {
     const isVisual = type === 'IMAGE' || type === 'VIDEO';
     return (
       <>
-        <div
-          {...bubbleShellProps}
-          className={`flex ${wrapperAlign} ${bubbleShellProps.className}`}
-          data-message-id={message.id}
-        >
-          <div className={`relative max-w-[75%] sm:max-w-[65%] ${isSticker ? 'max-w-[160px]' : ''}`}>
-            {actionMenu}
+        <div className={rowClass} data-message-id={message.id}>
+          {selectCheck}
+          <div
+            {...bubbleShellProps}
+            className={`${
+              isSticker ? 'w-fit shrink-0' : isVisual ? 'w-fit max-w-full' : bubbleMaxClass
+            } ${bubbleShellProps.className}`}
+          >
             <div
-              className={`relative overflow-hidden shadow-[0_1px_1px_rgba(11,20,26,0.12)] wa-msg-font ${
-                isSticker ? 'bg-transparent shadow-none' : bubbleTone
-              } ${isSticker ? 'rounded-xl' : radius} ${activeRing} ${
-                isSticker ? 'p-0' : isVisual ? 'p-1' : 'p-1.5'
+              className={`relative ${
+                isSticker
+                  ? 'w-fit shrink-0'
+                  : isVisual
+                    ? 'w-[min(100%,280px)] min-w-[min(100%,200px)]'
+                    : ''
               }`}
             >
-              {!isSticker && grouping.last && <BubbleTail outbound={isOutbound} />}
-              {quoteStrip}
-              <div className={`relative overflow-hidden ${isSticker ? '' : 'rounded-[10px]'}`}>
-                {mediaContent}
-                {!isSticker && isVisual && (time || isOutbound) && (
-                  <span className="pointer-events-none absolute bottom-1.5 right-1.5 rounded-full bg-black/45 px-1.5 py-0.5 backdrop-blur-[2px]">
-                    {metaRow(true)}
-                  </span>
+              {actionMenu}
+              <div
+                className={`relative wa-msg-font ${
+                  isSticker
+                    ? 'overflow-visible bg-transparent shadow-none rounded-xl p-0'
+                    : `overflow-hidden shadow-[0_1px_1px_rgba(11,20,26,0.12)] ${bubbleTone} ${radius} ${
+                        isVisual ? 'p-1' : 'p-1.5'
+                      }`
+                } ${activeRing}`}
+              >
+                {!isSticker && grouping.last && <BubbleTail outbound={isOutbound} />}
+                {quoteStrip}
+                <div
+                  className={`relative ${
+                    isSticker ? 'overflow-visible' : 'overflow-hidden rounded-[10px]'
+                  }`}
+                >
+                  {mediaContent}
+                  {!isSticker && isVisual && (time || isOutbound) && (
+                    <span className="pointer-events-none absolute bottom-1.5 right-1.5 rounded-full bg-black/45 px-1.5 py-0.5 backdrop-blur-[2px]">
+                      {metaRow(true)}
+                    </span>
+                  )}
+                </div>
+                {caption && !isSticker && (
+                  <CollapsibleMessageText className="px-1.5 pb-1 pt-1.5">
+                    {highlightText(caption, highlightQuery)}
+                  </CollapsibleMessageText>
+                )}
+                {!isVisual && !isSticker && (time || isOutbound) && (
+                  <div className="flex justify-end px-1 pb-0.5 whitespace-nowrap">{metaRow()}</div>
                 )}
               </div>
-              {caption && !isSticker && (
-                <CollapsibleMessageText className="px-1.5 pb-1 pt-1.5">
-                  {highlightText(caption, highlightQuery)}
-                </CollapsibleMessageText>
-              )}
-              {!isVisual && !isSticker && (time || isOutbound) && (
-                <div className="flex justify-end px-1 pb-0.5">{metaRow()}</div>
-              )}
+              {reactionChips}
+              <FailedRetryRow
+                show={isFailed}
+                retrying={retrying}
+                onRetry={() => onRetry?.(message)}
+              />
             </div>
-            {reactionChips}
-            <FailedRetryRow
-              show={isFailed}
-              retrying={retrying}
-              onRetry={() => onRetry?.(message)}
-            />
           </div>
         </div>
         {!onOpenMedia && (
@@ -806,25 +956,27 @@ export default function MessageBubble({
   }
 
   return (
-    <div
-      {...bubbleShellProps}
-      className={`flex ${wrapperAlign} ${bubbleShellProps.className}`}
-      data-message-id={message.id}
-    >
-      <div className="relative max-w-[75%] sm:max-w-[65%]">
-        {actionMenu}
-        <div
-          className={`relative px-3 py-2 shadow-[0_1px_1px_rgba(11,20,26,0.10)] wa-msg-font ${bubbleTone} ${radius} ${activeRing}`}
-        >
-          {grouping.last && <BubbleTail outbound={isOutbound} />}
-          {senderHeader}
-          {quoteStrip}
-          <CollapsibleMessageText endMeta={metaRow()}>
-            {highlightText(message.content, highlightQuery)}
-          </CollapsibleMessageText>
+    <div className={rowClass} data-message-id={message.id}>
+      {selectCheck}
+      <div
+        {...bubbleShellProps}
+        className={`${bubbleMaxClass} ${bubbleShellProps.className}`}
+      >
+        <div className="relative">
+          {actionMenu}
+          <div
+            className={`relative px-3 py-2 shadow-[0_1px_1px_rgba(11,20,26,0.10)] wa-msg-font ${bubbleTone} ${radius} ${activeRing}`}
+          >
+            {grouping.last && <BubbleTail outbound={isOutbound} />}
+            {senderHeader}
+            {quoteStrip}
+            <CollapsibleMessageText endMeta={metaRow()}>
+              {highlightText(message.content, highlightQuery)}
+            </CollapsibleMessageText>
+          </div>
+          {reactionChips}
+          <FailedRetryRow show={isFailed} retrying={retrying} onRetry={() => onRetry?.(message)} />
         </div>
-        {reactionChips}
-        <FailedRetryRow show={isFailed} retrying={retrying} onRetry={() => onRetry?.(message)} />
       </div>
     </div>
   );

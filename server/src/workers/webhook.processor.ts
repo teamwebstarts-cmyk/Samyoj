@@ -10,20 +10,21 @@ import { createModuleLogger } from '../utils/logger';
 
 const log = createModuleLogger('webhook');
 
-function mapInboundMessageType(type: string | undefined): 'TEXT' | 'IMAGE' | 'DOCUMENT' | 'AUDIO' | 'VIDEO' | 'INTERACTIVE' {
+function mapInboundMessageType(
+  type: string | undefined
+): 'TEXT' | 'IMAGE' | 'DOCUMENT' | 'AUDIO' | 'VIDEO' | 'INTERACTIVE' | 'LOCATION' | 'CONTACTS' {
   const normalized = (type || 'text').toLowerCase();
   if (normalized === 'image' || normalized === 'sticker') return 'IMAGE';
   if (normalized === 'document') return 'DOCUMENT';
   if (normalized === 'audio' || normalized === 'voice') return 'AUDIO';
   if (normalized === 'video') return 'VIDEO';
+  if (normalized === 'location') return 'LOCATION';
+  if (normalized === 'contacts') return 'CONTACTS';
   if (normalized === 'order') return 'INTERACTIVE';
-  if (
-    ['button', 'interactive', 'list', 'reaction', 'sticker', 'location', 'contacts'].includes(
-      normalized
-    )
-  ) {
+  if (['button', 'interactive', 'list', 'reaction'].includes(normalized)) {
     return 'INTERACTIVE';
   }
+  // Meta "unsupported" (polls, edits, …) → TEXT bubble with isUnsupported metadata
   return 'TEXT';
 }
 
@@ -251,6 +252,13 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
                   ? { ...(parsed.metadata as Record<string, unknown>) }
                   : undefined;
 
+        if (parsed.location) {
+          inboundMetadata = { ...(inboundMetadata || {}), location: parsed.location };
+        }
+        if (parsed.contacts?.length) {
+          inboundMetadata = { ...(inboundMetadata || {}), contacts: parsed.contacts };
+        }
+
         if (parsed.replyToMetaId) {
           const replyTarget = await prisma.message.findFirst({
             where: {
@@ -306,6 +314,8 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
               mimeType: parsed.metadata.mimeType,
               filename: parsed.metadata.filename,
               accessToken,
+              isSticker: Boolean((inboundMetadata as { isSticker?: boolean } | null)?.isSticker),
+              isGif: Boolean((inboundMetadata as { isGif?: boolean } | null)?.isGif),
             });
             message = await prisma.message.update({
               where: { id: message.id },

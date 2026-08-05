@@ -108,7 +108,8 @@ export function useInboxSender({
         noticeMediaLimit(selected?.id, 'Only PDF documents are supported');
         return;
       }
-      const previewUrl = type === 'IMAGE' ? URL.createObjectURL(file) : undefined;
+      const previewUrl =
+        type === 'IMAGE' || type === 'AUDIO' ? URL.createObjectURL(file) : undefined;
       setAttachment({ file, previewUrl, type });
     },
     [selected?.id]
@@ -236,9 +237,23 @@ export function useInboxSender({
       conversationId: selected.id,
       direction: 'OUTBOUND',
       type: pendingAttachment?.type || 'TEXT',
-      content: text || pendingAttachment?.file.name || '',
+      content:
+        text ||
+        (pendingAttachment?.type === 'IMAGE'
+          ? '[image]'
+          : pendingAttachment?.type === 'VIDEO'
+            ? '[video]'
+            : pendingAttachment?.type === 'AUDIO'
+              ? '[audio]'
+              : pendingAttachment?.file.name || ''),
       status: 'PENDING',
-      metadata: replyMeta || null,
+      metadata: pendingAttachment
+        ? {
+            ...(replyMeta || {}),
+            filename: pendingAttachment.file.name,
+            mimeType: pendingAttachment.file.type || undefined,
+          }
+        : replyMeta || null,
       createdAt: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, optimistic]);
@@ -272,7 +287,7 @@ export function useInboxSender({
         if (text) setDraft(text);
         if (pendingAttachment) {
           const previewUrl =
-            pendingAttachment.type === 'IMAGE'
+            pendingAttachment.type === 'IMAGE' || pendingAttachment.type === 'AUDIO'
               ? URL.createObjectURL(pendingAttachment.file)
               : undefined;
           setAttachment({ ...pendingAttachment, previewUrl });

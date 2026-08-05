@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LayoutTemplate, Lock, ArrowDown } from 'lucide-react';
+import { LayoutTemplate, Lock, ArrowDown, Trash2, X } from 'lucide-react';
 import ChatHeader from './ChatHeader';
 import ThreadSkeleton from './ThreadSkeleton';
 import MessageBubble, { DateDivider } from './MessageBubble';
@@ -87,6 +87,14 @@ interface ChatThreadProps {
   onReplyMessage?: (message: Message) => void;
   onReactMessage?: (message: Message, emoji: string) => void;
   onClearReply?: () => void;
+  onClearChat?: () => void;
+  onDeleteMessages?: (messageIds: string[]) => Promise<void> | void;
+  deletingMessages?: boolean;
+  onEnterSelectMode?: () => void;
+  selectMode?: boolean;
+  selectedMessageIds?: Set<string>;
+  onToggleMessageSelect?: (messageId: string) => void;
+  onExitSelectMode?: () => void;
   onMergeMessages: (found: Message[]) => void;
   onDraftChange: (value: string) => void;
   onSubmitMessage: (e: React.FormEvent) => void;
@@ -153,6 +161,14 @@ export default function ChatThread({
   onReplyMessage,
   onReactMessage,
   onClearReply,
+  onClearChat,
+  onDeleteMessages,
+  deletingMessages = false,
+  onEnterSelectMode,
+  selectMode = false,
+  selectedMessageIds,
+  onToggleMessageSelect,
+  onExitSelectMode,
   onMergeMessages,
   onDraftChange,
   onSubmitMessage,
@@ -572,7 +588,44 @@ export default function ChatThread({
         onToggleSearch={toggleSearch}
         onAssign={onAssign}
         onStatusChange={onStatusChange}
+        onClearChat={onClearChat}
+        onSelectMessages={
+          selectMode
+            ? onExitSelectMode
+            : onEnterSelectMode
+        }
+        selectMode={selectMode}
       />
+
+      {selectMode && (
+        <div className="flex shrink-0 items-center gap-2 border-b border-theme-border/70 bg-theme-surface/95 px-3 py-2 backdrop-blur-md sm:px-4">
+          <button
+            type="button"
+            onClick={onExitSelectMode}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-theme-muted transition hover:bg-theme-subtle hover:text-theme-fg"
+            aria-label="Cancel selection"
+          >
+            <X className="h-4 w-4" />
+          </button>
+          <p className="min-w-0 flex-1 text-[13px] font-semibold text-theme-fg">
+            {selectedMessageIds?.size
+              ? `${selectedMessageIds.size} selected`
+              : 'Tap messages to select'}
+          </p>
+                          <button
+            type="button"
+            disabled={!selectedMessageIds?.size || !onDeleteMessages || deletingMessages}
+            onClick={() => {
+              if (!selectedMessageIds?.size || !onDeleteMessages) return;
+              void onDeleteMessages([...selectedMessageIds]);
+            }}
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-red-600 px-3 text-[12px] font-bold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Delete
+          </button>
+        </div>
+      )}
 
       <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
         <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex flex-col">
@@ -700,6 +753,18 @@ export default function ChatThread({
                         onRetry={onRetryMessage}
                         onReply={onReplyMessage}
                         onReact={onReactMessage}
+                        onDelete={
+                          onDeleteMessages
+                            ? (m) => void onDeleteMessages([m.id])
+                            : undefined
+                        }
+                        selectMode={selectMode}
+                        selected={selectedMessageIds?.has(msg.id)}
+                        onToggleSelect={
+                          onToggleMessageSelect
+                            ? (m) => onToggleMessageSelect(m.id)
+                            : undefined
+                        }
                         retrying={retryingId === msg.id}
                         highlightQuery={normalizedQuery || undefined}
                         isActiveMatch={msg.id === activeMatchId}

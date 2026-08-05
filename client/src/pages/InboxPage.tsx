@@ -11,6 +11,8 @@ import InboxDetailsPanel, { type PanelSection } from '../components/inbox/InboxD
 import CreateTicketModal from '../components/inbox/CreateTicketModal';
 import PaymentLinkModal from '../components/inbox/PaymentLinkModal';
 import ExportChatDialog from '../components/inbox/ExportChatDialog';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
+import { toastError, toastSuccess } from '../utils/toast';
 import {
   readStoredPageSize,
   useConversationList,
@@ -120,6 +122,11 @@ export default function InboxPage() {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; conversationId: string } | null>(null);
   const [detailsOverlay, setDetailsOverlay] = useState<{ open: boolean; section?: PanelSection }>({ open: false });
   const [detailsPanelOpen, setDetailsPanelOpen] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(() => new Set());
+  const [clearChatOpen, setClearChatOpen] = useState(false);
+  const [clearingChat, setClearingChat] = useState(false);
+  const [deletingMessages, setDeletingMessages] = useState(false);
   const [detailsFocusSection, setDetailsFocusSection] = useState<PanelSection | undefined>();
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -354,12 +361,96 @@ export default function InboxPage() {
     }
   }, [selected?.id, serviceWindow?.open]);
 
-  // Reset details chrome when switching chats (panel also resets via conversationId).
   useEffect(() => {
     setDetailsOverlay({ open: false });
     setDetailsPanelOpen(false);
     setDetailsFocusSection(undefined);
+    setSelectMode(false);
+    setSelectedMessageIds(new Set());
+    setClearChatOpen(false);
   }, [selected?.id]);
+
+  const exitSelectMode = useCallback(() => {
+    setSelectMode(false);
+    setSelectedMessageIds(new Set());
+  }, []);
+
+  const toggleMessageSelect = useCallback((messageId: string) => {
+    setSelectedMessageIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(messageId)) next.delete(messageId);
+      else next.add(messageId);
+      return next;
+    });
+  }, []);
+
+  const handleDeleteMessages = useCallback(
+    async (messageIds: string[]) => {
+      if (!selected || messageIds.length === 0) return;
+      const confirmed =
+        messageIds.length === 1
+          ? window.confirm('Delete this message from the inbox? This does not unsend it on WhatsApp.')
+          : window.confirm(
+              `Delete ${messageIds.length} messages from the inbox? This does not unsend them on WhatsApp.`
+            );
+      if (!confirmed) return;
+      setDeletingMessages(true);
+      try {
+        await inboxApi.deleteMessages(selected.id, messageIds);
+        const removed = new Set(messageIds);
+        setMessages((prev) => prev.filter((m) => !removed.has(m.id)));
+        setSelectedMessageIds((prev) => {
+          const next = new Set(prev);
+          messageIds.forEach((id) => next.delete(id));
+          return next;
+        });
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.id === selected.id
+              ? {
+                  ...c,
+                  messages: (c.messages || []).filter((m) => !removed.has(m.id)),
+                }
+              : c
+          )
+        );
+        toastSuccess(messageIds.length === 1 ? 'Message deleted' : 'Messages deleted');
+        if (messageIds.length > 1) exitSelectMode();
+      } catch (err) {
+        toastError(err instanceof Error ? err.message : 'Could not delete messages');
+      } finally {
+        setDeletingMessages(false);
+      }
+    },
+    [selected, setMessages, setConversations, exitSelectMode]
+  );
+
+  const handleClearChat = useCallback(async () => {
+    if (!selected) return;
+    setClearingChat(true);
+    try {
+      await inboxApi.clearMessages(selected.id);
+      setMessages([]);
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === selected.id
+            ? { ...c, messages: [], lastMessageAt: undefined, unreadCount: 0 }
+            : c
+        )
+      );
+      setSelected((prev) =>
+        prev ? { ...prev, messages: [], lastMessageAt: undefined, unreadCount: 0 } : prev
+      );
+      exitSelectMode();
+      setClearChatOpen(false);
+      toastSuccess('Chat cleared');
+      void refreshUnread();
+    } catch (err) {
+      toastError(err instanceof Error ? err.message : 'Could not clear chat');
+    } finally {
+      setClearingChat(false);
+    }
+  }, [selected, setMessages, setConversations, setSelected, exitSelectMode, refreshUnread]);
 
   const handleOpenConversation = useCallback(
     async (conv: Conversation) => {
@@ -683,6 +774,14 @@ export default function InboxPage() {
                   }}
                   onReactMessage={(msg, emoji) => void handleReact(msg, emoji)}
                   onClearReply={() => setReplyTo(null)}
+                  onClearChat={() => setClearChatOpen(true)}
+                  onDeleteMessages={(ids) => handleDeleteMessages(ids)}
+                  deletingMessages={deletingMessages}
+                  onEnterSelectMode={() => setSelectMode(true)}
+                  selectMode={selectMode}
+                  selectedMessageIds={selectedMessageIds}
+                  onToggleMessageSelect={toggleMessageSelect}
+                  onExitSelectMode={exitSelectMode}
                   onMergeMessages={handleMergeMessages}
                   onDraftChange={setDraft}
                   onSubmitMessage={(e) => void handleSend(e)}
@@ -736,6 +835,11 @@ export default function InboxPage() {
                   onConvertToTicket={() => setTicketModalOpen(true)}
                   onExport={() => setExportTarget(selected)}
                   onCreateCampaign={() => navigate(`/campaigns?contacts=${selected.contact.id}`)}
+                  onClearChat={() => setClearChatOpen(true)}
+                  onSelectMessages={() => {
+                    setSelectMode(true);
+                    setDetailsPanelOpen(false);
+                  }}
                   panelOpen={detailsPanelOpen}
                   onPanelOpenChange={setDetailsPanelOpen}
                   focusSection={detailsFocusSection}
@@ -824,6 +928,23 @@ export default function InboxPage() {
           exportTarget ? exportTarget.contact.name || exportTarget.contact.phone : ''
         }
         onClose={() => setExportTarget(null)}
+      />
+
+      <ConfirmDialog
+        open={clearChatOpen}
+        onClose={() => {
+          if (!clearingChat) setClearChatOpen(false);
+        }}
+        onConfirm={() => void handleClearChat()}
+        title="Clear this chat?"
+        description="All messages will be removed from your inbox dashboard. This does not delete the chat on the customer’s WhatsApp."
+        details={[
+          'Photos, videos, and documents stored for this chat are removed from Samyoj storage.',
+          'The conversation stays open so you can keep messaging.',
+        ]}
+        confirmLabel="Clear chat"
+        variant="danger"
+        loading={clearingChat}
       />
 
       <KeyboardShortcutsOverlay open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />

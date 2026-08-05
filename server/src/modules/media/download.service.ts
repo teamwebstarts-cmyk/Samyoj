@@ -2,6 +2,7 @@ import prisma from '../../config/database';
 import { MetaWhatsAppService } from '../whatsapp/meta.service';
 import { getOrgWhatsappContext } from '../whatsapp/context';
 import { readMediaFile, saveMediaBuffer, mediaFileExists } from './storage';
+import { optimizeStoredImage } from './image-optimize';
 import { logError } from '../../errors';
 
 export interface MessageMediaMetadata {
@@ -11,6 +12,12 @@ export interface MessageMediaMetadata {
   caption?: string;
   mediaPath?: string;
   size?: number;
+  /** True when inbound media is a sticker (keep full fidelity — never recompress). */
+  isSticker?: boolean;
+  isGif?: boolean;
+  /** Present when we resized/re-encoded to save disk. */
+  originalSize?: number;
+  optimized?: boolean;
 }
 
 export async function downloadAndStoreMessageMedia(options: {
@@ -20,13 +27,21 @@ export async function downloadAndStoreMessageMedia(options: {
   mimeType?: string;
   filename?: string;
   accessToken: string;
+  isSticker?: boolean;
+  isGif?: boolean;
 }): Promise<MessageMediaMetadata> {
-  const buffer = await MetaWhatsAppService.downloadMedia(options.mediaId, options.accessToken);
+  const raw = await MetaWhatsAppService.downloadMedia(options.mediaId, options.accessToken);
+  const optimized = await optimizeStoredImage({
+    buffer: raw,
+    mimeType: options.mimeType,
+    skip: Boolean(options.isSticker || options.isGif),
+  });
+
   const saved = await saveMediaBuffer({
     organizationId: options.organizationId,
     messageId: options.messageId,
-    buffer,
-    mimeType: options.mimeType,
+    buffer: optimized.buffer,
+    mimeType: optimized.mimeType,
     filename: options.filename,
   });
 
@@ -36,6 +51,9 @@ export async function downloadAndStoreMessageMedia(options: {
     filename: options.filename,
     mediaPath: saved.mediaPath,
     size: saved.size,
+    ...(optimized.optimized
+      ? { optimized: true, originalSize: optimized.originalSize }
+      : {}),
   };
 }
 
@@ -60,6 +78,8 @@ export async function ensureMessageMediaStored(options: {
     mimeType: metadata.mimeType,
     filename: metadata.filename,
     accessToken,
+    isSticker: metadata.isSticker,
+    isGif: metadata.isGif,
   });
 
   const updatedMetadata = { ...metadata, ...stored };

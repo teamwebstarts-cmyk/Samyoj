@@ -5,7 +5,9 @@ import {
   Bell,
   Bot,
   CheckCircle2,
+  CheckSquare,
   Clock,
+  Eraser,
   Mail,
   MoreVertical,
   PauseCircle,
@@ -51,6 +53,9 @@ interface ChatHeaderProps {
   onToggleSearch: () => void;
   onAssign: (agentId: string | null) => void;
   onStatusChange: (status: string) => void;
+  onClearChat?: () => void;
+  onSelectMessages?: () => void;
+  selectMode?: boolean;
 }
 
 function HeaderIconButton({
@@ -142,6 +147,9 @@ export default function ChatHeader({
   onToggleSearch,
   onAssign,
   onStatusChange,
+  onClearChat,
+  onSelectMessages,
+  selectMode = false,
 }: ChatHeaderProps) {
   const tipFor = useGlassTipProps();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -278,6 +286,34 @@ export default function ChatHeader({
               <Mail className="h-4 w-4 text-theme-muted" />
               Mark as unread
             </button>
+
+            {onSelectMessages && (
+              <button
+                type="button"
+                onClick={() => {
+                  onSelectMessages();
+                  setMenuOpen(false);
+                }}
+                className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] text-theme-fg transition hover:bg-theme-subtle ${FOCUS_RING_CLASS}`}
+              >
+                <CheckSquare className="h-4 w-4 text-theme-muted" />
+                {selectMode ? 'Cancel selection' : 'Select messages'}
+              </button>
+            )}
+
+            {onClearChat && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClearChat();
+                  setMenuOpen(false);
+                }}
+                className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] text-red-600 transition hover:bg-red-50 dark:hover:bg-red-950/30 ${FOCUS_RING_CLASS}`}
+              >
+                <Eraser className="h-4 w-4" />
+                Clear chat
+              </button>
+            )}
 
             <div className="my-1 border-t border-theme-border/60" />
 

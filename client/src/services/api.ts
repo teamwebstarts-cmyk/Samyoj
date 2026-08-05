@@ -147,6 +147,16 @@ export const inboxApi = {
   get: (id: string) => api.get(`/inbox/${id}`),
   messages: (id: string, params?: Record<string, string>) =>
     api.get(`/inbox/${id}/messages`, { params }),
+  clearMessages: (id: string) =>
+    api.delete<{ data: { deleted: number } }>(`/inbox/${id}/messages`),
+  deleteMessages: (id: string, messageIds: string[]) =>
+    api.post<{ data: { deleted: number; messageIds: string[] } }>(`/inbox/${id}/messages/delete`, {
+      messageIds,
+    }),
+  deleteMessage: (messageId: string) =>
+    api.delete<{ data: { deleted: number; messageIds: string[] } }>(
+      `/inbox/messages/${messageId}`
+    ),
   markRead: (id: string) => api.post(`/inbox/${id}/read`),
   markUnread: (id: string) => api.post(`/inbox/${id}/unread`),
   mediaUrl: (messageId: string) => api.get(`/inbox/messages/${messageId}/media-url`),
@@ -315,6 +325,8 @@ export const callingApi = {
   decline: (id: string) => api.post(`/calling/${id}/decline`),
   callback: (data: { contactId?: string; phone?: string; conversationId?: string }) =>
     api.post('/calling/callback', data),
+  permission: (contactId: string) => api.get(`/calling/permission/${contactId}`),
+  requestPermission: (contactId: string) => api.post('/calling/permission/request', { contactId }),
   updateNotes: (id: string, notes: string) => api.patch(`/calling/${id}`, { notes }),
   terminate: (id: string) => api.post(`/calling/${id}/terminate`),
 };

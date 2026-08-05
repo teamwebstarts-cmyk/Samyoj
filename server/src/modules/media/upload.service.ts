@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { getPublicMediaUrl } from './storage-adapter';
 import { saveMediaBuffer } from './storage';
+import { optimizeStoredImage } from './image-optimize';
 
 /**
  * Upload limits (bytes).
@@ -51,12 +52,25 @@ export async function storeOutboundMedia(options: {
 }> {
   validateMediaUpload(options.mimeType, options.buffer.length);
 
+  const isGif =
+    (options.mimeType || '').toLowerCase().includes('gif') ||
+    /\.gif$/i.test(options.filename || '');
+
+  const optimized = await optimizeStoredImage({
+    buffer: options.buffer,
+    mimeType: options.mimeType,
+    skip: isGif,
+  });
+
+  // Enforce size limit against the buffer we actually store / send upstream.
+  validateMediaUpload(optimized.mimeType, optimized.buffer.length);
+
   const uploadId = randomUUID();
   const saved = await saveMediaBuffer({
     organizationId: options.organizationId,
     messageId: uploadId,
-    buffer: options.buffer,
-    mimeType: options.mimeType,
+    buffer: optimized.buffer,
+    mimeType: optimized.mimeType,
     filename: options.filename,
   });
 

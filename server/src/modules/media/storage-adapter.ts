@@ -16,6 +16,8 @@ function extensionFromMime(mimeType?: string, filename?: string): string {
     'image/gif': '.gif',
     'video/mp4': '.mp4',
     'audio/ogg': '.ogg',
+    'audio/webm': '.webm',
+    'audio/mpeg': '.mp3',
     'application/pdf': '.pdf',
   };
   if (mimeType) {
@@ -54,6 +56,7 @@ async function loadS3Client(): Promise<{
   PutObjectCommand: new (args: Record<string, unknown>) => unknown;
   GetObjectCommand: new (args: Record<string, unknown>) => unknown;
   HeadObjectCommand: new (args: Record<string, unknown>) => unknown;
+  DeleteObjectCommand: new (args: Record<string, unknown>) => unknown;
 }> {
   try {
     return await import('@aws-sdk/client-s3' as string);
@@ -156,4 +159,26 @@ export async function mediaExists(relativePath: string): Promise<boolean> {
     return existsS3(relativePath);
   }
   return existsLocal(relativePath);
+}
+
+/** Best-effort delete of a stored media object (local disk or S3). */
+export async function deleteMediaObject(relativePath: string): Promise<void> {
+  if (!relativePath) return;
+  try {
+    if (config.storage.driver === 's3') {
+      const { s3Bucket, s3Region, s3AccessKey, s3SecretKey } = config.storage;
+      if (!s3Bucket || !s3AccessKey || !s3SecretKey) return;
+      const { S3Client, DeleteObjectCommand } = await loadS3Client();
+      const client = new S3Client({
+        region: s3Region,
+        credentials: { accessKeyId: s3AccessKey, secretAccessKey: s3SecretKey },
+      });
+      await client.send(new DeleteObjectCommand({ Bucket: s3Bucket, Key: relativePath }));
+      return;
+    }
+    const absolute = path.join(UPLOAD_ROOT, relativePath);
+    await fs.unlink(absolute).catch(() => undefined);
+  } catch {
+    /* ignore missing / permission errors — clearing chat must still succeed */
+  }
 }

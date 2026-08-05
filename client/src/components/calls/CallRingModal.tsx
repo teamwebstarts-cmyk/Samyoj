@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Phone, PhoneOff, PhoneIncoming } from 'lucide-react';
 import AppButton from '../ui/AppButton';
@@ -21,9 +21,13 @@ interface CallRingModalProps {
 async function createAgentAnswer(sdpOffer: string): Promise<string> {
   const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
 
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  for (const track of stream.getTracks()) {
-    pc.addTrack(track, stream);
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    for (const track of stream.getTracks()) {
+      pc.addTrack(track, stream);
+    }
+  } catch {
+    throw new Error('Microphone access is required to answer calls. Check your browser permissions.');
   }
 
   await pc.setRemoteDescription({ type: 'offer', sdp: sdpOffer });
@@ -55,7 +59,6 @@ export default function CallRingModal({ ring, onDismiss }: CallRingModalProps) {
   const navigate = useNavigate();
   const [accepting, setAccepting] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(25);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     if (!ring) return;
@@ -100,11 +103,11 @@ export default function CallRingModal({ ring, onDismiss }: CallRingModalProps) {
       const sdpOffer = data.data.sdpOffer as string;
       const sdpAnswer = await createAgentAnswer(sdpOffer);
       await callingApi.accept(ring.callId, sdpAnswer);
-      toastSuccess('Call connected — use your microphone to speak.');
+      toastSuccess('Call connected.');
       onDismiss();
       navigate(`/calls/${ring.callId}`);
-    } catch {
-      toastError('Could not answer the call. Check microphone permissions.');
+    } catch (err) {
+      toastError(err instanceof Error ? err.message : 'Could not answer. Check microphone permissions.');
     } finally {
       setAccepting(false);
     }
@@ -125,36 +128,35 @@ export default function CallRingModal({ ring, onDismiss }: CallRingModalProps) {
   const displayName = ring.contactName || ring.fromPhone;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50 p-4 sm:items-center">
+    <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 backdrop-blur-sm p-4 sm:items-center">
       <div
-        className="w-full max-w-md animate-fade-up rounded-2xl border border-violet-200/80 bg-white p-5 shadow-2xl"
+        className="w-full max-w-sm animate-fade-up rounded-[28px] border border-white/20 bg-white/90 p-6 shadow-2xl backdrop-blur-xl dark:bg-neutral-900/90 dark:border-neutral-700/30"
         role="alertdialog"
         aria-labelledby="call-ring-title"
       >
-        <div className="flex items-center gap-3">
-          <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-700 text-white shadow-lg">
-            <PhoneIncoming className="h-6 w-6 animate-pulse" />
+        <div className="flex flex-col items-center text-center">
+          <span className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-indigo-700 text-white shadow-lg shadow-violet-500/25">
+            <PhoneIncoming className="h-7 w-7" />
           </span>
-          <div className="min-w-0 flex-1">
-            <p id="call-ring-title" className="truncate text-[16px] font-extrabold text-neutral-900">
-              Incoming call
-            </p>
-            <p className="truncate text-[13px] font-medium text-neutral-500">{displayName}</p>
-            <p className="text-[11px] font-semibold text-violet-600">Answering in {secondsLeft}s</p>
-          </div>
+          <p id="call-ring-title" className="mt-4 text-[18px] font-extrabold text-neutral-900 dark:text-white">
+            Incoming call
+          </p>
+          <p className="mt-1 text-[15px] font-semibold text-neutral-500 dark:text-neutral-400">{displayName}</p>
+          <p className="mt-2 text-[13px] font-bold text-violet-600 dark:text-violet-400">
+            {secondsLeft > 0 ? `Answering in ${secondsLeft}s` : 'Call ended'}
+          </p>
         </div>
 
-        <div className="mt-5 flex gap-2">
+        <div className="mt-6 flex gap-3">
           <AppButton variant="danger" className="flex-1" onClick={() => void handleDecline()}>
             <PhoneOff className="h-4 w-4" />
             Decline
           </AppButton>
           <AppButton className="flex-1" loading={accepting} onClick={() => void handleAccept()}>
             <Phone className="h-4 w-4" />
-            Answer
+            Accept
           </AppButton>
         </div>
-        <audio ref={audioRef} className="hidden" />
       </div>
     </div>
   );

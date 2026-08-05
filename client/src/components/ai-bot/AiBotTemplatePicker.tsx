@@ -62,10 +62,10 @@ export default function AiBotTemplatePicker({ templates, onSelect, compact }: Ai
           </div>
           <div>
             <h3 className="text-[14px] font-extrabold tracking-tight text-theme-fg">
-              {compact ? 'Quick start templates' : 'Start from a template'}
+              {compact ? 'Start from' : 'Start from'}
             </h3>
             <p className="text-[12px] font-medium text-theme-secondary">
-              Pre-filled instructions — customize before saving
+              Support desk · Sales desk · FAQ helper — lands on Personality
             </p>
           </div>
         </div>

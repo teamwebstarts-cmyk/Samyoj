@@ -15,6 +15,8 @@ import { endCallSession, getActiveSessionCount } from './call-session.manager';
 import { isAzureOpenAIConfigured } from '../ai/azure-openai.service';
 import { isDeepgramConfigured } from './deepgram.stt';
 import { isGoogleTtsConfigured } from './google-tts.service';
+import { isSarvamSttConfigured } from './sarvam.stt';
+import { isSarvamTtsConfigured } from './sarvam.tts';
 import { config } from '../../config';
 import { getOrgCallingSettings, saveOrgCallingSettings } from './settings.service';
 import { getOrgActiveCallCount, storePendingCall } from './session-store';
@@ -61,6 +63,11 @@ const callingSettingsSchema = z.object({
   ttsVoice: z.string().nullable().optional(),
   ttsLanguage: z.string().nullable().optional(),
   deepgramLanguage: z.string().nullable().optional(),
+  sarvamSttLanguage: z.string().nullable().optional(),
+  sarvamTtsSpeaker: z.string().nullable().optional(),
+  sarvamMode: z.enum(['codemix', 'transcribe']).optional(),
+  liveTransferEnabled: z.boolean().optional(),
+  transferMode: z.enum(['live', 'message_only']).optional(),
 });
 
 const notesSchema = z.object({
@@ -110,7 +117,10 @@ router.get(
       configured: isCallingConfigured() && isAzureOpenAIConfigured(),
       deepgram: isDeepgramConfigured(),
       googleTts: isGoogleTtsConfigured(),
+      sarvamStt: isSarvamSttConfigured(),
+      sarvamTts: isSarvamTtsConfigured(),
       azureOpenAI: isAzureOpenAIConfigured(),
+      voiceProvider: config.calling.voiceProvider,
       aiAutoAnswer: callingSettings.aiAutoAnswer,
       activeCalls,
       whatsappConnected: Boolean(number),
@@ -125,6 +135,132 @@ router.get(
         MetaCallingService.isCallingEnabled(callingSettingsMeta),
       orgCallingSettings: callingSettings,
     });
+  })
+);
+
+router.get(
+  '/permission/:contactId',
+  ...memberGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const contactId = String(req.params.contactId);
+
+    const contact = await prisma.contact.findFirst({
+      where: { id: contactId, organizationId: orgId },
+    });
+    if (!contact) throw new AppError(404, 'Contact not found');
+
+    const number = await prisma.whatsappNumber.findFirst({
+      where: { organizationId: orgId, isActive: true },
+    });
+
+    let granted = false;
+    let canRequest = false;
+    let status: string | null = null;
+    let expirationTime: number | undefined;
+    let callingEnabled = false;
+
+    if (number) {
+      try {
+        const accessToken = MetaWhatsAppService.decryptToken(number.accessToken);
+        const settings = await MetaCallingService.getCallingSettings(
+          number.phoneNumberId,
+          accessToken
+        );
+        callingEnabled = MetaCallingService.isCallingEnabled(settings);
+
+        if (callingEnabled) {
+          const perm = await MetaCallingService.getUserCallPermissions(
+            number.phoneNumberId,
+            accessToken,
+            contact.phone
+          );
+          status = perm.status;
+          expirationTime = perm.expirationTime;
+          granted = perm.canStartCall;
+          canRequest = perm.canRequestPermission && !perm.canStartCall;
+        }
+      } catch {
+        // Permission unknown — FE should not pretend granted
+      }
+    }
+
+    sendSuccess(res, {
+      granted,
+      canRequest,
+      callingEnabled,
+      status,
+      expirationTime,
+      contactId,
+      phone: contact.phone,
+    });
+  })
+);
+
+router.post(
+  '/permission/request',
+  ...memberGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const { contactId, message } = z
+      .object({
+        contactId: z.string().uuid(),
+        message: z.string().max(500).optional(),
+      })
+      .parse(req.body);
+
+    const contact = await prisma.contact.findFirst({
+      where: { id: contactId, organizationId: orgId },
+    });
+    if (!contact) throw new AppError(404, 'Contact not found');
+
+    const number = await prisma.whatsappNumber.findFirst({
+      where: { organizationId: orgId, isActive: true },
+    });
+    if (!number) throw new AppError(400, 'No active WhatsApp number');
+
+    const accessToken = MetaWhatsAppService.decryptToken(number.accessToken);
+
+    const settings = await MetaCallingService.getCallingSettings(number.phoneNumberId, accessToken);
+    if (!MetaCallingService.isCallingEnabled(settings)) {
+      throw new AppError(400, 'Enable WhatsApp calling on your number before requesting call permission.');
+    }
+
+    // Rate / eligibility check from Meta when available
+    try {
+      const perm = await MetaCallingService.getUserCallPermissions(
+        number.phoneNumberId,
+        accessToken,
+        contact.phone
+      );
+      if (perm.canStartCall) {
+        return sendSuccess(res, {
+          sent: false,
+          alreadyGranted: true,
+          contactId,
+          phone: contact.phone,
+          status: perm.status,
+        });
+      }
+      if (!perm.canRequestPermission) {
+        throw new AppError(
+          429,
+          'Meta call-permission request limit reached for this contact. Try again later or after a connected call.'
+        );
+      }
+    } catch (err) {
+      if (err instanceof AppError) throw err;
+      // Continue — send request even if preflight fails (Meta will enforce)
+    }
+
+    await MetaCallingService.sendCallPermissionRequest(
+      number.phoneNumberId,
+      accessToken,
+      contact.phone,
+      message
+    );
+
+    sendSuccess(res, { sent: true, contactId, phone: contact.phone });
   })
 );
 
@@ -261,7 +397,17 @@ router.get(
       ...(numberId ? { whatsappNumberId: numberId } : {}),
     };
 
-    if (query.status) where.status = query.status as Prisma.EnumCallStatusFilter['equals'];
+    if (query.status) {
+      const statuses = query.status
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (statuses.length === 1) {
+        where.status = statuses[0] as Prisma.EnumCallStatusFilter['equals'];
+      } else if (statuses.length > 1) {
+        where.status = { in: statuses as Prisma.EnumCallStatusFilter['in'] };
+      }
+    }
     if (query.handler) where.handler = query.handler as Prisma.EnumCallHandlerFilter['equals'];
     if (query.direction) where.direction = query.direction as Prisma.EnumCallDirectionFilter['equals'];
     if (query.contactId) where.contactId = query.contactId;
@@ -298,6 +444,7 @@ router.get(
           contact: { select: { id: true, name: true, phone: true } },
           aiBot: { select: { id: true, name: true } },
           assignedAgent: { select: { id: true, name: true } },
+          conversation: { select: { id: true } },
         },
       }),
     ]);
@@ -339,6 +486,30 @@ router.post(
     if (!contact) throw new AppError(400, 'Contact not found');
 
     const accessToken = MetaWhatsAppService.decryptToken(number.accessToken);
+
+    // Meta requires per-user call permission before business-initiated calls (BIC).
+    try {
+      const settings = await MetaCallingService.getCallingSettings(number.phoneNumberId, accessToken);
+      if (!MetaCallingService.isCallingEnabled(settings)) {
+        throw new AppError(400, 'Enable WhatsApp calling on your number before placing outbound calls.');
+      }
+      const perm = await MetaCallingService.getUserCallPermissions(
+        number.phoneNumberId,
+        accessToken,
+        contact.phone
+      );
+      if (!perm.canStartCall) {
+        throw new AppError(
+          403,
+          'This contact has not allowed WhatsApp calls yet. Send a call permission request first, then try again after they allow it.',
+          'CALL_PERMISSION_REQUIRED'
+        );
+      }
+    } catch (err) {
+      if (err instanceof AppError) throw err;
+      // If Meta permission API is unavailable, still attempt call — Meta will reject if illegal
+    }
+
     const bridge = new WhatsAppWebRtcBridge();
 
     try {
@@ -554,10 +725,28 @@ router.post(
       // may already be terminated
     }
 
+    const endedAt = new Date();
+    const durationSeconds =
+      call.answeredAt || call.startedAt
+        ? Math.max(
+            0,
+            Math.floor(
+              (endedAt.getTime() - new Date(call.answeredAt || call.startedAt || call.createdAt).getTime()) /
+                1000
+            )
+          )
+        : call.durationSeconds ?? undefined;
+
     await prisma.call.update({
       where: { id: call.id },
-      data: { status: 'TERMINATED', endedAt: new Date() },
+      data: {
+        status: 'TERMINATED',
+        endedAt,
+        ...(durationSeconds != null ? { durationSeconds } : {}),
+      },
     });
+
+    emitToOrg(orgId, 'call:updated', { callId: id, status: 'TERMINATED' });
 
     await logTeamAudit({
       organizationId: orgId,

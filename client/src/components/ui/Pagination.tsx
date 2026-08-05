@@ -6,6 +6,8 @@ interface PaginationProps {
   total: number;
   onPageChange: (page: number) => void;
   className?: string;
+  /** Shown after the total, e.g. "calls" → "Showing 1–8 of 24 calls" */
+  itemLabel?: string;
 }
 
 export default function Pagination({
@@ -14,13 +16,16 @@ export default function Pagination({
   total,
   onPageChange,
   className = '',
+  itemLabel,
 }: PaginationProps) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const safePage = Math.min(page, totalPages);
   const start = total === 0 ? 0 : (safePage - 1) * pageSize + 1;
   const end = Math.min(safePage * pageSize, total);
 
-  if (total <= pageSize) return null;
+  if (total === 0) return null;
+
+  const showControls = total > pageSize;
 
   return (
     <div
@@ -30,8 +35,10 @@ export default function Pagination({
         Showing <span className="font-bold text-theme-fg">{start}</span>–
         <span className="font-bold text-theme-fg">{end}</span> of{' '}
         <span className="font-bold text-theme-fg">{total}</span>
+        {itemLabel ? ` ${itemLabel}` : ''}
       </p>
 
+      {showControls && (
       <div className="flex items-center gap-1.5">
         <button
           type="button"
@@ -57,6 +64,7 @@ export default function Pagination({
           <ChevronRight className="h-4 w-4" />
         </button>
       </div>
+      )}
     </div>
   );
 }

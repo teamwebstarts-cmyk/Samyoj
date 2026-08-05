@@ -1,4 +1,5 @@
 import prisma from '../../config/database';
+import { MetaWhatsAppService } from '../whatsapp/meta.service';
 import { createModuleLogger } from '../../utils/logger';
 import { emitToOrg } from '../../realtime';
 import { MetaCallingService } from './meta-calling.service';
@@ -72,8 +73,30 @@ export async function declineCallAsAgent(params: {
   agentId: string;
   organizationId: string;
 }): Promise<void> {
+  const call = await prisma.call.findFirst({
+    where: { id: params.callId, organizationId: params.organizationId },
+  });
+  if (!call) return;
+
+  const pending =
+    (await getPendingCall(call.metaCallId)) ?? (await getPendingCallByCallId(params.callId));
+  if (pending) {
+    try {
+      await MetaCallingService.reject(
+        pending.phoneNumberId,
+        pending.accessToken,
+        pending.metaCallId
+      );
+    } catch {
+      // Meta may have already ended the call
+    }
+    await removePendingCall(call.metaCallId);
+  }
+
   emitToOrg(params.organizationId, 'call:declined', {
     callId: params.callId,
     agentId: params.agentId,
   });
+
+  log.info('Agent declined call', { callId: params.callId, agentId: params.agentId });
 }

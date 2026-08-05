@@ -50,6 +50,15 @@ export const config = {
     googleCredentialsPath: process.env.GOOGLE_APPLICATION_CREDENTIALS || 'key.json',
     googleTtsVoice: process.env.GOOGLE_TTS_VOICE || 'en-IN-Neural2-A',
     googleTtsLanguage: process.env.GOOGLE_TTS_LANGUAGE || 'en-IN',
+    /** Voice provider: 'sarvam' (Sarvam STT+TTS) or 'deepgram_google' (legacy). Default: 'deepgram_google'. */
+    voiceProvider: (process.env.CALLING_VOICE_PROVIDER || 'deepgram_google') as 'sarvam' | 'deepgram_google',
+    sarvamApiKey: process.env.SARVAM_API_KEY || '',
+    sarvamSttModel: process.env.SARVAM_STT_MODEL || 'saaras:v3-realtime',
+    sarvamSttMode: process.env.SARVAM_STT_MODE || 'codemix',
+    sarvamSttLanguage: process.env.SARVAM_STT_LANGUAGE || 'hi-IN',
+    sarvamTtsModel: process.env.SARVAM_TTS_MODEL || 'bulbul:v3',
+    sarvamTtsSpeaker: process.env.SARVAM_TTS_SPEAKER || 'shubh',
+    sarvamSampleRate: parseInt(process.env.SARVAM_SAMPLE_RATE || '16000', 10),
     aiAutoAnswer: process.env.CALLING_AI_AUTO_ANSWER !== 'false',
     aiGreeting:
       process.env.CALLING_AI_GREETING ||

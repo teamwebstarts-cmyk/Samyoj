@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { getMediaUrl } from './AuthenticatedMedia';
 import { messageHasMedia } from './inboxUtils';
 import type { MediaViewerItem } from './MediaViewer';
@@ -19,6 +19,17 @@ export function useMediaViewer(messages: Message[]) {
 
   const index = mediaViewer ? mediaGallery.findIndex((m) => m.id === mediaViewer.messageId) : -1;
 
+  // Prefetch neighbors (WhatsApp-smooth swipe) while the viewer is open.
+  useEffect(() => {
+    if (index < 0) return;
+    const neighbors = [mediaGallery[index - 1], mediaGallery[index + 1]].filter(Boolean) as Message[];
+    for (const msg of neighbors) {
+      void getMediaUrl(msg.id).catch(() => {
+        /* warm cache best-effort */
+      });
+    }
+  }, [index, mediaGallery]);
+
   const navigate = async (direction: 'prev' | 'next') => {
     const nextMsg = mediaGallery[direction === 'prev' ? index - 1 : index + 1];
     if (!nextMsg) return;
@@ -29,6 +40,8 @@ export function useMediaViewer(messages: Message[]) {
         type: nextMsg.type?.toUpperCase() as MediaViewerItem['type'],
         url,
         filename: nextMsg.metadata?.filename,
+        mimeType: nextMsg.metadata?.mimeType,
+        loopMuted: Boolean(nextMsg.metadata?.isGif),
       });
     } catch {
       toastError('Could not load media');

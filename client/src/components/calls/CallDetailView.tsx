@@ -1,8 +1,33 @@
-import { ArrowLeft, Bot, MessageSquare, PhoneOff, User } from 'lucide-react';
+import { useEffect, useRef, useState, type ComponentType } from 'react';
+import {
+  ArrowLeft,
+  Bot,
+  CheckCheck,
+  Clock3,
+  Grid3X3,
+  MessageSquare,
+  MicOff,
+  MoreVertical,
+  Pause,
+  PhoneForwarded,
+  PhoneIncoming,
+  PhoneOff,
+  PhoneOutgoing,
+  Timer,
+  User,
+} from 'lucide-react';
 import { Link } from 'react-router-dom';
 import ContactAvatar from '../inbox/ContactAvatar';
 import AppButton from '../ui/AppButton';
-import { callStatusLabel, formatCallTime, formatDuration, isActiveCallStatus } from './callUtils';
+import {
+  callStatusLabel,
+  callStatusTone,
+  formatBubbleTime,
+  formatCallTime,
+  formatDuration,
+  formatPhoneDisplay,
+  isActiveCallStatus,
+} from './callUtils';
 
 interface TranscriptEntry {
   role: string;
@@ -16,19 +41,38 @@ interface CallDetailViewProps {
   status: string;
   createdAt: string;
   durationSeconds?: number | null;
+  direction?: string;
+  handler?: string;
   botName?: string | null;
   agentName?: string | null;
   conversationId?: string | null;
   transcript?: TranscriptEntry[] | null;
+  notes?: string;
+  onNotesChange?: (value: string) => void;
+  onSaveNotes?: () => void;
+  savingNotes?: boolean;
+  notesDirty?: boolean;
   onBack?: () => void;
   onEndCall?: () => void;
   ending?: boolean;
 }
 
-function roleLabel(role: string): string {
-  if (role === 'user') return 'Customer';
-  if (role === 'assistant') return 'Assistant';
-  return 'Greeting';
+function Waveform() {
+  return (
+    <div className="flex h-4 items-end gap-0.5" aria-hidden>
+      {[3, 6, 4, 8, 5, 7, 3, 6].map((h, i) => (
+        <span
+          key={i}
+          className="w-0.5 animate-pulse rounded-full bg-emerald-500"
+          style={{ height: `${h * 2}px`, animationDelay: `${i * 80}ms` }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function isAssistantRole(role: string) {
+  return role === 'assistant' || role === 'system' || role === 'bot';
 }
 
 export default function CallDetailView({
@@ -37,24 +81,96 @@ export default function CallDetailView({
   status,
   createdAt,
   durationSeconds,
+  direction = 'USER_INITIATED',
+  handler,
   botName,
   agentName,
   conversationId,
   transcript,
+  notes = '',
+  onNotesChange,
+  onSaveNotes,
+  savingNotes,
+  notesDirty,
   onBack,
   onEndCall,
   ending,
 }: CallDetailViewProps) {
   const active = isActiveCallStatus(status);
-  const displayName = name || phone;
+  const displayName = name || formatPhoneDisplay(phone);
+  const tone = callStatusTone(status);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const moreRef = useRef<HTMLDivElement>(null);
+  const [liveElapsed, setLiveElapsed] = useState(durationSeconds ?? 0);
+  const [moreOpen, setMoreOpen] = useState(false);
+
+  useEffect(() => {
+    if (!active) {
+      setLiveElapsed(durationSeconds ?? 0);
+      return;
+    }
+    const started = new Date(createdAt).getTime();
+    const tick = () => setLiveElapsed(Math.max(0, Math.floor((Date.now() - started) / 1000)));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [active, createdAt, durationSeconds]);
+
+  useEffect(() => {
+    if (!active || !scrollRef.current) return;
+    scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [transcript?.length, active]);
+
+  useEffect(() => {
+    if (!moreOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!moreRef.current?.contains(e.target as Node)) setMoreOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMoreOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [moreOpen]);
+
+  const inbound = direction !== 'BUSINESS_INITIATED';
+  const handlerLabel =
+    handler === 'AGENT' || agentName
+      ? `Handler ${agentName || 'Agent'}`
+      : handler === 'AI' || botName
+        ? `Handler AI (${botName || 'Samyoj AI'})`
+        : null;
+
+  const lastEntry = transcript?.length ? transcript[transcript.length - 1] : null;
+  const aiLikelySpeaking =
+    active &&
+    handler !== 'AGENT' &&
+    Boolean(
+      lastEntry &&
+        isAssistantRole(lastEntry.role) &&
+        Date.now() - new Date(lastEntry.at).getTime() < 8000
+    );
+
+  const statusPillClass =
+    tone === 'live'
+      ? 'bg-emerald-50 text-emerald-700 ring-emerald-200/80'
+      : tone === 'missed'
+        ? 'bg-rose-50 text-rose-700 ring-rose-200/80'
+        : tone === 'completed'
+          ? 'bg-sky-50 text-sky-700 ring-sky-200/80'
+          : 'bg-neutral-100 text-neutral-600 ring-neutral-200';
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div className="calls-detail-header flex shrink-0 items-center gap-3 border-b border-neutral-200 bg-white px-4 py-3 dark:border-neutral-800 dark:bg-neutral-950">
+      <div className="flex shrink-0 items-center gap-2.5 border-b border-neutral-200 bg-white px-3 py-3 sm:gap-3 sm:px-4 dark:border-neutral-800 dark:bg-neutral-950">
         {onBack && (
           <button
             type="button"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-neutral-200/80 bg-white text-neutral-700 shadow-input transition hover:border-violet-300/50 hover:bg-violet-50 md:hidden dark:border-neutral-700 dark:bg-neutral-900"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-neutral-200 text-neutral-700 md:hidden dark:border-neutral-700"
             onClick={onBack}
             aria-label="Back to calls"
           >
@@ -65,117 +181,196 @@ export default function CallDetailView({
         <ContactAvatar name={name || undefined} phone={phone} size="lg" active={active} />
 
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[15px] font-bold tracking-tight text-theme-fg">{displayName}</p>
-          <p className="truncate text-[12px] font-medium text-theme-muted">
-            {formatCallTime(createdAt)}
-            {durationSeconds != null && durationSeconds > 0 && (
-              <span> · {formatDuration(durationSeconds)}</span>
-            )}
-          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="truncate text-[15px] font-bold tracking-tight text-theme-fg">{displayName}</p>
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${statusPillClass}`}
+            >
+              {active && (
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                </span>
+              )}
+              {callStatusLabel(status)}
+              {active && (
+                <span className="font-semibold tabular-nums normal-case tracking-normal">
+                  · {formatDuration(liveElapsed)}
+                </span>
+              )}
+            </span>
+          </div>
+          <p className="truncate text-[12px] font-medium text-theme-muted">{formatPhoneDisplay(phone)}</p>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
-          {active && (
-            <span className="hidden items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700 ring-1 ring-emerald-200/80 sm:inline-flex">
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-60" />
-                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              </span>
-              {callStatusLabel(status)}
-            </span>
-          )}
-          {active && onEndCall && (
-            <AppButton variant="danger" size="sm" loading={ending} onClick={onEndCall}>
-              <PhoneOff className="h-4 w-4" />
-              End
+        <div className="relative flex shrink-0 items-center gap-1.5 sm:gap-2" ref={moreRef}>
+          {conversationId ? (
+            <Link to={`/inbox?conversation=${conversationId}`}>
+              <AppButton variant="secondary" size="sm">
+                <MessageSquare className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Open chat</span>
+              </AppButton>
+            </Link>
+          ) : (
+            <AppButton variant="secondary" size="sm" disabled title="No linked chat yet">
+              <MessageSquare className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Open chat</span>
             </AppButton>
+          )}
+
+          {active && onEndCall && (
+            <AppButton
+              variant="danger"
+              size="sm"
+              loading={ending}
+              onClick={onEndCall}
+              className="hidden sm:inline-flex"
+            >
+              <PhoneOff className="h-3.5 w-3.5" />
+              End call
+            </AppButton>
+          )}
+
+          <button
+            type="button"
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-neutral-200 text-neutral-500 hover:bg-neutral-50 dark:border-neutral-700"
+            aria-label="More"
+            aria-expanded={moreOpen}
+            onClick={() => setMoreOpen((v) => !v)}
+          >
+            <MoreVertical className="h-4 w-4" />
+          </button>
+          {moreOpen && (
+            <div className="absolute right-0 top-11 z-20 w-44 rounded-xl border border-neutral-200 bg-white py-1 shadow-lg dark:border-neutral-700 dark:bg-neutral-900">
+              <button
+                type="button"
+                className="block w-full px-3 py-2 text-left text-[12px] font-semibold text-neutral-700 hover:bg-neutral-50 dark:text-neutral-200"
+                onClick={() => {
+                  void navigator.clipboard?.writeText(phone);
+                  setMoreOpen(false);
+                }}
+              >
+                Copy number
+              </button>
+              {conversationId && (
+                <Link
+                  to={`/inbox?conversation=${conversationId}`}
+                  className="block px-3 py-2 text-[12px] font-semibold text-neutral-700 hover:bg-neutral-50 dark:text-neutral-200"
+                  onClick={() => setMoreOpen(false)}
+                >
+                  Open chat
+                </Link>
+              )}
+              {onNotesChange && (
+                <button
+                  type="button"
+                  className="block w-full px-3 py-2 text-left text-[12px] font-semibold text-neutral-700 hover:bg-neutral-50 dark:text-neutral-200"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    document.getElementById('call-notes')?.focus();
+                  }}
+                >
+                  Focus notes
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>
 
-      {(botName || agentName || conversationId || !active) && (
-        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-neutral-200 bg-white px-4 py-2 dark:border-neutral-800 dark:bg-neutral-950">
-          {!active && (
-            <span className="rounded-full bg-neutral-100 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-neutral-600">
-              {callStatusLabel(status)}
-            </span>
-          )}
-          {botName && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2.5 py-0.5 text-[10px] font-bold text-violet-700 ring-1 ring-violet-100">
-              <Bot className="h-3 w-3" />
-              {botName}
-            </span>
-          )}
-          {agentName && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2.5 py-0.5 text-[10px] font-bold text-sky-700 ring-1 ring-sky-100">
-              <User className="h-3 w-3" />
-              {agentName}
-            </span>
-          )}
-          {conversationId && (
-            <Link
-              to={`/inbox?conversation=${conversationId}`}
-              className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700 ring-1 ring-emerald-100 hover:bg-emerald-100"
-            >
-              <MessageSquare className="h-3 w-3" />
-              Open in inbox
-            </Link>
-          )}
+      <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-neutral-200 bg-white px-3 py-2 text-[11px] font-medium text-neutral-500 sm:px-4 dark:border-neutral-800 dark:bg-neutral-950">
+        <span className="inline-flex items-center gap-1">
+          {inbound ? <PhoneIncoming className="h-3.5 w-3.5" /> : <PhoneOutgoing className="h-3.5 w-3.5" />}
+          {inbound ? 'Inbound call' : 'Outbound call'}
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <Clock3 className="h-3.5 w-3.5" />
+          Started {formatCallTime(createdAt)}
+        </span>
+        {handlerLabel && (
+          <span className="inline-flex items-center gap-1">
+            {agentName || handler === 'AGENT' ? (
+              <User className="h-3.5 w-3.5" />
+            ) : (
+              <Bot className="h-3.5 w-3.5" />
+            )}
+            {handlerLabel}
+          </span>
+        )}
+        <span className="inline-flex items-center gap-1">
+          <Timer className="h-3.5 w-3.5" />
+          Duration {formatDuration(active ? liveElapsed : durationSeconds)}
+        </span>
+      </div>
+
+      {aiLikelySpeaking && (
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-emerald-100 bg-emerald-50/80 px-3 py-2 sm:px-4 dark:border-emerald-900/40 dark:bg-emerald-950/30">
+          <span className="inline-flex items-center gap-2 text-[12px] font-bold text-emerald-700 dark:text-emerald-300">
+            <Bot className="h-4 w-4" />
+            AI is speaking…
+          </span>
+          <Waveform />
+        </div>
+      )}
+      {active && handler !== 'AGENT' && !aiLikelySpeaking && (
+        <div className="flex shrink-0 items-center gap-2 border-b border-neutral-100 bg-neutral-50/80 px-3 py-1.5 text-[11px] font-semibold text-neutral-500 sm:px-4 dark:border-neutral-800 dark:bg-neutral-900/40">
+          <Bot className="h-3.5 w-3.5" />
+          AI on this call · listening
         </div>
       )}
 
-      <div className="inbox-chat-bg min-h-0 flex-1 overflow-y-auto">
+      <div ref={scrollRef} className="inbox-placeholder-bg min-h-0 flex-1 overflow-y-auto">
         {!transcript?.length ? (
-          <div className="flex h-full min-h-[200px] items-center justify-center p-8">
-            <div className="rounded-2xl border border-white/60 bg-white/70 px-5 py-4 text-center shadow-sm backdrop-blur-sm">
+          <div className="flex h-full min-h-[140px] items-center justify-center p-6 sm:p-8">
+            <div className="rounded-2xl border border-white/60 bg-white/80 px-5 py-4 text-center shadow-sm">
               <p className="text-[13px] font-semibold text-neutral-700">
-                {active ? 'Conversation will appear here' : 'No conversation recorded'}
+                {active
+                  ? 'Listening…'
+                  : tone === 'missed'
+                    ? 'This call wasn’t answered'
+                    : 'No speech on this call yet'}
               </p>
               <p className="mt-1 text-[12px] text-neutral-500">
                 {active
-                  ? 'Speak after the greeting — your words and AI replies show up live.'
-                  : 'Transcript appears once the call starts and someone speaks.'}
+                  ? 'Conversation appears here as you and the AI talk.'
+                  : tone === 'missed'
+                    ? 'Customer didn’t connect — notes still help your team.'
+                    : 'Transcript appears once someone speaks.'}
               </p>
             </div>
           </div>
         ) : (
-          <div className="px-4 py-4 sm:px-6 sm:py-5">
+          <div className="px-3 py-4 sm:px-5">
             <div className="mx-auto max-w-2xl space-y-3">
               {transcript.map((entry, idx) => {
                 const isCustomer = entry.role === 'user';
-                const isAssistant = entry.role === 'assistant';
-                const isSystem = entry.role === 'system';
-
                 return (
                   <div
                     key={`${entry.at}-${idx}`}
-                    className={`flex animate-fade-up ${isCustomer ? 'justify-start' : 'justify-end'}`}
-                    style={{ animationDelay: `${Math.min(idx * 40, 200)}ms` }}
+                    className={`flex animate-fade-up items-end gap-2 ${
+                      isCustomer ? 'justify-end' : 'justify-start'
+                    }`}
                   >
+                    {!isCustomer && (
+                      <span className="mb-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+                        <Bot className="h-3.5 w-3.5" />
+                      </span>
+                    )}
                     <div
-                      className={`max-w-[min(100%,320px)] rounded-2xl px-3.5 py-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.06)] ${
+                      className={`max-w-[min(100%,85vw)] rounded-2xl px-3.5 py-2.5 shadow-sm sm:max-w-[min(100%,320px)] ${
                         isCustomer
-                          ? 'rounded-tl-md bg-white/95 ring-1 ring-black/[0.04]'
-                          : isAssistant
-                            ? 'rounded-tr-md bg-gradient-to-br from-whatsapp-600 to-whatsapp-700 text-white shadow-[0_2px_12px_rgba(37,211,102,0.25)]'
-                            : isSystem
-                              ? 'rounded-tr-md bg-violet-500/90 text-white shadow-[0_2px_12px_rgba(139,92,246,0.2)]'
-                              : 'rounded-tr-md bg-neutral-500/90 text-white'
+                          ? 'rounded-br-md bg-emerald-100 text-neutral-900 dark:bg-emerald-900/40 dark:text-emerald-50'
+                          : 'rounded-bl-md border border-neutral-200/80 bg-white text-neutral-800 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100'
                       }`}
                     >
+                      <p className="text-[13px] font-medium leading-[1.45]">{entry.text}</p>
                       <p
-                        className={`mb-0.5 text-[10px] font-bold uppercase tracking-wider ${
-                          isCustomer ? 'text-neutral-400' : 'text-white/70'
+                        className={`mt-1 flex items-center justify-end gap-1 text-[10px] font-medium ${
+                          isCustomer ? 'text-emerald-700/70' : 'text-neutral-400'
                         }`}
                       >
-                        {roleLabel(entry.role)}
-                      </p>
-                      <p
-                        className={`text-[13px] leading-[1.45] ${
-                          isCustomer ? 'font-medium text-neutral-800' : 'font-medium text-white'
-                        }`}
-                      >
-                        {entry.text}
+                        {formatBubbleTime(entry.at)}
+                        {isCustomer && <CheckCheck className="h-3 w-3 text-sky-500" />}
                       </p>
                     </div>
                   </div>
@@ -185,6 +380,82 @@ export default function CallDetailView({
           </div>
         )}
       </div>
+
+      {active && onEndCall && (
+        <div className="flex shrink-0 gap-1.5 border-t border-neutral-200 bg-white px-2 py-2 sm:hidden dark:border-neutral-800 dark:bg-neutral-950">
+          <ControlBtn icon={MicOff} label="Mute" disabled tip="Available on agent softphone" />
+          <ControlBtn icon={Pause} label="Hold" disabled tip="Coming soon" />
+          <ControlBtn icon={Grid3X3} label="Keypad" disabled tip="Coming soon" />
+          <ControlBtn icon={PhoneForwarded} label="Transfer" disabled tip="Live transfer next" />
+          <button
+            type="button"
+            onClick={onEndCall}
+            disabled={ending}
+            className="flex min-h-[44px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl bg-rose-600 text-white disabled:opacity-60"
+          >
+            <PhoneOff className="h-4 w-4" />
+            <span className="text-[10px] font-bold">End call</span>
+          </button>
+        </div>
+      )}
+
+      {onNotesChange && onSaveNotes && (
+        <div className="shrink-0 border-t border-neutral-200 bg-white px-3 py-3 sm:px-4 dark:border-neutral-800 dark:bg-neutral-950">
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <p className="text-[13px] font-bold text-theme-fg">Notes</p>
+            {notesDirty && (
+              <span className="text-[10px] font-bold uppercase tracking-wide text-amber-600">Unsaved</span>
+            )}
+          </div>
+          <textarea
+            id="call-notes"
+            value={notes}
+            onChange={(e) => onNotesChange(e.target.value)}
+            rows={2}
+            placeholder="Add notes about this call..."
+            className="w-full resize-none rounded-xl border border-neutral-200 bg-neutral-50/80 px-3 py-2 text-[13px] font-medium text-theme-fg outline-none placeholder:text-neutral-400 focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100 dark:border-neutral-700 dark:bg-neutral-900"
+          />
+          <div className="mt-2 flex justify-end">
+            <AppButton size="sm" loading={savingNotes} disabled={!notesDirty && !savingNotes} onClick={onSaveNotes}>
+              Save note
+            </AppButton>
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+function ControlBtn({
+  icon: Icon,
+  label,
+  onClick,
+  disabled,
+  active,
+  tip,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  label: string;
+  onClick?: () => void;
+  disabled?: boolean;
+  active?: boolean;
+  tip?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={tip}
+      aria-pressed={active}
+      className={`flex min-h-[44px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl border text-[10px] font-bold ${
+        active
+          ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+          : 'border-neutral-200 bg-white text-neutral-600 disabled:opacity-45 dark:border-neutral-700 dark:bg-neutral-900'
+      }`}
+    >
+      <Icon className="h-4 w-4" />
+      {label}
+    </button>
   );
 }

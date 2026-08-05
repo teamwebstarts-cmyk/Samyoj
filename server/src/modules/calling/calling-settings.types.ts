@@ -1,5 +1,6 @@
 export type AfterHoursMode = 'ai' | 'message' | 'missed';
 export type CallRoutingMode = 'ai_only' | 'agents_first' | 'ai_then_agents';
+export type TransferMode = 'live' | 'message_only';
 
 export interface CallingSettings {
   aiAutoAnswer: boolean;
@@ -17,6 +18,11 @@ export interface CallingSettings {
   ttsVoice: string | null;
   ttsLanguage: string | null;
   deepgramLanguage: string | null;
+  sarvamSttLanguage: string | null;
+  sarvamTtsSpeaker: string | null;
+  sarvamMode: 'codemix' | 'transcribe';
+  liveTransferEnabled: boolean;
+  transferMode: TransferMode;
 }
 
 export const DEFAULT_CALLING_SETTINGS: CallingSettings = {
@@ -38,4 +44,9 @@ export const DEFAULT_CALLING_SETTINGS: CallingSettings = {
   ttsVoice: null,
   ttsLanguage: null,
   deepgramLanguage: null,
+  sarvamSttLanguage: null,
+  sarvamTtsSpeaker: null,
+  sarvamMode: 'codemix',
+  liveTransferEnabled: false,
+  transferMode: 'message_only',
 };

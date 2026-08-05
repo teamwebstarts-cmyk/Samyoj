@@ -17,7 +17,7 @@ export interface BotTemplate {
 export const botTemplates: BotTemplate[] = [
   {
     id: 'support',
-    name: 'Customer Support',
+    name: 'Support desk',
     description: 'Orders, refunds, shipping, and general help',
     icon: Headphones,
     accent: 'from-indigo-500/10 via-theme-surface to-violet-500/5 border-indigo-200/60 dark:border-indigo-500/25',
@@ -31,7 +31,7 @@ export const botTemplates: BotTemplate[] = [
   },
   {
     id: 'sales',
-    name: 'Sales Assistant',
+    name: 'Sales desk',
     description: 'Pricing, quotes, and product recommendations',
     icon: ShoppingBag,
     accent: 'from-emerald-500/10 via-theme-surface to-teal-500/5 border-emerald-200/60 dark:border-emerald-500/25',
@@ -45,7 +45,7 @@ export const botTemplates: BotTemplate[] = [
   },
   {
     id: 'faq',
-    name: 'FAQ Bot',
+    name: 'FAQ helper',
     description: 'Business hours, location, and common questions',
     icon: HelpCircle,
     accent: 'from-sky-500/10 via-theme-surface to-blue-500/5 border-sky-200/60 dark:border-sky-500/25',

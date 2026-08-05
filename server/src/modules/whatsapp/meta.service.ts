@@ -19,10 +19,10 @@ export interface SendMessagePayload {
     language: { code: string };
     components?: unknown[];
   };
-  image?: { link: string; caption?: string };
-  document?: { link: string; caption?: string; filename?: string };
-  video?: { link: string; caption?: string };
-  audio?: { link: string; voice?: boolean };
+  image?: { id?: string; link?: string; caption?: string };
+  document?: { id?: string; link?: string; caption?: string; filename?: string };
+  video?: { id?: string; link?: string; caption?: string };
+  audio?: { id?: string; link?: string; voice?: boolean };
   location?: {
     latitude: number;
     longitude: number;
@@ -199,6 +199,25 @@ function requireMetaCredentials(credentials?: MetaCredentials): MetaCredentials 
     return { appId: config.meta.appId, appSecret: config.meta.appSecret };
   }
   throw new Error('Meta app credentials are not configured');
+}
+
+/** Filename extension for Meta multipart upload when the caller omits one. */
+function extensionForMime(mimeType: string): string {
+  const map: Record<string, string> = {
+    'image/jpeg': '.jpg',
+    'image/png': '.png',
+    'image/webp': '.webp',
+    'image/gif': '.gif',
+    'video/mp4': '.mp4',
+    'video/3gpp': '.3gp',
+    'audio/ogg': '.ogg',
+    'audio/mpeg': '.mp3',
+    'audio/aac': '.aac',
+    'audio/amr': '.amr',
+    'application/pdf': '.pdf',
+    'text/plain': '.txt',
+  };
+  return map[mimeType.split(';')[0].trim().toLowerCase()] || '';
 }
 
 export class MetaWhatsAppService {
@@ -760,6 +779,43 @@ export class MetaWhatsAppService {
     accessToken: string
   ): Promise<{ url: string; mime_type?: string; file_size?: number }> {
     return this.graphGet(`/${mediaId}`, accessToken);
+  }
+
+  /**
+   * Upload media to Meta Cloud API (POST /PHONE_NUMBER_ID/media).
+   * Meta recommends sending messages with the returned `id` instead of a public `link`
+   * for better delivery performance and reliability.
+   * @see https://developers.facebook.com/docs/whatsapp/cloud-api/reference/media/
+   */
+  static async uploadMedia(options: {
+    phoneNumberId: string;
+    accessToken: string;
+    buffer: Buffer;
+    mimeType: string;
+    filename?: string;
+  }): Promise<string> {
+    const mime = options.mimeType.split(';')[0].trim() || 'application/octet-stream';
+    const filename = options.filename?.trim() || `file${extensionForMime(mime)}`;
+    const form = new FormData();
+    form.append('messaging_product', 'whatsapp');
+    form.append('type', mime);
+    form.append('file', new Blob([new Uint8Array(options.buffer)], { type: mime }), filename);
+
+    const res = await fetch(`${META_BASE}/${options.phoneNumberId}/media`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${options.accessToken}` },
+      body: form,
+    });
+
+    const body = (await res.json()) as { id?: string } & GraphError;
+    if (!res.ok || !body.id) {
+      throw new MetaApiError(body.error?.message || 'Failed to upload media to Meta', {
+        metaCode: body.error?.code,
+        metaSubcode: body.error?.error_subcode,
+        fbtraceId: body.error?.fbtrace_id,
+      });
+    }
+    return body.id;
   }
 
   static async downloadMedia(mediaId: string, accessToken: string): Promise<Buffer> {

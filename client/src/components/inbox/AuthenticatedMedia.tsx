@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FileText, Loader2, Play } from 'lucide-react';
 import api from '../../services/api';
+import { resolveWaDocumentKind, waDocumentBadge, waDocumentTone } from './waDocumentChrome';
 
 /**
  * Session-level media URL cache. Prefers the cacheable URL from
@@ -74,6 +75,37 @@ export function evictMediaUrl(messageId: string) {
 }
 
 const MAX_MEDIA_RETRIES = 1;
+
+/**
+ * Soft fade-in after decode. Tracks reveal per-URL so a reset effect cannot
+ * wipe a successful cached load (common with signed media URLs).
+ */
+function useMediaReveal(url: string | null) {
+  const [revealedUrl, setRevealedUrl] = useState<string | null>(null);
+  const revealed = Boolean(url && revealedUrl === url);
+
+  const markRevealed = useCallback(() => {
+    if (url) setRevealedUrl(url);
+  }, [url]);
+
+  const bindImg = useCallback(
+    (el: HTMLImageElement | null) => {
+      if (!el || !url) return;
+      if (el.complete && el.naturalWidth > 0) setRevealedUrl(url);
+    },
+    [url]
+  );
+
+  const bindVideo = useCallback(
+    (el: HTMLVideoElement | null) => {
+      if (!el || !url) return;
+      if (el.readyState >= 2) setRevealedUrl(url);
+    },
+    [url]
+  );
+
+  return { revealed, markRevealed, bindImg, bindVideo };
+}
 
 function useAuthenticatedMediaUrl(messageId: string | undefined) {
   const [url, setUrl] = useState<string | null>(null);
@@ -182,12 +214,20 @@ function MediaError({ label, onRetry }: { label: string; onRetry: () => void }) 
   );
 }
 
-/** Fixed footprint so loading → loaded never jumps the thread. */
+/**
+ * Photo/video footprint. Prefer in-flow media (not only absolute children):
+ * shrink-wrapped WhatsApp bubbles + `width: min(100%, …)` + absolute-only kids
+ * collapse to ~8×8 (the “tiny View dot” bug). Stickers keep a fixed square.
+ */
 const VISUAL_SHELL =
-  'relative w-full overflow-hidden rounded-[6px] bg-[#f0f2f5] dark:bg-neutral-800';
-const VISUAL_SHELL_STYLE = { aspectRatio: '2 / 1', maxHeight: 288 } as const;
+  'relative block w-[280px] max-w-full min-w-[200px] shrink-0 overflow-hidden rounded-[6px] bg-[#f0f2f5] dark:bg-neutral-800';
+const VISUAL_SHELL_STYLE = {
+  aspectRatio: '4 / 3',
+  maxHeight: 320,
+  minHeight: 150,
+} as const;
 const STICKER_SHELL =
-  'relative flex h-32 w-32 shrink-0 items-center justify-center overflow-hidden rounded-[8px] bg-transparent';
+  'relative flex h-32 w-32 shrink-0 items-center justify-center overflow-visible rounded-[8px] bg-transparent';
 
 interface AuthenticatedImageProps {
   messageId: string;
@@ -206,6 +246,7 @@ export function AuthenticatedImage({
   variant = 'image',
 }: AuthenticatedImageProps) {
   const { url, loading, error, retry, failSoft } = useAuthenticatedMediaUrl(messageId);
+  const { revealed, markRevealed, bindImg } = useMediaReveal(url);
   const isSticker = variant === 'sticker';
 
   if (isSticker) {
@@ -219,12 +260,16 @@ export function AuthenticatedImage({
         )}
         {url && !error && (
           <img
+            ref={bindImg}
             src={url}
             alt={alt}
-            className="max-h-32 max-w-32 object-contain"
+            className={`max-h-32 max-w-32 object-contain transition-opacity duration-200 ease-out motion-reduce:transition-none ${
+              revealed ? 'opacity-100' : 'opacity-0'
+            }`}
             // Stickers are small — eager avoids “forever spinner” in virtualized lists.
             loading="eager"
             decoding="async"
+            onLoad={markRevealed}
             onError={failSoft}
           />
         )}
@@ -234,29 +279,34 @@ export function AuthenticatedImage({
 
   return (
     <div className={`${VISUAL_SHELL} ${className}`} style={VISUAL_SHELL_STYLE}>
-      {loading && !url && (
-        <div className="absolute inset-0 flex items-center justify-center">
+      {(loading && !url) || (url && !revealed && !error) ? (
+        <div className="absolute inset-0 z-[1] flex items-center justify-center">
           <Loader2 className="h-5 w-5 animate-spin text-chat-tick" />
         </div>
-      )}
+      ) : null}
       {error && !url && <MediaError label="Image unavailable" onRetry={retry} />}
       {url && !error && (
         <button
           type="button"
           onClick={() => onClick?.(url)}
-          className={`absolute inset-0 block ${onClick ? 'cursor-zoom-in' : 'cursor-default'}`}
+          className={`relative block h-full w-full ${onClick ? 'cursor-zoom-in' : 'cursor-default'}`}
+          aria-label={alt}
         >
           <img
+            ref={bindImg}
             src={url}
             alt={alt}
-            className="h-full w-full object-cover"
+            className={`block h-full w-full object-cover transition-opacity duration-200 ease-out motion-reduce:transition-none ${
+              revealed ? 'opacity-100' : 'opacity-0'
+            }`}
             loading="lazy"
             decoding="async"
+            onLoad={markRevealed}
             onError={failSoft}
           />
           {onClick && (
-            <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 transition group-hover:bg-black/10">
-              <span className="rounded-full bg-black/50 px-2 py-1 text-[10px] font-medium text-white opacity-0 transition group-hover:opacity-100">
+            <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition group-hover/bubble:bg-black/10 group-hover/bubble:opacity-100">
+              <span className="rounded-full bg-black/50 px-2 py-1 text-[10px] font-medium text-white">
                 View
               </span>
             </span>
@@ -285,6 +335,7 @@ export function AuthenticatedVideo({
   variant = 'video',
 }: AuthenticatedVideoProps) {
   const { url, loading, error, retry, failSoft } = useAuthenticatedMediaUrl(messageId);
+  const { revealed, markRevealed, bindVideo } = useMediaReveal(url);
   const isGif = variant === 'gif';
 
   return (
@@ -292,13 +343,13 @@ export function AuthenticatedVideo({
       className={`${VISUAL_SHELL} ${isGif ? '' : 'bg-black dark:bg-black'} ${className}`}
       style={VISUAL_SHELL_STYLE}
     >
-      {loading && !url && (
+      {(loading && !url) || (url && !revealed && !error) ? (
         <div className="absolute inset-0 flex items-center justify-center">
           <Loader2
             className={`h-5 w-5 animate-spin ${isGif ? 'text-chat-tick' : 'text-white/70'}`}
           />
         </div>
-      )}
+      ) : null}
 
       {error && !url && (
         <MediaError label={isGif ? 'GIF unavailable' : 'Video unavailable'} onRetry={retry} />
@@ -312,13 +363,17 @@ export function AuthenticatedVideo({
           aria-label="Animated GIF"
         >
           <video
+            ref={bindVideo}
             src={url}
-            className="h-full w-full object-contain"
+            className={`h-full w-full object-contain transition-opacity duration-200 ease-out motion-reduce:transition-none ${
+              revealed ? 'opacity-100' : 'opacity-0'
+            }`}
             autoPlay
             muted
             loop
             playsInline
             preload="auto"
+            onLoadedData={markRevealed}
             onError={failSoft}
           />
           {onClick && (
@@ -337,11 +392,15 @@ export function AuthenticatedVideo({
           aria-label="Play video"
         >
           <video
+            ref={bindVideo}
             src={url}
-            className="h-full w-full object-cover"
+            className={`h-full w-full object-cover transition-opacity duration-200 ease-out motion-reduce:transition-none ${
+              revealed ? 'opacity-100' : 'opacity-0'
+            }`}
             preload="metadata"
             muted
             playsInline
+            onLoadedData={markRevealed}
             onError={failSoft}
           />
           <span className="absolute inset-0 flex items-center justify-center bg-gradient-to-t from-black/20 via-transparent to-transparent">
@@ -354,11 +413,15 @@ export function AuthenticatedVideo({
 
       {url && !error && !isGif && !onClick && (
         <video
+          ref={bindVideo}
           src={url}
           controls
-          className="absolute inset-0 h-full w-full bg-black object-contain"
+          className={`absolute inset-0 h-full w-full bg-black object-contain transition-opacity duration-200 ease-out motion-reduce:transition-none ${
+            revealed ? 'opacity-100' : 'opacity-0'
+          }`}
           preload="metadata"
           playsInline
+          onLoadedData={markRevealed}
           onError={failSoft}
         >
           <track kind="captions" />
@@ -402,6 +465,7 @@ export function AuthenticatedAudio({ messageId, className = '' }: AuthenticatedA
 interface AuthenticatedDocumentProps {
   messageId: string;
   filename?: string;
+  mimeType?: string;
   sizeLabel?: string;
   className?: string;
   onClick?: (url: string) => void;
@@ -413,10 +477,11 @@ export function AuthenticatedDocument({
   sizeLabel,
   className = '',
   onClick,
+  mimeType,
 }: AuthenticatedDocumentProps) {
   const { url, loading, error, retry } = useAuthenticatedMediaUrl(messageId);
-  const isPdf = /\.pdf$/i.test(filename || '') || /pdf/i.test(filename || '');
-  const ext = (filename?.split('.').pop() || 'FILE').toUpperCase().slice(0, 4);
+  const kind = resolveWaDocumentKind(filename, mimeType);
+  const badge = waDocumentBadge(kind, filename);
 
   const handleOpen = () => {
     if (!url) return;
@@ -435,11 +500,7 @@ export function AuthenticatedDocument({
       className={`flex w-full items-center gap-3 rounded-lg bg-[#f0f2f5]/80 px-3 py-2.5 text-left transition hover:bg-[#e9edef] disabled:cursor-not-allowed dark:bg-neutral-800/70 dark:hover:bg-neutral-800 ${className}`}
     >
       <div
-        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg shadow-sm ${
-          isPdf
-            ? 'bg-red-50 text-red-600 dark:bg-red-950/50 dark:text-red-300'
-            : 'bg-chat-bubble-received text-chat-accent'
-        }`}
+        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg shadow-sm ${waDocumentTone(kind)}`}
       >
         {loading && !url ? (
           <Loader2 className="h-4 w-4 animate-spin" />
@@ -456,7 +517,7 @@ export function AuthenticatedDocument({
             ? 'Loading...'
             : error
               ? 'Unavailable — tap to retry'
-              : [sizeLabel, isPdf ? 'PDF' : ext].filter(Boolean).join(' · ') || 'Tap to view'}
+              : [sizeLabel, badge].filter(Boolean).join(' · ') || 'Tap to preview'}
         </p>
       </div>
     </button>

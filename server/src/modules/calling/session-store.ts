@@ -5,8 +5,14 @@ const log = createModuleLogger('call-session-store');
 
 const ACTIVE_PREFIX = 'call:active:';
 const PENDING_PREFIX = 'call:pending:';
+const ORG_ACTIVE_PREFIX = 'call:org:';
 const ACTIVE_TTL_SEC = 7200;
-const PENDING_TTL_SEC = 60;
+/** Default pending TTL (60s). Override per-call for ring scenarios that exceed this. */
+const DEFAULT_PENDING_TTL_SEC = 60;
+
+export function getPendingTtl(ringTimeoutSec: number = 25): number {
+  return Math.max(ringTimeoutSec + 5, DEFAULT_PENDING_TTL_SEC);
+}
 
 export interface PendingCallSignaling {
   callId: string;
@@ -65,7 +71,17 @@ export async function storePendingCall(
   payload: PendingCallSignaling
 ): Promise<void> {
   const redis = getRedis();
-  await redis.set(`${PENDING_PREFIX}${metaCallId}`, JSON.stringify(payload), 'EX', PENDING_TTL_SEC);
+  await redis.set(`${PENDING_PREFIX}${metaCallId}`, JSON.stringify(payload), 'EX', DEFAULT_PENDING_TTL_SEC);
+}
+
+export async function storePendingCallWithTtl(
+  metaCallId: string,
+  payload: PendingCallSignaling,
+  ringTimeoutSec: number
+): Promise<void> {
+  const redis = getRedis();
+  const ttl = getPendingTtl(ringTimeoutSec);
+  await redis.set(`${PENDING_PREFIX}${metaCallId}`, JSON.stringify(payload), 'EX', ttl);
 }
 
 export async function getPendingCall(metaCallId: string): Promise<PendingCallSignaling | null> {

@@ -32,7 +32,8 @@ async function streamMessageMedia(
   organizationId: string,
   messageId: string,
   metadata: MessageMediaMetadata,
-  cacheSeconds?: number
+  cacheSeconds?: number,
+  asAttachment = false
 ) {
   const { buffer, mimeType, filename } = await getMessageMediaBuffer({
     organizationId,
@@ -48,7 +49,9 @@ async function streamMessageMedia(
     res.setHeader('Cache-Control', `private, max-age=${cacheSeconds}`);
   }
   if (filename) {
-    res.setHeader('Content-Disposition', `inline; filename="${filename.replace(/"/g, '')}"`);
+    const safe = filename.replace(/"/g, '').replace(/[^\w.\- ()[\]]+/g, '_');
+    const disposition = asAttachment ? 'attachment' : 'inline';
+    res.setHeader('Content-Disposition', `${disposition}; filename="${safe}"`);
   }
   res.send(buffer);
 }
@@ -83,7 +86,8 @@ router.get(
       message.conversation.organizationId,
       message.id,
       metadata || {},
-      MEDIA_URL_TTL_SECONDS
+      MEDIA_URL_TTL_SECONDS,
+      req.query.download === '1'
     );
   })
 );
@@ -336,7 +340,14 @@ router.get(
       throw new AppError(404, 'No media attached to this message');
     }
 
-    await streamMessageMedia(res, orgId, message.id, metadata || {});
+    await streamMessageMedia(
+      res,
+      orgId,
+      message.id,
+      metadata || {},
+      undefined,
+      req.query.download === '1'
+    );
   })
 );
 
@@ -419,6 +430,8 @@ router.post(
     > & {
       mediaPath?: string;
       caption?: string;
+      mimeType?: string;
+      filename?: string;
       templateName?: string;
       templateLanguage?: string;
       templateParams?: {
@@ -465,6 +478,9 @@ router.post(
       templateLanguage: sendMetadata.templateLanguage || 'en_US',
       templateParams: sendMetadata.templateParams,
       mediaUrl,
+      mediaPath: sendMetadata.mediaPath,
+      mediaMimeType: typeof sendMetadata.mimeType === 'string' ? sendMetadata.mimeType : undefined,
+      mediaFilename: typeof sendMetadata.filename === 'string' ? sendMetadata.filename : undefined,
       mediaCaption: sendMetadata.caption,
       interactive: sendMetadata.interactive,
       contextMessageId: message.type !== 'TEMPLATE' ? sendMetadata.replyToMetaId : undefined,
@@ -705,6 +721,137 @@ router.get(
         windowOpensAt: windowOpensAt?.toISOString() ?? null,
       },
     });
+  })
+);
+
+async function purgeStoredMedia(
+  rows: Array<{ metadata: Prisma.JsonValue | null }>
+): Promise<void> {
+  const { deleteMediaObject } = await import('../media/storage-adapter');
+  await Promise.all(
+    rows.map(async (row) => {
+      const meta = row.metadata as { mediaPath?: string } | null;
+      if (meta?.mediaPath) await deleteMediaObject(meta.mediaPath);
+    })
+  );
+}
+
+async function syncConversationPreview(conversationId: string) {
+  const latest = await prisma.message.findFirst({
+    where: { conversationId },
+    orderBy: { createdAt: 'desc' },
+    select: { createdAt: true },
+  });
+  return prisma.conversation.update({
+    where: { id: conversationId },
+    data: {
+      lastMessageAt: latest?.createdAt ?? null,
+    },
+  });
+}
+
+const deleteMessagesSchema = z.object({
+  messageIds: z.array(z.string().uuid()).min(1).max(200),
+});
+
+/** Delete selected messages from a conversation (agent-side only; does not unsend on WhatsApp). */
+router.post(
+  '/:id/messages/delete',
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = paramId(req);
+    const orgId = req.user!.organizationId!;
+    const { messageIds } = deleteMessagesSchema.parse(req.body);
+
+    const conversation = await prisma.conversation.findFirst({
+      where: scopedConversationWhere(orgId, id, req.activeWhatsappNumberId),
+      select: { id: true },
+    });
+    if (!conversation) throw new AppError(404, 'Conversation not found');
+
+    const rows = await prisma.message.findMany({
+      where: { conversationId: id, id: { in: messageIds } },
+      select: { id: true, metadata: true },
+    });
+    if (rows.length === 0) {
+      sendSuccess(res, { deleted: 0, messageIds: [] as string[] });
+      return;
+    }
+
+    await purgeStoredMedia(rows);
+    await prisma.message.deleteMany({
+      where: { conversationId: id, id: { in: rows.map((r) => r.id) } },
+    });
+    await syncConversationPreview(id);
+
+    const deletedIds = rows.map((r) => r.id);
+    emitToOrg(orgId, 'messages:deleted', { conversationId: id, messageIds: deletedIds });
+    emitToOrg(orgId, 'conversation:updated', { conversationId: id });
+    sendSuccess(res, { deleted: deletedIds.length, messageIds: deletedIds });
+  })
+);
+
+/** Clear all messages in a conversation (keeps the chat + contact). */
+router.delete(
+  '/:id/messages',
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = paramId(req);
+    const orgId = req.user!.organizationId!;
+
+    const conversation = await prisma.conversation.findFirst({
+      where: scopedConversationWhere(orgId, id, req.activeWhatsappNumberId),
+      select: { id: true },
+    });
+    if (!conversation) throw new AppError(404, 'Conversation not found');
+
+    const rows = await prisma.message.findMany({
+      where: { conversationId: id },
+      select: { id: true, metadata: true },
+    });
+
+    await purgeStoredMedia(rows);
+    const result = await prisma.message.deleteMany({ where: { conversationId: id } });
+    await prisma.conversation.update({
+      where: { id },
+      data: { lastMessageAt: null, unreadCount: 0 },
+    });
+
+    emitToOrg(orgId, 'messages:cleared', { conversationId: id, deleted: result.count });
+    emitToOrg(orgId, 'conversation:updated', {
+      conversationId: id,
+      unreadCount: 0,
+      lastMessageAt: null,
+    });
+    emitToOrg(orgId, 'conversation:read', { conversationId: id, unreadCount: 0 });
+    sendSuccess(res, { deleted: result.count });
+  })
+);
+
+/** Delete a single message by id. */
+router.delete(
+  '/messages/:messageId',
+  asyncHandler(async (req: Request, res: Response) => {
+    const messageId = req.params.messageId as string;
+    const orgId = req.user!.organizationId!;
+
+    const message = await prisma.message.findFirst({
+      where: {
+        id: messageId,
+        conversation: scopedConversationParent(orgId, req.activeWhatsappNumberId),
+      },
+      select: { id: true, conversationId: true, metadata: true },
+    });
+    if (!message) throw new AppError(404, 'Message not found');
+
+    await purgeStoredMedia([message]);
+    await prisma.message.delete({ where: { id: message.id } });
+    await syncConversationPreview(message.conversationId);
+
+    emitToOrg(orgId, 'messages:deleted', {
+      conversationId: message.conversationId,
+      messageIds: [message.id],
+    });
+    emitToOrg(orgId, 'conversation:updated', { conversationId: message.conversationId });
+    sendSuccess(res, { deleted: 1, messageIds: [message.id] });
   })
 );
 
@@ -1047,7 +1194,16 @@ router.post(
         deliverType = mimeToMessageType(data.media.mimeType);
         mediaUrl = getPublicMediaUrl(relativePath);
         mediaCaption = messageContent || undefined;
-        messageContent = messageContent || data.media.filename || '';
+        // Never store the upload filename as message body — it shows as a fake caption.
+        messageContent =
+          messageContent ||
+          (deliverType === 'IMAGE'
+            ? '[image]'
+            : deliverType === 'VIDEO'
+              ? '[video]'
+              : deliverType === 'AUDIO'
+                ? '[audio]'
+                : data.media.filename || '[document]');
         const buffer = await fetchMediaBuffer(relativePath);
         messageMetadata = {
           mimeType: data.media.mimeType,
@@ -1081,7 +1237,15 @@ router.post(
         deliverType = stored.messageType;
         mediaUrl = stored.publicUrl;
         mediaCaption = messageContent || undefined;
-        messageContent = messageContent || data.media.filename || '';
+        messageContent =
+          messageContent ||
+          (deliverType === 'IMAGE'
+            ? '[image]'
+            : deliverType === 'VIDEO'
+              ? '[video]'
+              : deliverType === 'AUDIO'
+                ? '[audio]'
+                : data.media.filename || '[document]');
         messageMetadata = {
           mimeType: stored.mimeType,
           filename: data.media.filename,
@@ -1188,6 +1352,18 @@ router.post(
       templateLanguage: data.templateLanguage || 'en_US',
       templateParams: data.templateParams,
       mediaUrl,
+      mediaPath:
+        typeof (messageMetadata as { mediaPath?: string } | undefined)?.mediaPath === 'string'
+          ? (messageMetadata as { mediaPath: string }).mediaPath
+          : undefined,
+      mediaMimeType:
+        typeof (messageMetadata as { mimeType?: string } | undefined)?.mimeType === 'string'
+          ? (messageMetadata as { mimeType: string }).mimeType
+          : undefined,
+      mediaFilename:
+        typeof (messageMetadata as { filename?: string } | undefined)?.filename === 'string'
+          ? (messageMetadata as { filename: string }).filename
+          : undefined,
       mediaCaption,
       interactive: interactiveOpts,
       voiceNote: Boolean(

@@ -19,6 +19,7 @@ import {
   registerActiveCall,
   removePendingCall,
   storePendingCall,
+  storePendingCallWithTtl,
   unregisterActiveCall,
 } from './session-store';
 import type { CallWebhookEntry } from './types';
@@ -188,7 +189,7 @@ async function ringAgentsForCall(params: {
   botId: string;
   settings: Awaited<ReturnType<typeof getOrgCallingSettings>>;
 }): Promise<void> {
-  await storePendingCall(params.callRecord.metaCallId, {
+  await storePendingCallWithTtl(params.callRecord.metaCallId, {
     callId: params.callRecord.id,
     metaCallId: params.callRecord.metaCallId,
     organizationId: params.orgId,
@@ -201,7 +202,7 @@ async function ringAgentsForCall(params: {
     direction: params.direction as 'USER_INITIATED' | 'BUSINESS_INITIATED',
     sdpOffer: params.sdpOffer,
     createdAt: new Date().toISOString(),
-  });
+  }, params.timeoutSec);
 
   await prisma.call.update({
     where: { id: params.callRecord.id },
@@ -603,3 +604,106 @@ export async function processWebhookFields(payload: Record<string, unknown>): Pr
 }
 
 export { clearRingTimeout };
+
+/**
+ * Cold live transfer — ring agents on the same Meta call (keep bridge alive).
+ * Called after AI handoff when live transfer is enabled in settings.
+ */
+export async function handleLiveTransfer(params: {
+  orgId: string;
+  callRecord: { id: string; metaCallId: string };
+  conversation: { id: string };
+  contact: { id: string; name?: string | null };
+  phoneNumberId: string;
+  accessToken: string;
+  fromPhone: string;
+  toPhone: string;
+  direction: string;
+  reason: string;
+  transcriptSummary: string;
+  botId: string;
+  ttsVoice?: string;
+  ttsLanguage?: string;
+  preferTeam?: string;
+}): Promise<void> {
+  const { getEligibleAgents } = await import('../team/assignment');
+  const agents = await getEligibleAgents(params.orgId);
+  const onlineAgents = agents.filter((a) => a.availability === 'ONLINE');
+
+  if (onlineAgents.length === 0) {
+    // No agents online — resume AI or fall back to message
+    log.info('Live transfer skipped — no online agents', {
+      callId: params.callRecord.id,
+      reason: params.reason,
+    });
+    return;
+  }
+
+  const settings = await getOrgCallingSettings(params.orgId);
+  const agentIds = onlineAgents.map((a) => a.userId);
+
+  await storePendingCall(params.callRecord.metaCallId, {
+    callId: params.callRecord.id,
+    metaCallId: params.callRecord.metaCallId,
+    organizationId: params.orgId,
+    conversationId: params.conversation.id,
+    contactId: params.contact.id,
+    phoneNumberId: params.phoneNumberId,
+    accessToken: params.accessToken,
+    fromPhone: params.fromPhone,
+    toPhone: params.toPhone,
+    direction: params.direction as 'USER_INITIATED' | 'BUSINESS_INITIATED',
+    sdpOffer: '', // bridge already has the SDP; offer not needed for accept on live transfer
+    createdAt: new Date().toISOString(),
+  });
+
+  const ringPayload = {
+    callId: params.callRecord.id,
+    metaCallId: params.callRecord.metaCallId,
+    fromPhone: params.fromPhone,
+    contactName: params.contact.name,
+    conversationId: params.conversation.id,
+    timeoutSec: settings.agentRingTimeoutSec,
+    agentIds,
+    reason: params.reason,
+    transcriptSummary: params.transcriptSummary,
+    isLiveTransfer: true,
+  };
+
+  emitToOrg(params.orgId, 'call:ring', ringPayload);
+  emitToUsers(agentIds, 'call:ring', ringPayload);
+
+  clearRingTimeout(params.callRecord.metaCallId);
+
+  const timer = setTimeout(() => {
+    void (async () => {
+      ringTimeouts.delete(params.callRecord.metaCallId);
+      const current = await prisma.call.findUnique({ where: { id: params.callRecord.id } });
+      if (!current || current.status !== 'RINGING') return;
+
+      await removePendingCall(params.callRecord.metaCallId);
+
+      // Live transfer timed out — the AI session already ended, just mark as missed
+      await markCallMissed(
+        params.orgId,
+        params.callRecord.id,
+        params.conversation.id,
+        params.contact.id,
+        'live_transfer_timeout'
+      );
+    })().catch((err) => {
+      log.error('Live transfer timeout handler failed', {
+        callId: params.callRecord.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
+  }, settings.agentRingTimeoutSec * 1000);
+
+  ringTimeouts.set(params.callRecord.metaCallId, timer);
+
+  log.info('Live transfer initiated — ringing agents', {
+    callId: params.callRecord.id,
+    agentCount: agentIds.length,
+    reason: params.reason,
+  });
+}

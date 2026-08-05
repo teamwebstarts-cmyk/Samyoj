@@ -1,4 +1,5 @@
 import type { MessageMediaMetadata } from '../media/download.service';
+import { describeUnsupportedType } from './unsupported-message';
 
 export interface ParsedInboundMessage {
   content: string;
@@ -9,14 +10,46 @@ export interface ParsedInboundMessage {
   referral?: Record<string, unknown>;
   orderPayload?: {
     catalogId: string;
-    productItems: Array<{ product_retailer_id: string; quantity: number; item_price?: number; currency?: string }>;
+    productItems: Array<{
+      product_retailer_id: string;
+      quantity: number;
+      item_price?: number;
+      currency?: string;
+    }>;
     text?: string;
   };
-  metadata?: MessageMediaMetadata & { isSticker?: boolean };
+  location?: { latitude: number; longitude: number; name?: string; address?: string };
+  contacts?: Array<{ name: string; phone: string; email?: string }>;
+  metadata?: MessageMediaMetadata & {
+    isSticker?: boolean;
+    isUnsupported?: boolean;
+    unsupportedType?: string;
+    metaErrorCode?: number;
+    metaErrorTitle?: string;
+  };
 }
 
 function parseInboundContent(msg: Record<string, unknown>): ParsedInboundMessage {
   const msgType = (msg.type as string | undefined)?.toLowerCase() || 'text';
+
+  if (msgType === 'unsupported') {
+    const unsupported = msg.unsupported as { type?: string } | undefined;
+    const errors = msg.errors as
+      | Array<{ code?: number; title?: string; message?: string; error_data?: { details?: string } }>
+      | undefined;
+    const firstErr = errors?.[0];
+    const unsupportedType = unsupported?.type || undefined;
+    const described = describeUnsupportedType(unsupportedType);
+    return {
+      content: described.content,
+      metadata: {
+        isUnsupported: true,
+        unsupportedType: unsupportedType || 'unknown',
+        metaErrorCode: firstErr?.code,
+        metaErrorTitle: firstErr?.title || firstErr?.message,
+      },
+    };
+  }
 
   if (msgType === 'reaction') {
     const reaction = msg.reaction as { message_id?: string; emoji?: string } | undefined;
@@ -45,6 +78,59 @@ function parseInboundContent(msg: Record<string, unknown>): ParsedInboundMessage
     };
   }
 
+  if (msgType === 'location') {
+    const location = msg.location as
+      | { latitude?: number; longitude?: number; name?: string; address?: string }
+      | undefined;
+    if (
+      typeof location?.latitude === 'number' &&
+      typeof location?.longitude === 'number' &&
+      Number.isFinite(location.latitude) &&
+      Number.isFinite(location.longitude)
+    ) {
+      const label = location.name || location.address || 'Shared location';
+      return {
+        content: label,
+        location: {
+          latitude: location.latitude,
+          longitude: location.longitude,
+          name: location.name,
+          address: location.address,
+        },
+        metadata: {
+          location: {
+            latitude: location.latitude,
+            longitude: location.longitude,
+            name: location.name,
+            address: location.address,
+          },
+        } as ParsedInboundMessage['metadata'],
+      };
+    }
+  }
+
+  if (msgType === 'contacts') {
+    const raw = (msg.contacts as Array<Record<string, unknown>> | undefined) || [];
+    const contacts = raw
+      .map((c) => {
+        const nameObj = c.name as { formatted_name?: string; first_name?: string } | undefined;
+        const phones = c.phones as Array<{ phone?: string; wa_id?: string }> | undefined;
+        const emails = c.emails as Array<{ email?: string }> | undefined;
+        const name = nameObj?.formatted_name || nameObj?.first_name || 'Contact';
+        const phone = phones?.[0]?.phone || phones?.[0]?.wa_id || '';
+        const email = emails?.[0]?.email;
+        return { name, phone, ...(email ? { email } : {}) };
+      })
+      .filter((c) => c.name);
+    if (contacts.length) {
+      return {
+        content: contacts.map((c) => c.name).join(', '),
+        contacts,
+        metadata: { contacts } as ParsedInboundMessage['metadata'],
+      };
+    }
+  }
+
   if (msgType === 'interactive') {
     const interactive = msg.interactive as
       | {
@@ -58,7 +144,10 @@ function parseInboundContent(msg: Record<string, unknown>): ParsedInboundMessage
     if (interactive?.type === 'nfm_reply' && interactive.nfm_reply) {
       let waFlowResponse: Record<string, unknown> = {};
       try {
-        waFlowResponse = JSON.parse(interactive.nfm_reply.response_json || '{}') as Record<string, unknown>;
+        waFlowResponse = JSON.parse(interactive.nfm_reply.response_json || '{}') as Record<
+          string,
+          unknown
+        >;
       } catch {
         waFlowResponse = {};
       }
@@ -88,6 +177,14 @@ function parseInboundContent(msg: Record<string, unknown>): ParsedInboundMessage
         buttonReplyId: interactive.list_reply.id,
       };
     }
+
+    return {
+      content: 'Interactive message',
+      metadata: {
+        isUnsupported: true,
+        unsupportedType: interactive?.type || 'interactive',
+      },
+    };
   }
 
   if (msgType === 'order') {
@@ -132,10 +229,21 @@ function parseInboundContent(msg: Record<string, unknown>): ParsedInboundMessage
 
     const caption = media?.caption?.trim() || '';
     const filename = media?.filename?.trim();
-    const content = caption || filename || '';
+    // Prefer real caption; never put the filename in content (Inbox would show it under the media).
+    const content =
+      caption ||
+      (msgType === 'sticker'
+        ? '[sticker]'
+        : msgType === 'image'
+          ? '[image]'
+          : msgType === 'video'
+            ? '[video]'
+            : msgType === 'audio'
+              ? '[audio]'
+              : filename || '[document]');
 
     if (!media?.id) {
-      return { content: content || `[${msgType}]` };
+      return { content: content || `${msgType} (unavailable)` };
     }
 
     return {
@@ -154,7 +262,14 @@ function parseInboundContent(msg: Record<string, unknown>): ParsedInboundMessage
     };
   }
 
-  return { content: `[${msgType}]` };
+  const described = describeUnsupportedType(msgType);
+  return {
+    content: described.content,
+    metadata: {
+      isUnsupported: true,
+      unsupportedType: msgType,
+    },
+  };
 }
 
 export function parseInboundMessage(msg: Record<string, unknown>): ParsedInboundMessage {

@@ -2,7 +2,9 @@ import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 're
 import {
   Activity,
   BarChart3,
+  CheckSquare,
   Download,
+  Eraser,
   Hash,
   Plus,
   StickyNote,
@@ -83,6 +85,8 @@ interface InboxDetailsPanelProps {
   onConvertToTicket: () => void;
   onExport: () => void;
   onCreateCampaign: () => void;
+  onClearChat?: () => void;
+  onSelectMessages?: () => void;
   /** Controlled docked panel open (≥ md). */
   panelOpen: boolean;
   onPanelOpenChange: (open: boolean) => void;
@@ -176,6 +180,8 @@ export default function InboxDetailsPanel({
   onConvertToTicket,
   onExport,
   onCreateCampaign,
+  onClearChat,
+  onSelectMessages,
   panelOpen,
   onPanelOpenChange,
   focusSection,
@@ -518,6 +524,28 @@ export default function InboxDetailsPanel({
       >
         <Download className="h-4 w-4" strokeWidth={iconStroke} />
       </button>
+      {onSelectMessages && (
+        <button
+          type="button"
+          aria-label="Select messages"
+          onClick={onSelectMessages}
+          className={`${btn} text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40`}
+          {...tipFor('Select messages', opts.tipSide)}
+        >
+          <CheckSquare className="h-4 w-4" strokeWidth={iconStroke} />
+        </button>
+      )}
+      {onClearChat && (
+        <button
+          type="button"
+          aria-label="Clear chat"
+          onClick={onClearChat}
+          className={`${btn} text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40`}
+          {...tipFor('Clear chat', opts.tipSide)}
+        >
+          <Eraser className="h-4 w-4" strokeWidth={iconStroke} />
+        </button>
+      )}
       <button
         type="button"
         aria-label="Create campaign"

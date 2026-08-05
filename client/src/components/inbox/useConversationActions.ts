@@ -1,7 +1,7 @@
 import { useState, type Dispatch, type SetStateAction } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { callingApi, inboxApi } from '../../services/api';
-import { toastError, toastInbox } from '../../utils/toast';
+import { toastError, toastInbox, toastSuccess } from '../../utils/toast';
 import { emitChatNotice } from './chatNoticeBus';
 import type { Conversation } from '../../types';
 
@@ -143,6 +143,31 @@ export function useConversationActions({
     if (!selected) return;
     setCallingBack(true);
     try {
+      // Meta requires per-user call permission before outbound (BIC).
+      try {
+        const { data: permRes } = await callingApi.permission(selected.contact.id);
+        const perm = permRes.data as {
+          granted?: boolean;
+          canRequest?: boolean;
+          callingEnabled?: boolean;
+        };
+        if (perm.callingEnabled === false) {
+          toastError('Enable WhatsApp calling in Calls setup before placing outbound calls.');
+          return;
+        }
+        if (!perm.granted) {
+          if (perm.canRequest !== false) {
+            await callingApi.requestPermission(selected.contact.id);
+            toastSuccess('Ask-to-call sent. Call again after the customer allows WhatsApp calls.');
+          } else {
+            toastError('Cannot request call permission right now (Meta limit). Try again later.');
+          }
+          return;
+        }
+      } catch {
+        // If permission check fails, still attempt — backend also enforces
+      }
+
       const { data } = await callingApi.callback({
         contactId: selected.contact.id,
         conversationId: selected.id,
@@ -151,6 +176,17 @@ export function useConversationActions({
       const callId = (data.data as { call?: { id: string } })?.call?.id;
       if (callId) navigate(`/calls/${callId}`);
     } catch (err: unknown) {
+      const body = (err as { response?: { data?: { error?: { code?: string; message?: string } } } })
+        ?.response?.data?.error;
+      if (body?.code === 'CALL_PERMISSION_REQUIRED') {
+        try {
+          await callingApi.requestPermission(selected.contact.id);
+          toastSuccess('Ask-to-call sent. Call again after the customer allows WhatsApp calls.');
+          return;
+        } catch {
+          /* fall through */
+        }
+      }
       toastError(extractError(err, 'Could not start call.'));
     } finally {
       setCallingBack(false);

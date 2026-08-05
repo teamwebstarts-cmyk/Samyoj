@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ChevronDown,
   FileText,
@@ -6,6 +7,8 @@ import {
   IndianRupee,
   Mic,
   Paperclip,
+  Pause,
+  Play,
   SendHorizontal,
   Smile,
   Sparkles,
@@ -31,6 +34,78 @@ const COMMON_EMOJIS = [
   '👍', '👎', '👏', '🙏', '🔥', '✨', '🎉', '❤️', '💯', '✅',
   '😢', '😭', '😮', '😴', '🤝', '💪', '🙌', '⭐', '📌', '📎',
 ];
+
+/** Portaled popover so menus aren't clipped by overflow-x-auto / backdrop-blur ancestors. */
+function ComposerPortalMenu({
+  open,
+  anchorRef,
+  align = 'left',
+  widthClass,
+  onClose,
+  children,
+}: {
+  open: boolean;
+  anchorRef: RefObject<HTMLElement | null>;
+  align?: 'left' | 'right';
+  widthClass: string;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setCoords(null);
+      return;
+    }
+    const el = anchorRef.current;
+    if (!el) return;
+    const place = () => {
+      const r = el.getBoundingClientRect();
+      const gap = 8;
+      const left = align === 'right' ? r.right : r.left;
+      setCoords({ top: r.top - gap, left });
+    };
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [open, anchorRef, align]);
+
+  if (!open || typeof document === 'undefined') return null;
+
+  return createPortal(
+    <>
+      <div
+        className="fixed inset-0 z-[180]"
+        aria-hidden
+        onMouseDown={(e) => {
+          e.preventDefault();
+          onClose();
+        }}
+      />
+      <div
+        role="menu"
+        className={`fixed z-[190] ${widthClass} -translate-y-full overflow-hidden rounded-xl border border-theme-border bg-theme-surface py-1 shadow-panel ${
+          align === 'right' ? '-translate-x-full' : ''
+        }`}
+        style={{
+          top: coords?.top ?? 0,
+          left: coords?.left ?? 0,
+          visibility: coords ? 'visible' : 'hidden',
+        }}
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {children}
+      </div>
+    </>,
+    document.body
+  );
+}
 
 interface ChatComposerProps {
   value: string;
@@ -111,6 +186,9 @@ export default function ChatComposer({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const localTextareaRef = useRef<HTMLTextAreaElement>(null);
   const textareaRef = inputRef ?? localTextareaRef;
+  const attachBtnRef = useRef<HTMLButtonElement>(null);
+  const emojiBtnRef = useRef<HTMLButtonElement>(null);
+  const sendMenuBtnRef = useRef<HTMLButtonElement>(null);
   const [attachMenuOpen, setAttachMenuOpen] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [sendMenuOpen, setSendMenuOpen] = useState(false);
@@ -118,15 +196,71 @@ export default function ChatComposer({
   const [shortcutIndex, setShortcutIndex] = useState(0);
   const [recording, setRecording] = useState(false);
   const [recordSecs, setRecordSecs] = useState(0);
+  const [levels, setLevels] = useState<number[]>(() => Array.from({ length: 28 }, () => 0.12));
+  const [previewPlaying, setPreviewPlaying] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordChunksRef = useRef<Blob[]>([]);
   const recordTimerRef = useRef<number | null>(null);
   const recordSecsRef = useRef(0);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const levelRafRef = useRef<number | null>(null);
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const canRecord =
     typeof window !== 'undefined' &&
     typeof MediaRecorder !== 'undefined' &&
     !!navigator.mediaDevices?.getUserMedia;
   const canSend = Boolean(value.trim() || attachment);
+  const isVoiceAttachment =
+    attachment?.type === 'AUDIO' &&
+    (attachment.file.name.startsWith('voice-note-') || attachment.file.type.startsWith('audio/'));
+
+  const stopLevelMeter = () => {
+    if (levelRafRef.current) {
+      cancelAnimationFrame(levelRafRef.current);
+      levelRafRef.current = null;
+    }
+    analyserRef.current = null;
+    if (audioCtxRef.current) {
+      void audioCtxRef.current.close().catch(() => undefined);
+      audioCtxRef.current = null;
+    }
+    setLevels(Array.from({ length: 28 }, () => 0.12));
+  };
+
+  const startLevelMeter = (stream: MediaStream) => {
+    stopLevelMeter();
+    try {
+      const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!Ctx) return;
+      const ctx = new Ctx();
+      const source = ctx.createMediaStreamSource(stream);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 64;
+      analyser.smoothingTimeConstant = 0.75;
+      source.connect(analyser);
+      audioCtxRef.current = ctx;
+      analyserRef.current = analyser;
+      const data = new Uint8Array(analyser.frequencyBinCount);
+
+      const tick = () => {
+        const node = analyserRef.current;
+        if (!node) return;
+        node.getByteFrequencyData(data);
+        const next: number[] = [];
+        const step = Math.max(1, Math.floor(data.length / 28));
+        for (let i = 0; i < 28; i += 1) {
+          const v = data[Math.min(data.length - 1, i * step)] / 255;
+          next.push(0.1 + v * 0.9);
+        }
+        setLevels(next);
+        levelRafRef.current = requestAnimationFrame(tick);
+      };
+      levelRafRef.current = requestAnimationFrame(tick);
+    } catch {
+      /* analyser optional */
+    }
+  };
 
   useEffect(() => {
     const el = textareaRef.current;
@@ -171,25 +305,18 @@ export default function ChatComposer({
   useEffect(
     () => () => {
       if (recordTimerRef.current) window.clearInterval(recordTimerRef.current);
+      stopLevelMeter();
       mediaRecorderRef.current?.stop();
+      previewAudioRef.current?.pause();
     },
     []
   );
 
-  // Esc closes popovers from anywhere in the composer.
   useEffect(() => {
-    if (!attachMenuOpen && !emojiOpen && !slashMenuOpen && !sendMenuOpen) return;
-    const onKey = (e: globalThis.KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      if (shortcutMatch) {
-        onChange('');
-        setShortcutIndex(0);
-      }
-      closeAllMenus([setAttachMenuOpen, setEmojiOpen, setSendMenuOpen]);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [attachMenuOpen, emojiOpen, slashMenuOpen, sendMenuOpen, shortcutMatch, onChange]);
+    setPreviewPlaying(false);
+    previewAudioRef.current?.pause();
+    if (previewAudioRef.current) previewAudioRef.current.currentTime = 0;
+  }, [attachment?.previewUrl, attachment?.file.name]);
 
   const stopRecording = (cancel = false) => {
     const recorder = mediaRecorderRef.current;
@@ -199,6 +326,7 @@ export default function ChatComposer({
         window.clearInterval(recordTimerRef.current);
         recordTimerRef.current = null;
       }
+      stopLevelMeter();
       setRecording(false);
       setRecordSecs(0);
       recordSecsRef.current = 0;
@@ -211,21 +339,29 @@ export default function ChatComposer({
       recordChunksRef.current = [];
       if (blob.size < 200) return;
       const ext = blob.type.includes('ogg') ? 'ogg' : 'webm';
-      const file = new File([blob], `voice-note-${Date.now()}.${ext}`, { type: blob.type || 'audio/webm' });
+      const file = new File([blob], `voice-note-${Date.now()}.${ext}`, {
+        type: blob.type || 'audio/webm',
+      });
       onAttach(file);
     };
-    recorder.stop();
+    if (recorder.state !== 'inactive') recorder.stop();
     recorder.stream.getTracks().forEach((t) => t.stop());
   };
 
   const startRecording = async () => {
     if (!canRecord || !onAttach || recording) return;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-        ? 'audio/webm;codecs=opus'
-        : MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')
-          ? 'audio/ogg;codecs=opus'
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
+      const mime = MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')
+        ? 'audio/ogg;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+          ? 'audio/webm;codecs=opus'
           : undefined;
       const recorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
       recordChunksRef.current = [];
@@ -233,6 +369,7 @@ export default function ChatComposer({
         if (ev.data.size > 0) recordChunksRef.current.push(ev.data);
       };
       mediaRecorderRef.current = recorder;
+      startLevelMeter(stream);
       recorder.start(200);
       setRecording(true);
       setRecordSecs(0);
@@ -262,6 +399,41 @@ export default function ChatComposer({
     }
   };
 
+  const togglePreviewPlayback = () => {
+    const url = attachment?.previewUrl;
+    if (!url || attachment?.type !== 'AUDIO') return;
+    let audio = previewAudioRef.current;
+    if (!audio || audio.src !== url) {
+      audio?.pause();
+      audio = new Audio(url);
+      previewAudioRef.current = audio;
+      audio.onended = () => setPreviewPlaying(false);
+      audio.onpause = () => setPreviewPlaying(false);
+      audio.onplay = () => setPreviewPlaying(true);
+    }
+    if (audio.paused) {
+      void audio.play().then(() => setPreviewPlaying(true)).catch(() => setPreviewPlaying(false));
+    } else {
+      audio.pause();
+      setPreviewPlaying(false);
+    }
+  };
+
+  // Esc closes popovers from anywhere in the composer.
+  useEffect(() => {
+    if (!attachMenuOpen && !emojiOpen && !slashMenuOpen && !sendMenuOpen) return;
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (shortcutMatch) {
+        onChange('');
+        setShortcutIndex(0);
+      }
+      closeAllMenus([setAttachMenuOpen, setEmojiOpen, setSendMenuOpen]);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [attachMenuOpen, emojiOpen, slashMenuOpen, sendMenuOpen, shortcutMatch, onChange]);
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && onAttach) onAttach(file);
@@ -273,14 +445,13 @@ export default function ChatComposer({
     setAttachMenuOpen(false);
     setEmojiOpen(false);
     setSendMenuOpen(false);
-    // Defer click so menu/overlay unmounts before the native picker opens
-    // (avoids the fixed inset-0 backdrop swallowing the interaction).
-    requestAnimationFrame(() => {
+    // Defer until portaled menu/backdrop unmounts so the native picker isn't blocked.
+    window.setTimeout(() => {
       if (fileInputRef.current) {
         fileInputRef.current.accept = accept;
         fileInputRef.current.click();
       }
-    });
+    }, 0);
   };
 
   const insertEmoji = (emoji: string) => {
@@ -356,8 +527,6 @@ export default function ChatComposer({
   const toolBtn =
     'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-800 disabled:opacity-40 dark:hover:bg-neutral-800 dark:hover:text-neutral-200';
 
-  const menuPanel =
-    'absolute bottom-full z-40 mb-2 overflow-hidden rounded-xl border border-theme-border bg-theme-surface py-1 shadow-panel';
   const menuItem =
     'flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-[13px] text-theme-secondary hover:bg-theme-subtle';
 
@@ -394,18 +563,58 @@ export default function ChatComposer({
               alt="Preview"
               className="h-14 w-14 shrink-0 rounded-lg object-cover"
             />
+          ) : isVoiceAttachment ? (
+            <button
+              type="button"
+              onClick={togglePreviewPlayback}
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-whatsapp-500 text-white shadow-sm transition hover:brightness-105"
+              aria-label={previewPlaying ? 'Pause voice note' : 'Play voice note'}
+            >
+              {previewPlaying ? (
+                <Pause className="h-5 w-5" fill="currentColor" />
+              ) : (
+                <Play className="h-5 w-5 translate-x-0.5" fill="currentColor" />
+              )}
+            </button>
           ) : (
             <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-chat-bubble-received text-chat-accent dark:bg-neutral-800">
               {attachment.type === 'VIDEO' ? <Image className="h-6 w-6" /> : <FileText className="h-6 w-6" />}
             </div>
           )}
           <div className="min-w-0 flex-1">
-            <p className="truncate text-[13px] font-medium text-theme-fg">{attachment.file.name}</p>
-            <p className="text-[11px] text-theme-muted">{formatFileSize(attachment.file.size)}</p>
+            {isVoiceAttachment ? (
+              <>
+                <p className="text-[13px] font-semibold text-theme-fg">Voice note</p>
+                <p className="text-[11px] text-theme-muted">
+                  {formatFileSize(attachment.file.size)} · tap play to listen, then send
+                </p>
+                <div className="mt-1.5 flex h-7 items-end gap-[2px]">
+                  {Array.from({ length: 24 }).map((_, i) => {
+                    const h = 20 + ((i * 37) % 60);
+                    return (
+                      <span
+                        key={i}
+                        className={`w-[3px] rounded-full ${previewPlaying ? 'bg-whatsapp-500' : 'bg-whatsapp-500/45'}`}
+                        style={{ height: `${h}%` }}
+                      />
+                    );
+                  })}
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="truncate text-[13px] font-medium text-theme-fg">{attachment.file.name}</p>
+                <p className="text-[11px] text-theme-muted">{formatFileSize(attachment.file.size)}</p>
+              </>
+            )}
           </div>
           <button
             type="button"
-            onClick={onRemoveAttachment}
+            onClick={() => {
+              previewAudioRef.current?.pause();
+              setPreviewPlaying(false);
+              onRemoveAttachment?.();
+            }}
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-neutral-500 transition hover:bg-neutral-200/60"
             aria-label="Remove attachment"
           >
@@ -415,13 +624,22 @@ export default function ChatComposer({
       )}
 
       {recording && (
-        <div className="mb-2 flex items-center gap-2 rounded-xl border border-red-200/80 bg-red-50/90 px-3 py-2 dark:border-red-900/40 dark:bg-red-950/40">
-          <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" />
-          <span className="text-[12.5px] font-semibold tabular-nums text-red-700 dark:text-red-300">
-            Recording {Math.floor(recordSecs / 60)}:{String(recordSecs % 60).padStart(2, '0')}
+        <div className="mb-2 flex items-center gap-2.5 rounded-xl border border-red-200/80 bg-red-50/90 px-3 py-2.5 dark:border-red-900/40 dark:bg-red-950/40">
+          <span className="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-red-500" />
+          <div className="flex h-8 min-w-0 flex-1 items-end gap-[2px] px-1" aria-hidden>
+            {levels.map((level, i) => (
+              <span
+                key={i}
+                className="w-[3px] rounded-full bg-red-500/80 transition-[height] duration-75"
+                style={{ height: `${Math.max(12, Math.round(level * 100))}%` }}
+              />
+            ))}
+          </div>
+          <span className="shrink-0 text-[12.5px] font-semibold tabular-nums text-red-700 dark:text-red-300">
+            {Math.floor(recordSecs / 60)}:{String(recordSecs % 60).padStart(2, '0')}
             <span className="ml-1 font-normal opacity-70">/ 2:00</span>
           </span>
-          <div className="ml-auto flex items-center gap-1">
+          <div className="flex shrink-0 items-center gap-1">
             <button
               type="button"
               className={toolBtn}
@@ -466,21 +684,14 @@ export default function ChatComposer({
       )}
 
       {emojiOpen && (
-        <>
-          {/* Backdrop sits below menus (z-30) so Photo/PDF shortcuts outside stay usable once closed;
-              while open it only dismisses this popover. */}
-          <div
-            className="fixed inset-0 z-30"
-            aria-hidden
-            onMouseDown={(e) => {
-              e.preventDefault();
-              setEmojiOpen(false);
-            }}
-          />
-          <div
-            className="absolute bottom-full left-3 z-40 mb-2 grid w-[280px] grid-cols-6 gap-1 rounded-xl border border-theme-border bg-theme-surface p-2 shadow-panel sm:left-4"
-            onMouseDown={(e) => e.stopPropagation()}
-          >
+        <ComposerPortalMenu
+          open={emojiOpen}
+          anchorRef={emojiBtnRef}
+          align="left"
+          widthClass="w-[280px]"
+          onClose={() => setEmojiOpen(false)}
+        >
+          <div className="grid grid-cols-6 gap-1 p-2">
             {COMMON_EMOJIS.map((emoji) => (
               <button
                 key={emoji}
@@ -495,8 +706,100 @@ export default function ChatComposer({
               </button>
             ))}
           </div>
-        </>
+        </ComposerPortalMenu>
       )}
+
+      <ComposerPortalMenu
+        open={attachMenuOpen}
+        anchorRef={attachBtnRef}
+        align="left"
+        widthClass="w-48"
+        onClose={() => setAttachMenuOpen(false)}
+      >
+        <button
+          type="button"
+          role="menuitem"
+          onClick={() => openFilePicker('image/*')}
+          className={menuItem}
+        >
+          <Image size={16} className="text-chat-accent" />
+          Photo
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          onClick={() => openFilePicker('video/*')}
+          className={menuItem}
+        >
+          <Image size={16} className="text-chat-accent" />
+          Video
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          onClick={() => openFilePicker('application/pdf,.pdf')}
+          className={menuItem}
+        >
+          <FileText size={16} className="text-chat-accent" />
+          PDF
+        </button>
+        {onPaymentLink && (
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setAttachMenuOpen(false);
+              onPaymentLink();
+            }}
+            className={menuItem}
+          >
+            <IndianRupee size={16} className="text-chat-accent" />
+            Payment link
+          </button>
+        )}
+        {onInteractive && (
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setAttachMenuOpen(false);
+              onInteractive();
+            }}
+            className={menuItem}
+          >
+            <Sparkles size={16} className="text-violet-600" />
+            Interactive
+          </button>
+        )}
+      </ComposerPortalMenu>
+
+      <ComposerPortalMenu
+        open={sendMenuOpen}
+        anchorRef={sendMenuBtnRef}
+        align="right"
+        widthClass="w-52"
+        onClose={() => setSendMenuOpen(false)}
+      >
+        <button
+          type="button"
+          role="menuitem"
+          className={menuItem}
+          onClick={(e) => triggerSend(e)}
+        >
+          Send
+        </button>
+        {onSendAndClose && (
+          <button
+            type="button"
+            role="menuitem"
+            disabled={!canSend}
+            className={`${menuItem} disabled:cursor-not-allowed disabled:opacity-50`}
+            onClick={(e) => triggerSend(e, true)}
+          >
+            Send &amp; mark done
+          </button>
+        )}
+      </ComposerPortalMenu>
 
       <div className="rounded-2xl border border-chat-input-border bg-chat-input-bg ring-1 ring-chat-input-border/40 transition focus-within:border-slate-400/70 focus-within:ring-slate-400/15 dark:focus-within:border-slate-500/60 dark:focus-within:ring-slate-500/15">
         <textarea
@@ -512,6 +815,7 @@ export default function ChatComposer({
         <div className="flex items-center gap-0.5 px-2 pb-2 pt-0.5">
           <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
             <button
+              ref={emojiBtnRef}
               type="button"
               className={toolBtn}
               aria-label="Emoji"
@@ -528,6 +832,7 @@ export default function ChatComposer({
 
             <div className="relative">
               <button
+                ref={attachBtnRef}
                 type="button"
                 className={toolBtn}
                 aria-label="Attach"
@@ -543,80 +848,6 @@ export default function ChatComposer({
               >
                 <Paperclip size={18} strokeWidth={2} />
               </button>
-              {attachMenuOpen && (
-                <>
-                  <div
-                    className="fixed inset-0 z-30"
-                    aria-hidden
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      setAttachMenuOpen(false);
-                    }}
-                  />
-                  <div
-                    className={`${menuPanel} left-0 w-48`}
-                    role="menu"
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => openFilePicker('image/*')}
-                      className={menuItem}
-                    >
-                      <Image size={16} className="text-chat-accent" />
-                      Photo
-                    </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => openFilePicker('video/*')}
-                      className={menuItem}
-                    >
-                      <Image size={16} className="text-chat-accent" />
-                      Video
-                    </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => openFilePicker('application/pdf,.pdf')}
-                      className={menuItem}
-                    >
-                      <FileText size={16} className="text-chat-accent" />
-                      PDF
-                    </button>
-                    {onPaymentLink && (
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => {
-                          setAttachMenuOpen(false);
-                          onPaymentLink();
-                        }}
-                        className={menuItem}
-                      >
-                        <IndianRupee size={16} className="text-chat-accent" />
-                        Payment link
-                      </button>
-                    )}
-                    {onInteractive && (
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => {
-                          setAttachMenuOpen(false);
-                          onInteractive();
-                        }}
-                        className={menuItem}
-                      >
-                        <Sparkles size={16} className="text-violet-600" />
-                        Interactive
-                      </button>
-                    )}
-                  </div>
-                </>
-              )}
             </div>
 
             <button
@@ -688,6 +919,7 @@ export default function ChatComposer({
                 Send
               </button>
               <button
+                ref={sendMenuBtnRef}
                 type="button"
                 aria-label="Send options"
                 aria-expanded={sendMenuOpen}
@@ -704,45 +936,6 @@ export default function ChatComposer({
               >
                 <ChevronDown size={14} strokeWidth={2.5} />
               </button>
-              {sendMenuOpen && (
-                <>
-                  <div
-                    className="fixed inset-0 z-30"
-                    aria-hidden
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      setSendMenuOpen(false);
-                    }}
-                  />
-                  <div
-                    className={`${menuPanel} right-0 w-52`}
-                    role="menu"
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="flex w-full px-3 py-2 text-left text-[13px] font-medium text-theme-fg hover:bg-theme-subtle"
-                      onClick={(e) => triggerSend(e)}
-                    >
-                      Send
-                    </button>
-                    {/* Closes the conversation after a successful outbound send — useful for one-and-done replies. */}
-                    {onSendAndClose && (
-                      <button
-                        type="button"
-                        role="menuitem"
-                        disabled={!canSend}
-                        className="flex w-full px-3 py-2 text-left text-[13px] font-medium text-theme-fg hover:bg-theme-subtle disabled:cursor-not-allowed disabled:opacity-50"
-                        onClick={(e) => triggerSend(e, true)}
-                      >
-                        Send &amp; mark done
-                      </button>
-                    )}
-                  </div>
-                </>
-              )}
             </div>
           </div>
         </div>

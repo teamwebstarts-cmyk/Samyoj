@@ -74,10 +74,102 @@ interface DeliverMessageInput {
     body?: string;
   };
   mediaUrl?: string;
+  /** Local relative path under uploads/media — preferred for Meta upload-by-id. */
+  mediaPath?: string;
+  mediaMimeType?: string;
+  mediaFilename?: string;
   mediaCaption?: string;
   contextMessageId?: string;
   /** When true, Meta treats AUDIO as a WhatsApp voice note. */
   voiceNote?: boolean;
+}
+
+/**
+ * Resolve outbound media the Meta-recommended way: upload bytes → send by `id`.
+ * Falls back to public `link` only when we cannot read local bytes (e.g. external URL).
+ */
+async function resolveMediaRef(options: {
+  phoneNumberId: string;
+  accessToken: string;
+  mediaPath?: string;
+  mediaUrl?: string;
+  mimeType?: string;
+  filename?: string;
+}): Promise<{ id?: string; link?: string }> {
+  let mime = options.mimeType || 'application/octet-stream';
+  let filename = options.filename;
+
+  if (options.mediaPath) {
+    try {
+      const { fetchMediaBuffer } = await import('../media/storage-adapter');
+      let buffer = await fetchMediaBuffer(options.mediaPath);
+      const { ensureWhatsAppAudio, needsWhatsAppAudioTranscode } = await import(
+        '../media/audio-transcode'
+      );
+      if (needsWhatsAppAudioTranscode(mime, filename)) {
+        const converted = await ensureWhatsAppAudio({ buffer, mimeType: mime, filename });
+        buffer = converted.buffer;
+        mime = converted.mimeType;
+        filename = converted.filename;
+      }
+      const id = await MetaWhatsAppService.uploadMedia({
+        phoneNumberId: options.phoneNumberId,
+        accessToken: options.accessToken,
+        buffer,
+        mimeType: mime,
+        filename,
+      });
+      return { id };
+    } catch (err) {
+      log.warn('Meta media upload failed; falling back to link if available', {
+        mediaPath: options.mediaPath,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  if (options.mediaUrl) {
+    // Prefer uploading even from our own public URL so Meta caches the asset.
+    if (options.mediaUrl.includes('/api/media/public/')) {
+      try {
+        const relative = options.mediaUrl.split('/api/media/public/')[1];
+        if (relative) {
+          const { fetchMediaBuffer } = await import('../media/storage-adapter');
+          let buffer = await fetchMediaBuffer(decodeURIComponent(relative));
+          let uploadMime = mime;
+          let uploadName = filename;
+          const { ensureWhatsAppAudio, needsWhatsAppAudioTranscode } = await import(
+            '../media/audio-transcode'
+          );
+          if (needsWhatsAppAudioTranscode(uploadMime, uploadName)) {
+            const converted = await ensureWhatsAppAudio({
+              buffer,
+              mimeType: uploadMime,
+              filename: uploadName,
+            });
+            buffer = converted.buffer;
+            uploadMime = converted.mimeType;
+            uploadName = converted.filename;
+          }
+          const id = await MetaWhatsAppService.uploadMedia({
+            phoneNumberId: options.phoneNumberId,
+            accessToken: options.accessToken,
+            buffer,
+            mimeType: uploadMime,
+            filename: uploadName,
+          });
+          return { id };
+        }
+      } catch (err) {
+        log.warn('Could not upload from public media URL; using link', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+    return { link: options.mediaUrl };
+  }
+
+  throw new AppError(400, 'Media is required for this message type');
 }
 
 export async function deliverOutboundMessage(input: DeliverMessageInput) {
@@ -121,33 +213,70 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
         accessToken,
         { ...buildInteractivePayload(phone, interactiveOpts), ...context }
       );
-    } else if (input.type === 'IMAGE' && input.mediaUrl) {
+    } else if (input.type === 'IMAGE' && (input.mediaUrl || input.mediaPath)) {
+      const media = await resolveMediaRef({
+        phoneNumberId: input.phoneNumberId,
+        accessToken,
+        mediaPath: input.mediaPath,
+        mediaUrl: input.mediaUrl,
+        mimeType: input.mediaMimeType || 'image/jpeg',
+        filename: input.mediaFilename,
+      });
       result = await MetaWhatsAppService.sendMessage(input.phoneNumberId, accessToken, {
         to: phone,
         type: 'image',
-        image: { link: input.mediaUrl, caption: input.mediaCaption || input.content },
+        image: { ...media, caption: input.mediaCaption || undefined },
         ...context,
       });
-    } else if (input.type === 'DOCUMENT' && input.mediaUrl) {
+    } else if (input.type === 'DOCUMENT' && (input.mediaUrl || input.mediaPath)) {
+      const media = await resolveMediaRef({
+        phoneNumberId: input.phoneNumberId,
+        accessToken,
+        mediaPath: input.mediaPath,
+        mediaUrl: input.mediaUrl,
+        mimeType: input.mediaMimeType || 'application/pdf',
+        filename: input.mediaFilename,
+      });
       result = await MetaWhatsAppService.sendMessage(input.phoneNumberId, accessToken, {
         to: phone,
         type: 'document',
-        document: { link: input.mediaUrl, caption: input.mediaCaption || input.content },
+        document: {
+          ...media,
+          caption: input.mediaCaption || undefined,
+          // Meta uses filename extension to pick the document icon on WhatsApp.
+          filename: input.mediaFilename || 'document.pdf',
+        },
         ...context,
       });
-    } else if (input.type === 'VIDEO' && input.mediaUrl) {
+    } else if (input.type === 'VIDEO' && (input.mediaUrl || input.mediaPath)) {
+      const media = await resolveMediaRef({
+        phoneNumberId: input.phoneNumberId,
+        accessToken,
+        mediaPath: input.mediaPath,
+        mediaUrl: input.mediaUrl,
+        mimeType: input.mediaMimeType || 'video/mp4',
+        filename: input.mediaFilename,
+      });
       result = await MetaWhatsAppService.sendMessage(input.phoneNumberId, accessToken, {
         to: phone,
         type: 'video',
-        video: { link: input.mediaUrl, caption: input.mediaCaption || input.content },
+        video: { ...media, caption: input.mediaCaption || undefined },
         ...context,
       });
-    } else if (input.type === 'AUDIO' && input.mediaUrl) {
+    } else if (input.type === 'AUDIO' && (input.mediaUrl || input.mediaPath)) {
+      const media = await resolveMediaRef({
+        phoneNumberId: input.phoneNumberId,
+        accessToken,
+        mediaPath: input.mediaPath,
+        mediaUrl: input.mediaUrl,
+        mimeType: input.mediaMimeType || 'audio/ogg',
+        filename: input.mediaFilename,
+      });
       result = await MetaWhatsAppService.sendMessage(input.phoneNumberId, accessToken, {
         to: phone,
         type: 'audio',
         audio: {
-          link: input.mediaUrl,
+          ...media,
           ...(input.voiceNote ? { voice: true } : {}),
         },
         ...context,

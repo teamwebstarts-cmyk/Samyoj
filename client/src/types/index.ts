@@ -232,6 +232,11 @@ export interface MessageMetadata {
   contacts?: Array<{ name: string; phone: string; email?: string }>;
   location?: { latitude: number; longitude: number; name?: string; address?: string };
   isVoice?: boolean;
+  /** Meta delivered type:unsupported (polls, edits, …) — Cloud API limitation. */
+  isUnsupported?: boolean;
+  unsupportedType?: string;
+  metaErrorCode?: number;
+  metaErrorTitle?: string;
 }
 
 export interface SendMediaPayload {

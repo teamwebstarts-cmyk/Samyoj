@@ -1,6 +1,8 @@
 import { config } from '../../config';
 import { AppError } from '../../utils/response';
 import { createModuleLogger } from '../../utils/logger';
+import { isSarvamSttConfigured } from './sarvam.stt';
+import { isSarvamTtsConfigured } from './sarvam.tts';
 import type { CallAction } from './types';
 
 const log = createModuleLogger('meta-calling');
@@ -216,8 +218,101 @@ export class MetaCallingService {
     }
     return data;
   }
+
+  /**
+   * Per-user Meta call permission state (required before business-initiated calls).
+   * @see https://developers.facebook.com/documentation/business-messaging/whatsapp/calling/user-call-permissions
+   */
+  static async getUserCallPermissions(
+    phoneNumberId: string,
+    accessToken: string,
+    userWaId: string
+  ): Promise<{
+    status: string | null;
+    expirationTime?: number;
+    canStartCall: boolean;
+    canRequestPermission: boolean;
+    raw: Record<string, unknown>;
+  }> {
+    const waId = userWaId.replace(/\D/g, '');
+    const res = await fetch(
+      `${META_BASE}/${phoneNumberId}/call_permissions?user_wa_id=${encodeURIComponent(waId)}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    const data = (await res.json()) as Record<string, unknown> & GraphError;
+    if (!res.ok) {
+      throw parseMetaGraphError(data, `Failed to get call permissions (${res.status})`);
+    }
+
+    const permission = data.permission as { status?: string; expiration_time?: number } | undefined;
+    const actions = (data.actions as Array<{
+      action_name?: string;
+      can_perform_action?: boolean;
+    }>) || [];
+
+    const start = actions.find((a) => a.action_name === 'start_call');
+    const request = actions.find((a) => a.action_name === 'send_call_permission_request');
+
+    const status = permission?.status || null;
+    const grantedLike =
+      status === 'granted' ||
+      status === 'temporary' ||
+      status === 'permanent' ||
+      Boolean(start?.can_perform_action);
+
+    return {
+      status,
+      expirationTime: permission?.expiration_time,
+      canStartCall: Boolean(start?.can_perform_action ?? grantedLike),
+      canRequestPermission: Boolean(request?.can_perform_action ?? true),
+      raw: data,
+    };
+  }
+
+  /**
+   * Official Meta interactive call_permission_request (NOT generic reply buttons).
+   * Fake "Allow calls" buttons do not grant Meta calling permission.
+   */
+  static async sendCallPermissionRequest(
+    phoneNumberId: string,
+    accessToken: string,
+    toPhone: string,
+    bodyText?: string
+  ): Promise<void> {
+    const res = await fetch(`${META_BASE}/${phoneNumberId}/messages`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: toPhone.replace(/\D/g, ''),
+        type: 'interactive',
+        interactive: {
+          type: 'call_permission_request',
+          action: { name: 'call_permission_request' },
+          body: {
+            text:
+              bodyText?.trim() ||
+              'We would like to call you on WhatsApp to help with your request. Do you allow voice calls?',
+          },
+        },
+      }),
+    });
+
+    const data = (await res.json()) as Record<string, unknown> & GraphError;
+    if (!res.ok) {
+      throw parseMetaGraphError(data, `Failed to send call permission request (${res.status})`);
+    }
+    log.info('Call permission request sent', { phoneNumberId, to: toPhone.replace(/\D/g, '') });
+  }
 }
 
 export function isCallingConfigured(): boolean {
+  if (config.calling.voiceProvider === 'sarvam') {
+    return isSarvamSttConfigured() && isSarvamTtsConfigured();
+  }
   return Boolean(config.calling.deepgramApiKey && config.calling.googleCredentialsPath);
 }

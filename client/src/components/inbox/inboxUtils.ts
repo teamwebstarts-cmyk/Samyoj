@@ -1,4 +1,9 @@
 import type { Message, MessageMetadata } from '../../types';
+import {
+  describeUnsupportedMessage,
+  isUnsupportedMessageContent,
+  unsupportedTypeFromContent,
+} from './unsupportedMessage';
 
 /** Title-case / clean tokens like `AI_CHATBOT` → `AI Bot` for thread dividers. */
 function humanizeAutomationToken(value: string): string {
@@ -75,7 +80,10 @@ export function formatMessageTime(dateStr: string) {
   yesterday.setDate(yesterday.getDate() - 1);
   const isYesterday = date.toDateString() === yesterday.toDateString();
 
-  const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  // Narrow no-break space keeps "02:12 PM" on one line in tight bubbles.
+  const time = date
+    .toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    .replace(/\s+(AM|PM)/i, '\u202F$1');
 
   if (isToday) return time;
   if (isYesterday) return `Yesterday ${time}`;
@@ -185,6 +193,11 @@ export function getMessagePreview(message?: Pick<Message, 'type' | 'content' | '
   const type = message.type?.toUpperCase();
   const meta = message.metadata;
 
+  if (isUnsupportedMessageContent(message.content, meta)) {
+    const kind = meta?.unsupportedType || unsupportedTypeFromContent(message.content);
+    return describeUnsupportedMessage(kind).title;
+  }
+
   switch (type) {
     case 'IMAGE':
       return message.content || 'Photo';
@@ -196,6 +209,10 @@ export function getMessagePreview(message?: Pick<Message, 'type' | 'content' | '
       return meta?.filename || message.content || 'Document';
     case 'TEMPLATE':
       return message.content || 'Template message';
+    case 'LOCATION':
+      return meta?.location?.name || message.content || 'Location';
+    case 'CONTACTS':
+      return meta?.contacts?.[0]?.name || message.content || 'Contact';
     case 'INTERACTIVE':
       if (meta?.isButtonReply) return message.content || 'Button reply';
       if (meta?.buttons?.length) return message.content || 'Interactive message';
@@ -205,6 +222,7 @@ export function getMessagePreview(message?: Pick<Message, 'type' | 'content' | '
   }
 
   if (message.content === '[image]') return 'Photo';
+  if (message.content === '[sticker]') return 'Sticker';
   if (message.content === '[video]') return 'Video';
   if (message.content === '[audio]' || message.content === '[voice]') return 'Voice message';
   if (message.content === '[document]') return 'Document';

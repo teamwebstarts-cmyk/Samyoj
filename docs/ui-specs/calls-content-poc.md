@@ -4,7 +4,8 @@
 **Do not invent a new theme.** Match Inbox + glass sidebar language already shipping.  
 **Product/logic companion:** [`../calls/CALLS_SHIP_DOCUMENT.md`](../calls/CALLS_SHIP_DOCUMENT.md) (**v2.3** — chosen live handoff + easy personality/train)  
 **Inbox content reference:** [`inbox-content-poc.md`](inbox-content-poc.md)  
-**Also covers:** easy AI Bot personality + Train UX (§14) linked from Calls Customize.
+**Also covers:** easy AI Bot personality + Train UX (§14) linked from Calls Customize.  
+**With-content / live call pixel spec:** [`calls-with-content-ui.md`](calls-with-content-ui.md) (list rows, LIVE stage, mobile controls).
 
 ---
 
