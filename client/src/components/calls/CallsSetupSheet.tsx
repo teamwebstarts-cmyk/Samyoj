@@ -36,7 +36,7 @@ export default function CallsSetupSheet({
   return (
     <div className="fixed inset-0 z-50 bg-black/40" onClick={onClose}>
       <div
-        className="absolute bottom-0 left-0 right-0 max-h-[90dvh] overflow-y-auto rounded-t-2xl bg-white px-5 pb-8 pt-4 shadow-2xl sm:relative sm:rounded-2xl sm:shadow-xl"
+        className="absolute bottom-0 left-0 right-0 max-h-[90dvh] overflow-y-auto rounded-t-2xl bg-white px-5 pb-8 pt-4 shadow-2xl sm:relative sm:mx-auto sm:my-10 sm:max-w-lg sm:rounded-2xl sm:shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">

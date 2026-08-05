@@ -69,7 +69,11 @@ export default function CallListItem({
   name,
   phone,
   status,
+  handler,
   durationSeconds,
+  preview,
+  botName,
+  agentName,
   createdAt,
   selected,
   onSelect,
@@ -77,6 +81,9 @@ export default function CallListItem({
   const active = isActiveCallStatus(status);
   const displayName = name || formatPhoneDisplay(phone);
   const duration = formatDuration(durationSeconds ?? (active ? 0 : 0));
+  const previewText = preview && preview !== 'No conversation yet' ? preview : null;
+  const handlerLabel =
+    handler === 'AI' ? (botName ? `AI · ${botName}` : 'AI') : handler === 'AGENT' ? 'Agent' : null;
 
   return (
     <button
@@ -107,10 +114,18 @@ export default function CallListItem({
         <p className="mt-0.5 truncate text-[12px] font-medium text-neutral-500">
           {formatPhoneDisplay(phone)}
         </p>
+        {previewText && (
+          <p className="mt-0.5 hidden truncate text-[11px] font-medium text-neutral-400 sm:block">
+            {previewText}
+          </p>
+        )}
       </div>
 
       <div className="hidden shrink-0 sm:block">
-        <StatusBadge status={status} />
+        <div className="flex flex-col items-end gap-1">
+          <StatusBadge status={status} />
+          {handlerLabel && <span className="text-[10px] font-bold text-neutral-400">{handlerLabel}</span>}
+        </div>
       </div>
 
       <div className="flex w-[72px] shrink-0 flex-col items-end gap-0.5 sm:w-[80px]">

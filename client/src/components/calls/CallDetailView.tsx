@@ -147,7 +147,7 @@ export default function CallDetailView({
 
   const lastEntry = transcript?.length ? transcript[transcript.length - 1] : null;
   const aiLikelySpeaking =
-    active &&
+    status === 'CONNECTED' &&
     handler !== 'AGENT' &&
     Boolean(
       lastEntry &&
@@ -312,7 +312,7 @@ export default function CallDetailView({
           <Waveform />
         </div>
       )}
-      {active && handler !== 'AGENT' && !aiLikelySpeaking && (
+      {status === 'CONNECTED' && handler !== 'AGENT' && !aiLikelySpeaking && (
         <div className="flex shrink-0 items-center gap-2 border-b border-neutral-100 bg-neutral-50/80 px-3 py-1.5 text-[11px] font-semibold text-neutral-500 sm:px-4 dark:border-neutral-800 dark:bg-neutral-900/40">
           <Bot className="h-3.5 w-3.5" />
           AI on this call · listening

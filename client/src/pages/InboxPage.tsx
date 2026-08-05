@@ -375,6 +375,15 @@ export default function InboxPage() {
     setSelectedMessageIds(new Set());
   }, []);
 
+  useEffect(() => {
+    if (!selectMode) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') exitSelectMode();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectMode, exitSelectMode]);
+
   const toggleMessageSelect = useCallback((messageId: string) => {
     setSelectedMessageIds((prev) => {
       const next = new Set(prev);
@@ -835,11 +844,6 @@ export default function InboxPage() {
                   onConvertToTicket={() => setTicketModalOpen(true)}
                   onExport={() => setExportTarget(selected)}
                   onCreateCampaign={() => navigate(`/campaigns?contacts=${selected.contact.id}`)}
-                  onClearChat={() => setClearChatOpen(true)}
-                  onSelectMessages={() => {
-                    setSelectMode(true);
-                    setDetailsPanelOpen(false);
-                  }}
                   panelOpen={detailsPanelOpen}
                   onPanelOpenChange={setDetailsPanelOpen}
                   focusSection={detailsFocusSection}

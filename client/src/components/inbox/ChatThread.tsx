@@ -612,7 +612,7 @@ export default function ChatThread({
               ? `${selectedMessageIds.size} selected`
               : 'Tap messages to select'}
           </p>
-                          <button
+          <button
             type="button"
             disabled={!selectedMessageIds?.size || !onDeleteMessages || deletingMessages}
             onClick={() => {

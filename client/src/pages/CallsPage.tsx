@@ -256,6 +256,12 @@ export default function CallsPage() {
 
     setSelectedCallId(null);
     setNotes('');
+    setNotesDirty(false);
+    setPage(1);
+    setSearch('');
+    setChip('');
+    setRailPanel(null);
+    navigate('/calls');
     void loadRef.current();
   });
 
@@ -444,7 +450,8 @@ export default function CallsPage() {
                 <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
                   <div className="divide-y divide-neutral-200 dark:divide-neutral-800">
                     {calls.map((call) => {
-                      const phone = call.contact?.phone || call.fromPhone;
+                      const outbound = call.direction === 'BUSINESS_INITIATED';
+                      const phone = call.contact?.phone || (outbound ? call.toPhone : call.fromPhone);
                       return (
                         <CallListItem
                           key={call.id}

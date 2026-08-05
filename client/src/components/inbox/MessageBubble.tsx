@@ -648,8 +648,11 @@ export default function MessageBubble({
     </div>
   );
 
+  // WhatsApp dims non-selected bubbles while multi-select is active.
+  const selectionDim = selectMode && !selected ? 'opacity-45' : 'transition-opacity duration-150';
+
   const bubbleShellProps = {
-    className: `group/bubble relative ${enterClass} ${
+    className: `group/bubble relative ${enterClass} ${selectionDim} ${
       selectMode && selected ? 'ring-2 ring-whatsapp-500/40 ring-offset-1 ring-offset-transparent' : ''
     }`,
     onClick: selectMode
@@ -687,7 +690,9 @@ export default function MessageBubble({
         e.stopPropagation();
         onToggleSelect?.(message);
       }}
-      className="mb-1 flex h-6 w-6 shrink-0 items-center justify-center self-center"
+      className={`mb-1 flex h-6 w-6 shrink-0 items-center justify-center self-center ${
+        isOutbound ? 'order-2' : ''
+      }`}
     >
       <span
         className={`flex h-5 w-5 items-center justify-center rounded-full border-2 transition ${
@@ -711,7 +716,8 @@ export default function MessageBubble({
     ) : null;
 
   const wrapperAlign = isOutbound ? 'justify-end' : 'justify-start';
-  const rowClass = `flex items-end gap-2 ${selectMode ? 'justify-start' : wrapperAlign}`;
+  // Keep sender/receiver sides intact in select mode — only the checkbox moves.
+  const rowClass = `flex items-end gap-2 ${wrapperAlign}`;
   /** Size to content; cap against the thread — never `min-w-0` (that collapsed short texts to 1 letter wide). */
   const bubbleMaxClass = 'w-fit max-w-[min(100%,75%)] sm:max-w-[min(100%,65%)]';
 
