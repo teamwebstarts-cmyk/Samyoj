@@ -382,7 +382,9 @@ export default function CallsPage() {
       await callingApi.updateNotes(selectedCall.id, notes);
       setNotesDirty(false);
       toastSuccess('Notes saved.');
-      await loadCallDetail(selectedCall.id, { syncNotes: true });
+      setNotes('');
+      // Refresh the call record (status/transcript) without re-filling the notes box.
+      await loadCallDetail(selectedCall.id);
     } catch {
       toastError('Could not save notes.');
     } finally {
