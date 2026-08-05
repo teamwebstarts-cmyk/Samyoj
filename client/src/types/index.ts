@@ -208,6 +208,8 @@ export interface MessageMetadata {
   mediaPath?: string;
   size?: number;
   isSticker?: boolean;
+  /** True when inbound/outbound media is a GIF (incl. WhatsApp GIF-as-video). */
+  isGif?: boolean;
   replyToMessageId?: string;
   replyToMetaId?: string;
   replyPreview?: string;

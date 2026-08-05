@@ -7,6 +7,8 @@ export interface MediaViewerItem {
   type: 'IMAGE' | 'VIDEO' | 'DOCUMENT' | 'AUDIO';
   url: string;
   filename?: string;
+  /** Loop muted — GIF / short animation opened fullscreen */
+  loopMuted?: boolean;
 }
 
 interface MediaViewerProps {
@@ -142,8 +144,11 @@ export default function MediaViewer({
         {item.type === 'VIDEO' && (
           <video
             src={item.url}
-            controls
+            controls={!item.loopMuted}
             autoPlay
+            muted={item.loopMuted}
+            loop={item.loopMuted}
+            playsInline
             className="max-h-[80vh] max-w-full rounded-lg bg-black shadow-2xl"
           >
             <track kind="captions" />

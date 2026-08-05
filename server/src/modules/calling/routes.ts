@@ -408,9 +408,12 @@ router.post(
       emitToOrg(orgId, 'call:updated', { callId: updatedCall.id, status: 'CONNECTING' });
 
       sendSuccess(res, { call: updatedCall, sdpOffer });
-    } finally {
+    } catch (err) {
       bridge.close();
+      throw err;
     }
+    // Do NOT close the bridge here — the client needs the peer connection alive
+    // to attach its answer. The bridge lives until Meta connects or the call terminates.
   })
 );
 

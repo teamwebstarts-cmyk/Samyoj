@@ -42,6 +42,8 @@ async function streamMessageMedia(
 
   res.setHeader('Content-Type', mimeType);
   res.setHeader('Content-Length', buffer.length);
+  // Allow SPA (often a different origin in local/dev) to embed signed media.
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   if (cacheSeconds) {
     res.setHeader('Cache-Control', `private, max-age=${cacheSeconds}`);
   }
@@ -359,9 +361,12 @@ router.get(
     }
 
     const { path, expiresAt } = buildSignedMediaPath(message.id);
+    // Prefer same-origin relative `url` so the Vite/nginx proxy serves media
+    // without cross-origin CORP issues. `absoluteUrl` is for tooling / split deploys.
     sendSuccess(res, {
-      url: `${config.serverUrl}${path}`,
+      url: path,
       path,
+      absoluteUrl: `${config.serverUrl}${path}`,
       expiresAt,
       mimeType: metadata?.mimeType ?? null,
       filename: metadata?.filename ?? null,
@@ -1053,6 +1058,10 @@ router.post(
           ...(data.media.filename?.startsWith('voice-note-') || data.media.voice
             ? { isVoice: true }
             : {}),
+          ...((data.media.mimeType || '').toLowerCase().includes('gif') ||
+          (data.media.filename || '').toLowerCase().endsWith('.gif')
+            ? { isGif: true }
+            : {}),
         };
       } else if (data.media.data) {
         let buffer: Buffer;
@@ -1081,6 +1090,10 @@ router.post(
           caption: mediaCaption,
           ...(data.media.filename?.startsWith('voice-note-') || data.media.voice
             ? { isVoice: true }
+            : {}),
+          ...((stored.mimeType || '').toLowerCase().includes('gif') ||
+          (data.media.filename || '').toLowerCase().endsWith('.gif')
+            ? { isGif: true }
             : {}),
         };
       } else {

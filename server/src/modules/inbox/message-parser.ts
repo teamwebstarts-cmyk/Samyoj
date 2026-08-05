@@ -146,6 +146,10 @@ function parseInboundContent(msg: Record<string, unknown>): ParsedInboundMessage
         filename,
         caption: caption || undefined,
         ...(msgType === 'sticker' ? { isSticker: true } : {}),
+        ...((media.mime_type || '').toLowerCase().includes('gif') ||
+        (filename || '').toLowerCase().endsWith('.gif')
+          ? { isGif: true }
+          : {}),
       },
     };
   }

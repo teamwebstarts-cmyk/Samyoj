@@ -19,6 +19,7 @@ import {
   AuthenticatedImage,
   AuthenticatedVideo,
 } from './AuthenticatedMedia';
+import { resolveVisualMediaKind } from './mediaKind';
 import InteractiveMessageCard from './InteractiveMessageCard';
 import MediaViewer, { type MediaViewerItem } from './MediaViewer';
 import { WhatsAppBubble } from './WhatsAppPreview';
@@ -248,25 +249,48 @@ function renderMediaContent(
 
   const handleClick = (url: string) => {
     if (!onMediaClick || !type) return;
+    const kind = resolveVisualMediaKind(message);
     onMediaClick({
       messageId: message.id,
       type: type as MediaViewerItem['type'],
       url,
       filename: message.metadata?.filename,
+      loopMuted: kind === 'gif',
     });
   };
 
   switch (type) {
-    case 'IMAGE':
+    case 'IMAGE': {
+      const kind = resolveVisualMediaKind(message);
+      if (kind === 'gif') {
+        // Rare: image/gif stored as IMAGE — <img> animates natively; keep soft chrome.
+        return (
+          <AuthenticatedImage
+            messageId={message.id}
+            alt={message.content || 'GIF'}
+            onClick={handleClick}
+          />
+        );
+      }
       return (
         <AuthenticatedImage
           messageId={message.id}
-          alt={message.content || 'Photo'}
+          alt={message.content || (kind === 'sticker' ? 'Sticker' : 'Photo')}
+          variant={kind === 'sticker' ? 'sticker' : 'image'}
+          onClick={kind === 'sticker' ? undefined : handleClick}
+        />
+      );
+    }
+    case 'VIDEO': {
+      const kind = resolveVisualMediaKind(message);
+      return (
+        <AuthenticatedVideo
+          messageId={message.id}
+          variant={kind === 'gif' ? 'gif' : 'video'}
           onClick={handleClick}
         />
       );
-    case 'VIDEO':
-      return <AuthenticatedVideo messageId={message.id} onClick={handleClick} />;
+    }
     case 'AUDIO':
       return <AuthenticatedAudio messageId={message.id} />;
     case 'DOCUMENT':
