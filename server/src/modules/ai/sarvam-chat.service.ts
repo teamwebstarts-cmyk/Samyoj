@@ -167,12 +167,16 @@ export async function createSarvamChatCompletion(
     const payload: Record<string, unknown> = {
       model,
       messages: options.messages,
-      temperature: options.temperature ?? 0.7,
+      // Non-reasoning mode default is 0.2 — bump to 0.5 for natural WhatsApp chat.
+      // Per-bot temperature overrides via bot.temperature (0–2 supported).
+      temperature: options.temperature ?? 0.5,
       max_tokens: options.maxTokens ?? 1024,
       // Disable reasoning — sarvam-105b defaults to thinking mode which
       // consumes the entire max_tokens budget in reasoning_content, leaving
       // content=null. Set to null for direct, latency-friendly replies.
       reasoning_effort: null,
+      // Slight repetition penalty keeps WhatsApp replies crisp.
+      frequency_penalty: 0.1,
     };
     if (options.tools?.length) {
       payload.tools = options.tools;
@@ -188,6 +192,14 @@ export async function createSarvamChatCompletion(
       },
       body: JSON.stringify(payload),
     });
+
+    // Graceful handling for rate limits (429) and auth errors (401/403)
+    if (response.status === 429) {
+      throw new AppError(429, 'Sarvam AI rate limit reached — please try again in a moment');
+    }
+    if (response.status === 401 || response.status === 403) {
+      throw new AppError(503, 'Sarvam AI authentication failed — check SARVAM_API_KEY');
+    }
 
     const body = (await response.json()) as {
       choices?: Array<{
@@ -253,6 +265,12 @@ export async function createSarvamChatCompletion(
       toolCalls,
       provider: 'sarvam',
     };
+  } catch (err) {
+    // AbortController timeout or network failure — surface clearly
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new AppError(504, 'Sarvam AI request timed out — please try again');
+    }
+    throw err;
   } finally {
     clearTimeout(timeout);
   }

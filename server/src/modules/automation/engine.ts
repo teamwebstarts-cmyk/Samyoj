@@ -316,7 +316,8 @@ export async function processAiChatbotJob(payload: InboundAutomationPayload): Pr
     await performHandoff(
       payload.organizationId,
       payload.conversationId,
-      result.handoffReason || 'USER_REQUEST'
+      result.handoffReason || 'USER_REQUEST',
+      { phoneNumberId: payload.phoneNumberId, encryptedToken: payload.encryptedToken, contactPhone: payload.contactPhone }
     );
   }
 }

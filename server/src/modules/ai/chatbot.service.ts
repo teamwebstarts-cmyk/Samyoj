@@ -306,7 +306,9 @@ export async function generateBotReply(
 export async function performHandoff(
   organizationId: string,
   conversationId: string,
-  reason: string
+  reason: string,
+  /** Optional auth details for sending the handoff summary message. */
+  sendContext?: { phoneNumberId: string; encryptedToken: string; contactPhone: string }
 ): Promise<{ assignedAgent?: { id: string; name: string } | null }> {
   const existing = await prisma.conversation.findFirst({
     where: { id: conversationId, organizationId },
@@ -316,6 +318,14 @@ export async function performHandoff(
   let assignedAgent: { id: string; name: string } | null = null;
   if (!existing?.assignedAgentId) {
     assignedAgent = await assignAgentOnHandoff(organizationId, conversationId);
+  }
+
+  // Generate AI handoff summary so the agent sees what happened before joining.
+  let summary: string | null = null;
+  try {
+    summary = await generateHandoffSummary(organizationId, conversationId);
+  } catch {
+    /* best-effort — handoff still proceeds without summary */
   }
 
   await prisma.conversation.updateMany({
@@ -329,6 +339,28 @@ export async function performHandoff(
     },
   });
 
+  // Send a summary message into the chat so the agent sees context immediately.
+  if (summary && sendContext) {
+    try {
+      const { MetaWhatsAppService } = await import('../whatsapp/meta.service');
+      const accessToken = MetaWhatsAppService.decryptToken(sendContext.encryptedToken);
+      await MetaWhatsAppService.sendMessage(
+        sendContext.phoneNumberId,
+        accessToken,
+        {
+          to: sendContext.contactPhone,
+          type: 'text',
+          text: { body: `🤖 *AI Handoff Summary*\n\n${summary}` },
+        }
+      );
+    } catch (err) {
+      log.warn('Failed to send handoff summary message', {
+        conversationId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
   emitToOrg(organizationId, 'conversation:handoff', {
     conversationId,
     reason,
@@ -337,6 +369,53 @@ export async function performHandoff(
   });
 
   return { assignedAgent };
+}
+
+/**
+ * Generate a 1‑2 line summary of the recent conversation for smooth agent handoff.
+ */
+async function generateHandoffSummary(
+  organizationId: string,
+  conversationId: string
+): Promise<string | null> {
+  const recentMessages = await prisma.message.findMany({
+    where: { conversationId },
+    orderBy: { createdAt: 'desc' },
+    take: 10,
+    select: { content: true, direction: true, createdAt: true },
+  });
+
+  if (recentMessages.length === 0) return null;
+
+  const transcript = recentMessages
+    .reverse()
+    .map((m) => `${m.direction === 'OUTBOUND' ? 'Bot' : 'Customer'}: ${(m.content || '').slice(0, 300)}`)
+    .join('\n')
+    .slice(-2000);
+
+  // Use the configured AI to summarise — short, crisp context for the agent.
+  try {
+    const isConfigured = await (await import('./org-ai.service')).isAiConfiguredForOrg(organizationId);
+    if (!isConfigured) return null;
+
+    const completion = await createChatCompletion({
+      messages: [
+        {
+          role: 'system',
+          content: 'Summarise the following WhatsApp chat in 1 professional sentence for a human agent joining: what the customer needs, key details, urgency. Use the customer language.',
+        },
+        { role: 'user', content: transcript },
+      ],
+      temperature: 0.3,
+      maxTokens: 200,
+      organizationId,
+    });
+
+    const summary = completion.content?.trim();
+    return summary || null;
+  } catch {
+    return null;
+  }
 }
 
 export async function logAutomationRun(data: {

@@ -163,15 +163,29 @@ async function decodeMp3ToPcm(mp3: Buffer, sampleRate: number): Promise<Buffer> 
       'pipe:1',
     ], { stdio: ['pipe', 'pipe', 'pipe'] });
 
+    let settled = false;
+    const done = (err: Error | null, result?: Buffer) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try { child.kill('SIGTERM'); } catch { /* ignore */ }
+      if (err) reject(err);
+      else resolve(result!);
+    };
+
+    const timer = setTimeout(() => {
+      done(new Error('ffmpeg mp3 decode timed out'));
+    }, 60_000);
+
     const chunks: Buffer[] = [];
     child.stdout.on('data', (c: Buffer) => chunks.push(c));
     let stderr = '';
     child.stderr.on('data', (c: Buffer) => { stderr += c.toString(); });
     child.on('close', (code) => {
-      if (code === 0) resolve(Buffer.concat(chunks));
-      else reject(new Error(stderr.trim() || `ffmpeg mp3 decode failed (${code})`));
+      if (code === 0) done(null, Buffer.concat(chunks));
+      else done(new Error(stderr.trim() || `ffmpeg mp3 decode failed (${code})`));
     });
-    child.on('error', reject);
+    child.on('error', (err) => done(err));
     child.stdin.write(mp3);
     child.stdin.end();
   });
