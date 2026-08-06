@@ -71,6 +71,22 @@ curl -s http://localhost:8000/api/whatsapp/webhook/health
 
 ---
 
+## Optional: Doppler secrets layer
+
+`server/.env` is the source of truth for local dev and works standalone. Doppler is an **optional** layer on top — inject secrets from Doppler instead of `.env`.
+
+```bash
+bash scripts/doppler-setup.sh        # install CLI, login, link project, push .env secrets
+cd server && npm run dev:doppler      # run API with Doppler secrets
+# or: USE_DOPPLER=1 bash start.sh     # full stack with Doppler for the API
+```
+
+- Doppler values take **precedence**; anything not in Doppler falls back to `server/.env` (dotenv never overrides existing env vars).
+- `META_WEBHOOK_URL` stays dynamic — the tunnel re-writes it each start, so it is excluded from the Doppler push.
+- Manage secrets at https://dashboard.doppler.com.
+
+---
+
 ## Symptom → fix
 
 | Symptom | Fix |

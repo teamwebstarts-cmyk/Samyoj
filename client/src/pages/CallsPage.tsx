@@ -104,6 +104,8 @@ export default function CallsPage() {
   const [listLoading, setListLoading] = useState(false);
   const [enabling, setEnabling] = useState(false);
   const [ending, setEnding] = useState(false);
+  const [callingBack, setCallingBack] = useState(false);
+  const [callingBackId, setCallingBackId] = useState<string | null>(null);
   const [savingNotes, setSavingNotes] = useState(false);
   const [selectedCallId, setSelectedCallId] = useState<string | null>(routeCallId ?? null);
   const [page, setPage] = useState(1);
@@ -375,6 +377,69 @@ export default function CallsPage() {
     }
   }
 
+  async function handleCallBack() {
+    if (!selectedCall) return;
+    const contactId = selectedCall.contact?.id;
+    const phone = selectedCall.contact?.phone || selectedCall.fromPhone;
+    const conversationId = selectedCall.conversation?.id;
+    setCallingBack(true);
+    try {
+      const { data } = await callingApi.callback({
+        contactId,
+        phone,
+        conversationId,
+      });
+      const callId = (data.data as { call?: { id: string } })?.call?.id;
+      if (callId) {
+        toastSuccess(`Calling ${phone}…`);
+        navigate(`/calls/${callId}`);
+      } else {
+        toastError('Call started but no call page was returned.');
+      }
+    } catch (err: unknown) {
+      const body = (err as { response?: { data?: { error?: { code?: string; message?: string } } } })
+        ?.response?.data?.error;
+      if (body?.code === 'CALL_PERMISSION_REQUIRED') {
+        toastError('Ask-to-call sent. Call again after the customer allows WhatsApp calls.');
+      } else {
+        toastError(body?.message || 'Could not start the call.');
+      }
+    } finally {
+      setCallingBack(false);
+    }
+  }
+
+  async function handleCallListItemCallBack(call: CallRecord) {
+    const contactId = call.contact?.id;
+    const phone = call.contact?.phone || call.fromPhone;
+    const conversationId = call.conversation?.id;
+    setCallingBackId(call.id);
+    try {
+      const { data } = await callingApi.callback({
+        contactId,
+        phone,
+        conversationId,
+      });
+      const callId = (data.data as { call?: { id: string } })?.call?.id;
+      if (callId) {
+        toastSuccess(`Calling ${phone}…`);
+        navigate(`/calls/${callId}`);
+      } else {
+        toastError('Call started but no call page was returned.');
+      }
+    } catch (err: unknown) {
+      const body = (err as { response?: { data?: { error?: { code?: string; message?: string } } } })
+        ?.response?.data?.error;
+      if (body?.code === 'CALL_PERMISSION_REQUIRED') {
+        toastError('Ask-to-call sent. Call again after the customer allows WhatsApp calls.');
+      } else {
+        toastError(body?.message || 'Could not start the call.');
+      }
+    } finally {
+      setCallingBackId(null);
+    }
+  }
+
   async function handleSaveNotes() {
     if (!selectedCall) return;
     setSavingNotes(true);
@@ -475,6 +540,8 @@ export default function CallsPage() {
                           agentName={call.assignedAgent?.name}
                           selected={selectedCallId === call.id}
                           onSelect={() => handleSelectCall(call)}
+                          onCallBack={!isActiveCallStatus(call.status) ? () => void handleCallListItemCallBack(call) : undefined}
+                          callingBack={callingBackId === call.id}
                         />
                       );
                     })}
@@ -530,6 +597,8 @@ export default function CallsPage() {
                   navigate('/calls');
                 }}
                 onEndCall={isActiveCallStatus(selectedCall.status) ? () => void handleTerminate() : undefined}
+                onCallBack={!isActiveCallStatus(selectedCall.status) ? () => void handleCallBack() : undefined}
+                callingBack={callingBack}
                 ending={ending}
               />
             </div>

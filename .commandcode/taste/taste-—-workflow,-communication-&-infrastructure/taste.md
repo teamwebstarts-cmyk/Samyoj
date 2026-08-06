@@ -4,8 +4,11 @@
 - Likes generating subagents/teams to review and critique the work ("critic" reviewers), not just to execute. Confidence: 0.7
 - Prefers simplified UX with fewer clicks — removes unnecessary options/steps and prioritizes the most common actions. Confidence: 0.9
 - Wants feature/functionality documentation maintained in the project (docs folder, feature/meta docs, list of what was built and what's missing). Confidence: 0.8
-- Prefers simple, plain-point explanations (Hinglish is acceptable): what was done, what was suggested, what's missing, and why — not just raw dump. Confidence: 0.9
+- Prefers simple, plain-point explanations: what was done, what was suggested, what's missing, and why — not just raw dump. Explanations must stay very simple: short sentences, plain words (simple English, light Hinglish at most) — the user explicitly asks for simpler wording when a summary is too dense ("simprl akr ark baot") and said heavy Hinglish wasn't understood. The user themself communicates in garbled Hinglish (voice dictation) and expects intent to be inferred and findings summarized in plain points rather than re-asking for clarification. Confidence: 0.95
 - Always uses ngrok for public tunnels — never Cloudflare. Confidence: 0.8
 - Never exposes credentials/secrets (env variable names, App IDs, secrets) in the UI; secrets stay server-side in .env only. Confidence: 0.95
 - Wants an easy one-command local setup (script that configures dependencies/env) so other developers can run the project without friction. Confidence: 0.7
 - Likes being told the suggested next task/priority after each phase completes. Confidence: 0.6
+- Wants third-party API integrations verified against the vendor's official docs/SDK (e.g., read Sarvam's API reference, use their SDK/MCP) rather than trusting the existing code — docs are the ground truth for param ranges and sample rates. Confidence: 0.85
+- Requests broad end-to-end reviews of a whole subsystem (all AI bot + AI calling code), with a written report of what was found before/alongside fixes — not isolated one-off patches. Confidence: 0.9
+- AI automation scope is strictly channel-limited: the AI voice bot must only be connected to inbound calls — outbound calls are human/agent-only and must never get AI involvement (corrected emphatically when a summary implied otherwise). Confidence: 0.9

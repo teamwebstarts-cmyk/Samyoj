@@ -6,6 +6,7 @@
   "scripts": {
     "postinstall": "prisma generate",
     "dev": "tsx watch src/index.ts",
+    "dev:doppler": "doppler run -- tsx watch src/index.ts",
     "dev:worker": "tsx watch src/workers/index.ts",
     "setup-webhook": "tsx scripts/setup-webhook.ts",
     "build": "tsc",

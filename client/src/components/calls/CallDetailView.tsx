@@ -46,6 +46,7 @@ interface CallDetailViewProps {
   botName?: string | null;
   agentName?: string | null;
   conversationId?: string | null;
+  contactId?: string | null;
   transcript?: TranscriptEntry[] | null;
   notes?: string;
   onNotesChange?: (value: string) => void;
@@ -54,6 +55,8 @@ interface CallDetailViewProps {
   notesDirty?: boolean;
   onBack?: () => void;
   onEndCall?: () => void;
+  onCallBack?: () => void;
+  callingBack?: boolean;
   ending?: boolean;
 }
 
@@ -94,6 +97,8 @@ export default function CallDetailView({
   notesDirty,
   onBack,
   onEndCall,
+  onCallBack,
+  callingBack,
   ending,
 }: CallDetailViewProps) {
   const active = isActiveCallStatus(status);
@@ -204,6 +209,19 @@ export default function CallDetailView({
         </div>
 
         <div className="relative flex shrink-0 items-center gap-1.5 sm:gap-2" ref={moreRef}>
+          {!active && onCallBack && (
+            <AppButton
+              variant="secondary"
+              size="sm"
+              loading={callingBack}
+              onClick={onCallBack}
+              title="Call this contact back"
+            >
+              <PhoneOutgoing className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Call back</span>
+            </AppButton>
+          )}
+
           {conversationId ? (
             <Link to={`/inbox?conversation=${conversationId}`}>
               <AppButton variant="primary" size="sm">

@@ -111,7 +111,7 @@ export async function previewSpeechSarvam(
   const speaker = options?.speaker || config.sarvam.ttsSpeaker || 'shubh';
   const language =
     !options?.language || options.language === 'unknown' || options.language === 'auto'
-      ? 'hi-IN'
+      ? config.sarvam.sttLanguage || 'hi-IN'
       : options.language;
   const model = config.sarvam.ttsModel || 'bulbul:v3';
 

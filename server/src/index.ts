@@ -305,6 +305,25 @@ async function start() {
 
   await listen();
 
+  // On restart, any in-flight calls lost their in-memory AI sessions (WebRTC bridge, STT, TTS).
+  // Mark them TERMINATED so they don't stay stuck in "Listening..." forever.
+  try {
+    const stuck = await prisma.call.updateMany({
+      where: { status: { in: ['RINGING', 'CONNECTING', 'CONNECTED'] } },
+      data: { status: 'TERMINATED', endedAt: new Date() },
+    });
+    if (stuck.count > 0) {
+      logger.warn(`Startup cleanup: marked ${stuck.count} stale call(s) as TERMINATED`, {
+        source: 'startup',
+      });
+    }
+  } catch (err) {
+    logger.warn('Startup call cleanup failed', {
+      source: 'startup',
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
   const { checkRedisConnection } = await import('./config/redis');
   const redisAvailable = await checkRedisConnection();
 

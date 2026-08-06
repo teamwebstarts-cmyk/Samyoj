@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Shell(npx tsc --noEmit 2 >& 1)",
+      "Shell(npx vitest run 2 >& 1)",
+      "Shell(npm:*)",
+      "Shell(node --version)",
+      "Shell(ls:*)",
+      "Shell(head:*)",
+      "Shell(docker ps 2>&1; echo \"---\"; pg_isready 2>&1; echo \"---\"; redis-cli ping 2>&1)",
+      "Shell(npx tsx src/index.ts)",
+      "Shell(sleep:*)",
+      "Shell(curl -s http://localhost:8000/ 2>&1; echo \"---\"; curl -s http://localhost:8000/api/status 2>&1)",
+      "Shell(npx prisma db push --accept-data-loss 2 >& 1)",
+      "Shell(node --import tsx test-imports.mjs 2 >& 1)",
+      "Shell(kill $(lsof -t -i:8000) 2>/dev/null; echo \"stopped\")"
+    ],
+    "deny": [],
+    "defaultMode": "default"
+  }
+}

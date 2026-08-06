@@ -76,14 +76,16 @@ export class SarvamStreamTranscriber {
     url.searchParams.set('model', 'saaras:v3-realtime');
     url.searchParams.set('language_code', language === 'unknown' ? 'auto' : language);
     url.searchParams.set('mode', mode);
-    url.searchParams.set('stream_type', 'fast');
+    url.searchParams.set('stream_type', streamType);
     url.searchParams.set('encoding', 'linear16');
     url.searchParams.set('sample_rate', String(sampleRate === 8000 ? 8000 : 16000));
     url.searchParams.set('endpointing', 'vad');
-    // Telephony-optimised VAD: higher threshold rejects noise, shorter silence for snappier turns
-    url.searchParams.set('threshold', '0.6');
-    url.searchParams.set('silence_duration_ms', '400');
-    url.searchParams.set('min_speech_duration_ms', '120');
+    // Telephony-optimised VAD per Sarvam docs: threshold ~0.5 rejects noise,
+    // longer silence (800ms) avoids mid-sentence premature finals, and a longer
+    // min-speech (300ms) ignores short breath/click bursts that otherwise loop.
+    url.searchParams.set('threshold', '0.5');
+    url.searchParams.set('silence_duration_ms', '800');
+    url.searchParams.set('min_speech_duration_ms', '300');
     if (prompt) url.searchParams.set('prompt', prompt.slice(0, 500));
 
     this.ws = new WebSocket(url.toString(), {

@@ -74,8 +74,10 @@ export class AiVoiceCallSession {
         void this.handleUserSpeech(text);
       },
       onSpeechStart: () => {
-        // Signal barge-in intent; full interrupt = close TTS socket on next speak turn
-        if (this.speaking) this.speaking = false;
+        // Do NOT reset this.speaking here. Resetting it while the bot is still
+        // playing TTS lets the bot's own audio echo back into STT, causing the
+        // repeated-transcript loop (e.g. "perfect perfect perfect..."). The
+        // bridge guard (this.speaking) keeps echo out during playback.
       },
       onError: (err) => {
         log.error('Sarvam transcriber error during call', { callId: this.ctx.callId, error: err.message });

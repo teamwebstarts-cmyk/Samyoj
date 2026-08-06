@@ -91,10 +91,14 @@ async function buildConversationMessages(
           'Speak naturally, like a helpful real person. No robo-talk.',
           'Match the customer\'s language. If they speak Hindi, reply in Hindi. If English, reply in English.',
           'No markdown. No bullet points. No emoji. Just plain spoken words.',
-          'If you don\'t know something, offer to connect them with a person.',
+          'Always try to answer the customer\'s question from the FAQ and your own knowledge. Never give a vague "I\'m here to help" or "I can\'t help" reply — actually answer.',
+          'If the question is about products, orders, shipping, returns, payments, or any business topic, give a helpful, specific answer.',
+          'Only offer to connect with a person when you genuinely cannot answer — never as a default.',
+          'IMPORTANT: When the customer explicitly asks to speak with a human, agent, person, manager, or team, call the request_human function instead of replying with text.',
+          'IMPORTANT: When the customer asks for a callback, to be called later, or to schedule a call (e.g. "call schedule karo", "call me later", "team ke saath call fix karo"), call the schedule_callback function instead of replying with text. Do NOT say "I can\'t help" — just call schedule_callback.',
           'Before transferring: briefly summarise the issue in English.',
         ].join(' ')
-      : 'Reply in the same language the customer uses. Keep it short.',
+      : 'Reply in the same language the customer uses. Keep it short. Answer the question from the FAQ when possible; never give a vague "I\'m here to help" reply.',
   ].filter(Boolean);
 
   const messages: import('./chat-completion.service').ChatMessage[] = [{ role: 'system', content: systemParts.join('\n\n') }];
@@ -209,7 +213,9 @@ export async function generateBotReply(
     input.organizationId
   );
 
-  if (detectHandoff(sanitizedMessage, bot)) {
+  // In voice, let the model decide via the request_human / schedule_callback tools so the
+  // call can be live-transferred or a callback scheduled. Skip the text-based handoff shortcut.
+  if (!isVoice && detectHandoff(sanitizedMessage, bot)) {
     return {
       reply: bot.handoffMessage,
       handoff: true,

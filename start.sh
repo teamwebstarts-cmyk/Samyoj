@@ -53,7 +53,20 @@ restart_api() {
     fi
     rm -f "$RUN_DIR/api.pid"
   fi
-  start_process api "npm --prefix server run dev"
+
+  # Optional Doppler layer: USE_DOPPLER=1 bash start.sh runs the API with
+  # Doppler-injected secrets. server/.env remains the fallback for anything
+  # not present in Doppler (dotenv never overrides existing env vars).
+  local api_cmd="npm --prefix server run dev"
+  if [[ "${USE_DOPPLER:-0}" == "1" ]]; then
+    if command -v doppler >/dev/null 2>&1; then
+      api_cmd="doppler run -- npm --prefix server run dev"
+      info "USE_DOPPLER=1 — API will load secrets from Doppler (server/.env as fallback)"
+    else
+      warn "USE_DOPPLER=1 but Doppler CLI is missing — falling back to server/.env. Run bash scripts/doppler-setup.sh"
+    fi
+  fi
+  start_process api "$api_cmd"
 }
 
 [[ -f server/.env ]] || fail "server/.env is missing. Run bash setup.sh first."

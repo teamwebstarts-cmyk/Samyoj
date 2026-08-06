@@ -1,4 +1,4 @@
-import { Phone } from 'lucide-react';
+import { Phone, PhoneOutgoing } from 'lucide-react';
 import ContactAvatar from '../inbox/ContactAvatar';
 import {
   callStatusLabel,
@@ -21,6 +21,8 @@ interface CallListItemProps {
   agentName?: string | null;
   selected: boolean;
   onSelect: () => void;
+  onCallBack?: () => void;
+  callingBack?: boolean;
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -73,6 +75,8 @@ export default function CallListItem({
   createdAt,
   selected,
   onSelect,
+  onCallBack,
+  callingBack,
 }: CallListItemProps) {
   const active = isActiveCallStatus(status);
   const displayName = name || formatPhoneDisplay(phone);
@@ -122,6 +126,20 @@ export default function CallListItem({
             {duration}
             {active ? (
               <WaveIcon className="h-3 w-3 text-emerald-500" />
+            ) : onCallBack ? (
+              <button
+                type="button"
+                aria-label="Call back"
+                disabled={callingBack}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCallBack();
+                }}
+                className="ml-0.5 inline-flex h-5 w-5 items-center justify-center rounded-md text-neutral-500 transition hover:bg-emerald-50 hover:text-emerald-600 disabled:opacity-50 dark:hover:bg-emerald-950/40"
+                title="Call back"
+              >
+                <PhoneOutgoing className="h-3 w-3" strokeWidth={2.25} />
+              </button>
             ) : (
               <Phone className="h-3 w-3 text-neutral-600 dark:text-neutral-400" strokeWidth={2.25} />
             )}
