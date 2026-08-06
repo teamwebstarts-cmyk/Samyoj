@@ -1,10 +1,8 @@
-import WebSocket from 'ws';
 import { config } from '../../config';
 import { createModuleLogger } from '../../utils/logger';
 
 const log = createModuleLogger('sarvam-tts');
 
-const SARVAM_TTS_BASE = 'wss://api.sarvam.ai/text-to-speech/ws';
 const SARVAM_TTS_REST = `https://api.sarvam.ai/text-to-speech`;
 
 export interface SynthesizedAudio {
@@ -17,9 +15,9 @@ export function isSarvamTtsConfigured(): boolean {
 }
 
 /**
- * Synthesize speech using Sarvam Bulbul WebSocket streaming TTS.
- * Auth uses header `api-subscription-key` (never query string).
- * @see https://docs.sarvam.ai/api/api-guides-tutorials/text-to-speech/streaming-api/web-socket
+ * Synthesize speech via Sarvam Bulbul REST TTS — returns raw PCM for the call bridge.
+ * Faster than WebSocket (no ffmpeg needed, no streaming overhead for short replies).
+ * @see https://docs.sarvam.ai/api/api-guides-tutorials/text-to-speech/convert
  */
 export async function synthesizeSpeechSarvam(
   text: string,
@@ -28,189 +26,68 @@ export async function synthesizeSpeechSarvam(
   const apiKey = config.sarvam.apiKey;
   if (!apiKey) throw new Error('Sarvam API key not configured');
 
-  const trimmed = text.trim();
+  const trimmed = text.trim().slice(0, 500);
   if (!trimmed) throw new Error('Empty text for TTS');
 
   const speaker = options?.speaker || config.sarvam.ttsSpeaker || 'shubh';
-  const language = options?.language || config.sarvam.sttLanguage || 'hi-IN';
-  const pace = Math.min(2, Math.max(0.5, options?.pace ?? 1.1));
+  const language =
+    !options?.language || options.language === 'unknown' || options.language === 'auto'
+      ? 'hi-IN'
+      : options.language;
   const model = config.sarvam.ttsModel || 'bulbul:v3';
-  const targetRate = 48000;
 
-  const ws = new WebSocket(`${SARVAM_TTS_BASE}?model=${encodeURIComponent(model)}`, {
+  const res = await fetch(SARVAM_TTS_REST, {
+    method: 'POST',
+    signal: AbortSignal.timeout(30_000),
     headers: {
       'api-subscription-key': apiKey,
+      'Content-Type': 'application/json',
     },
+    body: JSON.stringify({
+      text: trimmed,
+      model,
+      speaker,
+      target_language_code: language,
+      pace: options?.pace ?? 1.0,
+      temperature: 0.6,
+      speech_sample_rate: 24000,
+    }),
   });
 
-  const audioChunks: Buffer[] = [];
+  const data = (await res.json()) as {
+    audios?: string[];
+    request_id?: string;
+    error?: { message?: string; code?: number };
+  };
 
-  await new Promise<void>((resolve, reject) => {
-    let settled = false;
-    const done = (err?: Error) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      if (err) reject(err);
-      else resolve();
-    };
-
-    const timer = setTimeout(() => {
-      try {
-        ws.close();
-      } catch {
-        /* ignore */
-      }
-      done(new Error('Sarvam TTS timed out'));
-    }, 45_000);
-
-    ws.onopen = () => {
-      ws.send(
-        JSON.stringify({
-          type: 'config',
-          data: {
-            speaker,
-            language_code: language === 'unknown' || language === 'auto' ? 'hi-IN' : language,
-            pace,
-          },
-        })
-      );
-
-      const maxChunkLen = 400;
-      let offset = 0;
-      while (offset < trimmed.length) {
-        const chunk = trimmed.slice(offset, offset + maxChunkLen);
-        ws.send(JSON.stringify({ type: 'text', data: { text: chunk } }));
-        offset += maxChunkLen;
-      }
-      ws.send(JSON.stringify({ type: 'flush' }));
-    };
-
-    ws.onmessage = (event) => {
-      try {
-        const raw = String(event.data);
-        const msg = JSON.parse(raw) as {
-          type?: string;
-          data?: { audio?: string };
-          audio?: string;
-          error?: string;
-          message?: string;
-        };
-
-        if (msg.type === 'error' || msg.error) {
-          done(new Error(msg.error || msg.message || 'Sarvam TTS error'));
-          return;
-        }
-
-        const b64 = msg.data?.audio || msg.audio;
-        if (b64) {
-          audioChunks.push(Buffer.from(b64, 'base64'));
-        }
-      } catch {
-        const buf = Buffer.isBuffer(event.data)
-          ? event.data
-          : Buffer.from(event.data as ArrayBuffer);
-        audioChunks.push(buf);
-      }
-    };
-
-    ws.onclose = () => {
-      if (audioChunks.length === 0) {
-        done(new Error('Sarvam TTS returned no audio'));
-        return;
-      }
-      done();
-    };
-
-    ws.onerror = (err) => {
-      done(
-        new Error(
-          `Sarvam TTS WebSocket error: ${(err as unknown as { message?: string }).message || 'unknown'}`
-        )
-      );
-    };
-  });
-
-  try {
-    ws.close();
-  } catch {
-    /* ignore */
+  if (!res.ok) {
+    throw new Error(data.error?.message || `Sarvam TTS failed (${res.status})`);
   }
 
-  const totalBytes = audioChunks.reduce((sum, c) => sum + c.length, 0);
-  const combined = Buffer.concat(audioChunks, totalBytes);
+  const b64 = (data.audios || []).join('');
+  if (!b64) throw new Error('Sarvam TTS returned empty audio');
 
-  // Bulbul returns mp3 audio by default — decode to raw 48kHz Int16 PCM
-  // for the Meta WhatsApp WebRTC bridge via ffmpeg.
-  const pcm = await decodeMp3ToPcm(combined, targetRate);
-  const samples = pcmBytesToInt16Pcm(pcm);
+  const wav = Buffer.from(b64, 'base64');
 
-  return { samples, sampleRate: targetRate };
-}
-
-/** Decode mp3 bytes → raw 16‑bit signed PCM s16le at `sampleRate` using ffmpeg. */
-async function decodeMp3ToPcm(mp3: Buffer, sampleRate: number): Promise<Buffer> {
-  const { spawn } = await import('child_process');
-  const ffmpegPath = await resolveFfmpegPath();
-
-  return new Promise<Buffer>((resolve, reject) => {
-    const child = spawn(ffmpegPath, [
-      '-i', 'pipe:0',
-      '-f', 's16le',
-      '-acodec', 'pcm_s16le',
-      '-ar', String(sampleRate),
-      '-ac', '1',
-      'pipe:1',
-    ], { stdio: ['pipe', 'pipe', 'pipe'] });
-
-    let settled = false;
-    const done = (err: Error | null, result?: Buffer) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      try { child.kill('SIGTERM'); } catch { /* ignore */ }
-      if (err) reject(err);
-      else resolve(result!);
-    };
-
-    const timer = setTimeout(() => {
-      done(new Error('ffmpeg mp3 decode timed out'));
-    }, 60_000);
-
-    const chunks: Buffer[] = [];
-    child.stdout.on('data', (c: Buffer) => chunks.push(c));
-    let stderr = '';
-    child.stderr.on('data', (c: Buffer) => { stderr += c.toString(); });
-    child.on('close', (code) => {
-      if (code === 0) done(null, Buffer.concat(chunks));
-      else done(new Error(stderr.trim() || `ffmpeg mp3 decode failed (${code})`));
-    });
-    child.on('error', (err) => done(err));
-    child.stdin.write(mp3);
-    child.stdin.end();
-  });
-}
-
-/** Copy PCM bytes (s16le) into an aligned Int16Array. */
-function pcmBytesToInt16Pcm(data: Buffer): Int16Array {
-  const byteLength = data.byteLength - (data.byteLength % 2);
-  if (byteLength === 0) return new Int16Array(0);
-  const samples = new Int16Array(byteLength / 2);
-  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
-  for (let i = 0; i < samples.length; i++) {
-    samples[i] = view.getInt16(i * 2, true);
+  // Parse WAV header → extract raw 16-bit PCM (skipping 44-byte header for simple WAV)
+  let pcmOffset = 44;
+  // Find the 'data' chunk marker for robustness
+  for (let i = 0; i < Math.min(wav.length - 8, 1000); i++) {
+    if (wav[i] === 0x64 && wav[i + 1] === 0x61 && wav[i + 2] === 0x74 && wav[i + 3] === 0x61) {
+      pcmOffset = i + 8;
+      break;
+    }
   }
-  return samples;
-}
 
-/** Resolve ffmpeg binary path (bundled via ffmpeg-static or system). */
-async function resolveFfmpegPath(): Promise<string> {
-  try {
-    const mod = await import('ffmpeg-static');
-    const candidate = (mod as { default?: string | null }).default || (mod as unknown as string | null);
-    if (typeof candidate === 'string' && candidate.length > 0) return candidate;
-  } catch { /* optional dep — fall through */ }
-  return 'ffmpeg';
+  const pcmLength = Math.floor((wav.length - pcmOffset) / 2);
+  if (pcmLength <= 0) throw new Error('Sarvam TTS returned invalid WAV');
+
+  const samples = new Int16Array(pcmLength);
+  for (let i = 0; i < pcmLength; i++) {
+    samples[i] = wav.readInt16LE(pcmOffset + i * 2);
+  }
+
+  return { samples, sampleRate: 48000 };
 }
 
 /**
