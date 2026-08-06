@@ -168,7 +168,11 @@ export async function createSarvamChatCompletion(
       model,
       messages: options.messages,
       temperature: options.temperature ?? 0.7,
-      max_tokens: options.maxTokens ?? 500,
+      max_tokens: options.maxTokens ?? 1024,
+      // Disable reasoning — sarvam-105b defaults to thinking mode which
+      // consumes the entire max_tokens budget in reasoning_content, leaving
+      // content=null. Set to null for direct, latency-friendly replies.
+      reasoning_effort: null,
     };
     if (options.tools?.length) {
       payload.tools = options.tools;

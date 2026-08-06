@@ -35,7 +35,6 @@ export async function synthesizeSpeechSarvam(
   const language = options?.language || config.sarvam.sttLanguage || 'hi-IN';
   const pace = Math.min(2, Math.max(0.5, options?.pace ?? 1.1));
   const model = config.sarvam.ttsModel || 'bulbul:v3';
-  const sourceSampleRate = 24000;
   const targetRate = 48000;
 
   const ws = new WebSocket(`${SARVAM_TTS_BASE}?model=${encodeURIComponent(model)}`, {
@@ -63,7 +62,7 @@ export async function synthesizeSpeechSarvam(
         /* ignore */
       }
       done(new Error('Sarvam TTS timed out'));
-    }, 25_000);
+    }, 45_000);
 
     ws.onopen = () => {
       ws.send(
@@ -71,11 +70,8 @@ export async function synthesizeSpeechSarvam(
           type: 'config',
           data: {
             speaker,
-            target_language_code: language === 'unknown' || language === 'auto' ? 'hi-IN' : language,
+            language_code: language === 'unknown' || language === 'auto' ? 'hi-IN' : language,
             pace,
-            speech_sample_rate: sourceSampleRate,
-            enable_preprocessing: true,
-            output_audio_codec: 'linear16',
           },
         })
       );
@@ -143,20 +139,64 @@ export async function synthesizeSpeechSarvam(
 
   const totalBytes = audioChunks.reduce((sum, c) => sum + c.length, 0);
   const combined = Buffer.concat(audioChunks, totalBytes);
-  const samples = new Int16Array(
-    combined.buffer,
-    combined.byteOffset,
-    Math.floor(combined.byteLength / 2)
-  );
 
-  // Meta WhatsApp bridge expects 48 kHz PCM (Bulbul WS outputs ~24 kHz linear16)
-  const ratio = sourceSampleRate / targetRate;
-  const outLen = Math.max(1, Math.floor(samples.length / ratio));
-  const resampled = new Int16Array(outLen);
-  for (let i = 0; i < outLen; i++) {
-    resampled[i] = samples[Math.floor(i * ratio)] ?? 0;
+  // Bulbul returns mp3 audio by default — decode to raw 48kHz Int16 PCM
+  // for the Meta WhatsApp WebRTC bridge via ffmpeg.
+  const pcm = await decodeMp3ToPcm(combined, targetRate);
+  const samples = pcmBytesToInt16Pcm(pcm);
+
+  return { samples, sampleRate: targetRate };
+}
+
+/** Decode mp3 bytes → raw 16‑bit signed PCM s16le at `sampleRate` using ffmpeg. */
+async function decodeMp3ToPcm(mp3: Buffer, sampleRate: number): Promise<Buffer> {
+  const { spawn } = await import('child_process');
+  const ffmpegPath = await resolveFfmpegPath();
+
+  return new Promise<Buffer>((resolve, reject) => {
+    const child = spawn(ffmpegPath, [
+      '-i', 'pipe:0',
+      '-f', 's16le',
+      '-acodec', 'pcm_s16le',
+      '-ar', String(sampleRate),
+      '-ac', '1',
+      'pipe:1',
+    ], { stdio: ['pipe', 'pipe', 'pipe'] });
+
+    const chunks: Buffer[] = [];
+    child.stdout.on('data', (c: Buffer) => chunks.push(c));
+    let stderr = '';
+    child.stderr.on('data', (c: Buffer) => { stderr += c.toString(); });
+    child.on('close', (code) => {
+      if (code === 0) resolve(Buffer.concat(chunks));
+      else reject(new Error(stderr.trim() || `ffmpeg mp3 decode failed (${code})`));
+    });
+    child.on('error', reject);
+    child.stdin.write(mp3);
+    child.stdin.end();
+  });
+}
+
+/** Copy PCM bytes (s16le) into an aligned Int16Array. */
+function pcmBytesToInt16Pcm(data: Buffer): Int16Array {
+  const byteLength = data.byteLength - (data.byteLength % 2);
+  if (byteLength === 0) return new Int16Array(0);
+  const samples = new Int16Array(byteLength / 2);
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  for (let i = 0; i < samples.length; i++) {
+    samples[i] = view.getInt16(i * 2, true);
   }
-  return { samples: resampled, sampleRate: targetRate };
+  return samples;
+}
+
+/** Resolve ffmpeg binary path (bundled via ffmpeg-static or system). */
+async function resolveFfmpegPath(): Promise<string> {
+  try {
+    const mod = await import('ffmpeg-static');
+    const candidate = (mod as { default?: string | null }).default || (mod as unknown as string | null);
+    if (typeof candidate === 'string' && candidate.length > 0) return candidate;
+  } catch { /* optional dep — fall through */ }
+  return 'ffmpeg';
 }
 
 /**

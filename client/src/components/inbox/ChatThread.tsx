@@ -201,6 +201,16 @@ export default function ChatThread({
   const [searching, setSearching] = useState(false);
   const debouncedQuery = useDebouncedValue(searchQuery, 300);
   const threadScrollRef = useRef<HTMLDivElement>(null);
+  /** Track whether the "AI Bot" automation divider has been shown — show it only once per thread view. */
+  const automationDividerShownRef = useRef(false);
+  // Reset when conversation changes.
+  const prevConvIdRef = useRef(conversation?.id);
+  useEffect(() => {
+    if (conversation?.id !== prevConvIdRef.current) {
+      prevConvIdRef.current = conversation?.id;
+      automationDividerShownRef.current = false;
+    }
+  }, [conversation?.id]);
   // M3: only fade-in on the very first reveal of this conversation's thread.
   const wasLoadingRef = useRef(threadLoading);
   const [firstThreadReveal, setFirstThreadReveal] = useState(false);
@@ -731,13 +741,12 @@ export default function ChatThread({
                   const first = !prevMsg || prevMsg.direction !== msg.direction;
                   const automationLabel =
                     msg.direction === 'OUTBOUND' ? getAutomationDividerLabel(msg.metadata) : null;
-                  const prevAutomationLabel =
-                    prevMsg?.direction === 'OUTBOUND'
-                      ? getAutomationDividerLabel(prevMsg.metadata)
-                      : null;
-                  // One centered pill per consecutive automation run (like day dividers).
-                  const showAutomationDivider =
-                    Boolean(automationLabel) && automationLabel !== prevAutomationLabel;
+                  // Show "AI Bot" centered pill only once per conversation view.
+                  let showAutomationDivider = false;
+                  if (automationLabel && !automationDividerShownRef.current) {
+                    showAutomationDivider = true;
+                    automationDividerShownRef.current = true;
+                  }
                   return (
                     <div key={msg.id} className={first || showAutomationDivider ? 'mt-2 first:mt-0' : 'mt-0.5'}>
                       {showAutomationDivider && automationLabel ? (

@@ -249,7 +249,7 @@ export async function queueAiBotProcessing(payload: InboundAutomationPayload): P
 }
 
 export async function processAiChatbotJob(payload: InboundAutomationPayload): Promise<void> {
-  await withAiBotConversationLock(payload.conversationId, async () => {
+  const result = await withAiBotConversationLock(payload.conversationId, async () => {
     try {
       const accessToken = MetaWhatsAppService.decryptToken(payload.encryptedToken);
       await MetaWhatsAppService.sendTypingIndicator(
@@ -268,47 +268,57 @@ export async function processAiChatbotJob(payload: InboundAutomationPayload): Pr
       inboundMessage: payload.content,
     });
 
-    if (result.skipped) {
-      await logAutomationRun({
-        organizationId: payload.organizationId,
-        conversationId: payload.conversationId,
-        triggerType: 'AI_CHATBOT',
-        action: 'generate_reply',
-        status: 'skipped',
-        input: { reason: result.skipReason, botId: result.botId },
-        durationMs: Date.now() - start,
-      });
-      return;
-    }
+    return result;
+  });
 
+  // Lock was busy — another job is already processing this conversation.
+  if (!result) {
+    log.info('AI chatbot job skipped — lock busy', { conversationId: payload.conversationId });
+    return;
+  }
+
+  const processingStart = Date.now();
+
+  if (result.skipped) {
     await logAutomationRun({
       organizationId: payload.organizationId,
       conversationId: payload.conversationId,
       triggerType: 'AI_CHATBOT',
       action: 'generate_reply',
-      status: 'success',
-      input: { botId: result.botId },
-      output: {
-        botId: result.botId,
-        handoff: result.handoff,
-        handoffReason: result.handoffReason,
-        totalTokens: result.totalTokens,
-      },
-      durationMs: Date.now() - start,
+      status: 'skipped',
+      input: { reason: result.skipReason, botId: result.botId },
+      durationMs: Date.now() - processingStart,
     });
+    return;
+  }
 
-    if (!result.reply) return;
-
-    await sendAutomationReply(payload, result.reply, 'AI_CHATBOT');
-
-    if (result.handoff) {
-      await performHandoff(
-        payload.organizationId,
-        payload.conversationId,
-        result.handoffReason || 'USER_REQUEST'
-      );
-    }
+  await logAutomationRun({
+    organizationId: payload.organizationId,
+    conversationId: payload.conversationId,
+    triggerType: 'AI_CHATBOT',
+    action: 'generate_reply',
+    status: 'success',
+    input: { botId: result.botId },
+    output: {
+      botId: result.botId,
+      handoff: result.handoff,
+      handoffReason: result.handoffReason,
+      totalTokens: result.totalTokens,
+    },
+    durationMs: Date.now() - processingStart,
   });
+
+  if (!result.reply) return;
+
+  await sendAutomationReply(payload, result.reply, 'AI_CHATBOT');
+
+  if (result.handoff) {
+    await performHandoff(
+      payload.organizationId,
+      payload.conversationId,
+      result.handoffReason || 'USER_REQUEST'
+    );
+  }
 }
 
 export async function handleInboundAutomations(payload: InboundAutomationPayload): Promise<void> {
