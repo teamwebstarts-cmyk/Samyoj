@@ -14,3 +14,4 @@ server/.env.updated
 server/key.json
 server/secrets/
 *.tsbuildinfo
+.cursor/mcp.json

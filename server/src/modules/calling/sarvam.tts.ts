@@ -47,10 +47,10 @@ export async function synthesizeSpeechSarvam(
       text: trimmed,
       model,
       speaker,
-      target_language_code: language,
+      language_code: language,
       pace: options?.pace ?? 1.0,
       temperature: 0.6,
-      speech_sample_rate: 24000,
+      speech_sample_rate: 48000,
     }),
   });
 
@@ -68,6 +68,13 @@ export async function synthesizeSpeechSarvam(
   if (!b64) throw new Error('Sarvam TTS returned empty audio');
 
   const wav = Buffer.from(b64, 'base64');
+
+  // Parse the WAV 'fmt ' chunk to get the actual sample rate (bytes 24-27, uint32 LE)
+  // instead of assuming 48000 — the bridge resamples correctly only when it knows the real rate.
+  let sampleRate = 48000;
+  if (wav.length >= 28 && wav.toString('ascii', 8, 12) === 'WAVE') {
+    sampleRate = wav.readUInt32LE(24);
+  }
 
   // Parse WAV header → extract raw 16-bit PCM (skipping 44-byte header for simple WAV)
   let pcmOffset = 44;
@@ -87,7 +94,7 @@ export async function synthesizeSpeechSarvam(
     samples[i] = wav.readInt16LE(pcmOffset + i * 2);
   }
 
-  return { samples, sampleRate: 48000 };
+  return { samples, sampleRate };
 }
 
 /**
@@ -116,7 +123,7 @@ export async function previewSpeechSarvam(
     },
     body: JSON.stringify({
       text: text.slice(0, 500),
-      target_language_code: language,
+      language_code: language,
       model,
       speaker,
     }),

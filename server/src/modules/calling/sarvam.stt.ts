@@ -1,6 +1,7 @@
 import WebSocket from 'ws';
 import { config } from '../../config';
 import { createModuleLogger } from '../../utils/logger';
+import { resamplePcm } from './audio-utils';
 
 const log = createModuleLogger('sarvam-stt');
 
@@ -49,6 +50,8 @@ export class SarvamStreamTranscriber {
   private readonly handlers: SarvamTranscriptHandler;
   private pingInterval: ReturnType<typeof setInterval> | null = null;
   private connectOptions: SarvamSttConnectOptions = {};
+  /** Sample rate the STT stream expects — inbound audio is resampled to this. */
+  private sampleRate = 16000;
 
   constructor(handlers: SarvamTranscriptHandler) {
     this.handlers = handlers;
@@ -65,6 +68,7 @@ export class SarvamStreamTranscriber {
       'auto';
     const mode = this.connectOptions.mode || config.sarvam.sttMode || 'codemix';
     const sampleRate = this.connectOptions.sampleRate || config.sarvam.sampleRate || 16000;
+    this.sampleRate = sampleRate === 8000 ? 8000 : 16000;
     const streamType = this.connectOptions.streamType || 'fast';
     const prompt = this.connectOptions.prompt?.trim();
 
@@ -170,10 +174,17 @@ export class SarvamStreamTranscriber {
     if (msg.transcript) this.handlers.onFinal(msg.transcript);
   }
 
-  sendPcm(samples: Int16Array, _sampleRate: number): void {
+  sendPcm(samples: Int16Array, sampleRate: number): void {
     if (this.closed || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
 
-    const buffer = Buffer.from(samples.buffer, samples.byteOffset, samples.byteLength);
+    // Sarvam STT stream expects audio at this.sampleRate. WebRTC inbound is 48kHz,
+    // so resample to the configured STT rate to avoid garbled/chipmunk transcription.
+    let pcm = samples;
+    if (sampleRate !== this.sampleRate) {
+      pcm = resamplePcm(samples, sampleRate, this.sampleRate);
+    }
+
+    const buffer = Buffer.from(pcm.buffer, pcm.byteOffset, pcm.byteLength);
     this.ws.send(
       JSON.stringify({
         event: 'audio_input',

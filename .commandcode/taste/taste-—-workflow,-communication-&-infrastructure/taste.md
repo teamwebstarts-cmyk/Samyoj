@@ -1,0 +1,11 @@
+# Taste — Workflow, Communication & Infrastructure
+- Expects a research-first, plan-then-build workflow: read the codebase/docs, do web research (incl. competitor and Meta/WhatsApp docs), produce a POC-backed plan, and give a confidence score before executing. Confidence: 0.9
+- Wants every deliverable rechecked end-to-end (bugs, error handling, endpoints, pixel match, responsiveness) and a confidence score before moving to the next screen/task. Confidence: 0.9
+- Likes generating subagents/teams to review and critique the work ("critic" reviewers), not just to execute. Confidence: 0.7
+- Prefers simplified UX with fewer clicks — removes unnecessary options/steps and prioritizes the most common actions. Confidence: 0.9
+- Wants feature/functionality documentation maintained in the project (docs folder, feature/meta docs, list of what was built and what's missing). Confidence: 0.8
+- Prefers simple, plain-point explanations (Hinglish is acceptable): what was done, what was suggested, what's missing, and why — not just raw dump. Confidence: 0.9
+- Always uses ngrok for public tunnels — never Cloudflare. Confidence: 0.8
+- Never exposes credentials/secrets (env variable names, App IDs, secrets) in the UI; secrets stay server-side in .env only. Confidence: 0.95
+- Wants an easy one-command local setup (script that configures dependencies/env) so other developers can run the project without friction. Confidence: 0.7
+- Likes being told the suggested next task/priority after each phase completes. Confidence: 0.6

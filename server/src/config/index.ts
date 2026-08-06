@@ -56,7 +56,7 @@ export const config = {
     chatEndpoint: process.env.SARVAM_CHAT_ENDPOINT || 'https://api.sarvam.ai/v1',
     sttModel: process.env.SARVAM_STT_MODEL || 'saaras:v3-realtime',
     sttMode: (process.env.SARVAM_STT_MODE || 'codemix') as 'codemix' | 'transcribe',
-    sttLanguage: process.env.SARVAM_STT_LANGUAGE || 'hi-IN',
+    sttLanguage: process.env.SARVAM_STT_LANGUAGE || 'auto',
     ttsModel: process.env.SARVAM_TTS_MODEL || 'bulbul:v3',
     ttsSpeaker: process.env.SARVAM_TTS_SPEAKER || 'shubh',
     sampleRate: parseInt(process.env.SARVAM_SAMPLE_RATE || '16000', 10),
