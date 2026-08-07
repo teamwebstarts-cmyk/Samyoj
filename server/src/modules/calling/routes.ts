@@ -81,6 +81,8 @@ const callbackSchema = z.object({
   contactId: z.string().uuid().optional(),
   phone: z.string().optional(),
   conversationId: z.string().uuid().optional(),
+  /** Browser-generated SDP offer for agent outbound calls. */
+  sdpOffer: z.string().optional(),
 });
 
 router.get(
@@ -550,10 +552,21 @@ router.post(
       // If Meta permission API is unavailable, still attempt call — Meta will reject if illegal
     }
 
-    const bridge = new WhatsAppWebRtcBridge();
+    // For agent outbound calls: use the browser's SDP offer instead of creating a
+    // server-side WebRTC bridge. This way the agent's mic/speaker connect directly
+    // to the customer through Meta's media relay.
+    const agentSdpOffer = data.sdpOffer;
+    let bridge: WhatsAppWebRtcBridge | null = null;
+    let sdpOffer: string;
+
+    if (agentSdpOffer) {
+      sdpOffer = agentSdpOffer;
+    } else {
+      bridge = new WhatsAppWebRtcBridge();
+      sdpOffer = await bridge.createOffer();
+    }
 
     try {
-      const sdpOffer = await bridge.createOffer();
 
       let conversation = data.conversationId
         ? await prisma.conversation.findFirst({
@@ -616,15 +629,23 @@ router.post(
         createdAt: new Date().toISOString(),
       });
 
+      // Outbound agent calls: notify the agent's browser that the server bridge is
+      // waiting for the customer's SDP answer. When the connect webhook arrives,
+      // it will emit call:outbound_connected with the answer so the browser can
+      // complete WebRTC setup.
       emitToOrg(orgId, 'call:updated', { callId: updatedCall.id, status: 'CONNECTING' });
+      emitToUser(req.user!.userId, 'call:outbound_initiated', {
+        callId: updatedCall.id,
+        sdpOffer,
+      });
 
       sendSuccess(res, { call: updatedCall, sdpOffer });
     } catch (err) {
-      bridge.close();
+      bridge?.close();
       throw err;
     }
-    // Do NOT close the bridge here — the client needs the peer connection alive
-    // to attach its answer. The bridge lives until Meta connects or the call terminates.
+    // For AI-initiated outbound calls (no agent SDP), keep the bridge alive.
+    // Agent calls use browser WebRTC — no bridge to keep.
   })
 );
 

@@ -16,7 +16,14 @@
       "Shell(kill $(lsof -t -i:8000) 2>/dev/null; echo \"stopped\")",
       "Shell(npx tsc --noEmit --pretty 2 >& 1)",
       "Shell(npx tsc --noEmit --pretty src/index.ts src/modules/calling/webrtc-bridge.ts src/modules/calling/ai-voice-agent.ts 2 >& 1)",
-      "Shell(npx tsc --noEmit src/config/*.ts src/utils/*.ts src/errors/*.ts src/modules/calling/webrtc-bridge.ts src/modules/calling/ai-voice-agent.ts src/modules/calling/types.ts src/modules/calling/sarvam.stt.ts src/modules/calling/sarvam.tts.ts src/modules/calling/session-store.ts src/modules/calling/audio-utils.ts src/modules/calling/meta-calling.service.ts 2 >& 1)"
+      "Shell(npx tsc --noEmit src/config/*.ts src/utils/*.ts src/errors/*.ts src/modules/calling/webrtc-bridge.ts src/modules/calling/ai-voice-agent.ts src/modules/calling/types.ts src/modules/calling/sarvam.stt.ts src/modules/calling/sarvam.tts.ts src/modules/calling/session-store.ts src/modules/calling/audio-utils.ts src/modules/calling/meta-calling.service.ts 2 >& 1)",
+      "Shell(grep:*)",
+      "Shell(python3 -c import json,sys; d=json.load(sys.stdin); [print(k,'->',v) for k,v in d.get('scripts',{}).items()])",
+      "Shell(npx tsc --noEmit -p tsconfig.json 2 >& 1)",
+      "Shell(cat tsconfig.json 2>/dev/null; echo \"---\"; cat package.json | python3 -c \"import json,sys; d=json.load(sys.stdin); print(d.get('scripts'))\")",
+      "Shell(cd /workspaces/Samyoj && grep -n \"SARVAM\" server/.env server/.env.example 2>/dev/null; echo \"---\"; cat server/.env 2>/dev/null | grep -i sarvam | head -5)",
+      "Shell(curl -s -X POST https://api.sarvam.ai/text-to-speech -H api-subscription-key: sk_9abwlg04_hGtdFvIgJlrV0NEwhyv3lxJ2 -H Content-Type: application/json -d {\"text\":\"Hello world\",\"language_code\":\"hi-IN\",\"model\":\"bulbul:v3\",\"speaker\":\"shubh\",\"speech_sample_rate\":24000} 2 >& 1)",
+      "Shell(curl -s -X POST https://api.sarvam.ai/text-to-speech -H api-subscription-key: sk_9abwlg04_hGtdFvIgJlrV0NEwhyv3lxJ2 -H Content-Type: application/json -d {\"text\":\"Hello world\",\"language_code\":\"hi-IN\",\"model\":\"bulbul:v3\",\"speaker\":\"amelia\",\"speech_sample_rate\":24000} 2 >& 1)"
     ],
     "deny": [],
     "defaultMode": "default"

@@ -51,6 +51,8 @@ export const config = {
   sarvam: {
     apiKey: process.env.SARVAM_API_KEY || '',
     chatModel: process.env.SARVAM_CHAT_MODEL || 'sarvam-105b',
+    /** Fast model for voice calls — 3-5× lower latency than sarvam-105b. */
+    voiceChatModel: process.env.SARVAM_VOICE_CHAT_MODEL || 'sarvam-105b-conversations',
     chatTimeoutMs: parseInt(process.env.SARVAM_CHAT_TIMEOUT_MS || '30000', 10),
     /** Chat completions endpoint — OpenAI-compatible. */
     chatEndpoint: process.env.SARVAM_CHAT_ENDPOINT || 'https://api.sarvam.ai/v1',

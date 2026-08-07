@@ -10,6 +10,7 @@ import CallListItem from '../components/calls/CallListItem';
 import { CallsListEmpty, CallsSelectEmpty } from '../components/calls/CallPlaceholder';
 import CallsPageHeader from '../components/calls/CallsPageHeader';
 import CallsRailPanel from '../components/calls/CallsRailPanel';
+import CallingSettingsStage from '../components/calls/CallingSettingsStage';
 import CallsSetupSheet from '../components/calls/CallsSetupSheet';
 import {
   isActiveCallStatus,
@@ -306,6 +307,12 @@ export default function CallsPage() {
       const payload = data as { callId: string; transcript: unknown };
       if (payload.callId) applyTranscriptUpdate(payload.callId, payload.transcript);
     }
+    if (event === 'call:outbound_connected') {
+      const payload = data as { callId: string; sdpAnswer: string };
+      const handler = (window as unknown as { __outboundCallHandler?: (e: string, d: unknown) => void }).__outboundCallHandler;
+      handler?.('call:outbound_connected', payload);
+      void load();
+    }
   });
 
   const handleEnableCalling = useCallback(async () => {
@@ -387,6 +394,28 @@ export default function CallsPage() {
     const conversationId = selectedCall.conversation?.id;
     setCallingBack(true);
     try {
+      // Create browser WebRTC offer for agent outbound call
+      const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        for (const track of stream.getTracks()) pc.addTrack(track, stream);
+      } catch {
+        throw new Error('Microphone access is required to make calls.');
+      }
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      await new Promise<void>((resolve) => {
+        if (pc.iceGatheringState === 'complete') { resolve(); return; }
+        const timer = setTimeout(resolve, 5000);
+        pc.onicegatheringstatechange = () => {
+          if (pc.iceGatheringState === 'complete') { clearTimeout(timer); resolve(); }
+        };
+      });
+      const sdpOffer = pc.localDescription?.sdp;
+      if (!sdpOffer) throw new Error('Could not create call offer');
+
+      (window as unknown as { __activeCallPc?: RTCPeerConnection }).__activeCallPc = pc;
+
       const { data } = await callingApi.callback({
         contactId,
         phone,
@@ -396,6 +425,14 @@ export default function CallsPage() {
       if (callId) {
         toastSuccess(`Calling ${phone}…`);
         navigate(`/calls/${callId}`);
+        // Listen for the outbound connect event to apply SDP answer
+        const handler = (event: string, payload: unknown) => {
+          const p = payload as { callId?: string; sdpAnswer?: string };
+          if (event === 'call:outbound_connected' && p.callId === callId && p.sdpAnswer) {
+            void pc.setRemoteDescription({ type: 'answer', sdp: p.sdpAnswer });
+          }
+        };
+        (window as unknown as { __outboundCallHandler?: typeof handler }).__outboundCallHandler = handler;
       } else {
         toastError('Call started but no call page was returned.');
       }
@@ -564,13 +601,17 @@ export default function CallsPage() {
           </div>
         </div>
 
-        {/* Stage pane — hidden on mobile when list is showing */}
+        {/* Stage pane — hidden on mobile when list is showing.
+            When the Settings rail is open, this becomes the calling
+            customization (replacing the chat), so it must stay visible. */}
         <div
           className={`flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden ${
-            selectedCall ? 'flex' : 'hidden md:flex'
+            selectedCall || railPanel === 'settings' ? 'flex' : 'hidden md:flex'
           }`}
         >
-          {selectedCall ? (
+          {railPanel === 'settings' ? (
+            <CallingSettingsStage onClose={() => setRailPanel(null)} />
+          ) : selectedCall ? (
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white dark:bg-neutral-950">
               <CallDetailView
                 name={selectedCall.contact?.name}
@@ -607,10 +648,10 @@ export default function CallsPage() {
           )}
         </div>
 
-        {/* Rail side panel — visible from md so tablet Settings icon isn't a dead control */}
-        {railPanel && (
+        {/* Rail side panel — Help only (settings now lives in the stage) */}
+        {railPanel === 'help' && (
           <CallsRailPanel
-            panel={railPanel}
+            panel="help"
             onClose={() => setRailPanel(null)}
             onOpenSetup={() => setSetupSheetOpen(true)}
           />

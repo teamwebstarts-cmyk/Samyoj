@@ -1,92 +1,115 @@
-# Plan: Inline Calling Settings in Calls Page Rail
+# Plan: Pixel-Perfect Calling Settings UI in Calls Page Center Stage
 
 ## Goal
-Embed the full calling customization UI directly into the Calls page rail panel so users configure who answers, greetings, voice, and all calling behavior without leaving the Calls screen. Same 9-section content and quality as Settings → Calling. No redirects to `/settings`.
+Replace the center "chat/call-detail" stage in the Calls page with the full calling customization UI — matching the reference design (image 1) pixel-perfectly. Layout: **history list (left) · settings config (center) · rail icons (right)**. Cancel/close returns to the chat.
 
-## Current State (verified against code)
-- `CallingSettingsPanel.tsx` (800 lines): owns ALL state + API calls + renders the form content, and passes the **Save / Cancel / Reset default** footer into `SettingsPanel`'s `footer` prop. Used ONLY by `SettingsPage.tsx` line 939 (`{activeTab === 'calling' && <CallingSettingsPanel />}`).
-- `SettingsPanel.tsx`: a full-page "dashboard card" with gradient header, body (`p-4 sm:p-5`), and optional `footer` slot. NOT suitable to nest inside a 280px rail (it's page chrome).
-- `CallsRailPanel.tsx`: slide-out panel with its own `PanelHeader` (title + X) and a single `overflow-y-auto` body. `SettingsBody` (lines 94–130) only shows links → `/settings?tab=calling`, `/ai-bot`, setup. Panel widths: `md:w-[260px] lg:w-[280px]` (help), `w-[min(100%,300px)]` mobile.
-- `CallsPage.tsx` line 611–617: mounts `CallsRailPanel` with `panel={railPanel}` ('settings' | 'help' | null). `toggleRail` allows only one open at a time.
-- Form internals: `<div className="flex flex-col gap-5 lg:flex-row lg:gap-6">` → section nav `lg:w-[200px]` + main. Below `lg` the nav is a **horizontal scroll row** (`overflow-x-auto`). "How it works" aside uses `xl:grid-cols-[1fr_220px]` and is hidden until `xl` viewport. So inside a narrow rail the form already degrades to a stacked layout (nav on top, content below) — good, no new responsive code strictly needed.
-- `AiBotPage.tsx:1231` links to `/settings?tab=calling&section=behavior` (URL only, not the component) — must keep that route working.
-- `CallingSettingsSkeleton` exists and is imported by the form for loading state.
+## Reference Design Analysis (Image 1)
+- **Left sidebar** (narrow, ~200px): icon + label items with subtle borders, active state has emerald left border + light bg
+- **Main content area**: "Who answers calls" title + subtitle, then option cards
+- **Option cards** (radio-select): clean borders (1px neutral-200), rounded-xl, generous padding (py-4 px-5), icon in colored circle (green/blue/amber), title, "Recommended" pill (green bg, white text, rounded-full, px-2 py-0.5, text-[10px] font-bold uppercase), description text, tags/pills, radio circle (border-2, 16px, selected = filled green)
+- **Right "How it works" panel**: light mint/emerald bg (#f0fdf4 / emerald-50), rounded-2xl, numbered circles (emerald-600 bg, white text, h-5 w-5), clean step text
+- **Bottom bar**: Reset default (left, ghost button) | Cancel (secondary, white bg, border) | Save changes (primary, emerald-600 bg, white text, rounded-lg, px-4 py-2)
+- **Typography**: Inter/system font, tight tracking, clear hierarchy (title 18px extrabold, subtitle 13px medium, labels 12px bold, helper 11px medium)
+- **Spacing**: Generous whitespace, consistent 4px/8px/12px/16px rhythm, max-width constraints on content
 
-## Key Correction vs. Prior Plan
-Prior plan said "keep footer inside the form" but the code puts the footer in `CallingSettingsPanel`'s `SettingsPanel footer` prop. **Resolution: move the Save/Cancel/Reset footer INTO `CallingSettingsForm`** so it renders in both contexts. `CallingSettingsPanel` then renders `<SettingsPanel title/desc>{<CallingSettingsForm/>}</SettingsPanel>` with NO footer prop (avoids duplicate footers). The form's footer becomes a **sticky bottom bar** within its own container.
+## Current State
+- `CallingSettingsForm.tsx`: extracted form (already exists) with nav + content + footer, but styling doesn't match reference
+- `CallingSettingsPanel.tsx`: thin wrapper for Settings page
+- `CallingSettingsStage.tsx`: center-stage wrapper (already exists, needs header styling refinement)
+- `CallsRailPanel.tsx`: help-only side panel
+- `CallsPage.tsx`: renders `CallingSettingsStage` in center when `railPanel === 'settings'`
 
-## Design Decisions (resolve these)
+## What Needs to Change (Styling Overhaul)
 
-### D1. Presentation style (ASK USER — recommended: wide rail)
-- **Recommended: Inline wide rail.** Clicking Settings widens the rail to `md:w-[480px] lg:w-[520px]`, shows the full 9-section form with a sticky Save/Cancel footer. Page chrome (list + stage) stays visible behind it.
-- Alternative: Full-page overlay/modal (covers the Calls page). More room but breaks "stays in calls" feel and is heavier.
-- The form's native responsive layout already supports a 480–520px width (stacked nav-on-top). No new layout CSS needed beyond width + sticky footer.
+### 1. `CallingSettingsForm.tsx` — Full styling rewrite to match reference
 
-### D2. Keep or remove Settings → Calling tab
-- **Recommended: KEEP** the tab but have it render the same shared `CallingSettingsForm` (via thin `CallingSettingsPanel`). Preserves `AiBotPage` deep link and bookmarks. Optionally add a small note "Edit these in Calls → Customize".
-- Not removing avoids breaking `AiBotPage.tsx:1231`.
+**SectionNav (left sidebar):**
+- Width: `w-[200px] shrink-0` on desktop, horizontal scroll on mobile
+- Items: `px-3 py-2.5 rounded-xl text-[12px] font-bold gap-2.5`
+- Active: `bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200/80 dark:bg-emerald-950/40 dark:text-emerald-300`
+- Inactive: `text-neutral-600 hover:bg-neutral-50`
+- Icon: `h-4 w-4`
+- Border-bottom separator between sections? No — clean spacing only
+- "Setup guide" link: `mt-auto pt-4 text-[11px] text-neutral-500 hover:text-emerald-700`
 
-### D3. Section deep-linking in rail
-- In the rail, section state is local (default `'who'`). `useSearchParams` reading moves to `CallingSettingsPanel` only; it passes `initialSection` to the form. Rail ignores URL.
+**Main content area:**
+- Max-width: `max-w-2xl` or flexible with `flex-1`
+- Section titles: `text-[18px] font-extrabold tracking-tight text-theme-fg`
+- Subtitles: `text-[13px] font-medium text-theme-muted mt-1`
+- Cards: `rounded-xl border border-neutral-200 bg-white p-5 hover:border-neutral-300 transition-all`
+- Selected card: `border-emerald-400 ring-1 ring-emerald-200 bg-emerald-50/30`
+- Card inner layout: flex row, icon left (h-11 w-11 rounded-xl), content middle, radio right
 
-## Files to Modify / Create
+**WhoCard refinements:**
+- Icon container: `h-11 w-11 rounded-xl flex items-center justify-center`
+- Title: `text-[14px] font-bold text-theme-fg`
+- Description: `text-[12px] font-medium text-theme-muted mt-1`
+- Tags: `rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-bold text-neutral-600`
+- Recommended pill: `rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-800`
+- Radio circle: `h-4 w-4 rounded-full border-2`, selected = `border-emerald-600 bg-emerald-600`
+- Card padding: `p-5` (up from `p-3.5`)
 
-### 1. CREATE `client/src/components/calls/CallingSettingsForm.tsx`
-Extract from `CallingSettingsPanel.tsx`:
-- Types: `CallingSettings` interface, `SectionId`, `defaultSettings`, `SARVAM_SPEAKERS`, `SARVAM_LANGUAGES`, `RING_PRESETS`, `SECTIONS`.
-- Logic: all `useState`/`useEffect` (load settings + bots), `dirty` memo, `handleSave`, `handlePreviewVoice`, `handleReset`, `handleCancel`.
-- Helpers: `howItWorks`, `applyWhoAnswers`.
-- Sub-components: `SectionFrame`, `HowItWorks`, `WhoCard`, `BehaviorRow`, `DeepLinkCard`.
-- Render: the `<div className="flex flex-col gap-5 lg:flex-row">` block (all 9 sections) **plus** a **sticky footer** (`sticky bottom-0 ... Save changes / Cancel / Reset default`) so it works inside the rail.
-- Props: `{ initialSection?: SectionId }`. Default `'who'`.
-- Loading: `if (loading) return <CallingSettingsSkeleton />;`
-- Export `CallingSettingsForm` and `type CallingSettings`.
+**HowItWorks panel (right aside):**
+- Container: `rounded-2xl border border-emerald-100 bg-emerald-50/50 p-5`
+- Title: `text-[12px] font-extrabold text-emerald-900 dark:text-emerald-300`
+- Steps: `mt-3 space-y-3`
+- Number circle: `h-5 w-5 rounded-full bg-emerald-600 text-white text-[10px] font-bold flex items-center justify-center`
+- Step text: `text-[12px] font-medium text-neutral-700 dark:text-neutral-300 pl-2`
+- On mobile (`< xl`): render below content with `mt-4`
 
-### 2. REFACTOR `client/src/components/calls/CallingSettingsPanel.tsx`
-- Imports `CallingSettingsForm`.
-- Reads `useSearchParams` for `section`, passes `initialSection` to the form.
-- Returns `<SettingsPanel title="Customize calls" description=... icon={PhoneCall} accent="emerald">{<CallingSettingsForm initialSection={...}/>}</SettingsPanel>` — **no footer prop** (form owns footer now).
-- Removes the inline footer JSX and duplicate helper/sub-component definitions (now in the form file).
+**SectionFrame:**
+- Grid: `grid gap-6 xl:grid-cols-[1fr_240px]` (main + aside)
+- Content padding: consistent `space-y-4`
 
-### 3. UPDATE `client/src/components/calls/CallsRailPanel.tsx`
-- Import `CallingSettingsForm`.
-- Replace `SettingsBody` usage when `panel === 'settings'` with `<CallingSettingsForm />`.
-- Width: when `panel === 'settings'` use `md:w-[480px] lg:w-[520px]`; Help keeps `md:w-[260px] lg:w-[280px]`.
-- `PanelHeader` already provides title "Customize" + close X — keep it; the form supplies content + its own sticky footer below the scrollable body.
-- Remove the now-dead `ActionRow` links to `/settings?tab=calling` and `/ai-bot` (form handles those internally via its own links). Keep `onOpenSetup` only if still referenced by Help.
-- Ensure the body container allows the form's sticky footer to stick (body is `overflow-y-auto`; the form's footer uses `sticky bottom-0` — verify it sticks within the scroll parent; if not, move footer outside the scroll container into `CallsRailPanel`).
+**Footer:**
+- Container: `flex shrink-0 items-center justify-between gap-3 border-t border-neutral-200 bg-white px-5 py-3.5`
+- Reset default: `text-[12px] font-medium text-neutral-500 hover:text-neutral-700`
+- Cancel: `px-4 py-2 rounded-lg border border-neutral-200 bg-white text-[13px] font-semibold text-neutral-700 hover:bg-neutral-50`
+- Save changes: `px-4 py-2 rounded-lg bg-emerald-600 text-white text-[13px] font-semibold hover:bg-emerald-700 shadow-sm`
+- Disabled Save: `opacity-50 cursor-not-allowed`
 
-### 4. `client/src/pages/SettingsPage.tsx` — NO structural change
-- Line 939 already renders `<CallingSettingsPanel />`; continues to work.
+**Form-level wrapper:**
+- Outer: `flex flex-col h-full`
+- Scroll area: `flex-1 overflow-y-auto`
+- Padding: `p-5 sm:p-6`
 
-### 5. `client/src/pages/CallsPage.tsx` — NO change needed
-- Already mounts `CallsRailPanel` with `panel`. Width handled inside `CallsRailPanel`.
+### 2. `CallingSettingsStage.tsx` — Header styling refinement
+- Header bar: `flex items-center justify-between border-b border-neutral-200 px-5 py-3.5`
+- Title: "Customize calls" — `text-[15px] font-extrabold tracking-tight`
+- Subtitle: `text-[12px] font-medium text-theme-muted mt-0.5`
+- Back button: `inline-flex items-center gap-1.5 rounded-lg border border-neutral-200 px-3 py-1.5 text-[12px] font-semibold hover:bg-neutral-50`
+- Chevron: `h-4 w-4`
+- The form below gets `flex-1 overflow-hidden` so its internal scroll takes over
 
-## UI/UX Details
-- **Rail (settings):** header "Customize" + X; scrollable form; sticky footer with Reset default (left) and Cancel / Save changes (right).
-- **Section nav:** horizontal scroll tabs on top (native `< lg` behavior); content below. At 520px this is comfortable.
-- **"How it works" aside:** hidden until `xl` viewport; shows below content in rail — acceptable.
-- **Deep links (Personality / Training):** `DeepLinkCard` → `/ai-bot`. Clicking navigates away from Calls (expected; same as today).
-- **Mobile:** panel `w-[min(100%,300px)]` overlays; form scrolls vertically; footer sticky.
+### 3. `CallsRailPanel.tsx` — No change needed (already help-only)
+- Keep as-is
 
-## Validation
-1. Calls page: click Settings icon → rail widens, full 9-section form appears, no redirect.
-2. Edit a field → Save changes enables; Cancel reverts; Reset default prompts.
-3. Voice section: "Play greeting preview" triggers audio (or graceful error toast).
-4. Switch sections via top tabs → content updates, state persists within panel session.
-5. Close X → rail collapses to 72px icon rail; Calls list/stage unchanged.
-6. Settings → Calling tab still renders the same form (backward compat + AiBotPage deep link works).
-7. Help icon still opens Help at original width; no regression.
-8. Responsive: desktop 520px readable; mobile 300px scrollable; footer stays visible.
+### 4. `CallsPage.tsx` — No change needed
+- Stage routing already correct
+
+### 5. `CallingSettingsPanel.tsx` — No change needed
+- Already thin wrapper
+
+## Files to Modify
+
+| File | Changes |
+|------|---------|
+| `client/src/components/calls/CallingSettingsForm.tsx` | Full CSS class overhaul on SectionFrame, HowItWorks, WhoCard, BehaviorRow, DeepLinkCard, section nav, footer, and wrapper padding |
+| `client/src/components/calls/CallingSettingsStage.tsx` | Minor header styling polish |
+
+## Validation Criteria
+1. Open Calls page → click Settings icon → center shows settings with reference design quality
+2. "Who answers" section shows three clean cards with proper radio selection, "Recommended" pill, tags
+3. "How it works" panel visible on desktop right side, clean mint background + numbered circles
+4. Section sidebar (left) shows all 9 items, active state highlighted
+5. Footer shows Reset default | Cancel | Save changes with correct button styles
+6. Click "Calls" back button → returns to call detail/chat
+7. Settings → Calling tab still works (backward compat)
+8. Responsive: mobile stacks nav on top, content below, footer sticky
 
 ## Risks
 | Risk | Mitigation |
 |------|-----------|
-| Sticky footer won't stick inside `overflow-y-auto` rail body | Move footer out of scroll container into `CallsRailPanel` flex column (header / scroll body / footer) |
-| 520px rail too narrow for "How it works" aside | Aside already `xl:`-gated; shows below content — acceptable |
-| Duplicate footer if both `CallingSettingsPanel` and form render one | Form owns footer; `CallingSettingsPanel` passes NO footer prop |
-| Breaking `AiBotPage` deep link | Keep Settings→Calling tab rendering the shared form |
-
-## Open Questions
-- **D1 (presentation):** wide inline rail (recommended) vs full-page overlay? → need user confirm.
-- **D2:** keep Settings→Calling tab (recommended) — assumed yes unless user says remove.
+| Center stage overflow on small screens | Form has `flex-1 overflow-y-auto`, header is `shrink-0` |
+| Styling conflicts with existing theme vars | Use existing `text-theme-fg`, `text-theme-muted`, `dark:` variants consistently |
+| Footer visibility | Sticky within form's flex column (`shrink-0` at bottom) |

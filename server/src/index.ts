@@ -375,6 +375,26 @@ async function start() {
         error: err instanceof Error ? err.message : String(err),
       });
     }
+
+    // Pre-warm the Sarvam voice chat model so the first call doesn't hit cold-start latency.
+    if (config.sarvam.apiKey) {
+      import('./modules/ai/sarvam-chat.service')
+        .then(({ createSarvamChatCompletion }) =>
+          createSarvamChatCompletion({
+            messages: [{ role: 'user', content: 'ping' }],
+            model: 'sarvam-105b-conversations',
+            maxTokens: 1,
+            temperature: 0,
+          })
+        )
+        .then(() => logger.info('Sarvam voice model pre-warmed', { source: 'startup' }))
+        .catch((err) =>
+          logger.warn('Sarvam voice model pre-warm failed (calling will still work)', {
+            source: 'startup',
+            error: err instanceof Error ? err.message : String(err),
+          })
+        );
+    }
   } else {
     logger.warn(
       `Redis is not reachable at ${config.redisUrl}. Background workers are disabled — campaigns, webhooks, and queued messages will not process.`,

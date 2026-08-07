@@ -327,20 +327,30 @@ async function handleCallConnect(
 
     if (pending && sdpAnswer) {
       await storePendingCall(metaCallId, { ...pending, sdpAnswer });
+
+      // Tell the calling agent's browser: "customer answered, here's their SDP answer".
+      // The agent's browser will set this as the remote description to complete WebRTC.
+      emitToOrg(orgId, 'call:outbound_connected', {
+        callId: existingCall.id,
+        metaCallId,
+        sdpAnswer,
+        sdpOffer: pending.sdpOffer,
+      });
     }
 
     await prisma.call.update({
       where: { id: existingCall.id },
-      data: { status: 'RINGING' },
+      data: { status: 'CONNECTED', answeredAt: new Date(), startedAt: new Date() },
     });
+
+    await registerActiveCall(metaCallId, orgId);
 
     emitToOrg(orgId, 'call:updated', {
       callId: existingCall.id,
-      status: 'RINGING',
+      status: 'CONNECTED',
       metaCallId,
-      sdpAnswer,
     });
-    log.info('Outbound agent call ready', { metaCallId, callId: existingCall.id });
+    log.info('Outbound agent call connected', { metaCallId, callId: existingCall.id });
     return;
   }
 

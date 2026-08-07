@@ -10,3 +10,4 @@
 - Avoids multiple/vertical scrollbars in composer panels; prefers side-by-side layouts (form on left, live preview on right) that don't require scrolling. Confidence: 0.8
 - Chat-scoped notifications only (inline notices like WhatsApp, e.g. "AI bot paused") — no global page-level toasts for success; success is shown by the message bubble itself. Confidence: 0.85
 - Wants skeleton loaders for async-loaded content (conversation lists, chat threads) and smooth transitions when content appears. Confidence: 0.7
+- When presenting many configurable options (especially sensory ones like TTS voices), requires inline preview/demo controls so users can audition each choice before selecting — listing names/labels alone is insufficient; the user must be able to experience the difference to make an informed decision. Confidence: 0.85

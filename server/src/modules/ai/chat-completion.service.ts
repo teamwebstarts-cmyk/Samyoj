@@ -55,9 +55,10 @@ export async function createChatCompletion(
       ...options,
       tools: options.tools,
       // Pass resolved org config through so custom endpoint/key/model are honored.
+      // options.model overrides cfg.deployment — voice calls pass sarvam-105b-conversations.
       endpoint: cfg.endpoint,
       apiKey: cfg.apiKey,
-      model: cfg.deployment,
+      model: options.model || cfg.deployment,
     });
 
     log.debug('Chat completion via Sarvam', { durationMs: Date.now() - start, tokens: result.usage?.totalTokens });

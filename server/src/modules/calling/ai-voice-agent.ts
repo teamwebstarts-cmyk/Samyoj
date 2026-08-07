@@ -123,7 +123,6 @@ export class AiVoiceCallSession {
         // playing TTS lets the bot's own audio echo back into STT, causing the
         // repeated-transcript loop (e.g. "perfect perfect perfect..."). The
         // bridge guard (this.speaking) keeps echo out during playback.
-      },
       onError: (err) => {
         log.error('Sarvam transcriber error during call', { callId: this.ctx.callId, error: err.message });
       },
@@ -253,22 +252,48 @@ export class AiVoiceCallSession {
       case 'request_human': {
         const reason = (tool.arguments.reason as string) || 'Customer requested human';
 
-        await this.speak(
-          'Please hold — let me connect you with our team.',
-          'assistant'
-        );
+        // Check if any agents are actually online before promising to connect.
+        try {
+          const { getEligibleAgents } = await import('../team/assignment');
+          const agents = await getEligibleAgents(this.ctx.organizationId);
+          const onlineAgents = agents.filter((a) => a.availability === 'ONLINE');
 
-        await this.performHandoffAndTransfer('TOOL_REQUEST_HUMAN', reason);
+          if (onlineAgents.length > 0) {
+            // Agents available — connect them
+            await this.speak(
+              'Please hold — let me connect you with our team.',
+              'assistant'
+            );
+            await this.performHandoffAndTransfer('TOOL_REQUEST_HUMAN', reason);
+          } else {
+            // No agents online — offer callback gracefully
+            await this.speak(
+              "Our team isn't available on call right now. Would you like us to call you back? Just tell me a time that works.",
+              'assistant'
+            );
+            // Let customer respond — the next speech turn will either:
+            // - Trigger schedule_callback if the brain recognizes a time request
+            // - Or the caller stays silent → we follow up via WhatsApp
+            this.scheduleSilenceTimeout();
+          }
+        } catch {
+          // Fallback if agent check fails — still try to connect
+          await this.speak(
+            'Please hold — let me connect you with our team.',
+            'assistant'
+          );
+          await this.performHandoffAndTransfer('TOOL_REQUEST_HUMAN', reason);
+        }
         break;
       }
 
       case 'schedule_callback': {
         const when = (tool.arguments.when as string) || 'as soon as possible';
-        await this.performHandoffAndTransfer('SCHEDULE_CALLBACK', `Schedule callback: ${when}`);
         await this.speak(
           `I've noted your request. Someone from our team will call you ${when}. They'll also message you here on WhatsApp.`,
           'assistant'
         );
+        await this.performHandoffAndTransfer('SCHEDULE_CALLBACK', `Schedule callback: ${when}`);
         await this.end('scheduled_callback');
         break;
       }
@@ -282,6 +307,23 @@ export class AiVoiceCallSession {
         await this.performHandoffAndTransfer('FALLBACK', 'Unknown tool');
         break;
     }
+  }
+
+  /** If the caller stays silent after being offered a callback, wrap up gracefully. */
+  private silenceTimer: ReturnType<typeof setTimeout> | null = null;
+
+  private scheduleSilenceTimeout(): void {
+    if (this.silenceTimer) clearTimeout(this.silenceTimer);
+    this.silenceTimer = setTimeout(() => {
+      if (!this.ended) {
+        void this.speak(
+          "I'll have someone message you on WhatsApp shortly. Thanks for calling!",
+          'assistant'
+        ).then(() => {
+          void this.end('no_agents_callback_offered');
+        });
+      }
+    }, 8000);
   }
 
   /**
@@ -395,6 +437,11 @@ export class AiVoiceCallSession {
     if (this.ended) return;
     this.ended = true;
 
+    if (this.silenceTimer) {
+      clearTimeout(this.silenceTimer);
+      this.silenceTimer = null;
+    }
+
     // Post-call summary: store AI summary in metadata
     if (this.transcript.length > 0) {
       try {
@@ -457,15 +504,27 @@ export class AiVoiceCallSession {
 
     await unregisterActiveCall(this.ctx.metaCallId, this.ctx.organizationId);
 
+    const priorCall = await prisma.call.findUnique({ where: { id: this.ctx.callId } });
+    const priorMetadata = ((priorCall?.metadata as Record<string, unknown> | null) || {}) as Record<
+      string,
+      unknown
+    >;
+    const durationSeconds =
+      this.recordingBuffer.length > 0
+        ? Math.round(
+            Buffer.concat(this.recordingBuffer).length / (this.recordingSampleRate * 2)
+          )
+        : priorCall?.durationSeconds ?? undefined;
+
     await prisma.call.update({
       where: { id: this.ctx.callId },
       data: {
         status: reason === 'handoff' ? 'COMPLETED' : 'TERMINATED',
         endedAt: new Date(),
-        ...(call.durationSeconds != null ? { durationSeconds } : {}),
+        ...(durationSeconds != null ? { durationSeconds } : {}),
         // Store voice quality metrics in call metadata
         metadata: {
-          ...((call?.metadata as Record<string, unknown>) || {}),
+          ...priorMetadata,
           voiceMetrics: {
             avgSttLatencyMs: this.sttLatenciesMs.length
               ? Math.round(this.sttLatenciesMs.reduce((a, b) => a + b, 0) / this.sttLatenciesMs.length)

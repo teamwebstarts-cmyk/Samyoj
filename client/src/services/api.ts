@@ -357,6 +357,10 @@ export const aiBotApi = {
     api.post(`/ai-bot/${botId}/ingest/url`, data),
   ingestPdf: (botId: string, data: { filename: string; dataBase64: string }) =>
     api.post(`/ai-bot/${botId}/ingest/pdf`, data),
+  seedKnowledge: (
+    botId: string,
+    items: Array<{ title: string; content: string }>
+  ) => api.post(`/ai-bot/${botId}/seed-knowledge`, { items }),
 };
 
 export const campaignApi = {

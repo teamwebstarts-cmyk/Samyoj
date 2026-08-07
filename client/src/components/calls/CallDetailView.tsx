@@ -147,10 +147,12 @@ export default function CallDetailView({
   const inbound = direction !== 'BUSINESS_INITIATED';
   const handlerLabel =
     handler === 'AGENT' || agentName
-      ? `Handler ${agentName || 'Agent'}`
+      ? `${agentName || 'Agent'}`
       : handler === 'AI' || botName
-        ? `Handler AI (${botName || 'Samyoj AI'})`
+        ? `${botName || 'Samyoj AI'}`
         : null;
+  const handlerTag =
+    handler === 'AI' ? 'AI Agent' : handler === 'AGENT' ? 'Human' : null;
 
   const lastEntry = transcript?.length ? transcript[transcript.length - 1] : null;
   const aiLikelySpeaking =
@@ -331,9 +333,18 @@ export default function CallDetailView({
               <Bot className="h-3.5 w-3.5 text-neutral-700 dark:text-neutral-300" strokeWidth={2.25} />
             )}
             <span>
-              <span className="font-bold text-neutral-900 dark:text-neutral-100">Handler</span>
+              <span className="font-bold text-neutral-900 dark:text-neutral-100">Answered by</span>
               <span className="text-neutral-300 dark:text-neutral-600">:</span>
-              <span className="font-semibold text-neutral-700 dark:text-neutral-200">{handlerLabel}</span>
+              <span className="inline-flex items-center gap-1.5 font-semibold text-neutral-700 dark:text-neutral-200">
+                {handlerLabel}
+                {handlerTag && (
+                  <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
+                    handler === 'AI' ? 'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-300' : 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300'
+                  }`}>
+                    {handlerTag}
+                  </span>
+                )}
+              </span>
             </span>
           </span>
         )}

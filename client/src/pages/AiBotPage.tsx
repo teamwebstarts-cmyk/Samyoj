@@ -40,6 +40,11 @@ import {
   ModalStatusSummary,
 } from '../components/ui/modalUi';
 import { botTemplates, type BotTemplate } from '../components/ai-bot/botTemplates';
+import {
+  professionalBrains,
+  type ProfessionalBrain,
+} from '../components/ai-bot/professionalBrains';
+import AiBotProfessionalBrainPicker from '../components/ai-bot/AiBotProfessionalBrainPicker';
 import AppButton from '../components/ui/AppButton';
 import AppInput from '../components/ui/AppInput';
 import AppSelect from '../components/ui/AppSelect';
@@ -263,6 +268,10 @@ export default function AiBotPage() {
   const [faqForm, setFaqForm] = useState(emptyFaq);
   const [editingFaqId, setEditingFaqId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [brainKnowledgeItems, setBrainKnowledgeItems] = useState<
+    Array<{ title: string; content: string }> | null
+  >(null);
+  const [_seedingKnowledge, setSeedingKnowledge] = useState(false);
   const [testMessage, setTestMessage] = useState('');
   const [testResult, setTestResult] = useState<BotTestResult | null>(null);
   const [testLoading, setTestLoading] = useState(false);
@@ -382,33 +391,35 @@ export default function AiBotPage() {
     }));
   };
 
-  const openCreate = (template?: BotTemplate) => {
+  const openCreate = (template?: BotTemplate, brain?: ProfessionalBrain) => {
     setEditing(null);
-    const preset: PersonalityPreset = template
-      ? template.id === 'sales'
+    setBrainKnowledgeItems(brain ? brain.knowledgeItems : null);
+
+    const source = brain ?? template;
+    const preset: PersonalityPreset = source
+      ? source.id === 'sales' || source.id === 'sales-pro'
         ? 'sales'
-        : template.id === 'faq'
+        : source.id === 'faq'
           ? 'professional'
           : 'friendly'
       : 'friendly';
-    const instructions = template?.instructions || PERSONALITY_PRESETS.find((p) => p.id === preset)?.instructions || '';
-    setPersonalityPreset(template ? 'custom' : preset);
+    const instructions =
+      source?.instructions ||
+      PERSONALITY_PRESETS.find((p) => p.id === preset)?.instructions ||
+      '';
+    setPersonalityPreset(source ? 'custom' : preset);
     setForm({
       ...emptyBotForm,
       isDefault: bots.length === 0,
-      ...(template
-        ? {
-            name: template.name,
-            instructions: template.instructions,
-            handoffMessage: template.handoffMessage,
-            handoffKeywords: template.handoffKeywords,
-            triggerKeywords: template.triggerKeywords,
-          }
-        : { instructions }),
+      name: source?.name || '',
+      instructions: instructions,
+      handoffMessage: source?.handoffMessage || emptyBotForm.handoffMessage,
+      handoffKeywords: source?.handoffKeywords || '',
+      triggerKeywords: source?.triggerKeywords || '',
     });
     setFaqs([]);
     resetSlideState();
-    setPersonalityPreset(template ? 'custom' : preset);
+    setPersonalityPreset(source ? 'custom' : preset);
     setSlideOpen(true);
   };
 
@@ -496,13 +507,28 @@ export default function AiBotPage() {
         closeSlide();
         load();
         toastSuccess('AI bot updated');
-      } else {
+       } else {
         const { data } = await aiBotApi.create(payload);
         load();
         toastSuccess('AI bot created — add knowledge next');
         const created = data.data as AiBot;
         setEditing(created);
         setSlideTab('train');
+
+        if (brainKnowledgeItems && brainKnowledgeItems.length > 0) {
+          setSeedingKnowledge(true);
+          try {
+            await aiBotApi.seedKnowledge(created.id, brainKnowledgeItems);
+            toastSuccess(`${brainKnowledgeItems.length} FAQs added to your bot`);
+          } catch {
+            toastError('Could not seed knowledge base — add FAQs manually in Train.');
+          } finally {
+            setSeedingKnowledge(false);
+          }
+        }
+
+        setBrainKnowledgeItems(null);
+
         try {
           const { data: botData } = await aiBotApi.get(created.id);
           setFaqs(botData.data.knowledgeItems || []);
@@ -776,7 +802,14 @@ export default function AiBotPage() {
             {!hasFilters && (
               <>
                 <AiBotHowItWorks />
-                <AiBotTemplatePicker templates={botTemplates} onSelect={(t) => openCreate(t)} />
+                <AiBotTemplatePicker
+                  templates={botTemplates}
+                  onSelect={(t) => openCreate(t)}
+                />
+                <AiBotProfessionalBrainPicker
+                  brains={professionalBrains}
+                  onSelect={(b) => openCreate(undefined, b)}
+                />
               </>
             )}
           </div>
@@ -927,6 +960,11 @@ export default function AiBotPage() {
                 <AiBotTemplatePicker
                   templates={botTemplates}
                   onSelect={(t) => openCreate(t)}
+                  compact
+                />
+                <AiBotProfessionalBrainPicker
+                  brains={professionalBrains}
+                  onSelect={(b) => openCreate(undefined, b)}
                   compact
                 />
               </div>

@@ -374,6 +374,52 @@ router.delete(
   })
 );
 
+const seedSchema = z.object({
+  items: z
+    .array(z.object({ title: z.string().min(1).max(200), content: z.string().min(1).max(5000) }))
+    .max(100),
+});
+
+router.post(
+  '/:id/seed-knowledge',
+  ...adminGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const botId = paramId(req);
+    const { items } = seedSchema.parse(req.body);
+
+    const bot = await prisma.aiBot.findFirst({ where: { id: botId, organizationId: orgId } });
+    if (!bot) throw new AppError(404, 'Bot not found');
+
+    const created = await prisma.$transaction(async (tx) => {
+      const results: { id: string; title: string; content: string }[] = [];
+      for (const item of items) {
+        const kb = await tx.knowledgeBaseItem.create({
+          data: { botId, title: item.title, content: item.content, sourceType: 'FAQ' },
+        });
+        results.push({ id: kb.id, title: kb.title, content: kb.content });
+      }
+      return results;
+    });
+
+    void Promise.all(
+      created.map((item) =>
+        upsertKnowledgeEmbedding(orgId, item.id, item.title, item.content, botId)
+      )
+    ).catch(() => {});
+
+    await logBotAudit({
+      botId,
+      organizationId: orgId,
+      userId: req.user!.userId,
+      action: 'seed_knowledge',
+      changes: { count: created.length },
+    });
+
+    sendSuccess(res, { created: created.length }, 201);
+  })
+);
+
 router.post(
   '/:id/ingest/url',
   ...adminGuard,
