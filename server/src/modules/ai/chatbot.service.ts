@@ -237,7 +237,7 @@ export async function generateBotReply(
       temperature: bot.temperature ?? 0.7,
       // Voice calls get lower maxTokens (short replies only) and the fast
       // sarvam-105b-conversations model built for real-time dialogue.
-      maxTokens: isVoice ? 120 : (bot.maxTokens ?? 500),
+      maxTokens: isVoice ? 200 : (bot.maxTokens ?? 500),
       model: isVoice ? 'sarvam-105b-conversations' : undefined,
       organizationId: input.organizationId,
       botId: bot.id,

@@ -164,20 +164,19 @@ export async function createSarvamChatCompletion(
 
   const start = Date.now();
   try {
+    const isConversationsModel = model === 'sarvam-105b-conversations';
     const payload: Record<string, unknown> = {
       model,
       messages: options.messages,
-      // Non-reasoning mode default is 0.2 — bump to 0.5 for natural WhatsApp chat.
-      // Per-bot temperature overrides via bot.temperature (0–2 supported).
       temperature: options.temperature ?? 0.5,
       max_tokens: options.maxTokens ?? 1024,
-      // Disable reasoning — sarvam-105b defaults to thinking mode which
-      // consumes the entire max_tokens budget in reasoning_content, leaving
-      // content=null. Set to null for direct, latency-friendly replies.
-      reasoning_effort: null,
-      // Slight repetition penalty keeps WhatsApp replies crisp.
       frequency_penalty: 0.1,
     };
+    // Only sarvam-105b needs reasoning disabled — conversations variant
+    // doesn't support reasoning_effort and always operates in direct mode.
+    if (!isConversationsModel) {
+      payload.reasoning_effort = null;
+    }
     if (options.tools?.length) {
       payload.tools = options.tools;
       payload.tool_choice = options.toolChoice ?? 'auto';

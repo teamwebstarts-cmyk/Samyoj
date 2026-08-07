@@ -126,10 +126,6 @@ export default function CallsPage() {
     }
   }, [searchParams]);
   const [setupSheetOpen, setSetupSheetOpen] = useState(false);
-  const [insights, setInsights] = useState<{ today: number; missed: number; aiAnswered: number } | null>(
-    null
-  );
-
   const loadRef = useRef<() => Promise<void>>(async () => {});
   const callsSnapshotRef = useRef<CallsNumberCache>({
     calls: [],
@@ -192,22 +188,11 @@ export default function CallsPage() {
 
   const load = useCallback(async () => {
     try {
-      const [statusRes, analyticsRes] = await Promise.all([
+      const [statusRes] = await Promise.all([
         callingApi.status(),
-        callingApi.analytics(7).catch(() => null),
         loadCalls(),
       ]);
       setStatus(statusRes.data.data);
-      const analytics = analyticsRes?.data?.data as
-        | { today?: number; missed?: number; aiAnswered?: number }
-        | undefined;
-      if (analytics) {
-        setInsights({
-          today: analytics.today ?? 0,
-          missed: analytics.missed ?? 0,
-          aiAnswered: analytics.aiAnswered ?? 0,
-        });
-      }
     } catch {
       toastError('Could not load calls. Please refresh the page.');
     } finally {
@@ -343,8 +328,6 @@ export default function CallsPage() {
   const callingEnabled = status?.callingEnabled ?? status?.callingSettings?.calling?.status === 'ENABLED';
   const botReady = Boolean(status?.configured);
   const isReady = Boolean(status?.voiceReady ?? (status?.whatsappConnected && botReady && callingEnabled));
-  const liveCount = status?.activeCalls ?? 0;
-  const callsToday = insights?.today ?? 0;
 
   const selectedCall = useMemo(
     () => (selectedCallId ? calls.find((c) => c.id === selectedCallId) ?? null : null),
@@ -428,6 +411,7 @@ export default function CallsPage() {
         contactId,
         phone,
         conversationId,
+        sdpOffer,
       });
       const callId = (data.data as { call?: { id: string } })?.call?.id;
       if (callId) {
@@ -463,10 +447,31 @@ export default function CallsPage() {
     const conversationId = call.conversation?.id;
     setCallingBackId(call.id);
     try {
+      // Create browser WebRTC offer for agent outbound call from list
+      const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+      let sdpOffer: string | undefined;
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        for (const track of stream.getTracks()) pc.addTrack(track, stream);
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        await new Promise<void>((resolve) => {
+          if (pc.iceGatheringState === 'complete') { resolve(); return; }
+          const timer = setTimeout(resolve, 5000);
+          pc.onicegatheringstatechange = () => {
+            if (pc.iceGatheringState === 'complete') { clearTimeout(timer); resolve(); }
+          };
+        });
+        sdpOffer = pc.localDescription?.sdp;
+        (window as unknown as { __activeCallPc?: RTCPeerConnection }).__activeCallPc = pc;
+      } catch {
+        // Mic not available
+      }
       const { data } = await callingApi.callback({
         contactId,
         phone,
         conversationId,
+        sdpOffer,
       });
       const callId = (data.data as { call?: { id: string } })?.call?.id;
       if (callId) {
@@ -524,9 +529,6 @@ export default function CallsPage() {
       <CallsPageHeader
         phoneNumber={status?.phoneNumber}
         isReady={isReady}
-        liveCount={liveCount}
-        callsToday={callsToday}
-        missedCount={insights?.missed ?? 0}
         onOpenSetup={() => setSetupSheetOpen(true)}
       />
 

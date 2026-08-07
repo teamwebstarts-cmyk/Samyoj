@@ -4,9 +4,6 @@ import AppButton from '../ui/AppButton';
 interface CallsPageHeaderProps {
   phoneNumber?: string | null;
   isReady: boolean;
-  liveCount: number;
-  callsToday: number;
-  missedCount: number;
   onOpenSetup?: () => void;
 }
 
@@ -22,36 +19,9 @@ function ReadyPill() {
   );
 }
 
-function StatChip({
-  label,
-  value,
-  emphasize,
-}: {
-  label: string;
-  value: number;
-  emphasize?: 'live' | 'missed';
-}) {
-  const valueClass =
-    emphasize === 'live' && value > 0
-      ? 'text-emerald-600'
-      : emphasize === 'missed' && value > 0
-        ? 'text-rose-600'
-        : 'text-theme-fg';
-
-  return (
-    <div className="min-w-[68px] flex-1 rounded-xl border border-neutral-100 bg-neutral-50/90 px-3 py-2.5 text-center shadow-sm sm:min-w-[76px] sm:flex-none dark:border-neutral-800 dark:bg-neutral-900/60">
-      <p className="text-[10px] font-bold uppercase tracking-wide text-theme-muted">{label}</p>
-      <p className={`mt-0.5 text-[20px] font-extrabold tabular-nums sm:text-[22px] ${valueClass}`}>{value}</p>
-    </div>
-  );
-}
-
 export default function CallsPageHeader({
   phoneNumber,
   isReady,
-  liveCount,
-  callsToday,
-  missedCount,
   onOpenSetup,
 }: CallsPageHeaderProps) {
   return (
@@ -104,9 +74,6 @@ export default function CallsPageHeader({
               Setup
             </AppButton>
           )}
-          <StatChip label="Live" value={liveCount} emphasize="live" />
-          <StatChip label="Today" value={callsToday} />
-          <StatChip label="Missed" value={missedCount} emphasize="missed" />
         </div>
       </div>
     </div>
