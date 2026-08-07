@@ -180,6 +180,27 @@ export function useConversationActions({
         contactId: selected.contact.id,
         conversationId: selected.id,
         phone: selected.contact.phone,
+        // Create browser WebRTC offer for direct agent calling
+        sdpOffer: await (async () => {
+          const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            for (const track of stream.getTracks()) pc.addTrack(track, stream);
+          } catch {
+            return undefined; // Mic not available — server fallback
+          }
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          await new Promise<void>((resolve) => {
+            if (pc.iceGatheringState === 'complete') { resolve(); return; }
+            const timer = setTimeout(resolve, 5000);
+            pc.onicegatheringstatechange = () => {
+              if (pc.iceGatheringState === 'complete') { clearTimeout(timer); resolve(); }
+            };
+          });
+          (window as unknown as { __activeCallPc?: RTCPeerConnection }).__activeCallPc = pc;
+          return pc.localDescription?.sdp ?? undefined;
+        })(),
       });
       const callId = (data.data as { call?: { id: string } })?.call?.id;
       if (callId) {

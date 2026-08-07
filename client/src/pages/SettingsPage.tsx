@@ -11,7 +11,6 @@ import {
   MessageSquare,
   Plug,
   Palette,
-  PhoneCall,
   PhoneOff,
   Send,
   Settings2,
@@ -19,7 +18,6 @@ import {
   Smartphone,
   Webhook,
 } from 'lucide-react';
-import CallingSettingsPanel from '../components/calls/CallingSettingsPanel';
 import SettingsInsightCards from '../components/settings/SettingsInsightCards';
 import SettingsPanel from '../components/settings/SettingsPanel';
 import CannedRepliesPanel from '../components/settings/CannedRepliesPanel';
@@ -50,7 +48,7 @@ import { isWaOAuthMessage, startWhatsAppOAuth } from '../utils/whatsappOAuth';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-type SettingsTab = 'general' | 'whatsapp' | 'automation' | 'ai' | 'calling' | 'campaigns' | 'inbox' | 'integrations' | 'setup';
+type SettingsTab = 'general' | 'whatsapp' | 'automation' | 'ai' | 'campaigns' | 'inbox' | 'integrations' | 'setup';
 
 interface WhatsappNumber {
   id: string;
@@ -212,13 +210,6 @@ export default function SettingsPage() {
         description: 'Number & messages',
         icon: Smartphone,
         badge: !isReady ? 'Setup' : undefined,
-        group: 'Connect',
-      },
-      {
-        id: 'calling' as const,
-        label: 'Calling',
-        description: 'Voice calls & routing',
-        icon: PhoneCall,
         group: 'Connect',
       },
       {
@@ -935,8 +926,6 @@ export default function SettingsPage() {
                 )}
               </SettingsPanel>
             )}
-
-            {activeTab === 'calling' && <CallingSettingsPanel />}
 
             {activeTab === 'campaigns' && (
               <SettingsPanel

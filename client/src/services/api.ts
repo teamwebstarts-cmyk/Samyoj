@@ -325,7 +325,7 @@ export const callingApi = {
   getSignaling: (id: string) => api.get(`/calling/${id}/signaling`),
   accept: (id: string, sdpAnswer: string) => api.post(`/calling/${id}/accept`, { sdpAnswer }),
   decline: (id: string) => api.post(`/calling/${id}/decline`),
-  callback: (data: { contactId?: string; phone?: string; conversationId?: string }) =>
+  callback: (data: { contactId?: string; phone?: string; conversationId?: string; sdpOffer?: string }) =>
     api.post('/calling/callback', data),
   permission: (contactId: string) => api.get(`/calling/permission/${contactId}`),
   requestPermission: (contactId: string) => api.post('/calling/permission/request', { contactId }),

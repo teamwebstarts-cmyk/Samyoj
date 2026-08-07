@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Phone, PhoneOff, PhoneIncoming } from 'lucide-react';
-import AppButton from '../ui/AppButton';
 import { callingApi } from '../../services/api';
 import { toastError, toastSuccess } from '../../utils/toast';
 
@@ -127,35 +126,51 @@ export default function CallRingModal({ ring, onDismiss }: CallRingModalProps) {
 
   const displayName = ring.contactName || ring.fromPhone;
 
+  // Non-blocking bottom banner — like a mobile incoming call notification.
+  // Doesn't block the page, user can still interact with everything below.
   return (
-    <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 backdrop-blur-sm p-4 sm:items-center">
-      <div
-        className="w-full max-w-sm animate-fade-up rounded-[28px] border border-white/20 bg-white/90 p-6 shadow-2xl backdrop-blur-xl dark:bg-neutral-900/90 dark:border-neutral-700/30"
-        role="alertdialog"
-        aria-labelledby="call-ring-title"
-      >
-        <div className="flex flex-col items-center text-center">
-          <span className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-indigo-700 text-white shadow-lg shadow-violet-500/25">
-            <PhoneIncoming className="h-7 w-7" />
-          </span>
-          <p id="call-ring-title" className="mt-4 text-[18px] font-extrabold text-neutral-900 dark:text-white">
-            Incoming call
-          </p>
-          <p className="mt-1 text-[15px] font-semibold text-neutral-500 dark:text-neutral-400">{displayName}</p>
-          <p className="mt-2 text-[13px] font-bold text-violet-600 dark:text-violet-400">
-            {secondsLeft > 0 ? `Answering in ${secondsLeft}s` : 'Call ended'}
-          </p>
-        </div>
+    <div className="fixed bottom-4 left-1/2 z-[100] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 animate-slide-up" role="alertdialog">
+      <div className="overflow-hidden rounded-2xl border border-white/25 bg-gradient-to-r from-violet-600 to-indigo-700 shadow-2xl shadow-violet-500/30 backdrop-blur-xl dark:from-violet-800 dark:to-indigo-900">
+        <div className="flex items-center gap-3 px-4 py-3">
+          {/* Avatar */}
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white/20 text-white ring-1 ring-white/30">
+            <PhoneIncoming className="h-5 w-5" />
+          </div>
 
-        <div className="mt-6 flex gap-3">
-          <AppButton variant="danger" className="flex-1" onClick={() => void handleDecline()}>
-            <PhoneOff className="h-4 w-4" />
-            Decline
-          </AppButton>
-          <AppButton className="flex-1" loading={accepting} onClick={() => void handleAccept()}>
-            <Phone className="h-4 w-4" />
-            Accept
-          </AppButton>
+          {/* Info */}
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[15px] font-extrabold text-white">{displayName}</p>
+            <div className="mt-0.5 flex items-center gap-1.5">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-300 opacity-60" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+              </span>
+              <p className="text-[12px] font-semibold text-white/80">
+                Incoming call · {secondsLeft}s
+              </p>
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex shrink-0 gap-2">
+            <button
+              type="button"
+              onClick={() => void handleDecline()}
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25 transition"
+              title="Decline"
+            >
+              <PhoneOff className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleAccept()}
+              disabled={accepting}
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500 text-white hover:bg-emerald-400 transition disabled:opacity-60"
+              title="Accept"
+            >
+              <Phone className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       </div>
     </div>

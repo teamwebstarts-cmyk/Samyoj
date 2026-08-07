@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, HelpCircle, Settings } from 'lucide-react';
 import { callingApi } from '../services/api';
 import { useSocket } from '../hooks/useSocket';
@@ -118,6 +118,13 @@ export default function CallsPage() {
   const [notesDirty, setNotesDirty] = useState(false);
   const notesDirtyRef = useRef(false);
   const [railPanel, setRailPanel] = useState<RailPanel>(null);
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    if (searchParams.get('panel') === 'settings') {
+      setRailPanel('settings');
+    }
+  }, [searchParams]);
   const [setupSheetOpen, setSetupSheetOpen] = useState(false);
   const [insights, setInsights] = useState<{ today: number; missed: number; aiAnswered: number } | null>(
     null

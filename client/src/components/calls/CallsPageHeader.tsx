@@ -55,8 +55,8 @@ export default function CallsPageHeader({
   onOpenSetup,
 }: CallsPageHeaderProps) {
   return (
-    <div className="shrink-0 rounded-2xl border border-neutral-200/80 bg-white px-4 py-4 shadow-[0_1px_0_rgba(0,0,0,0.03)] sm:px-5 dark:border-neutral-800 dark:bg-neutral-950">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="shrink-0 rounded-2xl border border-neutral-200/80 bg-white px-4 py-3 shadow-[0_1px_0_rgba(0,0,0,0.03)] sm:px-5 dark:border-neutral-800 dark:bg-neutral-950">
+      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-200/80 bg-violet-50/90 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-violet-800 dark:border-violet-500/30 dark:bg-violet-950/50 dark:text-violet-300">
@@ -76,27 +76,28 @@ export default function CallsPageHeader({
             )}
           </div>
 
-          <h2 className="mt-2.5 text-[18px] font-extrabold tracking-tight text-theme-fg sm:text-[20px]">
-            WhatsApp AI calling
-          </h2>
-
-          <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[13px] font-medium text-theme-muted">
-            {phoneNumber ? (
-              <>
-                <span className="inline-flex items-center gap-1 text-theme-secondary">
-                  <PhoneCall className="h-3.5 w-3.5 text-emerald-600" strokeWidth={2} />
-                  {phoneNumber}
-                </span>
-                <span className="hidden text-neutral-300 sm:inline">·</span>
-                <span>AI answers and saves transcripts</span>
-              </>
-            ) : (
-              'Connect WhatsApp to receive voice calls with AI auto-answer.'
-            )}
-          </p>
+          <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <h2 className="text-[15px] font-extrabold tracking-tight text-theme-fg sm:text-[16px]">
+              AI Voice Calls
+            </h2>
+            <p className="flex flex-wrap items-center gap-x-1.5 text-[12px] font-medium text-theme-muted">
+              {phoneNumber ? (
+                <>
+                  <span className="inline-flex items-center gap-1 text-theme-secondary">
+                    <PhoneCall className="h-3.5 w-3.5 text-emerald-600" strokeWidth={2} />
+                    {phoneNumber}
+                  </span>
+                  <span className="hidden text-neutral-300 sm:inline">·</span>
+                  <span>AI answers &amp; saves transcripts</span>
+                </>
+              ) : (
+                'Connect WhatsApp to receive voice calls with AI auto-answer.'
+              )}
+            </p>
+          </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+        <div className="flex shrink-0 items-center gap-2 sm:gap-2.5">
           {!isReady && onOpenSetup && (
             <AppButton variant="secondary" size="sm" onClick={onOpenSetup}>
               <Settings2 className="h-3.5 w-3.5" />

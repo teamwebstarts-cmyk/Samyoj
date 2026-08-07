@@ -1268,7 +1268,7 @@ export default function AiBotPage() {
             )}
             <p className="rounded-xl border border-sky-200/60 bg-sky-50/50 px-3 py-2.5 text-[12px] font-medium text-theme-secondary dark:border-sky-800/40 dark:bg-sky-950/20">
               Live ring vs WhatsApp if busy is set in{' '}
-              <Link to="/settings?tab=calling&section=behavior" className="font-bold text-sky-700 underline">
+              <Link to="/calls?panel=settings" className="font-bold text-sky-700 underline">
                 Calls → Customize → Call behavior
               </Link>
               .
