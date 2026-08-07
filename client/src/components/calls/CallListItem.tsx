@@ -86,7 +86,7 @@ export default function CallListItem({
     <button
       type="button"
       onClick={onSelect}
-      className={`group relative flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors sm:px-4 ${
+      className={`group relative flex w-full items-center gap-2.5 px-3 py-3.5 text-left transition-colors sm:px-4 ${
         selected
           ? 'bg-emerald-50/90 ring-1 ring-inset ring-emerald-200/70 dark:bg-emerald-950/30 dark:ring-emerald-900/60'
           : active

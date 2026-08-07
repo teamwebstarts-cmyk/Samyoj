@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { HelpCircle, Settings } from 'lucide-react';
+import { ChevronLeft, ChevronRight, HelpCircle, Settings } from 'lucide-react';
 import { callingApi } from '../services/api';
 import { useSocket } from '../hooks/useSocket';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
@@ -19,7 +19,9 @@ import {
 import { toastError, toastSuccess } from '../utils/toast';
 import CallsPageSkeleton, { CallsListSkeleton } from '../components/calls/CallsPageSkeleton';
 import PageShell from '../components/ui/PageShell';
-import Pagination from '../components/ui/Pagination';
+import PageSizeSelect from '../components/inbox/PageSizeSelect';
+import { type PageSize } from '../components/inbox/useConversationList';
+import { FOCUS_RING_CLASS } from '../hooks/inboxA11y';
 import { readNumberCache, writeNumberCache } from '../utils/whatsappNumberCache';
 
 interface CallRecord {
@@ -56,9 +58,7 @@ interface CallingStatus {
   orgCallingSettings?: Record<string, unknown>;
 }
 
-const PAGE_SIZE = 25;
 const CALLS_CACHE_KEY = 'calls';
-
 type CallsNumberCache = {
   calls: CallRecord[];
   totalCalls: number;
@@ -109,6 +109,7 @@ export default function CallsPage() {
   const [savingNotes, setSavingNotes] = useState(false);
   const [selectedCallId, setSelectedCallId] = useState<string | null>(routeCallId ?? null);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<PageSize>(10);
   const [totalCalls, setTotalCalls] = useState(0);
   const [search, setSearch] = useState('');
   const [chip, setChip] = useState('');
@@ -148,14 +149,16 @@ export default function CallsPage() {
   const pageRef = useRef(page);
   const searchRef = useRef(search);
   const chipRef = useRef(chip);
+  const pageSizeRef = useRef(pageSize);
   pageRef.current = page;
   searchRef.current = search;
   chipRef.current = chip;
+  pageSizeRef.current = pageSize;
 
   const loadCalls = useCallback(async (opts?: { skeleton?: boolean }) => {
     const params: Record<string, string> = {
       page: String(pageRef.current),
-      limit: String(PAGE_SIZE),
+      limit: String(pageSizeRef.current),
     };
     const q = searchRef.current.trim();
     if (q) params.search = q;
@@ -211,7 +214,7 @@ export default function CallsPage() {
       return;
     }
     void loadCalls({ skeleton: true });
-  }, [page, search, chip, loadCalls]);
+  }, [page, pageSize, search, chip, loadCalls]);
 
   const loadCallDetail = useCallback(
     async (callId: string, opts?: { syncNotes?: boolean }) => {
@@ -548,16 +551,13 @@ export default function CallsPage() {
                   </div>
                 </div>
                 {totalCalls > 0 && (
-                  <div className="shrink-0 border-t border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-950">
-                    <Pagination
-                      page={page}
-                      pageSize={PAGE_SIZE}
-                      total={totalCalls}
-                      onPageChange={setPage}
-                      itemLabel="calls"
-                      className="!border-t-0"
-                    />
-                  </div>
+                  <CallsPaginationFooter
+                    page={page}
+                    pageSize={pageSize}
+                    total={totalCalls}
+                    onPageChange={setPage}
+                    onPageSizeChange={setPageSize}
+                  />
                 )}
               </>
             )}
@@ -660,5 +660,117 @@ function RailIconButton({ icon: Icon, label, active, onClick }: RailIconButtonPr
         {label}
       </span>
     </button>
+  );
+}
+
+function buildCallsPageButtons(page: number, pageCount: number): Array<number | 'ellipsis'> {
+  if (pageCount <= 7) {
+    return Array.from({ length: pageCount }, (_, i) => i + 1);
+  }
+  const pages = new Set<number>();
+  pages.add(1);
+  pages.add(pageCount);
+  for (let i = page - 1; i <= page + 1; i++) {
+    if (i >= 1 && i <= pageCount) pages.add(i);
+  }
+  if (page <= 3) {
+    pages.add(2);
+    pages.add(3);
+    pages.add(4);
+  }
+  if (page >= pageCount - 2) {
+    pages.add(pageCount - 1);
+    pages.add(pageCount - 2);
+    pages.add(pageCount - 3);
+  }
+  const sorted = [...pages].sort((a, b) => a - b);
+  const out: Array<number | 'ellipsis'> = [];
+  let prev = 0;
+  for (const n of sorted) {
+    if (prev && n - prev > 1) out.push('ellipsis');
+    out.push(n);
+    prev = n;
+  }
+  return out;
+}
+
+interface CallsPaginationFooterProps {
+  page: number;
+  pageSize: PageSize;
+  total: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (size: PageSize) => void;
+}
+
+function CallsPaginationFooter({
+  page,
+  pageSize,
+  total,
+  onPageChange,
+  onPageSizeChange,
+}: CallsPaginationFooterProps) {
+  const pageCount = Math.max(1, Math.ceil(total / pageSize) || 1);
+  const safePage = Math.min(page, pageCount);
+  const rangeStart = total === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(safePage * pageSize, total);
+  const pageButtons = buildCallsPageButtons(safePage, pageCount);
+
+  return (
+    <div className="shrink-0 border-t border-neutral-100 px-2.5 py-2 dark:border-neutral-800/80">
+      <div className="flex min-w-0 flex-nowrap items-center justify-between gap-2 max-[260px]:flex-wrap">
+        <p
+          className="min-w-0 flex-1 truncate text-[11px] font-medium tabular-nums text-theme-muted"
+          title={`Showing ${rangeStart.toLocaleString()} – ${rangeEnd.toLocaleString()} of ${total.toLocaleString()} calls`}
+        >
+          Showing {rangeStart.toLocaleString()} – {rangeEnd.toLocaleString()} of{' '}
+          {total.toLocaleString()} calls
+        </p>
+        <PageSizeSelect value={pageSize} onChange={onPageSizeChange} />
+        <div className="flex shrink-0 items-center gap-0.5">
+          <button
+            type="button"
+            disabled={safePage <= 1}
+            onClick={() => onPageChange(safePage - 1)}
+            aria-label="Previous page"
+            className={`flex h-7 w-7 items-center justify-center rounded-md border border-theme-border text-theme-secondary transition enabled:hover:bg-theme-subtle disabled:cursor-not-allowed disabled:opacity-40 ${FOCUS_RING_CLASS}`}
+          >
+            <ChevronLeft className="h-3.5 w-3.5" strokeWidth={2.5} />
+          </button>
+          {pageButtons.map((item, idx) =>
+            item === 'ellipsis' ? (
+              <span
+                key={`e-${idx}`}
+                className="flex h-7 min-w-5 items-center justify-center px-0.5 text-[11px] font-semibold text-theme-muted"
+              >
+                …
+              </span>
+            ) : (
+              <button
+                key={item}
+                type="button"
+                onClick={() => onPageChange(item)}
+                aria-current={item === safePage ? 'page' : undefined}
+                className={`flex h-7 min-w-6 items-center justify-center rounded-md px-1 text-[11px] font-bold tabular-nums transition ${FOCUS_RING_CLASS} ${
+                  item === safePage
+                    ? 'bg-gradient-to-br from-whatsapp-500 to-whatsapp-600 text-white shadow-[0_2px_6px_rgba(37,211,102,0.35)]'
+                    : 'border border-transparent text-theme-secondary hover:bg-theme-subtle'
+                }`}
+              >
+                {item}
+              </button>
+            )
+          )}
+          <button
+            type="button"
+            disabled={safePage >= pageCount}
+            onClick={() => onPageChange(safePage + 1)}
+            aria-label="Next page"
+            className={`flex h-7 w-7 items-center justify-center rounded-md border border-theme-border text-theme-secondary transition enabled:hover:bg-theme-subtle disabled:cursor-not-allowed disabled:opacity-40 ${FOCUS_RING_CLASS}`}
+          >
+            <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.5} />
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

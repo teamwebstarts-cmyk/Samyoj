@@ -149,9 +149,16 @@ app.use(
 app.use(
   rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 500,
+    max: 5000,
     standardHeaders: true,
     legacyHeaders: false,
+    skip: (req) => {
+      const p = req.path || '';
+      // Never throttle health checks, webhook deliveries, or Socket.IO upgrades.
+      if (p === '/health' || p.startsWith('/api/whatsapp/webhook')) return true;
+      if (req.headers.upgrade && req.headers.upgrade.toLowerCase() === 'websocket') return true;
+      return false;
+    },
   })
 );
 

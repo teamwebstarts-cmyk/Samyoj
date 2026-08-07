@@ -36,11 +36,27 @@ async function streamMessageMedia(
   asAttachment = false,
   playbackFormat?: string
 ) {
-  let { buffer, mimeType, filename } = await getMessageMediaBuffer({
-    organizationId,
-    messageId,
-    metadata,
-  });
+  let buffer: Buffer;
+  let mimeType: string | undefined;
+  let filename: string | undefined;
+  try {
+    const result = await getMessageMediaBuffer({
+      organizationId,
+      messageId,
+      metadata,
+    });
+    buffer = result.buffer;
+    mimeType = result.mimeType;
+    filename = result.filename;
+  } catch (mediaErr) {
+    // Meta Graph API rejects the media ID (missing/expired/invalid) — degrade
+    // gracefully so the Inbox UI shows a broken-media placeholder instead of a 500.
+    logger.warn('[MEDIA] Could not load message media', {
+      messageId,
+      error: mediaErr instanceof Error ? mediaErr.message : String(mediaErr),
+    });
+    throw new AppError(404, 'Media unavailable or no longer accessible');
+  }
 
   // WhatsApp voice notes are OGG/Opus — many browsers (Safari/iOS) cannot play them in <audio>.
   // Serve an MP3 copy for Inbox playback; keep the original on disk for Meta/outbound.
