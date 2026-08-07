@@ -14,6 +14,29 @@ import type { ToolCallResult } from '../ai/sarvam-chat.service';
 
 const log = createModuleLogger('ai-voice-agent');
 
+/** Split text into sentence-sized chunks for per-utterance TTS synthesis. */
+function splitIntoSentences(text: string): string[] {
+  const trimmed = text.trim();
+  if (!trimmed) return [];
+  if (trimmed.length <= 500) return [trimmed];
+
+  // Split on sentence boundaries: period, question mark, exclamation, semicolon,
+  // or Hindi/Marathi-style sentence endings (। and ॥).
+  const raw = trimmed.split(/(?<=[.!?;।॥])\s+/);
+  const chunks: string[] = [];
+  let current = '';
+  for (const part of raw) {
+    if (current && (current.length + part.length > 450)) {
+      chunks.push(current.trimEnd());
+      current = part;
+    } else {
+      current = current ? `${current} ${part}` : part;
+    }
+  }
+  if (current.trim()) chunks.push(current.trim());
+  return chunks.length ? chunks : [trimmed];
+}
+
 /** Voice tool definitions sent to Sarvam for function calling. */
 const VOICE_TOOLS = [
   {
@@ -57,6 +80,13 @@ export class AiVoiceCallSession {
   private speaking = false;
   private ended = false;
   private readonly ctx: ActiveCallContext;
+  // Latency tracking
+  private sttLatenciesMs: number[] = [];
+  private ttsLatenciesMs: number[] = [];
+  private lastSpeechTimestamp: number | null = null;
+  // Call recording buffer
+  private recordingBuffer: Buffer[] = [];
+  private recordingSampleRate = 48000;
 
   constructor(ctx: ActiveCallContext) {
     this.ctx = ctx;
@@ -69,11 +99,26 @@ export class AiVoiceCallSession {
 
     this.bridge = new WhatsAppWebRtcBridge();
 
+    this.bridge.setDisconnectHandler((reason) => {
+      if (!this.ended) {
+        log.warn('WebRTC connection lost, ending call session', { callId: this.ctx.callId, reason });
+        void this.end(reason);
+      }
+    });
+
     this.transcriber = new SarvamStreamTranscriber({
       onFinal: (text) => {
+        // Track STT latency: time from when speech started to when final transcript arrived
+        if (this.lastSpeechTimestamp) {
+          const latency = Date.now() - this.lastSpeechTimestamp;
+          this.sttLatenciesMs.push(latency);
+          this.lastSpeechTimestamp = null;
+        }
         void this.handleUserSpeech(text);
       },
       onSpeechStart: () => {
+        this.lastSpeechTimestamp = Date.now();
+      },
         // Do NOT reset this.speaking here. Resetting it while the bot is still
         // playing TTS lets the bot's own audio echo back into STT, causing the
         // repeated-transcript loop (e.g. "perfect perfect perfect..."). The
@@ -91,6 +136,10 @@ export class AiVoiceCallSession {
 
     this.bridge.setAudioHandler((samples, sampleRate) => {
       if (this.ended || this.speaking || !this.transcriber) return;
+      // Buffer inbound audio for call recording
+      const buf = Buffer.from(samples.buffer, samples.byteOffset, samples.byteLength);
+      this.recordingBuffer.push(buf);
+      this.recordingSampleRate = sampleRate;
       this.transcriber.sendPcm(samples, sampleRate);
     });
 
@@ -298,15 +347,21 @@ export class AiVoiceCallSession {
     this.speaking = true;
     await this.appendTranscript(role, text);
 
-    try {
-      const audio = await synthesizeSpeechSarvam(text, {
+    // Split long replies into sentences so each is a separate Sarvam TTS call.
+    // Bulbul v3 handles up to 2500 chars but shorter per-request keeps latency low.
+    const sentences = splitIntoSentences(text);
+    for (const sentence of sentences) {
+      if (this.ended || !this.bridge) break;
+      const ttsStart = Date.now();
+      const audio = await synthesizeSpeechSarvam(sentence, {
         speaker: this.ctx.ttsVoice,
         language: this.ctx.ttsLanguage,
       });
+      this.ttsLatenciesMs.push(Date.now() - ttsStart);
       await this.bridge.playPcm(audio.samples, audio.sampleRate);
-    } finally {
-      this.speaking = false;
     }
+
+    this.speaking = false;
   }
 
   private async appendTranscript(role: TranscriptEntry['role'], text: string): Promise<void> {
@@ -378,6 +433,28 @@ export class AiVoiceCallSession {
     this.transcriber = null;
     this.bridge = null;
 
+    // Persist call recording if we captured any audio
+    if (this.recordingBuffer.length > 0) {
+      try {
+        const rawPcm = Buffer.concat(this.recordingBuffer);
+        const { default: fs } = await import('fs/promises');
+        const { default: path } = await import('path');
+        const uploadsDir = path.resolve(process.cwd(), 'uploads', 'calls');
+        await fs.mkdir(uploadsDir, { recursive: true });
+        await fs.writeFile(path.join(uploadsDir, `${this.ctx.callId}.pcm`), rawPcm);
+        log.info('Call recording saved', {
+          callId: this.ctx.callId,
+          sizeBytes: rawPcm.length,
+          durationSec: Math.round(rawPcm.length / (this.recordingSampleRate * 2)),
+        });
+      } catch (err) {
+        log.warn('Failed to save call recording', {
+          callId: this.ctx.callId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
     await unregisterActiveCall(this.ctx.metaCallId, this.ctx.organizationId);
 
     await prisma.call.update({
@@ -385,6 +462,22 @@ export class AiVoiceCallSession {
       data: {
         status: reason === 'handoff' ? 'COMPLETED' : 'TERMINATED',
         endedAt: new Date(),
+        ...(call.durationSeconds != null ? { durationSeconds } : {}),
+        // Store voice quality metrics in call metadata
+        metadata: {
+          ...((call?.metadata as Record<string, unknown>) || {}),
+          voiceMetrics: {
+            avgSttLatencyMs: this.sttLatenciesMs.length
+              ? Math.round(this.sttLatenciesMs.reduce((a, b) => a + b, 0) / this.sttLatenciesMs.length)
+              : 0,
+            maxSttLatencyMs: this.sttLatenciesMs.length ? Math.max(...this.sttLatenciesMs) : 0,
+            avgTtsLatencyMs: this.ttsLatenciesMs.length
+              ? Math.round(this.ttsLatenciesMs.reduce((a, b) => a + b, 0) / this.ttsLatenciesMs.length)
+              : 0,
+            maxTtsLatencyMs: this.ttsLatenciesMs.length ? Math.max(...this.ttsLatenciesMs) : 0,
+            utteranceCount: this.ttsLatenciesMs.length,
+          },
+        },
       },
     });
 

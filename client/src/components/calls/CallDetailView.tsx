@@ -6,6 +6,7 @@ import {
   Clock3,
   Grid3X3,
   MessageSquare,
+  Mic,
   MicOff,
   MoreVertical,
   Pause,
@@ -108,6 +109,7 @@ export default function CallDetailView({
   const moreRef = useRef<HTMLDivElement>(null);
   const [liveElapsed, setLiveElapsed] = useState(durationSeconds ?? 0);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [muted, setMuted] = useState(false);
 
   useEffect(() => {
     if (!active) {
@@ -427,7 +429,22 @@ export default function CallDetailView({
 
       {active && onEndCall && (
         <div className="flex shrink-0 gap-1.5 border-t border-neutral-200 bg-white px-2 py-2 sm:hidden dark:border-neutral-800 dark:bg-neutral-950">
-          <ControlBtn icon={MicOff} label="Mute" disabled tip="Available on agent softphone" />
+          <ControlBtn
+            icon={muted ? MicOff : Mic}
+            label={muted ? 'Unmute' : 'Mute'}
+            active={muted}
+            onClick={() => {
+              const pc = (window as unknown as { __activeCallPc?: RTCPeerConnection }).__activeCallPc;
+              if (pc) {
+                const senders = pc.getSenders();
+                const audioSender = senders.find((s) => s.track?.kind === 'audio');
+                if (audioSender?.track) {
+                  audioSender.track.enabled = muted;
+                  setMuted(!muted);
+                }
+              }
+            }}
+          />
           <ControlBtn icon={Pause} label="Hold" disabled tip="Coming soon" />
           <ControlBtn icon={Grid3X3} label="Keypad" disabled tip="Coming soon" />
           <ControlBtn icon={PhoneForwarded} label="Transfer" disabled tip="Live transfer next" />

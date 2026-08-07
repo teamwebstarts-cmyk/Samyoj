@@ -21,6 +21,7 @@ interface AudioSinkData {
 const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
 
 export type AudioFrameHandler = (samples: Int16Array, sampleRate: number) => void;
+export type DisconnectHandler = (reason: string) => void;
 
 function waitForIceGathering(pc: InstanceType<typeof RTCPeerConnection>, timeoutMs = 5000): Promise<void> {
   if (pc.iceGatheringState === 'complete') return Promise.resolve();
@@ -83,6 +84,7 @@ export class WhatsAppWebRtcBridge {
   private playbackQueue: Int16Array[] = [];
   private playbackInterval: ReturnType<typeof setInterval> | null = null;
   private inboundFrames = 0;
+  private onDisconnect: DisconnectHandler | null = null;
   private readonly sampleRate = 48000;
   /** @roamhq/wrtc RTCAudioSource requires exactly 10ms frames (480 samples @ 48kHz). */
   private readonly frameSize = 480;
@@ -90,6 +92,40 @@ export class WhatsAppWebRtcBridge {
 
   setAudioHandler(handler: AudioFrameHandler): void {
     this.onAudioFrame = handler;
+  }
+
+  setDisconnectHandler(handler: DisconnectHandler): void {
+    this.onDisconnect = handler;
+  }
+
+  private setupConnectionMonitor(): void {
+    if (!this.pc) return;
+    let disconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+    this.pc.onconnectionstatechange = () => {
+      const state = this.pc?.connectionState;
+      log.debug('WebRTC connection state changed', { state });
+
+      // Clear any pending disconnected timeout when state changes
+      if (disconnectTimer) {
+        clearTimeout(disconnectTimer);
+        disconnectTimer = null;
+      }
+
+      if (state === 'failed' || state === 'closed') {
+        this.onDisconnect?.(state === 'failed' ? 'connection_failed' : 'connection_closed');
+        return;
+      }
+
+      // 'disconnected' may recover via ICE restart — give it 10s before treating as terminal
+      if (state === 'disconnected') {
+        disconnectTimer = setTimeout(() => {
+          if (this.pc?.connectionState === 'disconnected') {
+            this.onDisconnect?.('connection_lost');
+          }
+        }, 10_000);
+      }
+    };
   }
 
   async createOffer(): Promise<string> {
@@ -116,10 +152,10 @@ export class WhatsAppWebRtcBridge {
     await this.pc.setLocalDescription(offer as { type: 'offer'; sdp?: string });
     await waitForIceGathering(this.pc);
 
+    this.setupConnectionMonitor();
+    this.startPlaybackLoop();
     const localSdp = this.pc.localDescription?.sdp;
     if (!localSdp) throw new Error('Failed to generate WebRTC SDP offer');
-
-    this.startPlaybackLoop();
     return normalizeSdpFingerprint(localSdp);
   }
 
@@ -152,9 +188,7 @@ export class WhatsAppWebRtcBridge {
       log.debug('Inbound audio track attached');
     };
 
-    this.pc.onconnectionstatechange = () => {
-      log.debug('WebRTC connection state', { state: this.pc?.connectionState });
-    };
+    this.setupConnectionMonitor();
 
     await this.pc.setRemoteDescription(
       new RTCSessionDescription({ type: 'offer', sdp: sdpOffer })

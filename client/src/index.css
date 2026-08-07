@@ -104,10 +104,10 @@
     --table-sticky-shadow: -8px 0 16px -12px rgba(15, 23, 42, 0.18);
 
     /* WhatsApp chat surface tokens — switch in .dark (no -dark suffixes) */
-    --chat-bg: #efeae2;
-    --bubble-sent: #d9fdd3;
+    --chat-bg: #f4f5f7;
+    --bubble-sent: #d1fae5;
     --bubble-received: #ffffff;
-    --chat-text: #111b21;
+    --chat-text: #171717;
     --chat-timestamp: #667781;
     --chat-tick: #667781;
     --chat-tick-read: #53bdeb;
@@ -167,11 +167,11 @@
     --table-sticky-header: #111827;
     --table-sticky-shadow: -8px 0 16px -12px rgba(0, 0, 0, 0.45);
 
-    /* WhatsApp chat surface tokens (dark) */
-    --chat-bg: #0b141a;
-    --bubble-sent: #005c4b;
-    --bubble-received: #202c33;
-    --chat-text: #e9edef;
+    /* WhatsApp chat surface tokens (dark) — soft, call-chat-like */
+    --chat-bg: #0e1419;
+    --bubble-sent: #064e3b;
+    --bubble-received: #171717;
+    --chat-text: #f5f5f5;
     --chat-timestamp: #8696a0;
     --chat-tick: #8696a0;
     --chat-tick-read: #53bdeb;
@@ -1499,13 +1499,14 @@
 
   .wa-msg-font {
     font-family: var(--chat-font);
+    font-weight: 400;
   }
 
   .wa-msg-body {
     font-family: var(--chat-font);
-    font-size: 16px;
-    line-height: 21px;
-    font-weight: 400;
+    font-size: 14px;
+    line-height: 20px;
+    font-weight: 500;
     letter-spacing: 0;
   }
 

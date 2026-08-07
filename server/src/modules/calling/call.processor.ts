@@ -595,6 +595,8 @@ export async function processCallWebhookPayload(payload: Record<string, unknown>
         } else if (event === 'terminate') {
           await endCallSession(call.id, 'remote_terminate').catch(() => undefined);
           await handleCallTerminate(orgId, call);
+        } else if (event === 'dtmf') {
+          await handleCallDtmf(orgId, call);
         }
       }
     }
@@ -630,6 +632,40 @@ export async function processWebhookFields(payload: Record<string, unknown>): Pr
 }
 
 export { clearRingTimeout };
+
+/** Handle DTMF tones sent by the caller during a live call. */
+async function handleCallDtmf(orgId: string, call: CallWebhookEntry): Promise<void> {
+  const metaCallId = call.id;
+  const tone = call.dtmf;
+  if (!tone) return;
+
+  const existing = await prisma.call.findUnique({ where: { metaCallId } });
+  if (!existing) return;
+
+  log.info('DTMF received', { metaCallId, tone, callId: existing.id });
+
+  // Store DTMF in transcript for visibility
+  const session = getCallSession(metaCallId);
+  if (session) {
+    // The session's internal methods handle transcript updates — we
+    // emit a transcript entry directly for DTMF visibility.
+    emitToOrg(orgId, 'call:dtmf', {
+      callId: existing.id,
+      tone,
+      at: new Date().toISOString(),
+    });
+  }
+
+  // Append DTMF to call metadata for analytics/IVR flows
+  const metadata = ((existing.metadata as Record<string, unknown>) || {});
+  const dtmfHistory = (Array.isArray(metadata.dtmfHistory) ? metadata.dtmfHistory : []) as Array<{ tone: string; at: string }>;
+  dtmfHistory.push({ tone, at: new Date().toISOString() });
+
+  await prisma.call.update({
+    where: { id: existing.id },
+    data: { metadata: { ...metadata, dtmfHistory } },
+  });
+}
 
 /**
  * Cold live transfer — ring agents on the same Meta call (keep bridge alive).

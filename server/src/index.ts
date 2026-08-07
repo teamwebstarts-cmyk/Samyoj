@@ -344,6 +344,37 @@ async function start() {
 
     const { startMediaRetentionWorker } = await import('./workers/media-retention.worker');
     startMediaRetentionWorker();
+
+    // Clean stale Redis call state left from a previous crash/restart.
+    // In-memory AI/WebRTC sessions are gone, but Redis keys would otherwise
+    // inflate concurrent-call counts for up to 2 hours (their TTL).
+    try {
+      const { getRedis } = await import('./config/redis');
+      const redis = getRedis();
+      const activeKeys = await redis.keys('call:active:*');
+      const pendingKeys = await redis.keys('call:pending:*');
+      const orgSetKeys = await redis.keys('call:org:*:active');
+      let cleaned = 0;
+      if (activeKeys.length) {
+        cleaned += await redis.del(...activeKeys);
+      }
+      if (pendingKeys.length) {
+        cleaned += await redis.del(...pendingKeys);
+      }
+      if (orgSetKeys.length) {
+        cleaned += await redis.del(...orgSetKeys);
+      }
+      if (cleaned > 0) {
+        logger.info(`Startup cleanup: removed ${cleaned} stale Redis call state entries`, {
+          source: 'startup',
+        });
+      }
+    } catch (err) {
+      logger.warn('Startup Redis call state cleanup failed', {
+        source: 'startup',
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   } else {
     logger.warn(
       `Redis is not reachable at ${config.redisUrl}. Background workers are disabled — campaigns, webhooks, and queued messages will not process.`,

@@ -528,10 +528,21 @@ router.post(
         contact.phone
       );
       if (!perm.canStartCall) {
+        // Auto-send the call_permission_request so the user doesn't have to take
+        // a separate manual step. If already requested, Meta politely no-ops.
+        try {
+          await MetaCallingService.sendCallPermissionRequest(
+            number.phoneNumberId,
+            accessToken,
+            contact.phone
+          );
+        } catch {
+          // Non-blocking — Meta may reject if limit reached; the error below still explains.
+        }
         throw new AppError(
           403,
-          'This contact has not allowed WhatsApp calls yet. Send a call permission request first, then try again after they allow it.',
-          'CALL_PERMISSION_REQUIRED'
+          'We asked this contact to allow WhatsApp calls. They will get a message now — call them again once they approve it.',
+          'CALL_PERMISSION_REQUESTED'
         );
       }
     } catch (err) {

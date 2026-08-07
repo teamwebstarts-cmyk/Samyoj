@@ -12,3 +12,4 @@
 - Wants third-party API integrations verified against the vendor's official docs/SDK (e.g., read Sarvam's API reference, use their SDK/MCP) rather than trusting the existing code — docs are the ground truth for param ranges and sample rates. Confidence: 0.85
 - Requests broad end-to-end reviews of a whole subsystem (all AI bot + AI calling code), with a written report of what was found before/alongside fixes — not isolated one-off patches. Confidence: 0.9
 - AI automation scope is strictly channel-limited: the AI voice bot must only be connected to inbound calls — outbound calls are human/agent-only and must never get AI involvement (corrected emphatically when a summary implied otherwise). Confidence: 0.9
+- After a plan is approved, the assistant should execute all remaining phases without asking "what next?" — "do itnow" means everything, not a menu selection. Don't keep polling for direction mid-execution. Confidence: 0.7

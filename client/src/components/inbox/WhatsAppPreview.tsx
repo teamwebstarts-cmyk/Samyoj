@@ -232,7 +232,7 @@ export function WhatsAppTemplateCard({
         <div className={compact ? 'px-2.5 pt-2.5 pb-1' : 'px-3.5 pt-3 pb-1.5'}>
           {header && (
             <p
-              className={`font-semibold leading-snug ${
+              className={`font-medium leading-snug ${
                 compact ? 'text-[13px]' : 'text-[15px]'
               }`}
             >

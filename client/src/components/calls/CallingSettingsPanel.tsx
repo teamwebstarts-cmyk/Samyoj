@@ -66,9 +66,32 @@ const defaultSettings: CallingSettings = {
 };
 
 const SARVAM_SPEAKERS = [
-  { value: 'shubh', label: 'Shubh', hint: 'Male · Hindi-friendly' },
-  { value: 'aditya', label: 'Aditya', hint: 'Male · Clear' },
-  { value: 'simran', label: 'Simran', hint: 'Female · Hindi-friendly' },
+  // Male voices
+  { value: 'shubh', label: 'Shubh', hint: 'Male · Confident & Bold', gender: 'male' },
+  { value: 'aditya', label: 'Aditya', hint: 'Male · Modern & Crisp', gender: 'male' },
+  { value: 'rahul', label: 'Rahul', hint: 'Male · Deep & Authoritative', gender: 'male' },
+  { value: 'rohan', label: 'Rohan', hint: 'Male · Confident & Bold', gender: 'male' },
+  { value: 'amit', label: 'Amit', hint: 'Male · Steady & Trustworthy', gender: 'male' },
+  { value: 'dev', label: 'Dev', hint: 'Male · Casual & Relatable', gender: 'male' },
+  { value: 'ratan', label: 'Ratan', hint: 'Male · Warm & Mature', gender: 'male' },
+  { value: 'ashutosh', label: 'Ashutosh', hint: 'Male · Clear & Precise', gender: 'male' },
+  { value: 'advait', label: 'Advait', hint: 'Male · Calm & Natural', gender: 'male' },
+  { value: 'kabir', label: 'Kabir', hint: 'Male · Warm & Friendly', gender: 'male' },
+  { value: 'aayan', label: 'Aayan', hint: 'Male · Youthful & Bright', gender: 'male' },
+  { value: 'manan', label: 'Manan', hint: 'Male · Polite & Soft', gender: 'male' },
+  { value: 'sumit', label: 'Sumit', hint: 'Male · Energetic', gender: 'male' },
+  // Female voices
+  { value: 'simran', label: 'Simran', hint: 'Female · Hindi-friendly', gender: 'female' },
+  { value: 'ishita', label: 'Ishita', hint: 'Female · Warm & Natural', gender: 'female' },
+  { value: 'priya', label: 'Priya', hint: 'Female · Soft & Polite', gender: 'female' },
+  { value: 'neha', label: 'Neha', hint: 'Female · Clear & Friendly', gender: 'female' },
+  { value: 'pooja', label: 'Pooja', hint: 'Female · Bright & Cheerful', gender: 'female' },
+  { value: 'ritu', label: 'Ritu', hint: 'Female · Professional', gender: 'female' },
+  { value: 'kavya', label: 'Kavya', hint: 'Female · Expressive', gender: 'female' },
+  { value: 'shreya', label: 'Shreya', hint: 'Female · Melodic', gender: 'female' },
+  { value: 'roopa', label: 'Roopa', hint: 'Female · Mature & Calm', gender: 'female' },
+  { value: 'amelia', label: 'Amelia', hint: 'Female · International English', gender: 'female' },
+  { value: 'sophia', label: 'Sophia', hint: 'Female · International English', gender: 'female' },
 ];
 
 const SARVAM_LANGUAGES = [
@@ -492,38 +515,59 @@ export default function CallingSettingsPanel() {
           )}
 
           {section === 'voice' && (
-            <SectionFrame title="Voice & language" subtitle="How your AI sounds on WhatsApp calls (Sarvam Bulbul + Saaras).">
+            <SectionFrame title="Voice & language" subtitle="How your AI sounds on WhatsApp calls (Sarvam Bulbul v3 + Saaras).">
               <AppSelect
                 label="Language"
                 value={settings.sarvamSttLanguage || 'hi-IN'}
                 onChange={(e) => setSettings((s) => ({ ...s, sarvamSttLanguage: e.target.value }))}
                 options={SARVAM_LANGUAGES}
               />
-              <p className="mb-2 mt-4 text-[12px] font-bold text-neutral-700 dark:text-neutral-300">Speaker</p>
-              <div className="grid gap-2 sm:grid-cols-3">
-                {SARVAM_SPEAKERS.map((sp) => {
+              <p className="mb-2 mt-4 text-[12px] font-bold text-neutral-700 dark:text-neutral-300">Male voices</p>
+              <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                {SARVAM_SPEAKERS.filter((sp) => sp.gender === 'male').map((sp) => {
                   const selected = (settings.sarvamTtsSpeaker || 'shubh') === sp.value;
                   return (
                     <button
                       key={sp.value}
                       type="button"
                       onClick={() => setSettings((s) => ({ ...s, sarvamTtsSpeaker: sp.value }))}
-                      className={`rounded-2xl border px-3 py-3 text-left transition ${
+                      className={`rounded-2xl border px-3 py-2.5 text-left transition ${
                         selected
                           ? 'border-emerald-400 bg-emerald-50/80 ring-1 ring-emerald-200 dark:border-emerald-700 dark:bg-emerald-950/40'
                           : 'border-neutral-200 bg-white hover:border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900'
                       }`}
                     >
                       <p className="text-[13px] font-extrabold text-theme-fg">{sp.label}</p>
-                      <p className="mt-0.5 text-[11px] font-medium text-theme-muted">{sp.hint}</p>
+                      <p className="mt-0.5 text-[10px] font-medium text-theme-muted">{sp.hint}</p>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mb-2 mt-5 text-[12px] font-bold text-neutral-700 dark:text-neutral-300">Female voices</p>
+              <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                {SARVAM_SPEAKERS.filter((sp) => sp.gender === 'female').map((sp) => {
+                  const selected = (settings.sarvamTtsSpeaker || 'shubh') === sp.value;
+                  return (
+                    <button
+                      key={sp.value}
+                      type="button"
+                      onClick={() => setSettings((s) => ({ ...s, sarvamTtsSpeaker: sp.value }))}
+                      className={`rounded-2xl border px-3 py-2.5 text-left transition ${
+                        selected
+                          ? 'border-emerald-400 bg-emerald-50/80 ring-1 ring-emerald-200 dark:border-emerald-700 dark:bg-emerald-950/40'
+                          : 'border-neutral-200 bg-white hover:border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900'
+                      }`}
+                    >
+                      <p className="text-[13px] font-extrabold text-theme-fg">{sp.label}</p>
+                      <p className="mt-0.5 text-[10px] font-medium text-theme-muted">{sp.hint}</p>
                     </button>
                   );
                 })}
               </div>
               <AppTextarea
                 className="mt-4"
-                label="Words Sarvam should recognize"
-                hint="Terminology hint for speech recognition — not bot personality"
+                label="Speech recognition hints"
+                hint="Add brand names, product names, and local terms so Sarvam Saaras transcribes them accurately. Comma-separated. Example: Samyoj, Pune clinic, Diwali offer"
                 value={settings.sarvamSttPrompt || ''}
                 onChange={(e) => setSettings((s) => ({ ...s, sarvamSttPrompt: e.target.value || null }))}
                 rows={2}

@@ -18,6 +18,8 @@ export interface CallWebhookEntry {
   duration?: number;
   session?: CallWebhookSession;
   biz_opaque_callback_data?: string;
+  /** DTMF tones pressed by the caller (digits 0-9, *, #). */
+  dtmf?: string;
 }
 
 export interface TranscriptEntry {

@@ -62,7 +62,7 @@ export default function InteractiveMessageCard({
           <Reply className="h-3 w-3 shrink-0" strokeWidth={2.5} />
           <span>Selected option</span>
         </div>
-        <p className="wa-msg-body whitespace-pre-wrap break-words font-medium">{optionTitle}</p>
+        <p className="wa-msg-body whitespace-pre-wrap break-words">{optionTitle}</p>
         <div className="mt-0.5 flex items-end justify-end gap-1">
           <span className="text-[11px] tabular-nums wa-timestamp">{time}</span>
           {isOutbound && status && <StatusIcon status={status} />}

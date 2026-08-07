@@ -402,8 +402,8 @@ export default function CallsPage() {
     } catch (err: unknown) {
       const body = (err as { response?: { data?: { error?: { code?: string; message?: string } } } })
         ?.response?.data?.error;
-      if (body?.code === 'CALL_PERMISSION_REQUIRED') {
-        toastError('Ask-to-call sent. Call again after the customer allows WhatsApp calls.');
+      if (body?.code === 'CALL_PERMISSION_REQUIRED' || body?.code === 'CALL_PERMISSION_REQUESTED') {
+        toastSuccess(body?.message || 'Call permission requested — try again after they approve.');
       } else {
         toastError(body?.message || 'Could not start the call.');
       }
@@ -433,8 +433,8 @@ export default function CallsPage() {
     } catch (err: unknown) {
       const body = (err as { response?: { data?: { error?: { code?: string; message?: string } } } })
         ?.response?.data?.error;
-      if (body?.code === 'CALL_PERMISSION_REQUIRED') {
-        toastError('Ask-to-call sent. Call again after the customer allows WhatsApp calls.');
+      if (body?.code === 'CALL_PERMISSION_REQUIRED' || body?.code === 'CALL_PERMISSION_REQUESTED') {
+        toastSuccess(body?.message || 'Call permission requested — try again after they approve.');
       } else {
         toastError(body?.message || 'Could not start the call.');
       }

@@ -13,7 +13,10 @@
       "Shell(curl -s http://localhost:8000/ 2>&1; echo \"---\"; curl -s http://localhost:8000/api/status 2>&1)",
       "Shell(npx prisma db push --accept-data-loss 2 >& 1)",
       "Shell(node --import tsx test-imports.mjs 2 >& 1)",
-      "Shell(kill $(lsof -t -i:8000) 2>/dev/null; echo \"stopped\")"
+      "Shell(kill $(lsof -t -i:8000) 2>/dev/null; echo \"stopped\")",
+      "Shell(npx tsc --noEmit --pretty 2 >& 1)",
+      "Shell(npx tsc --noEmit --pretty src/index.ts src/modules/calling/webrtc-bridge.ts src/modules/calling/ai-voice-agent.ts 2 >& 1)",
+      "Shell(npx tsc --noEmit src/config/*.ts src/utils/*.ts src/errors/*.ts src/modules/calling/webrtc-bridge.ts src/modules/calling/ai-voice-agent.ts src/modules/calling/types.ts src/modules/calling/sarvam.stt.ts src/modules/calling/sarvam.tts.ts src/modules/calling/session-store.ts src/modules/calling/audio-utils.ts src/modules/calling/meta-calling.service.ts 2 >& 1)"
     ],
     "deny": [],
     "defaultMode": "default"
