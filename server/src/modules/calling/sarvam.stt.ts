@@ -26,7 +26,7 @@ interface SarvamRealtimeMessage {
 
 export interface SarvamTranscriptHandler {
   onPartial?: (text: string) => void;
-  onFinal: (text: string) => void;
+  onFinal: (text: string, languageDetected?: string) => void;
   onError?: (error: Error) => void;
   onSpeechStart?: () => void;
   onSpeechEnd?: () => void;
@@ -167,7 +167,7 @@ export class SarvamStreamTranscriber {
     }
 
     if (event === 'transcript.final' && msg.text) {
-      this.handlers.onFinal(msg.text);
+      this.handlers.onFinal(msg.text, msg.language);
       return;
     }
 

@@ -363,6 +363,7 @@ export default function CallsPage() {
 
   const handleSelectCall = useCallback(
     (call: CallRecord) => {
+      setRailPanel(null);
       setSelectedCallId(call.id);
       setNotes('');
       setNotesDirty(false);

@@ -23,7 +23,7 @@ import { getPendingCallByCallId } from './session-store';
 import { clearRingTimeout } from './call.processor';
 import { logTeamAudit } from '../team/audit';
 import { WhatsAppWebRtcBridge } from './webrtc-bridge';
-import { emitToOrg } from '../../realtime';
+import { emitToOrg, emitToUser } from '../../realtime';
 import { resolveActiveWhatsappNumber } from '../whatsapp/active-number';
 import { publishCallEventMessage } from './call-event-message';
 

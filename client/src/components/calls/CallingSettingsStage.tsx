@@ -25,7 +25,7 @@ export default function CallingSettingsStage({ onClose }: CallingSettingsStagePr
           Calls
         </button>
       </div>
-      <div className="flex min-h-0 flex-1">
+      <div className="min-h-0 flex-1">
         <CallingSettingsForm />
       </div>
     </div>

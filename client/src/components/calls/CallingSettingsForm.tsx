@@ -65,33 +65,19 @@ const defaultSettings: CallingSettings = {
   sarvamSttPrompt: null,
 };
 
+// Top 10 Sarvam voices — officially recommended for multilingual voice agents.
+// Source: docs.sarvam.ai → Best Practices → Speaker Selection by Language
 const SARVAM_SPEAKERS = [
-  // Male voices
-  { value: 'shubh', label: 'Shubh', hint: 'Male · Confident & Bold', gender: 'male' },
-  { value: 'aditya', label: 'Aditya', hint: 'Male · Modern & Crisp', gender: 'male' },
-  { value: 'rahul', label: 'Rahul', hint: 'Male · Deep & Authoritative', gender: 'male' },
-  { value: 'rohan', label: 'Rohan', hint: 'Male · Confident & Bold', gender: 'male' },
-  { value: 'amit', label: 'Amit', hint: 'Male · Steady & Trustworthy', gender: 'male' },
-  { value: 'dev', label: 'Dev', hint: 'Male · Casual & Relatable', gender: 'male' },
-  { value: 'ratan', label: 'Ratan', hint: 'Male · Warm & Mature', gender: 'male' },
-  { value: 'ashutosh', label: 'Ashutosh', hint: 'Male · Clear & Precise', gender: 'male' },
-  { value: 'advait', label: 'Advait', hint: 'Male · Calm & Natural', gender: 'male' },
-  { value: 'kabir', label: 'Kabir', hint: 'Male · Warm & Friendly', gender: 'male' },
-  { value: 'aayan', label: 'Aayan', hint: 'Male · Youthful & Bright', gender: 'male' },
-  { value: 'manan', label: 'Manan', hint: 'Male · Polite & Soft', gender: 'male' },
-  { value: 'sumit', label: 'Sumit', hint: 'Male · Energetic', gender: 'male' },
-  // Female voices
-  { value: 'simran', label: 'Simran', hint: 'Female · Hindi-friendly', gender: 'female' },
-  { value: 'ishita', label: 'Ishita', hint: 'Female · Warm & Natural', gender: 'female' },
-  { value: 'priya', label: 'Priya', hint: 'Female · Soft & Polite', gender: 'female' },
-  { value: 'neha', label: 'Neha', hint: 'Female · Clear & Friendly', gender: 'female' },
-  { value: 'pooja', label: 'Pooja', hint: 'Female · Bright & Cheerful', gender: 'female' },
-  { value: 'ritu', label: 'Ritu', hint: 'Female · Professional', gender: 'female' },
-  { value: 'kavya', label: 'Kavya', hint: 'Female · Expressive', gender: 'female' },
-  { value: 'shreya', label: 'Shreya', hint: 'Female · Melodic', gender: 'female' },
-  { value: 'roopa', label: 'Roopa', hint: 'Female · Mature & Calm', gender: 'female' },
-  { value: 'amelia', label: 'Amelia', hint: 'Female · International English', gender: 'female' },
-  { value: 'sophia', label: 'Sophia', hint: 'Female · International English', gender: 'female' },
+  { value: 'shubh', label: 'Shubh', hint: 'Male · Best for Hindi, Telugu, Kannada, Odia', gender: 'male' },
+  { value: 'ratan', label: 'Ratan', hint: 'Male · Best for English, Tamil, Marathi, Gujarati', gender: 'male' },
+  { value: 'ashutosh', label: 'Ashutosh', hint: 'Male · Hindi specialist, clear & precise', gender: 'male' },
+  { value: 'rohan', label: 'Rohan', hint: 'Male · Tamil specialist, confident & bold', gender: 'male' },
+  { value: 'mani', label: 'Mani', hint: 'Male · Best overall male, Punjabi expert', gender: 'male' },
+  { value: 'priya', label: 'Priya', hint: 'Female · Best for Hindi, Marathi, Gujarati, Telugu', gender: 'female' },
+  { value: 'ishita', label: 'Ishita', hint: 'Female · Best for English, Tamil, Kannada', gender: 'female' },
+  { value: 'suhani', label: 'Suhani', hint: 'Female · Hindi, Bengali, Punjabi — sweet & soft', gender: 'female' },
+  { value: 'neha', label: 'Neha', hint: 'Female · Telugu, Kannada — clear & friendly', gender: 'female' },
+  { value: 'ritu', label: 'Ritu', hint: 'Female · Tamil, Marathi, Gujarati — professional', gender: 'female' },
 ];
 
 const SARVAM_LANGUAGES = [
@@ -129,33 +115,6 @@ const SECTIONS: Array<{
   { id: 'training', label: 'Training data', icon: Bot, deepLink: true },
   { id: 'advanced', label: 'Advanced', icon: Clock3 },
 ];
-
-function howItWorks(mode: CallingSettings['routingMode']): string[] {
-  if (mode === 'agents_first') {
-    return [
-      'Call comes in',
-      'Your team rings first',
-      'If nobody picks up, AI can help (when enabled)',
-      'Chat stays in Inbox',
-    ];
-  }
-  if (mode === 'ai_only') {
-    return [
-      'Call comes in',
-      'AI answers and greets',
-      'Talks using your training',
-      'Can connect a person if you allow it',
-      'Chat stays in Inbox',
-    ];
-  }
-  return [
-    'Call comes in',
-    'AI answers first',
-    'Helps from your training',
-    'If you turn on connect-to-person, callers can reach your team',
-    'Chat stays in Inbox',
-  ];
-}
 
 function applyWhoAnswers(
   mode: CallingSettings['routingMode']
@@ -196,7 +155,6 @@ export default function CallingSettingsForm({ initialSection = 'who' }: CallingS
     [settings, baseline]
   );
   const botName = bots.find((b) => b.id === settings.defaultBotId)?.name || 'Samyoj AI';
-  const steps = howItWorks(settings.routingMode);
 
   async function handleSave() {
     setSaving(true);
@@ -283,7 +241,6 @@ export default function CallingSettingsForm({ initialSection = 'who' }: CallingS
               <SectionFrame
                 title="Who answers calls"
                 subtitle="Choose who should handle incoming WhatsApp calls."
-                aside={<HowItWorks steps={steps} />}
               >
                 <div className="space-y-3">
                   <WhoCard
@@ -671,43 +628,16 @@ function SectionFrame({
   title,
   subtitle,
   children,
-  aside,
 }: {
   title: string;
   subtitle: string;
   children: ReactNode;
-  aside?: ReactNode;
 }) {
   return (
-    <div className={`grid gap-6 xl:grid-cols-[1fr_240px]`}>
-      <div>
-        <h3 className="text-[18px] font-extrabold tracking-tight text-theme-fg">{title}</h3>
-        <p className="mt-1.5 text-[13px] font-medium text-theme-muted">{subtitle}</p>
-        <div className="mt-5">{children}</div>
-        {aside && <div className="mt-5 xl:hidden">{aside}</div>}
-      </div>
-      {aside && <div className="hidden xl:block">{aside}</div>}
-    </div>
-  );
-}
-
-function HowItWorks({ steps }: { steps: string[] }) {
-  return (
-    <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-5 dark:border-emerald-900/50 dark:bg-emerald-950/30">
-      <p className="text-[12px] font-extrabold text-emerald-900 dark:text-emerald-300">How it works</p>
-      <ol className="mt-4 space-y-3">
-        {steps.map((step, i) => (
-          <li
-            key={step}
-            className="flex items-start gap-3 text-[12px] font-medium text-neutral-700 dark:text-neutral-300"
-          >
-            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-[10px] font-bold text-white">
-              {i + 1}
-            </span>
-            <span className="pt-0.5">{step}</span>
-          </li>
-        ))}
-      </ol>
+    <div>
+      <h3 className="text-[18px] font-extrabold tracking-tight text-theme-fg">{title}</h3>
+      <p className="mt-1.5 text-[13px] font-medium text-theme-muted">{subtitle}</p>
+      <div className="mt-5">{children}</div>
     </div>
   );
 }

@@ -107,12 +107,16 @@ export class AiVoiceCallSession {
     });
 
     this.transcriber = new SarvamStreamTranscriber({
-      onFinal: (text) => {
+      onFinal: (text, languageDetected) => {
         // Track STT latency: time from when speech started to when final transcript arrived
         if (this.lastSpeechTimestamp) {
           const latency = Date.now() - this.lastSpeechTimestamp;
           this.sttLatenciesMs.push(latency);
           this.lastSpeechTimestamp = null;
+        }
+        // Auto-detect and switch TTS language based on detected STT language
+        if (languageDetected && languageDetected !== 'unknown' && languageDetected !== 'auto') {
+          this.ctx.ttsLanguage = languageDetected;
         }
         void this.handleUserSpeech(text);
       },

@@ -463,6 +463,8 @@ export default function AiBotPage() {
     setEditing(null);
     setForm(emptyBotForm);
     setFaqs([]);
+    setBrainKnowledgeItems(null);
+    setSeedingKnowledge(false);
     setAnalytics(null);
     setSlideTab('personality');
     setPersonalityPreset('friendly');
