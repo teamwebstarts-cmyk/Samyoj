@@ -21,6 +21,7 @@ interface CallListItemProps {
   agentName?: string | null;
   selected: boolean;
   onSelect: () => void;
+  onContextMenu?: (event: React.MouseEvent) => void;
   onCallBack?: () => void;
   callingBack?: boolean;
 }
@@ -75,6 +76,7 @@ export default function CallListItem({
   createdAt,
   selected,
   onSelect,
+  onContextMenu,
   onCallBack,
   callingBack,
 }: CallListItemProps) {
@@ -86,6 +88,7 @@ export default function CallListItem({
     <button
       type="button"
       onClick={onSelect}
+      onContextMenu={onContextMenu}
       className={`group relative flex w-full items-center gap-2.5 px-3 py-3.5 text-left transition-colors sm:px-4 ${
         selected
           ? 'bg-emerald-50/90 ring-1 ring-inset ring-emerald-200/70 dark:bg-emerald-950/30 dark:ring-emerald-900/60'

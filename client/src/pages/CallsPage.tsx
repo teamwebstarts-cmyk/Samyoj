@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, HelpCircle, Settings } from 'lucide-react';
+import { ChevronLeft, ChevronRight, HelpCircle, Settings, Trash2 } from 'lucide-react';
 import { callingApi } from '../services/api';
 import { useSocket } from '../hooks/useSocket';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
@@ -12,10 +12,13 @@ import CallsRailPanel from '../components/calls/CallsRailPanel';
 import CallingSettingsStage from '../components/calls/CallingSettingsStage';
 import CallsSetupSheet from '../components/calls/CallsSetupSheet';
 import {
+  formatPhoneDisplay,
   isActiveCallStatus,
   normalizeTranscript,
   transcriptPreview,
 } from '../components/calls/callUtils';
+import ContextMenu from '../components/ui/ContextMenu';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { toastError, toastSuccess } from '../utils/toast';
 import {
   createAgentOffer,
@@ -123,6 +126,9 @@ export default function CallsPage() {
   const [notesDirty, setNotesDirty] = useState(false);
   const notesDirtyRef = useRef(false);
   const [railPanel, setRailPanel] = useState<RailPanel>(null);
+  const [callMenu, setCallMenu] = useState<{ x: number; y: number; callId: string } | null>(null);
+  const [deleteCallTarget, setDeleteCallTarget] = useState<CallRecord | null>(null);
+  const [deletingCall, setDeletingCall] = useState(false);
   const [searchParams] = useSearchParams();
 
   useEffect(() => {
@@ -348,6 +354,13 @@ export default function CallsPage() {
       const payload = data as { callId: string; transcript: unknown };
       if (payload.callId) applyTranscriptUpdate(payload.callId, payload.transcript);
     }
+    if (event === 'call:deleted') {
+      const payload = data as { callId: string };
+      if (!payload.callId) return;
+      setCalls((prev) => prev.filter((c) => c.id !== payload.callId));
+      setTotalCalls((prev) => Math.max(0, prev - 1));
+      setSelectedCallId((prev) => (prev === payload.callId ? null : prev));
+    }
     if (event === 'call:outbound_connected') {
       const payload = data as { callId: string; sdpAnswer?: string };
       if (payload.callId && payload.sdpAnswer) {
@@ -411,6 +424,35 @@ export default function CallsPage() {
       void loadCallDetail(call.id, { syncNotes: true });
     },
     [loadCallDetail, navigate]
+  );
+
+  const openCallContextMenu = useCallback((event: React.MouseEvent, call: CallRecord) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setCallMenu({ x: event.clientX, y: event.clientY, callId: call.id });
+  }, []);
+
+  const handleDeleteCall = useCallback(async () => {
+    if (!deleteCallTarget) return;
+    setDeletingCall(true);
+    try {
+      await callingApi.remove(deleteCallTarget.id);
+      setCalls((prev) => prev.filter((c) => c.id !== deleteCallTarget.id));
+      setTotalCalls((prev) => Math.max(0, prev - 1));
+      setSelectedCallId((prev) => (prev === deleteCallTarget.id ? null : prev));
+      if (routeCallId === deleteCallTarget.id) navigate('/calls');
+      setDeleteCallTarget(null);
+      toastSuccess('Call deleted.');
+    } catch {
+      toastError('Could not delete the call.');
+    } finally {
+      setDeletingCall(false);
+    }
+  }, [deleteCallTarget, navigate, routeCallId]);
+
+  const contextMenuCall = useMemo(
+    () => (callMenu ? calls.find((c) => c.id === callMenu.callId) ?? null : null),
+    [callMenu, calls]
   );
 
   async function handleTerminate() {
@@ -596,6 +638,7 @@ export default function CallsPage() {
                           agentName={call.assignedAgent?.name}
                           selected={selectedCallId === call.id}
                           onSelect={() => handleSelectCall(call)}
+                          onContextMenu={(e) => openCallContextMenu(e, call)}
                           onCallBack={!isActiveCallStatus(call.status) ? () => void handleCallListItemCallBack(call) : undefined}
                           callingBack={callingBackId === call.id}
                         />
@@ -700,6 +743,44 @@ export default function CallsPage() {
         </div>
         </div>
       </div>
+
+      <ContextMenu
+        open={Boolean(callMenu && contextMenuCall)}
+        x={callMenu?.x ?? 0}
+        y={callMenu?.y ?? 0}
+        onClose={() => setCallMenu(null)}
+        items={[
+          {
+            id: 'delete-call',
+            label: 'Delete call',
+            description: 'Remove this call from history',
+            icon: Trash2,
+            danger: true,
+            onClick: () => {
+              if (contextMenuCall) setDeleteCallTarget(contextMenuCall);
+              setCallMenu(null);
+            },
+          },
+        ]}
+      />
+
+      <ConfirmDialog
+        open={Boolean(deleteCallTarget)}
+        onClose={() => {
+          if (!deletingCall) setDeleteCallTarget(null);
+        }}
+        onConfirm={() => void handleDeleteCall()}
+        title="Delete this call?"
+        description={
+          deleteCallTarget
+            ? `The call with “${deleteCallTarget.contact?.name || formatPhoneDisplay(deleteCallTarget.contact?.phone || deleteCallTarget.fromPhone)}” will be permanently removed from your call history.`
+            : 'This call will be permanently removed from your call history.'
+        }
+        details={['The transcript, duration, and notes for this call are deleted.']}
+        confirmLabel="Delete call"
+        variant="danger"
+        loading={deletingCall}
+      />
     </PageShell>
   );
 }

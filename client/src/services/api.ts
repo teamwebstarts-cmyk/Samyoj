@@ -333,6 +333,8 @@ export const callingApi = {
   requestPermission: (contactId: string) => api.post('/calling/permission/request', { contactId }),
   updateNotes: (id: string, notes: string) => api.patch(`/calling/${id}`, { notes }),
   terminate: (id: string) => api.post(`/calling/${id}/terminate`),
+  remove: (id: string) =>
+    api.delete<{ data: { deleted: boolean; callId: string } }>(`/calling/${id}`),
 };
 
 export const aiBotApi = {
