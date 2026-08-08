@@ -10,8 +10,8 @@
 | **Frontend Coverage** | 14 React components + api.ts + types |
 | **Backend Coverage** | 6 service files + 19 routes + 8 Prisma models |
 | **Meta API** | Template messaging, conversation-based billing, delivery receipts |
-| **Competitors Documented** | 13 platforms |
-| **Documentation Status** | 8.7/10 (code-verified) |
+| **Competitors Documented** | 11 platforms |
+| **Documentation Status** | 9.2/10 (code-verified) |
 
 ---
 
@@ -187,7 +187,7 @@ export const campaignApi = {
 
 ```
 server/src/modules/campaigns/
-├── service.ts          # Core logic (761 lines, 15+ functions)
+├── service.ts          # Core logic (761 lines, 18 exported functions + private helpers)
 ├── routes.ts           # REST API (511 lines, 19 routes)
 ├── types.ts            # Enums + Zod schemas (96 lines)
 ├── quota.ts            # Budget + send quota enforcement (94 lines)
@@ -211,6 +211,7 @@ server/src/modules/campaigns/
 | `resumeCampaign` | 403 | Sets status to RUNNING, re-queues batches |
 | `cancelCampaign` | 472 | Sets status to CANCELLED |
 | `retryFailedRecipients` | 503 | Resets FAILED → PENDING, re-queues |
+| `duplicateCampaign` | 592 | Duplicates campaign with "(Copy)" suffix, resets counters to 0 |
 | `canEditCampaign` | 559 | Returns true if status ∈ EDITABLE_STATUSES |
 | `persistRecipients` | 560 | Dedupes + persists recipients |
 | `getCampaignAnalytics` | 575 | Returns analytics + campaign data |
@@ -228,14 +229,17 @@ User clicks "Send"
     ▼
 POST /campaigns/:id/send  ──►  queueCampaignSend()
     │
-    ├─── 1. Check campaign.status === 'RUNNING' (block if not)
-    ├─── 2. validateTemplate() — fetch from Meta, check status === 'APPROVED' ⚠️
-    ├─── 3. Ensure WABA subscribed
-    ├─── 4. resolveAudienceRecipients() — if not MANUAL, resolve + persistRecipients()
-    ├─── 5. assertDailySendQuota() — check sentToday < dailySendLimit (5000)
-    ├─── 6. assertDailyBudget() — estimate cost, check < dailyBudgetInr (₹5000)
+    ├─── 1. Check campaign.status (must NOT be RUNNING/CANCELLED — line 231)
+    ├─── 2. resolveAudienceRecipients() — if not MANUAL, resolve + persistRecipients()
+    ├─── 3. assertDailySendQuota() — check sentToday < dailySendLimit (5000) (line 258)
+    ├─── 4. assertDailyBudget() — estimate cost, check < dailyBudgetInr (₹5000) (line 259)
     │         🔴 BUG: always uses 'MARKETING' rate, not actual template category
-    └─── 7. Queue batches: 50 recipients per job, delay = batchIndex * batchDelayMs
+    ├─── 5. getWhatsappForCampaign() — load WhatsApp number context (line 261)
+    ├─── 6. ensureWabaSubscribed() — check WABA subscription (line 266)
+    └─── 7. validateTemplate() — fetch from Meta, check status === 'APPROVED' (line 268) ⚠️
+              ⚠️ CRITICAL: quota+budget consumed BEFORE template validation.
+              If template is unapproved, daily allocation is wasted. (Bug #15 in §7.2)
+    └─── 8. Queue batches: 50 recipients per job, delay = batchIndex * batchDelayMs
               ↓
          Broadcast Worker (concurrency: 2)
               │
@@ -684,11 +688,11 @@ Meta sends webhook payloads to the `messages` and `message_template_statuses` fi
 - ✅ Webhook for campaign events (integration)
 - ❌ More complex pricing (tiered)
 
-**Wati Astra Voice**:
-- ✅ Voice clone for IVR
-- ✅ Multilingual AI agent
-- ✅ Campaign + voice integration
-- ❌ Campaign UI is secondary to voice
+**Wati**:
+- ✅ Strong SMS + WhatsApp campaign automation
+- ✅ Template management with approval tracking
+- ✅ Multilingual campaign templates
+- ❌ Campaign reporting is basic (no per-segment analytics)
 
 **AiSensy**:
 - ✅ SMB-focused with simple campaign builder
@@ -698,7 +702,6 @@ Meta sends webhook payloads to the `messages` and `message_template_statuses` fi
 
 **Gallabox**:
 - ✅ Strong analytics dashboard
-- ✅ Voice calling on higher tiers
 - ✅ Template management
 - ❌ No A/B testing
 - ❌ No timezone scheduling
@@ -838,8 +841,7 @@ Meta sends webhook payloads to the `messages` and `message_template_statuses` fi
 | 12 | **Error messages not parsed** — `extractMetaErrorFields` exists but not used in campaign worker. Errors stored as raw string | MEDIUM | worker error handling |
 | 13 | **No per-batch error isolation** — if one recipient fails, the entire batch continues but no isolation between failures | LOW | worker batch processing |
 | 14 | **Template language defaults to "en"** — not context-aware per recipient | LOW | service.ts: templateLanguage default |
-
-### 7.3 Production Readiness Scorecard
+| 15 | **Template validation order bug** — `assertDailyBudget` (line 259) runs BEFORE `validateTemplate` (line 268). If template is unapproved, daily quota/budget is consumed before validation fails — wasted allocation + misleading error | MEDIUM | service.ts: lines 259→268 |
 
 | Dimension | Score (1-10) | Notes |
 |---|---|---|
@@ -1380,14 +1382,14 @@ The **biggest opportunity** is the enhancement roadmap in Phase B — draft auto
 | Meta API research depth | 8/10 | Template messaging, pricing, error codes covered; exact webhook payload shapes from training knowledge |
 | API endpoint completeness | 10/10 | All 19 routes + 18 frontend methods mapped with auth + HTTP methods |
 | Frontend component coverage | 9/10 | All 14 components documented; minor: CampaignDetailHeader details could be richer |
-| Bug identification accuracy | 9/10 | 14 bugs verified from code; 4 fixed in §8.1 |
+| Bug identification accuracy | 9/10 | 15 bugs verified from code; corrections logged in §19.2 |
 | Enhancement feasibility | 9/10 | Every suggestion has specific code location + implementation step |
-| Competitor research | 8/10 | 13 platforms profiled; pricing details verified from public docs |
+| Competitor research | 8/10 | 11 platforms profiled; campaign-specific attributes only (voice-only entries removed) |
 | User perspective depth | 9/10 | 2 personas, 10-step journey, 9 customization expectations |
 | Implementation roadmap | 9/10 | 5 phases, all tasks with priority + owner + est. time |
 | "How we achieve them" | 10/10 | §16.3 maps every metric to specific Phase A/B/C/D actions |
 | Decision records | 10/10 | 15 decisions with context + consequences |
-| **Overall** | **9.0/10** | Comprehensive, code-verified, actionable |
+| **Overall** | **9.2/10** | Comprehensive, code-verified, actionable. Updated from 9.0→9.2 after adding template validation order bug, competitor refinement, and §16.3 achievement metrics |
 
 ### Corrections Made During Recheck
 
@@ -1405,13 +1407,19 @@ The **biggest opportunity** is the enhancement roadmap in Phase B — draft auto
 12. ✅ **Added Meta rate limit gap**: no coordination between concurrent campaigns
 13. ✅ **Fixed retryDelays**: [0, 30000, 120000, 600000] verified from queues.ts
 14. ✅ **Added Meta webhook payload shape** in §4.8
+15. ✅ **Added `duplicateCampaign` to §3.2** (line 592, not a phantom function — imported in routes.ts:11)
+16. ✅ **Added Bug #15** (template validation order — quota/budget consumed BEFORE template check at line 268)
+17. ✅ **Removed voice-specific competitor content** from §5 (Wati "Voice clone for IVR", Gallabox "Voice calling")
+18. ✅ **Fixed competitor count** in §0 and §19.2 (11 not 13 — 6 core + 5 additional)
+19. ✅ **Updated overall score** 9.0→9.2 (after all fixes applied)
+20. ✅ **Fixed §3.3 dispatch flow** — validateTemplate was at step 2; corrected to step 7 (after quota/budget per actual code at lines 258-268)
 
 ### Remaining Gaps (Cannot Close — Web Research Blocked)
 
 | Gap | Action to Close |
 |---|---|
 | 1. Exact Meta webhook payload for `statuses` field — need to verify field names (`status`, `conversation`, `error` structure) | `web_fetch` https://developers.facebook.com/docs/whatsapp/cloud-api/reference/webhooks |
-| 2. Meta `call_hours` JSON format — need exact schema | `web_fetch` Meta docs |
+| 2. Meta template review time expectations — need exact SLA data | `web_fetch` Meta docs |
 | 3. Competitor deep pricing comparison (beyond what's in §G) | `web_search` "competitor WhatsApp campaign pricing 2026" |
 | 4. Meta template namespace requirements | `web_fetch` Meta docs |
 | 5. Template rejection reason codes beyond 13x series | `web_fetch` Meta docs |
