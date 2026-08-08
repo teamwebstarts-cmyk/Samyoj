@@ -1,1432 +1,256 @@
-# Samyoj Campaigns — Comprehensive Documentation
+# Samyoj Campaign Broadcasts — Phase 0 Baseline and Overhaul Roadmap
 
-## §0. Executive Summary
+**Reviewed:** 2026-08-08 (UTC+05:30)
+**Scope owner:** `docs/campaigns/COMPREHENSIVE_CAMPAIGNS_DOCUMENTATION.md` only
+**Evidence rule:** “Implemented” below means observable in the current repository. “Planned” and “decision” are not claims about current behavior.
 
-| Metric | Status |
-|---|---|
-| **Feature** | Campaigns (broadcast messaging via WhatsApp templates) |
-| **Description** | Send template-based messages to many contacts at once, pick your audience, and track delivery |
-| **Production Readiness** | 4/10 (from production audit) |
-| **Frontend Coverage** | 14 React components + api.ts + types |
-| **Backend Coverage** | 6 service files + 19 routes + 8 Prisma models |
-| **Meta API** | Template messaging, conversation-based billing, delivery receipts |
-| **Competitors Documented** | 11 platforms |
-| **Documentation Status** | 9.2/10 (code-verified) |
+## 0. Executive verdict
 
----
+Campaigns are a working, organization-scoped template broadcast prototype, not a production-grade broadcast system. CRUD, audience resolution, scheduling, a BullMQ worker, webhook status updates, analytics, CSV export, and Inbox conversation recording exist. Redis is an operational dependency for BullMQ queues/workers (`server/src/config/queues.ts:4–8`); without reachable Redis, campaign enqueue/processing is unavailable. The critical gaps are delivery idempotency and ordering, consent provenance and enforcement, quota/budget correctness, schedule semantics, retry policy, auditability, and scale isolation.
 
-## §1. What Are Campaigns?
+**Current readiness:** not assigned a numeric score in Phase 0. The former `4/10` score was an unsupported snapshot, not a durable measurement. Readiness must be scored only after the acceptance criteria in §6 are tested.
 
-Campaigns is Samyoj's **bulk messaging** feature. It lets operators send pre-approved WhatsApp **template messages** to many contacts at once, with:
+## 1. Verified current behavior
 
-- **Audience targeting**: manual phone list, tags, contact picker, or all opted-in contacts
-- **Template parameterization**: body params (`{{1}}`, `{{2}}`), header params, header media URL, coupon codes
-- **Scheduling**: immediate or time-zone-aware scheduling
-- **Tracking**: real-time delivery/read/failure rates, per-recipient status, error analysis
-- **Cost estimation**: real-time cost preview based on Meta's conversation-based pricing
+### 1.1 User-facing flow
 
-### 1.1 Campaign Lifecycle
+- Campaign creation and editing are in `client/src/pages/CampaignsPage.tsx`; only `DRAFT` and `SCHEDULED` are editable (`92–94`).
+- The form supports approved-template selection, body/header parameters, optional header media URL, manual phone entry, tags, selected contacts, selected WhatsApp number, scheduling, and browser-local timezone selection (`61–77`, `125–169`).
+- The UI hardcodes `requireOptIn: true` for TAGS, CONTACTS, and ALL_OPTED_IN (`145–161`). Manual phone entry does not carry a consent assertion.
+- The API does not enforce that UI choice: callers can submit `audienceConfig.requireOptIn: false` for TAGS or CONTACTS because the schema accepts the boolean (`server/src/modules/campaigns/types.ts:40–46`) and audience resolution skips the `optedIn` filter when it is explicitly false (`service.ts:35–48`). ALL_OPTED_IN still forces `optedIn = true` (`service.ts:52–54`). This is distinct from the current UI behavior.
+- The API client exposes list, quota, preview, CRUD, send/test/pause/resume/cancel/retry/duplicate, stats/analytics, recipient listing, and export methods. Verify `client/src/services/api.ts` campaign API block; do not infer server guarantees from the method list.
+- Campaign page refreshes list/detail data on `campaign:status` and `campaign:progress` (`347–357`). There is no evidence here of a durable event cursor or replay mechanism.
 
+### 1.2 API and authorization
+
+- Read routes use `authenticateJwtOrApiKey`, `requireOrg`, and active-number resolution; mutating routes additionally require `OWNER` or `ADMIN` (`server/src/modules/campaigns/routes.ts:34–36`).
+- The list query conditionally filters by `req.activeWhatsappNumberId` when one is present (`routes.ts:47–50`), but detail, recipients, analytics, stats, and export look up the campaign by `organizationId`/campaign ownership and do not add an active-number predicate (`routes.ts:197–212`, `223–245`, `454–499`). Do not describe those endpoints as active-WhatsApp-number scoped.
+- Create and update persist caller-supplied `whatsappNumberId` values; these routes do not validate that the ID belongs to the organization or is the active number (`routes.ts:166–180`, `257–328`). The selected number is resolved/validated later when sending (`service.ts:261–273`); this is a documented risk, not proof of an exploitable cross-tenant result.
+- Create resolves the submitted audience in the organization, rejects an empty result, persists the resolved recipients, and records `organizationId`, template, audience, number, schedule, and creator (`routes.ts:141–193`).
+- Send validates an approved Meta template, checks quota/budget, sets `RUNNING`, resets counters/recipient delivery fields, and enqueues batches (`service.ts:227–344`).
+- Test send is a real Meta send and is admin-guarded, but accepts an arbitrary caller-supplied phone number with no Contact lookup or consent check; it is not represented as a campaign recipient (`routes.ts:377–391`, `types.ts:74–76`, `service.ts:346–387`). This is a static consent risk, not a reproduced external send.
+
+### 1.3 Audience, consent, and schema
+
+- Audience types are `MANUAL`, `TAGS`, `CONTACTS`, and `ALL_OPTED_IN` (`server/src/modules/campaigns/types.ts:4–5`).
+- TAGS and CONTACTS filter organization contacts and, by default, `optedIn = true`; ALL_OPTED_IN always filters `optedIn = true` (`service.ts:35–54`).
+- MANUAL recipients are deduplicated but are not checked against the Contact consent record during resolution (`service.ts:37–39`; `recipients.ts`). The worker later fails a matching contact when `optedIn` is false, but a phone with no Contact row is not rejected (`server/src/workers/index.ts:179–197`).
+- The database stores `Contact.optedIn`, `consentSource`, and `consentAt` (`server/prisma/schema.prisma:504–517`), but CampaignRecipient stores no consent snapshot, category, policy version, or opt-out event reference.
+- STOP handling runs only after inbound processing has a resolved Contact and calls `handleOptOut` with that contact ID (`server/src/workers/webhook.processor.ts:462–478`; `server/src/modules/compliance/opt-out.ts:14–34`). A manual/unknown campaign phone with no Contact row can therefore still be sent: the worker rejects only a found contact whose `optedIn` is false (`server/src/workers/index.ts:179–197`). START/SUBSCRIBE sets that resolved Contact back to `optedIn:true`, `consentSource:'START_KEYWORD'`, and a new timestamp, but records no consent category or provenance beyond that generic source (`opt-out.ts:50–65`).
+- Campaign status enum is `DRAFT`, `SCHEDULED`, `RUNNING`, `PAUSED`, `COMPLETED`, `FAILED`, `CANCELLED` (`schema.prisma:147–155`). Recipient status uses the shared `MessageStatus` enum; recipient records have unique `metaMessageId`, unique `(campaignId, phone)`, retry count, timestamps, and an error string (`schema.prisma:965–984`).
+- Campaign stores nullable `scheduledAt` and nullable `timezone`; schedule execution compares `scheduledAt <= new Date()` and does not use the timezone field (`service.ts:705–730`). The UI converts the browser-local input to an ISO instant before submission (`CampaignsPage.tsx:163–167`). Therefore scheduling currently means “an already-converted UTC instant,” not server-side timezone-aware wall-clock scheduling.
+
+### 1.4 Queue, send, retries, and lifecycle
+
+- There is one BullMQ `broadcast-queue` and a broadcast worker with `concurrency: 2` (`server/src/config/queues.ts:6–9`; `server/src/workers/index.ts:124–140`, `279–285`).
+- Send creates delayed jobs per batch, default batch size `50` and delay `1000ms` (`service.ts:305–335`; `types.ts:84–96`). Delays do not establish ordering when multiple workers/processes or retries are present.
+- `broadcastQueue.add(...)` sets only a per-job `delay` (`service.ts:313–335`, `443–465`, `558–580`); it does not pass `attempts`, `backoff`, or retention options. The exported `defaultJobOptions` object (`queues.ts:19–26`) is not supplied to the `broadcastQueue` constructor (`queues.ts:6–8`) or these adds, so broadcast jobs have effective `attempts = 1` and do not inherit its retry/backoff/retention values. The worker’s custom backoff hook (`workers/index.ts:279–285`) is inactive for these jobs without a job-level backoff option. The worker catches per-recipient send errors and marks them `FAILED`, so a job can complete after partial failure (`workers/index.ts:207–273`). Per-recipient bounded retry, job-level backoff, dead-lettering, and idempotency are intended future retry design, not current behavior.
+- `retry-failed` resets failed recipients and increments `retryCount`, but has no max retry policy or idempotency key (`service.ts:503–590`).
+- Pause changes the campaign status, and the worker checks status before each recipient; already-in-flight Meta calls cannot be withdrawn (`service.ts:389–401`; `workers/index.ts:172–177`). Cancel marks pending recipients failed, but queued jobs are not removed (`service.ts:472–501`).
+- Completion is inferred when no recipient is `PENDING`; all-failed means `failedCount >= totalContacts` (`service.ts:104–123`). There is no explicit `SENDING`, `RETRYING`, `PARTIAL`, or terminal reason state.
+
+### 1.5 Webhooks, ordering, analytics, and Inbox
+
+- Meta webhook requests are acknowledged before asynchronous processing; status payloads are queued with four attempts (`server/src/modules/whatsapp/routes.ts:779–801`).
+- Campaign status synchronization looks up `CampaignRecipient` by `metaMessageId` and accepts `DELIVERED`, `READ`, and `FAILED` (`service.ts:141–152`). READ promotes delivered count if needed, but there is no timestamp comparison or event-id deduplication (`service.ts:157–197`). Out-of-order FAILED after READ can decrement counters and overwrite the terminal state.
+- The current campaign progress event payloads are minimal: send/failure events contain `campaignId`, `recipientId`, `status`, and failure may include `errorMessage` (`workers/index.ts:243–272`); webhook updates emit the same identity/status shape (`service.ts:199–203`). The old documentation’s `{sent, delivered, read, failed, total}` payload is not verified.
+- Successful broadcast sends are recorded in the normal conversation/message path with `campaignId` metadata and the selected WhatsApp number (`workers/index.ts:218–230`). This is the current Inbox routing integration; it is not a separate campaign Inbox model.
+- Analytics counts recipient rows and error strings, and calculates delivery/read percentages over `totalContacts` (`service.ts:629–674`). It does not expose spend, template category, consent cohort, unique event counts, latency, retries, or time-series data.
+- CSV export is unpaginated and emits `phone,name,status,error,sent_at,delivered_at,read_at`; values are quoted, but phone/name are not CSV-escaped consistently and formula-injection protection is absent (`service.ts:677–703`; `routes.ts:474–499`).
+
+### 1.6 Current defaults and cost preview
+
+| Behavior | Current value/evidence | Interpretation |
+|---|---|---|
+| Daily send limit | 5,000 | Organization setting fallback; count uses SENT/DELIVERED/READ rows with `sentAt` since server local midnight (`types.ts:91–96`; `quota.ts:16–37`). |
+| Daily budget | ₹5,000 | Estimate-only guard using the same recipient count, not delivered-message billing (`quota.ts:63–93`). |
+| Batch size/delay | 50 / 1,000ms | Queue shaping, not Meta rate-limit enforcement (`types.ts:91–96`; `service.ts:305–335`). |
+| Worker concurrency | 2 | Global worker concurrency, not per organization/number (`workers/index.ts:279–285`). |
+| Cost preview | MARKETING ₹0.78, UTILITY ₹0.35, AUTHENTICATION ₹0.35; fallback conversion USD→INR 83 | Local heuristic in `usage.service.ts:7–16`, `255–264`; not a live Meta rate card and not sufficient for billing. |
+
+## 2. Static findings and risks
+
+The items below are static code-review findings. Unless an item explicitly cites a reproduced test or runtime observation, label it **risk—unreproduced**, not a confirmed production incident.
+
+1. **Risk—unreproduced: consent is not an auditable send gate (High).** Manual recipients bypass resolution consent checks; unknown contacts can be sent after the worker’s `if (contact && ...)` check; API callers can also set `requireOptIn:false` for TAGS/CONTACTS; STOP handling applies only to a resolved Contact; START re-enables that contact without category/provenance tracking; and admin test sends accept arbitrary phones without consent checks. Evidence: `types.ts:40–46`, `74–76`; `service.ts:35–54`, `346–387`; `server/src/workers/webhook.processor.ts:462–478`; `server/src/modules/compliance/opt-out.ts:14–65`; `workers/index.ts:179–197`. Impact: unsolicited messaging and no proof of consent. Minimal fix: resolve every recipient against a consent decision at send time, persist a consent snapshot and policy/category, and fail closed, including test sends. Verify with manual, unknown, revoked, bypass-flag, STOP/START, arbitrary test-phone, and category-mismatch tests.
+2. **Risk—unreproduced: webhook state may not be monotonic or idempotent (High).** Status updates have no event timestamp/order guard or deduplicated event record; FAILED can mutate counters after READ. Evidence: `service.ts:141–197`. Impact: incorrect campaign state, analytics, and retries. Minimal fix: append immutable status events keyed by Meta message/status identity and apply only valid monotonic transitions. Verify permutations and duplicate delivery.
+3. **Risk—unreproduced: campaign enqueue may not be idempotent (High).** Repeated send/resume/scheduler execution can reset recipients and enqueue duplicate batches; jobs have no stable job IDs or send-attempt key. Evidence: `service.ts:227–344`, `705–730`; `queues.ts:6–8`. Impact: duplicate customer messages and double counts. Minimal fix: transactional claim/version plus `(campaignRecipient, attempt)` idempotency and unique queue job IDs.
+4. **Risk—unreproduced: quota and budget may race and are semantically incomplete (High).** Assertions count rows before enqueue without reservation; daily boundary is server local time; budget assumes fixed INR rates and counts attempted recipients, while Meta pricing is delivered-message/category/country dependent. Evidence: `quota.ts:20–29`, `40–61`, `63–86`; `usage.service.ts:9–16`, `255–264`. Minimal fix: atomic reservations, WABA timezone policy, delivered billing facts, and rate-card versioning.
+5. **Risk—unreproduced: schedule timezone is misleading (Medium).** `timezone` is stored but ignored by execution; browser conversion makes behavior dependent on the creator’s machine. Evidence: `CampaignsPage.tsx:73–76`, `163–167`; `service.ts:705–730`. Minimal fix: store intended local datetime plus IANA timezone or normalize explicitly at API boundary, and document DST behavior.
+6. **Risk—unreproduced: queue retries are not recipient retries (Medium).** The worker absorbs per-recipient errors, while queue attempts apply to the whole batch and there is no max/backoff classification or dead-letter contract. Evidence: `queues.ts:19–28`; `workers/index.ts:207–273`. Impact: transient failures are not reliably retried and permanent failures may be retried indiscriminately.
+7. **Risk—unreproduced: scale isolation is absent (Medium).** A global concurrency of two and unbounded per-campaign batch enqueue provide no per-org/number fairness, rate limit, or backpressure. Evidence: `workers/index.ts:124–140`, `279–285`; `service.ts:305–335`. Impact: one large campaign can delay all tenants.
+8. **Risk—unreproduced: export is unsafe/incomplete for operational use (Medium).** It loads all recipients, lacks consent/category/cost/event fields, and does not neutralize spreadsheet formulas. Evidence: `service.ts:677–703`; `routes.ts:487–498`.
+9. **Risk—unreproduced: readiness score and pricing claims drifted (Medium).** The former `4/10`, “9.2/10 documentation,” conversation-based billing, and fixed rates were not tied to a current test set. Evidence of current heuristic: `usage.service.ts:7–16`, `255–264`. They are removed from this baseline.
+
+## 3. Explicit product decisions for the overhaul
+
+These are decisions to implement or validate; they are not current behavior:
+
+- **Tenancy:** every campaign, recipient, consent record, event, export, and metric is scoped by organization and WhatsApp number. Cross-org and cross-number references fail closed.
+- **Consent:** campaigns may send only to recipients with recorded opt-in appropriate to the template category. Consent must include source, timestamp, policy/version, business identity, and opt-out history. Manual import is an input method, not consent.
+- **Lifecycle:** states are explicit and terminal transitions are guarded. A campaign run has a stable run/version; send, pause, resume, cancel, retry, and schedule operations are idempotent.
+- **Ordering:** Meta status events are applied by event timestamp and valid transition rules, not arrival order. Duplicate webhook deliveries are harmless.
+- **Scheduling:** API accepts an IANA timezone and local wall-clock time, stores the resolved instant and original intent, and defines DST gap/overlap behavior.
+- **Quota/retries:** reserve quota before enqueue; charge usage from authoritative delivered status/pricing facts; retry only classified transient failures with bounded exponential backoff and a dead-letter outcome.
+- **Exports/analytics:** exports are streamed/paginated and safe for spreadsheets; analytics are event-derived, explainable, and include delivery, failure, retry, consent, cost, and latency dimensions.
+- **Inbox:** every successful campaign send appears in the same organization/number conversation with campaign provenance; inbound replies route by Meta `phone_number_id` and preserve campaign linkage without changing assignment policy.
+- **Scale:** fairness and rate limiting are per organization and phone number, with bounded queue depth, observable lag, and resumable runs.
+
+**Provisional acceptance thresholds (product decisions for Phase 1–4; confirm before production):** deterministic race tests must produce zero duplicate sends; scheduler claim latency must be ≤60 seconds; ten concurrent quota requests (`N=10`) must produce zero quota oversubscription; cost/analytics reconciliation error must be ≤1%; and the multi-tenant load, fairness, alert, and restart thresholds in §6 are provisional until a production capacity review records final SLOs.
+
+## 4. Meta constraints and source register
+
+Checked **2026-08-08**. Meta policies and rates can change; implementation must store the source/rate version and never treat the local heuristic as authoritative billing.
+
+- Cloud API overview, templates, scale, quality, analytics, and opt-in: https://developers.facebook.com/docs/whatsapp/cloud-api/
+- Sending/service-window rules and opt-in reminder: https://developers.facebook.com/docs/whatsapp/cloud-api/guides/send-messages/
+- Pricing (per-message model, delivery/category/country conditions, free windows, volume tiers): https://developers.facebook.com/docs/whatsapp/pricing/
+- Pricing update history and conversation-based pricing deprecation: https://developers.facebook.com/docs/whatsapp/pricing/updates-to-pricing/
+- Template categorization and opt-in-management guidance: https://developers.facebook.com/docs/whatsapp/updates-to-pricing/new-template-guidelines/
+- Webhook components/status payloads and multiple status notifications: https://developers.facebook.com/docs/whatsapp/cloud-api/webhooks/components/
+- Webhook payload examples: https://developers.facebook.com/docs/whatsapp/cloud-api/webhooks/payload-examples/
+- WhatsApp Business Messaging Policy (consent, expectations, opt-out): https://business.whatsapp.com/policy/
+
+Operational implications:
+
+1. Templates are required for business-initiated messaging outside the customer-service window and generally require approval.
+2. Opt-in must be obtained before template messaging; the business name and intent must be clear, and opt-outs must be honored.
+3. Current Meta pricing is per delivered template message, varying by category and recipient country/region; conversation-based pricing must not be presented as current.
+4. A business message can produce separate sent, delivered, and read status webhooks. Status processing must tolerate duplicates and non-sequential arrival.
+5. The 24-hour customer-service window affects free-form messaging; it does not remove the consent/policy obligations for campaigns.
+
+## 5. Roadmap
+
+### Phase 0 — documentation and contract baseline (this change)
+
+- Replace stale claims with evidence tables and exact file/line references.
+- Record product decisions, Meta constraints, acceptance criteria, and known risks.
+- Stop using the numeric readiness score until criteria are measured.
+
+#### Phase 0 self-acceptance checklist
+
+- [x] Removed or corrected stale claims, including active-number scoping, timezone behavior, consent, queue retries/concurrency, schema, event payloads, CSV, pricing, and readiness score.
+- [x] Added exact current-client/server/schema/worker evidence references for behavior and defects.
+- [x] Kept verified current behavior, static risks, explicit product decisions, Meta constraints, and roadmap in separate sections.
+- [x] Added the caller-supplied `whatsappNumberId` validation gap and documented Redis/BullMQ as an operational dependency.
+- [x] Labeled static race/security findings as risks—unreproduced unless backed by a reproduced test or runtime observation.
+- [x] Validated the Meta source register URLs and access date recorded in §4.
+- [x] Assigned stable IDs, phase, owner/component, `TEST:` placeholders, and measurable pass conditions to every Section 6 criterion.
+- [x] Ran `git diff --check`, IDE diagnostics, and the exact reproducible consistency assertions recorded in §7.
+
+### Phase 1 — safety and correctness
+
+- Consent ledger/snapshot and fail-closed recipient resolution.
+- Immutable campaign run, send-attempt, webhook-event, and audit records.
+- Idempotent enqueue/send/status application with monotonic transitions.
+- Explicit schedule timezone/DST contract.
+- Correct org/number scoping tests, including active-number mismatch cases.
+
+### Phase 2 — quota, retry, and operations
+
+- Atomic quota reservations and delivered-message cost facts.
+- Error taxonomy, bounded per-recipient retries, dead-letter/replay tooling.
+- Per-org/number throttling, fairness, backpressure, pause/cancel claims, and queue lag metrics.
+- Operational dashboards and alert thresholds for stuck runs, webhook lag, duplicate suppression, and quota rejection.
+
+### Phase 3 — customer-facing completeness
+
+- Consent status and reason visible before send; category-aware opt-out controls.
+- Safe streamed exports with stable schema/version and filters.
+- Event-derived analytics with latency, cost, retries, and cohort breakdowns.
+- Inbox campaign provenance, reply routing verification, and user-visible partial/failure explanations.
+
+### Phase 4 — scale and governance
+
+- Load tests for multi-tenant campaigns and webhook bursts.
+- Partition/retention strategy for recipients and events.
+- Disaster recovery/replay runbook, rate-card updates, privacy retention, and production readiness review.
+
+## 6. Acceptance criteria
+
+Every criterion below has a stable ID, phase, owner/component, verification placeholder, and measurable pass condition. The `TEST:` values and named artifacts are outputs to implement or produce; they are not claims that those tests or artifacts already exist.
+
+### Tenancy and authorization
+
+- [ ] **CAM-TENANT-001** — Phase 1 | Owner: Campaign API/auth | Verify: `TEST: campaigns.cross_org_read_and_export` | Pass: every cross-organization read, preview, mutation, enqueue, and export returns 404/403 and creates no side effect.
+- [ ] **CAM-TENANT-002** — Phase 1 | Owner: Campaign API/WhatsApp context | Verify: `TEST: campaigns.number_ownership_matrix` | Pass: a campaign cannot resolve contacts or send through a number owned by another organization; active-number and explicit-number cases either both reject or both select the same owned number.
+- [ ] **CAM-TENANT-003** — Phase 1 | Owner: Campaign route authorization | Verify: `TEST: campaigns.role_matrix` | Pass: only OWNER/ADMIN can mutate or send; SUPERVISOR/AGENT read only permitted organization/number data.
+- [ ] **CAM-TENANT-004** — Phase 1 | Owner: Campaign audit | Verify: `TEST: campaigns.audit_required_fields` | Pass: 100% of campaign actions record organization, user, campaign/run, request ID, outcome, and no credential/token fields.
+
+### Consent and compliance
+
+- [ ] **CAM-CONSENT-001** — Phase 1 | Owner: Audience resolver/send worker | Verify: `TEST: campaigns.consent_fail_closed` | Pass: preview and send apply one fail-closed decision to 100% of MANUAL/TAGS/CONTACTS/ALL_OPTED_IN recipients.
+- [ ] **CAM-CONSENT-002** — Phase 1 | Owner: Campaign API | Verify: `TEST: campaigns.require_opt_in_false` | Pass: TAGS/CONTACTS requests with `requireOptIn:false` are rejected or still exclude every non-consented contact; no bypass sends.
+- [ ] **CAM-CONSENT-003** — Phase 1 | Owner: Test-send route | Verify: `TEST: campaigns.test_send_consent` | Pass: an arbitrary test phone without an auditable consent decision is rejected, or is allowed only under a documented test-destination policy with 100% audit coverage.
+- [ ] **CAM-CONSENT-004** — Phase 1 | Owner: Consent policy | Verify: `TEST: campaigns.revoked_and_category_consent` | Pass: absent, revoked, expired, or category-incompatible consent produces zero Meta sends and a recipient/audit reason.
+- [ ] **CAM-CONSENT-005** — Phase 1 | Owner: Consent ledger | Verify: `TEST: campaigns.consent_snapshot` | Pass: every sent recipient has source, timestamp, business identity, category/policy version, and opt-out state persisted before send.
+- [ ] **CAM-CONSENT-006** — Phase 1 | Owner: Webhook/compliance | Verify: `TEST: campaigns.stop_start_unknown_manual` | Pass: STOP blocks the next send for a resolved Contact; unknown/manual phones with no Contact are blocked before send; START re-enables only with recorded category/provenance policy.
+
+### Lifecycle and idempotency
+
+- [ ] **CAM-LIFE-001** — Phase 1 | Owner: Campaign run/queue | Verify: `TEST: campaigns.idempotent_enqueue` | Pass: duplicate send, scheduler, redelivery, resume, and retry requests create at most one Meta send per recipient attempt.
+- [ ] **CAM-LIFE-002** — Phase 1 | Owner: Campaign state machine | Verify: `TEST: campaigns.lifecycle_transitions` | Pass: every transition is guarded/audited and no terminal campaign or recipient state regresses in 100% of permutation tests.
+- [ ] **CAM-LIFE-003** — Phase 1 | Owner: Recipient counters | Verify: `TEST: campaigns.counter_reconciliation` | Pass: counters equal recipient facts after duplicate and retry events, with zero double-counted sent/delivered/read/failed outcomes.
+- [ ] **CAM-LIFE-004** — Phase 1 | Owner: Queue controls | Verify: `TEST: campaigns.pause_cancel_race` + artifact `campaign-state-transition-matrix` | Pass: the matrix lists every queued/in-flight pause/cancel outcome, and 1,000 deterministic race iterations produce zero duplicate sends and zero unclassified outcomes.
+
+### Webhook ordering
+
+- [ ] **CAM-WEBHOOK-001** — Phase 1 | Owner: Webhook processor | Verify: `TEST: campaigns.duplicate_status_webhook` | Pass: replaying any identical Meta status webhook changes recipient state/counters exactly once.
+- [ ] **CAM-WEBHOOK-002** — Phase 1 | Owner: Campaign status sync | Verify: `TEST: campaigns.status_permutations` | Pass: READ-before-DELIVERED, delayed FAILED, and mixed status permutations yield one valid monotonic state and reconciled counters.
+- [ ] **CAM-WEBHOOK-003** — Phase 1 | Owner: Webhook validation | Verify: `TEST: campaigns.invalid_status_isolation` | Pass: unknown IDs, malformed payloads, and cross-number IDs produce zero campaign mutations and an observable error/event.
+- [ ] **CAM-WEBHOOK-004** — Phase 1 | Owner: Webhook event store | Verify: `TEST: campaigns.webhook_replay` | Pass: replay reproduces recipient outcomes while preserving Meta timestamps, status, and error codes byte-for-byte.
+
+### Scheduling
+
+- [ ] **CAM-SCHED-001** — Phase 1 | Owner: Scheduler/API | Verify: `TEST: campaigns.schedule_dst` + artifact `schedule-dst-fixture-table` | Pass: 100% of the DST gap/overlap fixture cases listed in the artifact resolve to one explicitly recorded instant or one explicitly recorded rejection.
+- [ ] **CAM-SCHED-002** — Phase 1 | Owner: Scheduler worker | Verify: `TEST: campaigns.scheduler_claim` | Pass: concurrent scheduler ticks claim each due run once, scheduler claim latency is ≤60 seconds, and every misfire/late-start outcome is recorded.
+- [ ] **CAM-SCHED-003** — Phase 1 | Owner: Campaign UI/API | Verify: `TEST: campaigns.schedule_preview` | Pass: preview displays the exact resolved instant and WABA/business timezone policy for 100% of scheduled campaigns.
+
+### Quota, pricing, and retries
+
+- [ ] **CAM-QUOTA-001** — Phase 2 | Owner: Quota service | Verify: `TEST: campaigns.concurrent_quota_reservation` | Pass: under N=10 concurrent sends, quota oversubscription equals 0 for both organization and number reservations.
+- [ ] **CAM-QUOTA-002** — Phase 2 | Owner: Billing/quota | Verify: `TEST: campaigns.usage_window_semantics` | Pass: usage uses the documented timezone and separately counts attempted, accepted, delivered, and billable messages.
+- [ ] **CAM-QUOTA-003** — Phase 2 | Owner: Billing service | Verify: `TEST: campaigns.rate_card_reconciliation` + artifact `rate-card-reconciliation-report` | Pass: every estimate carries a Meta category/country rate version and delivered pricing facts reconcile with absolute error ≤1% against the test oracle.
+- [ ] **CAM-QUOTA-004** — Phase 2 | Owner: Retry worker | Verify: `TEST: campaigns.retry_taxonomy` | Pass: only transient errors retry within the configured maximum/backoff; permanent errors reach dead-letter state and replay is auditable.
+
+### Exports and analytics
+
+- [ ] **CAM-EXPORT-001** — Phase 3 | Owner: Export API | Verify: `TEST: campaigns.export_safety_and_bounds` | Pass: export is tenant-safe, bounded/streamed, schema-versioned, deterministic, and neutralizes every spreadsheet formula cell.
+- [ ] **CAM-EXPORT-002** — Phase 3 | Owner: Export schema | Verify: `TEST: campaigns.export_columns` | Pass: each export includes outcome, timestamps, Meta error/status, retry count, consent decision, category, and cost when available.
+- [ ] **CAM-ANALYTICS-001** — Phase 3 | Owner: Analytics service | Verify: `TEST: campaigns.analytics_reconciliation` | Pass: analytics reconcile to recipient/event facts and expose sent/delivered/read/failed, rates, latency, retries, spend, and denominators.
+
+### Inbox routing
+
+- [ ] **CAM-INBOX-001** — Phase 3 | Owner: Broadcast/message service | Verify: `TEST: campaigns.inbox_provenance` | Pass: 100% of successful sends link to the correct organization, number, conversation, and campaign run.
+- [ ] **CAM-INBOX-002** — Phase 3 | Owner: Webhook/inbox routing | Verify: `TEST: campaigns.inbound_number_routing` | Pass: inbound replies route by Meta `phone_number_id` with zero tenant/number cross-links and preserved campaign provenance.
+- [ ] **CAM-INBOX-003** — Phase 3 | Owner: Realtime client/API | Verify: `TEST: campaigns.realtime_catchup` | Pass: disconnect/reconnect or missed Socket.IO events converges to server truth without stale campaign/Inbox state.
+
+### Scale and operations
+
+- [ ] **CAM-SCALE-001** — Phase 4 | Owner: Queue/platform | Verify: `TEST: campaigns.multi_tenant_load` + artifact `multi-tenant-load-report` | Pass (provisional): with 10 organizations × 10 active campaigns and 50 recipients/campaign, p95 queue start lag is ≤60 seconds, no campaign is stalled >5 minutes, and all campaigns reach a terminal state; thresholds require production capacity review before launch.
+- [ ] **CAM-SCALE-002** — Phase 4 | Owner: Rate limiter | Verify: `TEST: campaigns.fair_throttling` + artifact `fairness-load-report` | Pass (provisional): with N=10 equally backlogged tenants, each tenant receives at least one batch within 60 seconds, zero sends exceed configured per-number limits, and no tenant waits >3× the median tenant wait; thresholds require production capacity review.
+- [ ] **CAM-SCALE-003** — Phase 4 | Owner: Operations/observability | Verify: `TEST: campaigns.operational_alerts` + artifact `alert-threshold-catalog` | Pass (provisional): injected stuck-job, webhook-lag, duplicate, quota-rejection, dead-letter, and partial-completion cases each emit the named metric within 60 seconds and an alert within 5 minutes, with 100% detection in 10 repetitions; thresholds require production capacity review.
+- [ ] **CAM-SCALE-004** — Phase 4 | Owner: Platform/recovery | Verify: `TEST: campaigns.restart_replay` + artifact `restart-replay-report` | Pass (provisional): restart API/workers/Redis at each deterministic checkpoint yields zero duplicate sends, restores processing within 5 minutes, and replays every unfinished recipient exactly once; thresholds require production capacity review.
+
+## 7. Verification record for this rewrite
+
+- **Repository snapshot:** reviewed at current HEAD `53237ab4d34c3aee1931b3eb9441051927b2ac09`. The documentation change is uncommitted working-tree evidence; no commit was created.
+- Re-read current campaign client: `client/src/pages/CampaignsPage.tsx` and campaign components/API references.
+- Re-read current campaign server: `server/src/modules/campaigns/types.ts`, `routes.ts`, `service.ts`, `quota.ts`, `recipients.ts`.
+- Re-read persistence: `server/prisma/schema.prisma` Campaign, CampaignRecipient, Contact, and WhatsappNumber models.
+- Re-read queue/worker behavior: `server/src/config/queues.ts` and `server/src/workers/index.ts`.
+- Re-read Meta webhook acknowledgement/queue path: `server/src/modules/whatsapp/routes.ts`.
+- Re-read local billing heuristic: `server/src/modules/billing/usage.service.ts`.
+- Checked official Meta documentation and policy URLs in §4 on 2026-08-08.
+- Reproducible consistency check: the exact Python command below verifies nine level-2 sections, absence of the stale section-10 reference and old documentation-status row, at least eight HTTP source URLs, and presence of required acceptance/evidence phrases.
+- Exact command (run from repository root):
+
+```sh
+python3 -c 'from pathlib import Path; import re; s=Path("docs/campaigns/COMPREHENSIVE_CAMPAIGNS_DOCUMENTATION.md").read_text(); assert len(re.findall(r"^## ",s,re.M))==9; assert chr(167)+"10" not in s; assert "Documentation"+" Status" not in s; assert len(re.findall(r"https?://[^)\s]+",s))>=8; assert len(re.findall(r"CAM-[A-Z]+-\d{3}",s))>=34; assert all(x in s for x in ["CAM-TENANT-001","CAM-CONSENT-006","CAM-LIFE-001","CAM-WEBHOOK-001","CAM-SCHED-001","CAM-QUOTA-001","CAM-EXPORT-001","CAM-ANALYTICS-001","CAM-INBOX-001","CAM-SCALE-001","broadcastQueue.add","effective `attempts = 1`","requireOptIn:false","STOP handling","START/SUBSCRIBE","N=10","Repository snapshot:"]); print("campaign-doc consistency ok")'
 ```
-┌──────────┐     ┌────────────┐     ┌─────────┐     ┌──────────┐
-│  DRAFT   │ --> │  SCHEDULED │ --> │ RUNNING   │ --> │ COMPLETED │
-└──────────┘     └────────────┘     └─────────┘     └──────────┘
-                    │                                │
-                    ▼                                ▼
-               ┌─────────┐                     ┌──────────┐
-               │ PAUSED  │                     │ FAILED   │
-               └─────────┘                     └──────────┘
-                    │                                ▲
-                    └────────────────────────┬───────┘
-                                             ▼
-                                      ┌───────────┐
-                                      │ CANCELLED │
-                                      └───────────┘
-```
+- `git diff --check` passed and IDE diagnostics reported no errors for this Markdown file.
+- No source code, schema, plan, or runtime configuration was changed by this Phase 0 documentation update.
 
-**Editable statuses**: DRAFT, SCHEDULED (per `EDITABLE_STATUSES = ['DRAFT', 'SCHEDULED']`)
-**Non-editable**: RUNNING, PAUSED, COMPLETED, FAILED, CANCELLED
+## 8. Change-control note
 
-### 1.2 Key Constants (verified in code)
-
-| Constant | Value | Location |
-|---|---|---|
-| `EDITABLE_STATUSES` | `['DRAFT', 'SCHEDULED']` | service.ts:23 |
-| `STUCK_RUNNING_MS` | `6 * 60 * 60 * 1000` (6h) | service.ts:24 |
-| `DEFAULT_CAMPAIGN_SETTINGS.batchSize` | `50` | quota.ts:21 |
-| `DEFAULT_CAMPAIGN_SETTINGS.batchDelayMs` | `1000` | quota.ts:22 |
-| `DEFAULT_CAMPAIGN_SETTINGS.dailySendLimit` | `5000` | quota.ts:21 |
-| `DEFAULT_CAMPAIGN_SETTINGS.dailyBudgetInr` | `5000` | quota.ts:22 |
-| `retryDelays` | `[0, 30000, 120000, 600000]` | queues.ts (via AUDIT.md:4.6) |
-| `CATEGORY_RATES_INR.MARKETING` | `0.78` | usage.service.ts:12 |
-| `CATEGORY_RATES_INR.UTILITY` | `0.35` | usage.service.ts:13 |
-| `CATEGORY_RATES_INR.AUTHENTICATION` | `0.35` | usage.service.ts:14 |
-
----
-
-## §2. Frontend Connection Map
-
-The campaign UI is built across 14 components, primarily in `client/src/pages/CampaignsPage.tsx` (607 lines) and `client/src/components/campaigns/`.
-
-### 2.1 CampaignsPage.tsx — Main Orchestrator
-
-**State management**: 20+ React state variables covering:
-- `campaigns`, `templates`, `whatsappNumbers`, `availableTags` (data)
-- `form` (emptyForm with 15 fields), `editing`, `saving` (edit state)
-- `search`, `debouncedSearch`, `statusFilter`, `page` (list view)
-- `analytics`, `analyticsLoading`, `analyticsError` (analytics view)
-- `recipients`, `recipientTotal`, `recipientPage`, `recipientStatusFilter` (recipient view)
-
-**Status tabs**: Drafts, Scheduled, Running, Paused, Completed, Failed, Cancelled
-
-**Key functions**:
-- `canEditCampaign(status)` — returns `status === 'DRAFT' || status === 'SCHEDULED'` (line 92-94)
-- `countVars(text)` — counts `{{1}}`, `{{2}}` pattern occurrences (line 96-98)
-- `campaignToForm(c, templates)` — auto-fills params array with empty strings based on template variable count
-- `buildPayload(form)` — builds API payload with audience-specific config:
-
-| Audience Type | payload.audienceConfig | requireOptIn |
-|---|---|---|
-| MANUAL | none (recipients passed directly) | defaults true (backend) |
-| TAGS | `{tags: [...], requireOptIn: true}` | **always true** (hardcoded) |
-| CONTACTS | `{contactIds: [...], requireOptIn: true}` | **always true** (hardcoded) |
-| ALL_OPTED_IN | `{requireOptIn: true}` | **always true** (hardcoded) |
-
-⚠️ **Finding**: `requireOptIn` is ALWAYS hardcoded to `true` in the UI. No toggle exists for bypassing opt-in. (CampaignsPage.tsx:151, 157, 160)
-
-**Imports** (15 modules):
-```typescript
-import { billingApi, campaignApi, contactApi, templateApi, whatsappApi } from '../services/api';
-import { useAuth } from '../contexts/AuthContext';        // role checks (canManageTeam)
-import { useSocket } from '../hooks/useSocket';            // real-time campaign:progress events
-import { useDebouncedValue } from '../hooks/useDebouncedValue'; // search debounce
-```
-
-### 2.2 Action Buttons (by status)
-
-| Status | Visible Actions | Hidden Actions |
-|---|---|---|
-| DRAFT | Edit, Send, Test, Duplicate, Export, Delete | Pause, Resume, Cancel (n/a) |
-| SCHEDULED | Pause, Cancel, Duplicate, Export, Delete | Send, Test (n/a) |
-| RUNNING | Pause, Cancel | Edit, Resume, Duplicate |
-| PAUSED | Resume, Cancel | Edit, Pause |
-| COMPLETED | Export, Duplicate | Edit, Send, Pause, Resume, Cancel |
-| FAILED | Retry Failed, Duplicate | Edit, Send |
-| CANCELLED | Duplicate | Edit, Send, Pause, Resume, Cancel |
-
-All edit/send actions are additionally hidden from non-admin users (role check via `useAuth().canManageTeam`).
-
-### 2.3 Key Components
-
-| Component | File | Purpose |
-|---|---|---|
-| **CampaignsPage** | `pages/CampaignsPage.tsx` (607 lines) | Main orchestrator — list, create/edit drawer, analytics, recipients |
-| **CampaignCard** | `components/campaigns/CampaignCard.tsx` | Progress card with sent/delivered/read/failed bars |
-| **CampaignTable** | `components/campaigns/CampaignTable.tsx` (195 lines) | Table view with responsive column hiding |
-| **CampaignDetailHeader** | `components/campaigns/CampaignDetailHeader.tsx` | Status badges + action buttons |
-| **CampaignAnalyticsPanel** | `components/campaigns/CampaignAnalyticsPanel.tsx` | Delivery rate, read rate, top errors |
-| **CampaignAudienceSection** | `components/campaigns/CampaignAudienceSection.tsx` | Audience type tabs (Manual/Tags/Contacts/All opted-in) |
-| **CampaignAudiencePreview** | `components/campaigns/CampaignAudiencePreview.tsx` | Recipient count + cost estimate |
-| **CampaignPhoneCsvImport** | `components/campaigns/CampaignPhoneCsvImport.tsx` | CSV upload with live validation |
-| **CampaignContactPicker** | `components/campaigns/CampaignContactPicker.tsx` | Tag-based contact picker with search |
-| **CampaignRecipientTable** | `components/campaigns/CampaignRecipientTable.tsx` | Per-recipient status table |
-| **CampaignQuotaBanner** | `components/campaigns/CampaignQuotaBanner.tsx` | Daily quota progress bar |
-| **campaignUi.tsx** | `components/campaigns/campaignUi.tsx` | Status badge colors, step components |
-| **campaignPreviewUtils.ts** | `components/campaigns/campaignPreviewUtils.ts` | Template preview formatting |
-
-### 2.4 Empty States
-
-When no campaigns exist or no templates are approved, the UI shows:
-- **No campaigns**: "No campaigns yet" with "Create Campaign" CTA
-- **No approved templates**: "No approved templates available" with link to Templates page
-- **No WhatsApp number**: "Connect your WhatsApp number" with link to Settings
-- **Quota exceeded**: "Daily send limit reached" with reset timer
-
-### 2.5 API Service Layer
-
-**campaignApi** (18 methods in `client/src/services/api.ts`):
-
-```typescript
-export const campaignApi = {
-  list:      (params?) => GET    '/campaigns'
-  quota:     ()         => GET    '/campaigns/quota'
-  previewAudience: (data) => POST '/campaigns/preview-audience'
-  get:       (id)       => GET    '/campaigns/${id}'
-  create:    (data)     => POST   '/campaigns'
-  update:    (id, data) => PATCH  '/campaigns/${id}'
-  delete:    (id)       => DELETE '/campaigns/${id}'
-  send:      (id)       => POST   '/campaigns/${id}/send'
-  test:      (id, phone) => POST  '/campaigns/${id}/test', { phone }
-  pause:     (id)       => POST   '/campaigns/${id}/pause'
-  resume:    (id)       => POST   '/campaigns/${id}/resume'
-  cancel:    (id)       => POST   '/campaigns/${id}/cancel'
-  retryFailed: (id)     => POST   '/campaigns/${id}/retry-failed'
-  duplicate: (id)       => POST   '/campaigns/${id}/duplicate'
-  stats:     (id)       => GET    '/campaigns/${id}/stats'
-  analytics: (id)       => GET    '/campaigns/${id}/analytics'
-  recipients: (id, params?) => GET '/campaigns/${id}/recipients', { params }
-  exportUrl: (id)       => URL string
-  export:    (id)       => GET    '/campaigns/${id}/export', { responseType: 'blob' }
-}
-```
-
-**Related APIs**: `billingApi.estimateCost(recipientCount, category)` → GET `/billing/estimate`, `templateApi.list()` + `templateApi.library()` → template picker, `whatsappApi.list()` → number picker, `contactApi.tags()` + `contactApi.list()` → audience picker
-
-### 2.6 Socket.IO Events
-
-| Event | Direction | Payload | Component |
-|---|---|---|---|
-| `campaign:progress` | server → org | `{campaignId, status, sent, delivered, read, failed, total}` | CampaignsPage, CampaignCard |
-| `campaign:list_update` | server → org | `{type: 'campaign', action, data}` | CampaignsPage |
-
----
-
-## §3. Backend Connection Map
-
-### 3.1 Module Layout
-
-```
-server/src/modules/campaigns/
-├── service.ts          # Core logic (761 lines, 18 exported functions + private helpers)
-├── routes.ts           # REST API (511 lines, 19 routes)
-├── types.ts            # Enums + Zod schemas (96 lines)
-├── quota.ts            # Budget + send quota enforcement (94 lines)
-├── template-params.ts  # Template parameter building (123 lines)
-├── audit.ts            # Audit log wrapper (18 lines)
-└── recipients.ts       # Recipient resolution + persistence
-```
-
-### 3.2 Core Service Functions (service.ts)
-
-| Function | Line | Purpose |
-|---|---|---|
-| `resolveAudienceRecipients` | 29 | Resolves recipients by audience type (MANUAL/TAGS/CONTACTS/ALL_OPTED_IN) |
-| `syncRunningCampaignStatuses` | 69 | Detects stuck campaigns, calls recoverStuckCampaign |
-| `finalizeCampaignIfDone` | 104 | Marks campaign COMPLETED/FAILED when all recipients resolved |
-| `syncCampaignRecipientFromWebhook` | 141 | Updates recipient status from webhook (DELIVERED/READ/FAILED) |
-| `validateTemplate` | 213 | ✅ **Checks `template.status === 'APPROVED'` before sending** |
-| `queueCampaignSend` | 227 | Main send entry point — validates, batches, queues |
-| `sendTestMessage` | 346 | Sends a single test message |
-| `pauseCampaign` | 389 | Sets status to PAUSED |
-| `resumeCampaign` | 403 | Sets status to RUNNING, re-queues batches |
-| `cancelCampaign` | 472 | Sets status to CANCELLED |
-| `retryFailedRecipients` | 503 | Resets FAILED → PENDING, re-queues |
-| `duplicateCampaign` | 592 | Duplicates campaign with "(Copy)" suffix, resets counters to 0 |
-| `canEditCampaign` | 559 | Returns true if status ∈ EDITABLE_STATUSES |
-| `persistRecipients` | 560 | Dedupes + persists recipients |
-| `getCampaignAnalytics` | 575 | Returns analytics + campaign data |
-| `recipientsToCsv` | 584 | Converts recipients to CSV |
-| `processScheduledCampaigns` | 592 | Cron: starts SCHEDULED campaigns at scheduledAt |
-| `campaignAnalyticsQuery` | 610 | SQL aggregation for analytics |
-
-### 3.3 Campaign Dispatch Flow
-
-From AUDIT.md §4.6 dispatch diagram:
-
-```
-User clicks "Send"
-    │
-    ▼
-POST /campaigns/:id/send  ──►  queueCampaignSend()
-    │
-    ├─── 1. Check campaign.status (must NOT be RUNNING/CANCELLED — line 231)
-    ├─── 2. resolveAudienceRecipients() — if not MANUAL, resolve + persistRecipients()
-    ├─── 3. assertDailySendQuota() — check sentToday < dailySendLimit (5000) (line 258)
-    ├─── 4. assertDailyBudget() — estimate cost, check < dailyBudgetInr (₹5000) (line 259)
-    │         🔴 BUG: always uses 'MARKETING' rate, not actual template category
-    ├─── 5. getWhatsappForCampaign() — load WhatsApp number context (line 261)
-    ├─── 6. ensureWabaSubscribed() — check WABA subscription (line 266)
-    └─── 7. validateTemplate() — fetch from Meta, check status === 'APPROVED' (line 268) ⚠️
-              ⚠️ CRITICAL: quota+budget consumed BEFORE template validation.
-              If template is unapproved, daily allocation is wasted. (Bug #15 in §7.2)
-    └─── 8. Queue batches: 50 recipients per job, delay = batchIndex * batchDelayMs
-              ↓
-         Broadcast Worker (concurrency: 2)
-              │
-              ├─── Per recipient:
-              │     ├── Check live.status === 'RUNNING' (stop if paused/cancelled)
-              │     ├── Check contact.optedIn (skip if opted-out)
-              │     ├── Re-fetch template metadata (🔴 redundant with #2)
-              │     ├── buildTemplateComponents()
-              │     ├── MetaWhatsAppService.sendMessage()
-              │     ├── recordOutboundInConversation() → creates Message in inbox
-              │     ├── Update CampaignRecipient.status = 'SENT', sentCount++
-              │     ├── emitToOrg('campaign:progress')
-              │     └── On failure: status = 'FAILED', failedCount++, emitToOrg
-              │
-              └─── After batch: finalizeCampaignIfDone()
-```
-
-### 3.4 Template Parameter Handling (template-params.ts)
-
-**`buildTemplateComponents(params, template)`** — builds the Meta API components array:
-
-1. **Header** (if params.headerMediaUrl && header component has non-TEXT format):
-   ```json
-   { "type": "header", "parameters": [{ "type": "image", "image": { "link": "<url>" } }] }
-   ```
-2. **Header** (if params.header has text values):
-   ```json
-   { "type": "header", "parameters": [{ "type": "text", "text": "<value>" }] }
-   ```
-3. **Body** (if params.body has values):
-   ```json
-   { "type": "body", "parameters": [{ "type": "text", "text": "<value>" }, ...] }
-   ```
-4. **Coupon code** (if params.couponCode && COPY_CODE button exists):
-   ```json
-   { "type": "button", "sub_type": "copy_code", "index": 0,
-     "parameters": [{ "type": "coupon_code", "coupon_code": "<code>" }] }
-   ```
-
-**`mergeTemplateParams(campaignParams, recipientVars, recipientName)`** — parameter resolution priority:
-1. Recipient-level variables (per-recipient personalization)
-2. Campaign-level params (applied to all)
-3. `{{name}}` substitution — replaced with recipient's name at campaign level, or per-recipient name if available
-
-**`applyTemplateParamsToPreview(template, params, fallbackName)`** — returns human-readable preview string with `{{1}}`, `{{2}}` replaced by actual values.
-
-### 3.5 Campaign Analytics Query
-
-```sql
--- campaignAnalyticsQuery (service.ts:610)
-SELECT
-  status,                    -- group by recipient status
-  COUNT(*) as count,
-  MAX(errorMessage) as topError
-FROM CampaignRecipient
-WHERE campaignId = ?
-GROUP BY status
-ORDER BY count DESC
-LIMIT 10
-```
-
-Returns: campaign summary (sent/delivered/read/failed counts), `deliveryRate` = `delivered/sent * 100`, `readRate` = `read/sent * 100`, `byStatus` object, `topErrors` array.
-
-⚠️ **Finding**: `deliveryRate` = `deliveredCount/sentCount * 100` — but if `sentCount` is 0 (messages sent but no DELIVERED webhook yet), this divides by zero. Need to guard.
-
-### 3.6 Recipient Status Sync (from Webhooks)
-
-`syncCampaignRecipientFromWebhook` (line 141) handles three Meta webhook statuses:
-
-| Meta Status | Code Field | Action |
-|---|---|---|
-| `delivered` | `statuses[0].status` | If not READ: set DELIVERED, deliveredAt, deliveredCount++ |
-| `read` | `statuses[0].status` | If not DELIVERED: set DELIVERED + READ, deliveredAt + readAt, deliveredCount++ + readCount++ |
-| `failed` | `statuses[0].status` + `error` object | Decrement sentCount/deliveredCount/readCount if transitioning from those states, set FAILED, failedCount++ |
-
-⚠️ **Finding**: **SENT status is never updated by webhooks.** Recipients stay PENDING until Meta sends DELIVERED/READ/FAILED. If a message is sent but no delivery receipt arrives (network issues), the recipient stays PENDING forever.
-
-### 3.7 Quota & Budget (quota.ts)
-
-```typescript
-const DEFAULT_SETTINGS: CampaignSettings = {
-  dailySendLimit: 5000,
-  dailyBudgetInr: 5000,
-  batchSize: 50,
-  batchDelayMs: 1000,
-};
-```
-
-**`getDailySendUsage(orgId)`**: Counts recipients with `status IN ('SENT','DELIVERED','READ')` and `sentAt >= startOfDay` (00:00 today).
-
-**`assertDailySendQuota(orgId, recipientCount)`**:
-- Gets org-specific settings (else defaults)
-- `sentToday + recipientCount > dailySendLimit` → throw `AppError(429, 'Daily send limit exceeded')`
-
-**`assertDailyBudget(orgId, recipientCount, category = 'MARKETING')`**:
-- Gets org-specific settings (else defaults)
-- `estimateCampaignCost(sentToday, category) + estimateCampaignCost(recipientCount, category) > dailyBudgetInr` → throw `AppError(429, 'Daily budget exceeded')`
-
-⚠️ **CONFIRMED BUG**: Both `queueCampaignSend` (line 259) and `retryFailedRecipients` (line 511) hardcode `'MARKETING'` as the category. If the template is UTILITY or AUTHENTICATION, the budget check will OVERESTIMATE cost (₹0.78 vs ₹0.35 per recipient), causing false budget-limit errors.
-
-### 3.8 Worker Configuration (workers/index.ts)
-
-```typescript
-broadcastWorker = worker('broadcast', async (job) => {
-  // job.data: { campaignId, batchRecipients[], recipientVariables, batchMetadata }
-  ...
-}, {
-  connection,
-  concurrency: 2,          // ← LOW: only 2 parallel batches
-  settings: {
-    backoffStrategy: (attemptsMade) => getRetryDelay(attemptsMade),
-  },
-});
-```
-
-- Queue: `broadcastQueue` (from config/queues)
-- Job name: `send-broadcast-batch`
-- **Concurrency: 2** — limits throughput to ~100 messages/second
-- **Backoff**: `retryDelays = [0, 30000, 120000, 600000]` (0s, 30s, 2min, 10min) for job-level retry (4 attempts)
-- **`removeOnFail: true, removeOnComplete: true`** — job cleanup enabled
-
-Worker per-recipient processing:
-1. Re-fetch template metadata (🔴 redundant with pre-send validateTemplate)
-2. Per-recipient opt-in check: `if (contact && !contact.optedIn)` → FAILED
-3. Per-recipient live-status check: `if (live.status !== 'RUNNING')` → stop
-4. `buildTemplateComponents()` → `MetaWhatsAppService.sendMessage()`
-5. `recordOutboundInConversation()` → creates Message table entry (links campaign to inbox)
-6. Success: recipient.status = 'SENT', sentCount++, emitToOrg('campaign:progress')
-7. Failure: recipient.status = 'FAILED', failedCount++, emitToOrg('campaign:progress')
-
-### 3.9 Database Schema — Campaign Models
-
-#### Campaign
-
-```prisma
-model Campaign {
-  id                String        @id @default(uuid())
-  organizationId    String
-  name              String
-  templateName      String
-  templateLanguage  String?       @default("en")
-  templateParams    Json?         // TemplateParams: { body[], header[], headerMediaUrl, couponCode }
-  audienceType      AudienceType  // MANUAL | TAGS | CONTACTS | ALL_OPTED_IN
-  audienceConfig    Json?         // { tags[], contactIds[], requireOptIn }
-  whatsappNumberId  String
-  status            CampaignStatus  // @default: DRAFT
-  scheduledAt       DateTime?
-  timezone          String?       @default("Asia/Kolkata")
-  pausedAt          DateTime?
-  cancelledAt       DateTime?
-  totalContacts     Int?          @default(0)
-  sentCount         Int?          @default(0)
-  deliveredCount    Int?          @default(0)
-  readCount         Int?          @default(0)
-  failedCount       Int?          @default(0)
-  createdById       String
-  sentById          String?
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
-
-  @@index([organizationId])
-  @@index([status])
-  @@index([organizationId, status])
-  @@index([scheduledAt])
-}
-```
-
-#### CampaignRecipient
-
-```prisma
-model CampaignRecipient {
-  id            String       @id @default(uuid())
-  campaignId    String
-  phone         String
-  name          String?
-  variables     Json?        // { body?: [], header?: [] } — per-recipient template params
-  status        MessageStatus  // PENDING | SENT | DELIVERED | READ | FAILED
-  metaMessageId String?      @unique
-  errorMessage  String?
-  retryCount    Int?         @default(0)
-  sentAt        DateTime?
-  deliveredAt   DateTime?
-  readAt        DateTime?
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
-
-  @@unique([campaignId, phone])
-  @@index([campaignId, status])
-  @@index([campaignId, status, metaMessageId])
-}
-```
-
-#### Connected Models
-
-| Model | Campaign Connection |
-|---|---|
-| **ConversationCharge** | `pollConversationAnalytics()` stores actual Meta costs per WABA/day/category |
-| **WhatsappNumber** | `qualityRating` field polled via `pollQualityRatings()` |
-| **Contact** | `optedIn` field — checked per recipient in worker |
-| **Message** | `recordOutboundInConversation()` creates Message records linked to campaign sends |
-| **AuditLog** | `logCampaignAudit()` writes campaign actions |
-| **Organization** | Settings include campaign config (`org.settings.campaigns`) |
-
-### 3.10 Enums (Prisma)
-
-```prisma
-enum CampaignStatus  { DRAFT SCHEDULED RUNNING PAUSED COMPLETED FAILED CANCELLED }
-enum AudienceType    { MANUAL TAGS CONTACTS ALL_OPTED_IN }
-enum MessageStatus   { PENDING SENT DELIVERED READ FAILED }
-enum BotChannelType  { TEXT VOICE }
-enum BotTone         { ... }
-enum BotPersonalityType { ... }
-enum KnowledgeSourceType { FAQ URL PDF }
-enum ConversationStatus { ... }
-enum UserRole        { OWNER ADMIN SUPERVISOR AGENT }
-enum OrgAiProvider   { AZURE_OPENAI SARVAM_AI }
-```
-
-### 3.11 Environment Variables
-
-```bash
-# Meta
-META_ACCESS_TOKEN=              # Encrypted with AES-GCM
-META_PHONE_NUMBER_ID=
-META_WABA_ID=
-META_APP_ID=
-META_APP_SECRET=               # ⚠️ Do NOT commit
-META_VERIFY_TOKEN=             # ⚠️ Defaults to "whatsapp_verify_token" — security issue if not overridden
-
-# Billing
-USD_TO_INR=83                  # For conversation charge conversion
-
-# Worker / Queue
-REDIS_URL=                     # BullMQ queue backend
-BROADCAST_CONCURRENCY=2        # Override default (2)
-
-# Scheduling
-CRON_PROCESS_SCHEDULED=*/5 * * * *  # Process scheduled campaigns every 5 min
-CRON_SYNC_RUNNING=*/1 * * * * *     # Sync running campaigns every minute
-```
-
-### 3.12 Related Module Connections
-
-| Module | Connection to Campaigns |
-|---|---|
-| **whatsapp/meta.service.ts** | `MetaWhatsAppService.sendMessage()` — actual API call |
-| **messages/send.service.ts** | `deliverOutboundMessage()` — template message delivery path |
-| **billing/usage.service.ts** | `estimateCampaignCost()`, `pollConversationAnalytics()`, `pollTemplateRejections()` |
-| **contacts/contacts.routes.ts** | Contact resolution for TAGS and CONTACTS audiences |
-| **templates/templates.routes.ts** | Approved template picker |
-| **whatsapp/webhooks.ts** | Inbound webhook processing (delivery receipts → syncCampaignRecipientFromWebhook) |
-| **compliance/compliance.routes.ts** | Opt-out enforcement (blocks sending to opted-out contacts) |
-| **automation/engine.ts** | Triggers on CALL_COMPLETED, MISSED_CALL → can start campaigns |
-| **workers/index.ts** | `broadcastWorker` processes `send-broadcast-batch` jobs |
-| **calling/calling-routes.ts** | Call → Campaign: missed call can trigger campaign follow-up |
-| **inbox/conversations.routes.ts** | `recordOutboundInConversation()` creates inbox Message records |
-
----
-
-## §4. Meta Documentation Deep Dive — Template Messaging
-
-### 4.1 Campaigns on Meta — Core Model
-
-The companion uses **Meta's WhatsApp Business Cloud API** for sending bulk messages. For campaigns (outbound messaging outside the 24h service window), Meta requires:
-
-1. **Pre-approved message templates** — every campaign must use an approved template
-2. **Conversation-based billing** — charge per 24-hour conversation window, not per message
-3. **Opt-in** — recipients must have opted in to receive messages (especially for MARKETING)
-4. **Templates in correct language** — `templateLanguage` must match recipient's locale
-5. **Call permissions for voice** — if campaign includes voice follow-up
-
-### 4.2 Template Categories & Pricing
-
-| Category | Rate (INR) | Rate (USD est.) | Use Case | Consent Required |
-|---|---|---|---|---|
-| **MARKETING** | ₹0.78 | ~$0.009 | Promotional offers, sales | ✅ Yes |
-| **UTILITY** | ₹0.35 | ~$0.004 | Account updates, alerts, delivery | ✅ Yes |
-| **AUTHENTICATION** | ₹0.35 | ~$0.004 | OTP, password reset, 2FA | ✅ Yes |
-| **SERVICE** | ₹0.00 | — | Within 24h service window | N/A (free) |
-| **USER_INITIATED** | ₹0.00 | — | Customer started conversation | N/A |
-| **BUSINESS_INITIATED** | ₹0.35 | ~$0.004 | Business starts conversation | ✅ Yes |
-
-**Conversion**: `1 USD = 83 INR` (from usage.service.ts:7)
-
-⚠️ **Finding**: The AUDIT.md §8.2 estimates Marketing at ~$0.05 USD (₹4.15) and Utility at ~$0.02 USD (₹1.66). The actual code uses `CATEGORY_RATES_INR` with much lower rates (₹0.78/₹0.35). This is a **major pricing discrepancy** that needs clarification with Meta's current pricing page.
-
-### 4.3 Template Requirements
-
-**For a template to be usable in campaigns, Meta requires:**
-
-| Requirement | Detail |
-|---|---|
-| **Approval status** | Must be `APPROVED` (verified via `validateTemplate()`) |
-| **Category** | MARKETING, UTILITY, or AUTHENTICATION |
-| **Components** | HEADER (optional), BODY (required), FOOTER (optional), BUTTONS (optional) |
-| **Body params** | Max 10 variables (`{{1}}` through `{{10}}`) |
-| **Header params** | 1 variable for text headers, 1 media URL for image/video/document |
-| **Button types** | QUICK_REPLY, URL, PHONE_NUMBER, COPY_CODE |
-| **Example values** | Must provide examples for all template variables |
-| **Footer limit** | 100 characters max |
-| **Button text limit** | 25 characters max |
-| **Template name** | Lowercase letters, numbers, underscores only |
-
-### 4.4 Template Sending (API)
-
-Meta's `POST /{phone-number-id}/messages` endpoint accepts:
-
-```json
-{
-  "messaging_product": "whatsapp",
-  "to": "+919999999999",
-  "type": "template",
-  "template": {
-    "name": "order_confirmation",
-    "language": { "code": "en" },
-    "components": [
-      {
-        "type": "header",
-        "parameters": [{ "type": "text", "text": "Order #12345" }]
-      },
-      {
-        "type": "body",
-        "parameters": [
-          { "type": "text", "text": "John" },
-          { "type": "text", "text": "12345" },
-          { "type": "currency", "currency": { "code": "INR", "amount": "999.00" } }
-        ]
-      }
-    ]
-  }
-}
-```
-
-### 4.5 Meta Error Codes (13x Series)
-
-| Code | Meaning | Recovery |
-|---|---|---|
-| 130429 | Rate limit reached | Wait + retry (built-in backoff) |
-| 130475 | Template temporarily unavailable | Retry same template |
-| 131047 | Template not allowed for destination | Use different template or remove recipient |
-| 131048 | Message template format invalid | Fix template format |
-| 131009 | Parameter is not valid | Fix template params |
-| 131052 | Template namespace invalid | Check template exists |
-
-### 4.6 Rate Limits
-
-| Endpoint | Limit |
-|---|---|
-| `POST /messages` (send template) | 1000 recipients per request, 60 requests per minute per WABA |
-| `GET /message_templates` | 60 requests per minute |
-| Webhook delivery | Up to 1000 messages/second |
-
-⚠️ **Finding**: The campaign worker does NOT implement Meta-level batching. It sends 50 recipients per job batch (code config), but each recipient is a separate API call. With worker `concurrency: 2`, the effective throughput is ~100 API calls/second — well within Meta's 60 rps limit per WABA. However, if multiple campaigns send simultaneously, the organization-wide limit could be exceeded.
-
-### 4.7 24-Hour Service Window
-
-Meta allows **free-form text messages** (not templates) only within **24 hours** of the customer's last inbound message. This is the "service window."
-
-The code checks this in `deliverOutboundMessage()`:
-```typescript
-const withinWindow = isWithin24HourWindow(lastMessageAt);
-if (withinWindow) {
-  // Send free-form text message (no template required)
-  type: 'text', text: { body: reply }
-} else {
-  // Must use approved template
-  type: 'template', template: { ... }
-}
-```
-
-⚠️ **Finding**: For campaigns, the `buildPayload` function in CampaignsPage.tsx does NOT check the 24h window. It always sends template messages. This is actually CORRECT — campaigns are for proactive outbound messaging and should always use templates (since they're business-initiated). But the `isWithin24HourWindow` function exists for the companion AI bot's chat replies.
-
-### 4.8 Webhook Delivery Receipts
-
-Meta sends webhook payloads to the `messages` and `message_template_statuses` fields. The payload structure:
-
-```json
-{
-  "object": "whatsapp_business_account",
-  "entry": [{
-    "id": "<WABA-ID>",
-    "changes": [{
-      "value": {
-        "messaging_product": "whatsapp",
-        "metadata": {...},
-        "statuses": [{
-          "id": "<message-id>",           // ← maps to CampaignRecipient.metaMessageId
-          "status": "delivered",          // sent | delivered | read | failed
-          "timestamp": "<unix-ts>",
-          "recipient_id": "<phone-number>",
-          "conversation": {
-            "id": "<conversation-id>",
-            "category": "business_initiated",
-            "expiration_timestamp": "<unix-ts>"
-          },
-          "error": {                      // only present on failure
-            "code": 131047,
-            "title": "Template not allowed for destination",
-            "message": "...",
-            "fbtrace_id": "..."
-          }
-        }]
-      }
-    }]
-  }]
-}
-```
-
-⚠️ **Finding**: The `syncCampaignRecipientFromWebhook` function matches recipients by `metaMessageId` (unique) and updates `status`, `deliveredAt`, `readAt`, `errorMessage`. It correctly handles `conversation` data for billing purposes, but the ConversationCharge polling (`pollConversationAnalytics`) is a SEPARATE cron job — there's no direct link between the per-message webhook and the per-conversation billing counter.
-
-### 4.9 Sandbox Limitations (Historical)
-
-| Feature | Sandbox | Production |
-|---|---|---|
-| Recipient count | 10 test contacts max | Unlimited |
-| Template sending | Only template sent to test numbers | All approved templates |
-| Webhook delivery | May be delayed | Real-time |
-| Opt-in requirement | Relaxed for testing | Strict |
-
-> Note: Meta deprecated the sandbox in 2025 in favor of production testing numbers.
-
----
-
-## §5. Competitor Analysis
-
-### 5.1 Competitive Landscape — Campaign Features
-
-| Platform | Campaign Types | A/B Testing | Timezone Scheduling | Dynamic Personalization | Templates | Analytics | Campaign Templates (save/reuse) |
-|---|---|---|---|---|---|---|---|
-| **Respond.io** | Bulk announcement | ✅ Auto-split | ✅ Per-recipient | ✅ Merge tags + custom vars | ✅ Built-in | ✅ Real-time | ✅ Yes |
-| **Wati** | Template + manual | ⚠️ Limited | ⚠️ Org-level only | ⚠️ Basic {{name}} | ✅ Built-in | ✅ Per-segment | ⚠️ Limited |
-| **AiSensy** | Bulk + sequence | ⚠️ Manual | ⚠️ Org-level | ⚠️ Basic | ✅ Gallery | ✅ Real-time | ❌ No |
-| **Gallabox** | Bulk announcement | ❌ No | ❌ No | ⚠️ Basic | ✅ Built-in | ✅ Delayed | ❌ No |
-| **Twilio** | Programmable | ⚠️ Manual | ✅ Per-recipient | ✅ Full custom | ✅ Full control | ⚠️ Manual | ⚠️ Via API only |
-| **MessageBird** | Campaigns + triggers | ⚠️ Limited | ✅ Per-recipient | ✅ Merge fields | ✅ Full control | ✅ Real-time | ⚠️ Limited |
-| **Samyoj** | Bulk template | ❌ No (planned A/B 10.1) | ❌ No (planned 10.6) | ⚠️ {{name}} + {{1-10}} | ✅ Built-in picker | ✅ Real-time Socket.IO | ❌ No (planned 10.2) |
-
-### 5.2 Competitor Strengths & Gaps
-
-**Respond.io** (Strongest competitor for campaigns):
-- ✅ Unified inbox shows campaign messages alongside replies
-- ✅ A/B testing with auto-winner selection (send winner to remaining 50%)
-- ✅ Per-recipient timezone scheduling
-- ✅ Campaign sequence / drip campaigns
-- ✅ Template quality score display in UI
-- ✅ Webhook for campaign events (integration)
-- ❌ More complex pricing (tiered)
-
-**Wati**:
-- ✅ Strong SMS + WhatsApp campaign automation
-- ✅ Template management with approval tracking
-- ✅ Multilingual campaign templates
-- ❌ Campaign reporting is basic (no per-segment analytics)
-
-**AiSensy**:
-- ✅ SMB-focused with simple campaign builder
-- ✅ Template gallery
-- ✅ Cart abandonment automation
-- ❌ Limited analytics (delayed, not real-time)
-
-**Gallabox**:
-- ✅ Strong analytics dashboard
-- ✅ Template management
-- ❌ No A/B testing
-- ❌ No timezone scheduling
-
-**Twilio**:
-- ✅ Full API control for developers
-- ✅ Global coverage
-- ✅ Template management API
-- ❌ Complex setup for non-developers
-- ❌ No built-in UI (requires custom build)
-
-**MessageBird**:
-- ✅ Conversations API with templates
-- ✅ Per-recipient timezone scheduling
-- ✅ Real-time delivery reports
-- ❌ More expensive pricing
-
-### 5.3 Industry Best Practices for Campaigns
-
-| Practice | Respond.io | Wati | AiSensy | Gallabox | Twilio | Samyoj |
-|---|---|---|---|---|---|---|
-| A/B testing | ✅ | ⚠️ | ⚠️ | ❌ | ⚠️ | ❌ |
-| Per-recipient timezone | ✅ | ⚠️ | ⚠️ | ❌ | ✅ | ❌ |
-| Template quality display | ✅ | ❌ | ❌ | ⚠️ | ✅ | ❌ |
-| Campaign templates (save/reuse) | ✅ | ⚠️ | ❌ | ❌ | ⚠️ | ❌ |
-| Draft autosave | ✅ | ✅ | ✅ | ✅ | N/A (API) | ❌ |
-| Delivery window (send only 9-5) | ✅ | ⚠️ | ⚠️ | ❌ | ✅ | ❌ |
-| Dynamic personalization | ✅ | ⚠️ | ⚠️ | ⚠️ | ✅ | ⚠️ |
-| Campaign collaboration | ✅ | ❌ | ❌ | ❌ | ⚠️ | ❌ |
-| Post-campaign summary | ✅ | ✅ | ✅ | ✅ | ⚠️ | ❌ |
-| Error categorization | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
-
----
-
-## §6. User Perspective
-
-### 6.1 Operator Personas
-
-**Sarah — Support Team Lead (E-commerce)**
-- **Goal**: Send order updates, delivery notifications, satisfaction surveys
-- **Audience**: Contacts who purchased in last 30 days
-- **Use case**: "Notify 5,000 customers about delivery delays"
-- **Pain points**: Can't see template quality, can't A/B test subject line, no delivery window
-- **Needs**: Template approval status, error categorization, delivery window, post-campaign summary
-
-**Raj — Sales Manager (E-commerce)**
-- **Goal**: Send promotions, product launches, cart abandonment reminders
-- **Audience**: Contacts tagged "Warm Leads" who haven't purchased in 60 days
-- **Use case**: "Promote new product to 10,000 opted-in contacts"
-- **Pain points**: Can't A/B test templates, can't schedule by timezone, can't save campaign templates
-- **Needs**: A/B testing, timezone scheduling, campaign templates, dynamic personalization
-
-### 6.2 Customer Journey Map — Campaign Creation
-
-| Stage | Action | System Response | Pain Point |
-|---|---|---|---|
-| 1. Entry | Click "Campaigns" from sidebar | CampaignsPage loads, shows tabs | No quick "Create Campaign" if on mobile |
-| 2. Create | Click "+ Create Campaign" (Drafts tab) | SlideOver opens with empty form | No guided wizard, no autosave |
-| 3. Template | Select from approved templates | Template preview shows | No quality rating display |
-| 4. Language | Select template language | Language updated in preview | No localization guidance |
-| 5. Params | Edit body/header params | Parameter count auto-set from template | No dynamic variable picker |
-| 6. Audience | Choose Manual/Tags/Contacts/All | Switch between input methods | No "exclude" tag option, no segment preview |
-| 7. Preview | See recipient count + cost | CampaignAudiencePreview shows "₹X" | Cost estimate uses wrong rate if template is Utility |
-| 8. Schedule | Choose date + time | Calendar opens | No per-recipient timezone, no delivery window |
-| 9. Review | See all settings + Send button | Button enabled if valid | No campaign review step, no error pre-check |
-| 10. Send | Click "Send" | Dialog asks to confirm | No undo, no staged rollout |
-| 11. Run | See live progress on card | CampaignCard shows bars | No per-recipient real-time progress |
-
-### 6.3 Customization Expectations
-
-| Feature | Desired by Users | Currently in Samyoj | Gap |
-|---|---|---|---|
-| **A/B testing** | 80% of power users | ❌ | High priority |
-| **Per-recipient timezone scheduling** | 70% | ❌ | High priority |
-| **Save campaign as template** | 60% | ❌ | Medium priority |
-| **Dynamic personalization** | 50% | ⚠️ ({{name}} + {{1-10}} only) | Medium priority |
-| **Campaign drafts (autosave)** | 90% | ❌ | High priority |
-| **Delivery window (9-5 only)** | 40% | ❌ | Low priority |
-| **Template quality score** | 60% | ❌ | Medium priority |
-| **Campaign collaboration (comments)** | 30% | ❌ | Low priority |
-| **Batch send (staggered)** | 50% | ✅ (50 per batch) | ✅ Done |
-| **Retry failed individually** | 40% | ⚠️ (bulk retry only) | Medium priority |
-
-### 6.4 Pain Points
-
-1. **No undo for send/cancel** — once sent, can't stop
-2. **No template quality display** — can't see if template might be rate-limited
-3. **No campaign template** — must re-enter all settings for recurring campaigns
-4. **No autosave** — browser refresh loses draft progress
-5. **Budget estimation inaccurate** — uses MARKETING rate for all templates
-6. **No per-recipient timezone** — sends at same time for all
-7. **Single phone number** — can't preview what multiple numbers would look like
-8. **No campaign sequence** — can't chain campaigns with delays
-
----
-
-## §7. Existing Features Assessment
-
-### 7.1 Features Built (Complete)
-
-| # | Feature | Status | Location |
-|---|---|---|---|
-| 1 | Full CRUD (create, edit, delete, duplicate) | ✅ Complete | CampaignsPage.tsx, service.ts |
-| 2 | Send/pause/resume/cancel/retry-failed | ✅ Complete | routes.ts: send, pause, resume, cancel, retry-failed |
-| 3 | 4 audience types (Manual, Tags, Contacts, All opted-in) | ✅ Complete | CampaignAudienceSection.tsx, service.ts:29 |
-| 4 | Template parameter editor (body, header, media, coupon) | ✅ Complete | template-params.ts:buildTemplateComponents |
-| 5 | CSV import with validation | ✅ Complete | CampaignPhoneCsvImport.tsx, validatePhoneLines |
-| 6 | Template picker with search | ✅ Complete | templateApi.list/library + CampaignsPage |
-| 7 | Real-time analytics (delivery, read, errors) | ✅ Complete | CampaignAnalyticsPanel.tsx, getCampaignAnalytics |
-| 8 | Recipient table with status + error | ✅ Complete | CampaignRecipientTable.tsx |
-| 9 | Quota banner (daily limit + budget) | ✅ Complete | CampaignQuotaBanner.tsx, quota.ts |
-| 10 | Test send | ✅ Complete | routes.ts:test, CampaignsPage:test |
-| 11 | Export recipients (CSV) | ✅ Complete | routes.ts:export, recipientsToCsv |
-| 12 | Socket.IO real-time progress | ✅ Complete | useSocket, emitToOrg('campaign:progress') |
-| 13 | Error categorization (by error message) | ✅ Complete | campaignAnalyticsQuery: topErrors |
-| 14 | Scheduling with timezone | ✅ Complete | form.scheduleEnabled, campaign.timezone |
-| 15 | Draft campaigns | ✅ Complete | status: DRAFT, canEditCampaign |
-| 16 | Campaign status tabs | ✅ Complete | statusFilterOptions, CampaignTable |
-| 17 | Role-based access (admin vs read) | ✅ Complete | routes.ts: adminGuard, readGuard |
-| 18 | Zod schema validation | ✅ Complete | types.ts: createCampaignSchema, etc. |
-
-### 7.2 Bugs & Issues (14 found)
-
-| # | Bug | Severity | Location |
-|---|---|---|---|
-| 1 | **Budget uses hardcoded MARKETING rate** — `assertDailyBudget(..., 'MARKETING')` at lines 259 + 511. Overestimates cost for UTILITY/AUTHENTICATION templates by 2x, causing false "budget exceeded" errors | HIGH | service.ts:259, 511 |
-| 2 | **No individual recipient retry** — failed recipients stay FAILED until bulk retry-all | MEDIUM | worker (no per-recipient retry) |
-| 3 | **Worker concurrency = 2** — bottleneck for large campaigns (100k recipients take 17min) | MEDIUM | workers/index.ts |
-| 4 | **Template metadata re-fetched in worker** — `getMessageTemplate()` called again after `validateTemplate()` already fetched it. Double API calls, double rate limit usage | LOW | worker:167 |
-| 5 | **EDITABLE_STATUSES only DRAFT/SCHEDULED** — can't edit Running/Paused campaigns (e.g., fix typo in template params mid-send) | MEDIUM | service.ts:23 |
-| 6 | **No SENT delivery receipt** — recipients stay PENDING until Meta sends DELIVERED/READ/FAILED webhook. If receipt lost, recipient stuck in PENDING | MEDIUM | syncCampaignRecipientFromWebhook:141 |
-| 7 | **No dead letter queue** — persistent failures (bad phone numbers) cause infinite retries | LOW | worker config |
-| 8 | **deliveryRate divides by zero** — if sentCount=0, analytics show NaN | LOW | campaignAnalyticsQuery |
-| 9 | **No template quality display** — can't see if template will be penalized (YELLOW/RED) | MEDIUM | UI missing |
-| 10 | **requireOptIn always true** — no UI toggle to bypass (even though backend supports it) | LOW | CampaignsPage.tsx:151/157/160 |
-| 11 | **No draft autosave** — browser refresh loses form state | LOW | CampaignsPage.tsx |
-| 12 | **Error messages not parsed** — `extractMetaErrorFields` exists but not used in campaign worker. Errors stored as raw string | MEDIUM | worker error handling |
-| 13 | **No per-batch error isolation** — if one recipient fails, the entire batch continues but no isolation between failures | LOW | worker batch processing |
-| 14 | **Template language defaults to "en"** — not context-aware per recipient | LOW | service.ts: templateLanguage default |
-| 15 | **Template validation order bug** — `assertDailyBudget` (line 259) runs BEFORE `validateTemplate` (line 268). If template is unapproved, daily quota/budget is consumed before validation fails — wasted allocation + misleading error | MEDIUM | service.ts: lines 259→268 |
-
-| Dimension | Score (1-10) | Notes |
-|---|---|---|
-| Core functionality | 7/10 | All features work, but with bugs |
-| Error handling | 5/10 | Errors logged but not categorized. No DLQ. |
-| Data integrity | 6/10 | PENDING state can get stuck. No transaction rollback. |
-| Performance | 4/10 | Concurrency=2, re-fetching templates |
-| Security | 8/10 | Opt-in enforced. Token decryption. RBAC. |
-| UX honesty | 6/10 | Cost estimate misleading (wrong rate). No quality display. |
-| Monitoring | 7/10 | Socket.IO progress, analytics, audit log |
-| **Overall** | **6/10** | Functional but needs hardening for production scale |
-
----
-
-## §8. Enhancement Opportunities
-
-### 8.1 UX Improvements
-
-| Enhancement | Code Location | How to Implement |
-|---|---|---|
-| **Template quality display** | CampaignsPage.tsx template picker | Fetch `qualityRating` from Meta (already in `pollQualityRatings`), show GREEN/RED badge next to template name |
-| **Draft autosave** | CampaignsPage.tsx form state | Use `onChange` to auto-save draft via `campaignApi.update` with debounce. Show "Saving..." indicator |
-| **Campaign review step** | CampaignsPage.tsx (pre-send) | Add "Review" step showing all settings before send. Validate recipients, check quota/budget, confirm template approval |
-| **Undo send** | CampaignsPage.tsx send action | After "Send", show undo toast for 5 seconds. Only proceed after timeout |
-| **Per-recipient error details** | CampaignRecipientTable.tsx | Expand row to show full Meta error code, retry history, suggestion to fix |
-
-### 8.2 Template & Personalization Improvements
-
-| Enhancement | Code Location | How to Implement |
-|---|---|---|
-| **Fix budget calculation** | service.ts:259, 511 | Pass actual template category to `assertDailyBudget`: `getTemplateCategory(campaign.templateName)` instead of `'MARKETING'` |
-| **Template category display** | CampaignsPage.tsx template picker | Fetch template metadata, show category badge (MARKETING/UTILITY/AUTHENTICATION) |
-| **Dynamic personalization beyond {{name}}** | template-params.ts, CampaignsPage.tsx | Support contact fields as variables: `{{email}}`, `{{company}}`, `{{last_purchase}}`, `{{tags}}` |
-| **Template preview before send** | CampaignsPage.tsx | Use `applyTemplateParamsToPreview` to show rendered message before sending. Add "Preview for 3 recipients" button |
-
-### 8.3 Performance & Reliability Improvements
-
-| Enhancement | Code Location | How to Implement |
-|---|---|---|
-| **Increase worker concurrency** | workers/index.ts | Change from 2 to 10. Monitor Meta rate limits (60 rps per WABA) |
-| **Remove redundant template fetch** | workers/index.ts:167 | Pass template metadata from `validateTemplate` result to worker via job data |
-| **Add dead letter queue** | workers/index.ts | For persistent failures (131047), move to DLQ instead of infinite retry |
-| **Per-recipient retry** | CampaignRecipientTable.tsx | Add individual "Retry" button per recipient in FAILED state |
-| **SENT delivery receipt** | syncCampaignRecipientFromWebhook | Also handle `status: 'sent'` from webhook to update recipients from PENDING → SENT |
-
-### 8.4 Analytics Improvements
-
-| Enhancement | Code Location | How to Implement |
-|---|---|---|
-| **Template performance dashboard** | CampaignAnalyticsPanel.tsx | Show template approval rate, quality trend, delivery rate by template |
-| **Error categorization** | worker error handling | Parse Meta error codes (130429, 130475, 131047), store as `errorCategory` field |
-| **Cost vs. estimate comparison** | billing/usage.service.ts | Compare `estimateCampaignCost` vs actual `pollConversationAnalytics` results |
-| **Fix deliveryRate divide-by-zero** | campaignAnalyticsQuery | Guard: `sentCount > 0 ? delivered/sent * 100 : 0` |
-
----
-
-## §9. New Features to Add
-
-### 9.1 A/B Testing (Auto-winner selection)
-
-| Detail | Value |
-|---|---|
-| **What** | Split audience by percentage, send different templates to each segment, auto-select winner |
-| **UI** | CampaignsPage → new "A/B Test" toggle → 2 template + 2 params sets + split percentage |
-| **Backend** | Fork campaign into 2 sub-campaigns, track performance, continue winner to remaining recipients |
-| **Meta dependency** | Same template approval flow — both templates must be approved |
-| **Priority** | P1 |
-
-### 9.2 Campaign Templates (Save for reuse)
-
-| Detail | Value |
-|---|---|
-| **What** | Save campaign configurations (template + params + audience + schedule) as reusable templates |
-| **UI** | CampaignsPage → "Save as Template" button → name + description |
-| **Backend** | New `CampaignTemplate` Prisma model |
-| **Priority** | P2 |
-
-### 9.3 Per-Recipient Timezone Scheduling
-
-| Detail | Value |
-|---|---|
-| **What** | Send campaigns at 9am in each recipient's local timezone |
-| **Dependency** | Contacts model needs `timezone` field |
-| **Implementation** | `resolveAudienceRecipients` → fetch timezone per contact → schedule batches by timezone |
-| **Priority** | P1 |
-
-### 9.4 Dynamic Personalization
-
-| Detail | Value |
-|---|---|
-| **What** | Use contact fields as template variables: `{{first_name}}`, `{{company}}`, `{{order_id}}` |
-| **Implementation** | Extend `mergeTemplateParams` to support arbitrary fields from Contact table |
-| **UI** | Template params editor shows dropdown of available contact fields |
-| **Priority** | P2 |
-
-### 9.5 Delivery Window
-
-| Detail | Value |
-|---|---|
-| **What** | Only send campaigns between 9am-9pm in recipient's timezone |
-| **UI** | CampaignsPage → "Delivery window" toggle → start/end time picker |
-| **Backend** | Filter recipients whose timezone is in window; queue rest for next window |
-| **Priority** | P3 |
-
-### 9.6 Campaign Sequence (Drip)
-
-| Detail | Value |
-|---|---|
-| **What** | Chain campaigns with delays — e.g., welcome series (Day 1 → Day 3 → Day 7) |
-| **UI** | New "Sequence" tab in CampaignsPage → define steps with delays |
-| **Backend** | New `CampaignSequence` model; worker schedules next campaign after completion |
-| **Priority** | P2 |
-
-### 9.7 Batch Send Control (Manual stagger)
-
-| Detail | Value |
-|---|---|
-| **What** | Control how many recipients receive the message per hour (manual staggering) |
-| **UI** | CampaignsPage → "Send rate" dropdown (50/min, 100/min, 500/min, unlimited) |
-| **Backend** | `batchDelayMs` and `batchSize` override per campaign |
-| **Priority** | P1 |
-
-### 9.8 Draft Autosave
-
-| Detail | Value |
-|---|---|
-| **What** | Auto-save campaign drafts as you type |
-| **UI** | Form `onChange` → debounced `campaignApi.update` with DRAFT status |
-| **Backend** | Already supports save-as-draft via `status: DRAFT` |
-| **Priority** | P1 |
-
----
-
-## §10. Features to Remove/Skip
-
-### 10.1 Features to Defer (Low value, high complexity)
-
-| Feature | Why Skip |
-|---|---|
-| **Multi-channel campaigns** (WhatsApp + SMS + Email) | Adds significant infrastructure complexity. Focus on WhatsApp-only for now |
-| **Campaign collaboration** (comments, approvals) | Enterprise-only need. Simple notification on completion is sufficient for SMBs |
-| **Campaign calendar view** | Visual scheduling feature. Use list with timezone instead |
-| **Campaign tags/categorization** | Nice-to-have. Use campaign name convention (e.g., "[Promo] Spring Sale") |
-| **Campaign ROI tracking** (conversion to sales) | Requires deep integration with commerce module. Track delivery metrics only |
-
-### 10.2 Code Simplification Opportunities
-
-| Code Smell | Fix |
-|---|---|
-| **Worker re-fetches template metadata** | Pass from `validateTemplate` result to worker job data |
-| **Budget uses hardcoded 'MARKETING'** | Pass `campaign.category` (template's category) to `assertDailyBudget` |
-| **`sentCount` incremented in worker** | Move to `syncCampaignRecipientFromWebhook` for SENT status, OR ensure webhook handles SENT |
-| **Duplicate `canEditCampaign` in frontend and backend** | Use single source of truth (backend API should return `canEdit` flag) |
-
----
-
-## §11. Production Hardening Checklist
-
-### 11.1 Security Hardening
-
-| Issue | Fix | Priority |
-|---|---|---|
-| **`META_VERIFY_TOKEN` defaults to `whatsapp_verify_token`** | Generate random token in setup, validate on all deployments | P0 |
-| **Template approval not shown to user before send** | Fetch and display template status (APPROVED/PENDING/REJECTED) in template picker | P1 |
-| **Error messages stored as raw strings** | Parse with `extractMetaErrorFields`, store categorized fields | P2 |
-| **No webhook signature verification for campaign statuses** | Verify `X-Hub-Signature-256` on all webhook payloads | P0 |
-| **Bulk recipient phone validation deferred to send time** | Validate phones at `previewAudience` time | P1 |
-
-### 11.2 Error Handling
-
-| Issue | Fix | Priority |
-|---|---|---|
-| **`assertDailyBudget` always uses 'MARKETING'** | Pass template category from campaign metadata | P0 |
-| **No dead letter queue** | After 4 retries, move to DLQ, notify admin | P1 |
-| **PENDING recipients stuck forever** | `syncRunningCampaignStatuses` timeout → auto-FAILED after 24h | P1 |
-| **Worker concurrency = 2** | Make configurable via env var (`BROADCAST_CONCURRENCY`) | P2 |
-| **`deliveryRate` divides by zero** | Guard: `sentCount > 0 ? ... : 0` | P0 |
-
-### 11.3 Reliability
-
-| Issue | Fix | Priority |
-|---|---|---|
-| **Template re-fetch in worker** | Pass template metadata from `validateTemplate` to worker job data | P1 |
-| **No circuit breaker for Meta API** | Add circuit breaker for 130429 rate limiting | P2 |
-| **`removeOnFail: true` silently drops failed jobs** | Log to DLQ before removing | P1 |
-| **No retry metrics** | Track retry counts per campaign, alert on high retry rate | P2 |
-
-### 11.4 Data Integrity
-
-| Issue | Fix | Priority |
-|---|---|---|
-| **No transaction for recipient updates** | Use `prisma.$transaction()` for batch recipient updates | P2 |
-| **Duplicate recipients not prevented at DB level** | `@@unique([campaignId, phone])` exists, but `upsertRecipient` should use it | P1 |
-| **`finalizeCampaignIfDone` race condition** | Use distributed lock or atomic update | P2 |
-
----
-
-## §12. Implementation Roadmap
-
-### Phase A — Foundation Fixes (2 weeks, 3 engineers)
-
-**Goal**: Fix critical bugs, make production-safe
-
-| Task | Priority | Owner | Est. Time |
-|---|---|---|---|
-| Fix budget calculation to use actual template category | P0 | Backend | 1 day |
-| Fix deliveryRate divide-by-zero | P0 | Backend | 2 hours |
-| Verify META_VERIFY_TOKEN in all deployments | P0 | DevOps | 1 day |
-| Add template quality display in UI | P1 | Frontend | 3 days |
-| Add webhook signature verification | P0 | Backend | 2 days |
-| Add SENT webhook handling | P1 | Backend | 1 day |
-| Add dead letter queue | P1 | Backend | 2 days |
-| Fix template re-fetch in worker | P1 | Backend | 1 day |
-
-### Phase B — UX & Core Feature Gaps (3 weeks, 4 engineers)
-
-**Goal**: Add missing features users request most
-
-| Task | Priority | Owner | Est. Time |
-|---|---|---|---|
-| Draft autosave with debounce | P1 | Frontend | 3 days |
-| Template preview before send | P1 | Frontend | 2 days |
-| Per-recipient error details in table | P1 | Frontend | 3 days |
-| Per-recipient timezone scheduling | P1 | Backend + Frontend | 1 week |
-| Batch send rate control (manual stagger) | P1 | Backend + Frontend | 3 days |
-| Per-recipient retry button | P1 | Frontend | 2 days |
-| Campaign review step (pre-send validation) | P1 | Frontend | 3 days |
-| Undo send (5-second window) | P2 | Frontend | 2 days |
-
-### Phase C — Competitive Feature Parity (4 weeks, 5 engineers)
-
-**Goal**: Match Respond.io / Wati best-in-class
-
-| Task | Priority | Owner | Est. Time |
-|---|---|---|---|
-| A/B testing with auto-winner | P1 | Full team | 2 weeks |
-| Campaign templates (save/reuse) | P2 | Backend + Frontend | 1 week |
-| Dynamic personalization (contact fields) | P2 | Full stack | 1 week |
-| Campaign analytics dashboard | P1 | Frontend + Backend | 1 week |
-| Error categorization with Meta codes | P1 | Backend | 3 days |
-| Delivery window (time-based filtering) | P3 | Backend | 4 days |
-| Campaign sequence / drip | P2 | Backend | 2 weeks |
-
-### Phase D — Scale & Polish (2 weeks, 2 engineers)
-
-**Goal**: Handle 100k+ recipient campaigns
-
-| Task | Priority | Owner | Est. Time |
-|---|---|---|---|
-| Scale worker concurrency | P2 | Backend | 1 day |
-| Add circuit breaker for Meta API | P2 | Backend | 3 days |
-| Add retry metrics dashboard | P2 | Backend | 2 days |
-| Transaction-safe recipient updates | P2 | Backend | 2 days |
-
-### Phase E — Validation & Testing
-
-| Activity | Priority | Est. Time |
-|---|---|---|
-| Run test campaigns (1K, 10K, 100K recipients) | P0 | 3 days |
-| Test all error scenarios (rate limit, template failure, bad numbers) | P0 | 2 days |
-| Verify budget calculation accuracy | P0 | 1 day |
-| Verify webhook delivery status handling | P0 | 2 days |
-| Document SOP for campaign operators | P1 | 1 day |
-
----
-
-## §13. Priority Matrix
-
-| Feature | Impact (1-5) | Effort (1-5) | Priority |
-|---|---|---|---|
-| Fix budget calculation (MARKETING rate bug) | 5 | 1 | **P0** |
-| Verify META_VERIFY_TOKEN in deployments | 5 | 2 | **P0** |
-| Fix deliveryRate divide-by-zero | 4 | 1 | **P0** |
-| Add webhook signature verification | 5 | 3 | **P0** |
-| Draft autosave | 4 | 3 | **P1** |
-| Template preview before send | 4 | 2 | **P1** |
-| Per-recipient timezone scheduling | 5 | 4 | **P1** |
-| Batch send rate control | 3 | 3 | **P1** |
-| A/B testing (auto-winner) | 5 | 5 | **P1** |
-| Per-recipient error details | 3 | 2 | **P1** |
-| Add SENT webhook handling | 3 | 2 | **P1** |
-| Campaign review step | 4 | 3 | **P1** |
-| Dead letter queue | 4 | 5 | **P1** |
-| Dynamic personalization | 4 | 5 | **P2** |
-| Template quality display | 3 | 3 | **P1** |
-| Scale worker concurrency | 3 | 1 | **P2** |
-| Error categorization | 3 | 4 | **P1** |
-| Campaign sequence / drip | 3 | 5 | **P2** |
-
----
-
-## §14. Meta Platform Connections
-
-### 14.1 Meta WhatsApp Messaging for Campaigns
-
-For campaigns to work on Meta's platform, the following connections are required:
-
-| Meta Requirement | Samyoj Connection | Status | How to Verify |
-|---|---|---|---|
-| **Message templates** | `templateApi.list()`, `templateApi.get(name)` | ✅ Works | Templates must be APPROVED (via `validateTemplate`) |
-| **Send template message** | `MetaWhatsAppService.sendMessage()` in `send.service.ts` | ✅ Works | Verify template name + language + params match Meta's approved template |
-| **Conversation billing** | `pollConversationAnalytics()` in `billing/usage.service.ts` | ✅ Works | Poll daily, store in `ConversationCharge` table |
-| **Delivery receipts** | `webhook.processor` → `syncCampaignRecipientFromWebhook` | ✅ Works | Webhook must subscribe to `messages` field |
-| **Template rejections** | `pollTemplateRejections()` in `billing/usage.service.ts` | ✅ Works | Polls REJECTED templates, notifies org |
-| **Phone number quality** | `pollQualityRatings()` in `billing/usage.service.ts` | ✅ Works | Poll quality, store on `WhatsappNumber.qualityRating` |
-
-### 14.2 Template Approval Status Sync
-
-Meta template statuses: `PENDING`, `APPROVED`, `REJECTED`, `DISABLED`
-
-Current flow:
-1. Campaign send → `validateTemplate()` → `GET /message_templates?status=APPROVED&name=...`
-2. If approved → proceed with queueing
-3. If not approved → throw error immediately (good)
-
-⚠️ **Gap**: Template rejection sync is asynchronous (pollTemplateRejections runs as cron). There's no real-time notification to the user when their template is rejected. The campaign will show "Not approved" error only at send time.
-
-### 14.3 Conversation Billing
-
-Meta bills per **conversation** (24-hour window), and the **first template's category** determines the charge:
-
-```
-Customer receives template message (MARKETING) → Conversation starts
-All messages within 24h → Charged as MARKETING
-After 24h → New conversation if business initiates with new template
-```
-
-The campaign cost estimation (`estimateCampaignCost`) uses:
-```
-estimatedCost = recipientCount × CATEGORY_RATES_INR[category]
-```
-
-⚠️ **Gap**: This doesn't account for conversation deduplication. If 50 recipients already had conversations with the business in the last 24h, the actual cost is 0 for those recipients (new template in same conversation = no new charge). The estimate always overcharges.
-
-### 14.4 Rate Limit Management
-
-| Resource | Limit | Current Handling |
-|---|---|---|
-| Send requests | 60/minute per WABA | Worker concurrency=2 → ~100 rps. Safe for single org. |
-| Recipients | 1000/request | Code sends 1 per message (batch=50 per job) |
-| Template fetches | 60/minute | `validateTemplate` + worker re-fetch = 2 per campaign send. Double usage |
-| Webhook | No strict limit | `message` webhook field must be subscribed |
-
-⚠️ **Gap**: No rate limit coordination between multiple campaigns. If 3 campaigns start simultaneously, the combined throughput could exceed Meta's 60 rps limit.
-
----
-
-## §15. Decision Record
-
-| Decision | Context | Decision | Consequence |
-|---|---|---|---|
-| **Batch size = 50** | Need rate limit safety + acceptable throughput | 50 recipients per batch job | 100k recipients = 2000 batches × 0.5s = 1000s; concurrency 2 helps |
-| **Template params via body/header arrays** | Template variables vary per template | Store as JSON arrays in `templateParams` field | Flexible but loses type safety of variable names |
-| **requireOptIn hardcoded true** | GDPR + India compliance | Always filter opted-in contacts | Cannot send to non-opted-in even if legally permissible; no override |
-| **EDITABLE_STATUSES = DRAFT/SCHEDULED** | Prevent mid-send configuration changes | Only editable before send starts | Good for data integrity; can't fix typos mid-campaign |
-| **No draft autosave** | Simplicity | Manual save only | Users lose progress on browser refresh; requested feature |
-| **Socket.IO progress events** | Real-time UX | `emitToOrg('campaign:progress')` per recipient | Good UX; scales to 1000+ recipients per org |
-| **Budget uses MARKETING rate** | Quick MVP | Hardcoded 'MARKETING' for simplicity | Overestimates cost for Utility/Auth templates; false errors |
-| **Retry = 4 attempts (0, 30s, 2min, 10min)** | Match typical business retry patterns | Fixed backoff schedule | No exponential backoff; 4th retry is 10min — too long for urgent campaigns |
-| **No transaction for batch updates** | Performance over ACID | Individual updates | Risk of partial failure; no rollback |
-| **Worker concurrency = 2** | Conservative Meta rate limits | Low default | Bottlenecks large campaigns; configurable but not exposed |
-| **Template re-fetch in worker** | Worker is stateless | Re-fetch metadata at process time | Double API calls; template could be deleted mid-campaign |
-| **Error: stored as raw string** | Quick MVP | Store `errorMessage` string | Not queryable; can't aggregate by error type |
-| **CSV import = single text area** | Simplicity | Paste phones in textarea | No file upload; limited for large lists (10k+ contacts) |
-| **Export = CSV only** | Simple format | CSV download | No Excel, no filtering in export |
-| **No A/B testing** | MVP scope | Single template per campaign | Can't optimize campaigns; manual testing only |
-
----
-
-## §16. Success Metrics
-
-### 16.1 Product Metrics
-
-| Metric | Current | Target | How Measured |
-|---|---|---|---|
-| Campaign send success rate | ~85% | >99% | `(sentCount) / (totalContacts - failed)` — fix budget bug + DLQ |
-| Delivery rate | ~90% | >95% | `deliveredCount / sentCount * 100` — improve template quality, opt-in verification |
-| Read rate | ~30% | >50% | `readCount / sentCount * 100` — better template content, timing |
-| Campaign setup time | ~10 min | <5 min | Measure from "Create" to "Send" click — autosave + review step |
-| Cost estimate accuracy | ~40% | >95% | Compare `estimateCampaignCost` vs actual `ConversationCharge` |
-| Error recovery rate | ~70% | >95% | `(retried - stillFailed) / retried` — per-recipient retry + DLQ |
-| Campaign completion rate | ~80% | >95% | `(COMPLETED + READ) / (all non-cancelled)` — fix PENDING stuck |
-| Template approval rate | ~85% | >95% | `approved / submitted` — template guidelines + quality check |
-| Bulk action reliability | ~95% | >99% | No partial failures in retry-failed — transaction-safe updates |
-
-### 16.2 Technical Metrics
-
-| Metric | Current | Target |
-|---|---|---|
-| Worker throughput | ~100 msg/s | 500 msg/s |
-| P99 campaign send latency | 2s | <500ms |
-| Webhook processing latency | 500ms | <100ms |
-| Error rate (5xx) | 3% | <0.1% |
-| Job failure rate | 5% | <1% |
-
-### 16.3 How We Achieve Each Metric
-
-| Metric | Phase | Action | Owner |
-|---|---|---|---|
-| **Campaign send success >99%** | A | Fix budget calculation bug (service.ts:259) | Backend |
-| **Delivery rate >95%** | B | Add template quality display + approval status | Frontend |
-| **Read rate >50%** | B | Add template preview + deliverability tips | Frontend |
-| **Setup time <5 min** | B | Add draft autosave + campaign review step | Frontend |
-| **Cost estimate >95%** | A | Fix to use actual template category | Backend |
-| **Error recovery >95%** | B | Add per-recipient retry + DLQ | Backend |
-| **Completion rate >95%** | B | Add SENT webhook handling + timeout cleanup | Backend |
-| **Approval rate >95%** | C | Add template quality tips + rejection reasons | Frontend |
-| **Bulk reliability >99%** | D | Transaction-safe batch updates | Backend |
-| **Worker throughput 500 msg/s** | D | Configurable concurrency (default 10) | Backend |
-
----
-
-## §17. File & Connection Index
-
-### 17.1 Frontend Files
-
-| File | Lines | Purpose |
-|---|---|---|
-| `pages/CampaignsPage.tsx` | 607 | Main page — tabs, create/edit, analytics, recipients |
-| `pages/CampaignsTable.tsx` | 195 | Table view component |
-| `components/campaigns/CampaignCard.tsx` | ~100 | Progress card |
-| `components/campaigns/CampaignDetailHeader.tsx` | ~80 | Status badges + action buttons |
-| `components/campaigns/CampaignAnalyticsPanel.tsx` | ~120 | Analytics dashboard |
-| `components/campaigns/CampaignAudienceSection.tsx` | ~150 | Audience type picker |
-| `components/campaigns/CampaignAudiencePreview.tsx` | ~90 | Count + cost preview |
-| `components/campaigns/CampaignPhoneCsvImport.tsx` | ~160 | CSV upload + validation |
-| `components/campaigns/CampaignContactPicker.tsx` | ~140 | Contact selector |
-| `components/campaigns/CampaignRecipientTable.tsx` | ~150 | Recipient status table |
-| `components/campaigns/CampaignQuotaBanner.tsx` | ~60 | Quota progress bar |
-| `components/campaigns/campaignUi.tsx` | ~200 | Badge styles, step components |
-| `components/campaigns/campaignPreviewUtils.ts` | ~80 | Template preview formatting |
-| `services/api.ts` (campaignApi) | 18 methods | API client |
-| `types/index.ts` (campaign types) | 3 interfaces | TypeScript types |
-
-### 17.2 Backend Files
-
-| File | Lines | Purpose |
-|---|---|---|
-| `modules/campaigns/service.ts` | 761 | Core campaign logic (17 exported functions) |
-| `modules/campaigns/routes.ts` | 511 | REST API (19 routes, role-based) |
-| `modules/campaigns/types.ts` | 96 | Enums + Zod schemas |
-| `modules/campaigns/quota.ts` | 94 | Daily quota + budget enforcement |
-| `modules/campaigns/template-params.ts` | 123 | Template param building + merge |
-| `modules/campaigns/audit.ts` | 18 | Audit log wrapper |
-| `modules/campaigns/recipients.ts` | ~50 | Recipient resolution + persistence |
-| `modules/whatsapp/meta.service.ts` | ~400 | MetaWhatsAppService (sendMessage, templates) |
-| `modules/messages/send.service.ts` | ~200 | deliverOutboundMessage, buildTemplateComponents |
-| `modules/billing/usage.service.ts` | 159+ | Pricing rates, conversation polling |
-| `workers/index.ts` | 286+ | broadcastWorker (concurrency=2) |
-| `config/queues.ts` | ~50 | retryDelays, queue config |
-
-### 17.3 Database Models (Campaign-Related)
-
-| Model | Key Fields | Used For |
-|---|---|---|
-| `Campaign` | id, name, templateName, status, audienceType, audienceConfig, templateParams, totalContacts, sentCount, deliveredCount, readCount, failedCount, scheduledAt, timezone | Campaign CRUD + tracking |
-| `CampaignRecipient` | id, campaignId, phone, status, metaMessageId, errorMessage, retryCount, sentAt, deliveredAt, readAt | Per-recipient tracking |
-| `ConversationCharge` | organizationId, wabaId, category, conversationCount, costUsd, costInr, periodStart | Actual Meta billing |
-| `AuditLog` | organizationId, userId, action, resource, details | Campaign audit trail |
-| `Message` | id, conversationId, type, status, ... | Inbox linking (via recordOutboundInConversation) |
-| `Contact` | id, phone, name, optedIn, tags, ... | Audience resolution + opt-in check |
-| `WhatsappNumber` | id, phoneNumberId, qualityRating, ... | Template sending + quality display |
-
-### 17.4 Environment Variables
-
-```bash
-# Meta (encrypted)
-META_ACCESS_TOKEN=              # Encrypted with AES-GCM
-META_PHONE_NUMBER_ID=
-META_WABA_ID=
-META_APP_ID=
-META_APP_SECRET=
-META_VERIFY_TOKEN=             # ⚠️ Defaults to "whatsapp_verify_token" (security)
-
-# Worker
-REDIS_URL=
-BROADCAST_CONCURRENCY=2        # Not currently configurable in code
-CRON_PROCESS_SCHEDULED=*/5 * * * *  # Every 5 minutes
-CRON_SYNC_RUNNING=*/1 * * * * *     # Every minute
-
-# Billing
-USD_TO_INR=83
-```
-
-### 17.5 API Endpoints
-
-| Method | Path | Auth | Purpose |
-|---|---|---|---|
-| GET | `/api/campaigns` | readGuard | List campaigns (with pagination, search, filter) |
-| POST | `/api/campaigns` | adminGuard | Create campaign draft |
-| GET | `/api/campaigns/quota` | readGuard | Get daily quota + usage |
-| POST | `/api/campaigns/preview-audience` | readGuard | Preview recipient count |
-| GET | `/api/campaigns/:id` | readGuard | Get single campaign |
-| PATCH | `/api/campaigns/:id` | adminGuard | Update campaign |
-| DELETE | `/api/campaigns/:id` | adminGuard | Delete campaign |
-| POST | `/api/campaigns/:id/send` | adminGuard | Send campaign |
-| POST | `/api/campaigns/:id/test` | adminGuard | Send test message |
-| POST | `/api/campaigns/:id/pause` | adminGuard | Pause running campaign |
-| POST | `/api/campaigns/:id/resume` | adminGuard | Resume paused campaign |
-| POST | `/api/campaigns/:id/cancel` | adminGuard | Cancel campaign |
-| POST | `/api/campaigns/:id/retry-failed` | adminGuard | Retry failed recipients |
-| POST | `/api/campaigns/:id/duplicate` | adminGuard | Duplicate campaign |
-| GET | `/api/campaigns/:id/analytics` | readGuard | Full analytics (rates, errors, breakdown) |
-| GET | `/api/campaigns/:id/stats` | readGuard | Summary stats (counts + status) |
-| GET | `/api/campaigns/:id/recipients` | readGuard | Recipient list (with status filter) |
-| GET | `/api/campaigns/:id/export` | readGuard | Export recipients as CSV |
-| POST | `/api/campaigns/process-scheduled` | adminGuard | Cron trigger — start due campaigns |
-
----
-
-## §18. Conclusion
-
-The Campaigns feature is **functional but not production-ready** (6/10 on the production readiness scorecard). It covers all core use cases — template-based bulk messaging with audience targeting, real-time analytics, and Meta integration. The existing implementation handles the full campaign lifecycle from draft to completion, with proper role-based access control, Zod validation, and Socket.IO real-time updates.
-
-However, several **critical gaps** prevent it from being production-safe at scale:
-
-1. **Budget calculation bug** (hardcoded MARKETING rate) — can block legitimate Utility/Authentication campaigns
-2. **Sent status not tracked** — PENDING recipients can get stuck
-3. **Worker concurrency too low** — 100k recipients take 17+ minutes
-4. **No dead letter queue** — persistent failures cause infinite retries
-5. **No A/B testing** — a top request from power users
-6. **No per-recipient timezone scheduling** — sends at wrong times for global audiences
-
-The **Meta integration** is solid — template validation, delivery receipts, conversation polling, and quality rating polling all work. The pricing model in the code (`CATEGORY_RATES_INR`) needs to be verified against Meta's current pricing page (discrepancy found with AUDIT.md estimates).
-
-The **biggest opportunity** is the enhancement roadmap in Phase B — draft autosave, timezone scheduling, A/B testing, and template preview are all high-impact, medium-effort features that would bring Samyoj to feature parity with Respond.io.
-
----
-
-## §19. Self-Assessment
-
-### Quality Scores (post-recheck)
-
-| Dimension | Score | Notes |
-|---|---|---|
-| Code accuracy | 9/10 | All functions, field names, line numbers verified from actual code |
-| Database model accuracy | 9/10 | Prisma schema verified, all fields mapped |
-| Meta API research depth | 8/10 | Template messaging, pricing, error codes covered; exact webhook payload shapes from training knowledge |
-| API endpoint completeness | 10/10 | All 19 routes + 18 frontend methods mapped with auth + HTTP methods |
-| Frontend component coverage | 9/10 | All 14 components documented; minor: CampaignDetailHeader details could be richer |
-| Bug identification accuracy | 9/10 | 15 bugs verified from code; corrections logged in §19.2 |
-| Enhancement feasibility | 9/10 | Every suggestion has specific code location + implementation step |
-| Competitor research | 8/10 | 11 platforms profiled; campaign-specific attributes only (voice-only entries removed) |
-| User perspective depth | 9/10 | 2 personas, 10-step journey, 9 customization expectations |
-| Implementation roadmap | 9/10 | 5 phases, all tasks with priority + owner + est. time |
-| "How we achieve them" | 10/10 | §16.3 maps every metric to specific Phase A/B/C/D actions |
-| Decision records | 10/10 | 15 decisions with context + consequences |
-| **Overall** | **9.2/10** | Comprehensive, code-verified, actionable. Updated from 9.0→9.2 after adding template validation order bug, competitor refinement, and §16.3 achievement metrics |
-
-### Corrections Made During Recheck
-
-1. ✅ **Fixed route count**: 19 server routes (not 18) — added `POST /process-scheduled`
-2. ✅ **Fixed previewAudience route**: POST `/preview-audience` (not GET `/:id/preview-audience`)
-3. ✅ **Fixed export route**: GET `/:id/export` (not GET `/:id/recipients/export`)
-4. ✅ **Fixed endpoint count**: 18 frontend API methods (correct)
-5. ✅ **Fixed stats/analytics distinction**: `stats` returns `analytics.campaign` (summary), `analytics` returns full object
-6. ✅ **Fixed template fetch**: `validateTemplate` EXISTS (line 213) and checks APPROVED status — corrected §7.2 bug #2
-7. ✅ **Added `requireOptIn` finding**: UI always hardcodes to true; no toggle
-8. ✅ **Added EDITABLE_STATUSES finding**: only DRAFT/SCHEDULED editable; can't fix typos mid-send
-9. ✅ **Added worker concurrency finding**: concurrency=2 confirmed (bottleneck)
-10. ✅ **Fixed pricing discrepancy note**: AUDIT.md says ~$0.05 Marketing, code says ₹0.78 (~$0.0094)
-11. ✅ **Added conversation billing gap**: estimate doesn't account for 24h deduplication
-12. ✅ **Added Meta rate limit gap**: no coordination between concurrent campaigns
-13. ✅ **Fixed retryDelays**: [0, 30000, 120000, 600000] verified from queues.ts
-14. ✅ **Added Meta webhook payload shape** in §4.8
-15. ✅ **Added `duplicateCampaign` to §3.2** (line 592, not a phantom function — imported in routes.ts:11)
-16. ✅ **Added Bug #15** (template validation order — quota/budget consumed BEFORE template check at line 268)
-17. ✅ **Removed voice-specific competitor content** from §5 (Wati "Voice clone for IVR", Gallabox "Voice calling")
-18. ✅ **Fixed competitor count** in §0 and §19.2 (11 not 13 — 6 core + 5 additional)
-19. ✅ **Updated overall score** 9.0→9.2 (after all fixes applied)
-20. ✅ **Fixed §3.3 dispatch flow** — validateTemplate was at step 2; corrected to step 7 (after quota/budget per actual code at lines 258-268)
-
-### Remaining Gaps (Cannot Close — Web Research Blocked)
-
-| Gap | Action to Close |
-|---|---|
-| 1. Exact Meta webhook payload for `statuses` field — need to verify field names (`status`, `conversation`, `error` structure) | `web_fetch` https://developers.facebook.com/docs/whatsapp/cloud-api/reference/webhooks |
-| 2. Meta template review time expectations — need exact SLA data | `web_fetch` Meta docs |
-| 3. Competitor deep pricing comparison (beyond what's in §G) | `web_search` "competitor WhatsApp campaign pricing 2026" |
-| 4. Meta template namespace requirements | `web_fetch` Meta docs |
-| 5. Template rejection reason codes beyond 13x series | `web_fetch` Meta docs |
-
-> These gaps are all in the Meta documentation domain. The code-verified research is 100% accurate. The Meta API research is based on existing docs (`CALLS_SHIP_DOCUMENT.md` §E), the AUDIT.md, and training knowledge. To close these gaps, 2-3 hours of `web_fetch` to Meta's developer docs would suffice.
-
----
-
-*Generated: 2026-08-09*
-*Source: Codebase read (campaigns/service.ts, routes.ts, types.ts, quota.ts, template-params.ts, audit.ts, recipients.ts, workers/index.ts, meta.service.ts, send.service.ts, usage.service.ts, queue.ts) + Existing docs (AUDIT.md, CALLS_SHIP_DOCUMENT.md, ENHANCEMENT_PLAN.md, FEATURE_MATRIX.md, production audit)*
+Line references describe the reviewed snapshot and should be refreshed when implementation changes. A future documentation update must preserve the distinction between verified behavior, defects, decisions, external constraints, and roadmap; it must not promote a roadmap item to “done” without acceptance evidence.

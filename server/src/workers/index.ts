@@ -15,6 +15,7 @@ import { pollConversationAnalytics, pollQualityRatings } from '../modules/billin
 import { attachWorkerErrorHandlers, logError, setupGlobalErrorHandlers } from '../errors';
 import { checkRedisConnection } from '../config/redis';
 import { createModuleLogger } from '../utils/logger';
+import { hasAuditableCampaignConsent } from '../modules/campaigns/recipients';
 
 const log = createModuleLogger('worker');
 
@@ -180,22 +181,46 @@ const broadcastWorker = new Worker(
         where: {
           organizationId_phone: { organizationId, phone: recipient.phone },
         },
-        select: { optedIn: true },
+        select: { optedIn: true, consentSource: true, consentAt: true, updatedAt: true },
       });
-      if (contact && !contact.optedIn) {
-        await prisma.campaignRecipient.update({
-          where: { id: recipient.id },
+      if (!contact || !hasAuditableCampaignConsent(contact)) {
+        const rejected = await prisma.campaignRecipient.updateMany({
+          where: { id: recipient.id, status: 'PENDING', claimToken: null },
           data: {
             status: 'FAILED',
-            errorMessage: 'Contact has not opted in',
+            errorMessage: 'Recipient has no active, auditable campaign consent',
           },
         });
-        await prisma.campaign.update({
-          where: { id: campaignId },
-          data: { failedCount: { increment: 1 } },
-        });
+        if (rejected.count === 1) {
+          await prisma.campaign.update({
+            where: { id: campaignId },
+            data: { failedCount: { increment: 1 } },
+          });
+        }
         continue;
       }
+
+      const claimToken = `${job.id}:${recipient.id}`;
+      const claimed = await prisma.campaignRecipient.updateMany({
+        where: {
+          id: recipient.id,
+          status: 'PENDING',
+          claimToken: null,
+        },
+        data: {
+          claimToken,
+          claimedAt: new Date(),
+          consentSnapshot: {
+            phone: recipient.phone,
+            optedIn: true,
+            consentSource: contact.consentSource,
+            consentAt: contact.consentAt,
+            capturedAt: new Date().toISOString(),
+            policyVersion: 'campaign-consent-v1',
+          },
+        },
+      });
+      if (claimed.count !== 1) continue;
 
       const mergedParams = mergeTemplateParams(
         templateParams,
@@ -230,8 +255,8 @@ const broadcastWorker = new Worker(
           });
         }
 
-        await prisma.campaignRecipient.update({
-          where: { id: recipient.id },
+        await prisma.campaignRecipient.updateMany({
+          where: { id: recipient.id, claimToken },
           data: { status: 'SENT', metaMessageId, sentAt: new Date(), errorMessage: null },
         });
 
@@ -254,9 +279,9 @@ const broadcastWorker = new Worker(
           path: `recipient:${recipient.phone}`,
         });
 
-        await prisma.campaignRecipient.update({
-          where: { id: recipient.id },
-          data: { status: 'FAILED', errorMessage },
+        await prisma.campaignRecipient.updateMany({
+          where: { id: recipient.id, claimToken },
+          data: { status: 'FAILED', errorMessage, claimToken: null, claimedAt: null },
         });
 
         await prisma.campaign.update({

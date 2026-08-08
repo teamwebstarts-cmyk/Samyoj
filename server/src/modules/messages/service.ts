@@ -46,7 +46,11 @@ export async function recordOutboundInConversation(input: RecordOutboundInput) {
   });
 
   let conversation = await prisma.conversation.findFirst({
-    where: { organizationId: input.organizationId, contactId: contact.id },
+    where: {
+      organizationId: input.organizationId,
+      contactId: contact.id,
+      whatsappNumberId: input.whatsappNumberId,
+    },
   });
 
   if (!conversation) {

@@ -37,16 +37,25 @@ export function validateOutboundReply(text: string): { safe: boolean; reason?: s
   return { safe: true };
 }
 
+/** Phrases that mean the model has no answer — not intentional handoff offers. */
 export function isLowConfidenceReply(text: string): boolean {
   const lower = text.toLowerCase();
   return (
     lower.includes("i don't know") ||
     lower.includes('i do not know') ||
     lower.includes('cannot help with that') ||
-    lower.includes("can't help with that") ||
-    lower.includes('connect you with') ||
-    lower.includes('team member') ||
-    lower.includes('speak to a human') ||
-    lower.includes('contact support')
+    lower.includes("can't help with that")
   );
+}
+
+/** Voice calls should only end when the caller or a tool explicitly requests a human. */
+export const VOICE_CALL_END_HANDOFF_REASONS = new Set([
+  'TOOL_REQUEST_HUMAN',
+  'USER_REQUEST',
+  'BLOCKED_CONTENT',
+  'PROMPT_INJECTION',
+]);
+
+export function shouldEndVoiceCallOnHandoff(reason?: string): boolean {
+  return Boolean(reason && VOICE_CALL_END_HANDOFF_REASONS.has(reason));
 }

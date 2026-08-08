@@ -35,6 +35,36 @@ const router = Router();
 const adminGuard = [authenticateJwtOrApiKey, requireOrg, resolveActiveWhatsappNumber, loadOrgRole, requireOrgRole('OWNER', 'ADMIN')];
 const readGuard = [authenticateJwtOrApiKey, requireOrg, resolveActiveWhatsappNumber];
 
+async function validateCampaignNumber(
+  organizationId: string,
+  requestedId: string | null | undefined,
+  activeId: string | undefined
+) {
+  const numberId = requestedId ?? activeId;
+  if (!numberId || (activeId && numberId !== activeId)) {
+    throw new AppError(400, 'Campaign WhatsApp number must match the active WhatsApp number');
+  }
+  const number = await prisma.whatsappNumber.findFirst({
+    where: { id: numberId, organizationId, isActive: true },
+    select: { id: true },
+  });
+  if (!number) throw new AppError(400, 'Selected WhatsApp number is not active or does not belong to this organization');
+  return number.id;
+}
+
+function validateCampaignTimezone(timezone: string | undefined, scheduledAt: string | null | undefined) {
+  if (scheduledAt && !timezone) {
+    throw new AppError(400, 'Scheduled campaigns require an IANA timezone, for example Asia/Kolkata');
+  }
+  if (timezone) {
+    try {
+      new Intl.DateTimeFormat('en-US', { timeZone: timezone }).format();
+    } catch {
+      throw new AppError(400, 'Timezone must be a valid IANA timezone, for example Asia/Kolkata');
+    }
+  }
+}
+
 router.get(
   '/',
   ...readGuard,
@@ -145,6 +175,7 @@ router.post(
     const data = createCampaignSchema.parse(req.body);
     const orgId = req.user!.organizationId!;
     const userId = req.user!.userId;
+    validateCampaignTimezone(data.timezone, data.scheduledAt);
 
     const manualRecipients = (data.recipients || []).map((r) => ({
       phone: r.phone,
@@ -162,6 +193,11 @@ router.post(
     if (!resolved.length) {
       throw new AppError(400, 'Campaign must have at least one recipient');
     }
+    const whatsappNumberId = await validateCampaignNumber(
+      orgId,
+      data.whatsappNumberId,
+      req.activeWhatsappNumberId
+    );
 
     const campaign = await prisma.campaign.create({
       data: {
@@ -172,7 +208,7 @@ router.post(
         templateParams: data.templateParams ? (data.templateParams as object) : undefined,
         audienceType: data.audienceType,
         audienceConfig: data.audienceConfig ? (data.audienceConfig as object) : undefined,
-        whatsappNumberId: data.whatsappNumberId ?? req.activeWhatsappNumberId,
+        whatsappNumberId,
         status: data.scheduledAt ? 'SCHEDULED' : 'DRAFT',
         scheduledAt: data.scheduledAt ? new Date(data.scheduledAt) : null,
         timezone: data.timezone,
@@ -199,7 +235,11 @@ router.get(
   ...readGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const campaign = await prisma.campaign.findFirst({
-      where: { id: paramId(req), organizationId: req.user!.organizationId! },
+      where: {
+        id: paramId(req),
+        organizationId: req.user!.organizationId!,
+        ...(req.activeWhatsappNumberId ? { whatsappNumberId: req.activeWhatsappNumberId } : {}),
+      },
       include: {
         recipients: {
           orderBy: { createdAt: 'asc' },
@@ -221,7 +261,11 @@ router.get(
     const { status, page = '1', limit = '50' } = req.query;
 
     const campaign = await prisma.campaign.findFirst({
-      where: { id, organizationId: orgId },
+      where: {
+        id,
+        organizationId: orgId,
+        ...(req.activeWhatsappNumberId ? { whatsappNumberId: req.activeWhatsappNumberId } : {}),
+      },
       select: { id: true },
     });
     if (!campaign) throw new AppError(404, 'Campaign not found');
@@ -253,12 +297,24 @@ router.patch(
     const data = updateCampaignSchema.parse(req.body);
     const id = paramId(req);
     const orgId = req.user!.organizationId!;
+    validateCampaignTimezone(data.timezone, data.scheduledAt);
 
-    const existing = await prisma.campaign.findFirst({ where: { id, organizationId: orgId } });
+    const existing = await prisma.campaign.findFirst({
+      where: {
+        id,
+        organizationId: orgId,
+        ...(req.activeWhatsappNumberId ? { whatsappNumberId: req.activeWhatsappNumberId } : {}),
+      },
+    });
     if (!existing) throw new AppError(404, 'Campaign not found');
     if (!canEditCampaign(existing.status)) {
       throw new AppError(400, 'Only draft or scheduled campaigns can be edited');
     }
+    const whatsappNumberId = await validateCampaignNumber(
+      orgId,
+      data.whatsappNumberId === undefined ? existing.whatsappNumberId : data.whatsappNumberId,
+      req.activeWhatsappNumberId
+    );
 
     let totalContacts = existing.totalContacts;
 
@@ -314,7 +370,7 @@ router.patch(
         templateParams: data.templateParams ? (data.templateParams as object) : undefined,
         audienceType: data.audienceType,
         audienceConfig: data.audienceConfig ? (data.audienceConfig as object) : undefined,
-        whatsappNumberId: data.whatsappNumberId === null ? null : data.whatsappNumberId,
+        whatsappNumberId,
         timezone: data.timezone,
         totalContacts,
         ...(scheduledAt !== undefined
@@ -339,7 +395,13 @@ router.delete(
     const id = paramId(req);
     const orgId = req.user!.organizationId!;
 
-    const existing = await prisma.campaign.findFirst({ where: { id, organizationId: orgId } });
+    const existing = await prisma.campaign.findFirst({
+      where: {
+        id,
+        organizationId: orgId,
+        ...(req.activeWhatsappNumberId ? { whatsappNumberId: req.activeWhatsappNumberId } : {}),
+      },
+    });
     if (!existing) throw new AppError(404, 'Campaign not found');
     if (!canEditCampaign(existing.status)) {
       throw new AppError(400, 'Only draft or scheduled campaigns can be deleted');
@@ -359,7 +421,11 @@ router.post(
     const orgId = req.user!.organizationId!;
 
     const campaign = await prisma.campaign.findFirst({
-      where: { id, organizationId: orgId },
+      where: {
+        id,
+        organizationId: orgId,
+        ...(req.activeWhatsappNumberId ? { whatsappNumberId: req.activeWhatsappNumberId } : {}),
+      },
       include: { recipients: true },
     });
     if (!campaign) throw new AppError(404, 'Campaign not found');
@@ -382,7 +448,11 @@ router.post(
     const orgId = req.user!.organizationId!;
 
     const campaign = await prisma.campaign.findFirst({
-      where: { id: paramId(req), organizationId: orgId },
+      where: {
+        id: paramId(req),
+        organizationId: orgId,
+        ...(req.activeWhatsappNumberId ? { whatsappNumberId: req.activeWhatsappNumberId } : {}),
+      },
     });
     if (!campaign) throw new AppError(404, 'Campaign not found');
 
@@ -405,7 +475,11 @@ router.post(
   ...adminGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const campaign = await prisma.campaign.findFirst({
-      where: { id: paramId(req), organizationId: req.user!.organizationId! },
+      where: {
+        id: paramId(req),
+        organizationId: req.user!.organizationId!,
+        ...(req.activeWhatsappNumberId ? { whatsappNumberId: req.activeWhatsappNumberId } : {}),
+      },
       include: { recipients: true },
     });
     if (!campaign) throw new AppError(404, 'Campaign not found');
@@ -428,7 +502,11 @@ router.post(
   ...adminGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const campaign = await prisma.campaign.findFirst({
-      where: { id: paramId(req), organizationId: req.user!.organizationId! },
+      where: {
+        id: paramId(req),
+        organizationId: req.user!.organizationId!,
+        ...(req.activeWhatsappNumberId ? { whatsappNumberId: req.activeWhatsappNumberId } : {}),
+      },
       include: { recipients: true },
     });
     if (!campaign) throw new AppError(404, 'Campaign not found');
@@ -442,7 +520,11 @@ router.post(
   ...adminGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const campaign = await prisma.campaign.findFirst({
-      where: { id: paramId(req), organizationId: req.user!.organizationId! },
+      where: {
+        id: paramId(req),
+        organizationId: req.user!.organizationId!,
+        ...(req.activeWhatsappNumberId ? { whatsappNumberId: req.activeWhatsappNumberId } : {}),
+      },
       include: { recipients: true },
     });
     if (!campaign) throw new AppError(404, 'Campaign not found');
@@ -455,7 +537,7 @@ router.get(
   '/:id/stats',
   ...readGuard,
   asyncHandler(async (req: Request, res: Response) => {
-    const analytics = await getCampaignAnalytics(paramId(req), req.user!.organizationId!);
+    const analytics = await getCampaignAnalytics(paramId(req), req.user!.organizationId!, req.activeWhatsappNumberId);
     if (!analytics) throw new AppError(404, 'Campaign not found');
     sendSuccess(res, analytics.campaign);
   })
@@ -465,7 +547,7 @@ router.get(
   '/:id/analytics',
   ...readGuard,
   asyncHandler(async (req: Request, res: Response) => {
-    const analytics = await getCampaignAnalytics(paramId(req), req.user!.organizationId!);
+    const analytics = await getCampaignAnalytics(paramId(req), req.user!.organizationId!, req.activeWhatsappNumberId);
     if (!analytics) throw new AppError(404, 'Campaign not found');
     sendSuccess(res, analytics);
   })
@@ -479,7 +561,11 @@ router.get(
     const id = paramId(req);
 
     const campaign = await prisma.campaign.findFirst({
-      where: { id, organizationId: orgId },
+      where: {
+        id,
+        organizationId: orgId,
+        ...(req.activeWhatsappNumberId ? { whatsappNumberId: req.activeWhatsappNumberId } : {}),
+      },
       select: { name: true },
     });
     if (!campaign) throw new AppError(404, 'Campaign not found');
@@ -502,8 +588,8 @@ router.get(
 router.post(
   '/process-scheduled',
   ...adminGuard,
-  asyncHandler(async (_req: Request, res: Response) => {
-    await processScheduledCampaigns();
+  asyncHandler(async (req: Request, res: Response) => {
+    await processScheduledCampaigns(req.user!.organizationId!);
     sendSuccess(res, { processed: true });
   })
 );

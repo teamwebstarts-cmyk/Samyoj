@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dedupeRecipients } from './recipients';
+import { dedupeRecipients, hasAuditableCampaignConsent } from './recipients';
 import { buildTemplateComponents, mergeTemplateParams } from './template-params';
 
 describe('dedupeRecipients', () => {
@@ -11,6 +11,18 @@ describe('dedupeRecipients', () => {
     ]);
     expect(result).toHaveLength(2);
     expect(result[0].name).toBe('A');
+  });
+});
+
+describe('campaign consent', () => {
+  it('rejects unknown, revoked, and provenance-free contacts', () => {
+    expect(hasAuditableCampaignConsent({ optedIn: false, consentSource: 'IMPORT', consentAt: new Date() })).toBe(false);
+    expect(hasAuditableCampaignConsent({ optedIn: true, consentSource: null, consentAt: new Date() })).toBe(false);
+    expect(hasAuditableCampaignConsent({ optedIn: true, consentSource: 'EXPLICIT', consentAt: null })).toBe(false);
+  });
+
+  it('accepts only opted-in contacts with recorded consent', () => {
+    expect(hasAuditableCampaignConsent({ optedIn: true, consentSource: 'EXPLICIT', consentAt: new Date() })).toBe(true);
   });
 });
 

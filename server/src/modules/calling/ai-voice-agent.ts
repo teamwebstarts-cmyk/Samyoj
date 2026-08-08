@@ -3,6 +3,7 @@ import { unregisterActiveCall } from './session-store';
 import { createModuleLogger } from '../../utils/logger';
 import { emitToOrg } from '../../realtime';
 import { generateBotReply, performHandoff, streamVoiceBotReply } from '../ai/chatbot.service';
+import { shouldEndVoiceCallOnHandoff } from '../ai/guardrails';
 import { validateOutboundReply } from '../ai/guardrails';
 import { MetaCallingService } from './meta-calling.service';
 import { SarvamStreamTranscriber, isSarvamSttConfigured } from './sarvam.stt';
@@ -277,7 +278,7 @@ export class AiVoiceCallSession {
           directHandled = true;
           const result = event.result;
           if (result.skipReason === 'blocked_after_stream' && spokenParts.length > 0) {
-            if (result.handoff) {
+            if (result.handoff && shouldEndVoiceCallOnHandoff(result.handoffReason)) {
               await this.performHandoffAndTransfer(
                 result.handoffReason || 'BLOCKED_CONTENT',
                 result.handoffReason || 'BLOCKED_CONTENT'
@@ -304,7 +305,7 @@ export class AiVoiceCallSession {
           if (result.toolCalls?.length) {
             for (const tool of result.toolCalls) await this.handleToolCall(tool);
           }
-          if (result.handoff) {
+          if (result.handoff && shouldEndVoiceCallOnHandoff(result.handoffReason)) {
             await this.performHandoffAndTransfer(
               result.handoffReason || 'VOICE_HANDOFF',
               result.handoffReason || 'VOICE_HANDOFF'
@@ -358,7 +359,11 @@ export class AiVoiceCallSession {
 
           for (const tool of tools) await this.handleToolCall(tool);
 
-          if (event.result?.handoff && tools.length === 0) {
+          if (
+            event.result?.handoff &&
+            tools.length === 0 &&
+            shouldEndVoiceCallOnHandoff(event.result.handoffReason)
+          ) {
             if (spokenParts.length === 0 && event.result.reply) {
               const cleaned = extractInlineToolCalls(event.result.reply).cleanText;
               if (cleaned) await this.speak(cleaned, 'assistant');

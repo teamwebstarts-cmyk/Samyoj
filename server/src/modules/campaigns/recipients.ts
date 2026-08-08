@@ -4,6 +4,14 @@ export interface ResolvedRecipient {
   variables?: { body?: string[]; header?: string[] };
 }
 
+export function hasAuditableCampaignConsent(contact: {
+  optedIn: boolean;
+  consentSource?: string | null;
+  consentAt?: Date | null;
+}) {
+  return Boolean(contact.optedIn && contact.consentSource && contact.consentAt);
+}
+
 export function dedupeRecipients(recipients: ResolvedRecipient[]): ResolvedRecipient[] {
   const seen = new Set<string>();
   const result: ResolvedRecipient[] = [];

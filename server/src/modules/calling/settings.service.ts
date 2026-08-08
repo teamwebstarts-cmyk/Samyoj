@@ -88,12 +88,21 @@ export async function saveOrgCallingSettings(
 }
 
 export function resolveEffectiveVoiceConfig(settings: CallingSettings) {
+  const sttLang =
+    settings.sarvamSttLanguage &&
+    settings.sarvamSttLanguage !== 'unknown' &&
+    settings.sarvamSttLanguage !== 'auto'
+      ? settings.sarvamSttLanguage
+      : settings.ttsLanguage && settings.ttsLanguage !== 'unknown'
+        ? settings.ttsLanguage
+        : config.sarvam.sttLanguage || 'en-IN';
+
   return {
     ttsVoice: settings.sarvamTtsSpeaker || settings.ttsVoice || config.sarvam.ttsSpeaker,
-    ttsLanguage: settings.sarvamSttLanguage || settings.ttsLanguage || config.sarvam.sttLanguage,
+    ttsLanguage: sttLang,
     aiGreeting: settings.aiGreeting,
     aiAutoAnswer: settings.aiAutoAnswer,
-    sarvamSttLanguage: settings.sarvamSttLanguage,
+    sarvamSttLanguage: sttLang,
     sarvamTtsSpeaker: settings.sarvamTtsSpeaker,
     sarvamMode: settings.sarvamMode,
     sarvamSttPrompt: settings.sarvamSttPrompt,

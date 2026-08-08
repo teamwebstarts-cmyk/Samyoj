@@ -17,7 +17,7 @@ import type {
   AudienceType,
   TemplateParams,
 } from './types';
-import { dedupeRecipients, type ResolvedRecipient } from './recipients';
+import { dedupeRecipients, hasAuditableCampaignConsent, type ResolvedRecipient } from './recipients';
 import type { Campaign, CampaignRecipient, CampaignStatus, Prisma } from '@prisma/client';
 
 const EDITABLE_STATUSES: CampaignStatus[] = ['DRAFT', 'SCHEDULED'];
@@ -32,14 +32,29 @@ export async function resolveAudienceRecipients(
   audienceConfig: AudienceConfig | null | undefined,
   manualRecipients: ResolvedRecipient[] = []
 ): Promise<ResolvedRecipient[]> {
-  const requireOptIn = audienceConfig?.requireOptIn !== false;
-
   if (audienceType === 'MANUAL') {
-    return dedupeRecipients(manualRecipients);
+    const deduped = dedupeRecipients(manualRecipients);
+    if (!deduped.length) return deduped;
+    const contacts = await prisma.contact.findMany({
+      where: {
+        organizationId,
+        phone: { in: deduped.map((recipient) => recipient.phone) },
+        optedIn: true,
+        consentSource: { not: null },
+        consentAt: { not: null },
+      },
+      select: { phone: true },
+    });
+    const optedIn = new Set(contacts.map((contact) => contact.phone));
+    return deduped.filter((recipient) => optedIn.has(recipient.phone));
   }
 
   const contactWhere: Prisma.ContactWhereInput = { organizationId };
-  if (requireOptIn) contactWhere.optedIn = true;
+  // Broadcasts are always fail-closed. The legacy requireOptIn=false input is
+  // intentionally ignored so API callers cannot bypass consent policy.
+  contactWhere.optedIn = true;
+  contactWhere.consentSource = { not: null };
+  contactWhere.consentAt = { not: null };
 
   if (audienceType === 'TAGS') {
     const tags = audienceConfig?.tags?.filter(Boolean) || [];
@@ -55,13 +70,14 @@ export async function resolveAudienceRecipients(
 
   const contacts = await prisma.contact.findMany({
     where: contactWhere,
-    select: { phone: true, name: true },
+    select: { phone: true, name: true, consentSource: true, consentAt: true },
   });
 
   return dedupeRecipients(
     contacts.map((c) => ({
       phone: c.phone,
       name: c.name ?? undefined,
+      variables: undefined,
     }))
   );
 }
@@ -154,21 +170,26 @@ export async function syncCampaignRecipientFromWebhook(
   const now = new Date();
   const data: Prisma.CampaignRecipientUpdateInput = {};
 
-  if (normalized === 'DELIVERED' && recipient.status !== 'READ') {
+  if (normalized === 'DELIVERED' && !['DELIVERED', 'READ', 'FAILED'].includes(recipient.status)) {
     data.status = 'DELIVERED';
     data.deliveredAt = now;
-  } else if (normalized === 'READ') {
+  } else if (normalized === 'READ' && recipient.status !== 'READ' && recipient.status !== 'FAILED') {
     data.status = 'READ';
     data.readAt = now;
     if (!recipient.deliveredAt) data.deliveredAt = now;
-  } else if (normalized === 'FAILED') {
+  } else if (normalized === 'FAILED' && !['DELIVERED', 'READ', 'FAILED'].includes(recipient.status)) {
     data.status = 'FAILED';
     data.errorMessage = 'Delivery failed (Meta webhook)';
   }
 
   await prisma.$transaction(async (tx) => {
     const prev = recipient.status;
-    await tx.campaignRecipient.update({ where: { id: recipient.id }, data });
+    if (!Object.keys(data).length) return;
+    const changed = await tx.campaignRecipient.updateMany({
+      where: { id: recipient.id, status: prev },
+      data,
+    });
+    if (changed.count !== 1) return;
 
     const campaignUpdate: Prisma.CampaignUpdateInput = {};
     if (normalized === 'DELIVERED' && prev !== 'DELIVERED' && prev !== 'READ') {
@@ -228,7 +249,7 @@ export async function queueCampaignSend(
   campaign: Campaign & { recipients: CampaignRecipient[] },
   userId?: string
 ) {
-  if (campaign.status === 'RUNNING') throw new AppError(400, 'Campaign already running');
+  if (campaign.status === 'RUNNING') throw new AppError(409, 'Campaign is already being sent');
   if (campaign.status === 'CANCELLED') throw new AppError(400, 'Campaign was cancelled');
 
   if (campaign.audienceType !== 'MANUAL') {
@@ -275,8 +296,8 @@ export async function queueCampaignSend(
   const templateParams = (campaign.templateParams as TemplateParams | null) || undefined;
   const templateContent = applyTemplateParamsToPreview(template, templateParams, campaign.templateName);
 
-  await prisma.campaign.update({
-    where: { id: campaign.id },
+  const claimedRun = await prisma.campaign.updateMany({
+    where: { id: campaign.id, status: { in: ['DRAFT', 'SCHEDULED'] } },
     data: {
       status: 'RUNNING',
       sentCount: 0,
@@ -289,12 +310,22 @@ export async function queueCampaignSend(
       templateLanguage,
     },
   });
+  if (claimedRun.count !== 1) {
+    throw new AppError(409, 'Campaign changed while it was being queued; try again');
+  }
+
+  await prisma.campaign.update({
+    where: { id: campaign.id },
+    data: { templateLanguage },
+  });
 
   await prisma.campaignRecipient.updateMany({
     where: { campaignId: campaign.id },
     data: {
       status: 'PENDING',
       metaMessageId: null,
+      claimToken: null,
+      claimedAt: null,
       errorMessage: null,
       sentAt: null,
       deliveredAt: null,
@@ -331,7 +362,7 @@ export async function queueCampaignSend(
         })),
         isLastBatch: batchIndex === totalBatches - 1,
       },
-      { delay: batchIndex * batchDelayMs }
+      { delay: batchIndex * batchDelayMs, jobId: `campaign:${campaign.id}:batch:${batch[0].id}` }
     );
   }
 
@@ -348,6 +379,13 @@ export async function sendTestMessage(
   phone: string,
   userId?: string
 ) {
+  const contact = await prisma.contact.findUnique({
+    where: { organizationId_phone: { organizationId: campaign.organizationId, phone } },
+    select: { optedIn: true, consentSource: true, consentAt: true },
+  });
+  if (!contact || !hasAuditableCampaignConsent(contact)) {
+    throw new AppError(400, 'Test sends require an existing opted-in contact with recorded consent');
+  }
   const { whatsappNumber, wabaId, accessToken } = await getWhatsappForCampaign(
     campaign.organizationId,
     campaign.whatsappNumberId
@@ -391,10 +429,11 @@ export async function pauseCampaign(campaignId: string, orgId: string, userId?: 
   if (!campaign) throw new AppError(404, 'Campaign not found');
   if (campaign.status !== 'RUNNING') throw new AppError(400, 'Only running campaigns can be paused');
 
-  await prisma.campaign.update({
-    where: { id: campaignId },
+  const updated = await prisma.campaign.updateMany({
+    where: { id: campaignId, organizationId: orgId, status: 'RUNNING' },
     data: { status: 'PAUSED', pausedAt: new Date() },
   });
+  if (updated.count !== 1) throw new AppError(409, 'Campaign changed before it could be paused');
 
   await logCampaignAudit(orgId, userId, 'campaign.pause', { campaignId });
   emitToOrg(orgId, 'campaign:status', { campaignId, status: 'PAUSED' });
@@ -412,10 +451,11 @@ export async function resumeCampaign(
     throw new AppError(400, 'No pending recipients to resume');
   }
 
-  await prisma.campaign.update({
-    where: { id: campaign.id },
+  const updated = await prisma.campaign.updateMany({
+    where: { id: campaign.id, status: 'PAUSED' },
     data: { status: 'RUNNING', pausedAt: null },
   });
+  if (updated.count !== 1) throw new AppError(409, 'Campaign changed before it could be resumed');
 
   const settings = await getCampaignSettings(campaign.organizationId);
   const batchSize = settings.batchSize ?? 50;
@@ -461,7 +501,7 @@ export async function resumeCampaign(
         })),
         isLastBatch: batchIndex === totalBatches - 1,
       },
-      { delay: batchIndex * batchDelayMs }
+      { delay: batchIndex * batchDelayMs, jobId: `campaign:${campaign.id}:retry:${batch[0].id}` }
     );
   }
 
@@ -476,25 +516,28 @@ export async function cancelCampaign(campaignId: string, orgId: string, userId?:
     throw new AppError(400, 'Campaign cannot be cancelled in its current state');
   }
 
-  const pendingCount = await prisma.campaignRecipient.count({
-    where: { campaignId, status: 'PENDING' },
-  });
-
-  await prisma.$transaction([
-    prisma.campaignRecipient.updateMany({
-      where: { campaignId, status: 'PENDING' },
+  const result = await prisma.$transaction(async (tx) => {
+    const current = await tx.campaign.findFirst({
+      where: { id: campaignId, organizationId: orgId, status: { in: ['RUNNING', 'PAUSED', 'SCHEDULED'] } },
+      select: { id: true },
+    });
+    if (!current) return 0;
+    const pending = await tx.campaignRecipient.updateMany({
+      where: { campaignId, status: 'PENDING', claimToken: null },
       data: { status: 'FAILED', errorMessage: 'Campaign cancelled' },
-    }),
-    prisma.campaign.update({
+    });
+    await tx.campaign.update({
       where: { id: campaignId },
       data: {
         status: 'CANCELLED',
         cancelledAt: new Date(),
         pausedAt: null,
-        failedCount: { increment: pendingCount },
+        failedCount: { increment: pending.count },
       },
-    }),
-  ]);
+    });
+    return 1;
+  });
+  if (!result) throw new AppError(409, 'Campaign has already changed or reached a terminal state');
 
   await logCampaignAudit(orgId, userId, 'campaign.cancel', { campaignId });
   emitToOrg(orgId, 'campaign:status', { campaignId, status: 'CANCELLED' });
@@ -510,14 +553,15 @@ export async function retryFailedRecipients(
   await assertDailySendQuota(campaign.organizationId, failed.length);
   await assertDailyBudget(campaign.organizationId, failed.length, 'MARKETING');
 
-  await prisma.campaign.update({
-    where: { id: campaign.id },
+  const retryRun = await prisma.campaign.updateMany({
+    where: { id: campaign.id, status: { in: ['FAILED', 'COMPLETED', 'PAUSED'] } },
     data: {
       status: 'RUNNING',
       failedCount: { decrement: failed.length },
       pausedAt: null,
     },
   });
+  if (retryRun.count !== 1) throw new AppError(409, 'Campaign changed before retry could start');
 
   await prisma.campaignRecipient.updateMany({
     where: { id: { in: failed.map((r) => r.id) } },
@@ -525,6 +569,8 @@ export async function retryFailedRecipients(
       status: 'PENDING',
       errorMessage: null,
       metaMessageId: null,
+      claimToken: null,
+      claimedAt: null,
       sentAt: null,
       deliveredAt: null,
       readAt: null,
@@ -626,9 +672,13 @@ export async function duplicateCampaign(
   return copy;
 }
 
-export async function getCampaignAnalytics(campaignId: string, orgId: string) {
+export async function getCampaignAnalytics(campaignId: string, orgId: string, whatsappNumberId?: string) {
   const campaign = await prisma.campaign.findFirst({
-    where: { id: campaignId, organizationId: orgId },
+    where: {
+      id: campaignId,
+      organizationId: orgId,
+      ...(whatsappNumberId ? { whatsappNumberId } : {}),
+    },
     include: {
       recipients: {
         select: { status: true, errorMessage: true, sentAt: true, deliveredAt: true, readAt: true },
@@ -702,9 +752,10 @@ export function recipientsToCsv(
   return [header, ...rows].join('\n');
 }
 
-export async function processScheduledCampaigns() {
+export async function processScheduledCampaigns(organizationId?: string) {
   const due = await prisma.campaign.findMany({
     where: {
+      ...(organizationId ? { organizationId } : {}),
       status: 'SCHEDULED',
       scheduledAt: { lte: new Date() },
     },
@@ -718,8 +769,8 @@ export async function processScheduledCampaigns() {
         campaignId: campaign.id,
       });
     } catch (err) {
-      await prisma.campaign.update({
-        where: { id: campaign.id },
+      await prisma.campaign.updateMany({
+        where: { id: campaign.id, status: 'SCHEDULED' },
         data: { status: 'FAILED' },
       });
       await logCampaignAudit(campaign.organizationId, undefined, 'campaign.scheduled_send_failed', {

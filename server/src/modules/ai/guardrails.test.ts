@@ -38,6 +38,9 @@ describe('guardrails', () => {
   it('detects low confidence replies', () => {
     expect(isLowConfidenceReply("I don't know the answer to that.")).toBe(true);
     expect(isLowConfidenceReply('Our price is ₹499 per month.')).toBe(false);
+    expect(
+      isLowConfidenceReply('Let me connect you with our team for more details.')
+    ).toBe(false);
   });
 });
 
