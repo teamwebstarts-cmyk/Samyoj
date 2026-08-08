@@ -25,7 +25,8 @@ import type {
   TemplateParams,
 } from './types';
 import { dedupeRecipients, hasAuditableCampaignConsent, type ResolvedRecipient } from './recipients';
-import type { Campaign, CampaignRecipient, CampaignStatus, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import type { Campaign, CampaignRecipient, CampaignStatus } from '@prisma/client';
 import {
   CAMPAIGN_CLAIM_LEASE_MS,
   canFinalizeCampaignRun,
@@ -38,6 +39,93 @@ import { canRollbackQueuedCampaign } from './worker-safety';
 const EDITABLE_STATUSES: CampaignStatus[] = ['DRAFT', 'SCHEDULED'];
 const STUCK_RUNNING_MS = 6 * 60 * 60 * 1000;
 const PAUSE_RECLAIM_MESSAGE = 'Campaign paused before provider send';
+
+type CampaignRunSnapshot = {
+  status: CampaignStatus;
+  runVersion: number;
+  templateLanguage: string | null;
+  sentCount: number;
+  deliveredCount: number;
+  readCount: number;
+  failedCount: number;
+  pausedAt: Date | null;
+  cancelledAt: Date | null;
+  sentById: string | null;
+  recipients: CampaignRecipient[];
+};
+
+function snapshotCampaignRun(campaign: Campaign & { recipients: CampaignRecipient[] }): CampaignRunSnapshot {
+  return {
+    status: campaign.status,
+    runVersion: campaign.runVersion,
+    templateLanguage: campaign.templateLanguage,
+    sentCount: campaign.sentCount,
+    deliveredCount: campaign.deliveredCount,
+    readCount: campaign.readCount,
+    failedCount: campaign.failedCount,
+    pausedAt: campaign.pausedAt,
+    cancelledAt: campaign.cancelledAt,
+    sentById: campaign.sentById,
+    recipients: campaign.recipients.map((recipient) => ({ ...recipient })),
+  };
+}
+
+async function restoreCampaignRun(
+  campaignId: string,
+  expectedRunVersion: number,
+  snapshot: CampaignRunSnapshot
+) {
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM campaigns WHERE id = ${campaignId} FOR UPDATE`;
+    const live = await tx.campaign.findUnique({
+      where: { id: campaignId },
+      select: { status: true, runVersion: true },
+    });
+    if (!live || !canRollbackQueuedCampaign({ ...live, expectedRunVersion })) return false;
+
+    await tx.campaign.update({
+      where: { id: campaignId },
+      data: {
+        status: snapshot.status,
+        runVersion: snapshot.runVersion,
+        templateLanguage: snapshot.templateLanguage,
+        sentCount: snapshot.sentCount,
+        deliveredCount: snapshot.deliveredCount,
+        readCount: snapshot.readCount,
+        failedCount: snapshot.failedCount,
+        pausedAt: snapshot.pausedAt,
+        cancelledAt: snapshot.cancelledAt,
+        sentById: snapshot.sentById,
+      },
+    });
+    for (const recipient of snapshot.recipients) {
+      await tx.campaignRecipient.update({
+        where: { id: recipient.id },
+        data: {
+          status: recipient.status,
+          metaMessageId: recipient.metaMessageId,
+          errorMessage: recipient.errorMessage,
+          retryCount: recipient.retryCount,
+          claimToken: recipient.claimToken,
+          claimedAt: recipient.claimedAt,
+          providerCallStartedAt: recipient.providerCallStartedAt,
+          consentSnapshot: recipient.consentSnapshot === null ? Prisma.JsonNull : recipient.consentSnapshot,
+          sentAt: recipient.sentAt,
+          deliveredAt: recipient.deliveredAt,
+          readAt: recipient.readAt,
+        },
+      });
+    }
+    return true;
+  });
+}
+
+async function removeQueuedCampaignJobs(jobIds: string[]) {
+  await Promise.all(jobIds.map(async (jobId) => {
+    const job = await broadcastQueue.getJob(jobId);
+    if (job) await job.remove().catch(() => undefined);
+  }));
+}
 
 export async function reconcileCampaignCounters(campaignId: string) {
   return prisma.$transaction(async (tx) => {
@@ -454,6 +542,7 @@ export async function queueCampaignSend(
   const templateLanguage = campaign.templateLanguage || template.language || 'en_US';
   const templateParams = (campaign.templateParams as TemplateParams | null) || undefined;
   const templateContent = applyTemplateParamsToPreview(template, templateParams, campaign.templateName);
+  const runSnapshot = snapshotCampaignRun(campaign);
   const claimedRun = claimedRunVersion === undefined
     ? await prisma.campaign.updateMany({
         where: { id: campaign.id, status: { in: ['DRAFT', 'SCHEDULED'] } },
@@ -476,6 +565,12 @@ export async function queueCampaignSend(
   }
   const run = await prisma.campaign.findUnique({ where: { id: campaign.id }, select: { runVersion: true } });
   if (!run) throw new AppError(404, 'Campaign not found');
+  const settings = await getCampaignSettings(campaign.organizationId);
+  const batchSize = settings.batchSize ?? 50;
+  const batchDelayMs = settings.batchDelayMs ?? 1000;
+  const totalBatches = Math.ceil(campaign.recipients.length / batchSize);
+
+  const queuedJobIds: string[] = [];
   try {
     await reserveCampaignQuota(
       campaign.organizationId,
@@ -484,60 +579,34 @@ export async function queueCampaignSend(
       campaign.recipients.length,
       'MARKETING'
     );
-  } catch (err) {
-    const live = await prisma.campaign.findUnique({
+    await prisma.campaign.update({
       where: { id: campaign.id },
-      select: { status: true, runVersion: true },
+      data: { templateLanguage },
     });
-    if (live && canRollbackQueuedCampaign({ ...live, expectedRunVersion: run.runVersion })) {
-      await prisma.campaign.updateMany({
-        where: { id: campaign.id, status: 'RUNNING', runVersion: run.runVersion },
-        data: { status: claimedRunVersion === undefined ? campaign.status : 'FAILED' },
-      });
+    const reset = await prisma.campaignRecipient.updateMany({
+      where: {
+        campaignId: campaign.id,
+        campaign: { status: 'RUNNING', runVersion: run.runVersion },
+      },
+      data: {
+        status: 'PENDING',
+        metaMessageId: null,
+        claimToken: null,
+        claimedAt: null,
+        providerCallStartedAt: null,
+        errorMessage: null,
+        sentAt: null,
+        deliveredAt: null,
+        readAt: null,
+      },
+    });
+    if (reset.count !== campaign.recipients.length) {
+      throw new AppError(409, 'Campaign changed before recipients could be queued');
     }
-    throw err;
-  }
-
-  await prisma.campaign.update({
-    where: { id: campaign.id },
-    data: { templateLanguage },
-  });
-
-  const reset = await prisma.campaignRecipient.updateMany({
-    where: {
-      campaignId: campaign.id,
-      campaign: { status: 'RUNNING', runVersion: run.runVersion },
-    },
-    data: {
-      status: 'PENDING',
-      metaMessageId: null,
-      claimToken: null,
-      claimedAt: null,
-      providerCallStartedAt: null,
-      errorMessage: null,
-      sentAt: null,
-      deliveredAt: null,
-      readAt: null,
-    },
-  });
-  if (reset.count !== campaign.recipients.length) {
-    await releaseCampaignQuota(campaign.id, run.runVersion);
-    await prisma.campaign.updateMany({
-      where: { id: campaign.id, status: 'RUNNING', runVersion: run.runVersion },
-      data: { status: 'FAILED' },
-    });
-    throw new AppError(409, 'Campaign changed before recipients could be queued');
-  }
-
-  const settings = await getCampaignSettings(campaign.organizationId);
-  const batchSize = settings.batchSize ?? 50;
-  const batchDelayMs = settings.batchDelayMs ?? 1000;
-  const totalBatches = Math.ceil(campaign.recipients.length / batchSize);
-
-  try {
     for (let i = 0; i < campaign.recipients.length; i += batchSize) {
     const batch = campaign.recipients.slice(i, i + batchSize);
     const batchIndex = Math.floor(i / batchSize);
+    const jobId = `campaign:${campaign.id}:batch:${batch[0].id}`;
     await broadcastQueue.add(
       'send-broadcast-batch',
       {
@@ -560,15 +629,17 @@ export async function queueCampaignSend(
         isLastBatch: batchIndex === totalBatches - 1,
         runVersion: run.runVersion,
       },
-      { delay: batchIndex * batchDelayMs, jobId: `campaign:${campaign.id}:batch:${batch[0].id}` }
+      { delay: batchIndex * batchDelayMs, jobId }
     );
+    queuedJobIds.push(jobId);
     }
   } catch (err) {
-    await releaseCampaignQuota(campaign.id, run.runVersion);
-    await prisma.campaign.updateMany({
-      where: { id: campaign.id, status: 'RUNNING', runVersion: run.runVersion },
-      data: { status: 'FAILED' },
-    });
+    await removeQueuedCampaignJobs(queuedJobIds);
+    try {
+      await releaseCampaignQuota(campaign.id, run.runVersion);
+    } finally {
+      await restoreCampaignRun(campaign.id, run.runVersion, runSnapshot);
+    }
     throw err;
   }
 
@@ -868,6 +939,7 @@ export async function retryFailedRecipients(
   const templateLanguage = campaign.templateLanguage || template.language || 'en_US';
   const templateParams = (campaign.templateParams as TemplateParams | null) || undefined;
   const templateContent = applyTemplateParamsToPreview(template, templateParams, campaign.templateName);
+  const runSnapshot = snapshotCampaignRun(campaign);
   const retryRun = await prisma.campaign.updateMany({
     where: { id: campaign.id, status: { in: ['FAILED', 'COMPLETED', 'PAUSED'] } },
     data: {
@@ -884,6 +956,7 @@ export async function retryFailedRecipients(
   if (!retryVersion) {
     throw new AppError(404, 'Campaign not found');
   }
+  const queuedJobIds: string[] = [];
   try {
     await reserveCampaignQuota(
       campaign.organizationId,
@@ -892,39 +965,30 @@ export async function retryFailedRecipients(
       failed.length,
       'MARKETING'
     );
-  } catch (err) {
-    await prisma.campaign.updateMany({
-      where: { id: campaign.id, status: 'RUNNING', runVersion: retryVersion.runVersion },
-      data: { status: campaign.status },
+    const reset = await prisma.campaignRecipient.updateMany({
+      where: { id: { in: failed.map((r) => r.id) }, status: 'FAILED' },
+      data: {
+        status: 'PENDING',
+        errorMessage: null,
+        metaMessageId: null,
+        claimToken: null,
+        claimedAt: null,
+        providerCallStartedAt: null,
+        sentAt: null,
+        deliveredAt: null,
+        readAt: null,
+        retryCount: { increment: 1 },
+      },
     });
-    throw err;
-  }
+    if (reset.count !== failed.length) {
+      throw new AppError(409, 'Recipients changed before retry could start');
+    }
 
-  const reset = await prisma.campaignRecipient.updateMany({
-    where: { id: { in: failed.map((r) => r.id) }, status: 'FAILED' },
-    data: {
-      status: 'PENDING',
-      errorMessage: null,
-      metaMessageId: null,
-      claimToken: null,
-      claimedAt: null,
-      providerCallStartedAt: null,
-      sentAt: null,
-      deliveredAt: null,
-      readAt: null,
-      retryCount: { increment: 1 },
-    },
-  });
-  if (reset.count !== failed.length) {
-    await releaseCampaignQuota(campaign.id, retryVersion.runVersion);
-    throw new AppError(409, 'Recipients changed before retry could start');
-  }
-
-  const totalBatches = Math.ceil(failed.length / batchSize);
-  try {
+    const totalBatches = Math.ceil(failed.length / batchSize);
     for (let i = 0; i < failed.length; i += batchSize) {
     const batch = failed.slice(i, i + batchSize);
     const batchIndex = Math.floor(i / batchSize);
+    const jobId = `campaign:${campaign.id}:retry:${batch[0].id}`;
     await broadcastQueue.add(
       'send-broadcast-batch',
       {
@@ -947,15 +1011,17 @@ export async function retryFailedRecipients(
         isLastBatch: batchIndex === totalBatches - 1,
         runVersion: retryVersion.runVersion,
       },
-      { delay: batchIndex * batchDelayMs }
+      { delay: batchIndex * batchDelayMs, jobId }
     );
+    queuedJobIds.push(jobId);
     }
   } catch (err) {
-    await releaseCampaignQuota(campaign.id, retryVersion.runVersion);
-    await prisma.campaign.updateMany({
-      where: { id: campaign.id, status: 'RUNNING', runVersion: retryVersion.runVersion },
-      data: { status: 'FAILED' },
-    });
+    await removeQueuedCampaignJobs(queuedJobIds);
+    try {
+      await releaseCampaignQuota(campaign.id, retryVersion.runVersion);
+    } finally {
+      await restoreCampaignRun(campaign.id, retryVersion.runVersion, runSnapshot);
+    }
     throw err;
   }
 

@@ -17,8 +17,14 @@ import { attachWorkerErrorHandlers, logError, setupGlobalErrorHandlers } from '.
 import { checkRedisConnection } from '../config/redis';
 import { createModuleLogger } from '../utils/logger';
 import { hasAuditableCampaignConsent } from '../modules/campaigns/recipients';
-import { buildConsentSnapshot, newClaimToken } from '../modules/campaigns/safety';
+import {
+  buildConsentSnapshot,
+  isCampaignConfigurationFailure,
+  newClaimToken,
+  classifyProviderError,
+} from '../modules/campaigns/safety';
 import { isBroadcastJobContextValid } from '../modules/campaigns/worker-safety';
+import { releaseCampaignQuota } from '../modules/campaigns/quota';
 
 const log = createModuleLogger('worker');
 
@@ -180,16 +186,54 @@ const broadcastWorker = new Worker(
     }
 
     const accessToken = MetaWhatsAppService.decryptToken(encryptedToken);
+    const { emitToOrg } = await import('../realtime');
     if (wabaId) {
-      const metaCredentials = await resolveMetaCredentials(organizationId);
-      await MetaWhatsAppService.ensureWabaSubscribed(wabaId, accessToken, metaCredentials);
+      try {
+        const metaCredentials = await resolveMetaCredentials(organizationId);
+        await MetaWhatsAppService.ensureWabaSubscribed(wabaId, accessToken, metaCredentials);
+      } catch (err) {
+        const classified = classifyProviderError(err);
+        if (!isCampaignConfigurationFailure(classified.classification)) {
+          // Network, throttling, and 5xx failures must retain BullMQ retry
+          // semantics; no recipient has crossed the provider boundary yet.
+          throw err;
+        }
+        const configurationMessage =
+          `Campaign blocked by WhatsApp configuration: ${classified.message} ` +
+          'Reconnect WhatsApp with a WABA admin account, then retry failed recipients.';
+        await prisma.$transaction(async (tx) => {
+          const changed = await tx.campaignRecipient.updateMany({
+            where: {
+              campaignId,
+              campaign: { organizationId, status: 'RUNNING', runVersion },
+              status: 'PENDING',
+              claimToken: null,
+              providerCallStartedAt: null,
+            },
+            data: { status: 'FAILED', errorMessage: configurationMessage },
+          });
+          await tx.campaign.updateMany({
+            where: { id: campaignId, organizationId, status: 'RUNNING', runVersion },
+            data: { status: 'FAILED' },
+          });
+          return changed.count;
+        });
+        const { reconcileCampaignCounters } = await import('../modules/campaigns/service');
+        await reconcileCampaignCounters(campaignId);
+        await releaseCampaignQuota(campaignId, runVersion);
+        emitToOrg(organizationId, 'campaign:status', {
+          campaignId,
+          status: 'FAILED',
+          reason: 'WHATSAPP_CONFIGURATION',
+          errorMessage: configurationMessage,
+        });
+        return;
+      }
     }
     const lang = templateLanguage || 'en_US';
 
     const { recordOutboundInConversation } = await import('../modules/messages/service');
     const { buildTemplateComponents, mergeTemplateParams } = await import('../modules/campaigns/template-params');
-    const { classifyProviderError } = await import('../modules/campaigns/safety');
-    const { emitToOrg } = await import('../realtime');
 
     let templateMeta = null;
     try {

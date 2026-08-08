@@ -11,10 +11,12 @@ import {
   fitsReservedQuota,
   hasUnresolvedProviderBoundary,
   isAbsoluteInstant,
+  isCampaignConfigurationFailure,
   isExactQuotaReservationOwner,
   isClaimLeaseExpired,
   ownsCampaignQuotaReservation,
   shouldReleaseCampaignQuota,
+  shouldRetryCampaignSetup,
   stopTransition,
   utcDayStart,
 } from './safety';
@@ -169,6 +171,8 @@ describe('campaign safety boundaries', () => {
     })).classification).toBe('CONFIGURATION_ERROR');
     expect(classifyProviderError(new Error('authentication failed')).classification)
       .toBe('CONFIGURATION_ERROR');
+    expect(classifyProviderError(Object.assign(new Error('invalid access token'), { status: 429 })).classification)
+      .toBe('CONFIGURATION_ERROR');
     expect(classifyProviderError(Object.assign(new Error('rate limited'), {
       status: 400,
       metaCode: 130429,
@@ -177,6 +181,15 @@ describe('campaign safety boundaries', () => {
       .toBe('TRANSIENT_PROVIDER_ERROR');
     expect(classifyProviderError(Object.assign(new Error('bad request'), { statusCode: 400 })).classification)
       .toBe('UNKNOWN');
+  });
+
+  it('separates durable setup failures from retryable provider outages', () => {
+    expect(isCampaignConfigurationFailure('CONFIGURATION_ERROR')).toBe(true);
+    expect(isCampaignConfigurationFailure('PERMANENT_REJECTION')).toBe(true);
+    expect(isCampaignConfigurationFailure('TRANSIENT_PROVIDER_ERROR')).toBe(false);
+    expect(shouldRetryCampaignSetup('TRANSIENT_PROVIDER_ERROR')).toBe(true);
+    expect(shouldRetryCampaignSetup('UNKNOWN')).toBe(true);
+    expect(shouldRetryCampaignSetup('CONFIGURATION_ERROR')).toBe(false);
   });
 
   it('never takes over a stale claim after the provider boundary', () => {

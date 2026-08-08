@@ -956,7 +956,17 @@ export class MetaWhatsAppService {
       return;
     }
 
-    throw new Error(message || 'Failed to subscribe WABA to app');
+    const error = new Error(message || 'Failed to subscribe WABA to app') as Error & {
+      statusCode?: number;
+      metaCode?: number;
+      metaSubcode?: number;
+      fbtraceId?: string;
+    };
+    error.statusCode = res.status;
+    if (data.error?.code !== undefined) error.metaCode = data.error.code;
+    if (data.error?.error_subcode !== undefined) error.metaSubcode = data.error.error_subcode;
+    if (data.error?.fbtrace_id) error.fbtraceId = data.error.fbtrace_id;
+    throw error;
   }
 
   /** Links the WABA to this Meta app so Cloud API can send messages (required even without webhooks). */
@@ -973,10 +983,19 @@ export class MetaWhatsAppService {
       try {
         await this.postSubscribeWaba(wabaId, this.getAppAccessToken(credentials));
         return;
-      } catch {
+      } catch (appErr) {
+        const status = (userErr as { statusCode?: number }).statusCode;
+        if (
+          status === 429 ||
+          (typeof status === 'number' && status >= 500) ||
+          /fetch failed|network|timeout|socket|econnreset|enotfound/i.test(userMessage)
+        ) {
+          throw userErr;
+        }
         throw new Error(
           `Could not link WhatsApp Business Account to this app: ${userMessage}. ` +
-            'Disconnect and reconnect WhatsApp in Settings, and ensure your Meta user is an admin on the WABA.'
+            'Disconnect and reconnect WhatsApp in Settings, and ensure your Meta user is an admin on the WABA.',
+          { cause: appErr }
         );
       }
     }

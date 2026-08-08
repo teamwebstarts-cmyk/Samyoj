@@ -176,15 +176,16 @@ export function classifyProviderError(error: unknown): {
       132000, 132001, 132012, 132015, 132016].includes(candidate.metaCode);
   const configuration =
     candidate?.metaCode === 190 ||
-    /(?:auth|authori[sz]|token|access key|credential)/i.test(message);
+    /(?:auth|authori[sz]|token|access key|credential|could not link|subscribe(?:d)? apps?|waba.*(?:admin|permission)|permission.*waba)/i.test(message);
   // A 4xx without a known permanent Meta code is not proof that Meta did not
   // accept the request. Keep it ambiguous; authentication (190), throttling,
   // and unknown provider responses must never become ordinary retries.
-  const transient =
-    !configuration &&
-    (typeof candidate?.metaCode === 'number' && [4, 130429, 131000, 131016, 131056, 131057, 80007].includes(candidate.metaCode)) ||
+  const transient = !configuration && (
+    (typeof candidate?.metaCode === 'number' &&
+      [4, 130429, 131000, 131016, 131056, 131057, 80007].includes(candidate.metaCode)) ||
     status === 429 ||
-    (typeof status === 'number' && status >= 500 && status < 600);
+    (typeof status === 'number' && status >= 500 && status < 600)
+  );
   return {
     classification: permanent
       ? 'PERMANENT_REJECTION'
@@ -196,6 +197,14 @@ export function classifyProviderError(error: unknown): {
     message,
     metadata,
   };
+}
+
+export function isCampaignConfigurationFailure(classification: ProviderErrorClassification) {
+  return classification === 'CONFIGURATION_ERROR' || classification === 'PERMANENT_REJECTION';
+}
+
+export function shouldRetryCampaignSetup(classification: ProviderErrorClassification) {
+  return classification === 'TRANSIENT_PROVIDER_ERROR' || classification === 'UNKNOWN';
 }
 
 export function stopTransition(status: string, hasProviderBoundary: boolean, reason: 'paused' | 'cancelled') {
