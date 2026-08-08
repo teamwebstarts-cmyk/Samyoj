@@ -498,27 +498,41 @@ export async function* streamVoiceBotReply(
   }
 
   const validation = validateOutboundReply(full);
-  if (!validation.safe || isLowConfidenceReply(full)) {
+  if (!validation.safe) {
+    // Caller must not keep speaking — abort after any buffered audio.
     yield {
       type: 'direct',
       result: {
         reply: bot.handoffMessage,
         handoff: true,
-        handoffReason: validation.safe ? 'LOW_CONFIDENCE' : 'BLOCKED_CONTENT',
+        handoffReason: 'BLOCKED_CONTENT',
         botId: bot.id,
         botName: bot.name,
+        skipReason: 'blocked_after_stream',
       },
     };
     return;
   }
 
+  const lowConfidence = isLowConfidenceReply(full);
   log.info('Voice stream reply complete', {
     conversationId: input.conversationId,
     botId: bot.id,
     durationMs: Date.now() - start,
     chars: full.length,
+    lowConfidence,
   });
-  yield { type: 'done', content: full, result: { reply: full, handoff: false, botId: bot.id, botName: bot.name } };
+  yield {
+    type: 'done',
+    content: full,
+    result: {
+      reply: full,
+      handoff: lowConfidence,
+      handoffReason: lowConfidence ? 'LOW_CONFIDENCE' : undefined,
+      botId: bot.id,
+      botName: bot.name,
+    },
+  };
 }
 
 export async function performHandoff(

@@ -525,7 +525,7 @@ router.post(
     if (unansweredCount >= BIC_UNANSWERED_BLOCK_AT) {
       throw new AppError(
         429,
-        'This contact has not answered recent outbound calls. Message them on WhatsApp first, or wait before calling again to protect WhatsApp calling quality.',
+        'This contact has not answered recent outbound calls. Wait about 24 hours, or call again after they answer once, to protect WhatsApp calling quality.',
         'BIC_UNANSWERED_COOLDOWN'
       );
     }
@@ -653,7 +653,7 @@ router.post(
       ...(unansweredCount === 1
         ? {
             bicUnansweredWarning:
-              'Previous outbound call to this contact went unanswered. If they miss this one too, outbound calling will be paused until you message them first.',
+              'Previous outbound call to this contact went unanswered. If they miss this one too, outbound calling will pause for about 24 hours to protect WhatsApp calling quality.',
           }
         : {}),
     });

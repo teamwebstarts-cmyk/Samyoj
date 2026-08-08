@@ -3,6 +3,7 @@ import { unregisterActiveCall } from './session-store';
 import { createModuleLogger } from '../../utils/logger';
 import { emitToOrg } from '../../realtime';
 import { generateBotReply, performHandoff, streamVoiceBotReply } from '../ai/chatbot.service';
+import { validateOutboundReply } from '../ai/guardrails';
 import { MetaCallingService } from './meta-calling.service';
 import { SarvamStreamTranscriber, isSarvamSttConfigured } from './sarvam.stt';
 import { synthesizeSpeechSarvam, isSarvamTtsConfigured } from './sarvam.tts';
@@ -35,41 +36,6 @@ function splitIntoSentences(text: string): string[] {
   if (current.trim()) chunks.push(current.trim());
   return chunks.length ? chunks : [trimmed];
 }
-
-/** Voice tool definitions sent to Sarvam for function calling. */
-const VOICE_TOOLS = [
-  {
-    type: 'function' as const,
-    function: {
-      name: 'request_human',
-      description:
-        'Call this when the caller explicitly asks to speak with a human, agent, person, manager, or team. Also call when you cannot help with their request.',
-      parameters: {
-        type: 'object',
-        properties: {
-          reason: { type: 'string', description: 'Why the caller needs a human' },
-          urgency: { type: 'string', enum: ['normal', 'urgent'], description: 'How urgent the request is' },
-        },
-        required: ['reason'],
-      },
-    },
-  },
-  {
-    type: 'function' as const,
-    function: {
-      name: 'schedule_callback',
-      description:
-        'Call this when the caller asks for a callback, wants to be called later, or asks to schedule a call.',
-      parameters: {
-        type: 'object',
-        properties: {
-          when: { type: 'string', description: 'When the caller wants to be called back (e.g. "tomorrow morning", "in 2 hours")' },
-        },
-        required: ['when'],
-      },
-    },
-  },
-];
 
 export class AiVoiceCallSession {
   private bridge: WhatsAppWebRtcBridge | null = null;
@@ -231,6 +197,16 @@ export class AiVoiceCallSession {
         if (event.type === 'direct' && event.result) {
           directHandled = true;
           const result = event.result;
+          // If we already streamed some audio then got a late blocked result, don't re-speak.
+          if (result.skipReason === 'blocked_after_stream' && spokenParts.length > 0) {
+            if (result.handoff) {
+              await this.performHandoffAndTransfer(
+                result.handoffReason || 'BLOCKED_CONTENT',
+                result.handoffReason || 'BLOCKED_CONTENT'
+              );
+            }
+            break;
+          }
           if (result.skipped && !result.reply) {
             await this.speak(
               result.skipReason === 'ai_not_configured'
@@ -259,6 +235,14 @@ export class AiVoiceCallSession {
             const ready = parts.slice(0, -1).join(' ').trim();
             pending = parts[parts.length - 1] || '';
             if (ready) {
+              if (!validateOutboundReply(ready).safe) {
+                await this.speak(
+                  "I'll have our team follow up with you on WhatsApp shortly.",
+                  'assistant'
+                );
+                await this.performHandoffAndTransfer('BLOCKED_CONTENT', 'BLOCKED_CONTENT');
+                return;
+              }
               spokenParts.push(ready);
               await this.speak(ready, 'assistant', { recordTranscript: false });
             }
@@ -268,6 +252,14 @@ export class AiVoiceCallSession {
               const ready = pending.slice(0, cut).trim();
               pending = pending.slice(cut).trim();
               if (ready) {
+                if (!validateOutboundReply(ready).safe) {
+                  await this.speak(
+                    "I'll have our team follow up with you on WhatsApp shortly.",
+                    'assistant'
+                  );
+                  await this.performHandoffAndTransfer('BLOCKED_CONTENT', 'BLOCKED_CONTENT');
+                  return;
+                }
                 spokenParts.push(ready);
                 await this.speak(ready, 'assistant', { recordTranscript: false });
               }
@@ -278,6 +270,16 @@ export class AiVoiceCallSession {
         if (event.type === 'done') {
           const tail = (pending || '').trim();
           if (tail) {
+            if (!validateOutboundReply(tail).safe) {
+              if (spokenParts.length === 0) {
+                await this.speak(
+                  "I'll have our team follow up with you on WhatsApp shortly.",
+                  'assistant'
+                );
+              }
+              await this.performHandoffAndTransfer('BLOCKED_CONTENT', 'BLOCKED_CONTENT');
+              return;
+            }
             spokenParts.push(tail);
             await this.speak(tail, 'assistant', { recordTranscript: false });
           }
@@ -292,6 +294,16 @@ export class AiVoiceCallSession {
             await this.speak(
               'Sorry, I am having trouble right now. Please try again in a moment.',
               'assistant'
+            );
+          }
+          // Low-confidence: hand off without re-speaking a second message if we already talked.
+          if (event.result?.handoff) {
+            if (spokenParts.length === 0 && event.result.reply) {
+              await this.speak(event.result.reply, 'assistant');
+            }
+            await this.performHandoffAndTransfer(
+              event.result.handoffReason || 'LOW_CONFIDENCE',
+              event.result.handoffReason || 'LOW_CONFIDENCE'
             );
           }
         }
@@ -508,25 +520,27 @@ export class AiVoiceCallSession {
   ): Promise<void> {
     if (!this.bridge || this.ended) return;
     this.speaking = true;
-    if (opts?.recordTranscript !== false) {
-      await this.appendTranscript(role, text);
-    }
+    try {
+      if (opts?.recordTranscript !== false) {
+        await this.appendTranscript(role, text);
+      }
 
-    // Split long replies into sentences so each is a separate Sarvam TTS call.
-    // Bulbul v3 handles up to 2500 chars but shorter per-request keeps latency low.
-    const sentences = splitIntoSentences(text);
-    for (const sentence of sentences) {
-      if (this.ended || !this.bridge) break;
-      const ttsStart = Date.now();
-      const audio = await synthesizeSpeechSarvam(sentence, {
-        speaker: this.ctx.ttsVoice,
-        language: this.ctx.ttsLanguage,
-      });
-      this.ttsLatenciesMs.push(Date.now() - ttsStart);
-      await this.bridge.playPcm(audio.samples, audio.sampleRate);
+      // Split long replies into sentences so each is a separate Sarvam TTS call.
+      // Bulbul v3 handles up to 2500 chars but shorter per-request keeps latency low.
+      const sentences = splitIntoSentences(text);
+      for (const sentence of sentences) {
+        if (this.ended || !this.bridge) break;
+        const ttsStart = Date.now();
+        const audio = await synthesizeSpeechSarvam(sentence, {
+          speaker: this.ctx.ttsVoice,
+          language: this.ctx.ttsLanguage,
+        });
+        this.ttsLatenciesMs.push(Date.now() - ttsStart);
+        await this.bridge.playPcm(audio.samples, audio.sampleRate);
+      }
+    } finally {
+      this.speaking = false;
     }
-
-    this.speaking = false;
   }
 
   private async appendTranscript(role: TranscriptEntry['role'], text: string): Promise<void> {

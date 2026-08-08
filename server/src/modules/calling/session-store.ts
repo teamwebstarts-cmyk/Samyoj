@@ -175,6 +175,8 @@ const BIC_UNANSWERED_PREFIX = 'call:bic:unanswered:';
 const BIC_UNANSWERED_TTL_SEC = 7 * 24 * 60 * 60; // 7 days
 /** Block further outbound calls at this consecutive unanswered count. */
 export const BIC_UNANSWERED_BLOCK_AT = 2;
+/** After this window, consecutive unanswered counter is treated as cooled down. */
+export const BIC_UNANSWERED_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
 function normalizePhoneDigits(phone: string): string {
   return phone.replace(/\D/g, '');
@@ -184,18 +186,45 @@ function bicUnansweredKey(orgId: string, contactPhone: string): string {
   return `${BIC_UNANSWERED_PREFIX}${orgId}:${normalizePhoneDigits(contactPhone)}`;
 }
 
+type BicUnansweredState = { count: number; lastAt: number };
+
+async function readBicState(orgId: string, contactPhone: string): Promise<BicUnansweredState> {
+  const redis = getRedis();
+  const raw = await redis.get(bicUnansweredKey(orgId, contactPhone));
+  if (!raw) return { count: 0, lastAt: 0 };
+  try {
+    const parsed = JSON.parse(raw) as BicUnansweredState;
+    if (typeof parsed?.count === 'number') {
+      return { count: Math.max(0, parsed.count), lastAt: Number(parsed.lastAt) || 0 };
+    }
+  } catch {
+    const n = Number.parseInt(raw, 10);
+    if (Number.isFinite(n) && n > 0) return { count: n, lastAt: Date.now() };
+  }
+  return { count: 0, lastAt: 0 };
+}
+
 export async function getBicUnansweredCount(orgId: string, contactPhone: string): Promise<number> {
   try {
-    const redis = getRedis();
-    const raw = await redis.get(bicUnansweredKey(orgId, contactPhone));
-    const n = raw ? Number.parseInt(raw, 10) : 0;
-    return Number.isFinite(n) && n > 0 ? n : 0;
+    const state = await readBicState(orgId, contactPhone);
+    if (state.count <= 0) return 0;
+    // Time-based release: after cooldown, allow dialing again (counter soft-resets).
+    if (
+      state.count >= BIC_UNANSWERED_BLOCK_AT &&
+      state.lastAt > 0 &&
+      Date.now() - state.lastAt >= BIC_UNANSWERED_COOLDOWN_MS
+    ) {
+      await clearBicUnanswered(orgId, contactPhone);
+      return 0;
+    }
+    return state.count;
   } catch (err) {
-    log.warn('BIC unanswered count read failed — allowing call', {
+    // Fail closed: without Redis we cannot track unanswered BIC quality — block dialing.
+    log.warn('BIC unanswered count read failed — blocking outbound call', {
       orgId,
       error: err instanceof Error ? err.message : String(err),
     });
-    return 0;
+    return BIC_UNANSWERED_BLOCK_AT;
   }
 }
 
@@ -204,9 +233,10 @@ export async function incrBicUnanswered(orgId: string, contactPhone: string): Pr
   try {
     const redis = getRedis();
     const key = bicUnansweredKey(orgId, contactPhone);
-    const count = await redis.incr(key);
-    await redis.expire(key, BIC_UNANSWERED_TTL_SEC);
-    return count;
+    const prev = await readBicState(orgId, contactPhone);
+    const next: BicUnansweredState = { count: prev.count + 1, lastAt: Date.now() };
+    await redis.set(key, JSON.stringify(next), 'EX', BIC_UNANSWERED_TTL_SEC);
+    return next.count;
   } catch (err) {
     log.warn('BIC unanswered incr failed', {
       orgId,

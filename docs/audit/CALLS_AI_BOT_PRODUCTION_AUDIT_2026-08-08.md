@@ -1,53 +1,65 @@
-# Critical review — Calls + AI Bot — 2026-08-08 (post-fix loop)
+# Critical review — Calls + AI Bot — 2026-08-08 (post Loop 2 + recheck)
 
-> Follow-up to the morning audit. Critical/High blockers closed in two fix loops. Prefer code over older Aug-5 docs.
+> Two fix loops completed, then a full plan recheck with technical tests. Prefer this over Aug-5 Azure-only docs.
 
 ## Verdict
 
-**Pilot-ready shared brain is now much safer for customers and platform users.** Customer-facing leaks, dual-reply, tenancy uniqueness, opt-out gates, and dishonest live-transfer paths are fixed or safely disabled. Overall production readiness: **~7.5/10** (was 4/10). Remaining work is latency polish, true live media transfer, and recording retention productization — not silent data leaks.
+**Careful beta ~7.9/10.** Plan checklist items are present in code and unit-tested. Recheck corrected an optimistic 8.2 claim downward, then closed two High holes found during recheck (`speaking` stuck after TTS error; BIC Redis fail-open). Live media transfer remains intentionally disabled — that is the main gap to ~9+.
 
-## Scorecard (after fixes)
+## Scorecard
 
-| Area | Was | Now | Notes |
-|------|-----|-----|-------|
-| Shared brain | 7 | 8 | Injection refuse + KB no-match handoff |
-| AI chat bot | 6 | 8 | Opt-out, after-hours reply, agent pause |
-| Calling product | 4 | 7 | Inbound solid; live transfer safely off |
-| Inbox integration | 5 | 8 | Internal handoff notes; no dual-reply |
-| Sarvam integration | 6 | 7 | Still non-stream voice LLM |
-| Error handling | 5 | 7 | Connect lock + Redis fail-closed |
-| Security / tenancy | 3 | 8 | Unique phoneNumberId; secrets redacted |
-| UX honesty | 5 | 8 | No “please hold” lie; matrix honest |
-| **Production overall** | **4** | **~7.5** | Friendly pilot → careful beta |
+| Area | Loop0 | Loop1 | Loop2 | Recheck |
+|------|-------|-------|-------|---------|
+| Shared brain / Inbox | 7 | 8 | 8.5 | 8.5 |
+| AI chat bot | 6 | 8 | 8 | 8 |
+| Calling product | 4 | 7 | 8 | 7.5 |
+| Sarvam / voice latency | 6 | 7 | 8.5 | 8.5 |
+| Security / tenancy | 3 | 8 | 8 | 8.5 |
+| UX honesty | 5 | 8 | 8.5 | 8.5 |
+| **Production overall** | **4** | **~7.5** | **~8.2 claimed** | **~7.9 honest** |
 
-## Fixed this session
+## Recheck (technical) — 2026-08-08
 
-1. Handoff summary → internal note only (never customer WhatsApp)
-2. Agent send auto-pauses `botActive`
-3. Live transfer coerced off API/UI; stubbed handler; message-only handoff copy
-4. Outbound `/callback` requires browser SDP
-5. `@@unique(phoneNumberId)` migration applied + connect 409
-6. AI queue/job + missed-call skip when opted out
-7. Prompt injection refuses LLM
-8. Trained bot + 0 KB match → handoff
-9. `schedule_callback` → Ticket + note + socket
-10. Concurrent Redis fail-closed; connect lock fail-closed; await connect
-11. Voice error speaks then ends
-12. Recording only when consent enabled (default off)
-13. After-hours still sends polite reply
-14. `.env.example` placeholders only
-15. FEATURE_MATRIX Voice Calling marked PARTIAL
+- `tsc --noEmit`: clean
+- Vitest AI + calling + media-retention: **32/32 passed**
+- Migration `20260808120000_unique_whatsapp_phone_number_id`: applied / DB up to date
+- Loop1+2 checklist: **PASS in code** (handoff note-only, agent pause, live transfer stub, outbound SDP, unique phoneNumberId, opt-out gates, injection refuse, empty-KB handoff, schedule_callback ticket, concurrent fail-closed, stream+validate, voiceInstructions, BIC 24h release, recording TTL, callback toast)
 
-## Remaining (next loop, not blockers for careful beta)
+### Closed during recheck
 
-1. Stream LLM → TTS for lower voice latency
-2. Real live media transfer (WebRTC renegotiation) — currently intentionally disabled
-3. Recording TTL/encryption/download ACL when consent on
-4. Wire `voiceInstructions` presets
-5. Integration tests for connect / handoff / opt-out / tenancy
-6. Local unanswered BIC cooldown vs Meta quality limits
+1. `speak()` now clears `speaking` in `finally` (TTS throw no longer deafens the call)
+2. BIC unread Redis failure **fail-closed** (blocks dial instead of allowing unlimited BIC)
+3. Removed dead `VOICE_TOOLS` const; FEATURE_MATRIX TOTAL no longer claims “All DONE”
 
-## Teams
+### Still skipped / needs more work
 
-- Fix: handoff + bot pause · calling honesty · tenancy/opt-out/KB
-- Critic re-verify then second loop for recording/copy/lock/stub
+1. Real live WebRTC media transfer (intentional stub — largest product gap)
+2. Softphone Hold / Keypad / Transfer UI stubs
+3. Unencrypted local PCM recordings / no download ACL
+4. Shallow regex prompt-injection only
+5. Agent pause vs in-flight AI job race (TOCTOU)
+6. No full Redis/stream integration tests; voice stream hardcodes conversations model
+
+## Loop 2 landed
+
+1. Stream Sarvam LLM → sentence TTS (validate each sentence before speak)
+2. Professional brain `voiceInstructions` embedded + extracted on voice channel
+3. BIC unanswered cooldown (≥2) with **24h time-based release** + honest copy
+4. Call recording TTL purge (`CALL_RECORDING_TTL_DAYS`, default 7)
+5. Consent-gated recording (unchanged, still default off)
+6. `call:callback_requested` toast in Calls notification provider
+7. Unit tests: voice-instructions, BIC helpers, media retention, guardrails
+
+## Still intentionally not done (not blockers for careful beta)
+
+1. Real live WebRTC media transfer (safely stubbed/off)
+2. Encrypted recording storage / download ACL
+3. Full Redis/stream integration tests
+4. Org-custom model override on voice stream path (hardcodes conversations model)
+
+## Teams this loop
+
+- Voice instructions + BIC wiring
+- Recording TTL + callback toast + tests
+- Streaming voice path + critic High fixes (BIC time release, validate-before-speak)
+- Recheck hotfixes: speaking finally, BIC fail-closed, matrix honesty

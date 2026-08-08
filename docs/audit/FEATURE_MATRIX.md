@@ -368,7 +368,7 @@ Legend:
 | Content Studio | 9 | All DONE |
 | WA Forms | 4 | All DONE |
 | Tickets | 4 | All DONE |
-| **TOTAL** | **184** | **All DONE** |
+| **TOTAL** | **184** | **Mostly DONE** — Voice Calling PARTIAL; see section 10 |
 
 ### Not Yet Built (from docs/roadmap)
 

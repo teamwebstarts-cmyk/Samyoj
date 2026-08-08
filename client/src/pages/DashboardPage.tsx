@@ -273,7 +273,7 @@ export default function DashboardPage() {
               onPeriodChange={setPeriodDays}
             />
 
-            <div className="mt-3 grid grid-cols-1 gap-3 lg:mt-3.5 lg:grid-cols-3 lg:items-stretch lg:gap-3">
+            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 md:items-stretch lg:mt-3.5 lg:grid-cols-3 lg:items-stretch lg:gap-3">
               <NeedsAttentionCard
                 openChats={stats.activeConversations}
                 failedMessages={stats.failedMessages}
