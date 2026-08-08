@@ -1,5 +1,6 @@
 import { Worker, Job } from 'bullmq';
 import { Server } from 'socket.io';
+import type { Prisma } from '@prisma/client';
 import prisma from '../config/database';
 import { config } from '../config';
 import { MetaWhatsAppService } from '../modules/whatsapp/meta.service';
@@ -142,6 +143,9 @@ const broadcastWorker = new Worker(
       runVersion,
     } = job.data;
 
+    if (!Number.isInteger(runVersion)) {
+      throw new Error('Campaign job missing runVersion. Legacy jobs must be re-enqueued.');
+    }
     if (!phoneNumberId || !encryptedToken) {
       throw new Error('Campaign job missing WhatsApp credentials. Re-send the campaign from the UI.');
     }
@@ -155,7 +159,7 @@ const broadcastWorker = new Worker(
         whatsappNumber: { select: { businessId: true, phoneNumberId: true } },
       },
     });
-    if (!campaign || campaign.status !== 'RUNNING' || (runVersion !== undefined && campaign.runVersion !== runVersion)) {
+    if (!campaign || campaign.status !== 'RUNNING' || campaign.runVersion !== runVersion) {
       return;
     }
 
@@ -168,6 +172,7 @@ const broadcastWorker = new Worker(
 
     const { recordOutboundInConversation } = await import('../modules/messages/service');
     const { buildTemplateComponents, mergeTemplateParams } = await import('../modules/campaigns/template-params');
+    const { classifyProviderError } = await import('../modules/campaigns/safety');
     const { emitToOrg } = await import('../realtime');
 
     let templateMeta = null;
@@ -221,6 +226,7 @@ const broadcastWorker = new Worker(
         data: {
           claimToken,
           claimedAt: new Date(),
+          providerCallStartedAt: null,
           consentSnapshot: buildConsentSnapshot({
             phone: recipient.phone,
             business: {
@@ -249,6 +255,64 @@ const broadcastWorker = new Worker(
         data: { claimedAt: new Date() },
       });
       if (preSend.count !== 1) continue;
+
+      // Re-read consent at the last transactional boundary. An opt-out after
+      // this commit races the external call and is therefore auditable/ambiguous.
+      const sendBoundary = await prisma.$transaction(async (tx) => {
+        const latestContact = await tx.contact.findUnique({
+          where: { organizationId_phone: { organizationId, phone: recipient.phone } },
+          select: {
+            optedIn: true, consentSource: true, consentAt: true, consentVersion: true,
+            consentDecision: true, optOutAt: true,
+          },
+        });
+        if (!latestContact || !hasAuditableCampaignConsent(latestContact)) {
+          const rejected = await tx.campaignRecipient.updateMany({
+            where: {
+              id: recipient.id,
+              claimToken,
+              status: 'PENDING',
+              campaign: { status: 'RUNNING', runVersion: campaign.runVersion },
+            },
+            data: {
+              status: 'FAILED',
+              errorMessage: 'Recipient opted out or lacks active consent before provider send',
+              claimToken: null,
+              claimedAt: null,
+              providerCallStartedAt: null,
+            },
+          });
+          return { allowed: false, rejected: rejected.count === 1 };
+        }
+        const marked = await tx.campaignRecipient.updateMany({
+          where: {
+            id: recipient.id,
+            claimToken,
+            status: 'PENDING',
+            providerCallStartedAt: null,
+            campaign: { status: 'RUNNING', runVersion: campaign.runVersion },
+          },
+          data: { providerCallStartedAt: new Date(), consentSnapshot: buildConsentSnapshot({
+            phone: recipient.phone,
+            business: {
+              organizationId,
+              name: campaign.organization.companyName,
+              businessId: campaign.whatsappNumber?.businessId,
+              phoneNumberId: campaign.whatsappNumber?.phoneNumberId,
+            },
+            category: 'MARKETING',
+            policyVersion: 'campaign-consent-v1',
+            contact: latestContact,
+          }) },
+        });
+        return { allowed: marked.count === 1, rejected: false };
+      });
+      if (!sendBoundary.allowed) {
+        if (sendBoundary.rejected) {
+          await prisma.campaign.update({ where: { id: campaignId }, data: { failedCount: { increment: 1 } } });
+        }
+        continue;
+      }
 
       const mergedParams = mergeTemplateParams(
         templateParams,
@@ -289,26 +353,32 @@ const broadcastWorker = new Worker(
             claimToken,
             campaign: { status: 'RUNNING', runVersion: campaign.runVersion },
           },
-          data: { status: 'SENT', metaMessageId, sentAt: new Date(), errorMessage: null },
+          data: {
+            status: 'SENT',
+            metaMessageId,
+            sentAt: new Date(),
+            errorMessage: null,
+            claimToken: null,
+            claimedAt: null,
+            providerCallStartedAt: null,
+          },
         });
-        if (completed.count === 1) {
-          await prisma.campaign.update({
-            where: { id: campaignId },
-            data: { sentCount: { increment: 1 } },
-          });
-        } else {
+        if (completed.count !== 1) {
           // Meta may have accepted the request while pause/cancel committed.
           // Record that ambiguous outcome so lease recovery never retries it.
           await prisma.campaignRecipient.updateMany({
             where: { id: recipient.id, claimToken },
             data: {
-              status: 'SENT',
+              status: 'AMBIGUOUS',
               metaMessageId,
-              sentAt: new Date(),
-              errorMessage: 'Sent before campaign pause/cancel; reconciled with Meta status',
+              errorMessage: 'Provider accepted before campaign pause/cancel; reconcile with Meta status',
+              claimToken: null,
+              claimedAt: null,
             },
           });
         }
+        const { reconcileCampaignCounters } = await import('../modules/campaigns/service');
+        await reconcileCampaignCounters(campaignId);
 
         emitToOrg(organizationId, 'campaign:progress', {
           campaignId,
@@ -316,7 +386,8 @@ const broadcastWorker = new Worker(
           status: 'SENT',
         });
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Send failed';
+        const classified = classifyProviderError(err);
+        const errorMessage = classified.message;
         logError(err, {
           source: 'worker',
           queueName: 'broadcast-queue',
@@ -324,27 +395,49 @@ const broadcastWorker = new Worker(
           path: `recipient:${recipient.phone}`,
         });
 
+        const currentRecipient = await prisma.campaignRecipient.findUnique({
+          where: { id: recipient.id },
+          select: { consentSnapshot: true },
+        });
+        const providerSnapshot = {
+          ...((currentRecipient?.consentSnapshot as Record<string, unknown> | null) ?? {}),
+          providerError: classified.metadata,
+          providerErrorMessage: errorMessage,
+          providerErrorClassification: classified.classification,
+        };
         const ambiguous = await prisma.campaignRecipient.updateMany({
           where: { id: recipient.id, claimToken },
           data: {
-            status: 'AMBIGUOUS',
-            errorMessage: `Provider outcome unknown; reconcile with Meta before retrying: ${errorMessage}`,
+            status: classified.classification === 'PERMANENT_REJECTION' ? 'FAILED' : 'AMBIGUOUS',
+            errorMessage: classified.classification === 'PERMANENT_REJECTION'
+              ? `Meta rejected before acceptance: ${errorMessage}`
+              : `Provider outcome unknown; reconcile with Meta before retrying: ${errorMessage}`,
+            consentSnapshot: providerSnapshot as Prisma.InputJsonValue,
             claimToken: null,
             claimedAt: null,
+            ...(classified.classification === 'PERMANENT_REJECTION' ? { providerCallStartedAt: null } : {}),
           },
         });
+        if (ambiguous.count === 1 && classified.classification === 'PERMANENT_REJECTION') {
+          await prisma.campaign.update({
+            where: { id: campaignId },
+            data: { failedCount: { increment: 1 } },
+          });
+        }
+        const { reconcileCampaignCounters } = await import('../modules/campaigns/service');
+        await reconcileCampaignCounters(campaignId);
 
         emitToOrg(organizationId, 'campaign:progress', {
           campaignId,
           recipientId: recipient.id,
-          status: ambiguous.count === 1 ? 'AMBIGUOUS' : 'FAILED',
+          status: classified.classification === 'PERMANENT_REJECTION' ? 'FAILED' : 'AMBIGUOUS',
           errorMessage,
         });
       }
     }
 
     const { finalizeCampaignIfDone } = await import('../modules/campaigns/service');
-    await finalizeCampaignIfDone(campaignId);
+    await finalizeCampaignIfDone(campaignId, runVersion);
   },
   {
     connection,

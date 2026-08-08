@@ -28,12 +28,16 @@ describe('extractMetaErrorFields', () => {
     const err = new MetaApiError('Recipient phone number not in allowed list', {
       metaCode: 131030,
       fbtraceId: 'AbCd',
+      status: 400,
+      statusCode: 400,
     });
     expect(extractMetaErrorFields(err)).toEqual({
       message: 'Recipient phone number not in allowed list',
       metaCode: 131030,
       metaSubcode: undefined,
       fbtraceId: 'AbCd',
+      status: 400,
+      statusCode: 400,
     });
   });
 

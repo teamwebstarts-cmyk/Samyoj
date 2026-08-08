@@ -2,6 +2,10 @@ import { randomUUID } from 'node:crypto';
 
 export const CAMPAIGN_CLAIM_LEASE_MS = 15 * 60 * 1000;
 
+export function utcDayStart(now = new Date()) {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+}
+
 export function isClaimLeaseExpired(
   claimedAt: Date | null | undefined,
   now = new Date(),
@@ -69,5 +73,131 @@ export function newClaimToken(jobId: string, recipientId: string) {
 }
 
 export function isAbsoluteInstant(value: string) {
-  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/.test(value);
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?Z$/);
+  if (!match) return false;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return false;
+  return (
+    date.getUTCFullYear() === Number(match[1]) &&
+    date.getUTCMonth() + 1 === Number(match[2]) &&
+    date.getUTCDate() === Number(match[3]) &&
+    date.getUTCHours() === Number(match[4]) &&
+    date.getUTCMinutes() === Number(match[5]) &&
+    date.getUTCSeconds() === Number(match[6])
+  );
+}
+
+export function campaignCounterSnapshot(statuses: string[]) {
+  return statuses.reduce(
+    (counts, status) => {
+      if (['SENT', 'DELIVERED', 'READ'].includes(status)) counts.sentCount += 1;
+      if (['DELIVERED', 'READ'].includes(status)) counts.deliveredCount += 1;
+      if (status === 'READ') counts.readCount += 1;
+      if (status === 'FAILED') counts.failedCount += 1;
+      return counts;
+    },
+    { sentCount: 0, deliveredCount: 0, readCount: 0, failedCount: 0 }
+  );
+}
+
+export function classifyClaimForStop(providerCallStartedAt: Date | null | undefined) {
+  return providerCallStartedAt ? 'AMBIGUOUS' : 'FAILED';
+}
+
+export function classifyClaimForRecovery(input: {
+  claimToken?: string | null;
+  providerCallStartedAt?: Date | null;
+}) {
+  return input.claimToken || input.providerCallStartedAt ? 'AMBIGUOUS' as const : 'FAILED' as const;
+}
+
+export function hasUnresolvedProviderBoundary(rows: Array<{
+  status: string;
+  claimToken?: string | null;
+  providerCallStartedAt?: Date | null;
+}>) {
+  return rows.some((row) =>
+    row.status === 'AMBIGUOUS' || Boolean(row.claimToken) || Boolean(row.providerCallStartedAt)
+  );
+}
+
+export type ProviderErrorClassification =
+  | 'PERMANENT_REJECTION'
+  | 'TRANSIENT_PROVIDER_ERROR'
+  | 'UNKNOWN';
+
+export function classifyProviderError(error: unknown): {
+  classification: ProviderErrorClassification;
+  message: string;
+  metadata: Record<string, unknown>;
+} {
+  const candidate = error as {
+    message?: unknown;
+    metaCode?: unknown;
+    metaSubcode?: unknown;
+    fbtraceId?: unknown;
+    status?: unknown;
+    statusCode?: unknown;
+  } | null;
+  const message = typeof candidate?.message === 'string' ? candidate.message : String(error);
+  const metadata = {
+    provider: 'meta',
+    ...(typeof candidate?.metaCode === 'number' ? { metaCode: candidate.metaCode } : {}),
+    ...(typeof candidate?.metaSubcode === 'number' ? { metaSubcode: candidate.metaSubcode } : {}),
+    ...(typeof candidate?.fbtraceId === 'string' ? { fbtraceId: candidate.fbtraceId } : {}),
+    ...(typeof candidate?.status === 'number' ? { status: candidate.status } : {}),
+    ...(typeof candidate?.statusCode === 'number' ? { statusCode: candidate.statusCode } : {}),
+  };
+  const status = typeof candidate?.statusCode === 'number'
+    ? candidate.statusCode
+    : typeof candidate?.status === 'number'
+      ? candidate.status
+      : undefined;
+  const permanent =
+    (typeof candidate?.metaCode === 'number' && [100, 132000, 131026, 131047, 131051, 131052].includes(candidate.metaCode)) ||
+    (typeof status === 'number' && status >= 400 && status < 500 && status !== 408 && status !== 429);
+  const transient = status === 429 || (typeof status === 'number' && status >= 500 && status < 600);
+  return {
+    classification: permanent
+      ? 'PERMANENT_REJECTION'
+      : transient
+        ? 'TRANSIENT_PROVIDER_ERROR'
+        : 'UNKNOWN',
+    message,
+    metadata,
+  };
+}
+
+export function stopTransition(status: string, hasProviderBoundary: boolean, reason: 'paused' | 'cancelled') {
+  if (status === 'AMBIGUOUS' || hasProviderBoundary) return 'AMBIGUOUS' as const;
+  if (status === 'PENDING') return 'FAILED' as const;
+  return status;
+}
+
+export function canReclaimPausedRecipient(status: string, errorMessage: string | null | undefined) {
+  return status === 'FAILED' && errorMessage === 'Campaign paused before provider send';
+}
+
+export function shouldReleaseCampaignQuota(ambiguousCount: number) {
+  return ambiguousCount === 0;
+}
+
+/** A stale run may never release a reservation transferred to a newer run. */
+export function ownsCampaignQuotaReservation(reservationRunVersion: number, runVersion: number) {
+  return reservationRunVersion === runVersion;
+}
+
+export function canFinalizeCampaignRun(
+  status: string,
+  currentRunVersion: number,
+  expectedRunVersion: number,
+  pending: number,
+  ambiguous: number
+) {
+  return (
+    (status === 'RUNNING' || status === 'PAUSED') &&
+    currentRunVersion === expectedRunVersion &&
+    pending === 0 &&
+    ambiguous === 0
+  );
 }

@@ -151,16 +151,26 @@ export class MetaApiError extends Error {
   readonly metaCode?: number;
   readonly metaSubcode?: number;
   readonly fbtraceId?: string;
+  readonly status?: number;
+  readonly statusCode?: number;
 
   constructor(
     message: string,
-    opts?: { metaCode?: number; metaSubcode?: number; fbtraceId?: string }
+    opts?: {
+      metaCode?: number;
+      metaSubcode?: number;
+      fbtraceId?: string;
+      status?: number;
+      statusCode?: number;
+    }
   ) {
     super(message);
     this.name = 'MetaApiError';
     this.metaCode = opts?.metaCode;
     this.metaSubcode = opts?.metaSubcode;
     this.fbtraceId = opts?.fbtraceId;
+    this.status = opts?.status ?? opts?.statusCode;
+    this.statusCode = opts?.statusCode ?? opts?.status;
   }
 }
 
@@ -169,6 +179,8 @@ export function extractMetaErrorFields(error: unknown): {
   metaCode?: number;
   metaSubcode?: number;
   fbtraceId?: string;
+  status?: number;
+  statusCode?: number;
 } {
   if (error instanceof MetaApiError) {
     return {
@@ -176,6 +188,8 @@ export function extractMetaErrorFields(error: unknown): {
       metaCode: error.metaCode,
       metaSubcode: error.metaSubcode,
       fbtraceId: error.fbtraceId,
+      status: error.status,
+      statusCode: error.statusCode,
     };
   }
   const message = error instanceof Error ? error.message : 'Failed to send message';
@@ -769,7 +783,13 @@ export class MetaWhatsAppService {
       } catch {
         /* use raw body */
       }
-      throw new MetaApiError(message, { metaCode, metaSubcode, fbtraceId });
+      throw new MetaApiError(message, {
+        metaCode,
+        metaSubcode,
+        fbtraceId,
+        status: res.status,
+        statusCode: res.status,
+      });
     }
     return res.json() as Promise<{ messages: { id: string }[] }>;
   }
@@ -813,6 +833,8 @@ export class MetaWhatsAppService {
         metaCode: body.error?.code,
         metaSubcode: body.error?.error_subcode,
         fbtraceId: body.error?.fbtrace_id,
+        status: res.status,
+        statusCode: res.status,
       });
     }
     return body.id;

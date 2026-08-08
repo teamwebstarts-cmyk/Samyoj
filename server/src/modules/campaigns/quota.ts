@@ -3,7 +3,7 @@ import { AppError } from '../../utils/response';
 import { DEFAULT_CAMPAIGN_SETTINGS, type CampaignSettings } from './types';
 import { estimateCampaignCost } from '../billing/usage.service';
 import { randomUUID } from 'node:crypto';
-import { fitsReservedQuota } from './safety';
+import { fitsReservedQuota, ownsCampaignQuotaReservation, utcDayStart } from './safety';
 
 export async function getCampaignSettings(organizationId: string): Promise<CampaignSettings> {
   const org = await prisma.organization.findUnique({
@@ -19,8 +19,7 @@ export async function getDailySendUsage(organizationId: string) {
   const settings = await getCampaignSettings(organizationId);
   const limit = settings.dailySendLimit ?? DEFAULT_CAMPAIGN_SETTINGS.dailySendLimit!;
 
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
+  const startOfDay = utcDayStart();
 
   const sentToday = await prisma.campaignRecipient.count({
     where: {
@@ -43,8 +42,7 @@ export async function assertDailySendQuota(organizationId: string, recipientCoun
   const settings = await getCampaignSettings(organizationId);
   const limit = settings.dailySendLimit ?? DEFAULT_CAMPAIGN_SETTINGS.dailySendLimit!;
 
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
+  const startOfDay = utcDayStart();
 
   const sentToday = await prisma.campaignRecipient.count({
     where: {
@@ -66,8 +64,7 @@ export async function assertDailyBudget(organizationId: string, recipientCount: 
   const settings = await getCampaignSettings(organizationId);
   const budget = settings.dailyBudgetInr ?? DEFAULT_CAMPAIGN_SETTINGS.dailyBudgetInr!;
 
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
+  const startOfDay = utcDayStart();
 
   const sentToday = await prisma.campaignRecipient.count({
     where: {
@@ -95,10 +92,6 @@ export async function assertDailyBudget(organizationId: string, recipientCount: 
   };
 }
 
-function utcDayStart(now = new Date()) {
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-}
-
 /**
  * Reserves quota under a locked per-org/day ledger. This prevents two API or
  * scheduler processes from both passing a read-only quota check.
@@ -106,6 +99,7 @@ function utcDayStart(now = new Date()) {
 export async function reserveCampaignQuota(
   organizationId: string,
   campaignId: string,
+  runVersion: number,
   recipientCount: number,
   category = 'MARKETING'
 ) {
@@ -122,7 +116,20 @@ export async function reserveCampaignQuota(
     await tx.$queryRaw`SELECT id FROM campaign_quota_ledgers WHERE id = ${ledger.id} FOR UPDATE`;
     const lockedLedger = await tx.campaignQuotaLedger.findUniqueOrThrow({ where: { id: ledger.id } });
     const existing = await tx.campaignQuotaReservation.findUnique({ where: { campaignId } });
-    if (existing?.status === 'ACTIVE') return existing;
+    if (existing?.status === 'ACTIVE') {
+      if (!ownsCampaignQuotaReservation(existing.runVersion, runVersion)) {
+        const current = await tx.campaign.findFirst({
+          where: { id: campaignId, runVersion },
+          select: { id: true },
+        });
+        if (!current) throw new AppError(409, 'Campaign already has an active reservation for another run');
+        return tx.campaignQuotaReservation.update({
+          where: { id: existing.id },
+          data: { runVersion },
+        });
+      }
+      return existing;
+    }
 
     const sentToday = await tx.campaignRecipient.count({
       where: {
@@ -157,15 +164,27 @@ export async function reserveCampaignQuota(
     });
     if (updated.count !== 1) throw new AppError(409, 'Campaign quota changed; try again');
     return tx.campaignQuotaReservation.create({
-      data: { id: randomUUID(), campaignId, organizationId, ledgerId: ledger.id, sendCount: recipientCount, budgetCents },
+      data: {
+        id: randomUUID(),
+        campaignId,
+        runVersion,
+        organizationId,
+        ledgerId: ledger.id,
+        sendCount: recipientCount,
+        budgetCents,
+      },
     });
   });
 }
 
-export async function releaseCampaignQuota(campaignId: string) {
+export async function releaseCampaignQuota(campaignId: string, runVersion: number) {
   return prisma.$transaction(async (tx) => {
     const reservation = await tx.campaignQuotaReservation.findUnique({ where: { campaignId } });
-    if (!reservation || reservation.status !== 'ACTIVE') return false;
+    if (
+      !reservation ||
+      reservation.status !== 'ACTIVE' ||
+      !ownsCampaignQuotaReservation(reservation.runVersion, runVersion)
+    ) return false;
     await tx.$queryRaw`SELECT id FROM campaign_quota_ledgers WHERE id = ${reservation.ledgerId} FOR UPDATE`;
     const updated = await tx.campaignQuotaReservation.updateMany({
       where: { id: reservation.id, status: 'ACTIVE' },

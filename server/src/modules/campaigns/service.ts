@@ -19,11 +19,74 @@ import type {
 } from './types';
 import { dedupeRecipients, hasAuditableCampaignConsent, type ResolvedRecipient } from './recipients';
 import type { Campaign, CampaignRecipient, CampaignStatus, Prisma } from '@prisma/client';
-import { CAMPAIGN_CLAIM_LEASE_MS } from './safety';
+import {
+  CAMPAIGN_CLAIM_LEASE_MS,
+  canFinalizeCampaignRun,
+  campaignCounterSnapshot,
+  shouldReleaseCampaignQuota,
+} from './safety';
 import { getRedis } from '../../config/redis';
 
 const EDITABLE_STATUSES: CampaignStatus[] = ['DRAFT', 'SCHEDULED'];
 const STUCK_RUNNING_MS = 6 * 60 * 60 * 1000;
+const PAUSE_RECLAIM_MESSAGE = 'Campaign paused before provider send';
+
+export async function reconcileCampaignCounters(campaignId: string) {
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM campaigns WHERE id = ${campaignId} FOR UPDATE`;
+    const recipients = await tx.campaignRecipient.findMany({
+      where: { campaignId },
+      select: { status: true },
+    });
+    const counters = campaignCounterSnapshot(recipients.map((recipient) => recipient.status));
+    await tx.campaign.update({ where: { id: campaignId }, data: counters });
+    return counters;
+  });
+}
+
+async function transitionRecipientsForStop(
+  tx: Prisma.TransactionClient,
+  campaignId: string,
+  reason: 'paused' | 'cancelled'
+) {
+  const safe = await tx.campaignRecipient.updateMany({
+    where: { campaignId, status: 'PENDING', claimToken: null, providerCallStartedAt: null },
+    data: { status: 'FAILED', errorMessage: reason === 'paused' ? PAUSE_RECLAIM_MESSAGE : 'Campaign cancelled' },
+  });
+  const safeClaims = await tx.campaignRecipient.updateMany({
+    where: { campaignId, status: 'PENDING', claimToken: { not: null }, providerCallStartedAt: null },
+    data: {
+      status: 'FAILED',
+      errorMessage: reason === 'paused' ? PAUSE_RECLAIM_MESSAGE : 'Campaign cancelled before provider send',
+      claimToken: null,
+      claimedAt: null,
+    },
+  });
+  const ambiguous = await tx.campaignRecipient.updateMany({
+    where: {
+      campaignId,
+      status: 'PENDING',
+      OR: [{ claimToken: { not: null } }, { providerCallStartedAt: { not: null } }],
+    },
+    data: {
+      status: 'AMBIGUOUS',
+      errorMessage: `Provider boundary crossed before campaign ${reason}; reconcile with Meta`,
+      claimToken: null,
+      claimedAt: null,
+    },
+  });
+  const unresolved = await tx.campaignRecipient.count({
+    where: {
+      campaignId,
+      OR: [
+        { status: 'AMBIGUOUS' },
+        { claimToken: { not: null } },
+        { providerCallStartedAt: { not: null } },
+      ],
+    },
+  });
+  return { failed: safe.count + safeClaims.count, ambiguous: Math.max(ambiguous.count, unresolved) };
+}
 
 export type { ResolvedRecipient };
 export { dedupeRecipients };
@@ -108,8 +171,26 @@ async function recoverStuckCampaign(campaignId: string, updatedAt: Date) {
   const pending = await prisma.campaignRecipient.count({ where: { campaignId, status: 'PENDING' } });
   if (pending === 0) return;
 
+  const providerBound = await prisma.campaignRecipient.updateMany({
+    where: {
+      campaignId,
+      status: 'PENDING',
+      OR: [{ claimToken: { not: null } }, { providerCallStartedAt: { not: null } }],
+    },
+    data: {
+      status: 'AMBIGUOUS',
+      errorMessage: 'Timed out after provider boundary; reconcile with Meta before retrying',
+      claimToken: null,
+      claimedAt: null,
+    },
+  });
   const recovered = await prisma.campaignRecipient.updateMany({
-    where: { campaignId, status: 'PENDING' },
+    where: {
+      campaignId,
+      status: 'PENDING',
+      claimToken: null,
+      providerCallStartedAt: null,
+    },
     data: {
       status: 'FAILED',
       errorMessage: 'Timed out — batch job did not complete',
@@ -122,6 +203,7 @@ async function recoverStuckCampaign(campaignId: string, updatedAt: Date) {
       data: { failedCount: { increment: recovered.count } },
     });
   }
+  return recovered.count + providerBound.count;
 }
 
 /** Expired claims are ambiguous: Meta may have accepted the request before a crash. */
@@ -144,25 +226,37 @@ export async function recoverExpiredCampaignClaims(campaignId: string, now = new
   return recovered.count;
 }
 
-export async function finalizeCampaignIfDone(campaignId: string) {
-  const campaign = await prisma.campaign.findUnique({
-    where: { id: campaignId },
-    include: { recipients: true },
+export async function finalizeCampaignIfDone(campaignId: string, expectedRunVersion?: number) {
+  const finalized = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM campaigns WHERE id = ${campaignId} FOR UPDATE`;
+    const campaign = await tx.campaign.findUnique({
+      where: { id: campaignId },
+      include: { recipients: true },
+    });
+
+    if (!campaign) {
+      return null;
+    }
+
+    const pending = campaign.recipients.filter((r) => r.status === 'PENDING').length;
+    const ambiguous = campaign.recipients.filter((r) => r.status === 'AMBIGUOUS').length;
+    const runVersion = expectedRunVersion ?? campaign.runVersion;
+    if (!canFinalizeCampaignRun(campaign.status, campaign.runVersion, runVersion, pending, ambiguous)) {
+      return null;
+    }
+
+    const allFailed = campaign.failedCount >= campaign.totalContacts;
+    const status: CampaignStatus = allFailed ? 'FAILED' : 'COMPLETED';
+    const updated = await tx.campaign.updateMany({
+      where: { id: campaignId, status: campaign.status, runVersion: campaign.runVersion },
+      data: { status, pausedAt: null },
+    });
+    if (updated.count !== 1) return null;
+    return { campaign, status, runVersion };
   });
 
-  if (!campaign || !['RUNNING', 'PAUSED'].includes(campaign.status)) return;
-
-  const pending = campaign.recipients.filter((r) => r.status === 'PENDING').length;
-  const ambiguous = campaign.recipients.filter((r) => r.status === 'AMBIGUOUS').length;
-  if (pending > 0 || ambiguous > 0) return;
-
-  const allFailed = campaign.failedCount >= campaign.totalContacts;
-  const status: CampaignStatus = allFailed ? 'FAILED' : 'COMPLETED';
-
-  await prisma.campaign.update({
-    where: { id: campaignId },
-    data: { status, pausedAt: null },
-  });
+  if (!finalized) return;
+  const { campaign, status, runVersion } = finalized;
 
   emitToOrg(campaign.organizationId, 'campaign:status', { campaignId, status });
 
@@ -180,7 +274,7 @@ export async function finalizeCampaignIfDone(campaignId: string) {
       });
     }
   }
-  await releaseCampaignQuota(campaignId);
+  await releaseCampaignQuota(campaignId, runVersion);
 }
 
 export async function syncCampaignRecipientFromWebhook(
@@ -351,8 +445,6 @@ export async function queueCampaignSend(
   const templateLanguage = campaign.templateLanguage || template.language || 'en_US';
   const templateParams = (campaign.templateParams as TemplateParams | null) || undefined;
   const templateContent = applyTemplateParamsToPreview(template, templateParams, campaign.templateName);
-  await reserveCampaignQuota(campaign.organizationId, campaign.id, campaign.recipients.length, 'MARKETING');
-
   const claimedRun = claimedRunVersion === undefined
     ? await prisma.campaign.updateMany({
         where: { id: campaign.id, status: { in: ['DRAFT', 'SCHEDULED'] } },
@@ -371,11 +463,25 @@ export async function queueCampaignSend(
       })
     : { count: 1 };
   if (claimedRun.count !== 1) {
-    await releaseCampaignQuota(campaign.id);
     throw new AppError(409, 'Campaign changed while it was being queued; try again');
   }
   const run = await prisma.campaign.findUnique({ where: { id: campaign.id }, select: { runVersion: true } });
   if (!run) throw new AppError(404, 'Campaign not found');
+  try {
+    await reserveCampaignQuota(
+      campaign.organizationId,
+      campaign.id,
+      run.runVersion,
+      campaign.recipients.length,
+      'MARKETING'
+    );
+  } catch (err) {
+    await prisma.campaign.updateMany({
+      where: { id: campaign.id, status: 'RUNNING', runVersion: run.runVersion },
+      data: { status: claimedRunVersion === undefined ? campaign.status : 'FAILED' },
+    });
+    throw err;
+  }
 
   await prisma.campaign.update({
     where: { id: campaign.id },
@@ -392,6 +498,7 @@ export async function queueCampaignSend(
       metaMessageId: null,
       claimToken: null,
       claimedAt: null,
+      providerCallStartedAt: null,
       errorMessage: null,
       sentAt: null,
       deliveredAt: null,
@@ -399,7 +506,11 @@ export async function queueCampaignSend(
     },
   });
   if (reset.count !== campaign.recipients.length) {
-    await releaseCampaignQuota(campaign.id);
+    await releaseCampaignQuota(campaign.id, run.runVersion);
+    await prisma.campaign.updateMany({
+      where: { id: campaign.id, status: 'RUNNING', runVersion: run.runVersion },
+      data: { status: 'FAILED' },
+    });
     throw new AppError(409, 'Campaign changed before recipients could be queued');
   }
 
@@ -438,7 +549,7 @@ export async function queueCampaignSend(
     );
     }
   } catch (err) {
-    await releaseCampaignQuota(campaign.id);
+    await releaseCampaignQuota(campaign.id, run.runVersion);
     await prisma.campaign.updateMany({
       where: { id: campaign.id, status: 'RUNNING', runVersion: run.runVersion },
       data: { status: 'FAILED' },
@@ -509,11 +620,19 @@ export async function pauseCampaign(campaignId: string, orgId: string, userId?: 
   if (!campaign) throw new AppError(404, 'Campaign not found');
   if (campaign.status !== 'RUNNING') throw new AppError(400, 'Only running campaigns can be paused');
 
-  const updated = await prisma.campaign.updateMany({
-    where: { id: campaignId, organizationId: orgId, status: 'RUNNING' },
-    data: { status: 'PAUSED', pausedAt: new Date(), runVersion: { increment: 1 } },
+  await prisma.$transaction(async (tx) => {
+    const updated = await tx.campaign.updateMany({
+      where: { id: campaignId, organizationId: orgId, status: 'RUNNING', runVersion: campaign.runVersion },
+      data: { status: 'PAUSED', pausedAt: new Date(), runVersion: { increment: 1 } },
+    });
+    if (updated.count !== 1) throw new AppError(409, 'Campaign changed before it could be paused');
+    const stopped = await transitionRecipientsForStop(tx, campaignId, 'paused');
+    await tx.campaign.update({
+      where: { id: campaignId },
+      data: { failedCount: { increment: stopped.failed } },
+    });
   });
-  if (updated.count !== 1) throw new AppError(409, 'Campaign changed before it could be paused');
+  await reconcileCampaignCounters(campaignId);
 
   await logCampaignAudit(orgId, userId, 'campaign.pause', { campaignId });
   emitToOrg(orgId, 'campaign:status', { campaignId, status: 'PAUSED' });
@@ -525,17 +644,52 @@ export async function resumeCampaign(
 ) {
   if (campaign.status !== 'PAUSED') throw new AppError(400, 'Only paused campaigns can be resumed');
 
+  await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM campaigns WHERE id = ${campaign.id} FOR UPDATE`;
+    const current = await tx.campaign.findFirst({
+      where: { id: campaign.id, status: 'PAUSED', runVersion: campaign.runVersion },
+      select: { id: true },
+    });
+    if (!current) throw new AppError(409, 'Campaign changed before it could be resumed');
+    const reclaimed = await tx.campaignRecipient.updateMany({
+      where: {
+        campaignId: campaign.id,
+        status: 'FAILED',
+        errorMessage: PAUSE_RECLAIM_MESSAGE,
+        claimToken: null,
+        providerCallStartedAt: null,
+      },
+      data: {
+        status: 'PENDING',
+        errorMessage: null,
+        providerCallStartedAt: null,
+        retryCount: { increment: 1 },
+      },
+    });
+    if (reclaimed.count) {
+      await tx.campaign.update({
+        where: { id: campaign.id },
+        data: { failedCount: { decrement: reclaimed.count } },
+      });
+    }
+    const updated = await tx.campaign.updateMany({
+      where: { id: campaign.id, status: 'PAUSED', runVersion: campaign.runVersion },
+      data: { status: 'RUNNING', pausedAt: null, runVersion: { increment: 1 } },
+    });
+    if (updated.count !== 1) throw new AppError(409, 'Campaign changed before it could be resumed');
+  });
+  const current = await prisma.campaign.findUnique({
+    where: { id: campaign.id },
+    include: { recipients: true },
+  });
+  if (!current) throw new AppError(404, 'Campaign not found');
+  campaign = current;
   const pending = campaign.recipients.filter((r) => r.status === 'PENDING');
   if (!pending.length) {
     await finalizeCampaignIfDone(campaign.id);
     throw new AppError(400, 'No pending recipients to resume');
   }
 
-  const updated = await prisma.campaign.updateMany({
-    where: { id: campaign.id, status: 'PAUSED' },
-    data: { status: 'RUNNING', pausedAt: null, runVersion: { increment: 1 } },
-  });
-  if (updated.count !== 1) throw new AppError(409, 'Campaign changed before it could be resumed');
   const resumedRun = await prisma.campaign.findUnique({ where: { id: campaign.id }, select: { runVersion: true } });
   if (!resumedRun) throw new AppError(404, 'Campaign not found');
 
@@ -600,15 +754,13 @@ export async function cancelCampaign(campaignId: string, orgId: string, userId?:
   }
 
   const result = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM campaigns WHERE id = ${campaignId} FOR UPDATE`;
     const current = await tx.campaign.findFirst({
       where: { id: campaignId, organizationId: orgId, status: { in: ['RUNNING', 'PAUSED', 'SCHEDULED'] } },
       select: { id: true },
     });
-    if (!current) return 0;
-    const pending = await tx.campaignRecipient.updateMany({
-      where: { campaignId, status: 'PENDING', claimToken: null },
-      data: { status: 'FAILED', errorMessage: 'Campaign cancelled' },
-    });
+    if (!current) return null;
+    const stopped = await transitionRecipientsForStop(tx, campaignId, 'cancelled');
     await tx.campaign.update({
       where: { id: campaignId },
       data: {
@@ -616,14 +768,17 @@ export async function cancelCampaign(campaignId: string, orgId: string, userId?:
         runVersion: { increment: 1 },
         cancelledAt: new Date(),
         pausedAt: null,
-        failedCount: { increment: pending.count },
+        failedCount: { increment: stopped.failed },
       },
     });
-    return 1;
+    return { ambiguous: stopped.ambiguous };
   });
   if (!result) throw new AppError(409, 'Campaign has already changed or reached a terminal state');
 
-  await releaseCampaignQuota(campaignId);
+  // Keep quota reserved while AMBIGUOUS rows may represent accepted provider
+  // sends; releasing would allow unsafe duplicate use before Meta reconciliation.
+  if (shouldReleaseCampaignQuota(result.ambiguous)) await releaseCampaignQuota(campaignId, campaign.runVersion);
+  await reconcileCampaignCounters(campaignId);
   await logCampaignAudit(orgId, userId, 'campaign.cancel', { campaignId });
   emitToOrg(orgId, 'campaign:status', { campaignId, status: 'CANCELLED' });
 }
@@ -655,7 +810,6 @@ export async function retryFailedRecipients(
   const templateLanguage = campaign.templateLanguage || template.language || 'en_US';
   const templateParams = (campaign.templateParams as TemplateParams | null) || undefined;
   const templateContent = applyTemplateParamsToPreview(template, templateParams, campaign.templateName);
-  await reserveCampaignQuota(campaign.organizationId, campaign.id, failed.length, 'MARKETING');
   const retryRun = await prisma.campaign.updateMany({
     where: { id: campaign.id, status: { in: ['FAILED', 'COMPLETED', 'PAUSED'] } },
     data: {
@@ -666,13 +820,26 @@ export async function retryFailedRecipients(
     },
   });
   if (retryRun.count !== 1) {
-    await releaseCampaignQuota(campaign.id);
     throw new AppError(409, 'Campaign changed before retry could start');
   }
   const retryVersion = await prisma.campaign.findUnique({ where: { id: campaign.id }, select: { runVersion: true } });
   if (!retryVersion) {
-    await releaseCampaignQuota(campaign.id);
     throw new AppError(404, 'Campaign not found');
+  }
+  try {
+    await reserveCampaignQuota(
+      campaign.organizationId,
+      campaign.id,
+      retryVersion.runVersion,
+      failed.length,
+      'MARKETING'
+    );
+  } catch (err) {
+    await prisma.campaign.updateMany({
+      where: { id: campaign.id, status: 'RUNNING', runVersion: retryVersion.runVersion },
+      data: { status: campaign.status },
+    });
+    throw err;
   }
 
   const reset = await prisma.campaignRecipient.updateMany({
@@ -683,6 +850,7 @@ export async function retryFailedRecipients(
       metaMessageId: null,
       claimToken: null,
       claimedAt: null,
+      providerCallStartedAt: null,
       sentAt: null,
       deliveredAt: null,
       readAt: null,
@@ -690,7 +858,7 @@ export async function retryFailedRecipients(
     },
   });
   if (reset.count !== failed.length) {
-    await releaseCampaignQuota(campaign.id);
+    await releaseCampaignQuota(campaign.id, retryVersion.runVersion);
     throw new AppError(409, 'Recipients changed before retry could start');
   }
 
@@ -725,7 +893,7 @@ export async function retryFailedRecipients(
     );
     }
   } catch (err) {
-    await releaseCampaignQuota(campaign.id);
+    await releaseCampaignQuota(campaign.id, retryVersion.runVersion);
     await prisma.campaign.updateMany({
       where: { id: campaign.id, status: 'RUNNING', runVersion: retryVersion.runVersion },
       data: { status: 'FAILED' },
@@ -896,7 +1064,7 @@ export async function processScheduledCampaigns(organizationId?: string) {
           where: { id: campaign.id, status: 'RUNNING', runVersion: campaign.runVersion },
           data: { status: 'FAILED' },
         });
-        await releaseCampaignQuota(campaign.id);
+        await releaseCampaignQuota(campaign.id, campaign.runVersion);
         await logCampaignAudit(campaign.organizationId, undefined, 'campaign.scheduled_send_failed', {
           campaignId: campaign.id,
           error: err instanceof Error ? err.message : String(err),

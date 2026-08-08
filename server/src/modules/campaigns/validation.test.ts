@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { dedupeRecipients, hasAuditableCampaignConsent } from './recipients';
 import { buildTemplateComponents, mergeTemplateParams } from './template-params';
+import { createCampaignSchema } from './types';
+import { isAbsoluteInstant } from './safety';
 
 describe('dedupeRecipients', () => {
   it('removes duplicate phone numbers keeping first occurrence', () => {
@@ -31,6 +33,14 @@ describe('campaign consent', () => {
         optOutAt: new Date(),
       })
     ).toBe(false);
+  });
+
+  it('rejects non-UTC scheduledAt values at the route payload schema boundary', () => {
+    const base = { name: 'Launch', templateName: 'approved_template' };
+    expect(() => createCampaignSchema.parse({ ...base, scheduledAt: '2026-08-09T12:00:00+05:30' })).toThrow();
+    expect(() => createCampaignSchema.parse({ ...base, scheduledAt: '2026-08-09T12:00:00' })).toThrow();
+    expect(isAbsoluteInstant('2026-02-31T12:00:00.000Z')).toBe(false);
+    expect(() => createCampaignSchema.parse({ ...base, scheduledAt: '2026-08-09T12:00:00.000Z' })).not.toThrow();
   });
 });
 

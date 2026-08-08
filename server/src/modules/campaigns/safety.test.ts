@@ -1,13 +1,29 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildConsentSnapshot,
+  canFinalizeCampaignRun,
+  campaignCounterSnapshot,
   canRetryCampaignRecipient,
+  classifyClaimForStop,
+  classifyClaimForRecovery,
+  classifyProviderError,
   fitsReservedQuota,
+  hasUnresolvedProviderBoundary,
   isAbsoluteInstant,
   isClaimLeaseExpired,
+  ownsCampaignQuotaReservation,
+  shouldReleaseCampaignQuota,
+  stopTransition,
+  utcDayStart,
 } from './safety';
 
 describe('campaign safety boundaries', () => {
+  it('uses the same UTC day start on both sides of midnight', () => {
+    expect(utcDayStart(new Date('2026-08-08T23:59:59.999Z')).toISOString()).toBe('2026-08-08T00:00:00.000Z');
+    expect(utcDayStart(new Date('2026-08-09T00:00:00.000Z')).toISOString()).toBe('2026-08-09T00:00:00.000Z');
+    expect(utcDayStart(new Date('2026-08-09T00:00:00.001Z')).toISOString()).toBe('2026-08-09T00:00:00.000Z');
+  });
+
   it('expires a claimed lease deterministically', () => {
     const now = new Date('2026-08-09T00:00:00.000Z');
     expect(isClaimLeaseExpired(new Date('2026-08-08T23:45:00.001Z'), now, 15 * 60 * 1000)).toBe(false);
@@ -18,6 +34,7 @@ describe('campaign safety boundaries', () => {
     expect(isAbsoluteInstant('2026-08-09T12:00:00.000Z')).toBe(true);
     expect(isAbsoluteInstant('2026-08-09T12:00:00+05:30')).toBe(false);
     expect(isAbsoluteInstant('2026-08-09T12:00:00')).toBe(false);
+    expect(isAbsoluteInstant('not-a-date')).toBe(false);
   });
 
   it('captures business, policy, provenance, opt-out, and typed decision data', () => {
@@ -67,5 +84,68 @@ describe('campaign safety boundaries', () => {
     expect(fitsReservedQuota(base)).toBe(true);
     expect(fitsReservedQuota({ ...base, reservedBudgetCents: 2501 })).toBe(false);
     expect(fitsReservedQuota({ ...base, requestedSendCount: 11 })).toBe(false);
+  });
+
+  // Pure transition coverage is intentional; live Prisma concurrency integration remains pending.
+  it('keeps stop transitions and quota conservative at the provider boundary', () => {
+    expect(classifyClaimForStop(null)).toBe('FAILED');
+    expect(classifyClaimForStop(new Date())).toBe('AMBIGUOUS');
+    expect(shouldReleaseCampaignQuota(0)).toBe(true);
+    expect(shouldReleaseCampaignQuota(1)).toBe(false);
+    expect(stopTransition('PENDING', false, 'cancelled')).toBe('FAILED');
+    expect(stopTransition('PENDING', true, 'cancelled')).toBe('AMBIGUOUS');
+    expect(stopTransition('AMBIGUOUS', false, 'cancelled')).toBe('AMBIGUOUS');
+    expect(hasUnresolvedProviderBoundary([
+      { status: 'FAILED' },
+      { status: 'AMBIGUOUS' },
+    ])).toBe(true);
+    expect(hasUnresolvedProviderBoundary([
+      { status: 'FAILED' },
+      { status: 'PENDING', providerCallStartedAt: new Date() },
+    ])).toBe(true);
+  });
+
+  it('prevents a concurrent loser from releasing the winner reservation', () => {
+    expect(ownsCampaignQuotaReservation(12, 12)).toBe(true);
+    expect(ownsCampaignQuotaReservation(11, 12)).toBe(false);
+    expect(ownsCampaignQuotaReservation(12, 11)).toBe(false);
+  });
+
+  it('rejects stale finalization after a newer run starts', () => {
+    expect(canFinalizeCampaignRun('RUNNING', 8, 7, 0, 0)).toBe(false);
+    expect(canFinalizeCampaignRun('RUNNING', 8, 8, 0, 0)).toBe(true);
+    expect(canFinalizeCampaignRun('RUNNING', 8, 8, 1, 0)).toBe(false);
+  });
+
+  it('never recovers provider-bound claims as ordinary retryable failures', () => {
+    expect(classifyClaimForRecovery({ claimToken: 'claim-1' })).toBe('AMBIGUOUS');
+    expect(classifyClaimForRecovery({ providerCallStartedAt: new Date() })).toBe('AMBIGUOUS');
+    expect(classifyClaimForRecovery({ claimToken: null, providerCallStartedAt: null })).toBe('FAILED');
+  });
+
+  it('classifies permanent Meta rejection separately from unknown provider outcomes', () => {
+    const permanent = classifyProviderError(Object.assign(new Error('Template rejected'), {
+      metaCode: 132000,
+      metaSubcode: 42,
+      fbtraceId: 'trace-1',
+    }));
+    expect(permanent.classification).toBe('PERMANENT_REJECTION');
+    expect(permanent.metadata).toMatchObject({ provider: 'meta', metaSubcode: 42, fbtraceId: 'trace-1' });
+    expect(classifyProviderError(new Error('socket reset')).classification).toBe('UNKNOWN');
+    expect(classifyProviderError(Object.assign(new Error('rate limited'), { statusCode: 429 })).classification)
+      .toBe('TRANSIENT_PROVIDER_ERROR');
+    expect(classifyProviderError(Object.assign(new Error('upstream failure'), { status: 503 })).classification)
+      .toBe('TRANSIENT_PROVIDER_ERROR');
+    expect(classifyProviderError(Object.assign(new Error('bad request'), { statusCode: 400 })).classification)
+      .toBe('PERMANENT_REJECTION');
+  });
+
+  it('reconciles counters from recipient statuses', () => {
+    expect(campaignCounterSnapshot(['SENT', 'DELIVERED', 'READ', 'FAILED', 'AMBIGUOUS'])).toEqual({
+      sentCount: 3,
+      deliveredCount: 2,
+      readCount: 1,
+      failedCount: 1,
+    });
   });
 });

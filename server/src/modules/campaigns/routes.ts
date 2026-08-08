@@ -30,6 +30,7 @@ import {
   type AudienceType,
 } from './types';
 import { resolveActiveWhatsappNumber } from '../whatsapp/active-number';
+import { isAbsoluteInstant } from './safety';
 
 const router = Router();
 const adminGuard = [authenticateJwtOrApiKey, requireOrg, resolveActiveWhatsappNumber, loadOrgRole, requireOrgRole('OWNER', 'ADMIN')];
@@ -54,7 +55,7 @@ async function validateCampaignNumber(
 
 function validateCampaignTimezone(timezone: string | undefined, scheduledAt: string | null | undefined) {
   // scheduledAt is an absolute UTC instant; timezone is only display/wall-clock metadata.
-  if (scheduledAt && Number.isNaN(new Date(scheduledAt).getTime())) {
+  if (scheduledAt && !isAbsoluteInstant(scheduledAt)) {
     throw new AppError(400, 'scheduledAt must be a valid UTC ISO instant');
   }
   if (timezone) {
