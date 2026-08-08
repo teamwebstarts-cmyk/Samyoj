@@ -7,7 +7,6 @@ import { MetaCallingService } from './meta-calling.service';
 import { SarvamStreamTranscriber, isSarvamSttConfigured } from './sarvam.stt';
 import { synthesizeSpeechSarvam, isSarvamTtsConfigured } from './sarvam.tts';
 import { WhatsAppWebRtcBridge } from './webrtc-bridge';
-import { handleLiveTransfer } from './call.processor';
 import { publishCallEventMessage } from './call-event-message';
 import type { ActiveCallContext, TranscriptEntry } from './types';
 import type { ToolCallResult } from '../ai/sarvam-chat.service';
@@ -241,6 +240,15 @@ export class AiVoiceCallSession {
         callId: this.ctx.callId,
         error: err instanceof Error ? err.message : String(err),
       });
+      try {
+        await this.speak(
+          "Sorry, I'm having trouble right now. Please try messaging us on WhatsApp.",
+          'assistant'
+        );
+      } catch {
+        // Speak may also fail if media is broken — still end below.
+      }
+      await this.end('voice_error');
     } finally {
       this.processing = false;
     }
@@ -293,11 +301,84 @@ export class AiVoiceCallSession {
 
       case 'schedule_callback': {
         const when = (tool.arguments.when as string) || 'as soon as possible';
+        const reason =
+          typeof tool.arguments.reason === 'string' ? tool.arguments.reason : undefined;
+
+        try {
+          const ticket = await prisma.ticket.create({
+            data: {
+              organizationId: this.ctx.organizationId,
+              conversationId: this.ctx.conversationId,
+              contactId: this.ctx.contactId,
+              title: `Callback requested: ${when}`,
+              category: 'callback',
+              priority: 'HIGH',
+              status: 'OPEN',
+            },
+          });
+
+          const noteAuthor = await prisma.organizationUser.findFirst({
+            where: {
+              organizationId: this.ctx.organizationId,
+              role: { in: ['OWNER', 'ADMIN'] },
+            },
+            orderBy: { role: 'asc' },
+            select: { userId: true },
+          });
+          if (noteAuthor) {
+            await prisma.internalNote.create({
+              data: {
+                conversationId: this.ctx.conversationId,
+                userId: noteAuthor.userId,
+                content: [
+                  'Callback requested via AI voice agent.',
+                  `When: ${when}`,
+                  reason ? `Reason: ${reason}` : null,
+                  `Ticket: ${ticket.id}`,
+                  `Call: ${this.ctx.callId}`,
+                ]
+                  .filter(Boolean)
+                  .join('\n'),
+              },
+            });
+          }
+
+          emitToOrg(this.ctx.organizationId, 'call:callback_requested', {
+            callId: this.ctx.callId,
+            conversationId: this.ctx.conversationId,
+            contactId: this.ctx.contactId,
+            ticketId: ticket.id,
+            when,
+            reason: reason || undefined,
+          });
+
+          log.info('Scheduled callback task created', {
+            callId: this.ctx.callId,
+            ticketId: ticket.id,
+            when,
+          });
+        } catch (err) {
+          log.error('Failed to persist schedule_callback task', {
+            callId: this.ctx.callId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+          emitToOrg(this.ctx.organizationId, 'call:callback_requested', {
+            callId: this.ctx.callId,
+            conversationId: this.ctx.conversationId,
+            contactId: this.ctx.contactId,
+            when,
+            reason: reason || undefined,
+          });
+        }
+
         await this.speak(
           `I've noted your request. Someone from our team will call you ${when}. They'll also message you here on WhatsApp.`,
           'assistant'
         );
-        await this.performHandoffAndTransfer('SCHEDULE_CALLBACK', `Schedule callback: ${when}`);
+        await this.performHandoffAndTransfer(
+          'SCHEDULE_CALLBACK',
+          `Schedule callback: ${when}${reason ? ` — ${reason}` : ''}`
+        );
         await this.end('scheduled_callback');
         break;
       }
@@ -331,12 +412,13 @@ export class AiVoiceCallSession {
   }
 
   /**
-   * Perform handoff (assign agent) then optionally trigger cold live transfer.
+   * Perform handoff (assign agent) then end call (message-only path).
+   * Live voice transfer is disabled until media works — never call handleLiveTransfer.
    */
   private async performHandoffAndTransfer(
     reason: string,
-    detail: string,
-    opts?: { preferTeam?: string }
+    _detail: string,
+    _opts?: { preferTeam?: string }
   ): Promise<void> {
     const handoff = await performHandoff(
       this.ctx.organizationId,
@@ -351,40 +433,6 @@ export class AiVoiceCallSession {
       });
     }
 
-    // Check if live transfer is enabled in settings
-    try {
-      const { getOrgCallingSettings } = await import('./settings.service');
-      const settings = await getOrgCallingSettings(this.ctx.organizationId);
-      const liveTransferEnabled = settings.liveTransferEnabled === true;
-      const transferLive = settings.transferMode === 'live';
-
-      if (liveTransferEnabled && transferLive && this.bridge && !this.ended) {
-        // Try cold live transfer — keep bridge alive, ring agents on same Meta call
-        await handleLiveTransfer({
-          orgId: this.ctx.organizationId,
-          callRecord: { id: this.ctx.callId, metaCallId: this.ctx.metaCallId },
-          conversation: { id: this.ctx.conversationId },
-          contact: { id: this.ctx.contactId },
-          phoneNumberId: this.ctx.phoneNumberId,
-          whatsappNumberId: this.ctx.whatsappNumberId,
-          accessToken: this.ctx.accessToken,
-          fromPhone: this.ctx.fromPhone,
-          toPhone: this.ctx.toPhone,
-          direction: this.ctx.direction,
-          reason: detail,
-          transcriptSummary: this.transcript.slice(-5).map((t) => `${t.role}: ${t.text}`).join('\n'),
-          botId: this.ctx.aiBotId ?? '',
-          ttsVoice: this.ctx.ttsVoice,
-          ttsLanguage: this.ctx.ttsLanguage,
-          preferTeam: opts?.preferTeam,
-        });
-        return; // handleLiveTransfer will resume or end the call
-      }
-    } catch {
-      // Live transfer not available — fall through to end with message
-    }
-
-    // Fallback: end call with handoff message
     await this.end('handoff');
   }
 

@@ -497,6 +497,7 @@ model WhatsappNumber {
   calls         Call[]
   campaigns     Campaign[]
 
+  @@unique([phoneNumberId])
   @@map("whatsapp_numbers")
 }
 

@@ -512,7 +512,7 @@ export default function CallsPage() {
   const missedCount = analytics?.missed ?? 0;
 
   return (
-    <PageShell className="space-y-3 sm:space-y-4">
+    <PageShell inbox>
       {setupSheetOpen && (
         <CallsSetupSheet
           whatsappConnected={Boolean(status?.whatsappConnected)}
@@ -525,7 +525,8 @@ export default function CallsPage() {
         />
       )}
 
-      <div className="inbox-shell relative flex h-[min(720px,calc(100dvh-160px))] min-h-[min(520px,calc(100dvh-140px))] flex-row overflow-hidden rounded-2xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-950 sm:h-[min(680px,calc(100dvh-200px))] sm:min-h-[420px]">
+      <div className="flex h-full min-h-0 flex-1 overflow-hidden">
+        <div className="inbox-shell relative flex h-full min-h-0 w-full flex-1 flex-row overflow-hidden md:rounded-2xl">
         {/* List pane */}
         <div
           className={`relative flex h-full min-h-0 w-full flex-col border-r border-neutral-200 dark:border-neutral-800 md:w-[300px] lg:w-[340px] ${
@@ -666,6 +667,7 @@ export default function CallsPage() {
             active={railPanel === 'help'}
             onClick={() => toggleRail('help')}
           />
+        </div>
         </div>
       </div>
     </PageShell>

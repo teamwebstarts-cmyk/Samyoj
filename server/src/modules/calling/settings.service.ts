@@ -15,7 +15,14 @@ export function mergeCallingSettings(
     aiGreeting: config.calling.aiGreeting,
   };
 
-  if (!stored) return base;
+  if (!stored) {
+    return {
+      ...base,
+      // Cold live transfer media is not production-ready — always message-only.
+      liveTransferEnabled: false,
+      transferMode: 'message_only',
+    };
+  }
 
   return {
     ...base,
@@ -25,6 +32,9 @@ export function mergeCallingSettings(
     missedCallMessage: stored.missedCallMessage?.trim() || base.missedCallMessage,
     recordingConsentMessage:
       stored.recordingConsentMessage?.trim() || base.recordingConsentMessage,
+    // Cold live transfer media is not production-ready — always message-only.
+    liveTransferEnabled: false,
+    transferMode: 'message_only',
   };
 }
 
@@ -37,16 +47,26 @@ export async function getOrgCallingSettings(organizationId: string): Promise<Cal
   return mergeCallingSettings(settings.calling as Partial<CallingSettings>);
 }
 
+export type SaveCallingSettingsResult = {
+  settings: CallingSettings;
+  /** Present when the client attempted to enable live transfer (coerced off). */
+  warning?: string;
+};
+
 export async function saveOrgCallingSettings(
   organizationId: string,
   updates: Partial<CallingSettings>
-): Promise<CallingSettings> {
+): Promise<SaveCallingSettingsResult> {
+  const requestedLive =
+    updates.liveTransferEnabled === true || updates.transferMode === 'live';
+
   const org = await prisma.organization.findUnique({
     where: { id: organizationId },
     select: { settings: true },
   });
   const current = (org?.settings as Record<string, unknown>) || {};
   const existing = mergeCallingSettings(current.calling as Partial<CallingSettings>);
+  // mergeCallingSettings forces liveTransferEnabled: false / transferMode: message_only
   const merged = mergeCallingSettings({ ...existing, ...updates });
 
   await prisma.organization.update({
@@ -59,7 +79,12 @@ export async function saveOrgCallingSettings(
     },
   });
 
-  return merged;
+  return {
+    settings: merged,
+    warning: requestedLive
+      ? 'Live voice transfer coming soon — human handoff stays in Inbox for now.'
+      : undefined,
+  };
 }
 
 export function resolveEffectiveVoiceConfig(settings: CallingSettings) {

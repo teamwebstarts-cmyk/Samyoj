@@ -60,6 +60,15 @@ export async function handleMissedCallFollowUp(params: {
     }
   }
 
+  // Opt-out: skip WhatsApp auto follow-up message (flows above may still handle service cases).
+  if (contact.optedIn === false) {
+    log.info('Missed call WhatsApp follow-up skipped — contact opted out', {
+      callId: params.callId,
+      contactId: params.contactId,
+    });
+    return;
+  }
+
   try {
     await sendDirectMessage(params.organizationId, {
       phone: contact.phone,

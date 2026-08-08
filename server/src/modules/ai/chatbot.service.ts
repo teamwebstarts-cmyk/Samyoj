@@ -26,6 +26,8 @@ const log = createModuleLogger('chatbot');
 
 const FALLBACK_MESSAGE =
   "Sorry, I couldn't help with that. Our team will assist you shortly.";
+const AFTER_HOURS_MESSAGE =
+  "Thanks for your message. We're currently outside business hours and will get back to you soon.";
 const MAX_CONTEXT = 12;
 const MAX_CONTEXT_VOICE = 3;
 
@@ -176,7 +178,14 @@ export async function generateBotReply(
   if (bot.businessHoursOnly && !input.testMode) {
     const hours = await getOrgBusinessHours(input.organizationId);
     if (!isWithinBusinessHours(hours)) {
-      return { reply: null, handoff: false, skipped: true, skipReason: 'outside_business_hours', botId: bot.id, botName: bot.name };
+      return {
+        reply: AFTER_HOURS_MESSAGE,
+        handoff: false,
+        skipped: true,
+        skipReason: 'outside_business_hours',
+        botId: bot.id,
+        botName: bot.name,
+      };
     }
   }
 
@@ -198,7 +207,17 @@ export async function generateBotReply(
   }
 
   if (detectPromptInjection(input.inboundMessage)) {
-    log.warn('Prompt injection attempt detected', { conversationId: input.conversationId, botId: bot.id });
+    log.warn('Prompt injection attempt detected — refusing LLM completion', {
+      conversationId: input.conversationId,
+      botId: bot.id,
+    });
+    return {
+      reply: bot.handoffMessage || "Let me connect you with our team for that.",
+      handoff: true,
+      handoffReason: 'PROMPT_INJECTION',
+      botId: bot.id,
+      botName: bot.name,
+    };
   }
 
   const knowledgeMatches = await searchKnowledgeBase(
@@ -207,6 +226,26 @@ export async function generateBotReply(
     5,
     input.organizationId
   );
+
+  // Trained bot with zero FAQ/KB hits → force handoff (avoid hallucinating past Train data).
+  // Untrained bot (no KB items) may still answer from instructions alone.
+  if (knowledgeMatches.length === 0 && !input.testMode) {
+    const kbCount = await prisma.knowledgeBaseItem.count({ where: { botId: bot.id } });
+    if (kbCount > 0) {
+      log.info('No KB match for trained bot — handing off', {
+        conversationId: input.conversationId,
+        botId: bot.id,
+        kbCount,
+      });
+      return {
+        reply: bot.handoffMessage || "Let me connect you with our team for that.",
+        handoff: true,
+        handoffReason: 'NO_KB_MATCH',
+        botId: bot.id,
+        botName: bot.name,
+      };
+    }
+  }
 
   // In voice, let the model decide via the request_human / schedule_callback tools so the
   // call can be live-transferred or a callback scheduled. Skip the text-based handoff shortcut.
@@ -319,8 +358,8 @@ export async function performHandoff(
   organizationId: string,
   conversationId: string,
   reason: string,
-  /** Optional auth details for sending the handoff summary message. */
-  sendContext?: { phoneNumberId: string; encryptedToken: string; contactPhone: string }
+  /** @deprecated Unused — was used to WhatsApp the customer with the handoff summary (leaked agent context). Kept for caller compat. */
+  _sendContext?: { phoneNumberId: string; encryptedToken: string; contactPhone: string }
 ): Promise<{ assignedAgent?: { id: string; name: string } | null }> {
   const existing = await prisma.conversation.findFirst({
     where: { id: conversationId, organizationId },
@@ -351,22 +390,28 @@ export async function performHandoff(
     },
   });
 
-  // Send a summary message into the chat so the agent sees context immediately.
-  if (summary && sendContext) {
+  // Persist summary as an internal note (never send to customer WhatsApp).
+  if (summary) {
     try {
-      const { MetaWhatsAppService } = await import('../whatsapp/meta.service');
-      const accessToken = MetaWhatsAppService.decryptToken(sendContext.encryptedToken);
-      await MetaWhatsAppService.sendMessage(
-        sendContext.phoneNumberId,
-        accessToken,
-        {
-          to: sendContext.contactPhone,
-          type: 'text',
-          text: { body: `🤖 *AI Handoff Summary*\n\n${summary}` },
-        }
-      );
+      let noteAuthorId = assignedAgent?.id || existing?.assignedAgentId || null;
+      if (!noteAuthorId) {
+        const owner = await prisma.organizationUser.findFirst({
+          where: { organizationId, role: 'OWNER' },
+          select: { userId: true },
+        });
+        noteAuthorId = owner?.userId ?? null;
+      }
+      if (noteAuthorId) {
+        await prisma.internalNote.create({
+          data: {
+            conversationId,
+            userId: noteAuthorId,
+            content: `AI Handoff Summary (${reason}):\n${summary}`,
+          },
+        });
+      }
     } catch (err) {
-      log.warn('Failed to send handoff summary message', {
+      log.warn('Failed to persist handoff summary note', {
         conversationId,
         error: err instanceof Error ? err.message : String(err),
       });
@@ -378,6 +423,7 @@ export async function performHandoff(
     reason,
     assignedAgent,
     botActive: false,
+    summary,
   });
 
   return { assignedAgent };

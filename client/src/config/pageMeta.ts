@@ -103,6 +103,11 @@ export function isInboxRoute(pathname: string): boolean {
   return pathname === '/inbox' || pathname.startsWith('/inbox/');
 }
 
+/** Calls uses the same full-viewport shell card as Inbox — lock main scroll. */
+export function isCallsShellRoute(pathname: string): boolean {
+  return pathname === '/calls' || pathname.startsWith('/calls/');
+}
+
 export function shouldShowMobileBottomNav(pathname: string): boolean {
   return !isBuilderRoute(pathname);
 }

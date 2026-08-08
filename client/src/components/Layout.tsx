@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useBreakpoint } from '../hooks/useBreakpoint';
 import { useInboxUnreadTotal } from '../hooks/useInboxUnreadTotal';
 import { useSidebarCollapsed } from '../hooks/useSidebarCollapsed';
-import { isBuilderRoute, isInboxRoute, shouldShowMobileBottomNav } from '../config/pageMeta';
+import { isBuilderRoute, isInboxRoute, isCallsShellRoute, shouldShowMobileBottomNav } from '../config/pageMeta';
 import AppTopbar from './layout/AppTopbar';
 import Sidebar from './layout/Sidebar';
 import MobileBottomNav from './layout/MobileBottomNav';
@@ -28,7 +28,7 @@ export default function Layout() {
   const effectiveCollapsed = isTablet || collapsed;
   const showBottomNav = isMobile && shouldShowMobileBottomNav(pathname);
   const hideTopbar = isBuilderRoute(pathname);
-  const lockMainScroll = isInboxRoute(pathname);
+  const lockMainScroll = isInboxRoute(pathname) || isCallsShellRoute(pathname);
 
   const handleLogout = () => {
     logout();

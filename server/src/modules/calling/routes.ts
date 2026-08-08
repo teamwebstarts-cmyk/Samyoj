@@ -22,7 +22,6 @@ import { acceptCallWithAgentAnswer, declineCallAsAgent } from './agent-call.serv
 import { getPendingCallByCallId } from './session-store';
 import { clearRingTimeout } from './call.processor';
 import { logTeamAudit } from '../team/audit';
-import { WhatsAppWebRtcBridge } from './webrtc-bridge';
 import { emitToOrg, emitToUser } from '../../realtime';
 import { resolveActiveWhatsappNumber } from '../whatsapp/active-number';
 import { publishCallEventMessage } from './call-event-message';
@@ -81,7 +80,7 @@ const callbackSchema = z.object({
   contactId: z.string().uuid().optional(),
   phone: z.string().optional(),
   conversationId: z.string().uuid().optional(),
-  /** Browser-generated SDP offer for agent outbound calls. */
+  /** Browser-generated SDP offer for agent outbound calls (required at runtime). */
   sdpOffer: z.string().optional(),
 });
 
@@ -278,7 +277,7 @@ router.patch(
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const data = callingSettingsSchema.parse(req.body);
-    const saved = await saveOrgCallingSettings(orgId, data);
+    const { settings: saved, warning } = await saveOrgCallingSettings(orgId, data);
 
     await logTeamAudit({
       organizationId: orgId,
@@ -287,7 +286,7 @@ router.patch(
       metadata: { area: 'calling', updates: Object.keys(data) },
     });
 
-    sendSuccess(res, saved);
+    sendSuccess(res, warning ? { ...saved, warning } : saved);
   })
 );
 
@@ -552,100 +551,88 @@ router.post(
       // If Meta permission API is unavailable, still attempt call — Meta will reject if illegal
     }
 
-    // For agent outbound calls: use the browser's SDP offer instead of creating a
-    // server-side WebRTC bridge. This way the agent's mic/speaker connect directly
-    // to the customer through Meta's media relay.
-    const agentSdpOffer = data.sdpOffer;
-    let bridge: WhatsAppWebRtcBridge | null = null;
-    let sdpOffer: string;
-
-    if (agentSdpOffer) {
-      sdpOffer = agentSdpOffer;
-    } else {
-      bridge = new WhatsAppWebRtcBridge();
-      sdpOffer = await bridge.createOffer();
+    // Agent outbound requires a browser WebRTC SDP offer (mic). Do not create a
+    // server-side WhatsAppWebRtcBridge offer — that path leaves a dead bridge.
+    const sdpOffer = data.sdpOffer?.trim();
+    if (!sdpOffer) {
+      throw new AppError(
+        400,
+        'Microphone WebRTC SDP offer is required to place an outbound call. Allow mic access and retry.',
+        'SDP_OFFER_REQUIRED'
+      );
     }
 
-    try {
+    let conversation = data.conversationId
+      ? await prisma.conversation.findFirst({
+          where: { id: data.conversationId, organizationId: orgId },
+        })
+      : null;
 
-      let conversation = data.conversationId
-        ? await prisma.conversation.findFirst({
-            where: { id: data.conversationId, organizationId: orgId },
-          })
-        : null;
-
-      if (!conversation) {
-        conversation = await prisma.conversation.findFirst({
-          where: { organizationId: orgId, contactId: contact.id },
-          orderBy: { lastMessageAt: 'desc' },
-        });
-      }
-
-      const placeholderMetaCallId = `pending-${randomUUID()}`;
-      const call = await prisma.call.create({
-        data: {
-          organizationId: orgId,
-          contactId: contact.id,
-          conversationId: conversation?.id,
-          whatsappNumberId: number.id,
-          metaCallId: placeholderMetaCallId,
-          direction: 'BUSINESS_INITIATED',
-          status: 'CONNECTING',
-          handler: 'AGENT',
-          assignedAgentId: req.user!.userId,
-          fromPhone: number.phoneNumber,
-          toPhone: contact.phone,
-        },
+    if (!conversation) {
+      conversation = await prisma.conversation.findFirst({
+        where: { organizationId: orgId, contactId: contact.id },
+        orderBy: { lastMessageAt: 'desc' },
       });
+    }
 
-      const metaCallId = await MetaCallingService.initiateOutboundCall(
-        number.phoneNumberId,
-        accessToken,
-        contact.phone,
-        { sdp_type: 'offer', sdp: sdpOffer },
-        call.id
-      );
-
-      const updatedCall =
-        metaCallId === placeholderMetaCallId
-          ? call
-          : await prisma.call.update({
-              where: { id: call.id },
-              data: { metaCallId },
-            });
-
-      await storePendingCall(metaCallId, {
-        callId: updatedCall.id,
-        metaCallId,
+    const placeholderMetaCallId = `pending-${randomUUID()}`;
+    const call = await prisma.call.create({
+      data: {
         organizationId: orgId,
-        conversationId: conversation?.id || updatedCall.conversationId || '',
         contactId: contact.id,
-        phoneNumberId: number.phoneNumberId,
+        conversationId: conversation?.id,
         whatsappNumberId: number.id,
+        metaCallId: placeholderMetaCallId,
+        direction: 'BUSINESS_INITIATED',
+        status: 'CONNECTING',
+        handler: 'AGENT',
+        assignedAgentId: req.user!.userId,
         fromPhone: number.phoneNumber,
         toPhone: contact.phone,
-        direction: 'BUSINESS_INITIATED',
-        sdpOffer,
-        createdAt: new Date().toISOString(),
-      });
+      },
+    });
 
-      // Outbound agent calls: notify the agent's browser that the server bridge is
-      // waiting for the customer's SDP answer. When the connect webhook arrives,
-      // it will emit call:outbound_connected with the answer so the browser can
-      // complete WebRTC setup.
-      emitToOrg(orgId, 'call:updated', { callId: updatedCall.id, status: 'CONNECTING' });
-      emitToUser(req.user!.userId, 'call:outbound_initiated', {
-        callId: updatedCall.id,
-        sdpOffer,
-      });
+    const metaCallId = await MetaCallingService.initiateOutboundCall(
+      number.phoneNumberId,
+      accessToken,
+      contact.phone,
+      { sdp_type: 'offer', sdp: sdpOffer },
+      call.id
+    );
 
-      sendSuccess(res, { call: updatedCall, sdpOffer });
-    } catch (err) {
-      bridge?.close();
-      throw err;
-    }
-    // For AI-initiated outbound calls (no agent SDP), keep the bridge alive.
-    // Agent calls use browser WebRTC — no bridge to keep.
+    const updatedCall =
+      metaCallId === placeholderMetaCallId
+        ? call
+        : await prisma.call.update({
+            where: { id: call.id },
+            data: { metaCallId },
+          });
+
+    await storePendingCall(metaCallId, {
+      callId: updatedCall.id,
+      metaCallId,
+      organizationId: orgId,
+      conversationId: conversation?.id || updatedCall.conversationId || '',
+      contactId: contact.id,
+      phoneNumberId: number.phoneNumberId,
+      whatsappNumberId: number.id,
+      fromPhone: number.phoneNumber,
+      toPhone: contact.phone,
+      direction: 'BUSINESS_INITIATED',
+      sdpOffer,
+      createdAt: new Date().toISOString(),
+    });
+
+    // Outbound agent calls: notify the agent's browser. When the connect webhook
+    // arrives, it will emit call:outbound_connected with the answer so the browser
+    // can complete WebRTC setup.
+    emitToOrg(orgId, 'call:updated', { callId: updatedCall.id, status: 'CONNECTING' });
+    emitToUser(req.user!.userId, 'call:outbound_initiated', {
+      callId: updatedCall.id,
+      sdpOffer,
+    });
+
+    sendSuccess(res, { call: updatedCall, sdpOffer });
   })
 );
 

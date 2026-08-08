@@ -122,11 +122,13 @@ Legend:
 | Bot analytics | DONE | `/api/ai-bot/:id/analytics` | `AiBotAnalyticsPanel` | |
 | Bot versioning | DONE | `AiBotVersion` model | `AiBotAuditPanel` | Restore to any version |
 | Bot audit log | DONE | `AiBotAuditLog` model | `AiBotAuditPanel` | |
-| Guardrails | DONE | `guardrails.ts` | — | Content safety filters |
-| Rate limiting | DONE | `rate-limit.service.ts` | — | Per-conversation rate limit |
-| Handoff to agent | DONE | `handoff.service.ts` | Socket.IO event | |
-| Embeddings (RAG) | DONE | `embeddings.service.ts` | — | Azure OpenAI embeddings |
+| Guardrails | DONE | `guardrails.ts` | — | Injection refuse + outbound filters |
+| Rate limiting | DONE | `rate-limit.service.ts` | — | Per-bot rate limit |
+| Handoff to agent | DONE | `handoff.service.ts` | Socket.IO + Inbox | Summary is agent-internal (not customer WA) |
+| LLM brain | DONE | `sarvam-chat.service.ts` | Settings → AI | Default Sarvam; Azure legacy fallback |
+| Embeddings (RAG) | PARTIAL | `embeddings.service.ts` | — | Azure embeddings only; token fallback if unset |
 | Bot templates | DONE | — | `AiBotTemplatePicker` | Predefined bot configs |
+| Shared voice brain | DONE | `generateBotReply(channel:voice)` | Calls + AiBot Voice tab | Same AiBot Train/Personality |
 
 ---
 
@@ -188,17 +190,21 @@ Legend:
 
 ## 10. VOICE CALLING
 
+> Updated 2026-08-08: Sarvam-only voice I/O + shared AiBot brain. Live media transfer is **not** production-ready.
+
 | Feature | Status | Backend | Frontend | Notes |
 |---------|--------|---------|----------|-------|
 | Call list + detail | DONE | `GET /api/calling/*` | `CallsPage` | |
-| AI voice agent | DONE | `ai-voice-agent.ts` | — | Auto-answer with AI |
-| Agent call routing | DONE | `routing.service.ts` | Ring modal | |
-| Accept/decline call | DONE | `/api/calling/:id/accept` | `CallRingModal` | |
-| Live transcript | DONE | Deepgram STT | `CallDetailView` | Real-time via Socket.IO |
-| Outbound callback | DONE | `/api/calling/callback` | Call detail | |
+| AI voice agent | DONE | `ai-voice-agent.ts` | — | Sarvam STT/TTS + shared AiBot brain |
+| Agent call routing | DONE | `routing.service.ts` | Ring modal | Initial inbound ring works |
+| Accept/decline call | DONE | `/api/calling/:id/accept` | `CallRingModal` | For RINGING/CONNECTING only |
+| Live transcript | DONE | Sarvam STT | `CallDetailView` | Real-time via Socket.IO |
+| Outbound callback (agent) | DONE | `/api/calling/callback` | Inbox/Calls | Requires browser SDP + Meta permission |
 | Call analytics | DONE | `/api/calling/analytics` | `CallAnalyticsPanel` | |
-| WebRTC bridge | DONE | `webrtc-bridge.ts` | Signaling | |
-| Google TTS | DONE | `google-tts.service.ts` | — | AI voice response |
+| WebRTC bridge | DONE | `webrtc-bridge.ts` | Signaling | Server bridge for AI; browser for agents |
+| Sarvam TTS | DONE | `sarvam.tts.ts` | Voice preview | Bulbul v3 (Google TTS removed) |
+| Live cold transfer | PARTIAL | `handleLiveTransfer` | Disabled in UI | Media renegotiation incomplete — message-only handoff |
+| Hold / Keypad / Transfer UI | PLANNED | — | Stubs disabled | Softphone chrome only |
 | Call notes | DONE | `PATCH /api/calling/:id` | Call detail | |
 | Settings (enable/disable) | DONE | `/api/calling/settings` | `CallingSettingsPanel` | |
 

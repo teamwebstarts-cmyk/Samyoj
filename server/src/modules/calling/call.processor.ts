@@ -21,6 +21,7 @@ import {
   removePendingCall,
   storePendingCall,
   storePendingCallWithTtl,
+  tryAcquireCallConnectLock,
   unregisterActiveCall,
 } from './session-store';
 import type { CallWebhookEntry } from './types';
@@ -39,8 +40,17 @@ async function ensureContactAndConversation(
   });
 
   if (!contact) {
+    // Inbound call is user-initiated engagement → allow service-window messaging consent.
+    // Do not force optedIn on existing contacts (STOP / opt-out must stick).
     contact = await prisma.contact.create({
-      data: { organizationId: orgId, phone: contactPhone, optedIn: true, source: 'INBOUND' },
+      data: {
+        organizationId: orgId,
+        phone: contactPhone,
+        optedIn: true,
+        consentSource: 'INBOUND_CALL',
+        consentAt: new Date(),
+        source: 'INBOUND',
+      },
     });
   }
 
@@ -606,19 +616,26 @@ export async function processCallWebhookPayload(payload: Record<string, unknown>
         log.info('Processing call webhook', { event, metaCallId: call.id, orgId });
 
         if (event === 'connect') {
-          void handleCallConnect(
-            orgId,
-            whatsappNumber.id,
-            phoneNumberId!,
-            accessToken,
-            whatsappNumber.phoneNumber,
-            call
-          ).catch((err) => {
+          const locked = await tryAcquireCallConnectLock(call.id);
+          if (!locked) {
+            log.info('Skipping duplicate call connect (lock held)', { metaCallId: call.id });
+            continue;
+          }
+          try {
+            await handleCallConnect(
+              orgId,
+              whatsappNumber.id,
+              phoneNumberId!,
+              accessToken,
+              whatsappNumber.phoneNumber,
+              call
+            );
+          } catch (err) {
             log.error('Call connect handler failed', {
               metaCallId: call.id,
               error: err instanceof Error ? err.message : String(err),
             });
-          });
+          }
         } else if (event === 'terminate') {
           await endCallSession(call.id, 'remote_terminate').catch(() => undefined);
           await handleCallTerminate(orgId, call);

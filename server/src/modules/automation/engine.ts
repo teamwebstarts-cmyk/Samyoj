@@ -210,6 +210,18 @@ export async function sendAutomationReply(
 export async function queueAiBotProcessing(payload: InboundAutomationPayload): Promise<void> {
   if (!(await hasEnabledBots(payload.organizationId))) return;
 
+  const contact = await prisma.contact.findFirst({
+    where: { id: payload.contactId, organizationId: payload.organizationId },
+    select: { optedIn: true },
+  });
+  if (contact && contact.optedIn === false) {
+    log.info('AI bot skipped — contact opted out', {
+      conversationId: payload.conversationId,
+      contactId: payload.contactId,
+    });
+    return;
+  }
+
   const conversation = await prisma.conversation.findFirst({
     where: { id: payload.conversationId, organizationId: payload.organizationId },
   });
@@ -249,6 +261,18 @@ export async function queueAiBotProcessing(payload: InboundAutomationPayload): P
 }
 
 export async function processAiChatbotJob(payload: InboundAutomationPayload): Promise<void> {
+  const contact = await prisma.contact.findFirst({
+    where: { id: payload.contactId, organizationId: payload.organizationId },
+    select: { optedIn: true },
+  });
+  if (contact && contact.optedIn === false) {
+    log.info('AI chatbot job skipped — contact opted out', {
+      conversationId: payload.conversationId,
+      contactId: payload.contactId,
+    });
+    return;
+  }
+
   const result = await withAiBotConversationLock(payload.conversationId, async () => {
     try {
       const accessToken = MetaWhatsAppService.decryptToken(payload.encryptedToken);
@@ -289,6 +313,10 @@ export async function processAiChatbotJob(payload: InboundAutomationPayload): Pr
       input: { reason: result.skipReason, botId: result.botId },
       durationMs: Date.now() - processingStart,
     });
+    // Still deliver polite replies that accompany a skip (e.g. outside business hours, rate limit).
+    if (result.reply) {
+      await sendAutomationReply(payload, result.reply, 'AI_CHATBOT');
+    }
     return;
   }
 

@@ -34,6 +34,20 @@ async function saveWhatsappConnection(
   const encryptedToken = MetaWhatsAppService.encryptToken(connection.accessToken);
   const metaCredentials = await resolveMetaCredentials(orgId);
 
+  const ownedElsewhere = await prisma.whatsappNumber.findFirst({
+    where: {
+      phoneNumberId: connection.phoneNumberId,
+      organizationId: { not: orgId },
+    },
+    select: { id: true, organizationId: true },
+  });
+  if (ownedElsewhere) {
+    throw new AppError(
+      409,
+      'This WhatsApp number is already connected to another organization. Disconnect it there first, or contact support.'
+    );
+  }
+
   const existing = await prisma.whatsappNumber.findFirst({
     where: {
       organizationId: orgId,
@@ -367,18 +381,47 @@ router.post(
     const data = connectSchema.parse(req.body);
     const orgId = req.user!.organizationId!;
 
+    const ownedElsewhere = await prisma.whatsappNumber.findFirst({
+      where: {
+        phoneNumberId: data.phoneNumberId,
+        organizationId: { not: orgId },
+      },
+      select: { id: true },
+    });
+    if (ownedElsewhere) {
+      throw new AppError(
+        409,
+        'This WhatsApp number is already connected to another organization. Disconnect it there first, or contact support.'
+      );
+    }
+
     const encryptedToken = MetaWhatsAppService.encryptToken(data.accessToken);
 
-    const whatsappNumber = await prisma.whatsappNumber.create({
-      data: {
-        organizationId: orgId,
-        phoneNumber: data.phoneNumber,
-        phoneNumberId: data.phoneNumberId,
-        wabaId: data.wabaId,
-        businessId: data.businessId,
-        accessToken: encryptedToken,
-      },
+    const existing = await prisma.whatsappNumber.findFirst({
+      where: { organizationId: orgId, phoneNumberId: data.phoneNumberId },
     });
+
+    const whatsappNumber = existing
+      ? await prisma.whatsappNumber.update({
+          where: { id: existing.id },
+          data: {
+            phoneNumber: data.phoneNumber,
+            wabaId: data.wabaId,
+            businessId: data.businessId,
+            accessToken: encryptedToken,
+            isActive: true,
+          },
+        })
+      : await prisma.whatsappNumber.create({
+          data: {
+            organizationId: orgId,
+            phoneNumber: data.phoneNumber,
+            phoneNumberId: data.phoneNumberId,
+            wabaId: data.wabaId,
+            businessId: data.businessId,
+            accessToken: encryptedToken,
+          },
+        });
 
     sendSuccess(
       res,

@@ -1445,6 +1445,23 @@ router.post(
         data.type !== 'TEMPLATE' ? replyTarget?.metaMessageId || undefined : undefined,
     });
 
+    // Human agent took over — pause the bot so it does not dual-reply (automation/AI paths skip this route).
+    if (conversation.botActive && !conversation.botHandoffAt) {
+      await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { botActive: false },
+      });
+      emitToOrg(orgId, 'conversation:bot', {
+        conversationId: conversation.id,
+        botActive: false,
+        botHandoffAt: conversation.botHandoffAt,
+      });
+      emitToOrg(orgId, 'conversation:updated', {
+        conversationId: conversation.id,
+        patch: { botActive: false },
+      });
+    }
+
     const { dispatchOrgWebhook } = await import('../integrations/dispatch');
     void dispatchOrgWebhook(orgId, 'message.sent', {
       conversationId: conversation.id,

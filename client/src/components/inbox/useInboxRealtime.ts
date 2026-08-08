@@ -56,6 +56,7 @@ export function useInboxRealtime({
         botHandoffAt?: string | null;
         activeBot?: { id: string; name: string } | null;
         reason?: string;
+        summary?: string | null;
       };
       const openId = selectedRef.current?.id;
 
@@ -204,11 +205,12 @@ export function useInboxRealtime({
         if (openId === payload.conversationId) {
           setSelected((prev) => (prev ? patch(prev) : prev));
           if (isHandoff) {
+            const base = payload.assignedAgent
+              ? `Handed off to ${payload.assignedAgent.name}`
+              : 'Customer handed off to your team';
             emitChatNotice(payload.conversationId, {
               kind: 'handoff',
-              message: payload.assignedAgent
-                ? `Handed off to ${payload.assignedAgent.name}`
-                : 'Customer handed off to your team',
+              message: payload.summary ? `${base}: ${payload.summary}` : base,
               icon: 'users',
               tone: 'orange',
             });

@@ -140,7 +140,12 @@ export default function CallingSettingsForm({ initialSection = 'who' }: CallingS
   useEffect(() => {
     Promise.all([callingApi.settings(), aiBotApi.list()])
       .then(([settingsRes, botsRes]) => {
-        const next = { ...defaultSettings, ...settingsRes.data.data };
+        const next = {
+          ...defaultSettings,
+          ...settingsRes.data.data,
+          liveTransferEnabled: false,
+          transferMode: 'message_only' as const,
+        };
         setSettings(next);
         setBaseline(next);
         const botPayload = botsRes.data.data as { bots?: Array<{ id: string; name: string }> };
@@ -162,10 +167,21 @@ export default function CallingSettingsForm({ initialSection = 'who' }: CallingS
       const { data } = await callingApi.updateSettings(
         settings as unknown as Record<string, unknown>
       );
-      const next = { ...defaultSettings, ...data.data };
+      const payload = data.data as CallingSettings & { warning?: string };
+      const { warning, ...rest } = payload;
+      const next = {
+        ...defaultSettings,
+        ...rest,
+        liveTransferEnabled: false,
+        transferMode: 'message_only' as const,
+      };
       setSettings(next);
       setBaseline(next);
-      toastSuccess('Calling settings saved.');
+      if (warning) {
+        toastSuccess(warning);
+      } else {
+        toastSuccess('Calling settings saved.');
+      }
     } catch {
       toastError('Could not save calling settings.');
     } finally {
@@ -332,25 +348,21 @@ export default function CallingSettingsForm({ initialSection = 'who' }: CallingS
                 />
                 <BehaviorRow
                   label="When caller asks for a person"
-                  hint="Live ring vs WhatsApp if busy"
+                  hint="Live voice transfer coming soon — human handoff stays in Inbox for now."
                   control={
                     <AppSelect
-                      value={
-                        settings.liveTransferEnabled && settings.transferMode === 'live'
-                          ? 'live'
-                          : 'message'
-                      }
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        setSettings((s) => ({
-                          ...s,
-                          liveTransferEnabled: v === 'live',
-                          transferMode: v === 'live' ? 'live' : 'message_only',
-                        }));
+                      value="message"
+                      disabled
+                      onChange={() => {
+                        /* Live transfer disabled until media works */
                       }}
                       options={[
-                        { value: 'live', label: 'Connect live if team online' },
                         { value: 'message', label: 'Message on WhatsApp' },
+                        {
+                          value: 'live',
+                          label: 'Connect live if team online (coming soon)',
+                          disabled: true,
+                        },
                       ]}
                     />
                   }

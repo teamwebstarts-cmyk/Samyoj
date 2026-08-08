@@ -5,10 +5,14 @@ const log = createModuleLogger('call-session-store');
 
 const ACTIVE_PREFIX = 'call:active:';
 const PENDING_PREFIX = 'call:pending:';
+const PENDING_BY_CALL_PREFIX = 'call:pending-by-id:';
+const CONNECT_LOCK_PREFIX = 'call:connect-lock:';
 const ORG_ACTIVE_PREFIX = 'call:org:';
 const ACTIVE_TTL_SEC = 7200;
 /** Default pending TTL (60s). Override per-call for ring scenarios that exceed this. */
 const DEFAULT_PENDING_TTL_SEC = 60;
+/** Fail-closed sentinel when Redis is unavailable for concurrency checks. */
+const REDIS_DOWN_ACTIVE_COUNT = Number.MAX_SAFE_INTEGER;
 
 export function getPendingTtl(ringTimeoutSec: number = 25): number {
   return Math.max(ringTimeoutSec + 5, DEFAULT_PENDING_TTL_SEC);
@@ -61,10 +65,24 @@ export async function unregisterActiveCall(metaCallId: string, orgId: string): P
 export async function getOrgActiveCallCount(orgId: string): Promise<number> {
   try {
     const redis = getRedis();
-    return await redis.scard(`call:org:${orgId}:active`);
-  } catch {
-    return 0;
+    return await redis.scard(`${ORG_ACTIVE_PREFIX}${orgId}:active`);
+  } catch (err) {
+    // Fail closed: treat as at capacity so we do not over-admit calls when Redis is down.
+    log.warn('Active call count unavailable — failing closed', {
+      orgId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return REDIS_DOWN_ACTIVE_COUNT;
   }
+}
+
+async function indexPendingByCallId(
+  callId: string,
+  metaCallId: string,
+  ttlSec: number
+): Promise<void> {
+  const redis = getRedis();
+  await redis.set(`${PENDING_BY_CALL_PREFIX}${callId}`, metaCallId, 'EX', ttlSec);
 }
 
 export async function storePendingCall(
@@ -73,6 +91,7 @@ export async function storePendingCall(
 ): Promise<void> {
   const redis = getRedis();
   await redis.set(`${PENDING_PREFIX}${metaCallId}`, JSON.stringify(payload), 'EX', DEFAULT_PENDING_TTL_SEC);
+  await indexPendingByCallId(payload.callId, metaCallId, DEFAULT_PENDING_TTL_SEC);
 }
 
 export async function storePendingCallWithTtl(
@@ -83,6 +102,7 @@ export async function storePendingCallWithTtl(
   const redis = getRedis();
   const ttl = getPendingTtl(ringTimeoutSec);
   await redis.set(`${PENDING_PREFIX}${metaCallId}`, JSON.stringify(payload), 'EX', ttl);
+  await indexPendingByCallId(payload.callId, metaCallId, ttl);
 }
 
 export async function getPendingCall(metaCallId: string): Promise<PendingCallSignaling | null> {
@@ -117,21 +137,33 @@ export async function resolvePendingCallAccessToken(
 
 export async function getPendingCallByCallId(callId: string): Promise<PendingCallSignaling | null> {
   const redis = getRedis();
-  const keys = await redis.keys(`${PENDING_PREFIX}*`);
-  for (const key of keys) {
-    const raw = await redis.get(key);
-    if (!raw) continue;
-    try {
-      const parsed = JSON.parse(raw) as PendingCallSignaling;
-      if (parsed.callId === callId) return parsed;
-    } catch {
-      continue;
-    }
+  const metaCallId = await redis.get(`${PENDING_BY_CALL_PREFIX}${callId}`);
+  if (metaCallId) {
+    return getPendingCall(metaCallId);
   }
   return null;
 }
 
 export async function removePendingCall(metaCallId: string): Promise<void> {
   const redis = getRedis();
+  const pending = await getPendingCall(metaCallId);
   await redis.del(`${PENDING_PREFIX}${metaCallId}`);
+  if (pending?.callId) {
+    await redis.del(`${PENDING_BY_CALL_PREFIX}${pending.callId}`);
+  }
+}
+
+/** Acquire a short-lived lock so duplicate Meta connect webhooks do not start two sessions. */
+export async function tryAcquireCallConnectLock(metaCallId: string, ttlSec = 30): Promise<boolean> {
+  try {
+    const redis = getRedis();
+    const result = await redis.set(`${CONNECT_LOCK_PREFIX}${metaCallId}`, '1', 'EX', ttlSec, 'NX');
+    return result === 'OK';
+  } catch (err) {
+    log.warn('Connect lock unavailable — proceeding without Redis lock', {
+      metaCallId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return true;
+  }
 }

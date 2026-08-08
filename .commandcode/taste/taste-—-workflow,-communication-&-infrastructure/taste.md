@@ -1,5 +1,5 @@
 # Taste — Workflow, Communication & Infrastructure
-- Expects a research-first, plan-then-build workflow: read the codebase/docs, do web research (incl. competitor and Meta/WhatsApp docs), produce a POC-backed plan, and give a confidence score before executing. Confidence: 0.9
+- Expects a research-first, plan-then-build workflow: read the codebase/docs, do web research (incl. competitor and Meta/WhatsApp docs), produce a POC-backed plan, and give a confidence score before executing. The user explicitly instructs to read the project "completely" and "make yourself ready first" before any task work begins. Confidence: 0.93
 - Wants every deliverable rechecked end-to-end (bugs, error handling, endpoints, pixel match, responsiveness) and a confidence score before moving to the next screen/task. Confidence: 0.9
 - Verifies every code change by running TypeScript typecheck (`npx tsc --noEmit`) on BOTH the client and server packages — treating a clean compile on each as a required gate before considering work done. Confidence: 0.8
 - Likes generating subagents/teams to review and critique the work ("critic" reviewers), not just to execute. Confidence: 0.7
@@ -9,7 +9,7 @@
 - Always uses ngrok for public tunnels — never Cloudflare. Confidence: 0.8
 - Never exposes credentials/secrets (env variable names, App IDs, secrets) in the UI; secrets stay server-side in .env only. Confidence: 0.95
 - Wants an easy one-command local setup (script that configures dependencies/env) so other developers can run the project without friction. Confidence: 0.7
-- Likes being told the suggested next task/priority after each phase completes. Confidence: 0.6
+- Likes being told the suggested next task/priority after each phase completes. Confidence: 0.8
 - Wants third-party API integrations verified against the vendor's official docs/SDK (e.g., read Sarvam's API reference, use their SDK/MCP) rather than trusting the existing code — docs are the ground truth for param ranges and sample rates. Confidence: 0.85
 - Requests broad end-to-end reviews of a whole subsystem (all AI bot + AI calling code), with a written report of what was found before/alongside fixes — not isolated one-off patches. Confidence: 0.9
 - AI automation scope is strictly channel-limited: the AI voice bot must only be connected to inbound calls — outbound calls are human/agent-only and must never get AI involvement (corrected emphatically when a summary implied otherwise, and re-confirmed explicitly in follow-up). Confidence: 0.95
@@ -25,3 +25,5 @@
 - When debugging AI pipeline failures (empty responses, fallback loops, silent errors), first isolate by testing the raw third-party API call directly (curl) — this separates API-level issues from application-code issues before any code changes are made. Confidence: 0.8
 - Before handing off for the user's manual testing, the assistant should run its own comprehensive technical self-tests — direct API isolation calls, full E2E pipeline simulations, and edge cases — so it discovers issues before the user does. Results should be presented as a structured summary (table format preferred) covering each test case, latency figures, and pass/fail status. Confidence: 0.85
 - When presenting a large catalog of configurable options (especially sensory ones like TTS voices, where the user must audition each choice), curate down to a small, high-quality selection of the most recommended/popular items rather than exposing the full vendor inventory. The user explicitly rejects exhaustive lists: "only add top 10, do research and choose the best." Default to curation over exhaustiveness. Confidence: 0.75
+- Wants feature assessments and reviews organized by the actual UI sidebar/navigation structure of the dashboard — not by backend module organization or server routers. When evaluating completeness, map findings to the visible left-sidebar options the user interacts with. Confidence: 0.9
+- Prefers tiered feature maturity ratings with percentage scores, grouped into labeled tiers: ✅ Complete (90-100%), ⚠️ Needs Polish (80-95%), 🚧 In Progress (60-80%), and 🆕 New/Hidden (<60%). Each feature should get a clear percentage and tier so the reader can quickly understand what's done, what needs work, and what's next. Confidence: 0.85
