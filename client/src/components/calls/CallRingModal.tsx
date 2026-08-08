@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Phone, PhoneOff, PhoneIncoming } from 'lucide-react';
 import { callingApi } from '../../services/api';
+import { createAgentAnswer, setActiveCallId } from '../../utils/agentCallRTC';
 import { toastError, toastSuccess } from '../../utils/toast';
 
 interface RingPayload {
@@ -15,43 +16,6 @@ interface RingPayload {
 interface CallRingModalProps {
   ring: RingPayload | null;
   onDismiss: () => void;
-}
-
-async function createAgentAnswer(sdpOffer: string): Promise<string> {
-  const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
-
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    for (const track of stream.getTracks()) {
-      pc.addTrack(track, stream);
-    }
-  } catch {
-    throw new Error('Microphone access is required to answer calls. Check your browser permissions.');
-  }
-
-  await pc.setRemoteDescription({ type: 'offer', sdp: sdpOffer });
-  const answer = await pc.createAnswer();
-  await pc.setLocalDescription(answer);
-
-  await new Promise<void>((resolve) => {
-    if (pc.iceGatheringState === 'complete') {
-      resolve();
-      return;
-    }
-    const timer = setTimeout(resolve, 5000);
-    pc.onicegatheringstatechange = () => {
-      if (pc.iceGatheringState === 'complete') {
-        clearTimeout(timer);
-        resolve();
-      }
-    };
-  });
-
-  const sdp = pc.localDescription?.sdp;
-  if (!sdp) throw new Error('Could not generate call answer');
-
-  (window as unknown as { __activeCallPc?: RTCPeerConnection }).__activeCallPc = pc;
-  return sdp;
 }
 
 export default function CallRingModal({ ring, onDismiss }: CallRingModalProps) {
@@ -102,6 +66,7 @@ export default function CallRingModal({ ring, onDismiss }: CallRingModalProps) {
       const sdpOffer = data.data.sdpOffer as string;
       const sdpAnswer = await createAgentAnswer(sdpOffer);
       await callingApi.accept(ring.callId, sdpAnswer);
+      setActiveCallId(ring.callId);
       toastSuccess('Call connected.');
       onDismiss();
       navigate(`/calls/${ring.callId}`);

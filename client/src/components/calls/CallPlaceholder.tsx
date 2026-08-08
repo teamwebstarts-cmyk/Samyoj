@@ -46,6 +46,16 @@ function StatColumn({ label, sub, value, tone = 'default', pulse = false }: Stat
   );
 }
 
+/** Small padded chip for the 7-day analytics breakdown. */
+function MiniStat({ value, label }: { value: string | number; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-lg border border-theme-border bg-theme-subtle px-2 py-1">
+      <span className="text-[12px] font-extrabold tabular-nums text-theme-fg">{value}</span>
+      <span className="text-[10.5px] font-medium text-theme-muted">{label}</span>
+    </span>
+  );
+}
+
 /** Left-pane empty state — green glow phone + 3 tips (matches design mock). */
 export function CallsListEmpty() {
   const tips = [

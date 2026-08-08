@@ -9,8 +9,8 @@ const PENDING_BY_CALL_PREFIX = 'call:pending-by-id:';
 const CONNECT_LOCK_PREFIX = 'call:connect-lock:';
 const ORG_ACTIVE_PREFIX = 'call:org:';
 const ACTIVE_TTL_SEC = 7200;
-/** Default pending TTL (60s). Override per-call for ring scenarios that exceed this. */
-const DEFAULT_PENDING_TTL_SEC = 60;
+/** Default pending TTL. Outbound BIC may ring for >60s before answer — keep signaling alive. */
+const DEFAULT_PENDING_TTL_SEC = 180;
 /** Fail-closed sentinel when Redis is unavailable for concurrency checks. */
 const REDIS_DOWN_ACTIVE_COUNT = Number.MAX_SAFE_INTEGER;
 

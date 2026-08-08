@@ -346,7 +346,7 @@ async function handleCallConnect(
     const pending = await getPendingCall(metaCallId);
 
     if (pending && sdpAnswer) {
-      await storePendingCall(metaCallId, { ...pending, sdpAnswer });
+      await storePendingCallWithTtl(metaCallId, { ...pending, sdpAnswer }, 175);
 
       // Tell the calling agent's browser: "customer answered, here's their SDP answer".
       // The agent's browser will set this as the remote description to complete WebRTC.

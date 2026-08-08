@@ -20,6 +20,7 @@ import {
 import { Link } from 'react-router-dom';
 import ContactAvatar from '../inbox/ContactAvatar';
 import AppButton from '../ui/AppButton';
+import { getAgentPeerConnection } from '../../utils/agentCallRTC';
 import {
   callStatusLabel,
   callStatusTone,
@@ -445,7 +446,7 @@ export default function CallDetailView({
             label={muted ? 'Unmute' : 'Mute'}
             active={muted}
             onClick={() => {
-              const pc = (window as unknown as { __activeCallPc?: RTCPeerConnection }).__activeCallPc;
+              const pc = getAgentPeerConnection();
               if (pc) {
                 const senders = pc.getSenders();
                 const audioSender = senders.find((s) => s.track?.kind === 'audio');

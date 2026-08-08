@@ -22,7 +22,7 @@ import {
   getOrgActiveCallCount,
   getPendingCallByCallId,
   recordBicUnansweredIfNeeded,
-  storePendingCall,
+  storePendingCallWithTtl,
 } from './session-store';
 import { getCallAnalytics } from './analytics';
 import { acceptCallWithAgentAnswer, declineCallAsAgent } from './agent-call.service';
@@ -623,7 +623,7 @@ router.post(
             data: { metaCallId },
           });
 
-    await storePendingCall(metaCallId, {
+    await storePendingCallWithTtl(metaCallId, {
       callId: updatedCall.id,
       metaCallId,
       organizationId: orgId,
@@ -636,7 +636,7 @@ router.post(
       direction: 'BUSINESS_INITIATED',
       sdpOffer,
       createdAt: new Date().toISOString(),
-    });
+    }, 175);
 
     // Outbound agent calls: notify the agent's browser. When the connect webhook
     // arrives, it will emit call:outbound_connected with the answer so the browser

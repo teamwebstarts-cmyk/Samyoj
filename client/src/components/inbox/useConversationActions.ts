@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { callingApi, inboxApi } from '../../services/api';
 import { toastError, toastInbox, toastSuccess } from '../../utils/toast';
 import { emitChatNotice } from './chatNoticeBus';
-import { createAgentOffer, pollSdpAnswer } from '../../utils/agentCallRTC';
+import { createAgentOffer, pollSdpAnswer, setActiveCallId, cleanupAgentCall } from '../../utils/agentCallRTC';
 import type { Conversation } from '../../types';
 
 interface ActionsDeps {
@@ -178,15 +178,20 @@ export function useConversationActions({
       }
 
       const sdpOffer = await createAgentOffer();
+      if (!sdpOffer) {
+        toastError('Microphone access is required to make calls.');
+        return;
+      }
+
       const { data } = await callingApi.callback({
         contactId: selected.contact.id,
         conversationId: selected.id,
         phone: selected.contact.phone,
-        sdpOffer: sdpOffer ?? undefined,
+        sdpOffer,
       });
       const callId = (data.data as { call?: { id: string } })?.call?.id;
       if (callId) {
-        import('../../utils/agentCallRTC').then((m) => m.setActiveCallId(callId));
+        setActiveCallId(callId);
         emitChatNotice(selected.id, {
           kind: 'calling',
           message: `Connecting to ${contactLabel}…`,
@@ -199,8 +204,10 @@ export function useConversationActions({
         void pollSdpAnswer(callId);
         return;
       }
+      cleanupAgentCall();
       toastError('Call started but no call page was returned.');
     } catch (err: unknown) {
+      cleanupAgentCall();
       const body = (err as { response?: { data?: { error?: { code?: string; message?: string } } } })
         ?.response?.data?.error;
       if (body?.code === 'CALL_PERMISSION_REQUIRED') {

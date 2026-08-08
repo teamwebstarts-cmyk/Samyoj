@@ -4,7 +4,7 @@
 
 ## Verdict
 
-**Careful beta ~7.9/10.** Plan checklist items are present in code and unit-tested. Recheck corrected an optimistic 8.2 claim downward, then closed two High holes found during recheck (`speaking` stuck after TTS error; BIC Redis fail-open). Live media transfer remains intentionally disabled — that is the main gap to ~9+.
+**Prototype connect path ~8.0/10.** Scope locked to existing inbound/outbound connect (no new features: live transfer, recording ACL, post-call intel, voice clone, etc.). Connect leftovers fixed: agent softphone remote audio, outbound SDP TTL 180s + socket apply, Inbox mic/SDP guard.
 
 ## Scorecard
 
