@@ -285,6 +285,28 @@ describe('campaign safety boundaries', () => {
     expect(reconcileProviderStatusTransition('AMBIGUOUS', 'unknown')).toBeNull();
   });
 
+  it.each(['SENT', 'DELIVERED', 'READ'])('reconciles FAILED after %s as terminal', (currentStatus) => {
+    expect(reconcileProviderStatusTransition(currentStatus, 'FAILED')).toBe('FAILED');
+    expect(reconcileWebhookRecipient({
+      currentStatus,
+      providerStatus: 'FAILED',
+    })).toEqual({ status: 'FAILED', clearClaim: true });
+  });
+
+  it('keeps FAILED idempotent and preserves terminal counters', () => {
+    expect(reconcileProviderStatusTransition('FAILED', 'FAILED')).toBeNull();
+    expect(reconcileWebhookRecipient({
+      currentStatus: 'FAILED',
+      providerStatus: 'FAILED',
+    })).toBeNull();
+    expect(campaignCounterSnapshot(['FAILED', 'FAILED', 'READ'])).toEqual({
+      sentCount: 1,
+      deliveredCount: 1,
+      readCount: 1,
+      failedCount: 2,
+    });
+  });
+
   it('keeps a FAILED webhook ambiguous when a live claim is racing it', () => {
     expect(reconcileWebhookRecipient({
       currentStatus: 'PENDING',
@@ -317,6 +339,10 @@ describe('campaign safety boundaries', () => {
       { status: 'FAILED', claimToken: 'claim-1' },
     ])).toBe(false);
     expect(shouldReleaseQuotaAfterWebhook([
+      { status: 'FAILED', claimToken: null, providerCallStartedAt: null },
+    ])).toBe(true);
+    expect(shouldReleaseQuotaAfterWebhook([
+      { status: 'FAILED', claimToken: null, providerCallStartedAt: null },
       { status: 'FAILED', claimToken: null, providerCallStartedAt: null },
     ])).toBe(true);
   });

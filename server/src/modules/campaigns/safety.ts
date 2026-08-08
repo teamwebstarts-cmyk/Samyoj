@@ -106,7 +106,12 @@ export function reconcileProviderStatusTransition(currentStatus: string, provide
   if (currentStatus === 'AMBIGUOUS') return next as 'SENT' | 'DELIVERED' | 'READ' | 'FAILED';
   if (currentStatus === 'FAILED') return null;
   const rank: Record<string, number> = { PENDING: 0, SENT: 1, DELIVERED: 2, READ: 3 };
-  if (next === 'FAILED') return currentStatus === 'PENDING' ? 'FAILED' : null;
+  // Meta's terminal FAILED status is authoritative even after a delivery
+  // milestone. It must replace SENT/DELIVERED/READ, while the webhook layer
+  // separately protects an in-flight PENDING provider boundary as AMBIGUOUS.
+  if (next === 'FAILED') {
+    return ['PENDING', 'SENT', 'DELIVERED', 'READ'].includes(currentStatus) ? 'FAILED' : null;
+  }
   return rank[next] > (rank[currentStatus] ?? -1)
     ? next as 'SENT' | 'DELIVERED' | 'READ'
     : null;
