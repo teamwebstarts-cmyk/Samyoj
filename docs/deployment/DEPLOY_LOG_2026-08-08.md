@@ -159,3 +159,31 @@ WARNING — git drift: these edits live on the VM working tree only (not committ
 - Rollback = `git checkout 45b5089` + `npm ci` + `npm run build` (client+server) + `pm2 restart config/ecosystem.config.js`.
 - DB backup for restore: `/home/samyoj/backups/whatsapp_platform-20260808-144221.sql.gz` (restore: `gunzip -c <file> | psql "$DATABASE_URL"`).
 - Note: rolling back code across the 3 applied migrations may require DB restore if the old code is incompatible with the new schema.
+
+---
+
+## Production investigation (2026-08-08 evening) — Inbound calls + Inbox realtime
+
+### Symptoms
+1. Outbound calls OK; inbound calls — AI not responding
+2. Inbox chat sometimes needs refresh; realtime intermittent
+
+### Log evidence
+Inbound call at 17:53:56 UTC:
+- `Processing call webhook event=connect`
+- **`Calling pipeline not configured`** → call missed + terminated immediately
+- Meta `calls` webhooks ARE arriving (not a tunnel issue)
+
+Production was missing `SARVAM_API_KEY` and all Sarvam STT/TTS vars. Outbound agent calls skip Sarvam entirely (browser WebRTC only).
+
+### Inbox realtime root cause
+PM2 runs `whatsapp-api` (has Socket.IO) AND `whatsapp-worker` (no Socket.IO). Both consume BullMQ. When `whatsapp-worker` processes inbound webhooks, `emitToOrg()` was a no-op — DB updated but browser not notified. Intermittent depending on which process got the job.
+
+### Fixes deployed
+1. Added full Sarvam voice config to prod `.env` (`SARVAM_API_KEY` verified set after restart)
+2. `server/src/realtime.ts` — Redis pub/sub bridge so worker publishes, API delivers to Socket.IO
+
+### Verify
+- **Inbound call:** call business number → AI should greet
+- **Inbox:** hard-refresh, send WhatsApp from phone → message appears without refresh
+- Console should show `[socket] Connected` (JWT expiry can cause `Invalid or expired token` + socket disconnect — re-login if needed)
