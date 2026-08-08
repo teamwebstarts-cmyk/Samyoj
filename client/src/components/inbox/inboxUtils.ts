@@ -187,8 +187,13 @@ export function formatWindowExpiry(expiresAt: string | null): string {
   return `${minutes}m left`;
 }
 
+export function isAgentOnlyChatMessage(message?: Pick<Message, 'metadata'>): boolean {
+  return Boolean(message?.metadata?.isCallSummary);
+}
+
 export function getMessagePreview(message?: Pick<Message, 'type' | 'content' | 'metadata'>) {
   if (!message) return 'No messages yet';
+  if (isAgentOnlyChatMessage(message)) return 'Call summary';
 
   const type = message.type?.toUpperCase();
   const meta = message.metadata;

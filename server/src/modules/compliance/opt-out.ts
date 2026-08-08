@@ -28,6 +28,9 @@ export async function handleOptOut(
       optedIn: false,
       consentSource: 'STOP_KEYWORD',
       consentAt: new Date(),
+      consentVersion: 'stop-keyword-v1',
+      optOutAt: new Date(),
+      consentDecision: { type: 'OPT_OUT', optedIn: false, source: 'STOP_KEYWORD' },
     },
   });
 
@@ -54,6 +57,9 @@ export async function handleOptIn(organizationId: string, contactId: string): Pr
       optedIn: true,
       consentSource: 'START_KEYWORD',
       consentAt: new Date(),
+      consentVersion: 'start-keyword-v1',
+      optOutAt: null,
+      consentDecision: { type: 'OPT_IN', optedIn: true, source: 'START_KEYWORD' },
     },
   });
   return true;

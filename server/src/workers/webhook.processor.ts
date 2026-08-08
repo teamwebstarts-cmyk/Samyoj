@@ -121,7 +121,10 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
         }
 
         const { syncCampaignRecipientFromWebhook } = await import('../modules/campaigns/service');
-        await syncCampaignRecipientFromWebhook(metaMessageId, statusValue);
+        await syncCampaignRecipientFromWebhook(metaMessageId, statusValue, {
+          organizationId: orgId,
+          phoneNumberId,
+        });
       }
 
       for (const msg of (value.messages as Array<Record<string, unknown>>) || []) {

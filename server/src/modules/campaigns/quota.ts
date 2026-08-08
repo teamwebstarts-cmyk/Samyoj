@@ -2,6 +2,7 @@ import prisma from '../../config/database';
 import { AppError } from '../../utils/response';
 import { DEFAULT_CAMPAIGN_SETTINGS, type CampaignSettings } from './types';
 import { estimateCampaignCost } from '../billing/usage.service';
+import { randomUUID } from 'node:crypto';
 
 export async function getCampaignSettings(organizationId: string): Promise<CampaignSettings> {
   const org = await prisma.organization.findUnique({
@@ -91,4 +92,73 @@ export async function assertDailyBudget(organizationId: string, recipientCount: 
     sendEstimateInr: sendEstimate,
     remainingInr: Math.max(0, budget - spentEstimate),
   };
+}
+
+function utcDayStart(now = new Date()) {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+}
+
+/**
+ * Reserves quota under a locked per-org/day ledger. This prevents two API or
+ * scheduler processes from both passing a read-only quota check.
+ */
+export async function reserveCampaignQuota(
+  organizationId: string,
+  campaignId: string,
+  recipientCount: number,
+  category = 'MARKETING'
+) {
+  const settings = await getCampaignSettings(organizationId);
+  const sendLimit = settings.dailySendLimit ?? DEFAULT_CAMPAIGN_SETTINGS.dailySendLimit!;
+  const budgetCents = Math.round(estimateCampaignCost(recipientCount, category).estimatedCostInr * 100);
+  const day = utcDayStart();
+  return prisma.$transaction(async (tx) => {
+    const ledger = await tx.campaignQuotaLedger.upsert({
+      where: { organizationId_periodStart: { organizationId, periodStart: day } },
+      create: { organizationId, periodStart: day },
+      update: {},
+    });
+    await tx.$queryRaw`SELECT id FROM campaign_quota_ledgers WHERE id = ${ledger.id} FOR UPDATE`;
+    const existing = await tx.campaignQuotaReservation.findUnique({ where: { campaignId } });
+    if (existing?.status === 'ACTIVE') return existing;
+
+    const sentToday = await tx.campaignRecipient.count({
+      where: {
+        campaign: { organizationId },
+        status: { in: ['SENT', 'DELIVERED', 'READ'] },
+        sentAt: { gte: day },
+      },
+    });
+    if (sentToday + ledger.reservedSendCount + recipientCount > sendLimit) {
+      throw new AppError(429, `Daily campaign send limit exceeded (${sendLimit} recipients/day).`);
+    }
+    const updated = await tx.campaignQuotaLedger.updateMany({
+      where: { id: ledger.id },
+      data: { reservedSendCount: { increment: recipientCount }, reservedBudgetCents: { increment: budgetCents } },
+    });
+    if (updated.count !== 1) throw new AppError(409, 'Campaign quota changed; try again');
+    return tx.campaignQuotaReservation.create({
+      data: { id: randomUUID(), campaignId, organizationId, ledgerId: ledger.id, sendCount: recipientCount, budgetCents },
+    });
+  });
+}
+
+export async function releaseCampaignQuota(campaignId: string) {
+  return prisma.$transaction(async (tx) => {
+    const reservation = await tx.campaignQuotaReservation.findUnique({ where: { campaignId } });
+    if (!reservation || reservation.status !== 'ACTIVE') return false;
+    const updated = await tx.campaignQuotaReservation.updateMany({
+      where: { id: reservation.id, status: 'ACTIVE' },
+      data: { status: 'RELEASED', releasedAt: new Date() },
+    });
+    if (updated.count !== 1) return false;
+    await tx.campaignQuotaLedger.update({
+      where: { id: reservation.ledgerId },
+      data: {
+        reservedSendCount: { decrement: reservation.sendCount },
+        reservedBudgetCents: { decrement: reservation.budgetCents },
+      },
+    });
+    return true;
+  });
 }

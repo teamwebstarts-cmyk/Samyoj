@@ -239,6 +239,8 @@ export interface MessageMetadata {
   metaErrorTitle?: string;
   /** Centered WhatsApp-style call notice in the thread. */
   isCallEvent?: boolean;
+  /** Legacy agent-only call summary rows (hidden from chat thread). */
+  isCallSummary?: boolean;
   callId?: string;
   callStatus?: string;
   callDirection?: string;

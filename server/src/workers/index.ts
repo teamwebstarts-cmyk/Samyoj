@@ -16,6 +16,7 @@ import { attachWorkerErrorHandlers, logError, setupGlobalErrorHandlers } from '.
 import { checkRedisConnection } from '../config/redis';
 import { createModuleLogger } from '../utils/logger';
 import { hasAuditableCampaignConsent } from '../modules/campaigns/recipients';
+import { buildConsentSnapshot, newClaimToken } from '../modules/campaigns/safety';
 
 const log = createModuleLogger('worker');
 
@@ -138,6 +139,7 @@ const broadcastWorker = new Worker(
       templateContent,
       templateParams,
       recipients,
+      runVersion,
     } = job.data;
 
     if (!phoneNumberId || !encryptedToken) {
@@ -146,9 +148,14 @@ const broadcastWorker = new Worker(
 
     const campaign = await prisma.campaign.findUnique({
       where: { id: campaignId },
-      select: { status: true },
+      select: {
+        status: true,
+        runVersion: true,
+        organization: { select: { companyName: true } },
+        whatsappNumber: { select: { businessId: true, phoneNumberId: true } },
+      },
     });
-    if (!campaign || !['RUNNING'].includes(campaign.status)) {
+    if (!campaign || campaign.status !== 'RUNNING' || (runVersion !== undefined && campaign.runVersion !== runVersion)) {
       return;
     }
 
@@ -181,7 +188,10 @@ const broadcastWorker = new Worker(
         where: {
           organizationId_phone: { organizationId, phone: recipient.phone },
         },
-        select: { optedIn: true, consentSource: true, consentAt: true, updatedAt: true },
+        select: {
+          optedIn: true, consentSource: true, consentAt: true, consentVersion: true,
+          consentDecision: true, optOutAt: true, updatedAt: true,
+        },
       });
       if (!contact || !hasAuditableCampaignConsent(contact)) {
         const rejected = await prisma.campaignRecipient.updateMany({
@@ -200,27 +210,45 @@ const broadcastWorker = new Worker(
         continue;
       }
 
-      const claimToken = `${job.id}:${recipient.id}`;
+      const claimToken = newClaimToken(String(job.id), recipient.id);
       const claimed = await prisma.campaignRecipient.updateMany({
         where: {
           id: recipient.id,
           status: 'PENDING',
-          claimToken: null,
+          OR: [{ claimToken: null }, { claimedAt: { lt: new Date(Date.now() - 15 * 60 * 1000) } }],
+          campaign: { status: 'RUNNING', runVersion: campaign.runVersion },
         },
         data: {
           claimToken,
           claimedAt: new Date(),
-          consentSnapshot: {
+          consentSnapshot: buildConsentSnapshot({
             phone: recipient.phone,
-            optedIn: true,
-            consentSource: contact.consentSource,
-            consentAt: contact.consentAt,
-            capturedAt: new Date().toISOString(),
+            business: {
+              organizationId,
+              name: campaign.organization.companyName,
+              businessId: campaign.whatsappNumber?.businessId,
+              phoneNumberId: campaign.whatsappNumber?.phoneNumberId,
+            },
+            category: 'MARKETING',
             policyVersion: 'campaign-consent-v1',
-          },
+            contact,
+          }),
         },
       });
       if (claimed.count !== 1) continue;
+
+      // This is the final database boundary before Meta. A committed pause/cancel
+      // increments runVersion and makes this lease refresh fail. Meta calls are
+      // external, so a crash after this check can still leave an accepted send.
+      const preSend = await prisma.campaignRecipient.updateMany({
+        where: {
+          id: recipient.id,
+          claimToken,
+          campaign: { status: 'RUNNING', runVersion: campaign.runVersion },
+        },
+        data: { claimedAt: new Date() },
+      });
+      if (preSend.count !== 1) continue;
 
       const mergedParams = mergeTemplateParams(
         templateParams,
@@ -255,15 +283,32 @@ const broadcastWorker = new Worker(
           });
         }
 
-        await prisma.campaignRecipient.updateMany({
-          where: { id: recipient.id, claimToken },
+        const completed = await prisma.campaignRecipient.updateMany({
+          where: {
+            id: recipient.id,
+            claimToken,
+            campaign: { status: 'RUNNING', runVersion: campaign.runVersion },
+          },
           data: { status: 'SENT', metaMessageId, sentAt: new Date(), errorMessage: null },
         });
-
-        await prisma.campaign.update({
-          where: { id: campaignId },
-          data: { sentCount: { increment: 1 } },
-        });
+        if (completed.count === 1) {
+          await prisma.campaign.update({
+            where: { id: campaignId },
+            data: { sentCount: { increment: 1 } },
+          });
+        } else {
+          // Meta may have accepted the request while pause/cancel committed.
+          // Record that ambiguous outcome so lease recovery never retries it.
+          await prisma.campaignRecipient.updateMany({
+            where: { id: recipient.id, claimToken },
+            data: {
+              status: 'SENT',
+              metaMessageId,
+              sentAt: new Date(),
+              errorMessage: 'Sent before campaign pause/cancel; reconciled with Meta status',
+            },
+          });
+        }
 
         emitToOrg(organizationId, 'campaign:progress', {
           campaignId,
@@ -279,15 +324,16 @@ const broadcastWorker = new Worker(
           path: `recipient:${recipient.phone}`,
         });
 
-        await prisma.campaignRecipient.updateMany({
+        const failed = await prisma.campaignRecipient.updateMany({
           where: { id: recipient.id, claimToken },
           data: { status: 'FAILED', errorMessage, claimToken: null, claimedAt: null },
         });
-
-        await prisma.campaign.update({
-          where: { id: campaignId },
-          data: { failedCount: { increment: 1 } },
-        });
+        if (failed.count === 1) {
+          await prisma.campaign.update({
+            where: { id: campaignId },
+            data: { failedCount: { increment: 1 } },
+          });
+        }
 
         emitToOrg(organizationId, 'campaign:progress', {
           campaignId,

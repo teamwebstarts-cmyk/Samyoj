@@ -54,7 +54,10 @@ export const createCampaignSchema = z.object({
   audienceConfig: audienceConfigSchema,
   recipients: z.array(recipientSchema).optional(),
   whatsappNumberId: z.string().uuid().optional(),
-  scheduledAt: z.string().datetime().optional(),
+  // Scheduled instants are UTC ISO values. `timezone` is retained as display metadata.
+  scheduledAt: z.string().datetime({ offset: false }).refine((value) => value.endsWith('Z'), {
+    message: 'scheduledAt must be an absolute UTC ISO instant ending in Z',
+  }).optional(),
   timezone: z.string().optional(),
 });
 
@@ -67,7 +70,9 @@ export const updateCampaignSchema = z.object({
   audienceConfig: audienceConfigSchema,
   recipients: z.array(recipientSchema).optional(),
   whatsappNumberId: z.string().uuid().nullable().optional(),
-  scheduledAt: z.string().datetime().nullable().optional(),
+  scheduledAt: z.string().datetime({ offset: false }).refine((value) => value.endsWith('Z'), {
+    message: 'scheduledAt must be an absolute UTC ISO instant ending in Z',
+  }).nullable().optional(),
   timezone: z.string().optional(),
 });
 

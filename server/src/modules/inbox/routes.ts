@@ -737,6 +737,12 @@ router.get(
     const hasMore = messages.length > take;
     if (hasMore) messages = messages.slice(0, take);
 
+    // Legacy call summaries were wrongly stored as inbound chat bubbles — hide from thread.
+    messages = messages.filter((msg) => {
+      const meta = msg.metadata as { isCallSummary?: boolean } | null;
+      return !meta?.isCallSummary;
+    });
+
     const templateNames = new Set<string>();
     for (const msg of messages) {
       if (msg.type !== 'TEMPLATE') continue;

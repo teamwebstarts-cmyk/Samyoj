@@ -53,8 +53,9 @@ async function validateCampaignNumber(
 }
 
 function validateCampaignTimezone(timezone: string | undefined, scheduledAt: string | null | undefined) {
-  if (scheduledAt && !timezone) {
-    throw new AppError(400, 'Scheduled campaigns require an IANA timezone, for example Asia/Kolkata');
+  // scheduledAt is an absolute UTC instant; timezone is only display/wall-clock metadata.
+  if (scheduledAt && Number.isNaN(new Date(scheduledAt).getTime())) {
+    throw new AppError(400, 'scheduledAt must be a valid UTC ISO instant');
   }
   if (timezone) {
     try {

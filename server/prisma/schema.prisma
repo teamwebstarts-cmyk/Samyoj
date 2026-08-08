@@ -154,6 +154,11 @@ enum CampaignStatus {
   CANCELLED
 }
 
+enum CampaignReservationStatus {
+  ACTIVE
+  RELEASED
+}
+
 model User {
   id              String    @id @default(uuid())
   name            String
@@ -164,19 +169,19 @@ model User {
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
-  organizations         OrganizationUser[]
-  assignedConversations Conversation[]     @relation("AssignedAgent")
-  assignedCalls         Call[]             @relation("AssignedCallAgent")
-  internalNotes         InternalNote[]
-  refreshTokens         RefreshToken[]
-  passwordResetTokens   PasswordResetToken[]
+  organizations           OrganizationUser[]
+  assignedConversations   Conversation[]           @relation("AssignedAgent")
+  assignedCalls           Call[]                   @relation("AssignedCallAgent")
+  internalNotes           InternalNote[]
+  refreshTokens           RefreshToken[]
+  passwordResetTokens     PasswordResetToken[]
   emailVerificationTokens EmailVerificationToken[]
-  sentInvites           TeamInvite[]       @relation("SentInvites")
-  auditActions          TeamAuditLog[]     @relation("AuditActor")
-  auditTargets          TeamAuditLog[]     @relation("AuditTarget")
-  oauthAccounts         OAuthAccount[]
-  assignedLeads         Lead[]             @relation("AssignedLeads")
-  assignedTickets       Ticket[]           @relation("AssignedTickets")
+  sentInvites             TeamInvite[]             @relation("SentInvites")
+  auditActions            TeamAuditLog[]           @relation("AuditActor")
+  auditTargets            TeamAuditLog[]           @relation("AuditTarget")
+  oauthAccounts           OAuthAccount[]
+  assignedLeads           Lead[]                   @relation("AssignedLeads")
+  assignedTickets         Ticket[]                 @relation("AssignedTickets")
 
   @@map("users")
 }
@@ -196,12 +201,12 @@ model EmailVerificationToken {
 }
 
 model PasswordResetToken {
-  id        String   @id @default(uuid())
-  userId    String   @map("user_id")
-  token     String   @unique
-  expiresAt DateTime @map("expires_at")
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  token     String    @unique
+  expiresAt DateTime  @map("expires_at")
   usedAt    DateTime? @map("used_at")
-  createdAt DateTime @default(now()) @map("created_at")
+  createdAt DateTime  @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -232,44 +237,46 @@ enum KnowledgeSourceType {
 }
 
 model Organization {
-  id          String   @id @default(uuid())
-  companyName String   @map("company_name")
-  plan        String   @default("starter")
-  settings    Json?
-  retentionDaysMessages Int @default(365) @map("retention_days_messages")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id                    String   @id @default(uuid())
+  companyName           String   @map("company_name")
+  plan                  String   @default("starter")
+  settings              Json?
+  retentionDaysMessages Int      @default(365) @map("retention_days_messages")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
 
-  users          OrganizationUser[]
-  whatsappNumbers WhatsappNumber[]
-  contacts       Contact[]
-  conversations  Conversation[]
-  automations    Automation[]
-  flows          Flow[]
-  flowAssets     FlowAsset[]
-  campaigns      Campaign[]
-  labels         Label[]
-  aiBots         AiBot[]
-  calls          Call[]
-  aiUsageLogs    AiUsageLog[]
-  departments    TeamDepartment[]
-  teamInvites    TeamInvite[]
-  teamAuditLogs     TeamAuditLog[]
-  cannedReplies     CannedReply[]
-  paymentOrders     PaymentOrder[]
-  apiKeys           ApiKey[]
-  webhookEndpoints  WebhookEndpoint[]
-  catalogProducts   CatalogProduct[]
-  orders            Order[]
-  brandKit          BrandKit?
-  contentDrafts     ContentDraft[]
-  generationJobs    GenerationJob[]
-  mediaAssets       MediaAsset[]
-  generationCredits GenerationCreditLedger[]
-  approvalLogs      ApprovalLog[]
-  featureFlags      OrgFeatureFlag[]
-  leads             Lead[]
-  tickets           Ticket[]
+  users                     OrganizationUser[]
+  whatsappNumbers           WhatsappNumber[]
+  contacts                  Contact[]
+  conversations             Conversation[]
+  automations               Automation[]
+  flows                     Flow[]
+  flowAssets                FlowAsset[]
+  campaigns                 Campaign[]
+  campaignQuotaLedgers      CampaignQuotaLedger[]
+  campaignQuotaReservations CampaignQuotaReservation[]
+  labels                    Label[]
+  aiBots                    AiBot[]
+  calls                     Call[]
+  aiUsageLogs               AiUsageLog[]
+  departments               TeamDepartment[]
+  teamInvites               TeamInvite[]
+  teamAuditLogs             TeamAuditLog[]
+  cannedReplies             CannedReply[]
+  paymentOrders             PaymentOrder[]
+  apiKeys                   ApiKey[]
+  webhookEndpoints          WebhookEndpoint[]
+  catalogProducts           CatalogProduct[]
+  orders                    Order[]
+  brandKit                  BrandKit?
+  contentDrafts             ContentDraft[]
+  generationJobs            GenerationJob[]
+  mediaAssets               MediaAsset[]
+  generationCredits         GenerationCreditLedger[]
+  approvalLogs              ApprovalLog[]
+  featureFlags              OrgFeatureFlag[]
+  leads                     Lead[]
+  tickets                   Ticket[]
 
   planExpiresAt      DateTime? @map("plan_expires_at")
   subscriptionStatus String    @default("active") @map("subscription_status")
@@ -364,18 +371,18 @@ model WebhookDelivery {
 }
 
 model ConversationCharge {
-  id             String   @id @default(uuid())
-  organizationId String   @map("organization_id")
-  wabaId         String   @map("waba_id")
-  phoneNumberId  String?  @map("phone_number_id")
-  category       String
-  country        String   @default("IN")
-  conversationCount Int   @default(0) @map("conversation_count")
-  costUsd        Float    @default(0) @map("cost_usd")
-  costInr        Float    @default(0) @map("cost_inr")
-  periodStart    DateTime @map("period_start")
-  periodEnd      DateTime @map("period_end")
-  createdAt      DateTime @default(now()) @map("created_at")
+  id                String   @id @default(uuid())
+  organizationId    String   @map("organization_id")
+  wabaId            String   @map("waba_id")
+  phoneNumberId     String?  @map("phone_number_id")
+  category          String
+  country           String   @default("IN")
+  conversationCount Int      @default(0) @map("conversation_count")
+  costUsd           Float    @default(0) @map("cost_usd")
+  costInr           Float    @default(0) @map("cost_inr")
+  periodStart       DateTime @map("period_start")
+  periodEnd         DateTime @map("period_end")
+  createdAt         DateTime @default(now()) @map("created_at")
 
   @@unique([organizationId, wabaId, category, periodStart])
   @@index([organizationId, periodStart])
@@ -398,21 +405,21 @@ model CannedReply {
 }
 
 model OrganizationUser {
-  id                  String            @id @default(uuid())
-  organizationId      String            @map("organization_id")
-  userId              String            @map("user_id")
-  role                OrgRole           @default(AGENT)
-  availability        AgentAvailability @default(OFFLINE) @map("availability")
-  maxConcurrentChats  Int               @default(10) @map("max_concurrent_chats")
-  departmentId        String?           @map("department_id")
-  permissions         Json?
-  shiftSchedule       Json?             @map("shift_schedule")
-  lastActiveAt        DateTime?         @map("last_active_at")
-  avatarUrl           String?           @map("avatar_url")
-  preferredLanguage   String            @default("en") @map("preferred_language")
-  twoFactorSecret     String?           @map("two_factor_secret")
-  twoFactorEnabled    Boolean           @default(false) @map("two_factor_enabled")
-  mustResetPassword   Boolean           @default(false) @map("must_reset_password")
+  id                 String            @id @default(uuid())
+  organizationId     String            @map("organization_id")
+  userId             String            @map("user_id")
+  role               OrgRole           @default(AGENT)
+  availability       AgentAvailability @default(OFFLINE) @map("availability")
+  maxConcurrentChats Int               @default(10) @map("max_concurrent_chats")
+  departmentId       String?           @map("department_id")
+  permissions        Json?
+  shiftSchedule      Json?             @map("shift_schedule")
+  lastActiveAt       DateTime?         @map("last_active_at")
+  avatarUrl          String?           @map("avatar_url")
+  preferredLanguage  String            @default("en") @map("preferred_language")
+  twoFactorSecret    String?           @map("two_factor_secret")
+  twoFactorEnabled   Boolean           @default(false) @map("two_factor_enabled")
+  mustResetPassword  Boolean           @default(false) @map("must_reset_password")
 
   organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -430,7 +437,7 @@ model TeamDepartment {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   members      OrganizationUser[]
   invites      TeamInvite[]
 
@@ -479,18 +486,18 @@ model TeamAuditLog {
 }
 
 model WhatsappNumber {
-  id            String   @id @default(uuid())
-  organizationId String  @map("organization_id")
-  phoneNumber   String   @map("phone_number")
-  phoneNumberId String   @map("phone_number_id")
-  wabaId        String   @map("waba_id")
-  businessId    String?  @map("business_id")
-  accessToken   String   @map("access_token")
-  webhookSecret String?  @map("webhook_secret")
-  qualityRating String?  @map("quality_rating")
-  isActive      Boolean  @default(true) @map("is_active")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  phoneNumber    String   @map("phone_number")
+  phoneNumberId  String   @map("phone_number_id")
+  wabaId         String   @map("waba_id")
+  businessId     String?  @map("business_id")
+  accessToken    String   @map("access_token")
+  webhookSecret  String?  @map("webhook_secret")
+  qualityRating  String?  @map("quality_rating")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
   organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   conversations Conversation[]
@@ -502,19 +509,22 @@ model WhatsappNumber {
 }
 
 model Contact {
-  id             String        @id @default(uuid())
-  organizationId String        @map("organization_id")
-  phone          String
-  name           String?
-  email          String?
-  tags           String[]      @default([])
-  notes          String?
-  optedIn        Boolean       @default(false) @map("opted_in")
-  consentSource  String?       @map("consent_source")
-  consentAt      DateTime?     @map("consent_at")
-  source         ContactSource @default(MANUAL)
-  createdAt      DateTime      @default(now()) @map("created_at")
-  updatedAt      DateTime      @updatedAt @map("updated_at")
+  id              String        @id @default(uuid())
+  organizationId  String        @map("organization_id")
+  phone           String
+  name            String?
+  email           String?
+  tags            String[]      @default([])
+  notes           String?
+  optedIn         Boolean       @default(false) @map("opted_in")
+  consentSource   String?       @map("consent_source")
+  consentAt       DateTime?     @map("consent_at")
+  consentVersion  String?       @map("consent_version")
+  consentDecision Json?         @map("consent_decision")
+  optOutAt        DateTime?     @map("opt_out_at")
+  source          ContactSource @default(MANUAL)
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
 
   organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   conversations Conversation[]
@@ -528,33 +538,33 @@ model Contact {
 }
 
 model Conversation {
-  id              String             @id @default(uuid())
-  organizationId  String             @map("organization_id")
-  contactId       String             @map("contact_id")
-  whatsappNumberId String?           @map("whatsapp_number_id")
-  assignedAgentId String?            @map("assigned_agent_id")
-  activeBotId     String?            @map("active_bot_id")
-  status          ConversationStatus @default(OPEN)
-  botActive       Boolean            @default(true) @map("bot_active")
-  botHandoffAt    DateTime?          @map("bot_handoff_at")
-  botHandoffReason String?           @map("bot_handoff_reason")
-  botState        Json?              @map("bot_state")
-  lastMessageAt   DateTime?          @map("last_message_at")
-  cs24hWindowOpensAt DateTime?       @map("cs24h_window_opens_at")
-  unreadCount     Int                @default(0) @map("unread_count")
-  firstResponseAt DateTime?          @map("first_response_at")
-  slaDueAt        DateTime?          @map("sla_due_at")
-  slaBreached     Boolean            @default(false) @map("sla_breached")
-  snoozedUntil    DateTime?          @map("snoozed_until")
-  isFavorite      Boolean            @default(false) @map("is_favorite")
-  createdAt       DateTime           @default(now()) @map("created_at")
-  updatedAt       DateTime           @updatedAt @map("updated_at")
+  id                 String             @id @default(uuid())
+  organizationId     String             @map("organization_id")
+  contactId          String             @map("contact_id")
+  whatsappNumberId   String?            @map("whatsapp_number_id")
+  assignedAgentId    String?            @map("assigned_agent_id")
+  activeBotId        String?            @map("active_bot_id")
+  status             ConversationStatus @default(OPEN)
+  botActive          Boolean            @default(true) @map("bot_active")
+  botHandoffAt       DateTime?          @map("bot_handoff_at")
+  botHandoffReason   String?            @map("bot_handoff_reason")
+  botState           Json?              @map("bot_state")
+  lastMessageAt      DateTime?          @map("last_message_at")
+  cs24hWindowOpensAt DateTime?          @map("cs24h_window_opens_at")
+  unreadCount        Int                @default(0) @map("unread_count")
+  firstResponseAt    DateTime?          @map("first_response_at")
+  slaDueAt           DateTime?          @map("sla_due_at")
+  slaBreached        Boolean            @default(false) @map("sla_breached")
+  snoozedUntil       DateTime?          @map("snoozed_until")
+  isFavorite         Boolean            @default(false) @map("is_favorite")
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
 
-  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  contact        Contact         @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  whatsappNumber WhatsappNumber? @relation(fields: [whatsappNumberId], references: [id])
-  assignedAgent  User?           @relation("AssignedAgent", fields: [assignedAgentId], references: [id])
-  activeBot      AiBot?          @relation("ActiveBot", fields: [activeBotId], references: [id])
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contact        Contact             @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  whatsappNumber WhatsappNumber?     @relation(fields: [whatsappNumberId], references: [id])
+  assignedAgent  User?               @relation("AssignedAgent", fields: [assignedAgentId], references: [id])
+  activeBot      AiBot?              @relation("ActiveBot", fields: [activeBotId], references: [id])
   messages       Message[]
   internalNotes  InternalNote[]
   labels         ConversationLabel[]
@@ -673,12 +683,12 @@ model Call {
   createdAt        DateTime      @default(now()) @map("created_at")
   updatedAt        DateTime      @updatedAt @map("updated_at")
 
-  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  contact        Contact        @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  conversation   Conversation?  @relation(fields: [conversationId], references: [id])
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contact        Contact         @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  conversation   Conversation?   @relation(fields: [conversationId], references: [id])
   whatsappNumber WhatsappNumber? @relation(fields: [whatsappNumberId], references: [id])
-  aiBot          AiBot?         @relation(fields: [aiBotId], references: [id])
-  assignedAgent  User?          @relation("AssignedCallAgent", fields: [assignedAgentId], references: [id])
+  aiBot          AiBot?          @relation(fields: [aiBotId], references: [id])
+  assignedAgent  User?           @relation("AssignedCallAgent", fields: [assignedAgentId], references: [id])
 
   @@index([organizationId, createdAt])
   @@index([conversationId])
@@ -941,6 +951,7 @@ model Campaign {
   audienceConfig   Json?          @map("audience_config")
   whatsappNumberId String?        @map("whatsapp_number_id")
   status           CampaignStatus @default(DRAFT)
+  runVersion       Int            @default(0) @map("run_version")
   scheduledAt      DateTime?      @map("scheduled_at")
   timezone         String?
   pausedAt         DateTime?      @map("paused_at")
@@ -955,30 +966,66 @@ model Campaign {
   createdAt        DateTime       @default(now()) @map("created_at")
   updatedAt        DateTime       @updatedAt @map("updated_at")
 
-  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  whatsappNumber WhatsappNumber?   @relation(fields: [whatsappNumberId], references: [id], onDelete: SetNull)
-  recipients     CampaignRecipient[]
+  organization     Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  whatsappNumber   WhatsappNumber?           @relation(fields: [whatsappNumberId], references: [id], onDelete: SetNull)
+  recipients       CampaignRecipient[]
+  quotaReservation CampaignQuotaReservation?
 
   @@map("campaigns")
 }
 
+model CampaignQuotaLedger {
+  id                  String   @id @default(uuid())
+  organizationId      String   @map("organization_id")
+  periodStart         DateTime @map("period_start")
+  reservedSendCount   Int      @default(0) @map("reserved_send_count")
+  reservedBudgetCents Int      @default(0) @map("reserved_budget_cents")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  organization Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  reservations CampaignQuotaReservation[]
+
+  @@unique([organizationId, periodStart])
+  @@map("campaign_quota_ledgers")
+}
+
+model CampaignQuotaReservation {
+  id             String                    @id @default(uuid())
+  campaignId     String                    @unique @map("campaign_id")
+  organizationId String                    @map("organization_id")
+  ledgerId       String                    @map("ledger_id")
+  sendCount      Int                       @map("send_count")
+  budgetCents    Int                       @map("budget_cents")
+  status         CampaignReservationStatus @default(ACTIVE)
+  createdAt      DateTime                  @default(now()) @map("created_at")
+  releasedAt     DateTime?                 @map("released_at")
+
+  campaign     Campaign            @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ledger       CampaignQuotaLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+  @@map("campaign_quota_reservations")
+}
+
 model CampaignRecipient {
-  id            String        @id @default(uuid())
-  campaignId    String        @map("campaign_id")
-  phone         String
-  name          String?
-  variables     Json?
-  status        MessageStatus @default(PENDING)
-  metaMessageId String?       @unique @map("meta_message_id")
-  errorMessage  String?       @map("error_message")
-  retryCount    Int           @default(0) @map("retry_count")
-  claimToken    String?       @unique @map("claim_token")
-  claimedAt     DateTime?     @map("claimed_at")
-  consentSnapshot Json?       @map("consent_snapshot")
-  sentAt        DateTime?     @map("sent_at")
-  deliveredAt   DateTime?     @map("delivered_at")
-  readAt        DateTime?     @map("read_at")
-  createdAt     DateTime      @default(now()) @map("created_at")
+  id              String        @id @default(uuid())
+  campaignId      String        @map("campaign_id")
+  phone           String
+  name            String?
+  variables       Json?
+  status          MessageStatus @default(PENDING)
+  metaMessageId   String?       @unique @map("meta_message_id")
+  errorMessage    String?       @map("error_message")
+  retryCount      Int           @default(0) @map("retry_count")
+  claimToken      String?       @unique @map("claim_token")
+  claimedAt       DateTime?     @map("claimed_at")
+  consentSnapshot Json?         @map("consent_snapshot")
+  sentAt          DateTime?     @map("sent_at")
+  deliveredAt     DateTime?     @map("delivered_at")
+  readAt          DateTime?     @map("read_at")
+  createdAt       DateTime      @default(now()) @map("created_at")
 
   campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
@@ -1143,31 +1190,31 @@ enum GenerationCreditKind {
 }
 
 model BrandKit {
-  id               String   @id @default(uuid())
-  organizationId   String   @unique @map("organization_id")
-  companyName      String   @map("company_name")
-  logoPrimaryAssetId String? @map("logo_primary_asset_id")
-  logoMonoAssetId  String?  @map("logo_mono_asset_id")
-  colorPrimary     String?  @map("color_primary")
-  colorSecondary   String?  @map("color_secondary")
-  colorAccent      String?  @map("color_accent")
-  fontHeading      String?  @map("font_heading")
-  fontBody         String?  @map("font_body")
-  toneFormal       Int      @default(60) @map("tone_formal")
-  toneBrief        Int      @default(40) @map("tone_brief")
-  toneFriendly     Int      @default(70) @map("tone_friendly")
-  tonePlayful      Int      @default(30) @map("tone_playful")
-  bannedWords      String[] @default([]) @map("banned_words")
-  mandatoryPhrases String[] @default([]) @map("mandatory_phrases")
-  sampleLike       String[] @default([]) @map("sample_like")
-  sampleDislike    String[] @default([]) @map("sample_dislike")
-  audience         String?
-  valueProps       String[] @default([]) @map("value_props")
-  defaultLocale    String   @default("en-IN") @map("default_locale")
-  locales          String[] @default(["en-IN"]) @map("locales")
-  schemaVersion    Int      @default(1) @map("schema_version")
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
+  id                 String   @id @default(uuid())
+  organizationId     String   @unique @map("organization_id")
+  companyName        String   @map("company_name")
+  logoPrimaryAssetId String?  @map("logo_primary_asset_id")
+  logoMonoAssetId    String?  @map("logo_mono_asset_id")
+  colorPrimary       String?  @map("color_primary")
+  colorSecondary     String?  @map("color_secondary")
+  colorAccent        String?  @map("color_accent")
+  fontHeading        String?  @map("font_heading")
+  fontBody           String?  @map("font_body")
+  toneFormal         Int      @default(60) @map("tone_formal")
+  toneBrief          Int      @default(40) @map("tone_brief")
+  toneFriendly       Int      @default(70) @map("tone_friendly")
+  tonePlayful        Int      @default(30) @map("tone_playful")
+  bannedWords        String[] @default([]) @map("banned_words")
+  mandatoryPhrases   String[] @default([]) @map("mandatory_phrases")
+  sampleLike         String[] @default([]) @map("sample_like")
+  sampleDislike      String[] @default([]) @map("sample_dislike")
+  audience           String?
+  valueProps         String[] @default([]) @map("value_props")
+  defaultLocale      String   @default("en-IN") @map("default_locale")
+  locales            String[] @default(["en-IN"]) @map("locales")
+  schemaVersion      Int      @default(1) @map("schema_version")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
@@ -1203,7 +1250,7 @@ model MediaAsset {
   createdAt      DateTime         @default(now()) @map("created_at")
   updatedAt      DateTime         @updatedAt @map("updated_at")
 
-  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   jobs         GenerationJob[]
   attachments  ContentDraftAttachment[]
 

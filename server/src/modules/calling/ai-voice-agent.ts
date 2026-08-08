@@ -2,9 +2,9 @@ import prisma from '../../config/database';
 import { unregisterActiveCall } from './session-store';
 import { createModuleLogger } from '../../utils/logger';
 import { emitToOrg } from '../../realtime';
-import { generateBotReply, performHandoff, streamVoiceBotReply } from '../ai/chatbot.service';
-import { shouldEndVoiceCallOnHandoff } from '../ai/guardrails';
-import { validateOutboundReply } from '../ai/guardrails';
+import { createChatCompletion } from '../ai/chat-completion.service';
+import { performHandoff, streamVoiceBotReply } from '../ai/chatbot.service';
+import { shouldEndVoiceCallOnHandoff, validateOutboundReply } from '../ai/guardrails';
 import { MetaCallingService } from './meta-calling.service';
 import { SarvamStreamTranscriber, isSarvamSttConfigured } from './sarvam.stt';
 import { synthesizeSpeechSarvam, isSarvamTtsConfigured } from './sarvam.tts';
@@ -665,52 +665,9 @@ export class AiVoiceCallSession {
             data: { metadata: { ...metadata, summary } },
           });
 
-          // Store the summary as a message in the Inbox conversation
+          // Agent-only: internal note (never show as an inbound customer chat bubble).
           if (this.ctx.conversationId) {
-            const msgDirection = call?.direction === 'BUSINESS_INITIATED' ? 'OUTBOUND' : 'INBOUND';
-            const summaryMessage = await prisma.message.create({
-              data: {
-                conversationId: this.ctx.conversationId,
-                direction: msgDirection,
-                type: 'TEXT',
-                content: summary,
-                status: 'READ',
-                metadata: {
-                  isCallSummary: true,
-                  callId: this.ctx.callId,
-                },
-              },
-            });
-
-            await prisma.conversation.update({
-              where: { id: this.ctx.conversationId },
-              data: { lastMessageAt: new Date() },
-            });
-
-            emitToOrg(this.ctx.organizationId, 'message:new', {
-              conversationId: this.ctx.conversationId,
-              message: {
-                id: summaryMessage.id,
-                direction: summaryMessage.direction,
-                type: summaryMessage.type,
-                content: summaryMessage.content,
-                status: summaryMessage.status,
-                createdAt: summaryMessage.createdAt,
-                metadata: summaryMessage.metadata,
-              },
-              conversation: {
-                id: this.ctx.conversationId,
-                lastMessageAt: new Date().toISOString(),
-                lastMessage: {
-                  id: summaryMessage.id,
-                  direction: summaryMessage.direction,
-                  type: summaryMessage.type,
-                  content: summaryMessage.content,
-                  status: summaryMessage.status,
-                  createdAt: summaryMessage.createdAt,
-                },
-              },
-            });
+            await this.persistCallSummaryNote(summary, reason);
           }
         }
       } catch (err) {
@@ -805,26 +762,57 @@ export class AiVoiceCallSession {
   }
 
   /**
-   * Generate a brief summary from the transcript using the AI bot.
+   * Generate a brief summary from the transcript for the agent inbox (internal note).
    */
   private async generateSummary(): Promise<string | null> {
     try {
       const transcriptText = this.transcript
-        .map((t) => `${t.role}: ${t.text}`)
+        .map((t) => `${t.role === 'assistant' ? 'AI' : 'Customer'}: ${t.text}`)
         .join('\n')
         .slice(-3000);
+      if (!transcriptText.trim()) return null;
 
-      const summaryResult = await generateBotReply({
+      const completion = await createChatCompletion({
         organizationId: this.ctx.organizationId,
         conversationId: this.ctx.conversationId,
-        inboundMessage: `Summarize this call transcript in 2-3 short sentences:\n\n${transcriptText}`,
-        channel: 'voice',
         botId: this.ctx.aiBotId ?? undefined,
+        messages: [
+          {
+            role: 'system',
+            content:
+              'Summarize this phone call transcript in 2-3 short sentences for the support agent. State what the customer wanted and what was promised. Do not address the customer or offer to connect them with anyone.',
+          },
+          { role: 'user', content: transcriptText },
+        ],
+        maxTokens: 150,
+        temperature: 0.3,
       });
 
-      return summaryResult.reply?.trim() || null;
+      return completion.content?.trim() || null;
     } catch {
       return null;
     }
+  }
+
+  private async persistCallSummaryNote(summary: string, reason: string): Promise<void> {
+    if (!this.ctx.conversationId) return;
+
+    const noteAuthor = await prisma.organizationUser.findFirst({
+      where: {
+        organizationId: this.ctx.organizationId,
+        role: { in: ['OWNER', 'ADMIN'] },
+      },
+      orderBy: { role: 'asc' },
+      select: { userId: true },
+    });
+    if (!noteAuthor) return;
+
+    await prisma.internalNote.create({
+      data: {
+        conversationId: this.ctx.conversationId,
+        userId: noteAuthor.userId,
+        content: `📞 Call summary (${reason}):\n${summary}\n\nCall ID: ${this.ctx.callId}`,
+      },
+    });
   }
 }
