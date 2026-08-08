@@ -121,6 +121,30 @@ Target branch `call-ui-improvemnet` ships 3 migrations (init + `auth_email_verif
 - Disk: 59% used (3.8G free). DB backup: `/home/samyoj/backups/whatsapp_platform-20260808-144221.sql.gz`.
 - Meta app webhook active (messages, calls); Connect OAuth ready pending the one-time Meta dashboard redirect-URI whitelist.
 
+---
+
+## Follow-up change (2026-08-08) — Email verification removed
+
+User request: allow simple email + password login/registration; the "Email not verified" gate was blocking sign-in.
+
+Code changes (identical files scp'd to VM `fa0cb5b`, rebuilt, restarted):
+- `server/src/modules/auth/routes.ts`:
+  - Register now sets `emailVerifiedAt: new Date()` and issues a session immediately (`accessToken`/`refreshToken`), returns `emailVerificationRequired: false` -> user is auto signed-in on registration.
+  - Login: removed the `!emailVerifiedAt` block that returned `requiresEmailVerification` -> login proceeds with email + password only.
+- `client/src/pages/RegisterPage.tsx`: after successful register, `navigate('/')` (auto-login lands in the app).
+- (Verification endpoints `/verify-email`, `/resend-verification` left intact but no longer gate anything; the login banner is now unreachable.)
+
+Data changes on prod DB:
+- `user.updateMany({ emailVerifiedAt: null } -> new Date())`: 1 existing user marked verified.
+- Reset password for `nirbhayhiwse37@gmail.com` to the user-provided value (stored hash didn't match) + marked verified. 1 org membership ("Student").
+
+Verification:
+- `POST /api/auth/login` (nirbhayhiwse37@gmail.com): `success:true`, accessToken issued, `emailVerified:true`.
+- `POST /api/auth/register` (throwaway): `201`, accessToken issued, `emailVerificationRequired:false`; test user+org deleted after.
+- Client rebuilt: new bundle `index-D82blPtG.js` (old `index-CgEXm8z1.js` replaced -> users should hard-refresh).
+
+WARNING — git drift: these edits live on the VM working tree only (not committed/pushed). A future `git reset --hard origin/call-ui-improvemnet` will revert them. Commit + push `routes.ts` + `RegisterPage.tsx` to persist.
+
 ### Recommended follow-ups (not done — flag only)
 - Add nightly `pg_dump` cron (still no automated backups beyond the manual one taken here).
 - Optionally clean the duplicate nginx `:80` server block (harmless warning) and block scanner paths.
