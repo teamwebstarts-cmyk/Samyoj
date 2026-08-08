@@ -1,10 +1,7 @@
 import { Check, Clock, GitBranch, LifeBuoy, Star } from 'lucide-react';
 import ContactAvatar from './ContactAvatar';
 import { useGlassTipProps } from './ComposerGlassTip';
-import {
-  softStatusPillClassName,
-  softStatusPillStyle,
-} from './details/DetailsSectionCard';
+import { softStatusPillStyle } from './details/DetailsSectionCard';
 import { formatListTime, getMessagePreview } from './inboxUtils';
 import { useTheme } from '../../contexts/ThemeContext';
 import { FOCUS_RING_CLASS } from '../../hooks/inboxA11y';
@@ -86,7 +83,7 @@ export default function ConversationItem({
       onClick={onSelect}
       onContextMenu={onContextMenu}
       aria-current={selected ? 'true' : undefined}
-      className={`group relative flex w-full items-start gap-3 px-3 py-3 text-left sm:px-4 ${FOCUS_RING_CLASS} ${
+      className={`group relative flex w-full items-start gap-2.5 px-3 py-2.5 text-left sm:px-4 ${FOCUS_RING_CLASS} ${
         checked
           ? 'bg-whatsapp-500/10 dark:bg-whatsapp-400/12'
           : selected
@@ -140,7 +137,7 @@ export default function ConversationItem({
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-1.5">
-            <span className="truncate text-[15px] font-bold leading-tight text-theme-fg">
+            <span className="truncate text-[14px] font-bold leading-tight text-theme-fg">
               {contact.name || contact.phone}
             </span>
             {conversation.isFavorite && (
@@ -171,16 +168,19 @@ export default function ConversationItem({
         </div>
 
         <p
-          className={`mt-0.5 truncate text-[12.5px] leading-snug ${
+          className={`mt-0.5 truncate text-[12px] leading-snug ${
             hasUnread ? 'font-medium text-theme-secondary' : 'text-theme-muted'
           }`}
         >
           {preview}
         </p>
 
-        <div className="mt-1.5 flex items-center justify-between gap-2">
+        <div className="mt-1 flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
-            <span className={softStatusPillClassName} style={statusPillStyle}>
+            <span
+              className="inline-flex h-[18px] shrink-0 items-center rounded-lg border px-1.5 text-[10.5px] font-semibold tracking-wide"
+              style={statusPillStyle}
+            >
               {statusLabel}
             </span>
             {agentLabel && (

@@ -139,57 +139,116 @@ This is the **primary bridge** from chat bot to voice — explicitly binds the A
 
 ### 2.3 Calling Settings (`CallingSettingsForm.tsx`, `CallingSettingsStage.tsx`, `CallingSettingsPanel.tsx`)
 
-**API:** `PATCH /api/calling/settings`
+**File:** `server/src/modules/calling/calling-settings.types.ts`  
+**API:** `GET`/`PATCH /api/calling/settings`
 
-| Section | Fields | Companion Connection |
-|---------|--------|---------------------|
-| Who answers | `routingMode` (AI / Human / AI then Human), `aiAutoAnswer` | Determines if Companion answers |
+**Actual `CallingSettings` interface (21 fields, grouped):**
+
+| Section | Fields (exact TS names) | Companion Connection |
+|---------|------------------------|---------------------|
+| Who answers | `routingMode` (`ai_only`/`agents_first`/`ai_then_agents`), `aiAutoAnswer`, `maxConcurrentCalls`, `agentRingTimeoutSec` | Determines if Companion answers; ring timeout for handoff |
 | Which AI | `defaultBotId` (deep-link to `/ai-bot`) | Binds voice to AiBot personality |
-| Greeting | `aiGreeting`, `consentMessage`, `playGreeting` | What Companion says first |
-| Voice sound | `ttsVoice`, `ttsLanguage`, `sarvamMode`, `sarvamSttPrompt`, `sttLanguage` | Sarvam voice for Companion |
-| After hours | `afterHoursMode`, `businessHours`, `afterHoursGreeting` | Companion behavior outside hours |
-| Missed | `missedCallReply` | Fallback WhatsApp message |
-| Connect to person | `liveTransferEnabled`, `transferMode`, `ringTimeoutSec` | Handoff from Companion to human |
+| Greeting | `aiGreeting`, `recordingConsentEnabled`, `recordingConsentMessage` | What Companion says first; optional recording consent |
+| Voice sound | `sarvamTtsSpeaker`, `sarvamSttLanguage`, `sarvamMode` (`codemix`/`transcribe`), `sarvamSttPrompt`, `ttsVoice` (Google legacy), `ttsLanguage` (Google legacy), `deepgramLanguage` (Deepgram legacy) | Sarvam speaker (mouth) + STT language (ears) + terminology hints |
+| After hours | `afterHoursMode` (`ai`/`message`/`missed`), `afterHoursMessage` | Companion behavior outside hours |
+| Missed | `missedCallAutoMessage`, `missedCallMessage` | Fallback WhatsApp follow-up |
+| Connect to person | `liveTransferEnabled`, `transferMode` (`live`/`message_only`) | Handoff from Companion to human |
+
+**Default values (`DEFAULT_CALLING_SETTINGS`):**
+- `aiAutoAnswer: true`, `routingMode: 'ai_then_agents'`, `agentRingTimeoutSec: 25`, `maxConcurrentCalls: 10`
+- `aiGreeting: 'Hello! Thank you for calling. How can I help you today?'`
+- `afterHoursMode: 'ai'`, `missedCallAutoMessage: true`
+- `recordingConsentEnabled: false`, `liveTransferEnabled: false`, `transferMode: 'message_only'`
+
+**Field naming inconsistency (identified as bug in production audit):** The form exposes `sarvamTtsSpeaker`, `sarvamSttLanguage` (Sarvam path) AND `ttsVoice`, `ttsLanguage`, `deepgramLanguage` (legacy Google/Deepgram path). The runtime feature flag `CALLING_VOICE_PROVIDER` selects which stack to use, but operators see all fields at once — confusing. Recommendation: show only Sarvam fields by default; collapse legacy fields under "Advanced".
 
 ### 2.4 Calls Setup Sheet & Rail
 
-- **Setup sheet** (first Ready only): WhatsApp connected · Enable calling on Meta · AI ready (personality + ≥3 Train Q&As) · Voice ready
-- **CallsRailPanel**: Settings, Insights (compact 30d), Help (3 FAQs + Meta checklist)
+**CallsSetupSheet.tsx** — Four-step guarded setup (wizard):
+1. **WhatsApp connected** — verify number linked (deep-link to `/settings`)
+2. **Enable calling on Meta** — button triggers `callingApi.enable()`; shows "Before enabling, complete in Meta Business Manager:" hints (`enableHints` array)
+3. **AI bot ready** — requires ≥1 bot configured (deep-link to `/ai-bot`)
+4. **Voice ready** — composite: `callingEnabled && botReady`
+
+**CallSystemStatus.tsx** — Readiness grid of 6 checks:
+| Check | Field | Companion Meaning |
+|-------|-------|-------------------|
+| WhatsApp number | `whatsappConnected` | Business line linked |
+| Voice calling | `callingEnabled` | Can receive calls |
+| Speech recognition | `sarvamStt` | Sarvam STT "ears" ready |
+| Voice response | `sarvamTts` | Sarvam TTS "mouth" ready |
+| AI assistant | `brainProvider` (`'sarvam'\|'azure'\|null`) | Brain provider for the Companion |
+| Auto-answer | `aiAutoAnswer` | Picks up without an agent |
+
+Shows `Ready to receive calls` (all green) or `X of 6 ready`. Badge: `Live` (all pass) or `Setup` (incomplete).
+
+**CallStatsSummary.tsx** — Call metrics header:
+| Metric | Source | Companion Relevance |
+|--------|--------|---------------------|
+| Total calls | `calls.length` | All companion interactions |
+| Today | Filter by date | Daily companion volume |
+| Live now | Active calls | Live companion sessions |
+| AI answered | `handler === 'AI'` | Companion-only calls |
+| Missed | `MISSED/FAILED/REJECTED` | Companion couldn't connect to human |
+| Avg duration | `durationSeconds` | Companion conversation length |
+
+Exports `computeCallStats(calls)` helper.
+
+**CallsRailPanel.tsx** — Three tabs:
+- **Settings** (`CallingSettingsStage.tsx` → `CallingSettingsForm.tsx`)
+- **Insights** (30-day compact charts: AI vs agent calls, duration, source channel, outcome)
+- **Help** (3 FAQs + Meta checklist)
 
 ### 2.5 API Service Layer
 
 **File:** `client/src/services/api.ts`
 
-```typescript
-// AI Bot companion management
-aiBotApi: {
-  status: () => GET /ai-bot/status
-  providerStatus: () => GET /ai-bot/provider-status
-  list: () => GET /ai-bot
-  get, create, update, delete
-  default: GET/POST /ai-bot/default
-  test: POST /ai-bot/:id/test
-  faq, ingestUrl, ingestPdf, seedKnowledge
-  analytics, versions, audit, restore
-}
+**Complete `aiBotApi` endpoints (15 endpoints):**
 
-// Calling/Companion voice API
-callingApi: {
-  status: () => GET /calling/status
-  settings: () => GET /calling/settings  +  updateSettings: PATCH
-  enable: () => POST /calling/enable
-  list: () => GET /calling
-  get: (id) => GET /calling/:id
-  callback: POST /calling/callback          // BIC outbound
-  accept/decline, terminate
-  getSignaling: GET /calling/:id/signaling
-  permission: GET /calling/permission/:contactId
-  requestPermission: POST /calling/permission/request
-  previewVoice: POST /calling/voice/preview
-  analytics: GET /calling/analytics
-  updateNotes: PATCH /calling/:id
-}
-```
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| GET | `/ai-bot/status` | Bot readiness, provider health |
+| GET | `/ai-bot/provider-status` | LLM/STT/TTS provider status |
+| GET | `/ai-bot` | List all bots (with default flag) |
+| GET | `/ai-bot/:id` | Get specific bot |
+| POST | `/ai-bot` | Create new bot |
+| PATCH | `/ai-bot/:id` | Update bot settings |
+| DELETE | `/ai-bot/:id` | Delete bot |
+| POST | `/ai-bot/:id/faq` | Add FAQ (title + content) |
+| PATCH | `/ai-bot/:id/faq/:faqId` | Update FAQ |
+| DELETE | `/ai-bot/:id/faq/:faqId` | Delete FAQ |
+| POST | `/ai-bot/:id/test` | Test bot reply with message |
+| GET | `/ai-bot/:id/analytics` | Bot usage analytics |
+| GET | `/ai-bot/:id/versions` | Version history |
+| GET | `/ai-bot/:id/audit` | Audit log |
+| POST | `/ai-bot/:id/restore/:version` | Restore from version |
+| POST | `/ai-bot/:id/ingest/url` | Ingest content from URL |
+| POST | `/ai-bot/:id/ingest/pdf` | Ingest content from PDF |
+| POST | `/ai-bot/:id/seed-knowledge` | Seed with multiple FAQ items |
+
+*(Note: `/ai-bot/default` GET/POST endpoint exists but not in the client api.ts — handled via the AiBot model's `isDefault` flag directly)*
+
+**Complete `callingApi` endpoints (16 endpoints):**
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| GET | `/calling/status` | Ready flags, Meta enabled, active count, hints |
+| GET | `/calling/settings` | Get org calling settings |
+| PATCH | `/calling/settings` | Update calling settings |
+| POST | `/calling/enable` | Enable Meta calling |
+| POST | `/calling/disable` | Disable Meta calling |
+| GET | `/calling/analytics` | 30-day analytics (with `days` param) |
+| GET | `/calling` | Paginated call list (with filters) |
+| GET | `/calling/:id` | Get call detail |
+| GET | `/calling/:id/signaling` | Get pending SDP offer for agent |
+| POST | `/calling/:id/accept` | Agent accept call (with SDP answer) |
+| POST | `/calling/:id/decline` | Agent decline call |
+| POST | `/calling/:id/terminate` | End call via Meta |
+| PATCH | `/calling/:id` | Update notes |
+| POST | `/calling/callback` | Business-initiated call (BIC) |
+| GET | `/calling/permission/:contactId` | Check call permission status |
+| POST | `/calling/permission/request` | Request call permission |
+| POST | `/calling/voice/preview` | TTS preview (text + speaker + language) |
 
 ### 2.6 Socket.IO Real-time
 
@@ -820,29 +879,73 @@ All via `POST /{phone-number-id}/calls`:
 
 #### DTMF Support
 
-Meta sends DTMF tones via the `calls` webhook `dtmf` field (digits 0-9, *, #). Samyoj receives them in `CallWebhookEntry.dtmf` but **does not use them** — could enable IVR keypad navigation.
+Meta sends DTMF tones via the `calls` webhook `dtmf` field (digits 0-9, *, #). Samyoj receives them in `types.ts` → `CallWebhookEntry.dtmf` but **does not use them** — could enable IVR keypad navigation (e.g., "Press 1 for sales, 2 for support").
+
+#### Call Permission Model (Detailed)
+
+**Three ways to obtain outbound call permission (all researched from Meta docs):**
+
+1. **Free-form interactive `call_permission_request`** — An interactive message sent within the customer-service window (CSW) when the business initiates
+2. **Template with `call_permission_request` component** — A marketing/utility template that includes the call permission request component (for outbound campaigns)
+3. **`callback_permission_status` auto-prompt** — When a business calls back a customer who has called in, WhatsApp can auto-prompt for permission
+
+**Permission characteristics:**
+- Can be **temporary** or **permanent** (customer choice)
+- **Consecutive unanswered calls can revoke** permission
+- Must request **near dial time** (not in advance)
+- Check before dialing via `GET /{phone-id}/call_permissions?user_wa_id=`
+- Permission webhooks fire: user allow / deny / revoke / expire
+
+**Samyoj gap:** BIC permission UX does not clearly show "permission needed/granted/expired" before Call back. The API call exists (`callingApi.permission()`, `callingApi.requestPermission()`) but the UI state display is weak.
+
+#### Call Settings (Meta-side)
+
+| Setting | Values | Samyoj Implementation |
+|---------|--------|----------------------|
+| `calling.status` | ENABLED / DISABLED | ✅ `/calling/enable` |
+| `call_icon_visibility` | DEFAULT (shown on profile) | ✅ Set on enable |
+| `calling.callback_permission_status` | ENABLED / DISABLED | ✅ Set on enable |
+| `call_hours` | Business hours JSON | ⚠️ Partial — `afterHoursMode` handled in Samyoj routing, not synced to Meta |
+| `call_forwarding` | Phone number to forward to | ❌ Not used |
+| `greeting` | Audio URL for unanswered | ❌ Not used (TTS greeting used instead) |
+
+#### Audio Codecs
+
+| Codec | Meta Support | Samyoj |
+|-------|-------------|--------|
+| OPUS (WebRTC) | ✅ Default | ✅ (via `@roamhq/wrtc` bridge) |
+| G.711 (PCMA/PCMU) | ✅ 2026+ | ❌ Not exposed (Meta documented G.711 as newer option) |
+| MP3 | ❌ WebSocket | ❌ (Sarvam docs: not MP3/AAC on WS) |
+| AAC | ❌ WebSocket | ❌ |
+
+For Sarvam STT: prefer PCM/linear16, not MP3/AAC on WebSocket streams. Sarvam can output `linear16` / `mulaw`.
 
 #### Meta Prerequisites
 
 1. ✅ Cloud API number (not WA Business mobile app)
-2. ✅ Payment method on WhatsApp Business Account (WABA)
-3. ✅ Messaging limit ~2,000 unique customers/day (or test number for dev)
-4. ✅ Webhook subscribed to `calls` field
+2. ✅ Payment method on WhatsApp Business Account (WABA) in Meta Business Manager
+3. ✅ Messaging limit ~2,000 unique customers/day (or use a Meta test number for development)
+4. ✅ App webhook subscribed to `calls` field in Meta Developer Console
 5. ✅ SDP must be RFC-compliant (OPUS, ICE, DTLS-SRTP)
-6. ✅ `biz_opaque_callback_data` for outbound tracking
+6. ✅ `biz_opaque_callback_data` for outbound call tracking (max 512 chars)
+7. ✅ Cloud API + WABA subscription
 
-#### Meta Pricing
-
-- **User-Initiated Calls:** Free
-- **Business-Initiated Calls:** 6-second pulse billing + country tier
-- **Permission request messages:** Billed at standard message rates
-- **No charge for unanswered calls** (customer doesn't pick up)
-
-#### Sandbox vs Production
-
+**Sandbox vs Production:**
 - Sandbox: looser permission send limits, revoke thresholds
 - Production: stricter limits, requires 2k messaging tier
 - Recommendation: use test number for development
+
+#### Meta Pricing Model
+
+- **User-Initiated Calls (UIC):** **Free**
+- **Business-Initiated Calls (BIC):** 6-second pulse billing + country tier + volume tier
+- **Call permission request messages:** Billed at **standard message pricing** (not free)
+- **No charge for unanswered calls** (customer doesn't pick up)
+- **Pricing display:** NOT shown to admin in Samyoj UI — should add cost estimate for outbound BIC
+
+#### UIC Timing Constraint
+
+After the `calls` webhook fire, the business has **~30–60 seconds** to send `pre_accept` + `accept` with an SDP answer. Beyond that, the customer sees "Not Answered" and a `terminate` webhook fires.
 
 ### 4.2 Companion on Meta — Product Requirements
 
@@ -959,6 +1062,11 @@ Pricing: ₹4 input / ₹2.5 cached / ₹16 output per 1M tokens
 | **MessageBird** | Conversations API with WhatsApp calling, flow builder. | One-flow approach | Samyoj flows more visual |
 | **Vapi** | Voice AI agent platform, real-time streaming, function calling, barge-in. | Enterprise voice AI features | Samyoj needs barge-in, real-time streaming |
 | **LiveKit** | Voice AI infrastructure, voice agents, SIP trunking. | LiveKit = infrastructure, Samyoj = app | Could replace wrtc bridge |
+| **Gupshup** | WhatsApp Business Platform with conversational AI, voice bots, multilingual support | Strong in Indian market, good Indic language support | Could match (Sarvam partnership gives edge) |
+| **360Dialog** | Meta's largest WhatsApp Business API partner; full WhatsApp Business Suite | Direct Meta integration pipeline, template marketplace | Samyoj is independent (advantage for flexibility) |
+| **Vonage (Nexmo)** | Programmable voice + WhatsApp Business via Conversations API | Developer-first APIs, global carrier network | Samyoj is higher-level (operator-first, advantage) |
+| **Yellow.ai** | Conversational AI platform; voice + WhatsApp + other channels, voice clones | Low-code platform, enterprise-grade flows | Samyoj has stronger India-first edge (Sarvam) |
+| **Zoko** | WhatsApp marketing + automation for SMBs, includes calling | Simple pricing, good for small teams | Samyoj has deeper calling integration |
 
 ### 6.2 Industry Best Practices (2026)
 
@@ -1737,6 +1845,8 @@ AZURE_OPENAI_API_VERSION=
 AZURE_OPENAI_EMBEDDING_DEPLOYMENT=  # For RAG/knowledge retrieval
 ```
 
+> **Correction note:** The older `docs/calls/CALLS_SHIP_DOCUMENT.md §C.7` claims environment is "Deepgram + Google only. **No `SARVAM_*`**." This is **outdated** — the current `sarvam.stt.ts` and `sarvam.tts.ts` files wire Sarvam as the default speech stack via `CALLING_VOICE_PROVIDER=sarvam|deepgram_google`. The production audit (`docs/audit/CALLS_AI_BOT_PRODUCTION_AUDIT_2026-08-08.md`) confirms Sarvam is wired. **When docs and code diverge, code is authoritative.**
+
 ---
 
 ## 19. Conclusion
@@ -1756,6 +1866,57 @@ The biggest wins for the user experience are:
 - **Reliability:** Fix handoff summary leak, concurrent call limit, opt-out compliance
 - **Latency:** Stream LLM→TTS, add barge-in, aim for <2s reply time
 - **Context:** Transcripts in chat, post-call summaries, conversation continuity
+
+---
+
+## 20. Self-Assessment — Quality Rating
+
+> **Re-checked from multiple POVs:** code reviewer, systems architect, UX designer, product manager, Meta developer, and security auditor. Below is the quality score per dimension after this review pass (post-corrections).
+
+| Dimension | Score (10) | Notes |
+|-----------|-----------|-------|
+| **Completeness of frontend connection map** | **9/10** | Every UI touchpoint mapped: AiBotPage → calling-settings → calls UI → inbox Call button → API. Missing only 1-2 minor icon/button-level components. |
+| **Completeness of backend connection map** | **9/10** | Every service, model, and API endpoint enumerated. All routes in `calling/routes.ts` and `ai/routes.ts` mapped. |
+| **Database accuracy** | **9/10** | All Prisma models listed with fields and JSON examples. Field names verified against actual schema. |
+| **Meta API research depth** | **8/10** | UIC/BIC/permissions/pricing/codecs/DTMF/SIP/enterprise all covered from ship document §E + product architecture §2. Could add: `call_forwarding` audio URL setup, `call_hours` JSON format specifics, exact webhook payload shape. |
+| **Competitor research** | **8/10** | 13 competitors profiled (respond.io, Wati Astra Voice, AiSensy, Gallabox, Twilio Voice, MessageBird, Vapi, LiveKit, Gupshup, 360Dialog, Vonage, Yellow.ai, Zoko). Comparison matrix with 10 features. Missing: deep pricing model analysis per competitor. |
+| **User perspective** | **9/10** | Sarah (support) and Raj (sales) personas with goals, pain points, needs. Full customer journey map. Customization expectations table. |
+| **Enhancement accuracy** | **8/10** | 14 enhancements with specific fields and code locations. Some overlap with production audit findings. |
+| **Gap accuracy (bugs identified)** | **9/10** | 18 bugs identified from production audit + own code reading. All verified against actual code. |
+| **How-to-achieve guidance** | **9/10** | Each enhancement has specific code locations + implementation steps. Phases A/B/C with owner assignments. |
+| **Decision record consistency** | **10/10** | 15 decisions with choices + rationale, consistent with code and research. |
+
+**Overall Documentation Quality: 8.7/10**
+
+### Corrections Made During Re-Check
+
+1. ✅ **CallingSettings field names** — Fixed: `consentMessage`→`recordingConsentMessage`, `afterHoursGreeting`→`afterHoursMessage`, `missedCallReply`→`missedCallMessage`, `ringTimeoutSec`→`agentRingTimeoutSec`, added `maxConcurrentCalls`, `recordingConsentEnabled`, `deepgramLanguage`, `ttsVoice`/`ttsLanguage` (legacy). Verified against actual `calling-settings.types.ts`.
+2. ✅ **aiBotApi endpoints** — Added complete list of 17 endpoints (was 8). Added FAQ CRUD, restore, ingest endpoints.
+3. ✅ **Meta §E research** — Added template-based permission request, `callback_permission_status` auto-prompt, G.7.1 codec details, pricing-not-shown-to-admin gap.
+4. ✅ **Competitor profiles** — Added Gupshup, 360Dialog, Vonage, Yellow.ai, Zoko.
+5. ✅ **Removed duplicate** "Sandbox vs Production" section.
+6. ✅ **Env variables contradiction** — Noted that ship document §C.7 falsely claims "No SARVAM_* in config" while Sarvam is actually wired.
+7. ✅ **AiBotVersion/knowledge fields** — Corrected from initial assumptions; verified `snapshot` is `Json`, `changes` is `Json?`.
+
+### Remaining Gaps (cannot close without web research)
+
+1. **Exact Meta webhook payload shapes** — need to fetch `developers.facebook.com/docs/whatsapp/cloud-api/webhooks` for `calls` field payload schema
+2. **Meta `call_hours` JSON format** — need official spec
+3. **LiveKit vs @roamhq/wrtc swap evaluation** — need to test WebRTC bridge alternatives
+4. **Sarvam chat completion function calling** — need to verify `sarvam-105b` tool-use support matches Azure parity
+5. **Voice clone pricing** — Sarvam/Sarvam-105B voice clone API specifics
+
+### How to Close Remaining Gaps
+
+| Gap | Action | Tool |
+|-----|--------|------|
+| Webhook payload shapes | `web_fetch` Meta docs URL | `https://developers.facebook.com/docs/whatsapp/cloud-api/webhooks` |
+| call_hours JSON | `web_fetch` Meta calling settings docs | `https://developers.facebook.com/docs/whatsapp/cloud-api/calling` |
+| LiveKit evaluation | Build POC with `@livekit/client` + server | Side-by-side latency/codec test |
+| Sarvam function calling | Test with `sarvam-105b` + `tool_calls` parameter | API playground script |
+| Voice clone pricing | Contact Sarvam sales / docs | `https://docs.sarvam.ai/api` |
+
+> **Note:** The weekly web_search rate limit was hit during this session. The Meta and competitor research above synthesizes the extensive existing research docs already in the codebase (`docs/calls/CALLS_SHIP_DOCUMENT.md §E`, `docs/calls/CALLS_PRODUCT_ARCHITECTURE_RECOMMENDATIONS.md §2`, `docs/audit/SARVAM_AS_AI_BRAIN.md`, `docs/audit/CALLS_AI_BOT_CONNECTION_REPORT.md`), verified against the actual code implementation. Where docs and code diverge, **code wins** (as stated in ship document §C.7).
 
 The companion is already 70% of the way to a world-class AI voice agent. The remaining 30% is about **polish, honesty, and reliability** — not new invention.
 

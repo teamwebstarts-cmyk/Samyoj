@@ -557,7 +557,7 @@ async function handleCallTerminate(orgId: string, call: CallWebhookEntry): Promi
   });
 
   // Unanswered outbound (never connected) increments Meta quality cooldown.
-  if (status === 'FAILED' || status === 'MISSED' || status === 'TERMINATED') {
+  if (status !== 'COMPLETED') {
     await recordBicUnansweredIfNeeded(existing);
   }
 

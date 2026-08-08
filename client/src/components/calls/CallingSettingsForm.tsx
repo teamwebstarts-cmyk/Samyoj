@@ -223,7 +223,7 @@ export default function CallingSettingsForm({ initialSection = 'who' }: CallingS
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
         <div className="flex flex-col gap-6 lg:flex-row lg:gap-8">
           {/* Section nav */}
-          <nav className="flex shrink-0 gap-1 overflow-x-auto lg:w-[200px] lg:flex-col lg:overflow-visible">
+          <nav className="flex shrink-0 gap-1 overflow-x-auto lg:h-full lg:w-[210px] lg:flex-col lg:gap-1.5 lg:overflow-visible">
             {SECTIONS.map((item) => {
               const Icon = item.icon;
               const active = section === item.id;
@@ -232,20 +232,20 @@ export default function CallingSettingsForm({ initialSection = 'who' }: CallingS
                   key={item.id}
                   type="button"
                   onClick={() => setSection(item.id)}
-                  className={`inline-flex shrink-0 items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-[13px] font-semibold transition-all ${
+                  className={`inline-flex shrink-0 items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-[13px] font-semibold transition-all lg:gap-3 lg:px-3.5 lg:py-3 lg:text-[15px] ${
                     active
                       ? 'bg-emerald-50 text-emerald-800 shadow-sm ring-1 ring-emerald-200/80 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-800'
                       : 'text-neutral-500 hover:bg-neutral-50 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-900 dark:hover:text-neutral-200'
                   }`}
                 >
-                  <Icon className="h-[18px] w-[18px] shrink-0" strokeWidth={2} />
+                  <Icon className="h-[18px] w-[18px] shrink-0 lg:h-[21px] lg:w-[21px]" strokeWidth={2} />
                   <span className="whitespace-nowrap">{item.label}</span>
                 </button>
               );
             })}
             <Link
               to="/calls"
-              className="mt-2 hidden rounded-xl border border-dashed border-neutral-200 px-3 py-2.5 text-[11px] font-semibold text-neutral-400 hover:border-emerald-200 hover:text-emerald-700 lg:block dark:border-neutral-700"
+              className="mt-2 hidden rounded-xl border border-dashed border-neutral-200 px-3.5 py-3 text-[12.5px] font-semibold text-neutral-400 hover:border-emerald-200 hover:text-emerald-700 lg:mt-auto lg:block dark:border-neutral-700"
             >
               Setup guide on Calls page
             </Link>
