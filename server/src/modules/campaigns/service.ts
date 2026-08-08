@@ -31,9 +31,10 @@ import {
   CAMPAIGN_CLAIM_LEASE_MS,
   canFinalizeCampaignRun,
   campaignCounterSnapshot,
-  reconcileProviderStatusTransition,
+  reconcileWebhookRecipient,
   rollbackRecipientAction,
   shouldReleaseCampaignQuota,
+  shouldReleaseQuotaAfterWebhook,
 } from './safety';
 import { getRedis } from '../../config/redis';
 import { buildCampaignJobId, canRollbackQueuedCampaign } from './worker-safety';
@@ -436,17 +437,37 @@ export async function syncCampaignRecipientFromWebhook(
     if (!current) return;
     const now = new Date();
     const data: Prisma.CampaignRecipientUpdateInput = {};
-    const reconciledStatus = reconcileProviderStatusTransition(current.status, normalized);
-    if (reconciledStatus) {
-      data.status = reconciledStatus;
+    const reconciliation = reconcileWebhookRecipient({
+      currentStatus: current.status,
+      providerStatus: normalized,
+      claimToken: current.claimToken,
+      providerCallStartedAt: current.providerCallStartedAt,
+    });
+    if (reconciliation) {
+      data.status = reconciliation.status;
       data.sentAt = now;
       if (normalized === 'DELIVERED' || normalized === 'READ') data.deliveredAt = current.deliveredAt ?? now;
       if (normalized === 'READ') data.readAt = current.readAt ?? now;
-      if (normalized === 'FAILED') data.errorMessage = 'Delivery failed (Meta webhook)';
+      if (normalized === 'FAILED') {
+        data.errorMessage = reconciliation.status === 'AMBIGUOUS'
+          ? 'Delivery outcome raced an active provider call; reconcile with Meta before retrying'
+          : 'Delivery failed (Meta webhook)';
+      }
+      if (reconciliation.clearClaim) {
+        data.claimToken = null;
+        data.claimedAt = null;
+        data.providerCallStartedAt = null;
+      }
     }
     if (!Object.keys(data).length) return;
     const changed = await tx.campaignRecipient.updateMany({
-      where: { id: recipient.id, status: current.status },
+      where: {
+        id: recipient.id,
+        status: current.status,
+        claimToken: current.claimToken,
+        providerCallStartedAt: current.providerCallStartedAt,
+        campaign: { id: recipient.campaignId, runVersion: recipient.campaign.runVersion },
+      },
       data,
     });
     if (changed.count !== 1) return;
@@ -460,11 +481,17 @@ export async function syncCampaignRecipientFromWebhook(
       organizationId: recipient.campaign.organizationId,
       whatsappNumberId: recipient.campaign.whatsappNumberId,
     },
-    select: { runVersion: true, status: true, recipients: { select: { status: true } } },
+    select: {
+      runVersion: true,
+      status: true,
+      recipients: { select: { status: true, claimToken: true, providerCallStartedAt: true } },
+    },
   });
   if (
     live &&
-    live.recipients.every((row) => row.status !== 'PENDING' && row.status !== 'AMBIGUOUS')
+    live.runVersion === recipient.campaign.runVersion &&
+    live.recipients.every((row) => row.status !== 'PENDING' && row.status !== 'AMBIGUOUS') &&
+    shouldReleaseQuotaAfterWebhook(live.recipients)
   ) {
     // The webhook may arrive after a newer run has started. Release only the
     // reservation owned by the run that produced this Meta message ID.

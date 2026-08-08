@@ -104,8 +104,34 @@ export function reconcileProviderStatusTransition(currentStatus: string, provide
   const next = providerStatus.toUpperCase();
   if (!['SENT', 'DELIVERED', 'READ', 'FAILED'].includes(next)) return null;
   if (currentStatus === 'AMBIGUOUS') return next as 'SENT' | 'DELIVERED' | 'READ' | 'FAILED';
-  if (['SENT', 'DELIVERED', 'READ', 'FAILED'].includes(currentStatus)) return null;
-  return next as 'SENT' | 'DELIVERED' | 'READ' | 'FAILED';
+  if (currentStatus === 'FAILED') return null;
+  const rank: Record<string, number> = { PENDING: 0, SENT: 1, DELIVERED: 2, READ: 3 };
+  if (next === 'FAILED') return currentStatus === 'PENDING' ? 'FAILED' : null;
+  return rank[next] > (rank[currentStatus] ?? -1)
+    ? next as 'SENT' | 'DELIVERED' | 'READ'
+    : null;
+}
+
+/**
+ * Decide how a webhook may reconcile a recipient while a worker owns it.
+ * A FAILED webhook cannot prove that a concurrent provider call failed, so
+ * retain the reservation as AMBIGUOUS until definitive reconciliation.
+ */
+export function reconcileWebhookRecipient(input: {
+  currentStatus: string;
+  providerStatus: string;
+  claimToken?: string | null;
+  providerCallStartedAt?: Date | null;
+}) {
+  const next = input.providerStatus.toUpperCase();
+  if (!['SENT', 'DELIVERED', 'READ', 'FAILED'].includes(next)) return null;
+  const hasProviderBoundary = Boolean(input.claimToken || input.providerCallStartedAt);
+  if (next === 'FAILED' && hasProviderBoundary && input.currentStatus === 'PENDING') {
+    return { status: 'AMBIGUOUS' as const, clearClaim: false };
+  }
+  const status = reconcileProviderStatusTransition(input.currentStatus, next);
+  if (!status) return null;
+  return { status, clearClaim: true };
 }
 
 export function classifyClaimForStop(providerCallStartedAt: Date | null | undefined) {
@@ -286,6 +312,14 @@ export function shouldReleaseCampaignQuota(ambiguousCount: number) {
 }
 
 export function shouldReleaseQuotaAfterConfigurationFailure(rows: Array<{
+  status: string;
+  claimToken?: string | null;
+  providerCallStartedAt?: Date | null;
+}>) {
+  return !hasUnresolvedProviderBoundary(rows);
+}
+
+export function shouldReleaseQuotaAfterWebhook(rows: Array<{
   status: string;
   claimToken?: string | null;
   providerCallStartedAt?: Date | null;

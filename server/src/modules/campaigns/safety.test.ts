@@ -4,6 +4,7 @@ import {
   buildStaleCampaignJobAudit,
   canFinalizeCampaignRun,
   campaignCounterSnapshot,
+  reconcileWebhookRecipient,
   reconcileProviderStatusTransition,
   canRetryCampaignRecipient,
   canTakeOverExpiredClaim,
@@ -20,6 +21,7 @@ import {
   ownsCampaignQuotaReservation,
   rollbackRecipientAction,
   shouldReleaseQuotaAfterConfigurationFailure,
+  shouldReleaseQuotaAfterWebhook,
   shouldReleaseCampaignQuota,
   shouldRetryCampaignSetup,
   stopTransition,
@@ -281,5 +283,41 @@ describe('campaign safety boundaries', () => {
     expect(reconcileProviderStatusTransition('PENDING', 'read')).toBe('READ');
     expect(reconcileProviderStatusTransition('READ', 'sent')).toBeNull();
     expect(reconcileProviderStatusTransition('AMBIGUOUS', 'unknown')).toBeNull();
+  });
+
+  it('keeps a FAILED webhook ambiguous when a live claim is racing it', () => {
+    expect(reconcileWebhookRecipient({
+      currentStatus: 'PENDING',
+      providerStatus: 'FAILED',
+      claimToken: 'claim-1',
+    })).toEqual({ status: 'AMBIGUOUS', clearClaim: false });
+    expect(reconcileWebhookRecipient({
+      currentStatus: 'PENDING',
+      providerStatus: 'FAILED',
+      providerCallStartedAt: new Date(),
+    })).toEqual({ status: 'AMBIGUOUS', clearClaim: false });
+  });
+
+  it('accepts duplicate and out-of-order webhooks without regression', () => {
+    expect(reconcileWebhookRecipient({ currentStatus: 'DELIVERED', providerStatus: 'SENT' })).toBeNull();
+    expect(reconcileWebhookRecipient({ currentStatus: 'READ', providerStatus: 'DELIVERED' })).toBeNull();
+    expect(reconcileWebhookRecipient({ currentStatus: 'DELIVERED', providerStatus: 'DELIVERED' })).toBeNull();
+    expect(reconcileWebhookRecipient({
+      currentStatus: 'PENDING',
+      providerStatus: 'READ',
+      claimToken: 'claim-1',
+    })).toEqual({ status: 'READ', clearClaim: true });
+  });
+
+  it('does not release quota while webhook reconciliation retains a boundary', () => {
+    expect(shouldReleaseQuotaAfterWebhook([
+      { status: 'AMBIGUOUS', claimToken: 'claim-1' },
+    ])).toBe(false);
+    expect(shouldReleaseQuotaAfterWebhook([
+      { status: 'FAILED', claimToken: 'claim-1' },
+    ])).toBe(false);
+    expect(shouldReleaseQuotaAfterWebhook([
+      { status: 'FAILED', claimToken: null, providerCallStartedAt: null },
+    ])).toBe(true);
   });
 });
