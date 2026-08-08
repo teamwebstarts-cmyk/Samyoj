@@ -769,6 +769,27 @@ router.patch(
   })
 );
 
+/** Delete a single call record from the org's call history. */
+router.delete(
+  '/:id',
+  ...memberGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const id = String(req.params.id);
+
+    const call = await prisma.call.findFirst({
+      where: { id, organizationId: orgId },
+      select: { id: true },
+    });
+    if (!call) throw new AppError(404, 'Call not found');
+
+    await prisma.call.delete({ where: { id } });
+
+    emitToOrg(orgId, 'call:deleted', { callId: id });
+    sendSuccess(res, { deleted: true, callId: id });
+  })
+);
+
 router.post(
   '/:id/terminate',
   ...memberGuard,

@@ -32,6 +32,7 @@ export interface ConversationThread {
   hasEarlier: boolean;
   loadingEarlier: boolean;
   upsertConversation: (conv: Conversation, toTop?: boolean) => void;
+  removeConversation: (conversationId: string) => void;
   openConversation: (conv: Conversation) => Promise<void>;
   loadEarlierMessages: () => Promise<void>;
   markConversationRead: (conversationId: string) => void;
