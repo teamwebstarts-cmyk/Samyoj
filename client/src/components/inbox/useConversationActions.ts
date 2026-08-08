@@ -1,9 +1,9 @@
-import { useState, type Dispatch, type SetStateAction, useCallback } from 'react';
+import { useState, type Dispatch, type SetStateAction } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { callingApi, inboxApi } from '../../services/api';
 import { toastError, toastInbox, toastSuccess } from '../../utils/toast';
 import { emitChatNotice } from './chatNoticeBus';
-import { createAgentOffer, cleanupAgentCall, pollSdpAnswer } from '../../utils/agentCallRTC';
+import { createAgentOffer, pollSdpAnswer } from '../../utils/agentCallRTC';
 import type { Conversation } from '../../types';
 
 interface ActionsDeps {
@@ -196,7 +196,7 @@ export function useConversationActions({
           onAction: () => navigate(`/calls/${callId}`),
         });
         navigate(`/calls/${callId}`);
-        void pollSdpAnswerFromApi(callId);
+        void pollSdpAnswer(callId);
         return;
       }
       toastError('Call started but no call page was returned.');
@@ -216,18 +216,7 @@ export function useConversationActions({
     } finally {
       setCallingBack(false);
     }
-  };
-
-  // Poll GET /signaling for the SDP answer from Meta (Socket.IO may drop
-  // during navigation). Stops once answer is applied or 30s elapse.
-  const pollSdpAnswerFromApi = useCallback(async (callId: string) => {
-    const { getSignaling } = callingApi;
-    await pollSdpAnswer(callId, async (id) => {
-      const { data } = await getSignaling(id);
-      const sdp = (data.data as { sdpAnswer?: string | null })?.sdpAnswer;
-      return { sdpAnswer: sdp };
-    });
-  }, [callingApi.getSignaling]);
+   };
 
   const handleSnooze = async (untilIso: string, _label?: string, conversationId?: string) => {
     const targetId = conversationId || selected?.id;

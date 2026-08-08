@@ -1,0 +1,58 @@
+import { describe, expect, it } from 'vitest';
+import {
+  EMBEDDING_MATCH_THRESHOLD,
+  formatKnowledgeContext,
+  tokenSearch,
+} from './knowledge.service';
+
+describe('tokenSearch', () => {
+  const items = [
+    { id: '1', title: 'Business hours', content: 'We are open 9 AM to 6 PM', sourceType: 'FAQ' },
+    { id: '2', title: 'Refund policy', content: 'Refunds take 5 to 7 days', sourceType: 'FAQ' },
+  ];
+
+  it('returns all items (score 1) when query has no tokens', () => {
+    const result = tokenSearch(items, '   ', 5);
+    expect(result).toHaveLength(2);
+    expect(result.every((r) => r.score === 1)).toBe(true);
+  });
+
+  it('ranks matching items above non-matching', () => {
+    const result = tokenSearch(items, 'refund', 5);
+    expect(result[0].id).toBe('2');
+    expect(result[0].score).toBeGreaterThan(0);
+  });
+
+  it('respects the limit', () => {
+    const many = Array.from({ length: 10 }, (_, i) => ({
+      id: String(i),
+      title: `item ${i}`,
+      content: 'common word here',
+      sourceType: 'FAQ' as const,
+    }));
+    expect(tokenSearch(many, 'common', 3)).toHaveLength(3);
+  });
+});
+
+describe('formatKnowledgeContext', () => {
+  it('returns empty string for no matches', () => {
+    expect(formatKnowledgeContext([])).toBe('');
+  });
+
+  it('tags non-FAQ sources', () => {
+    const ctx = formatKnowledgeContext([
+      { id: '1', title: 'Hours', content: '9-6', sourceType: 'URL', score: 1 },
+      { id: '2', title: 'Policy', content: 'yes', sourceType: 'FAQ', score: 1 },
+    ]);
+    expect(ctx).toContain('[URL]');
+    expect(ctx).not.toContain('[FAQ]');
+    expect(ctx).toContain('Q1 [URL]: Hours');
+  });
+});
+
+describe('EMBEDDING_MATCH_THRESHOLD', () => {
+  it('is a sane similarity cutoff', () => {
+    expect(EMBEDDING_MATCH_THRESHOLD).toBeGreaterThan(0);
+    expect(EMBEDDING_MATCH_THRESHOLD).toBeLessThanOrEqual(1);
+  });
+});

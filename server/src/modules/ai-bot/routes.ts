@@ -4,6 +4,7 @@ import prisma from '../../config/database';
 import { config } from '../../config';
 import { authenticate, requireOrg, loadOrgRole, requireOrgRole } from '../../middleware/auth';
 import { AppError, asyncHandler, paramId, sendSuccess } from '../../utils/response';
+import { redactText } from '../../utils/pii-redaction';
 import {
   clearDefaultFlag,
   DEFAULT_INSTRUCTIONS,
@@ -263,6 +264,15 @@ router.patch(
       include: { knowledgeItems: { orderBy: { createdAt: 'asc' } } },
     });
 
+    const { knowledgeItems, ...rest } = bot;
+    const shapedBot = {
+      ...rest,
+      knowledgeItems: knowledgeItems.map(({ embedding, ...item }) => ({
+        ...item,
+        hasEmbedding: Array.isArray(embedding) && (embedding as unknown[]).length > 0,
+      })),
+    };
+
     await createBotVersion(bot, req.user!.userId, changeNote);
     await logBotAudit({
       botId: bot.id,
@@ -272,7 +282,7 @@ router.patch(
       changes: updateData,
     });
 
-    sendSuccess(res, bot);
+    sendSuccess(res, shapedBot);
   })
 );
 
@@ -324,11 +334,13 @@ router.post(
     if (!bot) throw new AppError(404, 'Bot not found');
 
     const item = await prisma.knowledgeBaseItem.create({
-      data: { botId, title: data.title, content: data.content, sourceType: 'FAQ' },
+      data: { botId, title: redactText(data.title), content: redactText(data.content), sourceType: 'FAQ' },
     });
 
     await upsertKnowledgeEmbedding(orgId, item.id, item.title, item.content, botId);
-    sendSuccess(res, item, 201);
+    const { embedding, ...faqItem } = item;
+    void embedding;
+    sendSuccess(res, { ...faqItem, hasEmbedding: false }, 201);
   })
 );
 
@@ -346,15 +358,23 @@ router.patch(
 
     const item = await prisma.knowledgeBaseItem.updateMany({
       where: { id: faqId, botId },
-      data,
+      data: {
+        ...data,
+        ...(data.title !== undefined ? { title: redactText(data.title) } : {}),
+        ...(data.content !== undefined ? { content: redactText(data.content) } : {}),
+      },
     });
     if (item.count === 0) throw new AppError(404, 'FAQ not found');
 
     const updated = await prisma.knowledgeBaseItem.findUnique({ where: { id: faqId } });
     if (updated) {
       await upsertKnowledgeEmbedding(orgId, updated.id, updated.title, updated.content, botId);
+      const { embedding, ...faqUpdated } = updated;
+      void embedding;
+      sendSuccess(res, { ...faqUpdated, hasEmbedding: Array.isArray(updated.embedding) && updated.embedding.length > 0 });
+    } else {
+      sendSuccess(res, updated);
     }
-    sendSuccess(res, updated);
   })
 );
 
@@ -395,7 +415,7 @@ router.post(
       const results: { id: string; title: string; content: string }[] = [];
       for (const item of items) {
         const kb = await tx.knowledgeBaseItem.create({
-          data: { botId, title: item.title, content: item.content, sourceType: 'FAQ' },
+          data: { botId, title: redactText(item.title), content: redactText(item.content), sourceType: 'FAQ' },
         });
         results.push({ id: kb.id, title: kb.title, content: kb.content });
       }

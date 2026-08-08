@@ -1,5 +1,9 @@
 import prisma from '../../config/database';
 import { createEmbedding, cosineSimilarity } from './embeddings.service';
+import { redactText } from '../../utils/pii-redaction';
+import { createModuleLogger } from '../../utils/logger';
+
+const log = createModuleLogger('knowledge');
 
 export interface KnowledgeMatch {
   id: string;
@@ -9,6 +13,9 @@ export interface KnowledgeMatch {
   sourceType?: string;
 }
 
+/** Minimum cosine similarity for an embedding match to be used as context. */
+export const EMBEDDING_MATCH_THRESHOLD = 0.7;
+
 function tokenize(text: string): string[] {
   return text
     .toLowerCase()
@@ -17,7 +24,7 @@ function tokenize(text: string): string[] {
     .filter((t) => t.length > 2);
 }
 
-function tokenSearch(
+export function tokenSearch(
   items: Array<{ id: string; title: string; content: string; sourceType?: string }>,
   query: string,
   limit: number
@@ -85,7 +92,7 @@ export async function searchKnowledgeBase(
             sourceType: item.sourceType,
             score: cosineSimilarity(queryEmbedding, item.embedding as number[]),
           }))
-          .filter((item) => item.score > 0.7)
+          .filter((item) => item.score > EMBEDDING_MATCH_THRESHOLD)
           .sort((a, b) => b.score - a.score);
 
         if (scored.length > 0) {
@@ -126,13 +133,24 @@ export async function upsertKnowledgeEmbedding(
   const text = `${title}\n${content}`.trim().slice(0, 8000);
   if (!text) return;
 
-  try {
-    const embedding = await createEmbedding(organizationId, text, { botId });
-    await prisma.knowledgeBaseItem.update({
-      where: { id: itemId },
-      data: { embedding },
-    });
-  } catch {
-    /* embedding optional — token search still works */
+  // Transient embedding-API failures shouldn't leave an item stuck "Still learning".
+  // Retry a couple of times before giving up; token search still works either way.
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const embedding = await createEmbedding(organizationId, text, { botId });
+      await prisma.knowledgeBaseItem.update({
+        where: { id: itemId },
+        data: { embedding },
+      });
+      return;
+    } catch (err) {
+      lastError = err;
+    }
   }
+  log.warn('Embedding creation failed after retries — item will use token search', {
+    organizationId,
+    itemId,
+    error: lastError instanceof Error ? lastError.message : String(lastError),
+  });
 }

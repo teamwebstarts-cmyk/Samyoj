@@ -67,8 +67,9 @@ export function useSocket(onEvent?: (event: string, data: unknown) => void) {
         cb({ token: getAccessToken() || '' });
       },
       withCredentials: true,
-      // Prefer websocket; allow polling if the Codespace/Vite proxy blocks WS.
-      transports: ['websocket', 'polling'],
+      // Polling first — WebSocket WS proxying is flaky through Vite dev
+      // proxy. In prod (nginx) WebSocket works fine.
+      transports: ['polling', 'websocket'],
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,

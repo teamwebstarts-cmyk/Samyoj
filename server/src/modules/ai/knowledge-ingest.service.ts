@@ -1,6 +1,7 @@
 import prisma from '../../config/database';
 import { upsertKnowledgeEmbedding } from './knowledge.service';
 import { chunkText, extractPdfText, fetchUrlText } from './ingest.service';
+import { redactText } from '../../utils/pii-redaction';
 
 export async function ingestUrlKnowledge(
   organizationId: string,
@@ -20,7 +21,7 @@ export async function ingestUrlKnowledge(
       data: {
         botId,
         title: chunks.length > 1 ? `${baseTitle} (part ${i + 1})` : baseTitle,
-        content: chunks[i],
+        content: redactText(chunks[i]),
         sourceType: 'URL',
         sourceUrl: url,
       },
@@ -50,7 +51,7 @@ export async function ingestPdfKnowledge(
       data: {
         botId,
         title: chunks.length > 1 ? `${baseTitle} (part ${i + 1})` : baseTitle,
-        content: chunks[i],
+        content: redactText(chunks[i]),
         sourceType: 'PDF',
       },
     });

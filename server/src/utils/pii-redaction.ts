@@ -24,6 +24,11 @@ function redactString(value: string): string {
     .replace(PHONE_PATTERN, '[REDACTED_PHONE]');
 }
 
+/** Strip phone numbers, emails, and auth tokens from a free-text string (keeps the rest). */
+export function redactText(value: string): string {
+  return redactString(value);
+}
+
 export function redactPii<T>(input: T, depth = 0): T {
   if (depth > 8) return '[MAX_DEPTH]' as T;
   if (input === null || input === undefined) return input;

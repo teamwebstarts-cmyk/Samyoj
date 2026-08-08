@@ -8,7 +8,6 @@ import CallDetailView from '../components/calls/CallDetailView';
 import CallFiltersBar from '../components/calls/CallFiltersBar';
 import CallListItem from '../components/calls/CallListItem';
 import { CallsListEmpty, CallsSelectEmpty } from '../components/calls/CallPlaceholder';
-import CallsPageHeader from '../components/calls/CallsPageHeader';
 import CallsRailPanel from '../components/calls/CallsRailPanel';
 import CallingSettingsStage from '../components/calls/CallingSettingsStage';
 import CallsSetupSheet from '../components/calls/CallsSetupSheet';
@@ -132,6 +131,7 @@ export default function CallsPage() {
     }
   }, [searchParams]);
   const [setupSheetOpen, setSetupSheetOpen] = useState(false);
+  const [analytics, setAnalytics] = useState<{ today: number; missed: number } | null>(null);
   const loadRef = useRef<() => Promise<void>>(async () => {});
   const callsSnapshotRef = useRef<CallsNumberCache>({
     calls: [],
@@ -194,11 +194,18 @@ export default function CallsPage() {
 
   const load = useCallback(async () => {
     try {
-      const [statusRes] = await Promise.all([
+      const [statusRes, analyticsRes] = await Promise.all([
         callingApi.status(),
+        callingApi.analytics(7).catch(() => null),
         loadCalls(),
       ]);
       setStatus(statusRes.data.data);
+      const analyticsData = analyticsRes?.data?.data as
+        | { today?: number; missed?: number }
+        | undefined;
+      if (analyticsData) {
+        setAnalytics({ today: analyticsData.today ?? 0, missed: analyticsData.missed ?? 0 });
+      }
     } catch {
       toastError('Could not load calls. Please refresh the page.');
     } finally {
@@ -350,7 +357,6 @@ export default function CallsPage() {
 
   const callingEnabled = status?.callingEnabled ?? status?.callingSettings?.calling?.status === 'ENABLED';
   const botReady = Boolean(status?.configured);
-  const isReady = Boolean(status?.voiceReady ?? (status?.whatsappConnected && botReady && callingEnabled));
 
   const selectedCall = useMemo(
     () => (selectedCallId ? calls.find((c) => c.id === selectedCallId) ?? null : null),
@@ -425,11 +431,7 @@ export default function CallsPage() {
         navigate(`/calls/${callId}`);
 
         // Socket may disconnect during navigation — poll for SDP answer on the new page
-        void pollSdpAnswer(callId, async (id) => {
-          const res = await callingApi.getSignaling(id);
-          const sdp = (res.data.data as { sdpAnswer?: string | null })?.sdpAnswer;
-          return { sdpAnswer: sdp ?? null };
-        });
+        void pollSdpAnswer(callId);
       } else {
         toastError('Call started but no call page was returned.');
       }
@@ -466,11 +468,9 @@ export default function CallsPage() {
         setActiveCallId(callId);
         toastSuccess(`Calling ${phone}…`);
         navigate(`/calls/${callId}`);
-        void pollSdpAnswer(callId, async (id) => {
-          const res = await callingApi.getSignaling(id);
-          const sdp = (res.data.data as { sdpAnswer?: string | null })?.sdpAnswer;
-          return { sdpAnswer: sdp ?? null };
-        });
+
+        // Socket may disconnect during navigation — poll for SDP answer on the new page
+        void pollSdpAnswer(callId);
       } else {
         toastError('Call started but no call page was returned.');
       }
@@ -518,14 +518,12 @@ export default function CallsPage() {
 
   const selectedTranscript = normalizeTranscript(selectedCall?.transcript);
 
+  const liveCount = status?.activeCalls ?? 0;
+  const callsToday = analytics?.today ?? 0;
+  const missedCount = analytics?.missed ?? 0;
+
   return (
     <PageShell className="space-y-3 sm:space-y-4">
-      <CallsPageHeader
-        phoneNumber={status?.phoneNumber}
-        isReady={isReady}
-        onOpenSetup={() => setSetupSheetOpen(true)}
-      />
-
       {setupSheetOpen && (
         <CallsSetupSheet
           whatsappConnected={Boolean(status?.whatsappConnected)}
@@ -648,7 +646,11 @@ export default function CallsPage() {
               />
             </div>
           ) : (
-            <CallsSelectEmpty />
+            <CallsSelectEmpty
+              liveCount={liveCount}
+              callsToday={callsToday}
+              missedCount={missedCount}
+            />
           )}
         </div>
 

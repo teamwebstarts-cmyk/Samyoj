@@ -20,12 +20,29 @@ interface AgentCallRtc {
   callId: string;
 }
 
+interface SignalingRes {
+  data?: { sdpAnswer?: string | null };
+}
+
 function getStored(): AgentCallRtc | undefined {
   return (window as unknown as Record<string, AgentCallRtc | undefined>)[WINDOW_KEY];
 }
 
 function setStored(val: AgentCallRtc | undefined) {
   (window as unknown as Record<string, AgentCallRtc | undefined>)[WINDOW_KEY] = val;
+}
+
+/** Fetch the SDP answer directly (avoids axios interceptor logging 404s on every poll). */
+async function fetchSdpAnswer(callId: string): Promise<string | null> {
+  const res = await fetch(`/api/calling/${callId}/signaling`, {
+    credentials: 'include',
+    headers: {
+      Authorization: `Bearer ${localStorage.getItem('accessToken') || ''}`,
+    },
+  });
+  if (!res.ok) return null;
+  const body = (await res.json()) as SignalingRes;
+  return body.data?.sdpAnswer || null;
 }
 
 /** Create a browser WebRTC offer, grab mic, return the SDP offer string. */
@@ -72,9 +89,7 @@ export async function createAgentOffer(): Promise<string | null> {
       cleanupAgentCall();
     }
   };
-  pc.onerror = (ev) => console.error('[webrtc] error', ev);
-
-  const sdpOffer = pc.localDescription?.sd || pc.localDescription?.sdp;
+  const sdpOffer = pc.localDescription?.sdp;
   if (!sdpOffer) {
     pc.close();
     return null;
@@ -124,19 +139,15 @@ export function cleanupAgentCall(): void {
   setStored(undefined);
 }
 
-/** Poll GET /signaling for the SDP answer until it arrives. */
-export async function pollSdpAnswer(
-  callId: string,
-  apiCall: (id: string) => Promise<{ sdpAnswer?: string | null }>,
-  timeoutMs = 30000,
-): Promise<void> {
+/** Poll GET /signaling for the SDP answer until it arrives (500ms interval, 60s timeout). */
+export async function pollSdpAnswer(callId: string, timeoutMs = 60000): Promise<void> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
-    await new Promise((r) => setTimeout(r, 1000));
+    await new Promise((r) => setTimeout(r, 500));
     try {
-      const res = await apiCall(callId);
-      if (res.sdpAnswer) {
-        await applyAgentOfferAnswer(callId, res.sdpAnswer);
+      const sdp = await fetchSdpAnswer(callId);
+      if (sdp) {
+        await applyAgentOfferAnswer(callId, sdp);
         return;
       }
     } catch {

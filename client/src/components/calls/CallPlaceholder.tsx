@@ -43,8 +43,16 @@ export function CallsListEmpty() {
   );
 }
 
-/** Right-pane empty / select state — purple icon + When / Duration / Transcript cards. */
-export function CallsSelectEmpty() {
+/** Right-pane empty / select state — purple icon + stats + When / Duration / Transcript cards. */
+export function CallsSelectEmpty({
+  liveCount = 0,
+  callsToday = 0,
+  missedCount = 0,
+}: {
+  liveCount?: number;
+  callsToday?: number;
+  missedCount?: number;
+}) {
   const features = [
     { icon: Clock3, label: 'When', hint: 'Date & time' },
     { icon: Timer, label: 'Duration', hint: 'Call length' },
@@ -66,7 +74,22 @@ export function CallsSelectEmpty() {
           Pick a call from the list to view the transcript, duration, and handler details.
         </p>
 
-        <div className="mt-8 grid grid-cols-3 gap-2">
+        <div className="mt-6 grid grid-cols-3 gap-2">
+          <div className="flex flex-col items-center rounded-xl border border-neutral-200 bg-white px-2 py-2.5 shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-theme-muted">Live</p>
+            <p className="mt-0.5 text-[18px] font-extrabold tabular-nums text-emerald-600 dark:text-emerald-400">{liveCount}</p>
+          </div>
+          <div className="flex flex-col items-center rounded-xl border border-neutral-200 bg-white px-2 py-2.5 shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-theme-muted">Today</p>
+            <p className="mt-0.5 text-[18px] font-extrabold tabular-nums text-theme-fg">{callsToday}</p>
+          </div>
+          <div className="flex flex-col items-center rounded-xl border border-neutral-200 bg-white px-2 py-2.5 shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-theme-muted">Missed</p>
+            <p className="mt-0.5 text-[18px] font-extrabold tabular-nums text-rose-600 dark:text-rose-400">{missedCount}</p>
+          </div>
+        </div>
+
+        <div className="mt-6 grid grid-cols-3 gap-2">
           {features.map(({ icon: Icon, label, hint }) => (
             <div
               key={label}
