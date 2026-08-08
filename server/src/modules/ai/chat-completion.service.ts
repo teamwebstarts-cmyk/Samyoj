@@ -2,13 +2,14 @@ import { config } from '../../config';
 import { AppError } from '../../utils/response';
 import { createModuleLogger } from '../../utils/logger';
 import { checkOrgTokenQuota, recordAiUsage, resolveAiConfig } from './org-ai.service';
-import { createSarvamChatCompletion } from './sarvam-chat.service';
+import { createSarvamChatCompletion, streamSarvamChatCompletion } from './sarvam-chat.service';
 import type {
   ChatMessage,
   ChatCompletionOptions,
   ChatCompletionResult,
   ChatCompletionTool,
   ToolCallResult,
+  ChatCompletionChunk,
 } from './sarvam-chat.service';
 
 const log = createModuleLogger('chat-completion');
@@ -19,6 +20,7 @@ export type {
   ChatCompletionResult,
   ChatCompletionTool,
   ToolCallResult,
+  ChatCompletionChunk,
 } from './sarvam-chat.service';
 
 export async function isAiConfigured(organizationId?: string): Promise<boolean> {
@@ -70,6 +72,32 @@ export async function createChatCompletion(
 
   log.debug('Chat completion via Azure (fallback)', { durationMs: Date.now() - start, tokens: result.usage?.totalTokens });
   return result;
+}
+
+/**
+ * Streaming Sarvam completions for low-latency voice (SSE → TTS).
+ * Azure fallback is not streamed — callers should use createChatCompletion instead.
+ */
+export async function* streamChatCompletion(
+  options: ChatCompletionOptions
+): AsyncGenerator<ChatCompletionChunk> {
+  if (!options.organizationId) {
+    throw new AppError(503, 'Organization context required for AI requests');
+  }
+
+  await checkOrgTokenQuota(options.organizationId);
+
+  const cfg = await resolveAiConfig(options.organizationId);
+  if (!cfg || cfg.provider !== 'sarvam') {
+    throw new AppError(503, 'Streaming requires Sarvam brain. Set AI_BRAIN_PROVIDER=sarvam.');
+  }
+
+  yield* streamSarvamChatCompletion({
+    ...options,
+    endpoint: cfg.endpoint,
+    apiKey: cfg.apiKey,
+    model: options.model || cfg.deployment,
+  });
 }
 
 /** Legacy Azure completion. Kept for orgs that explicitly set provider=azure. */

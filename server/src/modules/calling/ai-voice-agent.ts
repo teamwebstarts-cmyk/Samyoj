@@ -2,7 +2,7 @@ import prisma from '../../config/database';
 import { unregisterActiveCall } from './session-store';
 import { createModuleLogger } from '../../utils/logger';
 import { emitToOrg } from '../../realtime';
-import { generateBotReply, performHandoff } from '../ai/chatbot.service';
+import { generateBotReply, performHandoff, streamVoiceBotReply } from '../ai/chatbot.service';
 import { MetaCallingService } from './meta-calling.service';
 import { SarvamStreamTranscriber, isSarvamSttConfigured } from './sarvam.stt';
 import { synthesizeSpeechSarvam, isSarvamTtsConfigured } from './sarvam.tts';
@@ -138,10 +138,12 @@ export class AiVoiceCallSession {
 
     this.bridge.setAudioHandler((samples, sampleRate) => {
       if (this.ended || this.speaking || !this.transcriber) return;
-      // Buffer inbound audio for call recording
-      const buf = Buffer.from(samples.buffer, samples.byteOffset, samples.byteLength);
-      this.recordingBuffer.push(buf);
-      this.recordingSampleRate = sampleRate;
+      // Only buffer PCM when recording is explicitly consent-enabled.
+      if (this.ctx.recordingEnabled) {
+        const buf = Buffer.from(samples.buffer, samples.byteOffset, samples.byteLength);
+        this.recordingBuffer.push(buf);
+        this.recordingSampleRate = sampleRate;
+      }
       this.transcriber.sendPcm(samples, sampleRate);
     });
 
@@ -189,51 +191,114 @@ export class AiVoiceCallSession {
     await this.appendTranscript('user', trimmed);
 
     try {
-      const result = await generateBotReply({
+      // Fast-path tools without waiting on LLM when intent is obvious.
+      const lower = trimmed.toLowerCase();
+      if (
+        /\b(human|agent|person|manager|representative|team member|talk to (a |someone|an )?human|speak to (a |someone|an )?human)\b/i.test(
+          lower
+        )
+      ) {
+        await this.handleToolCall({
+          id: 'kw',
+          name: 'request_human',
+          arguments: { reason: 'Customer asked for a human on the call' },
+        });
+        return;
+      }
+      if (
+        /\b(call( me)? back|callback|call later|schedule (a )?call)\b/i.test(lower)
+      ) {
+        await this.handleToolCall({
+          id: 'kw',
+          name: 'schedule_callback',
+          arguments: { when: trimmed },
+        });
+        return;
+      }
+
+      // Stream LLM → speak sentences as they complete (lower time-to-first-audio).
+      let pending = '';
+      let spokenParts: string[] = [];
+      let directHandled = false;
+
+      for await (const event of streamVoiceBotReply({
         organizationId: this.ctx.organizationId,
         conversationId: this.ctx.conversationId,
         inboundMessage: trimmed,
         channel: 'voice',
         botId: this.ctx.aiBotId ?? undefined,
-        tools: VOICE_TOOLS,
-      });
+      })) {
+        if (event.type === 'direct' && event.result) {
+          directHandled = true;
+          const result = event.result;
+          if (result.skipped && !result.reply) {
+            await this.speak(
+              result.skipReason === 'ai_not_configured'
+                ? 'Sorry, our AI assistant is not configured yet. Please message us on WhatsApp.'
+                : 'Sorry, I am having trouble right now. Please try again in a moment.',
+              'assistant'
+            );
+            break;
+          }
+          if (result.reply) {
+            await this.speak(result.reply, 'assistant');
+          }
+          if (result.handoff) {
+            await this.performHandoffAndTransfer(
+              result.handoffReason || 'VOICE_HANDOFF',
+              result.handoffReason || 'VOICE_HANDOFF'
+            );
+          }
+          break;
+        }
 
-      if (result.skipped && !result.reply) {
-        log.warn('Voice bot reply skipped', {
-          callId: this.ctx.callId,
-          skipReason: result.skipReason,
-        });
-        await this.speak(
-          result.skipReason === 'ai_not_configured'
-            ? 'Sorry, our AI assistant is not configured yet. Please message us on WhatsApp.'
-            : 'Sorry, I am having trouble right now. Please try again in a moment.',
-          'assistant'
-        );
-        return;
+        if (event.type === 'delta' && event.content) {
+          pending += event.content;
+          const parts = pending.split(/(?<=[.!?।॥])\s+/);
+          if (parts.length > 1) {
+            const ready = parts.slice(0, -1).join(' ').trim();
+            pending = parts[parts.length - 1] || '';
+            if (ready) {
+              spokenParts.push(ready);
+              await this.speak(ready, 'assistant', { recordTranscript: false });
+            }
+          } else if (pending.length > 80 && /\s/.test(pending)) {
+            const cut = pending.lastIndexOf(' ');
+            if (cut > 20) {
+              const ready = pending.slice(0, cut).trim();
+              pending = pending.slice(cut).trim();
+              if (ready) {
+                spokenParts.push(ready);
+                await this.speak(ready, 'assistant', { recordTranscript: false });
+              }
+            }
+          }
+        }
+
+        if (event.type === 'done') {
+          const tail = (pending || '').trim();
+          if (tail) {
+            spokenParts.push(tail);
+            await this.speak(tail, 'assistant', { recordTranscript: false });
+          }
+          const full = (event.content || spokenParts.join(' ')).trim();
+          if (full) {
+            await this.appendTranscript('assistant', full);
+            log.info('Speaking AI reply on call (streamed)', {
+              callId: this.ctx.callId,
+              chars: full.length,
+            });
+          } else if (!spokenParts.length) {
+            await this.speak(
+              'Sorry, I am having trouble right now. Please try again in a moment.',
+              'assistant'
+            );
+          }
+        }
       }
 
-      if (result.skipped && result.reply) {
-        await this.speak(result.reply, 'assistant');
-        return;
-      }
-
-      // Function calling: Sarvam returned a tool call
-      if (result.toolCalls?.length) {
-        await this.handleToolCall(result.toolCalls[0]);
-        return;
-      }
-
-      const reply = result.reply?.trim();
-      if (reply) {
-        log.info('Speaking AI reply on call', { callId: this.ctx.callId, chars: reply.length });
-        await this.speak(reply, 'assistant');
-      }
-
-      if (result.handoff) {
-        await this.performHandoffAndTransfer(
-          'VOICE_HANDOFF',
-          result.handoffReason || 'VOICE_HANDOFF'
-        );
+      if (!directHandled && spokenParts.length === 0 && !this.ended) {
+        await this.speak('Sorry, I am having trouble right now. Please try again in a moment.', 'assistant');
       }
     } catch (err) {
       log.error('Voice reply failed', {
@@ -271,9 +336,9 @@ export class AiVoiceCallSession {
           const onlineAgents = agents.filter((a) => a.availability === 'ONLINE');
 
           if (onlineAgents.length > 0) {
-            // Agents available — connect them
+            // Message-only handoff — do not promise a live connect until media transfer works.
             await this.speak(
-              'Please hold — let me connect you with our team.',
+              "I'll connect you with our team on WhatsApp chat now. Thanks for calling — someone will reply shortly.",
               'assistant'
             );
             await this.performHandoffAndTransfer('TOOL_REQUEST_HUMAN', reason);
@@ -289,9 +354,9 @@ export class AiVoiceCallSession {
             this.scheduleSilenceTimeout();
           }
         } catch {
-          // Fallback if agent check fails — still try to connect
+          // Fallback if agent check fails — still hand off via Inbox (no live hold promise).
           await this.speak(
-            'Please hold — let me connect you with our team.',
+            "I'll have our team follow up with you on WhatsApp shortly.",
             'assistant'
           );
           await this.performHandoffAndTransfer('TOOL_REQUEST_HUMAN', reason);
@@ -436,10 +501,16 @@ export class AiVoiceCallSession {
     await this.end('handoff');
   }
 
-  private async speak(text: string, role: TranscriptEntry['role']): Promise<void> {
+  private async speak(
+    text: string,
+    role: TranscriptEntry['role'],
+    opts?: { recordTranscript?: boolean }
+  ): Promise<void> {
     if (!this.bridge || this.ended) return;
     this.speaking = true;
-    await this.appendTranscript(role, text);
+    if (opts?.recordTranscript !== false) {
+      await this.appendTranscript(role, text);
+    }
 
     // Split long replies into sentences so each is a separate Sarvam TTS call.
     // Bulbul v3 handles up to 2500 chars but shorter per-request keeps latency low.
@@ -580,8 +651,8 @@ export class AiVoiceCallSession {
     this.transcriber = null;
     this.bridge = null;
 
-    // Persist call recording if we captured any audio
-    if (this.recordingBuffer.length > 0) {
+    // Persist call recording only when consent-gated recording was enabled.
+    if (this.ctx.recordingEnabled && this.recordingBuffer.length > 0) {
       try {
         const rawPcm = Buffer.concat(this.recordingBuffer);
         const { default: fs } = await import('fs/promises');

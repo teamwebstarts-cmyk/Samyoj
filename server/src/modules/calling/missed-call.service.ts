@@ -41,6 +41,15 @@ export async function handleMissedCallFollowUp(params: {
   const contact = await prisma.contact.findUnique({ where: { id: params.contactId } });
   if (!contact) return;
 
+  // Opt-out first: do not trigger missed-call flows or WA auto messages.
+  if (contact.optedIn === false) {
+    log.info('Missed call follow-up skipped — contact opted out', {
+      callId: params.callId,
+      contactId: params.contactId,
+    });
+    return;
+  }
+
   const whatsappNumber = await prisma.whatsappNumber.findFirst({
     where: { organizationId: params.organizationId, isActive: true },
   });
@@ -58,15 +67,6 @@ export async function handleMissedCallFollowUp(params: {
       log.info('Missed call handled by automation flow', { callId: params.callId, conversationId });
       return;
     }
-  }
-
-  // Opt-out: skip WhatsApp auto follow-up message (flows above may still handle service cases).
-  if (contact.optedIn === false) {
-    log.info('Missed call WhatsApp follow-up skipped — contact opted out', {
-      callId: params.callId,
-      contactId: params.contactId,
-    });
-    return;
   }
 
   try {

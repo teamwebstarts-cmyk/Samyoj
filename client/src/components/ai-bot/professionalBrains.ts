@@ -414,3 +414,31 @@ export const professionalBrains: ProfessionalBrain[] = [
   supportProfessionalBrain,
   salesConsultantBrain,
 ];
+
+/** Delimiter block embedding voiceInstructions inside AiBot.instructions (no Prisma column). */
+export const VOICE_INSTRUCTIONS_START = '<!-- VOICE_INSTRUCTIONS -->';
+export const VOICE_INSTRUCTIONS_END = '<!-- /VOICE_INSTRUCTIONS -->';
+
+const VOICE_INSTRUCTIONS_RE =
+  /<!--\s*VOICE_INSTRUCTIONS\s*-->\s*([\s\S]*?)\s*<!--\s*\/VOICE_INSTRUCTIONS\s*-->/i;
+
+export function stripVoiceInstructionsBlock(instructions: string): {
+  chatInstructions: string;
+  voiceInstructions: string | null;
+} {
+  const match = instructions.match(VOICE_INSTRUCTIONS_RE);
+  const voiceInstructions = match?.[1]?.trim() || null;
+  const chatInstructions = instructions.replace(VOICE_INSTRUCTIONS_RE, '').replace(/\n{3,}/g, '\n\n').trim();
+  return { chatInstructions, voiceInstructions };
+}
+
+/** Append voice instructions block only if not already present. */
+export function withVoiceInstructionsBlock(
+  chatInstructions: string,
+  voiceInstructions: string | null | undefined
+): string {
+  const chat = chatInstructions.trim();
+  if (!voiceInstructions?.trim()) return chat;
+  if (VOICE_INSTRUCTIONS_RE.test(chat)) return chat;
+  return `${chat}\n\n${VOICE_INSTRUCTIONS_START}\n${voiceInstructions.trim()}\n${VOICE_INSTRUCTIONS_END}`;
+}

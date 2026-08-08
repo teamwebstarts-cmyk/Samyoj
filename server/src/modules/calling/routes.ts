@@ -16,10 +16,16 @@ import { isSarvamSttConfigured } from './sarvam.stt';
 import { isSarvamTtsConfigured, previewSpeechSarvam } from './sarvam.tts';
 import { config } from '../../config';
 import { getOrgCallingSettings, saveOrgCallingSettings } from './settings.service';
-import { getOrgActiveCallCount, storePendingCall } from './session-store';
+import {
+  BIC_UNANSWERED_BLOCK_AT,
+  getBicUnansweredCount,
+  getOrgActiveCallCount,
+  getPendingCallByCallId,
+  recordBicUnansweredIfNeeded,
+  storePendingCall,
+} from './session-store';
 import { getCallAnalytics } from './analytics';
 import { acceptCallWithAgentAnswer, declineCallAsAgent } from './agent-call.service';
-import { getPendingCallByCallId } from './session-store';
 import { clearRingTimeout } from './call.processor';
 import { logTeamAudit } from '../team/audit';
 import { emitToOrg, emitToUser } from '../../realtime';
@@ -515,6 +521,15 @@ router.post(
 
     if (!contact) throw new AppError(400, 'Contact not found');
 
+    const unansweredCount = await getBicUnansweredCount(orgId, contact.phone);
+    if (unansweredCount >= BIC_UNANSWERED_BLOCK_AT) {
+      throw new AppError(
+        429,
+        'This contact has not answered recent outbound calls. Message them on WhatsApp first, or wait before calling again to protect WhatsApp calling quality.',
+        'BIC_UNANSWERED_COOLDOWN'
+      );
+    }
+
     const accessToken = MetaWhatsAppService.decryptToken(number.accessToken);
 
     // Meta requires per-user call permission before business-initiated calls (BIC).
@@ -632,7 +647,16 @@ router.post(
       sdpOffer,
     });
 
-    sendSuccess(res, { call: updatedCall, sdpOffer });
+    sendSuccess(res, {
+      call: updatedCall,
+      sdpOffer,
+      ...(unansweredCount === 1
+        ? {
+            bicUnansweredWarning:
+              'Previous outbound call to this contact went unanswered. If they miss this one too, outbound calling will be paused until you message them first.',
+          }
+        : {}),
+    });
   })
 );
 
@@ -794,6 +818,8 @@ router.post(
         ...(durationSeconds != null ? { durationSeconds } : {}),
       },
     });
+
+    await recordBicUnansweredIfNeeded(call);
 
     emitToOrg(orgId, 'call:updated', { callId: id, status: 'TERMINATED' });
     void publishCallEventMessage(call.id);

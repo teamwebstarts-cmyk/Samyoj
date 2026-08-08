@@ -16,9 +16,11 @@ import { triggerCallCompletedFlow } from '../flows/engine';
 import { handleMissedCallFollowUp } from './missed-call.service';
 import { publishCallEventMessage } from './call-event-message';
 import {
+  clearBicUnanswered,
   getPendingCall,
   registerActiveCall,
   removePendingCall,
+  recordBicUnansweredIfNeeded,
   storePendingCall,
   storePendingCallWithTtl,
   tryAcquireCallConnectLock,
@@ -87,10 +89,15 @@ async function markCallMissed(
   reason: string,
   customMessage?: string
 ): Promise<void> {
+  const existing = await prisma.call.findUnique({ where: { id: callId } });
   await prisma.call.update({
     where: { id: callId },
     data: { status: 'MISSED', handler: 'UNANSWERED', endedAt: new Date() },
   });
+
+  if (existing) {
+    await recordBicUnansweredIfNeeded(existing);
+  }
 
   emitToOrg(orgId, 'call:updated', { callId, status: 'MISSED', reason });
   void publishCallEventMessage(callId);
@@ -118,6 +125,7 @@ async function startAiSession(params: {
   botId: string;
   sdpOffer: string;
   consentMessage?: string;
+  recordingEnabled?: boolean;
   greeting?: string;
   ttsVoice?: string;
   ttsLanguage?: string;
@@ -140,6 +148,7 @@ async function startAiSession(params: {
     aiBotId: params.botId,
     greeting: params.greeting,
     consentMessage: params.consentMessage,
+    recordingEnabled: params.recordingEnabled === true,
     ttsVoice: params.ttsVoice,
     ttsLanguage: params.ttsLanguage,
     sttPrompt: params.sttPrompt,
@@ -272,6 +281,7 @@ async function ringAgentsForCall(params: {
           consentMessage: params.settings.recordingConsentEnabled
             ? params.settings.recordingConsentMessage
             : undefined,
+          recordingEnabled: params.settings.recordingConsentEnabled === true,
           greeting: resolveEffectiveVoiceConfig(params.settings).aiGreeting,
           ttsVoice: resolveEffectiveVoiceConfig(params.settings).ttsVoice,
           ttsLanguage: resolveEffectiveVoiceConfig(params.settings).ttsLanguage,
@@ -362,6 +372,7 @@ async function handleCallConnect(
     });
 
     await registerActiveCall(metaCallId, orgId);
+    await clearBicUnanswered(orgId, existingCall.toPhone);
 
     emitToOrg(orgId, 'call:updated', {
       callId: existingCall.id,
@@ -498,6 +509,7 @@ async function handleCallConnect(
     consentMessage: settings.recordingConsentEnabled
       ? settings.recordingConsentMessage
       : undefined,
+    recordingEnabled: settings.recordingConsentEnabled === true,
     greeting: voice.aiGreeting,
     ttsVoice: voice.ttsVoice,
     ttsLanguage: voice.ttsLanguage,
@@ -543,6 +555,11 @@ async function handleCallTerminate(orgId: string, call: CallWebhookEntry): Promi
       startedAt: call.start_time ? new Date(Number(call.start_time) * 1000) : existing.startedAt,
     },
   });
+
+  // Unanswered outbound (never connected) increments Meta quality cooldown.
+  if (status === 'FAILED' || status === 'MISSED' || status === 'TERMINATED') {
+    await recordBicUnansweredIfNeeded(existing);
+  }
 
   emitToOrg(orgId, 'call:updated', {
     callId: existing.id,
@@ -712,8 +729,8 @@ async function handleCallDtmf(orgId: string, call: CallWebhookEntry): Promise<vo
 }
 
 /**
- * Cold live transfer — ring agents on the same Meta call (keep bridge alive).
- * Called after AI handoff when live transfer is enabled in settings.
+ * Cold live transfer is NOT production-ready (empty SDP / no media renegotiation).
+ * Kept as a hard stub so accidental callers fail closed instead of ringing with dead media.
  */
 export async function handleLiveTransfer(params: {
   orgId: string;
@@ -733,84 +750,8 @@ export async function handleLiveTransfer(params: {
   ttsLanguage?: string;
   preferTeam?: string;
 }): Promise<void> {
-  const { getEligibleAgents } = await import('../team/assignment');
-  const agents = await getEligibleAgents(params.orgId);
-  const onlineAgents = agents.filter((a) => a.availability === 'ONLINE');
-
-  if (onlineAgents.length === 0) {
-    // No agents online — resume AI or fall back to message
-    log.info('Live transfer skipped — no online agents', {
-      callId: params.callRecord.id,
-      reason: params.reason,
-    });
-    return;
-  }
-
-  const settings = await getOrgCallingSettings(params.orgId);
-  const agentIds = onlineAgents.map((a) => a.userId);
-
-  await storePendingCall(params.callRecord.metaCallId, {
+  log.warn('Live transfer stub — media handoff disabled; use message-only Inbox handoff', {
     callId: params.callRecord.id,
-    metaCallId: params.callRecord.metaCallId,
-    organizationId: params.orgId,
-    conversationId: params.conversation.id,
-    contactId: params.contact.id,
-    phoneNumberId: params.phoneNumberId,
-    whatsappNumberId: params.whatsappNumberId,
-    fromPhone: params.fromPhone,
-    toPhone: params.toPhone,
-    direction: params.direction as 'USER_INITIATED' | 'BUSINESS_INITIATED',
-    sdpOffer: '', // bridge already has the SDP; offer not needed for accept on live transfer
-    createdAt: new Date().toISOString(),
-  });
-
-  const ringPayload = {
-    callId: params.callRecord.id,
-    metaCallId: params.callRecord.metaCallId,
-    fromPhone: params.fromPhone,
-    contactName: params.contact.name,
-    conversationId: params.conversation.id,
-    timeoutSec: settings.agentRingTimeoutSec,
-    agentIds,
-    reason: params.reason,
-    transcriptSummary: params.transcriptSummary,
-    isLiveTransfer: true,
-  };
-
-  emitToOrg(params.orgId, 'call:ring', ringPayload);
-  emitToUsers(agentIds, 'call:ring', ringPayload);
-
-  clearRingTimeout(params.callRecord.metaCallId);
-
-  const timer = setTimeout(() => {
-    void (async () => {
-      ringTimeouts.delete(params.callRecord.metaCallId);
-      const current = await prisma.call.findUnique({ where: { id: params.callRecord.id } });
-      if (!current || current.status !== 'RINGING') return;
-
-      await removePendingCall(params.callRecord.metaCallId);
-
-      // Live transfer timed out — the AI session already ended, just mark as missed
-      await markCallMissed(
-        params.orgId,
-        params.callRecord.id,
-        params.conversation.id,
-        params.contact.id,
-        'live_transfer_timeout'
-      );
-    })().catch((err) => {
-      log.error('Live transfer timeout handler failed', {
-        callId: params.callRecord.id,
-        error: err instanceof Error ? err.message : String(err),
-      });
-    });
-  }, settings.agentRingTimeoutSec * 1000);
-
-  ringTimeouts.set(params.callRecord.metaCallId, timer);
-
-  log.info('Live transfer initiated — ringing agents', {
-    callId: params.callRecord.id,
-    agentCount: agentIds.length,
     reason: params.reason,
   });
 }

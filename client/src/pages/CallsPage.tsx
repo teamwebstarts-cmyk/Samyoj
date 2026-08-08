@@ -130,7 +130,14 @@ export default function CallsPage() {
     }
   }, [searchParams]);
   const [setupSheetOpen, setSetupSheetOpen] = useState(false);
-  const [analytics, setAnalytics] = useState<{ today: number; missed: number } | null>(null);
+  const [analytics, setAnalytics] = useState<{
+    today: number;
+    missed: number;
+    total: number;
+    aiAnswered: number;
+    agentAnswered: number;
+    avgDurationSec: number;
+  } | null>(null);
   const loadRef = useRef<() => Promise<void>>(async () => {});
   const callsSnapshotRef = useRef<CallsNumberCache>({
     calls: [],
@@ -200,10 +207,24 @@ export default function CallsPage() {
       ]);
       setStatus(statusRes.data.data);
       const analyticsData = analyticsRes?.data?.data as
-        | { today?: number; missed?: number }
+        | {
+            today?: number;
+            missed?: number;
+            total?: number;
+            aiAnswered?: number;
+            agentAnswered?: number;
+            avgDurationSec?: number;
+          }
         | undefined;
       if (analyticsData) {
-        setAnalytics({ today: analyticsData.today ?? 0, missed: analyticsData.missed ?? 0 });
+        setAnalytics({
+          today: analyticsData.today ?? 0,
+          missed: analyticsData.missed ?? 0,
+          total: analyticsData.total ?? 0,
+          aiAnswered: analyticsData.aiAnswered ?? 0,
+          agentAnswered: analyticsData.agentAnswered ?? 0,
+          avgDurationSec: analyticsData.avgDurationSec ?? 0,
+        });
       }
     } catch {
       toastError('Could not load calls. Please refresh the page.');
@@ -303,7 +324,7 @@ export default function CallsPage() {
     cleanupAgentCall();
   }, []);
 
-  useSocket((event, data) => {
+  const { state: socketState } = useSocket((event, data) => {
     if (event === 'call:incoming') {
       const payload = data as { fromPhone: string; contactName?: string };
       toastSuccess(`Incoming call from ${payload.contactName || payload.fromPhone}`);
@@ -637,9 +658,15 @@ export default function CallsPage() {
             </div>
           ) : (
             <CallsSelectEmpty
+              liveConnected={socketState.status === 'connected'}
               liveCount={liveCount}
               callsToday={callsToday}
               missedCount={missedCount}
+              totalCount={analytics?.total ?? 0}
+              aiAnswered={analytics?.aiAnswered ?? 0}
+              agentAnswered={analytics?.agentAnswered ?? 0}
+              avgDurationSec={analytics?.avgDurationSec ?? 0}
+              rangeDays={7}
             />
           )}
         </div>

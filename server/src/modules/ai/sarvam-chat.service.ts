@@ -76,29 +76,44 @@ export function isSarvamChatConfigured(): boolean {
 export async function* streamSarvamChatCompletion(
   options: ChatCompletionOptions
 ): AsyncGenerator<ChatCompletionChunk> {
-  if (!config.sarvam.apiKey) {
+  const apiKey = options.apiKey || config.sarvam.apiKey;
+  const endpoint = options.endpoint || config.sarvam.chatEndpoint;
+  const model = options.model || config.sarvam.chatModel;
+  const timeoutMs = options.timeoutMs || config.sarvam.chatTimeoutMs;
+
+  if (!apiKey) {
     throw new AppError(503, 'Sarvam AI is not configured');
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), config.sarvam.chatTimeoutMs);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetch(`${config.sarvam.chatEndpoint}/chat/completions`, {
+    const isConversationsModel = model === 'sarvam-105b-conversations';
+    const payload: Record<string, unknown> = {
+      model,
+      messages: options.messages,
+      temperature: options.temperature ?? 0.5,
+      max_tokens: options.maxTokens ?? 500,
+      stream: true,
+      frequency_penalty: 0.1,
+    };
+    if (!isConversationsModel) {
+      payload.reasoning_effort = null;
+    }
+    if (options.tools?.length) {
+      payload.tools = options.tools;
+      payload.tool_choice = options.toolChoice ?? 'auto';
+    }
+
+    const response = await fetch(`${endpoint}/chat/completions`, {
       method: 'POST',
       signal: controller.signal,
       headers: {
         'Content-Type': 'application/json',
-        'api-subscription-key': config.sarvam.apiKey,
+        'api-subscription-key': apiKey,
       },
-      body: JSON.stringify({
-        model: config.sarvam.chatModel,
-        messages: options.messages,
-        temperature: options.temperature ?? 0.7,
-        max_tokens: options.maxTokens ?? 500,
-        stream: true,
-        ...(options.tools?.length ? { tools: options.tools, tool_choice: options.toolChoice ?? 'auto' } : {}),
-      }),
+      body: JSON.stringify(payload),
     });
 
     if (!response.ok) {

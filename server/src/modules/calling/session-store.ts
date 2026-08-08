@@ -160,10 +160,106 @@ export async function tryAcquireCallConnectLock(metaCallId: string, ttlSec = 30)
     const result = await redis.set(`${CONNECT_LOCK_PREFIX}${metaCallId}`, '1', 'EX', ttlSec, 'NX');
     return result === 'OK';
   } catch (err) {
-    log.warn('Connect lock unavailable — proceeding without Redis lock', {
+    // Fail closed: without a lock, duplicate Meta connect webhooks can start two sessions.
+    log.warn('Connect lock unavailable — rejecting connect to avoid duplicate sessions', {
       metaCallId,
       error: err instanceof Error ? err.message : String(err),
     });
-    return true;
+    return false;
   }
+}
+
+// ─── Outbound BIC unanswered cooldown (Meta quality / permission protection) ───
+
+const BIC_UNANSWERED_PREFIX = 'call:bic:unanswered:';
+const BIC_UNANSWERED_TTL_SEC = 7 * 24 * 60 * 60; // 7 days
+/** Block further outbound calls at this consecutive unanswered count. */
+export const BIC_UNANSWERED_BLOCK_AT = 2;
+
+function normalizePhoneDigits(phone: string): string {
+  return phone.replace(/\D/g, '');
+}
+
+function bicUnansweredKey(orgId: string, contactPhone: string): string {
+  return `${BIC_UNANSWERED_PREFIX}${orgId}:${normalizePhoneDigits(contactPhone)}`;
+}
+
+export async function getBicUnansweredCount(orgId: string, contactPhone: string): Promise<number> {
+  try {
+    const redis = getRedis();
+    const raw = await redis.get(bicUnansweredKey(orgId, contactPhone));
+    const n = raw ? Number.parseInt(raw, 10) : 0;
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  } catch (err) {
+    log.warn('BIC unanswered count read failed — allowing call', {
+      orgId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return 0;
+  }
+}
+
+/** Increment consecutive unanswered outbound BIC counter (TTL 7d). Returns new count. */
+export async function incrBicUnanswered(orgId: string, contactPhone: string): Promise<number> {
+  try {
+    const redis = getRedis();
+    const key = bicUnansweredKey(orgId, contactPhone);
+    const count = await redis.incr(key);
+    await redis.expire(key, BIC_UNANSWERED_TTL_SEC);
+    return count;
+  } catch (err) {
+    log.warn('BIC unanswered incr failed', {
+      orgId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return 0;
+  }
+}
+
+/** Clear consecutive unanswered counter after a BIC call is answered. */
+export async function clearBicUnanswered(orgId: string, contactPhone: string): Promise<void> {
+  try {
+    const redis = getRedis();
+    await redis.del(bicUnansweredKey(orgId, contactPhone));
+  } catch (err) {
+    log.warn('BIC unanswered clear failed', {
+      orgId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+/**
+ * Record an unanswered BUSINESS_INITIATED call for Meta quality cooldown.
+ * No-op unless direction is BIC and the call was never answered.
+ * Idempotent per call id so terminate route + Meta webhook do not double-count.
+ */
+export async function recordBicUnansweredIfNeeded(call: {
+  id?: string;
+  direction: string;
+  answeredAt?: Date | null;
+  organizationId: string;
+  toPhone: string;
+}): Promise<void> {
+  if (call.direction !== 'BUSINESS_INITIATED') return;
+  if (call.answeredAt) return;
+  try {
+    if (call.id) {
+      const redis = getRedis();
+      const once = await redis.set(
+        `call:bic:unanswered:once:${call.id}`,
+        '1',
+        'EX',
+        BIC_UNANSWERED_TTL_SEC,
+        'NX'
+      );
+      if (once !== 'OK') return;
+    }
+  } catch (err) {
+    log.warn('BIC unanswered once-guard failed — continuing to incr', {
+      callId: call.id,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+  await incrBicUnanswered(call.organizationId, call.toPhone);
 }

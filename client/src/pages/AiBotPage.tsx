@@ -41,6 +41,8 @@ import {
 } from '../components/ui/modalUi';
 import {
   professionalBrains,
+  stripVoiceInstructionsBlock,
+  withVoiceInstructionsBlock,
   type ProfessionalBrain,
 } from '../components/ai-bot/professionalBrains';
 import AiBotProfessionalBrainPicker from '../components/ai-bot/AiBotProfessionalBrainPicker';
@@ -298,6 +300,8 @@ export default function AiBotPage() {
   const [voicePreviewLoading, setVoicePreviewLoading] = useState(false);
   const [voiceReady, setVoiceReady] = useState(false);
   const [greetingDraft, setGreetingDraft] = useState('');
+  /** Voice instructions stored separately so Personality UI can edit chat text without the VOICE block. */
+  const [storedVoiceInstructions, setStoredVoiceInstructions] = useState<string | null>(null);
 
   const loadVoiceSettings = useCallback(async () => {
     if (!editing) return;
@@ -434,6 +438,7 @@ export default function AiBotPage() {
     setVoicePreviewLoading(false);
     setVoiceReady(false);
     setGreetingDraft('');
+    setStoredVoiceInstructions(null);
   };
 
   const composeInstructions = (
@@ -471,7 +476,7 @@ export default function AiBotPage() {
     }));
   };
 
-    const openCreate = (brain?: ProfessionalBrain) => {
+  const openCreate = (brain?: ProfessionalBrain) => {
     setEditing(null);
     setBrainKnowledgeItems(brain ? brain.knowledgeItems : null);
     setSeededTitles(brain ? new Set(brain.knowledgeItems.map((k) => k.title)) : new Set());
@@ -492,13 +497,14 @@ export default function AiBotPage() {
       ...emptyBotForm,
       isDefault: bots.length === 0,
       name: brain?.name || '',
-      instructions: instructions,
+      instructions,
       handoffMessage: brain?.handoffMessage || emptyBotForm.handoffMessage,
       handoffKeywords: brain?.handoffKeywords || '',
       triggerKeywords: brain?.triggerKeywords || '',
     });
     setFaqs([]);
     resetSlideState();
+    setStoredVoiceInstructions(brain?.voiceInstructions?.trim() || null);
     setPersonalityPreset(brain ? 'custom' : preset);
     setSlideOpen(true);
   };
@@ -512,9 +518,10 @@ export default function AiBotPage() {
 
   const openEdit = async (bot: AiBot) => {
     setEditing(bot);
+    const { chatInstructions, voiceInstructions } = stripVoiceInstructionsBlock(bot.instructions);
     setForm({
       name: bot.name,
-      instructions: bot.instructions,
+      instructions: chatInstructions,
       handoffMessage: bot.handoffMessage,
       triggerKeywords: bot.triggerKeywords.join(', '),
       handoffKeywords: (bot.handoffKeywords?.length ? bot.handoffKeywords : ['human', 'agent']).join(', '),
@@ -526,7 +533,8 @@ export default function AiBotPage() {
       rateLimitPerMin: bot.rateLimitPerMin ?? 30,
     });
     resetSlideState();
-    setPersonalityPreset(detectPreset(bot.instructions));
+    setStoredVoiceInstructions(voiceInstructions);
+    setPersonalityPreset(detectPreset(chatInstructions));
     setOfferConnect(Boolean(bot.handoffKeywords?.length));
     setSlideOpen(true);
 
@@ -567,13 +575,14 @@ export default function AiBotPage() {
     setVoicePreviewLoading(false);
     setVoiceReady(false);
     setGreetingDraft('');
+    setStoredVoiceInstructions(null);
   };
 
   const buildPayload = () => ({
     name: form.name,
     enabled: form.enabled,
     isDefault: form.isDefault,
-    instructions: form.instructions,
+    instructions: withVoiceInstructionsBlock(form.instructions, storedVoiceInstructions),
     handoffMessage: form.handoffMessage,
     triggerKeywords: form.triggerKeywords
       .split(',')
@@ -956,7 +965,9 @@ export default function AiBotPage() {
               )}
               renderTable={() => (
                 <DataTable headers={['Bot', 'Starts when', 'Knowledge', 'Status', 'Actions']}>
-                  {filteredBots.map((bot, index) => (
+                  {filteredBots.map((bot, index) => {
+                    const chatPreview = stripVoiceInstructionsBlock(bot.instructions).chatInstructions;
+                    return (
                     <tr key={bot.id} className="group">
                       <TableSerialCell rowIndex={index} />
                       <td>
@@ -995,9 +1006,9 @@ export default function AiBotPage() {
                                 </span>
                               )}
                             </div>
-                            {bot.instructions.trim() && (
+                            {chatPreview && (
                               <p className="mt-1 line-clamp-1 max-w-[280px] text-[12px] text-theme-secondary">
-                                {bot.instructions.trim()}
+                                {chatPreview}
                               </p>
                             )}
                           </div>
@@ -1056,7 +1067,8 @@ export default function AiBotPage() {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </DataTable>
               )}
             />

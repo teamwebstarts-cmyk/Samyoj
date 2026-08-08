@@ -353,11 +353,11 @@ Legend:
 | Inbox & Messaging | 21 | All DONE |
 | Automations | 8 | All DONE |
 | Flow Builder | 13 | All DONE |
-| AI Bot | 13 | All DONE |
+| AI Bot | 13 | Mostly DONE — Sarvam brain; live transfer N/A |
 | Campaigns | 17 | All DONE |
 | Contacts & Leads | 9 | All DONE |
 | Templates | 9 | All DONE |
-| Voice Calling | 11 | All DONE |
+| Voice Calling | 11 | PARTIAL — inbound AI + agent ring DONE; live transfer / Hold / Keypad not DONE |
 | Billing | 8 | All DONE |
 | Team Management | 10 | All DONE |
 | Analytics | 6 | All DONE |
