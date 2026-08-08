@@ -6,7 +6,14 @@ import { getOrgWhatsappContext, getWhatsappContextById } from '../whatsapp/conte
 import { getTemplateDisplayText, MetaWhatsAppService } from '../whatsapp/meta.service';
 import { resolveMetaCredentials } from '../whatsapp/org-meta.service';
 import { logCampaignAudit } from './audit';
-import { assertDailySendQuota, assertDailyBudget, getCampaignSettings, reserveCampaignQuota, releaseCampaignQuota } from './quota';
+import {
+  assertDailySendQuota,
+  assertDailyBudget,
+  getCampaignSettings,
+  reserveCampaignQuota,
+  releaseCampaignQuota,
+  transferCampaignQuotaReservation,
+} from './quota';
 import {
   applyTemplateParamsToPreview,
   buildTemplateComponents,
@@ -26,6 +33,7 @@ import {
   shouldReleaseCampaignQuota,
 } from './safety';
 import { getRedis } from '../../config/redis';
+import { canRollbackQueuedCampaign } from './worker-safety';
 
 const EDITABLE_STATUSES: CampaignStatus[] = ['DRAFT', 'SCHEDULED'];
 const STUCK_RUNNING_MS = 6 * 60 * 60 * 1000;
@@ -215,6 +223,7 @@ export async function recoverExpiredCampaignClaims(campaignId: string, now = new
       status: 'PENDING',
       claimToken: { not: null },
       claimedAt: { lt: cutoff },
+      providerCallStartedAt: null,
     },
     data: {
       status: 'AMBIGUOUS',
@@ -476,10 +485,16 @@ export async function queueCampaignSend(
       'MARKETING'
     );
   } catch (err) {
-    await prisma.campaign.updateMany({
-      where: { id: campaign.id, status: 'RUNNING', runVersion: run.runVersion },
-      data: { status: claimedRunVersion === undefined ? campaign.status : 'FAILED' },
+    const live = await prisma.campaign.findUnique({
+      where: { id: campaign.id },
+      select: { status: true, runVersion: true },
     });
+    if (live && canRollbackQueuedCampaign({ ...live, expectedRunVersion: run.runVersion })) {
+      await prisma.campaign.updateMany({
+        where: { id: campaign.id, status: 'RUNNING', runVersion: run.runVersion },
+        data: { status: claimedRunVersion === undefined ? campaign.status : 'FAILED' },
+      });
+    }
     throw err;
   }
 
@@ -626,6 +641,7 @@ export async function pauseCampaign(campaignId: string, orgId: string, userId?: 
       data: { status: 'PAUSED', pausedAt: new Date(), runVersion: { increment: 1 } },
     });
     if (updated.count !== 1) throw new AppError(409, 'Campaign changed before it could be paused');
+    await transferCampaignQuotaReservation(tx, campaignId, campaign.runVersion, campaign.runVersion + 1);
     const stopped = await transitionRecipientsForStop(tx, campaignId, 'paused');
     await tx.campaign.update({
       where: { id: campaignId },
@@ -644,11 +660,11 @@ export async function resumeCampaign(
 ) {
   if (campaign.status !== 'PAUSED') throw new AppError(400, 'Only paused campaigns can be resumed');
 
-  await prisma.$transaction(async (tx) => {
+  const transition = await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM campaigns WHERE id = ${campaign.id} FOR UPDATE`;
     const current = await tx.campaign.findFirst({
       where: { id: campaign.id, status: 'PAUSED', runVersion: campaign.runVersion },
-      select: { id: true },
+      select: { id: true, runVersion: true },
     });
     if (!current) throw new AppError(409, 'Campaign changed before it could be resumed');
     const reclaimed = await tx.campaignRecipient.updateMany({
@@ -677,73 +693,115 @@ export async function resumeCampaign(
       data: { status: 'RUNNING', pausedAt: null, runVersion: { increment: 1 } },
     });
     if (updated.count !== 1) throw new AppError(409, 'Campaign changed before it could be resumed');
-  });
-  const current = await prisma.campaign.findUnique({
-    where: { id: campaign.id },
-    include: { recipients: true },
-  });
-  if (!current) throw new AppError(404, 'Campaign not found');
-  campaign = current;
-  const pending = campaign.recipients.filter((r) => r.status === 'PENDING');
-  if (!pending.length) {
-    await finalizeCampaignIfDone(campaign.id);
-    throw new AppError(400, 'No pending recipients to resume');
-  }
-
-  const resumedRun = await prisma.campaign.findUnique({ where: { id: campaign.id }, select: { runVersion: true } });
-  if (!resumedRun) throw new AppError(404, 'Campaign not found');
-
-  const settings = await getCampaignSettings(campaign.organizationId);
-  const batchSize = settings.batchSize ?? 50;
-  const batchDelayMs = settings.batchDelayMs ?? 1000;
-
-  const { whatsappNumber, wabaId, accessToken } = await getWhatsappForCampaign(
-    campaign.organizationId,
-    campaign.whatsappNumberId
-  );
-
-  const template = await validateTemplate(
-    campaign.organizationId,
-    campaign.templateName,
-    wabaId,
-    accessToken
-  );
-  const templateLanguage = campaign.templateLanguage || template.language || 'en_US';
-  const templateParams = (campaign.templateParams as TemplateParams | null) || undefined;
-  const templateContent = applyTemplateParamsToPreview(template, templateParams, campaign.templateName);
-
-  const totalBatches = Math.ceil(pending.length / batchSize);
-  for (let i = 0; i < pending.length; i += batchSize) {
-    const batch = pending.slice(i, i + batchSize);
-    const batchIndex = Math.floor(i / batchSize);
-    await broadcastQueue.add(
-      'send-broadcast-batch',
-      {
-        campaignId: campaign.id,
-        organizationId: campaign.organizationId,
-        whatsappNumberDbId: whatsappNumber.id,
-        phoneNumberId: whatsappNumber.phoneNumberId,
-        encryptedToken: whatsappNumber.accessToken,
-        wabaId,
-        templateName: campaign.templateName,
-        templateLanguage,
-        templateContent,
-        templateParams,
-        recipients: batch.map((r) => ({
-          id: r.id,
-          phone: r.phone,
-          name: r.name ?? undefined,
-          variables: r.variables,
-        })),
-        isLastBatch: batchIndex === totalBatches - 1,
-        runVersion: resumedRun.runVersion,
-      },
-      { delay: batchIndex * batchDelayMs, jobId: `campaign:${campaign.id}:retry:${batch[0].id}` }
+    await transferCampaignQuotaReservation(
+      tx,
+      campaign.id,
+      current.runVersion,
+      current.runVersion + 1
     );
-  }
+    return {
+      pausedRunVersion: current.runVersion,
+      resumedRunVersion: current.runVersion + 1,
+      reclaimedCount: reclaimed.count,
+    };
+  });
+  const rollbackResume = async () => {
+    await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM campaigns WHERE id = ${campaign.id} FOR UPDATE`;
+      const live = await tx.campaign.findUnique({
+        where: { id: campaign.id },
+        select: { status: true, runVersion: true },
+      });
+      if (
+        !live ||
+        live.status !== 'RUNNING' ||
+        live.runVersion !== transition.resumedRunVersion
+      ) return;
+      const stopped = await transitionRecipientsForStop(tx, campaign.id, 'paused');
+      await tx.campaign.update({
+        where: { id: campaign.id },
+        data: {
+          status: 'PAUSED',
+          pausedAt: new Date(),
+          runVersion: transition.pausedRunVersion,
+          failedCount: { increment: stopped.failed },
+        },
+      });
+      await transferCampaignQuotaReservation(
+        tx,
+        campaign.id,
+        transition.resumedRunVersion,
+        transition.pausedRunVersion
+      );
+    });
+  };
 
-  await logCampaignAudit(campaign.organizationId, userId, 'campaign.resume', { campaignId: campaign.id });
-  emitToOrg(campaign.organizationId, 'campaign:status', { campaignId: campaign.id, status: 'RUNNING' });
+  try {
+    const current = await prisma.campaign.findUnique({
+      where: { id: campaign.id },
+      include: { recipients: true },
+    });
+    if (!current) throw new AppError(404, 'Campaign not found');
+    campaign = current;
+    const pending = campaign.recipients.filter((r) => r.status === 'PENDING');
+    if (!pending.length) {
+      await finalizeCampaignIfDone(campaign.id);
+      throw new AppError(400, 'No pending recipients to resume');
+    }
+
+    const settings = await getCampaignSettings(campaign.organizationId);
+    const batchSize = settings.batchSize ?? 50;
+    const batchDelayMs = settings.batchDelayMs ?? 1000;
+    const { whatsappNumber, wabaId, accessToken } = await getWhatsappForCampaign(
+      campaign.organizationId,
+      campaign.whatsappNumberId
+    );
+    const template = await validateTemplate(
+      campaign.organizationId,
+      campaign.templateName,
+      wabaId,
+      accessToken
+    );
+    const templateLanguage = campaign.templateLanguage || template.language || 'en_US';
+    const templateParams = (campaign.templateParams as TemplateParams | null) || undefined;
+    const templateContent = applyTemplateParamsToPreview(template, templateParams, campaign.templateName);
+
+    const totalBatches = Math.ceil(pending.length / batchSize);
+    for (let i = 0; i < pending.length; i += batchSize) {
+      const batch = pending.slice(i, i + batchSize);
+      const batchIndex = Math.floor(i / batchSize);
+      await broadcastQueue.add(
+        'send-broadcast-batch',
+        {
+          campaignId: campaign.id,
+          organizationId: campaign.organizationId,
+          whatsappNumberDbId: whatsappNumber.id,
+          phoneNumberId: whatsappNumber.phoneNumberId,
+          encryptedToken: whatsappNumber.accessToken,
+          wabaId,
+          templateName: campaign.templateName,
+          templateLanguage,
+          templateContent,
+          templateParams,
+          recipients: batch.map((r) => ({
+            id: r.id,
+            phone: r.phone,
+            name: r.name ?? undefined,
+            variables: r.variables,
+          })),
+          isLastBatch: batchIndex === totalBatches - 1,
+          runVersion: transition.resumedRunVersion,
+        },
+        { delay: batchIndex * batchDelayMs, jobId: `campaign:${campaign.id}:retry:${batch[0].id}` }
+      );
+    }
+
+    await logCampaignAudit(campaign.organizationId, userId, 'campaign.resume', { campaignId: campaign.id });
+    emitToOrg(campaign.organizationId, 'campaign:status', { campaignId: campaign.id, status: 'RUNNING' });
+  } catch (err) {
+    await rollbackResume();
+    throw err;
+  }
 }
 
 export async function cancelCampaign(campaignId: string, orgId: string, userId?: string) {

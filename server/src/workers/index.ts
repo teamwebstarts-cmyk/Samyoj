@@ -18,6 +18,7 @@ import { checkRedisConnection } from '../config/redis';
 import { createModuleLogger } from '../utils/logger';
 import { hasAuditableCampaignConsent } from '../modules/campaigns/recipients';
 import { buildConsentSnapshot, newClaimToken } from '../modules/campaigns/safety';
+import { isBroadcastJobContextValid } from '../modules/campaigns/worker-safety';
 
 const log = createModuleLogger('worker');
 
@@ -151,15 +152,30 @@ const broadcastWorker = new Worker(
     }
 
     const campaign = await prisma.campaign.findUnique({
-      where: { id: campaignId },
+      where: {
+        id: campaignId,
+        organizationId,
+        whatsappNumberId: whatsappNumberDbId,
+      },
       select: {
+        id: true,
         status: true,
         runVersion: true,
+        organizationId: true,
+        whatsappNumberId: true,
         organization: { select: { companyName: true } },
-        whatsappNumber: { select: { businessId: true, phoneNumberId: true } },
+        whatsappNumber: { select: { businessId: true, phoneNumberId: true, wabaId: true } },
       },
     });
-    if (!campaign || campaign.status !== 'RUNNING' || campaign.runVersion !== runVersion) {
+    if (!campaign) return;
+    if (!isBroadcastJobContextValid({
+      campaignId,
+      organizationId,
+      whatsappNumberDbId,
+      phoneNumberId,
+      wabaId,
+      runVersion,
+    }, campaign)) {
       return;
     }
 
@@ -200,15 +216,22 @@ const broadcastWorker = new Worker(
       });
       if (!contact || !hasAuditableCampaignConsent(contact)) {
         const rejected = await prisma.campaignRecipient.updateMany({
-          where: { id: recipient.id, status: 'PENDING', claimToken: null },
+          where: {
+            id: recipient.id,
+            campaignId,
+            status: 'PENDING',
+            claimToken: null,
+            providerCallStartedAt: null,
+            campaign: { organizationId, status: 'RUNNING', runVersion },
+          },
           data: {
             status: 'FAILED',
             errorMessage: 'Recipient has no active, auditable campaign consent',
           },
         });
         if (rejected.count === 1) {
-          await prisma.campaign.update({
-            where: { id: campaignId },
+          await prisma.campaign.updateMany({
+            where: { id: campaignId, organizationId, status: 'RUNNING', runVersion },
             data: { failedCount: { increment: 1 } },
           });
         }
@@ -221,7 +244,8 @@ const broadcastWorker = new Worker(
           id: recipient.id,
           status: 'PENDING',
           OR: [{ claimToken: null }, { claimedAt: { lt: new Date(Date.now() - 15 * 60 * 1000) } }],
-          campaign: { status: 'RUNNING', runVersion: campaign.runVersion },
+          providerCallStartedAt: null,
+          campaign: { id: campaignId, organizationId, status: 'RUNNING', runVersion },
         },
         data: {
           claimToken,
@@ -309,7 +333,10 @@ const broadcastWorker = new Worker(
       });
       if (!sendBoundary.allowed) {
         if (sendBoundary.rejected) {
-          await prisma.campaign.update({ where: { id: campaignId }, data: { failedCount: { increment: 1 } } });
+          await prisma.campaign.updateMany({
+            where: { id: campaignId, organizationId, status: 'RUNNING', runVersion },
+            data: { failedCount: { increment: 1 } },
+          });
         }
         continue;
       }
@@ -367,7 +394,11 @@ const broadcastWorker = new Worker(
           // Meta may have accepted the request while pause/cancel committed.
           // Record that ambiguous outcome so lease recovery never retries it.
           await prisma.campaignRecipient.updateMany({
-            where: { id: recipient.id, claimToken },
+            where: {
+              id: recipient.id,
+              claimToken,
+              campaign: { id: campaignId, organizationId, status: 'RUNNING', runVersion },
+            },
             data: {
               status: 'AMBIGUOUS',
               metaMessageId,
@@ -406,21 +437,27 @@ const broadcastWorker = new Worker(
           providerErrorClassification: classified.classification,
         };
         const ambiguous = await prisma.campaignRecipient.updateMany({
-          where: { id: recipient.id, claimToken },
+          where: {
+            id: recipient.id,
+            claimToken,
+            campaign: { id: campaignId, organizationId, status: 'RUNNING', runVersion },
+          },
           data: {
-            status: classified.classification === 'PERMANENT_REJECTION' ? 'FAILED' : 'AMBIGUOUS',
-            errorMessage: classified.classification === 'PERMANENT_REJECTION'
+            status: ['PERMANENT_REJECTION', 'CONFIGURATION_ERROR'].includes(classified.classification) ? 'FAILED' : 'AMBIGUOUS',
+            errorMessage: ['PERMANENT_REJECTION', 'CONFIGURATION_ERROR'].includes(classified.classification)
               ? `Meta rejected before acceptance: ${errorMessage}`
               : `Provider outcome unknown; reconcile with Meta before retrying: ${errorMessage}`,
             consentSnapshot: providerSnapshot as Prisma.InputJsonValue,
             claimToken: null,
             claimedAt: null,
-            ...(classified.classification === 'PERMANENT_REJECTION' ? { providerCallStartedAt: null } : {}),
+            ...(['PERMANENT_REJECTION', 'CONFIGURATION_ERROR'].includes(classified.classification)
+              ? { providerCallStartedAt: null }
+              : {}),
           },
         });
-        if (ambiguous.count === 1 && classified.classification === 'PERMANENT_REJECTION') {
-          await prisma.campaign.update({
-            where: { id: campaignId },
+        if (ambiguous.count === 1 && ['PERMANENT_REJECTION', 'CONFIGURATION_ERROR'].includes(classified.classification)) {
+          await prisma.campaign.updateMany({
+            where: { id: campaignId, organizationId, status: 'RUNNING', runVersion },
             data: { failedCount: { increment: 1 } },
           });
         }
@@ -430,7 +467,7 @@ const broadcastWorker = new Worker(
         emitToOrg(organizationId, 'campaign:progress', {
           campaignId,
           recipientId: recipient.id,
-          status: classified.classification === 'PERMANENT_REJECTION' ? 'FAILED' : 'AMBIGUOUS',
+          status: ['PERMANENT_REJECTION', 'CONFIGURATION_ERROR'].includes(classified.classification) ? 'FAILED' : 'AMBIGUOUS',
           errorMessage,
         });
       }

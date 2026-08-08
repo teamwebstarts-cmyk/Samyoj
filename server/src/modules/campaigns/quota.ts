@@ -4,6 +4,7 @@ import { DEFAULT_CAMPAIGN_SETTINGS, type CampaignSettings } from './types';
 import { estimateCampaignCost } from '../billing/usage.service';
 import { randomUUID } from 'node:crypto';
 import { fitsReservedQuota, ownsCampaignQuotaReservation, utcDayStart } from './safety';
+import type { Prisma } from '@prisma/client';
 
 export async function getCampaignSettings(organizationId: string): Promise<CampaignSettings> {
   const org = await prisma.organization.findUnique({
@@ -179,15 +180,25 @@ export async function reserveCampaignQuota(
 
 export async function releaseCampaignQuota(campaignId: string, runVersion: number) {
   return prisma.$transaction(async (tx) => {
-    const reservation = await tx.campaignQuotaReservation.findUnique({ where: { campaignId } });
+    // The first read only locates the ledger. Ownership is checked again after
+    // its lock so an old run cannot release a reservation transferred meanwhile.
+    const located = await tx.campaignQuotaReservation.findUnique({ where: { campaignId } });
+    if (!located) return false;
+    await tx.$queryRaw`SELECT id FROM campaign_quota_ledgers WHERE id = ${located.ledgerId} FOR UPDATE`;
+    const reservation = await tx.campaignQuotaReservation.findUnique({ where: { id: located.id } });
     if (
       !reservation ||
       reservation.status !== 'ACTIVE' ||
       !ownsCampaignQuotaReservation(reservation.runVersion, runVersion)
     ) return false;
-    await tx.$queryRaw`SELECT id FROM campaign_quota_ledgers WHERE id = ${reservation.ledgerId} FOR UPDATE`;
     const updated = await tx.campaignQuotaReservation.updateMany({
-      where: { id: reservation.id, status: 'ACTIVE' },
+      where: {
+        id: reservation.id,
+        campaignId,
+        organizationId: reservation.organizationId,
+        runVersion,
+        status: 'ACTIVE',
+      },
       data: { status: 'RELEASED', releasedAt: new Date() },
     });
     if (updated.count !== 1) return false;
@@ -205,4 +216,32 @@ export async function releaseCampaignQuota(campaignId: string, runVersion: numbe
     if (ledgerUpdated.count !== 1) throw new AppError(409, 'Campaign quota ledger is inconsistent; reconcile before release');
     return true;
   });
+}
+
+/**
+ * Move an active reservation with the campaign's run fence. This must be
+ * called inside the same transaction as the status/runVersion transition so
+ * a failed pause/resume cannot strand ownership on the wrong run.
+ */
+export async function transferCampaignQuotaReservation(
+  tx: Prisma.TransactionClient,
+  campaignId: string,
+  fromRunVersion: number,
+  toRunVersion: number
+) {
+  if (fromRunVersion === toRunVersion) return false;
+  const reservation = await tx.campaignQuotaReservation.findUnique({ where: { campaignId } });
+  if (
+    !reservation ||
+    reservation.status !== 'ACTIVE' ||
+    !ownsCampaignQuotaReservation(reservation.runVersion, fromRunVersion)
+  ) {
+    return false;
+  }
+  await tx.$queryRaw`SELECT id FROM campaign_quota_ledgers WHERE id = ${reservation.ledgerId} FOR UPDATE`;
+  const updated = await tx.campaignQuotaReservation.updateMany({
+    where: { id: reservation.id, status: 'ACTIVE', runVersion: fromRunVersion },
+    data: { runVersion: toRunVersion },
+  });
+  return updated.count === 1;
 }

@@ -111,6 +111,22 @@ export function classifyClaimForRecovery(input: {
   return input.claimToken || input.providerCallStartedAt ? 'AMBIGUOUS' as const : 'FAILED' as const;
 }
 
+export function canTakeOverExpiredClaim(input: {
+  status: string;
+  claimToken?: string | null;
+  claimedAt?: Date | null;
+  providerCallStartedAt?: Date | null;
+  now?: Date;
+  leaseMs?: number;
+}) {
+  return (
+    input.status === 'PENDING' &&
+    Boolean(input.claimToken) &&
+    isClaimLeaseExpired(input.claimedAt, input.now, input.leaseMs) &&
+    input.providerCallStartedAt == null
+  );
+}
+
 export function hasUnresolvedProviderBoundary(rows: Array<{
   status: string;
   claimToken?: string | null;
@@ -123,6 +139,7 @@ export function hasUnresolvedProviderBoundary(rows: Array<{
 
 export type ProviderErrorClassification =
   | 'PERMANENT_REJECTION'
+  | 'CONFIGURATION_ERROR'
   | 'TRANSIENT_PROVIDER_ERROR'
   | 'UNKNOWN';
 
@@ -154,12 +171,25 @@ export function classifyProviderError(error: unknown): {
       ? candidate.status
       : undefined;
   const permanent =
-    (typeof candidate?.metaCode === 'number' && [100, 132000, 131026, 131047, 131051, 131052].includes(candidate.metaCode)) ||
-    (typeof status === 'number' && status >= 400 && status < 500 && status !== 408 && status !== 429);
-  const transient = status === 429 || (typeof status === 'number' && status >= 500 && status < 600);
+    typeof candidate?.metaCode === 'number' &&
+    [100, 131008, 131021, 131026, 131037, 131047, 131049, 131050, 131051,
+      132000, 132001, 132012, 132015, 132016].includes(candidate.metaCode);
+  const configuration =
+    candidate?.metaCode === 190 ||
+    /(?:auth|authori[sz]|token|access key|credential)/i.test(message);
+  // A 4xx without a known permanent Meta code is not proof that Meta did not
+  // accept the request. Keep it ambiguous; authentication (190), throttling,
+  // and unknown provider responses must never become ordinary retries.
+  const transient =
+    !configuration &&
+    (typeof candidate?.metaCode === 'number' && [4, 130429, 131000, 131016, 131056, 131057, 80007].includes(candidate.metaCode)) ||
+    status === 429 ||
+    (typeof status === 'number' && status >= 500 && status < 600);
   return {
     classification: permanent
       ? 'PERMANENT_REJECTION'
+      : configuration
+        ? 'CONFIGURATION_ERROR'
       : transient
         ? 'TRANSIENT_PROVIDER_ERROR'
         : 'UNKNOWN',
@@ -185,6 +215,24 @@ export function shouldReleaseCampaignQuota(ambiguousCount: number) {
 /** A stale run may never release a reservation transferred to a newer run. */
 export function ownsCampaignQuotaReservation(reservationRunVersion: number, runVersion: number) {
   return reservationRunVersion === runVersion;
+}
+
+export function isExactQuotaReservationOwner(input: {
+  reservationId: string;
+  expectedReservationId: string;
+  reservationCampaignId: string;
+  campaignId: string;
+  reservationOrganizationId: string;
+  organizationId: string;
+  reservationRunVersion: number;
+  runVersion: number;
+}) {
+  return (
+    input.reservationId === input.expectedReservationId &&
+    input.reservationCampaignId === input.campaignId &&
+    input.reservationOrganizationId === input.organizationId &&
+    input.reservationRunVersion === input.runVersion
+  );
 }
 
 export function canFinalizeCampaignRun(

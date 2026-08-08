@@ -4,12 +4,14 @@ import {
   canFinalizeCampaignRun,
   campaignCounterSnapshot,
   canRetryCampaignRecipient,
+  canTakeOverExpiredClaim,
   classifyClaimForStop,
   classifyClaimForRecovery,
   classifyProviderError,
   fitsReservedQuota,
   hasUnresolvedProviderBoundary,
   isAbsoluteInstant,
+  isExactQuotaReservationOwner,
   isClaimLeaseExpired,
   ownsCampaignQuotaReservation,
   shouldReleaseCampaignQuota,
@@ -111,6 +113,31 @@ describe('campaign safety boundaries', () => {
     expect(ownsCampaignQuotaReservation(12, 11)).toBe(false);
   });
 
+  it('makes a resumed run the only valid owner of the transferred reservation', () => {
+    const pausedRun = 12;
+    const resumedRun = 13;
+    expect(ownsCampaignQuotaReservation(resumedRun, resumedRun)).toBe(true);
+    expect(ownsCampaignQuotaReservation(pausedRun, resumedRun)).toBe(false);
+    expect(ownsCampaignQuotaReservation(resumedRun, pausedRun)).toBe(false);
+  });
+
+  it('requires the exact reservation owner before releasing quota', () => {
+    const owner = {
+      reservationId: 'reservation-2',
+      expectedReservationId: 'reservation-2',
+      reservationCampaignId: 'campaign-1',
+      campaignId: 'campaign-1',
+      reservationOrganizationId: 'org-1',
+      organizationId: 'org-1',
+      reservationRunVersion: 13,
+      runVersion: 13,
+    };
+    expect(isExactQuotaReservationOwner(owner)).toBe(true);
+    expect(isExactQuotaReservationOwner({ ...owner, runVersion: 12 })).toBe(false);
+    expect(isExactQuotaReservationOwner({ ...owner, reservationOrganizationId: 'org-2' })).toBe(false);
+    expect(isExactQuotaReservationOwner({ ...owner, expectedReservationId: 'reservation-1' })).toBe(false);
+  });
+
   it('rejects stale finalization after a newer run starts', () => {
     expect(canFinalizeCampaignRun('RUNNING', 8, 7, 0, 0)).toBe(false);
     expect(canFinalizeCampaignRun('RUNNING', 8, 8, 0, 0)).toBe(true);
@@ -123,7 +150,7 @@ describe('campaign safety boundaries', () => {
     expect(classifyClaimForRecovery({ claimToken: null, providerCallStartedAt: null })).toBe('FAILED');
   });
 
-  it('classifies permanent Meta rejection separately from unknown provider outcomes', () => {
+  it('classifies structured Meta outcomes conservatively', () => {
     const permanent = classifyProviderError(Object.assign(new Error('Template rejected'), {
       metaCode: 132000,
       metaSubcode: 42,
@@ -136,8 +163,39 @@ describe('campaign safety boundaries', () => {
       .toBe('TRANSIENT_PROVIDER_ERROR');
     expect(classifyProviderError(Object.assign(new Error('upstream failure'), { status: 503 })).classification)
       .toBe('TRANSIENT_PROVIDER_ERROR');
+    expect(classifyProviderError(Object.assign(new Error('expired token'), {
+      status: 400,
+      metaCode: 190,
+    })).classification).toBe('CONFIGURATION_ERROR');
+    expect(classifyProviderError(new Error('authentication failed')).classification)
+      .toBe('CONFIGURATION_ERROR');
+    expect(classifyProviderError(Object.assign(new Error('rate limited'), {
+      status: 400,
+      metaCode: 130429,
+    })).classification).toBe('TRANSIENT_PROVIDER_ERROR');
+    expect(classifyProviderError(Object.assign(new Error('rate limited'), { status: 429 })).classification)
+      .toBe('TRANSIENT_PROVIDER_ERROR');
     expect(classifyProviderError(Object.assign(new Error('bad request'), { statusCode: 400 })).classification)
-      .toBe('PERMANENT_REJECTION');
+      .toBe('UNKNOWN');
+  });
+
+  it('never takes over a stale claim after the provider boundary', () => {
+    const now = new Date('2026-08-09T00:00:00.000Z');
+    const stale = new Date('2026-08-08T23:40:00.000Z');
+    expect(canTakeOverExpiredClaim({
+      status: 'PENDING',
+      claimToken: 'claim-1',
+      claimedAt: stale,
+      providerCallStartedAt: null,
+      now,
+    })).toBe(true);
+    expect(canTakeOverExpiredClaim({
+      status: 'PENDING',
+      claimToken: 'claim-1',
+      claimedAt: stale,
+      providerCallStartedAt: new Date('2026-08-08T23:41:00.000Z'),
+      now,
+    })).toBe(false);
   });
 
   it('reconciles counters from recipient statuses', () => {
