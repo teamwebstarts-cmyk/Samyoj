@@ -186,11 +186,85 @@ export class AiVoiceCallSession {
         return;
       }
 
-      // Stream LLM → speak clean sentences only (never speak <tool_call> markup).
-      let pending = '';
+      // Stream LLM → speak each new sentence once (never re-speak earlier chunks).
+      let rawAccum = '';
       let spokenParts: string[] = [];
       let directHandled = false;
-      let streamBuffer = '';
+
+      const unspokenRemainder = (cleanFull: string): string => {
+        let rest = cleanFull.trim();
+        for (const part of spokenParts) {
+          const p = part.trim();
+          if (!p) continue;
+          if (rest.startsWith(p)) {
+            rest = rest.slice(p.length).trimStart();
+            continue;
+          }
+          // Allow a single space/join mismatch between streamed chunks.
+          const joined = `${p} `;
+          if (rest.startsWith(joined)) {
+            rest = rest.slice(joined.length).trimStart();
+          }
+        }
+        return rest.trim();
+      };
+
+      const speakNewSentences = async (cleanFull: string, flushAll: boolean) => {
+        let rest = unspokenRemainder(cleanFull);
+        if (!rest) return;
+
+        if (!flushAll) {
+          const parts = rest.split(/(?<=[.!?।॥])\s+/);
+          if (parts.length > 1) {
+            const ready = parts.slice(0, -1).join(' ').trim();
+            rest = parts[parts.length - 1] || '';
+            if (ready && !/<tool_call>/i.test(ready)) {
+              if (!validateOutboundReply(ready).safe) {
+                await this.speak(
+                  "I'll have our team follow up with you on WhatsApp shortly.",
+                  'assistant'
+                );
+                await this.performHandoffAndTransfer('BLOCKED_CONTENT', 'BLOCKED_CONTENT');
+                throw new Error('blocked_outbound');
+              }
+              spokenParts.push(ready);
+              await this.speak(ready, 'assistant', { recordTranscript: false });
+            }
+          } else if (rest.length > 100 && /\s/.test(rest) && !/<tool_call>/i.test(rest)) {
+            const cut = rest.lastIndexOf(' ');
+            if (cut > 30) {
+              const ready = rest.slice(0, cut).trim();
+              if (ready) {
+                if (!validateOutboundReply(ready).safe) {
+                  await this.speak(
+                    "I'll have our team follow up with you on WhatsApp shortly.",
+                    'assistant'
+                  );
+                  await this.performHandoffAndTransfer('BLOCKED_CONTENT', 'BLOCKED_CONTENT');
+                  throw new Error('blocked_outbound');
+                }
+                spokenParts.push(ready);
+                await this.speak(ready, 'assistant', { recordTranscript: false });
+              }
+            }
+          }
+          return;
+        }
+
+        // Final flush — only the never-spoken tail.
+        if (!validateOutboundReply(rest).safe) {
+          if (spokenParts.length === 0) {
+            await this.speak(
+              "I'll have our team follow up with you on WhatsApp shortly.",
+              'assistant'
+            );
+          }
+          await this.performHandoffAndTransfer('BLOCKED_CONTENT', 'BLOCKED_CONTENT');
+          throw new Error('blocked_outbound');
+        }
+        spokenParts.push(rest);
+        await this.speak(rest, 'assistant', { recordTranscript: false });
+      };
 
       for await (const event of streamVoiceBotReply({
         organizationId: this.ctx.organizationId,
@@ -240,53 +314,19 @@ export class AiVoiceCallSession {
         }
 
         if (event.type === 'delta' && event.content) {
-          streamBuffer += event.content;
-          if (hasOpenToolCallMarkup(streamBuffer)) continue;
-
-          const stripped = extractInlineToolCalls(streamBuffer);
-          streamBuffer = stripped.cleanText;
-          pending = stripped.cleanText;
-          const parts = pending.split(/(?<=[.!?।॥])\s+/);
-          if (parts.length > 1) {
-            const ready = parts.slice(0, -1).join(' ').trim();
-            pending = parts[parts.length - 1] || '';
-            streamBuffer = pending;
-            if (ready && !/<tool_call>/i.test(ready)) {
-              if (!validateOutboundReply(ready).safe) {
-                await this.speak(
-                  "I'll have our team follow up with you on WhatsApp shortly.",
-                  'assistant'
-                );
-                await this.performHandoffAndTransfer('BLOCKED_CONTENT', 'BLOCKED_CONTENT');
-                return;
-              }
-              spokenParts.push(ready);
-              await this.speak(ready, 'assistant', { recordTranscript: false });
-            }
-          } else if (pending.length > 80 && /\s/.test(pending) && !/<tool_call>/i.test(pending)) {
-            const cut = pending.lastIndexOf(' ');
-            if (cut > 20) {
-              const ready = pending.slice(0, cut).trim();
-              pending = pending.slice(cut).trim();
-              streamBuffer = pending;
-              if (ready) {
-                if (!validateOutboundReply(ready).safe) {
-                  await this.speak(
-                    "I'll have our team follow up with you on WhatsApp shortly.",
-                    'assistant'
-                  );
-                  await this.performHandoffAndTransfer('BLOCKED_CONTENT', 'BLOCKED_CONTENT');
-                  return;
-                }
-                spokenParts.push(ready);
-                await this.speak(ready, 'assistant', { recordTranscript: false });
-              }
-            }
+          rawAccum += event.content;
+          if (hasOpenToolCallMarkup(rawAccum)) continue;
+          const stripped = extractInlineToolCalls(rawAccum);
+          try {
+            await speakNewSentences(stripped.cleanText, false);
+          } catch (err) {
+            if (err instanceof Error && err.message === 'blocked_outbound') return;
+            throw err;
           }
         }
 
         if (event.type === 'done') {
-          const parsed = extractInlineToolCalls((event.content || pending || streamBuffer || '').trim());
+          const parsed = extractInlineToolCalls((event.content || rawAccum || '').trim());
           const tools = [
             ...(event.tools || []),
             ...parsed.tools.map((t, i) => ({
@@ -295,21 +335,13 @@ export class AiVoiceCallSession {
               arguments: t.arguments,
             })),
           ];
-          const tail = parsed.cleanText.trim();
-          if (tail) {
-            if (!validateOutboundReply(tail).safe) {
-              if (spokenParts.length === 0) {
-                await this.speak(
-                  "I'll have our team follow up with you on WhatsApp shortly.",
-                  'assistant'
-                );
-              }
-              await this.performHandoffAndTransfer('BLOCKED_CONTENT', 'BLOCKED_CONTENT');
-              return;
-            }
-            spokenParts.push(tail);
-            await this.speak(tail, 'assistant', { recordTranscript: false });
+          try {
+            await speakNewSentences(parsed.cleanText, true);
+          } catch (err) {
+            if (err instanceof Error && err.message === 'blocked_outbound') return;
+            throw err;
           }
+
           const full = spokenParts.join(' ').trim();
           if (full) {
             await this.appendTranscript('assistant', full);

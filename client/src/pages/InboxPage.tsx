@@ -127,6 +127,8 @@ export default function InboxPage() {
   const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(() => new Set());
   const [clearChatOpen, setClearChatOpen] = useState(false);
   const [clearingChat, setClearingChat] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Conversation | null>(null);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [deletingMessages, setDeletingMessages] = useState(false);
   const [detailsFocusSection, setDetailsFocusSection] = useState<PanelSection | undefined>();
   const [selectionMode, setSelectionMode] = useState(false);
@@ -577,6 +579,17 @@ export default function InboxPage() {
     [selectedIds, bulkBusy, handleBulk, clearSelection]
   );
 
+  const confirmDeleteConversation = useCallback(async () => {
+    if (!deleteTarget) return;
+    const ok = await handleDeleteConversation(deleteTarget.id);
+    if (ok) setDeleteTarget(null);
+  }, [deleteTarget, handleDeleteConversation]);
+
+  const confirmBulkDelete = useCallback(async () => {
+    await runBulk({ action: 'delete' });
+    setBulkDeleteOpen(false);
+  }, [runBulk]);
+
   const botIsLive = selected?.botActive !== false && !selected?.botHandoffAt;
   const contextMenuConversation = useMemo(
     () => conversations.find((c) => c.id === contextMenu?.conversationId) ?? null,
@@ -706,6 +719,7 @@ export default function InboxPage() {
                   snoozedUntil: untilIso,
                 })
               }
+              onBulkDelete={() => setBulkDeleteOpen(true)}
               onClearSelection={clearSelection}
               onRetry={() => void loadConversations()}
               onSelect={(conv) => void handleOpenConversation(conv)}
@@ -902,6 +916,10 @@ export default function InboxPage() {
         }
         onUnsnooze={() => void handleUnsnooze(contextMenuConversation?.id)}
         onExport={() => setExportTarget(contextMenuConversation)}
+        onDelete={() => {
+          if (contextMenuConversation) setDeleteTarget(contextMenuConversation);
+          setContextMenu(null);
+        }}
         onSelectThis={() => {
           if (contextMenuConversation) selectConversation(contextMenuConversation.id);
         }}
@@ -952,6 +970,44 @@ export default function InboxPage() {
         confirmLabel="Clear chat"
         variant="danger"
         loading={clearingChat}
+      />
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        onClose={() => {
+          if (!deleting) setDeleteTarget(null);
+        }}
+        onConfirm={() => void confirmDeleteConversation()}
+        title="Delete this chat?"
+        description={
+          deleteTarget
+            ? `“${deleteTarget.contact.name || deleteTarget.contact.phone}” and its full message history will be permanently removed from Samyoj.`
+            : 'This conversation will be permanently removed from Samyoj.'
+        }
+        details={[
+          'All messages, notes, and stored media for this chat are deleted.',
+          'This does not delete the chat on the customer’s WhatsApp.',
+        ]}
+        confirmLabel="Delete chat"
+        variant="danger"
+        loading={deleting}
+      />
+
+      <ConfirmDialog
+        open={bulkDeleteOpen}
+        onClose={() => {
+          if (!bulkBusy) setBulkDeleteOpen(false);
+        }}
+        onConfirm={() => void confirmBulkDelete()}
+        title={`Delete ${selectedIds.size} chat${selectedIds.size === 1 ? '' : 's'}?`}
+        description="The selected conversations and their full message history will be permanently removed from Samyoj."
+        details={[
+          'All messages, notes, and stored media for these chats are deleted.',
+          'This does not delete the chats on the customers’ WhatsApp.',
+        ]}
+        confirmLabel="Delete chats"
+        variant="danger"
+        loading={bulkBusy}
       />
 
       <KeyboardShortcutsOverlay open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
