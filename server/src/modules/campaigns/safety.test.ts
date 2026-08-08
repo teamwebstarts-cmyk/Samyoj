@@ -15,6 +15,8 @@ import {
   isExactQuotaReservationOwner,
   isClaimLeaseExpired,
   ownsCampaignQuotaReservation,
+  rollbackRecipientAction,
+  shouldReleaseQuotaAfterConfigurationFailure,
   shouldReleaseCampaignQuota,
   shouldRetryCampaignSetup,
   stopTransition,
@@ -72,6 +74,16 @@ describe('campaign safety boundaries', () => {
     expect(canRetryCampaignRecipient('FAILED')).toBe(true);
     expect(canRetryCampaignRecipient('AMBIGUOUS')).toBe(false);
     expect(canRetryCampaignRecipient('SENT')).toBe(false);
+  });
+
+  it('rolls back only untouched rows and protects provider-bound rows', () => {
+    expect(rollbackRecipientAction({ status: 'PENDING' })).toBe('RESTORE');
+    expect(rollbackRecipientAction({
+      status: 'PENDING',
+      providerCallStartedAt: new Date(),
+    })).toBe('AMBIGUOUS');
+    expect(rollbackRecipientAction({ status: 'SENT' })).toBe('PRESERVE');
+    expect(rollbackRecipientAction({ status: 'FAILED' })).toBe('PRESERVE');
   });
 
   it('enforces both locked send and budget reservations', () => {
@@ -190,6 +202,16 @@ describe('campaign safety boundaries', () => {
     expect(shouldRetryCampaignSetup('TRANSIENT_PROVIDER_ERROR')).toBe(true);
     expect(shouldRetryCampaignSetup('UNKNOWN')).toBe(true);
     expect(shouldRetryCampaignSetup('CONFIGURATION_ERROR')).toBe(false);
+  });
+
+  it('retains quota when WABA setup failure races provider-bound work', () => {
+    expect(shouldReleaseQuotaAfterConfigurationFailure([{ status: 'FAILED' }])).toBe(true);
+    expect(shouldReleaseQuotaAfterConfigurationFailure([
+      { status: 'AMBIGUOUS' },
+    ])).toBe(false);
+    expect(shouldReleaseQuotaAfterConfigurationFailure([
+      { status: 'PENDING', providerCallStartedAt: new Date() },
+    ])).toBe(false);
   });
 
   it('never takes over a stale claim after the provider boundary', () => {

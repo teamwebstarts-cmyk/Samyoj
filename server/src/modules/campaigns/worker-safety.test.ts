@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildCampaignJobId,
   canRollbackQueuedCampaign,
   isBroadcastJobContextValid,
 } from './worker-safety';
@@ -48,5 +49,12 @@ describe('campaign worker safety', () => {
       runVersion: 7,
       expectedRunVersion: 7,
     })).toBe(false);
+  });
+
+  it('fences deterministic jobs by run so stale jobs cannot collide', () => {
+    expect(buildCampaignJobId('campaign-1', 7, 'retry', 'recipient-1'))
+      .not.toBe(buildCampaignJobId('campaign-1', 8, 'retry', 'recipient-1'));
+    expect(buildCampaignJobId('campaign-1', 7, 'batch', 'recipient-1'))
+      .toBe('campaign:campaign-1:run:7:batch:recipient-1');
   });
 });

@@ -42,3 +42,12 @@ export function canRollbackQueuedCampaign(input: {
 }) {
   return input.status === 'RUNNING' && input.runVersion === input.expectedRunVersion;
 }
+
+export function buildCampaignJobId(
+  campaignId: string,
+  runVersion: number,
+  kind: 'batch' | 'retry',
+  firstRecipientId: string
+) {
+  return `campaign:${campaignId}:run:${runVersion}:${kind}:${firstRecipientId}`;
+}

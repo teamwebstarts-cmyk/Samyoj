@@ -137,6 +137,31 @@ export function hasUnresolvedProviderBoundary(rows: Array<{
   );
 }
 
+export function isProviderBoundRecipient(input: {
+  status: string;
+  claimToken?: string | null;
+  providerCallStartedAt?: Date | null;
+}) {
+  return (
+    ['SENT', 'DELIVERED', 'READ', 'AMBIGUOUS'].includes(input.status) ||
+    Boolean(input.claimToken) ||
+    Boolean(input.providerCallStartedAt)
+  );
+}
+
+export function rollbackRecipientAction(input: {
+  status: string;
+  claimToken?: string | null;
+  providerCallStartedAt?: Date | null;
+}) {
+  if (isProviderBoundRecipient(input)) {
+    return ['SENT', 'DELIVERED', 'READ'].includes(input.status)
+      ? 'PRESERVE' as const
+      : 'AMBIGUOUS' as const;
+  }
+  return input.status === 'PENDING' ? 'RESTORE' as const : 'PRESERVE' as const;
+}
+
 export type ProviderErrorClassification =
   | 'PERMANENT_REJECTION'
   | 'CONFIGURATION_ERROR'
@@ -219,6 +244,14 @@ export function canReclaimPausedRecipient(status: string, errorMessage: string |
 
 export function shouldReleaseCampaignQuota(ambiguousCount: number) {
   return ambiguousCount === 0;
+}
+
+export function shouldReleaseQuotaAfterConfigurationFailure(rows: Array<{
+  status: string;
+  claimToken?: string | null;
+  providerCallStartedAt?: Date | null;
+}>) {
+  return !hasUnresolvedProviderBoundary(rows);
 }
 
 /** A stale run may never release a reservation transferred to a newer run. */

@@ -22,6 +22,7 @@ import {
   isCampaignConfigurationFailure,
   newClaimToken,
   classifyProviderError,
+  shouldReleaseQuotaAfterConfigurationFailure,
 } from '../modules/campaigns/safety';
 import { isBroadcastJobContextValid } from '../modules/campaigns/worker-safety';
 import { releaseCampaignQuota } from '../modules/campaigns/quota';
@@ -220,7 +221,15 @@ const broadcastWorker = new Worker(
         });
         const { reconcileCampaignCounters } = await import('../modules/campaigns/service');
         await reconcileCampaignCounters(campaignId);
-        await releaseCampaignQuota(campaignId, runVersion);
+        const rollbackSafetyRows = await prisma.campaignRecipient.findMany({
+          where: { campaignId },
+          select: { status: true, claimToken: true, providerCallStartedAt: true },
+        });
+        // No fake Meta reconciliation is attempted here. An in-flight provider
+        // boundary keeps this failed campaign's reservation until reconciliation.
+        if (shouldReleaseQuotaAfterConfigurationFailure(rollbackSafetyRows)) {
+          await releaseCampaignQuota(campaignId, runVersion);
+        }
         emitToOrg(organizationId, 'campaign:status', {
           campaignId,
           status: 'FAILED',

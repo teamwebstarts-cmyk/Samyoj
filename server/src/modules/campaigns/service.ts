@@ -31,10 +31,11 @@ import {
   CAMPAIGN_CLAIM_LEASE_MS,
   canFinalizeCampaignRun,
   campaignCounterSnapshot,
+  rollbackRecipientAction,
   shouldReleaseCampaignQuota,
 } from './safety';
 import { getRedis } from '../../config/redis';
-import { canRollbackQueuedCampaign } from './worker-safety';
+import { buildCampaignJobId, canRollbackQueuedCampaign } from './worker-safety';
 
 const EDITABLE_STATUSES: CampaignStatus[] = ['DRAFT', 'SCHEDULED'];
 const STUCK_RUNNING_MS = 6 * 60 * 60 * 1000;
@@ -83,40 +84,63 @@ async function restoreCampaignRun(
     });
     if (!live || !canRollbackQueuedCampaign({ ...live, expectedRunVersion })) return false;
 
+    const liveRecipients = await tx.campaignRecipient.findMany({ where: { campaignId } });
+    const liveById = new Map(liveRecipients.map((recipient) => [recipient.id, recipient]));
+    let ambiguousCount = 0;
+    for (const recipient of snapshot.recipients) {
+      const liveRecipient = liveById.get(recipient.id);
+      if (!liveRecipient) continue;
+      const action = rollbackRecipientAction(liveRecipient);
+      if (action === 'RESTORE') {
+        await tx.campaignRecipient.update({
+          where: { id: recipient.id },
+          data: {
+            status: recipient.status,
+            metaMessageId: recipient.metaMessageId,
+            errorMessage: recipient.errorMessage,
+            retryCount: recipient.retryCount,
+            claimToken: recipient.claimToken,
+            claimedAt: recipient.claimedAt,
+            providerCallStartedAt: recipient.providerCallStartedAt,
+            consentSnapshot: recipient.consentSnapshot === null ? Prisma.JsonNull : recipient.consentSnapshot,
+            sentAt: recipient.sentAt,
+            deliveredAt: recipient.deliveredAt,
+            readAt: recipient.readAt,
+          },
+        });
+      } else if (action === 'AMBIGUOUS') {
+        ambiguousCount += 1;
+        // No fake Meta reconciliation is attempted here. Keep the row explicitly
+        // non-retryable until an operator reconciles the provider outcome.
+        await tx.campaignRecipient.update({
+          where: { id: recipient.id },
+          data: {
+            status: 'AMBIGUOUS',
+            errorMessage: 'Provider boundary crossed during queue rollback; reconcile with Meta before retrying',
+            claimToken: null,
+            claimedAt: null,
+          },
+        });
+      }
+    }
+    const finalRecipients = await tx.campaignRecipient.findMany({
+      where: { campaignId },
+      select: { status: true },
+    });
+    const counters = campaignCounterSnapshot(finalRecipients.map((recipient) => recipient.status));
     await tx.campaign.update({
       where: { id: campaignId },
       data: {
-        status: snapshot.status,
-        runVersion: snapshot.runVersion,
+        status: ambiguousCount ? 'FAILED' : snapshot.status,
+        runVersion: ambiguousCount ? expectedRunVersion : snapshot.runVersion,
         templateLanguage: snapshot.templateLanguage,
-        sentCount: snapshot.sentCount,
-        deliveredCount: snapshot.deliveredCount,
-        readCount: snapshot.readCount,
-        failedCount: snapshot.failedCount,
-        pausedAt: snapshot.pausedAt,
-        cancelledAt: snapshot.cancelledAt,
+        ...counters,
+        pausedAt: ambiguousCount ? null : snapshot.pausedAt,
+        cancelledAt: ambiguousCount ? null : snapshot.cancelledAt,
         sentById: snapshot.sentById,
       },
     });
-    for (const recipient of snapshot.recipients) {
-      await tx.campaignRecipient.update({
-        where: { id: recipient.id },
-        data: {
-          status: recipient.status,
-          metaMessageId: recipient.metaMessageId,
-          errorMessage: recipient.errorMessage,
-          retryCount: recipient.retryCount,
-          claimToken: recipient.claimToken,
-          claimedAt: recipient.claimedAt,
-          providerCallStartedAt: recipient.providerCallStartedAt,
-          consentSnapshot: recipient.consentSnapshot === null ? Prisma.JsonNull : recipient.consentSnapshot,
-          sentAt: recipient.sentAt,
-          deliveredAt: recipient.deliveredAt,
-          readAt: recipient.readAt,
-        },
-      });
-    }
-    return true;
+    return { restored: true, ambiguousCount };
   });
 }
 
@@ -606,7 +630,7 @@ export async function queueCampaignSend(
     for (let i = 0; i < campaign.recipients.length; i += batchSize) {
     const batch = campaign.recipients.slice(i, i + batchSize);
     const batchIndex = Math.floor(i / batchSize);
-    const jobId = `campaign:${campaign.id}:batch:${batch[0].id}`;
+    const jobId = buildCampaignJobId(campaign.id, run.runVersion, 'batch', batch[0].id);
     await broadcastQueue.add(
       'send-broadcast-batch',
       {
@@ -635,10 +659,9 @@ export async function queueCampaignSend(
     }
   } catch (err) {
     await removeQueuedCampaignJobs(queuedJobIds);
-    try {
+    const rollback = await restoreCampaignRun(campaign.id, run.runVersion, runSnapshot);
+    if (rollback && shouldReleaseCampaignQuota(rollback.ambiguousCount)) {
       await releaseCampaignQuota(campaign.id, run.runVersion);
-    } finally {
-      await restoreCampaignRun(campaign.id, run.runVersion, runSnapshot);
     }
     throw err;
   }
@@ -807,6 +830,7 @@ export async function resumeCampaign(
     });
   };
 
+  const queuedJobIds: string[] = [];
   try {
     const current = await prisma.campaign.findUnique({
       where: { id: campaign.id },
@@ -841,6 +865,12 @@ export async function resumeCampaign(
     for (let i = 0; i < pending.length; i += batchSize) {
       const batch = pending.slice(i, i + batchSize);
       const batchIndex = Math.floor(i / batchSize);
+      const jobId = buildCampaignJobId(
+        campaign.id,
+        transition.resumedRunVersion,
+        'retry',
+        batch[0].id
+      );
       await broadcastQueue.add(
         'send-broadcast-batch',
         {
@@ -863,13 +893,15 @@ export async function resumeCampaign(
           isLastBatch: batchIndex === totalBatches - 1,
           runVersion: transition.resumedRunVersion,
         },
-        { delay: batchIndex * batchDelayMs, jobId: `campaign:${campaign.id}:retry:${batch[0].id}` }
+        { delay: batchIndex * batchDelayMs, jobId }
       );
+      queuedJobIds.push(jobId);
     }
 
     await logCampaignAudit(campaign.organizationId, userId, 'campaign.resume', { campaignId: campaign.id });
     emitToOrg(campaign.organizationId, 'campaign:status', { campaignId: campaign.id, status: 'RUNNING' });
   } catch (err) {
+    await removeQueuedCampaignJobs(queuedJobIds);
     await rollbackResume();
     throw err;
   }
@@ -988,7 +1020,7 @@ export async function retryFailedRecipients(
     for (let i = 0; i < failed.length; i += batchSize) {
     const batch = failed.slice(i, i + batchSize);
     const batchIndex = Math.floor(i / batchSize);
-    const jobId = `campaign:${campaign.id}:retry:${batch[0].id}`;
+    const jobId = buildCampaignJobId(campaign.id, retryVersion.runVersion, 'retry', batch[0].id);
     await broadcastQueue.add(
       'send-broadcast-batch',
       {
@@ -1017,10 +1049,9 @@ export async function retryFailedRecipients(
     }
   } catch (err) {
     await removeQueuedCampaignJobs(queuedJobIds);
-    try {
+    const rollback = await restoreCampaignRun(campaign.id, retryVersion.runVersion, runSnapshot);
+    if (rollback && shouldReleaseCampaignQuota(rollback.ambiguousCount)) {
       await releaseCampaignQuota(campaign.id, retryVersion.runVersion);
-    } finally {
-      await restoreCampaignRun(campaign.id, retryVersion.runVersion, runSnapshot);
     }
     throw err;
   }
