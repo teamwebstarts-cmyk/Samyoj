@@ -100,6 +100,14 @@ export function campaignCounterSnapshot(statuses: string[]) {
   );
 }
 
+export function reconcileProviderStatusTransition(currentStatus: string, providerStatus: string) {
+  const next = providerStatus.toUpperCase();
+  if (!['SENT', 'DELIVERED', 'READ', 'FAILED'].includes(next)) return null;
+  if (currentStatus === 'AMBIGUOUS') return next as 'SENT' | 'DELIVERED' | 'READ' | 'FAILED';
+  if (['SENT', 'DELIVERED', 'READ', 'FAILED'].includes(currentStatus)) return null;
+  return next as 'SENT' | 'DELIVERED' | 'READ' | 'FAILED';
+}
+
 export function classifyClaimForStop(providerCallStartedAt: Date | null | undefined) {
   return providerCallStartedAt ? 'AMBIGUOUS' : 'FAILED';
 }
@@ -109,6 +117,37 @@ export function classifyClaimForRecovery(input: {
   providerCallStartedAt?: Date | null;
 }) {
   return input.claimToken || input.providerCallStartedAt ? 'AMBIGUOUS' as const : 'FAILED' as const;
+}
+
+/** Setup failure occurs before this worker's provider call. A claim alone is
+ * safe to release; an already-started provider call must remain held. */
+export function classifyClaimForConfigurationFailure(input: {
+  status: string;
+  providerCallStartedAt?: Date | null;
+}) {
+  if (input.status !== 'PENDING') return input.status;
+  return input.providerCallStartedAt ? 'AMBIGUOUS' as const : 'FAILED' as const;
+}
+
+export function buildStaleCampaignJobAudit(input: {
+  campaignId: string;
+  jobId: string | number;
+  expectedRunVersion: number;
+  liveRunVersion?: number | null;
+  liveStatus?: string | null;
+  reason: 'campaign_missing' | 'context_mismatch';
+  releasedClaimCount: number;
+}) {
+  return {
+    campaignId: input.campaignId,
+    jobId: String(input.jobId),
+    expectedRunVersion: input.expectedRunVersion,
+    liveRunVersion: input.liveRunVersion ?? null,
+    liveStatus: input.liveStatus ?? null,
+    reason: input.reason,
+    releasedClaimCount: input.releasedClaimCount,
+    outcome: 'STALE_JOB_CLEANED',
+  };
 }
 
 export function canTakeOverExpiredClaim(input: {

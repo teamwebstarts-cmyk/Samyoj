@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildConsentSnapshot,
+  buildStaleCampaignJobAudit,
   canFinalizeCampaignRun,
   campaignCounterSnapshot,
+  reconcileProviderStatusTransition,
   canRetryCampaignRecipient,
   canTakeOverExpiredClaim,
   classifyClaimForStop,
   classifyClaimForRecovery,
+  classifyClaimForConfigurationFailure,
   classifyProviderError,
   fitsReservedQuota,
   hasUnresolvedProviderBoundary,
@@ -214,6 +217,36 @@ describe('campaign safety boundaries', () => {
     ])).toBe(false);
   });
 
+  it('cleans WABA setup failures without releasing provider-bound claims', () => {
+    expect(classifyClaimForConfigurationFailure({ status: 'PENDING' })).toBe('FAILED');
+    expect(classifyClaimForConfigurationFailure({
+      status: 'PENDING',
+      providerCallStartedAt: new Date(),
+    })).toBe('AMBIGUOUS');
+    expect(classifyClaimForConfigurationFailure({ status: 'FAILED' })).toBe('FAILED');
+  });
+
+  it('describes stale jobs as an auditable, run-fenced outcome', () => {
+    expect(buildStaleCampaignJobAudit({
+      campaignId: 'campaign-1',
+      jobId: 'job-1',
+      expectedRunVersion: 4,
+      liveRunVersion: 5,
+      liveStatus: 'RUNNING',
+      reason: 'context_mismatch',
+      releasedClaimCount: 0,
+    })).toEqual({
+      campaignId: 'campaign-1',
+      jobId: 'job-1',
+      expectedRunVersion: 4,
+      liveRunVersion: 5,
+      liveStatus: 'RUNNING',
+      reason: 'context_mismatch',
+      releasedClaimCount: 0,
+      outcome: 'STALE_JOB_CLEANED',
+    });
+  });
+
   it('never takes over a stale claim after the provider boundary', () => {
     const now = new Date('2026-08-09T00:00:00.000Z');
     const stale = new Date('2026-08-08T23:40:00.000Z');
@@ -240,5 +273,13 @@ describe('campaign safety boundaries', () => {
       readCount: 1,
       failedCount: 1,
     });
+  });
+
+  it('reconciles only monotonic verified provider outcomes', () => {
+    expect(reconcileProviderStatusTransition('AMBIGUOUS', 'sent')).toBe('SENT');
+    expect(reconcileProviderStatusTransition('AMBIGUOUS', 'delivered')).toBe('DELIVERED');
+    expect(reconcileProviderStatusTransition('PENDING', 'read')).toBe('READ');
+    expect(reconcileProviderStatusTransition('READ', 'sent')).toBeNull();
+    expect(reconcileProviderStatusTransition('AMBIGUOUS', 'unknown')).toBeNull();
   });
 });

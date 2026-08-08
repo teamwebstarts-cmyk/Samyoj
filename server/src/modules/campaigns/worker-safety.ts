@@ -51,3 +51,7 @@ export function buildCampaignJobId(
 ) {
   return `campaign:${campaignId}:run:${runVersion}:${kind}:${firstRecipientId}`;
 }
+
+export function campaignJobClaimPrefix(jobId: string | number) {
+  return `${String(jobId)}:`;
+}

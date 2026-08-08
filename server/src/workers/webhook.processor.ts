@@ -86,6 +86,11 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
           },
           select: { id: true, status: true, metadata: true },
         });
+        const { syncCampaignRecipientFromWebhook } = await import('../modules/campaigns/service');
+        await syncCampaignRecipientFromWebhook(metaMessageId, statusValue, {
+          organizationId: orgId,
+          phoneNumberId,
+        });
         if (!existingMsg) continue;
 
         const currentRank = STATUS_RANK[existingMsg.status] ?? -1;
@@ -139,7 +144,6 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
           });
         }
 
-        const { syncCampaignRecipientFromWebhook } = await import('../modules/campaigns/service');
         await syncCampaignRecipientFromWebhook(metaMessageId, statusValue, {
           organizationId: orgId,
           phoneNumberId,

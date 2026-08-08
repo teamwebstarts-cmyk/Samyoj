@@ -18,14 +18,18 @@ import { checkRedisConnection } from '../config/redis';
 import { createModuleLogger } from '../utils/logger';
 import { hasAuditableCampaignConsent } from '../modules/campaigns/recipients';
 import {
+  buildStaleCampaignJobAudit,
   buildConsentSnapshot,
+  campaignCounterSnapshot,
   isCampaignConfigurationFailure,
   newClaimToken,
   classifyProviderError,
+  classifyClaimForConfigurationFailure,
   shouldReleaseQuotaAfterConfigurationFailure,
 } from '../modules/campaigns/safety';
-import { isBroadcastJobContextValid } from '../modules/campaigns/worker-safety';
+import { campaignJobClaimPrefix, isBroadcastJobContextValid } from '../modules/campaigns/worker-safety';
 import { releaseCampaignQuota } from '../modules/campaigns/quota';
+import { logCampaignAudit } from '../modules/campaigns/audit';
 
 const log = createModuleLogger('worker');
 
@@ -40,6 +44,62 @@ export function setSocketIO(socketServer: Server) {
 
 function getRetryDelay(attemptsMade: number): number {
   return retryDelays[Math.min(attemptsMade, retryDelays.length - 1)];
+}
+
+async function cleanStaleCampaignJob(job: Job, input: {
+  campaignId: string;
+  organizationId: string;
+  runVersion: number;
+  reason: 'campaign_missing' | 'context_mismatch';
+}) {
+  const live = await prisma.campaign.findFirst({
+    where: { id: input.campaignId, organizationId: input.organizationId },
+    select: { status: true, runVersion: true },
+  });
+  let releasedClaimCount = 0;
+  if (live?.runVersion === input.runVersion) {
+    const released = await prisma.campaignRecipient.updateMany({
+      where: {
+        campaignId: input.campaignId,
+        status: 'PENDING',
+        providerCallStartedAt: null,
+        claimToken: { startsWith: campaignJobClaimPrefix(job.id ?? 'unknown') },
+        campaign: { organizationId: input.organizationId, runVersion: input.runVersion },
+      },
+      data: {
+        status: 'FAILED',
+        errorMessage: 'Stale campaign job discarded before provider send',
+        claimToken: null,
+        claimedAt: null,
+      },
+    });
+    releasedClaimCount = released.count;
+    await prisma.$transaction(async (tx) => {
+      const recipients = await tx.campaignRecipient.findMany({
+        where: { campaignId: input.campaignId },
+        select: { status: true },
+      });
+      const counts = campaignCounterSnapshot(recipients.map((row) => row.status));
+      await tx.campaign.updateMany({
+        where: { id: input.campaignId, organizationId: input.organizationId, runVersion: input.runVersion },
+        data: counts,
+      });
+    });
+  }
+  await logCampaignAudit(
+    input.organizationId,
+    undefined,
+    'campaign.stale_job',
+    buildStaleCampaignJobAudit({
+      campaignId: input.campaignId,
+      jobId: job.id ?? 'unknown',
+      expectedRunVersion: input.runVersion,
+      liveRunVersion: live?.runVersion,
+      liveStatus: live?.status,
+      reason: input.reason,
+      releasedClaimCount,
+    })
+  );
 }
 
 export function startWorkers(): void {
@@ -174,7 +234,15 @@ const broadcastWorker = new Worker(
         whatsappNumber: { select: { businessId: true, phoneNumberId: true, wabaId: true } },
       },
     });
-    if (!campaign) return;
+    if (!campaign) {
+      await cleanStaleCampaignJob(job, {
+        campaignId,
+        organizationId,
+        runVersion,
+        reason: 'campaign_missing',
+      });
+      return;
+    }
     if (!isBroadcastJobContextValid({
       campaignId,
       organizationId,
@@ -183,6 +251,12 @@ const broadcastWorker = new Worker(
       wabaId,
       runVersion,
     }, campaign)) {
+      await cleanStaleCampaignJob(job, {
+        campaignId,
+        organizationId,
+        runVersion,
+        reason: 'context_mismatch',
+      });
       return;
     }
 
@@ -203,21 +277,48 @@ const broadcastWorker = new Worker(
           `Campaign blocked by WhatsApp configuration: ${classified.message} ` +
           'Reconnect WhatsApp with a WABA admin account, then retry failed recipients.';
         await prisma.$transaction(async (tx) => {
-          const changed = await tx.campaignRecipient.updateMany({
+          const providerBound = await tx.campaignRecipient.updateMany({
             where: {
               campaignId,
               campaign: { organizationId, status: 'RUNNING', runVersion },
               status: 'PENDING',
-              claimToken: null,
-              providerCallStartedAt: null,
+              providerCallStartedAt: { not: null },
             },
-            data: { status: 'FAILED', errorMessage: configurationMessage },
+            data: {
+              status: 'AMBIGUOUS',
+              errorMessage: `${configurationMessage} Provider call started; reconcile with Meta before retrying.`,
+              claimToken: null,
+              claimedAt: null,
+            },
           });
+          const unstarted = await tx.campaignRecipient.findMany({
+            where: {
+              campaignId,
+              campaign: { organizationId, status: 'RUNNING', runVersion },
+              status: 'PENDING',
+            },
+            select: { id: true, status: true, providerCallStartedAt: true },
+          });
+          let failed = 0;
+          for (const row of unstarted) {
+            const next = classifyClaimForConfigurationFailure(row);
+            if (next !== 'FAILED') continue;
+            const released = await tx.campaignRecipient.updateMany({
+              where: { id: row.id, status: 'PENDING', providerCallStartedAt: null },
+              data: {
+                status: 'FAILED',
+                errorMessage: configurationMessage,
+                claimToken: null,
+                claimedAt: null,
+              },
+            });
+            failed += released.count;
+          }
           await tx.campaign.updateMany({
             where: { id: campaignId, organizationId, status: 'RUNNING', runVersion },
             data: { status: 'FAILED' },
           });
-          return changed.count;
+          return { failed, ambiguous: providerBound.count };
         });
         const { reconcileCampaignCounters } = await import('../modules/campaigns/service');
         await reconcileCampaignCounters(campaignId);

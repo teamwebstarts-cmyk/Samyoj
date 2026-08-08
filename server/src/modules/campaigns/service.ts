@@ -31,6 +31,7 @@ import {
   CAMPAIGN_CLAIM_LEASE_MS,
   canFinalizeCampaignRun,
   campaignCounterSnapshot,
+  reconcileProviderStatusTransition,
   rollbackRecipientAction,
   shouldReleaseCampaignQuota,
 } from './safety';
@@ -404,7 +405,7 @@ export async function syncCampaignRecipientFromWebhook(
   context?: { organizationId: string; phoneNumberId?: string }
 ) {
   const normalized = status.toUpperCase();
-  if (!['DELIVERED', 'READ', 'FAILED'].includes(normalized)) return;
+  if (!['SENT', 'DELIVERED', 'READ', 'FAILED'].includes(normalized)) return;
 
   const recipient = await prisma.campaignRecipient.findUnique({
     where: { metaMessageId },
@@ -430,56 +431,45 @@ export async function syncCampaignRecipientFromWebhook(
     return;
   }
 
-  const now = new Date();
-  const data: Prisma.CampaignRecipientUpdateInput = {};
-
-  if (normalized === 'DELIVERED' && !['DELIVERED', 'READ', 'FAILED'].includes(recipient.status)) {
-    data.status = 'DELIVERED';
-    data.deliveredAt = now;
-  } else if (normalized === 'READ' && recipient.status !== 'READ' && recipient.status !== 'FAILED') {
-    data.status = 'READ';
-    data.readAt = now;
-    if (!recipient.deliveredAt) data.deliveredAt = now;
-  } else if (normalized === 'FAILED' && !['DELIVERED', 'READ', 'FAILED'].includes(recipient.status)) {
-    data.status = 'FAILED';
-    data.errorMessage = 'Delivery failed (Meta webhook)';
-  }
-
   await prisma.$transaction(async (tx) => {
-    const prev = recipient.status;
+    const current = await tx.campaignRecipient.findUnique({ where: { id: recipient.id } });
+    if (!current) return;
+    const now = new Date();
+    const data: Prisma.CampaignRecipientUpdateInput = {};
+    const reconciledStatus = reconcileProviderStatusTransition(current.status, normalized);
+    if (reconciledStatus) {
+      data.status = reconciledStatus;
+      data.sentAt = now;
+      if (normalized === 'DELIVERED' || normalized === 'READ') data.deliveredAt = current.deliveredAt ?? now;
+      if (normalized === 'READ') data.readAt = current.readAt ?? now;
+      if (normalized === 'FAILED') data.errorMessage = 'Delivery failed (Meta webhook)';
+    }
     if (!Object.keys(data).length) return;
     const changed = await tx.campaignRecipient.updateMany({
-      where: { id: recipient.id, status: prev },
+      where: { id: recipient.id, status: current.status },
       data,
     });
     if (changed.count !== 1) return;
-
-    const campaignUpdate: Prisma.CampaignUpdateInput = {};
-    if (normalized === 'DELIVERED' && prev !== 'DELIVERED' && prev !== 'READ') {
-      campaignUpdate.deliveredCount = { increment: 1 };
-    }
-    if (normalized === 'READ' && prev !== 'READ') {
-      campaignUpdate.readCount = { increment: 1 };
-      if (prev !== 'DELIVERED') {
-        campaignUpdate.deliveredCount = { increment: 1 };
-      }
-    }
-    if (normalized === 'FAILED' && prev !== 'FAILED') {
-      campaignUpdate.failedCount = { increment: 1 };
-      if (prev === 'SENT' || prev === 'DELIVERED' || prev === 'READ') {
-        if (prev === 'SENT') campaignUpdate.sentCount = { decrement: 1 };
-        if (prev === 'DELIVERED' || prev === 'READ') {
-          campaignUpdate.deliveredCount = { decrement: 1 };
-        }
-        if (prev === 'READ') campaignUpdate.readCount = { decrement: 1 };
-      }
-    }
-
-    if (Object.keys(campaignUpdate).length) {
-      await tx.campaign.update({ where: { id: recipient.campaignId }, data: campaignUpdate });
-    }
   });
 
+  await reconcileCampaignCounters(recipient.campaignId);
+  await finalizeCampaignIfDone(recipient.campaignId, recipient.campaign.runVersion);
+  const live = await prisma.campaign.findFirst({
+    where: {
+      id: recipient.campaignId,
+      organizationId: recipient.campaign.organizationId,
+      whatsappNumberId: recipient.campaign.whatsappNumberId,
+    },
+    select: { runVersion: true, status: true, recipients: { select: { status: true } } },
+  });
+  if (
+    live &&
+    live.recipients.every((row) => row.status !== 'PENDING' && row.status !== 'AMBIGUOUS')
+  ) {
+    // The webhook may arrive after a newer run has started. Release only the
+    // reservation owned by the run that produced this Meta message ID.
+    await releaseCampaignQuota(recipient.campaignId, recipient.campaign.runVersion);
+  }
   emitToOrg(recipient.campaign.organizationId, 'campaign:progress', {
     campaignId: recipient.campaignId,
     recipientId: recipient.id,
