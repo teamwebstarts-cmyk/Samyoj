@@ -11,20 +11,23 @@ interface ActionsDeps {
   selected: Conversation | null;
   setSelected: Dispatch<SetStateAction<Conversation | null>>;
   upsertConversation: (conv: Conversation, toTop?: boolean) => void;
+  removeConversation: (conversationId: string) => void;
 }
 
-/** Assign / status / bot / call-back / snooze / favorite / bulk actions for conversations. */
+/** Assign / status / bot / call-back / snooze / favorite / delete / bulk actions for conversations. */
 export function useConversationActions({
   conversations,
   selected,
   setSelected,
   upsertConversation,
+  removeConversation,
 }: ActionsDeps) {
   const navigate = useNavigate();
   const [assigning, setAssigning] = useState(false);
   const [botToggling, setBotToggling] = useState(false);
   const [botAssigning, setBotAssigning] = useState(false);
   const [callingBack, setCallingBack] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const extractError = (err: unknown, fallback: string) =>
     (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
@@ -282,9 +285,28 @@ export function useConversationActions({
     }
   };
 
+  /** Permanently delete a conversation (and its messages) from the inbox. */
+  const handleDeleteConversation = async (conversationId?: string) => {
+    const { id: targetId, conversation: target } = findTarget(conversationId);
+    if (!targetId) return false;
+    const label = target?.contact.name?.trim() || target?.contact.phone || 'chat';
+    setDeleting(true);
+    try {
+      await inboxApi.remove(targetId);
+      removeConversation(targetId);
+      toastInbox(`Deleted ${label}`, { icon: 'star' });
+      return true;
+    } catch (err: unknown) {
+      toastError(extractError(err, 'Could not delete conversation'));
+      return false;
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const handleBulk = async (
     payload: {
-      action: 'assign' | 'status' | 'snooze' | 'unsnooze';
+      action: 'assign' | 'status' | 'snooze' | 'unsnooze' | 'delete';
       agentId?: string;
       status?: 'OPEN' | 'PENDING' | 'CLOSED';
       snoozedUntil?: string;
@@ -315,6 +337,10 @@ export function useConversationActions({
       const failedIds = new Set(result.failed.map((f) => f.id));
       for (const id of conversationIds) {
         if (failedIds.has(id)) continue;
+        if (payload.action === 'delete') {
+          removeConversation(id);
+          continue;
+        }
         const patch = patchFor(id);
         if (patch) upsertConversation(patch);
       }
@@ -333,6 +359,8 @@ export function useConversationActions({
     botToggling,
     botAssigning,
     callingBack,
+    deleting,
+    handleDeleteConversation,
     handleAssignAgent,
     handleStatusChange,
     handleToggleBot,

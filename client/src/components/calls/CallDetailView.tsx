@@ -383,17 +383,25 @@ export default function CallDetailView({
             <div className="rounded-2xl border border-white/60 bg-white/80 px-5 py-4 text-center shadow-sm">
               <p className="text-[13px] font-semibold text-neutral-700">
                 {active
-                  ? 'Listening…'
+                  ? handler === 'AGENT'
+                    ? 'Live with customer…'
+                    : 'Listening…'
                   : tone === 'missed'
                     ? 'This call wasn’t answered'
-                    : 'No speech on this call yet'}
+                    : handler === 'AGENT'
+                      ? 'Human call — no AI transcript'
+                      : 'No speech on this call yet'}
               </p>
               <p className="mt-1 text-[12px] text-neutral-500">
                 {active
-                  ? 'Conversation appears here as you and the AI talk.'
+                  ? handler === 'AGENT'
+                    ? 'Talk normally — your mic audio goes to WhatsApp. AI transcript only for AI-answered calls.'
+                    : 'Conversation appears here as you and the AI talk.'
                   : tone === 'missed'
                     ? 'Customer didn’t connect — notes still help your team.'
-                    : 'Transcript appears once someone speaks.'}
+                    : handler === 'AGENT'
+                      ? 'Agent outbound/inbound calls don’t store an AI speech transcript.'
+                      : 'Transcript appears once someone speaks.'}
               </p>
             </div>
           </div>

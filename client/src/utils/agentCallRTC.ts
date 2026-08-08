@@ -4,12 +4,8 @@
  * Lives on `window` so both the Inbox (call button) and the CallsPage
  * (detail view) can share state while the browser navigates between them.
  *
- * Responsibilities
- * 1. Create a browser RTCPeerConnection with mic
- * 2. Generate an SDP offer to send to Meta
- * 3. Apply the SDP answer (from Meta via webhook → API poll or socket)
- * 4. Route remote audio to a hidden <audio> element
- * 5. Clean up media + PC when the call ends
+ * Outbound BIC: browser creates SDP *offer* (with mic) → Meta → customer answers
+ * → browser applies SDP *answer*. Inbound agent ring: opposite (answer Meta offer).
  */
 
 const WINDOW_KEY = '__agentCallRtc';
@@ -18,6 +14,8 @@ interface AgentCallRtc {
   pc: RTCPeerConnection;
   remoteAudio: HTMLAudioElement;
   callId: string;
+  /** True once Meta SDP answer (outbound) or local answer (inbound) is applied. */
+  connected: boolean;
 }
 
 interface SignalingRes {
@@ -53,14 +51,24 @@ function attachRemoteAudio(pc: RTCPeerConnection): HTMLAudioElement {
   document.body.appendChild(remoteAudio);
 
   pc.ontrack = (event) => {
-    remoteAudio.srcObject = event.streams[0] ?? new MediaStream([event.track]);
+    const stream = event.streams[0] ?? new MediaStream([event.track]);
+    remoteAudio.srcObject = stream;
     void remoteAudio.play().catch(() => {});
   };
+
+  // Only tear down on terminal failure — do NOT cleanup on brief "disconnected"
+  // (common on Codespaces / flaky ICE); that was stopping the mic mid-call
+  // while remote audio could still appear to work briefly.
   pc.oniceconnectionstatechange = () => {
-    if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'closed') {
+    const state = pc.iceConnectionState;
+    if (state === 'failed') {
+      console.warn('[webrtc] ICE failed', state);
+    }
+    if (state === 'closed') {
       cleanupAgentCall();
     }
   };
+
   return remoteAudio;
 }
 
@@ -80,29 +88,75 @@ async function waitForIceGathering(pc: RTCPeerConnection): Promise<void> {
   });
 }
 
-async function addMicrophone(pc: RTCPeerConnection): Promise<void> {
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  for (const track of stream.getTracks()) pc.addTrack(track, stream);
+/**
+ * Mic must be sendrecv. Using addTransceiver+replaceTrack avoids recvonly offers
+ * that cause one-way audio (hear customer, they cannot hear agent).
+ */
+async function addMicrophoneSendRecv(pc: RTCPeerConnection): Promise<MediaStream> {
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+    },
+    video: false,
+  });
+  const track = stream.getAudioTracks()[0];
+  if (!track) {
+    stream.getTracks().forEach((t) => t.stop());
+    throw new Error('No microphone track');
+  }
+  track.enabled = true;
+
+  const transceiver = pc.addTransceiver('audio', { direction: 'sendrecv' });
+  await transceiver.sender.replaceTrack(track);
   (pc as unknown as Record<string, MediaStream>)._localStream = stream;
+  return stream;
+}
+
+function ensureLocalAudioSending(pc: RTCPeerConnection): void {
+  for (const sender of pc.getSenders()) {
+    if (sender.track?.kind === 'audio') {
+      sender.track.enabled = true;
+    }
+  }
+  for (const t of pc.getTransceivers()) {
+    if (t.receiver.track.kind === 'audio' || t.sender.track?.kind === 'audio') {
+      if (t.direction === 'inactive' || t.direction === 'recvonly') {
+        try {
+          t.direction = 'sendrecv';
+        } catch {
+          /* ignore if closed */
+        }
+      }
+    }
+  }
 }
 
 /** Create a browser WebRTC offer, grab mic, return the SDP offer string. */
 export async function createAgentOffer(): Promise<string | null> {
   cleanupAgentCall();
   const pc = new RTCPeerConnection({
-    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+    ],
   });
 
   try {
-    await addMicrophone(pc);
+    await addMicrophoneSendRecv(pc);
   } catch {
     pc.close();
-    return null; // mic not available
+    return null;
   }
 
-  const offer = await pc.createOffer();
+  const offer = await pc.createOffer({
+    offerToReceiveAudio: true,
+    offerToReceiveVideo: false,
+  });
   await pc.setLocalDescription(offer);
   await waitForIceGathering(pc);
+  ensureLocalAudioSending(pc);
 
   const sdpOffer = pc.localDescription?.sdp;
   if (!sdpOffer) {
@@ -110,8 +164,16 @@ export async function createAgentOffer(): Promise<string | null> {
     return null;
   }
 
+  // Guard: offer must advertise send (not recvonly) or Meta will not pull agent mic.
+  if (/a=recvonly/i.test(sdpOffer) && !/a=sendrecv|a=sendonly/i.test(sdpOffer)) {
+    console.error('[webrtc] Offer is recvonly — aborting outbound call setup');
+    cleanupAgentCall();
+    pc.close();
+    return null;
+  }
+
   const remoteAudio = attachRemoteAudio(pc);
-  setStored({ pc, remoteAudio, callId: '' });
+  setStored({ pc, remoteAudio, callId: '', connected: false });
   return sdpOffer;
 }
 
@@ -122,11 +184,14 @@ export async function createAgentOffer(): Promise<string | null> {
 export async function createAgentAnswer(sdpOffer: string): Promise<string> {
   cleanupAgentCall();
   const pc = new RTCPeerConnection({
-    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+    ],
   });
 
   try {
-    await addMicrophone(pc);
+    await addMicrophoneSendRecv(pc);
   } catch {
     pc.close();
     throw new Error('Microphone access is required to answer calls. Check your browser permissions.');
@@ -137,6 +202,7 @@ export async function createAgentAnswer(sdpOffer: string): Promise<string> {
   const answer = await pc.createAnswer();
   await pc.setLocalDescription(answer);
   await waitForIceGathering(pc);
+  ensureLocalAudioSending(pc);
 
   const sdp = pc.localDescription?.sdp;
   if (!sdp) {
@@ -145,24 +211,49 @@ export async function createAgentAnswer(sdpOffer: string): Promise<string> {
     throw new Error('Could not generate call answer');
   }
 
-  setStored({ pc, remoteAudio, callId: '' });
+  setStored({ pc, remoteAudio, callId: '', connected: true });
   return sdp;
 }
 
 /** Apply the SDP answer returned by Meta (via polling or socket). */
 export async function applyAgentOfferAnswer(callId: string, sdpAnswer: string): Promise<void> {
   const stored = getStored();
-  if (!stored || stored.callId !== callId) return;
-  if (stored.pc.signalingState !== 'stable') {
-    // already has remote description
-    if (stored.pc.signalingState === 'have-local-offer' || stored.pc.signalingState === 'have-remote-pranswer') {
-      try {
-        await stored.pc.setRemoteDescription({ type: 'answer', sdp: sdpAnswer });
-        console.log('[webrtc] SDP answer applied — ICE connecting');
-      } catch (e) {
-        console.error('[webrtc] setRemoteDescription failed:', e);
-      }
+  if (!stored) {
+    console.warn('[webrtc] No peer connection to apply SDP answer');
+    return;
+  }
+
+  // Race: answer can arrive before setActiveCallId — still apply if this PC is waiting.
+  const idOk = !stored.callId || stored.callId === callId;
+  if (!idOk) {
+    console.warn('[webrtc] SDP answer callId mismatch', { expected: stored.callId, got: callId });
+    return;
+  }
+  if (!stored.callId) stored.callId = callId;
+
+  if (stored.connected && stored.pc.signalingState === 'stable') {
+    return;
+  }
+
+  const state = stored.pc.signalingState;
+  if (state === 'have-local-offer' || state === 'have-remote-pranswer') {
+    try {
+      await stored.pc.setRemoteDescription({ type: 'answer', sdp: sdpAnswer });
+      ensureLocalAudioSending(stored.pc);
+      stored.connected = true;
+      console.log('[webrtc] SDP answer applied — local mic should be sending', {
+        ice: stored.pc.iceConnectionState,
+        senders: stored.pc.getSenders().map((s) => ({
+          kind: s.track?.kind,
+          enabled: s.track?.enabled,
+          muted: s.track?.muted,
+        })),
+      });
+    } catch (e) {
+      console.error('[webrtc] setRemoteDescription failed:', e);
     }
+  } else {
+    console.warn('[webrtc] Unexpected signaling state for answer', state);
   }
 }
 
@@ -184,21 +275,32 @@ export function cleanupAgentCall(): void {
   try {
     const stream = (stored.pc as unknown as Record<string, MediaStream>)._localStream;
     if (stream) stream.getTracks().forEach((t) => t.stop());
-  } catch {}
-  try { stored.pc.close(); } catch {}
+  } catch {
+    /* ignore */
+  }
+  try {
+    stored.pc.close();
+  } catch {
+    /* ignore */
+  }
   try {
     stored.remoteAudio.pause();
     stored.remoteAudio.srcObject = null;
     stored.remoteAudio.remove();
-  } catch {}
+  } catch {
+    /* ignore */
+  }
   setStored(undefined);
 }
 
 /** Poll GET /signaling for the SDP answer until it arrives (500ms interval, 3 min timeout). */
 export async function pollSdpAnswer(callId: string, timeoutMs = 180000): Promise<void> {
+  setActiveCallId(callId);
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     await new Promise((r) => setTimeout(r, 500));
+    const stored = getStored();
+    if (stored?.connected) return;
     try {
       const sdp = await fetchSdpAnswer(callId);
       if (sdp) {
@@ -209,4 +311,5 @@ export async function pollSdpAnswer(callId: string, timeoutMs = 180000): Promise
       /* not yet available — keep polling */
     }
   }
+  console.warn('[webrtc] Timed out waiting for SDP answer', callId);
 }

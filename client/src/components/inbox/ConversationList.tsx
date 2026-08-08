@@ -33,6 +33,7 @@ interface ConversationListProps {
   onBulkAssign: (agent: { id: string; name: string }) => void;
   onBulkClose: () => void;
   onBulkSnooze: (untilIso: string, label: string) => void;
+  onBulkDelete: () => void;
   onClearSelection: () => void;
   onRetry: () => void;
   onSelect: (conversation: Conversation) => void;
@@ -95,6 +96,7 @@ export default function ConversationList({
   onBulkAssign,
   onBulkClose,
   onBulkSnooze,
+  onBulkDelete,
   onClearSelection,
   onRetry,
   onSelect,
@@ -134,6 +136,7 @@ export default function ConversationList({
         onAssign={onBulkAssign}
         onCloseChats={onBulkClose}
         onSnoozeUntil={onBulkSnooze}
+        onDelete={onBulkDelete}
         onClear={onClearSelection}
       />
     ) : null;

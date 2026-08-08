@@ -149,6 +149,8 @@ export const inboxApi = {
     api.get(`/inbox/${id}/messages`, { params }),
   clearMessages: (id: string) =>
     api.delete<{ data: { deleted: number } }>(`/inbox/${id}/messages`),
+  remove: (id: string) =>
+    api.delete<{ data: { deleted: boolean; conversationId: string } }>(`/inbox/${id}`),
   deleteMessages: (id: string, messageIds: string[]) =>
     api.post<{ data: { deleted: number; messageIds: string[] } }>(`/inbox/${id}/messages/delete`, {
       messageIds,
@@ -183,7 +185,7 @@ export const inboxApi = {
   deleteNote: (noteId: string) => api.delete(`/inbox/notes/${noteId}`),
   bulk: (data: {
     conversationIds: string[];
-    action: 'assign' | 'status' | 'snooze' | 'unsnooze';
+    action: 'assign' | 'status' | 'snooze' | 'unsnooze' | 'delete';
     agentId?: string;
     status?: 'OPEN' | 'PENDING' | 'CLOSED';
     snoozedUntil?: string;

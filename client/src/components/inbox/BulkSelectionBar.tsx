@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { AlarmClock, CheckCircle2, Loader2, UserPlus, X } from 'lucide-react';
+import { AlarmClock, CheckCircle2, Loader2, Trash2, UserPlus, X } from 'lucide-react';
 import AssignAgentPopover from './AssignAgentPopover';
 import SnoozePopover from './SnoozePopover';
 import { useGlassTipProps } from './ComposerGlassTip';
@@ -14,6 +14,7 @@ interface BulkSelectionBarProps {
   onAssign: (agent: { id: string; name: string }) => void;
   onCloseChats: () => void;
   onSnoozeUntil: (untilIso: string, label: string) => void;
+  onDelete: () => void;
   onClear: () => void;
 }
 
@@ -31,6 +32,7 @@ export default function BulkSelectionBar({
   onAssign,
   onCloseChats,
   onSnoozeUntil,
+  onDelete,
   onClear,
 }: BulkSelectionBarProps) {
   const tipFor = useGlassTipProps();
@@ -122,6 +124,18 @@ export default function BulkSelectionBar({
             onClose={() => setSnoozeOpen(false)}
           />
         )}
+
+        <button
+          type="button"
+          disabled={busy}
+          aria-label="Delete"
+          {...tipFor('Delete selected')}
+          onClick={onDelete}
+          className={`${ACTION_BTN} border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:border-rose-900/60 dark:text-rose-400 dark:hover:bg-rose-950/40 ${FOCUS_RING_CLASS}`}
+        >
+          <Trash2 className="h-3.5 w-3.5 text-rose-500" strokeWidth={2.25} />
+          <span className="hidden @[300px]:inline">Delete</span>
+        </button>
 
         <button
           type="button"

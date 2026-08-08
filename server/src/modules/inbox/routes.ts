@@ -898,6 +898,36 @@ router.delete(
   })
 );
 
+/**
+ * Delete an entire conversation: purges stored media, then removes the
+ * conversation row. Messages / notes / labels cascade at the DB level;
+ * tickets, calls and analytics rows keep their history via SET NULL.
+ */
+router.delete(
+  '/:id',
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = paramId(req);
+    const orgId = req.user!.organizationId!;
+
+    const conversation = await prisma.conversation.findFirst({
+      where: scopedConversationWhere(orgId, id, req.activeWhatsappNumberId),
+      select: { id: true },
+    });
+    if (!conversation) throw new AppError(404, 'Conversation not found');
+
+    const rows = await prisma.message.findMany({
+      where: { conversationId: id },
+      select: { id: true, metadata: true },
+    });
+    await purgeStoredMedia(rows);
+
+    await prisma.conversation.delete({ where: { id } });
+
+    emitToOrg(orgId, 'conversation:deleted', { conversationId: id });
+    sendSuccess(res, { deleted: true, conversationId: id });
+  })
+);
+
 /** Delete a single message by id. */
 router.delete(
   '/messages/:messageId',
@@ -1668,7 +1698,7 @@ router.delete(
 const bulkSchema = z
   .object({
     conversationIds: z.array(z.string().min(1)).min(1).max(50),
-    action: z.enum(['assign', 'status', 'snooze', 'unsnooze']),
+    action: z.enum(['assign', 'status', 'snooze', 'unsnooze', 'delete']),
     agentId: z.string().min(1).optional(),
     status: z.enum(['OPEN', 'PENDING', 'CLOSED']).optional(),
     snoozedUntil: z.string().datetime().optional(),
@@ -1769,6 +1799,16 @@ router.post(
               data: { snoozedUntil: null },
             });
             emitToOrg(orgId, 'conversation:snooze', { conversationId, snoozedUntil: null });
+            break;
+          }
+          case 'delete': {
+            const msgs = await prisma.message.findMany({
+              where: { conversationId },
+              select: { id: true, metadata: true },
+            });
+            await purgeStoredMedia(msgs);
+            await prisma.conversation.delete({ where: { id: conversationId } });
+            emitToOrg(orgId, 'conversation:deleted', { conversationId });
             break;
           }
         }

@@ -854,7 +854,10 @@ CALLING_VOICE_PROVIDER=sarvam|deepgram_google  (feature flag)
 
 # Meta Calling
 META_ACCESS_TOKEN, META_PHONE_NUMBER_ID, META_WABA_ID, META_APP_ID, META_APP_SECRET
-META_WEBHOOK_URL, META_API_VERSION=v18.0
+META_VERIFY_TOKEN, META_WEBHOOK_URL, META_API_VERSION=v18.0
+```
+*Note: `META_VERIFY_TOKEN` defaults to `whatsapp_verify_token` in code (security risk — must be overridden in production; see §12.5).*
+```
 
 # Google Cloud (legacy TTS)
 GOOGLE_APPLICATION_CREDENTIALS, GOOGLE_TTS_VOICE, GOOGLE_TTS_LANGUAGE

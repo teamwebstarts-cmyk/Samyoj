@@ -12,6 +12,7 @@ const BLOCKED_OUTPUT_PATTERNS = [
   /\b(api[_-]?key|secret[_-]?key|password)\s*[:=]/i,
   /\bsk-[a-zA-Z0-9]{20,}/,
   /<script[\s>]/i,
+  /<tool_call>/i,
 ];
 
 export function sanitizeInboundMessage(text: string): string {

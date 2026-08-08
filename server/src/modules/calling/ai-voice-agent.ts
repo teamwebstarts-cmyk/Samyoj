@@ -11,6 +11,7 @@ import { WhatsAppWebRtcBridge } from './webrtc-bridge';
 import { publishCallEventMessage } from './call-event-message';
 import type { ActiveCallContext, TranscriptEntry } from './types';
 import type { ToolCallResult } from '../ai/sarvam-chat.service';
+import { extractInlineToolCalls, hasOpenToolCallMarkup } from '../ai/voice-tool-parse';
 
 const log = createModuleLogger('ai-voice-agent');
 
@@ -172,7 +173,10 @@ export class AiVoiceCallSession {
         return;
       }
       if (
-        /\b(call( me)? back|callback|call later|schedule (a )?call)\b/i.test(lower)
+        /\b(call( me)? back|callback|call later|schedule(\s+(a\s+)?)?(call|callback)?|वापस\s*कॉल|कॉल\s*बैक)\b/i.test(
+          lower
+        ) ||
+        /schedule|callback_time|call.*head|head.*call|manager.*call|call.*manager/i.test(lower)
       ) {
         await this.handleToolCall({
           id: 'kw',
@@ -182,10 +186,11 @@ export class AiVoiceCallSession {
         return;
       }
 
-      // Stream LLM → speak sentences as they complete (lower time-to-first-audio).
+      // Stream LLM → speak clean sentences only (never speak <tool_call> markup).
       let pending = '';
       let spokenParts: string[] = [];
       let directHandled = false;
+      let streamBuffer = '';
 
       for await (const event of streamVoiceBotReply({
         organizationId: this.ctx.organizationId,
@@ -197,7 +202,6 @@ export class AiVoiceCallSession {
         if (event.type === 'direct' && event.result) {
           directHandled = true;
           const result = event.result;
-          // If we already streamed some audio then got a late blocked result, don't re-speak.
           if (result.skipReason === 'blocked_after_stream' && spokenParts.length > 0) {
             if (result.handoff) {
               await this.performHandoffAndTransfer(
@@ -217,7 +221,14 @@ export class AiVoiceCallSession {
             break;
           }
           if (result.reply) {
-            await this.speak(result.reply, 'assistant');
+            const cleaned = extractInlineToolCalls(result.reply);
+            if (cleaned.cleanText) await this.speak(cleaned.cleanText, 'assistant');
+            for (const tool of cleaned.tools) {
+              await this.handleToolCall({ id: 'inline', name: tool.name, arguments: tool.arguments });
+            }
+          }
+          if (result.toolCalls?.length) {
+            for (const tool of result.toolCalls) await this.handleToolCall(tool);
           }
           if (result.handoff) {
             await this.performHandoffAndTransfer(
@@ -229,12 +240,18 @@ export class AiVoiceCallSession {
         }
 
         if (event.type === 'delta' && event.content) {
-          pending += event.content;
+          streamBuffer += event.content;
+          if (hasOpenToolCallMarkup(streamBuffer)) continue;
+
+          const stripped = extractInlineToolCalls(streamBuffer);
+          streamBuffer = stripped.cleanText;
+          pending = stripped.cleanText;
           const parts = pending.split(/(?<=[.!?।॥])\s+/);
           if (parts.length > 1) {
             const ready = parts.slice(0, -1).join(' ').trim();
             pending = parts[parts.length - 1] || '';
-            if (ready) {
+            streamBuffer = pending;
+            if (ready && !/<tool_call>/i.test(ready)) {
               if (!validateOutboundReply(ready).safe) {
                 await this.speak(
                   "I'll have our team follow up with you on WhatsApp shortly.",
@@ -246,11 +263,12 @@ export class AiVoiceCallSession {
               spokenParts.push(ready);
               await this.speak(ready, 'assistant', { recordTranscript: false });
             }
-          } else if (pending.length > 80 && /\s/.test(pending)) {
+          } else if (pending.length > 80 && /\s/.test(pending) && !/<tool_call>/i.test(pending)) {
             const cut = pending.lastIndexOf(' ');
             if (cut > 20) {
               const ready = pending.slice(0, cut).trim();
               pending = pending.slice(cut).trim();
+              streamBuffer = pending;
               if (ready) {
                 if (!validateOutboundReply(ready).safe) {
                   await this.speak(
@@ -268,7 +286,16 @@ export class AiVoiceCallSession {
         }
 
         if (event.type === 'done') {
-          const tail = (pending || '').trim();
+          const parsed = extractInlineToolCalls((event.content || pending || streamBuffer || '').trim());
+          const tools = [
+            ...(event.tools || []),
+            ...parsed.tools.map((t, i) => ({
+              id: `inline-${i}`,
+              name: t.name,
+              arguments: t.arguments,
+            })),
+          ];
+          const tail = parsed.cleanText.trim();
           if (tail) {
             if (!validateOutboundReply(tail).safe) {
               if (spokenParts.length === 0) {
@@ -283,23 +310,26 @@ export class AiVoiceCallSession {
             spokenParts.push(tail);
             await this.speak(tail, 'assistant', { recordTranscript: false });
           }
-          const full = (event.content || spokenParts.join(' ')).trim();
+          const full = spokenParts.join(' ').trim();
           if (full) {
             await this.appendTranscript('assistant', full);
             log.info('Speaking AI reply on call (streamed)', {
               callId: this.ctx.callId,
               chars: full.length,
             });
-          } else if (!spokenParts.length) {
+          } else if (!spokenParts.length && tools.length === 0) {
             await this.speak(
               'Sorry, I am having trouble right now. Please try again in a moment.',
               'assistant'
             );
           }
-          // Low-confidence: hand off without re-speaking a second message if we already talked.
-          if (event.result?.handoff) {
+
+          for (const tool of tools) await this.handleToolCall(tool);
+
+          if (event.result?.handoff && tools.length === 0) {
             if (spokenParts.length === 0 && event.result.reply) {
-              await this.speak(event.result.reply, 'assistant');
+              const cleaned = extractInlineToolCalls(event.result.reply).cleanText;
+              if (cleaned) await this.speak(cleaned, 'assistant');
             }
             await this.performHandoffAndTransfer(
               event.result.handoffReason || 'LOW_CONFIDENCE',
@@ -377,9 +407,16 @@ export class AiVoiceCallSession {
       }
 
       case 'schedule_callback': {
-        const when = (tool.arguments.when as string) || 'as soon as possible';
+        const when =
+          (tool.arguments.when as string) ||
+          (tool.arguments.callback_time as string) ||
+          'as soon as possible';
         const reason =
-          typeof tool.arguments.reason === 'string' ? tool.arguments.reason : undefined;
+          typeof tool.arguments.reason === 'string'
+            ? tool.arguments.reason
+            : typeof tool.arguments.notes === 'string'
+              ? tool.arguments.notes
+              : undefined;
 
         try {
           const ticket = await prisma.ticket.create({

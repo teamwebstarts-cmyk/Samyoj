@@ -22,6 +22,7 @@ import {
   pollSdpAnswer,
   setActiveCallId,
   cleanupAgentCall,
+  applyAgentOfferAnswer,
 } from '../utils/agentCallRTC';
 import { CallsListSkeleton } from '../components/calls/CallsPageSkeleton';
 import PageShell from '../components/ui/PageShell';
@@ -348,9 +349,11 @@ export default function CallsPage() {
       if (payload.callId) applyTranscriptUpdate(payload.callId, payload.transcript);
     }
     if (event === 'call:outbound_connected') {
-      const payload = data as { callId: string; sdpAnswer: string };
-      const handler = (window as unknown as { __outboundCallHandler?: (e: string, d: unknown) => void }).__outboundCallHandler;
-      handler?.('call:outbound_connected', payload);
+      const payload = data as { callId: string; sdpAnswer?: string };
+      if (payload.callId && payload.sdpAnswer) {
+        setActiveCallId(payload.callId);
+        void applyAgentOfferAnswer(payload.callId, payload.sdpAnswer);
+      }
       void load();
     }
   });

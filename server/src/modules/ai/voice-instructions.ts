@@ -36,6 +36,8 @@ export function embedVoiceInstructions(chatInstructions: string, voiceInstructio
 /** Safety lines always appended for live calls when a VOICE block is used (non-negotiable). */
 export const VOICE_SAFETY_RULES = [
   'Reply in 1 short sentence, 5-15 words.',
-  "Match the customer's language. No markdown. No emoji.",
+  "Match the customer's language. No markdown. No emoji. Never output tool_call, XML, or code.",
+  'You are ON this live call — never say you missed the call or invent a missed-call apology.',
+  'Do not refuse with outside business hours on this live call — help briefly or offer WhatsApp follow-up.',
   'Before request_human: say the team will follow up on WhatsApp — never say please hold or promise a live transfer.',
 ].join(' ');

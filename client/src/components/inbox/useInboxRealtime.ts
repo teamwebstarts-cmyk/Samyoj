@@ -183,6 +183,14 @@ export function useInboxRealtime({
         return;
       }
 
+      if (event === 'conversation:deleted') {
+        setConversations((prev) => prev.filter((c) => c.id !== payload.conversationId));
+        setSelected((prev) => (prev?.id === payload.conversationId ? null : prev));
+        if (openId === payload.conversationId) setMessages([]);
+        void refreshUnread();
+        return;
+      }
+
       if (event === 'conversation:assigned') {
         const patch = { assignedAgent: payload.assignedAgent || undefined };
         setConversations((prev) => prev.map((c) => (c.id === payload.conversationId ? { ...c, ...patch } : c)));

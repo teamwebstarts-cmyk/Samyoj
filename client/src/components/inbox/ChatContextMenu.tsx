@@ -11,6 +11,7 @@ import {
   PauseCircle,
   PlayCircle,
   Square,
+  Trash2,
   UserMinus,
   UserPlus,
   X,
@@ -39,6 +40,7 @@ interface ChatContextMenuProps {
   onSnoozeUntil: (untilIso: string, label: string) => void;
   onUnsnooze: () => void;
   onExport: () => void;
+  onDelete: () => void;
   onSelectThis: () => void;
   onDeselectThis: () => void;
   onSelectAll: () => void;
@@ -77,6 +79,7 @@ export default function ChatContextMenu({
   onSnoozeUntil,
   onUnsnooze,
   onExport,
+  onDelete,
   onSelectThis,
   onDeselectThis,
   onSelectAll,
@@ -242,6 +245,15 @@ export default function ChatContextMenu({
         checked: status === 'CLOSED',
         danger: status !== 'CLOSED',
       },
+      { id: 'sep-delete', label: '', separator: true },
+      {
+        id: 'delete-chat',
+        label: 'Delete chat',
+        description: 'Remove this conversation permanently',
+        icon: Trash2,
+        onClick: onDelete,
+        danger: true,
+      },
     ];
   }, [
     agents,
@@ -254,6 +266,7 @@ export default function ChatContextMenu({
     onAssign,
     onClearSelection,
     onDeselectThis,
+    onDelete,
     onExport,
     onSelectAll,
     onSelectThis,

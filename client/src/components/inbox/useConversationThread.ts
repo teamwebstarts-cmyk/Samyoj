@@ -76,6 +76,14 @@ export function useConversationThread({ setConversations, refreshUnread }: Threa
     [setConversations]
   );
 
+  const removeConversation = useCallback(
+    (conversationId: string) => {
+      setConversations((prev) => prev.filter((c) => c.id !== conversationId));
+      setSelected((prev) => (prev?.id === conversationId ? null : prev));
+    },
+    [setConversations]
+  );
+
   const markConversationRead = useCallback(
     (conversationId: string) => {
       inboxApi.markRead(conversationId).catch((err) => {
@@ -175,6 +183,7 @@ export function useConversationThread({ setConversations, refreshUnread }: Threa
     hasEarlier,
     loadingEarlier,
     upsertConversation,
+    removeConversation,
     openConversation,
     loadEarlierMessages,
     markConversationRead,
