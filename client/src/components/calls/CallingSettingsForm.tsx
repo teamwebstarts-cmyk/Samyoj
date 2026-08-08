@@ -43,7 +43,7 @@ export interface CallingSettings {
   transferMode?: 'live' | 'message_only';
 }
 
-const DEFAULT_GREETING = 'Hello! Thank you for calling. How can I help you today?';
+export const DEFAULT_GREETING = 'Hello! Thank you for calling. How can I help you today?';
 
 const defaultSettings: CallingSettings = {
   aiAutoAnswer: true,
@@ -67,7 +67,7 @@ const defaultSettings: CallingSettings = {
 
 // Top 10 Sarvam voices — officially recommended for multilingual voice agents.
 // Source: docs.sarvam.ai → Best Practices → Speaker Selection by Language
-const SARVAM_SPEAKERS = [
+export const SARVAM_SPEAKERS = [
   { value: 'shubh', label: 'Shubh', hint: 'Male · Best for Hindi, Telugu, Kannada, Odia', gender: 'male' },
   { value: 'ratan', label: 'Ratan', hint: 'Male · Best for English, Tamil, Marathi, Gujarati', gender: 'male' },
   { value: 'ashutosh', label: 'Ashutosh', hint: 'Male · Hindi specialist, clear & precise', gender: 'male' },
@@ -80,7 +80,7 @@ const SARVAM_SPEAKERS = [
   { value: 'ritu', label: 'Ritu', hint: 'Female · Tamil, Marathi, Gujarati — professional', gender: 'female' },
 ];
 
-const SARVAM_LANGUAGES = [
+export const SARVAM_LANGUAGES = [
   { value: 'hi-IN', label: 'Hindi' },
   { value: 'en-IN', label: 'English (India)' },
   { value: 'unknown', label: 'Auto-detect' },
@@ -216,13 +216,13 @@ export default function CallingSettingsForm({ initialSection = 'who' }: CallingS
                   key={item.id}
                   type="button"
                   onClick={() => setSection(item.id)}
-                  className={`inline-flex shrink-0 items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-[12px] font-bold transition-all ${
+                  className={`inline-flex shrink-0 items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-[13px] font-semibold transition-all ${
                     active
-                      ? 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200/80 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-800'
+                      ? 'bg-emerald-50 text-emerald-800 shadow-sm ring-1 ring-emerald-200/80 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-800'
                       : 'text-neutral-500 hover:bg-neutral-50 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-900 dark:hover:text-neutral-200'
                   }`}
                 >
-                  <Icon className="h-4 w-4 shrink-0" />
+                  <Icon className="h-[18px] w-[18px] shrink-0" strokeWidth={2} />
                   <span className="whitespace-nowrap">{item.label}</span>
                 </button>
               );

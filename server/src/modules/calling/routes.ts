@@ -667,6 +667,7 @@ router.get(
     sendSuccess(res, {
       callId: call.id,
       sdpOffer: pending.sdpOffer,
+      sdpAnswer: pending.sdpAnswer || null,
       metaCallId: pending.metaCallId,
     });
   })

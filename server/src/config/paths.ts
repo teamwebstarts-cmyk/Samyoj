@@ -1,10 +1,24 @@
 import path from 'path';
 import fs from 'fs';
 
+/** Walk up from `start` to the repo root (dir containing both `server` and `client`). */
+function findRepoRoot(start: string): string {
+  let dir = start;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    if (fs.existsSync(path.join(dir, 'client')) && fs.existsSync(path.join(dir, 'server'))) {
+      return dir;
+    }
+    const parent = path.resolve(dir, '..');
+    if (parent === dir) break; // reached filesystem root
+    dir = parent;
+  }
+  return path.resolve(start, '../../..');
+}
+
 /** Paths to the Vite client package (build output: client/dist). */
 export function getClientPaths() {
-  const serverRoot = path.resolve(__dirname, '../..');
-  const repoRoot = path.resolve(serverRoot, '..');
+  const repoRoot = findRepoRoot(__dirname);
   const clientRoot = path.join(repoRoot, 'client');
   return {
     clientRoot,

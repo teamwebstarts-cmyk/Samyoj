@@ -1,8 +1,9 @@
-import { useState, type Dispatch, type SetStateAction } from 'react';
+import { useState, type Dispatch, type SetStateAction, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { callingApi, inboxApi } from '../../services/api';
 import { toastError, toastInbox, toastSuccess } from '../../utils/toast';
 import { emitChatNotice } from './chatNoticeBus';
+import { createAgentOffer, cleanupAgentCall, pollSdpAnswer } from '../../utils/agentCallRTC';
 import type { Conversation } from '../../types';
 
 interface ActionsDeps {
@@ -176,34 +177,16 @@ export function useConversationActions({
         // If permission check fails, still attempt — backend also enforces
       }
 
+      const sdpOffer = await createAgentOffer();
       const { data } = await callingApi.callback({
         contactId: selected.contact.id,
         conversationId: selected.id,
         phone: selected.contact.phone,
-        // Create browser WebRTC offer for direct agent calling
-        sdpOffer: await (async () => {
-          const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
-          try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            for (const track of stream.getTracks()) pc.addTrack(track, stream);
-          } catch {
-            return undefined; // Mic not available — server fallback
-          }
-          const offer = await pc.createOffer();
-          await pc.setLocalDescription(offer);
-          await new Promise<void>((resolve) => {
-            if (pc.iceGatheringState === 'complete') { resolve(); return; }
-            const timer = setTimeout(resolve, 5000);
-            pc.onicegatheringstatechange = () => {
-              if (pc.iceGatheringState === 'complete') { clearTimeout(timer); resolve(); }
-            };
-          });
-          (window as unknown as { __activeCallPc?: RTCPeerConnection }).__activeCallPc = pc;
-          return pc.localDescription?.sdp ?? undefined;
-        })(),
+        sdpOffer: sdpOffer ?? undefined,
       });
       const callId = (data.data as { call?: { id: string } })?.call?.id;
       if (callId) {
+        import('../../utils/agentCallRTC').then((m) => m.setActiveCallId(callId));
         emitChatNotice(selected.id, {
           kind: 'calling',
           message: `Connecting to ${contactLabel}…`,
@@ -213,6 +196,7 @@ export function useConversationActions({
           onAction: () => navigate(`/calls/${callId}`),
         });
         navigate(`/calls/${callId}`);
+        void pollSdpAnswerFromApi(callId);
         return;
       }
       toastError('Call started but no call page was returned.');
@@ -233,6 +217,17 @@ export function useConversationActions({
       setCallingBack(false);
     }
   };
+
+  // Poll GET /signaling for the SDP answer from Meta (Socket.IO may drop
+  // during navigation). Stops once answer is applied or 30s elapse.
+  const pollSdpAnswerFromApi = useCallback(async (callId: string) => {
+    const { getSignaling } = callingApi;
+    await pollSdpAnswer(callId, async (id) => {
+      const { data } = await getSignaling(id);
+      const sdp = (data.data as { sdpAnswer?: string | null })?.sdpAnswer;
+      return { sdpAnswer: sdp };
+    });
+  }, [callingApi.getSignaling]);
 
   const handleSnooze = async (untilIso: string, _label?: string, conversationId?: string) => {
     const targetId = conversationId || selected?.id;

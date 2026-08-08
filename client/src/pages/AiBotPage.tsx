@@ -20,6 +20,7 @@ import {
   Plus,
   Settings,
   SlidersHorizontal,
+  Volume2,
   Sparkles,
   Star,
   Trash2,
@@ -30,7 +31,6 @@ import AiBotAnalyticsPanel from '../components/ai-bot/AiBotAnalyticsPanel';
 import AiBotAuditPanel from '../components/ai-bot/AiBotAuditPanel';
 import AiBotHowItWorks from '../components/ai-bot/AiBotHowItWorks';
 import AiBotCard from '../components/ai-bot/AiBotCard';
-import AiBotTemplatePicker from '../components/ai-bot/AiBotTemplatePicker';
 import {
   ModalCallout,
   ModalEmptyHint,
@@ -39,7 +39,6 @@ import {
   ModalSection,
   ModalStatusSummary,
 } from '../components/ui/modalUi';
-import { botTemplates, type BotTemplate } from '../components/ai-bot/botTemplates';
 import {
   professionalBrains,
   type ProfessionalBrain,
@@ -61,6 +60,12 @@ import SegmentedControl from '../components/ui/SegmentedControl';
 import SlideOver, { SlideOverFooter } from '../components/ui/SlideOver';
 import { TableTextButton } from '../components/ui/TableActions';
 import { WhatsAppMessagePreview } from '../components/inbox/WhatsAppPreview';
+import {
+  CallingSettings,
+  SARVAM_LANGUAGES,
+  SARVAM_SPEAKERS,
+  DEFAULT_GREETING,
+} from '../components/calls/CallingSettingsForm';
 import { aiBotApi, callingApi } from '../services/api';
 import { toastError, toastSuccess } from '../utils/toast';
 import type {
@@ -88,7 +93,7 @@ const emptyBotForm = {
 
 const emptyFaq = { title: '', content: '' };
 
-type SlideTab = 'personality' | 'train' | 'connect' | 'more' | 'try';
+type SlideTab = 'personality' | 'train' | 'voice' | 'connect' | 'more' | 'try';
 
 type PersonalityPreset = 'friendly' | 'professional' | 'sales' | 'custom';
 
@@ -271,6 +276,7 @@ export default function AiBotPage() {
   const [brainKnowledgeItems, setBrainKnowledgeItems] = useState<
     Array<{ title: string; content: string }> | null
   >(null);
+  const [seededTitles, setSeededTitles] = useState<Set<string>>(new Set());
   const [_seedingKnowledge, setSeedingKnowledge] = useState(false);
   const [testMessage, setTestMessage] = useState('');
   const [testResult, setTestResult] = useState<BotTestResult | null>(null);
@@ -285,6 +291,75 @@ export default function AiBotPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [setupExpanded, setSetupExpanded] = useState(true);
+
+  // Voice / AI call configuration (reads org-level calling settings)
+  const [voiceSettings, setVoiceSettings] = useState<CallingSettings | null>(null);
+  const [voiceSettingsLoading, setVoiceSettingsLoading] = useState(false);
+  const [voicePreviewLoading, setVoicePreviewLoading] = useState(false);
+  const [voiceReady, setVoiceReady] = useState(false);
+  const [greetingDraft, setGreetingDraft] = useState('');
+
+  const loadVoiceSettings = useCallback(async () => {
+    if (!editing) return;
+    setVoiceSettingsLoading(true);
+    try {
+      const [settingsRes, statusRes] = await Promise.all([
+        callingApi.settings(),
+        callingApi.status(),
+      ]);
+      const merged: CallingSettings = { ...voiceSettings, ...settingsRes.data.data };
+      setVoiceSettings(merged);
+      setGreetingDraft(merged.aiGreeting || DEFAULT_GREETING);
+      const statusData = statusRes.data.data;
+      setVoiceReady(Boolean(statusData?.voiceReady));
+    } catch {
+      toastError('Could not load voice settings.');
+    } finally {
+      setVoiceSettingsLoading(false);
+    }
+  }, [editing]);
+
+  const saveVoiceSettings = async (updates: Partial<CallingSettings>) => {
+    if (!voiceSettings) return;
+    const next = { ...voiceSettings, ...updates };
+    setVoiceSettings(next);
+    try {
+      const { data } = await callingApi.updateSettings(
+        next as unknown as Record<string, unknown>
+      );
+      const merged: CallingSettings = { ...next, ...data.data };
+      setVoiceSettings(merged);
+      toastSuccess('Voice settings saved.');
+    } catch {
+      toastError('Could not save voice settings.');
+    }
+  };
+
+  const handleVoicePreview = async () => {
+    if (!voiceSettings) return;
+    setVoicePreviewLoading(true);
+    try {
+      const { data } = await callingApi.previewVoice({
+        text: greetingDraft || DEFAULT_GREETING,
+        speaker: voiceSettings.sarvamTtsSpeaker || 'shubh',
+        language: voiceSettings.sarvamSttLanguage || 'hi-IN',
+      });
+      const payload = data.data as { audioBase64: string; contentType: string };
+      const audio = new Audio(`data:${payload.contentType};base64,${payload.audioBase64}`);
+      await audio.play();
+    } catch {
+      toastError('Could not play voice preview. Check Sarvam is configured.');
+    } finally {
+      setVoicePreviewLoading(false);
+    }
+  };
+
+  // Load voice settings when entering the Voice tab
+  useEffect(() => {
+    if (slideTab === 'voice' && editing) {
+      loadVoiceSettings();
+    }
+  }, [slideTab, editing, loadVoiceSettings]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -354,6 +429,11 @@ export default function AiBotPage() {
     setWhatYouDo('');
     setNeverPromise('');
     setOfferConnect(true);
+    setVoiceSettings(null);
+    setVoiceSettingsLoading(false);
+    setVoicePreviewLoading(false);
+    setVoiceReady(false);
+    setGreetingDraft('');
   };
 
   const composeInstructions = (
@@ -391,36 +471,43 @@ export default function AiBotPage() {
     }));
   };
 
-  const openCreate = (template?: BotTemplate, brain?: ProfessionalBrain) => {
+    const openCreate = (brain?: ProfessionalBrain) => {
     setEditing(null);
     setBrainKnowledgeItems(brain ? brain.knowledgeItems : null);
+    setSeededTitles(brain ? new Set(brain.knowledgeItems.map((k) => k.title)) : new Set());
 
-    const source = brain ?? template;
-    const preset: PersonalityPreset = source
-      ? source.id === 'sales' || source.id === 'sales-pro'
+    const preset: PersonalityPreset = brain
+      ? brain.id === 'sales-pro'
         ? 'sales'
-        : source.id === 'faq'
+        : brain.id === 'support-pro'
           ? 'professional'
           : 'friendly'
       : 'friendly';
     const instructions =
-      source?.instructions ||
+      brain?.instructions ||
       PERSONALITY_PRESETS.find((p) => p.id === preset)?.instructions ||
       '';
-    setPersonalityPreset(source ? 'custom' : preset);
+    setPersonalityPreset(brain ? 'custom' : preset);
     setForm({
       ...emptyBotForm,
       isDefault: bots.length === 0,
-      name: source?.name || '',
+      name: brain?.name || '',
       instructions: instructions,
-      handoffMessage: source?.handoffMessage || emptyBotForm.handoffMessage,
-      handoffKeywords: source?.handoffKeywords || '',
-      triggerKeywords: source?.triggerKeywords || '',
+      handoffMessage: brain?.handoffMessage || emptyBotForm.handoffMessage,
+      handoffKeywords: brain?.handoffKeywords || '',
+      triggerKeywords: brain?.triggerKeywords || '',
     });
     setFaqs([]);
     resetSlideState();
-    setPersonalityPreset(source ? 'custom' : preset);
+    setPersonalityPreset(brain ? 'custom' : preset);
     setSlideOpen(true);
+  };
+
+  const computeSeededTitles = (items: KnowledgeBaseItem[]): Set<string> => {
+    const allBrainTitles = new Set(
+      professionalBrains.flatMap((b) => b.knowledgeItems.map((k) => k.title))
+    );
+    return new Set(items.filter((i) => allBrainTitles.has(i.title)).map((i) => i.title));
   };
 
   const openEdit = async (bot: AiBot) => {
@@ -445,7 +532,9 @@ export default function AiBotPage() {
 
     try {
       const { data } = await aiBotApi.get(bot.id);
-      setFaqs(data.data.knowledgeItems || []);
+      const items = data.data.knowledgeItems || [];
+      setFaqs(items);
+      setSeededTitles(computeSeededTitles(items));
     } catch {
       setFaqs([]);
     }
@@ -464,6 +553,7 @@ export default function AiBotPage() {
     setForm(emptyBotForm);
     setFaqs([]);
     setBrainKnowledgeItems(null);
+    setSeededTitles(new Set());
     setSeedingKnowledge(false);
     setAnalytics(null);
     setSlideTab('personality');
@@ -472,6 +562,11 @@ export default function AiBotPage() {
     setWhatYouDo('');
     setNeverPromise('');
     setOfferConnect(true);
+    setVoiceSettings(null);
+    setVoiceSettingsLoading(false);
+    setVoicePreviewLoading(false);
+    setVoiceReady(false);
+    setGreetingDraft('');
   };
 
   const buildPayload = () => ({
@@ -533,7 +628,11 @@ export default function AiBotPage() {
 
         try {
           const { data: botData } = await aiBotApi.get(created.id);
-          setFaqs(botData.data.knowledgeItems || []);
+          const items = botData.data.knowledgeItems || [];
+          setFaqs(items);
+          if (brainKnowledgeItems && brainKnowledgeItems.length > 0) {
+            setSeededTitles(computeSeededTitles(items));
+          }
         } catch {
           setFaqs([]);
         }
@@ -697,6 +796,14 @@ export default function AiBotPage() {
     return { total: faqs.length, indexed };
   }, [faqs]);
 
+  const sourceBreakdown = useMemo(() => {
+    const prebuilt = faqs.filter((f) => seededTitles.has(f.title)).length;
+    const url = faqs.filter((f) => f.sourceType === 'URL').length;
+    const pdf = faqs.filter((f) => f.sourceType === 'PDF').length;
+    const added = faqs.length - prebuilt - url - pdf;
+    return { prebuilt, url, pdf, added };
+  }, [faqs, seededTitles]);
+
   const activeCount = bots.filter((b) => b.enabled).length;
   const isLive = bots.some((b) => b.enabled && b.isDefault);
   const knowledgeTotal = bots.reduce((sum, b) => sum + (b._count?.knowledgeItems ?? 0), 0);
@@ -710,6 +817,7 @@ export default function AiBotPage() {
       ? [
           { value: 'personality' as SlideTab, label: 'Personality', shortLabel: 'Tone', icon: Bot },
           { value: 'train' as SlideTab, label: 'Train', shortLabel: 'Train', icon: BookOpen },
+          { value: 'voice' as SlideTab, label: 'AI call', shortLabel: 'Voice', icon: Volume2 },
           { value: 'connect' as SlideTab, label: 'Connect', shortLabel: 'People', icon: MessageSquare },
           { value: 'try' as SlideTab, label: 'Try it', shortLabel: 'Try', icon: FlaskConical },
           { value: 'more' as SlideTab, label: 'More', shortLabel: 'More', icon: SlidersHorizontal },
@@ -804,13 +912,9 @@ export default function AiBotPage() {
             {!hasFilters && (
               <>
                 <AiBotHowItWorks />
-                <AiBotTemplatePicker
-                  templates={botTemplates}
-                  onSelect={(t) => openCreate(t)}
-                />
                 <AiBotProfessionalBrainPicker
                   brains={professionalBrains}
-                  onSelect={(b) => openCreate(undefined, b)}
+                  onSelect={(b) => openCreate(b)}
                 />
               </>
             )}
@@ -959,14 +1063,9 @@ export default function AiBotPage() {
 
             {!hasFilters && (
               <div className="px-4 pb-4 sm:px-5 sm:pb-5">
-                <AiBotTemplatePicker
-                  templates={botTemplates}
-                  onSelect={(t) => openCreate(t)}
-                  compact
-                />
                 <AiBotProfessionalBrainPicker
                   brains={professionalBrains}
-                  onSelect={(b) => openCreate(undefined, b)}
+                  onSelect={(b) => openCreate(b)}
                   compact
                 />
               </div>
@@ -1286,7 +1385,8 @@ export default function AiBotPage() {
             />
 
             {faqs.length > 0 && (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-theme-border bg-theme-subtle/30 px-3.5 py-3">
+              <>
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-theme-border bg-theme-subtle/30 px-3.5 py-3">
                 <div>
                   <p className="text-[12px] font-bold text-theme-fg">Training status</p>
                   <p className="text-[11px] text-theme-secondary">
@@ -1313,6 +1413,16 @@ export default function AiBotPage() {
                       : 'Still learning'}
                 </span>
               </div>
+              <p className="mt-2 text-[11px] font-medium text-theme-secondary">
+                {sourceBreakdown.prebuilt > 0 && `${sourceBreakdown.prebuilt} pre-built`}
+                {sourceBreakdown.url > 0 && ` · ${sourceBreakdown.url} from URL`}
+                {sourceBreakdown.pdf > 0 && ` · ${sourceBreakdown.pdf} from PDF`}
+                {sourceBreakdown.added > 0 && ` · ${sourceBreakdown.added} added`}
+                {sourceBreakdown.prebuilt + sourceBreakdown.url + sourceBreakdown.pdf + sourceBreakdown.added === 0
+                  ? 'No training items yet'
+                  : ''}
+              </p>
+              </>
             )}
 
             {faqs.length > 0 && (
@@ -1331,6 +1441,11 @@ export default function AiBotPage() {
                     <button type="button" className="min-w-0 flex-1 text-left" onClick={() => startEditFaq(faq)}>
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="text-[13px] font-semibold text-theme-fg">{faq.title}</p>
+                        {seededTitles.has(faq.title) && (
+                          <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[9px] font-bold uppercase text-violet-700 ring-1 ring-violet-100 dark:bg-violet-900/30 dark:text-violet-300">
+                            Pre-built
+                          </span>
+                        )}
                         {faq.sourceType && faq.sourceType !== 'FAQ' && (
                           <span className="rounded-full bg-theme-subtle px-2 py-0.5 text-[9px] font-bold uppercase text-theme-muted ring-1 ring-theme-border">
                             {faq.sourceType}
@@ -1445,6 +1560,161 @@ export default function AiBotPage() {
                 </label>
               </ModalPanel>
             </div>
+         </div>
+        )}
+
+        {editing && slideTab === 'voice' && (
+          <div className="space-y-5">
+            <ModalCallout
+              icon={Volume2}
+              title="Voice & AI call"
+              description="This AI answers WhatsApp voice calls too. One brain drives chat and voice — set the greeting, voice style, and language here."
+              accent="violet"
+            />
+
+            {!voiceReady && (
+              <p className="rounded-xl border border-amber-200/70 bg-amber-50/60 px-3 py-2.5 text-[12px] font-medium text-amber-900 dark:border-amber-800/40 dark:bg-amber-950/30 dark:text-amber-100">
+                Voice calling is not fully set up yet. A team admin needs to connect WhatsApp calling
+                and configure Sarvam voice in{' '}
+                <Link to="/calls?panel=settings" className="font-bold underline">
+                  Calls → Customize → Voice
+                </Link>
+                . The same voice settings below control all bots.
+              </p>
+            )}
+
+            {voiceSettingsLoading && (
+              <LoadingState label="Loading voice settings…" />
+            )}
+
+            {voiceSettings && !voiceSettingsLoading && (
+              <>
+                {/* AI Greeting */}
+                <ModalSection
+                  step={1}
+                  title="AI voice greeting"
+                  subtitle="The first thing the bot says when it answers a call"
+                >
+                  <AppTextarea
+                    label="Greeting"
+                    hint="Plain text the bot speaks — keep it short and friendly"
+                    rows={3}
+                    value={greetingDraft}
+                    onChange={(e) => setGreetingDraft(e.target.value)}
+                    onBlur={() => {
+                      if (voiceSettings?.aiGreeting !== greetingDraft) {
+                        saveVoiceSettings({ aiGreeting: greetingDraft });
+                      }
+                    }}
+                  />
+                  <div className="mt-3 flex items-center gap-3">
+                    <AppButton
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      loading={voicePreviewLoading}
+                      icon={<PlayCircle size={14} />}
+                      onClick={handleVoicePreview}
+                    >
+                      Play preview
+                    </AppButton>
+                    {voiceReady && (
+                      <span className="text-[11px] font-medium text-emerald-700">
+                        Voice ready
+                      </span>
+                    )}
+                  </div>
+                </ModalSection>
+
+                {/* Voice Style */}
+                <ModalSection
+                  step={2}
+                  title="Voice style"
+                  subtitle="Pick how the AI sounds — same voice is used for all calls"
+                >
+                  <p className="text-[11px] text-theme-secondary">
+                    These are the same voice settings used across your account in{' '}
+                    <Link to="/calls?panel=settings" className="font-bold text-sky-700 underline">
+                      Calls → Customize → Voice
+                    </Link>
+                    .
+                  </p>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    {SARVAM_SPEAKERS.slice(0, 6).map((sp) => {
+                      const selected = (voiceSettings.sarvamTtsSpeaker || 'shubh') === sp.value;
+                      return (
+                        <button
+                          key={sp.value}
+                          type="button"
+                          onClick={() => saveVoiceSettings({ sarvamTtsSpeaker: sp.value })}
+                          className={`rounded-2xl border px-3 py-3 text-left transition ${
+                            selected
+                              ? 'border-violet-400 bg-violet-50/80 ring-1 ring-violet-200 dark:border-violet-700 dark:bg-violet-950/30'
+                              : 'border-theme-border bg-theme-surface hover:border-theme-border-strong'
+                          }`}
+                        >
+                          <p className="text-[13px] font-extrabold text-theme-fg">{sp.label}</p>
+                          <p className="mt-0.5 text-[11px] font-medium text-theme-muted">{sp.hint}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </ModalSection>
+
+                {/* Language */}
+                <ModalSection
+                  step={3}
+                  title="Language"
+                  subtitle="Language your callers will use — the AI listens and replies in the same language"
+                >
+                  <AppSelect
+                    value={voiceSettings.sarvamSttLanguage || 'hi-IN'}
+                    options={SARVAM_LANGUAGES.map((l) => ({ value: l.value, label: l.label }))}
+                    onChange={(e) =>
+                      saveVoiceSettings({ sarvamSttLanguage: e.target.value === '' ? null : e.target.value })
+                    }
+                  />
+                </ModalSection>
+
+                {/* AI call routing */}
+                <ModalSection
+                  step={4}
+                  title="AI call routing"
+                  subtitle="Which brain answers WhatsApp voice calls"
+                >
+                  <ToggleRow
+                    checked={voiceSettings.defaultBotId === editing?.id}
+                    onChange={async (checked) => {
+                      if (checked && editing) {
+                        await callingApi.updateSettings({ defaultBotId: editing.id });
+                        setVoiceSettings((prev) =>
+                          prev ? { ...prev, defaultBotId: editing.id } : prev
+                        );
+                        toastSuccess('This bot will answer WhatsApp calls.');
+                      } else {
+                        await callingApi.updateSettings({ defaultBotId: null });
+                        setVoiceSettings((prev) =>
+                          prev ? { ...prev, defaultBotId: null } : prev
+                        );
+                        toastSuccess('Bot unassigned from calls.');
+                      }
+                    }}
+                    title="Use this brain for WhatsApp calls"
+                    description="When Calls is set to AI, this brain answers voice calls"
+                    icon={Globe}
+                  />
+
+                  <p className="rounded-xl border border-sky-200/60 bg-sky-50/50 px-3 py-2.5 text-[12px] font-medium text-theme-secondary dark:border-sky-800/40 dark:bg-sky-950/20">
+                    Voice rules are injected automatically — short replies, no formatting, and language
+                    matching for calls. Manage routing and business hours in{' '}
+                    <Link to="/calls?panel=settings" className="font-bold text-sky-700 underline">
+                      Calls → Customize
+                    </Link>
+                    .
+                  </p>
+                </ModalSection>
+              </>
+            )}
           </div>
         )}
 
@@ -1591,22 +1861,17 @@ export default function AiBotPage() {
                   {testResult.knowledgeMatches?.length === 0 && (
                     <p className="text-[11px] text-theme-muted">No training answers matched this message.</p>
                   )}
-                  <AppButton
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={async () => {
-                      if (!editing) return;
-                      try {
-                        await callingApi.updateSettings({ defaultBotId: editing.id });
-                        toastSuccess('This bot will answer WhatsApp calls.');
-                      } catch {
-                        toastError('Could not set call bot. You may need admin access.');
-                      }
-                    }}
-                  >
-                    Use for WhatsApp calls
-                  </AppButton>
+                 <div className="rounded-xl border border-sky-200/60 bg-sky-50/50 px-3 py-2.5 text-[12px] font-medium text-theme-secondary dark:border-sky-800/40 dark:bg-sky-950/20">
+                   To set this brain for WhatsApp calls, go to the{' '}
+                   <button
+                     type="button"
+                     onClick={() => setSlideTab('voice')}
+                     className="font-bold text-sky-700 underline underline-offset-2"
+                   >
+                     AI call
+                   </button>{' '}
+                   tab above.
+                 </div>
                 </div>
               ) : (
                 <ModalEmptyHint message="Run a test to see how your bot responds here." />

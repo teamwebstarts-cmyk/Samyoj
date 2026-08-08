@@ -18,6 +18,12 @@ import {
   transcriptPreview,
 } from '../components/calls/callUtils';
 import { toastError, toastSuccess } from '../utils/toast';
+import {
+  createAgentOffer,
+  pollSdpAnswer,
+  setActiveCallId,
+  cleanupAgentCall,
+} from '../utils/agentCallRTC';
 import CallsPageSkeleton, { CallsListSkeleton } from '../components/calls/CallsPageSkeleton';
 import PageShell from '../components/ui/PageShell';
 import PageSizeSelect from '../components/inbox/PageSizeSelect';
@@ -288,13 +294,30 @@ export default function CallsPage() {
     );
   }, []);
 
+   /** Tear down browser WebRTC + audio elements when a call ends (remote or local). */
+  const cleanupActiveCall = useCallback(() => {
+    cleanupAgentCall();
+  }, []);
+
   useSocket((event, data) => {
     if (event === 'call:incoming') {
       const payload = data as { fromPhone: string; contactName?: string };
       toastSuccess(`Incoming call from ${payload.contactName || payload.fromPhone}`);
       void load();
     }
-    if (event === 'call:updated') void load();
+    if (event === 'call:updated') {
+      void load();
+      // If the updated call IS the one selected, reload detail immediately
+      // so the UI reflects status changes (e.g. caller hung up) without
+      // waiting for the 3s polling cycle.
+      const update = data as { callId?: string; status?: string };
+      if (update.callId === selectedCallId) {
+        void loadCallDetail(selectedCallId);
+        if (update.status && !isActiveCallStatus(update.status)) {
+          cleanupActiveCall();
+        }
+      }
+    }
     if (event === 'call:transcript') {
       const payload = data as { callId: string; transcript: unknown };
       if (payload.callId) applyTranscriptUpdate(payload.callId, payload.transcript);
@@ -368,6 +391,7 @@ export default function CallsPage() {
     setEnding(true);
     try {
       await callingApi.terminate(selectedCall.id);
+      cleanupActiveCall();
       toastSuccess('Call ended.');
       await load();
       await loadCallDetail(selectedCall.id);
@@ -385,27 +409,8 @@ export default function CallsPage() {
     const conversationId = selectedCall.conversation?.id;
     setCallingBack(true);
     try {
-      // Create browser WebRTC offer for agent outbound call
-      const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        for (const track of stream.getTracks()) pc.addTrack(track, stream);
-      } catch {
-        throw new Error('Microphone access is required to make calls.');
-      }
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      await new Promise<void>((resolve) => {
-        if (pc.iceGatheringState === 'complete') { resolve(); return; }
-        const timer = setTimeout(resolve, 5000);
-        pc.onicegatheringstatechange = () => {
-          if (pc.iceGatheringState === 'complete') { clearTimeout(timer); resolve(); }
-        };
-      });
-      const sdpOffer = pc.localDescription?.sdp;
-      if (!sdpOffer) throw new Error('Could not create call offer');
-
-      (window as unknown as { __activeCallPc?: RTCPeerConnection }).__activeCallPc = pc;
+      const sdpOffer = await createAgentOffer();
+      if (!sdpOffer) throw new Error('Microphone access is required to make calls.');
 
       const { data } = await callingApi.callback({
         contactId,
@@ -415,16 +420,16 @@ export default function CallsPage() {
       });
       const callId = (data.data as { call?: { id: string } })?.call?.id;
       if (callId) {
+        setActiveCallId(callId);
         toastSuccess(`Calling ${phone}…`);
         navigate(`/calls/${callId}`);
-        // Listen for the outbound connect event to apply SDP answer
-        const handler = (event: string, payload: unknown) => {
-          const p = payload as { callId?: string; sdpAnswer?: string };
-          if (event === 'call:outbound_connected' && p.callId === callId && p.sdpAnswer) {
-            void pc.setRemoteDescription({ type: 'answer', sdp: p.sdpAnswer });
-          }
-        };
-        (window as unknown as { __outboundCallHandler?: typeof handler }).__outboundCallHandler = handler;
+
+        // Socket may disconnect during navigation — poll for SDP answer on the new page
+        void pollSdpAnswer(callId, async (id) => {
+          const res = await callingApi.getSignaling(id);
+          const sdp = (res.data.data as { sdpAnswer?: string | null })?.sdpAnswer;
+          return { sdpAnswer: sdp ?? null };
+        });
       } else {
         toastError('Call started but no call page was returned.');
       }
@@ -447,26 +452,9 @@ export default function CallsPage() {
     const conversationId = call.conversation?.id;
     setCallingBackId(call.id);
     try {
-      // Create browser WebRTC offer for agent outbound call from list
-      const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
-      let sdpOffer: string | undefined;
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        for (const track of stream.getTracks()) pc.addTrack(track, stream);
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        await new Promise<void>((resolve) => {
-          if (pc.iceGatheringState === 'complete') { resolve(); return; }
-          const timer = setTimeout(resolve, 5000);
-          pc.onicegatheringstatechange = () => {
-            if (pc.iceGatheringState === 'complete') { clearTimeout(timer); resolve(); }
-          };
-        });
-        sdpOffer = pc.localDescription?.sdp;
-        (window as unknown as { __activeCallPc?: RTCPeerConnection }).__activeCallPc = pc;
-      } catch {
-        // Mic not available
-      }
+      const sdpOffer = await createAgentOffer();
+      if (!sdpOffer) throw new Error('Microphone access is required to make calls.');
+
       const { data } = await callingApi.callback({
         contactId,
         phone,
@@ -475,8 +463,14 @@ export default function CallsPage() {
       });
       const callId = (data.data as { call?: { id: string } })?.call?.id;
       if (callId) {
+        setActiveCallId(callId);
         toastSuccess(`Calling ${phone}…`);
         navigate(`/calls/${callId}`);
+        void pollSdpAnswer(callId, async (id) => {
+          const res = await callingApi.getSignaling(id);
+          const sdp = (res.data.data as { sdpAnswer?: string | null })?.sdpAnswer;
+          return { sdpAnswer: sdp ?? null };
+        });
       } else {
         toastError('Call started but no call page was returned.');
       }
@@ -548,7 +542,7 @@ export default function CallsPage() {
         {/* List pane */}
         <div
           className={`relative flex h-full min-h-0 w-full flex-col border-r border-neutral-200 dark:border-neutral-800 md:w-[300px] lg:w-[340px] ${
-            selectedCall ? 'hidden md:flex' : 'flex'
+            railPanel === 'settings' ? 'hidden' : selectedCall ? 'hidden md:flex' : 'flex'
           }`}
         >
           <CallFiltersBar
@@ -668,7 +662,7 @@ export default function CallsPage() {
         )}
 
         {/* Customize rail — desktop only */}
-        <div className="hidden w-[72px] shrink-0 flex-col border-l border-neutral-200 bg-neutral-50/70 dark:border-neutral-800 dark:bg-neutral-900/50 md:flex">
+        <div className={`w-[72px] shrink-0 flex-col border-l border-neutral-200 bg-neutral-50/70 dark:border-neutral-800 dark:bg-neutral-900/50 ${railPanel === 'settings' ? 'hidden' : 'hidden md:flex'}`}>
           <RailIconButton
             icon={Settings}
             label="Settings"

@@ -1,6 +1,6 @@
 import prisma from '../../config/database';
 import { MetaWhatsAppService } from '../whatsapp/meta.service';
-import { emitToOrg, emitToUsers } from '../../realtime';
+import { emitToOrg, emitToUser, emitToUsers } from '../../realtime';
 import { createModuleLogger } from '../../utils/logger';
 import { AiVoiceCallSession } from './ai-voice-agent';
 import {
@@ -330,6 +330,14 @@ async function handleCallConnect(
 
       // Tell the calling agent's browser: "customer answered, here's their SDP answer".
       // The agent's browser will set this as the remote description to complete WebRTC.
+      // Use emitToUser for the assigned agent (guaranteed) AND emitToOrg as backup.
+      if (existingCall.assignedAgentId) {
+        emitToUser(existingCall.assignedAgentId, 'call:outbound_connected', {
+          callId: existingCall.id,
+          metaCallId,
+          sdpAnswer,
+        });
+      }
       emitToOrg(orgId, 'call:outbound_connected', {
         callId: existingCall.id,
         metaCallId,
@@ -531,6 +539,15 @@ async function handleCallTerminate(orgId: string, call: CallWebhookEntry): Promi
     status,
     durationSeconds: duration,
   });
+  // Also notify the assigned agent directly — Socket.IO may have dropped
+  // during page navigation, so emitToUser gives them a guaranteed path.
+  if (existing.assignedAgentId) {
+    emitToUser(existing.assignedAgentId, 'call:updated', {
+      callId: existing.id,
+      status,
+      durationSeconds: duration,
+    });
+  }
   void publishCallEventMessage(existing.id);
 
   if (existing.status === 'RINGING' && status === 'TERMINATED') {
