@@ -3,6 +3,8 @@ ALTER TABLE "contacts"
   ADD COLUMN "consent_decision" JSONB,
   ADD COLUMN "opt_out_at" TIMESTAMP(3);
 
+ALTER TYPE "MessageStatus" ADD VALUE IF NOT EXISTS 'AMBIGUOUS';
+
 ALTER TABLE "campaigns"
   ADD COLUMN "run_version" INTEGER NOT NULL DEFAULT 0;
 

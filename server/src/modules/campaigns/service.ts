@@ -44,6 +44,7 @@ export async function resolveAudienceRecipients(
         optedIn: true,
         consentSource: { not: null },
         consentAt: { not: null },
+        optOutAt: null,
       },
       select: { phone: true },
     });
@@ -57,6 +58,7 @@ export async function resolveAudienceRecipients(
   contactWhere.optedIn = true;
   contactWhere.consentSource = { not: null };
   contactWhere.consentAt = { not: null };
+  contactWhere.optOutAt = null;
 
   if (audienceType === 'TAGS') {
     const tags = audienceConfig?.tags?.filter(Boolean) || [];
@@ -72,7 +74,7 @@ export async function resolveAudienceRecipients(
 
   const contacts = await prisma.contact.findMany({
     where: contactWhere,
-    select: { phone: true, name: true, consentSource: true, consentAt: true },
+    select: { phone: true, name: true, consentSource: true, consentAt: true, optOutAt: true },
   });
 
   return dedupeRecipients(
@@ -101,10 +103,12 @@ async function recoverStuckCampaign(campaignId: string, updatedAt: Date) {
   const age = Date.now() - updatedAt.getTime();
   if (age < STUCK_RUNNING_MS) return;
 
+  const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { status: true } });
+  if (!campaign || campaign.status !== 'RUNNING') return;
   const pending = await prisma.campaignRecipient.count({ where: { campaignId, status: 'PENDING' } });
   if (pending === 0) return;
 
-  await prisma.campaignRecipient.updateMany({
+  const recovered = await prisma.campaignRecipient.updateMany({
     where: { campaignId, status: 'PENDING' },
     data: {
       status: 'FAILED',
@@ -112,30 +116,31 @@ async function recoverStuckCampaign(campaignId: string, updatedAt: Date) {
     },
   });
 
-  await prisma.campaign.update({
-    where: { id: campaignId },
-    data: { failedCount: { increment: pending } },
-  });
+  if (recovered.count > 0) {
+    await prisma.campaign.update({
+      where: { id: campaignId },
+      data: { failedCount: { increment: recovered.count } },
+    });
+  }
 }
 
 /** Expired claims are ambiguous: Meta may have accepted the request before a crash. */
 export async function recoverExpiredCampaignClaims(campaignId: string, now = new Date()) {
   const cutoff = new Date(now.getTime() - CAMPAIGN_CLAIM_LEASE_MS);
   const recovered = await prisma.campaignRecipient.updateMany({
-    where: { campaignId, status: 'PENDING', claimToken: { not: null }, claimedAt: { lt: cutoff } },
+    where: {
+      campaignId,
+      status: 'PENDING',
+      claimToken: { not: null },
+      claimedAt: { lt: cutoff },
+    },
     data: {
-      status: 'FAILED',
+      status: 'AMBIGUOUS',
       errorMessage: 'Claim lease expired; reconcile with Meta before retrying',
       claimToken: null,
       claimedAt: null,
     },
   });
-  if (recovered.count) {
-    await prisma.campaign.update({
-      where: { id: campaignId },
-      data: { failedCount: { increment: recovered.count } },
-    });
-  }
   return recovered.count;
 }
 
@@ -148,7 +153,8 @@ export async function finalizeCampaignIfDone(campaignId: string) {
   if (!campaign || !['RUNNING', 'PAUSED'].includes(campaign.status)) return;
 
   const pending = campaign.recipients.filter((r) => r.status === 'PENDING').length;
-  if (pending > 0) return;
+  const ambiguous = campaign.recipients.filter((r) => r.status === 'AMBIGUOUS').length;
+  if (pending > 0 || ambiguous > 0) return;
 
   const allFailed = campaign.failedCount >= campaign.totalContacts;
   const status: CampaignStatus = allFailed ? 'FAILED' : 'COMPLETED';
@@ -293,6 +299,13 @@ export async function queueCampaignSend(
   claimedRunVersion?: number
 ) {
   if (campaign.status === 'RUNNING' && claimedRunVersion === undefined) throw new AppError(409, 'Campaign is already being sent');
+  if (claimedRunVersion !== undefined) {
+    const current = await prisma.campaign.findFirst({
+      where: { id: campaign.id, status: 'RUNNING', runVersion: claimedRunVersion },
+      select: { id: true },
+    });
+    if (!current) return { recipientCount: 0, stale: true };
+  }
   if (campaign.status === 'CANCELLED') throw new AppError(400, 'Campaign was cancelled');
 
   if (campaign.audienceType !== 'MANUAL') {
@@ -358,6 +371,7 @@ export async function queueCampaignSend(
       })
     : { count: 1 };
   if (claimedRun.count !== 1) {
+    await releaseCampaignQuota(campaign.id);
     throw new AppError(409, 'Campaign changed while it was being queued; try again');
   }
   const run = await prisma.campaign.findUnique({ where: { id: campaign.id }, select: { runVersion: true } });
@@ -368,8 +382,11 @@ export async function queueCampaignSend(
     data: { templateLanguage },
   });
 
-  await prisma.campaignRecipient.updateMany({
-    where: { campaignId: campaign.id },
+  const reset = await prisma.campaignRecipient.updateMany({
+    where: {
+      campaignId: campaign.id,
+      campaign: { status: 'RUNNING', runVersion: run.runVersion },
+    },
     data: {
       status: 'PENDING',
       metaMessageId: null,
@@ -381,13 +398,18 @@ export async function queueCampaignSend(
       readAt: null,
     },
   });
+  if (reset.count !== campaign.recipients.length) {
+    await releaseCampaignQuota(campaign.id);
+    throw new AppError(409, 'Campaign changed before recipients could be queued');
+  }
 
   const settings = await getCampaignSettings(campaign.organizationId);
   const batchSize = settings.batchSize ?? 50;
   const batchDelayMs = settings.batchDelayMs ?? 1000;
   const totalBatches = Math.ceil(campaign.recipients.length / batchSize);
 
-  for (let i = 0; i < campaign.recipients.length; i += batchSize) {
+  try {
+    for (let i = 0; i < campaign.recipients.length; i += batchSize) {
     const batch = campaign.recipients.slice(i, i + batchSize);
     const batchIndex = Math.floor(i / batchSize);
     await broadcastQueue.add(
@@ -414,6 +436,14 @@ export async function queueCampaignSend(
       },
       { delay: batchIndex * batchDelayMs, jobId: `campaign:${campaign.id}:batch:${batch[0].id}` }
     );
+    }
+  } catch (err) {
+    await releaseCampaignQuota(campaign.id);
+    await prisma.campaign.updateMany({
+      where: { id: campaign.id, status: 'RUNNING', runVersion: run.runVersion },
+      data: { status: 'FAILED' },
+    });
+    throw err;
   }
 
   emitToOrg(campaign.organizationId, 'campaign:status', {
@@ -431,7 +461,7 @@ export async function sendTestMessage(
 ) {
   const contact = await prisma.contact.findUnique({
     where: { organizationId_phone: { organizationId: campaign.organizationId, phone } },
-    select: { optedIn: true, consentSource: true, consentAt: true },
+    select: { optedIn: true, consentSource: true, consentAt: true, optOutAt: true },
   });
   if (!contact || !hasAuditableCampaignConsent(contact)) {
     throw new AppError(400, 'Test sends require an existing opted-in contact with recorded consent');
@@ -607,35 +637,6 @@ export async function retryFailedRecipients(
 
   await assertDailySendQuota(campaign.organizationId, failed.length);
   await assertDailyBudget(campaign.organizationId, failed.length, 'MARKETING');
-
-  const retryRun = await prisma.campaign.updateMany({
-    where: { id: campaign.id, status: { in: ['FAILED', 'COMPLETED', 'PAUSED'] } },
-    data: {
-      status: 'RUNNING',
-      runVersion: { increment: 1 },
-      failedCount: { decrement: failed.length },
-      pausedAt: null,
-    },
-  });
-  if (retryRun.count !== 1) throw new AppError(409, 'Campaign changed before retry could start');
-  const retryVersion = await prisma.campaign.findUnique({ where: { id: campaign.id }, select: { runVersion: true } });
-  if (!retryVersion) throw new AppError(404, 'Campaign not found');
-
-  await prisma.campaignRecipient.updateMany({
-    where: { id: { in: failed.map((r) => r.id) } },
-    data: {
-      status: 'PENDING',
-      errorMessage: null,
-      metaMessageId: null,
-      claimToken: null,
-      claimedAt: null,
-      sentAt: null,
-      deliveredAt: null,
-      readAt: null,
-      retryCount: { increment: 1 },
-    },
-  });
-
   const settings = await getCampaignSettings(campaign.organizationId);
   const batchSize = settings.batchSize ?? 50;
   const batchDelayMs = settings.batchDelayMs ?? 1000;
@@ -654,9 +655,48 @@ export async function retryFailedRecipients(
   const templateLanguage = campaign.templateLanguage || template.language || 'en_US';
   const templateParams = (campaign.templateParams as TemplateParams | null) || undefined;
   const templateContent = applyTemplateParamsToPreview(template, templateParams, campaign.templateName);
+  await reserveCampaignQuota(campaign.organizationId, campaign.id, failed.length, 'MARKETING');
+  const retryRun = await prisma.campaign.updateMany({
+    where: { id: campaign.id, status: { in: ['FAILED', 'COMPLETED', 'PAUSED'] } },
+    data: {
+      status: 'RUNNING',
+      runVersion: { increment: 1 },
+      failedCount: { decrement: failed.length },
+      pausedAt: null,
+    },
+  });
+  if (retryRun.count !== 1) {
+    await releaseCampaignQuota(campaign.id);
+    throw new AppError(409, 'Campaign changed before retry could start');
+  }
+  const retryVersion = await prisma.campaign.findUnique({ where: { id: campaign.id }, select: { runVersion: true } });
+  if (!retryVersion) {
+    await releaseCampaignQuota(campaign.id);
+    throw new AppError(404, 'Campaign not found');
+  }
+
+  const reset = await prisma.campaignRecipient.updateMany({
+    where: { id: { in: failed.map((r) => r.id) }, status: 'FAILED' },
+    data: {
+      status: 'PENDING',
+      errorMessage: null,
+      metaMessageId: null,
+      claimToken: null,
+      claimedAt: null,
+      sentAt: null,
+      deliveredAt: null,
+      readAt: null,
+      retryCount: { increment: 1 },
+    },
+  });
+  if (reset.count !== failed.length) {
+    await releaseCampaignQuota(campaign.id);
+    throw new AppError(409, 'Recipients changed before retry could start');
+  }
 
   const totalBatches = Math.ceil(failed.length / batchSize);
-  for (let i = 0; i < failed.length; i += batchSize) {
+  try {
+    for (let i = 0; i < failed.length; i += batchSize) {
     const batch = failed.slice(i, i + batchSize);
     const batchIndex = Math.floor(i / batchSize);
     await broadcastQueue.add(
@@ -683,6 +723,14 @@ export async function retryFailedRecipients(
       },
       { delay: batchIndex * batchDelayMs }
     );
+    }
+  } catch (err) {
+    await releaseCampaignQuota(campaign.id);
+    await prisma.campaign.updateMany({
+      where: { id: campaign.id, status: 'RUNNING', runVersion: retryVersion.runVersion },
+      data: { status: 'FAILED' },
+    });
+    throw err;
   }
 
   await logCampaignAudit(campaign.organizationId, userId, 'campaign.retry_failed', {
@@ -838,7 +886,8 @@ export async function processScheduledCampaigns(organizationId?: string) {
       const campaign = await prisma.campaign.findUnique({ where: { id: item.id }, include: { recipients: true } });
       if (!campaign) continue;
       try {
-        await queueCampaignSend(campaign, undefined, campaign.runVersion);
+        const queued = await queueCampaignSend(campaign, undefined, campaign.runVersion);
+        if (queued.stale) continue;
         await logCampaignAudit(campaign.organizationId, undefined, 'campaign.scheduled_send', {
           campaignId: campaign.id,
         });
@@ -847,6 +896,7 @@ export async function processScheduledCampaigns(organizationId?: string) {
           where: { id: campaign.id, status: 'RUNNING', runVersion: campaign.runVersion },
           data: { status: 'FAILED' },
         });
+        await releaseCampaignQuota(campaign.id);
         await logCampaignAudit(campaign.organizationId, undefined, 'campaign.scheduled_send_failed', {
           campaignId: campaign.id,
           error: err instanceof Error ? err.message : String(err),

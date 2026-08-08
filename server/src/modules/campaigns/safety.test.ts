@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { buildConsentSnapshot, isAbsoluteInstant, isClaimLeaseExpired } from './safety';
+import {
+  buildConsentSnapshot,
+  canRetryCampaignRecipient,
+  fitsReservedQuota,
+  isAbsoluteInstant,
+  isClaimLeaseExpired,
+} from './safety';
 
 describe('campaign safety boundaries', () => {
   it('expires a claimed lease deterministically', () => {
@@ -39,5 +45,27 @@ describe('campaign safety boundaries', () => {
       decision: { type: 'OPT_IN' },
       optedIn: true,
     });
+  });
+
+  it('rejects ambiguous outcomes from ordinary retry', () => {
+    expect(canRetryCampaignRecipient('FAILED')).toBe(true);
+    expect(canRetryCampaignRecipient('AMBIGUOUS')).toBe(false);
+    expect(canRetryCampaignRecipient('SENT')).toBe(false);
+  });
+
+  it('enforces both locked send and budget reservations', () => {
+    const base = {
+      sentCount: 10,
+      reservedSendCount: 20,
+      requestedSendCount: 5,
+      sendLimit: 40,
+      spentBudgetCents: 1000,
+      reservedBudgetCents: 2000,
+      requestedBudgetCents: 500,
+      budgetLimitCents: 4000,
+    };
+    expect(fitsReservedQuota(base)).toBe(true);
+    expect(fitsReservedQuota({ ...base, reservedBudgetCents: 2501 })).toBe(false);
+    expect(fitsReservedQuota({ ...base, requestedSendCount: 11 })).toBe(false);
   });
 });

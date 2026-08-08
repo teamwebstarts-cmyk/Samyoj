@@ -40,6 +40,7 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
       const value = change.value as Record<string, unknown>;
       const metadata = value.metadata as { phone_number_id?: string } | undefined;
       const phoneNumberId = metadata?.phone_number_id;
+      if (!phoneNumberId) continue;
 
       const whatsappNumber = await prisma.whatsappNumber.findFirst({
         where: { phoneNumberId, isActive: true },
@@ -76,7 +77,13 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
         };
 
         const existingMsg = await prisma.message.findFirst({
-          where: { metaMessageId },
+          where: {
+            metaMessageId,
+            conversation: {
+              organizationId: orgId,
+              whatsappNumber: { phoneNumberId },
+            },
+          },
           select: { id: true, status: true, metadata: true },
         });
         if (!existingMsg) continue;
@@ -94,7 +101,13 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
         if (status.conversation) statusMeta.conversationId = (status.conversation as { id?: string })?.id;
 
         await prisma.message.updateMany({
-          where: { metaMessageId },
+          where: {
+            metaMessageId,
+            conversation: {
+              organizationId: orgId,
+              whatsappNumber: { phoneNumberId },
+            },
+          },
           data: {
             ...(shouldUpdateStatus ? { status: statusValue as never } : {}),
             metadata: statusMeta as Prisma.InputJsonValue,
@@ -102,7 +115,13 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
         });
 
         const msg = await prisma.message.findFirst({
-          where: { metaMessageId },
+          where: {
+            metaMessageId,
+            conversation: {
+              organizationId: orgId,
+              whatsappNumber: { phoneNumberId },
+            },
+          },
           include: { conversation: true },
         });
 

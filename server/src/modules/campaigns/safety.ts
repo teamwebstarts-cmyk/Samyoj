@@ -10,6 +10,26 @@ export function isClaimLeaseExpired(
   return Boolean(claimedAt && now.getTime() - claimedAt.getTime() >= leaseMs);
 }
 
+export function canRetryCampaignRecipient(status: string) {
+  return status === 'FAILED';
+}
+
+export function fitsReservedQuota(input: {
+  sentCount: number;
+  reservedSendCount: number;
+  requestedSendCount: number;
+  sendLimit: number;
+  spentBudgetCents: number;
+  reservedBudgetCents: number;
+  requestedBudgetCents: number;
+  budgetLimitCents: number;
+}) {
+  return (
+    input.sentCount + input.reservedSendCount + input.requestedSendCount <= input.sendLimit &&
+    input.spentBudgetCents + input.reservedBudgetCents + input.requestedBudgetCents <= input.budgetLimitCents
+  );
+}
+
 export function buildConsentSnapshot(input: {
   phone: string;
   business: { organizationId: string; name: string; businessId?: string | null; phoneNumberId?: string | null };

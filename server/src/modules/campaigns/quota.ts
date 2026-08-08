@@ -3,6 +3,7 @@ import { AppError } from '../../utils/response';
 import { DEFAULT_CAMPAIGN_SETTINGS, type CampaignSettings } from './types';
 import { estimateCampaignCost } from '../billing/usage.service';
 import { randomUUID } from 'node:crypto';
+import { fitsReservedQuota } from './safety';
 
 export async function getCampaignSettings(organizationId: string): Promise<CampaignSettings> {
   const org = await prisma.organization.findUnique({
@@ -119,6 +120,7 @@ export async function reserveCampaignQuota(
       update: {},
     });
     await tx.$queryRaw`SELECT id FROM campaign_quota_ledgers WHERE id = ${ledger.id} FOR UPDATE`;
+    const lockedLedger = await tx.campaignQuotaLedger.findUniqueOrThrow({ where: { id: ledger.id } });
     const existing = await tx.campaignQuotaReservation.findUnique({ where: { campaignId } });
     if (existing?.status === 'ACTIVE') return existing;
 
@@ -129,8 +131,25 @@ export async function reserveCampaignQuota(
         sentAt: { gte: day },
       },
     });
-    if (sentToday + ledger.reservedSendCount + recipientCount > sendLimit) {
+    const spentEstimateCents = Math.round(estimateCampaignCost(sentToday, category).estimatedCostInr * 100);
+    const budgetLimitCents = Math.round(
+      (settings.dailyBudgetInr ?? DEFAULT_CAMPAIGN_SETTINGS.dailyBudgetInr!) * 100
+    );
+    const fitsQuota = fitsReservedQuota({
+      sentCount: sentToday,
+      reservedSendCount: lockedLedger.reservedSendCount,
+      requestedSendCount: recipientCount,
+      sendLimit,
+      spentBudgetCents: spentEstimateCents,
+      reservedBudgetCents: lockedLedger.reservedBudgetCents,
+      requestedBudgetCents: budgetCents,
+      budgetLimitCents,
+    });
+    if (sentToday + lockedLedger.reservedSendCount + recipientCount > sendLimit) {
       throw new AppError(429, `Daily campaign send limit exceeded (${sendLimit} recipients/day).`);
+    }
+    if (!fitsQuota) {
+      throw new AppError(429, `Daily Meta budget exceeded (₹${(budgetLimitCents / 100).toFixed(2)} daily cap).`);
     }
     const updated = await tx.campaignQuotaLedger.updateMany({
       where: { id: ledger.id },
@@ -147,18 +166,24 @@ export async function releaseCampaignQuota(campaignId: string) {
   return prisma.$transaction(async (tx) => {
     const reservation = await tx.campaignQuotaReservation.findUnique({ where: { campaignId } });
     if (!reservation || reservation.status !== 'ACTIVE') return false;
+    await tx.$queryRaw`SELECT id FROM campaign_quota_ledgers WHERE id = ${reservation.ledgerId} FOR UPDATE`;
     const updated = await tx.campaignQuotaReservation.updateMany({
       where: { id: reservation.id, status: 'ACTIVE' },
       data: { status: 'RELEASED', releasedAt: new Date() },
     });
     if (updated.count !== 1) return false;
-    await tx.campaignQuotaLedger.update({
-      where: { id: reservation.ledgerId },
+    const ledgerUpdated = await tx.campaignQuotaLedger.updateMany({
+      where: {
+        id: reservation.ledgerId,
+        reservedSendCount: { gte: reservation.sendCount },
+        reservedBudgetCents: { gte: reservation.budgetCents },
+      },
       data: {
         reservedSendCount: { decrement: reservation.sendCount },
         reservedBudgetCents: { decrement: reservation.budgetCents },
       },
     });
+    if (ledgerUpdated.count !== 1) throw new AppError(409, 'Campaign quota ledger is inconsistent; reconcile before release');
     return true;
   });
 }

@@ -1,6 +1,7 @@
 import prisma from '../../config/database';
 import { sendDirectMessage } from '../messages/service';
 import { createModuleLogger } from '../../utils/logger';
+import { randomUUID } from 'node:crypto';
 
 const log = createModuleLogger('opt-out');
 
@@ -19,11 +20,12 @@ export async function handleOptOut(
 ): Promise<boolean> {
   const contact = await prisma.contact.findUniqueOrThrow({
     where: { id: contactId },
-    select: { phone: true },
+    select: { phone: true, organizationId: true },
   });
+  if (contact.organizationId !== organizationId) return false;
 
   await prisma.contact.update({
-    where: { id: contactId },
+    where: { id: contactId, organizationId },
     data: {
       optedIn: false,
       consentSource: 'STOP_KEYWORD',
@@ -51,15 +53,23 @@ export async function handleOptOut(
 }
 
 export async function handleOptIn(organizationId: string, contactId: string): Promise<boolean> {
+  const eventId = randomUUID();
+  const consentAt = new Date();
   await prisma.contact.update({
-    where: { id: contactId },
+    where: { id: contactId, organizationId },
     data: {
       optedIn: true,
       consentSource: 'START_KEYWORD',
-      consentAt: new Date(),
-      consentVersion: 'start-keyword-v1',
+      consentAt,
+      consentVersion: `start-keyword-v1:${eventId}`,
       optOutAt: null,
-      consentDecision: { type: 'OPT_IN', optedIn: true, source: 'START_KEYWORD' },
+      consentDecision: {
+        type: 'OPT_IN',
+        optedIn: true,
+        source: 'START_KEYWORD',
+        eventId,
+        occurredAt: consentAt.toISOString(),
+      },
     },
   });
   return true;

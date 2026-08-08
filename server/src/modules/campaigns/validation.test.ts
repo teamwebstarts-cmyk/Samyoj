@@ -23,6 +23,14 @@ describe('campaign consent', () => {
 
   it('accepts only opted-in contacts with recorded consent', () => {
     expect(hasAuditableCampaignConsent({ optedIn: true, consentSource: 'EXPLICIT', consentAt: new Date() })).toBe(true);
+    expect(
+      hasAuditableCampaignConsent({
+        optedIn: true,
+        consentSource: 'EXPLICIT',
+        consentAt: new Date(),
+        optOutAt: new Date(),
+      })
+    ).toBe(false);
   });
 });
 

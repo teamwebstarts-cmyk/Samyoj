@@ -8,8 +8,9 @@ export function hasAuditableCampaignConsent(contact: {
   optedIn: boolean;
   consentSource?: string | null;
   consentAt?: Date | null;
+  optOutAt?: Date | null;
 }) {
-  return Boolean(contact.optedIn && contact.consentSource && contact.consentAt);
+  return Boolean(contact.optedIn && contact.consentSource && contact.consentAt && !contact.optOutAt);
 }
 
 export function dedupeRecipients(recipients: ResolvedRecipient[]): ResolvedRecipient[] {

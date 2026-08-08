@@ -178,11 +178,11 @@ const broadcastWorker = new Worker(
     }
 
     for (const recipient of recipients) {
-      const live = await prisma.campaign.findUnique({
+        const live = await prisma.campaign.findUnique({
         where: { id: campaignId },
-        select: { status: true },
+          select: { status: true, runVersion: true },
       });
-      if (!live || live.status !== 'RUNNING') break;
+        if (!live || live.status !== 'RUNNING' || live.runVersion !== runVersion) break;
 
       const contact = await prisma.contact.findUnique({
         where: {
@@ -324,21 +324,20 @@ const broadcastWorker = new Worker(
           path: `recipient:${recipient.phone}`,
         });
 
-        const failed = await prisma.campaignRecipient.updateMany({
+        const ambiguous = await prisma.campaignRecipient.updateMany({
           where: { id: recipient.id, claimToken },
-          data: { status: 'FAILED', errorMessage, claimToken: null, claimedAt: null },
+          data: {
+            status: 'AMBIGUOUS',
+            errorMessage: `Provider outcome unknown; reconcile with Meta before retrying: ${errorMessage}`,
+            claimToken: null,
+            claimedAt: null,
+          },
         });
-        if (failed.count === 1) {
-          await prisma.campaign.update({
-            where: { id: campaignId },
-            data: { failedCount: { increment: 1 } },
-          });
-        }
 
         emitToOrg(organizationId, 'campaign:progress', {
           campaignId,
           recipientId: recipient.id,
-          status: 'FAILED',
+          status: ambiguous.count === 1 ? 'AMBIGUOUS' : 'FAILED',
           errorMessage,
         });
       }

@@ -87,6 +87,7 @@ enum MessageStatus {
   DELIVERED
   READ
   FAILED
+  AMBIGUOUS
 }
 
 enum CallDirection {
