@@ -155,15 +155,17 @@ export function CallsSelectEmpty({
             </div>
 
             {totalCount > 0 ? (
-              <p className="mt-3 border-t border-theme-border pt-2.5 text-[11px] font-medium leading-relaxed text-theme-muted">
-                <span className="font-bold text-theme-secondary tabular-nums">{totalCount}</span> calls
-                {' · '}
-                <span className="font-bold text-theme-secondary tabular-nums">{aiAnswered}</span> by AI
-                {' · '}
-                <span className="font-bold text-theme-secondary tabular-nums">{agentAnswered}</span> by team
-                {' · '}avg <span className="font-bold text-theme-secondary tabular-nums">{formatDuration(avgDurationSec)}</span>
-                <span className="text-theme-muted/80"> · last {rangeLabel}</span>
-              </p>
+              <div className="mt-3 border-t border-theme-border pt-3">
+                <div className="flex flex-wrap items-center justify-center gap-1.5">
+                  <MiniStat value={totalCount} label="calls" />
+                  <MiniStat value={aiAnswered} label="by AI" />
+                  <MiniStat value={agentAnswered} label="by team" />
+                  <MiniStat value={formatDuration(avgDurationSec)} label="avg" />
+                </div>
+                <p className="mt-2.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-theme-muted/70">
+                  Last {rangeLabel}
+                </p>
+              </div>
             ) : (
               <p className="mt-3 border-t border-theme-border pt-2.5 text-[11px] font-medium text-theme-muted">
                 No calls in the last {rangeLabel} yet.
