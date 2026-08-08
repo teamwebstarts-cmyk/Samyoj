@@ -106,6 +106,7 @@ export default function InboxPage() {
     hasEarlier,
     loadingEarlier,
     upsertConversation,
+    removeConversation,
     openConversation,
     loadEarlierMessages,
     markConversationRead,
@@ -313,7 +314,9 @@ export default function InboxPage() {
     handleToggleFavorite,
     handleMarkUnread,
     handleBulk,
-  } = useConversationActions({ conversations, selected, setSelected, upsertConversation });
+    handleDeleteConversation,
+    deleting,
+  } = useConversationActions({ conversations, selected, setSelected, upsertConversation, removeConversation });
 
   const {
     ticketModalOpen,
