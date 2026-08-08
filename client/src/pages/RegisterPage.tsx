@@ -1,6 +1,6 @@
 import { Building2, Lock, Mail, User } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import AuthButton from '../components/auth/AuthButton';
 import AuthDivider from '../components/auth/AuthDivider';
 import AuthInput from '../components/auth/AuthInput';
@@ -38,6 +38,7 @@ export default function RegisterPage() {
   const [smtpConfigured, setSmtpConfigured] = useState(true);
   const { register } = useAuth();
   const { signInWithGoogle } = useGoogleAuth();
+  const navigate = useNavigate();
 
   const passwordStrength = useMemo(
     () => getPasswordStrength(form.password),
@@ -55,6 +56,8 @@ export default function RegisterPage() {
         toastSuccess('Account created — verify your email to sign in');
         return;
       }
+      toastSuccess('Account created — welcome!');
+      navigate('/', { replace: true });
     } catch (err: unknown) {
       toastError(getErrorMessage(err, 'Registration failed'));
     } finally {

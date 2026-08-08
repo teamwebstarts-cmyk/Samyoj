@@ -70,7 +70,7 @@ router.post(
             email,
             passwordHash,
             role: 'ADMIN',
-            emailVerifiedAt: null,
+            emailVerifiedAt: new Date(),
           },
         });
 
@@ -96,11 +96,16 @@ router.post(
       throw err;
     }
 
-    await issueEmailVerification(result.user.id, result.user.email).catch(() => {
-      // registration still succeeds; user can resend
-    });
+    // Email verification is disabled: sign the user in immediately on registration.
+    const { accessToken, refreshToken } = await createSession(
+      {
+        userId: result.user.id,
+        email: result.user.email,
+        organizationId: result.org.id,
+      },
+      req
+    );
 
-    // Do not issue session tokens until email is verified (login after verify)
     sendSuccess(
       res,
       {
@@ -109,17 +114,17 @@ router.post(
           name: result.user.name,
           email: result.user.email,
           role: result.user.role,
-          emailVerified: false,
+          emailVerified: true,
         },
         organization: {
           id: result.org.id,
           companyName: result.org.companyName,
           role: 'OWNER',
         },
-        emailVerificationRequired: true,
-        smtpConfigured: isSmtpConfigured(),
-        message:
-          'Account created. Verify your email before signing in. Check your inbox for the verification link.',
+        emailVerificationRequired: false,
+        accessToken,
+        refreshToken,
+        message: 'Account created. You are now signed in.',
       },
       201
     );
@@ -149,17 +154,7 @@ router.post(
       throw new AppError(401, 'Invalid email or password');
     }
 
-    if (!user.emailVerifiedAt) {
-      const hasGoogle = user.oauthAccounts.some((a) => a.provider === 'google');
-      if (!hasGoogle) {
-        sendSuccess(res, {
-          requiresEmailVerification: true,
-          email: user.email,
-          message: 'Verify your email before signing in. Check your inbox or resend the link.',
-        });
-        return;
-      }
-    }
+    // Email verification is disabled: allow sign-in with email + password only.
 
     const orgMembership = user.organizations[0];
 
