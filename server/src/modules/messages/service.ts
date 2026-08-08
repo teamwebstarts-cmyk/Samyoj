@@ -203,6 +203,23 @@ export async function sendDirectMessage(organizationId: string, input: SendDirec
     templateLanguage: input.templateLanguage || 'en_US',
   });
 
+  emitToOrg(organizationId, 'message:new', {
+    conversationId: conversation.id,
+    message,
+    conversation: {
+      id: conversation.id,
+      lastMessageAt: new Date().toISOString(),
+      lastMessage: {
+        id: message.id,
+        direction: message.direction,
+        type: message.type,
+        content: message.content,
+        status: message.status,
+        createdAt: message.createdAt,
+      },
+    },
+  });
+
   return { message: sentMessage, conversationId: conversation.id, contact };
 }
 

@@ -457,6 +457,54 @@ export class AiVoiceCallSession {
             where: { id: this.ctx.callId },
             data: { metadata: { ...metadata, summary } },
           });
+
+          // Store the summary as a message in the Inbox conversation
+          if (this.ctx.conversationId) {
+            const msgDirection = call?.direction === 'BUSINESS_INITIATED' ? 'OUTBOUND' : 'INBOUND';
+            const summaryMessage = await prisma.message.create({
+              data: {
+                conversationId: this.ctx.conversationId,
+                direction: msgDirection,
+                type: 'TEXT',
+                content: summary,
+                status: 'READ',
+                metadata: {
+                  isCallSummary: true,
+                  callId: this.ctx.callId,
+                },
+              },
+            });
+
+            await prisma.conversation.update({
+              where: { id: this.ctx.conversationId },
+              data: { lastMessageAt: new Date() },
+            });
+
+            emitToOrg(this.ctx.organizationId, 'message:new', {
+              conversationId: this.ctx.conversationId,
+              message: {
+                id: summaryMessage.id,
+                direction: summaryMessage.direction,
+                type: summaryMessage.type,
+                content: summaryMessage.content,
+                status: summaryMessage.status,
+                createdAt: summaryMessage.createdAt,
+                metadata: summaryMessage.metadata,
+              },
+              conversation: {
+                id: this.ctx.conversationId,
+                lastMessageAt: new Date().toISOString(),
+                lastMessage: {
+                  id: summaryMessage.id,
+                  direction: summaryMessage.direction,
+                  type: summaryMessage.type,
+                  content: summaryMessage.content,
+                  status: summaryMessage.status,
+                  createdAt: summaryMessage.createdAt,
+                },
+              },
+            });
+          }
         }
       } catch (err) {
         log.warn('Post-call summary generation failed', {

@@ -23,7 +23,7 @@ import {
   setActiveCallId,
   cleanupAgentCall,
 } from '../utils/agentCallRTC';
-import CallsPageSkeleton, { CallsListSkeleton } from '../components/calls/CallsPageSkeleton';
+import { CallsListSkeleton } from '../components/calls/CallsPageSkeleton';
 import PageShell from '../components/ui/PageShell';
 import PageSizeSelect from '../components/inbox/PageSizeSelect';
 import { type PageSize } from '../components/inbox/useConversationList';
@@ -106,7 +106,6 @@ export default function CallsPage() {
 
   const [calls, setCalls] = useState<CallRecord[]>([]);
   const [status, setStatus] = useState<CallingStatus | null>(null);
-  const [loading, setLoading] = useState(true);
   const [listLoading, setListLoading] = useState(false);
   const [enabling, setEnabling] = useState(false);
   const [ending, setEnding] = useState(false);
@@ -209,7 +208,6 @@ export default function CallsPage() {
     } catch {
       toastError('Could not load calls. Please refresh the page.');
     } finally {
-      setLoading(false);
     }
   }, [loadCalls]);
 
@@ -266,7 +264,6 @@ export default function CallsPage() {
       setRailPanel(
         cached.railPanel === 'settings' || cached.railPanel === 'help' ? cached.railPanel : null
       );
-      setLoading(false);
       return;
     }
 
@@ -507,14 +504,6 @@ export default function CallsPage() {
   const toggleRail = (panel: RailPanel) => {
     setRailPanel((prev) => (prev === panel ? null : panel));
   };
-
-  if (loading) {
-    return (
-      <PageShell>
-        <CallsPageSkeleton />
-      </PageShell>
-    );
-  }
 
   const selectedTranscript = normalizeTranscript(selectedCall?.transcript);
 

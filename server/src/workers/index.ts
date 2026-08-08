@@ -7,6 +7,7 @@ import { resolveMetaCredentials } from '../modules/whatsapp/org-meta.service';
 import { deliverOutboundMessage } from '../modules/messages/send.service';
 import { retryDelays } from '../config/queues';
 import { processWebhookFields } from '../modules/calling/call.processor';
+import { processWebhookPayload } from './webhook.processor';
 import { processAiChatbotJob } from '../modules/automation/engine';
 import { executeWebhookDelivery } from '../modules/integrations/dispatch';
 import { processCompliancePurge } from './compliance-purge.processor';
@@ -34,11 +35,16 @@ export function startWorkers(): void {
   if (workersStarted) return;
   workersStarted = true;
 
-// Webhook worker
+// Webhook worker — handle inbound messages + status ticks (processWebhookPayload)
+// as well as voice-call webhooks (processWebhookFields). Both share the same
+// Meta payload shape, so run both processors.
 const webhookWorker = new Worker(
   'webhook-queue',
   async (job: Job) => {
-    await processWebhookFields(job.data.payload);
+    const payload = job.data?.payload;
+    if (!payload) return;
+    await processWebhookPayload(payload);
+    await processWebhookFields(payload);
   },
   {
     connection,
