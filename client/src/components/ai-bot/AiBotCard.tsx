@@ -1,6 +1,5 @@
 import {
   BookOpen,
-  Bot,
   Clock,
   Hash,
   PauseCircle,
@@ -11,6 +10,8 @@ import {
 } from 'lucide-react';
 import AppButton from '../ui/AppButton';
 import type { AiBot } from '../../types';
+import { AiBotStatusCell } from './AiBotListCells';
+import { botChip, getAiBotAvatar } from './aiBotVisuals';
 
 interface AiBotCardProps {
   bot: AiBot;
@@ -21,13 +22,10 @@ interface AiBotCardProps {
 
 export default function AiBotCard({ bot, onEdit, onToggle, onDelete }: AiBotCardProps) {
   const faqCount = bot._count?.knowledgeItems ?? 0;
-  const triggers =
-    bot.triggerKeywords.length > 0
-      ? bot.triggerKeywords
-      : bot.isDefault
-        ? ['All messages']
-        : [];
+  const triggers = bot.triggerKeywords;
   const instructionPreview = bot.instructions.trim();
+  const avatar = getAiBotAvatar(bot.id, bot.enabled);
+  const AvatarIcon = avatar.Icon;
 
   return (
     <article className="bg-white transition-colors hover:bg-neutral-50/80 dark:bg-neutral-950 dark:hover:bg-neutral-900/50">
@@ -37,14 +35,8 @@ export default function AiBotCard({ bot, onEdit, onToggle, onDelete }: AiBotCard
         className="flex w-full items-start gap-3 px-4 py-3.5 text-left"
       >
         <div className="relative shrink-0">
-          <div
-            className={`flex h-10 w-10 items-center justify-center rounded-xl ${
-              bot.enabled
-                ? 'bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-[0_4px_14px_rgba(99,102,241,0.3)]'
-                : 'bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400'
-            }`}
-          >
-            <Bot className="h-4 w-4" strokeWidth={2.25} />
+          <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${avatar.className}`}>
+            <AvatarIcon className="h-4 w-4" strokeWidth={2.25} />
           </div>
           {bot.enabled && (
             <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white bg-emerald-500 dark:border-neutral-950" />
@@ -53,16 +45,22 @@ export default function AiBotCard({ bot, onEdit, onToggle, onDelete }: AiBotCard
 
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
-            <h3 className="truncate text-[13px] font-bold text-theme-fg">{bot.name}</h3>
-            <span
-              className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ring-1 ${
-                bot.enabled
-                  ? 'bg-emerald-500/10 text-emerald-800 ring-emerald-500/20 dark:text-emerald-300'
-                  : 'bg-theme-subtle text-theme-muted ring-theme-border'
-              }`}
-            >
-              {bot.enabled ? 'Live' : 'Paused'}
-            </span>
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+              <h3 className="truncate text-[13px] font-bold text-theme-fg">{bot.name}</h3>
+              {bot.isDefault && (
+                <span className={`${botChip.base} ${botChip.default}`}>
+                  <Star className="h-2.5 w-2.5" />
+                  Default
+                </span>
+              )}
+              {bot.businessHoursOnly && (
+                <span className={`${botChip.base} ${botChip.hours}`}>
+                  <Clock className="h-2.5 w-2.5" />
+                  Hours
+                </span>
+              )}
+            </div>
+            <AiBotStatusCell enabled={bot.enabled} />
           </div>
 
           {instructionPreview && (
@@ -71,34 +69,33 @@ export default function AiBotCard({ bot, onEdit, onToggle, onDelete }: AiBotCard
             </p>
           )}
 
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            {bot.isDefault && (
-              <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-800 ring-1 ring-amber-100 dark:bg-amber-900/30 dark:text-amber-300">
-                <Star className="h-2.5 w-2.5" />
-                Default
-              </span>
-            )}
-            {bot.businessHoursOnly && (
-              <span className="inline-flex items-center gap-0.5 rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-bold text-sky-800 ring-1 ring-sky-100 dark:bg-sky-900/30 dark:text-sky-300">
-                <Clock className="h-2.5 w-2.5" />
-                Hours only
-              </span>
-            )}
-            {triggers.slice(0, 2).map((kw) => (
-              <span
-                key={kw}
-                className="inline-flex items-center gap-0.5 rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-800 ring-1 ring-indigo-200/70 dark:bg-indigo-900/30 dark:text-indigo-300"
-              >
-                {kw !== 'All messages' && <Hash className="h-3 w-3" />}
-                {kw}
-              </span>
-            ))}
-            {triggers.length > 2 && (
-              <span className="text-[10px] font-bold text-theme-muted">+{triggers.length - 2}</span>
-            )}
-            <span className="inline-flex items-center gap-0.5 rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-bold text-sky-700 ring-1 ring-sky-100 dark:bg-sky-900/30 dark:text-sky-300">
-              <BookOpen className="h-3 w-3" />
-              {faqCount}
+          <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            {triggers.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-1">
+                {triggers.slice(0, 3).map((kw) => (
+                  <span
+                    key={kw}
+                    className={`${botChip.base} normal-case tracking-normal ${botChip.keyword}`}
+                  >
+                    <Hash className="h-3 w-3 opacity-70" />
+                    {kw}
+                  </span>
+                ))}
+                {triggers.length > 3 && (
+                  <span className="text-[10px] font-bold text-theme-muted">
+                    +{triggers.length - 3}
+                  </span>
+                )}
+              </div>
+            ) : bot.isDefault ? (
+              <span className="text-[11px] font-semibold text-theme-secondary">All messages</span>
+            ) : null}
+
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-theme-secondary">
+              <BookOpen className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400" />
+              {faqCount > 0
+                ? `${faqCount.toLocaleString()} ${faqCount === 1 ? 'FAQ' : 'FAQs'}`
+                : 'No FAQs'}
             </span>
           </div>
         </div>

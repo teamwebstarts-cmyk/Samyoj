@@ -13,6 +13,8 @@ interface DataTableProps {
   total?: number;
   onPageChange?: (page: number) => void;
   serialNo?: boolean;
+  /** Skip outer dashboard-card chrome when nested inside another card shell */
+  embedded?: boolean;
 }
 
 export function getTableSerialNo(page: number, pageSize: number, rowIndex: number) {
@@ -48,6 +50,7 @@ export default function DataTable({
   total,
   onPageChange,
   serialNo = true,
+  embedded = false,
 }: DataTableProps) {
   const showPagination =
     page !== undefined &&
@@ -58,7 +61,11 @@ export default function DataTable({
   const displayHeaders = serialNo ? ['S.No.', ...headers] : headers;
 
   return (
-    <div className={`data-table dashboard-card overflow-hidden p-0 ${className}`}>
+    <div
+      className={`data-table overflow-hidden p-0 ${
+        embedded ? '' : 'dashboard-card'
+      } ${className}`.trim()}
+    >
       <div className="overflow-x-auto">
         <table className={`w-full ${minTableWidth} text-sm ${tableClassName}`}>
           <thead>

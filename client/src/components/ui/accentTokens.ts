@@ -69,7 +69,7 @@ export const slideOverAccents: Record<
   },
   emerald: {
     bar: 'from-whatsapp-500 via-emerald-500 to-teal-600',
-    icon: 'bg-gradient-to-br from-whatsapp-500 to-emerald-600 text-white shadow-[0_4px_14px_rgba(37,211,102,0.35)]',
+    icon: 'bg-gradient-to-br from-whatsapp-500 to-emerald-600 text-white shadow-[0_2px_8px_rgba(37,211,102,0.28)]',
     glow: 'bg-emerald-400/15',
   },
   sky: {

@@ -84,7 +84,7 @@ export default function AiBotProfessionalBrainPicker({
   compact,
 }: AiBotProfessionalBrainPickerProps) {
   return (
-    <section className="dashboard-card overflow-hidden p-0">
+    <section className="dashboard-card overflow-hidden p-0 shadow-xs">
       <div className="flex items-start justify-between gap-3 border-b border-theme-border bg-theme-subtle/50 px-4 py-4 sm:px-5">
         <div className="flex items-center gap-2.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">

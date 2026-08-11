@@ -6,6 +6,7 @@ import {
   BarChart3,
   BookOpen,
   Bot,
+  BotMessageSquare,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
@@ -21,16 +22,21 @@ import {
   Settings,
   SlidersHorizontal,
   Volume2,
-  Sparkles,
   Star,
   Trash2,
   XCircle,
   Zap,
+  HeartHandshake,
+  Briefcase,
+  ShoppingBag,
+  PenLine,
 } from 'lucide-react';
 import AiBotAnalyticsPanel from '../components/ai-bot/AiBotAnalyticsPanel';
 import AiBotAuditPanel from '../components/ai-bot/AiBotAuditPanel';
 import AiBotHowItWorks from '../components/ai-bot/AiBotHowItWorks';
 import AiBotCard from '../components/ai-bot/AiBotCard';
+import AiBotHero from '../components/ai-bot/AiBotHero';
+import AiBotListEmpty from '../components/ai-bot/AiBotListEmpty';
 import {
   ModalCallout,
   ModalEmptyHint,
@@ -46,15 +52,16 @@ import {
   type ProfessionalBrain,
 } from '../components/ai-bot/professionalBrains';
 import AiBotProfessionalBrainPicker from '../components/ai-bot/AiBotProfessionalBrainPicker';
+import AiBotStatusFilter from '../components/ai-bot/AiBotStatusFilter';
+import { AiBotKnowledgeCell, AiBotStartsWhenCell, AiBotStatusCell } from '../components/ai-bot/AiBotListCells';
+import { botChip, getAiBotAvatar } from '../components/ai-bot/aiBotVisuals';
 import AppButton from '../components/ui/AppButton';
 import AppInput from '../components/ui/AppInput';
 import AppSelect from '../components/ui/AppSelect';
 import AppTextarea from '../components/ui/AppTextarea';
 import DataTable, { TableSerialCell } from '../components/ui/DataTable';
-import EmptyState from '../components/ui/EmptyState';
 import ListToolbar from '../components/ui/ListToolbar';
 import LoadingState from '../components/ui/LoadingState';
-import PageHero from '../components/ui/PageHero';
 import PageShell from '../components/ui/PageShell';
 import ResponsiveDataView from '../components/ui/ResponsiveDataView';
 import RowActions from '../components/ui/RowActions';
@@ -104,11 +111,15 @@ const PERSONALITY_PRESETS: Array<{
   title: string;
   blurb: string;
   instructions: string;
+  icon: LucideIcon;
+  iconClass: string;
 }> = [
   {
     id: 'friendly',
     title: 'Friendly helper',
     blurb: 'Warm, clear, and patient',
+    icon: HeartHandshake,
+    iconClass: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300',
     instructions:
       'You are a friendly helper for this business. Speak simply, stay warm, and keep answers short. Use training answers when available. If unsure, offer to connect a person.',
   },
@@ -116,6 +127,8 @@ const PERSONALITY_PRESETS: Array<{
     id: 'professional',
     title: 'Professional',
     blurb: 'Polite and precise',
+    icon: Briefcase,
+    iconClass: 'bg-sky-50 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300',
     instructions:
       'You are a professional assistant for this business. Be concise, polite, and accurate. Prefer facts from training. Do not invent prices or policies. Offer to connect a person when needed.',
   },
@@ -123,6 +136,8 @@ const PERSONALITY_PRESETS: Array<{
     id: 'sales',
     title: 'Sales assist',
     blurb: 'Helpful recommendations',
+    icon: ShoppingBag,
+    iconClass: 'bg-amber-50 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300',
     instructions:
       'You are a helpful sales assistant. Answer pricing and product questions clearly. Recommend the best fit from training. Encourage a next step without pressure. Connect a person for quotes or negotiations.',
   },
@@ -130,6 +145,8 @@ const PERSONALITY_PRESETS: Array<{
     id: 'custom',
     title: 'Custom',
     blurb: 'Write your own style',
+    icon: PenLine,
+    iconClass: 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300',
     instructions: '',
   },
 ];
@@ -814,7 +831,6 @@ export default function AiBotPage() {
   }, [faqs, seededTitles]);
 
   const activeCount = bots.filter((b) => b.enabled).length;
-  const isLive = bots.some((b) => b.enabled && b.isDefault);
   const knowledgeTotal = bots.reduce((sum, b) => sum + (b._count?.knowledgeItems ?? 0), 0);
   const requiredChecks = setupStatus?.checks.filter((c) => !c.optional) ?? [];
   const setupProgress = setupStatus
@@ -838,22 +854,10 @@ export default function AiBotPage() {
   return (
     <PageShell>
       <div className="space-y-4 sm:space-y-5">
-        <PageHero
-          badge="AI Auto-Reply"
-          badgeIcon={Sparkles}
-          title="Auto-reply for WhatsApp, 24/7"
-          description="Teach your bot about your business. It answers customers instantly and passes tricky chats to your team."
-          accent="violet"
-          stats={[
-            {
-              label: 'Live status',
-              value: isLive ? 'ON' : 'OFF',
-              tone: isLive ? 'text-whatsapp-700' : 'text-amber-700',
-            },
-            { label: 'Active bots', value: activeCount, tone: 'text-indigo-700' },
-            { label: 'Knowledge', value: knowledgeTotal },
-            { label: 'Total bots', value: bots.length },
-          ]}
+        <AiBotHero
+          activeCount={activeCount}
+          knowledgeTotal={knowledgeTotal}
+          totalBots={bots.length}
         />
 
         {setupStatus && !setupStatus.ready && (
@@ -865,25 +869,16 @@ export default function AiBotPage() {
           />
         )}
 
-        <div className="inbox-shell overflow-hidden">
+        <div className="dashboard-card overflow-hidden p-0 shadow-xs">
           <ListToolbar
             embedded
             search={search}
             onSearchChange={setSearch}
             searchPlaceholder="Search bots..."
             filters={
-              <AppSelect
-                className="w-full sm:w-[132px]"
+              <AiBotStatusFilter
                 value={statusFilter}
-                placeholder="All statuses"
-                isSearchable={false}
-                options={[
-                  { value: '', label: 'All statuses' },
-                  { value: 'active', label: 'Live' },
-                  { value: 'paused', label: 'Paused' },
-                  { value: 'default', label: 'Default' },
-                ]}
-                onChange={(e) => setStatusFilter(e.target.value)}
+                onChange={setStatusFilter}
               />
             }
             actions={
@@ -899,61 +894,35 @@ export default function AiBotPage() {
             </div>
           ) : bots.length === 0 ? (
             <div className="space-y-5 p-4 sm:p-6">
-            <EmptyState
-              icon={Bot}
-              variant={hasFilters ? 'filter' : 'default'}
-              title={hasFilters ? 'No bots match your filters' : 'No AI bots yet'}
-              description={
-                hasFilters
-                  ? 'Try a different search word or clear your filters.'
-                  : 'An AI bot can reply to customers automatically — even when you are offline.'
-              }
-              steps={hasFilters ? undefined : ['Tap Create bot below', 'Add your business info and FAQs', 'Turn it on — it starts replying instantly']}
-              action={
-                !hasFilters ? (
-                  <AppButton icon={<Plus size={16} />} onClick={() => openCreate()}>
-                    Create bot
-                  </AppButton>
-                ) : undefined
-              }
-            />
-
-            {!hasFilters && (
-              <>
-                <AiBotHowItWorks />
-                <AiBotProfessionalBrainPicker
-                  brains={professionalBrains}
-                  onSelect={(b) => openCreate(b)}
-                />
-              </>
-            )}
-          </div>
-        ) : filteredBots.length === 0 ? (
-          <div className="p-4 sm:p-6">
-            <EmptyState
-            icon={Bot}
-            variant="filter"
-            title="No bots match your filters"
-            description="Try a different search word or clear the status filter."
-            action={
-              <AppButton
-                variant="secondary"
-                onClick={() => {
+              <AiBotListEmpty
+                mode={hasFilters ? 'filter' : 'new'}
+                hasSearch={Boolean(search.trim())}
+                onCreate={() => openCreate()}
+                onClearFilters={() => {
                   setSearch('');
                   setStatusFilter('');
                 }}
-              >
-                Clear filters
-              </AppButton>
-            }
-          />
-          </div>
-        ) : (
+              />
+              {!hasFilters && <AiBotHowItWorks />}
+            </div>
+          ) : filteredBots.length === 0 ? (
+            <div className="px-4 py-8 sm:px-6 sm:py-10">
+              <AiBotListEmpty
+                mode="filter"
+                hasSearch={Boolean(search.trim())}
+                onCreate={() => openCreate()}
+                onClearFilters={() => {
+                  setSearch('');
+                  setStatusFilter('');
+                }}
+              />
+            </div>
+          ) : (
           <>
             <ResponsiveDataView
               items={filteredBots}
               cardClassName="divide-y divide-neutral-200 dark:divide-neutral-800 lg:hidden"
-              tableClassName="px-4 sm:px-5 pt-4 sm:pb-5"
+              tableClassName=""
               renderCard={(bot) => (
                 <AiBotCard
                   key={bot.id}
@@ -964,9 +933,14 @@ export default function AiBotPage() {
                 />
               )}
               renderTable={() => (
-                <DataTable headers={['Bot', 'Starts when', 'Knowledge', 'Status', 'Actions']}>
+                <DataTable
+                  embedded
+                  headers={['Bot', 'Starts when', 'Knowledge', 'Status', 'Actions']}
+                >
                   {filteredBots.map((bot, index) => {
                     const chatPreview = stripVoiceInstructionsBlock(bot.instructions).chatInstructions;
+                    const avatar = getAiBotAvatar(bot.id, bot.enabled);
+                    const AvatarIcon = avatar.Icon;
                     return (
                     <tr key={bot.id} className="group">
                       <TableSerialCell rowIndex={index} />
@@ -977,30 +951,26 @@ export default function AiBotPage() {
                           className="flex w-full items-center gap-3 rounded-xl py-1 text-left transition hover:opacity-90"
                         >
                           <div
-                            className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-                              bot.enabled
-                                ? 'bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-[0_4px_14px_rgba(99,102,241,0.35)]'
-                                : 'bg-theme-subtle text-theme-muted ring-1 ring-theme-border'
-                            }`}
+                            className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${avatar.className}`}
                           >
-                            <Bot className="h-4 w-4" strokeWidth={2.25} />
+                            <AvatarIcon className="h-4 w-4" strokeWidth={2.25} />
                             {bot.enabled && (
                               <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-theme-surface" />
                             )}
                           </div>
                           <div className="min-w-0">
-                            <p className="truncate font-semibold text-theme-fg group-hover:text-whatsapp-700">
-                              {bot.name}
-                            </p>
-                            <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                              <p className="truncate font-semibold text-theme-fg group-hover:text-whatsapp-700">
+                                {bot.name}
+                              </p>
                               {bot.isDefault && (
-                                <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-amber-800 ring-1 ring-amber-100 dark:bg-amber-900/30 dark:text-amber-300 dark:ring-amber-700/40">
-                                  <Star className="h-2 w-2" />
+                                <span className={`${botChip.base} ${botChip.default}`}>
+                                  <Star className="h-2.5 w-2.5" />
                                   Default
                                 </span>
                               )}
                               {bot.businessHoursOnly && (
-                                <span className="inline-flex items-center gap-0.5 rounded-full bg-sky-50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-sky-800 ring-1 ring-sky-100 dark:bg-sky-900/30 dark:text-sky-300 dark:ring-sky-700/40">
+                                <span className={`${botChip.base} ${botChip.hours}`}>
                                   <Clock className="h-2.5 w-2.5" />
                                   Hours
                                 </span>
@@ -1014,45 +984,17 @@ export default function AiBotPage() {
                           </div>
                         </button>
                       </td>
-                      <td className="max-w-[180px]">
-                        {bot.triggerKeywords.length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
-                            {bot.triggerKeywords.slice(0, 2).map((kw) => (
-                              <span
-                                key={kw}
-                                className="inline-flex rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-800 ring-1 ring-indigo-200/70 dark:bg-indigo-900/30 dark:text-indigo-300 dark:ring-indigo-700/40"
-                              >
-                                {kw}
-                              </span>
-                            ))}
-                            {bot.triggerKeywords.length > 2 && (
-                              <span className="text-[10px] font-bold text-theme-muted">
-                                +{bot.triggerKeywords.length - 2}
-                              </span>
-                            )}
-                          </div>
-                        ) : bot.isDefault ? (
-                          <span className="text-[13px] font-medium text-theme-secondary">All messages</span>
-                        ) : (
-                          <span className="text-[13px] text-theme-muted">—</span>
-                        )}
+                      <td className="max-w-[220px]">
+                        <AiBotStartsWhenCell
+                          keywords={bot.triggerKeywords}
+                          isDefault={bot.isDefault}
+                        />
                       </td>
                       <td>
-                        <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2.5 py-0.5 text-[11px] font-bold text-sky-800 ring-1 ring-sky-100 dark:bg-sky-900/30 dark:text-sky-300 dark:ring-sky-700/40">
-                          <BookOpen className="h-3 w-3" />
-                          {bot._count?.knowledgeItems ?? 0}
-                        </span>
+                        <AiBotKnowledgeCell count={bot._count?.knowledgeItems ?? 0} />
                       </td>
                       <td>
-                        <span
-                          className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${
-                            bot.enabled
-                              ? 'bg-emerald-100 text-emerald-800 ring-emerald-200/70 dark:bg-emerald-900/40 dark:text-emerald-300 dark:ring-emerald-700/50'
-                              : 'bg-theme-subtle text-theme-muted ring-theme-border'
-                          }`}
-                        >
-                          {bot.enabled ? 'Live' : 'Paused'}
-                        </span>
+                        <AiBotStatusCell enabled={bot.enabled} />
                       </td>
                       <td>
                         <div className="flex items-center justify-end gap-1.5">
@@ -1072,19 +1014,17 @@ export default function AiBotPage() {
                 </DataTable>
               )}
             />
-
-            {!hasFilters && (
-              <div className="px-4 pb-4 sm:px-5 sm:pb-5">
-                <AiBotProfessionalBrainPicker
-                  brains={professionalBrains}
-                  onSelect={(b) => openCreate(b)}
-                  compact
-                />
-              </div>
-            )}
           </>
         )}
         </div>
+
+        {!hasFilters && (
+          <AiBotProfessionalBrainPicker
+            brains={professionalBrains}
+            onSelect={(b) => openCreate(b)}
+            compact={bots.length > 0}
+          />
+        )}
 
         <div className="flex items-start gap-2.5 rounded-xl border border-sky-200/50 bg-sky-50/40 px-3.5 py-2.5 dark:border-sky-500/20 dark:bg-sky-950/20">
           <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-sky-600 dark:text-sky-400" strokeWidth={2} />
@@ -1110,8 +1050,8 @@ export default function AiBotPage() {
             : 'Set up how this bot replies on WhatsApp'
         }
         size="2xl"
-        icon={Bot}
-        accent="violet"
+        icon={BotMessageSquare}
+        accent="emerald"
         footer={
           <SlideOverFooter
             onCancel={closeSlide}
@@ -1135,16 +1075,7 @@ export default function AiBotPage() {
         >
           {(slideTab === 'personality' || !editing) && (
             <>
-              {!editing && (
-                <ModalCallout
-                  icon={Sparkles}
-                  title="Quick start"
-                  description="Turn the bot ON and set as Default to reply to all customer messages automatically."
-                  accent="violet"
-                />
-              )}
-
-              <ModalSection step={1} title="Bot identity" subtitle="Name and routing behavior">
+              <ModalSection step={1} title="Identity & routing">
                 <AppInput
                   label="Bot name"
                   placeholder="e.g. Support Bot, Sales Bot"
@@ -1202,19 +1133,29 @@ export default function AiBotPage() {
                 <div className="grid gap-2 sm:grid-cols-2">
                   {PERSONALITY_PRESETS.map((preset) => {
                     const selected = personalityPreset === preset.id;
+                    const Icon = preset.icon;
                     return (
                       <button
                         key={preset.id}
                         type="button"
                         onClick={() => applyPersonalityPreset(preset.id)}
-                        className={`rounded-2xl border px-3 py-3 text-left transition ${
+                        className={`flex items-start gap-3 rounded-2xl border px-3 py-3 text-left transition ${
                           selected
                             ? 'border-emerald-400 bg-emerald-50/80 ring-1 ring-emerald-200 dark:border-emerald-700 dark:bg-emerald-950/30'
                             : 'border-theme-border bg-theme-surface hover:border-theme-border-strong'
                         }`}
                       >
-                        <p className="text-[13px] font-extrabold text-theme-fg">{preset.title}</p>
-                        <p className="mt-0.5 text-[11px] font-medium text-theme-muted">{preset.blurb}</p>
+                        <span
+                          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${preset.iconClass}`}
+                        >
+                          <Icon className="h-4 w-4" strokeWidth={2.25} />
+                        </span>
+                        <span className="min-w-0">
+                          <p className="text-[13px] font-extrabold text-theme-fg">{preset.title}</p>
+                          <p className="mt-0.5 text-[11px] font-medium text-theme-muted">
+                            {preset.blurb}
+                          </p>
+                        </span>
                       </button>
                     );
                   })}
