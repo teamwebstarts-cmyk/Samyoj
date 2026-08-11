@@ -179,34 +179,44 @@ describe('campaign safety boundaries', () => {
     expect(permanent.metadata).toMatchObject({ provider: 'meta', metaSubcode: 42, fbtraceId: 'trace-1' });
     expect(classifyProviderError(new Error('socket reset')).classification).toBe('UNKNOWN');
     expect(classifyProviderError(Object.assign(new Error('rate limited'), { statusCode: 429 })).classification)
-      .toBe('TRANSIENT_PROVIDER_ERROR');
+      .toBe('PACING_OR_RATE_LIMIT');
     expect(classifyProviderError(Object.assign(new Error('upstream failure'), { status: 503 })).classification)
       .toBe('TRANSIENT_PROVIDER_ERROR');
     expect(classifyProviderError(Object.assign(new Error('expired token'), {
       status: 400,
       metaCode: 190,
-    })).classification).toBe('CONFIGURATION_ERROR');
+    })).classification).toBe('AUTHENTICATION_ERROR');
     expect(classifyProviderError(new Error('authentication failed')).classification)
-      .toBe('CONFIGURATION_ERROR');
+      .toBe('AUTHENTICATION_ERROR');
     expect(classifyProviderError(Object.assign(new Error('invalid access token'), { status: 429 })).classification)
-      .toBe('CONFIGURATION_ERROR');
+      .toBe('AUTHENTICATION_ERROR');
     expect(classifyProviderError(Object.assign(new Error('rate limited'), {
       status: 400,
       metaCode: 130429,
-    })).classification).toBe('TRANSIENT_PROVIDER_ERROR');
+    })).classification).toBe('PACING_OR_RATE_LIMIT');
     expect(classifyProviderError(Object.assign(new Error('rate limited'), { status: 429 })).classification)
-      .toBe('TRANSIENT_PROVIDER_ERROR');
+      .toBe('PACING_OR_RATE_LIMIT');
     expect(classifyProviderError(Object.assign(new Error('bad request'), { statusCode: 400 })).classification)
       .toBe('UNKNOWN');
   });
 
   it('separates durable setup failures from retryable provider outages', () => {
     expect(isCampaignConfigurationFailure('CONFIGURATION_ERROR')).toBe(true);
+    expect(isCampaignConfigurationFailure('AUTHENTICATION_ERROR')).toBe(true);
+    expect(isCampaignConfigurationFailure('POLICY_REJECTION')).toBe(true);
     expect(isCampaignConfigurationFailure('PERMANENT_REJECTION')).toBe(true);
     expect(isCampaignConfigurationFailure('TRANSIENT_PROVIDER_ERROR')).toBe(false);
     expect(shouldRetryCampaignSetup('TRANSIENT_PROVIDER_ERROR')).toBe(true);
     expect(shouldRetryCampaignSetup('UNKNOWN')).toBe(true);
     expect(shouldRetryCampaignSetup('CONFIGURATION_ERROR')).toBe(false);
+  });
+
+  it('retries only bounded pacing and transient send outcomes', () => {
+    expect(shouldRetryProviderSend('PACING_OR_RATE_LIMIT')).toBe(true);
+    expect(shouldRetryProviderSend('TRANSIENT_PROVIDER_ERROR')).toBe(true);
+    expect(shouldRetryProviderSend('UNKNOWN')).toBe(false);
+    expect(shouldRetryProviderSend('AUTHENTICATION_ERROR')).toBe(false);
+    expect(shouldRetryProviderSend('POLICY_REJECTION')).toBe(false);
   });
 
   it('retains quota when WABA setup failure races provider-bound work', () => {
@@ -329,6 +339,28 @@ describe('campaign safety boundaries', () => {
       providerStatus: 'READ',
       claimToken: 'claim-1',
     })).toEqual({ status: 'READ', clearClaim: true });
+  });
+
+  it('rejects late and duplicate provider timestamps, including FAILED', () => {
+    const current = new Date('2026-08-10T10:00:00.000Z');
+    expect(reconcileWebhookRecipient({
+      currentStatus: 'READ',
+      providerStatus: 'FAILED',
+      currentProviderStatusAt: current,
+      providerStatusAt: new Date('2026-08-10T09:59:00.000Z'),
+    })).toBeNull();
+    expect(reconcileWebhookRecipient({
+      currentStatus: 'READ',
+      providerStatus: 'FAILED',
+      currentProviderStatusAt: current,
+      providerStatusAt: current,
+    })).toBeNull();
+    expect(reconcileWebhookRecipient({
+      currentStatus: 'READ',
+      providerStatus: 'FAILED',
+      currentProviderStatusAt: current,
+      providerStatusAt: new Date('2026-08-10T10:01:00.000Z'),
+    })).toEqual({ status: 'FAILED', clearClaim: true });
   });
 
   it('does not release quota while webhook reconciliation retains a boundary', () => {

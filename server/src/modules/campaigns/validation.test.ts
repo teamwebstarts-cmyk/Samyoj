@@ -3,6 +3,7 @@ import { dedupeRecipients, hasAuditableCampaignConsent } from './recipients';
 import { buildTemplateComponents, mergeTemplateParams } from './template-params';
 import { createCampaignSchema } from './types';
 import { isAbsoluteInstant } from './safety';
+import { templateValidationErrors } from './template-validation';
 
 describe('dedupeRecipients', () => {
   it('removes duplicate phone numbers keeping first occurrence', () => {
@@ -72,5 +73,61 @@ describe('buildTemplateComponents', () => {
         ],
       },
     ]);
+  });
+});
+
+describe('approved template validation', () => {
+  const template = {
+    id: 't1',
+    name: 'sale_offer',
+    status: 'APPROVED',
+    category: 'MARKETING',
+    language: 'en_US',
+    components: [
+      { type: 'HEADER', format: 'TEXT', text: 'Offer' },
+      { type: 'BODY', text: 'Hi {{1}}, save {{2}}' },
+    ],
+  };
+
+  it('rejects name, language, category, and variable-shape mismatches', () => {
+    const errors = templateValidationErrors(template, {
+      name: 'other_template',
+      language: 'hi',
+      category: 'UTILITY',
+      params: { body: ['Alice'] },
+    });
+    expect(errors.join(' ')).toContain('name');
+    expect(errors.join(' ')).toContain('language');
+    expect(errors.join(' ')).toContain('category');
+    expect(errors.join(' ')).toContain('requires 2 variable(s)');
+  });
+
+  it('accepts the exact approved template shape', () => {
+    expect(templateValidationErrors(template, {
+      name: 'sale_offer',
+      language: 'en_US',
+      category: 'MARKETING',
+      params: { body: ['Alice', '20%'] },
+    })).toEqual([]);
+  });
+
+  it('counts repeated placeholders once', () => {
+    const repeated = { ...template, components: [{ type: 'BODY', text: 'Hi {{1}}, {{1}}' }] };
+    expect(templateValidationErrors(repeated, {
+      name: 'sale_offer',
+      language: 'en_US',
+      params: { body: ['Alice'] },
+    })).toEqual([]);
+  });
+
+  it('rejects non-contiguous placeholders without inflating unique count', () => {
+    const nonContiguous = { ...template, components: [{ type: 'BODY', text: 'Hi {{1}}, {{3}}' }] };
+    const errors = templateValidationErrors(nonContiguous, {
+      name: 'sale_offer',
+      language: 'en_US',
+      params: { body: ['Alice', 'Order'] },
+    });
+    expect(errors.join(' ')).toContain('non-contiguous');
+    expect(errors.join(' ')).not.toContain('requires 3 variable(s)');
   });
 });

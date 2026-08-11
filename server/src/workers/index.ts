@@ -26,10 +26,12 @@ import {
   classifyProviderError,
   classifyClaimForConfigurationFailure,
   shouldReleaseQuotaAfterConfigurationFailure,
+  shouldRetryProviderSend,
 } from '../modules/campaigns/safety';
 import { campaignJobClaimPrefix, isBroadcastJobContextValid } from '../modules/campaigns/worker-safety';
 import { releaseCampaignQuota } from '../modules/campaigns/quota';
 import { logCampaignAudit } from '../modules/campaigns/audit';
+import { assertApprovedCampaignTemplate } from '../modules/campaigns/template-validation';
 
 const log = createModuleLogger('worker');
 
@@ -345,12 +347,13 @@ const broadcastWorker = new Worker(
     const { recordOutboundInConversation } = await import('../modules/messages/service');
     const { buildTemplateComponents, mergeTemplateParams } = await import('../modules/campaigns/template-params');
 
-    let templateMeta = null;
-    try {
-      templateMeta = await MetaWhatsAppService.getMessageTemplate(wabaId, accessToken, templateName);
-    } catch {
-      /* template metadata optional for component building */
-    }
+    const templateMeta = await MetaWhatsAppService.getMessageTemplate(wabaId, accessToken, templateName);
+    assertApprovedCampaignTemplate(templateMeta, {
+      name: templateName,
+      language: lang,
+      category: 'MARKETING',
+      params: templateParams,
+    });
 
     for (const recipient of recipients) {
         const live = await prisma.campaign.findUnique({
@@ -500,6 +503,38 @@ const broadcastWorker = new Worker(
         recipient.variables,
         recipient.name
       );
+      try {
+        assertApprovedCampaignTemplate(templateMeta, {
+          name: templateName,
+          language: lang,
+          category: 'MARKETING',
+          params: mergedParams,
+        });
+      } catch (templateError) {
+        const rejected = await prisma.campaignRecipient.updateMany({
+          where: {
+            id: recipient.id,
+            campaignId,
+            status: 'PENDING',
+            claimToken,
+            campaign: { organizationId, status: 'RUNNING', runVersion },
+          },
+          data: {
+            status: 'FAILED',
+            errorMessage: templateError instanceof Error ? templateError.message : String(templateError),
+            claimToken: null,
+            claimedAt: null,
+            providerCallStartedAt: null,
+          },
+        });
+        if (rejected.count === 1) {
+          await prisma.campaign.updateMany({
+            where: { id: campaignId, organizationId, status: 'RUNNING', runVersion },
+            data: { failedCount: { increment: 1 } },
+          });
+        }
+        continue;
+      }
       const components = buildTemplateComponents(mergedParams, templateMeta);
 
       try {
@@ -580,6 +615,26 @@ const broadcastWorker = new Worker(
           path: `recipient:${recipient.phone}`,
         });
 
+        if (shouldRetryProviderSend(classified.classification)) {
+          await prisma.campaignRecipient.updateMany({
+            where: {
+              id: recipient.id,
+              claimToken,
+              campaign: { id: campaignId, organizationId, status: 'RUNNING', runVersion },
+            },
+            data: {
+              status: 'PENDING',
+              errorMessage: `Retryable Meta delivery failure: ${errorMessage}`,
+              claimToken: null,
+              claimedAt: null,
+              providerCallStartedAt: null,
+            },
+          });
+          // Let BullMQ apply the bounded queue backoff. Keeping the row
+          // unstarted prevents quota leakage and allows this job to resume.
+          throw err;
+        }
+
         const currentRecipient = await prisma.campaignRecipient.findUnique({
           where: { id: recipient.id },
           select: { consentSnapshot: true },
@@ -590,6 +645,7 @@ const broadcastWorker = new Worker(
           providerErrorMessage: errorMessage,
           providerErrorClassification: classified.classification,
         };
+        const durableFailure = isCampaignConfigurationFailure(classified.classification);
         const ambiguous = await prisma.campaignRecipient.updateMany({
           where: {
             id: recipient.id,
@@ -597,8 +653,8 @@ const broadcastWorker = new Worker(
             campaign: { id: campaignId, organizationId, status: 'RUNNING', runVersion },
           },
           data: {
-            status: ['PERMANENT_REJECTION', 'CONFIGURATION_ERROR'].includes(classified.classification) ? 'FAILED' : 'AMBIGUOUS',
-            errorMessage: ['PERMANENT_REJECTION', 'CONFIGURATION_ERROR'].includes(classified.classification)
+            status: durableFailure ? 'FAILED' : 'AMBIGUOUS',
+            errorMessage: durableFailure
               ? `Meta rejected before acceptance: ${errorMessage}`
               : `Provider outcome unknown; reconcile with Meta before retrying: ${errorMessage}`,
             consentSnapshot: providerSnapshot as Prisma.InputJsonValue,
@@ -609,7 +665,7 @@ const broadcastWorker = new Worker(
               : {}),
           },
         });
-        if (ambiguous.count === 1 && ['PERMANENT_REJECTION', 'CONFIGURATION_ERROR'].includes(classified.classification)) {
+        if (ambiguous.count === 1 && durableFailure) {
           await prisma.campaign.updateMany({
             where: { id: campaignId, organizationId, status: 'RUNNING', runVersion },
             data: { failedCount: { increment: 1 } },
@@ -621,7 +677,7 @@ const broadcastWorker = new Worker(
         emitToOrg(organizationId, 'campaign:progress', {
           campaignId,
           recipientId: recipient.id,
-          status: ['PERMANENT_REJECTION', 'CONFIGURATION_ERROR'].includes(classified.classification) ? 'FAILED' : 'AMBIGUOUS',
+          status: durableFailure ? 'FAILED' : 'AMBIGUOUS',
           errorMessage,
         });
       }

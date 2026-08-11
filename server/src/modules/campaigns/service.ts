@@ -38,6 +38,7 @@ import {
 } from './safety';
 import { getRedis } from '../../config/redis';
 import { buildCampaignJobId, canRollbackQueuedCampaign } from './worker-safety';
+import { assertApprovedCampaignTemplate } from './template-validation';
 
 const EDITABLE_STATUSES: CampaignStatus[] = ['DRAFT', 'SCHEDULED'];
 const STUCK_RUNNING_MS = 6 * 60 * 60 * 1000;
@@ -403,7 +404,12 @@ export async function finalizeCampaignIfDone(campaignId: string, expectedRunVers
 export async function syncCampaignRecipientFromWebhook(
   metaMessageId: string,
   status: string,
-  context?: { organizationId: string; phoneNumberId?: string }
+  context?: {
+    organizationId: string;
+    phoneNumberId?: string;
+    timestamp?: Date;
+    errors?: unknown;
+  }
 ) {
   const normalized = status.toUpperCase();
   if (!['SENT', 'DELIVERED', 'READ', 'FAILED'].includes(normalized)) return;
@@ -435,23 +441,40 @@ export async function syncCampaignRecipientFromWebhook(
   await prisma.$transaction(async (tx) => {
     const current = await tx.campaignRecipient.findUnique({ where: { id: recipient.id } });
     if (!current) return;
-    const now = new Date();
+    const eventAt = context?.timestamp && !Number.isNaN(context.timestamp.getTime())
+      ? context.timestamp
+      : new Date();
     const data: Prisma.CampaignRecipientUpdateInput = {};
     const reconciliation = reconcileWebhookRecipient({
       currentStatus: current.status,
       providerStatus: normalized,
       claimToken: current.claimToken,
       providerCallStartedAt: current.providerCallStartedAt,
+      currentProviderStatusAt: current.providerStatusAt,
+      providerStatusAt: context?.timestamp,
     });
     if (reconciliation) {
       data.status = reconciliation.status;
-      data.sentAt = now;
-      if (normalized === 'DELIVERED' || normalized === 'READ') data.deliveredAt = current.deliveredAt ?? now;
-      if (normalized === 'READ') data.readAt = current.readAt ?? now;
+      if (context?.timestamp) data.providerStatusAt = eventAt;
+      data.providerEventKey = `${metaMessageId}:${normalized}:${eventAt.toISOString()}`;
+      if (normalized === 'SENT') data.sentAt = current.sentAt ?? eventAt;
+      if (normalized === 'DELIVERED' || normalized === 'READ') {
+        data.sentAt = current.sentAt ?? eventAt;
+        data.deliveredAt = current.deliveredAt ?? eventAt;
+      }
+      if (normalized === 'READ') data.readAt = current.readAt ?? eventAt;
       if (normalized === 'FAILED') {
         data.errorMessage = reconciliation.status === 'AMBIGUOUS'
           ? 'Delivery outcome raced an active provider call; reconcile with Meta before retrying'
-          : 'Delivery failed (Meta webhook)';
+          : `Delivery failed (Meta webhook)${context?.errors ? `: ${JSON.stringify(context.errors)}` : ''}`;
+      }
+      if (context?.errors) {
+        data.consentSnapshot = {
+          ...((current.consentSnapshot as Record<string, unknown> | null) ?? {}),
+          webhookErrors: context.errors,
+          webhookStatus: normalized,
+          webhookTimestamp: eventAt.toISOString(),
+        } as Prisma.InputJsonValue;
       }
       if (reconciliation.clearClaim) {
         data.claimToken = null;
@@ -511,16 +534,15 @@ async function getWhatsappForCampaign(orgId: string, whatsappNumberId?: string |
   return getOrgWhatsappContext(orgId);
 }
 
-async function validateTemplate(orgId: string, templateName: string, wabaId: string, accessToken: string) {
+async function validateTemplate(
+  orgId: string,
+  templateName: string,
+  wabaId: string,
+  accessToken: string
+): Promise<NonNullable<Awaited<ReturnType<typeof MetaWhatsAppService.getMessageTemplate>>>> {
   const template = await MetaWhatsAppService.getMessageTemplate(wabaId, accessToken, templateName);
   if (!template) {
-    throw new AppError(
-      400,
-      `Template "${templateName}" not found or not approved on your WhatsApp account.`
-    );
-  }
-  if (template.status !== 'APPROVED') {
-    throw new AppError(400, `Template "${templateName}" is not approved (status: ${template.status}).`);
+    throw new AppError(400, `Template "${templateName}" was not found on the connected WhatsApp account`);
   }
   return template;
 }
@@ -582,6 +604,16 @@ export async function queueCampaignSend(
   );
   const templateLanguage = campaign.templateLanguage || template.language || 'en_US';
   const templateParams = (campaign.templateParams as TemplateParams | null) || undefined;
+  try {
+    assertApprovedCampaignTemplate(template, {
+      name: campaign.templateName,
+      language: templateLanguage,
+      category: 'MARKETING',
+      params: templateParams,
+    });
+  } catch (error) {
+    throw new AppError(400, error instanceof Error ? error.message : String(error));
+  }
   const templateContent = applyTemplateParamsToPreview(template, templateParams, campaign.templateName);
   const runSnapshot = snapshotCampaignRun(campaign);
   const claimedRun = claimedRunVersion === undefined
@@ -721,6 +753,16 @@ export async function sendTestMessage(
     undefined
   );
   const components = buildTemplateComponents(templateParams, template);
+  try {
+    assertApprovedCampaignTemplate(template, {
+      name: campaign.templateName,
+      language: templateLanguage,
+      category: 'MARKETING',
+      params: templateParams,
+    });
+  } catch (error) {
+    throw new AppError(400, error instanceof Error ? error.message : String(error));
+  }
 
   const result = await MetaWhatsAppService.sendMessage(whatsappNumber.phoneNumberId, accessToken, {
     to: phone,

@@ -67,6 +67,9 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
         const metaMessageId = status.id as string;
         const statusValue = (status.status as string)?.toUpperCase();
         if (!statusValue) continue;
+        const statusTimestamp = status.timestamp
+          ? new Date(Number(status.timestamp) * 1000)
+          : undefined;
 
         const STATUS_RANK: Record<string, number> = {
           PENDING: 0,
@@ -90,20 +93,41 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
         await syncCampaignRecipientFromWebhook(metaMessageId, statusValue, {
           organizationId: orgId,
           phoneNumberId,
+          timestamp: statusTimestamp,
+          errors: status.errors,
         });
         if (!existingMsg) continue;
 
+        const existingMeta = (existingMsg.metadata as Record<string, unknown>) || {};
+        const existingStatusAt = typeof existingMeta.providerStatusAt === 'string'
+          ? new Date(existingMeta.providerStatusAt)
+          : null;
+        const hasValidEventTime = Boolean(statusTimestamp && !Number.isNaN(statusTimestamp.getTime()));
+        const isOlderOrDuplicate = Boolean(
+          hasValidEventTime &&
+          existingStatusAt &&
+          statusTimestamp!.getTime() <= existingStatusAt.getTime()
+        );
         const currentRank = STATUS_RANK[existingMsg.status] ?? -1;
         const nextRank = STATUS_RANK[statusValue] ?? -1;
-        // Don't regress ticks (e.g. sent after read). FAILED can overwrite; retry resets separately.
+        // Don't regress ticks (e.g. sent after read). FAILED can replace a
+        // milestone only when Meta supplied a newer event timestamp.
         const shouldUpdateStatus =
-          statusValue === 'FAILED' || nextRank >= currentRank;
+          !isOlderOrDuplicate &&
+          (statusValue === 'FAILED'
+            ? (!existingStatusAt || hasValidEventTime)
+            : nextRank >= currentRank);
 
-        const existingMeta = (existingMsg.metadata as Record<string, unknown>) || {};
         const statusMeta: Record<string, unknown> = { ...existingMeta };
-        if (status.pricing) statusMeta.pricing = status.pricing;
-        if (status.errors) statusMeta.errors = status.errors;
-        if (status.conversation) statusMeta.conversationId = (status.conversation as { id?: string })?.id;
+        if (!isOlderOrDuplicate && status.pricing) statusMeta.pricing = status.pricing;
+        if (!isOlderOrDuplicate && status.errors) statusMeta.errors = status.errors;
+        if (!isOlderOrDuplicate && status.conversation) {
+          statusMeta.conversationId = (status.conversation as { id?: string })?.id;
+        }
+        if (hasValidEventTime && !isOlderOrDuplicate) {
+          statusMeta.providerStatusAt = statusTimestamp!.toISOString();
+          statusMeta.providerEventKey = `${metaMessageId}:${statusValue}:${statusTimestamp!.toISOString()}`;
+        }
 
         await prisma.message.updateMany({
           where: {
@@ -144,10 +168,6 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
           });
         }
 
-        await syncCampaignRecipientFromWebhook(metaMessageId, statusValue, {
-          organizationId: orgId,
-          phoneNumberId,
-        });
       }
 
       for (const msg of (value.messages as Array<Record<string, unknown>>) || []) {

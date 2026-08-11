@@ -664,6 +664,16 @@ export async function processCallWebhookPayload(payload: Record<string, unknown>
   }
 }
 
+export const NON_MESSAGE_WEBHOOK_FIELDS = [
+  'message_template_status_update',
+  'message_template_quality_update',
+  'phone_number_quality_update',
+  'phone_number_name_update',
+  'business_capability_update',
+  'user_preferences',
+  'account_alerts',
+] as const;
+
 export async function processWebhookFields(payload: Record<string, unknown>): Promise<void> {
   const fields = new Set<string>();
   for (const entry of (payload.entry as Array<Record<string, unknown>>) || []) {
@@ -681,12 +691,7 @@ export async function processWebhookFields(payload: Record<string, unknown>): Pr
     await processCallWebhookPayload(payload);
   }
 
-  const nonMessageFields = [
-    'message_template_status_update',
-    'phone_number_quality_update',
-    'account_alerts',
-  ];
-  if (nonMessageFields.some((f) => fields.has(f))) {
+  if (NON_MESSAGE_WEBHOOK_FIELDS.some((f) => fields.has(f))) {
     const { dispatchNonMessageWebhookFields } = await import('../whatsapp/webhook-dispatcher');
     await dispatchNonMessageWebhookFields(payload);
   }

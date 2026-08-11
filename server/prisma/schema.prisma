@@ -1024,6 +1024,8 @@ model CampaignRecipient {
   claimToken           String?       @unique @map("claim_token")
   claimedAt            DateTime?     @map("claimed_at")
   providerCallStartedAt DateTime?    @map("provider_call_started_at")
+  providerStatusAt     DateTime?     @map("provider_status_at")
+  providerEventKey     String?       @map("provider_event_key")
   consentSnapshot      Json?         @map("consent_snapshot")
   sentAt          DateTime?     @map("sent_at")
   deliveredAt     DateTime?     @map("delivered_at")

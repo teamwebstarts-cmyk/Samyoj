@@ -4,9 +4,13 @@ import { createModuleLogger } from '../../utils/logger';
 
 const log = createModuleLogger('webhook-dispatcher');
 
-const HANDLED_FIELDS = new Set([
+export const HANDLED_FIELDS = new Set([
   'message_template_status_update',
+  'message_template_quality_update',
   'phone_number_quality_update',
+  'phone_number_name_update',
+  'business_capability_update',
+  'user_preferences',
   'account_alerts',
 ]);
 
@@ -54,6 +58,14 @@ async function appendOrgAlert(
     },
   });
 
+  await prisma.auditLog.create({
+    data: {
+      organizationId,
+      action: 'whatsapp.provider_webhook_state',
+      resource: 'whatsapp',
+      details: { alertType, alert } as object,
+    },
+  });
   emitToOrg(organizationId, 'alert:new', { type: alertType, alert: entry });
 }
 
@@ -95,7 +107,6 @@ async function handleTemplateStatusUpdate(
 
 async function handlePhoneNumberQualityUpdate(value: Record<string, unknown>) {
   const phoneNumberId =
-    (value.display_phone_number as string) ||
     (value.phone_number_id as string) ||
     (value.id as string);
 
@@ -130,6 +141,27 @@ async function handlePhoneNumberQualityUpdate(value: Record<string, unknown>) {
     qualityRating: rating,
     currentLimit: metadata.current_limit,
   });
+}
+
+async function handleAccountStateUpdate(
+  value: Record<string, unknown>,
+  wabaId: string | undefined,
+  field: string
+) {
+  const number = await resolveOrgFromWaba(wabaId);
+  if (!number) return;
+  const safeState = {
+    field,
+    event: typeof value.event === 'string' ? value.event : undefined,
+    status: typeof value.status === 'string' ? value.status : undefined,
+    currentLimit: typeof value.current_limit === 'string' ? value.current_limit : undefined,
+    maxLimit: typeof value.max_limit === 'string' ? value.max_limit : undefined,
+    restriction: typeof value.restriction === 'string' ? value.restriction : undefined,
+    qualityRating: typeof value.quality_rating === 'string' ? value.quality_rating : undefined,
+    updatedAt: new Date().toISOString(),
+  };
+  await appendOrgAlert(number.organizationId, field === 'user_preferences' ? 'marketingPreferences' : 'whatsappState', safeState);
+  emitToOrg(number.organizationId, 'whatsapp:state', safeState);
 }
 
 async function handleAccountAlerts(value: Record<string, unknown>, wabaId: string | undefined) {
@@ -169,10 +201,14 @@ export async function dispatchNonMessageWebhookFields(
 
       if (field === 'message_template_status_update') {
         await handleTemplateStatusUpdate(value, wabaId);
+      } else if (field === 'message_template_quality_update') {
+        await handleTemplateStatusUpdate(value, wabaId);
       } else if (field === 'phone_number_quality_update') {
         await handlePhoneNumberQualityUpdate(value);
       } else if (field === 'account_alerts') {
         await handleAccountAlerts(value, wabaId);
+      } else {
+        await handleAccountStateUpdate(value, wabaId, field);
       }
     }
   }
