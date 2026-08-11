@@ -44,10 +44,10 @@ export default function CampaignRecipientTable({
   onStatusFilterChange,
 }: CampaignRecipientTableProps) {
   return (
-    <ModalPanel title={`People in campaign (${total})`} icon={Users} accent="neutral">
+    <ModalPanel title={`Campaign recipients (${total})`} icon={Users} accent="neutral">
       <div className="mb-4 flex items-center justify-between gap-3">
         <p className="text-[12px] font-medium text-theme-muted">
-          Delivery status for each person in this campaign
+          Delivery status for each recipient
         </p>
         <AppSelect
           className="w-40 shrink-0"
@@ -61,7 +61,7 @@ export default function CampaignRecipientTable({
 
       {recipients.length === 0 ? (
         <div className="rounded-xl border border-dashed border-theme-border bg-theme-subtle/40 px-4 py-12 text-center text-[13px] font-medium text-theme-muted">
-          No one matches this filter
+          No recipients match this filter. Try another status or choose All statuses.
         </div>
       ) : (
         <>
@@ -71,7 +71,7 @@ export default function CampaignRecipientTable({
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="truncate font-mono text-[13px] font-semibold text-theme-fg">{recipient.phone}</p>
-                  <p className="mt-0.5 truncate text-[12px] font-medium text-theme-secondary">{recipient.name || 'Unnamed recipient'}</p>
+                  <p className="mt-0.5 truncate text-[12px] font-medium text-theme-secondary">{recipient.name || 'Unnamed contact'}</p>
                 </div>
                 <StatusBadge status={recipient.status} />
               </div>
@@ -109,7 +109,7 @@ export default function CampaignRecipientTable({
                 <TableSerialCell page={page} pageSize={pageSize} rowIndex={index} />
                 <td>
                   <p className="font-mono text-[12px] font-semibold text-theme-fg">{recipient.phone}</p>
-                  <p className="mt-0.5 text-[11px] font-medium text-theme-secondary">{recipient.name || 'Unnamed recipient'}</p>
+                  <p className="mt-0.5 text-[11px] font-medium text-theme-secondary">{recipient.name || 'Unnamed contact'}</p>
                 </td>
                 <td><StatusBadge status={recipient.status} /></td>
                 <td className="max-w-[210px]">

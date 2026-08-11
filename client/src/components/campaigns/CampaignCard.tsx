@@ -61,7 +61,7 @@ export default function CampaignCard({
         ? 'Resume'
       : campaign.status === 'COMPLETED'
         ? 'View results'
-        : 'View';
+        : 'View campaign';
   const hasOverflowActions =
     (primaryAction !== 'edit' && onEdit && editable) ||
     (primaryAction !== 'pause' && onPause && campaign.status === 'RUNNING') ||
@@ -152,18 +152,18 @@ export default function CampaignCard({
         )}
         {onSend && editable && (
           <AppButton size="sm" variant="secondary" icon={<Play size={14} />} onClick={onSend}>
-            Send
+            Send now
           </AppButton>
         )}
         {hasOverflowActions && <CampaignActionsMenu>
             {primaryAction !== 'edit' && onEdit && editable && (
               <button type="button" onClick={onEdit} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-fg hover:bg-theme-subtle">
-                <Pencil className="h-3.5 w-3.5" /> Edit
+                <Pencil className="h-3.5 w-3.5" /> Edit campaign
               </button>
             )}
             {onDelete && editable && (
               <button type="button" onClick={onDelete} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30">
-                <Trash2 className="h-3.5 w-3.5" /> Delete
+                <Trash2 className="h-3.5 w-3.5" /> Delete campaign
               </button>
             )}
           </CampaignActionsMenu>

@@ -2,13 +2,11 @@ import { useMemo, useState } from 'react';
 import {
   CheckCircle2,
   ChevronDown,
-  Hash,
   Phone,
   Sparkles,
   Tag,
   UserCheck,
   Users,
-  X,
   XCircle,
 } from 'lucide-react';
 import AppInput from '../ui/AppInput';
@@ -124,10 +122,6 @@ export default function CampaignAudienceSection({
     onAudienceTagsChange(next.join(', '));
   };
 
-  const removeTag = (tag: string) => {
-    onAudienceTagsChange(selectedTags.filter((t) => t !== tag).join(', '));
-  };
-
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Audience type">
@@ -157,7 +151,10 @@ export default function CampaignAudienceSection({
               <span className="min-w-0">
                 <span className="flex items-center gap-1.5">
                   <span className="block text-[12px] font-bold text-theme-fg">{type.label}</span>
-                  {active && <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-whatsapp-600" />}
+                  <CheckCircle2
+                    className={`h-3.5 w-3.5 shrink-0 text-whatsapp-600 ${active ? 'opacity-100' : 'opacity-0'}`}
+                    aria-hidden={!active}
+                  />
                 </span>
                 <span className="mt-0.5 block text-[10px] leading-snug text-theme-muted">
                   {type.description}
@@ -283,28 +280,6 @@ export default function CampaignAudienceSection({
 
           {audienceType === 'TAGS' && (
             <>
-              {selectedTags.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {selectedTags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="inline-flex items-center gap-1 rounded-full bg-violet-100 py-1 pl-2.5 pr-1.5 text-[11px] font-bold text-violet-800 ring-1 ring-violet-200/70 dark:bg-violet-950/40 dark:text-violet-300 dark:ring-violet-800/50"
-                    >
-                      <Hash className="h-3 w-3 opacity-70" />
-                      {tag}
-                      <button
-                        type="button"
-                        onClick={() => removeTag(tag)}
-                        className="flex min-h-11 min-w-11 items-center justify-center rounded-full transition hover:bg-violet-200/60 dark:hover:bg-violet-800/40"
-                        aria-label={`Remove tag ${tag}`}
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
-
               <AppInput
                 id="audience-tags"
                 label="Contact tags"
@@ -320,7 +295,7 @@ export default function CampaignAudienceSection({
                   <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-theme-muted">
                     Quick add
                   </p>
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="grid gap-2 sm:grid-cols-2">
                     {availableTags.slice(0, 16).map((tag) => {
                       const selected = selectedTags.includes(tag);
                       return (
@@ -329,13 +304,14 @@ export default function CampaignAudienceSection({
                           type="button"
                           onClick={() => toggleTag(tag)}
                           aria-pressed={selected}
-                          className={`min-h-[44px] rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 transition ${
+                          className={`flex min-h-11 items-center justify-between rounded-xl border px-3 py-2 text-left text-[11px] font-semibold transition ${
                             selected
-                              ? 'bg-violet-600 text-white ring-violet-600 dark:bg-violet-500'
-                              : 'bg-theme-surface text-violet-700 ring-violet-200/70 hover:bg-violet-50 dark:text-violet-300 dark:ring-violet-800/50 dark:hover:bg-violet-950/40'
+                              ? 'border-violet-300 bg-violet-50 text-violet-800 dark:border-violet-700 dark:bg-violet-950/40 dark:text-violet-200'
+                              : 'border-theme-border bg-theme-surface text-theme-secondary hover:border-violet-200 hover:bg-violet-50/50 dark:hover:border-violet-800 dark:hover:bg-violet-950/20'
                           }`}
                         >
-                          {tag}
+                          <span className="truncate">{tag}</span>
+                          {selected && <CheckCircle2 className="h-4 w-4 shrink-0 text-violet-600 dark:text-violet-300" />}
                         </button>
                       );
                     })}

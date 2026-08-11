@@ -2555,3 +2555,24 @@
     color: #6ee7b7 !important;
   }
 }
+
+@keyframes outboundLiveWave {
+  0%,
+  100% {
+    transform: scaleY(0.45);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+.outbound-live-wave {
+  transform-origin: bottom;
+  animation: outboundLiveWave 0.9s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .outbound-live-wave {
+    animation: none;
+  }
+}

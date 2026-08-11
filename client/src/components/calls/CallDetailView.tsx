@@ -221,9 +221,15 @@ export default function CallDetailView({
               loading={callingBack}
               onClick={onCallBack}
               title="Call this contact back"
+              className={
+                callingBack
+                  ? 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-700/50 dark:bg-emerald-950/40 dark:text-emerald-200'
+                  : ''
+              }
             >
-              <PhoneOutgoing className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Call back</span>
+              {!callingBack && <PhoneOutgoing className="h-3.5 w-3.5" />}
+              <span className="hidden sm:inline">{callingBack ? 'Calling…' : 'Call back'}</span>
+              <span className="sm:hidden">{callingBack ? '…' : 'Call'}</span>
             </AppButton>
           )}
 

@@ -1,6 +1,6 @@
 import { Calendar, Eye, LayoutTemplate, Pause, Pencil, Play, Send, Trash2, Users } from 'lucide-react';
 import DataTable from '../ui/DataTable';
-import { TableTextButton } from '../ui/TableActions';
+import { TableIconButton, TableTextButton } from '../ui/TableActions';
 import type { Campaign } from '../../types';
 import CampaignActionsMenu from './CampaignActionsMenu';
 import {
@@ -52,7 +52,7 @@ export default function CampaignTable({
       pageSize={pageSize}
       total={total}
       onPageChange={onPageChange}
-      minTableWidth="min-w-[760px]"
+      minTableWidth="min-w-0"
       serialNo={false}
     >
       {campaigns.map((campaign) => {
@@ -77,7 +77,7 @@ export default function CampaignTable({
               ? 'Resume'
             : campaign.status === 'COMPLETED'
               ? 'View results'
-              : 'View';
+              : 'View campaign';
 
         return (
           <tr key={campaign.id} className="group">
@@ -162,14 +162,10 @@ export default function CampaignTable({
                   {primaryLabel}
                 </TableTextButton>
                 {resolvedPrimaryAction !== 'view' && onView && (
-                  <TableTextButton onClick={() => onView(campaign)} icon={Eye} variant="neutral">
-                    View
-                  </TableTextButton>
+                  <TableIconButton onClick={() => onView(campaign)} icon={Eye} label="View campaign" />
                 )}
                 {onSend && editable && (
-                  <TableTextButton onClick={() => onSend(campaign)} icon={Play} variant="neutral">
-                    Send
-                  </TableTextButton>
+                  <TableIconButton onClick={() => onSend(campaign)} icon={Play} label="Send now" variant="primary" />
                 )}
                 {(resolvedPrimaryAction !== 'edit' && onEdit && editable) ||
                 (resolvedPrimaryAction !== 'pause' && onPause && campaign.status === 'RUNNING') ||
@@ -178,7 +174,7 @@ export default function CampaignTable({
                   <CampaignActionsMenu>
                       {resolvedPrimaryAction !== 'edit' && onEdit && editable && (
                         <button type="button" onClick={() => onEdit(campaign)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-fg hover:bg-theme-subtle">
-                          <Pencil className="h-3.5 w-3.5" /> Edit
+                          <Pencil className="h-3.5 w-3.5" /> Edit campaign
                         </button>
                       )}
                       {resolvedPrimaryAction !== 'pause' && onPause && campaign.status === 'RUNNING' && (
@@ -193,7 +189,7 @@ export default function CampaignTable({
                       )}
                       {onDelete && editable && (
                         <button type="button" onClick={() => onDelete(campaign)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30">
-                          <Trash2 className="h-3.5 w-3.5" /> Delete
+                          <Trash2 className="h-3.5 w-3.5" /> Delete campaign
                         </button>
                       )}
                   </CampaignActionsMenu>

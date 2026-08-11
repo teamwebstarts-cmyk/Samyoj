@@ -13,7 +13,7 @@ export default function CampaignDetailHeader({ campaign }: CampaignDetailHeaderP
   const progress = campaignProgress(campaign.sentCount, campaign.totalContacts);
 
   return (
-    <ModalPanel title="Campaign overview" accent="violet">
+    <ModalPanel title="Campaign details" accent="violet">
       <div className="flex flex-wrap items-center gap-2">
         <StatusBadge status={campaign.status} />
         <span className="inline-flex items-center gap-1.5 rounded-full bg-theme-subtle px-2.5 py-0.5 font-mono text-[11px] font-semibold text-theme-fg ring-1 ring-theme-border">
@@ -38,7 +38,7 @@ export default function CampaignDetailHeader({ campaign }: CampaignDetailHeaderP
 
       <div className="mt-4 rounded-xl bg-theme-subtle/60 px-3 py-2.5 ring-1 ring-theme-border">
         <div className="flex items-center justify-between gap-2 text-[11px] font-semibold tabular-nums">
-          <span className="text-theme-muted">Sending progress</span>
+          <span className="text-theme-muted">Delivery progress</span>
           <span className="text-theme-secondary">{progress}% · {campaign.sentCount.toLocaleString()} of {campaign.totalContacts.toLocaleString()}</span>
         </div>
         <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-theme-surface">

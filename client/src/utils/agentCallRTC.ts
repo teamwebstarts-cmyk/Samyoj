@@ -291,6 +291,10 @@ export function cleanupAgentCall(): void {
     /* ignore */
   }
   setStored(undefined);
+  // Lazy import avoids circular deps with call UI modules.
+  void import('./outboundLiveCallStore').then(({ clearOutboundLiveCall }) => {
+    clearOutboundLiveCall();
+  });
 }
 
 /** Poll GET /signaling for the SDP answer until it arrives (500ms interval, 3 min timeout). */

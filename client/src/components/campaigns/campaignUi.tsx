@@ -8,7 +8,6 @@ import {
   Send,
   XCircle,
 } from 'lucide-react';
-import { messagingConsent } from '../../utils/plainLanguage';
 
 export function campaignProgress(sent: number, total: number) {
   if (total <= 0) return 0;
@@ -106,8 +105,8 @@ export function getCampaignPrimaryAction(status: string): CampaignPrimaryAction 
 }
 
 export const audienceLabels: Record<string, string> = {
-  MANUAL: 'Manual list',
-  TAGS: 'By tags',
+  MANUAL: 'Phone numbers',
+  TAGS: 'Tagged contacts',
   CONTACTS: 'Selected contacts',
-  ALL_OPTED_IN: messagingConsent.allAudienceLabel,
+  ALL_OPTED_IN: 'All opted-in contacts',
 };

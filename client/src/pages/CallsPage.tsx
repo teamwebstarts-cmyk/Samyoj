@@ -27,6 +27,7 @@ import {
   cleanupAgentCall,
   applyAgentOfferAnswer,
 } from '../utils/agentCallRTC';
+import { beginOutboundDialing, beginOutboundLiveCall, clearOutboundLiveCall, updateOutboundLiveCallStatus } from '../utils/outboundLiveCallStore';
 import { CallsListSkeleton } from '../components/calls/CallsPageSkeleton';
 import PageShell from '../components/ui/PageShell';
 import PageSizeSelect from '../components/inbox/PageSizeSelect';
@@ -343,6 +344,9 @@ export default function CallsPage() {
       // so the UI reflects status changes (e.g. caller hung up) without
       // waiting for the 3s polling cycle.
       const update = data as { callId?: string; status?: string };
+      if (update.callId && update.status) {
+        updateOutboundLiveCallStatus(update.callId, update.status);
+      }
       if (update.callId === selectedCallId) {
         void loadCallDetail(selectedCallId);
         if (update.status && !isActiveCallStatus(update.status)) {
@@ -476,7 +480,9 @@ export default function CallsPage() {
     const contactId = selectedCall.contact?.id;
     const phone = selectedCall.contact?.phone || selectedCall.fromPhone;
     const conversationId = selectedCall.conversation?.id;
+    const contactName = selectedCall.contact?.name;
     setCallingBack(true);
+    beginOutboundDialing({ contactName, phone, conversationId });
     try {
       const sdpOffer = await createAgentOffer();
       if (!sdpOffer) throw new Error('Microphone access is required to make calls.');
@@ -490,15 +496,22 @@ export default function CallsPage() {
       const callId = (data.data as { call?: { id: string } })?.call?.id;
       if (callId) {
         setActiveCallId(callId);
-        toastSuccess(`Calling ${phone}…`);
+        beginOutboundLiveCall({
+          callId,
+          contactName,
+          phone,
+          conversationId,
+          status: 'CONNECTING',
+        });
         navigate(`/calls/${callId}`);
-
-        // Socket may disconnect during navigation — poll for SDP answer on the new page
         void pollSdpAnswer(callId);
       } else {
+        clearOutboundLiveCall();
         toastError('Call started but no call page was returned.');
       }
     } catch (err: unknown) {
+      clearOutboundLiveCall();
+      cleanupAgentCall();
       const body = (err as { response?: { data?: { error?: { code?: string; message?: string } } } })
         ?.response?.data?.error;
       if (body?.code === 'CALL_PERMISSION_REQUIRED' || body?.code === 'CALL_PERMISSION_REQUESTED') {
@@ -515,7 +528,9 @@ export default function CallsPage() {
     const contactId = call.contact?.id;
     const phone = call.contact?.phone || call.fromPhone;
     const conversationId = call.conversation?.id;
+    const contactName = call.contact?.name;
     setCallingBackId(call.id);
+    beginOutboundDialing({ contactName, phone, conversationId });
     try {
       const sdpOffer = await createAgentOffer();
       if (!sdpOffer) throw new Error('Microphone access is required to make calls.');
@@ -529,15 +544,22 @@ export default function CallsPage() {
       const callId = (data.data as { call?: { id: string } })?.call?.id;
       if (callId) {
         setActiveCallId(callId);
-        toastSuccess(`Calling ${phone}…`);
+        beginOutboundLiveCall({
+          callId,
+          contactName,
+          phone,
+          conversationId,
+          status: 'CONNECTING',
+        });
         navigate(`/calls/${callId}`);
-
-        // Socket may disconnect during navigation — poll for SDP answer on the new page
         void pollSdpAnswer(callId);
       } else {
+        clearOutboundLiveCall();
         toastError('Call started but no call page was returned.');
       }
     } catch (err: unknown) {
+      clearOutboundLiveCall();
+      cleanupAgentCall();
       const body = (err as { response?: { data?: { error?: { code?: string; message?: string } } } })
         ?.response?.data?.error;
       if (body?.code === 'CALL_PERMISSION_REQUIRED' || body?.code === 'CALL_PERMISSION_REQUESTED') {

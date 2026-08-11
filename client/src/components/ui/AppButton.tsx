@@ -46,7 +46,7 @@ export default function AppButton({
       {...props}
     >
       {loading && (
-        <span className="h-4 w-4 animate-spin rounded-full border-2 border-current/25 border-t-current" />
+        <span className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-500/25 border-t-emerald-600 dark:border-emerald-400/30 dark:border-t-emerald-300" />
       )}
       {!loading && icon}
       {children}

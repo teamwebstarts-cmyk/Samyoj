@@ -32,7 +32,7 @@ export default function CampaignQuotaBanner() {
       <div className="flex min-w-0 items-center gap-2.5">
         <Gauge className="h-4 w-4 shrink-0 text-sky-600" strokeWidth={2.25} />
         <div className="min-w-0">
-          <p className="text-[12px] font-extrabold text-theme-fg">Daily send quota</p>
+          <p className="text-[12px] font-extrabold text-theme-fg">Daily campaign limit</p>
           <p className="text-[11px] font-medium text-theme-secondary">
             <span className={`font-bold tabular-nums ${tone}`}>{quota.sentToday}</span> of{' '}
             <span className="font-bold tabular-nums">{quota.limit}</span> used ·{' '}
@@ -58,7 +58,7 @@ export default function CampaignQuotaBanner() {
         className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-lg px-2 py-1.5 text-[11px] font-bold text-theme-secondary transition hover:bg-theme-surface hover:text-sky-700 sm:self-auto"
       >
         <Settings className="h-3.5 w-3.5" />
-        Manage quota
+        Manage campaign limits
       </Link>
     </div>
   );

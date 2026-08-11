@@ -4,6 +4,7 @@ import { callingApi, inboxApi } from '../../services/api';
 import { toastError, toastInbox, toastSuccess } from '../../utils/toast';
 import { emitChatNotice } from './chatNoticeBus';
 import { createAgentOffer, pollSdpAnswer, setActiveCallId, cleanupAgentCall } from '../../utils/agentCallRTC';
+import { beginOutboundDialing, beginOutboundLiveCall, clearOutboundLiveCall } from '../../utils/outboundLiveCallStore';
 import type { Conversation } from '../../types';
 
 interface ActionsDeps {
@@ -195,6 +196,13 @@ export function useConversationActions({
       const callId = (data.data as { call?: { id: string } })?.call?.id;
       if (callId) {
         setActiveCallId(callId);
+        beginOutboundLiveCall({
+          callId,
+          contactName: selected.contact.name,
+          phone: selected.contact.phone,
+          conversationId: selected.id,
+          status: 'CONNECTING',
+        });
         emitChatNotice(selected.id, {
           kind: 'calling',
           message: `Connecting to ${contactLabel}…`,

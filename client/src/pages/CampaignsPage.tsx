@@ -537,7 +537,7 @@ export default function CampaignsPage() {
         setForm(campaignToForm(full, templates));
         setViewOnly(true);
         setConfirmState({
-          title: `Send to ${full.totalContacts.toLocaleString()} people?`,
+          title: `Send to ${full.totalContacts.toLocaleString()} recipients?`,
           description: 'This will start sending the approved template to the selected audience.',
           confirmLabel: `Send to ${full.totalContacts.toLocaleString()}`,
           variant: 'default',
@@ -588,19 +588,9 @@ export default function CampaignsPage() {
     }
 
     if (stage === 1) {
-      if (invalidAudienceCount > 0) {
-        return `Fix ${invalidAudienceCount} invalid phone number${invalidAudienceCount === 1 ? '' : 's'} before continuing.`;
-      }
-      if (excludedSelectedContacts > 0) {
-        return `${excludedSelectedContacts} selected contact${excludedSelectedContacts === 1 ? '' : 's'} can’t receive messages. Remove them before continuing.`;
-      }
-      if (latestAudienceCount === 0) {
-        return form.audienceType === 'TAGS'
-          ? 'Add at least one contact tag.'
-          : form.audienceType === 'CONTACTS'
-            ? 'Select at least one contact.'
-            : 'Add at least one eligible recipient.';
-      }
+      // Audience eligibility is shown in the preview and enforced on the
+      // final Send/Schedule action, so users can continue to Review and fix
+      // their selection without being trapped on this step.
     }
 
     if (stage === 2 && form.scheduleEnabled) {
@@ -642,7 +632,7 @@ export default function CampaignsPage() {
   const handleDelete = async () => {
     if (!editing) return;
     setConfirmState({
-      title: 'Delete this campaign?',
+      title: 'Delete campaign?',
       description: `“${editing.name}” will be permanently removed.`,
       confirmLabel: 'Delete campaign',
       variant: 'danger',
@@ -665,7 +655,7 @@ export default function CampaignsPage() {
   const handleDeleteItem = async (campaign: Campaign) => {
     if (!canEditCampaign(campaign.status)) return;
     setConfirmState({
-      title: 'Delete this campaign?',
+      title: 'Delete campaign?',
       description: `“${campaign.name}” will be permanently removed.`,
       confirmLabel: 'Delete campaign',
       variant: 'danger',
@@ -704,7 +694,7 @@ export default function CampaignsPage() {
     const campaign = campaigns.find((c) => c.id === id) || (editing?.id === id ? editing : null);
     const count = campaign?.totalContacts ?? 0;
     setConfirmState({
-      title: `Send to ${count.toLocaleString()} people?`,
+      title: `Send to ${count.toLocaleString()} recipients?`,
       description: 'This will start sending the approved template to the selected audience.',
       confirmLabel: `Send to ${count.toLocaleString()}`,
       variant: 'default',
@@ -795,7 +785,7 @@ export default function CampaignsPage() {
 
         {!canManageTeam && (
           <div className="rounded-xl border border-amber-200/70 bg-amber-50/80 px-3.5 py-2.5 text-[12px] font-medium text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
-            You have read-only access to campaigns. Ask an admin to create or send broadcasts.
+            You have read-only access to campaigns. Ask an admin to create or send campaigns.
           </div>
         )}
 
@@ -804,7 +794,7 @@ export default function CampaignsPage() {
             embedded
             search={search}
             onSearchChange={setSearch}
-            searchPlaceholder="Search campaigns or templates..."
+            searchPlaceholder="Search campaigns or templates"
             filters={
               <AppSelect
                 className="w-full sm:w-[148px]"
@@ -833,7 +823,7 @@ export default function CampaignsPage() {
 
           {loading ? (
             <div className="p-6">
-              <LoadingState label="Loading campaigns..." />
+              <LoadingState label="Loading campaigns…" />
             </div>
           ) : campaigns.length === 0 ? (
             <div className="p-4 sm:p-6">
@@ -844,12 +834,12 @@ export default function CampaignsPage() {
                 description={
                   hasFilters
                     ? 'Try a different search word or status.'
-                    : 'Send approved WhatsApp messages to many contacts at once.'
+                    : 'Send approved WhatsApp messages to multiple contacts at once.'
                 }
                 steps={
                   hasFilters
                     ? undefined
-                    : ['Create a message template first', 'Pick contacts to send to', 'Launch your campaign']
+                    : ['Create an approved template', 'Choose contacts to receive it', 'Send your campaign']
                 }
                 action={
                   !hasFilters && canManageTeam ? (
@@ -917,7 +907,7 @@ export default function CampaignsPage() {
         title={viewOnly ? editing?.name || 'Campaign details' : editing ? 'Edit campaign' : 'New campaign'}
         subtitle={
           viewOnly
-            ? 'Delivery stats, who received it, and campaign actions'
+          ? 'Delivery stats, recipients, and campaign actions'
             : 'Template, audience, schedule, and preview'
         }
         size="xl"
@@ -970,21 +960,21 @@ export default function CampaignsPage() {
                   <CampaignActionsMenu>
                     {canManageTeam && ['RUNNING', 'PAUSED', 'SCHEDULED'].includes(editing.status) && (
                       <button type="button" role="menuitem" className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-secondary hover:bg-theme-subtle hover:text-theme-fg" onClick={() => handleAction(() => campaignApi.cancel(editing.id), 'Campaign cancelled')}>
-                        <Square size={14} /> Cancel
+                        <Square size={14} /> Cancel campaign
                       </button>
                     )}
                     {canManageTeam && editing.failedCount > 0 && (
                       <button type="button" role="menuitem" className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-secondary hover:bg-theme-subtle hover:text-theme-fg" onClick={() => handleAction(() => campaignApi.retryFailed(editing.id), 'Retrying failed sends')}>
-                        <RefreshCw size={14} /> Retry failed
+                        <RefreshCw size={14} /> Retry failed sends
                       </button>
                     )}
                     {canManageTeam && (
                       <button type="button" role="menuitem" className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-secondary hover:bg-theme-subtle hover:text-theme-fg" onClick={handleDuplicate}>
-                        <Copy size={14} /> Duplicate
+                        <Copy size={14} /> Duplicate campaign
                       </button>
                     )}
                     <button type="button" role="menuitem" className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-secondary hover:bg-theme-subtle hover:text-theme-fg" onClick={() => handleExport(editing.id, editing.name)}>
-                      <Download size={14} /> Export
+                      <Download size={14} /> Export results
                     </button>
                   </CampaignActionsMenu>
                 )}
@@ -1044,10 +1034,10 @@ export default function CampaignsPage() {
                   error={analyticsError}
                   onViewFailures={() => setDetailSection('errors')}
                 />
-                <ModalPanel title="Message preview & test send" icon={TestTube2} accent="emerald">
+                <ModalPanel title="Preview and test send" icon={TestTube2} accent="emerald">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
                     <AppInput id="test-phone" label="Phone number" placeholder={PHONE_PLACEHOLDER} value={form.testPhone} onChange={(e) => setForm({ ...form, testPhone: e.target.value })} className="flex-1" />
-                    <AppButton type="button" variant="secondary" icon={<TestTube2 size={14} />} onClick={handleTestSend}>Send test</AppButton>
+                <AppButton type="button" variant="secondary" icon={<TestTube2 size={14} />} onClick={handleTestSend}>Send test message</AppButton>
                   </div>
                 </ModalPanel>
               </>
@@ -1061,19 +1051,18 @@ export default function CampaignsPage() {
           </div>
         ) : (
           <form id="slideover-form" onSubmit={handleSubmit} className="space-y-6">
-            <div className="sticky top-0 z-10 -mx-1 space-y-2 bg-theme-surface/95 pb-2 backdrop-blur-sm">
-            <nav aria-label="Campaign creation steps" role="tablist" className="rounded-xl border border-theme-border bg-theme-surface/95 p-2">
+            <div className="sticky top-0 z-20 -mx-1 isolate space-y-2 bg-theme-surface pb-2 shadow-sm">
+            <nav aria-label="Campaign creation steps" role="tablist" className="rounded-xl border border-theme-border bg-theme-surface p-2">
               <ol className="grid grid-cols-3 gap-1">
                 {stageLabels.map((label, index) => (
                   <li key={label}>
                     <button
                       type="button"
-                      onClick={() => index <= activeStep && setActiveStep(index)}
-                      disabled={index > activeStep}
+                      onClick={() => setActiveStep(index)}
                       role="tab"
                       aria-selected={activeStep === index}
                       aria-current={activeStep === index ? 'step' : undefined}
-                      className={`w-full rounded-lg px-1 py-2 text-[10px] font-bold transition focus:outline-none focus:ring-2 focus:ring-violet-500/40 ${
+                      className={`w-full rounded-lg px-1 py-2 text-[11px] font-bold transition focus:outline-none focus:ring-2 focus:ring-violet-500/40 ${
                         activeStep === index
                           ? 'bg-violet-600 text-white'
                           : index < activeStep
@@ -1143,7 +1132,7 @@ export default function CampaignsPage() {
             </ModalSection>}
 
             {activeStep === 0 && (form.bodyParams.length > 0 || form.headerParams.length > 0 || selectedTemplate) && (
-              <ModalSection title="Message preview" subtitle="Fill in the blanks and preview your message">
+              <ModalSection title="Message preview">
                 <div className="space-y-4">
                   {form.bodyParams.map((_, i) => (
                     <AppInput
@@ -1243,16 +1232,17 @@ export default function CampaignsPage() {
                 <div className="grid gap-3 sm:grid-cols-2">
                   <AppInput
                     id="scheduled-at"
-                    label="Send at"
+                    label="Schedule for"
                     type="datetime-local"
                     value={form.scheduledAt}
                     onChange={(e) => setForm({ ...form, scheduledAt: e.target.value })}
+                    min={getMinScheduleDateTime()}
+                    aria-describedby="scheduled-at-timezone"
                     required={form.scheduleEnabled}
                   />
                   <div className="rounded-xl border border-theme-border bg-theme-subtle/35 px-3.5 py-3">
                     <p className="text-[11px] font-bold text-theme-fg">Browser timezone</p>
-                    <p className="mt-1 text-[12px] font-semibold text-theme-secondary">{browserTimezone}</p>
-                    <p className="mt-1 text-[10px] leading-relaxed text-theme-muted">The scheduled time uses your browser’s resolved timezone.</p>
+                    <p id="scheduled-at-timezone" className="mt-1 text-[12px] font-semibold text-theme-secondary">{browserTimezone}</p>
                   </div>
                 </div>
               )}
@@ -1264,13 +1254,9 @@ export default function CampaignsPage() {
                   </p>
                 </div>
               )}
-              <div className="rounded-xl border border-violet-200/70 bg-violet-50/60 p-3 text-[12px] dark:border-violet-800/40 dark:bg-violet-950/20">
-                <p className="font-bold text-violet-900 dark:text-violet-200">Ready to review</p>
-                <p className="mt-1 text-violet-800 dark:text-violet-300">Check the compact summary above, then save the draft or complete the final action below.</p>
-              </div>
               <div className="rounded-xl border border-emerald-200/70 bg-emerald-50/70 p-3 text-[12px] dark:border-emerald-800/40 dark:bg-emerald-950/20">
-                <p className="font-bold text-emerald-900 dark:text-emerald-200">Send only to people who agreed to get messages</p>
-                <p className="mt-1 text-emerald-800 dark:text-emerald-300">{messagingConsent.campaignNotice}. Invalid numbers and people who can’t receive messages are blocked from the final action.</p>
+                <p className="font-bold text-emerald-900 dark:text-emerald-200">Before sending</p>
+                <p className="mt-1 text-emerald-800 dark:text-emerald-300">{messagingConsent.campaignNotice}. Invalid or ineligible recipients are blocked automatically.</p>
               </div>
                 {filledPreview && (
                   <ModalPreviewCard title="Message preview">
@@ -1331,4 +1317,10 @@ function getErrMsg(err: unknown, fallback: string) {
     (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ||
     fallback
   );
+}
+
+function getMinScheduleDateTime() {
+  const now = new Date(Date.now() + 60_000);
+  const offset = now.getTimezoneOffset();
+  return new Date(now.getTime() - offset * 60_000).toISOString().slice(0, 16);
 }

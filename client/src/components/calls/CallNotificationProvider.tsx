@@ -2,7 +2,9 @@ import { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSocket } from '../../hooks/useSocket';
 import { toastInbox, toastSuccess } from '../../utils/toast';
+import { updateOutboundLiveCallStatus } from '../../utils/outboundLiveCallStore';
 import CallRingModal from './CallRingModal';
+import OutboundLiveCallBar from './OutboundLiveCallBar';
 
 interface RingPayload {
   callId: string;
@@ -55,6 +57,19 @@ export default function CallNotificationProvider({ children }: { children: React
         setRing((current) =>
           current && payload.callId === current.callId ? null : current
         );
+        if (payload.callId && payload.status) {
+          updateOutboundLiveCallStatus(payload.callId, payload.status);
+        }
+      }
+      if (event === 'call:outbound_connected') {
+        const payload = data as { callId?: string };
+        if (payload.callId) updateOutboundLiveCallStatus(payload.callId, 'CONNECTED');
+      }
+      if (event === 'call:outbound_initiated') {
+        const payload = data as { callId?: string; status?: string };
+        if (payload.callId && payload.status) {
+          updateOutboundLiveCallStatus(payload.callId, payload.status);
+        }
       }
     }, [navigate])
   );
@@ -63,6 +78,7 @@ export default function CallNotificationProvider({ children }: { children: React
     <>
       {children}
       <CallRingModal ring={ring} onDismiss={() => setRing(null)} />
+      <OutboundLiveCallBar />
     </>
   );
 }
