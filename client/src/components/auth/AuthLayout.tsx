@@ -22,7 +22,7 @@ export default function AuthLayout({
       {/* Full-page hero — woman stays visible in the middle */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <img
-          src="/brand/auth-hero.png"
+          src="/brand/new%20auth%20images.png"
           alt=""
           className="h-full w-full object-cover object-[48%_22%]"
         />

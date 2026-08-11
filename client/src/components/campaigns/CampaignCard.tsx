@@ -63,9 +63,7 @@ export default function CampaignCard({
         ? 'View results'
         : 'View';
   const hasOverflowActions =
-    (primaryAction !== 'view' && onView) ||
     (primaryAction !== 'edit' && onEdit && editable) ||
-    (onSend && editable) ||
     (primaryAction !== 'pause' && onPause && campaign.status === 'RUNNING') ||
     (primaryAction !== 'resume' && onResume && campaign.status === 'PAUSED') ||
     (onDelete && editable);
@@ -147,20 +145,20 @@ export default function CampaignCard({
         >
           {primaryLabel}
         </AppButton>
+        {primaryAction !== 'view' && onView && (
+          <AppButton size="sm" variant="secondary" icon={<Eye size={14} />} onClick={onView}>
+            View
+          </AppButton>
+        )}
+        {onSend && editable && (
+          <AppButton size="sm" variant="secondary" icon={<Play size={14} />} onClick={onSend}>
+            Send
+          </AppButton>
+        )}
         {hasOverflowActions && <CampaignActionsMenu>
-            {primaryAction !== 'view' && onView && (
-              <button type="button" onClick={onView} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-fg hover:bg-theme-subtle">
-                <Eye className="h-3.5 w-3.5" /> View
-              </button>
-            )}
             {primaryAction !== 'edit' && onEdit && editable && (
               <button type="button" onClick={onEdit} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-fg hover:bg-theme-subtle">
                 <Pencil className="h-3.5 w-3.5" /> Edit
-              </button>
-            )}
-            {onSend && editable && (
-              <button type="button" onClick={onSend} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-fg hover:bg-theme-subtle">
-                <Play className="h-3.5 w-3.5" /> Send
               </button>
             )}
             {onDelete && editable && (

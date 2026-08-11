@@ -67,10 +67,10 @@ function NoticeIcon({ icon, tone }: { icon: ChatNoticeIcon; tone: ChatNoticeTone
               : Bot;
   return (
     <span
-      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ring-1 ${TONE_ICON[tone]}`}
+      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md ring-1 ${TONE_ICON[tone]}`}
     >
       <Icon
-        className="h-3.5 w-3.5"
+        className="h-3 w-3"
         strokeWidth={2.2}
         fill={icon === 'star' ? 'currentColor' : 'none'}
         aria-hidden
@@ -79,13 +79,13 @@ function NoticeIcon({ icon, tone }: { icon: ChatNoticeIcon; tone: ChatNoticeTone
   );
 }
 
-/** Absolute stack of glass in-chat notices (under header, over messages). */
+/** Absolute stack of compact centered in-chat toasts (under header, over messages). */
 export default function ChatNoticeStack({ notices, onDismiss }: ChatNoticeStackProps) {
   if (notices.length === 0) return null;
 
   return (
     <div
-      className="pointer-events-none flex flex-col gap-2 px-3 pt-2 sm:px-4"
+      className="pointer-events-none flex w-full flex-col items-center gap-1.5 px-2 pt-2"
       aria-live="polite"
       aria-relevant="additions text"
     >
@@ -93,17 +93,17 @@ export default function ChatNoticeStack({ notices, onDismiss }: ChatNoticeStackP
         <div
           key={notice.id}
           role={notice.variant === 'sticky' ? 'status' : 'status'}
-          className={`pointer-events-auto relative flex items-start gap-2.5 rounded-xl border px-3 py-2 pr-9 text-[12.5px] font-medium motion-reduce:animate-none ${
+          className={`pointer-events-auto relative flex w-fit max-w-[min(92vw,11.5rem)] items-center gap-1.5 rounded-lg border px-2 py-1.5 pr-7 text-[11px] font-semibold leading-tight motion-reduce:animate-none ${
             TONE_CARD[notice.tone]
           } ${notice.leaving ? 'inbox-modal-exit' : 'inbox-modal-enter'}`}
         >
           <NoticeIcon icon={notice.icon} tone={notice.tone} />
-          <div className="min-w-0 flex-1 pt-0.5 leading-snug">{notice.message}</div>
+          <div className="min-w-0 flex-1 line-clamp-2">{notice.message}</div>
           {notice.action && (
             <button
               type="button"
               onClick={notice.action.onClick}
-              className={`shrink-0 rounded-lg px-2 py-1 text-[12px] font-bold transition ${TONE_ACTION[notice.tone]} ${FOCUS_RING_CLASS}`}
+              className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-bold transition ${TONE_ACTION[notice.tone]} ${FOCUS_RING_CLASS}`}
             >
               {notice.action.label}
             </button>
@@ -112,9 +112,9 @@ export default function ChatNoticeStack({ notices, onDismiss }: ChatNoticeStackP
             type="button"
             onClick={() => onDismiss(notice.id, notice.kind, notice.variant)}
             aria-label="Dismiss notice"
-            className={`absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-lg transition ${TONE_DISMISS[notice.tone]} ${FOCUS_RING_CLASS}`}
+            className={`absolute right-1 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-md transition ${TONE_DISMISS[notice.tone]} ${FOCUS_RING_CLASS}`}
           >
-            <X className="h-3.5 w-3.5" strokeWidth={2.4} />
+            <X className="h-3 w-3" strokeWidth={2.4} />
           </button>
         </div>
       ))}

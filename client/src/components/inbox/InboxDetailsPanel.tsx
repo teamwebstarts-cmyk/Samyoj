@@ -1,6 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import {
-  BarChart3,
   Download,
   Hash,
   Plus,
@@ -69,7 +68,6 @@ interface InboxDetailsPanelProps {
   onAssign: (agentId: string | null) => void;
   onConvertToTicket: () => void;
   onExport: () => void;
-  onCreateCampaign: () => void;
   /** Controlled docked panel open (≥ md). */
   panelOpen: boolean;
   onPanelOpenChange: (open: boolean) => void;
@@ -161,7 +159,6 @@ export default function InboxDetailsPanel({
   onAssign,
   onConvertToTicket,
   onExport,
-  onCreateCampaign,
   panelOpen,
   onPanelOpenChange,
   focusSection,
@@ -516,15 +513,6 @@ export default function InboxDetailsPanel({
         {...tipFor('Export chat', opts.tipSide)}
       >
         <Download className="h-4 w-4" strokeWidth={iconStroke} />
-      </button>
-      <button
-        type="button"
-        aria-label="Create campaign"
-        onClick={onCreateCampaign}
-        className={`${btn} text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/40`}
-        {...tipFor('Create campaign', opts.tipSide)}
-      >
-        <BarChart3 className="h-4 w-4" strokeWidth={iconStroke} />
       </button>
     </>
     );

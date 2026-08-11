@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom';
 import {
   FileText,
   Image,
-  IndianRupee,
   Mic,
   Paperclip,
   Pause,
@@ -135,7 +134,6 @@ interface ChatComposerProps {
   /** Kept for template/interactive parents; reply composer no longer locks on this. */
   sending: boolean;
   cannedReplies?: CannedReply[];
-  onPaymentLink?: () => void;
   onInteractive?: () => void;
   onOpenTemplate?: () => void;
   /** Conversation id for in-chat media-limit notices. */
@@ -182,7 +180,6 @@ export default function ChatComposer({
   onRemoveAttachment,
   sending: _sending,
   cannedReplies = [],
-  onPaymentLink,
   onInteractive,
   conversationId,
   inputRef,
@@ -757,20 +754,6 @@ export default function ChatComposer({
           <FileText size={16} className="text-chat-accent" />
           PDF
         </button>
-        {onPaymentLink && (
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              setAttachMenuOpen(false);
-              onPaymentLink();
-            }}
-            className={menuItem}
-          >
-            <IndianRupee size={16} className="text-chat-accent" />
-            Payment link
-          </button>
-        )}
         {onInteractive && (
           <button
             type="button"
@@ -852,24 +835,6 @@ export default function ChatComposer({
                 </button>
               </div>
 
-              <button
-                type="button"
-                className={toolBtn}
-                aria-label="Photo"
-                {...tipFor('Photo')}
-                onClick={() => openFilePicker('image/*')}
-              >
-                <Image size={18} strokeWidth={2} />
-              </button>
-              <button
-                type="button"
-                className={toolBtn}
-                aria-label="PDF"
-                {...tipFor('PDF')}
-                onClick={() => openFilePicker('application/pdf,.pdf')}
-              >
-                <FileText size={18} strokeWidth={2} />
-              </button>
               <button
                 type="button"
                 className={toolBtn}

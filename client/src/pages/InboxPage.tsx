@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import MediaViewer from '../components/inbox/MediaViewer';
 import ChatContextMenu from '../components/inbox/ChatContextMenu';
 import ChatPlaceholder from '../components/inbox/ChatPlaceholder';
@@ -9,7 +8,6 @@ import InboxListHeader, { type ListChip } from '../components/inbox/InboxListHea
 import ChatThread from '../components/inbox/ChatThread';
 import InboxDetailsPanel, { type PanelSection } from '../components/inbox/InboxDetailsPanel';
 import CreateTicketModal from '../components/inbox/CreateTicketModal';
-import PaymentLinkModal from '../components/inbox/PaymentLinkModal';
 import ExportChatDialog from '../components/inbox/ExportChatDialog';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { toastError, toastSuccess } from '../utils/toast';
@@ -54,7 +52,6 @@ import type {
 
 export default function InboxPage() {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const { hasConnectedNumber, loading: numbersLoading } = useWhatsAppNumber();
 
   const [search, setSearch] = useState('');
@@ -186,7 +183,6 @@ export default function InboxPage() {
     draft,
     setDraft,
     sending,
-    setSending,
     attachment,
     retryingId,
     replyTo,
@@ -320,13 +316,10 @@ export default function InboxPage() {
     ticketModalOpen,
     setTicketModalOpen,
     ticketSubmitting,
-    paymentModalOpen,
-    setPaymentModalOpen,
     ticketConversationIds,
     setTicketConversationIds,
     handleSubmitTicket,
-    handleSubmitPaymentLink,
-  } = useInboxModals({ selected, serviceWindow, appendSentMessage, setSending });
+  } = useInboxModals({ selected });
 
   useEffect(() => {
     teamApi.agents().then(({ data }) => setAgents(data.data.agents)).catch(console.error);
@@ -789,7 +782,6 @@ export default function InboxPage() {
                   }}
                   onAttach={handleAttach}
                   onRemoveAttachment={removeAttachment}
-                  onPaymentLink={() => setPaymentModalOpen(true)}
                   onOpenInteractive={() => setInteractiveOpen(true)}
                   onCloseInteractive={() => setInteractiveOpen(false)}
                   onSendInteractive={async (payload) => {
@@ -834,14 +826,6 @@ export default function InboxPage() {
                   onAssign={(agentId) => void handleAssignAgent(agentId)}
                   onConvertToTicket={() => setTicketModalOpen(true)}
                   onExport={() => setExportTarget(selected)}
-                  onCreateCampaign={() => {
-                    const tags = (selected.contact.tags ?? []).filter(Boolean);
-                    if (tags.length > 0) {
-                      navigate(`/campaigns?tags=${encodeURIComponent(tags.join(','))}`);
-                      return;
-                    }
-                    navigate(`/campaigns?contacts=${selected.contact.id}`);
-                  }}
                   panelOpen={detailsPanelOpen}
                   onPanelOpenChange={setDetailsPanelOpen}
                   focusSection={detailsFocusSection}
@@ -904,14 +888,6 @@ export default function InboxPage() {
         submitting={ticketSubmitting}
         onClose={() => setTicketModalOpen(false)}
         onSubmit={(values) => void handleSubmitTicket(values)}
-      />
-
-      <PaymentLinkModal
-        open={paymentModalOpen}
-        customerName={selected?.contact.name || selected?.contact.phone}
-        submitting={sending}
-        onClose={() => setPaymentModalOpen(false)}
-        onSubmit={(values) => void handleSubmitPaymentLink(values)}
       />
 
       <ExportChatDialog

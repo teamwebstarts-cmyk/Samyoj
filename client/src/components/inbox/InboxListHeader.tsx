@@ -373,7 +373,7 @@ export default function InboxListHeader({
           role="tablist"
           aria-label="Filter conversations"
           aria-live="polite"
-          className="mt-1.5 grid grid-cols-6 gap-0.5"
+          className="mt-1.5 flex flex-wrap items-center gap-1"
         >
           {FILTER_CHIPS.map((item) => {
             const active = chip === item.chip;
@@ -385,7 +385,7 @@ export default function InboxListHeader({
                 aria-selected={active}
                 data-testid={`inbox-filter-chip-${item.chip}`}
                 onClick={() => onChipChange(item.chip)}
-                className={`inline-flex h-7 w-full items-center justify-center rounded-md px-0.5 text-[11px] font-semibold transition ${FOCUS_RING_CLASS} ${
+                className={`inline-flex h-7 shrink-0 items-center justify-center rounded-md px-2 text-[11px] font-semibold transition ${FOCUS_RING_CLASS} ${
                   active
                     ? 'bg-whatsapp-600 text-white shadow-[0_1px_2px_rgba(37,211,102,0.28)] dark:bg-whatsapp-500'
                     : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700'

@@ -161,21 +161,34 @@ export default function CampaignTable({
                 >
                   {primaryLabel}
                 </TableTextButton>
-                {(resolvedPrimaryAction !== 'view' && onView) || (resolvedPrimaryAction !== 'edit' && onEdit && editable) || (onSend && editable) || (onDelete && editable) ? (
+                {resolvedPrimaryAction !== 'view' && onView && (
+                  <TableTextButton onClick={() => onView(campaign)} icon={Eye} variant="neutral">
+                    View
+                  </TableTextButton>
+                )}
+                {onSend && editable && (
+                  <TableTextButton onClick={() => onSend(campaign)} icon={Play} variant="neutral">
+                    Send
+                  </TableTextButton>
+                )}
+                {(resolvedPrimaryAction !== 'edit' && onEdit && editable) ||
+                (resolvedPrimaryAction !== 'pause' && onPause && campaign.status === 'RUNNING') ||
+                (resolvedPrimaryAction !== 'resume' && onResume && campaign.status === 'PAUSED') ||
+                (onDelete && editable) ? (
                   <CampaignActionsMenu>
-                      {resolvedPrimaryAction !== 'view' && onView && (
-                        <button type="button" onClick={() => onView(campaign)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-fg hover:bg-theme-subtle">
-                          <Eye className="h-3.5 w-3.5" /> View
-                        </button>
-                      )}
                       {resolvedPrimaryAction !== 'edit' && onEdit && editable && (
                         <button type="button" onClick={() => onEdit(campaign)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-fg hover:bg-theme-subtle">
                           <Pencil className="h-3.5 w-3.5" /> Edit
                         </button>
                       )}
-                      {onSend && editable && (
-                        <button type="button" onClick={() => onSend(campaign)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-fg hover:bg-theme-subtle">
-                          <Play className="h-3.5 w-3.5" /> Send
+                      {resolvedPrimaryAction !== 'pause' && onPause && campaign.status === 'RUNNING' && (
+                        <button type="button" onClick={() => onPause(campaign)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-fg hover:bg-theme-subtle">
+                          <Pause className="h-3.5 w-3.5" /> Pause
+                        </button>
+                      )}
+                      {resolvedPrimaryAction !== 'resume' && onResume && campaign.status === 'PAUSED' && (
+                        <button type="button" onClick={() => onResume(campaign)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-fg hover:bg-theme-subtle">
+                          <Play className="h-3.5 w-3.5" /> Resume
                         </button>
                       )}
                       {onDelete && editable && (

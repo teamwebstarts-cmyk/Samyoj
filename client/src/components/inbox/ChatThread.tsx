@@ -39,7 +39,7 @@ import type {
   TeamAgent,
 } from '../../types';
 
-const EPHEMERAL_MS = 3500;
+const EPHEMERAL_MS = 2200;
 const NOTICE_EXIT_MS = 150;
 
 interface ChatThreadProps {
@@ -101,7 +101,6 @@ interface ChatThreadProps {
   onSendAndClose?: (e: React.FormEvent) => void;
   onAttach: (file: File) => void;
   onRemoveAttachment: () => void;
-  onPaymentLink: () => void;
   onOpenInteractive: () => void;
   onCloseInteractive: () => void;
   onSendInteractive: (payload: SendMessagePayload) => Promise<void>;
@@ -169,7 +168,6 @@ export default function ChatThread({
   onSendAndClose,
   onAttach,
   onRemoveAttachment,
-  onPaymentLink,
   onOpenInteractive,
   onCloseInteractive,
   onSendInteractive,
@@ -851,7 +849,6 @@ export default function ChatThread({
               onRemoveAttachment={onRemoveAttachment}
               sending={sending}
               cannedReplies={cannedReplies}
-              onPaymentLink={onPaymentLink}
               onInteractive={onOpenInteractive}
               conversationId={conversation.id}
               inputRef={composerInputRef}

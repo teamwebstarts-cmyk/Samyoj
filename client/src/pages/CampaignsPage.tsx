@@ -49,7 +49,7 @@ import { DEFAULT_PAGE_SIZE } from '../constants/pagination';
 import { useAuth } from '../contexts/AuthContext';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useSocket } from '../hooks/useSocket';
-import { billingApi, campaignApi, contactApi, templateApi, whatsappApi } from '../services/api';
+import { campaignApi, contactApi, templateApi, whatsappApi } from '../services/api';
 import { toastError, toastSuccess } from '../utils/toast';
 import { PHONE_PLACEHOLDER, validatePhoneLines } from '../utils/phone';
 import { messagingConsent } from '../utils/plainLanguage';
@@ -225,7 +225,6 @@ export default function CampaignsPage() {
   const [activeStep, setActiveStep] = useState(0);
   const [stageError, setStageError] = useState<string | null>(null);
   const [detailSection, setDetailSection] = useState<'overview' | 'recipients' | 'errors'>('overview');
-  const [estimatedCost, setEstimatedCost] = useState<number | null>(null);
   const [audiencePreviewCount, setAudiencePreviewCount] = useState<number | null>(null);
   const [confirmState, setConfirmState] = useState<{
     title: string;
@@ -263,7 +262,6 @@ export default function CampaignsPage() {
     invalidAudienceCount > 0 ||
     excludedSelectedContacts > 0 ||
     latestAudienceCount === 0;
-  const audienceCount = audiencePreviewCount ?? 0;
   const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
   const stageLabels = ['Message', 'Audience', 'Review and send'];
 
@@ -364,18 +362,6 @@ export default function CampaignsPage() {
       })
       .catch(() => {});
   }, [loadTemplates]);
-
-  useEffect(() => {
-    if (!audienceCount) {
-      setEstimatedCost(null);
-      return;
-    }
-    let cancelled = false;
-    billingApi.estimateCost(audienceCount)
-      .then(({ data }) => { if (!cancelled) setEstimatedCost(data.data.estimatedCostInr); })
-      .catch(() => { if (!cancelled) setEstimatedCost(null); });
-    return () => { cancelled = true; };
-  }, [audienceCount]);
 
   useEffect(() => {
     if (!canManageTeam) return;
@@ -1102,19 +1088,6 @@ export default function CampaignsPage() {
               </ol>
               <div className="sr-only" aria-live="polite">Currently editing {stageLabels[activeStep]} stage</div>
             </nav>
-            <aside className="rounded-xl border border-theme-border bg-theme-subtle/95 p-3" aria-label="Campaign summary">
-              <div className="mb-2 flex items-center justify-between">
-                <p className="text-[10px] font-bold uppercase tracking-wide text-theme-muted">Campaign summary</p>
-                <span className="text-[10px] font-semibold text-theme-muted">{activeStep + 1}/{stageLabels.length}</span>
-              </div>
-              <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-[11px] sm:grid-cols-5">
-                <div><dt className="text-theme-muted">Sender</dt><dd className="truncate font-bold text-theme-fg">{whatsappNumbers.find((n) => n.id === form.whatsappNumberId)?.phoneNumber || (whatsappNumbers.length === 1 ? whatsappNumbers[0].phoneNumber : 'Default number')}</dd></div>
-                <div><dt className="text-theme-muted">Template</dt><dd className="truncate font-bold text-theme-fg">{form.templateName || 'Not selected'}</dd></div>
-                <div><dt className="text-theme-muted">Eligible recipients</dt><dd className="font-bold text-theme-fg">{latestAudienceCount.toLocaleString()}</dd></div>
-                <div><dt className="text-theme-muted">Estimated campaign cost</dt><dd className="font-bold text-theme-fg">{estimatedCost != null ? `₹${estimatedCost.toLocaleString('en-IN')}` : '—'}<span className="ml-1 font-medium text-theme-muted">(estimate)</span></dd></div>
-                <div><dt className="text-theme-muted">Resolved send time</dt><dd className="truncate font-bold text-theme-fg">{form.scheduleEnabled && form.scheduledAt ? `${new Date(form.scheduledAt).toLocaleString()} · ${browserTimezone}` : 'Now, after confirmation'}</dd></div>
-              </dl>
-            </aside>
             </div>
             {stageError && (
               <div className="rounded-xl border border-red-200/80 bg-red-50/70 px-3.5 py-2.5 text-[12px] font-semibold text-red-800 dark:border-red-900/50 dark:bg-red-950/25 dark:text-red-300" role="alert">
