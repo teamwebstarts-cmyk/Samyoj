@@ -56,7 +56,7 @@ export default function App() {
                     even before auth hydrates. Page itself requires a signed-in user. */}
                 <Route path="/settings/whatsapp/callback" element={<WhatsappCallbackPage />} />
                 <Route element={<ProtectedRoute />}>
-                  <Route path="/onboarding" element={<Navigate to="/settings?tab=setup" replace />} />
+                  <Route path="/onboarding" element={<Navigate to="/" replace />} />
                   <Route element={<OnboardingGate />}>
                     <Route element={<Layout />}>
                       <Route path="/" element={<DashboardPage />} />

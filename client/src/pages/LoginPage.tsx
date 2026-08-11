@@ -119,7 +119,7 @@ export default function LoginPage() {
 
   return (
     <AuthLayout
-      title={requires2FA ? 'Two-factor authentication' : 'Welcome back 👋'}
+      title={requires2FA ? 'Two-factor authentication' : 'Welcome'}
       subtitle={
         requires2FA
           ? 'Enter the 6-digit code from your authenticator app to continue.'

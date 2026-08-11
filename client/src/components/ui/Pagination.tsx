@@ -44,7 +44,7 @@ export default function Pagination({
           type="button"
           onClick={() => onPageChange(safePage - 1)}
           disabled={safePage <= 1}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-theme-border bg-theme-surface text-theme-secondary transition hover:border-whatsapp-500/30 hover:bg-whatsapp-500/10 disabled:cursor-not-allowed disabled:opacity-40"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-theme-border bg-theme-surface text-theme-secondary transition hover:border-whatsapp-500/30 hover:bg-whatsapp-500/10 disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-whatsapp-500/40"
           aria-label="Previous page"
         >
           <ChevronLeft className="h-4 w-4" />
@@ -58,7 +58,7 @@ export default function Pagination({
           type="button"
           onClick={() => onPageChange(safePage + 1)}
           disabled={safePage >= totalPages}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-theme-border bg-theme-surface text-theme-secondary transition hover:border-whatsapp-500/30 hover:bg-whatsapp-500/10 disabled:cursor-not-allowed disabled:opacity-40"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-theme-border bg-theme-surface text-theme-secondary transition hover:border-whatsapp-500/30 hover:bg-whatsapp-500/10 disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-whatsapp-500/40"
           aria-label="Next page"
         >
           <ChevronRight className="h-4 w-4" />

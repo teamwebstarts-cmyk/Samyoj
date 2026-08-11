@@ -2072,7 +2072,6 @@
 
   .inbox-row-preview {
     animation: inboxPreviewIn 200ms ease-out both;
-    transition-delay: 400ms;
   }
 
   /* Interactive composer — type panel enter */

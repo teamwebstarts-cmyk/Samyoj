@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import AuthBrand from './AuthBrand';
-import AuthShowcase, { AuthTopBadge } from './AuthShowcase';
+import AuthShowcase from './AuthShowcase';
 
 interface AuthLayoutProps {
   title: string;
@@ -31,8 +31,6 @@ export default function AuthLayout({
         {/* Soft green glow like the design mock (upper mid-right) */}
         <div className="absolute right-[28%] top-[8%] h-56 w-56 rounded-full bg-emerald-200/30 blur-3xl" />
       </div>
-
-      <AuthTopBadge />
 
       <div className="relative z-10 flex min-h-0 flex-1">
         <div className="hidden min-h-0 w-[60%] lg:block">
