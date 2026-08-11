@@ -65,7 +65,7 @@ export default function CampaignRecipientTable({
         </div>
       ) : (
         <>
-        <div className="space-y-2 md:hidden">
+        <div className="space-y-2 lg:hidden">
           {recipients.map((recipient) => (
             <article key={recipient.id} className="rounded-xl border border-theme-border bg-theme-surface p-3">
               <div className="flex items-start justify-between gap-3">
@@ -89,13 +89,13 @@ export default function CampaignRecipientTable({
           <div className="pt-1">
             <p className="mb-2 text-center text-[11px] text-theme-muted">{total.toLocaleString()} recipients</p>
             <div className="flex justify-center">
-              <button type="button" disabled={page <= 1} onClick={() => onPageChange(page - 1)} className="rounded-lg border border-theme-border px-3 py-2 text-[11px] font-bold disabled:opacity-40">Previous</button>
+              <button type="button" disabled={page <= 1} onClick={() => onPageChange(page - 1)} className="min-h-11 rounded-lg border border-theme-border px-3 py-2 text-[11px] font-bold disabled:opacity-40">Previous</button>
               <span className="px-3 py-2 text-[11px] font-semibold text-theme-muted">Page {page}</span>
-              <button type="button" disabled={page * pageSize >= total} onClick={() => onPageChange(page + 1)} className="rounded-lg border border-theme-border px-3 py-2 text-[11px] font-bold disabled:opacity-40">Next</button>
+              <button type="button" disabled={page * pageSize >= total} onClick={() => onPageChange(page + 1)} className="min-h-11 rounded-lg border border-theme-border px-3 py-2 text-[11px] font-bold disabled:opacity-40">Next</button>
             </div>
           </div>
         </div>
-        <div className="hidden md:block">
+        <div className="hidden lg:block">
           <DataTable
             headers={['Recipient', 'Status', 'Delivery details']}
             page={page}
@@ -115,7 +115,7 @@ export default function CampaignRecipientTable({
                 <td className="max-w-[210px]">
                   <p className="text-[11px] font-medium text-theme-secondary">{formatSentAt(recipient.sentAt)} · {recipient.retryCount ?? 0} retries</p>
                   {recipient.errorMessage ? (
-                    <span className="mt-0.5 block truncate text-[11px] font-medium text-red-600 dark:text-red-400" title={recipient.errorMessage}>{recipient.errorMessage}</span>
+                    <span className="mt-0.5 block break-words text-[11px] font-medium text-red-600 dark:text-red-400">{recipient.errorMessage}</span>
                   ) : <span className="text-[11px] text-theme-muted">No error reported</span>}
                 </td>
               </tr>

@@ -46,14 +46,19 @@ export default function CampaignPhoneCsvImport({ onPhonesImported }: CampaignPho
       tabIndex={0}
       aria-label="Import phone numbers from CSV or JSON"
       onClick={() => inputRef.current?.click()}
-      onKeyDown={(e) => e.key === 'Enter' && inputRef.current?.click()}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          inputRef.current?.click();
+        }
+      }}
       onDragOver={(e) => {
         e.preventDefault();
         setDragging(true);
       }}
       onDragLeave={() => setDragging(false)}
       onDrop={onDrop}
-      className={`cursor-pointer rounded-xl border-2 border-dashed px-4 py-4 text-center transition ${
+      className={`min-h-[44px] cursor-pointer rounded-xl border-2 border-dashed px-4 py-4 text-center transition focus:outline-none focus:ring-2 focus:ring-sky-500/40 ${
         dragging
           ? 'border-sky-400 bg-sky-50/80 dark:border-sky-500 dark:bg-sky-950/30'
           : 'border-theme-border bg-theme-subtle/30 hover:border-theme-border-strong hover:bg-theme-subtle/50'
@@ -90,11 +95,11 @@ export default function CampaignPhoneCsvImport({ onPhonesImported }: CampaignPho
           )}
           {importErrors.length > 0 && (
             <div className="mt-1 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-amber-800 dark:border-amber-800/50 dark:bg-amber-950/30 dark:text-amber-300" role="alert">
-              <p className="font-bold">{importErrors.length} invalid row{importErrors.length === 1 ? '' : 's'} skipped</p>
-              <ul className="mt-1 space-y-0.5">
-                {importErrors.slice(0, 4).map((error) => <li key={error}>{error}</li>)}
-                {importErrors.length > 4 && <li>…and {importErrors.length - 4} more</li>}
+              <p className="font-bold">{importErrors.length} invalid row{importErrors.length === 1 ? '' : 's'} not imported</p>
+              <ul className="mt-1 max-h-32 space-y-0.5 overflow-y-auto">
+                {importErrors.map((error, index) => <li key={`${error}-${index}`}>{error}</li>)}
               </ul>
+              <p className="mt-1 font-semibold">Valid rows were imported and remain usable.</p>
             </div>
           )}
         </div>

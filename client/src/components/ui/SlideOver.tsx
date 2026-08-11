@@ -161,6 +161,7 @@ interface SlideOverFooterProps {
   loading?: boolean;
   submitDisabled?: boolean;
   submitVariant?: 'primary' | 'secondary';
+  primaryDisabled?: boolean;
   onDelete?: () => void;
   deleteLabel?: string;
   primaryAction?: {
@@ -175,6 +176,7 @@ export function SlideOverFooter({
   loading,
   submitDisabled,
   submitVariant = 'primary',
+  primaryDisabled,
   onDelete,
   deleteLabel = 'Delete',
   primaryAction,
@@ -219,7 +221,7 @@ export function SlideOverFooter({
       {primaryAction && (
         <button
           type="button"
-          disabled={loading || submitDisabled}
+          disabled={loading || submitDisabled || primaryDisabled}
           onClick={primaryAction.onClick}
           className={`btn-primary inline-flex h-10 min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl px-5 text-[13px] font-semibold sm:flex-none disabled:opacity-50 ${FOCUS_RING_CLASS}`}
         >

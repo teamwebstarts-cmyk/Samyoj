@@ -52,6 +52,7 @@ import { useSocket } from '../hooks/useSocket';
 import { billingApi, campaignApi, contactApi, templateApi, whatsappApi } from '../services/api';
 import { toastError, toastSuccess } from '../utils/toast';
 import { PHONE_PLACEHOLDER, validatePhoneLines } from '../utils/phone';
+import { messagingConsent } from '../utils/plainLanguage';
 import type {
   Campaign,
   CampaignAnalytics,
@@ -248,19 +249,21 @@ export default function CampaignsPage() {
 
   const showHeaderMedia = selectedTemplate ? templateNeedsHeaderMedia(selectedTemplate) : false;
   const manualLines = form.phones.split('\n').map((line) => line.trim()).filter(Boolean);
-  const validManualPhones = [...new Set(manualLines.flatMap((line) => {
-    const result = validatePhoneLines([line]);
-    return result.ok ? result.phones : [];
-  }))];
-  const audienceCount = form.audienceType === 'MANUAL'
-    ? validManualPhones.length
-    : form.audienceType === 'CONTACTS'
-      ? form.selectedContactIds.length
-      : editing?.totalContacts || 0;
   const invalidAudienceCount = form.audienceType === 'MANUAL'
     ? manualLines.filter((line) => !validatePhoneLines([line]).ok).length
     : 0;
-  const latestAudienceCount = audiencePreviewCount ?? audienceCount;
+  // The preview is authoritative for send/schedule eligibility. Local counts are
+  // useful while editing, but they must never authorize a final action.
+  const latestAudienceCount = audiencePreviewCount ?? 0;
+  const excludedSelectedContacts = form.audienceType === 'CONTACTS' && audiencePreviewCount !== null
+    ? Math.max(0, form.selectedContactIds.length - audiencePreviewCount)
+    : 0;
+  const finalActionBlocked =
+    audiencePreviewCount === null ||
+    invalidAudienceCount > 0 ||
+    excludedSelectedContacts > 0 ||
+    latestAudienceCount === 0;
+  const audienceCount = audiencePreviewCount ?? 0;
   const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
   const stageLabels = ['Message', 'Audience', 'Review and send'];
 
@@ -602,6 +605,9 @@ export default function CampaignsPage() {
       if (invalidAudienceCount > 0) {
         return `Fix ${invalidAudienceCount} invalid phone number${invalidAudienceCount === 1 ? '' : 's'} before continuing.`;
       }
+      if (excludedSelectedContacts > 0) {
+        return `${excludedSelectedContacts} selected contact${excludedSelectedContacts === 1 ? '' : 's'} can’t receive messages. Remove them before continuing.`;
+      }
       if (latestAudienceCount === 0) {
         return form.audienceType === 'TAGS'
           ? 'Add at least one contact tag.'
@@ -630,6 +636,10 @@ export default function CampaignsPage() {
   };
 
   const handleFinalAction = async () => {
+    if (audiencePreviewCount === null) {
+      setStageError('Preview audience to continue. Final send and schedule require a successful audience preview.');
+      return;
+    }
     const error = validateStage(2) || validateStage(1) || validateStage(0);
     if (error) {
       setStageError(error);
@@ -1016,6 +1026,7 @@ export default function CampaignsPage() {
                   : undefined
               }
               submitDisabled={saving}
+              primaryDisabled={activeStep === stageLabels.length - 1 && finalActionBlocked}
             />
           )
         }
@@ -1023,14 +1034,17 @@ export default function CampaignsPage() {
         {viewOnly && editing ? (
           <div className="space-y-5">
             <CampaignDetailHeader campaign={editing} />
+            <div className="sr-only" aria-live="polite" aria-atomic="true">
+              {editing.name} is {editing.status.toLowerCase()}: {editing.sentCount.toLocaleString()} of {editing.totalContacts.toLocaleString()} recipients sent.
+            </div>
 
-            <nav aria-label="Campaign detail sections" className="grid grid-cols-3 gap-1 rounded-xl border border-theme-border bg-theme-subtle/70 p-1">
+            <nav aria-label="Campaign detail sections" role="tablist" className="grid grid-cols-3 gap-1 rounded-xl border border-theme-border bg-theme-subtle/70 p-1">
               {[
                 ['overview', 'Overview'],
                 ['recipients', `Recipients (${editing.totalContacts.toLocaleString()})`],
                 ['errors', `Errors (${editing.failedCount.toLocaleString()})`],
               ].map(([value, label]) => (
-                <button key={value} type="button" onClick={() => setDetailSection(value as typeof detailSection)} className={`rounded-lg px-2 py-2 text-[11px] font-bold transition ${detailSection === value ? 'bg-theme-surface text-theme-fg shadow-sm' : 'text-theme-muted hover:text-theme-secondary'}`}>
+                <button key={value} type="button" role="tab" aria-selected={detailSection === value} onClick={() => setDetailSection(value as typeof detailSection)} className={`min-h-11 rounded-lg px-2 py-2 text-[11px] font-bold transition focus:outline-none focus:ring-2 focus:ring-violet-500/40 ${detailSection === value ? 'bg-theme-surface text-theme-fg shadow-sm' : 'text-theme-muted hover:text-theme-secondary'}`}>
                   {label}
                 </button>
               ))}
@@ -1062,7 +1076,7 @@ export default function CampaignsPage() {
         ) : (
           <form id="slideover-form" onSubmit={handleSubmit} className="space-y-6">
             <div className="sticky top-0 z-10 -mx-1 space-y-2 bg-theme-surface/95 pb-2 backdrop-blur-sm">
-            <nav aria-label="Campaign creation steps" className="rounded-xl border border-theme-border bg-theme-surface/95 p-2">
+            <nav aria-label="Campaign creation steps" role="tablist" className="rounded-xl border border-theme-border bg-theme-surface/95 p-2">
               <ol className="grid grid-cols-3 gap-1">
                 {stageLabels.map((label, index) => (
                   <li key={label}>
@@ -1070,6 +1084,8 @@ export default function CampaignsPage() {
                       type="button"
                       onClick={() => index <= activeStep && setActiveStep(index)}
                       disabled={index > activeStep}
+                      role="tab"
+                      aria-selected={activeStep === index}
                       aria-current={activeStep === index ? 'step' : undefined}
                       className={`w-full rounded-lg px-1 py-2 text-[10px] font-bold transition focus:outline-none focus:ring-2 focus:ring-violet-500/40 ${
                         activeStep === index
@@ -1267,9 +1283,21 @@ export default function CampaignsPage() {
                   </div>
                 </div>
               )}
+              {audiencePreviewCount === null && (
+                <div className="rounded-xl border border-amber-200/70 bg-amber-50/70 p-3 text-[12px] text-amber-900 dark:border-amber-800/40 dark:bg-amber-950/20 dark:text-amber-200" role="alert">
+                  <p className="font-bold">Preview audience to continue</p>
+                  <p className="mt-1">
+                    Final send and schedule stay disabled until the authoritative audience preview succeeds.
+                  </p>
+                </div>
+              )}
               <div className="rounded-xl border border-violet-200/70 bg-violet-50/60 p-3 text-[12px] dark:border-violet-800/40 dark:bg-violet-950/20">
                 <p className="font-bold text-violet-900 dark:text-violet-200">Ready to review</p>
                 <p className="mt-1 text-violet-800 dark:text-violet-300">Check the compact summary above, then save the draft or complete the final action below.</p>
+              </div>
+              <div className="rounded-xl border border-emerald-200/70 bg-emerald-50/70 p-3 text-[12px] dark:border-emerald-800/40 dark:bg-emerald-950/20">
+                <p className="font-bold text-emerald-900 dark:text-emerald-200">Send only to people who agreed to get messages</p>
+                <p className="mt-1 text-emerald-800 dark:text-emerald-300">{messagingConsent.campaignNotice}. Invalid numbers and people who can’t receive messages are blocked from the final action.</p>
               </div>
                 {filledPreview && (
                   <ModalPreviewCard title="Message preview">
@@ -1287,14 +1315,14 @@ export default function CampaignsPage() {
               />
             )}
             <div className="flex items-center justify-between gap-2 border-t border-theme-border pt-4">
-              <button
+                  <button
                 type="button"
                 onClick={() => {
                   setStageError(null);
                   setActiveStep((step) => Math.max(0, step - 1));
                 }}
                 disabled={activeStep === 0}
-                className="rounded-xl border border-theme-border px-3 py-2 text-[12px] font-bold text-theme-secondary transition hover:bg-theme-subtle disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+                className="min-h-11 rounded-xl border border-theme-border px-3 py-2 text-[12px] font-bold text-theme-secondary transition hover:bg-theme-subtle disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
               >
                 Back
               </button>
@@ -1302,7 +1330,7 @@ export default function CampaignsPage() {
                 <button
                   type="button"
                   onClick={continueToNextStage}
-                  className="rounded-xl bg-violet-600 px-4 py-2 text-[12px] font-bold text-white transition hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+                  className="min-h-11 rounded-xl bg-violet-600 px-4 py-2 text-[12px] font-bold text-white transition hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
                 >
                   Continue to {stageLabels[activeStep + 1]}
                 </button>

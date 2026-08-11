@@ -1,6 +1,7 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   CheckCircle2,
+  ChevronDown,
   Hash,
   Phone,
   Sparkles,
@@ -16,7 +17,7 @@ import { ModalCallout } from '../ui/modalUi';
 import CampaignAudiencePreview from './CampaignAudiencePreview';
 import CampaignContactPicker from './CampaignContactPicker';
 import CampaignPhoneCsvImport from './CampaignPhoneCsvImport';
-import { PHONE_HINT, PHONE_PLACEHOLDER, validatePhoneLines } from '../../utils/phone';
+import { PHONE_HINT, PHONE_PLACEHOLDER, validatePhone, validatePhoneLines } from '../../utils/phone';
 import { messagingConsent } from '../../utils/plainLanguage';
 
 export type AudienceType = 'MANUAL' | 'TAGS' | 'CONTACTS' | 'ALL_OPTED_IN';
@@ -84,18 +85,22 @@ export default function CampaignAudienceSection({
   showSavedCount,
   onPreviewCountChange,
 }: CampaignAudienceSectionProps) {
+  const [manualInputOpen, setManualInputOpen] = useState(Boolean(phones.trim()));
   const selectedTags = useMemo(() => parseTags(audienceTags), [audienceTags]);
 
   const phoneStats = useMemo(() => {
-    const lines = phones.split('\n').map((p) => p.trim()).filter(Boolean);
-    const results = lines.map((line) => validatePhoneLines([line]));
-    const validPhones = results.flatMap((result) => (result.ok ? result.phones : []));
+    const lines = phones.split('\n').map((value, index) => ({ value: value.trim(), lineNumber: index + 1 })).filter((line) => line.value);
+    const results = lines.map((line) => validatePhone(line.value));
+    const validPhones = results.flatMap((result) => (result.ok ? [result.phone] : []));
     return {
       total: lines.length,
       valid: new Set(validPhones).size,
     invalid: results.filter((result) => !result.ok).length,
       duplicates: validPhones.length - new Set(validPhones).size,
-      invalidLines: lines.filter((_, index) => !results[index].ok),
+      invalidLines: lines.flatMap((line, index) => {
+        const result = results[index];
+        return result.ok ? [] : [{ ...line, error: result.error }];
+      }),
     };
   }, [phones]);
 
@@ -125,7 +130,7 @@ export default function CampaignAudienceSection({
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Audience type">
         {audienceTypes.map((type) => {
           const Icon = type.icon;
           const active = audienceType === type.id;
@@ -134,7 +139,8 @@ export default function CampaignAudienceSection({
               key={type.id}
               type="button"
               onClick={() => onAudienceTypeChange(type.id)}
-              aria-pressed={active}
+              role="radio"
+              aria-checked={active}
               className={`flex items-start gap-2.5 rounded-xl border p-3 text-left transition focus:outline-none focus:ring-2 focus:ring-whatsapp-500/40 ${
                 active
                   ? 'border-whatsapp-500/30 bg-whatsapp-500/[0.04]'
@@ -173,39 +179,69 @@ export default function CampaignAudienceSection({
         <div className="space-y-4 bg-theme-surface p-3.5">
           {audienceType === 'MANUAL' && (
             <>
-              <CampaignPhoneCsvImport
-                onPhonesImported={(imported) => {
-                  const existing = phones
-                    .split('\n')
-                    .map((p) => p.trim())
-                    .filter(Boolean);
-                  const merged = [...new Set([...existing, ...imported])];
-                  onPhonesChange(merged.join('\n'));
-                }}
-              />
-
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-100 px-2.5 py-1 text-[11px] font-bold text-sky-800 ring-1 ring-sky-200/70 dark:bg-sky-950/40 dark:text-sky-300">
-                  <Phone className="h-3 w-3" />
-                  {phoneStats.valid} valid
+              <button
+                type="button"
+                onClick={() => setManualInputOpen((open) => !open)}
+                aria-expanded={manualInputOpen}
+                className="flex w-full items-center justify-between rounded-xl border border-theme-border bg-theme-subtle/40 px-3.5 py-3 text-left transition hover:bg-theme-subtle/70 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+              >
+                <span>
+                  <span className="block text-[12px] font-bold text-theme-fg">Add phone numbers</span>
+                  <span className="mt-0.5 block text-[11px] text-theme-muted">
+                    Paste a list or import a CSV when you need it
+                  </span>
                 </span>
-                {phoneStats.invalid > 0 && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-800 ring-1 ring-amber-200/70 dark:bg-amber-950/40 dark:text-amber-300">
-                    <XCircle className="h-3 w-3" />
-                    {phoneStats.invalid} invalid line{phoneStats.invalid === 1 ? '' : 's'}
+                <ChevronDown className={`h-4 w-4 text-theme-muted transition ${manualInputOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {manualInputOpen && (
+                <div className="space-y-3">
+                  <AppTextarea
+                    id="campaign-phones"
+                    label="Phone numbers"
+                    hint={`One per line · ${PHONE_HINT}`}
+                    placeholder={`${PHONE_PLACEHOLDER}\n919123456789`}
+                    value={phones}
+                    onChange={(e) => onPhonesChange(e.target.value)}
+                    rows={6}
+                    className="font-mono text-[13px]"
+                    required
+                  />
+                  <details className="rounded-xl border border-theme-border bg-theme-subtle/30">
+                    <summary className="cursor-pointer list-none px-3 py-2.5 text-[11px] font-bold text-theme-secondary">
+                      Import CSV or JSON instead
+                    </summary>
+                    <div className="border-t border-theme-border p-3">
+                      <CampaignPhoneCsvImport
+                        onPhonesImported={(imported) => {
+                          const existing = phones.split('\n').map((p) => p.trim()).filter(Boolean);
+                          onPhonesChange([...new Set([...existing, ...imported])].join('\n'));
+                        }}
+                      />
+                    </div>
+                  </details>
+                </div>
+              )}
+
+              {phoneStats.total > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-100 px-2.5 py-1 text-[11px] font-bold text-sky-800 ring-1 ring-sky-200/70 dark:bg-sky-950/40 dark:text-sky-300">
+                    <Phone className="h-3 w-3" />
+                    {phoneStats.valid} eligible format
                   </span>
-                )}
-                {phoneStats.duplicates > 0 && (
-                  <span className="rounded-full bg-violet-100 px-2.5 py-1 text-[11px] font-bold text-violet-800 ring-1 ring-violet-200/70 dark:bg-violet-950/40 dark:text-violet-300">
-                    {phoneStats.duplicates} duplicate{phoneStats.duplicates === 1 ? '' : 's'}
-                  </span>
-                )}
-                {phoneStats.total > 0 && (
-                  <span className="text-[11px] font-medium text-theme-muted">
-                    {phoneStats.total} line{phoneStats.total === 1 ? '' : 's'} entered
-                  </span>
-                )}
-              </div>
+                  {phoneStats.invalid > 0 && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-800 ring-1 ring-amber-200/70 dark:bg-amber-950/40 dark:text-amber-300">
+                      <XCircle className="h-3 w-3" />
+                      {phoneStats.invalid} invalid
+                    </span>
+                  )}
+                  {phoneStats.duplicates > 0 && (
+                    <span className="rounded-full bg-violet-100 px-2.5 py-1 text-[11px] font-bold text-violet-800 ring-1 ring-violet-200/70 dark:bg-violet-950/40 dark:text-violet-300">
+                      {phoneStats.duplicates} duplicate{phoneStats.duplicates === 1 ? '' : 's'}
+                    </span>
+                  )}
+                </div>
+              )}
 
               {phoneStats.invalidLines.length > 0 && (
                 <div className="rounded-xl border border-amber-200/70 bg-amber-50/70 p-3 dark:border-amber-900/40 dark:bg-amber-950/25" role="alert">
@@ -213,10 +249,11 @@ export default function CampaignAudienceSection({
                     {phoneStats.invalid} invalid line{phoneStats.invalid === 1 ? '' : 's'} must be fixed before sending
                   </p>
                   <ul className="mt-1 space-y-0.5 text-[11px] text-amber-800 dark:text-amber-300">
-                    {phoneStats.invalidLines.slice(0, 5).map((line, index) => (
-                      <li key={`${line}-${index}`} className="font-mono">{line}</li>
+                    {phoneStats.invalidLines.map((line) => (
+                      <li key={line.lineNumber} className="font-mono">
+                        Line {line.lineNumber}: {line.value} — {line.error}
+                      </li>
                     ))}
-                    {phoneStats.invalidLines.length > 5 && <li>…and {phoneStats.invalidLines.length - 5} more</li>}
                   </ul>
                   <div className="mt-2 flex flex-wrap gap-2">
                     <button type="button" onClick={removeInvalidPhones} className="rounded-lg bg-amber-700 px-2.5 py-1.5 text-[11px] font-bold text-white hover:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-500/40">
@@ -230,18 +267,17 @@ export default function CampaignAudienceSection({
                   </div>
                 </div>
               )}
+              {phoneStats.duplicates > 0 && phoneStats.invalidLines.length === 0 && (
+                <div className="flex items-center justify-between rounded-xl border border-violet-200/70 bg-violet-50/60 px-3 py-2.5 dark:border-violet-800/40 dark:bg-violet-950/20">
+                  <p className="text-[11px] font-semibold text-violet-800 dark:text-violet-300">
+                    Duplicate numbers will be counted once.
+                  </p>
+                  <button type="button" onClick={deduplicatePhones} className="rounded-lg border border-violet-300 px-2.5 py-1.5 text-[11px] font-bold text-violet-900 hover:bg-violet-100 focus:outline-none focus:ring-2 focus:ring-violet-500/40 dark:border-violet-700 dark:text-violet-200">
+                    Deduplicate
+                  </button>
+                </div>
+              )}
 
-              <AppTextarea
-                id="campaign-phones"
-                label="Phone numbers"
-                hint={`One per line · ${PHONE_HINT}`}
-                placeholder={`${PHONE_PLACEHOLDER}\n919123456789`}
-                value={phones}
-                onChange={(e) => onPhonesChange(e.target.value)}
-                rows={6}
-                className="font-mono text-[13px]"
-                required
-              />
             </>
           )}
 
@@ -259,7 +295,7 @@ export default function CampaignAudienceSection({
                       <button
                         type="button"
                         onClick={() => removeTag(tag)}
-                        className="rounded-full p-0.5 transition hover:bg-violet-200/60 dark:hover:bg-violet-800/40"
+                        className="flex min-h-11 min-w-11 items-center justify-center rounded-full transition hover:bg-violet-200/60 dark:hover:bg-violet-800/40"
                         aria-label={`Remove tag ${tag}`}
                       >
                         <X className="h-3 w-3" />
@@ -292,7 +328,8 @@ export default function CampaignAudienceSection({
                           key={tag}
                           type="button"
                           onClick={() => toggleTag(tag)}
-                          className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 transition ${
+                          aria-pressed={selected}
+                          className={`min-h-[44px] rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 transition ${
                             selected
                               ? 'bg-violet-600 text-white ring-violet-600 dark:bg-violet-500'
                               : 'bg-theme-surface text-violet-700 ring-violet-200/70 hover:bg-violet-50 dark:text-violet-300 dark:ring-violet-800/50 dark:hover:bg-violet-950/40'
@@ -340,6 +377,7 @@ export default function CampaignAudienceSection({
         phones={phones}
         audienceTags={audienceTags}
         selectedContactIds={selectedContactIds}
+        requestedCount={audienceType === 'CONTACTS' ? selectedContactIds.length : undefined}
         onCountChange={onPreviewCountChange}
       />
     </div>

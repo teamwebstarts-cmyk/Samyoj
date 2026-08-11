@@ -114,7 +114,7 @@ export default function CampaignCard({
           </div>
 
           <div className="mt-2.5">
-            <div className="flex items-center justify-between gap-2 text-[11px] font-semibold tabular-nums">
+            <div className="flex items-center justify-between gap-2 text-[11px] font-semibold tabular-nums" aria-live="polite" aria-atomic="true">
               <span className="text-theme-muted">
                 {campaign.sentCount} / {campaign.totalContacts} sent
               </span>

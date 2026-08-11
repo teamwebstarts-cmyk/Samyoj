@@ -65,12 +65,12 @@ export default function CampaignAnalyticsPanel({
             </div>
             <div className="flex flex-wrap gap-2">
               {onViewFailures && (
-                <button type="button" onClick={onViewFailures} className="rounded-lg border border-red-200 bg-theme-surface px-3 py-2 text-[11px] font-bold text-red-700 hover:bg-red-50 dark:border-red-900/60 dark:text-red-300">
+                <button type="button" onClick={onViewFailures} className="min-h-11 rounded-lg border border-red-200 bg-theme-surface px-3 py-2 text-[11px] font-bold text-red-700 hover:bg-red-50 dark:border-red-900/60 dark:text-red-300">
                   View failures
                 </button>
               )}
               {campaign.failedCount > 0 && onRetryFailed && (
-                <button type="button" onClick={onRetryFailed} className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-2 text-[11px] font-bold text-white hover:bg-red-700">
+                <button type="button" onClick={onRetryFailed} className="inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-red-600 px-3 py-2 text-[11px] font-bold text-white hover:bg-red-700">
                   <RefreshCw className="h-3.5 w-3.5" />
                   Retry failed
                 </button>
@@ -120,7 +120,7 @@ export default function CampaignAnalyticsPanel({
             <button
               type="button"
               onClick={onViewFailures}
-              className="mt-2 rounded-lg border border-red-200 bg-theme-surface px-3 py-1.5 text-[11px] font-bold text-red-700 hover:bg-red-50 dark:border-red-900/60 dark:text-red-300"
+              className="mt-2 min-h-11 rounded-lg border border-red-200 bg-theme-surface px-3 py-1.5 text-[11px] font-bold text-red-700 hover:bg-red-50 dark:border-red-900/60 dark:text-red-300"
             >
               View failures
             </button>

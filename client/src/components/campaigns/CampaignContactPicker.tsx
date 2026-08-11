@@ -113,7 +113,7 @@ export default function CampaignContactPicker({ selectedIds, onChange }: Campaig
                   key={id}
                   type="button"
                   onClick={() => onChange(selectedIds.filter((item) => item !== id))}
-                  className="inline-flex max-w-full items-center gap-1 rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-indigo-800 ring-1 ring-indigo-200 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 dark:bg-indigo-950/50 dark:text-indigo-200 dark:ring-indigo-700"
+                  className="inline-flex min-h-11 max-w-full items-center gap-1 rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-indigo-800 ring-1 ring-indigo-200 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 dark:bg-indigo-950/50 dark:text-indigo-200 dark:ring-indigo-700"
                   aria-label={`Remove ${contact?.name || 'selected contact'}`}
                 >
                   <span className="max-w-[150px] truncate">{contact?.name || contact?.phone || id}</span>
@@ -135,7 +135,7 @@ export default function CampaignContactPicker({ selectedIds, onChange }: Campaig
             type="button"
             aria-pressed={showSelected}
             onClick={() => setShowSelected((value) => !value)}
-            className="rounded-lg border border-theme-border px-2.5 py-1.5 text-[11px] font-bold text-theme-secondary transition hover:bg-theme-subtle focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+            className="min-h-11 rounded-lg border border-theme-border px-2.5 py-1.5 text-[11px] font-bold text-theme-secondary transition hover:bg-theme-subtle focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
           >
             {showSelected ? 'Show all contacts' : 'Show selected'}
           </button>
@@ -143,7 +143,7 @@ export default function CampaignContactPicker({ selectedIds, onChange }: Campaig
             type="button"
             onClick={() => onChange([])}
             disabled={!selectedIds.length}
-            className="rounded-lg border border-theme-border px-2.5 py-1.5 text-[11px] font-bold text-theme-secondary transition hover:bg-theme-subtle disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+            className="min-h-11 rounded-lg border border-theme-border px-2.5 py-1.5 text-[11px] font-bold text-theme-secondary transition hover:bg-theme-subtle disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
           >
             Clear selection
           </button>
@@ -152,7 +152,7 @@ export default function CampaignContactPicker({ selectedIds, onChange }: Campaig
           type="button"
           onClick={selectAllVisible}
           disabled={!visibleContacts.length}
-          className="rounded-lg border border-indigo-200 px-2.5 py-1.5 text-[11px] font-bold text-indigo-700 transition hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 dark:border-indigo-800 dark:text-indigo-300 dark:hover:bg-indigo-950/30"
+          className="min-h-11 rounded-lg border border-indigo-200 px-2.5 py-1.5 text-[11px] font-bold text-indigo-700 transition hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 dark:border-indigo-800 dark:text-indigo-300 dark:hover:bg-indigo-950/30"
         >
           Select all visible
         </button>
@@ -180,7 +180,7 @@ export default function CampaignContactPicker({ selectedIds, onChange }: Campaig
                     onClick={() => toggle(contact.id)}
                     aria-checked={checked}
                     role="checkbox"
-                    className={`flex w-full items-center gap-3 px-3 py-2.5 text-left transition focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500/40 ${
+                    className={`min-h-11 flex w-full items-center gap-3 px-3 py-2.5 text-left transition focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500/40 ${
                       checked
                         ? 'bg-indigo-50/80 dark:bg-indigo-950/25'
                         : 'hover:bg-theme-subtle/60'

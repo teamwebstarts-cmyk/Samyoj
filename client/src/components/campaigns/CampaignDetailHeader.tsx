@@ -2,7 +2,7 @@ import { Calendar, LayoutTemplate, Users } from 'lucide-react';
 import { ModalPanel } from '../ui/modalUi';
 import StatusBadge from '../ui/StatusBadge';
 import type { Campaign } from '../../types';
-import { audienceLabels, formatCampaignDate } from './campaignUi';
+import { audienceLabels, campaignProgress, formatCampaignDate } from './campaignUi';
 
 interface CampaignDetailHeaderProps {
   campaign: Campaign;
@@ -10,6 +10,7 @@ interface CampaignDetailHeaderProps {
 
 export default function CampaignDetailHeader({ campaign }: CampaignDetailHeaderProps) {
   const scheduledLabel = formatCampaignDate(campaign.scheduledAt);
+  const progress = campaignProgress(campaign.sentCount, campaign.totalContacts);
 
   return (
     <ModalPanel title="Campaign overview" accent="violet">
@@ -34,6 +35,24 @@ export default function CampaignDetailHeader({ campaign }: CampaignDetailHeaderP
       </div>
 
       <p className="mt-3 text-lg font-extrabold tracking-tight text-theme-fg">{campaign.name}</p>
+
+      <div className="mt-4 rounded-xl bg-theme-subtle/60 px-3 py-2.5 ring-1 ring-theme-border">
+        <div className="flex items-center justify-between gap-2 text-[11px] font-semibold tabular-nums">
+          <span className="text-theme-muted">Sending progress</span>
+          <span className="text-theme-secondary">{progress}% · {campaign.sentCount.toLocaleString()} of {campaign.totalContacts.toLocaleString()}</span>
+        </div>
+        <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-theme-surface">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-violet-500 to-whatsapp-600 transition-all duration-500"
+            style={{ width: `${progress}%` }}
+            role="progressbar"
+            aria-valuenow={progress}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label={`${campaign.name}: ${progress}% sent, ${campaign.sentCount} of ${campaign.totalContacts} recipients`}
+          />
+        </div>
+      </div>
 
       <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
         {[

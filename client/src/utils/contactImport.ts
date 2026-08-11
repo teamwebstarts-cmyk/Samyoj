@@ -86,6 +86,11 @@ function normalizeHeader(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, '_');
 }
 
+function describeImportValue(value: string): string {
+  const trimmed = value.trim();
+  return trimmed ? `"${trimmed}"` : '(empty)';
+}
+
 function parseCsvContacts(text: string): ContactImportPreview {
   const lines = text
     .replace(/^\uFEFF/, '')
@@ -121,7 +126,7 @@ function parseCsvContacts(text: string): ContactImportPreview {
 
     const phoneResult = validatePhone(phoneRaw);
     if (!phoneResult.ok) {
-      errors.push(`Row ${rowNumber}: ${phoneResult.error}`);
+      errors.push(`Row ${rowNumber}: value ${describeImportValue(phoneRaw)} — ${phoneResult.error}`);
       return;
     }
 
@@ -166,7 +171,7 @@ function parseJsonContacts(text: string): ContactImportPreview {
     const phoneRaw = String(record.phone ?? '');
     const phoneResult = validatePhone(phoneRaw);
     if (!phoneResult.ok) {
-      errors.push(`Row ${rowNumber}: ${phoneResult.error}`);
+      errors.push(`Row ${rowNumber}: value ${describeImportValue(phoneRaw)} — ${phoneResult.error}`);
       return;
     }
 

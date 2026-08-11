@@ -44,6 +44,11 @@ export default function CampaignQuotaBanner() {
                 usedPct >= 90 ? 'from-red-400 to-rose-600' : usedPct >= 70 ? 'from-amber-400 to-orange-500' : 'from-emerald-400 to-whatsapp-600'
               }`}
               style={{ width: `${usedPct}%` }}
+              role="progressbar"
+              aria-valuenow={usedPct}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={`Daily send quota: ${quota.sentToday} of ${quota.limit} messages used`}
             />
           </div>
         </div>

@@ -132,7 +132,7 @@ export default function CampaignTable({
 
             <td className="min-w-[140px]">
               <div className="space-y-1.5">
-                <div className="flex items-center justify-between gap-2 text-[11px] font-semibold tabular-nums">
+                <div className="flex items-center justify-between gap-2 text-[11px] font-semibold tabular-nums" aria-live="polite" aria-atomic="true">
                   <span className="text-theme-muted">{progress}%</span>
                   <span className="text-theme-secondary">
                     {campaign.sentCount}/{campaign.totalContacts}

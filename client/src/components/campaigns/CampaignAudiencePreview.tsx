@@ -11,6 +11,7 @@ interface CampaignAudiencePreviewProps {
   phones: string;
   audienceTags: string;
   selectedContactIds: string[];
+  requestedCount?: number;
   onCountChange?: (count: number | null) => void;
 }
 
@@ -19,6 +20,7 @@ export default function CampaignAudiencePreview({
   phones,
   audienceTags,
   selectedContactIds,
+  requestedCount,
   onCountChange,
 }: CampaignAudiencePreviewProps) {
   const [count, setCount] = useState<number | null>(null);
@@ -124,6 +126,9 @@ export default function CampaignAudiencePreview({
 
   return (
     <div
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
       className={`overflow-hidden rounded-2xl border ${
         error
           ? 'border-amber-200/80 bg-amber-50/50 dark:border-amber-900/40 dark:bg-amber-950/20'
@@ -151,7 +156,7 @@ export default function CampaignAudiencePreview({
 
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-bold uppercase tracking-wide text-theme-muted">
-            Audience estimate
+            Eligible recipients
           </p>
           {loading ? (
             <p className="mt-0.5 text-[13px] font-semibold text-theme-secondary">
@@ -172,12 +177,17 @@ export default function CampaignAudiencePreview({
                   {count.toLocaleString()}
                 </span>{' '}
                 <span className="font-semibold text-theme-fg">
-                  {count === 1 ? 'person' : 'people'} will get this
+                  {count === 1 ? 'person' : 'people'} can receive this
                 </span>
               </p>
               {costInr != null && costInr > 0 && (
                 <p className="mt-1 text-[12px] font-semibold text-amber-800 dark:text-amber-300">
                   Estimated campaign cost: ₹{costInr.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                </p>
+              )}
+              {requestedCount != null && count < requestedCount && (
+                <p className="mt-1 text-[11px] font-semibold text-amber-800 dark:text-amber-300">
+                  {requestedCount - count} selected contact{requestedCount - count === 1 ? '' : 's'} can’t receive messages and won’t be included.
                 </p>
               )}
             </div>
