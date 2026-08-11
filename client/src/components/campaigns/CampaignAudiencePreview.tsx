@@ -11,6 +11,7 @@ interface CampaignAudiencePreviewProps {
   phones: string;
   audienceTags: string;
   selectedContactIds: string[];
+  onCountChange?: (count: number | null) => void;
 }
 
 export default function CampaignAudiencePreview({
@@ -18,18 +19,22 @@ export default function CampaignAudiencePreview({
   phones,
   audienceTags,
   selectedContactIds,
+  onCountChange,
 }: CampaignAudiencePreviewProps) {
   const [count, setCount] = useState<number | null>(null);
   const [costInr, setCostInr] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [stale, setStale] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
 
     async function load() {
       setLoading(true);
+      setStale(false);
       setError(null);
+      onCountChange?.(null);
 
       try {
         let payload: Record<string, unknown>;
@@ -38,6 +43,7 @@ export default function CampaignAudiencePreview({
           const result = validatePhoneLines(phones.split('\n'));
           if (!result.ok) {
             setCount(null);
+          onCountChange?.(null);
             setError(result.errors[0]);
             return;
           }
@@ -52,6 +58,7 @@ export default function CampaignAudiencePreview({
             .filter(Boolean);
           if (!tags.length) {
             setCount(null);
+            onCountChange?.(null);
             setError('Add at least one tag');
             return;
           }
@@ -62,6 +69,7 @@ export default function CampaignAudiencePreview({
         } else if (audienceType === 'CONTACTS') {
           if (!selectedContactIds.length) {
             setCount(null);
+            onCountChange?.(null);
             setError('Select at least one contact');
             return;
           }
@@ -79,6 +87,7 @@ export default function CampaignAudiencePreview({
         const { data } = await campaignApi.previewAudience(payload);
         if (!cancelled) {
           setCount(data.data.count);
+          onCountChange?.(data.data.count);
           if (data.data.count === 0) {
             setCostInr(null);
             setError(messagingConsent.noMatchingAudience);
@@ -90,6 +99,7 @@ export default function CampaignAudiencePreview({
       } catch (err: unknown) {
         if (!cancelled) {
           setCount(null);
+          onCountChange?.(null);
           setCostInr(null);
           setError(
             (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
@@ -106,6 +116,10 @@ export default function CampaignAudiencePreview({
       cancelled = true;
       clearTimeout(timer);
     };
+  }, [audienceType, phones, audienceTags, selectedContactIds, onCountChange]);
+
+  useEffect(() => {
+    setStale(count !== null);
   }, [audienceType, phones, audienceTags, selectedContactIds]);
 
   return (
@@ -142,6 +156,10 @@ export default function CampaignAudiencePreview({
           {loading ? (
             <p className="mt-0.5 text-[13px] font-semibold text-theme-secondary">
               Calculating how many people…
+            </p>
+          ) : stale ? (
+            <p className="mt-0.5 text-[13px] font-semibold text-amber-800 dark:text-amber-300">
+              Audience changed — refreshing estimate…
             </p>
           ) : error ? (
             <p className="mt-0.5 text-[13px] font-semibold text-amber-800 dark:text-amber-300">

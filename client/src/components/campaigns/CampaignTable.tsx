@@ -59,10 +59,7 @@ export default function CampaignTable({
         'Status',
         'Audience',
         'Progress',
-        'Sent',
-        'Delivered',
-        'Read',
-        'Failed',
+        'Delivery',
         'Scheduled',
         'Actions',
       ]}
@@ -87,7 +84,7 @@ export default function CampaignTable({
               <button
                 type="button"
                 onClick={() => onView(campaign)}
-                className="flex w-full items-center gap-3 rounded-xl py-1 text-left transition hover:opacity-90"
+                className="flex w-full items-center gap-3 rounded-xl py-1 text-left transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-violet-500/50"
               >
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-purple-700 text-white shadow-[0_4px_14px_rgba(139,92,246,0.3)]">
                   <Send className="h-4 w-4" strokeWidth={2.25} />
@@ -139,38 +136,47 @@ export default function CampaignTable({
                   <div
                     className={`h-full rounded-full bg-gradient-to-r transition-all duration-500 ${meta.bar}`}
                     style={{ width: `${progress}%` }}
+                    role="progressbar"
+                    aria-valuenow={progress}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-label={`${campaign.name}: ${progress}% sent, ${campaign.sentCount} of ${campaign.totalContacts} recipients`}
                   />
                 </div>
               </div>
             </td>
 
-            <td className="tabular-nums">
-              <StatPill label="Sent" value={campaign.sentCount} tone="text-sky-700 dark:text-sky-400" />
-            </td>
-            <td className="tabular-nums">
-              <StatPill
-                label="Del."
-                value={campaign.deliveredCount}
-                tone="text-emerald-700 dark:text-emerald-400"
-              />
-            </td>
-            <td className="tabular-nums">
-              <StatPill
-                label="Read"
-                value={campaign.readCount}
-                tone="text-violet-700 dark:text-violet-400"
-              />
-            </td>
-            <td className="tabular-nums">
-              <StatPill
-                label="Fail"
-                value={campaign.failedCount}
-                tone={
-                  campaign.failedCount > 0
-                    ? 'text-red-600 dark:text-red-400'
-                    : 'text-theme-muted'
-                }
-              />
+            <td>
+              <details className="group/delivery">
+                <summary className="flex min-w-[150px] cursor-pointer list-none items-center gap-2 rounded-lg px-1 py-1 text-left focus:outline-none focus:ring-2 focus:ring-violet-500/40">
+                  <span className="text-[12px] font-semibold tabular-nums text-theme-secondary">
+                    {campaign.deliveredCount.toLocaleString()} delivered
+                  </span>
+                  <span className="text-[11px] font-bold text-theme-muted group-open/delivery:hidden">
+                    · details
+                  </span>
+                  <span className="text-[11px] font-bold text-theme-muted group-open/delivery:inline hidden">
+                    · hide
+                  </span>
+                </summary>
+                <div className="mt-2 grid grid-cols-3 gap-2 rounded-lg border border-theme-border bg-theme-subtle/50 p-2">
+                  <StatPill label="Sent" value={campaign.sentCount} tone="text-sky-700 dark:text-sky-400" />
+                  <StatPill
+                    label="Read"
+                    value={campaign.readCount}
+                    tone="text-violet-700 dark:text-violet-400"
+                  />
+                  <StatPill
+                    label="Failed"
+                    value={campaign.failedCount}
+                    tone={
+                      campaign.failedCount > 0
+                        ? 'text-red-600 dark:text-red-400'
+                        : 'text-theme-muted'
+                    }
+                  />
+                </div>
+              </details>
             </td>
 
             <td className="whitespace-nowrap">

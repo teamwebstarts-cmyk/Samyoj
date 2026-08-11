@@ -8,6 +8,7 @@ import {
   UserCheck,
   Users,
   X,
+  XCircle,
 } from 'lucide-react';
 import AppInput from '../ui/AppInput';
 import AppTextarea from '../ui/AppTextarea';
@@ -59,6 +60,7 @@ interface CampaignAudienceSectionProps {
   availableTags: string[];
   editingTotalContacts?: number;
   showSavedCount?: boolean;
+  onPreviewCountChange?: (count: number | null) => void;
 }
 
 function parseTags(value: string) {
@@ -80,18 +82,35 @@ export default function CampaignAudienceSection({
   availableTags,
   editingTotalContacts,
   showSavedCount,
+  onPreviewCountChange,
 }: CampaignAudienceSectionProps) {
   const selectedTags = useMemo(() => parseTags(audienceTags), [audienceTags]);
 
   const phoneStats = useMemo(() => {
     const lines = phones.split('\n').map((p) => p.trim()).filter(Boolean);
-    const result = validatePhoneLines(lines);
+    const results = lines.map((line) => validatePhoneLines([line]));
+    const validPhones = results.flatMap((result) => (result.ok ? result.phones : []));
     return {
       total: lines.length,
-      valid: result.ok ? result.phones.length : 0,
-      invalid: result.ok ? lines.length - result.phones.length : lines.length,
+      valid: new Set(validPhones).size,
+    invalid: results.filter((result) => !result.ok).length,
+      duplicates: validPhones.length - new Set(validPhones).size,
+      invalidLines: lines.filter((_, index) => !results[index].ok),
     };
   }, [phones]);
+
+  const removeInvalidPhones = () => {
+    const valid = phones
+      .split('\n')
+      .map((line) => validatePhoneLines([line]))
+      .flatMap((result) => (result.ok ? result.phones : []));
+    onPhonesChange([...new Set(valid)].join('\n'));
+  };
+
+  const deduplicatePhones = () => {
+    const values = phones.split('\n').map((line) => line.trim()).filter(Boolean);
+    onPhonesChange([...new Set(values)].join('\n'));
+  };
 
   const toggleTag = (tag: string) => {
     const next = selectedTags.includes(tag)
@@ -115,7 +134,8 @@ export default function CampaignAudienceSection({
               key={type.id}
               type="button"
               onClick={() => onAudienceTypeChange(type.id)}
-              className={`flex items-start gap-2.5 rounded-xl border p-3 text-left transition ${
+              aria-pressed={active}
+              className={`flex items-start gap-2.5 rounded-xl border p-3 text-left transition focus:outline-none focus:ring-2 focus:ring-whatsapp-500/40 ${
                 active
                   ? 'border-whatsapp-500/30 bg-whatsapp-500/[0.04]'
                   : 'border-theme-border bg-theme-surface hover:border-theme-border-strong hover:bg-theme-subtle/40'
@@ -170,8 +190,14 @@ export default function CampaignAudienceSection({
                   {phoneStats.valid} valid
                 </span>
                 {phoneStats.invalid > 0 && (
-                  <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-800 ring-1 ring-amber-200/70 dark:bg-amber-950/40 dark:text-amber-300">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-800 ring-1 ring-amber-200/70 dark:bg-amber-950/40 dark:text-amber-300">
+                    <XCircle className="h-3 w-3" />
                     {phoneStats.invalid} invalid line{phoneStats.invalid === 1 ? '' : 's'}
+                  </span>
+                )}
+                {phoneStats.duplicates > 0 && (
+                  <span className="rounded-full bg-violet-100 px-2.5 py-1 text-[11px] font-bold text-violet-800 ring-1 ring-violet-200/70 dark:bg-violet-950/40 dark:text-violet-300">
+                    {phoneStats.duplicates} duplicate{phoneStats.duplicates === 1 ? '' : 's'}
                   </span>
                 )}
                 {phoneStats.total > 0 && (
@@ -180,6 +206,30 @@ export default function CampaignAudienceSection({
                   </span>
                 )}
               </div>
+
+              {phoneStats.invalidLines.length > 0 && (
+                <div className="rounded-xl border border-amber-200/70 bg-amber-50/70 p-3 dark:border-amber-900/40 dark:bg-amber-950/25" role="alert">
+                  <p className="text-[11px] font-bold text-amber-900 dark:text-amber-200">
+                    {phoneStats.invalid} invalid line{phoneStats.invalid === 1 ? '' : 's'} must be fixed before sending
+                  </p>
+                  <ul className="mt-1 space-y-0.5 text-[11px] text-amber-800 dark:text-amber-300">
+                    {phoneStats.invalidLines.slice(0, 5).map((line, index) => (
+                      <li key={`${line}-${index}`} className="font-mono">{line}</li>
+                    ))}
+                    {phoneStats.invalidLines.length > 5 && <li>…and {phoneStats.invalidLines.length - 5} more</li>}
+                  </ul>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button type="button" onClick={removeInvalidPhones} className="rounded-lg bg-amber-700 px-2.5 py-1.5 text-[11px] font-bold text-white hover:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-500/40">
+                      Remove invalid rows
+                    </button>
+                    {phoneStats.duplicates > 0 && (
+                      <button type="button" onClick={deduplicatePhones} className="rounded-lg border border-amber-300 px-2.5 py-1.5 text-[11px] font-bold text-amber-900 hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-500/40 dark:border-amber-700 dark:text-amber-200">
+                        Remove duplicates
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <AppTextarea
                 id="campaign-phones"
@@ -290,6 +340,7 @@ export default function CampaignAudienceSection({
         phones={phones}
         audienceTags={audienceTags}
         selectedContactIds={selectedContactIds}
+        onCountChange={onPreviewCountChange}
       />
     </div>
   );

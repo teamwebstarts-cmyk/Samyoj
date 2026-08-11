@@ -16,6 +16,7 @@ function RateCard({
   glow,
   bar,
   iconBg,
+  description,
 }: {
   label: string;
   value: string;
@@ -24,15 +25,21 @@ function RateCard({
   glow: string;
   bar: string;
   iconBg: string;
+  description: string;
 }) {
   const numeric = Math.min(100, Math.max(0, parseFloat(value) || 0));
 
   return (
-    <div className="relative overflow-hidden rounded-xl border border-theme-border bg-theme-surface p-4">
+    <div
+      className="relative overflow-hidden rounded-xl border border-theme-border bg-theme-surface p-4"
+      aria-label={`${label}: ${value} percent. ${description}`}
+    >
       <div className={`pointer-events-none absolute -right-4 -top-4 h-20 w-20 rounded-full blur-2xl opacity-40 ${glow}`} />
       <div className="relative flex items-start justify-between gap-3">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-wide text-theme-muted">{label}</p>
+          <p className="text-[10px] font-bold uppercase tracking-wide text-theme-muted" title={description}>
+            {label}
+          </p>
           <p className={`mt-1 text-2xl font-extrabold tabular-nums ${tone}`}>{value}%</p>
         </div>
         <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${iconBg}`}>
@@ -43,6 +50,11 @@ function RateCard({
         <div
           className={`h-full rounded-full bg-gradient-to-r transition-all duration-700 ${bar}`}
           style={{ width: `${numeric}%` }}
+          role="progressbar"
+          aria-valuenow={numeric}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label={`${label}: ${value}%`}
         />
       </div>
     </div>
@@ -99,9 +111,12 @@ export default function CampaignAnalyticsPanel({ analytics, loading, error }: Ca
           {statCards.map((stat) => (
             <div
               key={stat.label}
+              aria-label={`${stat.value.toLocaleString()} ${stat.label.toLowerCase()}`}
               className="rounded-xl border border-theme-border bg-theme-surface px-3 py-2.5 shadow-sm"
             >
-              <p className="text-[10px] font-bold uppercase tracking-wide text-theme-muted">{stat.label}</p>
+              <p className="text-[10px] font-bold uppercase tracking-wide text-theme-muted" title={`Number of ${stat.label.toLowerCase()}`}>
+                {stat.label}
+              </p>
               <p className={`mt-0.5 text-lg font-extrabold tabular-nums ${stat.tone || 'text-theme-fg'}`}>
                 {stat.value}
               </p>
@@ -113,6 +128,7 @@ export default function CampaignAnalyticsPanel({ analytics, loading, error }: Ca
           <RateCard
             label="Delivery rate"
             value={deliveryRate}
+            description="Percentage of messages reported as delivered"
             icon={Send}
             tone="text-emerald-700 dark:text-emerald-400"
             glow="bg-emerald-400/20"
@@ -122,6 +138,7 @@ export default function CampaignAnalyticsPanel({ analytics, loading, error }: Ca
           <RateCard
             label="Read rate"
             value={readRate}
+            description="Percentage of messages reported as read"
             icon={Eye}
             tone="text-violet-700 dark:text-violet-400"
             glow="bg-violet-400/20"

@@ -35,10 +35,12 @@ import AppButton from '../components/ui/AppButton';
 import AppInput from '../components/ui/AppInput';
 import AppSelect from '../components/ui/AppSelect';
 import EmptyState from '../components/ui/EmptyState';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
 import ListToolbar from '../components/ui/ListToolbar';
 import LoadingState from '../components/ui/LoadingState';
 import PageHero from '../components/ui/PageHero';
 import PageShell from '../components/ui/PageShell';
+import Pagination from '../components/ui/Pagination';
 import ResponsiveDataView from '../components/ui/ResponsiveDataView';
 import SlideOver, { SlideOverFooter } from '../components/ui/SlideOver';
 import { WhatsAppTemplatePreview } from '../components/inbox/WhatsAppPreview';
@@ -139,9 +141,19 @@ function buildPayload(form: typeof emptyForm, options?: { clearSchedule?: boolea
 
   if (form.audienceType === 'MANUAL') {
     const lines = form.phones.split('\n');
-    const phoneResult = validatePhoneLines(lines);
-    if (!phoneResult.ok) throw new Error(phoneResult.errors.join('\n'));
-    payload.recipients = phoneResult.phones.map((phone) => ({ phone }));
+    const invalid = lines
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .filter((line) => !validatePhoneLines([line]).ok);
+    if (invalid.length) {
+      throw new Error(`Remove or fix ${invalid.length} invalid phone line${invalid.length === 1 ? '' : 's'} before saving`);
+    }
+    const phones = [...new Set(lines.flatMap((line) => {
+      const result = validatePhoneLines([line]);
+      return result.ok ? result.phones : [];
+    }))];
+    if (!phones.length) throw new Error('Add at least one valid phone number');
+    payload.recipients = phones.map((phone) => ({ phone }));
   } else if (form.audienceType === 'TAGS') {
     payload.audienceConfig = {
       tags: form.audienceTags
@@ -185,7 +197,12 @@ export default function CampaignsPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
-  const [summary, setSummary] = useState({ total: 0, running: 0, completed: 0, sent: 0 });
+  const [lifecycleSummary, setLifecycleSummary] = useState({
+    drafts: 0,
+    scheduled: 0,
+    running: 0,
+    completed: 0,
+  });
   const [analytics, setAnalytics] = useState<CampaignAnalytics | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [analyticsError, setAnalyticsError] = useState<string | null>(null);
@@ -193,6 +210,17 @@ export default function CampaignsPage() {
   const [recipientTotal, setRecipientTotal] = useState(0);
   const [recipientPage, setRecipientPage] = useState(1);
   const [recipientStatusFilter, setRecipientStatusFilter] = useState('');
+  const [activeStep, setActiveStep] = useState(0);
+  const [quotaRemaining, setQuotaRemaining] = useState<number | null>(null);
+  const [estimatedCost, setEstimatedCost] = useState<number | null>(null);
+  const [audiencePreviewCount, setAudiencePreviewCount] = useState<number | null>(null);
+  const [confirmState, setConfirmState] = useState<{
+    title: string;
+    description: string;
+    confirmLabel: string;
+    variant: 'danger' | 'default';
+    onConfirm: () => void | Promise<void>;
+  } | null>(null);
 
   const debouncedSearch = useDebouncedValue(search);
   const hasFilters = Boolean(search || statusFilter);
@@ -207,6 +235,20 @@ export default function CampaignsPage() {
   );
 
   const showHeaderMedia = selectedTemplate ? templateNeedsHeaderMedia(selectedTemplate) : false;
+  const manualLines = form.phones.split('\n').map((line) => line.trim()).filter(Boolean);
+  const validManualPhones = [...new Set(manualLines.flatMap((line) => {
+    const result = validatePhoneLines([line]);
+    return result.ok ? result.phones : [];
+  }))];
+  const audienceCount = form.audienceType === 'MANUAL'
+    ? validManualPhones.length
+    : form.audienceType === 'CONTACTS'
+      ? form.selectedContactIds.length
+      : editing?.totalContacts || 0;
+  const invalidAudienceCount = form.audienceType === 'MANUAL'
+    ? manualLines.filter((line) => !validatePhoneLines([line]).ok).length
+    : 0;
+  const latestAudienceCount = audiencePreviewCount ?? audienceCount;
 
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -219,6 +261,29 @@ export default function CampaignsPage() {
         setTemplates(list as MessageTemplate[]);
       })
       .catch(() => setTemplates([]));
+  }, []);
+
+  const loadLifecycleSummary = useCallback(() => {
+    const statuses = [
+      ['drafts', 'DRAFT'],
+      ['scheduled', 'SCHEDULED'],
+      ['running', 'RUNNING'],
+      ['completed', 'COMPLETED'],
+    ] as const;
+
+    Promise.all(
+      statuses.map(async ([key, status]) => {
+        const { data } = await campaignApi.list({ page: '1', limit: '1', status });
+        return [key, data.data.total] as const;
+      })
+    )
+      .then((counts) => {
+        setLifecycleSummary((previous) => ({
+          ...previous,
+          ...Object.fromEntries(counts),
+        }));
+      })
+      .catch(() => {});
   }, []);
 
   const loadCampaigns = useCallback((showLoading = false) => {
@@ -236,13 +301,13 @@ export default function CampaignsPage() {
       .then(({ data }) => {
         setCampaigns(data.data.campaigns);
         setTotal(data.data.total);
-        setSummary(data.data.summary);
+        loadLifecycleSummary();
       })
       .catch((err: unknown) => {
         toastError(getErrMsg(err, 'Failed to load campaigns'));
       })
       .finally(() => setLoading(false));
-  }, [page, debouncedSearch, statusFilter]);
+  }, [page, debouncedSearch, statusFilter, loadLifecycleSummary]);
 
   const loadDetailExtras = useCallback(async (campaignId: string) => {
     setAnalyticsLoading(true);
@@ -279,7 +344,20 @@ export default function CampaignsPage() {
         setAvailableTags(tags.map((t: string | { name: string }) => (typeof t === 'string' ? t : t.name)));
       })
       .catch(() => {});
+    campaignApi.quota().then(({ data }) => setQuotaRemaining(data.data.remaining)).catch(() => {});
   }, [loadTemplates]);
+
+  useEffect(() => {
+    if (!audienceCount) {
+      setEstimatedCost(null);
+      return;
+    }
+    let cancelled = false;
+    billingApi.estimateCost(audienceCount)
+      .then(({ data }) => { if (!cancelled) setEstimatedCost(data.data.estimatedCostInr); })
+      .catch(() => { if (!cancelled) setEstimatedCost(null); });
+    return () => { cancelled = true; };
+  }, [audienceCount]);
 
   useEffect(() => {
     const templateName = searchParams.get('template');
@@ -311,6 +389,28 @@ export default function CampaignsPage() {
       audienceType: 'CONTACTS',
       selectedContactIds: contactIds,
       name: `Campaign — ${contactIds.length} contact${contactIds.length === 1 ? '' : 's'}`,
+    });
+    setSearchParams({}, { replace: true });
+  }, [searchParams, setSearchParams, canManageTeam]);
+
+  useEffect(() => {
+    const tagsParam = searchParams.get('tags');
+    if (!tagsParam || !canManageTeam) return;
+
+    const tags = tagsParam
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean);
+    if (!tags.length) return;
+
+    setEditing(null);
+    setViewOnly(false);
+    setSlideOpen(true);
+    setForm({
+      ...emptyForm,
+      audienceType: 'TAGS',
+      audienceTags: tags.join(', '),
+      name: `Campaign — ${tags.join(', ')}`,
     });
     setSearchParams({}, { replace: true });
   }, [searchParams, setSearchParams, canManageTeam]);
@@ -361,6 +461,8 @@ export default function CampaignsPage() {
     setEditing(null);
     setViewOnly(false);
     setForm(emptyForm);
+    setAudiencePreviewCount(null);
+    setActiveStep(0);
     setSlideOpen(true);
     setAnalytics(null);
     setAnalyticsError(null);
@@ -378,6 +480,8 @@ export default function CampaignsPage() {
       setEditing(full);
       setViewOnly(true);
       setForm(campaignToForm(full, templates));
+      setAudiencePreviewCount(null);
+      setActiveStep(0);
       setRecipientPage(1);
       setSlideOpen(true);
     } catch {
@@ -392,6 +496,8 @@ export default function CampaignsPage() {
       setEditing(full);
       setViewOnly(false);
       setForm(campaignToForm(full, templates));
+      setAudiencePreviewCount(null);
+      setActiveStep(0);
       setSlideOpen(true);
       loadTemplates();
     } catch {
@@ -404,6 +510,7 @@ export default function CampaignsPage() {
     setViewOnly(false);
     setEditing(null);
     setForm(emptyForm);
+    setAudiencePreviewCount(null);
     setAnalytics(null);
     setAnalyticsError(null);
     setRecipients([]);
@@ -429,18 +536,28 @@ export default function CampaignsPage() {
       }
 
       if (andSend && campaignId) {
-        if (!confirm('Start sending this campaign now?')) {
-          loadCampaigns(false);
-          return campaignId;
-        }
-        await campaignApi.send(campaignId);
-        toastSuccess('Campaign started');
-        loadCampaigns(false);
         const full = await loadCampaignDetail({ id: campaignId } as Campaign);
         setEditing(full);
-        setViewOnly(true);
         setForm(campaignToForm(full, templates));
-        setRecipientPage(1);
+        setViewOnly(true);
+        setConfirmState({
+          title: `Send to ${full.totalContacts.toLocaleString()} people?`,
+          description: 'This will start sending the approved template to the selected audience.',
+          confirmLabel: `Send to ${full.totalContacts.toLocaleString()}`,
+          variant: 'default',
+          onConfirm: async () => {
+            try {
+              await campaignApi.send(campaignId as string);
+              toastSuccess('Campaign started');
+              setSlideOpen(false);
+              loadCampaigns(false);
+            } catch (err: unknown) {
+              toastError(getErrMsg(err, 'Failed to start campaign'));
+            } finally {
+              setConfirmState(null);
+            }
+          },
+        });
         return campaignId;
       }
 
@@ -452,6 +569,7 @@ export default function CampaignsPage() {
       return null;
     } finally {
       setSaving(false);
+      setConfirmState(null);
     }
   };
 
@@ -467,7 +585,13 @@ export default function CampaignsPage() {
   };
 
   const handleDelete = async () => {
-    if (!editing || !confirm(`Delete campaign "${editing.name}"?`)) return;
+    if (!editing) return;
+    setConfirmState({
+      title: 'Delete this campaign?',
+      description: `“${editing.name}” will be permanently removed.`,
+      confirmLabel: 'Delete campaign',
+      variant: 'danger',
+      onConfirm: async () => {
     setSaving(true);
     try {
       await campaignApi.delete(editing.id);
@@ -479,18 +603,29 @@ export default function CampaignsPage() {
     } finally {
       setSaving(false);
     }
+      },
+    });
   };
 
   const handleDeleteItem = async (campaign: Campaign) => {
     if (!canEditCampaign(campaign.status)) return;
-    if (!confirm(`Delete campaign "${campaign.name}"?`)) return;
-    try {
-      await campaignApi.delete(campaign.id);
-      loadCampaigns(false);
-      toastSuccess('Campaign deleted');
-    } catch (err: unknown) {
-      toastError(getErrMsg(err, 'Failed to delete campaign'));
-    }
+    setConfirmState({
+      title: 'Delete this campaign?',
+      description: `“${campaign.name}” will be permanently removed.`,
+      confirmLabel: 'Delete campaign',
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          await campaignApi.delete(campaign.id);
+          loadCampaigns(false);
+          toastSuccess('Campaign deleted');
+        } catch (err: unknown) {
+          toastError(getErrMsg(err, 'Failed to delete campaign'));
+        } finally {
+          setConfirmState(null);
+        }
+      },
+    });
   };
 
   const handleDuplicate = async () => {
@@ -513,24 +648,23 @@ export default function CampaignsPage() {
     if (!canManageTeam) return;
     const campaign = campaigns.find((c) => c.id === id) || (editing?.id === id ? editing : null);
     const count = campaign?.totalContacts ?? 0;
-    let costLine = '';
-    if (count > 0) {
-      try {
-        const { data } = await billingApi.estimateCost(count);
-        costLine = `\n\nEstimated Meta cost: ₹${data.data.estimatedCostInr.toLocaleString('en-IN')}`;
-      } catch {
-        /* estimate optional */
-      }
-    }
-    const recipientLine = count > 0 ? ` (${count.toLocaleString()} people)` : '';
-    if (!confirm(`Start sending this campaign?${recipientLine}${costLine}`)) return;
-    try {
-      await campaignApi.send(id);
-      loadCampaigns(false);
-      toastSuccess('Campaign started');
-    } catch (err: unknown) {
-      toastError(getErrMsg(err, 'Failed to start campaign'));
-    }
+    setConfirmState({
+      title: `Send to ${count.toLocaleString()} people?`,
+      description: 'This will start sending the approved template to the selected audience.',
+      confirmLabel: `Send to ${count.toLocaleString()}`,
+      variant: 'default',
+      onConfirm: async () => {
+        try {
+          await campaignApi.send(id);
+          loadCampaigns(false);
+          toastSuccess('Campaign started');
+        } catch (err: unknown) {
+          toastError(getErrMsg(err, 'Failed to start campaign'));
+        } finally {
+          setConfirmState(null);
+        }
+      },
+    });
   };
 
   const handleAction = async (action: () => Promise<unknown>, success: string) => {
@@ -575,16 +709,16 @@ export default function CampaignsPage() {
     <PageShell>
       <div className="space-y-4 sm:space-y-5">
         <PageHero
-          badge="Broadcast"
+          badge="Campaigns"
           badgeIcon={Send}
-          title="Send messages to many contacts"
-          description="Use approved templates, pick your audience, and track delivery."
+          title="Plan, send, and monitor campaigns"
+          description="Create a campaign, schedule it for later, and follow delivery from one place."
           accent="violet"
           stats={[
-            { label: 'Total', value: summary.total },
-            { label: 'Active', value: summary.running, tone: 'text-violet-700' },
-            { label: 'Completed', value: summary.completed, tone: 'text-whatsapp-700' },
-            { label: 'Sent', value: summary.sent, tone: 'text-sky-700' },
+            { label: 'Drafts', value: lifecycleSummary.drafts },
+            { label: 'Scheduled', value: lifecycleSummary.scheduled, tone: 'text-amber-700' },
+            { label: 'Running', value: lifecycleSummary.running, tone: 'text-violet-700' },
+            { label: 'Completed', value: lifecycleSummary.completed, tone: 'text-whatsapp-700' },
           ]}
         />
 
@@ -615,14 +749,14 @@ export default function CampaignsPage() {
             actions={
               canManageTeam ? (
                 <div className="flex flex-wrap items-center gap-2">
+                  <AppButton icon={<Plus size={16} />} onClick={openCreate}>
+                    New campaign
+                  </AppButton>
                   <Link to="/content-studio">
                     <AppButton variant="secondary" size="sm">
                       Content Studio
                     </AppButton>
                   </Link>
-                  <AppButton icon={<Plus size={16} />} onClick={openCreate}>
-                    New campaign
-                  </AppButton>
                 </div>
               ) : undefined
             }
@@ -658,35 +792,48 @@ export default function CampaignsPage() {
               />
             </div>
           ) : (
-            <ResponsiveDataView
-              items={campaigns}
-              cardClassName="divide-y divide-neutral-200 dark:divide-neutral-800 lg:hidden"
-              tableClassName="px-4 sm:px-5 pt-4 sm:pb-5"
-              renderCard={(c) => (
-                <CampaignCard
-                  key={c.id}
-                  campaign={c}
-                  onView={() => openView(c)}
-                  onEdit={canManageTeam ? () => openEdit(c) : undefined}
-                  onSend={canManageTeam ? () => handleSend(c.id) : undefined}
-                  onDelete={canManageTeam ? () => handleDeleteItem(c) : undefined}
-                />
-              )}
-              renderTable={() => (
-                <CampaignTable
-                  campaigns={campaigns}
-                  page={page}
-                  pageSize={DEFAULT_PAGE_SIZE}
-                  total={total}
-                  onPageChange={setPage}
-                  canManageTeam={canManageTeam}
-                  onView={openView}
-                  onEdit={canManageTeam ? openEdit : undefined}
-                  onSend={canManageTeam ? (c) => handleSend(c.id) : undefined}
-                  onDelete={canManageTeam ? handleDeleteItem : undefined}
-                />
-              )}
-            />
+            <>
+              <div className="sr-only" aria-live="polite" role="status">
+                Campaign progress updated: {lifecycleSummary.running} running and {lifecycleSummary.completed} completed.
+              </div>
+              <ResponsiveDataView
+                items={campaigns}
+                cardClassName="divide-y divide-neutral-200 dark:divide-neutral-800 lg:hidden"
+                tableClassName="px-4 sm:px-5 pt-4 sm:pb-5"
+                renderCard={(c) => (
+                  <CampaignCard
+                    key={c.id}
+                    campaign={c}
+                    onView={() => openView(c)}
+                    onEdit={canManageTeam ? () => openEdit(c) : undefined}
+                    onSend={canManageTeam ? () => handleSend(c.id) : undefined}
+                    onDelete={canManageTeam ? () => handleDeleteItem(c) : undefined}
+                  />
+                )}
+                renderTable={() => (
+                  <CampaignTable
+                    campaigns={campaigns}
+                    page={page}
+                    pageSize={DEFAULT_PAGE_SIZE}
+                    total={total}
+                    onPageChange={setPage}
+                    canManageTeam={canManageTeam}
+                    onView={openView}
+                    onEdit={canManageTeam ? openEdit : undefined}
+                    onSend={canManageTeam ? (c) => handleSend(c.id) : undefined}
+                    onDelete={canManageTeam ? handleDeleteItem : undefined}
+                  />
+                )}
+              />
+              <Pagination
+                className="lg:hidden"
+                page={page}
+                pageSize={DEFAULT_PAGE_SIZE}
+                total={total}
+                onPageChange={setPage}
+                itemLabel="campaigns"
+              />
+            </>
           )}
         </div>
       </div>
@@ -797,11 +944,12 @@ export default function CampaignsPage() {
               primaryAction={
                 !form.scheduleEnabled
                   ? {
-                      label: editing ? 'Save & send' : 'Create & send',
+                      label: `Send to ${latestAudienceCount.toLocaleString()}`,
                       onClick: handleSaveAndSend,
                     }
                   : undefined
               }
+              submitDisabled={invalidAudienceCount > 0 || latestAudienceCount === 0}
             />
           )
         }
@@ -847,6 +995,46 @@ export default function CampaignsPage() {
           </div>
         ) : (
           <form id="slideover-form" onSubmit={handleSubmit} className="space-y-6">
+            <nav aria-label="Campaign creation steps" className="sticky top-0 z-10 -mx-1 rounded-xl border border-theme-border bg-theme-surface/95 p-2 backdrop-blur-sm">
+              <ol className="grid grid-cols-4 gap-1">
+                {['Template', 'Audience', 'Schedule', 'Review'].map((label, index) => (
+                  <li key={label}>
+                    <button
+                      type="button"
+                      onClick={() => index <= activeStep && setActiveStep(index)}
+                      disabled={index > activeStep}
+                      aria-current={activeStep === index ? 'step' : undefined}
+                      className={`w-full rounded-lg px-1 py-2 text-[10px] font-bold transition focus:outline-none focus:ring-2 focus:ring-violet-500/40 ${
+                        activeStep === index
+                          ? 'bg-violet-600 text-white'
+                          : index < activeStep
+                            ? 'bg-violet-50 text-violet-700 hover:bg-violet-100 dark:bg-violet-950/30 dark:text-violet-300'
+                            : 'bg-theme-subtle text-theme-muted'
+                      }`}
+                    >
+                      <span className="block text-[9px] opacity-75">Step {index + 1}</span>
+                      {label}
+                    </button>
+                  </li>
+                ))}
+              </ol>
+              <div className="sr-only" aria-live="polite">Currently editing {['Template', 'Audience', 'Schedule', 'Review'][activeStep]} step</div>
+            </nav>
+            <aside className="rounded-xl border border-theme-border bg-theme-subtle/35 p-3" aria-label="Campaign summary">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-theme-muted">Campaign summary</p>
+                <span className="text-[10px] font-semibold text-theme-muted">{activeStep + 1}/4</span>
+              </div>
+              <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-[11px] sm:grid-cols-3">
+                <div><dt className="text-theme-muted">Sender</dt><dd className="truncate font-bold text-theme-fg">{whatsappNumbers.find((n) => n.id === form.whatsappNumberId)?.phoneNumber || (whatsappNumbers.length === 1 ? whatsappNumbers[0].phoneNumber : 'Default number')}</dd></div>
+                <div><dt className="text-theme-muted">Template</dt><dd className="truncate font-bold text-theme-fg">{form.templateName || 'Not selected'}</dd></div>
+                <div><dt className="text-theme-muted">Audience</dt><dd className="font-bold text-theme-fg">{latestAudienceCount.toLocaleString()}</dd></div>
+                <div><dt className="text-theme-muted">Invalid / excluded</dt><dd className={`font-bold ${invalidAudienceCount ? 'text-amber-700 dark:text-amber-300' : 'text-theme-fg'}`}>{invalidAudienceCount}</dd></div>
+                <div><dt className="text-theme-muted">Estimated cost</dt><dd className="font-bold text-theme-fg">{estimatedCost != null ? `₹${estimatedCost.toLocaleString('en-IN')}` : '—'}</dd></div>
+                <div><dt className="text-theme-muted">Quota remaining</dt><dd className="font-bold text-theme-fg">{quotaRemaining == null ? '—' : quotaRemaining.toLocaleString()}</dd></div>
+                <div className="col-span-2 sm:col-span-3"><dt className="text-theme-muted">Schedule</dt><dd className="font-bold text-theme-fg">{form.scheduleEnabled && form.scheduledAt ? `${new Date(form.scheduledAt).toLocaleString()} (${form.timezone})` : 'Send manually after saving'}</dd></div>
+              </dl>
+            </aside>
             {!editing && (
               <ModalCallout
                 icon={LayoutTemplate}
@@ -856,7 +1044,7 @@ export default function CampaignsPage() {
               />
             )}
 
-            <ModalSection step={1} title="Campaign details" subtitle="Name, template, and sending number">
+            {activeStep === 0 && <ModalSection step={1} title="Campaign details" subtitle="Name, template, and sending number">
               <AppInput
                 id="campaign-name"
                 label="Campaign name"
@@ -893,9 +1081,9 @@ export default function CampaignsPage() {
                   />
                 )}
               </div>
-            </ModalSection>
+            </ModalSection>}
 
-            {(form.bodyParams.length > 0 || form.headerParams.length > 0 || selectedTemplate) && (
+            {activeStep === 0 && (form.bodyParams.length > 0 || form.headerParams.length > 0 || selectedTemplate) && (
               <ModalSection step={2} title="Message details" subtitle="Fill in the blanks and preview your message">
                 <div className="space-y-4">
                   {form.bodyParams.map((_, i) => (
@@ -948,7 +1136,7 @@ export default function CampaignsPage() {
               </ModalSection>
             )}
 
-            <ModalSection step={selectedTemplate ? 3 : 2} title="Audience" subtitle="Who should receive this campaign?">
+            {activeStep === 1 && <ModalSection step={2} title="Audience" subtitle="Who should receive this campaign?">
               <CampaignAudienceSection
                 audienceType={form.audienceType}
                 onAudienceTypeChange={(audienceType) => setForm({ ...form, audienceType })}
@@ -963,11 +1151,12 @@ export default function CampaignsPage() {
                 availableTags={availableTags}
                 editingTotalContacts={editing?.totalContacts}
                 showSavedCount={Boolean(editing)}
+                onPreviewCountChange={setAudiencePreviewCount}
               />
-            </ModalSection>
+            </ModalSection>}
 
-            <ModalSection
-              step={selectedTemplate ? 4 : 3}
+            {activeStep === 2 && <ModalSection
+              step={3}
               title="Scheduling"
               subtitle="Send immediately or pick a date and time"
             >
@@ -1009,7 +1198,21 @@ export default function CampaignsPage() {
                   />
                 </div>
               )}
-            </ModalSection>
+            </ModalSection>}
+
+            {activeStep === 3 && (
+              <ModalSection step={4} title="Review and send" subtitle="Confirm the details before you launch">
+                <div className="rounded-xl border border-violet-200/70 bg-violet-50/60 p-3 text-[12px] dark:border-violet-800/40 dark:bg-violet-950/20">
+                  <p className="font-bold text-violet-900 dark:text-violet-200">Ready to review</p>
+                  <p className="mt-1 text-violet-800 dark:text-violet-300">Check the summary below, then save the draft or send it when you are ready.</p>
+                </div>
+                {filledPreview && (
+                  <ModalPreviewCard title="Message preview">
+                    <WhatsAppTemplatePreview {...filledPreview} variant="compact" />
+                  </ModalPreviewCard>
+                )}
+              </ModalSection>
+            )}
 
             {templates.length === 0 && (
               <ModalCallout
@@ -1019,9 +1222,38 @@ export default function CampaignsPage() {
                 accent="amber"
               />
             )}
+            <div className="flex items-center justify-between gap-2 border-t border-theme-border pt-4">
+              <button
+                type="button"
+                onClick={() => setActiveStep((step) => Math.max(0, step - 1))}
+                disabled={activeStep === 0}
+                className="rounded-xl border border-theme-border px-3 py-2 text-[12px] font-bold text-theme-secondary transition hover:bg-theme-subtle disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+              >
+                Back
+              </button>
+              {activeStep < 3 && (
+                <button
+                  type="button"
+                  onClick={() => setActiveStep((step) => Math.min(3, step + 1))}
+                  className="rounded-xl bg-violet-600 px-4 py-2 text-[12px] font-bold text-white transition hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+                >
+                  Continue to {['Audience', 'Schedule', 'Review'][activeStep]}
+                </button>
+              )}
+            </div>
           </form>
         )}
       </SlideOver>
+      <ConfirmDialog
+        open={Boolean(confirmState)}
+        onClose={() => setConfirmState(null)}
+        onConfirm={() => void confirmState?.onConfirm()}
+        title={confirmState?.title || ''}
+        description={confirmState?.description}
+        confirmLabel={confirmState?.confirmLabel}
+        variant={confirmState?.variant}
+        loading={saving}
+      />
     </PageShell>
   );
 }

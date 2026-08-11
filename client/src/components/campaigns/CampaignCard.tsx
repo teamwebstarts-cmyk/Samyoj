@@ -2,6 +2,7 @@ import {
   Calendar,
   Eye,
   LayoutTemplate,
+  MoreHorizontal,
   Pencil,
   Play,
   Send,
@@ -43,7 +44,7 @@ export default function CampaignCard({
       <button
         type="button"
         onClick={onView}
-        className="flex w-full items-start gap-3 px-4 py-3.5 text-left"
+        className="flex w-full items-start gap-3 px-4 py-3.5 text-left focus:outline-none focus:ring-2 focus:ring-inset focus:ring-violet-500/50"
       >
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-purple-700 text-white shadow-[0_4px_14px_rgba(139,92,246,0.3)]">
           <Send className="h-4 w-4" strokeWidth={2.25} />
@@ -93,6 +94,11 @@ export default function CampaignCard({
               <div
                 className={`h-full rounded-full bg-gradient-to-r transition-all duration-500 ${meta.bar}`}
                 style={{ width: `${progress}%` }}
+                role="progressbar"
+                aria-valuenow={progress}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label={`${campaign.name}: ${progress}% sent, ${campaign.sentCount} of ${campaign.totalContacts} recipients`}
               />
             </div>
           </div>
@@ -116,20 +122,34 @@ export default function CampaignCard({
       <div className="flex items-center gap-2 border-t border-theme-border/60 bg-theme-subtle/20 px-3 py-2.5">
         {onSend && editable && (
           <AppButton size="sm" className="flex-1" icon={<Play size={14} />} onClick={onSend}>
-            Send
+            Send to {campaign.totalContacts.toLocaleString()}
           </AppButton>
         )}
-        <AppButton size="sm" className="flex-1" variant="secondary" icon={<Eye size={14} />} onClick={onView}>
-          View
-        </AppButton>
-        {onEdit && editable && (
-          <AppButton size="sm" variant="secondary" icon={<Pencil size={14} />} onClick={onEdit}>
-            Edit
+        {(!onSend || !editable) && (
+          <AppButton size="sm" className="flex-1" variant="secondary" icon={<Eye size={14} />} onClick={onView}>
+            View campaign
           </AppButton>
         )}
-        {onDelete && editable && (
-          <AppButton size="sm" variant="danger" icon={<Trash2 size={14} />} onClick={onDelete} aria-label="Delete" />
-        )}
+        <details className="relative">
+          <summary className="flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-xl border border-theme-border bg-theme-surface text-theme-secondary hover:bg-theme-subtle focus:outline-none focus:ring-2 focus:ring-violet-500/40" aria-label="More campaign actions">
+            <MoreHorizontal className="h-4 w-4" />
+          </summary>
+          <div className="absolute bottom-11 right-0 z-20 min-w-[130px] rounded-xl border border-theme-border bg-theme-surface p-1.5 shadow-xl">
+            <button type="button" onClick={onView} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-fg hover:bg-theme-subtle">
+              <Eye className="h-3.5 w-3.5" /> View
+            </button>
+            {onEdit && editable && (
+              <button type="button" onClick={onEdit} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-fg hover:bg-theme-subtle">
+                <Pencil className="h-3.5 w-3.5" /> Edit
+              </button>
+            )}
+            {onDelete && editable && (
+              <button type="button" onClick={onDelete} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30">
+                <Trash2 className="h-3.5 w-3.5" /> Delete
+              </button>
+            )}
+          </div>
+        </details>
       </div>
     </article>
   );

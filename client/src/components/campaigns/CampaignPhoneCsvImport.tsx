@@ -10,6 +10,8 @@ interface CampaignPhoneCsvImportProps {
 export default function CampaignPhoneCsvImport({ onPhonesImported }: CampaignPhoneCsvImportProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
+  const [importErrors, setImportErrors] = useState<string[]>([]);
+  const [importedCount, setImportedCount] = useState(0);
 
   const handleFile = async (file: File) => {
     const lower = file.name.toLowerCase();
@@ -20,16 +22,15 @@ export default function CampaignPhoneCsvImport({ onPhonesImported }: CampaignPho
 
     const text = await file.text();
     const preview = parseContactImportFile(text, file.name);
-    if (preview.errors.length) {
-      toastError(preview.errors.join('\n'));
-      return;
-    }
+    setImportErrors(preview.errors);
+    setImportedCount(preview.rows.length);
     if (!preview.rows.length) {
       toastError('No valid phone numbers found in file');
       return;
     }
 
     onPhonesImported(preview.rows.map((row) => row.phone));
+    if (preview.errors.length) toastError(`${preview.errors.length} invalid row${preview.errors.length === 1 ? '' : 's'} skipped`);
   };
 
   const onDrop = (e: React.DragEvent) => {
@@ -43,6 +44,7 @@ export default function CampaignPhoneCsvImport({ onPhonesImported }: CampaignPho
     <div
       role="button"
       tabIndex={0}
+      aria-label="Import phone numbers from CSV or JSON"
       onClick={() => inputRef.current?.click()}
       onKeyDown={(e) => e.key === 'Enter' && inputRef.current?.click()}
       onDragOver={(e) => {
@@ -79,6 +81,24 @@ export default function CampaignPhoneCsvImport({ onPhonesImported }: CampaignPho
         <FileSpreadsheet className="h-3 w-3" />
         Uses phone column from contact import format
       </p>
+      {(importErrors.length > 0 || importedCount > 0) && (
+        <div className="mt-3 text-left text-[11px]" aria-live="polite">
+          {importedCount > 0 && (
+            <p className="font-semibold text-emerald-700 dark:text-emerald-300">
+              Imported {importedCount} valid row{importedCount === 1 ? '' : 's'}
+            </p>
+          )}
+          {importErrors.length > 0 && (
+            <div className="mt-1 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-amber-800 dark:border-amber-800/50 dark:bg-amber-950/30 dark:text-amber-300" role="alert">
+              <p className="font-bold">{importErrors.length} invalid row{importErrors.length === 1 ? '' : 's'} skipped</p>
+              <ul className="mt-1 space-y-0.5">
+                {importErrors.slice(0, 4).map((error) => <li key={error}>{error}</li>)}
+                {importErrors.length > 4 && <li>…and {importErrors.length - 4} more</li>}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
