@@ -1,3 +1,4 @@
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Check, Clock, GitBranch, LifeBuoy, Star } from 'lucide-react';
 import ContactAvatar from './ContactAvatar';
 import { useGlassTipProps } from './ComposerGlassTip';
@@ -70,6 +71,46 @@ export default function ConversationItem({
   const hasUnread = unreadCount > 0;
   const statusLabel = STATUS_LABEL[status] || STATUS_LABEL.CLOSED;
   const statusPillStyle = softStatusPillStyle(status, { dark: themeResolved === 'dark' });
+  const hoverPreviewAllowed = useHoverPreviewAllowed();
+  const previewRef = useRef<HTMLParagraphElement>(null);
+  const hoverTimerRef = useRef<number | null>(null);
+  const [previewTruncated, setPreviewTruncated] = useState(false);
+  const [showFullPreview, setShowFullPreview] = useState(false);
+
+  useLayoutEffect(() => {
+    const el = previewRef.current;
+    if (!el) return;
+    const measure = () => setPreviewTruncated(el.scrollWidth > el.clientWidth + 1);
+    measure();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+    ro?.observe(el);
+    return () => ro?.disconnect();
+  }, [preview]);
+
+  useEffect(
+    () => () => {
+      if (hoverTimerRef.current) window.clearTimeout(hoverTimerRef.current);
+    },
+    []
+  );
+
+  const clearHoverTimer = () => {
+    if (hoverTimerRef.current) {
+      window.clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+  };
+
+  const onRowMouseEnter = () => {
+    if (!hoverPreviewAllowed || !previewTruncated) return;
+    clearHoverTimer();
+    hoverTimerRef.current = window.setTimeout(() => setShowFullPreview(true), 800);
+  };
+
+  const onRowMouseLeave = () => {
+    clearHoverTimer();
+    setShowFullPreview(false);
+  };
 
   const agentLabel = assignedAgent
     ? currentUserId && assignedAgent.id === currentUserId
@@ -82,6 +123,8 @@ export default function ConversationItem({
       type="button"
       onClick={onSelect}
       onContextMenu={onContextMenu}
+      onMouseEnter={onRowMouseEnter}
+      onMouseLeave={onRowMouseLeave}
       aria-current={selected ? 'true' : undefined}
       className={`group relative flex w-full items-start gap-2.5 px-3 py-2.5 text-left sm:px-4 ${FOCUS_RING_CLASS} ${
         checked
@@ -167,16 +210,26 @@ export default function ConversationItem({
           )}
         </div>
 
-        <p
-          className={`mt-0.5 truncate text-[12px] leading-snug ${
-            hasUnread ? 'font-medium text-theme-secondary' : 'text-theme-muted'
-          }`}
-        >
-          {preview}
-        </p>
+        <div className="relative mt-0.5 flex items-center gap-2">
+          <p
+            ref={previewRef}
+            className={`min-w-0 flex-1 truncate text-[12px] leading-snug ${
+              hasUnread ? 'font-medium text-theme-secondary' : 'text-theme-muted'
+            }`}
+          >
+            {preview}
+          </p>
+          {hasUnread && (
+            <span className="flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-whatsapp-400 to-whatsapp-600 px-1 text-[10px] font-bold text-white shadow-[0_2px_6px_rgba(37,211,102,0.4)]">
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </span>
+          )}
+          {showFullPreview && previewTruncated ? (
+            <ConversationMessageTooltip message={preview} />
+          ) : null}
+        </div>
 
-        <div className="mt-1 flex items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
+        <div className="mt-1 flex min-w-0 items-center gap-1.5 overflow-hidden">
             <span
               className="inline-flex h-[18px] shrink-0 items-center rounded-lg border px-1.5 text-[10.5px] font-semibold tracking-wide"
               style={statusPillStyle}
@@ -210,24 +263,8 @@ export default function ConversationItem({
                 <span className="truncate">{activeFlow.currentStepLabel || 'Flow'}</span>
               </span>
             )}
-          </div>
-
-          {hasUnread && (
-            <span className="flex h-[18px] min-w-[18px] shrink-0 items-center justify-center self-end rounded-full bg-gradient-to-br from-whatsapp-400 to-whatsapp-600 px-1 text-[10px] font-bold text-white shadow-[0_2px_6px_rgba(37,211,102,0.4)]">
-              {unreadCount > 99 ? '99+' : unreadCount}
-            </span>
-          )}
         </div>
       </div>
-
-      <ConversationPreviewHover
-        contactName={contact.name}
-        contactPhone={contact.phone}
-        lastMessage={preview}
-        preview={preview}
-        lastMessageAt={lastMessageAt}
-        status={status}
-      />
     </button>
   );
 }
@@ -239,39 +276,14 @@ function useHoverPreviewAllowed() {
   return !reducedMotion && !isTouch;
 }
 
-function ConversationPreviewHover({
-  contactName,
-  contactPhone,
-  lastMessage,
-  preview,
-  lastMessageAt,
-  status,
-}: {
-  contactName?: string;
-  contactPhone?: string;
-  lastMessage: string;
-  preview: string;
-  lastMessageAt?: string;
-  status: string;
-}) {
-  const allowed = useHoverPreviewAllowed();
-  if (!allowed) return null;
-  const time = lastMessageAt ? new Date(lastMessageAt).toLocaleString() : '';
+function ConversationMessageTooltip({ message }: { message: string }) {
   return (
     <div
-      role="presentation"
-      className="inbox-row-preview pointer-events-none invisible absolute right-3 top-full z-30 mt-1 w-[280px] rounded-xl border border-theme-border bg-theme-surface/95 p-3 text-[12px] text-theme-fg opacity-0 shadow-panel ring-1 ring-black/5 backdrop-blur transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+      role="tooltip"
+      className="inbox-row-preview pointer-events-none absolute bottom-full left-0 z-30 mb-1 max-w-[min(300px,calc(100vw-4rem))] rounded-lg bg-neutral-800 px-2.5 py-1.5 text-[12px] leading-snug text-white shadow-[0_4px_16px_rgba(0,0,0,0.22)] dark:bg-neutral-900"
       data-testid="conversation-preview"
     >
-      <p className="truncate text-[12.5px] font-bold text-theme-fg">{contactName || contactPhone}</p>
-      {contactName && contactPhone && (
-        <p className="truncate text-[10.5px] font-medium text-theme-muted">{contactPhone}</p>
-      )}
-      <p className="mt-1.5 line-clamp-3 text-[11.5px] text-theme-secondary">{lastMessage || preview}</p>
-      <p className="mt-1.5 flex items-center gap-2 text-[10px] uppercase tracking-wide text-theme-muted">
-        <span>{status}</span>
-        {time && <span>· {time}</span>}
-      </p>
+      {message}
     </div>
   );
 }

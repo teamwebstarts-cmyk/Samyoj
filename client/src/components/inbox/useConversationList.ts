@@ -32,7 +32,6 @@ export function writeStoredPageSize(size: PageSize) {
 interface ListFilters {
   search: string;
   chip: ListChip;
-  statusFilter: string;
   agentFilter: string;
   userId?: string;
   page: number;
@@ -46,7 +45,6 @@ interface ListFilters {
 export function useConversationList({
   search,
   chip,
-  statusFilter,
   agentFilter,
   userId,
   page,
@@ -87,7 +85,6 @@ export function useConversationList({
         pageSize,
         search,
         chip,
-        statusFilter,
         agentFilter,
         userId,
       });
@@ -113,7 +110,6 @@ export function useConversationList({
   }, [
     search,
     chip,
-    statusFilter,
     agentFilter,
     userId,
     page,

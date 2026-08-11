@@ -1,28 +1,17 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
-  Bell,
   Bot,
-  CheckCircle2,
-  CheckSquare,
-  Clock,
-  Eraser,
-  Mail,
-  MoreVertical,
-  PauseCircle,
+  ChevronDown,
+  Loader2,
   Phone,
-  PlayCircle,
   Search,
   Star,
   UserPlus,
-  XCircle,
-  Loader2,
 } from 'lucide-react';
 import ContactAvatar from './ContactAvatar';
 import AssignAgentPopover from './AssignAgentPopover';
 import BotPickerPopover from './BotPickerPopover';
-import SnoozePopover from './SnoozePopover';
 import { ServiceWindowBadge } from './ServiceWindowBanner';
 import { useGlassTipProps } from './ComposerGlassTip';
 import type { PresenceViewer } from './useConversationPresence';
@@ -45,18 +34,11 @@ interface ChatHeaderProps {
   viewers: PresenceViewer[];
   onBack: () => void;
   onCallBack: () => void;
-  onSnoozeUntil: (untilIso: string, label: string) => void;
-  onUnsnooze: () => void;
+  onAssign: (agentId: string | null) => void;
   onToggleBot: () => void;
   onSetActiveBot?: (botId: string | null) => void;
   onToggleFavorite: () => void;
-  onMarkUnread: () => void;
   onToggleSearch: () => void;
-  onAssign: (agentId: string | null) => void;
-  onStatusChange: (status: string) => void;
-  onClearChat?: () => void;
-  onSelectMessages?: () => void;
-  selectMode?: boolean;
 }
 
 function HeaderIconButton({
@@ -65,7 +47,6 @@ function HeaderIconButton({
   disabled,
   active,
   pressed,
-  dot,
   className = '',
   children,
 }: {
@@ -74,7 +55,6 @@ function HeaderIconButton({
   disabled?: boolean;
   active?: boolean;
   pressed?: boolean;
-  dot?: boolean;
   className?: string;
   children: React.ReactNode;
 }) {
@@ -94,9 +74,6 @@ function HeaderIconButton({
       } ${className}`}
     >
       {children}
-      {dot && (
-        <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-indigo-500 ring-2 ring-white dark:ring-neutral-900" />
-      )}
     </button>
   );
 }
@@ -139,82 +116,36 @@ export default function ChatHeader({
   viewers,
   onBack,
   onCallBack,
-  onSnoozeUntil,
-  onUnsnooze,
+  onAssign,
   onToggleBot,
   onSetActiveBot,
   onToggleFavorite,
-  onMarkUnread,
   onToggleSearch,
-  onAssign,
-  onStatusChange,
-  onClearChat,
-  onSelectMessages,
-  selectMode = false,
 }: ChatHeaderProps) {
   const tipFor = useGlassTipProps();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [assignOpen, setAssignOpen] = useState(false);
-  const [snoozeOpen, setSnoozeOpen] = useState(false);
   const [botMenuOpen, setBotMenuOpen] = useState(false);
+  const [assignOpen, setAssignOpen] = useState(false);
   const [starPulse, setStarPulse] = useState(false);
-  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const menuPanelRef = useRef<HTMLDivElement>(null);
-  const menuBtnRef = useRef<HTMLButtonElement>(null);
-  const snoozeRef = useRef<HTMLDivElement>(null);
   const botBtnRef = useRef<HTMLButtonElement>(null);
-
-  useLayoutEffect(() => {
-    if (!menuOpen || !menuBtnRef.current) {
-      setMenuPos(null);
-      return;
-    }
-    const place = () => {
-      const rect = menuBtnRef.current!.getBoundingClientRect();
-      setMenuPos({
-        top: rect.bottom + 6,
-        right: Math.max(8, window.innerWidth - rect.right),
-      });
-    };
-    place();
-    window.addEventListener('resize', place);
-    window.addEventListener('scroll', place, true);
-    return () => {
-      window.removeEventListener('resize', place);
-      window.removeEventListener('scroll', place, true);
-    };
-  }, [menuOpen]);
-
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onDoc = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (menuRef.current?.contains(target)) return;
-      if (menuPanelRef.current?.contains(target)) return;
-      setMenuOpen(false);
-      setAssignOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setMenuOpen(false);
-        setAssignOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', onDoc);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDoc);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [menuOpen]);
+  const assignBtnRef = useRef<HTMLButtonElement>(null);
 
   const { contact, status } = conversation;
-  const assignedId = conversation.assignedAgent?.id;
   const isFavorite = Boolean(conversation.isFavorite);
-  const isSnoozed =
-    Boolean(conversation.snoozedUntil && new Date(conversation.snoozedUntil).getTime() > Date.now()) ||
-    status === 'SNOOZED';
+  const assignedId = conversation.assignedAgent?.id;
+
+  const botDisplayName = useMemo(() => {
+    if (conversation.activeBot?.name) return conversation.activeBot.name;
+    const enabled = bots.filter((b) => b.enabled);
+    const defaultBot = enabled.find((b) => b.isDefault) ?? enabled[0];
+    return defaultBot ? 'Auto' : 'AI Bot';
+  }, [conversation.activeBot?.name, bots]);
+
+  const botTipDetail = useMemo(() => {
+    if (conversation.activeBot?.name) return conversation.activeBot.name;
+    const enabled = bots.filter((b) => b.enabled);
+    const defaultBot = enabled.find((b) => b.isDefault) ?? enabled[0];
+    return defaultBot ? `Auto · ${defaultBot.name}` : 'Choose chatbot';
+  }, [conversation.activeBot?.name, bots]);
 
   const avatarPresence =
     status === 'OPEN' || status === 'PENDING' || status === 'CLOSED' || status === 'SNOOZED'
@@ -225,121 +156,11 @@ export default function ChatHeader({
       avatarPresence
     ];
 
-  const statusItems = [
-    { value: 'OPEN', label: 'Mark as open', icon: CheckCircle2 },
-    { value: 'PENDING', label: 'Mark as pending', icon: Clock },
-    { value: 'CLOSED', label: 'Mark as closed', icon: XCircle },
-  ];
-
   const handleFavoriteClick = () => {
     setStarPulse(true);
     window.setTimeout(() => setStarPulse(false), 280);
     onToggleFavorite();
   };
-
-  const overflowMenu =
-    menuOpen && menuPos
-      ? createPortal(
-          <div
-            ref={menuPanelRef}
-            role="menu"
-            style={{ top: menuPos.top, right: menuPos.right }}
-            className="fixed z-[80] w-[220px] overflow-hidden rounded-xl border border-theme-border bg-theme-surface py-1 shadow-panel"
-          >
-            <button
-              type="button"
-              onClick={() => setAssignOpen((v) => !v)}
-              aria-expanded={assignOpen}
-              className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] text-theme-fg transition hover:bg-theme-subtle ${FOCUS_RING_CLASS}`}
-            >
-              <UserPlus className="h-4 w-4 text-emerald-600" />
-              Assign agent
-              <span className="ml-auto truncate text-[11px] text-theme-muted">
-                {conversation.assignedAgent?.name || 'None'}
-              </span>
-            </button>
-            {assignOpen && (
-              <div className="relative border-y border-theme-border/60 bg-theme-subtle/40 px-2 py-2">
-                <AssignAgentPopover
-                  agents={agents}
-                  currentUserId={currentUserId}
-                  selectedAgentId={assignedId}
-                  disabled={assigning}
-                  placement="inline"
-                  onSelect={(agentId) => {
-                    onAssign(agentId);
-                    setAssignOpen(false);
-                    setMenuOpen(false);
-                  }}
-                  onClose={() => setAssignOpen(false)}
-                />
-              </div>
-            )}
-
-            <button
-              type="button"
-              onClick={() => {
-                onMarkUnread();
-                setMenuOpen(false);
-              }}
-              className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] text-theme-fg transition hover:bg-theme-subtle ${FOCUS_RING_CLASS}`}
-            >
-              <Mail className="h-4 w-4 text-theme-muted" />
-              Mark as unread
-            </button>
-
-            {onSelectMessages && (
-              <button
-                type="button"
-                onClick={() => {
-                  onSelectMessages();
-                  setMenuOpen(false);
-                }}
-                className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] text-theme-fg transition hover:bg-theme-subtle ${FOCUS_RING_CLASS}`}
-              >
-                <CheckSquare className="h-4 w-4 text-theme-muted" />
-                {selectMode ? 'Cancel selection' : 'Select messages'}
-              </button>
-            )}
-
-            {onClearChat && (
-              <button
-                type="button"
-                onClick={() => {
-                  onClearChat();
-                  setMenuOpen(false);
-                }}
-                className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] text-red-600 transition hover:bg-red-50 dark:hover:bg-red-950/30 ${FOCUS_RING_CLASS}`}
-              >
-                <Eraser className="h-4 w-4" />
-                Clear chat
-              </button>
-            )}
-
-            <div className="my-1 border-t border-theme-border/60" />
-
-            {statusItems.map((item) => (
-              <button
-                key={item.value}
-                type="button"
-                disabled={status === item.value}
-                onClick={() => {
-                  onStatusChange(item.value);
-                  setMenuOpen(false);
-                }}
-                className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] text-theme-fg transition hover:bg-theme-subtle disabled:opacity-50 ${FOCUS_RING_CLASS}`}
-              >
-                <item.icon className="h-4 w-4 text-theme-muted" />
-                {item.label}
-                {status === item.value && (
-                  <CheckCircle2 className="ml-auto h-3.5 w-3.5 text-whatsapp-600" />
-                )}
-              </button>
-            ))}
-          </div>,
-          document.body
-        )
-      : null;
 
   return (
     <div className="inbox-chat-header relative z-30 flex shrink-0 items-center gap-3 border-b border-neutral-100/80 px-3 py-3.5 sm:px-4 dark:border-neutral-800/80">
@@ -411,28 +232,6 @@ export default function ChatHeader({
           <Search className="h-4 w-4" strokeWidth={2.1} />
         </HeaderIconButton>
 
-        <div className="relative" ref={snoozeRef}>
-          <HeaderIconButton
-            label={isSnoozed ? 'Snoozed — manage snooze' : 'Snooze conversation'}
-            onClick={() => {
-              setSnoozeOpen((v) => !v);
-              setBotMenuOpen(false);
-            }}
-            dot={isSnoozed}
-          >
-            <Bell className="h-4 w-4" strokeWidth={2.1} />
-          </HeaderIconButton>
-          {snoozeOpen && (
-            <SnoozePopover
-              anchorRef={snoozeRef}
-              snoozedUntil={conversation.snoozedUntil}
-              onSnooze={onSnoozeUntil}
-              onUnsnooze={onUnsnooze}
-              onClose={() => setSnoozeOpen(false)}
-            />
-          )}
-        </div>
-
         <HeaderIconButton
           label={isFavorite ? 'Remove from favourites' : 'Add to favourites'}
           onClick={handleFavoriteClick}
@@ -450,63 +249,47 @@ export default function ChatHeader({
           />
         </HeaderIconButton>
 
-        <HeaderIconButton
-          label={botIsLive ? 'Pause AI bot' : 'Enable AI bot'}
-          onClick={() => {
-            setBotMenuOpen(false);
-            setSnoozeOpen(false);
-            setMenuOpen(false);
-            onToggleBot();
-          }}
-          disabled={botToggling}
-          active={botIsLive}
-          pressed={botIsLive}
-          className={
-            botIsLive
-              ? ''
-              : 'text-theme-muted hover:text-theme-fg'
-          }
-        >
-          {botIsLive ? (
-            <PauseCircle className="h-4 w-4" strokeWidth={2.1} />
-          ) : (
-            <PlayCircle className="h-4 w-4" strokeWidth={2.1} />
-          )}
-        </HeaderIconButton>
-
         <div className="relative">
           <button
             ref={botBtnRef}
             type="button"
             onClick={() => {
+              setAssignOpen(false);
               setBotMenuOpen((v) => !v);
-              setSnoozeOpen(false);
-              setMenuOpen(false);
             }}
-            disabled={botAssigning}
-            aria-label={
-              conversation.activeBot?.name
-                ? `Choose chatbot · ${conversation.activeBot.name}`
-                : 'Choose chatbot'
-            }
+            disabled={botToggling || botAssigning}
+            aria-label={`${botIsLive ? 'AI bot live' : 'AI bot off'} · ${botTipDetail}. Open bot menu`}
             aria-expanded={botMenuOpen}
             aria-haspopup="dialog"
             {...tipFor(
-              conversation.activeBot?.name
-                ? `Chatbot · ${conversation.activeBot.name}`
-                : 'Choose chatbot'
+              botIsLive
+                ? `AI bot live · ${botTipDetail}`
+                : `AI bot off · ${botTipDetail}`
             )}
-            className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border transition disabled:cursor-not-allowed disabled:opacity-45 ${FOCUS_RING_CLASS} ${
+            className={`relative flex h-9 max-w-[11.5rem] shrink-0 items-center gap-1.5 rounded-[10px] border px-2 transition disabled:cursor-not-allowed disabled:opacity-45 ${FOCUS_RING_CLASS} ${
               botMenuOpen
                 ? 'border-whatsapp-500/50 bg-whatsapp-500/10 text-whatsapp-700 dark:text-whatsapp-400'
-                : 'border-theme-border bg-theme-surface text-theme-secondary hover:bg-theme-subtle hover:text-theme-fg'
+                : botIsLive
+                  ? 'border-whatsapp-500/40 bg-whatsapp-500/8 text-whatsapp-700 hover:bg-whatsapp-500/12 dark:text-whatsapp-400'
+                  : 'border-theme-border bg-theme-surface text-theme-secondary hover:bg-theme-subtle hover:text-theme-fg'
             }`}
           >
-            <Bot className="h-4 w-4" strokeWidth={2.1} />
-            {botIsLive && (
-              <span
-                className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-whatsapp-500 ring-2 ring-white dark:ring-neutral-900"
-                aria-hidden
+            <span
+              className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                botIsLive ? 'bg-whatsapp-500' : 'bg-neutral-300 dark:bg-neutral-600'
+              }`}
+              aria-hidden
+            />
+            <Bot className="h-4 w-4 shrink-0" strokeWidth={2.1} />
+            <span className="min-w-0 flex-1 truncate text-left text-[12px] font-semibold tracking-tight">
+              {botDisplayName}
+            </span>
+            {botToggling ? (
+              <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin opacity-70" strokeWidth={2.25} />
+            ) : (
+              <ChevronDown
+                className={`h-3.5 w-3.5 shrink-0 opacity-70 transition ${botMenuOpen ? 'rotate-180' : ''}`}
+                strokeWidth={2.25}
               />
             )}
           </button>
@@ -516,8 +299,10 @@ export default function ChatHeader({
               loading={botsLoading}
               activeBotId={conversation.activeBot?.id ?? null}
               botIsLive={botIsLive}
+              botToggling={botToggling}
               botAssigning={botAssigning}
               anchorRef={botBtnRef}
+              onToggleBot={onToggleBot}
               onSelectBot={(botId) => {
                 onSetActiveBot?.(botId);
               }}
@@ -526,26 +311,47 @@ export default function ChatHeader({
           )}
         </div>
 
-        <div className="relative" ref={menuRef}>
+        <div className="relative">
           <button
-            ref={menuBtnRef}
+            ref={assignBtnRef}
             type="button"
+            aria-label={
+              conversation.assignedAgent?.name
+                ? `Assign agent · ${conversation.assignedAgent.name}`
+                : 'Assign agent'
+            }
+            aria-expanded={assignOpen}
+            disabled={assigning}
             onClick={() => {
-              setMenuOpen((v) => !v);
-              setAssignOpen(false);
               setBotMenuOpen(false);
+              setAssignOpen((open) => !open);
             }}
-            aria-label="More actions"
-            aria-expanded={menuOpen}
-            aria-haspopup="menu"
-            {...tipFor('More actions')}
-            className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-theme-border bg-theme-surface text-theme-secondary transition hover:bg-theme-subtle hover:text-theme-fg ${FOCUS_RING_CLASS} ${
-              menuOpen ? 'border-theme-fg/20 bg-theme-subtle text-theme-fg' : ''
+            {...tipFor(
+              conversation.assignedAgent?.name
+                ? `Assign · ${conversation.assignedAgent.name}`
+                : 'Assign agent'
+            )}
+            className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-theme-border bg-theme-surface text-emerald-600 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-45 dark:hover:bg-emerald-950/40 ${FOCUS_RING_CLASS} ${
+              assignOpen ? 'border-whatsapp-500/50 bg-whatsapp-500/10' : ''
             }`}
           >
-            <MoreVertical className="h-4 w-4" strokeWidth={2.1} />
+            <UserPlus className="h-4 w-4" strokeWidth={2.1} />
           </button>
-          {overflowMenu}
+          {assignOpen && (
+            <AssignAgentPopover
+              agents={agents}
+              currentUserId={currentUserId}
+              selectedAgentId={assignedId}
+              disabled={assigning}
+              placement="below"
+              anchorRef={assignBtnRef}
+              onSelect={(agentId) => {
+                onAssign(agentId);
+                setAssignOpen(false);
+              }}
+              onClose={() => setAssignOpen(false)}
+            />
+          )}
         </div>
       </div>
     </div>

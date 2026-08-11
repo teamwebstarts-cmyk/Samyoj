@@ -1,6 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import {
-  Activity,
   BarChart3,
   Download,
   Hash,
@@ -9,14 +8,11 @@ import {
   Tag,
   Ticket,
   Trash2,
-  User,
   UserPlus,
   X,
 } from 'lucide-react';
 import AppInput from '../ui/AppInput';
 import AppTextarea from '../ui/AppTextarea';
-import ProfileCard from './details/ProfileCard';
-import ConversationActivity from './details/ConversationActivity';
 import {
   DetailsSectionCard,
   DetailsSectionHeader,
@@ -28,7 +24,7 @@ import {
 } from './details/DetailsSectionCard';
 import AssignAgentPopover from './AssignAgentPopover';
 import { useGlassTipProps } from './ComposerGlassTip';
-import { contactApi, inboxApi, labelsApi } from '../../services/api';
+import { inboxApi, labelsApi, contactApi } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import type {
@@ -41,18 +37,11 @@ import type {
 } from '../../types';
 import { toastError } from '../../utils/toast';
 
-type PanelSection =
-  | 'profile'
-  | 'labels'
-  | 'notes'
-  | 'stats'
-  | 'tags';
+type PanelSection = 'labels' | 'notes' | 'tags';
 
-type DetailsTab = 'overview' | 'notes' | 'activity';
+type DetailsTab = 'overview' | 'notes';
 
 const SECTION_TO_TAB: Record<PanelSection, DetailsTab> = {
-  profile: 'overview',
-  stats: 'activity',
   labels: 'overview',
   notes: 'notes',
   tags: 'overview',
@@ -62,11 +51,10 @@ const DETAILS_TABS: ReadonlyArray<{
   id: DetailsTab;
   label: string;
   shortLabel: string;
-  icon: typeof User;
+  icon: typeof Tag;
 }> = [
-  { id: 'overview', label: 'Overview', shortLabel: 'Overview', icon: User },
+  { id: 'overview', label: 'Labels', shortLabel: 'Labels', icon: Tag },
   { id: 'notes', label: 'Notes', shortLabel: 'Notes', icon: StickyNote },
-  { id: 'activity', label: 'Activity', shortLabel: 'Activity', icon: Activity },
 ];
 
 interface InboxDetailsPanelProps {
@@ -75,7 +63,6 @@ interface InboxDetailsPanelProps {
   agents: TeamAgent[];
   currentUserId?: string;
   assigning: boolean;
-  botIsLive: boolean;
   onNotesChange: (notes: InternalNote[]) => void;
   onLabelsChange: (labels: ConversationLabel[]) => void;
   onContactChange: (contact: Contact) => void;
@@ -168,7 +155,6 @@ export default function InboxDetailsPanel({
   agents,
   currentUserId,
   assigning,
-  botIsLive,
   onNotesChange,
   onLabelsChange,
   onContactChange,
@@ -188,8 +174,8 @@ export default function InboxDetailsPanel({
   const { resolved: themeResolved } = useTheme();
   const pillDark = themeResolved === 'dark';
   const conversationId = conversation.id;
-  const labels = conversation.labels ?? [];
   const contact = conversation.contact;
+  const labels = conversation.labels ?? [];
   const { canManageTeam } = useAuth();
 
   const [detailsTab, setDetailsTab] = useState<DetailsTab>('overview');
@@ -203,12 +189,12 @@ export default function InboxDetailsPanel({
   const [creatingLabel, setCreatingLabel] = useState(false);
   const [showNewLabel, setShowNewLabel] = useState(false);
   const [labelsPickerOpen, setLabelsPickerOpen] = useState(false);
-  const [assignListOpen, setAssignListOpen] = useState(false);
-  const [headerAssignOpen, setHeaderAssignOpen] = useState(false);
-  const [railAssignOpen, setRailAssignOpen] = useState(false);
   const [newTag, setNewTag] = useState('');
   const [addingTag, setAddingTag] = useState(false);
   const [showTagInput, setShowTagInput] = useState(false);
+  const [orgTags, setOrgTags] = useState<string[]>([]);
+  const [headerAssignOpen, setHeaderAssignOpen] = useState(false);
+  const [railAssignOpen, setRailAssignOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const railAssignRef = useRef<HTMLButtonElement>(null);
   const headerAssignRef = useRef<HTMLButtonElement>(null);
@@ -230,16 +216,25 @@ export default function InboxDetailsPanel({
       .list()
       .then(({ data }) => setAllLabels(data.data.labels))
       .catch(console.error);
+    contactApi
+      .tags()
+      .then(({ data }) => {
+        const tags = data.data.tags || [];
+        setOrgTags(
+          tags.map((t: string | { name: string }) => (typeof t === 'string' ? t : t.name))
+        );
+      })
+      .catch(console.error);
   }, []);
 
   useEffect(() => {
     onPanelOpenChange(false);
-    setAssignListOpen(false);
     setHeaderAssignOpen(false);
     setRailAssignOpen(false);
     setLabelsPickerOpen(false);
     setShowNewLabel(false);
     setShowTagInput(false);
+    setNewTag('');
     setShowNoteComposer(false);
     setNoteText('');
     setConfirmDeleteNoteId(null);
@@ -294,10 +289,8 @@ export default function InboxDetailsPanel({
     setDetailsTab(tab);
     requestAnimationFrame(() => {
       scrollTabIntoStrip(tab);
-      if (tab === 'overview' && section !== 'profile') {
-        const el = scrollRef.current?.querySelector<HTMLElement>(
-          `[data-section="${section}"]`
-        );
+      if (section === 'labels' || section === 'tags') {
+        const el = scrollRef.current?.querySelector<HTMLElement>(`[data-section="${section}"]`);
         el?.scrollIntoView({ block: 'start', behavior: 'smooth' });
       } else {
         scrollRef.current?.scrollTo({ top: 0 });
@@ -405,8 +398,8 @@ export default function InboxDetailsPanel({
     }
   };
 
-  const handleAddTag = async () => {
-    const tag = newTag.trim();
+  const handleAddTag = async (tagName?: string) => {
+    const tag = (tagName ?? newTag).trim();
     if (!tag || addingTag) return;
     const tags = contact.tags ?? [];
     if (tags.includes(tag)) {
@@ -420,6 +413,7 @@ export default function InboxDetailsPanel({
       const { data } = await contactApi.update(contact.id, { tags: nextTags });
       const updated = (data.data?.contact ?? data.data) as Partial<Contact> | undefined;
       onContactChange({ ...contact, ...updated, tags: updated?.tags ?? nextTags });
+      if (!orgTags.includes(tag)) setOrgTags((prev) => [...prev, tag].sort());
       setNewTag('');
       setShowTagInput(false);
     } catch {
@@ -440,8 +434,10 @@ export default function InboxDetailsPanel({
     }
   };
 
-  const toggleAssignList = () => setAssignListOpen((v) => !v);
   const tagCount = contact.tags?.length ?? 0;
+  const contactTagSet = new Set(contact.tags ?? []);
+  const suggestedTags = orgTags.filter((t) => !contactTagSet.has(t));
+
   const assignedId = conversation.assignedAgent?.id;
   const iconStroke = 1.9;
 
@@ -593,9 +589,7 @@ export default function InboxDetailsPanel({
       </div>
 
       <div ref={scrollRef} className="inbox-composer-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain">
-        {detailsTab === 'activity' ? (
-          <ConversationActivity conversation={conversation} botIsLive={botIsLive} />
-        ) : detailsTab === 'notes' ? (
+        {detailsTab === 'notes' ? (
           <div className="space-y-2.5 px-3 py-3">
             <DetailsSectionCard data-section="notes">
               <DetailsSectionHeader
@@ -704,31 +698,6 @@ export default function InboxDetailsPanel({
           </div>
         ) : (
           <div className="space-y-2.5 px-3 py-3">
-            <DetailsSectionCard data-section="profile" className="!p-0 overflow-hidden">
-                <ProfileCard
-                  contact={contact}
-                  conversation={conversation}
-                  assignedAgent={conversation.assignedAgent}
-                  onChangeAssignee={toggleAssignList}
-                />
-                {assignListOpen && (
-                  <div className="relative mx-4 mb-4">
-                    <AssignAgentPopover
-                      agents={agents}
-                      currentUserId={currentUserId}
-                      selectedAgentId={conversation.assignedAgent?.id}
-                      disabled={assigning}
-                      placement="inline"
-                      onSelect={(agentId) => {
-                        onAssign(agentId);
-                        setAssignListOpen(false);
-                      }}
-                      onClose={() => setAssignListOpen(false)}
-                    />
-                  </div>
-                )}
-              </DetailsSectionCard>
-
             <DetailsSectionCard data-section="labels">
               <div ref={labelsSectionRef}>
                 <DetailsSectionHeader
@@ -867,7 +836,7 @@ export default function InboxDetailsPanel({
             <DetailsSectionCard data-section="tags">
               <DetailsSectionHeader
                 icon={<Hash className="h-3.5 w-3.5" strokeWidth={2.25} />}
-                title="Tags"
+                title="Contact tags"
                 action={
                   !showTagInput ? (
                     <button
@@ -880,15 +849,14 @@ export default function InboxDetailsPanel({
                   ) : undefined
                 }
               />
+              <p className="mb-2 text-[11px] leading-snug text-theme-muted">
+                Tag this contact for campaign audiences and automation.
+              </p>
               <div className="flex flex-wrap gap-1.5">
                 {(contact.tags ?? []).map((tag) => {
                   const style = softLabelPillStyle(null, { seed: tag, dark: pillDark });
                   return (
-                    <span
-                      key={tag}
-                      className={softLabelPillClassName}
-                      style={style}
-                    >
+                    <span key={tag} className={softLabelPillClassName} style={style}>
                       <span className="truncate">{tag}</span>
                       <button
                         type="button"
@@ -909,7 +877,7 @@ export default function InboxDetailsPanel({
                     <AppInput
                       value={newTag}
                       onChange={(e) => setNewTag(e.target.value)}
-                      placeholder="e.g. vip, high-intent"
+                      placeholder="e.g. vip, newsletter"
                       className="flex-1"
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
@@ -940,6 +908,26 @@ export default function InboxDetailsPanel({
                   </span>
                 )}
               </div>
+              {suggestedTags.length > 0 && (
+                <div className="mt-2.5 border-t border-theme-border/60 pt-2.5">
+                  <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-theme-muted">
+                    Quick add
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {suggestedTags.slice(0, 12).map((tag) => (
+                      <button
+                        key={tag}
+                        type="button"
+                        disabled={addingTag}
+                        onClick={() => void handleAddTag(tag)}
+                        className="rounded-full border border-dashed border-sky-300/80 px-2 py-0.5 text-[11px] font-semibold text-sky-700 transition hover:border-sky-400 hover:bg-sky-50 disabled:opacity-50 dark:border-sky-800/60 dark:text-sky-300 dark:hover:bg-sky-950/40"
+                      >
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </DetailsSectionCard>
           </div>
         )}
@@ -969,7 +957,6 @@ export default function InboxDetailsPanel({
   }
 
   if (!panelOpen) {
-    const unread = conversation.unreadCount ?? 0;
     const railBtn =
       'relative flex h-9 w-9 items-center justify-center rounded-xl transition';
     const railBadge =
@@ -980,27 +967,6 @@ export default function InboxDetailsPanel({
         className="inbox-composer-scroll hidden w-11 shrink-0 flex-col items-center gap-1 overflow-y-auto overscroll-contain border-l border-white/40 bg-white/55 py-3 backdrop-blur-md md:flex dark:border-neutral-800/80 dark:bg-neutral-950/70"
         aria-label="Conversation details shortcuts"
       >
-        <button
-          type="button"
-          aria-label="Customer details"
-          onClick={() => openPanel('profile')}
-          className={`${railBtn} text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40`}
-          {...tipFor('Customer details', 'left')}
-        >
-          <User className="h-4 w-4" strokeWidth={iconStroke} />
-        </button>
-        <button
-          type="button"
-          aria-label={unread > 0 ? `Activity, ${unread} unread` : 'Activity'}
-          onClick={() => openPanel('stats')}
-          className={`${railBtn} text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/40`}
-          {...tipFor('Activity', 'left')}
-        >
-          <Activity className="h-4 w-4" strokeWidth={iconStroke} />
-          {unread > 0 && (
-            <span className={`${railBadge} bg-orange-600`}>{unread > 9 ? '9+' : unread}</span>
-          )}
-        </button>
         <button
           type="button"
           aria-label={labels.length > 0 ? `Labels, ${labels.length}` : 'Labels'}
@@ -1027,10 +993,10 @@ export default function InboxDetailsPanel({
         </button>
         <button
           type="button"
-          aria-label={tagCount > 0 ? `Tags, ${tagCount}` : 'Tags'}
+          aria-label={tagCount > 0 ? `Contact tags, ${tagCount}` : 'Contact tags'}
           onClick={() => openPanel('tags')}
           className={`${railBtn} text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-950/40`}
-          {...tipFor('Tags', 'left')}
+          {...tipFor('Contact tags', 'left')}
         >
           <Hash className="h-4 w-4" strokeWidth={iconStroke} />
           {tagCount > 0 && <span className={`${railBadge} bg-sky-600`}>{tagCount}</span>}

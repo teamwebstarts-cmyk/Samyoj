@@ -59,7 +59,6 @@ export default function InboxPage() {
 
   const [search, setSearch] = useState('');
   const [chip, setChip] = useState<ListChip>('all');
-  const [statusFilter, setStatusFilter] = useState('');
   const [agentFilter, setAgentFilter] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<PageSize>(() => readStoredPageSize());
@@ -84,7 +83,6 @@ export default function InboxPage() {
   } = useConversationList({
     search: debouncedSearch,
     chip,
-    statusFilter,
     agentFilter,
     userId: user?.id,
     page,
@@ -494,7 +492,6 @@ export default function InboxPage() {
     total,
     search,
     chip,
-    statusFilter,
     agentFilter,
     page,
     pageSize,
@@ -503,7 +500,6 @@ export default function InboxPage() {
     setTotal,
     setSearch,
     setChip,
-    setStatusFilter,
     setAgentFilter,
     setPage,
     setPageSize,
@@ -551,11 +547,6 @@ export default function InboxPage() {
     });
   }, []);
 
-  const selectAllVisible = useCallback(() => {
-    setSelectionMode(true);
-    setSelectedIds(new Set(conversations.map((c) => c.id)));
-  }, [conversations]);
-
   const clearSelection = useCallback(() => {
     setSelectionMode(false);
     setSelectedIds(new Set());
@@ -595,8 +586,6 @@ export default function InboxPage() {
     () => conversations.find((c) => c.id === contextMenu?.conversationId) ?? null,
     [contextMenu, conversations]
   );
-  const contextMenuBotIsLive =
-    contextMenuConversation?.botActive !== false && !contextMenuConversation?.botHandoffAt;
 
   const agentFilterOptions = useMemo<InboxSelectOption[]>(
     () => [
@@ -618,11 +607,6 @@ export default function InboxPage() {
     writeStoredPageSize(size);
     setPage(1);
     setPageSize(size);
-  }, []);
-
-  const handleStatusFilterChange = useCallback((value: string) => {
-    setPage(1);
-    setStatusFilter(value);
   }, []);
 
   const handleAgentFilterChange = useCallback((value: string) => {
@@ -672,12 +656,9 @@ export default function InboxPage() {
               onChipChange={handleChipChange}
               conversationTotal={total}
               unreadTotal={unreadTotal}
-              statusFilter={statusFilter}
               agentFilter={agentFilter}
-              onStatusFilterChange={handleStatusFilterChange}
               onAgentFilterChange={handleAgentFilterChange}
               agentOptions={agentFilterOptions}
-              agentOptionsSearchable={agents.length > 4}
               selectionMode={selectionMode}
               onCancelSelection={clearSelection}
               onNewChat={() => setNewChatOpen(true)}
@@ -691,9 +672,7 @@ export default function InboxPage() {
               selectedId={selected?.id}
               loading={listLoading}
               error={listError}
-              filtered={Boolean(
-                search || statusFilter || agentFilter || chip !== 'all'
-              )}
+              filtered={Boolean(search || agentFilter || chip !== 'all')}
               ticketConversationIds={ticketConversationIds}
               selectionMode={selectionMode}
               selectedIds={selectedIds}
@@ -803,7 +782,10 @@ export default function InboxPage() {
                   onClearChat={() => setClearChatOpen(true)}
                   onDeleteMessages={(ids) => handleDeleteMessages(ids)}
                   deletingMessages={deletingMessages}
-                  onEnterSelectMode={() => setSelectMode(true)}
+                  onEnterSelectMode={(msg) => {
+                    setSelectMode(true);
+                    setSelectedMessageIds(new Set([msg.id]));
+                  }}
                   selectMode={selectMode}
                   selectedMessageIds={selectedMessageIds}
                   onToggleMessageSelect={toggleMessageSelect}
@@ -847,20 +829,29 @@ export default function InboxPage() {
                   agents={agents}
                   currentUserId={user?.id}
                   assigning={assigning}
-                  botIsLive={botIsLive}
                   onNotesChange={(notes: InternalNote[]) =>
                     setSelected((prev) => (prev ? { ...prev, internalNotes: notes } : prev))
                   }
                   onLabelsChange={(labels: ConversationLabel[]) =>
                     setSelected((prev) => (prev ? { ...prev, labels } : prev))
                   }
-                  onContactChange={(contact) =>
-                    setSelected((prev) => (prev ? { ...prev, contact } : prev))
-                  }
+                  onContactChange={(contact) => {
+                    setSelected((prev) => (prev ? { ...prev, contact } : prev));
+                    setConversations((prev) =>
+                      prev.map((c) => (c.contact.id === contact.id ? { ...c, contact } : c))
+                    );
+                  }}
                   onAssign={(agentId) => void handleAssignAgent(agentId)}
                   onConvertToTicket={() => setTicketModalOpen(true)}
                   onExport={() => setExportTarget(selected)}
-                  onCreateCampaign={() => navigate(`/campaigns?contacts=${selected.contact.id}`)}
+                  onCreateCampaign={() => {
+                    const tags = (selected.contact.tags ?? []).filter(Boolean);
+                    if (tags.length > 0) {
+                      navigate(`/campaigns?tags=${encodeURIComponent(tags.join(','))}`);
+                      return;
+                    }
+                    navigate(`/campaigns?contacts=${selected.contact.id}`);
+                  }}
                   panelOpen={detailsPanelOpen}
                   onPanelOpenChange={setDetailsPanelOpen}
                   focusSection={detailsFocusSection}
@@ -898,24 +889,12 @@ export default function InboxPage() {
         x={contextMenu?.x ?? 0}
         y={contextMenu?.y ?? 0}
         conversation={contextMenuConversation}
-        agents={agents}
-        currentUserId={user?.id}
-        botIsLive={contextMenuBotIsLive}
-        assigning={assigning}
-        botToggling={botToggling}
         selectionMode={selectionMode}
         isConversationSelected={Boolean(
           contextMenuConversation && selectedIds.has(contextMenuConversation.id)
         )}
         onClose={() => setContextMenu(null)}
-        onAssign={(agentId) => void handleAssignAgent(agentId, contextMenuConversation?.id)}
-        onToggleBot={() => void handleToggleBot(contextMenuConversation?.id)}
         onStatusChange={(status) => void handleStatusChange(status, contextMenuConversation?.id)}
-        onSnoozeUntil={(untilIso, label) =>
-          void handleSnooze(untilIso, label, contextMenuConversation?.id)
-        }
-        onUnsnooze={() => void handleUnsnooze(contextMenuConversation?.id)}
-        onExport={() => setExportTarget(contextMenuConversation)}
         onDelete={() => {
           if (contextMenuConversation) setDeleteTarget(contextMenuConversation);
           setContextMenu(null);
@@ -926,7 +905,6 @@ export default function InboxPage() {
         onDeselectThis={() => {
           if (contextMenuConversation) deselectConversation(contextMenuConversation.id);
         }}
-        onSelectAll={selectAllVisible}
         onClearSelection={clearSelection}
       />
 

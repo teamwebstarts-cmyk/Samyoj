@@ -1,39 +1,27 @@
 import { useEffect, useLayoutEffect, useRef, useState, type Ref } from 'react';
 import { createPortal } from 'react-dom';
-import {
-  AlertTriangle,
-  Bot,
-  CircleDot,
-  Filter,
-  MessageCircleWarning,
-  Plus,
-  RefreshCw,
-  Star,
-  Ticket,
-  X,
-} from 'lucide-react';
-import InboxSelect, { type InboxSelectOption } from './InboxSelect';
+import { AlertTriangle, MoreHorizontal, Plus, RefreshCw, User, X } from 'lucide-react';
 import SearchInput from '../ui/SearchInput';
 import { useGlassTipProps } from './ComposerGlassTip';
 import { FOCUS_RING_CLASS } from '../../hooks/inboxA11y';
 import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
 import type { InboundHealth } from '../../hooks/useWebhookHealth';
+import type { InboxSelectOption } from './InboxSelect';
+import { getAvatarGradient, getInitials } from './inboxUtils';
 
-const FILTERS_MENU_WIDTH = 280;
-const FILTERS_MENU_GAP = 8;
-const FILTERS_MENU_FALLBACK_HEIGHT = 360;
+const AGENT_MENU_WIDTH = 240;
+const AGENT_MENU_GAP = 8;
+const AGENT_VISIBLE_COUNT = 4;
 
-export type ListChip = 'all' | 'unread' | 'favourites' | 'unreplied' | 'hasTicket' | 'botActive';
+export type ListChip = 'all' | 'unread' | 'unreplied' | 'open' | 'favourites' | 'pending' | 'hasTicket' | 'botActive';
 
-const STATUS_CHIPS: Array<{
-  value: string;
-  label: string;
-  color?: string;
-}> = [
-  { value: '', label: 'All' },
-  { value: 'OPEN', label: 'Open', color: 'bg-emerald-500' },
-  { value: 'PENDING', label: 'Pending', color: 'bg-amber-500' },
-  { value: 'CLOSED', label: 'Closed', color: 'bg-neutral-400' },
+const FILTER_CHIPS: Array<{ chip: ListChip; label: string }> = [
+  { chip: 'all', label: 'All' },
+  { chip: 'unread', label: 'Unread' },
+  { chip: 'unreplied', label: 'Unreplied' },
+  { chip: 'open', label: 'Open' },
+  { chip: 'favourites', label: 'Favorites' },
+  { chip: 'pending', label: 'Pending' },
 ];
 
 interface InboxListHeaderProps {
@@ -44,12 +32,9 @@ interface InboxListHeaderProps {
   onChipChange: (chip: ListChip) => void;
   conversationTotal: number;
   unreadTotal: number;
-  statusFilter: string;
   agentFilter: string;
-  onStatusFilterChange: (value: string) => void;
   onAgentFilterChange: (value: string) => void;
   agentOptions: InboxSelectOption[];
-  agentOptionsSearchable: boolean;
   selectionMode: boolean;
   onCancelSelection: () => void;
   onNewChat: () => void;
@@ -74,6 +59,42 @@ function formatCountLine(conversationTotal: number, unreadTotal: number) {
   return `${conversations} · ${unread}`;
 }
 
+function AgentAvatarButton({
+  label,
+  avatarKey,
+  active,
+  onClick,
+  tipFor,
+}: {
+  label: string;
+  avatarKey?: string;
+  active: boolean;
+  onClick: () => void;
+  tipFor: (label: string) => Record<string, unknown>;
+}) {
+  const key = avatarKey || label;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      aria-label={`Filter by ${label}`}
+      {...tipFor(`Filter by ${label}`)}
+      className={`relative z-0 flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition hover:z-20 ${FOCUS_RING_CLASS} ${
+        active
+          ? 'z-10 ring-2 ring-whatsapp-500 ring-offset-1 ring-offset-white dark:ring-offset-neutral-950'
+          : 'ring-2 ring-white dark:ring-neutral-950'
+      }`}
+    >
+      <span
+        className={`flex h-full w-full items-center justify-center rounded-full bg-gradient-to-br text-[9px] font-bold text-white shadow-sm ${getAvatarGradient(key)}`}
+      >
+        {getInitials(label, avatarKey)}
+      </span>
+    </button>
+  );
+}
+
 export default function InboxListHeader({
   search,
   onSearchChange,
@@ -82,12 +103,9 @@ export default function InboxListHeader({
   onChipChange,
   conversationTotal,
   unreadTotal,
-  statusFilter,
   agentFilter,
-  onStatusFilterChange,
   onAgentFilterChange,
   agentOptions,
-  agentOptionsSearchable,
   selectionMode,
   onCancelSelection,
   onNewChat,
@@ -96,82 +114,49 @@ export default function InboxListHeader({
   onRetryHealth,
 }: InboxListHeaderProps) {
   const tipFor = useGlassTipProps();
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [filtersPos, setFiltersPos] = useState<{
-    top?: number;
-    bottom?: number;
-    right: number;
-  } | null>(null);
-  const filtersBtnRef = useRef<HTMLButtonElement>(null);
-  const filtersMenuRef = useRef<HTMLDivElement>(null);
+  const [agentsMenuOpen, setAgentsMenuOpen] = useState(false);
+  const [agentsMenuPos, setAgentsMenuPos] = useState<{ top: number; right: number } | null>(null);
+  const agentsMenuBtnRef = useRef<HTMLButtonElement>(null);
+  const agentsMenuRef = useRef<HTMLDivElement>(null);
   const { hasConnectedNumber, loading: numberLoading } = useWhatsAppNumber();
 
   const isConnected = hasConnectedNumber && !numberLoading;
-  const unreadActive = chip === 'unread';
-  const popoverFiltersActive =
-    Boolean(agentFilter) ||
-    chip === 'favourites' ||
-    chip === 'unreplied' ||
-    chip === 'hasTicket' ||
-    chip === 'botActive';
-  const anyFilterActive = unreadActive || Boolean(statusFilter) || popoverFiltersActive;
-
-  const clearAllFilters = () => {
-    onStatusFilterChange('');
-    onAgentFilterChange('');
-    onChipChange('all');
-    setFiltersOpen(false);
-  };
+  const selectableAgents = agentOptions.filter((option) => option.value !== '');
+  const visibleAgents = selectableAgents.slice(0, AGENT_VISIBLE_COUNT);
+  const overflowAgents = selectableAgents.slice(AGENT_VISIBLE_COUNT);
+  const hasOverflowAgents = overflowAgents.length > 0;
 
   useLayoutEffect(() => {
-    if (!filtersOpen || !filtersBtnRef.current) {
-      setFiltersPos(null);
+    if (!agentsMenuOpen || !agentsMenuBtnRef.current) {
+      setAgentsMenuPos(null);
       return;
     }
     const place = () => {
-      const btn = filtersBtnRef.current;
-      if (!btn) return;
-      const rect = btn.getBoundingClientRect();
-      const menuH = filtersMenuRef.current?.offsetHeight ?? FILTERS_MENU_FALLBACK_HEIGHT;
-      const spaceBelow = window.innerHeight - rect.bottom - FILTERS_MENU_GAP;
-      const spaceAbove = rect.top - FILTERS_MENU_GAP;
-      const flipUp = spaceBelow < menuH && spaceAbove > spaceBelow;
-      const right = Math.min(
-        Math.max(FILTERS_MENU_GAP, window.innerWidth - rect.right),
-        Math.max(FILTERS_MENU_GAP, window.innerWidth - FILTERS_MENU_WIDTH - FILTERS_MENU_GAP)
-      );
-      if (flipUp) {
-        setFiltersPos({
-          bottom: Math.max(FILTERS_MENU_GAP, window.innerHeight - rect.top + FILTERS_MENU_GAP),
-          right,
-        });
-      } else {
-        setFiltersPos({ top: rect.bottom + FILTERS_MENU_GAP, right });
-      }
+      const rect = agentsMenuBtnRef.current!.getBoundingClientRect();
+      setAgentsMenuPos({
+        top: rect.bottom + AGENT_MENU_GAP,
+        right: Math.max(AGENT_MENU_GAP, window.innerWidth - rect.right),
+      });
     };
     place();
-    const raf = window.requestAnimationFrame(place);
     window.addEventListener('resize', place);
     window.addEventListener('scroll', place, true);
     return () => {
-      window.cancelAnimationFrame(raf);
       window.removeEventListener('resize', place);
       window.removeEventListener('scroll', place, true);
     };
-  }, [filtersOpen, agentFilter, chip]);
+  }, [agentsMenuOpen, overflowAgents.length]);
 
   useEffect(() => {
-    if (!filtersOpen) return;
+    if (!agentsMenuOpen) return;
     const onDoc = (e: MouseEvent) => {
       const target = e.target as Node;
-      const inBtn = filtersBtnRef.current?.contains(target);
-      const inMenu = filtersMenuRef.current?.contains(target);
-      // react-select menus portal to body — don't close when interacting with them
-      const inSelectMenu = (target as Element).closest?.('.inbox-select__menu-portal');
-      if (!inBtn && !inMenu && !inSelectMenu) setFiltersOpen(false);
+      if (agentsMenuBtnRef.current?.contains(target)) return;
+      if (agentsMenuRef.current?.contains(target)) return;
+      setAgentsMenuOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setFiltersOpen(false);
+      if (e.key === 'Escape') setAgentsMenuOpen(false);
     };
     document.addEventListener('mousedown', onDoc);
     document.addEventListener('keydown', onKey);
@@ -179,10 +164,15 @@ export default function InboxListHeader({
       document.removeEventListener('mousedown', onDoc);
       document.removeEventListener('keydown', onKey);
     };
-  }, [filtersOpen]);
+  }, [agentsMenuOpen]);
+
+  const toggleAgentFilter = (value: string) => {
+    onAgentFilterChange(agentFilter === value ? '' : value);
+    setAgentsMenuOpen(false);
+  };
 
   return (
-    <div className="shrink-0 border-b border-neutral-100 px-4 pb-3 pt-4 dark:border-neutral-800/80">
+    <div className="shrink-0 border-b border-neutral-100 px-3 pb-2 pt-3 dark:border-neutral-800/80">
       {inboundHealth?.state === 'unhealthy' && (
         <div
           role="alert"
@@ -273,143 +263,136 @@ export default function InboxListHeader({
         </div>
       </div>
 
-      <div className="mt-3 border-t border-neutral-100 pt-3 dark:border-neutral-800/80">
+      <div className="mt-2 border-t border-neutral-100 pt-2 dark:border-neutral-800/80">
         <div className="flex items-center gap-2">
           <SearchInput
             ref={searchInputRef}
             value={search}
             onChange={onSearchChange}
-            placeholder="Search by name or phone..."
-            className="min-w-0 flex-1 [&_input]:!h-9 [&_input]:rounded-lg [&_input]:!bg-theme-surface [&_input]:!shadow-none"
+            placeholder="Search inbox"
+            className="min-w-0 flex-1 [&_input]:!h-8 [&_input]:rounded-lg [&_input]:!bg-theme-surface [&_input]:!text-[13px] [&_input]:!shadow-none [&_svg]:left-2.5 [&_svg]:!h-3.5 [&_svg]:!w-3.5 [&_input]:!pl-8"
           />
-          <button
-            type="button"
-            onClick={() => onChipChange(unreadActive ? 'all' : 'unread')}
-            aria-pressed={unreadActive}
-            aria-label={unreadActive ? 'Show all chats' : 'Unread only'}
-            {...tipFor(unreadActive ? 'Show all chats' : 'Unread only')}
-            data-testid="inbox-unread-toggle"
-            className={squareBtn(unreadActive)}
-          >
-            <CircleDot className="h-4 w-4" strokeWidth={2.25} />
-          </button>
-          <div className="relative shrink-0">
-            <button
-              ref={filtersBtnRef}
-              type="button"
-              onClick={() => setFiltersOpen((v) => !v)}
-              aria-expanded={filtersOpen}
-              aria-haspopup="dialog"
-              aria-label="Filters"
-              {...tipFor('Filters')}
-              data-testid="inbox-filter-toggle"
-              className={squareBtn(filtersOpen || popoverFiltersActive)}
-            >
-              <Filter className="h-4 w-4" strokeWidth={2.25} />
-            </button>
-            {filtersOpen &&
-              filtersPos &&
-              createPortal(
-                <div
-                  ref={filtersMenuRef}
-                  role="dialog"
-                  aria-label="Inbox filters"
-                  data-testid="inbox-filters-menu"
-                  style={{
-                    top: filtersPos.top,
-                    bottom: filtersPos.bottom,
-                    right: filtersPos.right,
-                    width: FILTERS_MENU_WIDTH,
-                  }}
-                  className="fixed z-[80] space-y-3 rounded-2xl border border-theme-border bg-theme-surface p-3 shadow-panel"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-[10px] font-bold uppercase tracking-wide text-theme-muted">
-                      Filters
-                    </p>
-                    {anyFilterActive && (
-                      <button
-                        type="button"
-                        onClick={clearAllFilters}
-                        data-testid="inbox-clear-filters"
-                        className={`text-[11px] font-semibold text-whatsapp-700 transition hover:underline dark:text-whatsapp-400 ${FOCUS_RING_CLASS}`}
+
+          {selectableAgents.length > 0 && (
+            <div className="flex shrink-0 items-center">
+              <div className="flex items-center -space-x-2">
+                {visibleAgents.map((agent) => (
+                  <AgentAvatarButton
+                    key={agent.value}
+                    label={agent.label}
+                    avatarKey={agent.avatarKey}
+                    active={agentFilter === agent.value}
+                    onClick={() => toggleAgentFilter(agent.value)}
+                    tipFor={tipFor}
+                  />
+                ))}
+              </div>
+              {hasOverflowAgents && (
+                <div className="relative -ml-2 shrink-0">
+                  <button
+                    ref={agentsMenuBtnRef}
+                    type="button"
+                    onClick={() => setAgentsMenuOpen((open) => !open)}
+                    aria-expanded={agentsMenuOpen}
+                    aria-haspopup="menu"
+                    aria-label="More agents"
+                    data-testid="inbox-agent-overflow"
+                    {...tipFor('More agents')}
+                    className={`relative z-0 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ring-2 ring-white transition hover:z-20 dark:ring-neutral-950 ${FOCUS_RING_CLASS} ${
+                      agentsMenuOpen || overflowAgents.some((agent) => agent.value === agentFilter)
+                        ? 'bg-whatsapp-500/15 text-whatsapp-700 ring-whatsapp-500/40 dark:text-whatsapp-400'
+                        : 'bg-neutral-100 text-neutral-500 hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700'
+                    }`}
+                  >
+                    {overflowAgents.length === 1 ? (
+                      <span
+                        className={`flex h-full w-full items-center justify-center rounded-full bg-gradient-to-br text-[9px] font-bold text-white ${getAvatarGradient(overflowAgents[0].avatarKey || overflowAgents[0].label)}`}
                       >
-                        Clear all
-                      </button>
+                        {getInitials(overflowAgents[0].label, overflowAgents[0].avatarKey)}
+                      </span>
+                    ) : (
+                      <MoreHorizontal className="h-3.5 w-3.5" strokeWidth={2.25} />
                     )}
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="block text-[11px] font-semibold text-theme-muted">
-                      Agent
-                    </label>
-                    <InboxSelect
-                      variant="filter"
-                      value={agentFilter}
-                      placeholder="All agents"
-                      isSearchable={agentOptionsSearchable}
-                      options={agentOptions}
-                      ariaLabel="Filter by assigned agent"
-                      className="min-w-0 w-full"
-                      menuMinWidth={240}
-                      onChange={(e) => onAgentFilterChange(e.target.value)}
-                    />
-                  </div>
-
-                  <div className="space-y-1 border-t border-theme-border/70 pt-2">
-                    <p className="px-0.5 pb-1 text-[10px] font-bold uppercase tracking-wide text-theme-muted">
-                      More
-                    </p>
-                    <ExtraToggle
-                      active={chip === 'favourites'}
-                      icon={Star}
-                      label="Favourites"
-                      onClick={() => onChipChange(chip === 'favourites' ? 'all' : 'favourites')}
-                    />
-                    <ExtraToggle
-                      active={chip === 'unreplied'}
-                      icon={MessageCircleWarning}
-                      label="Unreplied"
-                      onClick={() => onChipChange(chip === 'unreplied' ? 'all' : 'unreplied')}
-                    />
-                    <ExtraToggle
-                      active={chip === 'hasTicket'}
-                      icon={Ticket}
-                      label="Open ticket"
-                      onClick={() => onChipChange(chip === 'hasTicket' ? 'all' : 'hasTicket')}
-                    />
-                    <ExtraToggle
-                      active={chip === 'botActive'}
-                      icon={Bot}
-                      label="Bot active"
-                      onClick={() => onChipChange(chip === 'botActive' ? 'all' : 'botActive')}
-                    />
-                  </div>
-                </div>,
-                document.body
+                  </button>
+                  {agentsMenuOpen &&
+                    agentsMenuPos &&
+                    createPortal(
+                      <div
+                        ref={agentsMenuRef}
+                        role="menu"
+                        aria-label="Filter by agent"
+                        data-testid="inbox-agent-menu"
+                        style={{
+                          top: agentsMenuPos.top,
+                          right: agentsMenuPos.right,
+                          width: AGENT_MENU_WIDTH,
+                        }}
+                        className="fixed z-[80] overflow-hidden rounded-xl border border-theme-border bg-theme-surface py-1 shadow-panel"
+                      >
+                        {agentFilter && (
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => onAgentFilterChange('')}
+                            className={`flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-[13px] font-semibold text-theme-fg transition hover:bg-theme-subtle ${FOCUS_RING_CLASS}`}
+                          >
+                            <span className="flex h-7 w-7 items-center justify-center rounded-full border border-dashed border-neutral-300 text-[10px] font-bold text-neutral-400">
+                              <User className="h-3.5 w-3.5" strokeWidth={2.25} />
+                            </span>
+                            All agents
+                          </button>
+                        )}
+                        {overflowAgents.map((agent) => {
+                          const active = agentFilter === agent.value;
+                          return (
+                            <button
+                              key={agent.value}
+                              type="button"
+                              role="menuitem"
+                              onClick={() => toggleAgentFilter(agent.value)}
+                              className={`flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-[13px] font-semibold transition ${FOCUS_RING_CLASS} ${
+                                active
+                                  ? 'bg-whatsapp-500/10 text-whatsapp-800 dark:text-whatsapp-300'
+                                  : 'text-theme-fg hover:bg-theme-subtle'
+                              }`}
+                            >
+                              <span
+                                className={`flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br text-[10px] font-bold text-white ${getAvatarGradient(agent.avatarKey || agent.label)}`}
+                              >
+                                {getInitials(agent.label, agent.avatarKey)}
+                              </span>
+                              <span className="min-w-0 flex-1 truncate">{agent.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>,
+                      document.body
+                    )}
+                </div>
               )}
-          </div>
+            </div>
+          )}
         </div>
 
         <div
           role="tablist"
-          aria-label="Filter by status"
+          aria-label="Filter conversations"
           aria-live="polite"
-          className="mt-2.5 flex items-center gap-1 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="mt-1.5 grid grid-cols-6 gap-0.5"
         >
-          {STATUS_CHIPS.map((item) => {
-            const active = statusFilter === item.value;
+          {FILTER_CHIPS.map((item) => {
+            const active = chip === item.chip;
             return (
               <button
-                key={item.value || 'all'}
+                key={item.chip}
                 type="button"
                 role="tab"
                 aria-selected={active}
-                data-testid={`inbox-status-chip-${item.value || 'all'}`}
-                onClick={() => onStatusFilterChange(item.value)}
-                className={`inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[11.5px] font-semibold transition ${FOCUS_RING_CLASS} ${
+                data-testid={`inbox-filter-chip-${item.chip}`}
+                onClick={() => onChipChange(item.chip)}
+                className={`inline-flex h-6 w-full items-center justify-center rounded-md px-0.5 text-[10px] font-semibold transition ${FOCUS_RING_CLASS} ${
                   active
-                    ? 'bg-whatsapp-600 text-white shadow-[0_1px_3px_rgba(37,211,102,0.3)] dark:bg-whatsapp-500 dark:text-white'
+                    ? 'bg-whatsapp-600 text-white shadow-[0_1px_2px_rgba(37,211,102,0.28)] dark:bg-whatsapp-500'
                     : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700'
                 }`}
               >
@@ -474,41 +457,5 @@ function InboundStatusDot({
       )}
       <span className={`relative inline-flex h-2 w-2 rounded-full ${colorClass}`} />
     </span>
-  );
-}
-
-function ExtraToggle({
-  active,
-  icon: Icon,
-  label,
-  onClick,
-}: {
-  active: boolean;
-  icon: typeof Star;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[13px] font-semibold transition ${FOCUS_RING_CLASS} ${
-        active
-          ? 'bg-whatsapp-500/10 text-whatsapp-800 dark:text-whatsapp-300'
-          : 'text-theme-fg hover:bg-theme-subtle'
-      }`}
-    >
-      <Icon
-        className={`h-3.5 w-3.5 ${active ? 'text-whatsapp-600' : 'text-theme-muted'}`}
-        strokeWidth={2.25}
-      />
-      {label}
-      {active && (
-        <span className="ml-auto text-[10px] font-bold uppercase tracking-wide text-whatsapp-600">
-          On
-        </span>
-      )}
-    </button>
   );
 }

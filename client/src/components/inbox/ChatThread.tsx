@@ -91,7 +91,7 @@ interface ChatThreadProps {
   onClearChat?: () => void;
   onDeleteMessages?: (messageIds: string[]) => Promise<void> | void;
   deletingMessages?: boolean;
-  onEnterSelectMode?: () => void;
+  onEnterSelectMode?: (message: Message) => void;
   selectMode?: boolean;
   selectedMessageIds?: Set<string>;
   onToggleMessageSelect?: (messageId: string) => void;
@@ -146,14 +146,10 @@ export default function ChatThread({
   composerInputRef,
   onBack,
   onCallBack,
-  onSnoozeUntil,
-  onUnsnooze,
+  onAssign,
   onToggleBot,
   onSetActiveBot,
   onToggleFavorite,
-  onMarkUnread,
-  onAssign,
-  onStatusChange,
   onContextMenu,
   onReloadThread,
   onLoadEarlier,
@@ -162,7 +158,6 @@ export default function ChatThread({
   onReplyMessage,
   onReactMessage,
   onClearReply,
-  onClearChat,
   onDeleteMessages,
   deletingMessages = false,
   onEnterSelectMode,
@@ -594,22 +589,11 @@ export default function ChatThread({
         viewers={viewers}
         onBack={onBack}
         onCallBack={onCallBack}
-        onSnoozeUntil={onSnoozeUntil}
-        onUnsnooze={onUnsnooze}
+        onAssign={onAssign}
         onToggleBot={onToggleBot}
         onSetActiveBot={onSetActiveBot}
         onToggleFavorite={onToggleFavorite}
-        onMarkUnread={onMarkUnread}
         onToggleSearch={toggleSearch}
-        onAssign={onAssign}
-        onStatusChange={onStatusChange}
-        onClearChat={onClearChat}
-        onSelectMessages={
-          selectMode
-            ? onExitSelectMode
-            : onEnterSelectMode
-        }
-        selectMode={selectMode}
       />
 
       {selectMode && (
@@ -772,6 +756,7 @@ export default function ChatThread({
                             ? (m) => void onDeleteMessages([m.id])
                             : undefined
                         }
+                        onEnterSelectMode={onEnterSelectMode}
                         selectMode={selectMode}
                         selected={selectedMessageIds?.has(msg.id)}
                         onToggleSelect={

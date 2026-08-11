@@ -4,10 +4,11 @@ import {
   AlertCircle,
   Check,
   CheckCheck,
+  CheckSquare,
+  ChevronDown,
   Clock,
   Copy,
   Info,
-  MoreVertical,
   Phone,
   PhoneIncoming,
   PhoneMissed,
@@ -67,6 +68,8 @@ interface MessageBubbleProps {
   onReply?: (message: Message) => void;
   onReact?: (message: Message, emoji: string) => void;
   onDelete?: (message: Message) => void;
+  /** Enter multi-select mode (optionally starting from this message). */
+  onEnterSelectMode?: (message: Message) => void;
   /** WhatsApp-style multi-select mode */
   selectMode?: boolean;
   selected?: boolean;
@@ -347,6 +350,7 @@ export default function MessageBubble({
   onReply,
   onReact,
   onDelete,
+  onEnterSelectMode,
   selectMode = false,
   selected = false,
   onToggleSelect,
@@ -361,7 +365,6 @@ export default function MessageBubble({
   const [reactOpen, setReactOpen] = useState(false);
   const [menuPos, setMenuPos] = useState<PopoverCoords | null>(null);
   const [reactPos, setReactPos] = useState<PopoverCoords | null>(null);
-  const longPressTimer = useRef<number | null>(null);
   const menuBtnRef = useRef<HTMLButtonElement>(null);
   const menuPanelRef = useRef<HTMLDivElement>(null);
   const reactPanelRef = useRef<HTMLDivElement>(null);
@@ -397,15 +400,6 @@ export default function MessageBubble({
     setReactOpen(false);
   };
 
-  const clearLongPress = () => {
-    if (longPressTimer.current) {
-      window.clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-  };
-
-  useEffect(() => () => clearLongPress(), []);
-
   useLayoutEffect(() => {
     if (!menuOpen || !menuBtnRef.current) {
       setMenuPos(null);
@@ -433,7 +427,7 @@ export default function MessageBubble({
       window.removeEventListener('resize', place);
       window.removeEventListener('scroll', place, true);
     };
-  }, [menuOpen, isFailed, onReply, onReact, onRetry, onDelete]);
+  }, [menuOpen, isFailed, onReply, onReact, onRetry, onDelete, onEnterSelectMode]);
 
   useLayoutEffect(() => {
     if (!reactOpen || !menuBtnRef.current) {
@@ -576,6 +570,19 @@ export default function MessageBubble({
                 <RotateCcw className="h-3.5 w-3.5" /> Retry
               </button>
             )}
+            {onEnterSelectMode && (
+              <button
+                type="button"
+                role="menuitem"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12.5px] hover:bg-theme-subtle"
+                onClick={() => {
+                  onEnterSelectMode(message);
+                  closeMenus();
+                }}
+              >
+                <CheckSquare className="h-3.5 w-3.5" /> Select messages
+              </button>
+            )}
             {onDelete && (
               <button
                 type="button"
@@ -624,17 +631,17 @@ export default function MessageBubble({
 
   const actionMenu = selectMode ? null : (
     <div
-      className={`absolute top-0 z-10 ${isOutbound ? 'left-0 -translate-x-full pr-1' : 'right-0 translate-x-full pl-1'} ${
+      className={`absolute top-1 z-10 ${isOutbound ? 'left-1' : 'right-1'} ${
         menuOpen || reactOpen ? 'opacity-100' : 'opacity-0 group-hover/bubble:opacity-100 focus-within:opacity-100'
       } transition-opacity`}
     >
       <button
         ref={menuBtnRef}
         type="button"
-        aria-label="Message actions"
+        aria-label="Message options"
         aria-expanded={menuOpen || reactOpen}
         aria-haspopup="menu"
-        className="flex h-7 w-7 items-center justify-center rounded-full bg-theme-surface/95 text-theme-muted shadow-sm ring-1 ring-theme-border hover:text-theme-fg"
+        className="flex h-5 w-5 items-center justify-center rounded-md bg-black/10 text-chat-text backdrop-blur-[2px] hover:bg-black/15 dark:bg-white/15 dark:hover:bg-white/25"
         onClick={(e) => {
           e.stopPropagation();
           if (menuOpen || reactOpen) {
@@ -645,59 +652,25 @@ export default function MessageBubble({
           }
         }}
       >
-        <MoreVertical className="h-3.5 w-3.5" />
+        <ChevronDown className="h-3 w-3" strokeWidth={2.5} />
       </button>
       {portaledMenu}
       {portaledReact}
     </div>
   );
 
-  // WhatsApp dims non-selected bubbles while multi-select is active.
-  const selectionDim = selectMode && !selected ? 'opacity-45' : 'transition-opacity duration-150';
-
-  const openMenuFromClick = (clientX: number, clientY: number) => {
-    setReactOpen(false);
-    const left = Math.max(8, Math.min(clientX - ACTION_MENU_WIDTH / 2, window.innerWidth - ACTION_MENU_WIDTH - 8));
-    const top = clientY + 8;
-    setMenuPos({ top: Math.min(top, window.innerHeight - 172), left });
-    setMenuOpen(true);
-  };
-
-  const bubbleShellProps = {
-    className: `group/bubble relative ${enterClass} ${selectionDim} ${
-      selectMode && selected ? 'ring-2 ring-whatsapp-500/40 ring-offset-1 ring-offset-transparent' : ''
-    }`,
-    onClick: selectMode
-      ? (e: React.MouseEvent) => {
+  const bubbleShellProps = selectMode
+    ? {
+        className: `group/bubble relative ${enterClass}`,
+        onClick: (e: React.MouseEvent) => {
           e.preventDefault();
           e.stopPropagation();
           onToggleSelect?.(message);
-        }
-      : (e: React.MouseEvent) => {
-          e.preventDefault();
-          e.stopPropagation();
-          clearLongPress();
-          openMenuFromClick(e.clientX, e.clientY);
         },
-    onContextMenu: selectMode
-      ? undefined
-      : (e: React.MouseEvent) => {
-          e.preventDefault();
-          e.stopPropagation();
-          openMenuFromClick(e.clientX, e.clientY);
-        },
-    onTouchStart: selectMode
-      ? undefined
-      : () => {
-          clearLongPress();
-          longPressTimer.current = window.setTimeout(() => {
-            setReactOpen(false);
-            setMenuOpen(true);
-          }, 450);
-        },
-    onTouchEnd: selectMode ? undefined : clearLongPress,
-    onTouchMove: selectMode ? undefined : clearLongPress,
-  };
+      }
+    : {
+        className: `group/bubble relative ${enterClass}`,
+      };
 
   const selectCheck = selectMode ? (
     <button

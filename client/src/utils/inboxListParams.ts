@@ -5,7 +5,6 @@ export type InboxListQueryInput = {
   pageSize: number;
   search?: string;
   chip: ListChip;
-  statusFilter?: string;
   agentFilter?: string;
   userId?: string;
 };
@@ -20,17 +19,22 @@ export function buildInboxListParams(input: InboxListQueryInput): Record<string,
     limit: String(input.pageSize),
   };
   if (input.search) params.search = input.search;
-  if (input.statusFilter) params.status = input.statusFilter;
 
   switch (input.chip) {
     case 'unread':
       params.unread = 'true';
       break;
-    case 'favourites':
-      params.favorite = 'true';
-      break;
     case 'unreplied':
       params.unreplied = 'true';
+      break;
+    case 'open':
+      params.status = 'OPEN';
+      break;
+    case 'pending':
+      params.status = 'PENDING';
+      break;
+    case 'favourites':
+      params.favorite = 'true';
       break;
     case 'hasTicket':
       params.hasOpenTicket = 'true';

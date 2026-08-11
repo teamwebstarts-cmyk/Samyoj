@@ -11,7 +11,6 @@ export type InboxNumberCache = {
   total: number;
   search: string;
   chip: ListChip;
-  statusFilter: string;
   agentFilter: string;
   page: number;
   pageSize: PageSize;
@@ -22,7 +21,6 @@ interface NumberCacheDeps {
   total: number;
   search: string;
   chip: ListChip;
-  statusFilter: string;
   agentFilter: string;
   page: number;
   pageSize: PageSize;
@@ -31,7 +29,6 @@ interface NumberCacheDeps {
   setTotal: (total: number) => void;
   setSearch: (search: string) => void;
   setChip: (chip: ListChip) => void;
-  setStatusFilter: (status: string) => void;
   setAgentFilter: (agent: string) => void;
   setPage: (page: number) => void;
   setPageSize: (size: PageSize) => void;
@@ -46,7 +43,6 @@ export function useInboxNumberCache(deps: NumberCacheDeps) {
     total,
     search,
     chip,
-    statusFilter,
     agentFilter,
     page,
     pageSize,
@@ -55,7 +51,6 @@ export function useInboxNumberCache(deps: NumberCacheDeps) {
     setTotal,
     setSearch,
     setChip,
-    setStatusFilter,
     setAgentFilter,
     setPage,
     setPageSize,
@@ -71,7 +66,6 @@ export function useInboxNumberCache(deps: NumberCacheDeps) {
         total,
         search,
         chip,
-        statusFilter,
         agentFilter,
         page,
         pageSize,
@@ -83,8 +77,13 @@ export function useInboxNumberCache(deps: NumberCacheDeps) {
       setConversations(cached.conversations);
       setTotal(cached.total);
       setSearch(cached.search);
-      setChip(cached.chip);
-      setStatusFilter(cached.statusFilter);
+      setChip(
+        (cached as { statusFilter?: string }).statusFilter === 'OPEN'
+          ? 'open'
+          : (cached as { statusFilter?: string }).statusFilter === 'PENDING'
+            ? 'pending'
+            : cached.chip
+      );
       setAgentFilter(cached.agentFilter);
       setPage(cached.page ?? 1);
       if (cached.pageSize) setPageSize(cached.pageSize);

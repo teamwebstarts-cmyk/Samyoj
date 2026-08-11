@@ -12,10 +12,11 @@ export interface BotPickerPopoverProps {
   loading?: boolean;
   /** Conversation's assigned bot id; null = org default (Auto). */
   activeBotId: string | null;
-  /** Status only — live on/off is controlled by the header toggle button. */
   botIsLive: boolean;
+  botToggling?: boolean;
   botAssigning?: boolean;
   anchorRef: RefObject<HTMLElement | null>;
+  onToggleBot: () => void;
   onSelectBot: (botId: string | null) => void;
   onClose: () => void;
 }
@@ -31,14 +32,16 @@ function truncateHint(text?: string | null, max = 72): string | null {
   return t.length > max ? `${t.slice(0, max - 1)}…` : t;
 }
 
-/** Header popover: choose which AI bot handles this conversation (no live toggle). */
+/** Header popover: toggle AI replies and choose which bot handles this chat. */
 export default function BotPickerPopover({
   bots,
   loading = false,
   activeBotId,
   botIsLive,
+  botToggling = false,
   botAssigning = false,
   anchorRef,
+  onToggleBot,
   onSelectBot,
   onClose,
 }: BotPickerPopoverProps) {
@@ -82,7 +85,7 @@ export default function BotPickerPopover({
       window.removeEventListener('resize', place);
       window.removeEventListener('scroll', place, true);
     };
-  }, [anchorRef, enabledBots.length, loading, botIsLive]);
+  }, [anchorRef, enabledBots.length, loading, botIsLive, botToggling]);
 
   useLayoutEffect(() => {
     const onDoc = (e: MouseEvent) => {
@@ -102,6 +105,7 @@ export default function BotPickerPopover({
   };
 
   const busy = botAssigning || loading;
+  const toggleBusy = botToggling || botAssigning;
 
   return createPortal(
     <div
@@ -119,22 +123,38 @@ export default function BotPickerPopover({
         coords ? 'visible' : 'invisible'
       }`}
     >
-      <div className="flex items-center justify-between gap-2 px-3 pb-1 pt-2.5">
+      <div className="border-b border-theme-border/60 px-3 py-2.5">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[12px] font-semibold text-theme-fg">AI auto-replies</p>
+            <p className="text-[10px] text-theme-muted">
+              {botIsLive ? 'Bot is replying in this chat' : 'Bot is paused for this chat'}
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={botIsLive}
+            aria-label={botIsLive ? 'Pause AI bot' : 'Enable AI bot'}
+            disabled={toggleBusy}
+            onClick={onToggleBot}
+            className={`relative h-7 w-12 shrink-0 rounded-full transition disabled:cursor-not-allowed disabled:opacity-50 ${FOCUS_RING_CLASS} ${
+              botIsLive ? 'bg-whatsapp-500' : 'bg-neutral-300 dark:bg-neutral-600'
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition ${
+                botIsLive ? 'left-[22px]' : 'left-0.5'
+              }`}
+            />
+          </button>
+        </div>
+      </div>
+
+      <div className="px-3 pb-1 pt-2">
         <p className="text-[10px] font-bold uppercase tracking-wide text-theme-muted">
           Bot for this chat
         </p>
-        <span
-          className={`inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${
-            botIsLive
-              ? 'bg-whatsapp-500/12 text-whatsapp-700 dark:bg-whatsapp-500/15 dark:text-whatsapp-400'
-              : 'bg-neutral-200/80 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400'
-          }`}
-        >
-          {botIsLive ? (
-            <span className="h-1.5 w-1.5 rounded-full bg-whatsapp-500" aria-hidden />
-          ) : null}
-          {botIsLive ? 'Live' : 'Off'}
-        </span>
       </div>
 
       <div className="max-h-56 overflow-y-auto py-0.5" role="listbox" aria-label="Select chatbot">
