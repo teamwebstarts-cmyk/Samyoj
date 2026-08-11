@@ -471,8 +471,8 @@ export const templateApi = {
 };
 
 export const analyticsApi = {
-  overview: (days?: number) =>
-    api.get('/analytics/overview', { params: days ? { days: String(days) } : {} }),
+  overview: (params?: Record<string, string>) =>
+    api.get('/analytics/overview', { params }),
   reports: (days?: number) => api.get('/analytics/reports', { params: days ? { days: String(days) } : {} }),
   leaderboard: (days?: number) =>
     api.get('/analytics/leaderboard', { params: days ? { days: String(days) } : {} }),

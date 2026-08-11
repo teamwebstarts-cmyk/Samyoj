@@ -4,6 +4,11 @@ import { authenticate, requireOrg } from '../../middleware/auth';
 import { loadPermissions, requirePermission } from '../../middleware/permissions';
 import { sendSuccess, asyncHandler } from '../../utils/response';
 import { resolveActiveWhatsappNumber, conversationFilter, contactsForNumberFilter } from '../whatsapp/active-number';
+import {
+  buildDailySeriesBuckets,
+  resolveOverviewPeriod,
+  startOfDay,
+} from './overview-period';
 
 const router = Router();
 
@@ -18,15 +23,41 @@ router.get(
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const numberId = req.activeWhatsappNumberId;
-    const rawDays = parseInt((req.query.days as string) || '7', 10);
-    const days = [7, 14, 30].includes(rawDays) ? rawDays : 7;
-    const since = daysAgo(days);
-    const previousSince = daysAgo(days * 2);
+    let periodWindow;
+    try {
+      periodWindow = resolveOverviewPeriod(req.query);
+    } catch {
+      periodWindow = resolveOverviewPeriod({ days: '7' });
+    }
+
+    const { since, until, previousSince, previousUntil, compareEnabled, period } = periodWindow;
     const convScope = { organizationId: orgId, ...conversationFilter(numberId) };
+
+    if (period.mode === 'overall') {
+      const firstMessage = await prisma.message.findFirst({
+        where: { direction: 'OUTBOUND', conversation: convScope },
+        orderBy: { createdAt: 'asc' },
+        select: { createdAt: true },
+      });
+      if (firstMessage?.createdAt) {
+        periodWindow.since = startOfDay(firstMessage.createdAt);
+        periodWindow.dayCount = Math.max(
+          1,
+          Math.ceil((until.getTime() - periodWindow.since.getTime()) / (24 * 60 * 60 * 1000))
+        );
+      }
+    }
+
+    const currentSince = periodWindow.since;
+    const currentUntil = period.mode === 'preset' ? undefined : periodWindow.until;
 
     const outboundIn = (from: Date, to?: Date) => ({
       direction: 'OUTBOUND' as const,
-      createdAt: to ? { gte: from, lt: to } : { gte: from },
+      createdAt: to
+        ? period.mode === 'preset'
+          ? { gte: from, lt: to }
+          : { gte: from, lte: to }
+        : { gte: from },
       conversation: convScope,
     });
 
@@ -45,40 +76,49 @@ router.get(
       periodMessages,
       periodContacts,
     ] = await Promise.all([
-      prisma.message.count({ where: outboundIn(since) }),
-      // Latest status is exclusive (READ replaces DELIVERED on the row)
+      prisma.message.count({ where: outboundIn(currentSince, currentUntil) }),
       prisma.message.count({
-        where: { ...outboundIn(since), status: 'DELIVERED' },
+        where: { ...outboundIn(currentSince, currentUntil), status: 'DELIVERED' },
       }),
       prisma.message.count({
-        where: { ...outboundIn(since), status: 'READ' },
+        where: { ...outboundIn(currentSince, currentUntil), status: 'READ' },
       }),
       prisma.message.count({
-        where: { ...outboundIn(since), status: 'FAILED' },
+        where: { ...outboundIn(currentSince, currentUntil), status: 'FAILED' },
       }),
-      prisma.message.count({
-        where: { ...outboundIn(since), status: { in: ['PENDING', 'SENT'] } },
-      }),
-      prisma.message.count({ where: outboundIn(previousSince, since) }),
       prisma.message.count({
         where: {
-          ...outboundIn(previousSince, since),
-          status: { in: ['DELIVERED', 'READ'] },
+          ...outboundIn(currentSince, currentUntil),
+          status: { in: ['PENDING', 'SENT'] },
         },
       }),
-      prisma.message.count({
-        where: { ...outboundIn(previousSince, since), status: 'READ' },
-      }),
-      prisma.message.count({
-        where: { ...outboundIn(previousSince, since), status: 'FAILED' },
-      }),
+      compareEnabled
+        ? prisma.message.count({ where: outboundIn(previousSince, previousUntil) })
+        : Promise.resolve(0),
+      compareEnabled
+        ? prisma.message.count({
+            where: {
+              ...outboundIn(previousSince, previousUntil),
+              status: { in: ['DELIVERED', 'READ'] },
+            },
+          })
+        : Promise.resolve(0),
+      compareEnabled
+        ? prisma.message.count({
+            where: { ...outboundIn(previousSince, previousUntil), status: 'READ' },
+          })
+        : Promise.resolve(0),
+      compareEnabled
+        ? prisma.message.count({
+            where: { ...outboundIn(previousSince, previousUntil), status: 'FAILED' },
+          })
+        : Promise.resolve(0),
       prisma.conversation.count({
         where: { organizationId: orgId, status: 'OPEN', ...conversationFilter(numberId) },
       }),
       prisma.contact.count({ where: { organizationId: orgId, ...contactsForNumberFilter(numberId) } }),
-      // Daily time-series breakdown for real sparkline charts
       prisma.message.findMany({
-        where: outboundIn(since),
+        where: outboundIn(currentSince, currentUntil),
         select: {
           createdAt: true,
           status: true,
@@ -91,21 +131,12 @@ router.get(
       }),
     ]);
 
-    // Build `days` daily buckets from (days - 1) days ago to today
     const dailySeries = [];
-    const now = new Date();
+    const buckets = buildDailySeriesBuckets(periodWindow);
 
-    for (let i = days - 1; i >= 0; i--) {
-      const d = new Date(now);
-      d.setDate(d.getDate() - i);
-      const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
-      const dayEnd = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
-
-      const dateLabel = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-
-      // Messages in this day
+    for (const bucket of buckets) {
       const dayMsgs = periodMessages.filter(
-        (m) => m.createdAt >= dayStart && m.createdAt <= dayEnd
+        (m) => m.createdAt >= bucket.dayStart && m.createdAt <= bucket.dayEnd
       );
       const daySent = dayMsgs.length;
       const dayDelivered = dayMsgs.filter(
@@ -117,11 +148,11 @@ router.get(
       const dayReadRate = daySent ? Number(((dayRead / daySent) * 100).toFixed(1)) : 0;
       const dayActiveConvs = new Set(dayMsgs.map((m) => m.conversationId)).size;
       const dayTotalContacts = periodContacts.filter(
-        (c) => new Date(c.createdAt || 0) <= dayEnd
+        (c) => new Date(c.createdAt || 0) <= bucket.dayEnd
       ).length;
 
       dailySeries.push({
-        date: dateLabel,
+        date: bucket.dateLabel,
         messagesSent: daySent,
         deliveryRate: dayDeliveryRate,
         readRate: dayReadRate,
@@ -154,7 +185,10 @@ router.get(
     };
 
     sendSuccess(res, {
-      days,
+      days: period.days,
+      from: period.from,
+      to: period.to,
+      periodMode: period.mode,
       messagesSent,
       messagesDelivered,
       messagesDeliveredOnly,
@@ -167,10 +201,10 @@ router.get(
       activeConversations,
       totalContacts,
       deltas: {
-        messagesSent: pctDelta(messagesSent, messagesSentPrev),
-        deliveryRate: ratePointDelta(deliveryRate, prevDeliveryRate),
-        readRate: ratePointDelta(readRate, prevReadRate),
-        failedMessages: pctDelta(messagesFailed, messagesFailedPrev),
+        messagesSent: compareEnabled ? pctDelta(messagesSent, messagesSentPrev) : null,
+        deliveryRate: compareEnabled ? ratePointDelta(deliveryRate, prevDeliveryRate) : null,
+        readRate: compareEnabled ? ratePointDelta(readRate, prevReadRate) : null,
+        failedMessages: compareEnabled ? pctDelta(messagesFailed, messagesFailedPrev) : null,
         activeConversations: null,
         totalContacts: null,
       },

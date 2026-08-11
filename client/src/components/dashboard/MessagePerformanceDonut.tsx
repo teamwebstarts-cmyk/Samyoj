@@ -4,7 +4,7 @@ import IconWell from './icons/IconWell';
 import { MessagePerformanceEmptyIllustrationSvg } from './icons/CardIllustrations';
 import {
   PeriodPicker,
-  type LiveMetricsPeriodDays,
+  type MetricsPeriod,
 } from './LiveMetricsHero';
 
 interface MessagePerformanceDonutProps {
@@ -16,13 +16,8 @@ interface MessagePerformanceDonutProps {
   messagesPending: number;
   /** Fallback label when periodDays is not provided */
   periodLabel?: string;
-  periodDays?: number;
-  onPeriodChange?: (days: LiveMetricsPeriodDays) => void;
-}
-
-function pct(part: number, whole: number): string {
-  if (!whole) return '0.0%';
-  return `${((part / whole) * 100).toFixed(1)}%`;
+  period?: MetricsPeriod;
+  onPeriodChange?: (period: MetricsPeriod) => void;
 }
 
 export default function MessagePerformanceDonut({
@@ -33,7 +28,7 @@ export default function MessagePerformanceDonut({
   messagesFailed,
   messagesPending,
   periodLabel = 'Last 7 days',
-  periodDays,
+  period,
   onPeriodChange,
 }: MessagePerformanceDonutProps) {
   const isEmpty = messagesSent <= 0;
@@ -77,7 +72,6 @@ export default function MessagePerformanceDonut({
       label: 'Delivered',
       labelFull: 'Delivered (not read yet)',
       value: deliveredOnly.toLocaleString(),
-      pct: pct(deliveredOnly, messagesSent),
       color: 'bg-[#25D366]',
       bar: 'bg-[#25D366]',
       share: Math.min(100, deliveredOnlyPctNum),
@@ -87,7 +81,6 @@ export default function MessagePerformanceDonut({
       label: 'Read',
       labelFull: 'Read',
       value: messagesRead.toLocaleString(),
-      pct: pct(messagesRead, messagesSent),
       color: 'bg-[#3B82F6]',
       bar: 'bg-[#3B82F6]',
       share: Math.min(100, readPctNum),
@@ -97,7 +90,6 @@ export default function MessagePerformanceDonut({
       label: 'Failed',
       labelFull: 'Failed',
       value: messagesFailed.toLocaleString(),
-      pct: pct(messagesFailed, messagesSent),
       color: 'bg-[#EF4444]',
       bar: 'bg-[#EF4444]',
       share: Math.min(100, failPctNum),
@@ -107,7 +99,6 @@ export default function MessagePerformanceDonut({
       label: 'Pending',
       labelFull: 'Pending',
       value: messagesPending.toLocaleString(),
-      pct: pct(messagesPending, messagesSent),
       color: 'bg-[#8B5CF6]',
       bar: 'bg-[#8B5CF6]',
       share: Math.min(100, pendPctNum),
@@ -115,9 +106,9 @@ export default function MessagePerformanceDonut({
   ];
 
   const periodControl =
-    typeof periodDays === 'number' ? (
+    period ? (
       <PeriodPicker
-        periodDays={periodDays}
+        period={period}
         onPeriodChange={onPeriodChange}
         align="right"
       />
@@ -215,7 +206,6 @@ export default function MessagePerformanceDonut({
                   </span>
                   <span className="shrink-0 whitespace-nowrap text-right text-[11px] font-bold tabular-nums text-neutral-900 sm:text-[11.5px]">
                     {item.value}
-                    <span className="ml-0.5 font-medium text-neutral-500">({item.pct})</span>
                   </span>
                 </div>
                 <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-neutral-100">

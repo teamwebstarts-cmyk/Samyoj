@@ -7,9 +7,8 @@ import WhatsAppConnectGuide, {
 import PreConnectDashboard, {
   PreConnectSkeleton,
 } from '../components/dashboard/PreConnectDashboard';
-import LiveMetricsHero, {
-  type LiveMetricsPeriodDays,
-} from '../components/dashboard/LiveMetricsHero';
+import LiveMetricsHero from '../components/dashboard/LiveMetricsHero';
+import { DEFAULT_METRICS_PERIOD, metricsPeriodToParams, type MetricsPeriod } from '../utils/metricsPeriod';
 import NeedsAttentionCard from '../components/dashboard/NeedsAttentionCard';
 import MessagePerformanceDonut from '../components/dashboard/MessagePerformanceDonut';
 import UpcomingCampaignsCard from '../components/dashboard/UpcomingCampaignsCard';
@@ -27,7 +26,7 @@ import { toastError } from '../utils/toast';
 import type { AnalyticsOverview, Campaign } from '../types';
 import type { ActivityItem } from '../components/dashboard/RecentActivityCard';
 
-const DEFAULT_PERIOD_DAYS: LiveMetricsPeriodDays = 7;
+const DEFAULT_PERIOD: MetricsPeriod = DEFAULT_METRICS_PERIOD;
 
 interface OnboardingStatus {
   steps: Array<{
@@ -69,7 +68,7 @@ function extractCampaigns(payload: unknown): Campaign[] {
 
 export default function DashboardPage() {
   const { hasConnectedNumber, loading: numbersLoading } = useWhatsAppNumber();
-  const [periodDays, setPeriodDays] = useState<LiveMetricsPeriodDays>(DEFAULT_PERIOD_DAYS);
+  const [metricsPeriod, setMetricsPeriod] = useState<MetricsPeriod>(DEFAULT_PERIOD);
   const [stats, setStats] = useState<AnalyticsOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -104,7 +103,7 @@ export default function DashboardPage() {
     else setLoading(true);
 
     analyticsApi
-      .overview(periodDays)
+      .overview(metricsPeriodToParams(metricsPeriod))
       .then(({ data }) => {
         if (reqId !== statsReqId.current) return;
         const payload = data?.data;
@@ -129,7 +128,7 @@ export default function DashboardPage() {
         setLoading(false);
         setRefreshing(false);
       });
-  }, [periodDays]);
+  }, [metricsPeriod]);
 
   const loadSideData = useCallback(() => {
     setCampaignsLoading(true);
@@ -269,8 +268,8 @@ export default function DashboardPage() {
               readRate={stats.readRate}
               deliveryDelta={stats.deltas?.deliveryRate}
               readRateDelta={stats.deltas?.readRate}
-              periodDays={periodDays}
-              onPeriodChange={setPeriodDays}
+              period={metricsPeriod}
+              onPeriodChange={setMetricsPeriod}
             />
 
             <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 md:items-stretch lg:mt-3.5 lg:grid-cols-3 lg:items-stretch lg:gap-3">
@@ -287,8 +286,8 @@ export default function DashboardPage() {
                 messagesRead={stats.messagesRead ?? 0}
                 messagesFailed={stats.messagesFailed ?? stats.failedMessages}
                 messagesPending={stats.messagesPending ?? 0}
-                periodDays={periodDays}
-                onPeriodChange={setPeriodDays}
+                period={metricsPeriod}
+                onPeriodChange={setMetricsPeriod}
               />
               <UpcomingCampaignsCard
                 campaigns={campaigns}
@@ -299,7 +298,7 @@ export default function DashboardPage() {
             </div>
 
             <div
-              className={`mt-3 grid grid-cols-1 gap-3 lg:mt-4 lg:gap-4 ${showChecklist || onboardingError ? 'lg:grid-cols-5 lg:items-start' : ''
+              className={`mt-3 grid grid-cols-1 gap-3 lg:mt-4 lg:gap-4 ${showChecklist || onboardingError ? 'lg:grid-cols-5 lg:items-stretch' : ''
                 }`}
             >
               <div className={`min-w-0 ${showChecklist || onboardingError ? 'lg:col-span-3' : ''}`}>

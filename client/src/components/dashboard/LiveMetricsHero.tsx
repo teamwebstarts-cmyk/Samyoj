@@ -1,13 +1,13 @@
-import { useRef, useState, useEffect } from 'react';
-import { ArrowDownRight, ArrowUpRight, Calendar, ChevronDown } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight } from 'lucide-react';
+import MetricsPeriodPicker from './MetricsPeriodPicker';
+import { metricsPeriodCompareLabel, type MetricsPeriod } from '../../utils/metricsPeriod';
 
-export const LIVE_METRICS_PERIOD_OPTIONS = [
-  { value: 7, label: 'Last 7 days' },
-  { value: 14, label: 'Last 14 days' },
-  { value: 30, label: 'Last 30 days' },
-] as const;
-
-export type LiveMetricsPeriodDays = (typeof LIVE_METRICS_PERIOD_OPTIONS)[number]['value'];
+export { PeriodPicker } from './MetricsPeriodPicker';
+export {
+  METRICS_PRESET_OPTIONS as LIVE_METRICS_PERIOD_OPTIONS,
+  type MetricsPresetDays as LiveMetricsPeriodDays,
+} from '../../utils/metricsPeriod';
+export type { MetricsPeriod } from '../../utils/metricsPeriod';
 
 interface LiveMetricsHeroProps {
   messagesSent: number;
@@ -15,8 +15,8 @@ interface LiveMetricsHeroProps {
   readRate: string;
   deliveryDelta?: number | null;
   readRateDelta?: number | null;
-  periodDays?: number;
-  onPeriodChange?: (days: LiveMetricsPeriodDays) => void;
+  period: MetricsPeriod;
+  onPeriodChange?: (period: MetricsPeriod) => void;
 }
 
 function parseRate(value: string): number {
@@ -26,31 +26,29 @@ function parseRate(value: string): number {
 
 function formatRateDisplay(value: string): string {
   const n = parseRate(value);
-  if (Number.isInteger(n)) return `${n}%`;
-  return `${n.toFixed(1)}%`;
+  return `${Math.round(n)}%`;
 }
 
 function formatDeltaPoints(
   delta: number | null | undefined,
-  periodDays: number
+  compareLabel: string
 ): {
   percent: string;
   period: string;
   tone: 'up' | 'down' | 'flat';
 } {
-  const period = `vs last ${periodDays} days`;
   if (typeof delta !== 'number' || !Number.isFinite(delta)) {
-    return { percent: '0%', period, tone: 'flat' };
+    return { percent: '—', period: compareLabel, tone: 'flat' };
   }
-  const rounded = Math.round(delta * 10) / 10;
+  const rounded = Math.round(delta);
   const abs = Math.abs(rounded);
-  const percent = Number.isInteger(abs) ? `${abs}%` : `${abs.toFixed(1)}%`;
+  const percent = `${abs}%`;
   if (rounded === 0) {
-    return { percent: '0%', period, tone: 'flat' };
+    return { percent: '0%', period: compareLabel, tone: 'flat' };
   }
   return {
     percent,
-    period,
+    period: compareLabel,
     tone: rounded > 0 ? 'up' : 'down',
   };
 }
@@ -59,14 +57,14 @@ function MiniMetricCard({
   label,
   value,
   delta,
-  periodDays,
+  compareLabel,
 }: {
   label: string;
   value: string;
   delta: number | null | undefined;
-  periodDays: number;
+  compareLabel: string;
 }) {
-  const formatted = formatDeltaPoints(delta, periodDays);
+  const formatted = formatDeltaPoints(delta, compareLabel);
   const percentTone =
     formatted.tone === 'up'
       ? 'text-emerald-600'
@@ -103,113 +101,19 @@ function MiniMetricCard({
   );
 }
 
-export function PeriodPicker({
-  periodDays,
-  onPeriodChange,
-  align = 'left',
-}: {
-  periodDays: number;
-  onPeriodChange?: (days: LiveMetricsPeriodDays) => void;
-  align?: 'left' | 'right';
-}) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-  const selected =
-    LIVE_METRICS_PERIOD_OPTIONS.find((o) => o.value === periodDays) ??
-    LIVE_METRICS_PERIOD_OPTIONS[0];
-
-  useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (event: MouseEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('mousedown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [open]);
-
-  if (!onPeriodChange) {
-    return (
-      <span className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200/80 bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-neutral-600 shadow-xs">
-        <Calendar className="h-3.5 w-3.5 text-neutral-400 stroke-[2]" aria-hidden />
-        {selected.label}
-      </span>
-    );
-  }
-
-  return (
-    <div ref={rootRef} className="relative inline-flex">
-      <button
-        type="button"
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-label="Metrics period"
-        onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200/80 bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-neutral-600 shadow-xs transition-colors hover:border-neutral-300 hover:bg-white"
-      >
-        <Calendar className="h-3.5 w-3.5 text-neutral-400 stroke-[2]" aria-hidden />
-        {selected.label}
-        <ChevronDown
-          className={`h-3.5 w-3.5 text-neutral-400 transition-transform ${open ? 'rotate-180' : ''}`}
-          aria-hidden
-        />
-      </button>
-
-      {open ? (
-        <ul
-          role="listbox"
-          aria-label="Metrics period"
-          className={`absolute top-[calc(100%+0.35rem)] z-20 min-w-[11.5rem] overflow-hidden rounded-xl border border-neutral-200/90 bg-white py-1 shadow-[0_8px_24px_rgba(15,23,42,0.12)] ${
-            align === 'right' ? 'right-0' : 'left-0'
-          }`}
-        >
-          {LIVE_METRICS_PERIOD_OPTIONS.map((option) => {
-            const isActive = option.value === selected.value;
-            return (
-              <li key={option.value} role="option" aria-selected={isActive}>
-                <button
-                  type="button"
-                  className={`flex w-full items-center px-3 py-2 text-left text-[12px] font-semibold transition-colors ${
-                    isActive
-                      ? 'bg-emerald-50 text-emerald-800'
-                      : 'text-neutral-700 hover:bg-neutral-50'
-                  }`}
-                  onClick={() => {
-                    onPeriodChange(option.value);
-                    setOpen(false);
-                  }}
-                >
-                  {option.label}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      ) : null}
-    </div>
-  );
-}
-
 export default function LiveMetricsHero({
   messagesSent,
   deliveryRate,
   readRate,
   deliveryDelta,
   readRateDelta,
-  periodDays = 7,
+  period,
   onPeriodChange,
 }: LiveMetricsHeroProps) {
   const delivery = parseRate(deliveryRate);
   const read = parseRate(readRate);
   const healthScore = Math.round((delivery + read) / 2);
+  const compareLabel = metricsPeriodCompareLabel(period);
 
   const healthDelta =
     typeof deliveryDelta === 'number' &&
@@ -239,7 +143,7 @@ export default function LiveMetricsHero({
             </span>
             Live metrics
           </span>
-          <PeriodPicker periodDays={periodDays} onPeriodChange={onPeriodChange} />
+          <MetricsPeriodPicker period={period} onPeriodChange={onPeriodChange} />
         </div>
 
         <div className="mt-4 flex flex-col gap-4 lg:mt-5 lg:flex-row lg:items-end lg:justify-between lg:gap-6">
@@ -260,19 +164,19 @@ export default function LiveMetricsHero({
               label="Delivery"
               value={formatRateDisplay(deliveryRate)}
               delta={deliveryDelta}
-              periodDays={periodDays}
+              compareLabel={compareLabel}
             />
             <MiniMetricCard
               label="Read rate"
               value={formatRateDisplay(readRate)}
               delta={readRateDelta}
-              periodDays={periodDays}
+              compareLabel={compareLabel}
             />
             <MiniMetricCard
               label="Health score"
               value={`${healthScore}%`}
               delta={healthDelta}
-              periodDays={periodDays}
+              compareLabel={compareLabel}
             />
           </div>
         </div>

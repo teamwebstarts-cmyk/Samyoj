@@ -862,6 +862,9 @@ export interface DailyAnalyticsPoint {
 
 export interface AnalyticsOverview {
   days?: number;
+  from?: string;
+  to?: string;
+  periodMode?: 'preset' | 'custom' | 'overall';
   messagesSent: number;
   /** Funnel: DELIVERED + READ (reached device) */
   messagesDelivered?: number;

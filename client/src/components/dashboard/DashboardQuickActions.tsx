@@ -60,16 +60,17 @@ const PRIMARY_ACTIONS = [
     bgClass: 'bg-amber-50/50 border-amber-100/80 hover:border-amber-200 hover:bg-amber-50/80',
     wellClass: 'bg-amber-100 text-amber-600',
   },
-];
-
-const MORE_MENU_ITEMS = [
   {
     to: '/templates',
     label: 'Templates',
     desc: 'Approved messages',
-    icon: FileText,
-    accent: 'slate' as const,
+    icon: <FileText className="h-[18px] w-[18px] text-rose-600 stroke-[2.2]" />,
+    bgClass: 'bg-rose-50/50 border-rose-100/80 hover:border-rose-200 hover:bg-rose-50/80',
+    wellClass: 'bg-rose-100 text-rose-600',
   },
+];
+
+const MORE_MENU_ITEMS = [
   {
     to: '/calls',
     label: 'Calls',
@@ -105,7 +106,7 @@ function ActionTile({
 }: ActionTileProps) {
   const content = (
     <div
-      className={`group flex h-full min-h-[72px] items-center gap-2 rounded-xl border px-2 py-3 transition hover:shadow-xs sm:min-h-[76px] sm:gap-2.5 sm:px-2.5 sm:py-3.5 ${
+      className={`group flex h-full min-h-[74px] items-center gap-2 rounded-xl border px-2.5 py-3 transition hover:shadow-xs sm:min-h-[78px] sm:gap-2.5 sm:px-3 sm:py-3.5 ${
         isDashed
           ? 'border-dashed border-neutral-300 bg-neutral-50/40 hover:border-neutral-400 hover:bg-neutral-50/80'
           : bgClass
@@ -132,7 +133,7 @@ function ActionTile({
       <button
         type="button"
         onClick={onClick}
-        className="w-full text-left"
+        className="h-full w-full text-left"
         aria-label="More quick actions"
       >
         {content}
@@ -140,7 +141,11 @@ function ActionTile({
     );
   }
 
-  return <Link to={to}>{content}</Link>;
+  return (
+    <Link to={to} className="block h-full">
+      {content}
+    </Link>
+  );
 }
 
 export default function DashboardQuickActions() {
@@ -164,7 +169,7 @@ export default function DashboardQuickActions() {
   }, [open]);
 
   return (
-    <section className="dashboard-card flex flex-col rounded-2xl border border-neutral-100/90 bg-white p-2.5 shadow-xs sm:rounded-2xl sm:p-3">
+    <section className="dashboard-card flex h-full flex-col rounded-2xl border border-neutral-100/90 bg-white p-2.5 shadow-xs sm:rounded-2xl sm:p-3">
       <div className="flex items-center gap-1.5 sm:gap-2">
         <IconWell accent="emerald" size="sm">
           <Scan className="h-3.5 w-3.5 stroke-[2.2]" />
@@ -174,7 +179,7 @@ export default function DashboardQuickActions() {
         </h2>
       </div>
 
-      <div className="mt-1.5 grid grid-cols-1 gap-1.5 min-[420px]:grid-cols-2 sm:mt-2 md:grid-cols-5 md:gap-2">
+      <div className="mt-2 grid flex-1 grid-cols-2 auto-rows-fr gap-2 sm:grid-cols-3 sm:gap-2.5">
         {PRIMARY_ACTIONS.map((item) => (
           <ActionTile
             key={item.to}
@@ -187,7 +192,7 @@ export default function DashboardQuickActions() {
           />
         ))}
 
-        <div className="relative col-span-1" ref={ref}>
+        <div className="relative h-full" ref={ref}>
           <ActionTile
             to="#"
             label="More"
