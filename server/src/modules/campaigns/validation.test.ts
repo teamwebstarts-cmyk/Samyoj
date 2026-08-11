@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { dedupeRecipients, hasAuditableCampaignConsent } from './recipients';
 import { buildTemplateComponents, mergeTemplateParams } from './template-params';
 import { createCampaignSchema } from './types';
-import { isAbsoluteInstant } from './safety';
+import { isAbsoluteInstant, parseMetaTimestamp } from './safety';
 import { templateValidationErrors } from './template-validation';
 
 describe('dedupeRecipients', () => {
@@ -43,6 +43,13 @@ describe('campaign consent', () => {
     expect(isAbsoluteInstant('2026-02-31T12:00:00.000Z')).toBe(false);
     expect(() => createCampaignSchema.parse({ ...base, scheduledAt: '2026-08-09T12:00:00.000Z' })).not.toThrow();
   });
+
+  it('rejects malformed provider timestamps instead of persisting them', () => {
+    expect(parseMetaTimestamp('not-a-timestamp')).toBeUndefined();
+    expect(parseMetaTimestamp('1700000000.5')).toBeUndefined();
+    expect(parseMetaTimestamp('0')).toBeUndefined();
+    expect(parseMetaTimestamp('1700000000')).toEqual(new Date('2023-11-14T22:13:20.000Z'));
+  });
 });
 
 describe('mergeTemplateParams', () => {
@@ -58,6 +65,16 @@ describe('mergeTemplateParams', () => {
       'Bob'
     );
     expect(merged.body).toEqual(['Custom']);
+  });
+
+  it('fills a supported named template placeholder from recipient data', () => {
+    const merged = mergeTemplateParams(
+      undefined,
+      undefined,
+      'Alice',
+      { components: [{ type: 'BODY', text: 'Hello {{name}}' }] } as never
+    );
+    expect(merged.body).toEqual(['Alice']);
   });
 });
 
@@ -129,5 +146,41 @@ describe('approved template validation', () => {
     });
     expect(errors.join(' ')).toContain('non-contiguous');
     expect(errors.join(' ')).not.toContain('requires 3 variable(s)');
+  });
+
+  it('rejects unresolved and unsupported placeholders as actionable errors', () => {
+    const unresolved = {
+      ...template,
+      components: [{ type: 'BODY', text: 'Hi {{unknown}}' }],
+    };
+    const errors = templateValidationErrors(unresolved, {
+      name: 'sale_offer',
+      language: 'en_US',
+      category: 'MARKETING',
+      params: { body: ['{{unknown}}'] },
+    });
+    expect(errors.join(' ')).toContain('unsupported placeholders');
+    expect(errors.join(' ')).toContain('unresolved placeholders');
+  });
+
+  it('supports named-only placeholders independently', () => {
+    const named = { ...template, components: [{ type: 'BODY', text: 'Hi {{name}}, welcome back {{name}}' }] };
+    expect(templateValidationErrors(named, {
+      name: 'sale_offer',
+      language: 'en_US',
+      category: 'MARKETING',
+      params: { body: ['Alice'] },
+    })).toEqual([]);
+  });
+
+  it('rejects mixed numeric and named placeholders deterministically', () => {
+    const mixed = { ...template, components: [{ type: 'BODY', text: 'Hi {{1}}, {{name}}' }] };
+    const errors = templateValidationErrors(mixed, {
+      name: 'sale_offer',
+      language: 'en_US',
+      category: 'MARKETING',
+      params: { body: ['Alice', 'Bob'] },
+    });
+    expect(errors.join(' ')).toContain('mixes numeric and named');
   });
 });

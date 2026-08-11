@@ -87,6 +87,16 @@ export function isAbsoluteInstant(value: string) {
   );
 }
 
+/** Parse Meta's Unix-second timestamps without allowing invalid dates into state. */
+export function parseMetaTimestamp(value: unknown): Date | undefined {
+  const raw = typeof value === 'number' ? String(value) : typeof value === 'string' ? value : '';
+  if (!/^\d{1,12}$/.test(raw)) return undefined;
+  const seconds = Number(raw);
+  if (!Number.isSafeInteger(seconds) || seconds <= 0) return undefined;
+  const date = new Date(seconds * 1000);
+  return Number.isNaN(date.getTime()) ? undefined : date;
+}
+
 export function campaignCounterSnapshot(statuses: string[]) {
   return statuses.reduce(
     (counts, status) => {
@@ -287,9 +297,10 @@ export function classifyProviderError(error: unknown): {
     typeof candidate?.metaCode === 'number' &&
     [100, 131008, 131021, 131026, 131037, 131047, 131049, 131050, 131051,
       132000, 132001, 132012, 132015, 132016].includes(candidate.metaCode);
-  const authentication =
-    candidate?.metaCode === 190 ||
-    /(?:auth|authori[sz]|token|access key|credential|could not link|subscribe(?:d)? apps?|waba.*(?:admin|permission)|permission.*waba)/i.test(message);
+  // Error text is not authoritative: Meta commonly echoes token/auth words in
+  // throttling and upstream failures. Only explicit Meta auth code/status
+  // semantics are safe to classify as a durable configuration failure.
+  const authentication = candidate?.metaCode === 190 || status === 401 || status === 403;
   const policy =
     typeof candidate?.metaCode === 'number' &&
     [131026, 131047, 131049, 131050, 131051, 132015, 132016].includes(candidate.metaCode);
@@ -300,11 +311,7 @@ export function classifyProviderError(error: unknown): {
   // A 4xx without a known permanent Meta code is not proof that Meta did not
   // accept the request. Keep it ambiguous; authentication (190), throttling,
   // and unknown provider responses must never become ordinary retries.
-  const transient = !authentication && (
-    pacing ||
-    status === 429 ||
-    (typeof status === 'number' && status >= 500 && status < 600)
-  );
+  const transient = pacing || (typeof status === 'number' && status >= 500 && status < 600);
   return {
     classification: policy
       ? 'POLICY_REJECTION'
@@ -338,6 +345,11 @@ export function shouldRetryCampaignSetup(classification: ProviderErrorClassifica
 
 export function shouldRetryProviderSend(classification: ProviderErrorClassification) {
   return classification === 'PACING_OR_RATE_LIMIT' || classification === 'TRANSIENT_PROVIDER_ERROR';
+}
+
+/** Once the provider boundary is crossed, only an explicit rejection is safe to fail. */
+export function classifyProviderBoundaryOutcome(classification: ProviderErrorClassification) {
+  return isCampaignConfigurationFailure(classification) ? 'FAILED' as const : 'AMBIGUOUS' as const;
 }
 
 export function stopTransition(status: string, hasProviderBoundary: boolean, reason: 'paused' | 'cancelled') {

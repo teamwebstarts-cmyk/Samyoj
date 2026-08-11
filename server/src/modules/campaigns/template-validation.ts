@@ -9,9 +9,21 @@ export type TemplateValidationInput = {
   params?: TemplateParams | null;
 };
 
-function placeholderIndexes(text?: string) {
-  const indexes = Array.from(text?.matchAll(/\{\{(\d+)\}\}/g) ?? [], (match) => Number(match[1]));
-  return [...new Set(indexes)].sort((a, b) => a - b);
+export function templatePlaceholderProfile(text?: string) {
+  const tokens = placeholderTokens(text);
+  const numeric = [...new Set(tokens.filter((token) => /^\d+$/.test(token)))].map(Number)
+    .sort((a, b) => a - b);
+  const named = [...new Set(tokens.filter((token) => !/^\d+$/.test(token)))];
+  return {
+    tokens,
+    numeric,
+    named,
+    mixed: numeric.length > 0 && named.length > 0,
+  };
+}
+
+function placeholderTokens(text?: string) {
+  return Array.from(text?.matchAll(/\{\{([^}]+)\}\}/g) ?? [], (match) => match[1].trim());
 }
 
 export function templateValidationErrors(
@@ -34,14 +46,25 @@ export function templateValidationErrors(
     const expected = approved.filter((item) => item === type).length;
     const actual = suppliedTypes.filter((item) => item === type).length;
     const component = template.components?.find((item) => item.type.toUpperCase() === type);
-    const indexes = placeholderIndexes(component?.text);
-    const variables = indexes.length;
+    const profile = templatePlaceholderProfile(component?.text);
+    const { indexes, tokens } = { indexes: profile.numeric, tokens: profile.tokens };
+    const unknown = profile.named.filter((token) => token !== 'name');
+    if (unknown.length) {
+      errors.push(`${type.toLowerCase()} contains unsupported placeholders: ${unknown.join(', ')}`);
+    }
+    if (profile.mixed) {
+      errors.push(`${type.toLowerCase()} mixes numeric and named placeholders; use one placeholder style`);
+    }
+    const variables = profile.numeric.length + profile.named.length;
     const values = type === 'BODY' ? input.params?.body || [] : input.params?.header || [];
     if (expected !== actual && (variables > 0 || values.length > 0)) {
       errors.push(`${type.toLowerCase()} component does not match approved template shape`);
     }
     if (values.length !== variables) {
       errors.push(`${type.toLowerCase()} requires ${variables} variable(s), received ${values.length}`);
+    }
+    if (values.some((value) => /\{\{[^}]+\}\}/.test(value))) {
+      errors.push(`${type.toLowerCase()} contains unresolved placeholders; provide recipient data before sending`);
     }
     if (indexes.some((index, position) => index !== position + 1)) {
       errors.push(`${type.toLowerCase()} uses non-contiguous numeric placeholders ${indexes.join(', ')}; use contiguous indexes starting at 1`);
@@ -90,4 +113,34 @@ export function buildValidatedTemplateComponents(
   });
   if (errors.length) throw new Error(`Approved template mismatch: ${errors.join('; ')}`);
   return buildTemplateComponents(params, template);
+}
+
+export function assertCampaignRecipientTemplates(
+  template: MessageTemplate,
+  campaignParams: TemplateParams | null | undefined,
+  recipients: Array<{
+    name?: string | null;
+    variables?: { body?: string[]; header?: string[] } | null;
+  }>,
+  options: { name?: string; language?: string; category?: string } = {}
+) {
+  for (const recipient of recipients) {
+    const params = mergeTemplateParams(
+      campaignParams,
+      recipient.variables,
+      recipient.name,
+      template
+    );
+    const errors = templateValidationErrors(template, {
+      name: options.name ?? template.name,
+      language: options.language ?? template.language,
+      category: options.category ?? template.category,
+      params,
+    });
+    if (errors.length) {
+      throw new Error(
+        `Recipient ${recipient.name || 'without a name'} has invalid template data: ${errors.join('; ')}`
+      );
+    }
+  }
 }

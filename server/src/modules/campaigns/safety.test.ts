@@ -12,6 +12,7 @@ import {
   classifyClaimForRecovery,
   classifyClaimForConfigurationFailure,
   classifyProviderError,
+  classifyProviderBoundaryOutcome,
   fitsReservedQuota,
   hasUnresolvedProviderBoundary,
   isAbsoluteInstant,
@@ -24,6 +25,7 @@ import {
   shouldReleaseQuotaAfterWebhook,
   shouldReleaseCampaignQuota,
   shouldRetryCampaignSetup,
+  shouldRetryProviderSend,
   stopTransition,
   utcDayStart,
 } from './safety';
@@ -186,10 +188,15 @@ describe('campaign safety boundaries', () => {
       status: 400,
       metaCode: 190,
     })).classification).toBe('AUTHENTICATION_ERROR');
+    expect(classifyProviderError(Object.assign(new Error('upstream auth text'), {
+      status: 401,
+    })).classification).toBe('AUTHENTICATION_ERROR');
     expect(classifyProviderError(new Error('authentication failed')).classification)
-      .toBe('AUTHENTICATION_ERROR');
+      .toBe('UNKNOWN');
     expect(classifyProviderError(Object.assign(new Error('invalid access token'), { status: 429 })).classification)
-      .toBe('AUTHENTICATION_ERROR');
+      .toBe('PACING_OR_RATE_LIMIT');
+    expect(classifyProviderError(Object.assign(new Error('invalid access token'), { status: 503 })).classification)
+      .toBe('TRANSIENT_PROVIDER_ERROR');
     expect(classifyProviderError(Object.assign(new Error('rate limited'), {
       status: 400,
       metaCode: 130429,
@@ -217,6 +224,14 @@ describe('campaign safety boundaries', () => {
     expect(shouldRetryProviderSend('UNKNOWN')).toBe(false);
     expect(shouldRetryProviderSend('AUTHENTICATION_ERROR')).toBe(false);
     expect(shouldRetryProviderSend('POLICY_REJECTION')).toBe(false);
+  });
+
+  it('holds quota after the provider boundary unless acceptance is impossible', () => {
+    expect(classifyProviderBoundaryOutcome('PACING_OR_RATE_LIMIT')).toBe('AMBIGUOUS');
+    expect(classifyProviderBoundaryOutcome('TRANSIENT_PROVIDER_ERROR')).toBe('AMBIGUOUS');
+    expect(classifyProviderBoundaryOutcome('UNKNOWN')).toBe('AMBIGUOUS');
+    expect(classifyProviderBoundaryOutcome('PERMANENT_REJECTION')).toBe('FAILED');
+    expect(classifyProviderBoundaryOutcome('POLICY_REJECTION')).toBe('FAILED');
   });
 
   it('retains quota when WABA setup failure races provider-bound work', () => {
@@ -361,6 +376,16 @@ describe('campaign safety boundaries', () => {
       currentProviderStatusAt: current,
       providerStatusAt: new Date('2026-08-10T10:01:00.000Z'),
     })).toEqual({ status: 'FAILED', clearClaim: true });
+  });
+
+  it('does not reconcile a provider event without a valid timestamp', () => {
+    // The service boundary rejects this event before calling reconciliation.
+    expect(reconcileWebhookRecipient({
+      currentStatus: 'READ',
+      providerStatus: 'FAILED',
+      currentProviderStatusAt: new Date('2026-08-10T10:00:00.000Z'),
+      providerStatusAt: undefined,
+    })).toBeNull();
   });
 
   it('does not release quota while webhook reconciliation retains a boundary', () => {

@@ -38,7 +38,7 @@ import {
 } from './safety';
 import { getRedis } from '../../config/redis';
 import { buildCampaignJobId, canRollbackQueuedCampaign } from './worker-safety';
-import { assertApprovedCampaignTemplate } from './template-validation';
+import { assertApprovedCampaignTemplate, assertCampaignRecipientTemplates } from './template-validation';
 
 const EDITABLE_STATUSES: CampaignStatus[] = ['DRAFT', 'SCHEDULED'];
 const STUCK_RUNNING_MS = 6 * 60 * 60 * 1000;
@@ -437,13 +437,14 @@ export async function syncCampaignRecipientFromWebhook(
     }
     return;
   }
+  // A missing or malformed provider timestamp is not an event time. Do not
+  // invent one: accepting it would mutate reconciliation state nondeterministically.
+  if (!context?.timestamp || Number.isNaN(context.timestamp.getTime())) return;
 
   await prisma.$transaction(async (tx) => {
     const current = await tx.campaignRecipient.findUnique({ where: { id: recipient.id } });
     if (!current) return;
-    const eventAt = context?.timestamp && !Number.isNaN(context.timestamp.getTime())
-      ? context.timestamp
-      : new Date();
+    const eventAt = context.timestamp!;
     const data: Prisma.CampaignRecipientUpdateInput = {};
     const reconciliation = reconcileWebhookRecipient({
       currentStatus: current.status,
@@ -451,11 +452,11 @@ export async function syncCampaignRecipientFromWebhook(
       claimToken: current.claimToken,
       providerCallStartedAt: current.providerCallStartedAt,
       currentProviderStatusAt: current.providerStatusAt,
-      providerStatusAt: context?.timestamp,
+      providerStatusAt: eventAt,
     });
     if (reconciliation) {
       data.status = reconciliation.status;
-      if (context?.timestamp) data.providerStatusAt = eventAt;
+      data.providerStatusAt = eventAt;
       data.providerEventKey = `${metaMessageId}:${normalized}:${eventAt.toISOString()}`;
       if (normalized === 'SENT') data.sentAt = current.sentAt ?? eventAt;
       if (normalized === 'DELIVERED' || normalized === 'READ') {
@@ -605,12 +606,10 @@ export async function queueCampaignSend(
   const templateLanguage = campaign.templateLanguage || template.language || 'en_US';
   const templateParams = (campaign.templateParams as TemplateParams | null) || undefined;
   try {
-    assertApprovedCampaignTemplate(template, {
-      name: campaign.templateName,
-      language: templateLanguage,
-      category: 'MARKETING',
-      params: templateParams,
-    });
+    assertCampaignRecipientTemplates(template, templateParams, campaign.recipients.map((recipient) => ({
+      name: recipient.name,
+      variables: recipient.variables as { body?: string[]; header?: string[] } | null,
+    })), { name: campaign.templateName, language: templateLanguage, category: 'MARKETING' });
   } catch (error) {
     throw new AppError(400, error instanceof Error ? error.message : String(error));
   }
@@ -730,7 +729,7 @@ export async function sendTestMessage(
 ) {
   const contact = await prisma.contact.findUnique({
     where: { organizationId_phone: { organizationId: campaign.organizationId, phone } },
-    select: { optedIn: true, consentSource: true, consentAt: true, optOutAt: true },
+    select: { name: true, optedIn: true, consentSource: true, consentAt: true, optOutAt: true },
   });
   if (!contact || !hasAuditableCampaignConsent(contact)) {
     throw new AppError(400, 'Test sends require an existing opted-in contact with recorded consent');
@@ -750,7 +749,8 @@ export async function sendTestMessage(
   const templateParams = mergeTemplateParams(
     campaign.templateParams as TemplateParams | null,
     null,
-    undefined
+    contact.name,
+    template
   );
   const components = buildTemplateComponents(templateParams, template);
   try {
@@ -918,6 +918,10 @@ export async function resumeCampaign(
     );
     const templateLanguage = campaign.templateLanguage || template.language || 'en_US';
     const templateParams = (campaign.templateParams as TemplateParams | null) || undefined;
+    assertCampaignRecipientTemplates(template, templateParams, pending.map((recipient) => ({
+      name: recipient.name,
+      variables: recipient.variables as { body?: string[]; header?: string[] } | null,
+    })), { name: campaign.templateName, language: templateLanguage, category: 'MARKETING' });
     const templateContent = applyTemplateParamsToPreview(template, templateParams, campaign.templateName);
 
     const totalBatches = Math.ceil(pending.length / batchSize);
@@ -1029,6 +1033,10 @@ export async function retryFailedRecipients(
   );
   const templateLanguage = campaign.templateLanguage || template.language || 'en_US';
   const templateParams = (campaign.templateParams as TemplateParams | null) || undefined;
+  assertCampaignRecipientTemplates(template, templateParams, failed.map((recipient) => ({
+    name: recipient.name,
+    variables: recipient.variables as { body?: string[]; header?: string[] } | null,
+  })), { name: campaign.templateName, language: templateLanguage, category: 'MARKETING' });
   const templateContent = applyTemplateParamsToPreview(template, templateParams, campaign.templateName);
   const runSnapshot = snapshotCampaignRun(campaign);
   const retryRun = await prisma.campaign.updateMany({

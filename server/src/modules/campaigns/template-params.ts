@@ -10,7 +10,8 @@ function textParameters(values: string[]) {
 export function mergeTemplateParams(
   campaignParams: TemplateParams | null | undefined,
   recipientVars: RecipientVariables | null | undefined,
-  recipientName?: string | null
+  recipientName?: string | null,
+  template?: MessageTemplate | null
 ): TemplateParams {
   const mapValue = (value: string) => {
     if (value === '{{name}}' && recipientName) return recipientName;
@@ -18,13 +19,21 @@ export function mergeTemplateParams(
     return value;
   };
 
+  const templateBodyHasName = template?.components?.some(
+    (component) => component.type?.toUpperCase() === 'BODY' && component.text?.includes('{{name}}')
+  );
+  const templateHeaderHasName = template?.components?.some(
+    (component) => component.type?.toUpperCase() === 'HEADER' && component.text?.includes('{{name}}')
+  );
   const body = recipientVars?.body?.length
-    ? recipientVars.body
-    : campaignParams?.body?.map(mapValue);
+    ? recipientVars.body.map(mapValue)
+    : campaignParams?.body?.map(mapValue) ||
+      (templateBodyHasName && recipientName ? [recipientName] : undefined);
 
   const header = recipientVars?.header?.length
-    ? recipientVars.header
-    : campaignParams?.header?.map(mapValue);
+    ? recipientVars.header.map(mapValue)
+    : campaignParams?.header?.map(mapValue) ||
+      (templateHeaderHasName && recipientName ? [recipientName] : undefined);
 
   return {
     body: body?.filter(Boolean),
@@ -103,15 +112,12 @@ export function applyTemplateParamsToPreview(
     let text = component.text?.trim();
     if (!text) continue;
 
-    if (type === 'BODY' && params?.body?.length) {
-      params.body.forEach((value, index) => {
+    const values = type === 'BODY' ? params?.body : params?.header;
+    if (values?.length) {
+      values.forEach((value, index) => {
         text = text!.replace(new RegExp(`\\{\\{${index + 1}\\}\\}`, 'g'), value);
       });
-    }
-    if (type === 'HEADER' && params?.header?.length) {
-      params.header.forEach((value, index) => {
-        text = text!.replace(new RegExp(`\\{\\{${index + 1}\\}\\}`, 'g'), value);
-      });
+      if (values[0]) text = text!.replace(/\{\{name\}\}/g, values[0]);
     }
 
     if (type === 'HEADER' || type === 'BODY' || type === 'FOOTER') {
