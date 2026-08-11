@@ -7,6 +7,7 @@ import { downloadAndStoreMessageMedia } from '../modules/media/download.service'
 import { emitToOrg } from '../realtime';
 import { logError } from '../errors';
 import { createModuleLogger } from '../utils/logger';
+import { parseMetaTimestamp } from '../modules/campaigns/safety';
 
 const log = createModuleLogger('webhook');
 
@@ -67,9 +68,7 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
         const metaMessageId = status.id as string;
         const statusValue = (status.status as string)?.toUpperCase();
         if (!statusValue) continue;
-        const statusTimestamp = status.timestamp
-          ? new Date(Number(status.timestamp) * 1000)
-          : undefined;
+        const statusTimestamp = parseMetaTimestamp(status.timestamp);
 
         const STATUS_RANK: Record<string, number> = {
           PENDING: 0,
@@ -99,8 +98,11 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
         if (!existingMsg) continue;
 
         const existingMeta = (existingMsg.metadata as Record<string, unknown>) || {};
-        const existingStatusAt = typeof existingMeta.providerStatusAt === 'string'
+        const parsedExistingStatusAt = typeof existingMeta.providerStatusAt === 'string'
           ? new Date(existingMeta.providerStatusAt)
+          : null;
+        const existingStatusAt = parsedExistingStatusAt && !Number.isNaN(parsedExistingStatusAt.getTime())
+          ? parsedExistingStatusAt
           : null;
         const hasValidEventTime = Boolean(statusTimestamp && !Number.isNaN(statusTimestamp.getTime()));
         const isOlderOrDuplicate = Boolean(
@@ -175,6 +177,15 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
         const metaMessageId = msg.id as string;
         const messageType = msg.type as string;
         const contactPhone = msg.from as string;
+        if (!metaMessageId || !contactPhone) continue;
+        const inboundTimestamp = parseMetaTimestamp(msg.timestamp);
+        if (!inboundTimestamp) {
+          log.warn('Inbound message rejected without a valid Meta timestamp', {
+            metaMessageId,
+            organizationId: orgId,
+          });
+          continue;
+        }
         const contacts = (value.contacts as Array<{ wa_id?: string; profile?: { name?: string } }>) || [];
         const contactEntry = contacts.find((c) => c.wa_id === contactPhone);
         const contactName = contactEntry?.profile?.name;
@@ -221,69 +232,45 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
           continue;
         }
 
-        let contact = await prisma.contact.findUnique({
-          where: {
-            organizationId_phone: { organizationId: orgId, phone: contactPhone },
+        let contact = await prisma.contact.upsert({
+          where: { organizationId_phone: { organizationId: orgId, phone: contactPhone } },
+          create: {
+            organizationId: orgId,
+            phone: contactPhone,
+            name: contactName,
+            optedIn: true,
+            source: 'INBOUND',
           },
+          update: contactName ? { name: contactName } : {},
         });
 
-        if (!contact) {
-          contact = await prisma.contact.create({
-            data: {
-              organizationId: orgId,
-              phone: contactPhone,
-              name: contactName,
-              optedIn: true,
-              source: 'INBOUND',
-            },
-          });
-        } else if (contactName && !contact.name) {
-          contact = await prisma.contact.update({
-            where: { id: contact.id },
-            data: { name: contactName },
-          });
-        }
-
-        let conversation = await prisma.conversation.findFirst({
-          where: { organizationId: orgId, contactId: contact.id, whatsappNumberId: whatsappNumber.id },
-        });
-
-        const isNew = !conversation;
-        const { computeSlaDueAt } = await import('../modules/sla/service');
-        const inboundTimestamp = msg.timestamp
-          ? new Date(Number(msg.timestamp) * 1000)
-          : new Date();
-
-        if (!conversation) {
-          conversation = await prisma.conversation.create({
-            data: {
+        const priorConversation = await prisma.conversation.findUnique({
+          where: {
+            organizationId_contactId_whatsappNumberId: {
               organizationId: orgId,
               contactId: contact.id,
               whatsappNumberId: whatsappNumber.id,
-              lastMessageAt: inboundTimestamp,
-              cs24hWindowOpensAt: inboundTimestamp,
-              unreadCount: 1,
-              slaDueAt: computeSlaDueAt(),
             },
-          });
-        } else {
-          const updateData: Prisma.ConversationUpdateInput = {
-            lastMessageAt: inboundTimestamp,
-            cs24hWindowOpensAt: inboundTimestamp,
-            unreadCount: { increment: 1 },
-          };
-          const existing = await prisma.conversation.findUnique({
-            where: { id: conversation.id },
-            select: { firstResponseAt: true, slaDueAt: true },
-          });
-          if (!existing?.firstResponseAt && !existing?.slaDueAt) {
-            updateData.slaDueAt = computeSlaDueAt();
-          }
-          await prisma.conversation.update({
-            where: { id: conversation.id },
-            data: updateData,
-          });
-        }
+          },
+        });
+        let conversation = await prisma.conversation.upsert({
+          where: {
+            organizationId_contactId_whatsappNumberId: {
+              organizationId: orgId,
+              contactId: contact.id,
+              whatsappNumberId: whatsappNumber.id,
+            },
+          },
+          create: {
+            organizationId: orgId,
+            contactId: contact.id,
+            whatsappNumberId: whatsappNumber.id,
+          },
+          update: {},
+        });
+
+        const isNew = !priorConversation;
+        const { computeSlaDueAt } = await import('../modules/sla/service');
 
         const inboundType = mapInboundMessageType(msg.type as string | undefined);
         let inboundMetadata: Record<string, unknown> | undefined = parsed.waFlowResponse
@@ -349,6 +336,26 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
           }
           throw err;
         }
+
+        // The unique metaMessageId insert is the commit point. Only its winner
+        // may mutate unread/timestamps/SLA state, so concurrent Meta retries
+        // cannot double-apply conversation side effects.
+        const updateData: Prisma.ConversationUpdateInput = {
+          lastMessageAt: inboundTimestamp,
+          cs24hWindowOpensAt: inboundTimestamp,
+          unreadCount: { increment: 1 },
+        };
+        const conversationState = await prisma.conversation.findUnique({
+          where: { id: conversation.id },
+          select: { firstResponseAt: true, slaDueAt: true },
+        });
+        if (!conversationState?.firstResponseAt && !conversationState?.slaDueAt) {
+          updateData.slaDueAt = computeSlaDueAt();
+        }
+        await prisma.conversation.update({
+          where: { id: conversation.id },
+          data: updateData,
+        });
 
         if (parsed.metadata?.mediaId) {
           try {
@@ -516,11 +523,11 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
               organizationId: orgId,
               contactPhone,
             });
-            await handleOptOut(orgId, contact.id, conversation.id, whatsappNumber.id);
+            await handleOptOut(orgId, contact.id, conversation.id, whatsappNumber.id, inboundTimestamp, metaMessageId);
             continue;
           }
           if (isOptInMessage(textContent)) {
-            await handleOptIn(orgId, contact.id);
+            await handleOptIn(orgId, contact.id, inboundTimestamp, metaMessageId);
           }
         }
 

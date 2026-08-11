@@ -22,6 +22,13 @@ import { webhookQueue } from '../../config/queues';
 import { z } from 'zod';
 import { logError } from '../../errors';
 import { createModuleLogger } from '../../utils/logger';
+import {
+  webhookHealth,
+  trackWebhookFailed,
+  trackWebhookProcessed,
+  trackWebhookQueued,
+  trackWebhookReceived,
+} from './webhook-health';
 
 const log = createModuleLogger('whatsapp');
 
@@ -88,25 +95,24 @@ async function saveWhatsappConnection(
     throw err;
   }
 
-  // Don't block Connect success on webhook registration — local/tunnel URLs often
-  // fail Meta's HTTPS callback check and made the OAuth popup look "stuck".
   let webhookConfigured = false;
   if (config.meta.webhookUrl) {
-    void MetaWhatsAppService.configureWebhooks(
-      connection.wabaId,
-      connection.accessToken,
-      metaCredentials
-    )
-      .then(() => {
-        log.info('Webhook auto-configured after connect', { organizationId: orgId });
-      })
-      .catch((err) => {
-        logError(err, {
-          source: 'webhook',
-          action: 'Webhook auto-config failed',
-          organizationId: orgId,
-        });
+    try {
+      await MetaWhatsAppService.configureWebhooks(
+        connection.wabaId,
+        connection.accessToken,
+        metaCredentials
+      );
+      webhookConfigured = true;
+      log.info('Webhook auto-configured after connect', { organizationId: orgId });
+    } catch (err) {
+      logError(err, {
+        source: 'webhook',
+        action: 'Webhook auto-config failed',
+        organizationId: orgId,
       });
+      throw err;
+    }
   }
 
   return { whatsappNumber, webhookConfigured };
@@ -579,38 +585,6 @@ router.post(
 );
 
 // =============================================================================
-// Webhook health tracker (in-memory, resets on restart)
-// =============================================================================
-interface WebhookHealthState {
-  totalReceived: number;
-  totalProcessed: number;
-  totalErrors: number;
-  lastReceivedAt: string | null;
-  lastError: string | null;
-  lastFbTraceId: string | null;
-}
-
-const webhookHealth: WebhookHealthState = {
-  totalReceived: 0,
-  totalProcessed: 0,
-  totalErrors: 0,
-  lastReceivedAt: null,
-  lastError: null,
-  lastFbTraceId: null,
-};
-
-function trackWebhookHealth(field: string, count: number) {
-  webhookHealth.totalReceived++;
-  webhookHealth.lastReceivedAt = new Date().toISOString();
-  webhookHealth.totalProcessed += count;
-}
-
-function trackWebhookError(err: unknown) {
-  webhookHealth.totalErrors++;
-  webhookHealth.lastError =
-    err instanceof Error ? err.message : String(err);
-}
-
 function extractFbTraceId(payload: Record<string, unknown>): string | null {
   try {
     const entry = (payload.entry as Array<Record<string, unknown>>)?.[0];
@@ -781,9 +755,7 @@ router.post('/webhook', async (req: Request, res: Response) => {
 
   // --- 5. Queue processing ---
   const totalCount = messageCount + callCount + statusCount;
-  if (totalCount > 0) {
-    trackWebhookHealth(field || 'unknown', totalCount);
-  }
+  trackWebhookReceived();
 
   try {
     const job = await webhookQueue.add(
@@ -799,20 +771,23 @@ router.post('/webhook', async (req: Request, res: Response) => {
       queueLatencyMs: Date.now() - startTime,
       source: 'webhook',
     });
+    trackWebhookQueued();
   } catch (err) {
-    trackWebhookError(err);
+    trackWebhookFailed(err);
     logError(err, {
       source: 'webhook',
       action: 'BullMQ queue add failed — processing inline',
       requestId,
     });
+    const { processWebhookPayload } = await import('../../workers/webhook.processor');
     const { processWebhookFields } = await import('../calling/call.processor');
-    processWebhookFields(payload)
+    Promise.all([processWebhookPayload(payload), processWebhookFields(payload)])
       .then(() => {
+        trackWebhookProcessed();
         log.info('Inline webhook processing completed', { requestId, source: 'webhook' });
       })
       .catch((e) => {
-        trackWebhookError(e);
+        trackWebhookFailed(e);
         logError(e, {
           source: 'webhook',
           action: 'Inline webhook processing failed',

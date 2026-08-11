@@ -278,6 +278,7 @@ model Organization {
   featureFlags              OrgFeatureFlag[]
   leads                     Lead[]
   tickets                   Ticket[]
+  providerWebhookEvents     ProviderWebhookEvent[]
 
   planExpiresAt      DateTime? @map("plan_expires_at")
   subscriptionStatus String    @default("active") @map("subscription_status")
@@ -575,6 +576,7 @@ model Conversation {
 
   @@index([organizationId, lastMessageAt])
   @@index([organizationId, snoozedUntil])
+  @@unique([organizationId, contactId, whatsappNumberId])
   @@map("conversations")
 }
 
@@ -1050,6 +1052,20 @@ model AuditLog {
 
   @@index([organizationId, createdAt])
   @@map("audit_logs")
+}
+
+model ProviderWebhookEvent {
+  id             String       @id @default(uuid())
+  organizationId String       @map("organization_id")
+  eventKey       String       @map("event_key")
+  field          String
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, eventKey])
+  @@index([organizationId, createdAt])
+  @@map("provider_webhook_events")
 }
 
 enum OrderStatus {

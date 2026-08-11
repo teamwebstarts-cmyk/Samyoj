@@ -24,14 +24,15 @@ import {
   isCampaignConfigurationFailure,
   newClaimToken,
   classifyProviderError,
+  classifyProviderBoundaryOutcome,
   classifyClaimForConfigurationFailure,
   shouldReleaseQuotaAfterConfigurationFailure,
-  shouldRetryProviderSend,
 } from '../modules/campaigns/safety';
 import { campaignJobClaimPrefix, isBroadcastJobContextValid } from '../modules/campaigns/worker-safety';
 import { releaseCampaignQuota } from '../modules/campaigns/quota';
 import { logCampaignAudit } from '../modules/campaigns/audit';
 import { assertApprovedCampaignTemplate } from '../modules/campaigns/template-validation';
+import { trackWebhookFailed, trackWebhookProcessed } from '../modules/whatsapp/webhook-health';
 
 const log = createModuleLogger('worker');
 
@@ -116,8 +117,19 @@ const webhookWorker = new Worker(
   async (job: Job) => {
     const payload = job.data?.payload;
     if (!payload) return;
-    await processWebhookPayload(payload);
-    await processWebhookFields(payload);
+    try {
+      await processWebhookPayload(payload);
+      await processWebhookFields(payload);
+      trackWebhookProcessed();
+    } catch (err) {
+      // Count terminal worker failures once; transient BullMQ retry attempts
+      // are not completed jobs and must not inflate monitoring totals.
+      const maxAttempts = job.opts.attempts ?? 1;
+      if ((job.attemptsMade ?? 0) + 1 >= maxAttempts) {
+        trackWebhookFailed(err);
+      }
+      throw err;
+    }
   },
   {
     connection,
@@ -501,7 +513,8 @@ const broadcastWorker = new Worker(
       const mergedParams = mergeTemplateParams(
         templateParams,
         recipient.variables,
-        recipient.name
+        recipient.name,
+        templateMeta
       );
       try {
         assertApprovedCampaignTemplate(templateMeta, {
@@ -615,26 +628,6 @@ const broadcastWorker = new Worker(
           path: `recipient:${recipient.phone}`,
         });
 
-        if (shouldRetryProviderSend(classified.classification)) {
-          await prisma.campaignRecipient.updateMany({
-            where: {
-              id: recipient.id,
-              claimToken,
-              campaign: { id: campaignId, organizationId, status: 'RUNNING', runVersion },
-            },
-            data: {
-              status: 'PENDING',
-              errorMessage: `Retryable Meta delivery failure: ${errorMessage}`,
-              claimToken: null,
-              claimedAt: null,
-              providerCallStartedAt: null,
-            },
-          });
-          // Let BullMQ apply the bounded queue backoff. Keeping the row
-          // unstarted prevents quota leakage and allows this job to resume.
-          throw err;
-        }
-
         const currentRecipient = await prisma.campaignRecipient.findUnique({
           where: { id: recipient.id },
           select: { consentSnapshot: true },
@@ -645,7 +638,7 @@ const broadcastWorker = new Worker(
           providerErrorMessage: errorMessage,
           providerErrorClassification: classified.classification,
         };
-        const durableFailure = isCampaignConfigurationFailure(classified.classification);
+        const durableFailure = classifyProviderBoundaryOutcome(classified.classification) === 'FAILED';
         const ambiguous = await prisma.campaignRecipient.updateMany({
           where: {
             id: recipient.id,
@@ -660,7 +653,12 @@ const broadcastWorker = new Worker(
             consentSnapshot: providerSnapshot as Prisma.InputJsonValue,
             claimToken: null,
             claimedAt: null,
-            ...(['PERMANENT_REJECTION', 'CONFIGURATION_ERROR'].includes(classified.classification)
+            ...([
+              'PERMANENT_REJECTION',
+              'CONFIGURATION_ERROR',
+              'AUTHENTICATION_ERROR',
+              'POLICY_REJECTION',
+            ].includes(classified.classification)
               ? { providerCallStartedAt: null }
               : {}),
           },

@@ -2,6 +2,19 @@ import { config } from '../../config';
 import { decrypt, encrypt } from '../../utils/crypto';
 
 const META_BASE = `https://graph.facebook.com/${config.meta.apiVersion}`;
+export const META_WEBHOOK_FIELDS = [
+  'messages',
+  'calls',
+  'account_alerts',
+  'business_capability_update',
+  'phone_number_quality_update',
+  'phone_number_name_update',
+  'message_template_status_update',
+  'message_template_quality_update',
+  'message_template_components_update',
+  'template_category_update',
+  'user_preferences',
+] as const;
 
 export interface InteractiveButton {
   type: 'reply';
@@ -930,12 +943,14 @@ export class MetaWhatsAppService {
       object: 'whatsapp_business_account',
       callback_url: callbackUrl,
       verify_token: config.meta.verifyToken,
-      fields: 'messages,calls',
-      access_token: this.getAppAccessToken(credentials),
+      fields: META_WEBHOOK_FIELDS.join(','),
     });
+    params.set('access_token', this.getAppAccessToken(credentials));
 
-    const res = await fetch(`${META_BASE}/${creds.appId}/subscriptions?${params}`, {
+    const res = await fetch(`${META_BASE}/${creds.appId}/subscriptions`, {
       method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: params,
     });
     const data = (await res.json()) as { success?: boolean } & GraphError;
     if (!res.ok && !data.success) {

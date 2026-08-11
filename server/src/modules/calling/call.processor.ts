@@ -667,6 +667,8 @@ export async function processCallWebhookPayload(payload: Record<string, unknown>
 export const NON_MESSAGE_WEBHOOK_FIELDS = [
   'message_template_status_update',
   'message_template_quality_update',
+  'message_template_components_update',
+  'template_category_update',
   'phone_number_quality_update',
   'phone_number_name_update',
   'business_capability_update',
@@ -680,11 +682,6 @@ export async function processWebhookFields(payload: Record<string, unknown>): Pr
     for (const change of (entry.changes as Array<Record<string, unknown>>) || []) {
       if (typeof change.field === 'string') fields.add(change.field);
     }
-  }
-
-  if (fields.has('messages')) {
-    const { processWebhookPayload } = await import('../../workers/webhook.processor');
-    await processWebhookPayload(payload);
   }
 
   if (fields.has('calls')) {
