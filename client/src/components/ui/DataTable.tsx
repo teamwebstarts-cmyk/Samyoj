@@ -7,6 +7,7 @@ interface DataTableProps {
   children: ReactNode;
   className?: string;
   minTableWidth?: string;
+  tableClassName?: string;
   page?: number;
   pageSize?: number;
   total?: number;
@@ -41,6 +42,7 @@ export default function DataTable({
   children,
   className = '',
   minTableWidth = 'min-w-[640px]',
+  tableClassName = '',
   page,
   pageSize,
   total,
@@ -58,7 +60,7 @@ export default function DataTable({
   return (
     <div className={`data-table dashboard-card overflow-hidden p-0 ${className}`}>
       <div className="overflow-x-auto">
-        <table className={`w-full ${minTableWidth} text-sm`}>
+        <table className={`w-full ${minTableWidth} text-sm ${tableClassName}`}>
           <thead>
             <tr className="border-b border-theme-border bg-theme-subtle/80">
               {displayHeaders.map((header) => {

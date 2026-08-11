@@ -84,10 +84,17 @@ export const statusMeta: Record<
   },
 };
 
+function sentenceCase(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
 export function getStatusMeta(status: string) {
   return (
     statusMeta[status] ?? {
-      label: status,
+      label: sentenceCase(status),
       icon: Send,
       badge: 'bg-neutral-100 text-neutral-600 ring-neutral-200/70 dark:bg-slate-800 dark:text-slate-300',
       bar: 'from-violet-400 to-purple-600',
@@ -108,5 +115,25 @@ export const audienceLabels: Record<string, string> = {
   MANUAL: 'Phone numbers',
   TAGS: 'Tagged contacts',
   CONTACTS: 'Selected contacts',
-  ALL_OPTED_IN: 'All opted-in contacts',
+  ALL_OPTED_IN: 'Consented contacts',
 };
+
+export function getAudienceLabel(audienceType: string) {
+  return audienceLabels[audienceType] ?? sentenceCase(audienceType);
+}
+
+export const recipientStatusLabels: Record<string, string> = {
+  PENDING: 'Pending',
+  SENT: 'Sent',
+  DELIVERED: 'Delivered',
+  READ: 'Read',
+  FAILED: 'Failed',
+  QUEUED: 'Queued',
+  SENDING: 'Sending',
+  REJECTED: 'Rejected',
+  CANCELLED: 'Cancelled',
+};
+
+export function getRecipientStatusLabel(status: string) {
+  return recipientStatusLabels[status] ?? sentenceCase(status);
+}

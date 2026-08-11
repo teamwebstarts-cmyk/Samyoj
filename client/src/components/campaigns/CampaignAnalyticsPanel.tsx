@@ -1,6 +1,8 @@
 import { AlertTriangle, BarChart3, RefreshCw } from 'lucide-react';
 import { ModalEmptyHint, ModalPanel } from '../ui/modalUi';
 import type { CampaignAnalytics } from '../../types';
+import { getRecipientStatusLabel } from './campaignUi';
+import { formatRecipientError } from '../../utils/plainLanguage';
 
 interface CampaignAnalyticsPanelProps {
   analytics: CampaignAnalytics | null;
@@ -21,7 +23,7 @@ export default function CampaignAnalyticsPanel({
 }: CampaignAnalyticsPanelProps) {
   if (loading) {
     return (
-      <ModalPanel title="Campaign analytics" icon={BarChart3} accent="indigo">
+      <ModalPanel title="Delivery results" icon={BarChart3} accent="indigo">
         <div className="animate-pulse space-y-3">
           <div className="h-20 rounded-xl bg-theme-subtle" />
           <div className="h-16 rounded-xl bg-theme-subtle" />
@@ -32,7 +34,7 @@ export default function CampaignAnalyticsPanel({
 
   if (error) {
     return (
-      <ModalPanel title="Campaign analytics" icon={BarChart3} accent="indigo">
+      <ModalPanel title="Delivery results" icon={BarChart3} accent="indigo">
         <p className="text-[13px] font-medium text-red-600 dark:text-red-400">{error}</p>
       </ModalPanel>
     );
@@ -60,7 +62,7 @@ export default function CampaignAnalyticsPanel({
                 {campaign.failedCount.toLocaleString()} failed recipient{campaign.failedCount === 1 ? '' : 's'}
               </p>
               <p className="mt-1 text-[11px] font-medium text-red-800/80 dark:text-red-300/80">
-                Review the recipient error text below, then retry only after fixing the cause.
+                Review the failed recipients below, fix the reported issue, then retry.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -82,12 +84,12 @@ export default function CampaignAnalyticsPanel({
               {topErrors.map((err) => (
                 <li key={err.message} className="rounded-xl border border-theme-border bg-theme-subtle/40 px-3 py-2.5 text-[12px] text-theme-secondary">
                   <span className="font-extrabold tabular-nums text-red-600 dark:text-red-400">{err.count}×</span>{' '}
-                  <span className="font-medium">{err.message}</span>
+                  <span className="font-medium">{formatRecipientError(err.message)}</span>
                 </li>
               ))}
             </ul>
           ) : (
-            <ModalEmptyHint message="No error details are available. Check recipients for delivery status." />
+            <ModalEmptyHint message="Details unavailable. Check recipient statuses for more information." />
           )}
         </div>
       </ModalPanel>
@@ -95,7 +97,7 @@ export default function CampaignAnalyticsPanel({
   }
 
   return (
-    <ModalPanel title="Campaign analytics" icon={BarChart3} accent="indigo">
+    <ModalPanel title="Delivery results" icon={BarChart3} accent="indigo">
       <div className="space-y-4">
         <div className={`rounded-xl border px-3.5 py-3 ${
           campaign.failedCount > 0
@@ -109,12 +111,16 @@ export default function CampaignAnalyticsPanel({
               ? `${campaign.failedCount.toLocaleString()} recipient${campaign.failedCount === 1 ? '' : 's'} need attention`
               : byStatus.PENDING
                 ? 'Delivery is still in progress'
+              : campaign.failedCount === 0
+                ? 'No delivery issues'
                 : 'Delivery updates are complete'}
           </p>
           <p className="mt-1 text-[11px] font-medium text-theme-secondary">
             {campaign.failedCount > 0
-              ? 'Review the Errors section for recipient-level causes before retrying.'
-              : 'Use the status breakdown below for the current recipient state.'}
+              ? 'Review the Errors section, fix the reported issue, then retry.'
+              : campaign.failedCount === 0
+                ? 'All recipients are currently clear of reported delivery issues.'
+                : 'Use the status breakdown below for the current recipient state.'}
           </p>
           {campaign.failedCount > 0 && onViewFailures && (
             <button
@@ -139,7 +145,7 @@ export default function CampaignAnalyticsPanel({
                     'bg-theme-subtle text-theme-secondary ring-theme-border'
                   }`}
                 >
-                  {status}: <span className="tabular-nums">{count}</span>
+                  {getRecipientStatusLabel(status)}: <span className="tabular-nums">{count}</span>
                 </span>
               ))}
             </div>

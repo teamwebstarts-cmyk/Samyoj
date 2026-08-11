@@ -45,6 +45,7 @@ import Pagination from '../components/ui/Pagination';
 import ResponsiveDataView from '../components/ui/ResponsiveDataView';
 import SlideOver, { SlideOverFooter } from '../components/ui/SlideOver';
 import { WhatsAppTemplatePreview } from '../components/inbox/WhatsAppPreview';
+import { InboxGlassTipProvider } from '../components/inbox/ComposerGlassTip';
 import { DEFAULT_PAGE_SIZE } from '../constants/pagination';
 import { useAuth } from '../contexts/AuthContext';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
@@ -251,8 +252,8 @@ export default function CampaignsPage() {
   const invalidAudienceCount = form.audienceType === 'MANUAL'
     ? manualLines.filter((line) => !validatePhoneLines([line]).ok).length
     : 0;
-  // The preview is authoritative for send/schedule eligibility. Local counts are
-  // useful while editing, but they must never authorize a final action.
+  // The preview is the final check for send/schedule eligibility. Local counts
+  // are useful while editing, but they must never authorize a final action.
   const latestAudienceCount = audiencePreviewCount ?? 0;
   const excludedSelectedContacts = form.audienceType === 'CONTACTS' && audiencePreviewCount !== null
     ? Math.max(0, form.selectedContactIds.length - audiencePreviewCount)
@@ -319,7 +320,7 @@ export default function CampaignsPage() {
         loadLifecycleSummary();
       })
       .catch((err: unknown) => {
-        toastError(getErrMsg(err, 'Failed to load campaigns'));
+        toastError(getErrMsg(err, 'Campaigns could not load. Refresh the page and try again.'));
       })
       .finally(() => setLoading(false));
   }, [page, debouncedSearch, statusFilter, loadLifecycleSummary]);
@@ -339,8 +340,8 @@ export default function CampaignsPage() {
       setAnalytics(analyticsRes.data.data as CampaignAnalytics);
       setRecipients(recipientsRes.data.data.recipients);
       setRecipientTotal(recipientsRes.data.data.total);
-    } catch (err: unknown) {
-      setAnalyticsError(getErrMsg(err, 'Failed to load campaign analytics'));
+    } catch {
+      setAnalyticsError('Details unavailable. Refresh the campaign and try again.');
       setAnalytics(null);
     } finally {
       setAnalyticsLoading(false);
@@ -475,7 +476,7 @@ export default function CampaignsPage() {
       setRecipientPage(1);
       setSlideOpen(true);
     } catch {
-      toastError('Failed to load campaign details');
+      toastError('Campaign details could not load. Refresh the page and try again.');
     }
   };
 
@@ -492,7 +493,7 @@ export default function CampaignsPage() {
       setSlideOpen(true);
       loadTemplates();
     } catch {
-      toastError('Failed to load campaign details');
+      toastError('Campaign details could not load. Refresh the page and try again.');
     }
   };
 
@@ -524,11 +525,11 @@ export default function CampaignsPage() {
       let campaignId = editing?.id;
       if (editing) {
         await campaignApi.update(editing.id, payload);
-        toastSuccess(andSend ? 'Campaign updated' : 'Campaign saved');
+        toastSuccess(andSend ? 'Campaign saved' : action === 'schedule' ? 'Campaign scheduled' : 'Campaign saved');
       } else {
         const { data } = await campaignApi.create(payload);
         campaignId = (data.data as Campaign).id;
-        toastSuccess(andSend ? 'Campaign created' : 'Campaign saved as draft');
+        toastSuccess(andSend ? 'Campaign saved' : action === 'schedule' ? 'Campaign scheduled' : 'Campaign saved as draft');
       }
 
       if (andSend && campaignId) {
@@ -537,18 +538,18 @@ export default function CampaignsPage() {
         setForm(campaignToForm(full, templates));
         setViewOnly(true);
         setConfirmState({
-          title: `Send to ${full.totalContacts.toLocaleString()} recipients?`,
-          description: 'This will start sending the approved template to the selected audience.',
+          title: `Send “${full.name}” to ${full.totalContacts.toLocaleString()} recipients?`,
+          description: `This will start sending “${full.name}” to the selected audience. This action cannot be undone.`,
           confirmLabel: `Send to ${full.totalContacts.toLocaleString()}`,
           variant: 'default',
           onConfirm: async () => {
             try {
               await campaignApi.send(campaignId as string);
-              toastSuccess('Campaign started');
+              toastSuccess('Campaign sent');
               setSlideOpen(false);
               loadCampaigns(false);
             } catch (err: unknown) {
-              toastError(getErrMsg(err, 'Failed to start campaign'));
+              toastError(getErrMsg(err, 'Campaign could not be sent. Check the campaign and try again.'));
             } finally {
               setConfirmState(null);
             }
@@ -561,7 +562,7 @@ export default function CampaignsPage() {
       loadCampaigns(false);
       return campaignId;
     } catch (err: unknown) {
-      toastError(getErrMsg(err, 'Failed to save campaign'));
+      toastError(getErrMsg(err, 'Campaign could not be saved. Check the required fields and try again.'));
       return null;
     } finally {
       setSaving(false);
@@ -644,7 +645,7 @@ export default function CampaignsPage() {
       loadCampaigns(false);
       toastSuccess('Campaign deleted');
     } catch (err: unknown) {
-      toastError(getErrMsg(err, 'Failed to delete campaign'));
+      toastError(getErrMsg(err, 'Campaign could not be deleted. Try again.'));
     } finally {
       setSaving(false);
     }
@@ -665,7 +666,7 @@ export default function CampaignsPage() {
           loadCampaigns(false);
           toastSuccess('Campaign deleted');
         } catch (err: unknown) {
-          toastError(getErrMsg(err, 'Failed to delete campaign'));
+          toastError(getErrMsg(err, 'Campaign could not be deleted. Try again.'));
         } finally {
           setConfirmState(null);
         }
@@ -685,7 +686,7 @@ export default function CampaignsPage() {
       loadTemplates();
       toastSuccess('Campaign duplicated — review and send when ready');
     } catch (err: unknown) {
-      toastError(getErrMsg(err, 'Failed to duplicate campaign'));
+      toastError(getErrMsg(err, 'Campaign could not be duplicated. Try again.'));
     }
   };
 
@@ -694,17 +695,17 @@ export default function CampaignsPage() {
     const campaign = campaigns.find((c) => c.id === id) || (editing?.id === id ? editing : null);
     const count = campaign?.totalContacts ?? 0;
     setConfirmState({
-      title: `Send to ${count.toLocaleString()} recipients?`,
-      description: 'This will start sending the approved template to the selected audience.',
+      title: `Send “${campaign?.name || 'this campaign'}” to ${count.toLocaleString()} recipients?`,
+      description: `This will start sending “${campaign?.name || 'this campaign'}” to the selected audience. This action cannot be undone.`,
       confirmLabel: `Send to ${count.toLocaleString()}`,
       variant: 'default',
       onConfirm: async () => {
         try {
           await campaignApi.send(id);
           loadCampaigns(false);
-          toastSuccess('Campaign started');
+          toastSuccess('Campaign sent');
         } catch (err: unknown) {
-          toastError(getErrMsg(err, 'Failed to start campaign'));
+          toastError(getErrMsg(err, 'Campaign could not be sent. Check the campaign and try again.'));
         } finally {
           setConfirmState(null);
         }
@@ -714,15 +715,15 @@ export default function CampaignsPage() {
 
   const handlePause = async (id: string) => {
     if (!canManageTeam) return;
-    await handleAction(() => campaignApi.pause(id), 'Campaign paused');
+    await handleAction(() => campaignApi.pause(id), 'Campaign paused', 'Could not pause this campaign. Refresh and try again.');
   };
 
   const handleResume = async (id: string) => {
     if (!canManageTeam) return;
-    await handleAction(() => campaignApi.resume(id), 'Campaign resumed');
+    await handleAction(() => campaignApi.resume(id), 'Campaign resumed', 'Could not resume this campaign. Refresh and try again.');
   };
 
-  const handleAction = async (action: () => Promise<unknown>, success: string) => {
+  const handleAction = async (action: () => Promise<unknown>, success: string, fallback = 'Could not update this campaign. Refresh and try again.') => {
     try {
       await action();
       loadCampaigns(false);
@@ -733,7 +734,7 @@ export default function CampaignsPage() {
       }
       toastSuccess(success);
     } catch (err: unknown) {
-      toastError(getErrMsg(err, 'Action failed'));
+      toastError(getErrMsg(err, fallback));
     }
   };
 
@@ -760,11 +761,12 @@ export default function CampaignsPage() {
       a.click();
       URL.revokeObjectURL(url);
     } catch {
-      toastError('Failed to export results');
+      toastError('Campaign results could not be exported. Try again.');
     }
   };
 
   return (
+    <InboxGlassTipProvider>
     <PageShell>
       <div className="space-y-4 sm:space-y-5">
         <PageHero
@@ -907,8 +909,8 @@ export default function CampaignsPage() {
         title={viewOnly ? editing?.name || 'Campaign details' : editing ? 'Edit campaign' : 'New campaign'}
         subtitle={
           viewOnly
-          ? 'Delivery stats, recipients, and campaign actions'
-            : 'Template, audience, schedule, and preview'
+          ? 'Track delivery and manage this campaign'
+            : 'Message, audience, timing, and review'
         }
         size="xl"
         icon={Send}
@@ -964,7 +966,7 @@ export default function CampaignsPage() {
                       </button>
                     )}
                     {canManageTeam && editing.failedCount > 0 && (
-                      <button type="button" role="menuitem" className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-secondary hover:bg-theme-subtle hover:text-theme-fg" onClick={() => handleAction(() => campaignApi.retryFailed(editing.id), 'Retrying failed sends')}>
+                      <button type="button" role="menuitem" className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-secondary hover:bg-theme-subtle hover:text-theme-fg" onClick={() => handleAction(() => campaignApi.retryFailed(editing.id), 'Failed campaign messages queued for retry', 'Could not retry failed messages. Refresh and try again.')}>
                         <RefreshCw size={14} /> Retry failed sends
                       </button>
                     )}
@@ -986,7 +988,7 @@ export default function CampaignsPage() {
           ) : (
             <SlideOverFooter
               onCancel={closeSlide}
-              submitLabel="Save draft"
+              submitLabel={editing ? 'Save changes' : 'Save draft'}
               submitVariant="secondary"
               loading={saving}
               onDelete={editing ? handleDelete : undefined}
@@ -995,11 +997,14 @@ export default function CampaignsPage() {
                 activeStep === stageLabels.length - 1
                   ? {
                       label: form.scheduleEnabled
-                        ? `Schedule campaign · ${latestAudienceCount.toLocaleString()} eligible`
-                        : `Send now · ${latestAudienceCount.toLocaleString()} eligible`,
+                        ? `Schedule campaign · ${latestAudienceCount.toLocaleString()} included`
+                        : `Send now · ${latestAudienceCount.toLocaleString()} included`,
                       onClick: handleFinalAction,
                     }
-                  : undefined
+                  : {
+                      label: 'Continue',
+                      onClick: continueToNextStage,
+                    }
               }
               submitDisabled={saving}
               primaryDisabled={activeStep === stageLabels.length - 1 && finalActionBlocked}
@@ -1046,12 +1051,12 @@ export default function CampaignsPage() {
               <CampaignRecipientTable recipients={recipients} total={recipientTotal} page={recipientPage} pageSize={50} onPageChange={setRecipientPage} statusFilter={recipientStatusFilter} onStatusFilterChange={(s) => { setRecipientStatusFilter(s); setRecipientPage(1); }} />
             )}
             {detailSection === 'errors' && (
-              <CampaignAnalyticsPanel analytics={analytics} loading={analyticsLoading} error={analyticsError} section="errors" onViewFailures={() => setDetailSection('recipients')} onRetryFailed={() => editing && handleAction(() => campaignApi.retryFailed(editing.id), 'Retrying failed sends')} />
+              <CampaignAnalyticsPanel analytics={analytics} loading={analyticsLoading} error={analyticsError} section="errors" onViewFailures={() => setDetailSection('recipients')} onRetryFailed={() => editing && handleAction(() => campaignApi.retryFailed(editing.id), 'Failed campaign messages queued for retry', 'Could not retry failed messages. Refresh and try again.')} />
             )}
           </div>
         ) : (
           <form id="slideover-form" onSubmit={handleSubmit} className="space-y-6">
-            <div className="sticky top-0 z-20 -mx-1 isolate space-y-2 bg-theme-surface pb-2 shadow-sm">
+            <div className="sticky top-0 z-20 -mx-5 -mt-5 isolate border-b border-theme-border bg-theme-surface px-5 pb-3 pt-3 sm:-mx-6 sm:-mt-6 sm:px-6 sm:pt-4">
             <nav aria-label="Campaign creation steps" role="tablist" className="rounded-xl border border-theme-border bg-theme-surface p-2">
               <ol className="grid grid-cols-3 gap-1">
                 {stageLabels.map((label, index) => (
@@ -1086,8 +1091,8 @@ export default function CampaignsPage() {
             {!editing && (
               <ModalCallout
                 icon={LayoutTemplate}
-                title="Approved templates only"
-                description="Bulk campaigns need an approved template. Create one under Templates if needed."
+                title="Use an approved template"
+                description="Choose an approved WhatsApp template for this campaign."
                 accent="violet"
               />
             )}
@@ -1132,14 +1137,14 @@ export default function CampaignsPage() {
             </ModalSection>}
 
             {activeStep === 0 && (form.bodyParams.length > 0 || form.headerParams.length > 0 || selectedTemplate) && (
-              <ModalSection title="Message preview">
+              <ModalSection title="Personalize message">
                 <div className="space-y-4">
                   {form.bodyParams.map((_, i) => (
                     <AppInput
                       key={`body-${i}`}
                       id={`body-param-${i}`}
-                      label={`Message line {{${i + 1}}}`}
-                      placeholder={i === 0 ? '{{name}} or static text' : 'Value'}
+                      label={`Message detail ${i + 1}`}
+                      placeholder={i === 0 ? 'Name or other value' : 'Enter a value'}
                       value={form.bodyParams[i]}
                       onChange={(e) => {
                         const bodyParams = [...form.bodyParams];
@@ -1153,7 +1158,7 @@ export default function CampaignsPage() {
                     <AppInput
                       key={`header-${i}`}
                       id={`header-param-${i}`}
-                      label={`Header line {{${i + 1}}}`}
+                      label={`Header detail ${i + 1}`}
                       value={form.headerParams[i]}
                       onChange={(e) => {
                         const headerParams = [...form.headerParams];
@@ -1167,7 +1172,7 @@ export default function CampaignsPage() {
                     <AppInput
                       id="header-media-url"
                       label={headerMediaLabel(selectedTemplate ? getTemplateHeaderFormat(selectedTemplate) : undefined)}
-                      hint="Link to your image or video for the header"
+                    hint="Add a link to the image, video, or document used in the header"
                       placeholder="https://example.com/image.jpg"
                       value={form.headerMediaUrl}
                       onChange={(e) => setForm({ ...form, headerMediaUrl: e.target.value })}
@@ -1176,7 +1181,7 @@ export default function CampaignsPage() {
                   )}
 
                   {filledPreview && (
-                    <ModalPreviewCard title="WhatsApp preview">
+                  <ModalPreviewCard title="Message preview">
                       <WhatsAppTemplatePreview {...filledPreview} variant="compact" />
                     </ModalPreviewCard>
                   )}
@@ -1203,10 +1208,10 @@ export default function CampaignsPage() {
               />
             </ModalSection>}
 
-            {activeStep === 2 && <ModalSection title="Review and send" subtitle="Choose when to send, then confirm the campaign details">
+            {activeStep === 2 && <ModalSection title="Review and send" subtitle="Check the message, audience, cost, and send timing">
               <div className="grid gap-2 sm:grid-cols-2">
                 {[
-                  { value: false, title: 'Send now', description: 'Start after the final confirmation.' },
+                  { value: false, title: 'Send now', description: 'Start sending after you confirm.' },
                   { value: true, title: 'Schedule', description: 'Choose a future date and time.' },
                 ].map((option) => (
                   <label key={option.title} className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3.5 transition ${
@@ -1232,7 +1237,7 @@ export default function CampaignsPage() {
                 <div className="grid gap-3 sm:grid-cols-2">
                   <AppInput
                     id="scheduled-at"
-                    label="Schedule for"
+                    label="Send date and time"
                     type="datetime-local"
                     value={form.scheduledAt}
                     onChange={(e) => setForm({ ...form, scheduledAt: e.target.value })}
@@ -1250,16 +1255,16 @@ export default function CampaignsPage() {
                 <div className="rounded-xl border border-amber-200/70 bg-amber-50/70 p-3 text-[12px] text-amber-900 dark:border-amber-800/40 dark:bg-amber-950/20 dark:text-amber-200" role="alert">
                   <p className="font-bold">Preview audience to continue</p>
                   <p className="mt-1">
-                    Final send and schedule stay disabled until the authoritative audience preview succeeds.
+                    Check the audience preview before sending or scheduling.
                   </p>
                 </div>
               )}
               <div className="rounded-xl border border-emerald-200/70 bg-emerald-50/70 p-3 text-[12px] dark:border-emerald-800/40 dark:bg-emerald-950/20">
-                <p className="font-bold text-emerald-900 dark:text-emerald-200">Before sending</p>
-                <p className="mt-1 text-emerald-800 dark:text-emerald-300">{messagingConsent.campaignNotice}. Invalid or ineligible recipients are blocked automatically.</p>
+                  <p className="font-bold text-emerald-900 dark:text-emerald-200">Before you send</p>
+                <p className="mt-1 text-emerald-800 dark:text-emerald-300">{messagingConsent.campaignNotice}</p>
               </div>
                 {filledPreview && (
-                  <ModalPreviewCard title="Message preview">
+                  <ModalPreviewCard title="Preview">
                     <WhatsAppTemplatePreview {...filledPreview} variant="compact" />
                   </ModalPreviewCard>
                 )}
@@ -1268,8 +1273,8 @@ export default function CampaignsPage() {
             {templates.length === 0 && (
               <ModalCallout
                 icon={LayoutTemplate}
-                title="No approved templates"
-                description="Create a template under Templates and wait for approval before sending."
+                title="No approved templates yet"
+                description="Create a template and wait for approval before sending."
                 accent="amber"
               />
             )}
@@ -1285,15 +1290,6 @@ export default function CampaignsPage() {
               >
                 Back
               </button>
-              {activeStep < stageLabels.length - 1 && (
-                <button
-                  type="button"
-                  onClick={continueToNextStage}
-                  className="min-h-11 rounded-xl bg-violet-600 px-4 py-2 text-[12px] font-bold text-white transition hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
-                >
-                  Continue to {stageLabels[activeStep + 1]}
-                </button>
-              )}
             </div>
           </form>
         )}
@@ -1309,6 +1305,7 @@ export default function CampaignsPage() {
         loading={saving}
       />
     </PageShell>
+    </InboxGlassTipProvider>
   );
 }
 

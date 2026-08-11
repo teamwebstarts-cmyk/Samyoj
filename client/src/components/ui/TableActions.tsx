@@ -1,5 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { useGlassTipProps, useInboxGlassTipActive } from '../inbox/ComposerGlassTip';
 
 const iconVariants = {
   default:
@@ -23,11 +24,15 @@ export function TableIconButton({
   label,
   variant = 'default',
 }: TableIconButtonProps) {
+  const getTipProps = useGlassTipProps();
+  const glassTipsActive = useInboxGlassTipActive();
+
   return (
     <button
       type="button"
       onClick={onClick}
-      title={label}
+      {...getTipProps(label, 'above')}
+      title={glassTipsActive ? undefined : label}
       aria-label={label}
       className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border shadow-sm transition ${iconVariants[variant]}`}
     >

@@ -105,7 +105,7 @@ export default function CampaignAudiencePreview({
           setCostInr(null);
           setError(
             (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
-              ?.message || 'Could not preview audience',
+              ?.message || 'Audience preview could not load. Check your selection and try again.',
           );
         }
       } finally {
@@ -155,16 +155,16 @@ export default function CampaignAudiencePreview({
         </div>
 
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-theme-muted">
-            Eligible recipients
+          <p className="text-[10px] font-bold text-theme-muted">
+            Recipients included
           </p>
           {loading ? (
             <p className="mt-0.5 text-[13px] font-semibold text-theme-secondary">
-              Calculating how many people…
+              Checking your audience…
             </p>
           ) : stale ? (
             <p className="mt-0.5 text-[13px] font-semibold text-amber-800 dark:text-amber-300">
-              Audience changed — refreshing estimate…
+              Audience changed — updating…
             </p>
           ) : error ? (
             <p className="mt-0.5 text-[13px] font-semibold text-amber-800 dark:text-amber-300">
@@ -177,7 +177,7 @@ export default function CampaignAudiencePreview({
                   {count.toLocaleString()}
                 </span>{' '}
                 <span className="font-semibold text-theme-fg">
-                  {count === 1 ? 'person' : 'people'} can receive this
+                  {count === 1 ? 'person is' : 'people are'} included in this campaign
                 </span>
               </p>
               {costInr != null && costInr > 0 && (
@@ -187,13 +187,13 @@ export default function CampaignAudiencePreview({
               )}
               {requestedCount != null && count < requestedCount && (
                 <p className="mt-1 text-[11px] font-semibold text-amber-800 dark:text-amber-300">
-                  {requestedCount - count} selected contact{requestedCount - count === 1 ? '' : 's'} can’t receive messages and won’t be included.
+                  {requestedCount - count} selected contact{requestedCount - count === 1 ? '' : 's'} can’t receive this message and won’t be included.
                 </p>
               )}
             </div>
           ) : (
             <p className="mt-0.5 text-[13px] font-medium text-theme-secondary">
-              Choose who receives this to see the count
+              Choose an audience to see how many people are included
             </p>
           )}
         </div>

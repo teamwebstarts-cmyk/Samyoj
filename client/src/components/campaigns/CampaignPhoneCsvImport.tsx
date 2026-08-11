@@ -16,7 +16,7 @@ export default function CampaignPhoneCsvImport({ onPhonesImported }: CampaignPho
   const handleFile = async (file: File) => {
     const lower = file.name.toLowerCase();
     if (!lower.endsWith('.csv') && !lower.endsWith('.json')) {
-      toastError('Only CSV or JSON files are supported');
+      toastError('Choose a CSV or JSON file, then try importing again.');
       return;
     }
 
@@ -25,12 +25,12 @@ export default function CampaignPhoneCsvImport({ onPhonesImported }: CampaignPho
     setImportErrors(preview.errors);
     setImportedCount(preview.rows.length);
     if (!preview.rows.length) {
-      toastError('No valid phone numbers found in file');
+      toastError('No valid phone numbers found. Add phone values in the phone column and import the file again.');
       return;
     }
 
     onPhonesImported(preview.rows.map((row) => row.phone));
-    if (preview.errors.length) toastError(`${preview.errors.length} invalid row${preview.errors.length === 1 ? '' : 's'} skipped`);
+    if (preview.errors.length) toastError(`${preview.errors.length} invalid row${preview.errors.length === 1 ? '' : 's'} skipped. Fix those rows and import them again if needed.`);
   };
 
   const onDrop = (e: React.DragEvent) => {
@@ -78,19 +78,19 @@ export default function CampaignPhoneCsvImport({ onPhonesImported }: CampaignPho
       <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-lg bg-sky-500/10 text-sky-600">
         <Upload className="h-5 w-5" strokeWidth={2.25} />
       </div>
-      <p className="mt-2.5 text-[13px] font-bold text-theme-fg">Import phone numbers</p>
+      <p className="mt-2.5 text-[13px] font-bold text-theme-fg">Import a phone list</p>
       <p className="mt-1 text-[11px] font-medium text-theme-muted">
-        Drop CSV or JSON here, or click to browse
+        Drop a CSV or JSON file here, or click to browse
       </p>
       <p className="mt-2 inline-flex items-center gap-1 text-[10px] font-semibold text-theme-muted">
         <FileSpreadsheet className="h-3 w-3" />
-        Uses phone column from contact import format
+        Add each person's phone number in the <code>phone</code> column
       </p>
       {(importErrors.length > 0 || importedCount > 0) && (
         <div className="mt-3 text-left text-[11px]" aria-live="polite">
           {importedCount > 0 && (
             <p className="font-semibold text-emerald-700 dark:text-emerald-300">
-              Imported {importedCount} valid row{importedCount === 1 ? '' : 's'}
+              Added {importedCount} phone number{importedCount === 1 ? '' : 's'} to the list
             </p>
           )}
           {importErrors.length > 0 && (
@@ -99,7 +99,7 @@ export default function CampaignPhoneCsvImport({ onPhonesImported }: CampaignPho
               <ul className="mt-1 max-h-32 space-y-0.5 overflow-y-auto">
                 {importErrors.map((error, index) => <li key={`${error}-${index}`}>{error}</li>)}
               </ul>
-              <p className="mt-1 font-semibold">Valid rows were imported and remain usable.</p>
+              <p className="mt-1 font-semibold">Valid phone numbers were added. Fix the skipped rows and import them again if needed.</p>
             </div>
           )}
         </div>

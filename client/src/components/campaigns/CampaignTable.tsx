@@ -4,9 +4,9 @@ import { TableIconButton, TableTextButton } from '../ui/TableActions';
 import type { Campaign } from '../../types';
 import CampaignActionsMenu from './CampaignActionsMenu';
 import {
-  audienceLabels,
   campaignProgress,
   formatCampaignDate,
+  getAudienceLabel,
   getCampaignPrimaryAction,
   getStatusMeta,
 } from './campaignUi';
@@ -53,6 +53,7 @@ export default function CampaignTable({
       total={total}
       onPageChange={onPageChange}
       minTableWidth="min-w-0"
+      tableClassName="table-fixed"
       serialNo={false}
     >
       {campaigns.map((campaign) => {
@@ -100,7 +101,7 @@ export default function CampaignTable({
 
             <td className="whitespace-nowrap">
               <span
-                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ring-1 ${meta.badge}`}
+                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold ring-1 ${meta.badge}`}
               >
                 <StatusIcon
                   className={`h-3 w-3 ${meta.pulse ? 'animate-spin' : ''}`}
@@ -124,7 +125,7 @@ export default function CampaignTable({
                 </span>
                 {campaign.audienceType && (
                   <span className="text-[10px] font-semibold text-theme-muted">
-                    {audienceLabels[campaign.audienceType] || campaign.audienceType}
+                    {getAudienceLabel(campaign.audienceType)}
                   </span>
                 )}
               </div>

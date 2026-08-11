@@ -1,4 +1,4 @@
-import { Phone, PhoneOutgoing } from 'lucide-react';
+import { Loader2, Phone, PhoneOutgoing } from 'lucide-react';
 import ContactAvatar from '../inbox/ContactAvatar';
 import {
   callStatusLabel,
@@ -132,16 +132,20 @@ export default function CallListItem({
             ) : onCallBack ? (
               <button
                 type="button"
-                aria-label="Call back"
+                aria-label={callingBack ? 'Calling…' : 'Call back'}
                 disabled={callingBack}
                 onClick={(e) => {
                   e.stopPropagation();
                   onCallBack();
                 }}
-                className="ml-0.5 inline-flex h-5 w-5 items-center justify-center rounded-md text-neutral-500 transition hover:bg-emerald-50 hover:text-emerald-600 disabled:opacity-50 dark:hover:bg-emerald-950/40"
-                title="Call back"
+                className="ml-0.5 inline-flex h-5 w-5 items-center justify-center rounded-md text-neutral-500 transition hover:bg-emerald-50 hover:text-emerald-600 disabled:opacity-70 dark:hover:bg-emerald-950/40"
+                title={callingBack ? 'Calling…' : 'Call back'}
               >
-                <PhoneOutgoing className="h-3 w-3" strokeWidth={2.25} />
+                {callingBack ? (
+                  <Loader2 className="h-3 w-3 animate-spin text-emerald-600" strokeWidth={2.5} />
+                ) : (
+                  <PhoneOutgoing className="h-3 w-3" strokeWidth={2.25} />
+                )}
               </button>
             ) : (
               <Phone className="h-3 w-3 text-neutral-600 dark:text-neutral-400" strokeWidth={2.25} />

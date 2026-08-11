@@ -183,16 +183,16 @@ export function SlideOverFooter({
 }: SlideOverFooterProps) {
   const submitClass =
     submitVariant === 'secondary' || primaryAction
-      ? 'inline-flex h-10 min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl border border-theme-border bg-theme-surface px-5 text-[13px] font-semibold text-theme-fg transition hover:bg-theme-subtle sm:flex-none disabled:opacity-50'
-      : 'btn-primary inline-flex h-10 min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl px-5 text-[13px] font-semibold sm:flex-none disabled:opacity-50';
+      ? 'inline-flex h-10 min-h-[44px] items-center justify-center gap-2 rounded-xl border border-theme-border bg-theme-surface px-5 text-[13px] font-semibold text-theme-fg transition hover:bg-theme-subtle disabled:opacity-50'
+      : 'btn-primary inline-flex h-10 min-h-[44px] items-center justify-center gap-2 rounded-xl px-5 text-[13px] font-semibold disabled:opacity-50';
 
   return (
-    <div className="flex flex-wrap items-center gap-2.5">
+    <div className="flex items-center gap-2.5">
       {onDelete && (
         <button
           type="button"
           onClick={onDelete}
-          className="mr-auto inline-flex h-10 min-h-[44px] items-center gap-2 rounded-xl border border-red-200/70 bg-red-50 px-3 text-[13px] font-semibold text-red-600 transition hover:border-red-300 hover:bg-red-100 hover:text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/15"
+          className="inline-flex h-10 min-h-[44px] w-fit shrink-0 items-center gap-2 rounded-xl border border-red-200/70 bg-red-50 px-3 text-[13px] font-semibold text-red-600 transition hover:border-red-300 hover:bg-red-100 hover:text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/15"
           title={deleteLabel}
           aria-label={deleteLabel}
         >
@@ -200,37 +200,39 @@ export function SlideOverFooter({
           <span className="hidden sm:inline">Delete</span>
         </button>
       )}
-      <button
-        type="button"
-        onClick={onCancel}
-        className={`inline-flex h-10 min-h-[44px] flex-1 items-center justify-center rounded-xl border border-theme-border bg-theme-surface px-5 text-[13px] font-semibold text-theme-fg transition hover:bg-theme-subtle sm:flex-none ${FOCUS_RING_CLASS}`}
-      >
-        Cancel
-      </button>
-      <button
-        type="submit"
-        form="slideover-form"
-        disabled={loading || submitDisabled}
-        className={`${submitClass} ${FOCUS_RING_CLASS}`}
-      >
-        {loading && !primaryAction && (
-          <span className="h-4 w-4 animate-spin rounded-full border-2 border-current/25 border-t-current" />
-        )}
-        {submitLabel}
-      </button>
-      {primaryAction && (
+      <div className="ml-auto flex flex-wrap items-center justify-end gap-2.5">
         <button
           type="button"
-          disabled={loading || submitDisabled || primaryDisabled}
-          onClick={primaryAction.onClick}
-          className={`btn-primary inline-flex h-10 min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl px-5 text-[13px] font-semibold sm:flex-none disabled:opacity-50 ${FOCUS_RING_CLASS}`}
+          onClick={onCancel}
+          className={`inline-flex h-10 min-h-[44px] items-center justify-center rounded-xl border border-theme-border bg-theme-surface px-5 text-[13px] font-semibold text-theme-fg transition hover:bg-theme-subtle ${FOCUS_RING_CLASS}`}
         >
-          {loading && (
-            <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-          )}
-          {primaryAction.label}
+          Cancel
         </button>
-      )}
+        <button
+          type="submit"
+          form="slideover-form"
+          disabled={loading || submitDisabled}
+          className={`${submitClass} ${FOCUS_RING_CLASS}`}
+        >
+          {loading && !primaryAction && (
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-current/25 border-t-current" />
+          )}
+          {submitLabel}
+        </button>
+        {primaryAction && (
+          <button
+            type="button"
+            disabled={loading || submitDisabled || primaryDisabled}
+            onClick={primaryAction.onClick}
+            className={`btn-primary inline-flex h-10 min-h-[44px] items-center justify-center gap-2 rounded-xl px-5 text-[13px] font-semibold disabled:opacity-50 ${FOCUS_RING_CLASS}`}
+          >
+            {loading && (
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+            )}
+            {primaryAction.label}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

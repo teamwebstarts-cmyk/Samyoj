@@ -4,6 +4,8 @@ import DataTable, { TableSerialCell } from '../ui/DataTable';
 import { ModalPanel } from '../ui/modalUi';
 import StatusBadge from '../ui/StatusBadge';
 import type { CampaignRecipient } from '../../types';
+import { getRecipientStatusLabel } from './campaignUi';
+import { formatRecipientError } from '../../utils/plainLanguage';
 
 interface CampaignRecipientTableProps {
   recipients: CampaignRecipient[];
@@ -61,7 +63,7 @@ export default function CampaignRecipientTable({
 
       {recipients.length === 0 ? (
         <div className="rounded-xl border border-dashed border-theme-border bg-theme-subtle/40 px-4 py-12 text-center text-[13px] font-medium text-theme-muted">
-          No recipients match this filter. Try another status or choose All statuses.
+          No recipients match this filter. Choose another status or select All statuses.
         </div>
       ) : (
         <>
@@ -73,7 +75,7 @@ export default function CampaignRecipientTable({
                   <p className="truncate font-mono text-[13px] font-semibold text-theme-fg">{recipient.phone}</p>
                   <p className="mt-0.5 truncate text-[12px] font-medium text-theme-secondary">{recipient.name || 'Unnamed contact'}</p>
                 </div>
-                <StatusBadge status={recipient.status} />
+                <StatusBadge status={recipient.status} label={getRecipientStatusLabel(recipient.status)} className="normal-case tracking-normal" />
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] text-theme-muted">
                 <span className="inline-flex items-center gap-1"><Clock3 className="h-3 w-3" />{formatSentAt(recipient.sentAt)}</span>
@@ -81,7 +83,7 @@ export default function CampaignRecipientTable({
               </div>
               {recipient.errorMessage && (
                 <p className="mt-2 flex gap-1.5 text-[11px] font-medium leading-relaxed text-red-600 dark:text-red-400">
-                  <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />{recipient.errorMessage}
+                  <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />{formatRecipientError(recipient.errorMessage)}
                 </p>
               )}
             </article>
@@ -111,12 +113,12 @@ export default function CampaignRecipientTable({
                   <p className="font-mono text-[12px] font-semibold text-theme-fg">{recipient.phone}</p>
                   <p className="mt-0.5 text-[11px] font-medium text-theme-secondary">{recipient.name || 'Unnamed contact'}</p>
                 </td>
-                <td><StatusBadge status={recipient.status} /></td>
+                <td><StatusBadge status={recipient.status} label={getRecipientStatusLabel(recipient.status)} className="normal-case tracking-normal" /></td>
                 <td className="max-w-[210px]">
                   <p className="text-[11px] font-medium text-theme-secondary">{formatSentAt(recipient.sentAt)} · {recipient.retryCount ?? 0} retries</p>
                   {recipient.errorMessage ? (
-                    <span className="mt-0.5 block break-words text-[11px] font-medium text-red-600 dark:text-red-400">{recipient.errorMessage}</span>
-                  ) : <span className="text-[11px] text-theme-muted">No error reported</span>}
+                    <span className="mt-0.5 block break-words text-[11px] font-medium text-red-600 dark:text-red-400">{formatRecipientError(recipient.errorMessage)}</span>
+              ) : <span className="text-[11px] text-theme-muted">No delivery issue reported</span>}
                 </td>
               </tr>
             ))}

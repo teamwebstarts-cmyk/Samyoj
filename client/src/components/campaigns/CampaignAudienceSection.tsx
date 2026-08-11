@@ -23,20 +23,20 @@ export type AudienceType = 'MANUAL' | 'TAGS' | 'CONTACTS' | 'ALL_OPTED_IN';
 const audienceTypes = [
   {
     id: 'MANUAL' as const,
-    label: 'Manual list',
-    description: 'Paste or import numbers',
+    label: 'Phone numbers',
+    description: 'Paste or import a list',
     icon: Phone,
   },
   {
     id: 'TAGS' as const,
-    label: 'By tags',
-    description: 'Filter by contact tags',
+    label: 'Contact tags',
+    description: 'Choose contacts with these tags',
     icon: Tag,
   },
   {
     id: 'CONTACTS' as const,
-    label: 'Pick contacts',
-    description: 'Select individuals',
+    label: 'Select contacts',
+    description: 'Choose specific contacts',
     icon: UserCheck,
   },
   {
@@ -170,7 +170,6 @@ export default function CampaignAudienceSection({
           <p className="text-[12px] font-bold text-theme-fg">
             {audienceTypes.find((t) => t.id === audienceType)?.label}
           </p>
-          <p className="mt-0.5 text-[11px] text-theme-muted">{messagingConsent.campaignNotice}</p>
         </div>
 
         <div className="space-y-4 bg-theme-surface p-3.5">
@@ -185,7 +184,7 @@ export default function CampaignAudienceSection({
                 <span>
                   <span className="block text-[12px] font-bold text-theme-fg">Add phone numbers</span>
                   <span className="mt-0.5 block text-[11px] text-theme-muted">
-                    Paste a list or import a CSV when you need it
+                    One number per line, or import a CSV file
                   </span>
                 </span>
                 <ChevronDown className={`h-4 w-4 text-theme-muted transition ${manualInputOpen ? 'rotate-180' : ''}`} />
@@ -206,7 +205,7 @@ export default function CampaignAudienceSection({
                   />
                   <details className="rounded-xl border border-theme-border bg-theme-subtle/30">
                     <summary className="cursor-pointer list-none px-3 py-2.5 text-[11px] font-bold text-theme-secondary">
-                      Import CSV or JSON instead
+                      Import a CSV or JSON file
                     </summary>
                     <div className="border-t border-theme-border p-3">
                       <CampaignPhoneCsvImport
@@ -224,7 +223,7 @@ export default function CampaignAudienceSection({
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-100 px-2.5 py-1 text-[11px] font-bold text-sky-800 ring-1 ring-sky-200/70 dark:bg-sky-950/40 dark:text-sky-300">
                     <Phone className="h-3 w-3" />
-                    {phoneStats.valid} eligible format
+                    {phoneStats.valid} valid numbers
                   </span>
                   {phoneStats.invalid > 0 && (
                     <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-800 ring-1 ring-amber-200/70 dark:bg-amber-950/40 dark:text-amber-300">
@@ -283,7 +282,7 @@ export default function CampaignAudienceSection({
               <AppInput
                 id="audience-tags"
                 label="Contact tags"
-                hint="Comma-separated · matches any tag"
+                hint="Separate tags with commas. Contacts matching any tag are included."
                 placeholder="vip, newsletter, lead"
                 value={audienceTags}
                 onChange={(e) => onAudienceTagsChange(e.target.value)}
@@ -292,8 +291,8 @@ export default function CampaignAudienceSection({
 
               {availableTags.length > 0 && (
                 <div>
-                  <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-theme-muted">
-                    Quick add
+                  <p className="mb-2 text-[11px] font-bold text-theme-muted">
+                    Choose a tag
                   </p>
                   <div className="grid gap-2 sm:grid-cols-2">
                     {availableTags.slice(0, 16).map((tag) => {
@@ -331,8 +330,8 @@ export default function CampaignAudienceSection({
           {audienceType === 'ALL_OPTED_IN' && (
             <ModalCallout
               icon={Sparkles}
-              title={messagingConsent.allAudienceTitle}
-              description={messagingConsent.allAudienceDetail}
+              title="Consent-based audience"
+              description="Use everyone in your contact list who agreed to receive WhatsApp campaign messages."
               accent="emerald"
             />
           )}
@@ -340,7 +339,7 @@ export default function CampaignAudienceSection({
           {showSavedCount && ['TAGS', 'CONTACTS', 'ALL_OPTED_IN'].includes(audienceType) && (
             <div className="rounded-xl border border-sky-200/70 bg-sky-50/60 px-3.5 py-2.5 dark:border-sky-800/40 dark:bg-sky-950/25">
               <p className="text-[12px] font-medium text-sky-900 dark:text-sky-200">
-                People are picked from your contact list when you save. Current count:{' '}
+                Contacts are checked when you save. Current count:{' '}
                 <span className="font-extrabold tabular-nums">{editingTotalContacts ?? 0}</span>.
               </p>
             </div>

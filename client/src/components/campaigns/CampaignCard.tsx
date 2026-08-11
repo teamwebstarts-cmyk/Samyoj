@@ -13,9 +13,9 @@ import AppButton from '../ui/AppButton';
 import CampaignActionsMenu from './CampaignActionsMenu';
 import type { Campaign } from '../../types';
 import {
-  audienceLabels,
   campaignProgress,
   formatCampaignDate,
+  getAudienceLabel,
   getCampaignPrimaryAction,
   getStatusMeta,
 } from './campaignUi';
@@ -79,7 +79,7 @@ export default function CampaignCard({
           <div className="flex items-start justify-between gap-2">
             <h3 className="truncate text-[13px] font-bold text-theme-fg">{campaign.name}</h3>
             <span
-              className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ring-1 ${meta.badge}`}
+              className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold ring-1 ${meta.badge}`}
             >
               <StatusIcon
                 className={`h-3 w-3 ${meta.pulse ? 'animate-spin' : ''}`}
@@ -97,7 +97,7 @@ export default function CampaignCard({
             {campaign.audienceType && (
               <span className="inline-flex items-center gap-1 rounded-full bg-theme-subtle px-2 py-0.5 text-[10px] font-bold text-theme-secondary ring-1 ring-theme-border">
                 <Users className="h-3 w-3" />
-                {audienceLabels[campaign.audienceType] || campaign.audienceType}
+                {getAudienceLabel(campaign.audienceType)}
               </span>
             )}
             {scheduledLabel && campaign.status === 'SCHEDULED' && (

@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Check, UserCheck } from 'lucide-react';
+import { Check } from 'lucide-react';
 import SearchInput from '../ui/SearchInput';
 import { contactApi } from '../../services/api';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import type { Contact } from '../../types';
-import { messagingConsent } from '../../utils/plainLanguage';
 import Pagination from '../ui/Pagination';
 
 interface CampaignContactPickerProps {
@@ -47,7 +46,7 @@ export default function CampaignContactPicker({ selectedIds, onChange }: Campaig
       .catch(() => {
         setContacts([]);
         setTotal(0);
-        setError('Could not load contacts. Try again.');
+        setError('Could not load contacts. Refresh this section and try again.');
       })
       .finally(() => setLoading(false));
   }, [debouncedSearch, page]);
@@ -83,7 +82,7 @@ export default function CampaignContactPicker({ selectedIds, onChange }: Campaig
       <SearchInput
         value={search}
         onChange={setSearch}
-        placeholder="Search contacts by name or phone..."
+        placeholder="Search contacts"
       />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
@@ -123,7 +122,7 @@ export default function CampaignContactPicker({ selectedIds, onChange }: Campaig
           <p className="px-4 py-8 text-center text-[12px] font-medium text-amber-700 dark:text-amber-300" role="alert">{error}</p>
         ) : visibleContacts.length === 0 ? (
           <p className="px-4 py-8 text-center text-[12px] font-medium text-theme-muted">
-            {showSelected ? 'No selected contacts on this page' : 'No contacts found'}
+            {showSelected ? 'No selected contacts on this page' : 'No contacts found. Try a different search.'}
           </p>
         ) : (
           <ul className="max-h-56 divide-y divide-theme-border overflow-auto">
@@ -175,11 +174,7 @@ export default function CampaignContactPicker({ selectedIds, onChange }: Campaig
       </div>
       {!showSelected && <Pagination page={page} pageSize={10} total={total} onPageChange={setPage} itemLabel="contacts" />}
 
-      <div className="flex items-center justify-between rounded-xl bg-emerald-50/70 px-3 py-2.5 ring-1 ring-emerald-100 dark:bg-emerald-950/25 dark:ring-emerald-900/40">
-        <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-800 dark:text-emerald-300">
-          <UserCheck className="h-3.5 w-3.5" />
-          {messagingConsent.contactPickerNotice}
-        </p>
+      <div className="flex items-center justify-end rounded-xl bg-emerald-50/70 px-3 py-2.5 ring-1 ring-emerald-100 dark:bg-emerald-950/25 dark:ring-emerald-900/40">
         <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-extrabold tabular-nums text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300">
           {selectedIds.length} selected
         </span>

@@ -35,12 +35,12 @@ export function templateNeedsHeaderMedia(template: MessageTemplate) {
 export function headerMediaLabel(format?: string) {
   switch (format) {
     case 'IMAGE':
-      return 'Header image URL';
+      return 'Header image link';
     case 'VIDEO':
-      return 'Header video URL';
+      return 'Header video link';
     case 'DOCUMENT':
-      return 'Header document URL';
+      return 'Header document link';
     default:
-      return 'Header media URL';
+      return 'Header file link';
   }
 }

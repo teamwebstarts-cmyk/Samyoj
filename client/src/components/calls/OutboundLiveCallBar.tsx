@@ -31,8 +31,8 @@ function LiveWaveform({ active }: { active: boolean }) {
       {bars.map((base, i) => (
         <span
           key={i}
-          className={`w-[3px] rounded-full bg-emerald-400/90 ${
-            active ? 'outbound-live-wave' : 'opacity-40'
+          className={`w-[3px] rounded-full bg-whatsapp-500 ${
+            active ? 'outbound-live-wave' : 'opacity-35'
           }`}
           style={{
             height: `${Math.round(base * 100)}%`,
@@ -114,36 +114,36 @@ export default function OutboundLiveCallBar() {
       aria-live="polite"
       aria-label={`Outbound call with ${call.contactName}`}
     >
-      <div className="pointer-events-auto flex w-full max-w-3xl animate-[slideUp_0.28s_ease-out] items-center gap-2.5 rounded-2xl border border-white/10 bg-[#1A1D1F] px-3 py-2.5 shadow-[0_12px_40px_rgba(0,0,0,0.45)] sm:gap-3 sm:rounded-[1.35rem] sm:px-4 sm:py-3">
+      <div className="pointer-events-auto flex w-auto max-w-[min(100%,42rem)] animate-[slideUp_0.28s_ease-out] items-center gap-2.5 rounded-2xl border border-emerald-200/80 bg-theme-surface/95 px-3 py-2.5 shadow-[0_12px_40px_rgba(15,23,42,0.12)] backdrop-blur-md sm:gap-3 sm:rounded-[1.25rem] sm:px-4 sm:py-3 dark:border-emerald-800/50 dark:bg-neutral-950/90 dark:shadow-[0_12px_40px_rgba(0,0,0,0.45)]">
         <span className="relative flex h-10 w-10 shrink-0 items-center justify-center">
           <span
-            className={`flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br text-[11px] font-bold text-white ring-2 ring-white/10 ${getAvatarGradient(avatarKey)}`}
+            className={`flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br text-[11px] font-bold text-white ring-2 ring-white dark:ring-neutral-900 ${getAvatarGradient(avatarKey)}`}
           >
             {getInitials(call.contactName, call.phone)}
           </span>
           {dialing && (
-            <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#1A1D1F]">
-              <Loader2 className="h-3 w-3 animate-spin text-emerald-400" strokeWidth={2.5} />
+            <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-theme-surface ring-1 ring-theme-border dark:bg-neutral-950">
+              <Loader2 className="h-3 w-3 animate-spin text-whatsapp-600" strokeWidth={2.5} />
             </span>
           )}
         </span>
 
-        <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-emerald-400">
-            {dialing && (
+        <div className="min-w-0 flex-1 sm:min-w-[7rem]">
+          <p className="flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-whatsapp-700 dark:text-whatsapp-400">
+            {(dialing || live) && (
               <span className="relative flex h-1.5 w-1.5">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-70" />
-                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-whatsapp-500 opacity-70" />
+                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-whatsapp-500" />
               </span>
             )}
             {label}
           </p>
-          <p className="truncate text-[14px] font-semibold text-white sm:text-[15px]">
+          <p className="truncate text-[14px] font-bold text-theme-fg sm:text-[15px]">
             {call.contactName}
           </p>
         </div>
 
-        <p className="shrink-0 tabular-nums text-[13px] font-semibold text-white/90 sm:text-[14px]">
+        <p className="shrink-0 tabular-nums text-[13px] font-semibold text-theme-secondary sm:text-[14px]">
           {formatDuration(elapsed)}
         </p>
 
@@ -154,13 +154,13 @@ export default function OutboundLiveCallBar() {
             <button
               type="button"
               onClick={handleReturn}
-              className="inline-flex h-9 items-center justify-center rounded-xl bg-emerald-500 px-3 text-[12px] font-bold text-white transition hover:bg-emerald-400 active:scale-[0.98] sm:px-3.5 sm:text-[13px]"
+              className="inline-flex h-9 items-center justify-center rounded-xl bg-gradient-to-br from-whatsapp-500 to-whatsapp-600 px-3 text-[12px] font-bold text-white shadow-[0_2px_8px_rgba(37,211,102,0.28)] transition hover:brightness-105 active:scale-[0.98] sm:px-3.5 sm:text-[13px]"
             >
               Return to call
             </button>
           )}
           {onCallStage && (
-            <span className="hidden h-9 items-center rounded-xl border border-white/10 bg-white/5 px-3 text-[12px] font-semibold text-white/70 sm:inline-flex">
+            <span className="hidden h-9 items-center rounded-xl border border-emerald-200/80 bg-emerald-50 px-3 text-[12px] font-semibold text-emerald-800 sm:inline-flex dark:border-emerald-800/50 dark:bg-emerald-950/40 dark:text-emerald-200">
               On this call
             </span>
           )}
@@ -168,7 +168,7 @@ export default function OutboundLiveCallBar() {
             type="button"
             onClick={() => void handleEnd()}
             disabled={ending}
-            className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-rose-500/50 bg-rose-950/60 px-2.5 text-[12px] font-bold text-rose-200 transition hover:bg-rose-900/70 disabled:opacity-60 sm:px-3 sm:text-[13px]"
+            className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-rose-200/90 bg-rose-50 px-2.5 text-[12px] font-bold text-rose-700 transition hover:bg-rose-100 disabled:opacity-60 sm:px-3 sm:text-[13px] dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300 dark:hover:bg-rose-500/15"
           >
             {ending ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2.25} />

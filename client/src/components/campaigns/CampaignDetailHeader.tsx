@@ -2,20 +2,24 @@ import { Calendar, LayoutTemplate, Users } from 'lucide-react';
 import { ModalPanel } from '../ui/modalUi';
 import StatusBadge from '../ui/StatusBadge';
 import type { Campaign } from '../../types';
-import { audienceLabels, campaignProgress, formatCampaignDate } from './campaignUi';
+import { campaignProgress, formatCampaignDate, getAudienceLabel, getStatusMeta } from './campaignUi';
 
 interface CampaignDetailHeaderProps {
   campaign: Campaign;
 }
 
 export default function CampaignDetailHeader({ campaign }: CampaignDetailHeaderProps) {
-  const scheduledLabel = formatCampaignDate(campaign.scheduledAt);
+  const scheduledLabel = formatCampaignDate(campaign.scheduledAt, campaign.timezone);
   const progress = campaignProgress(campaign.sentCount, campaign.totalContacts);
 
   return (
     <ModalPanel title="Campaign details" accent="violet">
       <div className="flex flex-wrap items-center gap-2">
-        <StatusBadge status={campaign.status} />
+        <StatusBadge
+          status={campaign.status}
+          label={getStatusMeta(campaign.status).label}
+          className="normal-case tracking-normal"
+        />
         <span className="inline-flex items-center gap-1.5 rounded-full bg-theme-subtle px-2.5 py-0.5 font-mono text-[11px] font-semibold text-theme-fg ring-1 ring-theme-border">
           <LayoutTemplate className="h-3 w-3 text-violet-500" />
           {campaign.templateName}
@@ -23,7 +27,7 @@ export default function CampaignDetailHeader({ campaign }: CampaignDetailHeaderP
         {campaign.audienceType && (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-theme-subtle px-2.5 py-0.5 text-[11px] font-semibold text-theme-secondary ring-1 ring-theme-border">
             <Users className="h-3 w-3" />
-            {audienceLabels[campaign.audienceType] || campaign.audienceType}
+            {getAudienceLabel(campaign.audienceType)}
           </span>
         )}
         {scheduledLabel && (
@@ -70,7 +74,7 @@ export default function CampaignDetailHeader({ campaign }: CampaignDetailHeaderP
             key={stat.label}
             className="rounded-xl bg-theme-subtle/60 px-3 py-2.5 ring-1 ring-theme-border"
           >
-            <p className="text-[10px] font-bold uppercase tracking-wide text-theme-muted">{stat.label}</p>
+            <p className="text-[10px] font-bold text-theme-muted">{stat.label}</p>
             <p className={`mt-0.5 text-lg font-extrabold tabular-nums ${stat.tone || 'text-theme-fg'}`}>
               {stat.value}
             </p>

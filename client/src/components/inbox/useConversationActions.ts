@@ -148,13 +148,11 @@ export function useConversationActions({
     if (!selected || callingBack) return;
     const contactLabel = selected.contact.name?.trim() || selected.contact.phone || 'contact';
     setCallingBack(true);
-    emitChatNotice(selected.id, {
-      kind: 'calling',
-      message: `Calling ${contactLabel}…`,
-      tone: 'lavender',
-      icon: 'phone',
+    beginOutboundDialing({
+      contactName: selected.contact.name,
+      phone: selected.contact.phone,
+      conversationId: selected.id,
     });
-    toastSuccess(`Calling ${contactLabel}…`);
     try {
       // Meta requires per-user call permission before outbound (BIC).
       try {
@@ -165,10 +163,12 @@ export function useConversationActions({
           callingEnabled?: boolean;
         };
         if (perm.callingEnabled === false) {
+          clearOutboundLiveCall();
           toastError('Enable WhatsApp calling in Calls setup before placing outbound calls.');
           return;
         }
         if (!perm.granted) {
+          clearOutboundLiveCall();
           if (perm.canRequest !== false) {
             await callingApi.requestPermission(selected.contact.id);
             toastSuccess('Ask-to-call sent. Call again after the customer allows WhatsApp calls.');
@@ -183,6 +183,7 @@ export function useConversationActions({
 
       const sdpOffer = await createAgentOffer();
       if (!sdpOffer) {
+        clearOutboundLiveCall();
         toastError('Microphone access is required to make calls.');
         return;
       }
@@ -215,9 +216,11 @@ export function useConversationActions({
         void pollSdpAnswer(callId);
         return;
       }
+      clearOutboundLiveCall();
       cleanupAgentCall();
       toastError('Call started but no call page was returned.');
     } catch (err: unknown) {
+      clearOutboundLiveCall();
       cleanupAgentCall();
       const body = (err as { response?: { data?: { error?: { code?: string; message?: string } } } })
         ?.response?.data?.error;
@@ -234,7 +237,7 @@ export function useConversationActions({
     } finally {
       setCallingBack(false);
     }
-   };
+  };
 
   const handleToggleFavorite = async (conversationId?: string) => {
     const { id: targetId, conversation: target } = findTarget(conversationId);
