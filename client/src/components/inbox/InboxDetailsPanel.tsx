@@ -194,9 +194,7 @@ export default function InboxDetailsPanel({
   const [showTagInput, setShowTagInput] = useState(false);
   const [orgTags, setOrgTags] = useState<string[]>([]);
   const [headerAssignOpen, setHeaderAssignOpen] = useState(false);
-  const [railAssignOpen, setRailAssignOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const railAssignRef = useRef<HTMLButtonElement>(null);
   const headerAssignRef = useRef<HTMLButtonElement>(null);
   const tabListRef = useRef<HTMLDivElement>(null);
   const noteInputRef = useRef<HTMLTextAreaElement>(null);
@@ -230,7 +228,6 @@ export default function InboxDetailsPanel({
   useEffect(() => {
     onPanelOpenChange(false);
     setHeaderAssignOpen(false);
-    setRailAssignOpen(false);
     setLabelsPickerOpen(false);
     setShowNewLabel(false);
     setShowTagInput(false);
@@ -448,53 +445,59 @@ export default function InboxDetailsPanel({
     'relative flex h-9 w-9 items-center justify-center rounded-xl transition disabled:cursor-not-allowed disabled:opacity-45';
 
   const renderQuickActions = (opts: {
-    assignRef: RefObject<HTMLButtonElement>;
-    assignOpen: boolean;
-    setAssignOpen: (open: boolean) => void;
+    assignRef?: RefObject<HTMLButtonElement>;
+    assignOpen?: boolean;
+    setAssignOpen?: (open: boolean) => void;
+    showAssign?: boolean;
     tipSide: 'left' | 'below';
     popoverPrefer: 'above' | 'below';
     compact?: boolean;
   }) => {
+    const showAssign = opts.showAssign !== false && opts.assignRef && opts.setAssignOpen;
     const btn = opts.compact
       ? 'relative flex h-8 w-8 items-center justify-center rounded-lg transition disabled:cursor-not-allowed disabled:opacity-45'
       : actionBtnClass;
     return (
     <>
-      <button
-        ref={opts.assignRef}
-        type="button"
-        aria-label={
-          conversation.assignedAgent?.name
-            ? `Assign agent · ${conversation.assignedAgent.name}`
-            : 'Assign agent'
-        }
-        aria-expanded={opts.assignOpen}
-        disabled={assigning}
-        onClick={() => opts.setAssignOpen(!opts.assignOpen)}
-        className={`${btn} text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40`}
-        {...tipFor(
-          conversation.assignedAgent?.name
-            ? `Assign · ${conversation.assignedAgent.name}`
-            : 'Assign agent',
-          opts.tipSide
-        )}
-      >
-        <UserPlus className="h-4 w-4" strokeWidth={iconStroke} />
-      </button>
-      {opts.assignOpen && (
-        <AssignAgentPopover
-          agents={agents}
-          currentUserId={currentUserId}
-          selectedAgentId={assignedId}
-          disabled={assigning}
-          placement={opts.popoverPrefer}
-          anchorRef={opts.assignRef}
-          onSelect={(agentId) => {
-            onAssign(agentId);
-            opts.setAssignOpen(false);
-          }}
-          onClose={() => opts.setAssignOpen(false)}
-        />
+      {showAssign && (
+        <>
+          <button
+            ref={opts.assignRef}
+            type="button"
+            aria-label={
+              conversation.assignedAgent?.name
+                ? `Assign agent · ${conversation.assignedAgent.name}`
+                : 'Assign agent'
+            }
+            aria-expanded={opts.assignOpen}
+            disabled={assigning}
+            onClick={() => opts.setAssignOpen!(!opts.assignOpen)}
+            className={`${btn} text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40`}
+            {...tipFor(
+              conversation.assignedAgent?.name
+                ? `Assign · ${conversation.assignedAgent.name}`
+                : 'Assign agent',
+              opts.tipSide
+            )}
+          >
+            <UserPlus className="h-4 w-4" strokeWidth={iconStroke} />
+          </button>
+          {opts.assignOpen && (
+            <AssignAgentPopover
+              agents={agents}
+              currentUserId={currentUserId}
+              selectedAgentId={assignedId}
+              disabled={assigning}
+              placement={opts.popoverPrefer}
+              anchorRef={opts.assignRef!}
+              onSelect={(agentId) => {
+                onAssign(agentId);
+                opts.setAssignOpen!(false);
+              }}
+              onClose={() => opts.setAssignOpen!(false)}
+            />
+          )}
+        </>
       )}
       <button
         type="button"
@@ -1006,9 +1009,7 @@ export default function InboxDetailsPanel({
 
         <div className="flex flex-col items-center gap-1">
           {renderQuickActions({
-            assignRef: railAssignRef,
-            assignOpen: railAssignOpen,
-            setAssignOpen: setRailAssignOpen,
+            showAssign: false,
             tipSide: 'left',
             popoverPrefer: 'above',
           })}

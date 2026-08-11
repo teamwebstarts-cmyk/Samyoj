@@ -1,4 +1,4 @@
-import { AlertTriangle, BarChart3, Eye, Send } from 'lucide-react';
+import { AlertTriangle, BarChart3, RefreshCw } from 'lucide-react';
 import { ModalEmptyHint, ModalPanel } from '../ui/modalUi';
 import type { CampaignAnalytics } from '../../types';
 
@@ -6,71 +6,25 @@ interface CampaignAnalyticsPanelProps {
   analytics: CampaignAnalytics | null;
   loading?: boolean;
   error?: string | null;
+  section?: 'overview' | 'errors';
+  onViewFailures?: () => void;
+  onRetryFailed?: () => void;
 }
 
-function RateCard({
-  label,
-  value,
-  icon: Icon,
-  tone,
-  glow,
-  bar,
-  iconBg,
-  description,
-}: {
-  label: string;
-  value: string;
-  icon: typeof Send;
-  tone: string;
-  glow: string;
-  bar: string;
-  iconBg: string;
-  description: string;
-}) {
-  const numeric = Math.min(100, Math.max(0, parseFloat(value) || 0));
-
-  return (
-    <div
-      className="relative overflow-hidden rounded-xl border border-theme-border bg-theme-surface p-4"
-      aria-label={`${label}: ${value} percent. ${description}`}
-    >
-      <div className={`pointer-events-none absolute -right-4 -top-4 h-20 w-20 rounded-full blur-2xl opacity-40 ${glow}`} />
-      <div className="relative flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-wide text-theme-muted" title={description}>
-            {label}
-          </p>
-          <p className={`mt-1 text-2xl font-extrabold tabular-nums ${tone}`}>{value}%</p>
-        </div>
-        <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${iconBg}`}>
-          <Icon className={`h-5 w-5 ${tone}`} strokeWidth={2.25} />
-        </div>
-      </div>
-      <div className="relative mt-3 h-2 overflow-hidden rounded-full bg-theme-subtle">
-        <div
-          className={`h-full rounded-full bg-gradient-to-r transition-all duration-700 ${bar}`}
-          style={{ width: `${numeric}%` }}
-          role="progressbar"
-          aria-valuenow={numeric}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-label={`${label}: ${value}%`}
-        />
-      </div>
-    </div>
-  );
-}
-
-export default function CampaignAnalyticsPanel({ analytics, loading, error }: CampaignAnalyticsPanelProps) {
+export default function CampaignAnalyticsPanel({
+  analytics,
+  loading,
+  error,
+  section = 'overview',
+  onViewFailures,
+  onRetryFailed,
+}: CampaignAnalyticsPanelProps) {
   if (loading) {
     return (
       <ModalPanel title="Campaign analytics" icon={BarChart3} accent="indigo">
         <div className="animate-pulse space-y-3">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="h-16 rounded-xl bg-theme-subtle" />
-            ))}
-          </div>
+          <div className="h-20 rounded-xl bg-theme-subtle" />
+          <div className="h-16 rounded-xl bg-theme-subtle" />
         </div>
       </ModalPanel>
     );
@@ -86,15 +40,7 @@ export default function CampaignAnalyticsPanel({ analytics, loading, error }: Ca
 
   if (!analytics) return null;
 
-  const { campaign, deliveryRate, readRate, byStatus, topErrors } = analytics;
-
-  const statCards = [
-    { label: 'Recipients', value: campaign.totalContacts, tone: '' },
-    { label: 'Sent', value: campaign.sentCount, tone: 'text-sky-700 dark:text-sky-400' },
-    { label: 'Delivered', value: campaign.deliveredCount, tone: 'text-emerald-700 dark:text-emerald-400' },
-    { label: 'Read', value: campaign.readCount, tone: 'text-violet-700 dark:text-violet-400' },
-    { label: 'Failed', value: campaign.failedCount, tone: 'text-red-600 dark:text-red-400' },
-  ];
+  const { campaign, byStatus, topErrors } = analytics;
 
   const statusColors: Record<string, string> = {
     PENDING: 'bg-amber-50 text-amber-800 ring-amber-100 dark:bg-amber-950/40 dark:text-amber-300',
@@ -104,47 +50,81 @@ export default function CampaignAnalyticsPanel({ analytics, loading, error }: Ca
     FAILED: 'bg-red-50 text-red-800 ring-red-100 dark:bg-red-950/40 dark:text-red-300',
   };
 
+  if (section === 'errors') {
+    return (
+      <ModalPanel title="Errors" icon={AlertTriangle} accent="neutral">
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200/70 bg-red-50/70 px-3.5 py-3 dark:border-red-900/50 dark:bg-red-950/25">
+            <div>
+              <p className="text-[12px] font-extrabold text-red-900 dark:text-red-200">
+                {campaign.failedCount.toLocaleString()} failed recipient{campaign.failedCount === 1 ? '' : 's'}
+              </p>
+              <p className="mt-1 text-[11px] font-medium text-red-800/80 dark:text-red-300/80">
+                Review the recipient error text below, then retry only after fixing the cause.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {onViewFailures && (
+                <button type="button" onClick={onViewFailures} className="rounded-lg border border-red-200 bg-theme-surface px-3 py-2 text-[11px] font-bold text-red-700 hover:bg-red-50 dark:border-red-900/60 dark:text-red-300">
+                  View failures
+                </button>
+              )}
+              {campaign.failedCount > 0 && onRetryFailed && (
+                <button type="button" onClick={onRetryFailed} className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-2 text-[11px] font-bold text-white hover:bg-red-700">
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Retry failed
+                </button>
+              )}
+            </div>
+          </div>
+          {topErrors.length > 0 ? (
+            <ul className="space-y-2">
+              {topErrors.map((err) => (
+                <li key={err.message} className="rounded-xl border border-theme-border bg-theme-subtle/40 px-3 py-2.5 text-[12px] text-theme-secondary">
+                  <span className="font-extrabold tabular-nums text-red-600 dark:text-red-400">{err.count}×</span>{' '}
+                  <span className="font-medium">{err.message}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <ModalEmptyHint message="No error details have been reported for this campaign." />
+          )}
+        </div>
+      </ModalPanel>
+    );
+  }
+
   return (
     <ModalPanel title="Campaign analytics" icon={BarChart3} accent="indigo">
       <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-          {statCards.map((stat) => (
-            <div
-              key={stat.label}
-              aria-label={`${stat.value.toLocaleString()} ${stat.label.toLowerCase()}`}
-              className="rounded-xl border border-theme-border bg-theme-surface px-3 py-2.5 shadow-sm"
+        <div className={`rounded-xl border px-3.5 py-3 ${
+          campaign.failedCount > 0
+            ? 'border-red-200/70 bg-red-50/70 dark:border-red-900/50 dark:bg-red-950/25'
+            : 'border-theme-border bg-theme-subtle/40'
+        }`}>
+          <p className={`text-[12px] font-extrabold ${
+            campaign.failedCount > 0 ? 'text-red-900 dark:text-red-200' : 'text-theme-fg'
+          }`}>
+            {campaign.failedCount > 0
+              ? `${campaign.failedCount.toLocaleString()} recipient${campaign.failedCount === 1 ? '' : 's'} need attention`
+              : byStatus.PENDING
+                ? 'Delivery is still in progress'
+                : 'Delivery updates are complete'}
+          </p>
+          <p className="mt-1 text-[11px] font-medium text-theme-secondary">
+            {campaign.failedCount > 0
+              ? 'Review the Errors section for recipient-level causes before retrying.'
+              : 'Use the status breakdown below for the current recipient state.'}
+          </p>
+          {campaign.failedCount > 0 && onViewFailures && (
+            <button
+              type="button"
+              onClick={onViewFailures}
+              className="mt-2 rounded-lg border border-red-200 bg-theme-surface px-3 py-1.5 text-[11px] font-bold text-red-700 hover:bg-red-50 dark:border-red-900/60 dark:text-red-300"
             >
-              <p className="text-[10px] font-bold uppercase tracking-wide text-theme-muted" title={`Number of ${stat.label.toLowerCase()}`}>
-                {stat.label}
-              </p>
-              <p className={`mt-0.5 text-lg font-extrabold tabular-nums ${stat.tone || 'text-theme-fg'}`}>
-                {stat.value}
-              </p>
-            </div>
-          ))}
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          <RateCard
-            label="Delivery rate"
-            value={deliveryRate}
-            description="Percentage of messages reported as delivered"
-            icon={Send}
-            tone="text-emerald-700 dark:text-emerald-400"
-            glow="bg-emerald-400/20"
-            bar="from-emerald-400 to-whatsapp-600"
-            iconBg="bg-emerald-50 dark:bg-emerald-950/40"
-          />
-          <RateCard
-            label="Read rate"
-            value={readRate}
-            description="Percentage of messages reported as read"
-            icon={Eye}
-            tone="text-violet-700 dark:text-violet-400"
-            glow="bg-violet-400/20"
-            bar="from-violet-400 to-purple-600"
-            iconBg="bg-violet-50 dark:bg-violet-950/40"
-          />
+              View failures
+            </button>
+          )}
         </div>
 
         {Object.keys(byStatus).length > 0 ? (
@@ -168,25 +148,6 @@ export default function CampaignAnalyticsPanel({ analytics, loading, error }: Ca
           <ModalEmptyHint message="Status breakdown will appear once delivery starts." />
         )}
 
-        {topErrors.length > 0 && (
-          <div className="rounded-xl border border-red-200/70 bg-gradient-to-br from-red-50/80 to-rose-50/40 p-4 dark:border-red-900/50 dark:from-red-950/30 dark:to-rose-950/20">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
-              <p className="text-[12px] font-extrabold text-red-900 dark:text-red-200">Top errors</p>
-            </div>
-            <ul className="mt-3 space-y-2">
-              {topErrors.map((err) => (
-                <li
-                  key={err.message}
-                  className="rounded-xl bg-theme-surface/80 px-3 py-2.5 text-[12px] text-red-800 ring-1 ring-red-100 dark:text-red-300 dark:ring-red-900/50"
-                >
-                  <span className="font-extrabold tabular-nums">{err.count}×</span>{' '}
-                  <span className="font-medium">{err.message}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
       </div>
     </ModalPanel>
   );

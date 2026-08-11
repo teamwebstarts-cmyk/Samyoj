@@ -228,29 +228,6 @@ export function useConversationActions({
     }
    };
 
-  const handleSnooze = async (untilIso: string, _label?: string, conversationId?: string) => {
-    const targetId = conversationId || selected?.id;
-    if (!targetId) return;
-    try {
-      await inboxApi.snooze(targetId, untilIso);
-      upsertConversation({ id: targetId, status: 'SNOOZED', snoozedUntil: untilIso } as Conversation);
-      if (selected?.id === targetId) setSelected(null);
-    } catch (err: unknown) {
-      toastError(extractError(err, 'Could not snooze conversation'));
-    }
-  };
-
-  const handleUnsnooze = async (conversationId?: string) => {
-    const targetId = conversationId || selected?.id;
-    if (!targetId) return;
-    try {
-      await inboxApi.unsnooze(targetId);
-      upsertConversation({ id: targetId, status: 'OPEN', snoozedUntil: null } as Conversation);
-    } catch (err: unknown) {
-      toastError(extractError(err, 'Could not unsnooze conversation'));
-    }
-  };
-
   const handleToggleFavorite = async (conversationId?: string) => {
     const { id: targetId, conversation: target } = findTarget(conversationId);
     if (!target || !targetId) return;
@@ -366,8 +343,6 @@ export function useConversationActions({
     handleToggleBot,
     handleSetActiveBot,
     handleCallBack,
-    handleSnooze,
-    handleUnsnooze,
     handleToggleFavorite,
     handleMarkUnread,
     handleBulk,

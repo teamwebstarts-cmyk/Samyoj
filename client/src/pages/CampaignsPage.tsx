@@ -19,6 +19,7 @@ import CampaignCard from '../components/campaigns/CampaignCard';
 import CampaignDetailHeader from '../components/campaigns/CampaignDetailHeader';
 import CampaignQuotaBanner from '../components/campaigns/CampaignQuotaBanner';
 import CampaignRecipientTable from '../components/campaigns/CampaignRecipientTable';
+import CampaignActionsMenu from '../components/campaigns/CampaignActionsMenu';
 import {
   getFilledTemplatePreview,
   getTemplateHeaderFormat,
@@ -80,6 +81,14 @@ const emptyForm = {
 
 type CampaignDetail = Campaign & { recipients?: CampaignRecipient[] };
 
+function toDateTimeLocalValue(iso?: string | null) {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 const statusFilterOptions = [
   { value: '', label: 'All statuses' },
   { value: 'DRAFT', label: 'Draft' },
@@ -118,13 +127,13 @@ function campaignToForm(campaign: CampaignDetail, templates: MessageTemplate[]) 
     phones: (campaign.recipients || []).map((r) => r.phone).join('\n'),
     whatsappNumberId: campaign.whatsappNumberId || '',
     scheduleEnabled: Boolean(campaign.scheduledAt),
-    scheduledAt: campaign.scheduledAt ? campaign.scheduledAt.slice(0, 16) : '',
-    timezone: campaign.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+    scheduledAt: toDateTimeLocalValue(campaign.scheduledAt),
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
     testPhone: '',
   };
 }
 
-function buildPayload(form: typeof emptyForm, options?: { clearSchedule?: boolean }) {
+function buildPayload(form: typeof emptyForm, options?: { clearSchedule?: boolean; draft?: boolean }) {
   const payload: Record<string, unknown> = {
     name: form.name,
     templateName: form.templateName,
@@ -133,8 +142,8 @@ function buildPayload(form: typeof emptyForm, options?: { clearSchedule?: boolea
     whatsappNumberId: form.whatsappNumberId || undefined,
     timezone: form.timezone || undefined,
     templateParams: {
-      body: form.bodyParams.filter(Boolean),
-      header: form.headerParams.filter(Boolean),
+      body: form.bodyParams,
+      header: form.headerParams,
       headerMediaUrl: form.headerMediaUrl || undefined,
     },
   };
@@ -172,7 +181,9 @@ function buildPayload(form: typeof emptyForm, options?: { clearSchedule?: boolea
     payload.audienceConfig = { requireOptIn: true };
   }
 
-  if (form.scheduleEnabled && form.scheduledAt) {
+  if (options?.draft) {
+    if (options.clearSchedule) payload.scheduledAt = null;
+  } else if (form.scheduleEnabled && form.scheduledAt) {
     payload.scheduledAt = new Date(form.scheduledAt).toISOString();
   } else if (options?.clearSchedule) {
     payload.scheduledAt = null;
@@ -211,7 +222,8 @@ export default function CampaignsPage() {
   const [recipientPage, setRecipientPage] = useState(1);
   const [recipientStatusFilter, setRecipientStatusFilter] = useState('');
   const [activeStep, setActiveStep] = useState(0);
-  const [quotaRemaining, setQuotaRemaining] = useState<number | null>(null);
+  const [stageError, setStageError] = useState<string | null>(null);
+  const [detailSection, setDetailSection] = useState<'overview' | 'recipients' | 'errors'>('overview');
   const [estimatedCost, setEstimatedCost] = useState<number | null>(null);
   const [audiencePreviewCount, setAudiencePreviewCount] = useState<number | null>(null);
   const [confirmState, setConfirmState] = useState<{
@@ -249,6 +261,8 @@ export default function CampaignsPage() {
     ? manualLines.filter((line) => !validatePhoneLines([line]).ok).length
     : 0;
   const latestAudienceCount = audiencePreviewCount ?? audienceCount;
+  const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  const stageLabels = ['Message', 'Audience', 'Review and send'];
 
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -311,6 +325,7 @@ export default function CampaignsPage() {
 
   const loadDetailExtras = useCallback(async (campaignId: string) => {
     setAnalyticsLoading(true);
+    setAnalyticsError(null);
     try {
       const [analyticsRes, recipientsRes] = await Promise.all([
         campaignApi.analytics(campaignId),
@@ -323,7 +338,8 @@ export default function CampaignsPage() {
       setAnalytics(analyticsRes.data.data as CampaignAnalytics);
       setRecipients(recipientsRes.data.data.recipients);
       setRecipientTotal(recipientsRes.data.data.total);
-    } catch {
+    } catch (err: unknown) {
+      setAnalyticsError(getErrMsg(err, 'Failed to load campaign analytics'));
       setAnalytics(null);
     } finally {
       setAnalyticsLoading(false);
@@ -336,7 +352,7 @@ export default function CampaignsPage() {
 
   useEffect(() => {
     loadTemplates();
-    whatsappApi.numbers().then(({ data }) => setWhatsappNumbers(data.data.numbers || [])).catch(() => {});
+    whatsappApi.numbers().then(({ data }) => setWhatsappNumbers(Array.isArray(data.data) ? data.data : [])).catch(() => {});
     contactApi
       .tags()
       .then(({ data }) => {
@@ -344,7 +360,6 @@ export default function CampaignsPage() {
         setAvailableTags(tags.map((t: string | { name: string }) => (typeof t === 'string' ? t : t.name)));
       })
       .catch(() => {});
-    campaignApi.quota().then(({ data }) => setQuotaRemaining(data.data.remaining)).catch(() => {});
   }, [loadTemplates]);
 
   useEffect(() => {
@@ -360,57 +375,34 @@ export default function CampaignsPage() {
   }, [audienceCount]);
 
   useEffect(() => {
-    const templateName = searchParams.get('template');
-    if (!templateName || !canManageTeam) return;
+    if (!canManageTeam) return;
 
+    const templateName = searchParams.get('template') || '';
+    const templateLanguage = searchParams.get('language') || '';
+    const contactIds = (searchParams.get('contacts') || '').split(',').filter(Boolean);
+    const tags = (searchParams.get('tags') || '')
+      .split(',')
+      .map((tag) => tag.trim())
+      .filter(Boolean);
+    if (!templateName && !contactIds.length && !tags.length) return;
+
+    const audienceType = contactIds.length ? 'CONTACTS' : tags.length ? 'TAGS' : 'MANUAL';
+    const name = contactIds.length
+      ? `Campaign — ${contactIds.length} contact${contactIds.length === 1 ? '' : 's'}`
+      : tags.length
+        ? `Campaign — ${tags.join(', ')}`
+        : '';
     setEditing(null);
     setViewOnly(false);
     setSlideOpen(true);
     setForm({
       ...emptyForm,
       templateName,
-      templateLanguage: searchParams.get('language') || '',
-    });
-    setSearchParams({}, { replace: true });
-  }, [searchParams, setSearchParams, canManageTeam]);
-
-  useEffect(() => {
-    const contactsParam = searchParams.get('contacts');
-    if (!contactsParam || !canManageTeam) return;
-
-    const contactIds = contactsParam.split(',').filter(Boolean);
-    if (!contactIds.length) return;
-
-    setEditing(null);
-    setViewOnly(false);
-    setSlideOpen(true);
-    setForm({
-      ...emptyForm,
-      audienceType: 'CONTACTS',
-      selectedContactIds: contactIds,
-      name: `Campaign — ${contactIds.length} contact${contactIds.length === 1 ? '' : 's'}`,
-    });
-    setSearchParams({}, { replace: true });
-  }, [searchParams, setSearchParams, canManageTeam]);
-
-  useEffect(() => {
-    const tagsParam = searchParams.get('tags');
-    if (!tagsParam || !canManageTeam) return;
-
-    const tags = tagsParam
-      .split(',')
-      .map((t) => t.trim())
-      .filter(Boolean);
-    if (!tags.length) return;
-
-    setEditing(null);
-    setViewOnly(false);
-    setSlideOpen(true);
-    setForm({
-      ...emptyForm,
-      audienceType: 'TAGS',
+      templateLanguage,
+      audienceType,
       audienceTags: tags.join(', '),
-      name: `Campaign — ${tags.join(', ')}`,
+      selectedContactIds: contactIds,
+      name,
     });
     setSearchParams({}, { replace: true });
   }, [searchParams, setSearchParams, canManageTeam]);
@@ -463,6 +455,8 @@ export default function CampaignsPage() {
     setForm(emptyForm);
     setAudiencePreviewCount(null);
     setActiveStep(0);
+    setDetailSection('overview');
+    setStageError(null);
     setSlideOpen(true);
     setAnalytics(null);
     setAnalyticsError(null);
@@ -474,6 +468,11 @@ export default function CampaignsPage() {
     return data.data as CampaignDetail;
   };
 
+  const refreshOpenCampaign = async (campaignId: string) => {
+    const full = await loadCampaignDetail({ id: campaignId } as Campaign);
+    setEditing((current) => (current?.id === campaignId ? full : current));
+  };
+
   const openView = async (campaign: Campaign) => {
     try {
       const full = await loadCampaignDetail(campaign);
@@ -482,6 +481,8 @@ export default function CampaignsPage() {
       setForm(campaignToForm(full, templates));
       setAudiencePreviewCount(null);
       setActiveStep(0);
+      setDetailSection('overview');
+      setStageError(null);
       setRecipientPage(1);
       setSlideOpen(true);
     } catch {
@@ -498,6 +499,7 @@ export default function CampaignsPage() {
       setForm(campaignToForm(full, templates));
       setAudiencePreviewCount(null);
       setActiveStep(0);
+      setStageError(null);
       setSlideOpen(true);
       loadTemplates();
     } catch {
@@ -511,18 +513,23 @@ export default function CampaignsPage() {
     setEditing(null);
     setForm(emptyForm);
     setAudiencePreviewCount(null);
+    setStageError(null);
     setAnalytics(null);
     setAnalyticsError(null);
     setRecipients([]);
   };
 
-  const saveCampaign = async (andSend = false) => {
+  const saveCampaign = async (action: 'draft' | 'schedule' | 'send' = 'draft') => {
+    const andSend = action === 'send';
     if (selectedTemplate && templateNeedsHeaderMedia(selectedTemplate) && !form.headerMediaUrl.trim()) {
       toastError('Header media URL is required for this template');
       return null;
     }
 
-    const payload = buildPayload(form, { clearSchedule: Boolean(editing && !form.scheduleEnabled) });
+    const payload = buildPayload(form, {
+      clearSchedule: Boolean(editing && (action === 'draft' || !form.scheduleEnabled)),
+      draft: action === 'draft',
+    });
     setSaving(true);
     try {
       let campaignId = editing?.id;
@@ -576,12 +583,64 @@ export default function CampaignsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (viewOnly) return;
-    await saveCampaign(false);
+    await saveCampaign('draft');
   };
 
-  const handleSaveAndSend = async () => {
-    if (viewOnly || form.scheduleEnabled) return;
-    await saveCampaign(true);
+  const validateStage = (stage: number) => {
+    if (stage === 0) {
+      if (!form.name.trim()) return 'Add a campaign name.';
+      if (!form.templateName) return 'Choose an approved template.';
+      if (form.bodyParams.some((value) => !value.trim()) || form.headerParams.some((value) => !value.trim())) {
+        return 'Fill in every template variable before continuing.';
+      }
+      if (selectedTemplate && templateNeedsHeaderMedia(selectedTemplate) && !form.headerMediaUrl.trim()) {
+        return 'Add the required header media URL before continuing.';
+      }
+    }
+
+    if (stage === 1) {
+      if (invalidAudienceCount > 0) {
+        return `Fix ${invalidAudienceCount} invalid phone number${invalidAudienceCount === 1 ? '' : 's'} before continuing.`;
+      }
+      if (latestAudienceCount === 0) {
+        return form.audienceType === 'TAGS'
+          ? 'Add at least one contact tag.'
+          : form.audienceType === 'CONTACTS'
+            ? 'Select at least one contact.'
+            : 'Add at least one eligible recipient.';
+      }
+    }
+
+    if (stage === 2 && form.scheduleEnabled) {
+      if (!form.scheduledAt) return 'Choose when this campaign should be sent.';
+      if (new Date(form.scheduledAt).getTime() <= Date.now()) return 'Choose a future time for the campaign.';
+    }
+
+    return null;
+  };
+
+  const continueToNextStage = () => {
+    const error = validateStage(activeStep);
+    if (error) {
+      setStageError(error);
+      return;
+    }
+    setStageError(null);
+    setActiveStep((step) => Math.min(stageLabels.length - 1, step + 1));
+  };
+
+  const handleFinalAction = async () => {
+    const error = validateStage(2) || validateStage(1) || validateStage(0);
+    if (error) {
+      setStageError(error);
+      return;
+    }
+    setStageError(null);
+    if (form.scheduleEnabled) {
+      await saveCampaign('schedule');
+    } else {
+      await saveCampaign('send');
+    }
   };
 
   const handleDelete = async () => {
@@ -667,11 +726,25 @@ export default function CampaignsPage() {
     });
   };
 
+  const handlePause = async (id: string) => {
+    if (!canManageTeam) return;
+    await handleAction(() => campaignApi.pause(id), 'Campaign paused');
+  };
+
+  const handleResume = async (id: string) => {
+    if (!canManageTeam) return;
+    await handleAction(() => campaignApi.resume(id), 'Campaign resumed');
+  };
+
   const handleAction = async (action: () => Promise<unknown>, success: string) => {
     try {
       await action();
       loadCampaigns(false);
-      if (editing?.id) void loadDetailExtras(editing.id);
+      if (editing?.id) {
+        const campaignId = editing.id;
+        await refreshOpenCampaign(campaignId);
+        void loadDetailExtras(campaignId);
+      }
       toastSuccess(success);
     } catch (err: unknown) {
       toastError(getErrMsg(err, 'Action failed'));
@@ -807,6 +880,8 @@ export default function CampaignsPage() {
                     onView={() => openView(c)}
                     onEdit={canManageTeam ? () => openEdit(c) : undefined}
                     onSend={canManageTeam ? () => handleSend(c.id) : undefined}
+                    onPause={canManageTeam ? () => handlePause(c.id) : undefined}
+                    onResume={canManageTeam ? () => handleResume(c.id) : undefined}
                     onDelete={canManageTeam ? () => handleDeleteItem(c) : undefined}
                   />
                 )}
@@ -821,6 +896,8 @@ export default function CampaignsPage() {
                     onView={openView}
                     onEdit={canManageTeam ? openEdit : undefined}
                     onSend={canManageTeam ? (c) => handleSend(c.id) : undefined}
+                    onPause={canManageTeam ? (c) => handlePause(c.id) : undefined}
+                    onResume={canManageTeam ? (c) => handleResume(c.id) : undefined}
                     onDelete={canManageTeam ? handleDeleteItem : undefined}
                   />
                 )}
@@ -893,40 +970,27 @@ export default function CampaignsPage() {
                 )}
               </div>
               <div className="flex flex-wrap items-center justify-end gap-2 border-t border-theme-border pt-2.5">
-                {canManageTeam && editing && ['RUNNING', 'PAUSED', 'SCHEDULED'].includes(editing.status) && (
-                  <AppButton
-                    size="sm"
-                    variant="secondary"
-                    icon={<Square size={14} />}
-                    onClick={() => editing && handleAction(() => campaignApi.cancel(editing.id), 'Campaign cancelled')}
-                  >
-                    Cancel
-                  </AppButton>
-                )}
-                {canManageTeam && editing && editing.failedCount > 0 && (
-                  <AppButton
-                    size="sm"
-                    variant="secondary"
-                    icon={<RefreshCw size={14} />}
-                    onClick={() => editing && handleAction(() => campaignApi.retryFailed(editing.id), 'Retrying failed sends')}
-                  >
-                    Retry failed
-                  </AppButton>
-                )}
-                {canManageTeam && editing && (
-                  <AppButton size="sm" variant="secondary" icon={<Copy size={14} />} onClick={handleDuplicate}>
-                    Duplicate
-                  </AppButton>
-                )}
                 {editing && (
-                  <AppButton
-                    size="sm"
-                    variant="secondary"
-                    icon={<Download size={14} />}
-                    onClick={() => editing && handleExport(editing.id, editing.name)}
-                  >
-                    Export
-                  </AppButton>
+                  <CampaignActionsMenu>
+                    {canManageTeam && ['RUNNING', 'PAUSED', 'SCHEDULED'].includes(editing.status) && (
+                      <button type="button" role="menuitem" className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-secondary hover:bg-theme-subtle hover:text-theme-fg" onClick={() => handleAction(() => campaignApi.cancel(editing.id), 'Campaign cancelled')}>
+                        <Square size={14} /> Cancel
+                      </button>
+                    )}
+                    {canManageTeam && editing.failedCount > 0 && (
+                      <button type="button" role="menuitem" className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-secondary hover:bg-theme-subtle hover:text-theme-fg" onClick={() => handleAction(() => campaignApi.retryFailed(editing.id), 'Retrying failed sends')}>
+                        <RefreshCw size={14} /> Retry failed
+                      </button>
+                    )}
+                    {canManageTeam && (
+                      <button type="button" role="menuitem" className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-secondary hover:bg-theme-subtle hover:text-theme-fg" onClick={handleDuplicate}>
+                        <Copy size={14} /> Duplicate
+                      </button>
+                    )}
+                    <button type="button" role="menuitem" className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-secondary hover:bg-theme-subtle hover:text-theme-fg" onClick={() => handleExport(editing.id, editing.name)}>
+                      <Download size={14} /> Export
+                    </button>
+                  </CampaignActionsMenu>
                 )}
                 <AppButton size="sm" variant="secondary" onClick={closeSlide}>
                   Close
@@ -942,14 +1006,16 @@ export default function CampaignsPage() {
               onDelete={editing ? handleDelete : undefined}
               deleteLabel="Delete campaign"
               primaryAction={
-                !form.scheduleEnabled
+                activeStep === stageLabels.length - 1
                   ? {
-                      label: `Send to ${latestAudienceCount.toLocaleString()}`,
-                      onClick: handleSaveAndSend,
+                      label: form.scheduleEnabled
+                        ? `Schedule campaign · ${latestAudienceCount.toLocaleString()} eligible`
+                        : `Send now · ${latestAudienceCount.toLocaleString()} eligible`,
+                      onClick: handleFinalAction,
                     }
                   : undefined
               }
-              submitDisabled={invalidAudienceCount > 0 || latestAudienceCount === 0}
+              submitDisabled={saving}
             />
           )
         }
@@ -958,46 +1024,47 @@ export default function CampaignsPage() {
           <div className="space-y-5">
             <CampaignDetailHeader campaign={editing} />
 
-            <CampaignAnalyticsPanel
-              analytics={analytics}
-              loading={analyticsLoading}
-              error={analyticsError}
-            />
+            <nav aria-label="Campaign detail sections" className="grid grid-cols-3 gap-1 rounded-xl border border-theme-border bg-theme-subtle/70 p-1">
+              {[
+                ['overview', 'Overview'],
+                ['recipients', `Recipients (${editing.totalContacts.toLocaleString()})`],
+                ['errors', `Errors (${editing.failedCount.toLocaleString()})`],
+              ].map(([value, label]) => (
+                <button key={value} type="button" onClick={() => setDetailSection(value as typeof detailSection)} className={`rounded-lg px-2 py-2 text-[11px] font-bold transition ${detailSection === value ? 'bg-theme-surface text-theme-fg shadow-sm' : 'text-theme-muted hover:text-theme-secondary'}`}>
+                  {label}
+                </button>
+              ))}
+            </nav>
 
-            <CampaignRecipientTable
-              recipients={recipients}
-              total={recipientTotal}
-              page={recipientPage}
-              pageSize={50}
-              onPageChange={setRecipientPage}
-              statusFilter={recipientStatusFilter}
-              onStatusFilterChange={(s) => {
-                setRecipientStatusFilter(s);
-                setRecipientPage(1);
-              }}
-            />
-
-            <ModalPanel title="Test send" icon={TestTube2} accent="emerald">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-                <AppInput
-                  id="test-phone"
-                  label="Phone number"
-                  placeholder={PHONE_PLACEHOLDER}
-                  value={form.testPhone}
-                  onChange={(e) => setForm({ ...form, testPhone: e.target.value })}
-                  className="flex-1"
+            {detailSection === 'overview' && (
+              <>
+                <CampaignAnalyticsPanel
+                  analytics={analytics}
+                  loading={analyticsLoading}
+                  error={analyticsError}
+                  onViewFailures={() => setDetailSection('errors')}
                 />
-                <AppButton type="button" variant="secondary" icon={<TestTube2 size={14} />} onClick={handleTestSend}>
-                  Send test
-                </AppButton>
-              </div>
-            </ModalPanel>
+                <ModalPanel title="Message preview & test send" icon={TestTube2} accent="emerald">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                    <AppInput id="test-phone" label="Phone number" placeholder={PHONE_PLACEHOLDER} value={form.testPhone} onChange={(e) => setForm({ ...form, testPhone: e.target.value })} className="flex-1" />
+                    <AppButton type="button" variant="secondary" icon={<TestTube2 size={14} />} onClick={handleTestSend}>Send test</AppButton>
+                  </div>
+                </ModalPanel>
+              </>
+            )}
+            {detailSection === 'recipients' && (
+              <CampaignRecipientTable recipients={recipients} total={recipientTotal} page={recipientPage} pageSize={50} onPageChange={setRecipientPage} statusFilter={recipientStatusFilter} onStatusFilterChange={(s) => { setRecipientStatusFilter(s); setRecipientPage(1); }} />
+            )}
+            {detailSection === 'errors' && (
+              <CampaignAnalyticsPanel analytics={analytics} loading={analyticsLoading} error={analyticsError} section="errors" onViewFailures={() => setDetailSection('recipients')} onRetryFailed={() => editing && handleAction(() => campaignApi.retryFailed(editing.id), 'Retrying failed sends')} />
+            )}
           </div>
         ) : (
           <form id="slideover-form" onSubmit={handleSubmit} className="space-y-6">
-            <nav aria-label="Campaign creation steps" className="sticky top-0 z-10 -mx-1 rounded-xl border border-theme-border bg-theme-surface/95 p-2 backdrop-blur-sm">
-              <ol className="grid grid-cols-4 gap-1">
-                {['Template', 'Audience', 'Schedule', 'Review'].map((label, index) => (
+            <div className="sticky top-0 z-10 -mx-1 space-y-2 bg-theme-surface/95 pb-2 backdrop-blur-sm">
+            <nav aria-label="Campaign creation steps" className="rounded-xl border border-theme-border bg-theme-surface/95 p-2">
+              <ol className="grid grid-cols-3 gap-1">
+                {stageLabels.map((label, index) => (
                   <li key={label}>
                     <button
                       type="button"
@@ -1012,29 +1079,32 @@ export default function CampaignsPage() {
                             : 'bg-theme-subtle text-theme-muted'
                       }`}
                     >
-                      <span className="block text-[9px] opacity-75">Step {index + 1}</span>
                       {label}
                     </button>
                   </li>
                 ))}
               </ol>
-              <div className="sr-only" aria-live="polite">Currently editing {['Template', 'Audience', 'Schedule', 'Review'][activeStep]} step</div>
+              <div className="sr-only" aria-live="polite">Currently editing {stageLabels[activeStep]} stage</div>
             </nav>
-            <aside className="rounded-xl border border-theme-border bg-theme-subtle/35 p-3" aria-label="Campaign summary">
+            <aside className="rounded-xl border border-theme-border bg-theme-subtle/95 p-3" aria-label="Campaign summary">
               <div className="mb-2 flex items-center justify-between">
                 <p className="text-[10px] font-bold uppercase tracking-wide text-theme-muted">Campaign summary</p>
-                <span className="text-[10px] font-semibold text-theme-muted">{activeStep + 1}/4</span>
+                <span className="text-[10px] font-semibold text-theme-muted">{activeStep + 1}/{stageLabels.length}</span>
               </div>
-              <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-[11px] sm:grid-cols-3">
+              <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-[11px] sm:grid-cols-5">
                 <div><dt className="text-theme-muted">Sender</dt><dd className="truncate font-bold text-theme-fg">{whatsappNumbers.find((n) => n.id === form.whatsappNumberId)?.phoneNumber || (whatsappNumbers.length === 1 ? whatsappNumbers[0].phoneNumber : 'Default number')}</dd></div>
                 <div><dt className="text-theme-muted">Template</dt><dd className="truncate font-bold text-theme-fg">{form.templateName || 'Not selected'}</dd></div>
-                <div><dt className="text-theme-muted">Audience</dt><dd className="font-bold text-theme-fg">{latestAudienceCount.toLocaleString()}</dd></div>
-                <div><dt className="text-theme-muted">Invalid / excluded</dt><dd className={`font-bold ${invalidAudienceCount ? 'text-amber-700 dark:text-amber-300' : 'text-theme-fg'}`}>{invalidAudienceCount}</dd></div>
-                <div><dt className="text-theme-muted">Estimated cost</dt><dd className="font-bold text-theme-fg">{estimatedCost != null ? `₹${estimatedCost.toLocaleString('en-IN')}` : '—'}</dd></div>
-                <div><dt className="text-theme-muted">Quota remaining</dt><dd className="font-bold text-theme-fg">{quotaRemaining == null ? '—' : quotaRemaining.toLocaleString()}</dd></div>
-                <div className="col-span-2 sm:col-span-3"><dt className="text-theme-muted">Schedule</dt><dd className="font-bold text-theme-fg">{form.scheduleEnabled && form.scheduledAt ? `${new Date(form.scheduledAt).toLocaleString()} (${form.timezone})` : 'Send manually after saving'}</dd></div>
+                <div><dt className="text-theme-muted">Eligible recipients</dt><dd className="font-bold text-theme-fg">{latestAudienceCount.toLocaleString()}</dd></div>
+                <div><dt className="text-theme-muted">Estimated campaign cost</dt><dd className="font-bold text-theme-fg">{estimatedCost != null ? `₹${estimatedCost.toLocaleString('en-IN')}` : '—'}<span className="ml-1 font-medium text-theme-muted">(estimate)</span></dd></div>
+                <div><dt className="text-theme-muted">Resolved send time</dt><dd className="truncate font-bold text-theme-fg">{form.scheduleEnabled && form.scheduledAt ? `${new Date(form.scheduledAt).toLocaleString()} · ${browserTimezone}` : 'Now, after confirmation'}</dd></div>
               </dl>
             </aside>
+            </div>
+            {stageError && (
+              <div className="rounded-xl border border-red-200/80 bg-red-50/70 px-3.5 py-2.5 text-[12px] font-semibold text-red-800 dark:border-red-900/50 dark:bg-red-950/25 dark:text-red-300" role="alert">
+                {stageError}
+              </div>
+            )}
             {!editing && (
               <ModalCallout
                 icon={LayoutTemplate}
@@ -1044,7 +1114,7 @@ export default function CampaignsPage() {
               />
             )}
 
-            {activeStep === 0 && <ModalSection step={1} title="Campaign details" subtitle="Name, template, and sending number">
+            {activeStep === 0 && <ModalSection title="Message" subtitle="Choose an approved template and personalize the message">
               <AppInput
                 id="campaign-name"
                 label="Campaign name"
@@ -1084,7 +1154,7 @@ export default function CampaignsPage() {
             </ModalSection>}
 
             {activeStep === 0 && (form.bodyParams.length > 0 || form.headerParams.length > 0 || selectedTemplate) && (
-              <ModalSection step={2} title="Message details" subtitle="Fill in the blanks and preview your message">
+              <ModalSection title="Message preview" subtitle="Fill in the blanks and preview your message">
                 <div className="space-y-4">
                   {form.bodyParams.map((_, i) => (
                     <AppInput
@@ -1136,7 +1206,7 @@ export default function CampaignsPage() {
               </ModalSection>
             )}
 
-            {activeStep === 1 && <ModalSection step={2} title="Audience" subtitle="Who should receive this campaign?">
+            {activeStep === 1 && <ModalSection title="Audience" subtitle="Who should receive this campaign?">
               <CampaignAudienceSection
                 audienceType={form.audienceType}
                 onAudienceTypeChange={(audienceType) => setForm({ ...form, audienceType })}
@@ -1155,31 +1225,31 @@ export default function CampaignsPage() {
               />
             </ModalSection>}
 
-            {activeStep === 2 && <ModalSection
-              step={3}
-              title="Scheduling"
-              subtitle="Send immediately or pick a date and time"
-            >
-              <label
-                className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3.5 transition ${
-                  form.scheduleEnabled
-                    ? 'border-amber-500/30 bg-amber-500/[0.04]'
-                    : 'border-theme-border/70 bg-theme-surface hover:bg-theme-subtle/40'
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={form.scheduleEnabled}
-                  onChange={(e) => setForm({ ...form, scheduleEnabled: e.target.checked })}
-                  className="mt-1 h-4 w-4 rounded border-theme-border text-amber-600 focus:ring-amber-500/25"
-                />
-                <div>
-                  <p className="text-[13px] font-bold text-theme-fg">Schedule for later</p>
-                  <p className="mt-0.5 text-[11px] leading-relaxed text-theme-secondary">
-                    Leave unchecked to send manually after saving
-                  </p>
-                </div>
-              </label>
+            {activeStep === 2 && <ModalSection title="Review and send" subtitle="Choose when to send, then confirm the campaign details">
+              <div className="grid gap-2 sm:grid-cols-2">
+                {[
+                  { value: false, title: 'Send now', description: 'Start after the final confirmation.' },
+                  { value: true, title: 'Schedule', description: 'Choose a future date and time.' },
+                ].map((option) => (
+                  <label key={option.title} className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3.5 transition ${
+                    form.scheduleEnabled === option.value
+                      ? 'border-amber-500/30 bg-amber-500/[0.04]'
+                      : 'border-theme-border/70 bg-theme-surface hover:bg-theme-subtle/40'
+                  }`}>
+                    <input
+                      type="radio"
+                      name="send-timing"
+                      checked={form.scheduleEnabled === option.value}
+                      onChange={() => setForm({ ...form, scheduleEnabled: option.value })}
+                      className="mt-1 h-4 w-4 border-theme-border text-amber-600 focus:ring-amber-500/25"
+                    />
+                    <div>
+                      <p className="text-[13px] font-bold text-theme-fg">{option.title}</p>
+                      <p className="mt-0.5 text-[11px] leading-relaxed text-theme-secondary">{option.description}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
               {form.scheduleEnabled && (
                 <div className="grid gap-3 sm:grid-cols-2">
                   <AppInput
@@ -1190,29 +1260,23 @@ export default function CampaignsPage() {
                     onChange={(e) => setForm({ ...form, scheduledAt: e.target.value })}
                     required={form.scheduleEnabled}
                   />
-                  <AppInput
-                    id="timezone"
-                    label="Timezone"
-                    value={form.timezone}
-                    onChange={(e) => setForm({ ...form, timezone: e.target.value })}
-                  />
+                  <div className="rounded-xl border border-theme-border bg-theme-subtle/35 px-3.5 py-3">
+                    <p className="text-[11px] font-bold text-theme-fg">Browser timezone</p>
+                    <p className="mt-1 text-[12px] font-semibold text-theme-secondary">{browserTimezone}</p>
+                    <p className="mt-1 text-[10px] leading-relaxed text-theme-muted">The scheduled time uses your browser’s resolved timezone.</p>
+                  </div>
                 </div>
               )}
-            </ModalSection>}
-
-            {activeStep === 3 && (
-              <ModalSection step={4} title="Review and send" subtitle="Confirm the details before you launch">
-                <div className="rounded-xl border border-violet-200/70 bg-violet-50/60 p-3 text-[12px] dark:border-violet-800/40 dark:bg-violet-950/20">
-                  <p className="font-bold text-violet-900 dark:text-violet-200">Ready to review</p>
-                  <p className="mt-1 text-violet-800 dark:text-violet-300">Check the summary below, then save the draft or send it when you are ready.</p>
-                </div>
+              <div className="rounded-xl border border-violet-200/70 bg-violet-50/60 p-3 text-[12px] dark:border-violet-800/40 dark:bg-violet-950/20">
+                <p className="font-bold text-violet-900 dark:text-violet-200">Ready to review</p>
+                <p className="mt-1 text-violet-800 dark:text-violet-300">Check the compact summary above, then save the draft or complete the final action below.</p>
+              </div>
                 {filledPreview && (
                   <ModalPreviewCard title="Message preview">
                     <WhatsAppTemplatePreview {...filledPreview} variant="compact" />
                   </ModalPreviewCard>
                 )}
-              </ModalSection>
-            )}
+            </ModalSection>}
 
             {templates.length === 0 && (
               <ModalCallout
@@ -1225,19 +1289,22 @@ export default function CampaignsPage() {
             <div className="flex items-center justify-between gap-2 border-t border-theme-border pt-4">
               <button
                 type="button"
-                onClick={() => setActiveStep((step) => Math.max(0, step - 1))}
+                onClick={() => {
+                  setStageError(null);
+                  setActiveStep((step) => Math.max(0, step - 1));
+                }}
                 disabled={activeStep === 0}
                 className="rounded-xl border border-theme-border px-3 py-2 text-[12px] font-bold text-theme-secondary transition hover:bg-theme-subtle disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
               >
                 Back
               </button>
-              {activeStep < 3 && (
+              {activeStep < stageLabels.length - 1 && (
                 <button
                   type="button"
-                  onClick={() => setActiveStep((step) => Math.min(3, step + 1))}
+                  onClick={continueToNextStage}
                   className="rounded-xl bg-violet-600 px-4 py-2 text-[12px] font-bold text-white transition hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
                 >
-                  Continue to {['Audience', 'Schedule', 'Review'][activeStep]}
+                  Continue to {stageLabels[activeStep + 1]}
                 </button>
               )}
             </div>

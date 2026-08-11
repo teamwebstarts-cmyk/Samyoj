@@ -32,7 +32,6 @@ interface ConversationListProps {
   onToggleSelect: (conversationId: string) => void;
   onBulkAssign: (agent: { id: string; name: string }) => void;
   onBulkClose: () => void;
-  onBulkSnooze: (untilIso: string, label: string) => void;
   onBulkDelete: () => void;
   onClearSelection: () => void;
   onRetry: () => void;
@@ -95,7 +94,6 @@ export default function ConversationList({
   onToggleSelect,
   onBulkAssign,
   onBulkClose,
-  onBulkSnooze,
   onBulkDelete,
   onClearSelection,
   onRetry,
@@ -135,7 +133,6 @@ export default function ConversationList({
         busy={bulkBusy}
         onAssign={onBulkAssign}
         onCloseChats={onBulkClose}
-        onSnoozeUntil={onBulkSnooze}
         onDelete={onBulkDelete}
         onClear={onClearSelection}
       />

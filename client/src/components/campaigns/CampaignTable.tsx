@@ -1,12 +1,13 @@
-import { Calendar, LayoutTemplate, Play, Send, Users } from 'lucide-react';
-import DataTable, { TableSerialCell } from '../ui/DataTable';
-import RowActions from '../ui/RowActions';
+import { Calendar, Eye, LayoutTemplate, Pause, Pencil, Play, Send, Trash2, Users } from 'lucide-react';
+import DataTable from '../ui/DataTable';
 import { TableTextButton } from '../ui/TableActions';
 import type { Campaign } from '../../types';
+import CampaignActionsMenu from './CampaignActionsMenu';
 import {
   audienceLabels,
   campaignProgress,
   formatCampaignDate,
+  getCampaignPrimaryAction,
   getStatusMeta,
 } from './campaignUi';
 
@@ -20,24 +21,9 @@ interface CampaignTableProps {
   onView: (campaign: Campaign) => void;
   onEdit?: (campaign: Campaign) => void;
   onSend?: (campaign: Campaign) => void;
+  onPause?: (campaign: Campaign) => void;
+  onResume?: (campaign: Campaign) => void;
   onDelete?: (campaign: Campaign) => void;
-}
-
-function StatPill({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number;
-  tone: string;
-}) {
-  return (
-    <div className="text-center">
-      <p className={`text-[13px] font-extrabold tabular-nums ${tone}`}>{value}</p>
-      <p className="mt-0.5 text-[9px] font-bold uppercase tracking-wide text-theme-muted">{label}</p>
-    </div>
-  );
 }
 
 export default function CampaignTable({
@@ -46,10 +32,11 @@ export default function CampaignTable({
   pageSize,
   total,
   onPageChange,
-  canManageTeam,
   onView,
   onEdit,
   onSend,
+  onPause,
+  onResume,
   onDelete,
 }: CampaignTableProps) {
   return (
@@ -59,33 +46,43 @@ export default function CampaignTable({
         'Status',
         'Audience',
         'Progress',
-        'Delivery',
-        'Scheduled',
         'Actions',
       ]}
       page={page}
       pageSize={pageSize}
       total={total}
       onPageChange={onPageChange}
-      minTableWidth="min-w-[1080px]"
+      minTableWidth="min-w-[760px]"
+      serialNo={false}
     >
-      {campaigns.map((campaign, index) => {
+      {campaigns.map((campaign) => {
         const meta = getStatusMeta(campaign.status);
         const StatusIcon = meta.icon;
         const progress = campaignProgress(campaign.sentCount, campaign.totalContacts);
-        const scheduledLabel = formatCampaignDate(campaign.scheduledAt);
         const editable = campaign.status === 'DRAFT' || campaign.status === 'SCHEDULED';
+        const requestedAction = getCampaignPrimaryAction(campaign.status);
+        const primaryAction =
+          requestedAction === 'edit' && !onEdit
+            ? 'view'
+            : requestedAction === 'pause' && !onPause
+              ? 'view'
+              : requestedAction;
+        const resolvedPrimaryAction =
+          primaryAction === 'resume' && !onResume ? 'view' : primaryAction;
+        const primaryLabel = resolvedPrimaryAction === 'edit'
+          ? 'Edit'
+          : resolvedPrimaryAction === 'pause'
+            ? 'Pause'
+            : resolvedPrimaryAction === 'resume'
+              ? 'Resume'
+            : campaign.status === 'COMPLETED'
+              ? 'View results'
+              : 'View';
 
         return (
           <tr key={campaign.id} className="group">
-            <TableSerialCell page={page} pageSize={pageSize} rowIndex={index} />
-
             <td className="min-w-[200px]">
-              <button
-                type="button"
-                onClick={() => onView(campaign)}
-                className="flex w-full items-center gap-3 rounded-xl py-1 text-left transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-violet-500/50"
-              >
+              <div className="flex w-full items-center gap-3 py-1">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-purple-700 text-white shadow-[0_4px_14px_rgba(139,92,246,0.3)]">
                   <Send className="h-4 w-4" strokeWidth={2.25} />
                 </div>
@@ -98,7 +95,7 @@ export default function CampaignTable({
                     {campaign.templateName}
                   </p>
                 </div>
-              </button>
+              </div>
             </td>
 
             <td className="whitespace-nowrap">
@@ -111,17 +108,26 @@ export default function CampaignTable({
                 />
                 {meta.label}
               </span>
+              {campaign.status === 'SCHEDULED' && campaign.scheduledAt && (
+                <span className="mt-1 flex items-center gap-1 text-[10px] font-semibold text-theme-muted">
+                  <Calendar className="h-3 w-3 shrink-0" />
+                  <span className="truncate">{formatCampaignDate(campaign.scheduledAt, campaign.timezone)}</span>
+                </span>
+              )}
             </td>
 
             <td className="whitespace-nowrap">
-              {campaign.audienceType ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-theme-subtle px-2.5 py-1 text-[11px] font-bold text-theme-secondary ring-1 ring-theme-border">
+              <div className="flex flex-col gap-1">
+                <span className="inline-flex items-center gap-1 text-[13px] font-bold tabular-nums text-theme-fg">
                   <Users className="h-3 w-3 shrink-0 text-theme-muted" />
-                  {audienceLabels[campaign.audienceType] || campaign.audienceType}
+                  {campaign.totalContacts.toLocaleString()} recipients
                 </span>
-              ) : (
-                <span className="text-[13px] text-theme-muted">—</span>
-              )}
+                {campaign.audienceType && (
+                  <span className="text-[10px] font-semibold text-theme-muted">
+                    {audienceLabels[campaign.audienceType] || campaign.audienceType}
+                  </span>
+                )}
+              </div>
             </td>
 
             <td className="min-w-[140px]">
@@ -147,63 +153,38 @@ export default function CampaignTable({
             </td>
 
             <td>
-              <details className="group/delivery">
-                <summary className="flex min-w-[150px] cursor-pointer list-none items-center gap-2 rounded-lg px-1 py-1 text-left focus:outline-none focus:ring-2 focus:ring-violet-500/40">
-                  <span className="text-[12px] font-semibold tabular-nums text-theme-secondary">
-                    {campaign.deliveredCount.toLocaleString()} delivered
-                  </span>
-                  <span className="text-[11px] font-bold text-theme-muted group-open/delivery:hidden">
-                    · details
-                  </span>
-                  <span className="text-[11px] font-bold text-theme-muted group-open/delivery:inline hidden">
-                    · hide
-                  </span>
-                </summary>
-                <div className="mt-2 grid grid-cols-3 gap-2 rounded-lg border border-theme-border bg-theme-subtle/50 p-2">
-                  <StatPill label="Sent" value={campaign.sentCount} tone="text-sky-700 dark:text-sky-400" />
-                  <StatPill
-                    label="Read"
-                    value={campaign.readCount}
-                    tone="text-violet-700 dark:text-violet-400"
-                  />
-                  <StatPill
-                    label="Failed"
-                    value={campaign.failedCount}
-                    tone={
-                      campaign.failedCount > 0
-                        ? 'text-red-600 dark:text-red-400'
-                        : 'text-theme-muted'
-                    }
-                  />
-                </div>
-              </details>
-            </td>
-
-            <td className="whitespace-nowrap">
-              {scheduledLabel && campaign.status === 'SCHEDULED' ? (
-                <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-amber-800 dark:text-amber-300">
-                  <Calendar className="h-3.5 w-3.5 shrink-0" />
-                  {scheduledLabel}
-                </span>
-              ) : (
-                <span className="text-[13px] text-theme-muted">—</span>
-              )}
-            </td>
-
-            <td>
               <div className="flex items-center justify-end gap-1.5">
-                {canManageTeam && onSend && editable && (
-                  <TableTextButton onClick={() => onSend(campaign)} icon={Play}>
-                    Send
-                  </TableTextButton>
-                )}
-                <RowActions
-                  onView={() => onView(campaign)}
-                  onEdit={canManageTeam && onEdit && editable ? () => onEdit(campaign) : undefined}
-                  onDelete={
-                    canManageTeam && onDelete && editable ? () => onDelete(campaign) : undefined
-                  }
-                />
+                <TableTextButton
+                  onClick={() => (resolvedPrimaryAction === 'edit' ? onEdit?.(campaign) : resolvedPrimaryAction === 'pause' ? onPause?.(campaign) : resolvedPrimaryAction === 'resume' ? onResume?.(campaign) : onView(campaign))}
+                  icon={resolvedPrimaryAction === 'edit' ? Pencil : resolvedPrimaryAction === 'pause' ? Pause : resolvedPrimaryAction === 'resume' ? Play : Eye}
+                  variant={resolvedPrimaryAction === 'edit' || resolvedPrimaryAction === 'resume' ? 'primary' : 'neutral'}
+                >
+                  {primaryLabel}
+                </TableTextButton>
+                {(resolvedPrimaryAction !== 'view' && onView) || (resolvedPrimaryAction !== 'edit' && onEdit && editable) || (onSend && editable) || (onDelete && editable) ? (
+                  <CampaignActionsMenu>
+                      {resolvedPrimaryAction !== 'view' && onView && (
+                        <button type="button" onClick={() => onView(campaign)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-fg hover:bg-theme-subtle">
+                          <Eye className="h-3.5 w-3.5" /> View
+                        </button>
+                      )}
+                      {resolvedPrimaryAction !== 'edit' && onEdit && editable && (
+                        <button type="button" onClick={() => onEdit(campaign)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-fg hover:bg-theme-subtle">
+                          <Pencil className="h-3.5 w-3.5" /> Edit
+                        </button>
+                      )}
+                      {onSend && editable && (
+                        <button type="button" onClick={() => onSend(campaign)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-fg hover:bg-theme-subtle">
+                          <Play className="h-3.5 w-3.5" /> Send
+                        </button>
+                      )}
+                      {onDelete && editable && (
+                        <button type="button" onClick={() => onDelete(campaign)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30">
+                          <Trash2 className="h-3.5 w-3.5" /> Delete
+                        </button>
+                      )}
+                  </CampaignActionsMenu>
+                ) : null}
               </div>
             </td>
           </tr>

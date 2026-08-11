@@ -35,11 +35,11 @@ export default function ComposerModeHeader({
 
   return (
     <div
-      className="flex items-center gap-3 border-b border-neutral-100 px-3 pt-1 sm:gap-4 sm:px-4 dark:border-neutral-800/80"
+      className="flex items-center gap-2 border-b border-neutral-100 px-2 pt-1 sm:gap-3 sm:px-3 md:gap-4 md:px-4 dark:border-neutral-800/80"
       role="tablist"
       aria-label="Composer mode"
     >
-      <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
+      <div className="flex min-w-0 flex-1 items-center justify-around gap-1 sm:justify-start sm:gap-3 md:gap-4">
         {TABS.map((tab) => {
           const Icon = tab.icon;
           const selected = active === tab.id;
@@ -50,16 +50,17 @@ export default function ComposerModeHeader({
               type="button"
               role="tab"
               aria-selected={selected}
+              aria-label={tab.label}
               disabled={locked}
               onClick={() => onChange(tab.id)}
-              className={`relative inline-flex items-center gap-1.5 pb-2 pt-1.5 text-[13px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${
+              className={`relative inline-flex min-w-0 flex-1 items-center justify-center gap-1.5 px-1 pb-2 pt-1.5 text-[12px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none sm:px-0 sm:text-[13px] ${
                 selected
                   ? 'text-whatsapp-600 dark:text-whatsapp-400'
                   : 'text-theme-muted hover:text-theme-fg'
               }`}
             >
-              <Icon size={14} strokeWidth={2} className="shrink-0" />
-              <span>{tab.label}</span>
+              <Icon size={15} strokeWidth={2} className="shrink-0 sm:h-[14px] sm:w-[14px]" />
+              <span className="truncate sm:inline">{tab.label}</span>
               {selected && (
                 <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-whatsapp-500" />
               )}

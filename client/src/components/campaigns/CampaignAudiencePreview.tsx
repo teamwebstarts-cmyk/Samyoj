@@ -177,7 +177,7 @@ export default function CampaignAudiencePreview({
               </p>
               {costInr != null && costInr > 0 && (
                 <p className="mt-1 text-[12px] font-semibold text-amber-800 dark:text-amber-300">
-                  Estimated Meta cost: ₹{costInr.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  Estimated campaign cost: ₹{costInr.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                 </p>
               )}
             </div>

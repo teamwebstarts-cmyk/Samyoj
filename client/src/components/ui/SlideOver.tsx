@@ -1,9 +1,9 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { LucideIcon } from 'lucide-react';
 import { Trash2, X } from 'lucide-react';
 import { slideOverAccents } from './accentTokens';
-import { FOCUS_RING_CLASS } from '../../hooks/inboxA11y';
+import { FOCUS_RING_CLASS, useFocusTrap } from '../../hooks/inboxA11y';
 import { useModalTransition } from '../../hooks/useModalTransition';
 
 type SlideOverAccent = keyof typeof slideOverAccents;
@@ -44,24 +44,26 @@ export default function SlideOver({
 }: SlideOverProps) {
   const theme = slideOverAccents[accent];
   const panelRef = useRef<HTMLDivElement>(null);
-  const previousFocus = useRef<HTMLElement | null>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  const handleEscape = useCallback(() => onCloseRef.current(), []);
   const { mounted, phase } = useModalTransition(open, EXIT_MS);
 
   useEffect(() => {
     if (!open || !mounted) return;
-    previousFocus.current = document.activeElement as HTMLElement | null;
     requestAnimationFrame(() => {
       const firstField = panelRef.current?.querySelector<HTMLElement>(
         'input:not([type="hidden"]):not([tabindex="-1"]), textarea, select',
       );
       (firstField ?? panelRef.current?.querySelector<HTMLElement>('button'))?.focus();
     });
-    return () => {
-      previousFocus.current?.focus();
-    };
   }, [open, mounted]);
+
+  useFocusTrap({
+    ref: panelRef,
+    active: mounted && open,
+    onEscape: handleEscape,
+  });
 
   useEffect(() => {
     if (!mounted) return;

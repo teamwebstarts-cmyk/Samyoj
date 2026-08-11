@@ -309,8 +309,6 @@ export default function InboxPage() {
     handleToggleBot,
     handleSetActiveBot,
     handleCallBack,
-    handleSnooze,
-    handleUnsnooze,
     handleToggleFavorite,
     handleMarkUnread,
     handleBulk,
@@ -692,12 +690,6 @@ export default function InboxPage() {
                 void runBulk({ action: 'assign', agentId: agent.id }, agent)
               }
               onBulkClose={() => void runBulk({ action: 'status', status: 'CLOSED' })}
-              onBulkSnooze={(untilIso) =>
-                void runBulk({
-                  action: 'snooze',
-                  snoozedUntil: untilIso,
-                })
-              }
               onBulkDelete={() => setBulkDeleteOpen(true)}
               onClearSelection={clearSelection}
               onRetry={() => void loadConversations()}
@@ -758,8 +750,6 @@ export default function InboxPage() {
                   composerInputRef={composerInputRef}
                   onBack={() => setSelected(null)}
                   onCallBack={() => void handleCallBack()}
-                  onSnoozeUntil={(untilIso, label) => void handleSnooze(untilIso, label)}
-                  onUnsnooze={() => void handleUnsnooze()}
                   onToggleBot={() => void handleToggleBot()}
                   onSetActiveBot={(botId) => void handleSetActiveBot(botId)}
                   onToggleFavorite={() => void handleToggleFavorite()}

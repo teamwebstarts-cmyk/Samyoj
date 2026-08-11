@@ -2,7 +2,7 @@ import {
   Calendar,
   Eye,
   LayoutTemplate,
-  MoreHorizontal,
+  Pause,
   Pencil,
   Play,
   Send,
@@ -10,11 +10,13 @@ import {
   Users,
 } from 'lucide-react';
 import AppButton from '../ui/AppButton';
+import CampaignActionsMenu from './CampaignActionsMenu';
 import type { Campaign } from '../../types';
 import {
   audienceLabels,
   campaignProgress,
   formatCampaignDate,
+  getCampaignPrimaryAction,
   getStatusMeta,
 } from './campaignUi';
 
@@ -23,6 +25,8 @@ interface CampaignCardProps {
   onView: () => void;
   onEdit?: () => void;
   onSend?: () => void;
+  onPause?: () => void;
+  onResume?: () => void;
   onDelete?: () => void;
 }
 
@@ -31,21 +35,44 @@ export default function CampaignCard({
   onView,
   onEdit,
   onSend,
+  onPause,
+  onResume,
   onDelete,
 }: CampaignCardProps) {
   const meta = getStatusMeta(campaign.status);
   const StatusIcon = meta.icon;
   const progress = campaignProgress(campaign.sentCount, campaign.totalContacts);
-  const scheduledLabel = formatCampaignDate(campaign.scheduledAt);
+  const scheduledLabel = formatCampaignDate(campaign.scheduledAt, campaign.timezone);
   const editable = campaign.status === 'DRAFT' || campaign.status === 'SCHEDULED';
+  const requestedAction = getCampaignPrimaryAction(campaign.status);
+  const primaryAction =
+    requestedAction === 'edit' && !onEdit
+      ? 'view'
+      : requestedAction === 'pause' && !onPause
+        ? 'view'
+        : requestedAction === 'resume' && !onResume
+          ? 'view'
+        : requestedAction;
+  const primaryLabel = primaryAction === 'edit'
+    ? 'Edit'
+    : primaryAction === 'pause'
+      ? 'Pause'
+      : primaryAction === 'resume'
+        ? 'Resume'
+      : campaign.status === 'COMPLETED'
+        ? 'View results'
+        : 'View';
+  const hasOverflowActions =
+    (primaryAction !== 'view' && onView) ||
+    (primaryAction !== 'edit' && onEdit && editable) ||
+    (onSend && editable) ||
+    (primaryAction !== 'pause' && onPause && campaign.status === 'RUNNING') ||
+    (primaryAction !== 'resume' && onResume && campaign.status === 'PAUSED') ||
+    (onDelete && editable);
 
   return (
     <article className="bg-white transition-colors hover:bg-neutral-50/80 dark:bg-neutral-950 dark:hover:bg-neutral-900/50">
-      <button
-        type="button"
-        onClick={onView}
-        className="flex w-full items-start gap-3 px-4 py-3.5 text-left focus:outline-none focus:ring-2 focus:ring-inset focus:ring-violet-500/50"
-      >
+      <div className="flex w-full items-start gap-3 px-4 py-3.5 text-left">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-purple-700 text-white shadow-[0_4px_14px_rgba(139,92,246,0.3)]">
           <Send className="h-4 w-4" strokeWidth={2.25} />
         </div>
@@ -81,6 +108,9 @@ export default function CampaignCard({
                 {scheduledLabel}
               </span>
             )}
+            <span className="text-[10px] font-bold text-theme-secondary">
+              {campaign.totalContacts.toLocaleString()} recipients
+            </span>
           </div>
 
           <div className="mt-2.5">
@@ -103,44 +133,34 @@ export default function CampaignCard({
             </div>
           </div>
 
-          <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-semibold tabular-nums">
-            <span className="text-sky-700 dark:text-sky-400">{campaign.sentCount} sent</span>
-            <span className="text-theme-muted">·</span>
-            <span className="text-emerald-700 dark:text-emerald-400">{campaign.deliveredCount} delivered</span>
-            <span className="text-theme-muted">·</span>
-            <span className="text-violet-700 dark:text-violet-400">{campaign.readCount} read</span>
-            {campaign.failedCount > 0 && (
-              <>
-                <span className="text-theme-muted">·</span>
-                <span className="text-red-600 dark:text-red-400">{campaign.failedCount} failed</span>
-              </>
-            )}
-          </div>
         </div>
-      </button>
+      </div>
 
       <div className="flex items-center gap-2 border-t border-theme-border/60 bg-theme-subtle/20 px-3 py-2.5">
-        {onSend && editable && (
-          <AppButton size="sm" className="flex-1" icon={<Play size={14} />} onClick={onSend}>
-            Send to {campaign.totalContacts.toLocaleString()}
-          </AppButton>
-        )}
-        {(!onSend || !editable) && (
-          <AppButton size="sm" className="flex-1" variant="secondary" icon={<Eye size={14} />} onClick={onView}>
-            View campaign
-          </AppButton>
-        )}
-        <details className="relative">
-          <summary className="flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-xl border border-theme-border bg-theme-surface text-theme-secondary hover:bg-theme-subtle focus:outline-none focus:ring-2 focus:ring-violet-500/40" aria-label="More campaign actions">
-            <MoreHorizontal className="h-4 w-4" />
-          </summary>
-          <div className="absolute bottom-11 right-0 z-20 min-w-[130px] rounded-xl border border-theme-border bg-theme-surface p-1.5 shadow-xl">
-            <button type="button" onClick={onView} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-fg hover:bg-theme-subtle">
-              <Eye className="h-3.5 w-3.5" /> View
-            </button>
-            {onEdit && editable && (
+        <AppButton
+          size="sm"
+          className="flex-1"
+          variant={primaryAction === 'edit' ? 'primary' : 'secondary'}
+          icon={primaryAction === 'edit' ? <Pencil size={14} /> : primaryAction === 'pause' ? <Pause size={14} /> : primaryAction === 'resume' ? <Play size={14} /> : <Eye size={14} />}
+          onClick={primaryAction === 'edit' ? onEdit : primaryAction === 'pause' ? onPause : primaryAction === 'resume' ? onResume : onView}
+          disabled={primaryAction === 'edit' ? !onEdit : primaryAction === 'pause' ? !onPause : primaryAction === 'resume' ? !onResume : !onView}
+        >
+          {primaryLabel}
+        </AppButton>
+        {hasOverflowActions && <CampaignActionsMenu>
+            {primaryAction !== 'view' && onView && (
+              <button type="button" onClick={onView} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-fg hover:bg-theme-subtle">
+                <Eye className="h-3.5 w-3.5" /> View
+              </button>
+            )}
+            {primaryAction !== 'edit' && onEdit && editable && (
               <button type="button" onClick={onEdit} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-fg hover:bg-theme-subtle">
                 <Pencil className="h-3.5 w-3.5" /> Edit
+              </button>
+            )}
+            {onSend && editable && (
+              <button type="button" onClick={onSend} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-fg hover:bg-theme-subtle">
+                <Play className="h-3.5 w-3.5" /> Send
               </button>
             )}
             {onDelete && editable && (
@@ -148,8 +168,8 @@ export default function CampaignCard({
                 <Trash2 className="h-3.5 w-3.5" /> Delete
               </button>
             )}
-          </div>
-        </details>
+          </CampaignActionsMenu>
+        }
       </div>
     </article>
   );

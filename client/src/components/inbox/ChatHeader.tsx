@@ -67,7 +67,7 @@ function HeaderIconButton({
       aria-label={label}
       aria-pressed={pressed}
       {...tipFor(label)}
-      className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border transition disabled:cursor-not-allowed disabled:opacity-45 ${FOCUS_RING_CLASS} ${
+      className={`relative flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border transition disabled:cursor-not-allowed disabled:opacity-45 md:h-9 md:w-9 ${FOCUS_RING_CLASS} ${
         active
           ? 'border-whatsapp-500/50 bg-whatsapp-500/10 text-whatsapp-700 dark:text-whatsapp-400'
           : 'border-theme-border bg-theme-surface text-theme-secondary hover:bg-theme-subtle hover:text-theme-fg'
@@ -163,10 +163,10 @@ export default function ChatHeader({
   };
 
   return (
-    <div className="inbox-chat-header relative z-30 flex shrink-0 items-center gap-3 border-b border-neutral-100/80 px-3 py-3.5 sm:px-4 dark:border-neutral-800/80">
+    <div className="inbox-chat-header relative z-30 flex shrink-0 items-center gap-1.5 border-b border-neutral-100/80 px-2 py-2.5 sm:gap-2 sm:px-3 sm:py-3 md:gap-3 md:px-4 md:py-3.5 dark:border-neutral-800/80">
       <button
         type="button"
-        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-theme-border bg-theme-surface text-theme-secondary transition hover:bg-theme-subtle md:hidden ${FOCUS_RING_CLASS}`}
+        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border border-theme-border bg-theme-surface text-theme-secondary transition hover:bg-theme-subtle md:hidden ${FOCUS_RING_CLASS}`}
         onClick={onBack}
         aria-label="Back to conversations"
         {...tipFor('Back', 'right')}
@@ -184,8 +184,8 @@ export default function ChatHeader({
       />
 
       <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-center gap-1.5">
-          <p className="truncate text-[15px] font-bold tracking-tight text-theme-fg">
+        <div className="flex min-w-0 items-center gap-1">
+          <p className="truncate text-[14px] font-bold tracking-tight text-theme-fg sm:text-[15px]">
             {contact.name || contact.phone}
           </p>
           {isFavorite && (
@@ -208,9 +208,9 @@ export default function ChatHeader({
         <PresenceRow viewers={viewers} />
       </div>
 
-      <div className="flex shrink-0 items-center gap-1.5">
+      <div className="flex shrink-0 items-center gap-0.5 sm:gap-1 md:gap-1.5">
         {serviceWindow === undefined ? (
-          <span className="inbox-skeleton-shimmer hidden h-9 w-[7.5rem] rounded-[10px] sm:block" />
+          <span className="inbox-skeleton-shimmer hidden h-8 w-[6.5rem] rounded-[10px] md:h-9 md:w-[7.5rem] sm:block" />
         ) : (
           <ServiceWindowBadge serviceWindow={serviceWindow} />
         )}
@@ -228,26 +228,34 @@ export default function ChatHeader({
           )}
         </HeaderIconButton>
 
-        <HeaderIconButton label="Search in this chat" onClick={onToggleSearch}>
+        <HeaderIconButton label="Search in this chat" onClick={onToggleSearch} className="max-sm:hidden">
           <Search className="h-4 w-4" strokeWidth={2.1} />
         </HeaderIconButton>
 
-        <HeaderIconButton
-          label={isFavorite ? 'Remove from favourites' : 'Add to favourites'}
-          onClick={handleFavoriteClick}
-          className={
-            isFavorite
-              ? 'border-amber-300/80 bg-amber-50 text-amber-600 hover:bg-amber-100/90 hover:text-amber-700 dark:border-amber-700/50 dark:bg-amber-950/40 dark:text-amber-400'
-              : 'hover:border-amber-200 hover:text-amber-500'
-          }
-        >
-          <Star
-            className={`h-4 w-4 transition-transform duration-200 motion-reduce:transition-none ${
-              isFavorite ? 'fill-amber-400 text-amber-500 dark:fill-amber-400 dark:text-amber-400' : ''
-            } ${starPulse ? 'scale-125' : 'scale-100'}`}
-            strokeWidth={2.1}
-          />
-        </HeaderIconButton>
+        {!isFavorite && (
+          <HeaderIconButton
+            label="Add to favourites"
+            onClick={handleFavoriteClick}
+            className="max-sm:hidden hover:border-amber-200 hover:text-amber-500"
+          >
+            <Star className="h-4 w-4" strokeWidth={2.1} />
+          </HeaderIconButton>
+        )}
+
+        {isFavorite && (
+          <HeaderIconButton
+            label="Remove from favourites"
+            onClick={handleFavoriteClick}
+            className="hidden border-amber-300/80 bg-amber-50 text-amber-600 hover:bg-amber-100/90 hover:text-amber-700 dark:border-amber-700/50 dark:bg-amber-950/40 dark:text-amber-400 sm:flex"
+          >
+            <Star
+              className={`h-4 w-4 fill-amber-400 text-amber-500 transition-transform duration-200 motion-reduce:transition-none dark:fill-amber-400 dark:text-amber-400 ${
+                starPulse ? 'scale-125' : 'scale-100'
+              }`}
+              strokeWidth={2.1}
+            />
+          </HeaderIconButton>
+        )}
 
         <div className="relative">
           <button
@@ -266,29 +274,29 @@ export default function ChatHeader({
                 ? `AI bot live · ${botTipDetail}`
                 : `AI bot off · ${botTipDetail}`
             )}
-            className={`relative flex h-9 max-w-[11.5rem] shrink-0 items-center gap-1.5 rounded-[10px] border px-2 transition disabled:cursor-not-allowed disabled:opacity-45 ${FOCUS_RING_CLASS} ${
+            className={`relative flex h-8 max-w-[11.5rem] shrink-0 items-center gap-1.5 rounded-[10px] border px-2 transition disabled:cursor-not-allowed disabled:opacity-45 md:h-9 ${FOCUS_RING_CLASS} ${
               botMenuOpen
                 ? 'border-whatsapp-500/50 bg-whatsapp-500/10 text-whatsapp-700 dark:text-whatsapp-400'
                 : botIsLive
                   ? 'border-whatsapp-500/40 bg-whatsapp-500/8 text-whatsapp-700 hover:bg-whatsapp-500/12 dark:text-whatsapp-400'
                   : 'border-theme-border bg-theme-surface text-theme-secondary hover:bg-theme-subtle hover:text-theme-fg'
-            }`}
+            } max-md:h-8 max-md:w-8 max-md:justify-center max-md:px-0`}
           >
             <span
-              className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+              className={`h-1.5 w-1.5 shrink-0 rounded-full max-md:absolute max-md:bottom-1 max-md:right-1 ${
                 botIsLive ? 'bg-whatsapp-500' : 'bg-neutral-300 dark:bg-neutral-600'
               }`}
               aria-hidden
             />
             <Bot className="h-4 w-4 shrink-0" strokeWidth={2.1} />
-            <span className="min-w-0 flex-1 truncate text-left text-[12px] font-semibold tracking-tight">
+            <span className="hidden min-w-0 flex-1 truncate text-left text-[12px] font-semibold tracking-tight md:block">
               {botDisplayName}
             </span>
             {botToggling ? (
-              <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin opacity-70" strokeWidth={2.25} />
+              <Loader2 className="hidden h-3.5 w-3.5 shrink-0 animate-spin opacity-70 md:block" strokeWidth={2.25} />
             ) : (
               <ChevronDown
-                className={`h-3.5 w-3.5 shrink-0 opacity-70 transition ${botMenuOpen ? 'rotate-180' : ''}`}
+                className={`hidden h-3.5 w-3.5 shrink-0 opacity-70 transition md:block ${botMenuOpen ? 'rotate-180' : ''}`}
                 strokeWidth={2.25}
               />
             )}
@@ -331,7 +339,7 @@ export default function ChatHeader({
                 ? `Assign · ${conversation.assignedAgent.name}`
                 : 'Assign agent'
             )}
-            className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-theme-border bg-theme-surface text-emerald-600 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-45 dark:hover:bg-emerald-950/40 ${FOCUS_RING_CLASS} ${
+            className={`relative flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border border-theme-border bg-theme-surface text-emerald-600 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-45 dark:hover:bg-emerald-950/40 md:h-9 md:w-9 ${FOCUS_RING_CLASS} ${
               assignOpen ? 'border-whatsapp-500/50 bg-whatsapp-500/10' : ''
             }`}
           >

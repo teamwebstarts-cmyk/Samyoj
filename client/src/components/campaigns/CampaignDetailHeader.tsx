@@ -35,7 +35,7 @@ export default function CampaignDetailHeader({ campaign }: CampaignDetailHeaderP
 
       <p className="mt-3 text-lg font-extrabold tracking-tight text-theme-fg">{campaign.name}</p>
 
-      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
         {[
           { label: 'Recipients', value: campaign.totalContacts },
           { label: 'Sent', value: campaign.sentCount, tone: 'text-sky-700 dark:text-sky-400' },
@@ -45,6 +45,7 @@ export default function CampaignDetailHeader({ campaign }: CampaignDetailHeaderP
             tone: 'text-emerald-700 dark:text-emerald-400',
           },
           { label: 'Read', value: campaign.readCount, tone: 'text-violet-700 dark:text-violet-400' },
+          { label: 'Failed', value: campaign.failedCount, tone: 'text-red-600 dark:text-red-400' },
         ].map((stat) => (
           <div
             key={stat.label}

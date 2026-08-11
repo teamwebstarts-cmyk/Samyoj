@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  ChevronDown,
   FileText,
   Image,
   IndianRupee,
@@ -20,6 +19,20 @@ import type { CannedReply } from '../../types';
 import { VOICE_MAX_SECONDS } from './mediaLimits';
 import { emitChatNotice } from './chatNoticeBus';
 import { composerTipProps, useInboxGlassTip } from './ComposerGlassTip';
+
+function useMinWidth(minPx: number) {
+  const [matches, setMatches] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia(`(min-width: ${minPx}px)`).matches
+  );
+  useEffect(() => {
+    const mq = window.matchMedia(`(min-width: ${minPx}px)`);
+    const update = () => setMatches(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, [minPx]);
+  return matches;
+}
 
 export interface PendingAttachment {
   file: File;
@@ -186,12 +199,13 @@ export default function ChatComposer({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const localTextareaRef = useRef<HTMLTextAreaElement>(null);
   const textareaRef = inputRef ?? localTextareaRef;
-  const attachBtnRef = useRef<HTMLButtonElement>(null);
+  const attachBtnMobileRef = useRef<HTMLButtonElement>(null);
+  const attachBtnDesktopRef = useRef<HTMLButtonElement>(null);
   const emojiBtnRef = useRef<HTMLButtonElement>(null);
-  const sendMenuBtnRef = useRef<HTMLButtonElement>(null);
+  const isMdUp = useMinWidth(768);
+  const attachMenuAnchorRef = isMdUp ? attachBtnDesktopRef : attachBtnMobileRef;
   const [attachMenuOpen, setAttachMenuOpen] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
-  const [sendMenuOpen, setSendMenuOpen] = useState(false);
   const [sendAnim, setSendAnim] = useState<'punch' | 'shake' | null>(null);
   const [shortcutIndex, setShortcutIndex] = useState(0);
   const [recording, setRecording] = useState(false);
@@ -298,7 +312,6 @@ export default function ChatComposer({
     }
     setAttachMenuOpen(false);
     setEmojiOpen(false);
-    setSendMenuOpen(false);
     textareaRef.current?.focus();
   };
 
@@ -421,18 +434,18 @@ export default function ChatComposer({
 
   // Esc closes popovers from anywhere in the composer.
   useEffect(() => {
-    if (!attachMenuOpen && !emojiOpen && !slashMenuOpen && !sendMenuOpen) return;
+    if (!attachMenuOpen && !emojiOpen && !slashMenuOpen) return;
     const onKey = (e: globalThis.KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       if (shortcutMatch) {
         onChange('');
         setShortcutIndex(0);
       }
-      closeAllMenus([setAttachMenuOpen, setEmojiOpen, setSendMenuOpen]);
+      closeAllMenus([setAttachMenuOpen, setEmojiOpen]);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [attachMenuOpen, emojiOpen, slashMenuOpen, sendMenuOpen, shortcutMatch, onChange]);
+  }, [attachMenuOpen, emojiOpen, slashMenuOpen, shortcutMatch, onChange]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -444,7 +457,6 @@ export default function ChatComposer({
   const openFilePicker = (accept: string) => {
     setAttachMenuOpen(false);
     setEmojiOpen(false);
-    setSendMenuOpen(false);
     // Defer until portaled menu/backdrop unmounts so the native picker isn't blocked.
     window.setTimeout(() => {
       if (fileInputRef.current) {
@@ -485,7 +497,6 @@ export default function ChatComposer({
     }
     setSendAnim('punch');
     window.setTimeout(() => setSendAnim(null), 180);
-    setSendMenuOpen(false);
     if (closeAfter && onSendAndClose) {
       onSendAndClose(e as FormEvent);
     } else {
@@ -520,12 +531,15 @@ export default function ChatComposer({
         onChange('');
         setShortcutIndex(0);
       }
-      closeAllMenus([setEmojiOpen, setAttachMenuOpen, setSendMenuOpen]);
+      closeAllMenus([setEmojiOpen, setAttachMenuOpen]);
     }
   };
 
   const toolBtn =
     'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-800 disabled:opacity-40 dark:hover:bg-neutral-800 dark:hover:text-neutral-200';
+
+  const sendBtnClass = (extra = '') =>
+    `inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition disabled:cursor-not-allowed disabled:from-neutral-300 disabled:to-neutral-400 disabled:shadow-none ${extra}`;
 
   const menuItem =
     'flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-[13px] text-theme-secondary hover:bg-theme-subtle';
@@ -536,7 +550,7 @@ export default function ChatComposer({
         e.preventDefault();
         triggerSend(e);
       }}
-      className="relative z-20 border-t border-neutral-100 bg-theme-surface/95 px-3 py-2.5 backdrop-blur-md sm:px-4 dark:border-neutral-800/80"
+      className="relative z-20 border-t border-neutral-100 bg-theme-surface/95 px-2 py-2 backdrop-blur-md sm:px-3 sm:py-2.5 md:px-4 dark:border-neutral-800/80"
     >
       {replyToPreview && (
         <div className="mb-2 flex items-start gap-2 rounded-xl border-l-4 border-whatsapp-500 bg-neutral-50/90 px-2.5 py-2 dark:bg-neutral-900/50">
@@ -711,7 +725,7 @@ export default function ChatComposer({
 
       <ComposerPortalMenu
         open={attachMenuOpen}
-        anchorRef={attachBtnRef}
+        anchorRef={attachMenuAnchorRef}
         align="left"
         widthClass="w-48"
         onClose={() => setAttachMenuOpen(false)}
@@ -773,172 +787,174 @@ export default function ChatComposer({
         )}
       </ComposerPortalMenu>
 
-      <ComposerPortalMenu
-        open={sendMenuOpen}
-        anchorRef={sendMenuBtnRef}
-        align="right"
-        widthClass="w-52"
-        onClose={() => setSendMenuOpen(false)}
-      >
+      <div className="flex items-end gap-1.5 md:block">
         <button
+          ref={attachBtnMobileRef}
           type="button"
-          role="menuitem"
-          className={menuItem}
-          onClick={(e) => triggerSend(e)}
+          className={`${toolBtn} md:hidden`}
+          aria-label="Attach"
+          aria-expanded={attachMenuOpen}
+          {...tipFor('Attach')}
+          onClick={(e) => {
+            e.stopPropagation();
+            onHideTip();
+            setAttachMenuOpen((v) => !v);
+            setEmojiOpen(false);
+          }}
         >
-          Send
+          <Paperclip size={20} strokeWidth={2} />
         </button>
-        {onSendAndClose && (
-          <button
-            type="button"
-            role="menuitem"
-            disabled={!canSend}
-            className={`${menuItem} disabled:cursor-not-allowed disabled:opacity-50`}
-            onClick={(e) => triggerSend(e, true)}
-          >
-            Send &amp; mark done
-          </button>
-        )}
-      </ComposerPortalMenu>
 
-      <div className="rounded-2xl border border-chat-input-border bg-chat-input-bg ring-1 ring-chat-input-border/40 transition focus-within:border-slate-400/70 focus-within:ring-slate-400/15 dark:focus-within:border-slate-500/60 dark:focus-within:ring-slate-500/15">
-        <textarea
-          ref={textareaRef}
-          rows={1}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={onKeyDown}
-          placeholder={attachment ? 'Add a caption (optional)...' : 'Type a message...'}
-          className="max-h-36 min-h-[40px] w-full resize-none border-0 bg-transparent px-3.5 pb-1 pt-2.5 text-[14px] leading-snug text-theme-fg placeholder:text-theme-muted focus:outline-none"
-        />
+        <div className="min-w-0 flex-1 rounded-3xl border border-chat-input-border bg-chat-input-bg ring-1 ring-chat-input-border/40 transition focus-within:border-slate-400/70 focus-within:ring-slate-400/15 md:rounded-2xl dark:focus-within:border-slate-500/60 dark:focus-within:ring-slate-500/15">
+          <textarea
+            ref={textareaRef}
+            rows={1}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            onKeyDown={onKeyDown}
+            placeholder={attachment ? 'Add a caption (optional)...' : 'Type a message...'}
+            className="max-h-36 min-h-[38px] w-full resize-none border-0 bg-transparent px-3 pb-1.5 pt-2 text-[14px] leading-snug text-theme-fg placeholder:text-theme-muted focus:outline-none md:min-h-[40px] md:px-3.5 md:pb-1 md:pt-2.5"
+          />
 
-        <div className="flex items-center gap-0.5 px-2 pb-2 pt-0.5">
-          <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
-            <button
-              ref={emojiBtnRef}
-              type="button"
-              className={toolBtn}
-              aria-label="Emoji"
-              aria-expanded={emojiOpen}
-              {...tipFor('Emoji')}
-              onClick={() => {
-                setEmojiOpen((v) => !v);
-                setAttachMenuOpen(false);
-                setSendMenuOpen(false);
-              }}
-            >
-              <Smile size={18} strokeWidth={2} />
-            </button>
-
-            <div className="relative">
+          <div className="hidden items-center gap-0.5 px-2 pb-2 pt-0.5 md:flex">
+            <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <button
-                ref={attachBtnRef}
+                ref={emojiBtnRef}
                 type="button"
                 className={toolBtn}
-                aria-label="Attach"
-                aria-expanded={attachMenuOpen}
-                {...tipFor('Attach')}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onHideTip();
-                  setAttachMenuOpen((v) => !v);
-                  setEmojiOpen(false);
-                  setSendMenuOpen(false);
+                aria-label="Emoji"
+                aria-expanded={emojiOpen}
+                {...tipFor('Emoji')}
+                onClick={() => {
+                  setEmojiOpen((v) => !v);
+                  setAttachMenuOpen(false);
                 }}
               >
-                <Paperclip size={18} strokeWidth={2} />
+                <Smile size={18} strokeWidth={2} />
               </button>
-            </div>
 
-            <button
-              type="button"
-              className={toolBtn}
-              aria-label="Photo"
-              {...tipFor('Photo')}
-              onClick={() => openFilePicker('image/*')}
-            >
-              <Image size={18} strokeWidth={2} />
-            </button>
-            <button
-              type="button"
-              className={toolBtn}
-              aria-label="PDF"
-              {...tipFor('PDF')}
-              onClick={() => openFilePicker('application/pdf,.pdf')}
-            >
-              <FileText size={18} strokeWidth={2} />
-            </button>
-            <button
-              type="button"
-              className={toolBtn}
-              aria-label="Quick replies"
-              aria-expanded={slashMenuOpen}
-              disabled={cannedReplies.length === 0 || recording}
-              {...tipFor('Quick replies · also in Details')}
-              onClick={toggleSlashMenu}
-            >
-              <Zap size={16} strokeWidth={2} />
-            </button>
-            {canRecord && (
+              <div className="relative">
+                <button
+                  ref={attachBtnDesktopRef}
+                  type="button"
+                  className={toolBtn}
+                  aria-label="Attach"
+                  aria-expanded={attachMenuOpen}
+                  {...tipFor('Attach')}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onHideTip();
+                    setAttachMenuOpen((v) => !v);
+                    setEmojiOpen(false);
+                  }}
+                >
+                  <Paperclip size={18} strokeWidth={2} />
+                </button>
+              </div>
+
               <button
                 type="button"
-                className={`${toolBtn} ${recording ? 'text-red-600' : ''}`}
-                aria-label={recording ? 'Stop recording' : 'Voice note'}
-                {...tipFor(recording ? 'Stop' : 'Voice note')}
-                onClick={() => (recording ? stopRecording(false) : void startRecording())}
+                className={toolBtn}
+                aria-label="Photo"
+                {...tipFor('Photo')}
+                onClick={() => openFilePicker('image/*')}
               >
-                <Mic size={18} strokeWidth={2} />
+                <Image size={18} strokeWidth={2} />
               </button>
-            )}
-          </div>
+              <button
+                type="button"
+                className={toolBtn}
+                aria-label="PDF"
+                {...tipFor('PDF')}
+                onClick={() => openFilePicker('application/pdf,.pdf')}
+              >
+                <FileText size={18} strokeWidth={2} />
+              </button>
+              <button
+                type="button"
+                className={toolBtn}
+                aria-label="Quick replies"
+                aria-expanded={slashMenuOpen}
+                disabled={cannedReplies.length === 0 || recording}
+                {...tipFor('Quick replies · also in Details')}
+                onClick={toggleSlashMenu}
+              >
+                <Zap size={16} strokeWidth={2} />
+              </button>
+              {canRecord && (
+                <button
+                  type="button"
+                  className={`${toolBtn} ${recording ? 'text-red-600' : ''}`}
+                  aria-label={recording ? 'Stop recording' : 'Voice note'}
+                  {...tipFor(recording ? 'Stop' : 'Voice note')}
+                  onClick={() => (recording ? stopRecording(false) : void startRecording())}
+                >
+                  <Mic size={18} strokeWidth={2} />
+                </button>
+              )}
+            </div>
 
-          <div className="flex shrink-0 items-center gap-1.5 pl-1">
-            <button
-              type="button"
-              className={`${toolBtn} text-[13px] font-semibold text-neutral-400 hover:text-neutral-700 dark:text-neutral-500 dark:hover:text-neutral-200`}
-              aria-label="Quick replies"
-              aria-expanded={slashMenuOpen}
-              disabled={recording || cannedReplies.length === 0}
-              {...tipFor('Type / for quick replies')}
-              onClick={toggleSlashMenu}
-            >
-              /
-            </button>
+            <div className="flex shrink-0 items-center gap-1.5 pl-1">
+              <button
+                type="button"
+                className={`${toolBtn} text-[13px] font-semibold text-neutral-400 hover:text-neutral-700 dark:text-neutral-500 dark:hover:text-neutral-200`}
+                aria-label="Quick replies"
+                aria-expanded={slashMenuOpen}
+                disabled={recording || cannedReplies.length === 0}
+                {...tipFor('Type / for quick replies')}
+                onClick={toggleSlashMenu}
+              >
+                /
+              </button>
 
-            <div className="relative flex rounded-xl shadow-[0_4px_14px_rgba(37,211,102,0.35)]">
               <button
                 type="submit"
                 disabled={!canSend}
                 aria-label="Send"
                 {...tipFor('Send')}
-                className={`inline-flex h-9 items-center gap-1.5 rounded-l-xl bg-gradient-to-br from-whatsapp-500 to-whatsapp-600 px-3.5 text-[13px] font-bold text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:from-neutral-300 disabled:to-neutral-400 disabled:shadow-none ${
-                  sendAnim === 'punch' ? 'inbox-send-punch' : sendAnim === 'shake' ? 'inbox-send-shake' : ''
-                }`}
+                className={sendBtnClass(
+                  `bg-gradient-to-br from-whatsapp-500 to-whatsapp-600 text-white shadow-[0_4px_14px_rgba(37,211,102,0.35)] hover:brightness-105 ${
+                    sendAnim === 'punch' ? 'inbox-send-punch' : sendAnim === 'shake' ? 'inbox-send-shake' : ''
+                  }`
+                )}
               >
-                <SendHorizontal size={15} strokeWidth={2.25} />
-                Send
-              </button>
-              <button
-                ref={sendMenuBtnRef}
-                type="button"
-                aria-label="Send options"
-                aria-expanded={sendMenuOpen}
-                disabled={!canSend}
-                {...tipFor('Send options')}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onHideTip();
-                  setSendMenuOpen((v) => !v);
-                  setAttachMenuOpen(false);
-                  setEmojiOpen(false);
-                }}
-                className="inline-flex h-9 w-8 items-center justify-center rounded-r-xl border-l border-white/25 bg-gradient-to-br from-whatsapp-500 to-whatsapp-600 text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:from-neutral-300 disabled:to-neutral-400"
-              >
-                <ChevronDown size={14} strokeWidth={2.5} />
+                <SendHorizontal size={18} strokeWidth={2.25} />
               </button>
             </div>
           </div>
         </div>
+
+        {!recording && (
+          <div className="flex shrink-0 md:hidden">
+            {canSend ? (
+              <button
+                type="submit"
+                disabled={!canSend}
+                aria-label="Send"
+                {...tipFor('Send')}
+                className={sendBtnClass(
+                  `bg-gradient-to-br from-whatsapp-500 to-whatsapp-600 text-white shadow-[0_4px_14px_rgba(37,211,102,0.35)] hover:brightness-105 ${
+                    sendAnim === 'punch' ? 'inbox-send-punch' : sendAnim === 'shake' ? 'inbox-send-shake' : ''
+                  }`
+                )}
+              >
+                <SendHorizontal size={18} strokeWidth={2.25} />
+              </button>
+            ) : canRecord ? (
+              <button
+                type="button"
+                className={sendBtnClass(
+                  'bg-neutral-200 text-neutral-600 hover:bg-neutral-300 dark:bg-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-600'
+                )}
+                aria-label="Voice note"
+                {...tipFor('Voice note')}
+                onClick={() => void startRecording()}
+              >
+                <Mic size={18} strokeWidth={2} />
+              </button>
+            ) : null}
+          </div>
+        )}
       </div>
     </form>
   );

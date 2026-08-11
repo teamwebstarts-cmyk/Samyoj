@@ -15,7 +15,7 @@ export function campaignProgress(sent: number, total: number) {
   return Math.min(100, Math.round((sent / total) * 100));
 }
 
-export function formatCampaignDate(iso?: string) {
+export function formatCampaignDate(iso?: string, timezone?: string) {
   if (!iso) return null;
   try {
     return new Intl.DateTimeFormat(undefined, {
@@ -23,6 +23,7 @@ export function formatCampaignDate(iso?: string) {
       day: 'numeric',
       hour: 'numeric',
       minute: '2-digit',
+      ...(timezone ? { timeZone: timezone, timeZoneName: 'short' } : {}),
     }).format(new Date(iso));
   } catch {
     return null;
@@ -93,6 +94,15 @@ export function getStatusMeta(status: string) {
       bar: 'from-violet-400 to-purple-600',
     }
   );
+}
+
+export type CampaignPrimaryAction = 'edit' | 'pause' | 'resume' | 'view';
+
+export function getCampaignPrimaryAction(status: string): CampaignPrimaryAction {
+  if (status === 'DRAFT' || status === 'SCHEDULED') return 'edit';
+  if (status === 'RUNNING') return 'pause';
+  if (status === 'PAUSED') return 'resume';
+  return 'view';
 }
 
 export const audienceLabels: Record<string, string> = {

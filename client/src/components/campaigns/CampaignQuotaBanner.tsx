@@ -49,7 +49,7 @@ export default function CampaignQuotaBanner() {
         </div>
       </div>
       <Link
-        to="/settings"
+        to="/settings?tab=campaigns"
         className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-lg px-2 py-1.5 text-[11px] font-bold text-theme-secondary transition hover:bg-theme-surface hover:text-sky-700 sm:self-auto"
       >
         <Settings className="h-3.5 w-3.5" />

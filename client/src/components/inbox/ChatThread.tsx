@@ -72,8 +72,6 @@ interface ChatThreadProps {
   composerInputRef?: RefObject<HTMLTextAreaElement>;
   onBack: () => void;
   onCallBack: () => void;
-  onSnoozeUntil: (untilIso: string, label: string) => void;
-  onUnsnooze: () => void;
   onToggleBot: () => void;
   onSetActiveBot?: (botId: string | null) => void;
   onToggleFavorite: () => void;

@@ -11,7 +11,7 @@ import { getAvatarGradient, getInitials } from './inboxUtils';
 
 const AGENT_MENU_WIDTH = 240;
 const AGENT_MENU_GAP = 8;
-const AGENT_VISIBLE_COUNT = 4;
+const AGENT_VISIBLE_COUNT = 3;
 
 export type ListChip = 'all' | 'unread' | 'unreplied' | 'open' | 'favourites' | 'pending' | 'hasTicket' | 'botActive';
 
@@ -123,8 +123,8 @@ export default function InboxListHeader({
   const isConnected = hasConnectedNumber && !numberLoading;
   const selectableAgents = agentOptions.filter((option) => option.value !== '');
   const visibleAgents = selectableAgents.slice(0, AGENT_VISIBLE_COUNT);
-  const overflowAgents = selectableAgents.slice(AGENT_VISIBLE_COUNT);
-  const hasOverflowAgents = overflowAgents.length > 0;
+  const hiddenActiveFilter =
+    Boolean(agentFilter) && !visibleAgents.some((agent) => agent.value === agentFilter);
 
   useLayoutEffect(() => {
     if (!agentsMenuOpen || !agentsMenuBtnRef.current) {
@@ -145,7 +145,7 @@ export default function InboxListHeader({
       window.removeEventListener('resize', place);
       window.removeEventListener('scroll', place, true);
     };
-  }, [agentsMenuOpen, overflowAgents.length]);
+  }, [agentsMenuOpen, selectableAgents.length]);
 
   useEffect(() => {
     if (!agentsMenuOpen) return;
@@ -270,7 +270,7 @@ export default function InboxListHeader({
             value={search}
             onChange={onSearchChange}
             placeholder="Search inbox"
-            className="min-w-0 flex-1 [&_input]:!h-8 [&_input]:rounded-lg [&_input]:!bg-theme-surface [&_input]:!text-[13px] [&_input]:!shadow-none [&_svg]:left-2.5 [&_svg]:!h-3.5 [&_svg]:!w-3.5 [&_input]:!pl-8"
+            className="min-w-0 flex-1 [&_input]:!h-8 [&_input]:rounded-lg [&_input]:!bg-theme-surface [&_input]:!text-[14px] [&_input]:!shadow-none [&_svg]:left-2.5 [&_svg]:!h-3.5 [&_svg]:!w-3.5 [&_input]:!pl-8"
           />
 
           {selectableAgents.length > 0 && (
@@ -287,89 +287,84 @@ export default function InboxListHeader({
                   />
                 ))}
               </div>
-              {hasOverflowAgents && (
-                <div className="relative -ml-2 shrink-0">
-                  <button
-                    ref={agentsMenuBtnRef}
-                    type="button"
-                    onClick={() => setAgentsMenuOpen((open) => !open)}
-                    aria-expanded={agentsMenuOpen}
-                    aria-haspopup="menu"
-                    aria-label="More agents"
-                    data-testid="inbox-agent-overflow"
-                    {...tipFor('More agents')}
-                    className={`relative z-0 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ring-2 ring-white transition hover:z-20 dark:ring-neutral-950 ${FOCUS_RING_CLASS} ${
-                      agentsMenuOpen || overflowAgents.some((agent) => agent.value === agentFilter)
-                        ? 'bg-whatsapp-500/15 text-whatsapp-700 ring-whatsapp-500/40 dark:text-whatsapp-400'
-                        : 'bg-neutral-100 text-neutral-500 hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700'
-                    }`}
-                  >
-                    {overflowAgents.length === 1 ? (
-                      <span
-                        className={`flex h-full w-full items-center justify-center rounded-full bg-gradient-to-br text-[9px] font-bold text-white ${getAvatarGradient(overflowAgents[0].avatarKey || overflowAgents[0].label)}`}
-                      >
-                        {getInitials(overflowAgents[0].label, overflowAgents[0].avatarKey)}
-                      </span>
-                    ) : (
-                      <MoreHorizontal className="h-3.5 w-3.5" strokeWidth={2.25} />
-                    )}
-                  </button>
-                  {agentsMenuOpen &&
-                    agentsMenuPos &&
-                    createPortal(
-                      <div
-                        ref={agentsMenuRef}
-                        role="menu"
-                        aria-label="Filter by agent"
-                        data-testid="inbox-agent-menu"
-                        style={{
-                          top: agentsMenuPos.top,
-                          right: agentsMenuPos.right,
-                          width: AGENT_MENU_WIDTH,
+              <div className="relative -ml-1 shrink-0">
+                <button
+                  ref={agentsMenuBtnRef}
+                  type="button"
+                  onClick={() => setAgentsMenuOpen((open) => !open)}
+                  aria-expanded={agentsMenuOpen}
+                  aria-haspopup="menu"
+                  aria-label="All agents"
+                  data-testid="inbox-agent-overflow"
+                  {...tipFor('All agents')}
+                  className={`relative z-0 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ring-2 ring-white transition hover:z-20 dark:ring-neutral-950 ${FOCUS_RING_CLASS} ${
+                    agentsMenuOpen || hiddenActiveFilter
+                      ? 'bg-whatsapp-500/15 text-whatsapp-700 ring-whatsapp-500/40 dark:text-whatsapp-400'
+                      : 'bg-neutral-100 text-neutral-500 hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700'
+                  }`}
+                >
+                  <MoreHorizontal className="h-3.5 w-3.5" strokeWidth={2.25} />
+                </button>
+                {agentsMenuOpen &&
+                  agentsMenuPos &&
+                  createPortal(
+                    <div
+                      ref={agentsMenuRef}
+                      role="menu"
+                      aria-label="Filter by agent"
+                      data-testid="inbox-agent-menu"
+                      style={{
+                        top: agentsMenuPos.top,
+                        right: agentsMenuPos.right,
+                        width: AGENT_MENU_WIDTH,
+                      }}
+                      className="fixed z-[80] max-h-64 overflow-y-auto rounded-xl border border-theme-border bg-theme-surface py-1 shadow-panel"
+                    >
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          onAgentFilterChange('');
+                          setAgentsMenuOpen(false);
                         }}
-                        className="fixed z-[80] overflow-hidden rounded-xl border border-theme-border bg-theme-surface py-1 shadow-panel"
+                        className={`flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-[13px] font-semibold transition ${FOCUS_RING_CLASS} ${
+                          !agentFilter
+                            ? 'bg-whatsapp-500/10 text-whatsapp-800 dark:text-whatsapp-300'
+                            : 'text-theme-fg hover:bg-theme-subtle'
+                        }`}
                       >
-                        {agentFilter && (
+                        <span className="flex h-7 w-7 items-center justify-center rounded-full border border-dashed border-neutral-300 text-[10px] font-bold text-neutral-400">
+                          <User className="h-3.5 w-3.5" strokeWidth={2.25} />
+                        </span>
+                        All agents
+                      </button>
+                      {selectableAgents.map((agent) => {
+                        const active = agentFilter === agent.value;
+                        return (
                           <button
+                            key={agent.value}
                             type="button"
                             role="menuitem"
-                            onClick={() => onAgentFilterChange('')}
-                            className={`flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-[13px] font-semibold text-theme-fg transition hover:bg-theme-subtle ${FOCUS_RING_CLASS}`}
+                            onClick={() => toggleAgentFilter(agent.value)}
+                            className={`flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-[13px] font-semibold transition ${FOCUS_RING_CLASS} ${
+                              active
+                                ? 'bg-whatsapp-500/10 text-whatsapp-800 dark:text-whatsapp-300'
+                                : 'text-theme-fg hover:bg-theme-subtle'
+                            }`}
                           >
-                            <span className="flex h-7 w-7 items-center justify-center rounded-full border border-dashed border-neutral-300 text-[10px] font-bold text-neutral-400">
-                              <User className="h-3.5 w-3.5" strokeWidth={2.25} />
-                            </span>
-                            All agents
-                          </button>
-                        )}
-                        {overflowAgents.map((agent) => {
-                          const active = agentFilter === agent.value;
-                          return (
-                            <button
-                              key={agent.value}
-                              type="button"
-                              role="menuitem"
-                              onClick={() => toggleAgentFilter(agent.value)}
-                              className={`flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-[13px] font-semibold transition ${FOCUS_RING_CLASS} ${
-                                active
-                                  ? 'bg-whatsapp-500/10 text-whatsapp-800 dark:text-whatsapp-300'
-                                  : 'text-theme-fg hover:bg-theme-subtle'
-                              }`}
+                            <span
+                              className={`flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br text-[10px] font-bold text-white ${getAvatarGradient(agent.avatarKey || agent.label)}`}
                             >
-                              <span
-                                className={`flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br text-[10px] font-bold text-white ${getAvatarGradient(agent.avatarKey || agent.label)}`}
-                              >
-                                {getInitials(agent.label, agent.avatarKey)}
-                              </span>
-                              <span className="min-w-0 flex-1 truncate">{agent.label}</span>
-                            </button>
-                          );
-                        })}
-                      </div>,
-                      document.body
-                    )}
-                </div>
-              )}
+                              {getInitials(agent.label, agent.avatarKey)}
+                            </span>
+                            <span className="min-w-0 flex-1 truncate">{agent.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>,
+                    document.body
+                  )}
+              </div>
             </div>
           )}
         </div>
@@ -390,7 +385,7 @@ export default function InboxListHeader({
                 aria-selected={active}
                 data-testid={`inbox-filter-chip-${item.chip}`}
                 onClick={() => onChipChange(item.chip)}
-                className={`inline-flex h-6 w-full items-center justify-center rounded-md px-0.5 text-[10px] font-semibold transition ${FOCUS_RING_CLASS} ${
+                className={`inline-flex h-7 w-full items-center justify-center rounded-md px-0.5 text-[11px] font-semibold transition ${FOCUS_RING_CLASS} ${
                   active
                     ? 'bg-whatsapp-600 text-white shadow-[0_1px_2px_rgba(37,211,102,0.28)] dark:bg-whatsapp-500'
                     : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700'

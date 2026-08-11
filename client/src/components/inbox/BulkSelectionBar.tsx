@@ -1,7 +1,6 @@
 import { useRef, useState } from 'react';
-import { AlarmClock, CheckCircle2, Loader2, Trash2, UserPlus, X } from 'lucide-react';
+import { CheckCircle2, Loader2, Trash2, UserPlus, X } from 'lucide-react';
 import AssignAgentPopover from './AssignAgentPopover';
-import SnoozePopover from './SnoozePopover';
 import { useGlassTipProps } from './ComposerGlassTip';
 import { FOCUS_RING_CLASS } from '../../hooks/inboxA11y';
 import type { TeamAgent } from '../../types';
@@ -13,7 +12,6 @@ interface BulkSelectionBarProps {
   busy: boolean;
   onAssign: (agent: { id: string; name: string }) => void;
   onCloseChats: () => void;
-  onSnoozeUntil: (untilIso: string, label: string) => void;
   onDelete: () => void;
   onClear: () => void;
 }
@@ -31,15 +29,12 @@ export default function BulkSelectionBar({
   busy,
   onAssign,
   onCloseChats,
-  onSnoozeUntil,
   onDelete,
   onClear,
 }: BulkSelectionBarProps) {
   const tipFor = useGlassTipProps();
   const [assignOpen, setAssignOpen] = useState(false);
-  const [snoozeOpen, setSnoozeOpen] = useState(false);
   const assignBtnRef = useRef<HTMLButtonElement>(null);
-  const snoozeBtnRef = useRef<HTMLButtonElement>(null);
 
   return (
     <div className="@container inbox-modal-enter sticky top-0 z-40 flex shrink-0 items-center gap-1 border-b border-neutral-100 bg-theme-surface/95 px-2 py-2 backdrop-blur-md dark:border-neutral-800/80 motion-reduce:animate-none @[300px]:gap-1.5 @[300px]:px-3">
@@ -60,10 +55,7 @@ export default function BulkSelectionBar({
           aria-label="Assign"
           aria-expanded={assignOpen}
           {...tipFor('Assign')}
-          onClick={() => {
-            setAssignOpen((v) => !v);
-            setSnoozeOpen(false);
-          }}
+          onClick={() => setAssignOpen((v) => !v)}
           className={`${ACTION_BTN} ${FOCUS_RING_CLASS}`}
         >
           <UserPlus className="h-3.5 w-3.5 text-emerald-600" strokeWidth={2.25} />
@@ -96,34 +88,6 @@ export default function BulkSelectionBar({
           <CheckCircle2 className="h-3.5 w-3.5 text-neutral-500" strokeWidth={2.25} />
           <span className="hidden @[300px]:inline">Close</span>
         </button>
-
-        <button
-          ref={snoozeBtnRef}
-          type="button"
-          disabled={busy}
-          aria-label="Snooze"
-          aria-expanded={snoozeOpen}
-          {...tipFor('Snooze')}
-          onClick={() => {
-            setSnoozeOpen((v) => !v);
-            setAssignOpen(false);
-          }}
-          className={`${ACTION_BTN} ${FOCUS_RING_CLASS}`}
-        >
-          <AlarmClock className="h-3.5 w-3.5 text-indigo-500" strokeWidth={2.25} />
-          <span className="hidden @[300px]:inline">Snooze</span>
-        </button>
-        {snoozeOpen && (
-          <SnoozePopover
-            anchorRef={snoozeBtnRef}
-            onSnooze={(untilIso, label) => {
-              onSnoozeUntil(untilIso, label);
-              setSnoozeOpen(false);
-            }}
-            onUnsnooze={() => setSnoozeOpen(false)}
-            onClose={() => setSnoozeOpen(false)}
-          />
-        )}
 
         <button
           type="button"
