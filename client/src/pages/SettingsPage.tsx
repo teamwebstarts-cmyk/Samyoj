@@ -44,7 +44,8 @@ import type { AiUsageSummary, BusinessHours, OrgAiSettings } from '../types';
 import type { ReadinessCheck } from '../components/settings/SettingsReadinessBanner';
 import { toastError, toastSuccess } from '../utils/toast';
 import { formatPhoneDisplay } from '../utils/formatPhone';
-import { isWaOAuthMessage, startWhatsAppOAuth } from '../utils/whatsappOAuth';
+import { handleWaOAuthPopupClosed, startWhatsAppOAuth } from '../utils/whatsappOAuth';
+import { useWaOAuthPopupListener } from '../hooks/useWaOAuthPopupListener';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -266,7 +267,31 @@ export default function SettingsPage() {
     const popupClosedPoll = window.setInterval(() => {
       if (popup && popup.closed) {
         window.clearInterval(popupClosedPoll);
-        setConnecting(false);
+        handleWaOAuthPopupClosed(
+          (event) => {
+            setConnecting(false);
+            if (event.status === 'success') {
+              console.info('[wa-oauth] Popup reported success', event.phoneNumber);
+              toastSuccess(event.message || 'WhatsApp connected');
+              load();
+              void refreshNumbers();
+              return;
+            }
+            if (event.status === 'cancel') {
+              console.info('[wa-oauth] Popup cancelled');
+              toastSuccess(event.message || 'Connection cancelled — you are still signed in.');
+              return;
+            }
+            console.error('[wa-oauth] Popup reported error', event.message);
+            toastError(event.message || 'WhatsApp connection failed');
+          },
+          {
+            onClosedWithoutResult: () => {
+              setConnecting(false);
+              void refreshNumbers();
+            },
+          }
+        );
       }
     }, 500);
   };
@@ -293,29 +318,23 @@ export default function SettingsPage() {
     beginWhatsAppOAuth(connectUrl);
   };
 
-  useEffect(() => {
-    const onMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
-      if (!isWaOAuthMessage(event.data)) return;
-      setConnecting(false);
-      if (event.data.status === 'success') {
-        console.info('[wa-oauth] Popup reported success', event.data.phoneNumber);
-        toastSuccess(event.data.message || 'WhatsApp connected');
-        load();
-        void refreshNumbers();
-        return;
-      }
-      if (event.data.status === 'cancel') {
-        console.info('[wa-oauth] Popup cancelled');
-        toastSuccess(event.data.message || 'Connection cancelled — you are still signed in.');
-        return;
-      }
-      console.error('[wa-oauth] Popup reported error', event.data.message);
-      toastError(event.data.message || 'WhatsApp connection failed');
-    };
-    window.addEventListener('message', onMessage);
-    return () => window.removeEventListener('message', onMessage);
-  }, [refreshNumbers]);
+  useWaOAuthPopupListener((event) => {
+    setConnecting(false);
+    if (event.status === 'success') {
+      console.info('[wa-oauth] Popup reported success', event.phoneNumber);
+      toastSuccess(event.message || 'WhatsApp connected');
+      load();
+      void refreshNumbers();
+      return;
+    }
+    if (event.status === 'cancel') {
+      console.info('[wa-oauth] Popup cancelled');
+      toastSuccess(event.message || 'Connection cancelled — you are still signed in.');
+      return;
+    }
+    console.error('[wa-oauth] Popup reported error', event.message);
+    toastError(event.message || 'WhatsApp connection failed');
+  });
 
   const handleDisconnect = async (id: string, phone: string) => {
     setDisconnectTarget({ id, phone });

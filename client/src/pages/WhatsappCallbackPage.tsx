@@ -7,7 +7,7 @@ import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { whatsappApi, type WhatsappPhoneOption, type WhatsappConnectResult } from '../services/api';
 import { clearAuthBackup, restoreAuthBackupIfNeeded } from '../utils/authStorage';
 import { logError, normalizeError } from '../utils/errors';
-import { notifyOpenerAndClose } from '../utils/whatsappOAuth';
+import { completeOAuthPopupFlow, isOAuthPopupContext } from '../utils/whatsappOAuth';
 
 type PageStatus = 'loading' | 'select' | 'connecting' | 'success' | 'error';
 
@@ -34,16 +34,12 @@ function clearStashedOAuthParams() {
   sessionStorage.removeItem(STATE_KEY);
 }
 
-function finishInPopup(payload: {
+function finishOAuthFlow(payload: {
   status: 'success' | 'error' | 'cancel';
   phoneNumber?: string;
   message?: string;
-}) {
-  if (window.opener && !window.opener.closed) {
-    notifyOpenerAndClose(payload);
-    return true;
-  }
-  return false;
+}): boolean {
+  return completeOAuthPopupFlow(payload);
 }
 
 function exchangeCodeOnce(code: string, state: string): Promise<WhatsappConnectResult> {
@@ -105,7 +101,11 @@ export default function WhatsappCallbackPage() {
         action: 'WhatsApp OAuth cancelled/rejected by Meta',
         component: 'WhatsappCallbackPage',
       });
-      if (finishInPopup({ status: 'error', message: msg })) return;
+      if (finishOAuthFlow({ status: 'error', message: msg })) {
+        setStatus('error');
+        setMessage(msg);
+        return;
+      }
       setStatus('error');
       setMessage(msg);
       return;
@@ -131,7 +131,11 @@ export default function WhatsappCallbackPage() {
         action: 'WhatsApp OAuth missing code/state',
         component: 'WhatsappCallbackPage',
       });
-      if (finishInPopup({ status: 'cancel', message: msg })) return;
+      if (finishOAuthFlow({ status: 'cancel', message: msg })) {
+        setStatus('error');
+        setMessage('Connection cancelled. Close this window to return to Samyoj.');
+        return;
+      }
       setStatus('error');
       setMessage('Something went wrong. Please try connecting again from Settings.');
       return;
@@ -164,12 +168,14 @@ export default function WhatsappCallbackPage() {
         setMessage('WhatsApp connected successfully!');
         void refreshNumbers();
         if (
-          finishInPopup({
+          finishOAuthFlow({
             status: 'success',
             phoneNumber: result.phoneNumber || '',
             message: 'WhatsApp connected successfully!',
           })
         ) {
+          setStatus('success');
+          setMessage('WhatsApp connected! You can close this window.');
           return;
         }
         window.setTimeout(() => navigate('/settings?tab=whatsapp', { replace: true }), 1500);
@@ -191,14 +197,20 @@ export default function WhatsappCallbackPage() {
           void refreshNumbers();
           setStatus('success');
           setMessage('WhatsApp connected successfully!');
-          if (finishInPopup({ status: 'success', message: 'WhatsApp connected successfully!' })) {
+          if (finishOAuthFlow({ status: 'success', message: 'WhatsApp connected successfully!' })) {
+            setStatus('success');
+            setMessage('WhatsApp connected! You can close this window.');
             return;
           }
           window.setTimeout(() => navigate('/settings?tab=whatsapp', { replace: true }), 1500);
           return;
         }
 
-        if (finishInPopup({ status: 'error', message: msg })) return;
+        if (finishOAuthFlow({ status: 'error', message: msg })) {
+          setStatus('error');
+          setMessage(msg);
+          return;
+        }
         setStatus('error');
         setMessage(msg);
       });
@@ -228,12 +240,14 @@ export default function WhatsappCallbackPage() {
       setMessage('WhatsApp connected successfully!');
       void refreshNumbers();
       if (
-        finishInPopup({
+        finishOAuthFlow({
           status: 'success',
           phoneNumber: data.data.phoneNumber || selected.phoneNumber,
           message: 'WhatsApp connected successfully!',
         })
       ) {
+        setStatus('success');
+        setMessage('WhatsApp connected! You can close this window.');
         return;
       }
       setTimeout(() => navigate('/settings?tab=whatsapp', { replace: true }), 2500);
@@ -244,7 +258,11 @@ export default function WhatsappCallbackPage() {
         component: 'WhatsappCallbackPage',
       });
       const msg = normalizeError(err).message || 'Failed to connect selected number.';
-      if (finishInPopup({ status: 'error', message: normalized.message || msg })) return;
+      if (finishOAuthFlow({ status: 'error', message: normalized.message || msg })) {
+        setStatus('error');
+        setMessage(normalized.message || msg);
+        return;
+      }
       setStatus('error');
       setMessage(normalized.message || msg);
     }
@@ -316,7 +334,11 @@ export default function WhatsappCallbackPage() {
             {phoneNumber && (
               <p className="mt-2 text-[13px] font-medium text-neutral-600">Number: +{phoneNumber}</p>
             )}
-            <p className="mt-4 text-[11px] font-medium text-neutral-500">Redirecting to Settings...</p>
+            <p className="mt-4 text-[11px] font-medium text-neutral-500">
+              {isOAuthPopupContext()
+                ? 'Close this window to return to Samyoj.'
+                : 'Redirecting to Settings...'}
+            </p>
           </>
         )}
 

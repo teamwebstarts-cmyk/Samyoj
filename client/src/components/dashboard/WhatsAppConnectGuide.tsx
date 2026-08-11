@@ -12,7 +12,8 @@ import { Link } from 'react-router-dom';
 import AppButton from '../ui/AppButton';
 import { toastError, toastSuccess } from '../../utils/toast';
 import { billingApi, whatsappApi } from '../../services/api';
-import { isWaOAuthMessage, startWhatsAppOAuth } from '../../utils/whatsappOAuth';
+import { handleWaOAuthPopupClosed, startWhatsAppOAuth } from '../../utils/whatsappOAuth';
+import { useWaOAuthPopupListener } from '../../hooks/useWaOAuthPopupListener';
 import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
 import { formatPhoneDisplay } from '../../utils/formatPhone';
 import type { BillingUsage } from '../../types';
@@ -200,26 +201,20 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
     load();
   }, [load]);
 
-  useEffect(() => {
-    const onMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
-      if (!isWaOAuthMessage(event.data)) return;
-      setConnecting(false);
-      if (event.data.status === 'success') {
-        toastSuccess(event.data.message || 'WhatsApp connected');
-        void refreshNumbers({ silent: true });
-        load();
-        return;
-      }
-      if (event.data.status === 'cancel') {
-        toastSuccess(event.data.message || 'Connection cancelled — you are still signed in.');
-        return;
-      }
-      toastError(event.data.message || 'WhatsApp connection failed');
-    };
-    window.addEventListener('message', onMessage);
-    return () => window.removeEventListener('message', onMessage);
-  }, [load, refreshNumbers]);
+  useWaOAuthPopupListener((event) => {
+    setConnecting(false);
+    if (event.status === 'success') {
+      toastSuccess(event.message || 'WhatsApp connected');
+      void refreshNumbers({ silent: true });
+      load();
+      return;
+    }
+    if (event.status === 'cancel') {
+      toastSuccess(event.message || 'Connection cancelled — you are still signed in.');
+      return;
+    }
+    toastError(event.message || 'WhatsApp connection failed');
+  });
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -238,7 +233,28 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
       const poll = window.setInterval(() => {
         if (popup && popup.closed) {
           window.clearInterval(poll);
-          setConnecting(false);
+          handleWaOAuthPopupClosed(
+            (event) => {
+              setConnecting(false);
+              if (event.status === 'success') {
+                toastSuccess(event.message || 'WhatsApp connected');
+                void refreshNumbers({ silent: true });
+                load();
+                return;
+              }
+              if (event.status === 'cancel') {
+                toastSuccess(event.message || 'Connection cancelled — you are still signed in.');
+                return;
+              }
+              toastError(event.message || 'WhatsApp connection failed');
+            },
+            {
+              onClosedWithoutResult: () => {
+                setConnecting(false);
+                void refreshNumbers({ silent: true });
+              },
+            }
+          );
         }
       }, 500);
     };
@@ -540,15 +556,6 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
                       Enable incoming
                     </button>
                   )}
-                  <Link
-                    to="/settings?tab=whatsapp"
-                    role="menuitem"
-                    onClick={() => setMenuOpen(false)}
-                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] font-semibold text-neutral-800 transition hover:bg-neutral-50"
-                  >
-                    <Settings2 className="h-3.5 w-3.5" />
-                    Connection settings
-                  </Link>
                   <button
                     type="button"
                     role="menuitem"

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { whatsappApi } from '../services/api';
-import { isWaOAuthMessage, startWhatsAppOAuth } from '../utils/whatsappOAuth';
+import { handleWaOAuthPopupClosed, startWhatsAppOAuth } from '../utils/whatsappOAuth';
 import { toastError, toastSuccess } from '../utils/toast';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
+import { useWaOAuthPopupListener } from './useWaOAuthPopupListener';
 
 function pickConnectUrl(payload: unknown): string {
   if (payload && typeof payload === 'object' && typeof (payload as { url?: unknown }).url === 'string') {
@@ -20,6 +21,23 @@ export function useWhatsAppConnectOAuth(options?: { returnPath?: string; onConne
   const onConnectedRef = useRef(options?.onConnected);
   onConnectedRef.current = options?.onConnected;
 
+  const handleOAuthResult = useCallback(
+    (data: { status: string; message?: string }) => {
+      setConnecting(false);
+      if (data.status === 'success') {
+        toastSuccess(data.message || 'WhatsApp connected');
+        void refreshNumbers({ silent: true }).then(() => onConnectedRef.current?.());
+        return;
+      }
+      if (data.status === 'cancel') {
+        toastSuccess(data.message || 'Connection cancelled — you are still signed in.');
+        return;
+      }
+      toastError(data.message || 'WhatsApp connection failed');
+    },
+    [refreshNumbers]
+  );
+
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -36,25 +54,7 @@ export function useWhatsAppConnectOAuth(options?: { returnPath?: string; onConne
     };
   }, []);
 
-  useEffect(() => {
-    const onMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
-      if (!isWaOAuthMessage(event.data)) return;
-      setConnecting(false);
-      if (event.data.status === 'success') {
-        toastSuccess(event.data.message || 'WhatsApp connected');
-        void refreshNumbers({ silent: true }).then(() => onConnectedRef.current?.());
-        return;
-      }
-      if (event.data.status === 'cancel') {
-        toastSuccess(event.data.message || 'Connection cancelled — you are still signed in.');
-        return;
-      }
-      toastError(event.data.message || 'WhatsApp connection failed');
-    };
-    window.addEventListener('message', onMessage);
-    return () => window.removeEventListener('message', onMessage);
-  }, [refreshNumbers]);
+  useWaOAuthPopupListener(handleOAuthResult);
 
   const connect = useCallback(() => {
     const start = (url: string) => {
@@ -64,7 +64,12 @@ export function useWhatsAppConnectOAuth(options?: { returnPath?: string; onConne
       const poll = window.setInterval(() => {
         if (popup && popup.closed) {
           window.clearInterval(poll);
-          setConnecting(false);
+          handleWaOAuthPopupClosed(handleOAuthResult, {
+            onClosedWithoutResult: () => {
+              setConnecting(false);
+              void refreshNumbers({ silent: true });
+            },
+          });
         }
       }, 500);
     };
@@ -89,7 +94,7 @@ export function useWhatsAppConnectOAuth(options?: { returnPath?: string; onConne
         toastError('Could not start WhatsApp connection. Please try again.');
       }
     })();
-  }, [connectUrl, returnPath]);
+  }, [connectUrl, returnPath, handleOAuthResult, refreshNumbers]);
 
   return { connect, connecting };
 }
