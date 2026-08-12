@@ -19,6 +19,7 @@ interface CampaignMessageStepProps {
   form: CampaignWizardForm;
   setForm: Dispatch<SetStateAction<CampaignWizardForm>>;
   templates: MessageTemplate[];
+  templatesLoading: boolean;
   selectedTemplate?: MessageTemplate;
   whatsappNumbers: Array<{ id: string; phoneNumber: string }>;
 }
@@ -46,6 +47,7 @@ export default function CampaignMessageStep({
   form,
   setForm,
   templates,
+  templatesLoading,
   selectedTemplate,
   whatsappNumbers,
 }: CampaignMessageStepProps) {
@@ -103,6 +105,7 @@ export default function CampaignMessageStep({
       <div className="grid min-h-0 flex-1 gap-3 overflow-hidden xl:h-full xl:grid-rows-1 xl:grid-cols-[minmax(280px,1.08fr)_minmax(250px,0.92fr)_minmax(250px,0.9fr)]">
         <CampaignTemplatePicker
           templates={templates}
+          templatesLoading={templatesLoading}
           value={form.templateName}
           onChange={selectTemplate}
         />
@@ -157,11 +160,23 @@ export default function CampaignMessageStep({
             )}
 
             {!selectedTemplate ? (
+              templatesLoading ? (
+                <div
+                  className="space-y-3 rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-4 dark:border-slate-800 dark:bg-slate-900/35"
+                  role="status"
+                  aria-label="Loading template content"
+                >
+                  <div className="h-2.5 w-32 animate-pulse rounded-full bg-slate-200 dark:bg-slate-700" />
+                  <div className="h-9 w-full animate-pulse rounded-lg bg-slate-200/80 dark:bg-slate-800" />
+                  <div className="h-2 w-3/4 animate-pulse rounded-full bg-slate-100 dark:bg-slate-800" />
+                </div>
+              ) : (
               <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/70 px-3 py-8 text-center dark:border-slate-800 dark:bg-slate-900/40">
                 <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
                   Select a template to enter its variables.
                 </p>
               </div>
+              )
             ) : (
               <>
                 <div className="flex items-center gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
@@ -304,6 +319,20 @@ export default function CampaignMessageStep({
                 variant="compact"
                 className="campaign-message-preview-surface min-h-[260px] overflow-hidden rounded-xl"
               />
+            ) : templatesLoading ? (
+              <div
+                className="campaign-message-preview-loading space-y-3 rounded-xl border border-slate-100 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-900/40"
+                role="status"
+                aria-label="Loading message preview"
+              >
+                <div className="h-3 w-24 animate-pulse rounded-full bg-slate-200 dark:bg-slate-700" />
+                <div className="space-y-2 rounded-xl bg-white/80 p-4 dark:bg-slate-950/60">
+                  <div className="h-2.5 w-4/5 animate-pulse rounded-full bg-slate-200 dark:bg-slate-700" />
+                  <div className="h-2.5 w-full animate-pulse rounded-full bg-slate-100 dark:bg-slate-800" />
+                  <div className="h-2.5 w-3/5 animate-pulse rounded-full bg-slate-100 dark:bg-slate-800" />
+                </div>
+                <div className="h-2.5 w-28 animate-pulse rounded-full bg-slate-200 dark:bg-slate-700" />
+              </div>
             ) : (
               <div className="campaign-message-preview-empty flex min-h-[280px] items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-4 text-center dark:border-slate-800 dark:bg-slate-900/40">
                 <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">

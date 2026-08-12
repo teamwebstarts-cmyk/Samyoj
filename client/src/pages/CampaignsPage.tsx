@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
+  ArrowRight,
   Copy,
   Download,
   LayoutTemplate,
@@ -11,6 +12,7 @@ import {
   Send,
   Square,
   TestTube2,
+  Users,
 } from 'lucide-react';
 import CampaignAnalyticsPanel from '../components/campaigns/CampaignAnalyticsPanel';
 import CampaignAudienceSection from '../components/campaigns/CampaignAudienceSection';
@@ -828,28 +830,105 @@ export default function CampaignsPage() {
             </div>
           ) : campaigns.length === 0 ? (
             <div className="p-4 sm:p-6">
-              <EmptyState
-                icon={Send}
-                variant={hasFilters ? 'filter' : 'default'}
-                title={hasFilters ? 'No campaigns match your filters' : 'No campaigns yet'}
-                description={
-                  hasFilters
-                    ? 'Try a different search word or status.'
-                    : 'Send approved WhatsApp messages to multiple contacts at once.'
-                }
-                steps={
-                  hasFilters
-                    ? undefined
-                    : ['Create an approved template', 'Choose contacts to receive it', 'Send your campaign']
-                }
-                action={
-                  !hasFilters && canManageTeam ? (
-                    <AppButton icon={<Plus size={16} />} onClick={openCreate}>
-                      Create campaign
-                    </AppButton>
-                  ) : undefined
-                }
-              />
+              {hasFilters ? (
+                <EmptyState
+                  icon={Send}
+                  variant="filter"
+                  compact
+                  title="No campaigns match your filters"
+                  description="Try a different search word or status."
+                />
+              ) : (
+                <div className="relative overflow-hidden rounded-2xl border border-emerald-100 bg-gradient-to-br from-white via-emerald-50/35 to-violet-50/45 px-4 py-5 shadow-sm dark:border-emerald-900/50 dark:from-slate-950 dark:via-emerald-950/15 dark:to-violet-950/15 sm:px-6 sm:py-6">
+                  <div
+                    className="pointer-events-none absolute -right-16 -top-20 h-48 w-48 rounded-full bg-emerald-300/20 blur-3xl dark:bg-emerald-500/10"
+                    aria-hidden="true"
+                  />
+                  <div
+                    className="pointer-events-none absolute -bottom-24 left-1/3 h-48 w-48 rounded-full bg-violet-300/15 blur-3xl dark:bg-violet-500/10"
+                    aria-hidden="true"
+                  />
+
+                  <div className="relative grid items-center gap-6 lg:grid-cols-[210px_minmax(0,1fr)]">
+                    <div className="hidden rounded-2xl border border-emerald-100 bg-white/75 p-4 shadow-sm dark:border-emerald-900/50 dark:bg-slate-950/60 lg:block">
+                      <div className="flex items-center gap-2">
+                        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-[0_8px_20px_rgba(16,185,129,0.22)]">
+                          <Send className="h-5 w-5" strokeWidth={2.1} />
+                        </span>
+                        <div>
+                          <p className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-emerald-700 dark:text-emerald-300">
+                            Campaigns
+                          </p>
+                          <p className="mt-0.5 text-[11px] font-bold text-slate-700 dark:text-slate-200">
+                            Ready to reach people
+                          </p>
+                        </div>
+                      </div>
+                      <div className="mt-4 space-y-2">
+                        <div className="flex items-center gap-2 rounded-lg bg-violet-50 px-2.5 py-2 text-[10px] font-bold text-violet-700 dark:bg-violet-950/30 dark:text-violet-300">
+                          <LayoutTemplate className="h-3.5 w-3.5" />
+                          Approved templates
+                        </div>
+                        <div className="flex items-center gap-2 rounded-lg bg-sky-50 px-2.5 py-2 text-[10px] font-bold text-sky-700 dark:bg-sky-950/30 dark:text-sky-300">
+                          <Users className="h-3.5 w-3.5" />
+                          Audience targeting
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="min-w-0">
+                      <h3 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
+                        Launch your first campaign
+                      </h3>
+                      <p className="mt-1.5 max-w-xl text-[11px] font-medium leading-relaxed text-slate-500 dark:text-slate-400 sm:text-[12px]">
+                        Turn an approved template into a thoughtful, measurable message for the right audience.
+                      </p>
+
+                      <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                        {[
+                          { icon: LayoutTemplate, label: 'Choose a template', tone: 'bg-violet-50 text-violet-600 dark:bg-violet-950/35 dark:text-violet-300' },
+                          { icon: Users, label: 'Select your audience', tone: 'bg-sky-50 text-sky-600 dark:bg-sky-950/35 dark:text-sky-300' },
+                          { icon: Send, label: 'Review and send', tone: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/35 dark:text-emerald-300' },
+                        ].map(({ icon: StepIcon, label, tone }, index) => (
+                          <div
+                            key={label}
+                            className="group flex min-h-[62px] items-center gap-2.5 rounded-xl border border-slate-200/70 bg-white/80 px-3 py-2.5 shadow-[0_4px_14px_rgba(15,23,42,0.04)] transition hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-[0_8px_20px_rgba(16,185,129,0.10)] dark:border-slate-800/80 dark:bg-slate-950/55 dark:hover:border-emerald-800"
+                          >
+                            <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${tone}`}>
+                              <StepIcon className="h-4 w-4" strokeWidth={2.1} />
+                            </span>
+                            <span className="min-w-0">
+                              <span className="flex items-center gap-1.5">
+                                <span className="text-[9px] font-extrabold tabular-nums text-emerald-600 dark:text-emerald-300">
+                                  0{index + 1}
+                                </span>
+                                <span className="truncate text-[10.5px] font-bold text-slate-700 dark:text-slate-200">
+                                  {label}
+                                </span>
+                              </span>
+                            </span>
+                            {index < 2 && (
+                              <ArrowRight className="ml-auto hidden h-3.5 w-3.5 shrink-0 text-slate-300 transition-transform group-hover:translate-x-0.5 group-hover:text-emerald-500 sm:block" />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+
+                      {canManageTeam && (
+                        <AppButton
+                          className="mt-4 !min-h-9"
+                          size="sm"
+                          icon={<Plus className="h-3.5 w-3.5" />}
+                          onClick={openCreate}
+                        >
+                          Create your first campaign
+                          <ArrowRight className="h-3.5 w-3.5" />
+                        </AppButton>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <>

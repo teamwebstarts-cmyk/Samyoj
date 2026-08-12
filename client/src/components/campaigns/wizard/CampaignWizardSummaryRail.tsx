@@ -1,4 +1,4 @@
-import { CheckCircle2, Gift, Info, MessageCircle, ShieldCheck, Users, Zap } from 'lucide-react';
+import { CheckCircle2, Info, MessageCircle, ShieldCheck, Users } from 'lucide-react';
 import type { MessageTemplate } from '../../../types';
 import type { CampaignWizardForm } from './campaignWizardModel';
 import type { AudiencePreviewMetrics } from '../CampaignAudiencePreview';
@@ -23,6 +23,14 @@ interface CampaignWizardSummaryRailProps {
 }
 
 function audienceLabel(form: CampaignWizardForm) {
+  const selectedTypes = form.selectedAudienceTypes || [form.audienceType];
+  if (selectedTypes.includes('TAGS') && selectedTypes.includes('CONTACTS')) {
+    return `Tags + Selected contacts (${form.audienceOperator || 'OR'})`;
+  }
+  if (selectedTypes.includes('TAGS')) return 'Contact tags';
+  if (selectedTypes.includes('CONTACTS')) return 'Selected contacts';
+  if (selectedTypes.includes('ALL_OPTED_IN')) return 'All contacts';
+
   switch (form.audienceType) {
     case 'MANUAL':
       return 'Phone numbers';
@@ -31,7 +39,7 @@ function audienceLabel(form: CampaignWizardForm) {
     case 'CONTACTS':
       return 'Selected contacts';
     default:
-      return 'Consented contacts';
+      return 'All contacts';
   }
 }
 
@@ -49,7 +57,7 @@ function QuotaCard({ quota }: { quota: CampaignQuotaData | null }) {
     <section className="campaign-wizard-card overflow-hidden">
       <div className="flex items-center gap-2 border-b border-slate-100 px-3.5 py-3 dark:border-slate-800">
         <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-300">
-          <Zap className="h-3.5 w-3.5" strokeWidth={2.25} />
+          <ShieldCheck className="h-3.5 w-3.5" strokeWidth={2.25} />
         </span>
         <p className="text-[12px] font-extrabold text-slate-900 dark:text-white">Daily campaign limit</p>
       </div>
@@ -98,43 +106,49 @@ export default function CampaignWizardSummaryRail({
           </h2>
         </div>
         <div className="space-y-3 p-3.5">
-          <div>
+          <div className={variant === 'review' ? 'flex items-center justify-between gap-3' : undefined}>
             <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-slate-400">Campaign name</p>
-            <p className="mt-1 truncate text-[11px] font-extrabold text-slate-800 dark:text-slate-200">
+            <p
+              className={`max-w-[68%] truncate text-[11px] font-extrabold text-slate-800 dark:text-slate-200 ${
+                variant === 'review' ? 'text-right' : 'mt-1'
+              }`}
+            >
               {form.name || 'Untitled campaign'}
             </p>
           </div>
 
-          <div className="flex items-start gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600 dark:bg-violet-950/50 dark:text-violet-300">
-              <Gift className="h-3.5 w-3.5" strokeWidth={2.2} />
-            </span>
-            <div className="min-w-0">
-              <p className="truncate text-[11px] font-extrabold text-slate-800 dark:text-slate-200">
-                {selectedTemplate?.name || 'No template selected'}
-              </p>
-              <p className="mt-0.5 truncate text-[9px] font-medium text-slate-400">
-                {selectedTemplate ? `${selectedTemplate.language} · ${selectedTemplate.category}` : 'Choose an approved template'}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-start gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
-            <MessageCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-300" />
-            <div className="min-w-0">
-              <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-slate-400">WhatsApp channel</p>
-              <p className="mt-1 truncate text-[11px] font-bold text-slate-800 dark:text-slate-200">
-                {channelLabel}
-              </p>
-            </div>
-          </div>
-
-          <div className="border-t border-slate-100 pt-3 dark:border-slate-800">
-            <p className="text-[9px] font-bold text-slate-400">Audience</p>
-            <p className="mt-1 text-[11px] font-extrabold text-slate-800 dark:text-slate-200">
-              {audienceLabel(form)}
+          <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-3 dark:border-slate-800">
+            <p className="text-[9px] font-bold text-slate-400">Template</p>
+            <p className="max-w-[68%] truncate text-right text-[10px] font-extrabold text-slate-800 dark:text-slate-200">
+              {selectedTemplate?.name || 'No template selected'}
             </p>
           </div>
+
+          {variant === 'review' ? (
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-[9px] font-bold text-slate-400">Audience</p>
+              <p className="max-w-[68%] truncate text-right text-[10px] font-extrabold text-slate-800 dark:text-slate-200">
+                {includedCount == null ? audienceLabel(form) : `${includedCount.toLocaleString()} contacts`}
+              </p>
+            </div>
+          ) : (
+            <div className="border-t border-slate-100 pt-3 dark:border-slate-800">
+              <p className="text-[9px] font-bold text-slate-400">Audience</p>
+              <p className="mt-1 text-[11px] font-extrabold text-slate-800 dark:text-slate-200">
+                {includedCount == null ? audienceLabel(form) : `${includedCount.toLocaleString()} contacts`}
+              </p>
+              {form.selectedAudienceTypes?.includes('TAGS') && (
+                <p className="mt-1 truncate text-[10px] font-medium text-violet-600 dark:text-violet-300">
+                  Tags: {form.audienceTags || 'Choose tags'}
+                </p>
+              )}
+              {form.selectedAudienceTypes?.includes('CONTACTS') && (
+                <p className="mt-1 text-[10px] font-medium text-sky-600 dark:text-sky-300">
+                  Selected contacts: {form.selectedContactIds.length.toLocaleString()}
+                </p>
+              )}
+            </div>
+          )}
 
           {variant === 'audience' && (
             <div className="border-t border-slate-100 pt-3 dark:border-slate-800">
@@ -164,6 +178,23 @@ export default function CampaignWizardSummaryRail({
             </div>
           )}
 
+          {variant === 'review' && (
+            <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-3 text-[10px] dark:border-slate-800">
+              <span className="font-medium text-slate-500">Estimated to reach</span>
+              <NumberValue value={audienceMetrics?.estimatedReach ?? includedCount} />
+            </div>
+          )}
+
+          <div className="flex items-start gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
+            <MessageCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-300" />
+            <div className="min-w-0">
+              <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-slate-400">WhatsApp channel</p>
+              <p className="mt-1 truncate text-[11px] font-bold text-slate-800 dark:text-slate-200">
+                {channelLabel}
+              </p>
+            </div>
+          </div>
+
           {estimatedCost != null && estimatedCost > 0 && (
             <div className="flex items-center justify-between border-t border-slate-100 pt-3 text-[10px] dark:border-slate-800">
               <span className="font-semibold text-slate-500">Estimated cost</span>
@@ -185,16 +216,30 @@ export default function CampaignWizardSummaryRail({
             </div>
             <ol className="space-y-3 p-3.5">
               {[
-                'Campaign will start sending.',
-                'You can monitor real-time progress.',
-                'Results will be available after delivery.',
+                {
+                  title: 'Campaign will start sending.',
+                  description: 'We will send messages to opted-in contacts.',
+                },
+                {
+                  title: 'You can monitor real-time progress.',
+                  description: 'Track delivery, read, and failed counts.',
+                },
+                {
+                  title: 'Results will be available.',
+                  description: 'View detailed results and export reports.',
+                },
               ].map((item, index) => (
-                <li key={item} className="flex items-start gap-2">
+                <li key={item.title} className="flex items-start gap-2">
                   <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-[9px] font-extrabold text-white">
                     {index + 1}
                   </span>
-                  <span className="text-[10px] font-semibold leading-relaxed text-slate-600 dark:text-slate-300">
-                    {item}
+                  <span>
+                    <span className="block text-[10px] font-extrabold leading-relaxed text-slate-700 dark:text-slate-200">
+                      {item.title}
+                    </span>
+                    <span className="block text-[9px] font-medium leading-relaxed text-slate-500 dark:text-slate-400">
+                      {item.description}
+                    </span>
                   </span>
                 </li>
               ))}

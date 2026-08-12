@@ -214,12 +214,70 @@ async function transitionRecipientsForStop(
 export type { ResolvedRecipient };
 export { dedupeRecipients };
 
+type AudienceGroup = NonNullable<AudienceConfig['groups']>[number];
+
+function buildAudienceGroupScopes(groups: AudienceGroup[]) {
+  if (!groups.length) throw new AppError(400, 'At least one audience group is required');
+
+  return groups.map((group) => {
+    if (group.type === 'TAGS') {
+      const tags = group.tags?.filter(Boolean) || [];
+      if (!tags.length) throw new AppError(400, 'At least one tag is required for tag-based audience');
+      return { tags: { hasSome: tags } } satisfies Prisma.ContactWhereInput;
+    }
+
+    const contactIds = group.contactIds?.filter(Boolean) || [];
+    if (!contactIds.length) throw new AppError(400, 'At least one contact is required');
+    return { id: { in: contactIds } } satisfies Prisma.ContactWhereInput;
+  });
+}
+
+function buildAudienceScope(
+  organizationId: string,
+  groups: AudienceGroup[],
+  operator: 'OR' | 'AND',
+): Prisma.ContactWhereInput {
+  const scopes = buildAudienceGroupScopes(groups);
+  return {
+    organizationId,
+    [operator === 'AND' ? 'AND' : 'OR']: scopes,
+  };
+}
+
+function addConsentFilter(scope: Prisma.ContactWhereInput): Prisma.ContactWhereInput {
+  return {
+    ...scope,
+    optedIn: true,
+    consentSource: { not: null },
+    consentAt: { not: null },
+    optOutAt: null,
+  };
+}
+
 export async function resolveAudienceRecipients(
   organizationId: string,
   audienceType: AudienceType,
   audienceConfig: AudienceConfig | null | undefined,
   manualRecipients: ResolvedRecipient[] = []
 ): Promise<ResolvedRecipient[]> {
+  const groups = audienceConfig?.groups;
+  if (groups?.length) {
+    const contactWhere = addConsentFilter(
+      buildAudienceScope(organizationId, groups, audienceConfig?.operator || 'OR'),
+    );
+    const contacts = await prisma.contact.findMany({
+      where: contactWhere,
+      select: { phone: true, name: true },
+    });
+    return dedupeRecipients(
+      contacts.map((contact) => ({
+        phone: contact.phone,
+        name: contact.name ?? undefined,
+        variables: undefined,
+      })),
+    );
+  }
+
   if (audienceType === 'MANUAL') {
     const deduped = dedupeRecipients(manualRecipients);
     if (!deduped.length) return deduped;
@@ -284,6 +342,24 @@ export async function previewAudienceMetrics(
   audienceConfig: AudienceConfig | null | undefined,
   manualRecipients: ResolvedRecipient[] = []
 ) {
+  const groups = audienceConfig?.groups;
+  if (groups?.length) {
+    const scope = buildAudienceScope(organizationId, groups, audienceConfig?.operator || 'OR');
+    const [total, optedIn] = await Promise.all([
+      prisma.contact.count({ where: scope }),
+      prisma.contact.count({ where: addConsentFilter(scope) }),
+    ]);
+    const estimatedFailed = Math.max(0, Math.round(optedIn * 0.01));
+    return {
+      count: optedIn,
+      total,
+      optedIn,
+      notOptedIn: Math.max(0, total - optedIn),
+      estimatedFailed,
+      estimatedReach: Math.max(0, optedIn - estimatedFailed),
+    };
+  }
+
   let total = 0;
   let optedIn = 0;
 

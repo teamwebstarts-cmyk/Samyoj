@@ -112,6 +112,8 @@ export default function AppSelect({
         styles={styles}
         menuPortalTarget={typeof document !== 'undefined' ? document.body : null}
         menuPosition="fixed"
+        menuPlacement="auto"
+        menuShouldScrollIntoView
         classNamePrefix="app-select"
         noOptionsMessage={() => 'No options found'}
       />

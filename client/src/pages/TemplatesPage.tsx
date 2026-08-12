@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   BookOpen,
   FileText,
@@ -16,8 +16,7 @@ import PageHero from '../components/ui/PageHero';
 import PageShell from '../components/ui/PageShell';
 import ResponsiveDataView from '../components/ui/ResponsiveDataView';
 import Pagination from '../components/ui/Pagination';
-import SlideOver, { SlideOverFooter } from '../components/ui/SlideOver';
-import TemplateCreateForm from '../components/templates/TemplateCreateForm';
+import SlideOver from '../components/ui/SlideOver';
 import TemplateDetailPanel from '../components/templates/TemplateDetailPanel';
 import TemplateLibraryPanel from '../components/templates/TemplateLibraryPanel';
 import TemplatePendingBanner from '../components/templates/TemplatePendingBanner';
@@ -33,16 +32,12 @@ import { useSocket } from '../hooks/useSocket';
 import { getTemplateParts } from '../components/inbox/WhatsAppPreview';
 import { settingsApi, templateApi, whatsappApi } from '../services/api';
 import {
-  buildCreatePayload,
   duplicateTemplateForm,
-  emptyTemplateForm,
   formFromLibraryEntry,
   formFromMessageTemplate,
-  type TemplateFormState,
 } from '../utils/templateForm';
 import {
   groupTemplatesByName,
-  validateTemplateForm,
 } from '../utils/templateUtils';
 import type { MessageTemplate, TemplateLibraryEntry } from '../types';
 import { toastError, toastSuccess } from '../utils/toast';
@@ -59,17 +54,13 @@ interface TemplateRejectionAlert {
 
 export default function TemplatesPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [whatsappConnected, setWhatsappConnected] = useState<boolean | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
   const [viewing, setViewing] = useState<MessageTemplate | null>(null);
-  const [form, setForm] = useState<TemplateFormState>(emptyTemplateForm);
-  const [formMode, setFormMode] = useState<'create' | 'resubmit'>('create');
-  const [resubmitName, setResubmitName] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState(ALL_STATUSES);
   const [categoryFilter, setCategoryFilter] = useState(ALL_CATEGORIES);
@@ -181,6 +172,41 @@ export default function TemplatesPage() {
     setPage(1);
   }, [debouncedSearch, statusFilter, categoryFilter, languageFilter, groupView]);
 
+  useEffect(() => {
+    const viewName = searchParams.get('view');
+    if (!viewName || loading) return;
+
+    const next = new URLSearchParams(searchParams);
+    next.delete('view');
+
+    const match = templates.find((t) => t.name === viewName);
+    if (match) {
+      setViewing(match);
+      setViewOpen(true);
+      setSearchParams(next, { replace: true });
+      return;
+    }
+
+    let cancelled = false;
+    templateApi
+      .get(viewName)
+      .then(({ data }) => {
+        if (cancelled) return;
+        setViewing(data.data as MessageTemplate);
+        setViewOpen(true);
+      })
+      .catch(() => {
+        /* not found — list stays closed */
+      })
+      .finally(() => {
+        if (!cancelled) setSearchParams(next, { replace: true });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, searchParams, setSearchParams, templates]);
+
   const stats = useMemo(
     () => ({
       total: templates.length,
@@ -192,10 +218,7 @@ export default function TemplatesPage() {
   );
 
   const openCreate = () => {
-    setForm(emptyTemplateForm);
-    setFormMode('create');
-    setResubmitName(null);
-    setCreateOpen(true);
+    navigate('/templates/new');
   };
 
   const openView = (template: MessageTemplate) => {
@@ -204,74 +227,22 @@ export default function TemplatesPage() {
   };
 
   const openDuplicate = (template: MessageTemplate) => {
-    setForm(duplicateTemplateForm(template));
-    setFormMode('create');
-    setResubmitName(null);
     setViewOpen(false);
-    setCreateOpen(true);
+    navigate('/templates/new', { state: { form: duplicateTemplateForm(template) } });
   };
 
   const openResubmit = (template: MessageTemplate) => {
-    setForm(formFromMessageTemplate(template));
-    setFormMode('resubmit');
-    setResubmitName(template.name);
     setViewOpen(false);
-    setCreateOpen(true);
+    navigate(`/templates/${encodeURIComponent(template.name)}/resubmit`);
   };
 
   const handleUseLibraryReference = (entry: TemplateLibraryEntry | MessageTemplate) => {
     const isLibrary = 'body' in entry && typeof (entry as TemplateLibraryEntry).body === 'string';
-    setForm(
-      isLibrary
-        ? formFromLibraryEntry(entry as TemplateLibraryEntry)
-        : formFromMessageTemplate(entry as MessageTemplate),
-    );
-    setFormMode('create');
-    setResubmitName(null);
+    const nextForm = isLibrary
+      ? formFromLibraryEntry(entry as TemplateLibraryEntry)
+      : formFromMessageTemplate(entry as MessageTemplate);
     setLibraryOpen(false);
-    setCreateOpen(true);
-  };
-
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const issues = validateTemplateForm(form).filter((i) => i.severity === 'error');
-    if (issues.length) {
-      toastError(issues[0].message);
-      return;
-    }
-
-    setSaving(true);
-    const savedName = form.name;
-    try {
-      const payload = buildCreatePayload(form);
-      if (formMode === 'resubmit' && resubmitName) {
-        await templateApi.resubmit(resubmitName, payload);
-        toastSuccess('Template resubmitted for review');
-      } else {
-        await templateApi.create(payload);
-        toastSuccess('Template submitted for approval');
-      }
-      setCreateOpen(false);
-      setForm(emptyTemplateForm);
-      await load();
-      invalidateFlowReferenceData();
-      invalidateApprovedTemplatesCache();
-      try {
-        const { data } = await templateApi.get(savedName);
-        const created = data.data as MessageTemplate;
-        setViewing(created);
-        setViewOpen(true);
-      } catch {
-        /* list refresh is enough */
-      }
-    } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
-          ?.error?.message || 'Failed to save template.';
-      toastError(msg);
-    } finally {
-      setSaving(false);
-    }
+    navigate('/templates/new', { state: { form: nextForm } });
   };
 
   const handleDelete = async (name: string) => {
@@ -384,11 +355,11 @@ export default function TemplatesPage() {
     <PageShell>
       <div className="min-w-0 space-y-3 sm:space-y-4 lg:space-y-5">
         <PageHero
+          variant="clean"
           badge="Templates"
           badgeIcon={FileText}
           title="Message templates"
           description="Create and manage approved templates for campaigns and outreach."
-          accent="emerald"
           stats={[
             { label: 'Total', value: stats.total },
             { label: 'Approved', value: stats.approved, tone: 'text-emerald-600' },
@@ -528,32 +499,6 @@ export default function TemplatesPage() {
         accent="violet"
       >
         <TemplateLibraryPanel onUseAsReference={handleUseLibraryReference} onCreated={() => load()} />
-      </SlideOver>
-
-      <SlideOver
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        title={formMode === 'resubmit' ? 'Edit & resubmit template' : 'Create message template'}
-        subtitle="Sent for review after you create it"
-        size="lg"
-        icon={FileText}
-        accent="violet"
-        footer={
-          <SlideOverFooter
-            onCancel={() => setCreateOpen(false)}
-            submitLabel={formMode === 'resubmit' ? 'Resubmit for review' : 'Submit for review'}
-            loading={saving}
-          />
-        }
-      >
-        <form id="slideover-form" onSubmit={handleCreate}>
-          <TemplateCreateForm
-            form={form}
-            onChange={setForm}
-            mode={formMode}
-            resubmitName={resubmitName || undefined}
-          />
-        </form>
       </SlideOver>
 
       <SlideOver

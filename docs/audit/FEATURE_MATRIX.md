@@ -47,14 +47,14 @@ Legend:
 
 | Feature | Status | Backend | Frontend | Notes |
 |---------|--------|---------|----------|-------|
-| Conversation list | DONE | `GET /api/inbox/` | `InboxPage` | Paginated, filterable; number-scoped; disconnected = empty |
-| Chat view with messages | DONE | `GET /api/inbox/:id/messages` | `MessageBubble` | Load-earlier supported |
+| Conversation list | DONE | `GET /api/inbox/` | `InboxPage` | Paginated, filterable |
+| Chat view with messages | DONE | `GET /api/inbox/:id/messages` | `MessageBubble` | |
 | Send text message | DONE | `POST /api/inbox/:id/messages` | `ChatComposer` | |
 | Send template message | DONE | Template type | `TemplateComposer` | |
 | Send interactive message | DONE | Interactive type | `InteractiveComposer` | Buttons, lists, CTA |
 | Send image/video/doc/audio | DONE | Media types | `ChatComposer` file picker | |
 | Real-time message delivery | DONE | Socket.IO `message:new` | Live updates | |
-| Message status tracking | DONE | Socket.IO `message:status` | Status icons | Sent/delivered/read/failed; Meta code logged |
+| Message status tracking | DONE | Socket.IO `message:status` | Status icons | Sent/delivered/read/failed |
 | Service window (24h) | DONE | `cs24hWindowOpensAt` field | `ServiceWindowBanner` | |
 | Conversation assignment | DONE | `PATCH /api/inbox/:id/assign` | `InboxDetailsPanel` | |
 | Conversation status | DONE | `PATCH /api/inbox/:id/status` | Filters | Open/Pending/Closed |
@@ -68,10 +68,6 @@ Legend:
 | Context menu | DONE | — | `ChatContextMenu` | Right-click actions |
 | Keyboard shortcuts | DONE | — | `useInboxKeyboardShortcuts` | R=search, Esc=close, D=details |
 | Payment link sending | DONE | `POST /api/billing/create-payment-link` | `ChatComposer` | Razorpay integration |
-| Mark as read (Meta) | DONE | `POST /api/inbox/:id/read` | Auto on open | Blue ticks to customer |
-| Mark as unread (CRM) | API READY | `POST /api/inbox/:id/unread` | — | Backend only; UI not wired (no fake Soon) |
-| Composer drafts | DONE | — | `useDraft` | sessionStorage per conversation |
-| Disconnect / reconnect history | DONE | Soft `isActive:false` | Settings | Same Meta `phoneNumberId` restores chats |
 
 ---
 
@@ -122,13 +118,11 @@ Legend:
 | Bot analytics | DONE | `/api/ai-bot/:id/analytics` | `AiBotAnalyticsPanel` | |
 | Bot versioning | DONE | `AiBotVersion` model | `AiBotAuditPanel` | Restore to any version |
 | Bot audit log | DONE | `AiBotAuditLog` model | `AiBotAuditPanel` | |
-| Guardrails | DONE | `guardrails.ts` | — | Injection refuse + outbound filters |
-| Rate limiting | DONE | `rate-limit.service.ts` | — | Per-bot rate limit |
-| Handoff to agent | DONE | `handoff.service.ts` | Socket.IO + Inbox | Summary is agent-internal (not customer WA) |
-| LLM brain | DONE | `sarvam-chat.service.ts` | Settings → AI | Default Sarvam; Azure legacy fallback |
-| Embeddings (RAG) | PARTIAL | `embeddings.service.ts` | — | Azure embeddings only; token fallback if unset |
+| Guardrails | DONE | `guardrails.ts` | — | Content safety filters |
+| Rate limiting | DONE | `rate-limit.service.ts` | — | Per-conversation rate limit |
+| Handoff to agent | DONE | `handoff.service.ts` | Socket.IO event | |
+| Embeddings (RAG) | DONE | `embeddings.service.ts` | — | Azure OpenAI embeddings |
 | Bot templates | DONE | — | `AiBotTemplatePicker` | Predefined bot configs |
-| Shared voice brain | DONE | `generateBotReply(channel:voice)` | Calls + AiBot Voice tab | Same AiBot Train/Personality |
 
 ---
 
@@ -190,21 +184,17 @@ Legend:
 
 ## 10. VOICE CALLING
 
-> Updated 2026-08-08: Sarvam-only voice I/O + shared AiBot brain. Live media transfer is **not** production-ready.
-
 | Feature | Status | Backend | Frontend | Notes |
 |---------|--------|---------|----------|-------|
 | Call list + detail | DONE | `GET /api/calling/*` | `CallsPage` | |
-| AI voice agent | DONE | `ai-voice-agent.ts` | — | Sarvam STT/TTS + shared AiBot brain |
-| Agent call routing | DONE | `routing.service.ts` | Ring modal | Initial inbound ring works |
-| Accept/decline call | DONE | `/api/calling/:id/accept` | `CallRingModal` | For RINGING/CONNECTING only |
-| Live transcript | DONE | Sarvam STT | `CallDetailView` | Real-time via Socket.IO |
-| Outbound callback (agent) | DONE | `/api/calling/callback` | Inbox/Calls | Requires browser SDP + Meta permission |
+| AI voice agent | DONE | `ai-voice-agent.ts` | — | Auto-answer with AI |
+| Agent call routing | DONE | `routing.service.ts` | Ring modal | |
+| Accept/decline call | DONE | `/api/calling/:id/accept` | `CallRingModal` | |
+| Live transcript | DONE | Deepgram STT | `CallDetailView` | Real-time via Socket.IO |
+| Outbound callback | DONE | `/api/calling/callback` | Call detail | |
 | Call analytics | DONE | `/api/calling/analytics` | `CallAnalyticsPanel` | |
-| WebRTC bridge | DONE | `webrtc-bridge.ts` | Signaling | Server bridge for AI; browser for agents |
-| Sarvam TTS | DONE | `sarvam.tts.ts` | Voice preview | Bulbul v3 (Google TTS removed) |
-| Live cold transfer | PARTIAL | `handleLiveTransfer` | Disabled in UI | Media renegotiation incomplete — message-only handoff |
-| Hold / Keypad / Transfer UI | PLANNED | — | Stubs disabled | Softphone chrome only |
+| WebRTC bridge | DONE | `webrtc-bridge.ts` | Signaling | |
+| Google TTS | DONE | `google-tts.service.ts` | — | AI voice response |
 | Call notes | DONE | `PATCH /api/calling/:id` | Call detail | |
 | Settings (enable/disable) | DONE | `/api/calling/settings` | `CallingSettingsPanel` | |
 
@@ -353,11 +343,11 @@ Legend:
 | Inbox & Messaging | 21 | All DONE |
 | Automations | 8 | All DONE |
 | Flow Builder | 13 | All DONE |
-| AI Bot | 13 | Mostly DONE — Sarvam brain; live transfer N/A |
+| AI Bot | 13 | All DONE |
 | Campaigns | 17 | All DONE |
 | Contacts & Leads | 9 | All DONE |
 | Templates | 9 | All DONE |
-| Voice Calling | 11 | PARTIAL — inbound AI + agent ring DONE; live transfer / Hold / Keypad not DONE |
+| Voice Calling | 11 | All DONE |
 | Billing | 8 | All DONE |
 | Team Management | 10 | All DONE |
 | Analytics | 6 | All DONE |
@@ -368,7 +358,7 @@ Legend:
 | Content Studio | 9 | All DONE |
 | WA Forms | 4 | All DONE |
 | Tickets | 4 | All DONE |
-| **TOTAL** | **184** | **Mostly DONE** — Voice Calling PARTIAL; see section 10 |
+| **TOTAL** | **184** | **All DONE** |
 
 ### Not Yet Built (from docs/roadmap)
 

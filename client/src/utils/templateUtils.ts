@@ -62,6 +62,14 @@ function validateVariableText(field: string, text: string, issues: TemplateValid
       severity: 'error',
     });
   }
+
+  if (/\{\{\d+\}\}\s*\{\{\d+\}\}/.test(text)) {
+    issues.push({
+      field,
+      message: 'Placeholders cannot be placed directly next to each other — add text between them',
+      severity: 'error',
+    });
+  }
 }
 
 function validateButtons(
@@ -110,6 +118,20 @@ function validateButtons(
           field: 'buttons',
           message: 'URL buttons cannot link to wa.me or whatsapp.com',
           severity: 'error',
+        });
+      }
+      if (/bit\.ly|tinyurl\.com|t\.co\/|goo\.gl|ow\.ly/.test(lower)) {
+        issues.push({
+          field: 'buttons',
+          message: 'Avoid URL shorteners (bit.ly, t.co) — WhatsApp may reject them',
+          severity: 'warning',
+        });
+      }
+      if (btn.url.trim() && !/^https:\/\//i.test(btn.url.trim())) {
+        issues.push({
+          field: 'buttons',
+          message: 'Website URLs should use HTTPS for better approval odds',
+          severity: 'warning',
         });
       }
     }
@@ -285,6 +307,15 @@ export function validateTemplateForm(form: {
     }
   }
 
+  const emojiCount = (form.body.match(/\p{Extended_Pictographic}/gu) || []).length;
+  if (emojiCount > 10) {
+    issues.push({
+      field: 'body',
+      message: `Too many emojis in body (${emojiCount}). WhatsApp may reject templates with excessive emojis.`,
+      severity: 'warning',
+    });
+  }
+
   if (form.buttons?.length) {
     validateButtons(form.buttons, issues);
     for (const btn of form.buttons) {
@@ -328,3 +359,92 @@ export const HEADER_FORMAT_OPTIONS = [
   { value: 'VIDEO', label: 'Video header' },
   { value: 'DOCUMENT', label: 'Document header' },
 ];
+
+export interface ApprovalChecklistItem {
+  id: string;
+  label: string;
+  passed: boolean;
+  severity: 'error' | 'warning';
+  hint?: string;
+}
+
+export function getTemplateApprovalChecklist(form: {
+  name: string;
+  body: string;
+  header: string;
+  footer: string;
+  category: string;
+  bodyExamples: string[];
+  headerExamples: string[];
+  headerFormat: string;
+  headerMediaHandle: string;
+  buttons?: Array<{ type: string; text: string; url?: string; phone_number?: string; example?: string }>;
+}): ApprovalChecklistItem[] {
+  const issues = validateTemplateForm(form);
+  const errors = new Set(issues.filter((i) => i.severity === 'error').map((i) => i.field));
+  const warnings = new Set(issues.filter((i) => i.severity === 'warning').map((i) => i.field));
+
+  const bodyVars = countTemplateVars(form.body);
+  const fixedText = form.body.replace(/\{\{\d+\}\}/g, '').trim();
+  const mostlyVariables = bodyVars > 0 && fixedText.length < 12;
+
+  const emojiCount = (form.body.match(/\p{Extended_Pictographic}/gu) || []).length;
+
+  const items: ApprovalChecklistItem[] = [
+    {
+      id: 'name',
+      label: 'Template name follows WhatsApp guidelines',
+      passed: !errors.has('name') && Boolean(form.name.trim()),
+      severity: 'error',
+    },
+    {
+      id: 'body',
+      label: 'Body has clear, readable text',
+      passed: Boolean(form.body.trim()) && !errors.has('body') && !mostlyVariables,
+      severity: 'error',
+      hint: mostlyVariables ? 'Add more fixed text around your placeholders' : undefined,
+    },
+    {
+      id: 'samples',
+      label: 'Sample values provided for all variables',
+      passed: !errors.has('bodyExamples') && !errors.has('headerExamples'),
+      severity: 'error',
+    },
+    {
+      id: 'category',
+      label: 'Category matches message content',
+      passed: !errors.has('category') && !warnings.has('category'),
+      severity: warnings.has('category') ? 'warning' : 'error',
+    },
+    {
+      id: 'media',
+      label: 'Media header sample uploaded (if applicable)',
+      passed: !errors.has('headerMediaHandle'),
+      severity: 'error',
+    },
+    {
+      id: 'buttons',
+      label: 'Buttons configured correctly',
+      passed: !errors.has('buttons'),
+      severity: 'error',
+    },
+    {
+      id: 'marketing',
+      label: 'Marketing opt-out included in footer',
+      passed:
+        form.category !== 'MARKETING' ||
+        form.footer.toLowerCase().includes('stop') ||
+        !warnings.has('footer'),
+      severity: 'warning',
+    },
+    {
+      id: 'content',
+      label: 'No prohibited content detected',
+      passed: emojiCount <= 10 && !errors.has('body'),
+      severity: 'warning',
+      hint: emojiCount > 10 ? 'Reduce emojis in the body text' : undefined,
+    },
+  ];
+
+  return items;
+}

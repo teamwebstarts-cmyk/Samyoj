@@ -15,6 +15,12 @@ export interface AudienceConfig {
   tags?: string[];
   contactIds?: string[];
   requireOptIn?: boolean;
+  operator?: 'OR' | 'AND';
+  groups?: Array<{
+    type: 'TAGS' | 'CONTACTS';
+    tags?: string[];
+    contactIds?: string[];
+  }>;
 }
 
 export const recipientSchema = z.object({
@@ -42,6 +48,17 @@ export const audienceConfigSchema = z
     tags: z.array(z.string()).optional(),
     contactIds: z.array(z.string()).optional(),
     requireOptIn: z.boolean().optional(),
+    operator: z.enum(['OR', 'AND']).optional(),
+    groups: z
+      .array(
+        z.object({
+          type: z.enum(['TAGS', 'CONTACTS']),
+          tags: z.array(z.string()).optional(),
+          contactIds: z.array(z.string()).optional(),
+        }),
+      )
+      .min(1)
+      .optional(),
   })
   .optional();
 

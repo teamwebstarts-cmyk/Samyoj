@@ -9,7 +9,6 @@ import {
   isInboxRoute,
   isCallsShellRoute,
   isListShellRoute,
-  isCampaignWizardRoute,
   shouldShowMobileBottomNav,
 } from '../config/pageMeta';
 import AppTopbar from './layout/AppTopbar';
@@ -35,14 +34,10 @@ export default function Layout() {
   const effectiveCollapsed = isTablet || collapsed;
   const showBottomNav = isMobile && shouldShowMobileBottomNav(pathname);
   const hideTopbar = isBuilderRoute(pathname);
-  // The three-card wizard shell is intentionally locked only on wide desktop.
-  // Smaller layouts need the main page to grow and scroll as one document.
-  const lockCampaignWizardScroll = isCampaignWizardRoute(pathname) && breakpoint === 'xl';
   const lockMainScroll =
     isInboxRoute(pathname) ||
     isCallsShellRoute(pathname) ||
-    isListShellRoute(pathname, search) ||
-    lockCampaignWizardScroll;
+    isListShellRoute(pathname, search);
 
   const handleLogout = () => {
     logout();

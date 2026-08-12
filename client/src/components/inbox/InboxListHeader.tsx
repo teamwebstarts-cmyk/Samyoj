@@ -62,17 +62,20 @@ function formatCountLine(conversationTotal: number, unreadTotal: number) {
 function AgentAvatarButton({
   label,
   avatarKey,
+  gradientKey,
   active,
   onClick,
   tipFor,
 }: {
   label: string;
   avatarKey?: string;
+  /** Stable unique key for color (e.g. agent id) — avoids same gradient for different people. */
+  gradientKey?: string;
   active: boolean;
   onClick: () => void;
   tipFor: (label: string) => Record<string, unknown>;
 }) {
-  const key = avatarKey || label;
+  const colorKey = gradientKey || avatarKey || label;
   return (
     <button
       type="button"
@@ -87,7 +90,7 @@ function AgentAvatarButton({
       }`}
     >
       <span
-        className={`flex h-full w-full items-center justify-center rounded-full bg-gradient-to-br text-[9px] font-bold text-white shadow-sm ${getAvatarGradient(key)}`}
+        className={`flex h-full w-full items-center justify-center rounded-full bg-gradient-to-br text-[9px] font-bold text-white shadow-sm ${getAvatarGradient(colorKey)}`}
       >
         {getInitials(label, avatarKey)}
       </span>
@@ -281,6 +284,7 @@ export default function InboxListHeader({
                     key={agent.value}
                     label={agent.label}
                     avatarKey={agent.avatarKey}
+                    gradientKey={agent.value}
                     active={agentFilter === agent.value}
                     onClick={() => toggleAgentFilter(agent.value)}
                     tipFor={tipFor}
@@ -353,7 +357,7 @@ export default function InboxListHeader({
                             }`}
                           >
                             <span
-                              className={`flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br text-[10px] font-bold text-white ${getAvatarGradient(agent.avatarKey || agent.label)}`}
+                              className={`flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br text-[10px] font-bold text-white ${getAvatarGradient(agent.value)}`}
                             >
                               {getInitials(agent.label, agent.avatarKey)}
                             </span>

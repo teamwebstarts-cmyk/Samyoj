@@ -12,6 +12,8 @@ export interface CampaignWizardForm {
   headerParams: string[];
   headerMediaUrl: string;
   audienceType: CampaignAudienceType;
+  selectedAudienceTypes: CampaignAudienceType[];
+  audienceOperator: 'OR' | 'AND';
   audienceTags: string;
   selectedContactIds: string[];
   phones: string;
@@ -24,6 +26,18 @@ export interface CampaignWizardForm {
 
 export type CampaignWizardDetail = Campaign & { recipients?: CampaignRecipient[] };
 
+function getSelectedAudienceTypes(form: CampaignWizardForm): CampaignAudienceType[] {
+  if (!form.selectedAudienceTypes?.length) return [form.audienceType];
+  if (
+    form.selectedAudienceTypes.length === 1 &&
+    form.selectedAudienceTypes[0] === 'ALL_OPTED_IN' &&
+    form.audienceType !== 'ALL_OPTED_IN'
+  ) {
+    return [form.audienceType];
+  }
+  return form.selectedAudienceTypes;
+}
+
 export function createEmptyCampaignWizardForm(): CampaignWizardForm {
   return {
     name: '',
@@ -32,7 +46,9 @@ export function createEmptyCampaignWizardForm(): CampaignWizardForm {
     bodyParams: [],
     headerParams: [],
     headerMediaUrl: '',
-    audienceType: 'MANUAL',
+    audienceType: 'ALL_OPTED_IN',
+    selectedAudienceTypes: ['ALL_OPTED_IN'],
+    audienceOperator: 'OR',
     audienceTags: '',
     selectedContactIds: [],
     phones: '',
@@ -66,6 +82,18 @@ export function campaignToWizardForm(
   const headerText =
     template?.header || template?.components?.find((component) => component.type === 'HEADER')?.text;
   const empty = createEmptyCampaignWizardForm();
+  const groups = campaign.audienceConfig?.groups;
+  const selectedAudienceTypes: CampaignAudienceType[] = groups?.length
+    ? groups.map((group) => group.type)
+    : [(campaign.audienceType || 'ALL_OPTED_IN') as CampaignAudienceType];
+  const audienceType =
+    groups?.length && groups.some((group) => group.type === 'CONTACTS')
+      ? 'CONTACTS'
+      : groups?.length
+        ? 'TAGS'
+        : (campaign.audienceType || 'ALL_OPTED_IN') as CampaignAudienceType;
+  const groupedTags = groups?.find((group) => group.type === 'TAGS')?.tags;
+  const groupedContactIds = groups?.find((group) => group.type === 'CONTACTS')?.contactIds;
 
   return {
     ...empty,
@@ -75,9 +103,11 @@ export function campaignToWizardForm(
     bodyParams: campaign.templateParams?.body || Array(countTemplateVariables(bodyText)).fill(''),
     headerParams: campaign.templateParams?.header || Array(countTemplateVariables(headerText)).fill(''),
     headerMediaUrl: campaign.templateParams?.headerMediaUrl || '',
-    audienceType: (campaign.audienceType || 'MANUAL') as CampaignAudienceType,
-    audienceTags: (campaign.audienceConfig?.tags || []).join(', '),
-    selectedContactIds: campaign.audienceConfig?.contactIds || [],
+    audienceType,
+    selectedAudienceTypes,
+    audienceOperator: campaign.audienceConfig?.operator || 'OR',
+    audienceTags: (groupedTags || campaign.audienceConfig?.tags || []).join(', '),
+    selectedContactIds: groupedContactIds || campaign.audienceConfig?.contactIds || [],
     phones: (campaign.recipients || []).map((recipient) => recipient.phone).join('\n'),
     whatsappNumberId: campaign.whatsappNumberId || '',
     scheduleEnabled: Boolean(campaign.scheduledAt),
@@ -104,7 +134,27 @@ export function buildCampaignPayload(
     },
   };
 
-  if (form.audienceType === 'MANUAL') {
+  const selectedAudienceTypes = getSelectedAudienceTypes(form);
+  const hasTags = selectedAudienceTypes.includes('TAGS');
+  const hasContacts = selectedAudienceTypes.includes('CONTACTS');
+
+  if (hasTags && hasContacts) {
+    payload.audienceType = 'CONTACTS';
+    payload.audienceConfig = {
+      groups: [
+        {
+          type: 'TAGS',
+          tags: form.audienceTags.split(',').map((tag) => tag.trim()).filter(Boolean),
+        },
+        {
+          type: 'CONTACTS',
+          contactIds: form.selectedContactIds,
+        },
+      ],
+      operator: form.audienceOperator || 'OR',
+      requireOptIn: true,
+    };
+  } else if (form.audienceType === 'MANUAL') {
     const lines = form.phones.split('\n');
     const invalid = lines
       .map((line) => line.trim())
@@ -125,7 +175,7 @@ export function buildCampaignPayload(
     ];
     if (!phones.length) throw new Error('Add at least one valid phone number');
     payload.recipients = phones.map((phone) => ({ phone }));
-  } else if (form.audienceType === 'TAGS') {
+  } else if (hasTags || form.audienceType === 'TAGS') {
     payload.audienceConfig = {
       tags: form.audienceTags
         .split(',')
@@ -133,7 +183,7 @@ export function buildCampaignPayload(
         .filter(Boolean),
       requireOptIn: true,
     };
-  } else if (form.audienceType === 'CONTACTS') {
+  } else if (hasContacts || form.audienceType === 'CONTACTS') {
     if (!form.selectedContactIds.length) throw new Error('Select at least one contact');
     payload.audienceConfig = {
       contactIds: form.selectedContactIds,
@@ -167,6 +217,16 @@ export function validateCampaignWizardStage(
     }
     if (selectedTemplate && templateNeedsHeaderMedia(selectedTemplate) && !form.headerMediaUrl.trim()) {
       return 'Add the required header media URL before continuing.';
+    }
+  }
+
+  if (stage === 1) {
+    const selectedAudienceTypes = getSelectedAudienceTypes(form);
+    if (selectedAudienceTypes.includes('TAGS') && !form.audienceTags.split(',').some((tag) => tag.trim())) {
+      return 'Choose at least one contact tag.';
+    }
+    if (selectedAudienceTypes.includes('CONTACTS') && form.selectedContactIds.length === 0) {
+      return 'Select at least one contact.';
     }
   }
 

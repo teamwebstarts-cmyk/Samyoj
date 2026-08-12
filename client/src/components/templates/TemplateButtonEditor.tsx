@@ -17,6 +17,8 @@ interface TemplateButtonEditorProps {
   onChange: (buttons: TemplateButtonForm[]) => void;
   maxButtons?: number;
   category?: string;
+  /** Wizard layout: numbered cards + IN +91 phone split */
+  variant?: 'default' | 'wizard';
 }
 
 export default function TemplateButtonEditor({
@@ -24,7 +26,9 @@ export default function TemplateButtonEditor({
   onChange,
   maxButtons = 10,
   category,
+  variant = 'default',
 }: TemplateButtonEditorProps) {
+  const isWizard = variant === 'wizard';
   const effectiveMax = category === 'AUTHENTICATION' ? 1 : maxButtons;
 
   const addButton = () => {
@@ -44,14 +48,23 @@ export default function TemplateButtonEditor({
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
         <div>
-          <p className="text-[13px] font-semibold text-theme-fg">Buttons</p>
-          <p className="text-[11px] font-medium text-theme-muted">
-            Optional · up to {effectiveMax} (Quick reply, URL, Call, or Copy code)
-          </p>
+          {!isWizard && (
+            <>
+              <p className="text-[13px] font-semibold text-theme-fg">Buttons</p>
+              <p className="text-[11px] font-medium text-theme-muted">
+                Optional · up to {effectiveMax} (Quick reply, URL, Call, or Copy code)
+              </p>
+            </>
+          )}
+          {isWizard && (
+            <p className="text-[11px] font-medium text-slate-500">
+              Optional · up to {effectiveMax} (Quick reply, URL, Call, or Copy code)
+            </p>
+          )}
         </div>
         <AppButton
           type="button"
-          variant="ghost"
+          variant={isWizard ? 'secondary' : 'ghost'}
           size="sm"
           icon={<Plus size={14} />}
           onClick={addButton}
@@ -70,11 +83,15 @@ export default function TemplateButtonEditor({
           {buttons.map((btn, index) => (
             <div
               key={index}
-              className="rounded-2xl border border-theme-border/80 bg-theme-subtle/50 p-3 ring-1 ring-theme-border/40"
+              className={
+                isWizard
+                  ? 'rounded-xl border border-slate-200/90 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900/50'
+                  : 'rounded-2xl border border-theme-border/80 bg-theme-subtle/50 p-3 ring-1 ring-theme-border/40'
+              }
             >
               <div className="mb-2 flex items-center justify-between">
                 <span className="text-[11px] font-bold uppercase tracking-wide text-theme-muted">
-                  Button {index + 1}
+                  {isWizard ? index + 1 : `Button ${index + 1}`}
                 </span>
                 <button
                   type="button"
@@ -102,6 +119,7 @@ export default function TemplateButtonEditor({
                 />
                 <AppInput
                   label="Button label"
+                  hint={isWizard ? 'Example: Track order' : undefined}
                   placeholder="e.g. Track order"
                   value={btn.text}
                   onChange={(e) => updateButton(index, { text: e.target.value })}
@@ -121,15 +139,38 @@ export default function TemplateButtonEditor({
                 />
               )}
               {btn.type === 'PHONE_NUMBER' && (
-                <AppInput
-                  className="mt-3"
-                  label="Phone number"
-                  hint="E.164 format, e.g. +919876543210"
-                  placeholder="+919876543210"
-                  value={btn.phone_number}
-                  onChange={(e) => updateButton(index, { phone_number: e.target.value })}
-                  required
-                />
+                <div className="mt-3">
+                  <p className="mb-1.5 text-[13px] font-semibold text-theme-secondary">Phone number</p>
+                  <p className="mb-2 text-[11px] font-medium text-theme-muted">
+                    E.164 format, e.g. +919876543210
+                  </p>
+                  {isWizard ? (
+                    <div className="flex gap-2">
+                      <div className="flex h-11 shrink-0 items-center rounded-xl border border-theme-border bg-theme-subtle/80 px-3 text-[12px] font-semibold text-theme-secondary">
+                        IN +91
+                      </div>
+                      <input
+                        type="tel"
+                        placeholder="98765 43210"
+                        value={btn.phone_number.replace(/^\+91/, '').trim()}
+                        onChange={(e) => {
+                          const digits = e.target.value.replace(/\D/g, '');
+                          updateButton(index, { phone_number: digits ? `+91${digits}` : '' });
+                        }}
+                        className="h-11 min-w-0 flex-1 rounded-xl border border-theme-border bg-theme-surface px-3 text-[14px] font-medium text-theme-fg outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200/80"
+                      />
+                    </div>
+                  ) : (
+                    <AppInput
+                      label="Phone number"
+                      hint="E.164 format, e.g. +919876543210"
+                      placeholder="+919876543210"
+                      value={btn.phone_number}
+                      onChange={(e) => updateButton(index, { phone_number: e.target.value })}
+                      required
+                    />
+                  )}
+                </div>
               )}
               {btn.type === 'COPY_CODE' && (
                 <AppInput

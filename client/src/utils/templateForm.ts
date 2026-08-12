@@ -12,6 +12,13 @@ export interface TemplateButtonForm {
   example: string;
 }
 
+export interface TemplateVariableMeta {
+  scope: 'body' | 'header';
+  index: number;
+  description: string;
+  suggestedSource?: 'contact.name' | 'contact.phone' | 'custom';
+}
+
 export interface TemplateFormState {
   name: string;
   language: string;
@@ -24,6 +31,7 @@ export interface TemplateFormState {
   buttons: TemplateButtonForm[];
   bodyExamples: string[];
   headerExamples: string[];
+  variableMeta: TemplateVariableMeta[];
   addSecurityRecommendation: boolean;
   authType: 'OTP' | 'ONE_TAP';
 }
@@ -34,12 +42,13 @@ export const emptyTemplateForm: TemplateFormState = {
   category: 'UTILITY',
   body: '',
   header: '',
-  headerFormat: 'TEXT',
+  headerFormat: 'NONE',
   headerMediaHandle: '',
   footer: '',
   buttons: [],
   bodyExamples: [],
   headerExamples: [],
+  variableMeta: [],
   addSecurityRecommendation: true,
   authType: 'OTP',
 };
@@ -68,10 +77,64 @@ function syncExamples(text: string, current: string[]): string[] {
   return Array.from({ length: count }, (_, i) => current[i] || '');
 }
 
+export function inferVariableDescription(text: string, varIndex: number): string {
+  const parts = text.split(`{{${varIndex}}}`);
+  const before = (parts[0] || '').toLowerCase();
+  if (/\b(hi|hello|dear|hey)\s*$/.test(before.trim())) return 'Customer name';
+  if (before.includes('order')) return 'Order number';
+  if (before.includes('appointment') || before.includes('date')) return 'Date or time';
+  if (before.includes('amount') || before.includes('₹') || before.includes('rs')) return 'Amount';
+  if (before.includes('code') || before.includes('otp') || before.includes('verification'))
+    return 'Verification code';
+  if (before.includes('track') || before.includes('reference') || before.includes('id'))
+    return 'Reference ID';
+  const defaults = [
+    'Customer name',
+    'Order number',
+    'Date or time',
+    'Amount',
+    'Reference ID',
+    'Product name',
+    'Location',
+  ];
+  return defaults[varIndex - 1] || `Variable ${varIndex}`;
+}
+
+function syncVariableMeta(
+  form: Pick<TemplateFormState, 'body' | 'header' | 'variableMeta'>,
+): TemplateVariableMeta[] {
+  const bodyCount = countTemplateVars(form.body);
+  const headerCount = countTemplateVars(form.header);
+  const existing = form.variableMeta || [];
+  const next: TemplateVariableMeta[] = [];
+
+  for (let i = 1; i <= headerCount; i++) {
+    const prev = existing.find((m) => m.scope === 'header' && m.index === i);
+    next.push({
+      scope: 'header',
+      index: i,
+      description: prev?.description || inferVariableDescription(form.header, i),
+      suggestedSource: prev?.suggestedSource,
+    });
+  }
+  for (let i = 1; i <= bodyCount; i++) {
+    const prev = existing.find((m) => m.scope === 'body' && m.index === i);
+    next.push({
+      scope: 'body',
+      index: i,
+      description: prev?.description || inferVariableDescription(form.body, i),
+      suggestedSource:
+        prev?.suggestedSource ||
+        (i === 1 && /\b(hi|hello|dear)\s*\{\{1\}\}/i.test(form.body) ? 'contact.name' : 'custom'),
+    });
+  }
+  return next;
+}
+
 export function formFromLibraryEntry(entry: TemplateLibraryEntry): TemplateFormState {
   const body = entry.body || '';
   const header = entry.header || '';
-  return {
+  return syncFormExamples({
     name: '',
     language: entry.language || 'en_US',
     category:
@@ -86,9 +149,10 @@ export function formFromLibraryEntry(entry: TemplateLibraryEntry): TemplateFormS
     buttons: buttonsFromTemplate(entry),
     bodyExamples: syncExamples(body, []),
     headerExamples: syncExamples(header, []),
+    variableMeta: [],
     addSecurityRecommendation: true,
     authType: 'OTP',
-  };
+  });
 }
 
 export function formFromMessageTemplate(template: MessageTemplate): TemplateFormState {
@@ -98,7 +162,7 @@ export function formFromMessageTemplate(template: MessageTemplate): TemplateForm
   const headerComp = components.find((c) => c.type === 'HEADER') as { format?: string } | undefined;
   const format = (headerComp?.format?.toUpperCase() || (header ? 'TEXT' : 'NONE')) as HeaderFormat;
 
-  return {
+  return syncFormExamples({
     name: template.name,
     language: template.language || 'en_US',
     category: (template.category as TemplateFormState['category']) || 'UTILITY',
@@ -110,17 +174,15 @@ export function formFromMessageTemplate(template: MessageTemplate): TemplateForm
     buttons: buttonsFromTemplate(template),
     bodyExamples: syncExamples(body, []),
     headerExamples: syncExamples(header, []),
+    variableMeta: [],
     addSecurityRecommendation: true,
     authType: 'OTP',
-  };
+  });
 }
 
 export function duplicateTemplateForm(template: MessageTemplate): TemplateFormState {
   const base = formFromMessageTemplate(template);
-  return {
-    ...base,
-    name: `${template.name}_copy`,
-  };
+  return { ...base, name: `${template.name}_copy` };
 }
 
 export function buildCreatePayload(form: TemplateFormState) {
@@ -160,9 +222,26 @@ export function getTemplateButtons(
 }
 
 export function syncFormExamples(form: TemplateFormState): TemplateFormState {
-  return {
+  const bodyExamples = syncExamples(form.body, form.bodyExamples);
+  const headerExamples = syncExamples(form.header, form.headerExamples);
+  const withExamples = {
     ...form,
-    bodyExamples: syncExamples(form.body, form.bodyExamples),
-    headerExamples: syncExamples(form.header, form.headerExamples),
+    bodyExamples,
+    headerExamples,
+  };
+  return {
+    ...withExamples,
+    variableMeta: syncVariableMeta(withExamples),
   };
 }
+
+export const AUTO_FILL_SAMPLES: Record<string, string[]> = {
+  'Customer name': ['Rahul', 'Priya', 'Amit'],
+  'Order number': ['ORD12345', 'ORD98765', 'ORD55443'],
+  'Date or time': ['12 Aug 2026', 'Tomorrow 3 PM', 'Friday 10 AM'],
+  Amount: ['₹1,299', '₹499', '₹2,450'],
+  'Reference ID': ['REF-8821', 'TRK-4412', 'ID-99001'],
+  'Verification code': ['482910', '739201', '105482'],
+  'Product name': ['Premium Plan', 'Blue Sneakers', 'Annual subscription'],
+  Location: ['Mumbai', 'Delhi', 'Bangalore'],
+};

@@ -57,6 +57,7 @@ export default function CampaignWizardPage() {
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(true);
   const [whatsappNumbers, setWhatsappNumbers] = useState<Array<{ id: string; phoneNumber: string }>>([]);
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [quota, setQuota] = useState<CampaignQuotaData | null>(null);
@@ -98,6 +99,7 @@ export default function CampaignWizardPage() {
   const channelLabel = selectedNumber?.phoneNumber || 'Default WhatsApp number';
 
   const loadTemplates = useCallback(() => {
+    setTemplatesLoading(true);
     templateApi
       .list({ status: 'APPROVED', all: 'true' })
       .then(({ data }) => {
@@ -105,7 +107,8 @@ export default function CampaignWizardPage() {
         const list = Array.isArray(payload) ? payload : payload?.templates || [];
         setTemplates(list as MessageTemplate[]);
       })
-      .catch(() => setTemplates([]));
+      .catch(() => setTemplates([]))
+      .finally(() => setTemplatesLoading(false));
   }, []);
 
   useEffect(() => {
@@ -356,6 +359,7 @@ export default function CampaignWizardPage() {
           form={form}
           setForm={setForm}
           templates={templates}
+          templatesLoading={templatesLoading}
           selectedTemplate={selectedTemplate}
           whatsappNumbers={whatsappNumbers}
         />
@@ -452,8 +456,8 @@ export default function CampaignWizardPage() {
       </form>
 
       <footer className="campaign-wizard-footer">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2">
+        <div className="wizard-footer-inner">
+          <div className="wizard-footer-start">
             {activeStep === 0 ? (
               <AppButton
                 type="button"
@@ -494,7 +498,7 @@ export default function CampaignWizardPage() {
             )}
           </div>
 
-          <div className="flex flex-wrap items-center justify-end gap-2">
+          <div className="wizard-footer-end">
             {activeStep === 0 ? (
               <>
                 <AppButton
@@ -545,14 +549,17 @@ export default function CampaignWizardPage() {
                   </AppButton>
                 ) : (
                   <>
-                    {form.scheduleEnabled && (
+                    {!form.scheduleEnabled && (
                       <AppButton
                         type="button"
                         size="sm"
                         variant="secondary"
-                        className="!min-h-10"
+                        className="!h-8 !min-h-8"
                         disabled={saving || finalActionBlocked}
-                        onClick={handleFinalAction}
+                        onClick={() => {
+                          setStageError(null);
+                          setForm((previous) => ({ ...previous, scheduleEnabled: true }));
+                        }}
                       >
                         Schedule for later
                       </AppButton>
@@ -561,14 +568,26 @@ export default function CampaignWizardPage() {
                       type="button"
                       size="sm"
                       icon={<Send className="h-3.5 w-3.5" />}
-                      className="!min-h-10 sm:min-w-[190px]"
+                      className="!h-8 !min-h-8"
                       loading={saving}
                       disabled={saving || finalActionBlocked}
                       onClick={handleFinalAction}
                     >
-                      {form.scheduleEnabled
-                        ? `Schedule campaign · ${(audiencePreviewCount || 0).toLocaleString()} included`
-                        : `Send now · ${(audiencePreviewCount || 0).toLocaleString()} included`}
+                      {form.scheduleEnabled ? (
+                        <>
+                          <span className="hidden xl:inline">
+                            {`Schedule campaign · ${(audiencePreviewCount || 0).toLocaleString()} included`}
+                          </span>
+                          <span className="xl:hidden">Schedule campaign</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="hidden xl:inline">
+                            {`Send now · ${(audiencePreviewCount || 0).toLocaleString()} included`}
+                          </span>
+                          <span className="xl:hidden">Send now</span>
+                        </>
+                      )}
                     </AppButton>
                   </>
                 )}

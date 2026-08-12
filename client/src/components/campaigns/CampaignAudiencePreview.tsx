@@ -20,6 +20,8 @@ interface CampaignAudiencePreviewProps {
   audienceTags: string;
   selectedContactIds: string[];
   requestedCount?: number;
+  audienceTypes?: Array<'TAGS' | 'CONTACTS' | 'ALL_OPTED_IN' | 'MANUAL'>;
+  audienceOperator?: 'OR' | 'AND';
   onCountChange?: (count: number | null) => void;
   onCostChange?: (cost: number | null) => void;
   onMetricsChange?: (metrics: AudiencePreviewMetrics | null) => void;
@@ -37,6 +39,8 @@ export default function CampaignAudiencePreview({
   audienceTags,
   selectedContactIds,
   requestedCount,
+  audienceTypes,
+  audienceOperator = 'OR',
   onCountChange,
   onCostChange,
   onMetricsChange,
@@ -65,8 +69,43 @@ export default function CampaignAudiencePreview({
 
       try {
         let payload: Record<string, unknown>;
+        const activeAudienceTypes = audienceTypes?.length ? audienceTypes : [audienceType];
+        const hasTags = activeAudienceTypes.includes('TAGS');
+        const hasContacts = activeAudienceTypes.includes('CONTACTS');
 
-        if (audienceType === 'MANUAL') {
+        if (hasTags && hasContacts) {
+          const tags = audienceTags
+            .split(',')
+            .map((tag) => tag.trim())
+            .filter(Boolean);
+          if (!tags.length) {
+            setError('Add at least one tag');
+            onCountChange?.(null);
+            onCostChange?.(null);
+            onMetricsChange?.(null);
+            setMetrics(null);
+            return;
+          }
+          if (!selectedContactIds.length) {
+            setError('Select at least one contact');
+            onCountChange?.(null);
+            onCostChange?.(null);
+            onMetricsChange?.(null);
+            setMetrics(null);
+            return;
+          }
+          payload = {
+            audienceType: 'CONTACTS',
+            audienceConfig: {
+              groups: [
+                { type: 'TAGS', tags },
+                { type: 'CONTACTS', contactIds: selectedContactIds },
+              ],
+              operator: audienceOperator,
+              requireOptIn: true,
+            },
+          };
+        } else if (audienceType === 'MANUAL') {
           const result = validatePhoneLines(phones.split('\n'));
           if (!result.ok) {
             setCount(null);
@@ -211,6 +250,8 @@ export default function CampaignAudiencePreview({
     audienceTags,
     selectedContactIds,
     requestedCount,
+    audienceTypes,
+    audienceOperator,
     onCountChange,
     onCostChange,
     onMetricsChange,

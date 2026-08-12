@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   Download,
   Hash,
@@ -7,7 +7,6 @@ import {
   Tag,
   Ticket,
   Trash2,
-  UserPlus,
   X,
 } from 'lucide-react';
 import AppInput from '../ui/AppInput';
@@ -21,7 +20,6 @@ import {
   softLabelPillPickerClassName,
   softLabelPillStyle,
 } from './details/DetailsSectionCard';
-import AssignAgentPopover from './AssignAgentPopover';
 import { useGlassTipProps } from './ComposerGlassTip';
 import { inboxApi, labelsApi, contactApi } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
@@ -32,7 +30,6 @@ import type {
   ConversationLabel,
   InboxLabel,
   InternalNote,
-  TeamAgent,
 } from '../../types';
 import { toastError } from '../../utils/toast';
 
@@ -59,13 +56,10 @@ const DETAILS_TABS: ReadonlyArray<{
 interface InboxDetailsPanelProps {
   conversation: Conversation;
   notes: InternalNote[];
-  agents: TeamAgent[];
   currentUserId?: string;
-  assigning: boolean;
   onNotesChange: (notes: InternalNote[]) => void;
   onLabelsChange: (labels: ConversationLabel[]) => void;
   onContactChange: (contact: Contact) => void;
-  onAssign: (agentId: string | null) => void;
   onConvertToTicket: () => void;
   onExport: () => void;
   /** Controlled docked panel open (≥ md). */
@@ -150,13 +144,10 @@ function CollapsibleNoteText({ content }: { content: string }) {
 export default function InboxDetailsPanel({
   conversation,
   notes,
-  agents,
   currentUserId,
-  assigning,
   onNotesChange,
   onLabelsChange,
   onContactChange,
-  onAssign,
   onConvertToTicket,
   onExport,
   panelOpen,
@@ -190,9 +181,7 @@ export default function InboxDetailsPanel({
   const [addingTag, setAddingTag] = useState(false);
   const [showTagInput, setShowTagInput] = useState(false);
   const [orgTags, setOrgTags] = useState<string[]>([]);
-  const [headerAssignOpen, setHeaderAssignOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const headerAssignRef = useRef<HTMLButtonElement>(null);
   const tabListRef = useRef<HTMLDivElement>(null);
   const noteInputRef = useRef<HTMLTextAreaElement>(null);
   const labelsSectionRef = useRef<HTMLDivElement>(null);
@@ -432,7 +421,6 @@ export default function InboxDetailsPanel({
   const contactTagSet = new Set(contact.tags ?? []);
   const suggestedTags = orgTags.filter((t) => !contactTagSet.has(t));
 
-  const assignedId = conversation.assignedAgent?.id;
   const iconStroke = 1.9;
 
   const panelShellClass =
@@ -442,60 +430,14 @@ export default function InboxDetailsPanel({
     'relative flex h-9 w-9 items-center justify-center rounded-xl transition disabled:cursor-not-allowed disabled:opacity-45';
 
   const renderQuickActions = (opts: {
-    assignRef?: RefObject<HTMLButtonElement>;
-    assignOpen?: boolean;
-    setAssignOpen?: (open: boolean) => void;
-    showAssign?: boolean;
     tipSide: 'left' | 'below';
-    popoverPrefer: 'above' | 'below';
     compact?: boolean;
   }) => {
-    const showAssign = opts.showAssign !== false && opts.assignRef && opts.setAssignOpen;
     const btn = opts.compact
       ? 'relative flex h-8 w-8 items-center justify-center rounded-lg transition disabled:cursor-not-allowed disabled:opacity-45'
       : actionBtnClass;
     return (
     <>
-      {showAssign && (
-        <>
-          <button
-            ref={opts.assignRef}
-            type="button"
-            aria-label={
-              conversation.assignedAgent?.name
-                ? `Assign agent · ${conversation.assignedAgent.name}`
-                : 'Assign agent'
-            }
-            aria-expanded={opts.assignOpen}
-            disabled={assigning}
-            onClick={() => opts.setAssignOpen!(!opts.assignOpen)}
-            className={`${btn} text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40`}
-            {...tipFor(
-              conversation.assignedAgent?.name
-                ? `Assign · ${conversation.assignedAgent.name}`
-                : 'Assign agent',
-              opts.tipSide
-            )}
-          >
-            <UserPlus className="h-4 w-4" strokeWidth={iconStroke} />
-          </button>
-          {opts.assignOpen && (
-            <AssignAgentPopover
-              agents={agents}
-              currentUserId={currentUserId}
-              selectedAgentId={assignedId}
-              disabled={assigning}
-              placement={opts.popoverPrefer}
-              anchorRef={opts.assignRef!}
-              onSelect={(agentId) => {
-                onAssign(agentId);
-                opts.setAssignOpen!(false);
-              }}
-              onClose={() => opts.setAssignOpen!(false)}
-            />
-          )}
-        </>
-      )}
       <button
         type="button"
         aria-label="Convert to ticket"
@@ -558,14 +500,7 @@ export default function InboxDetailsPanel({
           </div>
         </div>
         <div className="relative z-10 flex shrink-0 items-center gap-0.5 border-l border-white/50 bg-white/40 px-1.5 dark:border-white/10 dark:bg-neutral-950/40">
-          {renderQuickActions({
-            assignRef: headerAssignRef,
-            assignOpen: headerAssignOpen,
-            setAssignOpen: setHeaderAssignOpen,
-            tipSide: 'below',
-            popoverPrefer: 'below',
-            compact: true,
-          })}
+          {renderQuickActions({ tipSide: 'below', compact: true })}
           <span className="mx-0.5 h-4 w-px shrink-0 bg-theme-border/70" aria-hidden />
           <button
             type="button"
@@ -996,11 +931,7 @@ export default function InboxDetailsPanel({
         <span className="my-1.5 h-px w-6 shrink-0 bg-theme-border/80" aria-hidden />
 
         <div className="flex flex-col items-center gap-1">
-          {renderQuickActions({
-            showAssign: false,
-            tipSide: 'left',
-            popoverPrefer: 'above',
-          })}
+          {renderQuickActions({ tipSide: 'left' })}
         </div>
       </aside>
     );

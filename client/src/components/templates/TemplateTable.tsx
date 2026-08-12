@@ -197,10 +197,12 @@ export default function TemplateTable({
             </td>
 
             <td className="!py-3.5 sm:!py-4">
-              <TemplateRowActions
-                onView={() => onView(template)}
-                onDuplicate={() => onDuplicate(template)}
-              />
+              <div className="flex min-w-[9.5rem] justify-end">
+                <TemplateRowActions
+                  onView={() => onView(template)}
+                  onDuplicate={() => onDuplicate(template)}
+                />
+              </div>
             </td>
           </tr>
         );

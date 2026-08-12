@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
 import {
+  Check,
   CheckCircle2,
   ChevronDown,
   Info,
   Phone,
-  ShieldCheck,
   Sparkles,
   Tag,
   UserCheck,
@@ -61,12 +61,16 @@ const audienceTypes = [
   },
 ] as const;
 
-const wizardAudienceTypes = [audienceTypes[3], audienceTypes[1], audienceTypes[2], audienceTypes[0]] as const;
+const wizardAudienceTypes = [audienceTypes[3], audienceTypes[1], audienceTypes[2]] as const;
 
 interface CampaignAudienceSectionProps {
   variant?: 'default' | 'wizard';
   audienceType: AudienceType;
   onAudienceTypeChange: (type: AudienceType) => void;
+  selectedAudienceTypes?: AudienceType[];
+  onAudienceTypesChange?: (types: AudienceType[]) => void;
+  audienceOperator?: 'OR' | 'AND';
+  onAudienceOperatorChange?: (operator: 'OR' | 'AND') => void;
   phones: string;
   onPhonesChange: (phones: string) => void;
   audienceTags: string;
@@ -93,6 +97,10 @@ export default function CampaignAudienceSection({
   variant = 'default',
   audienceType,
   onAudienceTypeChange,
+  selectedAudienceTypes,
+  onAudienceTypesChange,
+  audienceOperator = 'OR',
+  onAudienceOperatorChange,
   phones,
   onPhonesChange,
   audienceTags,
@@ -109,6 +117,37 @@ export default function CampaignAudienceSection({
 }: CampaignAudienceSectionProps) {
   const [manualInputOpen, setManualInputOpen] = useState(Boolean(phones.trim()));
   const selectedTags = useMemo(() => parseTags(audienceTags), [audienceTags]);
+  const activeAudienceTypes = useMemo(
+    () =>
+      variant === 'wizard' && selectedAudienceTypes?.length
+        ? selectedAudienceTypes
+        : [audienceType],
+    [audienceType, selectedAudienceTypes, variant],
+  );
+  const isTagsSelected = activeAudienceTypes.includes('TAGS');
+  const isContactsSelected = activeAudienceTypes.includes('CONTACTS');
+  const isAllSelected = activeAudienceTypes.includes('ALL_OPTED_IN');
+
+  const toggleAudienceType = (type: AudienceType) => {
+    if (variant !== 'wizard' || !onAudienceTypesChange) {
+      onAudienceTypeChange(type);
+      return;
+    }
+
+    if (type === 'ALL_OPTED_IN') {
+      onAudienceTypesChange(['ALL_OPTED_IN']);
+      onAudienceTypeChange(type);
+      return;
+    }
+
+    const withoutAll = activeAudienceTypes.filter((item) => item !== 'ALL_OPTED_IN');
+    const next = withoutAll.includes(type)
+      ? withoutAll.filter((item) => item !== type)
+      : [...withoutAll, type];
+    const normalized = next.length ? next : ['ALL_OPTED_IN' as const];
+    onAudienceTypesChange(normalized);
+    onAudienceTypeChange(normalized[0]);
+  };
 
   const phoneStats = useMemo(() => {
     const lines = phones.split('\n').map((value, index) => ({ value: value.trim(), lineNumber: index + 1 })).filter((line) => line.value);
@@ -152,20 +191,21 @@ export default function CampaignAudienceSection({
         className={`campaign-audience-options grid gap-2 ${
           variant === 'wizard' ? 'grid-cols-1' : 'grid-cols-2'
         }`}
-        role="radiogroup"
+        role={variant === 'wizard' ? 'group' : 'radiogroup'}
         aria-label="Audience type"
       >
         {(variant === 'wizard' ? wizardAudienceTypes : audienceTypes).map((type) => {
           const Icon = type.icon;
-          const active = audienceType === type.id;
+          const active = activeAudienceTypes.includes(type.id);
+          const multiSelectable = variant === 'wizard' && type.id !== 'ALL_OPTED_IN';
           const label = variant === 'wizard' ? type.wizardLabel : type.label;
           const description = variant === 'wizard' ? type.wizardDescription : type.description;
           return (
             <button
               key={type.id}
               type="button"
-              onClick={() => onAudienceTypeChange(type.id)}
-              role="radio"
+              onClick={() => toggleAudienceType(type.id)}
+              role={variant === 'wizard' ? 'checkbox' : 'radio'}
               aria-checked={active}
               className={`flex min-h-[52px] items-center gap-2 rounded-lg border px-2.5 py-2 text-left transition focus:outline-none focus:ring-2 focus:ring-whatsapp-500/40 ${
                 active
@@ -174,12 +214,21 @@ export default function CampaignAudienceSection({
               }`}
             >
               <span
-                className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
-                  active ? 'border-emerald-500' : 'border-slate-300 dark:border-slate-600'
+                className={`flex h-4 w-4 shrink-0 items-center justify-center border ${
+                  multiSelectable ? 'rounded-md' : 'rounded-full'
+                } ${
+                  active
+                    ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40'
+                    : 'border-slate-300 dark:border-slate-600'
                 }`}
                 aria-hidden="true"
               >
-                {active && <span className="h-2 w-2 rounded-full bg-emerald-500" />}
+                {active &&
+                  (multiSelectable ? (
+                    <Check className="h-2.5 w-2.5 text-emerald-600 dark:text-emerald-300" strokeWidth={3} />
+                  ) : (
+                    <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                  ))}
               </span>
               <span
                 className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${type.tone} ${
@@ -191,7 +240,7 @@ export default function CampaignAudienceSection({
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-1.5">
                   <span className="block truncate text-[11px] font-extrabold text-theme-fg">{label}</span>
-                  {active && (
+                  {active && !multiSelectable && (
                     <CheckCircle2
                       className="h-3 w-3 shrink-0 text-emerald-600 dark:text-emerald-300"
                       aria-hidden="true"
@@ -205,30 +254,44 @@ export default function CampaignAudienceSection({
             </button>
           );
         })}
-        {variant === 'wizard' && (
-          <div className="flex min-h-[52px] items-center gap-2 rounded-lg border border-slate-100 bg-slate-50/70 px-2.5 py-2 dark:border-slate-800 dark:bg-slate-900/40">
-            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-slate-300 dark:border-slate-600" />
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-300">
-              <ShieldCheck className="h-3.5 w-3.5" strokeWidth={2.2} />
-            </span>
-            <span className="min-w-0">
-              <span className="block truncate text-[11px] font-extrabold text-theme-fg">Consent-based contacts</span>
-              <span className="mt-0.5 block truncate text-[9px] font-medium text-theme-muted">
-                Only opted-in contacts can receive campaigns
-              </span>
-            </span>
-          </div>
-        )}
       </div>
 
       <div className="campaign-audience-detail-column">
       <div className="campaign-audience-detail overflow-hidden rounded-xl border border-theme-border">
-        <div className="border-b border-theme-border bg-theme-subtle/40 px-3.5 py-2.5">
-          <p className="text-[12px] font-bold text-theme-fg">
+        <div className="flex items-center justify-between gap-3 border-b border-theme-border bg-theme-subtle/40 px-3.5 py-2.5">
+          <p className="min-w-0 truncate text-[12px] font-bold text-theme-fg">
             {variant === 'wizard'
-              ? audienceTypes.find((t) => t.id === audienceType)?.wizardLabel
+              ? activeAudienceTypes
+                  .map((type) => audienceTypes.find((item) => item.id === type)?.wizardLabel)
+                  .filter(Boolean)
+                  .join(' + ')
               : audienceTypes.find((t) => t.id === audienceType)?.label}
           </p>
+          {variant === 'wizard' && isTagsSelected && isContactsSelected && (
+            <div className="flex shrink-0 items-center gap-1.5">
+              <span className="hidden text-[9px] font-semibold text-violet-700/80 sm:inline dark:text-violet-300/80">
+                Match
+              </span>
+              <div className="flex rounded-md border border-violet-200 bg-white p-0.5 dark:border-violet-800 dark:bg-slate-950">
+                {(['OR', 'AND'] as const).map((operator) => (
+                  <button
+                    key={operator}
+                    type="button"
+                    aria-label={`Match ${operator === 'OR' ? 'any' : 'all'} audience conditions`}
+                    aria-pressed={audienceOperator === operator}
+                    onClick={() => onAudienceOperatorChange?.(operator)}
+                    className={`rounded px-2 py-1 text-[9px] font-extrabold transition ${
+                      audienceOperator === operator
+                        ? 'bg-violet-600 text-white shadow-sm'
+                        : 'text-violet-700 hover:bg-violet-50 dark:text-violet-300 dark:hover:bg-violet-950/50'
+                    }`}
+                  >
+                    {operator === 'OR' ? 'Any' : 'All'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="space-y-4 bg-theme-surface p-3.5">
@@ -336,7 +399,7 @@ export default function CampaignAudienceSection({
             </>
           )}
 
-          {audienceType === 'TAGS' && (
+          {isTagsSelected && (
             <>
               <AppInput
                 id="audience-tags"
@@ -379,7 +442,7 @@ export default function CampaignAudienceSection({
             </>
           )}
 
-          {audienceType === 'CONTACTS' && (
+          {isContactsSelected && (
             <CampaignContactPicker
               variant={variant}
               selectedIds={selectedContactIds}
@@ -387,7 +450,7 @@ export default function CampaignAudienceSection({
             />
           )}
 
-          {audienceType === 'ALL_OPTED_IN' && (
+          {isAllSelected && (
             variant === 'wizard' ? (
               <div className="space-y-2.5">
                 <div className="grid grid-cols-3 gap-1.5">
@@ -413,31 +476,6 @@ export default function CampaignAudienceSection({
                     Only opted-in contacts will receive this campaign.
                   </p>
                 </div>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="mr-auto text-[9px] font-extrabold text-theme-muted">
-                    Filter audience <span className="font-medium">(optional)</span>
-                  </span>
-                  {['Tags', 'Custom fields', 'Last active'].map((filter) => (
-                    <button
-                      key={filter}
-                      type="button"
-                      disabled
-                      className="inline-flex items-center gap-1 rounded-md border border-theme-border bg-theme-surface px-2 py-1.5 text-[9px] font-bold text-theme-secondary opacity-80"
-                      title="Use Content Studio for advanced audience filters"
-                    >
-                      {filter}
-                      <ChevronDown className="h-2.5 w-2.5" />
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    disabled
-                    className="inline-flex items-center gap-1 rounded-md border border-dashed border-emerald-200 px-2 py-1.5 text-[9px] font-extrabold text-emerald-700 opacity-80 dark:border-emerald-800 dark:text-emerald-300"
-                    title="Use Content Studio for advanced audience filters"
-                  >
-                    + Add filter
-                  </button>
-                </div>
               </div>
             ) : (
               <ModalCallout
@@ -449,7 +487,7 @@ export default function CampaignAudienceSection({
             )
           )}
 
-          {showSavedCount && ['TAGS', 'CONTACTS', 'ALL_OPTED_IN'].includes(audienceType) && (
+          {showSavedCount && activeAudienceTypes.some((type) => ['TAGS', 'CONTACTS', 'ALL_OPTED_IN'].includes(type)) && (
             <div className="rounded-xl border border-sky-200/70 bg-sky-50/60 px-3.5 py-2.5 dark:border-sky-800/40 dark:bg-sky-950/25">
               <p className="text-[12px] font-medium text-sky-900 dark:text-sky-200">
                 Contacts are checked when you save. Current count:{' '}
@@ -463,12 +501,14 @@ export default function CampaignAudienceSection({
       <div className="campaign-audience-preview">
         <CampaignAudiencePreview
           variant={variant === 'wizard' ? 'wizard' : 'default'}
-          showMetrics={!(variant === 'wizard' && audienceType === 'ALL_OPTED_IN')}
+          showMetrics={!(variant === 'wizard' && isAllSelected)}
           audienceType={audienceType}
+          audienceTypes={activeAudienceTypes}
+          audienceOperator={audienceOperator}
           phones={phones}
           audienceTags={audienceTags}
           selectedContactIds={selectedContactIds}
-          requestedCount={audienceType === 'CONTACTS' ? selectedContactIds.length : undefined}
+          requestedCount={activeAudienceTypes.includes('CONTACTS') ? selectedContactIds.length : undefined}
           onCountChange={onPreviewCountChange}
           onCostChange={onPreviewCostChange}
           onMetricsChange={onPreviewMetricsChange}

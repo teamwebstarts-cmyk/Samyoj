@@ -21,7 +21,7 @@ export default function TemplateRowActions({ onView, onDuplicate }: TemplateRowA
   }, [open]);
 
   return (
-    <div className="flex items-center justify-end gap-1.5">
+    <div className="flex items-center justify-end gap-2 whitespace-nowrap">
       <TableTextButton onClick={onView} icon={Eye}>
         View
       </TableTextButton>

@@ -7,6 +7,7 @@ import type { MessageTemplate } from '../../../types';
 
 interface CampaignTemplatePickerProps {
   templates: MessageTemplate[];
+  templatesLoading?: boolean;
   value: string;
   onChange: (template: MessageTemplate) => void;
 }
@@ -38,6 +39,7 @@ const templateIconTones = [
 
 export default function CampaignTemplatePicker({
   templates,
+  templatesLoading = false,
   value,
   onChange,
 }: CampaignTemplatePickerProps) {
@@ -118,7 +120,24 @@ export default function CampaignTemplatePicker({
       </div>
 
       <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto p-3 sm:p-3.5">
-        {filteredTemplates.length === 0 ? (
+        {templatesLoading ? (
+          <div className="space-y-2" role="status" aria-label="Loading approved templates">
+            {[0, 1, 2, 3, 4].map((item) => (
+              <div
+                key={item}
+                className="flex min-h-[58px] items-center gap-2 rounded-lg border border-slate-100 bg-slate-50/70 px-2.5 py-3 dark:border-slate-800 dark:bg-slate-900/35"
+              >
+                <span className="h-3.5 w-3.5 shrink-0 animate-pulse rounded-full bg-slate-200 dark:bg-slate-700" />
+                <span className="h-[34px] w-[34px] shrink-0 animate-pulse rounded-lg bg-slate-200 dark:bg-slate-800" />
+                <span className="min-w-0 flex-1 space-y-1.5">
+                  <span className="block h-2.5 w-3/4 animate-pulse rounded-full bg-slate-200 dark:bg-slate-700" />
+                  <span className="block h-2 w-1/2 animate-pulse rounded-full bg-slate-100 dark:bg-slate-800" />
+                </span>
+                <span className="h-4 w-12 animate-pulse rounded-md bg-slate-100 dark:bg-slate-800" />
+              </div>
+            ))}
+          </div>
+        ) : filteredTemplates.length === 0 ? (
           <div className="rounded-lg border border-dashed border-slate-200 px-3 py-8 text-center dark:border-slate-800">
             <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
               {templates.length ? 'No templates match these filters.' : 'No approved templates yet.'}

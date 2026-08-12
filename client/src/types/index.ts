@@ -815,7 +815,13 @@ export interface Campaign {
   templateLanguage?: string;
   templateParams?: { body?: string[]; header?: string[]; headerMediaUrl?: string };
   audienceType?: 'MANUAL' | 'TAGS' | 'CONTACTS' | 'ALL_OPTED_IN';
-  audienceConfig?: { tags?: string[]; contactIds?: string[]; requireOptIn?: boolean };
+  audienceConfig?: {
+    tags?: string[];
+    contactIds?: string[];
+    requireOptIn?: boolean;
+    operator?: 'OR' | 'AND';
+    groups?: Array<{ type: 'TAGS' | 'CONTACTS'; tags?: string[]; contactIds?: string[] }>;
+  };
   whatsappNumberId?: string;
   status: string;
   totalContacts: number;

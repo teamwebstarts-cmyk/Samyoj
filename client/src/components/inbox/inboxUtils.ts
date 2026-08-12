@@ -49,6 +49,16 @@ const AVATAR_GRADIENTS = [
   'from-amber-500 to-orange-600',
   'from-rose-500 to-pink-600',
   'from-teal-500 to-cyan-600',
+  'from-fuchsia-500 to-purple-600',
+  'from-lime-500 to-green-600',
+  'from-red-500 to-rose-600',
+  'from-indigo-500 to-blue-700',
+  'from-yellow-500 to-amber-600',
+  'from-cyan-500 to-teal-600',
+  'from-pink-500 to-fuchsia-600',
+  'from-emerald-500 to-green-700',
+  'from-orange-500 to-red-500',
+  'from-blue-600 to-indigo-700',
 ] as const;
 
 export function getInitials(name?: string, phone?: string) {
@@ -65,9 +75,12 @@ export function getInitials(name?: string, phone?: string) {
 }
 
 export function getAvatarGradient(key: string) {
-  let hash = 0;
+  if (!key.trim()) return AVATAR_GRADIENTS[0];
+  // FNV-1a spreads short strings (names, emails, ids) more evenly across the palette.
+  let hash = 2166136261;
   for (let i = 0; i < key.length; i += 1) {
-    hash = key.charCodeAt(i) + ((hash << 5) - hash);
+    hash ^= key.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
   }
   return AVATAR_GRADIENTS[Math.abs(hash) % AVATAR_GRADIENTS.length];
 }

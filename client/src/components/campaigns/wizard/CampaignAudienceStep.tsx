@@ -55,12 +55,20 @@ export default function CampaignAudienceStep({
         </p>
       </div>
 
-      <div className="campaign-audience-layout grid items-start gap-3 lg:grid-cols-[minmax(0,1fr)_250px]">
+      <div className="campaign-audience-layout grid items-start gap-3 lg:grid-cols-[minmax(0,1fr)_280px]">
         <section className="campaign-wizard-card flex h-full min-h-0 flex-col overflow-hidden">
           <div className="min-h-0 flex-1 p-3.5 sm:p-4">
             <CampaignAudienceSection
               variant="wizard"
               audienceType={form.audienceType}
+              selectedAudienceTypes={form.selectedAudienceTypes}
+              onAudienceTypesChange={(selectedAudienceTypes) =>
+                setForm((previous) => ({ ...previous, selectedAudienceTypes }))
+              }
+              audienceOperator={form.audienceOperator}
+              onAudienceOperatorChange={(audienceOperator) =>
+                setForm((previous) => ({ ...previous, audienceOperator }))
+              }
               onAudienceTypeChange={(audienceType) => setForm((previous) => ({ ...previous, audienceType }))}
               phones={form.phones}
               onPhonesChange={(phones) => setForm((previous) => ({ ...previous, phones }))}

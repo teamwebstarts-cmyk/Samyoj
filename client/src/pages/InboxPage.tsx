@@ -808,9 +808,7 @@ export default function InboxPage() {
                 <InboxDetailsPanel
                   conversation={selected}
                   notes={selected.internalNotes ?? []}
-                  agents={agents}
                   currentUserId={user?.id}
-                  assigning={assigning}
                   onNotesChange={(notes: InternalNote[]) =>
                     setSelected((prev) => (prev ? { ...prev, internalNotes: notes } : prev))
                   }
@@ -823,7 +821,6 @@ export default function InboxPage() {
                       prev.map((c) => (c.contact.id === contact.id ? { ...c, contact } : c))
                     );
                   }}
-                  onAssign={(agentId) => void handleAssignAgent(agentId)}
                   onConvertToTicket={() => setTicketModalOpen(true)}
                   onExport={() => setExportTarget(selected)}
                   panelOpen={detailsPanelOpen}

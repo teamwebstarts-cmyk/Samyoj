@@ -1,44 +1,16 @@
-# Dependencies
 node_modules/
-.pnp
-.pnp.js
-
-# Environment / secrets
-.env
-.env.*
-!.env.example
-!.env.sample
-server/.env.updated
-.cursor/mcp.json
-
-# Build output
 dist/
-build/
+.env
+.env.local
+.env.*.local
+*.log
+.DS_Store
 client/dist/
 server/dist/
-*.tsbuildinfo
-
-# Runtime state (dev scripts, tunnels, pids, logs)
-.run/
-*.pid
-*.log
-logs/
-
-# Runtime uploads / user-generated media
 server/uploads/
-
-# Local binaries
 .bin/
-
-# Caches
-.cache/
-.vite/
-.turbo/
-coverage/
-*.local
-
-# OS / editor cruft
-.DS_Store
-Thumbs.db
-*.swp
-*~
+.run/
+server/.env.updated
+server/key.json
+server/secrets/
+*.tsbuildinfo

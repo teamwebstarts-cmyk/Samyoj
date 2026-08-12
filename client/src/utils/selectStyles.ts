@@ -69,7 +69,7 @@ export function createSelectStyles(
       paddingLeft: isCompact ? 2 : base.paddingLeft,
       '&:hover': { color: focusBorder },
     }),
-    menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+    menuPortal: (base) => ({ ...base, zIndex: 10050 }),
     menu: (base) => ({
       ...base,
       borderRadius: 12,
