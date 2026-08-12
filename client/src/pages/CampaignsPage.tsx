@@ -40,6 +40,7 @@ import AppSelect from '../components/ui/AppSelect';
 import EmptyState from '../components/ui/EmptyState';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import ListToolbar from '../components/ui/ListToolbar';
+import { useIsBelowLg } from '../hooks/useBreakpoint';
 import LoadingState from '../components/ui/LoadingState';
 import PageShell from '../components/ui/PageShell';
 import Pagination from '../components/ui/Pagination';
@@ -191,6 +192,7 @@ function buildPayload(form: typeof emptyForm, options?: { clearSchedule?: boolea
 
 export default function CampaignsPage() {
   const { canManageTeam } = useAuth();
+  const isBelowLg = useIsBelowLg();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [whatsappNumbers, setWhatsappNumbers] = useState<Array<{ id: string; phoneNumber: string }>>([]);
@@ -788,7 +790,7 @@ export default function CampaignsPage() {
     <InboxGlassTipProvider>
     <PageShell list>
       <div className="list-page-stack">
-        <div className="shrink-0 space-y-[var(--density-stack-gap)]">
+        <div className="shrink-0 space-y-2 sm:space-y-[var(--density-stack-gap)]">
         <CampaignHero
           stats={[
             { label: 'Drafts', value: lifecycleSummary.drafts, tone: 'drafts' },
@@ -810,6 +812,7 @@ export default function CampaignsPage() {
         <div className="inbox-shell campaigns-list-shell list-shell-body overflow-hidden">
           <ListToolbar
             embedded
+            compactMobile
             search={search}
             onSearchChange={setSearch}
             searchPlaceholder="Search campaigns or templates"
@@ -817,7 +820,8 @@ export default function CampaignsPage() {
               <>
                 <CampaignStatusFilter value={statusFilter} onChange={setStatusFilter} />
                 <AppSelect
-                  className="w-full sm:w-[148px]"
+                  className="w-full min-w-0 sm:w-[148px]"
+                  size={isBelowLg ? 'compact' : 'default'}
                   value={period}
                   placeholder="All time"
                   isSearchable={false}
@@ -828,12 +832,22 @@ export default function CampaignsPage() {
             }
             actions={
               canManageTeam ? (
-                <div className="flex flex-wrap items-center gap-2">
-                  <AppButton icon={<Plus size={16} />} onClick={openCreate}>
+                <div className="flex w-full items-stretch gap-1.5 sm:w-auto sm:gap-2">
+                  <AppButton
+                    size="sm"
+                    className="max-sm:!min-h-9 max-sm:flex-1"
+                    icon={<Plus size={15} />}
+                    onClick={openCreate}
+                  >
                     New campaign
                   </AppButton>
-                  <Link to="/content-studio">
-                    <AppButton variant="secondary" size="sm" icon={<LayoutTemplate size={14} />}>
+                  <Link to="/content-studio" className="max-sm:flex-1">
+                    <AppButton
+                      variant="secondary"
+                      size="sm"
+                      className="w-full max-sm:!min-h-9"
+                      icon={<LayoutTemplate size={14} />}
+                    >
                       Content Studio
                     </AppButton>
                   </Link>

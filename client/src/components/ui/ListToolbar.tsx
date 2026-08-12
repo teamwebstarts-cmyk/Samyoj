@@ -13,6 +13,8 @@ interface ListToolbarProps {
   stackFilters?: boolean;
   /** Desktop: search (half) on the left; filters + actions grouped on the right */
   filtersLeading?: boolean;
+  /** Tighter padding, gaps, and filter grid on small screens */
+  compactMobile?: boolean;
 }
 
 export default function ListToolbar({
@@ -25,7 +27,14 @@ export default function ListToolbar({
   embedded = false,
   stackFilters = false,
   filtersLeading = false,
+  compactMobile = false,
 }: ListToolbarProps) {
+  const stackGap = compactMobile ? 'gap-2 sm:gap-3' : 'gap-3';
+  const rowGap = compactMobile ? 'gap-1.5 sm:gap-2' : 'gap-2';
+  const filterWrapClass = compactMobile
+    ? `grid grid-cols-2 ${rowGap} sm:flex sm:flex-row sm:flex-wrap sm:items-center`
+    : 'flex flex-col gap-2 sm:flex-row sm:items-center';
+
   let content: ReactNode;
 
   if (filtersLeading) {
@@ -68,19 +77,20 @@ export default function ListToolbar({
     );
   } else {
     content = (
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between lg:gap-4">
+      <div className={`flex flex-col ${stackGap} lg:flex-row lg:items-center lg:justify-between lg:gap-4`}>
         <SearchInput
           value={search}
           onChange={onSearchChange}
           placeholder={searchPlaceholder}
           className="w-full lg:max-w-sm lg:flex-1"
+          compact={compactMobile}
         />
 
         {(filters || actions) && (
-          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end lg:shrink-0">
-            {filters && (
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">{filters}</div>
-            )}
+          <div
+            className={`flex flex-col ${rowGap} sm:flex-row sm:flex-wrap sm:items-center sm:justify-end lg:shrink-0`}
+          >
+            {filters && <div className={filterWrapClass}>{filters}</div>}
             {actions}
           </div>
         )}
@@ -89,7 +99,8 @@ export default function ListToolbar({
   }
 
   if (embedded) {
-    return <div className={`border-b border-theme-border px-4 py-3.5 ${className}`}>{content}</div>;
+    const embeddedPad = compactMobile ? 'px-3 py-2 sm:px-4 sm:py-3.5' : 'px-4 py-3.5';
+    return <div className={`border-b border-theme-border ${embeddedPad} ${className}`}>{content}</div>;
   }
 
   return <div className={`dashboard-card p-4 ${className}`}>{content}</div>;

@@ -110,19 +110,19 @@ const statIcons = {
 
 export default function CampaignHero({ stats }: CampaignHeroProps) {
   return (
-    <section className="relative overflow-hidden rounded-2xl border border-[#c9efe0] bg-[linear-gradient(100deg,#eafff4_0%,#f4fff9_42%,#ffffff_100%)] p-3.5 shadow-[0_10px_30px_rgba(16,185,129,0.07)] dark:border-emerald-900/50 dark:bg-[linear-gradient(100deg,#10251f_0%,#13231f_45%,#151c24_100%)] sm:rounded-[22px] sm:p-5 md:p-6">
-      <div className="pointer-events-none absolute -left-20 -top-24 h-56 w-56 rounded-full bg-emerald-200/30 blur-3xl dark:bg-emerald-500/10" />
+    <section className="relative overflow-hidden rounded-xl border border-[#c9efe0] bg-[linear-gradient(100deg,#eafff4_0%,#f4fff9_42%,#ffffff_100%)] p-2.5 shadow-[0_8px_24px_rgba(16,185,129,0.06)] dark:border-emerald-900/50 dark:bg-[linear-gradient(100deg,#10251f_0%,#13231f_45%,#151c24_100%)] sm:rounded-[22px] sm:p-5 md:p-6">
+      <div className="pointer-events-none absolute -left-20 -top-24 h-56 w-56 rounded-full bg-emerald-200/30 blur-3xl dark:bg-emerald-500/10 max-sm:hidden" />
 
-      <div className="relative flex flex-col gap-3.5 sm:gap-5 xl:flex-row xl:items-center xl:justify-between xl:gap-8">
+      <div className="relative flex flex-col gap-2.5 sm:gap-5 xl:flex-row xl:items-center xl:justify-between xl:gap-8">
         <div className="min-w-0 max-w-xl">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.12em] text-violet-700 ring-1 ring-violet-200/70 dark:bg-violet-950/40 dark:text-violet-300 dark:ring-violet-800/50">
-            <Send className="h-3 w-3" strokeWidth={2.5} />
+          <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.1em] text-violet-700 ring-1 ring-violet-200/70 dark:bg-violet-950/40 dark:text-violet-300 dark:ring-violet-800/50 sm:gap-1.5 sm:px-2.5 sm:py-1 sm:text-[10px] sm:tracking-[0.12em]">
+            <Send className="h-2.5 w-2.5 sm:h-3 sm:w-3" strokeWidth={2.5} />
             Broadcast
           </span>
-          <h1 className="mt-2 text-[1.25rem] font-extrabold leading-tight tracking-tight text-[#0f172a] dark:text-white sm:mt-3 sm:text-[1.5rem] md:text-[1.65rem] xl:whitespace-nowrap">
+          <h1 className="mt-1.5 text-[1.05rem] font-extrabold leading-snug tracking-tight text-[#0f172a] dark:text-white sm:mt-3 sm:text-[1.5rem] md:text-[1.65rem] xl:whitespace-nowrap">
             Plan, send, and monitor campaigns
           </h1>
-          <p className="mt-1 max-w-md text-[12px] font-medium leading-relaxed text-[#64748b] dark:text-slate-300 sm:mt-1.5 sm:text-[13px]">
+          <p className="mt-0.5 hidden max-w-md text-[12px] font-medium leading-relaxed text-[#64748b] dark:text-slate-300 sm:mt-1.5 sm:block sm:text-[13px]">
             Create a campaign, schedule it for later, and follow delivery from one place.
           </p>
         </div>
@@ -133,18 +133,18 @@ export default function CampaignHero({ stats }: CampaignHeroProps) {
             return (
               <div
                 key={stat.label}
-                className="flex min-w-0 items-center gap-2 rounded-xl border border-neutral-200/80 bg-white px-2.5 py-2 shadow-[0_1px_2px_rgba(15,23,42,0.03)] dark:border-slate-700/70 dark:bg-slate-900/70 sm:gap-2.5 sm:rounded-2xl sm:px-3 sm:py-3 xl:w-[150px] 2xl:w-[160px]"
+                className="flex min-w-0 items-center gap-1.5 rounded-lg border border-neutral-200/80 bg-white px-2 py-1.5 shadow-[0_1px_2px_rgba(15,23,42,0.03)] dark:border-slate-700/70 dark:bg-slate-900/70 sm:gap-2.5 sm:rounded-2xl sm:px-3 sm:py-3 xl:w-[150px] 2xl:w-[160px]"
               >
                 <span
-                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full sm:h-9 sm:w-9 ${iconChip[stat.tone]}`}
+                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full sm:h-9 sm:w-9 ${iconChip[stat.tone]}`}
                 >
                   <Icon />
                 </span>
                 <div className="min-w-0">
-                  <p className="truncate text-[10px] font-semibold leading-tight text-neutral-800 dark:text-slate-200 sm:text-[12px]">
+                  <p className="truncate text-[9px] font-semibold leading-tight text-neutral-800 dark:text-slate-200 sm:text-[12px]">
                     {stat.label}
                   </p>
-                  <p className="mt-0.5 text-[1.1rem] font-extrabold leading-none tracking-tight tabular-nums text-neutral-950 dark:text-white sm:text-[1.35rem]">
+                  <p className="mt-0.5 text-[1rem] font-extrabold leading-none tracking-tight tabular-nums text-neutral-950 dark:text-white sm:text-[1.35rem]">
                     {stat.value.toLocaleString()}
                   </p>
                   <p className="mt-1 hidden truncate text-[11px] font-medium leading-snug text-neutral-400 dark:text-slate-400 sm:block">

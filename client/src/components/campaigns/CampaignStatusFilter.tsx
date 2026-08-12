@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import AppSelect from '../ui/AppSelect';
+import { useIsBelowLg } from '../../hooks/useBreakpoint';
 
 const PRIMARY_STATUSES = [
   { value: '', label: 'All' },
@@ -37,6 +38,7 @@ function isMoreStatus(value: string) {
 }
 
 export default function CampaignStatusFilter({ value, onChange }: CampaignStatusFilterProps) {
+  const isBelowLg = useIsBelowLg();
   const [moreOpen, setMoreOpen] = useState(false);
   const moreRef = useRef<HTMLDivElement>(null);
   const moreActive = isMoreStatus(value);
@@ -65,9 +67,10 @@ export default function CampaignStatusFilter({ value, onChange }: CampaignStatus
 
   return (
     <>
-      <div className="lg:hidden">
+      <div className="min-w-0 lg:hidden">
         <AppSelect
           className="w-full sm:w-[148px]"
+          size={isBelowLg ? 'compact' : 'default'}
           value={value}
           placeholder="All statuses"
           isSearchable={false}
