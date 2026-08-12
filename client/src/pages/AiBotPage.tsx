@@ -869,9 +869,10 @@ export default function AiBotPage() {
           />
         )}
 
-        <div className="dashboard-card overflow-hidden p-0 shadow-xs">
+        <div className="dashboard-card dashboard-card-soft overflow-hidden p-0">
           <ListToolbar
             embedded
+            filtersLeading
             search={search}
             onSearchChange={setSearch}
             searchPlaceholder="Search bots..."
@@ -921,8 +922,8 @@ export default function AiBotPage() {
           <>
             <ResponsiveDataView
               items={filteredBots}
-              cardClassName="divide-y divide-neutral-200 dark:divide-neutral-800 lg:hidden"
-              tableClassName=""
+              tableFrom="xl"
+              cardClassName="divide-y divide-neutral-200 dark:divide-neutral-800 xl:hidden"
               renderCard={(bot) => (
                 <AiBotCard
                   key={bot.id}

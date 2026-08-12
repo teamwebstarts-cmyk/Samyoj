@@ -14,12 +14,14 @@ import {
 } from 'lucide-react';
 import CampaignAnalyticsPanel from '../components/campaigns/CampaignAnalyticsPanel';
 import CampaignAudienceSection from '../components/campaigns/CampaignAudienceSection';
-import CampaignTable from '../components/campaigns/CampaignTable';
+import CampaignHero from '../components/campaigns/CampaignHero';
+import CampaignTable, { type CampaignSortKey } from '../components/campaigns/CampaignTable';
 import CampaignCard from '../components/campaigns/CampaignCard';
 import CampaignDetailHeader from '../components/campaigns/CampaignDetailHeader';
 import CampaignQuotaBanner from '../components/campaigns/CampaignQuotaBanner';
 import CampaignRecipientTable from '../components/campaigns/CampaignRecipientTable';
 import CampaignActionsMenu from '../components/campaigns/CampaignActionsMenu';
+import CampaignStatusFilter from '../components/campaigns/CampaignStatusFilter';
 import {
   getFilledTemplatePreview,
   getTemplateHeaderFormat,
@@ -39,7 +41,6 @@ import EmptyState from '../components/ui/EmptyState';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import ListToolbar from '../components/ui/ListToolbar';
 import LoadingState from '../components/ui/LoadingState';
-import PageHero from '../components/ui/PageHero';
 import PageShell from '../components/ui/PageShell';
 import Pagination from '../components/ui/Pagination';
 import ResponsiveDataView from '../components/ui/ResponsiveDataView';
@@ -91,15 +92,9 @@ function toDateTimeLocalValue(iso?: string | null) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-const statusFilterOptions = [
-  { value: '', label: 'All statuses' },
-  { value: 'DRAFT', label: 'Draft' },
-  { value: 'SCHEDULED', label: 'Scheduled' },
-  { value: 'RUNNING', label: 'Running' },
-  { value: 'PAUSED', label: 'Paused' },
-  { value: 'COMPLETED', label: 'Completed' },
-  { value: 'FAILED', label: 'Failed' },
-  { value: 'CANCELLED', label: 'Cancelled' },
+const periodFilterOptions = [
+  { value: '', label: 'All time' },
+  { value: 'this_month', label: 'This month' },
 ];
 
 function canEditCampaign(status: string) {
@@ -208,7 +203,11 @@ export default function CampaignsPage() {
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [period, setPeriod] = useState<'' | 'this_month'>('');
+  const [sortBy, setSortBy] = useState<CampaignSortKey>('createdAt');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [total, setTotal] = useState(0);
   const [lifecycleSummary, setLifecycleSummary] = useState({
     drafts: 0,
@@ -236,7 +235,7 @@ export default function CampaignsPage() {
   } | null>(null);
 
   const debouncedSearch = useDebouncedValue(search);
-  const hasFilters = Boolean(search || statusFilter);
+  const hasFilters = Boolean(search || statusFilter || period);
   const selectedTemplate = useMemo(
     () => templates.find((t) => t.name === form.templateName),
     [templates, form.templateName]
@@ -307,10 +306,13 @@ export default function CampaignsPage() {
 
     const params: Record<string, string> = {
       page: String(page),
-      limit: String(DEFAULT_PAGE_SIZE),
+      limit: String(pageSize),
+      sortBy,
+      sortDir,
     };
     if (debouncedSearch) params.search = debouncedSearch;
     if (statusFilter) params.status = statusFilter;
+    if (period) params.period = period;
 
     campaignApi
       .list(params)
@@ -323,7 +325,7 @@ export default function CampaignsPage() {
         toastError(getErrMsg(err, 'Campaigns could not load. Refresh the page and try again.'));
       })
       .finally(() => setLoading(false));
-  }, [page, debouncedSearch, statusFilter, loadLifecycleSummary]);
+  }, [page, pageSize, debouncedSearch, statusFilter, period, sortBy, sortDir, loadLifecycleSummary]);
 
   const loadDetailExtras = useCallback(async (campaignId: string) => {
     setAnalyticsLoading(true);
@@ -350,7 +352,7 @@ export default function CampaignsPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, statusFilter]);
+  }, [debouncedSearch, statusFilter, period, sortBy, sortDir, pageSize]);
 
   useEffect(() => {
     loadTemplates();
@@ -765,21 +767,33 @@ export default function CampaignsPage() {
     }
   };
 
+  const handleRetry = async (id: string) => {
+    await handleAction(
+      () => campaignApi.retryFailed(id),
+      'Failed campaign messages queued for retry',
+      'Could not retry failed messages. Refresh and try again.'
+    );
+  };
+
+  const handleSort = (key: CampaignSortKey) => {
+    if (sortBy === key) {
+      setSortDir((dir) => (dir === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+    setSortBy(key);
+    setSortDir(key === 'name' || key === 'status' ? 'asc' : 'desc');
+  };
+
   return (
     <InboxGlassTipProvider>
     <PageShell>
       <div className="space-y-4 sm:space-y-5">
-        <PageHero
-          badge="Campaigns"
-          badgeIcon={Send}
-          title="Plan, send, and monitor campaigns"
-          description="Create a campaign, schedule it for later, and follow delivery from one place."
-          accent="violet"
+        <CampaignHero
           stats={[
-            { label: 'Drafts', value: lifecycleSummary.drafts },
-            { label: 'Scheduled', value: lifecycleSummary.scheduled, tone: 'text-amber-700' },
-            { label: 'Running', value: lifecycleSummary.running, tone: 'text-violet-700' },
-            { label: 'Completed', value: lifecycleSummary.completed, tone: 'text-whatsapp-700' },
+            { label: 'Drafts', value: lifecycleSummary.drafts, tone: 'drafts' },
+            { label: 'Scheduled', value: lifecycleSummary.scheduled, tone: 'scheduled' },
+            { label: 'Running', value: lifecycleSummary.running, tone: 'running' },
+            { label: 'Completed', value: lifecycleSummary.completed, tone: 'completed' },
           ]}
         />
 
@@ -791,21 +805,24 @@ export default function CampaignsPage() {
           </div>
         )}
 
-        <div className="inbox-shell overflow-hidden">
+        <div className="inbox-shell campaigns-list-shell overflow-hidden">
           <ListToolbar
             embedded
             search={search}
             onSearchChange={setSearch}
             searchPlaceholder="Search campaigns or templates"
             filters={
-              <AppSelect
-                className="w-full sm:w-[148px]"
-                value={statusFilter}
-                placeholder="All statuses"
-                isSearchable={false}
-                options={statusFilterOptions}
-                onChange={(e) => setStatusFilter(e.target.value)}
-              />
+              <>
+                <CampaignStatusFilter value={statusFilter} onChange={setStatusFilter} />
+                <AppSelect
+                  className="w-full sm:w-[148px]"
+                  value={period}
+                  placeholder="All time"
+                  isSearchable={false}
+                  options={periodFilterOptions}
+                  onChange={(e) => setPeriod((e.target.value as '' | 'this_month') || '')}
+                />
+              </>
             }
             actions={
               canManageTeam ? (
@@ -814,7 +831,7 @@ export default function CampaignsPage() {
                     New campaign
                   </AppButton>
                   <Link to="/content-studio">
-                    <AppButton variant="secondary" size="sm">
+                    <AppButton variant="secondary" size="sm" icon={<LayoutTemplate size={14} />}>
                       Content Studio
                     </AppButton>
                   </Link>
@@ -871,15 +888,21 @@ export default function CampaignsPage() {
                     onPause={canManageTeam ? () => handlePause(c.id) : undefined}
                     onResume={canManageTeam ? () => handleResume(c.id) : undefined}
                     onDelete={canManageTeam ? () => handleDeleteItem(c) : undefined}
+                    onExport={() => handleExport(c.id, c.name)}
+                    onRetry={canManageTeam ? () => handleRetry(c.id) : undefined}
                   />
                 )}
                 renderTable={() => (
                   <CampaignTable
                     campaigns={campaigns}
                     page={page}
-                    pageSize={DEFAULT_PAGE_SIZE}
+                    pageSize={pageSize}
                     total={total}
                     onPageChange={setPage}
+                    onPageSizeChange={setPageSize}
+                    sortBy={sortBy}
+                    sortDir={sortDir}
+                    onSort={handleSort}
                     canManageTeam={canManageTeam}
                     onView={openView}
                     onEdit={canManageTeam ? openEdit : undefined}
@@ -887,13 +910,15 @@ export default function CampaignsPage() {
                     onPause={canManageTeam ? (c) => handlePause(c.id) : undefined}
                     onResume={canManageTeam ? (c) => handleResume(c.id) : undefined}
                     onDelete={canManageTeam ? handleDeleteItem : undefined}
+                    onExport={(c) => handleExport(c.id, c.name)}
+                    onRetry={canManageTeam ? (c) => handleRetry(c.id) : undefined}
                   />
                 )}
               />
               <Pagination
                 className="lg:hidden"
                 page={page}
-                pageSize={DEFAULT_PAGE_SIZE}
+                pageSize={pageSize}
                 total={total}
                 onPageChange={setPage}
                 itemLabel="campaigns"

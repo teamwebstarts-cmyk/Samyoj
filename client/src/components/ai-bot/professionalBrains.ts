@@ -37,7 +37,7 @@ export const supportProfessionalBrain: ProfessionalBrain = {
   accent:
     'from-indigo-500/10 via-theme-surface to-indigo-500/5 border-indigo-200/60 dark:border-indigo-500/25',
   iconBg:
-    'bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-[0_4px_14px_rgba(99,102,241,0.35)]',
+    'bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-[0_1px_2px_rgba(99,102,241,0.25)]',
 
   instructions: `You are the Customer Care Expert for [BUSINESS_NAME]. Your job is to resolve customer issues with patience, empathy, and thoroughness. You speak like a real, experienced customer service representative who genuinely cares about every customer.
 
@@ -231,7 +231,7 @@ export const salesConsultantBrain: ProfessionalBrain = {
   accent:
     'from-emerald-500/10 via-theme-surface to-teal-500/5 border-emerald-200/60 dark:border-emerald-500/25',
   iconBg:
-    'bg-gradient-to-br from-whatsapp-600 to-emerald-700 text-white shadow-[0_4px_14px_rgba(37,211,102,0.35)]',
+    'bg-gradient-to-br from-whatsapp-600 to-emerald-700 text-white shadow-[0_1px_2px_rgba(37,211,102,0.25)]',
 
   instructions: `You are the Sales Consultant for [BUSINESS_NAME]. Your job is to understand customer needs, recommend the right solution, and guide prospects toward a confident purchase decision — all while being genuinely helpful, never pushy.
 

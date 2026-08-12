@@ -73,7 +73,15 @@ router.get(
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const numberId = req.activeWhatsappNumberId;
-    const { search, status, page = '1', limit = '10' } = req.query;
+    const {
+      search,
+      status,
+      page = '1',
+      limit = '10',
+      sortBy = 'createdAt',
+      sortDir = 'desc',
+      period,
+    } = req.query;
     await syncRunningCampaignStatuses(orgId);
 
     const where: Prisma.CampaignWhereInput = {
@@ -89,15 +97,33 @@ router.get(
     if (status) {
       where.status = status as Prisma.EnumCampaignStatusFilter['equals'];
     }
+    if (period === 'this_month') {
+      const now = new Date();
+      const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+      const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+      where.createdAt = { gte: start, lt: end };
+    }
 
     const pageNum = parseInt(page as string);
     const limitNum = parseInt(limit as string);
     const skip = (pageNum - 1) * limitNum;
+    const direction = sortDir === 'asc' ? 'asc' : 'desc';
+    const sortKey = String(sortBy);
+    const orderBy: Prisma.CampaignOrderByWithRelationInput =
+      sortKey === 'name'
+        ? { name: direction }
+        : sortKey === 'status'
+          ? { status: direction }
+          : sortKey === 'totalContacts'
+            ? { totalContacts: direction }
+            : sortKey === 'progress'
+              ? { sentCount: direction }
+              : { createdAt: direction };
 
     const [campaigns, total, running, completed, sentAgg] = await Promise.all([
       prisma.campaign.findMany({
         where,
-        orderBy: { createdAt: 'desc' },
+        orderBy,
         skip,
         take: limitNum,
       }),

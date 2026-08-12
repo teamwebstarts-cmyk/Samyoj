@@ -77,7 +77,13 @@ export function createSelectStyles(
       boxShadow: menuShadow,
       backgroundColor: surface,
     }),
-    menuList: (base) => ({ ...base, padding: 6 }),
+    menuList: (base) => ({
+      ...base,
+      padding: 6,
+      maxHeight: 240,
+      scrollbarWidth: 'thin',
+      scrollbarColor: 'transparent transparent',
+    }),
     option: (base, state) => ({
       ...base,
       borderRadius: 8,
