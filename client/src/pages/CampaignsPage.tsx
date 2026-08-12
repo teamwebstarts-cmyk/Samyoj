@@ -15,7 +15,7 @@ import {
 import CampaignAnalyticsPanel from '../components/campaigns/CampaignAnalyticsPanel';
 import CampaignAudienceSection from '../components/campaigns/CampaignAudienceSection';
 import CampaignHero from '../components/campaigns/CampaignHero';
-import CampaignTable, { type CampaignSortKey } from '../components/campaigns/CampaignTable';
+import CampaignTable, { CampaignListPagination, type CampaignSortKey } from '../components/campaigns/CampaignTable';
 import CampaignCard from '../components/campaigns/CampaignCard';
 import CampaignDetailHeader from '../components/campaigns/CampaignDetailHeader';
 import CampaignQuotaBanner from '../components/campaigns/CampaignQuotaBanner';
@@ -786,8 +786,9 @@ export default function CampaignsPage() {
 
   return (
     <InboxGlassTipProvider>
-    <PageShell>
-      <div className="space-y-4 sm:space-y-5">
+    <PageShell list>
+      <div className="list-page-stack">
+        <div className="shrink-0 space-y-[var(--density-stack-gap)]">
         <CampaignHero
           stats={[
             { label: 'Drafts', value: lifecycleSummary.drafts, tone: 'drafts' },
@@ -804,8 +805,9 @@ export default function CampaignsPage() {
             You have read-only access to campaigns. Ask an admin to create or send campaigns.
           </div>
         )}
+        </div>
 
-        <div className="inbox-shell campaigns-list-shell overflow-hidden">
+        <div className="inbox-shell campaigns-list-shell list-shell-body overflow-hidden">
           <ListToolbar
             embedded
             search={search}
@@ -871,58 +873,71 @@ export default function CampaignsPage() {
             </div>
           ) : (
             <>
-              <div className="sr-only" aria-live="polite" role="status">
-                Campaign progress updated: {lifecycleSummary.running} running and {lifecycleSummary.completed} completed.
+              <div className="list-shell-scroll">
+                <div className="sr-only" aria-live="polite" role="status">
+                  Campaign progress updated: {lifecycleSummary.running} running and {lifecycleSummary.completed} completed.
+                </div>
+                <ResponsiveDataView
+                  items={campaigns}
+                  cardClassName="divide-y divide-neutral-200 dark:divide-neutral-800 lg:hidden"
+                  tableClassName="px-4 sm:px-5 pt-4"
+                  renderCard={(c) => (
+                    <CampaignCard
+                      key={c.id}
+                      campaign={c}
+                      onView={() => openView(c)}
+                      onEdit={canManageTeam ? () => openEdit(c) : undefined}
+                      onSend={canManageTeam ? () => handleSend(c.id) : undefined}
+                      onPause={canManageTeam ? () => handlePause(c.id) : undefined}
+                      onResume={canManageTeam ? () => handleResume(c.id) : undefined}
+                      onDelete={canManageTeam ? () => handleDeleteItem(c) : undefined}
+                      onExport={() => handleExport(c.id, c.name)}
+                      onRetry={canManageTeam ? () => handleRetry(c.id) : undefined}
+                    />
+                  )}
+                  renderTable={() => (
+                    <CampaignTable
+                      campaigns={campaigns}
+                      page={page}
+                      pageSize={pageSize}
+                      total={total}
+                      onPageChange={setPage}
+                      onPageSizeChange={setPageSize}
+                      sortBy={sortBy}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                      canManageTeam={canManageTeam}
+                      showPagination={false}
+                      onView={openView}
+                      onEdit={canManageTeam ? openEdit : undefined}
+                      onSend={canManageTeam ? (c) => handleSend(c.id) : undefined}
+                      onPause={canManageTeam ? (c) => handlePause(c.id) : undefined}
+                      onResume={canManageTeam ? (c) => handleResume(c.id) : undefined}
+                      onDelete={canManageTeam ? handleDeleteItem : undefined}
+                      onExport={(c) => handleExport(c.id, c.name)}
+                      onRetry={canManageTeam ? (c) => handleRetry(c.id) : undefined}
+                    />
+                  )}
+                />
               </div>
-              <ResponsiveDataView
-                items={campaigns}
-                cardClassName="divide-y divide-neutral-200 dark:divide-neutral-800 lg:hidden"
-                tableClassName="px-4 sm:px-5 pt-4 sm:pb-5"
-                renderCard={(c) => (
-                  <CampaignCard
-                    key={c.id}
-                    campaign={c}
-                    onView={() => openView(c)}
-                    onEdit={canManageTeam ? () => openEdit(c) : undefined}
-                    onSend={canManageTeam ? () => handleSend(c.id) : undefined}
-                    onPause={canManageTeam ? () => handlePause(c.id) : undefined}
-                    onResume={canManageTeam ? () => handleResume(c.id) : undefined}
-                    onDelete={canManageTeam ? () => handleDeleteItem(c) : undefined}
-                    onExport={() => handleExport(c.id, c.name)}
-                    onRetry={canManageTeam ? () => handleRetry(c.id) : undefined}
-                  />
-                )}
-                renderTable={() => (
-                  <CampaignTable
-                    campaigns={campaigns}
-                    page={page}
-                    pageSize={pageSize}
-                    total={total}
-                    onPageChange={setPage}
-                    onPageSizeChange={setPageSize}
-                    sortBy={sortBy}
-                    sortDir={sortDir}
-                    onSort={handleSort}
-                    canManageTeam={canManageTeam}
-                    onView={openView}
-                    onEdit={canManageTeam ? openEdit : undefined}
-                    onSend={canManageTeam ? (c) => handleSend(c.id) : undefined}
-                    onPause={canManageTeam ? (c) => handlePause(c.id) : undefined}
-                    onResume={canManageTeam ? (c) => handleResume(c.id) : undefined}
-                    onDelete={canManageTeam ? handleDeleteItem : undefined}
-                    onExport={(c) => handleExport(c.id, c.name)}
-                    onRetry={canManageTeam ? (c) => handleRetry(c.id) : undefined}
-                  />
-                )}
-              />
-              <Pagination
-                className="lg:hidden"
-                page={page}
-                pageSize={pageSize}
-                total={total}
-                onPageChange={setPage}
-                itemLabel="campaigns"
-              />
+              <footer className="list-shell-footer shrink-0">
+                <CampaignListPagination
+                  className="hidden lg:flex"
+                  page={page}
+                  pageSize={pageSize}
+                  total={total}
+                  onPageChange={setPage}
+                  onPageSizeChange={setPageSize}
+                />
+                <Pagination
+                  className="lg:hidden"
+                  page={page}
+                  pageSize={pageSize}
+                  total={total}
+                  onPageChange={setPage}
+                  itemLabel="campaigns"
+                />
+              </footer>
             </>
           )}
         </div>

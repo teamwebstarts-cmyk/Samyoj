@@ -67,7 +67,7 @@ function NavItem({
       {...flyout}
       className={({ isActive }) =>
         [
-          'sidebar-nav-item group relative box-border flex h-10 w-full items-center rounded-xl border pl-2.5 pr-2.5 text-[13.5px] font-medium',
+          'sidebar-nav-item group relative box-border flex h-[var(--density-nav-item-h)] w-full items-center rounded-xl border pl-2.5 pr-2.5 text-[13.5px] font-medium',
           'transition-[background-color,color,box-shadow,border-color] duration-200 ease-out',
           isActive ? 'sidebar-nav-item--active' : 'sidebar-nav-item--idle',
         ].join(' ')

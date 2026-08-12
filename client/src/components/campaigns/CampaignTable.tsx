@@ -44,6 +44,8 @@ interface CampaignTableProps {
   onDelete?: (campaign: Campaign) => void;
   onExport?: (campaign: Campaign) => void;
   onRetry?: (campaign: Campaign) => void;
+  /** When false, pagination is rendered by the parent (e.g. list shell footer). */
+  showPagination?: boolean;
 }
 
 const sortableHeaders: Array<{ key: CampaignSortKey | null; label: string }> = [
@@ -72,6 +74,7 @@ export default function CampaignTable({
   onDelete,
   onExport,
   onRetry,
+  showPagination = true,
 }: CampaignTableProps) {
   return (
     <div className="overflow-hidden">
@@ -324,29 +327,33 @@ export default function CampaignTable({
         </table>
       </div>
 
-      <CampaignListPagination
-        page={page}
-        pageSize={pageSize}
-        total={total}
-        onPageChange={onPageChange}
-        onPageSizeChange={onPageSizeChange}
-      />
+      {showPagination && (
+        <CampaignListPagination
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onPageChange={onPageChange}
+          onPageSizeChange={onPageSizeChange}
+        />
+      )}
     </div>
   );
 }
 
-function CampaignListPagination({
+export function CampaignListPagination({
   page,
   pageSize,
   total,
   onPageChange,
   onPageSizeChange,
+  className = '',
 }: {
   page: number;
   pageSize: number;
   total: number;
   onPageChange: (page: number) => void;
   onPageSizeChange?: (pageSize: number) => void;
+  className?: string;
 }) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -356,7 +363,9 @@ function CampaignListPagination({
   if (total === 0) return null;
 
   return (
-    <div className="flex flex-col gap-3 border-t border-slate-200/80 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-950 sm:flex-row sm:items-center sm:justify-between">
+    <div
+      className={`flex flex-col gap-3 border-t border-slate-200/80 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-950 sm:flex-row sm:items-center sm:justify-between ${className}`.trim()}
+    >
       <p className="text-[12px] font-medium text-slate-500">
         Showing <span className="font-bold text-slate-800 dark:text-slate-200">{start}</span> to{' '}
         <span className="font-bold text-slate-800 dark:text-slate-200">{end}</span> of{' '}

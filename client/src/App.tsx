@@ -3,6 +3,7 @@ import { lazy, Suspense } from 'react';
 import { AuthProvider } from './contexts/AuthContext';
 import { WhatsAppNumberProvider } from './contexts/WhatsAppNumberContext';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { DensityProvider } from './contexts/DensityContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -41,6 +42,7 @@ export default function App() {
   return (
     <ErrorBoundary>
       <ThemeProvider>
+        <DensityProvider>
         <AuthProvider>
           <WhatsAppNumberProvider>
             <AppToaster />
@@ -96,6 +98,7 @@ export default function App() {
             </BrowserRouter>
           </WhatsAppNumberProvider>
         </AuthProvider>
+        </DensityProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );

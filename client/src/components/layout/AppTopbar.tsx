@@ -178,7 +178,7 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
     <>
       <header className="topbar-glass sticky top-0 z-40 shrink-0">
         <div
-          className={`flex min-h-[72px] items-center gap-3 py-3 lg:min-h-[76px] lg:gap-5 lg:py-3.5 ${PAGE_GUTTER_X}`}
+          className={`flex min-h-[var(--density-topbar-min-h)] items-center gap-3 py-3 lg:min-h-[var(--density-topbar-min-h-lg)] lg:gap-5 lg:py-3.5 ${PAGE_GUTTER_X}`}
         >
           {onMenuOpen && (
             <button

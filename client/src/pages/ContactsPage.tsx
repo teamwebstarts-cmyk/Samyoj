@@ -471,8 +471,9 @@ export default function ContactsPage() {
   const partialSelected = selectedIds.length > 0 && !allSelected;
 
   return (
-    <PageShell className={selectedIds.length > 0 ? 'pb-28' : undefined}>
-      <div className="space-y-4 sm:space-y-5">
+    <PageShell list={viewTab === 'all'} className={selectedIds.length > 0 ? 'pb-28' : undefined}>
+      <div className={viewTab === 'all' ? 'list-page-stack' : 'space-y-[var(--density-stack-gap)]'}>
+        <div className={`space-y-[var(--density-stack-gap)] ${viewTab === 'all' ? 'shrink-0' : ''}`}>
         <PageHero
           badge="Audience"
           badgeIcon={Users}
@@ -529,11 +530,12 @@ export default function ContactsPage() {
           ]}
           ariaLabel="Contact views"
         />
+        </div>
 
         {viewTab === 'pipeline' ? (
           <ContactPipelineTab refreshToken={pipelineRefresh} onStatsChange={setPipelineStats} />
         ) : (
-          <div className="inbox-shell overflow-hidden">
+          <div className="inbox-shell list-shell-body overflow-hidden">
             <ListToolbar
               embedded
               stackFilters
@@ -628,50 +630,52 @@ export default function ContactsPage() {
               </div>
             ) : (
               <>
-                <ResponsiveDataView
-                  items={contacts}
-                  cardClassName="divide-y divide-neutral-200 dark:divide-neutral-800 lg:hidden"
-                  tableClassName="px-4 sm:px-5 pt-4 sm:pb-5"
-                  renderCard={(contact) => (
-                    <ContactCard
-                      key={contact.id}
-                      contact={contact}
-                      selected={selectedIds.includes(contact.id)}
-                      onToggleSelect={() => toggleSelect(contact.id)}
-                      onView={() => openDetail(contact)}
-                      onEdit={() => openEdit(contact)}
-                      onDelete={() => handleDeleteContact(contact)}
-                      onMessage={() => openMessage(contact)}
-                    />
-                  )}
-                  renderTable={() => (
-                    <ContactTable
-                      contacts={contacts}
-                      page={page}
-                      pageSize={DEFAULT_PAGE_SIZE}
-                      total={total}
-                      selectedIds={selectedIds}
-                      allSelected={allSelected}
-                      partialSelected={partialSelected}
-                      onPageChange={setPage}
-                      onToggleSelect={toggleSelect}
-                      onToggleSelectAll={toggleSelectAll}
-                      onView={openDetail}
-                      onEdit={openEdit}
-                      onDelete={handleDeleteContact}
-                      onMessage={openMessage}
-                    />
-                  )}
-                />
-                <div className="border-t border-theme-border lg:hidden">
+                <div className="list-shell-scroll">
+                  <ResponsiveDataView
+                    items={contacts}
+                    cardClassName="divide-y divide-neutral-200 dark:divide-neutral-800 lg:hidden"
+                    tableClassName="px-4 sm:px-5 pt-4"
+                    renderCard={(contact) => (
+                      <ContactCard
+                        key={contact.id}
+                        contact={contact}
+                        selected={selectedIds.includes(contact.id)}
+                        onToggleSelect={() => toggleSelect(contact.id)}
+                        onView={() => openDetail(contact)}
+                        onEdit={() => openEdit(contact)}
+                        onDelete={() => handleDeleteContact(contact)}
+                        onMessage={() => openMessage(contact)}
+                      />
+                    )}
+                    renderTable={() => (
+                      <ContactTable
+                        contacts={contacts}
+                        page={page}
+                        pageSize={DEFAULT_PAGE_SIZE}
+                        total={total}
+                        selectedIds={selectedIds}
+                        allSelected={allSelected}
+                        partialSelected={partialSelected}
+                        onPageChange={setPage}
+                        showPagination={false}
+                        onToggleSelect={toggleSelect}
+                        onToggleSelectAll={toggleSelectAll}
+                        onView={openDetail}
+                        onEdit={openEdit}
+                        onDelete={handleDeleteContact}
+                        onMessage={openMessage}
+                      />
+                    )}
+                  />
+                </div>
+                <footer className="list-shell-footer shrink-0">
                   <Pagination
                     page={page}
                     pageSize={DEFAULT_PAGE_SIZE}
                     total={total}
                     onPageChange={setPage}
-                    className="!border-t-0"
                   />
-                </div>
+                </footer>
               </>
             )}
           </div>

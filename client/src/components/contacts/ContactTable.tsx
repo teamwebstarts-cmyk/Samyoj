@@ -28,6 +28,7 @@ interface ContactTableProps {
   onEdit: (contact: Contact) => void;
   onDelete: (contact: Contact) => void;
   onMessage: (contact: Contact) => void;
+  showPagination?: boolean;
 }
 
 const headers = ['Contact', 'Tags', 'Last active', 'Status', 'Actions'];
@@ -47,6 +48,7 @@ export default function ContactTable({
   onEdit,
   onDelete,
   onMessage,
+  showPagination = true,
 }: ContactTableProps) {
   return (
     <div className="data-table contact-table dashboard-card overflow-hidden p-0">
@@ -186,7 +188,9 @@ export default function ContactTable({
         </table>
       </div>
 
-      <Pagination page={page} pageSize={pageSize} total={total} onPageChange={onPageChange} />
+      {showPagination && (
+        <Pagination page={page} pageSize={pageSize} total={total} onPageChange={onPageChange} />
+      )}
     </div>
   );
 }

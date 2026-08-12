@@ -35,6 +35,7 @@ import PageHeader from '../components/ui/PageHeader';
 import PageHero from '../components/ui/PageHero';
 import PageShell from '../components/ui/PageShell';
 // import ThemeToggle from '../components/ui/ThemeToggle';
+import AppearanceSettingsPanel from '../components/settings/AppearanceSettingsPanel';
 import TeamSecurityPanel from '../components/team/TeamSecurityPanel';
 import { skipOnboardingSetup } from '../components/OnboardingGate';
 // import { useTheme } from '../contexts/ThemeContext';
@@ -519,7 +520,12 @@ export default function SettingsPage() {
           />
 
           <div className="min-w-0 space-y-5">
-            {activeTab === 'general' && <TeamSecurityPanel />}
+            {activeTab === 'general' && (
+              <div className="space-y-5">
+                <AppearanceSettingsPanel />
+                <TeamSecurityPanel />
+              </div>
+            )}
 
             {activeTab === 'whatsapp' && (
               <div className="space-y-5">

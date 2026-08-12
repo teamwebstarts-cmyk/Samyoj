@@ -18,6 +18,11 @@
         var dark = stored === 'dark';
         document.documentElement.classList.toggle('dark', dark);
         document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+
+        var densityKey = 'samyoj:density:v1';
+        var density = localStorage.getItem(densityKey);
+        document.documentElement.dataset.density =
+          density === 'compact' ? 'compact' : 'comfortable';
       })();
     </script>
   </head>

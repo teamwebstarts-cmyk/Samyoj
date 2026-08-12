@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useBreakpoint } from '../hooks/useBreakpoint';
 import { useInboxUnreadTotal } from '../hooks/useInboxUnreadTotal';
 import { useSidebarCollapsed } from '../hooks/useSidebarCollapsed';
-import { isBuilderRoute, isInboxRoute, isCallsShellRoute, shouldShowMobileBottomNav } from '../config/pageMeta';
+import { isBuilderRoute, isInboxRoute, isCallsShellRoute, isListShellRoute, shouldShowMobileBottomNav } from '../config/pageMeta';
 import AppTopbar from './layout/AppTopbar';
 import Sidebar from './layout/Sidebar';
 import MobileBottomNav from './layout/MobileBottomNav';
@@ -15,7 +15,7 @@ import QualityRatingBanner from './billing/QualityRatingBanner';
 export default function Layout() {
   const { user, organization, logout } = useAuth();
   const navigate = useNavigate();
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const { collapsed, toggle } = useSidebarCollapsed();
@@ -28,7 +28,8 @@ export default function Layout() {
   const effectiveCollapsed = isTablet || collapsed;
   const showBottomNav = isMobile && shouldShowMobileBottomNav(pathname);
   const hideTopbar = isBuilderRoute(pathname);
-  const lockMainScroll = isInboxRoute(pathname) || isCallsShellRoute(pathname);
+  const lockMainScroll =
+    isInboxRoute(pathname) || isCallsShellRoute(pathname) || isListShellRoute(pathname, search);
 
   const handleLogout = () => {
     logout();
@@ -61,7 +62,7 @@ export default function Layout() {
       <div className="flex h-[100dvh] overflow-hidden platform-gradient">
         <aside
           className={`sidebar-glass hidden shrink-0 overflow-hidden transition-[width] duration-[250ms] ease-[cubic-bezier(0.22,1,0.36,1)] md:block ${
-            effectiveCollapsed ? 'w-[76px]' : 'w-[260px]'
+            effectiveCollapsed ? 'w-[var(--density-sidebar-collapsed)]' : 'w-[var(--density-sidebar-width)]'
           }`}
         >
           <Sidebar

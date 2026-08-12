@@ -120,6 +120,27 @@
     --bubble-sent-hover: #cfe9ca;
     --bubble-received-hover: #f5f6f6;
     --chat-font: Roboto, 'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif;
+
+    /* Display density — comfortable default; compact tightens via html[data-density] */
+    --density-sidebar-width: 248px;
+    --density-sidebar-collapsed: 76px;
+    --density-topbar-min-h: 72px;
+    --density-topbar-min-h-lg: 76px;
+    --density-page-py: 1rem;
+    --density-page-py-lg: 1.25rem;
+    --density-stack-gap: 1rem;
+    --density-nav-item-h: 2.5rem;
+  }
+
+  html[data-density='compact'] {
+    --density-sidebar-width: 228px;
+    --density-sidebar-collapsed: 72px;
+    --density-topbar-min-h: 64px;
+    --density-topbar-min-h-lg: 68px;
+    --density-page-py: 0.75rem;
+    --density-page-py-lg: 1rem;
+    --density-stack-gap: 0.75rem;
+    --density-nav-item-h: 2.25rem;
   }
 
   .dark {
@@ -1166,7 +1187,63 @@
   }
 
   .page-shell {
-    @apply mx-auto w-full max-w-[1600px] page-gutter-x py-4 sm:py-5 lg:py-6;
+    @apply mx-auto w-full max-w-[1600px] page-gutter-x;
+    padding-top: var(--density-page-py);
+    padding-bottom: var(--density-page-py);
+  }
+
+  @media (min-width: 1024px) {
+    .page-shell {
+      padding-top: var(--density-page-py-lg);
+      padding-bottom: var(--density-page-py-lg);
+    }
+  }
+
+  .page-shell-list {
+    @apply mx-auto flex h-full min-h-0 w-full max-w-[1600px] flex-1 flex-col overflow-hidden page-gutter-x;
+    padding-top: var(--density-page-py);
+    padding-bottom: var(--density-page-py);
+  }
+
+  @media (min-width: 1024px) {
+    .page-shell-list {
+      padding-top: var(--density-page-py-lg);
+      padding-bottom: var(--density-page-py-lg);
+    }
+  }
+
+  .list-page-stack {
+    display: flex;
+    height: 100%;
+    min-height: 0;
+    flex-direction: column;
+    gap: var(--density-stack-gap);
+  }
+
+  .list-shell-body {
+    display: flex;
+    min-height: 0;
+    flex: 1 1 0%;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .list-shell-scroll {
+    min-height: 0;
+    flex: 1 1 0%;
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+
+  .list-shell-scroll thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+
+  .list-shell-footer {
+    flex-shrink: 0;
+    margin-top: auto;
   }
 
   .page-shell-bleed {

@@ -108,6 +108,16 @@ export function isCallsShellRoute(pathname: string): boolean {
   return pathname === '/calls' || pathname.startsWith('/calls/');
 }
 
+/** Campaigns and contacts list fill the viewport — table scrolls inside the shell card. */
+export function isListShellRoute(pathname: string, search = ''): boolean {
+  if (pathname === '/campaigns') return true;
+  if (pathname === '/contacts' || pathname.startsWith('/contacts/')) {
+    const tab = new URLSearchParams(search).get('tab');
+    return tab !== 'pipeline';
+  }
+  return false;
+}
+
 export function shouldShowMobileBottomNav(pathname: string): boolean {
   return !isBuilderRoute(pathname);
 }
