@@ -272,6 +272,79 @@ export async function resolveAudienceRecipients(
   );
 }
 
+/**
+ * Return the numbers needed by the campaign wizard without exposing recipient
+ * data. `count` is the fail-closed, consent-eligible audience that will
+ * actually be queued. The failure/reach values are intentionally estimates:
+ * provider delivery failures are only known after a send.
+ */
+export async function previewAudienceMetrics(
+  organizationId: string,
+  audienceType: AudienceType,
+  audienceConfig: AudienceConfig | null | undefined,
+  manualRecipients: ResolvedRecipient[] = []
+) {
+  let total = 0;
+  let optedIn = 0;
+
+  if (audienceType === 'MANUAL') {
+    const recipients = dedupeRecipients(manualRecipients);
+    total = recipients.length;
+    if (recipients.length) {
+      const contacts = await prisma.contact.findMany({
+        where: {
+          organizationId,
+          phone: { in: recipients.map((recipient) => recipient.phone) },
+        },
+        select: {
+          phone: true,
+          optedIn: true,
+          consentSource: true,
+          consentAt: true,
+          optOutAt: true,
+        },
+      });
+      const eligiblePhones = new Set(
+        contacts.filter(hasAuditableCampaignConsent).map((contact) => contact.phone),
+      );
+      optedIn = recipients.filter((recipient) => eligiblePhones.has(recipient.phone)).length;
+    }
+  } else {
+    const scope: Prisma.ContactWhereInput = { organizationId };
+    if (audienceType === 'TAGS') {
+      const tags = audienceConfig?.tags?.filter(Boolean) || [];
+      if (!tags.length) throw new AppError(400, 'At least one tag is required for tag-based audience');
+      scope.tags = { hasSome: tags };
+    } else if (audienceType === 'CONTACTS') {
+      const contactIds = audienceConfig?.contactIds?.filter(Boolean) || [];
+      if (!contactIds.length) throw new AppError(400, 'At least one contact is required');
+      scope.id = { in: contactIds };
+    }
+
+    const eligibleWhere: Prisma.ContactWhereInput = {
+      ...scope,
+      optedIn: true,
+      consentSource: { not: null },
+      consentAt: { not: null },
+      optOutAt: null,
+    };
+    [total, optedIn] = await Promise.all([
+      prisma.contact.count({ where: scope }),
+      prisma.contact.count({ where: eligibleWhere }),
+    ]);
+  }
+
+  const estimatedFailed = Math.max(0, Math.round(optedIn * 0.01));
+  return {
+    count: optedIn,
+    total,
+    optedIn,
+    notOptedIn: Math.max(0, total - optedIn),
+    estimatedFailed,
+    estimatedReach: Math.max(0, optedIn - estimatedFailed),
+  };
+}
+
 export async function syncRunningCampaignStatuses(organizationId?: string) {
   const running = await prisma.campaign.findMany({
     where: { ...(organizationId ? { organizationId } : {}), status: { in: ['RUNNING', 'PAUSED'] } },

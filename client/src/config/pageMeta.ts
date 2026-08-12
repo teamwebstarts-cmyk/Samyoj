@@ -108,6 +108,11 @@ export function isCallsShellRoute(pathname: string): boolean {
   return pathname === '/calls' || pathname.startsWith('/calls/');
 }
 
+/** Campaign create/edit uses an internal full-page wizard scroll region. */
+export function isCampaignWizardRoute(pathname: string): boolean {
+  return pathname === '/campaigns/new' || /^\/campaigns\/[^/]+\/edit$/.test(pathname);
+}
+
 /** Campaigns and contacts list fill the viewport — table scrolls inside the shell card. */
 export function isListShellRoute(pathname: string, search = ''): boolean {
   if (pathname === '/campaigns') return true;
@@ -119,5 +124,5 @@ export function isListShellRoute(pathname: string, search = ''): boolean {
 }
 
 export function shouldShowMobileBottomNav(pathname: string): boolean {
-  return !isBuilderRoute(pathname);
+  return !isBuilderRoute(pathname) && !isCampaignWizardRoute(pathname);
 }

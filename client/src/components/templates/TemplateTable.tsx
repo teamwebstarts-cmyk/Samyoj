@@ -1,25 +1,23 @@
 import {
   ChevronDown,
   ChevronRight,
-  Copy,
-  Eye,
   FileText,
   Globe,
   Layers,
 } from 'lucide-react';
 import DataTable, { TableSerialCell } from '../ui/DataTable';
-import { TableIconButton, TableTextButton } from '../ui/TableActions';
-import StatusBadge from '../ui/StatusBadge';
 import type { MessageTemplate } from '../../types';
 import {
-  getQualityLabel,
   getTemplatePreviewSnippet,
   getTemplateRejectedReason,
 } from '../../utils/templateUtils';
 import {
+  CategoryInlinePill,
   getCategoryMeta,
   getLanguageLabel,
 } from './templateUi';
+import TemplateRowActions from './TemplateRowActions';
+import TemplateStatusCell from './TemplateStatusCell';
 
 export type TemplateTableRow =
   | { type: 'group'; name: string; variants: MessageTemplate[]; primary: MessageTemplate }
@@ -38,7 +36,7 @@ interface TemplateTableProps {
   onDuplicate: (template: MessageTemplate) => void;
 }
 
-function TemplateRowContent({
+function TemplateNameCell({
   template,
   indented,
   onView,
@@ -49,29 +47,32 @@ function TemplateRowContent({
 }) {
   const category = getCategoryMeta(template.category);
   const CategoryIcon = category?.icon ?? FileText;
-  const snippet = getTemplatePreviewSnippet(template, 72);
+  const snippet = getTemplatePreviewSnippet(template, 88);
 
   return (
     <button
       type="button"
       onClick={onView}
-      className={`flex w-full items-center gap-3 rounded-xl py-1 text-left transition hover:opacity-90 ${indented ? 'pl-4' : ''}`}
+      className={`group/cell flex w-full items-start gap-3 py-0.5 text-left ${indented ? 'pl-3' : ''}`}
     >
       <div
-        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white ${category?.iconBg ?? 'bg-gradient-to-br from-rose-500 to-pink-600'}`}
+        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white shadow-sm ${category?.iconBg ?? 'bg-gradient-to-br from-rose-500 to-pink-600'}`}
       >
-        <CategoryIcon className="h-4 w-4" strokeWidth={2.25} />
+        <CategoryIcon className="h-[18px] w-[18px]" strokeWidth={2.1} />
       </div>
-      <div className="min-w-0 flex-1">
-        <span className="block truncate font-mono text-[12px] font-bold text-theme-fg group-hover:text-whatsapp-700 dark:group-hover:text-whatsapp-400">
-          {template.name}
-        </span>
-        {snippet ? (
-          <span className="mt-0.5 block truncate text-[11px] font-medium leading-relaxed text-theme-muted">
-            {snippet}
+      <div className="min-w-0 flex-1 pt-0.5">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <span className="truncate font-mono text-[13px] font-bold text-neutral-900 group-hover/cell:text-whatsapp-700 dark:text-neutral-100 dark:group-hover/cell:text-whatsapp-400">
+            {template.name}
           </span>
+          <CategoryInlinePill category={template.category} />
+        </div>
+        {snippet ? (
+          <p className="mt-1 line-clamp-2 text-[12px] font-medium leading-snug text-neutral-500 dark:text-neutral-400">
+            {snippet}
+          </p>
         ) : (
-          <span className="mt-0.5 block text-[11px] text-theme-muted">No preview text</span>
+          <p className="mt-1 text-[12px] text-neutral-400">No preview text</p>
         )}
       </div>
     </button>
@@ -93,12 +94,18 @@ export default function TemplateTable({
 
   return (
     <DataTable
+      embedded
+      serialHeader="S.N.O."
+      className="templates-data-table"
       headers={['Template', 'Status', 'Category', 'Language', 'Actions']}
       page={page}
       pageSize={pageSize}
       total={total}
       onPageChange={onPageChange}
-      minTableWidth="min-w-[920px]"
+      paginationVariant="numbered"
+      paginationItemLabel="templates"
+      minTableWidth="min-w-[900px]"
+      tableClassName="text-sm"
     >
       {rows.map((row) => {
         if (row.type === 'group') {
@@ -106,14 +113,14 @@ export default function TemplateTable({
           const approvedCount = row.variants.filter((v) => v.status === 'APPROVED').length;
 
           return (
-            <tr key={`group-${row.name}`} className="bg-theme-subtle/50">
+            <tr key={`group-${row.name}`} className="bg-neutral-50/80 dark:bg-neutral-900/40">
               <td colSpan={6} className="!px-4 !py-2.5 sm:!px-5">
                 <button
                   type="button"
                   onClick={() => onToggleGroup(row.name)}
-                  className="flex w-full items-center gap-3 rounded-xl px-2 py-1 text-left transition hover:bg-theme-surface/60"
+                  className="flex w-full items-center gap-3 rounded-xl px-2 py-1 text-left transition hover:bg-white/60 dark:hover:bg-neutral-800/60"
                 >
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-theme-surface text-theme-secondary ring-1 ring-theme-border">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-neutral-600 ring-1 ring-neutral-200 dark:bg-neutral-800 dark:text-neutral-300 dark:ring-neutral-700">
                     {expanded ? (
                       <ChevronDown className="h-4 w-4" />
                     ) : (
@@ -121,8 +128,10 @@ export default function TemplateTable({
                     )}
                   </span>
                   <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-                    <span className="font-mono text-[13px] font-extrabold text-theme-fg">{row.name}</span>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 text-[10px] font-bold text-rose-800 ring-1 ring-rose-200/70 dark:bg-rose-950/50 dark:text-rose-300 dark:ring-rose-800/50">
+                    <span className="font-mono text-[13px] font-extrabold text-neutral-900 dark:text-neutral-100">
+                      {row.name}
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 text-[10px] font-bold text-rose-800 ring-1 ring-rose-200/70 dark:bg-rose-950/50 dark:text-rose-300">
                       <Layers className="h-3 w-3" />
                       {row.variants.length} languages
                     </span>
@@ -141,52 +150,36 @@ export default function TemplateTable({
         const template = row.template;
         const serialIndex = templateRowIndex++;
         const rejectedReason = getTemplateRejectedReason(template.rejected_reason);
-        const quality = getQualityLabel(template.quality_score?.score);
         const category = getCategoryMeta(template.category);
         const CategoryIcon = category?.icon ?? FileText;
 
         return (
           <tr
             key={template.id || `${template.name}-${template.language}-${serialIndex}`}
-            className={`group ${row.type === 'variant' ? 'bg-theme-subtle/25' : ''}`}
+            className={row.type === 'variant' ? 'bg-neutral-50/40 dark:bg-neutral-900/20' : ''}
           >
             <TableSerialCell page={page} pageSize={pageSize} rowIndex={serialIndex} />
 
-            <td className="min-w-[220px]">
-              <TemplateRowContent
+            <td className="min-w-[200px] max-w-[340px] !py-3.5 sm:!py-4">
+              <TemplateNameCell
                 template={template}
                 indented={row.type === 'variant'}
                 onView={() => onView(template)}
               />
             </td>
 
-            <td className="whitespace-nowrap">
-              <div className="flex flex-col gap-1.5">
-                <div className="flex items-center gap-2">
-                  {template.status ? (
-                    <StatusBadge status={template.status} />
-                  ) : (
-                    <span className="text-[13px] text-theme-muted">—</span>
-                  )}
-                </div>
-                {quality && (
-                  <span className={`text-[10px] font-semibold ${quality.tone}`}>{quality.label}</span>
-                )}
-                {rejectedReason && (
-                  <p
-                    className="max-w-[200px] truncate text-[11px] font-medium text-red-600 dark:text-red-400"
-                    title={rejectedReason}
-                  >
-                    {rejectedReason}
-                  </p>
-                )}
-              </div>
+            <td className="whitespace-nowrap !py-3.5 sm:!py-4">
+              <TemplateStatusCell
+                status={template.status}
+                qualityScore={template.quality_score?.score}
+                rejectedReason={rejectedReason}
+              />
             </td>
 
-            <td className="whitespace-nowrap">
+            <td className="whitespace-nowrap !py-3.5 sm:!py-4">
               {category ? (
                 <span
-                  className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ring-1 ${category.badge}`}
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ring-1 ${category.badge}`}
                 >
                   <CategoryIcon className="h-3 w-3 shrink-0" />
                   {category.label}
@@ -196,24 +189,18 @@ export default function TemplateTable({
               )}
             </td>
 
-            <td className="whitespace-nowrap">
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-theme-border bg-theme-subtle/60 px-2.5 py-1 text-[11px] font-bold text-theme-secondary">
-                <Globe className="h-3 w-3 shrink-0 text-theme-muted" />
+            <td className="whitespace-nowrap !py-3.5 sm:!py-4">
+              <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-neutral-600 dark:text-neutral-300">
+                <Globe className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
                 {getLanguageLabel(template.language)}
               </span>
             </td>
 
-            <td>
-              <div className="flex items-center justify-end gap-1.5">
-                <TableTextButton onClick={() => onView(template)} icon={Eye}>
-                  View
-                </TableTextButton>
-                <TableIconButton
-                  onClick={() => onDuplicate(template)}
-                  icon={Copy}
-                  label="Duplicate template"
-                />
-              </div>
+            <td className="!py-3.5 sm:!py-4">
+              <TemplateRowActions
+                onView={() => onView(template)}
+                onDuplicate={() => onDuplicate(template)}
+              />
             </td>
           </tr>
         );

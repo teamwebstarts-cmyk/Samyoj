@@ -1,5 +1,31 @@
 import { z } from 'zod';
 
+function extractVarNumbers(text: string): number[] {
+  const matches = text.match(/\{\{\d+\}\}/g) || [];
+  return [...new Set(matches.map((m) => parseInt(m.replace(/[{}]/g, ''), 10)))].sort((a, b) => a - b);
+}
+
+function validatePlaceholderText(path: string, text: string, ctx: z.RefinementCtx) {
+  if (!text.includes('{{')) return;
+  const nums = extractVarNumbers(text);
+  const expected = Array.from({ length: nums.length ? Math.max(...nums) : 0 }, (_, i) => i + 1);
+  const missing = expected.filter((n) => !nums.includes(n));
+  if (missing.length) {
+    ctx.addIssue({
+      code: 'custom',
+      message: `Use sequential placeholders starting at {{1}} — missing {{${missing[0]}}}`,
+      path: [path],
+    });
+  }
+  const trimmed = text.trim();
+  if (/^\{\{\d+\}\}/.test(trimmed)) {
+    ctx.addIssue({ code: 'custom', message: 'Text cannot start with a placeholder', path: [path] });
+  }
+  if (/\{\{\d+\}\}$/.test(trimmed)) {
+    ctx.addIssue({ code: 'custom', message: 'Text cannot end with a placeholder', path: [path] });
+  }
+}
+
 export const templateButtonSchema = z
   .object({
     type: z.enum(['QUICK_REPLY', 'URL', 'PHONE_NUMBER', 'COPY_CODE']),
@@ -77,6 +103,25 @@ export const createTemplateSchema = z
         message: 'Upload a sample file for media headers',
         path: ['headerMediaHandle'],
       });
+    }
+
+    validatePlaceholderText('body', data.body, ctx);
+    if (data.header) validatePlaceholderText('header', data.header, ctx);
+
+    if (data.buttons?.length) {
+      const filled = data.buttons.filter((b) => b.text.trim());
+      const labels = filled.map((b) => b.text.trim().toLowerCase());
+      if (new Set(labels).size !== labels.length) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Each button label must be unique',
+          path: ['buttons'],
+        });
+      }
+      const urlCount = filled.filter((b) => b.type === 'URL').length;
+      if (urlCount > 2) {
+        ctx.addIssue({ code: 'custom', message: 'Maximum 2 URL buttons', path: ['buttons'] });
+      }
     }
   });
 

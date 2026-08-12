@@ -12,6 +12,7 @@ import {
   getCampaignAnalytics,
   pauseCampaign,
   persistRecipients,
+  previewAudienceMetrics,
   processScheduledCampaigns,
   queueCampaignSend,
   recipientsToCsv,
@@ -185,14 +186,14 @@ router.post(
       variables: r.variables,
     }));
 
-    const resolved = await resolveAudienceRecipients(
+    const metrics = await previewAudienceMetrics(
       orgId,
       data.audienceType,
       data.audienceConfig,
       manualRecipients
     );
 
-    sendSuccess(res, { count: resolved.length });
+    sendSuccess(res, metrics);
   })
 );
 

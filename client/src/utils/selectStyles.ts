@@ -6,7 +6,7 @@ export interface SelectOption {
   disabled?: boolean;
 }
 
-export type SelectSize = 'default' | 'compact';
+export type SelectSize = 'default' | 'compact' | 'micro';
 
 function cssVar(name: string, fallback: string): string {
   if (typeof document === 'undefined') return fallback;
@@ -18,9 +18,10 @@ export function createSelectStyles(
   isDark: boolean,
   size: SelectSize = 'default',
 ): StylesConfig<SelectOption, false, GroupBase<SelectOption>> {
-  const isCompact = size === 'compact';
-  const controlHeight = isCompact ? 36 : 44;
-  const fontSize = isCompact ? 12 : 14;
+  const isCompact = size === 'compact' || size === 'micro';
+  const isMicro = size === 'micro';
+  const controlHeight = isMicro ? 32 : isCompact ? 36 : 44;
+  const fontSize = isMicro ? 11 : isCompact ? 12 : 14;
   const surface = cssVar('--color-surface', isDark ? '#151d2b' : '#ffffff');
   const text = cssVar('--color-text', isDark ? '#f1f5f9' : '#0f172a');
   const muted = cssVar('--color-text-muted', isDark ? '#64748b' : '#64748b');
@@ -42,7 +43,7 @@ export function createSelectStyles(
       ...base,
       minHeight: controlHeight,
       height: isCompact ? controlHeight : base.height,
-      borderRadius: isCompact ? 10 : 12,
+      borderRadius: isMicro ? 8 : isCompact ? 10 : 12,
       borderColor: state.isFocused ? focusBorder : border,
       boxShadow: state.isFocused ? focusRing : isCompact ? '0 1px 2px rgba(15, 23, 42, 0.04)' : 'none',
       backgroundColor: surface,
@@ -55,7 +56,7 @@ export function createSelectStyles(
     }),
     valueContainer: (base) => ({
       ...base,
-      padding: isCompact ? '0 8px' : '0 12px',
+      padding: isMicro ? '0 7px' : isCompact ? '0 8px' : '0 12px',
     }),
     placeholder: (base) => ({ ...base, color: muted, fontSize, fontWeight: isCompact ? 600 : 400 }),
     singleValue: (base) => ({ ...base, color: text, fontSize, fontWeight: isCompact ? 600 : 500 }),
@@ -64,7 +65,7 @@ export function createSelectStyles(
     dropdownIndicator: (base, state) => ({
       ...base,
       color: state.isFocused ? focusBorder : muted,
-      paddingRight: isCompact ? 8 : 12,
+      paddingRight: isMicro ? 6 : isCompact ? 8 : 12,
       paddingLeft: isCompact ? 2 : base.paddingLeft,
       '&:hover': { color: focusBorder },
     }),

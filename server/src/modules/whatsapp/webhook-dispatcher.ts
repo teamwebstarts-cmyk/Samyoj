@@ -4,6 +4,7 @@ import { emitToOrg } from '../../realtime';
 import { createModuleLogger } from '../../utils/logger';
 import { parseMetaTimestamp } from '../campaigns/safety';
 import { createHash } from 'node:crypto';
+import { invalidateTemplateCache } from '../templates/cache';
 
 const log = createModuleLogger('webhook-dispatcher');
 
@@ -135,6 +136,10 @@ async function handleTemplateStatusUpdate(
     event,
     reason,
   });
+
+  if (wabaId && templateName) {
+    await invalidateTemplateCache(number.organizationId, wabaId, templateName);
+  }
 
   if (['REJECTED', 'PAUSED', 'DISABLED', 'FLAGGED'].includes(event.toUpperCase())) {
     await appendOrgAlert(number.organizationId, 'templateRejections', {

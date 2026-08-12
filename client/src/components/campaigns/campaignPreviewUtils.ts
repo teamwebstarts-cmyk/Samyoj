@@ -10,12 +10,13 @@ export function applyParamsToText(text: string, params: string[]) {
 
 export function getFilledTemplatePreview(
   template: MessageTemplate,
-  params: { bodyParams: string[]; headerParams: string[] }
+  params: { bodyParams: string[]; headerParams: string[]; headerMediaUrl?: string }
 ) {
   const parts = getTemplateParts(template);
   return {
     ...parts,
     header: parts.header ? applyParamsToText(parts.header, params.headerParams) : undefined,
+    headerMediaUrl: params.headerMediaUrl || undefined,
     body: parts.body && parts.body !== '—' ? applyParamsToText(parts.body, params.bodyParams) : parts.body,
   };
 }

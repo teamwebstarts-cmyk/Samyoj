@@ -11,6 +11,7 @@ import {
   isWithin24HourWindow,
 } from '../whatsapp/meta.service';
 import { getOrgWhatsappContext } from '../whatsapp/context';
+import { getCachedMessageTemplate } from '../templates/cache';
 import { resolveActiveWhatsappNumber, conversationFilter, scopedConversationWhere, scopedConversationParent, ticketsForNumberFilter } from '../whatsapp/active-number';
 import { deliverOutboundMessage, type DeliverMessageType } from '../messages/send.service';
 import { validateInteractive, type InteractiveMessageOptions } from '../messages/interactive';
@@ -756,14 +757,15 @@ router.get(
 
     if (templateNames.size > 0) {
       try {
+        const orgId = req.user!.organizationId!;
         const { wabaId, accessToken } = await getOrgWhatsappContext(
-          req.user!.organizationId!,
+          orgId,
           req.activeWhatsappNumberId
         );
         const displayByName = new Map<string, string>();
         await Promise.all(
           [...templateNames].map(async (name) => {
-            const tpl = await MetaWhatsAppService.getMessageTemplate(wabaId, accessToken, name);
+            const tpl = await getCachedMessageTemplate(orgId, wabaId, accessToken, name);
             displayByName.set(name, getTemplateDisplayText(tpl, name));
           })
         );
@@ -1398,7 +1400,8 @@ router.post(
       deliverType = 'INTERACTIVE';
     } else if (data.type === 'TEMPLATE' && data.templateName) {
       const { wabaId, accessToken } = await getOrgWhatsappContext(orgId, req.activeWhatsappNumberId);
-      const template = await MetaWhatsAppService.getMessageTemplate(
+      const template = await getCachedMessageTemplate(
+        orgId,
         wabaId,
         accessToken,
         data.templateName

@@ -2,7 +2,9 @@ import { useMemo, useState } from 'react';
 import {
   CheckCircle2,
   ChevronDown,
+  Info,
   Phone,
+  ShieldCheck,
   Sparkles,
   Tag,
   UserCheck,
@@ -12,7 +14,7 @@ import {
 import AppInput from '../ui/AppInput';
 import AppTextarea from '../ui/AppTextarea';
 import { ModalCallout } from '../ui/modalUi';
-import CampaignAudiencePreview from './CampaignAudiencePreview';
+import CampaignAudiencePreview, { type AudiencePreviewMetrics } from './CampaignAudiencePreview';
 import CampaignContactPicker from './CampaignContactPicker';
 import CampaignPhoneCsvImport from './CampaignPhoneCsvImport';
 import { PHONE_HINT, PHONE_PLACEHOLDER, validatePhone, validatePhoneLines } from '../../utils/phone';
@@ -25,29 +27,44 @@ const audienceTypes = [
     id: 'MANUAL' as const,
     label: 'Phone numbers',
     description: 'Paste or import a list',
+    wizardLabel: 'Upload list',
+    wizardDescription: 'Paste or import phone numbers',
     icon: Phone,
+    tone: 'bg-orange-50 text-orange-600 dark:bg-orange-950/40 dark:text-orange-300',
   },
   {
     id: 'TAGS' as const,
     label: 'Contact tags',
     description: 'Choose contacts with these tags',
+    wizardLabel: 'Tags',
+    wizardDescription: 'Send to contacts with specific tags',
     icon: Tag,
+    tone: 'bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-300',
   },
   {
     id: 'CONTACTS' as const,
     label: 'Select contacts',
     description: 'Choose specific contacts',
+    wizardLabel: 'Selected contacts',
+    wizardDescription: 'Choose individual contacts',
     icon: UserCheck,
+    tone: 'bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-300',
   },
   {
     id: 'ALL_OPTED_IN' as const,
     label: messagingConsent.allAudienceLabel,
     description: messagingConsent.allAudienceDescription,
+    wizardLabel: 'All contacts',
+    wizardDescription: 'Send to opted-in saved contacts',
     icon: Users,
+    tone: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-300',
   },
 ] as const;
 
+const wizardAudienceTypes = [audienceTypes[3], audienceTypes[1], audienceTypes[2], audienceTypes[0]] as const;
+
 interface CampaignAudienceSectionProps {
+  variant?: 'default' | 'wizard';
   audienceType: AudienceType;
   onAudienceTypeChange: (type: AudienceType) => void;
   phones: string;
@@ -60,6 +77,9 @@ interface CampaignAudienceSectionProps {
   editingTotalContacts?: number;
   showSavedCount?: boolean;
   onPreviewCountChange?: (count: number | null) => void;
+  onPreviewCostChange?: (cost: number | null) => void;
+  onPreviewMetricsChange?: (metrics: AudiencePreviewMetrics | null) => void;
+  previewMetrics?: AudiencePreviewMetrics | null;
 }
 
 function parseTags(value: string) {
@@ -70,6 +90,7 @@ function parseTags(value: string) {
 }
 
 export default function CampaignAudienceSection({
+  variant = 'default',
   audienceType,
   onAudienceTypeChange,
   phones,
@@ -82,6 +103,9 @@ export default function CampaignAudienceSection({
   editingTotalContacts,
   showSavedCount,
   onPreviewCountChange,
+  onPreviewCostChange,
+  onPreviewMetricsChange,
+  previewMetrics,
 }: CampaignAudienceSectionProps) {
   const [manualInputOpen, setManualInputOpen] = useState(Boolean(phones.trim()));
   const selectedTags = useMemo(() => parseTags(audienceTags), [audienceTags]);
@@ -123,11 +147,19 @@ export default function CampaignAudienceSection({
   };
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Audience type">
-        {audienceTypes.map((type) => {
+    <div className={`campaign-audience-section ${variant === 'wizard' ? 'campaign-audience-section--wizard' : 'space-y-4'}`}>
+      <div
+        className={`campaign-audience-options grid gap-2 ${
+          variant === 'wizard' ? 'grid-cols-1' : 'grid-cols-2'
+        }`}
+        role="radiogroup"
+        aria-label="Audience type"
+      >
+        {(variant === 'wizard' ? wizardAudienceTypes : audienceTypes).map((type) => {
           const Icon = type.icon;
           const active = audienceType === type.id;
+          const label = variant === 'wizard' ? type.wizardLabel : type.label;
+          const description = variant === 'wizard' ? type.wizardDescription : type.description;
           return (
             <button
               key={type.id}
@@ -135,40 +167,67 @@ export default function CampaignAudienceSection({
               onClick={() => onAudienceTypeChange(type.id)}
               role="radio"
               aria-checked={active}
-              className={`flex items-start gap-2.5 rounded-xl border p-3 text-left transition focus:outline-none focus:ring-2 focus:ring-whatsapp-500/40 ${
+              className={`flex min-h-[52px] items-center gap-2 rounded-lg border px-2.5 py-2 text-left transition focus:outline-none focus:ring-2 focus:ring-whatsapp-500/40 ${
                 active
-                  ? 'border-whatsapp-500/30 bg-whatsapp-500/[0.04]'
+                  ? 'border-emerald-300 bg-emerald-50/55 shadow-[0_4px_14px_rgba(16,185,129,0.08)] dark:border-emerald-700 dark:bg-emerald-950/25'
                   : 'border-theme-border bg-theme-surface hover:border-theme-border-strong hover:bg-theme-subtle/40'
               }`}
             >
               <span
-                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
-                  active ? 'bg-whatsapp-500/10 text-whatsapp-600' : 'bg-theme-subtle text-theme-muted'
+                className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+                  active ? 'border-emerald-500' : 'border-slate-300 dark:border-slate-600'
+                }`}
+                aria-hidden="true"
+              >
+                {active && <span className="h-2 w-2 rounded-full bg-emerald-500" />}
+              </span>
+              <span
+                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${type.tone} ${
+                  active ? 'ring-1 ring-emerald-300/80 dark:ring-emerald-700/80' : ''
                 }`}
               >
-                <Icon className="h-4 w-4" strokeWidth={2.25} />
+                <Icon className="h-3.5 w-3.5" strokeWidth={2.25} />
               </span>
-              <span className="min-w-0">
+              <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-1.5">
-                  <span className="block text-[12px] font-bold text-theme-fg">{type.label}</span>
-                  <CheckCircle2
-                    className={`h-3.5 w-3.5 shrink-0 text-whatsapp-600 ${active ? 'opacity-100' : 'opacity-0'}`}
-                    aria-hidden={!active}
-                  />
+                  <span className="block truncate text-[11px] font-extrabold text-theme-fg">{label}</span>
+                  {active && (
+                    <CheckCircle2
+                      className="h-3 w-3 shrink-0 text-emerald-600 dark:text-emerald-300"
+                      aria-hidden="true"
+                    />
+                  )}
                 </span>
-                <span className="mt-0.5 block text-[10px] leading-snug text-theme-muted">
-                  {type.description}
+                <span className="mt-0.5 block truncate text-[9px] font-medium leading-snug text-theme-muted">
+                  {description}
                 </span>
               </span>
             </button>
           );
         })}
+        {variant === 'wizard' && (
+          <div className="flex min-h-[52px] items-center gap-2 rounded-lg border border-slate-100 bg-slate-50/70 px-2.5 py-2 dark:border-slate-800 dark:bg-slate-900/40">
+            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-slate-300 dark:border-slate-600" />
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-300">
+              <ShieldCheck className="h-3.5 w-3.5" strokeWidth={2.2} />
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate text-[11px] font-extrabold text-theme-fg">Consent-based contacts</span>
+              <span className="mt-0.5 block truncate text-[9px] font-medium text-theme-muted">
+                Only opted-in contacts can receive campaigns
+              </span>
+            </span>
+          </div>
+        )}
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-theme-border">
+      <div className="campaign-audience-detail-column">
+      <div className="campaign-audience-detail overflow-hidden rounded-xl border border-theme-border">
         <div className="border-b border-theme-border bg-theme-subtle/40 px-3.5 py-2.5">
           <p className="text-[12px] font-bold text-theme-fg">
-            {audienceTypes.find((t) => t.id === audienceType)?.label}
+            {variant === 'wizard'
+              ? audienceTypes.find((t) => t.id === audienceType)?.wizardLabel
+              : audienceTypes.find((t) => t.id === audienceType)?.label}
           </p>
         </div>
 
@@ -322,18 +381,72 @@ export default function CampaignAudienceSection({
 
           {audienceType === 'CONTACTS' && (
             <CampaignContactPicker
+              variant={variant}
               selectedIds={selectedContactIds}
               onChange={onSelectedContactIdsChange}
             />
           )}
 
           {audienceType === 'ALL_OPTED_IN' && (
-            <ModalCallout
-              icon={Sparkles}
-              title="Consent-based audience"
-              description="Use everyone in your contact list who agreed to receive WhatsApp campaign messages."
-              accent="emerald"
-            />
+            variant === 'wizard' ? (
+              <div className="space-y-2.5">
+                <div className="grid grid-cols-3 gap-1.5">
+                  {[
+                    { label: 'Total contacts', value: previewMetrics?.total },
+                    { label: 'Opted-in', value: previewMetrics?.optedIn },
+                    { label: 'Not opted-in', value: previewMetrics?.notOptedIn },
+                  ].map((item) => (
+                    <div
+                      key={item.label}
+                      className="rounded-lg border border-slate-100 bg-slate-50/70 px-2.5 py-2 dark:border-slate-800 dark:bg-slate-900/45"
+                    >
+                      <p className="text-[9px] font-semibold text-theme-muted">{item.label}</p>
+                      <p className="mt-1 text-[12px] font-extrabold tabular-nums text-theme-fg">
+                        {item.value == null ? '—' : item.value.toLocaleString()}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-start gap-2 rounded-lg border border-sky-100 bg-sky-50/70 px-2.5 py-2 dark:border-sky-900/40 dark:bg-sky-950/20">
+                  <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-sky-600 dark:text-sky-300" />
+                  <p className="text-[9px] font-semibold leading-relaxed text-sky-800 dark:text-sky-200">
+                    Only opted-in contacts will receive this campaign.
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="mr-auto text-[9px] font-extrabold text-theme-muted">
+                    Filter audience <span className="font-medium">(optional)</span>
+                  </span>
+                  {['Tags', 'Custom fields', 'Last active'].map((filter) => (
+                    <button
+                      key={filter}
+                      type="button"
+                      disabled
+                      className="inline-flex items-center gap-1 rounded-md border border-theme-border bg-theme-surface px-2 py-1.5 text-[9px] font-bold text-theme-secondary opacity-80"
+                      title="Use Content Studio for advanced audience filters"
+                    >
+                      {filter}
+                      <ChevronDown className="h-2.5 w-2.5" />
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    disabled
+                    className="inline-flex items-center gap-1 rounded-md border border-dashed border-emerald-200 px-2 py-1.5 text-[9px] font-extrabold text-emerald-700 opacity-80 dark:border-emerald-800 dark:text-emerald-300"
+                    title="Use Content Studio for advanced audience filters"
+                  >
+                    + Add filter
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <ModalCallout
+                icon={Sparkles}
+                title="Consent-based audience"
+                description="Use everyone in your contact list who agreed to receive WhatsApp campaign messages."
+                accent="emerald"
+              />
+            )
           )}
 
           {showSavedCount && ['TAGS', 'CONTACTS', 'ALL_OPTED_IN'].includes(audienceType) && (
@@ -347,14 +460,21 @@ export default function CampaignAudienceSection({
         </div>
       </div>
 
-      <CampaignAudiencePreview
-        audienceType={audienceType}
-        phones={phones}
-        audienceTags={audienceTags}
-        selectedContactIds={selectedContactIds}
-        requestedCount={audienceType === 'CONTACTS' ? selectedContactIds.length : undefined}
-        onCountChange={onPreviewCountChange}
-      />
+      <div className="campaign-audience-preview">
+        <CampaignAudiencePreview
+          variant={variant === 'wizard' ? 'wizard' : 'default'}
+          showMetrics={!(variant === 'wizard' && audienceType === 'ALL_OPTED_IN')}
+          audienceType={audienceType}
+          phones={phones}
+          audienceTags={audienceTags}
+          selectedContactIds={selectedContactIds}
+          requestedCount={audienceType === 'CONTACTS' ? selectedContactIds.length : undefined}
+          onCountChange={onPreviewCountChange}
+          onCostChange={onPreviewCostChange}
+          onMetricsChange={onPreviewMetricsChange}
+        />
+      </div>
+      </div>
     </div>
   );
 }

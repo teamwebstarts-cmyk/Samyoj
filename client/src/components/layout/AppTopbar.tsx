@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   ChevronDown,
+  ChevronRight,
   CircleHelp,
   LogOut,
   Menu,
@@ -9,7 +10,7 @@ import {
   Settings2,
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
-import { getPageMeta } from '../../config/pageMeta';
+import { getPageMeta, isCampaignWizardRoute } from '../../config/pageMeta';
 import { useAuth } from '../../contexts/AuthContext';
 import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
 import type { OrgRole } from '../../types';
@@ -56,10 +57,16 @@ function useIsApplePlatform() {
 }
 
 export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout }: AppTopbarProps) {
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   const { orgRole } = useAuth();
   const { hasConnectedNumber, loading: numbersLoading } = useWhatsAppNumber();
   const { title, description } = getPageMeta(pathname);
+  const isCampaignWizard = isCampaignWizardRoute(pathname);
+  const wizardLabel = pathname === '/campaigns/new' ? 'New campaign' : 'Edit campaign';
+  const wizardStatus =
+    pathname === '/campaigns/new'
+      ? 'Draft'
+      : new URLSearchParams(search).get('status')?.toLowerCase() || '';
   const initials = nameInitials(userName);
   const roleText = roleLabel(orgRole);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -191,33 +198,50 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
             </button>
           )}
 
-          {/* Left — page title + live + subtitle */}
+          {/* Left — page title/context + live + subtitle */}
           <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="truncate text-[18px] font-bold leading-none tracking-tight text-neutral-900 sm:text-[20px] dark:text-theme-fg">
-                {title}
-              </h1>
-              {showLive ? (
-                <span
-                  className="inline-flex h-5 items-center rounded-full bg-emerald-50 px-2 text-[10px] font-bold uppercase tracking-[0.06em] text-emerald-700 ring-1 ring-emerald-100/90 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20 motion-reduce:animate-none"
-                  title="WhatsApp connected — live updates available"
-                >
-                  Live
-                </span>
-              ) : showNotConnected ? (
-                <span
-                  className="inline-flex h-5 items-center rounded-full bg-[#FFF1E8] px-2.5 text-[11px] font-bold text-[#E67E22] ring-1 ring-[#FFD8BF]/90 dark:bg-orange-500/15 dark:text-orange-300 dark:ring-orange-500/25"
-                  title="WhatsApp is not connected"
-                >
-                  Not connected
-                </span>
-              ) : null}
-            </div>
-            {subtitle ? (
-              <p className="mt-1 truncate text-[12px] font-semibold leading-snug text-neutral-700 sm:text-[13px] dark:text-neutral-300">
-                {subtitle}
-              </p>
-            ) : null}
+            {isCampaignWizard ? (
+              <div className="flex min-w-0 items-center gap-1.5 text-[11px] font-semibold text-neutral-600 dark:text-neutral-300">
+                <Link to="/campaigns" className="transition hover:text-emerald-700 dark:hover:text-emerald-300">
+                  Campaigns
+                </Link>
+                <ChevronRight className="h-3 w-3 text-neutral-300 dark:text-slate-600" />
+                <span className="font-extrabold text-neutral-900 dark:text-theme-fg">{wizardLabel}</span>
+                {wizardStatus && (
+                  <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-extrabold capitalize text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
+                    {wizardStatus}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="truncate text-[18px] font-bold leading-none tracking-tight text-neutral-900 sm:text-[20px] dark:text-theme-fg">
+                    {title}
+                  </h1>
+                  {showLive ? (
+                    <span
+                      className="inline-flex h-5 items-center rounded-full bg-emerald-50 px-2 text-[10px] font-bold uppercase tracking-[0.06em] text-emerald-700 ring-1 ring-emerald-100/90 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20 motion-reduce:animate-none"
+                      title="WhatsApp connected — live updates available"
+                    >
+                      Live
+                    </span>
+                  ) : showNotConnected ? (
+                    <span
+                      className="inline-flex h-5 items-center rounded-full bg-[#FFF1E8] px-2.5 text-[11px] font-bold text-[#E67E22] ring-1 ring-[#FFD8BF]/90 dark:bg-orange-500/15 dark:text-orange-300 dark:ring-orange-500/25"
+                      title="WhatsApp is not connected"
+                    >
+                      Not connected
+                    </span>
+                  ) : null}
+                </div>
+                {subtitle ? (
+                  <p className="mt-1 truncate text-[12px] font-semibold leading-snug text-neutral-700 sm:text-[13px] dark:text-neutral-300">
+                    {subtitle}
+                  </p>
+                ) : null}
+              </>
+            )}
           </div>
 
           {/* Right — help, search, notifications, profile */}

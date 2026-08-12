@@ -27,6 +27,10 @@ interface TemplateComposerProps {
 /** Session cache so reopening Template tab doesn’t flash empty / re-fetch every time. */
 let approvedTemplatesCache: MessageTemplate[] | null = null;
 
+export function invalidateApprovedTemplatesCache() {
+  approvedTemplatesCache = null;
+}
+
 export default function TemplateComposer({
   onSend,
   sending,
@@ -165,9 +169,13 @@ export default function TemplateComposer({
         {/* Left: inputs — sole scroll region on desktop; includes mobile preview in same scroll */}
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-2 pt-2.5 sm:px-4 md:max-w-[60%] md:flex-[0_0_60%] md:pb-3">
           <div className="space-y-3">
-            {windowClosed && (
+            {windowClosed ? (
               <p className="rounded-lg bg-amber-50/90 px-2.5 py-1.5 text-[11px] font-medium text-amber-900 ring-1 ring-amber-200/70 dark:bg-amber-950/40 dark:text-amber-200 dark:ring-amber-800/45">
                 24-hour reply window is closed — send an approved template to restart the conversation.
+              </p>
+            ) : (
+              <p className="rounded-lg bg-emerald-50/80 px-2.5 py-1.5 text-[11px] font-medium text-emerald-900 ring-1 ring-emerald-200/60 dark:bg-emerald-950/35 dark:text-emerald-200 dark:ring-emerald-800/40">
+                Templates can be sent anytime — useful for proactive updates even while the chat window is open.
               </p>
             )}
             <TemplatePicker

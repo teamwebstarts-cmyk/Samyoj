@@ -47,3 +47,24 @@ export function getLanguageLabel(code?: string) {
   const match = LANGUAGE_OPTIONS.find((o) => o.value === code);
   return match?.label ?? code.replace('_', ' ');
 }
+
+const inlinePillClass: Record<string, string> = {
+  UTILITY: 'bg-sky-100 text-sky-700 ring-sky-200/60 dark:bg-sky-950/50 dark:text-sky-300',
+  MARKETING: 'bg-rose-100 text-rose-700 ring-rose-200/60 dark:bg-rose-950/50 dark:text-rose-300',
+  AUTHENTICATION:
+    'bg-violet-100 text-violet-700 ring-violet-200/60 dark:bg-violet-950/50 dark:text-violet-300',
+};
+
+export function CategoryInlinePill({ category }: { category?: string }) {
+  if (!category) return null;
+  const cls =
+    inlinePillClass[category] ??
+    'bg-theme-subtle text-theme-secondary ring-theme-border';
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ring-1 ${cls}`}
+    >
+      {category}
+    </span>
+  );
+}

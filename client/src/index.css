@@ -1117,6 +1117,41 @@
     background: var(--table-row-hover);
   }
 
+  .templates-data-table tbody tr,
+  .templates-data-table tbody tr:nth-child(even) {
+    background: transparent;
+  }
+
+  .templates-data-table tbody tr:hover {
+    background: rgba(248, 250, 252, 0.9);
+  }
+
+  .dark .templates-data-table tbody tr:hover {
+    background: rgba(23, 23, 23, 0.55);
+  }
+
+  .templates-data-table thead tr {
+    background: rgba(248, 250, 252, 0.95);
+  }
+
+  .dark .templates-data-table thead tr {
+    background: rgba(23, 23, 23, 0.6);
+  }
+
+  /* xl+ only: table is hidden below xl — disable sticky actions overlap on narrower desktop */
+  @media (max-width: 1399px) {
+    .templates-data-table thead th:last-child,
+    .templates-data-table tbody td:last-child {
+      position: static;
+      box-shadow: none;
+      background: transparent;
+    }
+  }
+
+  .templates-data-table .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+
   .contact-checkbox {
     accent-color: #128C7E;
     cursor: pointer;
@@ -1244,6 +1279,327 @@
   .list-shell-footer {
     flex-shrink: 0;
     margin-top: auto;
+  }
+
+  .campaign-wizard-page {
+    @apply mx-auto flex h-full min-h-0 w-full max-w-[1600px] flex-1 flex-col page-gutter-x;
+    padding-top: var(--density-page-py);
+  }
+
+  @media (min-width: 1024px) {
+    .campaign-wizard-page {
+      padding-top: var(--density-page-py-lg);
+    }
+  }
+
+  .campaign-wizard-header,
+  .campaign-wizard-stepper {
+    flex-shrink: 0;
+  }
+
+  .campaign-wizard-header {
+    padding-bottom: 0.75rem;
+  }
+
+  .campaign-wizard-scroll {
+    min-height: 0;
+    flex: 1 1 0%;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 0.75rem 0 1rem;
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+
+  .campaign-wizard-scroll:hover,
+  .campaign-wizard-scroll:focus-within {
+    scrollbar-color: rgba(148, 163, 184, 0.5) transparent;
+  }
+
+  .campaign-wizard-footer {
+    flex-shrink: 0;
+    border-top: 1px solid var(--color-border);
+    background: color-mix(in srgb, var(--color-surface) 94%, transparent);
+    padding: 0.75rem 0 max(0.75rem, env(safe-area-inset-bottom));
+    backdrop-filter: blur(12px);
+  }
+
+  .campaign-wizard-card {
+    border: 1px solid rgba(226, 232, 240, 0.8);
+    border-radius: 0.75rem;
+    background: var(--color-surface);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.025);
+  }
+
+  .dark .campaign-wizard-card {
+    border-color: rgba(51, 65, 85, 0.65);
+    background: var(--color-surface);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.16);
+  }
+
+  .campaign-audience-section--wizard {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .campaign-audience-detail-column {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  /* Keep the three Message cards usable on short desktop viewports without
+     changing the spacious composition used by the reference-sized desktop. */
+  @media (min-width: 1024px) and (max-height: 700px) {
+    .campaign-wizard-page {
+      padding-top: 0.375rem;
+    }
+
+    .campaign-wizard-header {
+      padding-bottom: 0.375rem;
+    }
+
+    .campaign-wizard-header h1 {
+      font-size: 18px;
+      line-height: 1.1;
+    }
+
+    .campaign-wizard-header p {
+      font-size: 9px;
+    }
+
+    .campaign-wizard-stepper {
+      padding-bottom: 0.375rem !important;
+      padding-top: 0.375rem !important;
+    }
+
+    .campaign-wizard-stepper button > span:first-child {
+      height: 24px !important;
+      width: 24px !important;
+    }
+
+    .campaign-wizard-stepper button > span:last-child > span:first-child {
+      font-size: 9px;
+    }
+
+    .campaign-wizard-stepper button > span:last-child > span:last-child {
+      font-size: 8px;
+    }
+
+    .campaign-wizard-scroll {
+      padding-bottom: 0.5rem;
+      padding-top: 0.375rem;
+    }
+
+    .campaign-wizard-footer {
+      padding-bottom: max(0.375rem, env(safe-area-inset-bottom));
+      padding-top: 0.375rem;
+    }
+
+    .campaign-wizard-footer button {
+      height: 34px !important;
+      min-height: 34px !important;
+    }
+
+    .campaign-template-picker > div:first-child {
+      padding: 0.5rem 0.75rem;
+    }
+
+    .campaign-template-picker > div:nth-child(2) {
+      gap: 0.375rem;
+      padding: 0.5rem 0.75rem;
+    }
+
+    .campaign-template-picker input {
+      height: 32px !important;
+      min-height: 32px !important;
+    }
+
+    .campaign-template-picker .app-select__control {
+      height: 32px !important;
+      min-height: 32px !important;
+    }
+
+    .campaign-template-picker > div:nth-child(3) {
+      gap: 0.25rem;
+      padding: 0.5rem;
+    }
+
+    .campaign-template-picker button {
+      min-height: 40px !important;
+      gap: 0.375rem;
+      padding: 0.375rem 0.5rem !important;
+    }
+
+    .campaign-template-picker button > span:nth-child(2) {
+      height: 28px !important;
+      width: 28px !important;
+    }
+
+    .campaign-template-picker button > span:nth-child(2) svg {
+      height: 14px !important;
+      width: 14px !important;
+    }
+
+    .campaign-template-picker button > span:nth-child(3) > span:first-child > span:first-child {
+      font-size: 10px !important;
+    }
+
+    .campaign-template-picker button > span:nth-child(3) > span:last-child {
+      font-size: 8px !important;
+    }
+
+    .campaign-template-picker button > span:last-child > span {
+      font-size: 8px !important;
+      padding: 0.125rem 0.375rem;
+    }
+
+    .campaign-template-picker > div:last-child {
+      padding: 0.375rem 0.75rem;
+    }
+
+    .campaign-message-content-card > div:last-child,
+    .campaign-message-preview-card > div:last-child {
+      padding: 0.625rem 0.75rem;
+    }
+
+    .campaign-message-content-card .space-y-3 > * + * {
+      margin-top: 0.5rem;
+    }
+
+    .campaign-message-content-card input {
+      height: 32px !important;
+      min-height: 32px !important;
+    }
+
+    .campaign-message-preview-surface {
+      min-height: 180px !important;
+    }
+
+    .campaign-message-preview-empty {
+      min-height: 180px !important;
+    }
+  }
+
+  /*
+   * Below wide desktop the wizard is a document, not a fixed card grid.
+   * Keeping overflow on the form/main page prevents nested scroll regions
+   * from clipping template cards and preview content on touch devices.
+   */
+  @media (max-width: 1279px) {
+    .campaign-wizard-page {
+      height: auto !important;
+      min-height: 100%;
+      flex: none !important;
+      overflow: visible;
+      padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+    }
+
+    .campaign-wizard-scroll {
+      height: auto !important;
+      min-height: 0;
+      flex: none !important;
+      overflow: visible !important;
+      padding-bottom: 1rem;
+    }
+
+    .campaign-message-panel {
+      height: auto !important;
+      min-height: 0 !important;
+      flex: none !important;
+      overflow: visible !important;
+    }
+
+    .campaign-message-panel > .grid {
+      display: flex !important;
+      height: auto !important;
+      min-height: 0 !important;
+      flex: none !important;
+      flex-direction: column;
+      overflow: visible !important;
+    }
+
+    .campaign-template-picker,
+    .campaign-message-content-card,
+    .campaign-message-preview-card,
+    .campaign-audience-layout > .campaign-wizard-card {
+      height: auto !important;
+      min-height: 0 !important;
+      flex: none !important;
+      overflow: visible !important;
+    }
+
+    .campaign-template-picker > div:nth-child(3),
+    .campaign-message-content-card > div:last-child,
+    .campaign-message-preview-card > div:last-child {
+      height: auto !important;
+      min-height: 0 !important;
+      flex: none !important;
+      overflow: visible !important;
+    }
+
+    .campaign-contact-picker ul {
+      max-height: none !important;
+      overflow: visible !important;
+    }
+  }
+
+  @media (min-width: 900px) {
+    .campaign-audience-section--wizard {
+      display: grid;
+      grid-template-columns: minmax(170px, 0.72fr) minmax(0, 1.38fr);
+      align-items: start;
+    }
+
+    .campaign-audience-section--wizard > .campaign-audience-detail-column {
+      grid-column: 2;
+    }
+  }
+
+  @media (min-width: 1024px) and (max-height: 700px) {
+    .campaign-audience-step {
+      gap: 0.5rem;
+    }
+
+    .campaign-audience-step > div:first-child h2 {
+      font-size: 14px;
+    }
+
+    .campaign-audience-step > div:first-child p {
+      font-size: 9px;
+    }
+
+    .campaign-audience-layout {
+      gap: 0.5rem;
+    }
+
+    .campaign-audience-layout > .campaign-wizard-card > div {
+      padding: 0.625rem;
+    }
+
+    .campaign-audience-section--wizard {
+      gap: 0.5rem;
+      grid-template-columns: minmax(155px, 0.7fr) minmax(0, 1.3fr);
+    }
+
+    .campaign-audience-detail-column {
+      gap: 0.5rem;
+    }
+
+    .campaign-audience-detail > div:first-child {
+      padding: 0.5rem 0.625rem;
+    }
+
+    .campaign-audience-detail > div:last-child {
+      gap: 0.5rem;
+      padding: 0.625rem;
+    }
+
+    .campaign-audience-step > .flex.items-center {
+      padding: 0.5rem 0.625rem;
+    }
   }
 
   .page-shell-bleed {

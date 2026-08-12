@@ -3,18 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import {
   BookOpen,
   FileText,
-  Layers,
   Plus,
-  RefreshCw,
   Settings,
 } from 'lucide-react';
 import AppAlert from '../components/ui/AppAlert';
 import AppButton from '../components/ui/AppButton';
-import AppSelect from '../components/ui/AppSelect';
 import TemplateTable, { type TemplateTableRow } from '../components/templates/TemplateTable';
 import TemplateCard from '../components/templates/TemplateCard';
 import EmptyState from '../components/ui/EmptyState';
-import ListToolbar from '../components/ui/ListToolbar';
 import LoadingState from '../components/ui/LoadingState';
 import PageHero from '../components/ui/PageHero';
 import PageShell from '../components/ui/PageShell';
@@ -24,10 +20,18 @@ import SlideOver, { SlideOverFooter } from '../components/ui/SlideOver';
 import TemplateCreateForm from '../components/templates/TemplateCreateForm';
 import TemplateDetailPanel from '../components/templates/TemplateDetailPanel';
 import TemplateLibraryPanel from '../components/templates/TemplateLibraryPanel';
+import TemplatePendingBanner from '../components/templates/TemplatePendingBanner';
+import TemplatesPageToolbar, {
+  ALL_CATEGORIES,
+  ALL_LANGUAGES,
+  ALL_STATUSES,
+} from '../components/templates/TemplatesPageToolbar';
+import { invalidateApprovedTemplatesCache } from '../components/inbox/TemplateComposer';
 import { DEFAULT_PAGE_SIZE } from '../constants/pagination';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { useSocket } from '../hooks/useSocket';
 import { getTemplateParts } from '../components/inbox/WhatsAppPreview';
-import { templateApi, whatsappApi } from '../services/api';
+import { settingsApi, templateApi, whatsappApi } from '../services/api';
 import {
   buildCreatePayload,
   duplicateTemplateForm,
@@ -37,27 +41,21 @@ import {
   type TemplateFormState,
 } from '../utils/templateForm';
 import {
-  CATEGORY_OPTIONS,
   groupTemplatesByName,
-  LANGUAGE_OPTIONS,
   validateTemplateForm,
 } from '../utils/templateUtils';
 import type { MessageTemplate, TemplateLibraryEntry } from '../types';
 import { toastError, toastSuccess } from '../utils/toast';
-
-const ALL_STATUSES = '__all__';
-const ALL_CATEGORIES = '__all__';
-const ALL_LANGUAGES = '__all__';
-
-const statusFilterOptions = [
-  { value: ALL_STATUSES, label: 'All statuses' },
-  { value: 'APPROVED', label: 'Approved' },
-  { value: 'PENDING', label: 'Pending' },
-  { value: 'REJECTED', label: 'Rejected' },
-  { value: 'PAUSED', label: 'Paused' },
-];
+import { invalidateFlowReferenceData } from '../components/flows/flowReferenceData';
 
 const PENDING_POLL_MS = 30_000;
+
+interface TemplateRejectionAlert {
+  templateName?: string;
+  status?: string;
+  reason?: string;
+  createdAt?: string;
+}
 
 export default function TemplatesPage() {
   const navigate = useNavigate();
@@ -79,8 +77,19 @@ export default function TemplatesPage() {
   const [groupView, setGroupView] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
+  const [rejectionAlerts, setRejectionAlerts] = useState<TemplateRejectionAlert[]>([]);
 
   const debouncedSearch = useDebouncedValue(search);
+
+  const loadAlerts = useCallback(() => {
+    settingsApi
+      .alerts()
+      .then(({ data }) => {
+        const list = (data.data?.templateRejections || []) as TemplateRejectionAlert[];
+        setRejectionAlerts(list);
+      })
+      .catch(() => setRejectionAlerts([]));
+  }, []);
 
   const checkWhatsapp = useCallback(() => {
     whatsappApi
@@ -117,7 +126,49 @@ export default function TemplatesPage() {
   useEffect(() => {
     checkWhatsapp();
     load();
-  }, [checkWhatsapp, load]);
+    loadAlerts();
+  }, [checkWhatsapp, load, loadAlerts]);
+
+  const refreshViewingTemplate = useCallback((name: string) => {
+    templateApi
+      .get(name)
+      .then(({ data }) => {
+        const fresh = data.data as MessageTemplate;
+        setViewing((current) => (current?.name === name ? fresh : current));
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleSocketEvent = useCallback(
+    (event: string, data: unknown) => {
+      if (event === 'template:status') {
+        const payload = data as { templateName?: string; event?: string; reason?: string };
+        load();
+        loadAlerts();
+        invalidateApprovedTemplatesCache();
+        const statusEvent = (payload.event || '').toUpperCase();
+        const name = payload.templateName;
+        if (name) {
+          refreshViewingTemplate(name);
+          if (statusEvent === 'APPROVED') {
+            toastSuccess(`Template "${name}" approved`);
+          } else if (['REJECTED', 'PAUSED', 'DISABLED', 'FLAGGED'].includes(statusEvent)) {
+            const reason = payload.reason ? ` — ${payload.reason}` : '';
+            toastError(`Template "${name}" ${statusEvent.toLowerCase()}${reason}`);
+          }
+        }
+      }
+      if (event === 'alert:new') {
+        const payload = data as { type?: string };
+        if (payload.type === 'templateRejections' || payload.type === 'templateStatus') {
+          loadAlerts();
+        }
+      }
+    },
+    [load, loadAlerts, refreshViewingTemplate]
+  );
+
+  useSocket(handleSocketEvent);
 
   useEffect(() => {
     const hasPending = templates.some((t) => t.status === 'PENDING');
@@ -190,6 +241,7 @@ export default function TemplatesPage() {
     }
 
     setSaving(true);
+    const savedName = form.name;
     try {
       const payload = buildCreatePayload(form);
       if (formMode === 'resubmit' && resubmitName) {
@@ -201,7 +253,17 @@ export default function TemplatesPage() {
       }
       setCreateOpen(false);
       setForm(emptyTemplateForm);
-      load();
+      await load();
+      invalidateFlowReferenceData();
+      invalidateApprovedTemplatesCache();
+      try {
+        const { data } = await templateApi.get(savedName);
+        const created = data.data as MessageTemplate;
+        setViewing(created);
+        setViewOpen(true);
+      } catch {
+        /* list refresh is enough */
+      }
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
@@ -218,6 +280,8 @@ export default function TemplatesPage() {
       await templateApi.delete(name);
       setViewOpen(false);
       load();
+      invalidateFlowReferenceData();
+      invalidateApprovedTemplatesCache();
       toastSuccess('Template deleted');
     } catch (err: unknown) {
       const msg =
@@ -318,88 +382,55 @@ export default function TemplatesPage() {
 
   return (
     <PageShell>
-      <div className="space-y-4 sm:space-y-5">
+      <div className="min-w-0 space-y-3 sm:space-y-4 lg:space-y-5">
         <PageHero
           badge="Templates"
           badgeIcon={FileText}
           title="Message templates"
           description="Create and manage approved templates for campaigns and outreach."
-          accent="rose"
+          accent="emerald"
           stats={[
             { label: 'Total', value: stats.total },
-            { label: 'Approved', value: stats.approved, tone: 'text-whatsapp-700' },
-            { label: 'Pending', value: stats.pending, tone: 'text-amber-700' },
+            { label: 'Approved', value: stats.approved, tone: 'text-emerald-600' },
+            { label: 'Pending', value: stats.pending, tone: 'text-amber-600' },
             { label: 'Rejected', value: stats.rejected, tone: 'text-red-600' },
           ]}
         />
 
-        <div className="inbox-shell overflow-hidden">
-          <ListToolbar
-            embedded
-            stackFilters
+        <div className="inbox-shell min-w-0 overflow-hidden">
+          <TemplatesPageToolbar
             search={search}
             onSearchChange={setSearch}
-            searchPlaceholder="Search templates..."
-            filters={
-              <>
-                <AppSelect
-                  className="w-full sm:w-[132px]"
-                  value={statusFilter}
-                  placeholder="All statuses"
-                  isSearchable={false}
-                  options={statusFilterOptions}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                />
-                <AppSelect
-                  className="w-full sm:w-[132px]"
-                  value={categoryFilter}
-                  placeholder="All categories"
-                  isSearchable={false}
-                  options={[{ value: ALL_CATEGORIES, label: 'All categories' }, ...CATEGORY_OPTIONS]}
-                  onChange={(e) => setCategoryFilter(e.target.value)}
-                />
-                <AppSelect
-                  className="w-full sm:w-[140px]"
-                  value={languageFilter}
-                  placeholder="All languages"
-                  isSearchable
-                  options={[{ value: ALL_LANGUAGES, label: 'All languages' }, ...LANGUAGE_OPTIONS]}
-                  onChange={(e) => setLanguageFilter(e.target.value)}
-                />
-                <AppButton
-                  variant={groupView ? 'primary' : 'secondary'}
-                  size="sm"
-                  icon={<Layers size={14} />}
-                  onClick={() => setGroupView((v) => !v)}
-                >
-                  Group
-                </AppButton>
-              </>
-            }
-            actions={
-              <div className="flex flex-wrap items-center gap-2">
-                <AppButton variant="secondary" size="sm" icon={<RefreshCw size={15} />} onClick={load}>
-                  Refresh
-                </AppButton>
-                <AppButton
-                  variant="secondary"
-                  size="sm"
-                  icon={<BookOpen size={16} />}
-                  onClick={() => setLibraryOpen(true)}
-                >
-                  Library
-                </AppButton>
-                <AppButton icon={<Plus size={16} />} onClick={openCreate}>
-                  New template
-                </AppButton>
-              </div>
-            }
+            statusFilter={statusFilter}
+            onStatusFilterChange={setStatusFilter}
+            categoryFilter={categoryFilter}
+            onCategoryFilterChange={setCategoryFilter}
+            languageFilter={languageFilter}
+            onLanguageFilterChange={setLanguageFilter}
+            groupView={groupView}
+            onToggleGroupView={() => setGroupView((v) => !v)}
+            onRefresh={load}
+            onOpenLibrary={() => setLibraryOpen(true)}
+            onCreate={openCreate}
           />
 
-          {stats.pending > 0 && (
+          <TemplatePendingBanner pending={stats.pending} />
+
+          {rejectionAlerts.length > 0 && (
             <div className="border-b border-theme-border px-4 py-2.5 sm:px-5">
-              <AppAlert variant="info">
-                {stats.pending} template{stats.pending > 1 ? 's' : ''} waiting for approval · auto-refreshes every 30s
+              <AppAlert variant="error">
+                <p className="font-semibold">
+                  {rejectionAlerts.length} recent template issue{rejectionAlerts.length > 1 ? 's' : ''}
+                </p>
+                <ul className="mt-1.5 space-y-1 text-[12px]">
+                  {rejectionAlerts.slice(0, 3).map((alert, i) => (
+                    <li key={`${alert.templateName}-${i}`}>
+                      <span className="font-mono font-semibold">{alert.templateName || 'Template'}</span>
+                      {alert.status ? ` · ${alert.status}` : ''}
+                      {alert.reason ? ` — ${alert.reason}` : ''}
+                    </li>
+                  ))}
+                </ul>
               </AppAlert>
             </div>
           )}
@@ -446,8 +477,9 @@ export default function TemplatesPage() {
             <>
               <ResponsiveDataView
                 items={paginatedTemplates}
-                cardClassName="divide-y divide-neutral-200 dark:divide-neutral-800 lg:hidden"
-                tableClassName="px-4 sm:px-5 pt-4 sm:pb-5"
+                tableFrom="xl"
+                cardClassName="divide-y divide-neutral-200 dark:divide-neutral-800 xl:hidden"
+                tableClassName=""
                 renderCard={(template) => (
                   <TemplateCard
                     key={template.id}
@@ -470,12 +502,14 @@ export default function TemplatesPage() {
                   />
                 )}
               />
-              <div className="border-t border-theme-border lg:hidden">
+              <div className="border-t border-theme-border xl:hidden">
                 <Pagination
                   page={page}
                   pageSize={DEFAULT_PAGE_SIZE}
                   total={filteredTemplates.length}
                   onPageChange={setPage}
+                  variant="numbered"
+                  itemLabel="templates"
                   className="!border-t-0"
                 />
               </div>

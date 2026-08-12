@@ -19,6 +19,7 @@ import FlowBuilderPage from './pages/FlowBuilderPage';
 import MetaFlowBuilder from './pages/MetaFlowBuilder';
 import AiBotPage from './pages/AiBotPage';
 import CampaignsPage from './pages/CampaignsPage';
+import CampaignWizardPage from './pages/CampaignWizardPage';
 import ContactsPage from './pages/ContactsPage';
 import TeamPage from './pages/TeamPage';
 import AcceptInvitePage from './pages/AcceptInvitePage';
@@ -70,6 +71,8 @@ export default function App() {
                       <Route path="/automations/meta-flows/:id" element={<MetaFlowBuilder />} />
                       <Route path="/ai-bot" element={<AiBotPage />} />
                       <Route path="/campaigns" element={<CampaignsPage />} />
+                      <Route path="/campaigns/new" element={<CampaignWizardPage />} />
+                      <Route path="/campaigns/:id/edit" element={<CampaignWizardPage />} />
                       <Route path="/templates" element={<TemplatesPage />} />
                       <Route path="/content-studio" element={<ContentStudioPage />} />
                       <Route path="/commerce" element={<CommercePage />} />

@@ -296,6 +296,7 @@ export const flowApi = {
 
 export const settingsApi = {
   get: () => api.get('/settings'),
+  alerts: () => api.get('/settings/alerts'),
   updateBusinessHours: (data: {
     startHour: number;
     endHour: number;

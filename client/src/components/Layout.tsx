@@ -4,7 +4,14 @@ import { useAuth } from '../contexts/AuthContext';
 import { useBreakpoint } from '../hooks/useBreakpoint';
 import { useInboxUnreadTotal } from '../hooks/useInboxUnreadTotal';
 import { useSidebarCollapsed } from '../hooks/useSidebarCollapsed';
-import { isBuilderRoute, isInboxRoute, isCallsShellRoute, isListShellRoute, shouldShowMobileBottomNav } from '../config/pageMeta';
+import {
+  isBuilderRoute,
+  isInboxRoute,
+  isCallsShellRoute,
+  isListShellRoute,
+  isCampaignWizardRoute,
+  shouldShowMobileBottomNav,
+} from '../config/pageMeta';
 import AppTopbar from './layout/AppTopbar';
 import Sidebar from './layout/Sidebar';
 import MobileBottomNav from './layout/MobileBottomNav';
@@ -28,8 +35,14 @@ export default function Layout() {
   const effectiveCollapsed = isTablet || collapsed;
   const showBottomNav = isMobile && shouldShowMobileBottomNav(pathname);
   const hideTopbar = isBuilderRoute(pathname);
+  // The three-card wizard shell is intentionally locked only on wide desktop.
+  // Smaller layouts need the main page to grow and scroll as one document.
+  const lockCampaignWizardScroll = isCampaignWizardRoute(pathname) && breakpoint === 'xl';
   const lockMainScroll =
-    isInboxRoute(pathname) || isCallsShellRoute(pathname) || isListShellRoute(pathname, search);
+    isInboxRoute(pathname) ||
+    isCallsShellRoute(pathname) ||
+    isListShellRoute(pathname, search) ||
+    lockCampaignWizardScroll;
 
   const handleLogout = () => {
     logout();

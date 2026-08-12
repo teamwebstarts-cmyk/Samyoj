@@ -13,9 +13,120 @@ export function getTemplateRejectedReason(reason?: string): string | null {
 
 export function countTemplateVars(text?: string): number {
   if (!text) return 0;
-  const matches = text.match(/\{\{\d+\}\}/g) || [];
-  const nums = matches.map((m) => parseInt(m.replace(/[{}]/g, ''), 10));
+  const nums = extractTemplateVarNumbers(text);
   return nums.length ? Math.max(...nums) : 0;
+}
+
+/** Returns sorted unique variable indices found in text (e.g. {{1}}, {{2}}). */
+export function extractTemplateVarNumbers(text?: string): number[] {
+  if (!text) return [];
+  const matches = text.match(/\{\{\d+\}\}/g) || [];
+  return [...new Set(matches.map((m) => parseInt(m.replace(/[{}]/g, ''), 10)))].sort((a, b) => a - b);
+}
+
+function validateVariableText(field: string, text: string, issues: TemplateValidationIssue[]) {
+  if (!text.includes('{{')) return;
+
+  const nums = extractTemplateVarNumbers(text);
+  const expected = Array.from({ length: nums.length ? Math.max(...nums) : 0 }, (_, i) => i + 1);
+  const missing = expected.filter((n) => !nums.includes(n));
+  if (missing.length) {
+    issues.push({
+      field,
+      message: `Use sequential placeholders starting at {{1}} — missing {{${missing[0]}}}`,
+      severity: 'error',
+    });
+  }
+
+  const invalid = text.match(/\{\{(?!\d+\}\})[^}]*\}\}/g);
+  if (invalid?.length) {
+    issues.push({
+      field,
+      message: 'Only numbered placeholders are allowed (e.g. {{1}}, {{2}})',
+      severity: 'error',
+    });
+  }
+
+  const trimmed = text.trim();
+  if (/^\{\{\d+\}\}/.test(trimmed)) {
+    issues.push({
+      field,
+      message: 'Text cannot start with a placeholder',
+      severity: 'error',
+    });
+  }
+  if (/\{\{\d+\}\}$/.test(trimmed)) {
+    issues.push({
+      field,
+      message: 'Text cannot end with a placeholder',
+      severity: 'error',
+    });
+  }
+}
+
+function validateButtons(
+  buttons: Array<{ type: string; text: string; url?: string; phone_number?: string; example?: string }>,
+  issues: TemplateValidationIssue[]
+) {
+  if (!buttons.length) return;
+
+  const filled = buttons.filter((b) => b.text.trim());
+  const labels = filled.map((b) => b.text.trim().toLowerCase());
+  if (new Set(labels).size !== labels.length) {
+    issues.push({
+      field: 'buttons',
+      message: 'Each button label must be unique',
+      severity: 'error',
+    });
+  }
+
+  const qr = filled.filter((b) => b.type === 'QUICK_REPLY');
+  const url = filled.filter((b) => b.type === 'URL');
+  const phone = filled.filter((b) => b.type === 'PHONE_NUMBER');
+  const copy = filled.filter((b) => b.type === 'COPY_CODE');
+
+  if (url.length > 2) {
+    issues.push({ field: 'buttons', message: 'Maximum 2 website (URL) buttons', severity: 'error' });
+  }
+  if (phone.length > 1) {
+    issues.push({ field: 'buttons', message: 'Maximum 1 call (phone) button', severity: 'error' });
+  }
+  if (copy.length > 1) {
+    issues.push({ field: 'buttons', message: 'Maximum 1 copy-code button', severity: 'error' });
+  }
+
+  for (const btn of filled) {
+    if (btn.text.length > 25) {
+      issues.push({
+        field: 'buttons',
+        message: `Button "${btn.text.slice(0, 12)}…" exceeds 25 characters`,
+        severity: 'error',
+      });
+    }
+    if (btn.type === 'URL' && btn.url) {
+      const lower = btn.url.toLowerCase();
+      if (lower.includes('wa.me') || lower.includes('whatsapp.com')) {
+        issues.push({
+          field: 'buttons',
+          message: 'URL buttons cannot link to wa.me or whatsapp.com',
+          severity: 'error',
+        });
+      }
+    }
+  }
+
+  if (qr.length && (url.length || phone.length || copy.length)) {
+    const types = filled.map((b) => (b.type === 'QUICK_REPLY' ? 'QR' : 'CTA'));
+    const ctaFirst = types.indexOf('CTA');
+    const qrFirst = types.indexOf('QR');
+    if (ctaFirst >= 0 && qrFirst >= 0 && ctaFirst > qrFirst) {
+      issues.push({
+        field: 'buttons',
+        message: 'Group action buttons (URL, Call, Copy) before quick-reply buttons',
+        severity: 'error',
+      });
+    }
+  }
 }
 
 export function getTemplateBodyText(template: MessageTemplate): string {
@@ -89,6 +200,7 @@ export function validateTemplateForm(form: {
   headerExamples: string[];
   headerFormat: string;
   headerMediaHandle: string;
+  buttons?: Array<{ type: string; text: string; url?: string; phone_number?: string; example?: string }>;
 }): TemplateValidationIssue[] {
   const issues: TemplateValidationIssue[] = [];
 
@@ -100,10 +212,26 @@ export function validateTemplateForm(form: {
       message: 'Use lowercase letters, numbers, and underscores only',
       severity: 'error',
     });
+  } else if (form.name.length > 512) {
+    issues.push({ field: 'name', message: 'Template name must be 512 characters or fewer', severity: 'error' });
   }
 
   if (!form.body.trim()) {
     issues.push({ field: 'body', message: 'Body text is required', severity: 'error' });
+  } else if (form.body.length > 1024) {
+    issues.push({ field: 'body', message: 'Body must be 1,024 characters or fewer', severity: 'error' });
+  } else {
+    validateVariableText('body', form.body, issues);
+  }
+
+  if (form.header && form.header.length > 60) {
+    issues.push({ field: 'header', message: 'Header must be 60 characters or fewer', severity: 'error' });
+  } else if (form.header) {
+    validateVariableText('header', form.header, issues);
+  }
+
+  if (form.footer && form.footer.length > 60) {
+    issues.push({ field: 'footer', message: 'Footer must be 60 characters or fewer', severity: 'error' });
   }
 
   const bodyVars = countTemplateVars(form.body);
@@ -124,7 +252,7 @@ export function validateTemplateForm(form: {
     if (filled < headerVars) {
       issues.push({
         field: 'headerExamples',
-        message: `Add sample values for all ${headerVars} body variable(s)`,
+        message: `Add sample values for all ${headerVars} header variable(s)`,
         severity: 'error',
       });
     }
@@ -144,6 +272,33 @@ export function validateTemplateForm(form: {
       message: messagingConsent.templateStopHint,
       severity: 'warning',
     });
+  }
+
+  if (form.category === 'UTILITY' && form.body) {
+    const promoWords = /\b(sale|discount|offer|buy now|limited time|% off|coupon|deal)\b/i;
+    if (promoWords.test(form.body) || promoWords.test(form.header)) {
+      issues.push({
+        field: 'category',
+        message: 'Promotional language may cause Utility templates to be rejected — consider Marketing category',
+        severity: 'warning',
+      });
+    }
+  }
+
+  if (form.buttons?.length) {
+    validateButtons(form.buttons, issues);
+    for (const btn of form.buttons) {
+      if (!btn.text.trim()) continue;
+      if (btn.type === 'URL' && !btn.url?.trim()) {
+        issues.push({ field: 'buttons', message: 'URL is required for website buttons', severity: 'error' });
+      }
+      if (btn.type === 'PHONE_NUMBER' && !btn.phone_number?.trim()) {
+        issues.push({ field: 'buttons', message: 'Phone number is required for call buttons', severity: 'error' });
+      }
+      if (btn.type === 'COPY_CODE' && !btn.example?.trim()) {
+        issues.push({ field: 'buttons', message: 'Sample code is required for copy-code buttons', severity: 'error' });
+      }
+    }
   }
 
   return issues;

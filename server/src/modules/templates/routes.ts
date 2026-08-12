@@ -9,6 +9,7 @@ import { resolveActiveWhatsappNumber } from '../whatsapp/active-number';
 import { buildTemplateComponents } from '../campaigns/template-params';
 import { buildTemplateComponents as buildCreateComponents } from './builder';
 import { getTemplateUsage } from './analytics';
+import { invalidateTemplateCache } from './cache';
 import {
   createTemplateSchema,
   createFromLibrarySchema,
@@ -149,7 +150,10 @@ router.post(
       language: data.language,
       category: data.category,
       components: buildCreateComponents(data),
+      allow_category_change: true,
     });
+
+    await invalidateTemplateCache(req.user!.organizationId!, wabaId, data.name);
 
     sendSuccess(res, result, 201);
   })
@@ -171,7 +175,10 @@ router.post(
       language: data.language,
       libraryTemplateName: data.libraryTemplateName,
       libraryTemplateButtonInputs: data.libraryTemplateButtonInputs,
+      allow_category_change: true,
     });
+
+    await invalidateTemplateCache(req.user!.organizationId!, wabaId, data.name);
 
     sendSuccess(res, result, 201);
   })
@@ -228,18 +235,22 @@ router.post(
 
     const existing = await MetaWhatsAppService.getMessageTemplate(wabaId, accessToken, name);
     if (!existing) throw new AppError(404, 'Template not found');
-    if (!['REJECTED', 'PAUSED'].includes(existing.status)) {
-      throw new AppError(400, 'Only rejected or paused templates can be resubmitted');
+    if (!['REJECTED', 'PAUSED', 'DISABLED'].includes(existing.status)) {
+      throw new AppError(400, 'Only rejected, paused, or disabled templates can be resubmitted');
     }
 
     await MetaWhatsAppService.deleteMessageTemplate(wabaId, accessToken, name);
+    await invalidateTemplateCache(req.user!.organizationId!, wabaId, name);
 
     const result = await MetaWhatsAppService.createMessageTemplate(wabaId, accessToken, {
       name: data.name,
       language: data.language,
       category: data.category,
       components: buildCreateComponents(data),
+      allow_category_change: true,
     });
+
+    await invalidateTemplateCache(req.user!.organizationId!, wabaId, data.name);
 
     sendSuccess(res, result, 201);
   })
@@ -257,6 +268,7 @@ router.delete(
     );
 
     await MetaWhatsAppService.deleteMessageTemplate(wabaId, accessToken, name);
+    await invalidateTemplateCache(req.user!.organizationId!, wabaId, name);
     sendSuccess(res, { deleted: true, name });
   })
 );

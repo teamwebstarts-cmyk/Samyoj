@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Copy,
   Download,
@@ -193,6 +193,7 @@ function buildPayload(form: typeof emptyForm, options?: { clearSchedule?: boolea
 export default function CampaignsPage() {
   const { canManageTeam } = useAuth();
   const isBelowLg = useIsBelowLg();
+  const navigate = useNavigate();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [whatsappNumbers, setWhatsappNumbers] = useState<Array<{ id: string; phoneNumber: string }>>([]);
@@ -245,7 +246,7 @@ export default function CampaignsPage() {
 
   const filledPreview = useMemo(
     () => (selectedTemplate ? getFilledTemplatePreview(selectedTemplate, form) : null),
-    [selectedTemplate, form.bodyParams, form.headerParams]
+    [selectedTemplate, form.bodyParams, form.headerParams, form.headerMediaUrl]
   );
 
   const showHeaderMedia = selectedTemplate ? templateNeedsHeaderMedia(selectedTemplate) : false;
@@ -267,7 +268,7 @@ export default function CampaignsPage() {
   const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
   const stageLabels = ['Message', 'Audience', 'Review and send'];
 
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
 
   const loadTemplates = useCallback(() => {
     templateApi
@@ -380,26 +381,13 @@ export default function CampaignsPage() {
       .filter(Boolean);
     if (!templateName && !contactIds.length && !tags.length) return;
 
-    const audienceType = contactIds.length ? 'CONTACTS' : tags.length ? 'TAGS' : 'MANUAL';
-    const name = contactIds.length
-      ? `Campaign — ${contactIds.length} contact${contactIds.length === 1 ? '' : 's'}`
-      : tags.length
-        ? `Campaign — ${tags.join(', ')}`
-        : '';
-    setEditing(null);
-    setViewOnly(false);
-    setSlideOpen(true);
-    setForm({
-      ...emptyForm,
-      templateName,
-      templateLanguage,
-      audienceType,
-      audienceTags: tags.join(', '),
-      selectedContactIds: contactIds,
-      name,
-    });
-    setSearchParams({}, { replace: true });
-  }, [searchParams, setSearchParams, canManageTeam]);
+    const params = new URLSearchParams();
+    if (templateName) params.set('template', templateName);
+    if (templateLanguage) params.set('language', templateLanguage);
+    if (contactIds.length) params.set('contacts', contactIds.join(','));
+    if (tags.length) params.set('tags', tags.join(','));
+    navigate(`/campaigns/new?${params.toString()}`);
+  }, [searchParams, navigate, canManageTeam]);
 
   useEffect(() => {
     loadCampaigns(true);
@@ -444,17 +432,7 @@ export default function CampaignsPage() {
 
   const openCreate = () => {
     if (!canManageTeam) return;
-    setEditing(null);
-    setViewOnly(false);
-    setForm(emptyForm);
-    setAudiencePreviewCount(null);
-    setActiveStep(0);
-    setDetailSection('overview');
-    setStageError(null);
-    setSlideOpen(true);
-    setAnalytics(null);
-    setAnalyticsError(null);
-    loadTemplates();
+    navigate('/campaigns/new');
   };
 
   const loadCampaignDetail = async (campaign: Campaign) => {
@@ -484,21 +462,9 @@ export default function CampaignsPage() {
     }
   };
 
-  const openEdit = async (campaign: Campaign) => {
+  const openEdit = (campaign: Campaign) => {
     if (!canEditCampaign(campaign.status)) return;
-    try {
-      const full = await loadCampaignDetail(campaign);
-      setEditing(full);
-      setViewOnly(false);
-      setForm(campaignToForm(full, templates));
-      setAudiencePreviewCount(null);
-      setActiveStep(0);
-      setStageError(null);
-      setSlideOpen(true);
-      loadTemplates();
-    } catch {
-      toastError('Campaign details could not load. Refresh the page and try again.');
-    }
+    navigate(`/campaigns/${campaign.id}/edit?status=${campaign.status.toLowerCase()}`);
   };
 
   const closeSlide = () => {

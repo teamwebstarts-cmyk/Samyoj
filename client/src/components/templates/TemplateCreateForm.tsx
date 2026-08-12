@@ -130,6 +130,16 @@ export default function TemplateCreateForm({
         </AppAlert>
       )}
 
+      {form.category === 'UTILITY' && (
+        <AppAlert variant="info">
+          <p className="font-semibold">Utility template guidelines</p>
+          <p className="mt-1 text-[12px]">
+            Use for transactional updates (orders, appointments, account alerts). Avoid promotional
+            language — Meta may recategorize or reject miscategorized templates.
+          </p>
+        </AppAlert>
+      )}
+
       {form.category === 'AUTHENTICATION' && (
         <AppAlert variant="info">
           <p className="font-semibold">Authentication template</p>
@@ -249,7 +259,7 @@ export default function TemplateCreateForm({
       <AppTextarea
         id="template-body"
         label="Body text"
-        hint="Use {{1}}, {{2}} for placeholders like a name or order number"
+        hint="Use {{1}}, {{2}} for placeholders. Cannot start or end with a variable. Must be sequential."
         placeholder={
           form.category === 'AUTHENTICATION'
             ? 'Your verification code is {{1}}.'

@@ -13,6 +13,9 @@ interface DataTableProps {
   total?: number;
   onPageChange?: (page: number) => void;
   serialNo?: boolean;
+  serialHeader?: string;
+  paginationVariant?: 'default' | 'numbered';
+  paginationItemLabel?: string;
   /** Skip outer dashboard-card chrome when nested inside another card shell */
   embedded?: boolean;
 }
@@ -50,6 +53,9 @@ export default function DataTable({
   total,
   onPageChange,
   serialNo = true,
+  serialHeader = 'S.No.',
+  paginationVariant = 'default',
+  paginationItemLabel,
   embedded = false,
 }: DataTableProps) {
   const showPagination =
@@ -58,7 +64,7 @@ export default function DataTable({
     total !== undefined &&
     onPageChange !== undefined;
 
-  const displayHeaders = serialNo ? ['S.No.', ...headers] : headers;
+  const displayHeaders = serialNo ? [serialHeader, ...headers] : headers;
 
   return (
     <div
@@ -72,7 +78,7 @@ export default function DataTable({
             <tr className="border-b border-theme-border bg-theme-subtle/80">
               {displayHeaders.map((header) => {
                 const isActions = header === 'Actions';
-                const isSerial = header === 'S.No.';
+                const isSerial = header === serialHeader || header === 'S.No.';
                 return (
                   <th
                     key={header}
@@ -96,7 +102,14 @@ export default function DataTable({
       </div>
 
       {showPagination && (
-        <Pagination page={page} pageSize={pageSize} total={total} onPageChange={onPageChange} />
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onPageChange={onPageChange}
+          itemLabel={paginationItemLabel}
+          variant={paginationVariant}
+        />
       )}
     </div>
   );

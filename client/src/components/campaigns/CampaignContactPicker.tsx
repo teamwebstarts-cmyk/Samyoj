@@ -7,20 +7,35 @@ import type { Contact } from '../../types';
 import Pagination from '../ui/Pagination';
 
 interface CampaignContactPickerProps {
+  variant?: 'default' | 'wizard';
   selectedIds: string[];
   onChange: (ids: string[]) => void;
 }
 
+const avatarTones = [
+  'from-indigo-500 to-violet-600',
+  'from-sky-500 to-blue-600',
+  'from-fuchsia-500 to-purple-600',
+  'from-amber-500 to-orange-600',
+  'from-emerald-500 to-teal-600',
+] as const;
+
 function ContactAvatar({ name, phone }: { name?: string; phone: string }) {
   const initial = (name || phone).charAt(0).toUpperCase();
+  const tone = avatarTones[(name || phone).charCodeAt(0) % avatarTones.length];
   return (
-    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-[12px] font-extrabold text-white shadow-sm">
+    <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${tone} text-[10px] font-extrabold text-white shadow-sm`}>
       {initial}
     </div>
   );
 }
 
-export default function CampaignContactPicker({ selectedIds, onChange }: CampaignContactPickerProps) {
+export default function CampaignContactPicker({
+  variant = 'default',
+  selectedIds,
+  onChange,
+}: CampaignContactPickerProps) {
+  const compact = variant === 'wizard';
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -78,11 +93,12 @@ export default function CampaignContactPicker({ selectedIds, onChange }: Campaig
   };
 
   return (
-    <div className="space-y-3">
+    <div className={`campaign-contact-picker ${compact ? 'space-y-2.5' : 'space-y-3'}`}>
       <SearchInput
         value={search}
         onChange={setSearch}
         placeholder="Search contacts"
+        compact={compact}
       />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
@@ -90,7 +106,7 @@ export default function CampaignContactPicker({ selectedIds, onChange }: Campaig
             type="button"
             aria-pressed={showSelected}
             onClick={() => setShowSelected((value) => !value)}
-            className="min-h-11 rounded-lg border border-theme-border px-2.5 py-1.5 text-[11px] font-bold text-theme-secondary transition hover:bg-theme-subtle focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+            className={`${compact ? 'min-h-8 px-2 text-[9px]' : 'min-h-11 px-2.5 text-[11px]'} rounded-lg border border-theme-border py-1.5 font-bold text-theme-secondary transition hover:bg-theme-subtle focus:outline-none focus:ring-2 focus:ring-indigo-500/40`}
           >
             {showSelected ? 'Show all contacts' : 'Show selected'}
           </button>
@@ -98,7 +114,7 @@ export default function CampaignContactPicker({ selectedIds, onChange }: Campaig
             type="button"
             onClick={() => onChange([])}
             disabled={!selectedIds.length}
-            className="min-h-11 rounded-lg border border-theme-border px-2.5 py-1.5 text-[11px] font-bold text-theme-secondary transition hover:bg-theme-subtle disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+            className={`${compact ? 'min-h-8 px-2 text-[9px]' : 'min-h-11 px-2.5 text-[11px]'} rounded-lg border border-theme-border py-1.5 font-bold text-theme-secondary transition hover:bg-theme-subtle disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-indigo-500/40`}
           >
             Clear selection
           </button>
@@ -107,7 +123,7 @@ export default function CampaignContactPicker({ selectedIds, onChange }: Campaig
           type="button"
           onClick={selectAllVisible}
           disabled={!visibleContacts.length}
-          className="min-h-11 rounded-lg border border-indigo-200 px-2.5 py-1.5 text-[11px] font-bold text-indigo-700 transition hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 dark:border-indigo-800 dark:text-indigo-300 dark:hover:bg-indigo-950/30"
+          className={`${compact ? 'min-h-8 px-2 text-[9px]' : 'min-h-11 px-2.5 text-[11px]'} rounded-lg border border-indigo-200 py-1.5 font-bold text-indigo-700 transition hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 dark:border-indigo-800 dark:text-indigo-300 dark:hover:bg-indigo-950/30`}
         >
           Select all visible
         </button>
@@ -125,7 +141,7 @@ export default function CampaignContactPicker({ selectedIds, onChange }: Campaig
             {showSelected ? 'No selected contacts on this page' : 'No contacts found. Try a different search.'}
           </p>
         ) : (
-          <ul className="max-h-56 divide-y divide-theme-border overflow-auto">
+          <ul className={`${compact ? 'max-h-44' : 'max-h-56'} divide-y divide-theme-border overflow-auto`}>
             {visibleContacts.map((contact) => {
               const checked = selectedIds.includes(contact.id);
               return (
@@ -135,14 +151,14 @@ export default function CampaignContactPicker({ selectedIds, onChange }: Campaig
                     onClick={() => toggle(contact.id)}
                     aria-checked={checked}
                     role="checkbox"
-                    className={`min-h-11 flex w-full items-center gap-3 px-3 py-2.5 text-left transition focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500/40 ${
+                    className={`${compact ? 'min-h-9 gap-2 px-2.5 py-1.5' : 'min-h-11 gap-3 px-3 py-2.5'} flex w-full items-center text-left transition focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500/40 ${
                       checked
                         ? 'bg-indigo-50/80 dark:bg-indigo-950/25'
                         : 'hover:bg-theme-subtle/60'
                     }`}
                   >
                     <span
-                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition ${
+                        className={`flex ${compact ? 'h-4 w-4' : 'h-5 w-5'} shrink-0 items-center justify-center rounded-md border transition ${
                         checked
                           ? 'border-indigo-500 bg-indigo-500 text-white'
                           : 'border-theme-border bg-theme-surface'
@@ -152,15 +168,15 @@ export default function CampaignContactPicker({ selectedIds, onChange }: Campaig
                     </span>
                     <ContactAvatar name={contact.name} phone={contact.phone} />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-[13px] font-semibold text-theme-fg">
+                      <p className={`truncate ${compact ? 'text-[10px]' : 'text-[13px]'} font-semibold text-theme-fg`}>
                         {contact.name || 'Unnamed contact'}
                       </p>
-                      <p className="truncate font-mono text-[11px] text-theme-secondary">
+                      <p className={`truncate font-mono ${compact ? 'text-[9px]' : 'text-[11px]'} text-theme-secondary`}>
                         +{contact.phone}
                       </p>
                     </div>
                     {contact.tags?.length > 0 && (
-                      <span className="hidden shrink-0 rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-bold text-violet-700 ring-1 ring-violet-100 sm:inline dark:bg-violet-950/40 dark:text-violet-300">
+                      <span className={`hidden shrink-0 rounded-full bg-violet-50 px-2 py-0.5 ${compact ? 'text-[8px]' : 'text-[10px]'} font-bold text-violet-700 ring-1 ring-violet-100 sm:inline dark:bg-violet-950/40 dark:text-violet-300`}>
                         {contact.tags[0]}
                         {contact.tags.length > 1 ? ` +${contact.tags.length - 1}` : ''}
                       </span>
@@ -174,8 +190,8 @@ export default function CampaignContactPicker({ selectedIds, onChange }: Campaig
       </div>
       {!showSelected && <Pagination page={page} pageSize={10} total={total} onPageChange={setPage} itemLabel="contacts" />}
 
-      <div className="flex items-center justify-end rounded-xl bg-emerald-50/70 px-3 py-2.5 ring-1 ring-emerald-100 dark:bg-emerald-950/25 dark:ring-emerald-900/40">
-        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-extrabold tabular-nums text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300">
+      <div className="flex items-center justify-end rounded-lg bg-emerald-50/70 px-2.5 py-2 ring-1 ring-emerald-100 dark:bg-emerald-950/25 dark:ring-emerald-900/40">
+        <span className={`${compact ? 'text-[9px]' : 'text-[11px]'} rounded-full bg-emerald-100 px-2 py-0.5 font-extrabold tabular-nums text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300`}>
           {selectedIds.length} selected
         </span>
       </div>

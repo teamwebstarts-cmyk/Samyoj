@@ -699,6 +699,7 @@ export class MetaWhatsAppService {
       language: string;
       libraryTemplateName: string;
       libraryTemplateButtonInputs?: Array<Record<string, unknown>>;
+      allow_category_change?: boolean;
     }
   ): Promise<{ id: string; status: string; category: string }> {
     const body: Record<string, unknown> = {
@@ -710,6 +711,9 @@ export class MetaWhatsAppService {
 
     if (payload.libraryTemplateButtonInputs?.length) {
       body.library_template_button_inputs = payload.libraryTemplateButtonInputs;
+    }
+    if (payload.allow_category_change) {
+      body.allow_category_change = true;
     }
 
     const res = await fetch(`${META_BASE}/${wabaId}/message_templates`, {

@@ -10,6 +10,7 @@ import { WhatsAppTemplatePreview, getTemplateParts } from '../inbox/WhatsAppPrev
 import { getFilledTemplatePreview, templateNeedsHeaderMedia } from '../campaigns/campaignPreviewUtils';
 import { templateApi } from '../../services/api';
 import { getTemplateRejectedReason, getQualityLabel, countTemplateVars, getTemplateBodyText, getTemplateHeaderText } from '../../utils/templateUtils';
+import { getTemplateRejectionGuide, getTemplateStatusHelp } from '../../utils/templateRejectionGuide';
 import type { MessageTemplate, TemplateUsage } from '../../types';
 import { toastError, toastSuccess } from '../../utils/toast';
 import { PHONE_PLACEHOLDER } from '../../utils/phone';
@@ -37,6 +38,8 @@ export default function TemplateDetailPanel({
   const parts = getTemplateParts(template);
   const quality = getQualityLabel(template.quality_score?.score);
   const rejectedReason = getTemplateRejectedReason(template.rejected_reason);
+  const rejectionGuide = getTemplateRejectionGuide(rejectedReason);
+  const statusHelp = getTemplateStatusHelp(template.status);
   const needsMedia = templateNeedsHeaderMedia(template);
 
   useEffect(() => {
@@ -93,8 +96,30 @@ export default function TemplateDetailPanel({
         )}
       </div>
 
+      {statusHelp && (
+        <AppAlert variant={template.status === 'PENDING' ? 'info' : 'warning'}>
+          <p className="font-semibold">{statusHelp.title}</p>
+          <p className="mt-1 text-[12px]">{statusHelp.message}</p>
+        </AppAlert>
+      )}
+
       {rejectedReason && (
-        <AppAlert variant="error">{rejectedReason}</AppAlert>
+        <AppAlert variant="error">
+          <p className="font-semibold">Rejected by WhatsApp</p>
+          <p className="mt-1 text-[12px]">{rejectedReason}</p>
+        </AppAlert>
+      )}
+
+      {rejectionGuide && (
+        <div className="rounded-xl border border-amber-200/80 bg-amber-50/60 p-4 dark:border-amber-900/50 dark:bg-amber-950/30">
+          <p className="text-[13px] font-bold text-amber-900 dark:text-amber-200">{rejectionGuide.title}</p>
+          <p className="mt-1 text-[12px] text-amber-800 dark:text-amber-300">{rejectionGuide.summary}</p>
+          <ul className="mt-3 list-disc space-y-1.5 pl-4 text-[12px] text-amber-900 dark:text-amber-200">
+            {rejectionGuide.fixes.map((fix) => (
+              <li key={fix}>{fix}</li>
+            ))}
+          </ul>
+        </div>
       )}
 
       <ModalPreviewCard title="Preview">
@@ -183,7 +208,7 @@ export default function TemplateDetailPanel({
         </>
       )}
 
-      {['REJECTED', 'PAUSED'].includes(template.status) && (
+      {['REJECTED', 'PAUSED', 'DISABLED'].includes(template.status) && (
         <AppButton variant="secondary" icon={<Pencil size={14} />} onClick={onResubmit}>
           Edit & resubmit
         </AppButton>
