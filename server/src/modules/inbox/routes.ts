@@ -14,6 +14,7 @@ import { getOrgWhatsappContext } from '../whatsapp/context';
 import { getCachedMessageTemplate } from '../templates/cache';
 import { resolveActiveWhatsappNumber, conversationFilter, scopedConversationWhere, scopedConversationParent, ticketsForNumberFilter } from '../whatsapp/active-number';
 import { deliverOutboundMessage, type DeliverMessageType } from '../messages/send.service';
+import { sanitizeFieldToken } from '../campaigns/types';
 import { validateInteractive, type InteractiveMessageOptions } from '../messages/interactive';
 import { getMessageMediaBuffer, type MessageMediaMetadata } from '../media/download.service';
 import { storeOutboundMedia } from '../media/upload.service';
@@ -320,10 +321,18 @@ router.post(
     const { whatsappNumber } = await getOrgWhatsappContext(orgId, req.activeWhatsappNumberId);
 
     const contact = await prisma.contact.upsert({
-      where: { organizationId_phone: { organizationId: orgId, phone } },
+      where: {
+        organizationId_whatsappNumberId_normalizedPhone: {
+          organizationId: orgId,
+          whatsappNumberId: whatsappNumber.id,
+          normalizedPhone: phone,
+        },
+      },
       create: {
         organizationId: orgId,
         phone,
+        normalizedPhone: phone,
+        whatsappNumberId: whatsappNumber.id,
         name: data.name,
         optedIn: true,
         source: 'OUTBOUND',
@@ -331,19 +340,32 @@ router.post(
       update: { name: data.name || undefined },
     });
 
-    let conversation = await prisma.conversation.findFirst({
-      where: { organizationId: orgId, contactId: contact.id, whatsappNumberId: whatsappNumber.id },
-    });
-
-    if (!conversation) {
-      conversation = await prisma.conversation.create({
-        data: {
+    const existingConversation = await prisma.conversation.findUnique({
+      where: {
+        organizationId_contactId_whatsappNumberId: {
           organizationId: orgId,
           contactId: contact.id,
           whatsappNumberId: whatsappNumber.id,
         },
-      });
-    }
+      },
+      select: { id: true },
+    });
+
+    const conversation = await prisma.conversation.upsert({
+      where: {
+        organizationId_contactId_whatsappNumberId: {
+          organizationId: orgId,
+          contactId: contact.id,
+          whatsappNumberId: whatsappNumber.id,
+        },
+      },
+      create: {
+        organizationId: orgId,
+        contactId: contact.id,
+        whatsappNumberId: whatsappNumber.id,
+      },
+      update: {},
+    });
 
     const fullConversation = await prisma.conversation.findFirst({
       where: { id: conversation.id, organizationId: orgId },
@@ -357,7 +379,7 @@ router.post(
 
     if (!fullConversation) throw new AppError(404, 'Conversation not found');
 
-    sendSuccess(res, fullConversation, 201);
+    sendSuccess(res, fullConversation, existingConversation ? 200 : 201);
   })
 );
 
@@ -1087,6 +1109,32 @@ const templateParamsSchema = z
   })
   .optional();
 
+type InboxTemplateParams = z.infer<NonNullable<typeof templateParamsSchema>>;
+
+/**
+ * Resolve contact-field tokens ({{name}}/{{phone}}/{{email}}) in inbox template params
+ * against the conversation's contact, with a graceful fallback for empty names.
+ */
+function resolveInboxTemplateParams(
+  params: InboxTemplateParams | undefined,
+  contact: { name?: string | null; phone?: string | null; email?: string | null } | null | undefined
+): InboxTemplateParams | undefined {
+  if (!params) return params;
+  const resolveValue = (value: string): string => {
+    const token = sanitizeFieldToken(value);
+    if (token === 'contact.name') return contact?.name?.trim() || 'Valued customer';
+    if (token === 'contact.phone') return contact?.phone?.trim() || 'your registered number';
+    if (token === 'contact.email') return contact?.email?.trim() || 'your registered email';
+    if (value === '{{name}}') return contact?.name?.trim() || 'Valued customer';
+    return value;
+  };
+  return {
+    ...params,
+    body: params.body?.map(resolveValue),
+    header: params.header?.map(resolveValue),
+  };
+}
+
 const interactiveSchema = z
   .object({
     mode: z.enum(['reply', 'cta_url', 'cta_call', 'list']).default('reply'),
@@ -1282,6 +1330,7 @@ router.post(
 
     let messageContent = data.content?.trim() || '';
     let messageMetadata: Record<string, unknown> | undefined;
+    let resolvedTemplateParams: InboxTemplateParams | undefined;
     let deliverType: 'TEXT' | 'TEMPLATE' | 'IMAGE' | 'VIDEO' | 'DOCUMENT' | 'AUDIO' | 'INTERACTIVE' =
       data.type as 'TEXT' | 'TEMPLATE' | 'IMAGE' | 'VIDEO' | 'DOCUMENT' | 'AUDIO' | 'INTERACTIVE';
     let interactiveOpts = data.interactive;
@@ -1410,10 +1459,11 @@ router.post(
         throw new AppError(400, 'Only approved templates can be sent');
       }
       messageContent = getTemplateDisplayText(template, data.templateName);
+      resolvedTemplateParams = resolveInboxTemplateParams(data.templateParams, conversation.contact);
       messageMetadata = {
         templateName: data.templateName,
         templateLanguage: data.templateLanguage || template?.language || 'en_US',
-        templateParams: data.templateParams,
+        templateParams: resolvedTemplateParams,
       };
     }
 
@@ -1461,7 +1511,7 @@ router.post(
       type: deliverType,
       templateName: data.templateName,
       templateLanguage: data.templateLanguage || 'en_US',
-      templateParams: data.templateParams,
+      templateParams: resolvedTemplateParams ?? data.templateParams,
       mediaUrl,
       mediaPath:
         typeof (messageMetadata as { mediaPath?: string } | undefined)?.mediaPath === 'string'

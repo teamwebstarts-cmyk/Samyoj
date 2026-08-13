@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Send } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Send, Sparkles } from 'lucide-react';
 import AppButton from '../ui/AppButton';
 import AppInput from '../ui/AppInput';
 import TemplatePicker from './TemplatePicker';
@@ -10,6 +11,13 @@ import {
 } from '../campaigns/campaignPreviewUtils';
 import { templateApi } from '../../services/api';
 import { countTemplateVars, getTemplateBodyText, getTemplateHeaderText } from '../../utils/templateUtils';
+import {
+  loadTemplateVariableMeta,
+  previewParams,
+  sourceFromParamValue,
+  sourceLabel,
+  tokenForSource,
+} from '../../utils/templateForm';
 import type { MessageTemplate } from '../../types';
 
 interface TemplateComposerProps {
@@ -92,13 +100,30 @@ export default function TemplateComposer({
       setHeaderMediaUrl('');
       return;
     }
-    setBodyParams(Array(countTemplateVars(getTemplateBodyText(selected))).fill(''));
-    setHeaderParams(Array(countTemplateVars(getTemplateHeaderText(selected))).fill(''));
+    const meta = loadTemplateVariableMeta(selected.name);
+    const bodyCount = countTemplateVars(getTemplateBodyText(selected));
+    const headerCount = countTemplateVars(getTemplateHeaderText(selected));
+    setBodyParams(
+      Array.from({ length: bodyCount }, (_, i) => {
+        const m = meta.find((v) => v.scope === 'body' && v.index === i + 1);
+        const token = m?.suggestedSource && m.suggestedSource !== 'custom' ? tokenForSource(m.suggestedSource) : '';
+        return token;
+      }),
+    );
+    setHeaderParams(
+      Array.from({ length: headerCount }, (_, i) => {
+        const m = meta.find((v) => v.scope === 'header' && v.index === i + 1);
+        return m?.suggestedSource && m.suggestedSource !== 'custom' ? tokenForSource(m.suggestedSource) : '';
+      }),
+    );
     setHeaderMediaUrl('');
   }, [selected]);
 
   const preview = selected
-    ? getFilledTemplatePreview(selected, { bodyParams, headerParams })
+    ? getFilledTemplatePreview(selected, {
+        bodyParams: previewParams(bodyParams),
+        headerParams: previewParams(headerParams),
+      })
     : null;
 
   const handleTemplateChange = (name: string) => {
@@ -149,11 +174,26 @@ export default function TemplateComposer({
       <div className="bg-theme-surface px-4 py-4">
         <p className="text-[13px] font-bold text-theme-fg">No approved templates</p>
         <p className="mt-1 text-[12px] text-theme-secondary">
-          Create and get a template approved under Templates to message outside the 24-hour window.
+          Add a Meta library template to message outside the 24-hour window immediately, or create
+          your own for WhatsApp review.
         </p>
-        <AppButton type="button" variant="ghost" size="sm" className="mt-2" onClick={onCancel}>
-          Cancel
-        </AppButton>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Link
+            to="/templates/library"
+            className="inline-flex min-h-9 items-center rounded-xl bg-emerald-600 px-3 text-[12px] font-bold text-white hover:bg-emerald-700"
+          >
+            Browse library
+          </Link>
+          <Link
+            to="/templates/new"
+            className="inline-flex min-h-9 items-center rounded-xl border border-theme-border px-3 text-[12px] font-bold text-theme-secondary hover:bg-theme-subtle"
+          >
+            Create template
+          </Link>
+          <AppButton type="button" variant="ghost" size="sm" onClick={onCancel}>
+            Cancel
+          </AppButton>
+        </div>
       </div>
     );
   }
@@ -188,23 +228,41 @@ export default function TemplateComposer({
               <div className="space-y-2.5">
                 {(headerParams.length > 0 || (selected && templateNeedsHeaderMedia(selected))) && (
                   <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                    {headerParams.map((_, i) => (
-                      <AppInput
-                        key={`inbox-header-${selected?.name ?? 't'}-${i}`}
-                        label={`Header {{${i + 1}}}`}
-                        value={headerParams[i]}
-                        className="!h-9 text-[13px]"
-                        labelClassName="text-[11px] font-semibold text-theme-secondary"
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          setHeaderParams((prev) => {
-                            const next = [...prev];
-                            next[i] = value;
-                            return next;
-                          });
-                        }}
-                      />
-                    ))}
+                    {headerParams.map((value, i) => {
+                      const source = sourceFromParamValue(value);
+                      if (source) {
+                        return (
+                          <div key={`inbox-header-${selected?.name ?? 't'}-${i}`}>
+                            <p className="mb-1 text-[11px] font-semibold text-theme-secondary">
+                              Header {`{{${i + 1}}}`}
+                            </p>
+                            <div className="flex h-9 items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 dark:border-emerald-800 dark:bg-emerald-950/30">
+                              <Sparkles className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                              <p className="text-[11px] font-bold text-emerald-800 dark:text-emerald-200">
+                                Auto: {sourceLabel(source)}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      }
+                      return (
+                        <AppInput
+                          key={`inbox-header-${selected?.name ?? 't'}-${i}`}
+                          label={`Header {{${i + 1}}}`}
+                          value={headerParams[i]}
+                          className="!h-9 text-[13px]"
+                          labelClassName="text-[11px] font-semibold text-theme-secondary"
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setHeaderParams((prev) => {
+                              const next = [...prev];
+                              next[i] = v;
+                              return next;
+                            });
+                          }}
+                        />
+                      );
+                    })}
                     {selected && templateNeedsHeaderMedia(selected) && (
                       <AppInput
                         className={`!h-9 text-[13px] ${headerParams.length % 2 === 1 ? '' : 'sm:col-span-2'}`}
@@ -220,23 +278,41 @@ export default function TemplateComposer({
 
                 {bodyParams.length > 0 && (
                   <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                    {bodyParams.map((_, i) => (
-                      <AppInput
-                        key={`inbox-body-${selected?.name ?? 't'}-${i}`}
-                        label={`Body {{${i + 1}}}`}
-                        value={bodyParams[i]}
-                        className="!h-9 text-[13px]"
-                        labelClassName="text-[11px] font-semibold text-theme-secondary"
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          setBodyParams((prev) => {
-                            const next = [...prev];
-                            next[i] = value;
-                            return next;
-                          });
-                        }}
-                      />
-                    ))}
+                    {bodyParams.map((value, i) => {
+                      const source = sourceFromParamValue(value);
+                      if (source) {
+                        return (
+                          <div key={`inbox-body-${selected?.name ?? 't'}-${i}`}>
+                            <p className="mb-1 text-[11px] font-semibold text-theme-secondary">
+                              Body {`{{${i + 1}}}`}
+                            </p>
+                            <div className="flex h-9 items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 dark:border-emerald-800 dark:bg-emerald-950/30">
+                              <Sparkles className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                              <p className="text-[11px] font-bold text-emerald-800 dark:text-emerald-200">
+                                Auto: {sourceLabel(source)}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      }
+                      return (
+                        <AppInput
+                          key={`inbox-body-${selected?.name ?? 't'}-${i}`}
+                          label={`Body {{${i + 1}}}`}
+                          value={bodyParams[i]}
+                          className="!h-9 text-[13px]"
+                          labelClassName="text-[11px] font-semibold text-theme-secondary"
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setBodyParams((prev) => {
+                              const next = [...prev];
+                              next[i] = v;
+                              return next;
+                            });
+                          }}
+                        />
+                      );
+                    })}
                   </div>
                 )}
               </div>

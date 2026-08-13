@@ -41,17 +41,22 @@ router.post(
   '/',
   asyncHandler(async (req: Request, res: Response) => {
     const data = contactSchema.parse(req.body);
+    const whatsappNumberId = req.activeWhatsappNumberId;
+    if (!whatsappNumberId) throw new AppError(400, 'Connect a WhatsApp number before creating contacts');
 
     const contact = await prisma.contact.upsert({
       where: {
-        organizationId_phone: {
+        organizationId_whatsappNumberId_normalizedPhone: {
           organizationId: req.user!.organizationId!,
-          phone: data.phone,
+          whatsappNumberId,
+          normalizedPhone: data.phone,
         },
       },
       create: {
         organizationId: req.user!.organizationId!,
         phone: data.phone,
+        normalizedPhone: data.phone,
+        whatsappNumberId,
         name: data.name,
         email: data.email || undefined,
         tags: data.tags || [],
@@ -84,6 +89,8 @@ router.post(
     if (!Array.isArray(contacts)) throw new AppError(400, 'Contacts array required');
 
     const orgId = req.user!.organizationId!;
+    const whatsappNumberId = req.activeWhatsappNumberId;
+    if (!whatsappNumberId) throw new AppError(400, 'Connect a WhatsApp number before importing contacts');
     let imported = 0;
 
     for (let i = 0; i < contacts.length; i++) {
@@ -92,10 +99,18 @@ router.post(
       if (!result.ok) throw new AppError(400, `Contact ${i + 1}: ${result.error}`);
 
       await prisma.contact.upsert({
-        where: { organizationId_phone: { organizationId: orgId, phone: result.phone } },
+        where: {
+          organizationId_whatsappNumberId_normalizedPhone: {
+            organizationId: orgId,
+            whatsappNumberId,
+            normalizedPhone: result.phone,
+          },
+        },
         create: {
           organizationId: orgId,
           phone: result.phone,
+          normalizedPhone: result.phone,
+          whatsappNumberId,
           name: c.name,
           tags: c.tags || [],
           notes: c.notes,
@@ -122,7 +137,11 @@ router.post(
       optedIn: z.boolean().optional(),
     });
     const data = schema.parse(req.body);
-    const result = await bulkUpdateContacts(req.user!.organizationId!, data);
+    const result = await bulkUpdateContacts(
+      req.user!.organizationId!,
+      data,
+      req.activeWhatsappNumberId
+    );
     sendSuccess(res, result);
   })
 );
@@ -133,8 +152,9 @@ router.get(
   requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
+    const whatsappNumberId = req.activeWhatsappNumberId;
     const contacts = await prisma.contact.findMany({
-      where: { organizationId: orgId },
+      where: whatsappNumberId ? { organizationId: orgId, whatsappNumberId } : { id: { in: [] } },
       select: { tags: true },
     });
 
@@ -160,7 +180,12 @@ router.post(
   asyncHandler(async (req: Request, res: Response) => {
     const schema = z.object({ from: z.string().min(1), to: z.string().min(1) });
     const data = schema.parse(req.body);
-    const result = await renameTag(req.user!.organizationId!, data.from, data.to);
+    const result = await renameTag(
+      req.user!.organizationId!,
+      data.from,
+      data.to,
+      req.activeWhatsappNumberId
+    );
     sendSuccess(res, result);
   })
 );
@@ -171,7 +196,7 @@ router.delete(
   requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
     const tag = decodeURIComponent(String(req.params.tag));
-    const result = await deleteTag(req.user!.organizationId!, tag);
+    const result = await deleteTag(req.user!.organizationId!, tag, req.activeWhatsappNumberId);
     sendSuccess(res, result);
   })
 );
@@ -181,7 +206,11 @@ router.get(
   authenticate,
   requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
-    const result = await exportContacts(req.user!.organizationId!, req.query as Record<string, string>);
+    const result = await exportContacts(
+      req.user!.organizationId!,
+      req.query as Record<string, string>,
+      req.activeWhatsappNumberId
+    );
     const ext = result.contentType === 'text/csv' ? 'csv' : 'json';
     res.setHeader('Content-Type', result.contentType);
     res.setHeader('Content-Disposition', `attachment; filename=contacts.${ext}`);
@@ -194,7 +223,11 @@ router.get(
   authenticate,
   requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
-    const detail = await getContactDetail(req.user!.organizationId!, paramId(req));
+    const detail = await getContactDetail(
+      req.user!.organizationId!,
+      paramId(req),
+      req.activeWhatsappNumberId
+    );
     sendSuccess(res, detail);
   })
 );
@@ -205,7 +238,11 @@ router.get(
   requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
     const { getContactTimeline } = await import('./timeline');
-    const result = await getContactTimeline(req.user!.organizationId!, paramId(req));
+    const result = await getContactTimeline(
+      req.user!.organizationId!,
+      paramId(req),
+      req.activeWhatsappNumberId
+    );
     if (!result) throw new AppError(404, 'Contact not found');
     sendSuccess(res, result);
   })
@@ -217,7 +254,11 @@ router.get(
   requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
     const contact = await prisma.contact.findFirst({
-      where: { id: paramId(req), organizationId: req.user!.organizationId! },
+      where: {
+        id: paramId(req),
+        organizationId: req.user!.organizationId!,
+        ...(req.activeWhatsappNumberId ? { whatsappNumberId: req.activeWhatsappNumberId } : { id: { in: [] } }),
+      },
     });
     if (!contact) throw new AppError(404, 'Contact not found');
     sendSuccess(res, contact);
@@ -240,7 +281,11 @@ router.patch(
     const data = updateContactSchema.parse(req.body);
     const id = paramId(req);
     const existing = await prisma.contact.findFirst({
-      where: { id, organizationId: req.user!.organizationId! },
+      where: {
+        id,
+        organizationId: req.user!.organizationId!,
+        ...(req.activeWhatsappNumberId ? { whatsappNumberId: req.activeWhatsappNumberId } : { id: { in: [] } }),
+      },
     });
     if (!existing) throw new AppError(404, 'Contact not found');
 
@@ -262,10 +307,33 @@ router.delete(
   requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
     const id = paramId(req);
-    const deleted = await prisma.contact.deleteMany({
-      where: { id, organizationId: req.user!.organizationId! },
+    await prisma.$transaction(async (tx) => {
+      const contact = await tx.contact.findFirst({
+        where: {
+          id,
+          organizationId: req.user!.organizationId!,
+          ...(req.activeWhatsappNumberId ? { whatsappNumberId: req.activeWhatsappNumberId } : { id: { in: [] } }),
+        },
+        select: { id: true },
+      });
+      if (!contact) throw new AppError(404, 'Contact not found');
+
+      // Lock the parent while checking history. FK inserts acquire a
+      // conflicting key-share lock, so a concurrent history write cannot
+      // race this check and be cascaded by deletion.
+      await tx.$queryRaw`SELECT id FROM contacts WHERE id = ${contact.id} FOR UPDATE`;
+      const locked = await tx.contact.findUnique({
+        where: { id: contact.id },
+        select: {
+          _count: { select: { conversations: true, calls: true, orders: true, leads: true, tickets: true } },
+        },
+      });
+      if (!locked || Object.values(locked._count).some((count) => count > 0)) {
+        throw new AppError(409, 'Cannot delete a contact with history; retain or archive it instead');
+      }
+      const deleted = await tx.contact.deleteMany({ where: { id: contact.id } });
+      if (deleted.count !== 1) throw new AppError(404, 'Contact not found');
     });
-    if (deleted.count === 0) throw new AppError(404, 'Contact not found');
     sendSuccess(res, { deleted: true });
   })
 );

@@ -1,10 +1,11 @@
 import type { Dispatch, SetStateAction } from 'react';
-import { CheckCircle2, ExternalLink, Globe2, Info, Link2, MessageCircle } from 'lucide-react';
+import { CheckCircle2, ExternalLink, Globe2, Info, Link2, MessageCircle, Sparkles } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import AppInput from '../../ui/AppInput';
 import AppSelect from '../../ui/AppSelect';
 import { WhatsAppTemplatePreview } from '../../inbox/WhatsAppPreview';
+import { CONTACT_SOURCE_TOKEN, loadTemplateVariableMeta, previewParams, sourceFromParamValue, sourceLabel } from '../../../utils/templateForm';
 import {
   getFilledTemplatePreview,
   getTemplateHeaderFormat,
@@ -54,11 +55,59 @@ export default function CampaignMessageStep({
   const [previewLanguage, setPreviewLanguage] = useState(form.templateLanguage || selectedTemplate?.language || '');
   const filledPreview = selectedTemplate
     ? {
-        ...getFilledTemplatePreview(selectedTemplate, form),
+        ...getFilledTemplatePreview(selectedTemplate, {
+          ...form,
+          bodyParams: previewParams(form.bodyParams),
+          headerParams: previewParams(form.headerParams),
+        }),
         headerMediaUrl: form.headerMediaUrl || undefined,
       }
     : null;
   const showHeaderMedia = selectedTemplate ? templateNeedsHeaderMedia(selectedTemplate) : false;
+  const templateMeta = useMemo(
+    () => (selectedTemplate ? loadTemplateVariableMeta(selectedTemplate.name) : []),
+    [selectedTemplate],
+  );
+  /** body var index (0-based) → mapped source, from the wizard's saved mapping. */
+  const bodySourceByIndex = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const m of templateMeta) {
+      if (m.scope === 'body' && m.suggestedSource) map.set(m.index - 1, m.suggestedSource);
+    }
+    return map;
+  }, [templateMeta]);
+  const headerSourceByIndex = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const m of templateMeta) {
+      if (m.scope === 'header' && m.suggestedSource) map.set(m.index - 1, m.suggestedSource);
+    }
+    return map;
+  }, [templateMeta]);
+
+  // Auto-fill mapped variables (body + header) with their resolution token. Empty slots only.
+  useEffect(() => {
+    if (!selectedTemplate) return;
+    if (!bodySourceByIndex.size && !headerSourceByIndex.size) return;
+    setForm((previous) => {
+      let changed = false;
+      const fill = (params: string[], sourceByIndex: Map<number, string>) => {
+        const next = [...params];
+        for (let i = 0; i < next.length; i += 1) {
+          const source = sourceByIndex.get(i);
+          if (!source || source === 'custom') continue;
+          const token = CONTACT_SOURCE_TOKEN[source];
+          if (token && !(next[i] || '').trim()) {
+            next[i] = token;
+            changed = true;
+          }
+        }
+        return next;
+      };
+      const bodyParams = fill(previous.bodyParams, bodySourceByIndex);
+      const headerParams = fill(previous.headerParams, headerSourceByIndex);
+      return changed ? { ...previous, bodyParams, headerParams } : previous;
+    });
+  }, [selectedTemplate, bodySourceByIndex, headerSourceByIndex, setForm]);
   const previewLanguages = useMemo(
     () =>
       selectedTemplate
@@ -210,32 +259,68 @@ export default function CampaignMessageStep({
                   </div>
                 ) : (
                   <>
-                    {form.bodyParams.map((value, index) => (
-                      <AppInput
-                        key={`body-param-${index}`}
-                        id={`body-param-${index}`}
-                        label={`${index + 1}. ${getVariableLabel(selectedTemplate, index)} *`}
-                        hint={`${value.length} characters`}
-                        placeholder={index === 0 ? 'Name or other value' : 'Enter a value'}
-                        value={value}
-                        onChange={(event) => updateBodyParam(index, event.target.value)}
-                        labelClassName="text-[11px] font-bold text-slate-600 dark:text-slate-300"
-                        className="!h-9 rounded-lg text-[12px]"
-                      />
-                    ))}
+                    {form.bodyParams.map((value, index) => {
+                      const source = bodySourceByIndex.get(index) || sourceFromParamValue(value);
+                      if (source && source !== 'custom') {
+                        return (
+                          <div key={`body-param-${index}`}>
+                            <p className="mb-1 text-[11px] font-bold text-slate-600 dark:text-slate-300">
+                              {index + 1}. {getVariableLabel(selectedTemplate, index)}
+                            </p>
+                            <div className="flex h-9 items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 dark:border-emerald-800 dark:bg-emerald-950/30">
+                              <Sparkles className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                              <p className="text-[11px] font-bold text-emerald-800 dark:text-emerald-200">
+                                Auto-filled from contact ({sourceLabel(source)})
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      }
+                      return (
+                        <AppInput
+                          key={`body-param-${index}`}
+                          id={`body-param-${index}`}
+                          label={`${index + 1}. ${getVariableLabel(selectedTemplate, index)} *`}
+                          hint={`${value.length} characters`}
+                          placeholder={index === 0 ? 'Name or other value' : 'Enter a value'}
+                          value={value}
+                          onChange={(event) => updateBodyParam(index, event.target.value)}
+                          labelClassName="text-[11px] font-bold text-slate-600 dark:text-slate-300"
+                          className="!h-9 rounded-lg text-[12px]"
+                        />
+                      );
+                    })}
 
-                    {form.headerParams.map((value, index) => (
-                      <AppInput
-                        key={`header-param-${index}`}
-                        id={`header-param-${index}`}
-                        label={`${index + 1}. Header detail *`}
-                        hint={`${value.length} characters`}
-                        value={value}
-                        onChange={(event) => updateHeaderParam(index, event.target.value)}
-                        labelClassName="text-[11px] font-bold text-slate-600 dark:text-slate-300"
-                        className="!h-9 rounded-lg text-[12px]"
-                      />
-                    ))}
+                    {form.headerParams.map((value, index) => {
+                      const source = headerSourceByIndex.get(index) || sourceFromParamValue(value);
+                      if (source && source !== 'custom') {
+                        return (
+                          <div key={`header-param-${index}`}>
+                            <p className="mb-1 text-[11px] font-bold text-slate-600 dark:text-slate-300">
+                              {index + 1}. Header detail
+                            </p>
+                            <div className="flex h-9 items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 dark:border-emerald-800 dark:bg-emerald-950/30">
+                              <Sparkles className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                              <p className="text-[11px] font-bold text-emerald-800 dark:text-emerald-200">
+                                Auto-filled from contact ({sourceLabel(source)})
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      }
+                      return (
+                        <AppInput
+                          key={`header-param-${index}`}
+                          id={`header-param-${index}`}
+                          label={`${index + 1}. Header detail *`}
+                          hint={`${value.length} characters`}
+                          value={value}
+                          onChange={(event) => updateHeaderParam(index, event.target.value)}
+                          labelClassName="text-[11px] font-bold text-slate-600 dark:text-slate-300"
+                          className="!h-9 rounded-lg text-[12px]"
+                        />
+                      );
+                    })}
 
                     {showHeaderMedia && (
                       <AppInput

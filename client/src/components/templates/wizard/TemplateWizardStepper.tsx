@@ -1,24 +1,33 @@
 import { Check } from 'lucide-react';
 import { templateWizardStages } from './templateWizardModel';
 
+interface Stage {
+  id: string;
+  label: string;
+}
+
 interface TemplateWizardStepperProps {
   activeStep: number;
   maxReachableStep: number;
   onStepChange: (step: number) => void;
+  stages?: readonly Stage[];
+  ariaLabel?: string;
 }
 
 export default function TemplateWizardStepper({
   activeStep,
   maxReachableStep,
   onStepChange,
+  stages = templateWizardStages,
+  ariaLabel = 'Template creation steps',
 }: TemplateWizardStepperProps) {
   return (
     <nav
-      aria-label="Template creation steps"
+      aria-label={ariaLabel}
       className="template-wizard-stepper flex shrink-0 items-center justify-end gap-0"
     >
       <ol className="flex items-center">
-        {templateWizardStages.map((stage, index) => {
+        {stages.map((stage, index) => {
           const completed = index < activeStep;
           const active = index === activeStep;
           const reachable = index <= maxReachableStep;
@@ -55,7 +64,7 @@ export default function TemplateWizardStepper({
                   {stage.label}
                 </span>
               </button>
-              {index < templateWizardStages.length - 1 && (
+              {index < stages.length - 1 && (
                 <span
                   aria-hidden
                   className={`mx-2 h-px w-6 sm:w-10 ${

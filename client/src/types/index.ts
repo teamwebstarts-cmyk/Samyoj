@@ -953,6 +953,9 @@ export interface TemplateLibraryEntry {
   body?: string;
   footer?: string;
   body_params?: string[];
+  /** Meta param types: TEXT | AMOUNT | DATE | PHONE NUMBER | EMAIL | NUMBER | ADDRESS */
+  body_param_types?: string[];
+  header_params?: string[];
   buttons?: TemplateButton[];
   components?: Array<{ type: string; text?: string; buttons?: TemplateButton[] }>;
 }

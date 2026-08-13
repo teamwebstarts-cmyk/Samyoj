@@ -1,6 +1,14 @@
 import { Check, Lightbulb, Wand2, X } from 'lucide-react';
 import { getTemplateApprovalChecklist } from '../../../utils/templateUtils';
-import type { TemplateFormState } from '../../../utils/templateForm';
+import type { TemplateFormState, TemplateVariableMeta } from '../../../utils/templateForm';
+
+const SOURCE_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: '', label: 'Type manually (campaign)' },
+  { value: 'contact.name', label: 'Auto: Customer name' },
+  { value: 'contact.phone', label: 'Auto: Phone number' },
+  { value: 'contact.email', label: 'Auto: Email' },
+  { value: 'custom', label: 'Same value for everyone' },
+];
 
 interface TemplateWizardReviewStepProps {
   form: TemplateFormState;
@@ -42,6 +50,17 @@ export default function TemplateWizardReviewStep({
       ...form,
       variableMeta: form.variableMeta.map((m) =>
         m.scope === scope && m.index === index ? { ...m, description } : m,
+      ),
+    });
+  };
+
+  const updateSource = (scope: 'body' | 'header', index: number, source: string) => {
+    onChange({
+      ...form,
+      variableMeta: form.variableMeta.map((m) =>
+        m.scope === scope && m.index === index
+          ? { ...m, suggestedSource: (source || undefined) as TemplateVariableMeta['suggestedSource'] }
+          : m,
       ),
     });
   };
@@ -98,11 +117,12 @@ export default function TemplateWizardReviewStep({
               Body variables ({bodyVars.length})
             </p>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[520px] text-left text-[12px]">
+              <table className="w-full min-w-[640px] text-left text-[12px]">
                 <thead>
                   <tr className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
                     <th className="pb-2 pr-3">Variable</th>
                     <th className="pb-2 pr-3">Description</th>
+                    <th className="pb-2 pr-3">Filled from</th>
                     <th className="pb-2 pr-3">Sample value</th>
                     <th className="pb-2">Preview</th>
                   </tr>
@@ -122,6 +142,20 @@ export default function TemplateWizardReviewStep({
                           onChange={(e) => updateMeta('body', meta.index, e.target.value)}
                           className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[12px] dark:border-slate-700 dark:bg-slate-900"
                         />
+                      </td>
+                      <td className="py-2.5 pr-3">
+                        <select
+                          value={meta.suggestedSource || ''}
+                          onChange={(e) => updateSource('body', meta.index, e.target.value)}
+                          className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[12px] font-medium dark:border-slate-700 dark:bg-slate-900"
+                          title="How this variable is filled when sending"
+                        >
+                          {SOURCE_OPTIONS.map((o) => (
+                            <option key={o.value} value={o.value}>
+                              {o.label}
+                            </option>
+                          ))}
+                        </select>
                       </td>
                       <td className="py-2.5 pr-3">
                         <input
@@ -151,10 +185,22 @@ export default function TemplateWizardReviewStep({
             </p>
             <div className="space-y-2">
               {headerVars.map((meta) => (
-                <div key={`header-${meta.index}`} className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <div key={`header-${meta.index}`} className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                   <span className="inline-flex w-fit rounded-md bg-emerald-50 px-2 py-0.5 font-mono text-[11px] font-bold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
                     {`{{${meta.index}}}`}
                   </span>
+                  <select
+                    value={meta.suggestedSource || ''}
+                    onChange={(e) => updateSource('header', meta.index, e.target.value)}
+                    className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[12px] font-medium dark:border-slate-700 dark:bg-slate-900"
+                    title="How this variable is filled when sending"
+                  >
+                    {SOURCE_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
                   <input
                     type="text"
                     value={getSample('header', meta.index)}

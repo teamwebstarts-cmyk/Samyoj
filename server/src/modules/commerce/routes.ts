@@ -5,7 +5,7 @@ import prisma from '../../config/database';
 import { authenticate, requireOrg } from '../../middleware/auth';
 import { AppError, sendSuccess, asyncHandler, paramId } from '../../utils/response';
 import { MetaWhatsAppService } from '../whatsapp/meta.service';
-import { getOrgWhatsappContext } from '../whatsapp/context';
+import { getWhatsappContextById } from '../whatsapp/context';
 import { resolveActiveWhatsappNumber } from '../whatsapp/active-number';
 import {
   buildOrderStatusPayload,
@@ -41,7 +41,7 @@ router.get(
   requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
-    const order = await getOrder(orgId, paramId(req));
+    const order = await getOrder(orgId, paramId(req), req.activeWhatsappNumberId);
     if (!order) throw new AppError(404, 'Order not found');
     sendSuccess(res, order);
   })
@@ -63,7 +63,13 @@ router.patch(
     const orderId = paramId(req);
     const data = statusSchema.parse(req.body);
 
-    const order = await updateOrderStatus(orgId, orderId, data.status, data.statusNote);
+    const order = await updateOrderStatus(
+      orgId,
+      orderId,
+      data.status,
+      data.statusNote,
+      req.activeWhatsappNumberId
+    );
     if (!order) throw new AppError(404, 'Order not found');
 
     if (data.notifyContact && order.contactId) {
@@ -72,7 +78,11 @@ router.patch(
         select: { phone: true },
       });
       if (contact?.phone) {
-        const { whatsappNumber, accessToken } = await getOrgWhatsappContext(orgId);
+        if (!order.whatsappNumberId) throw new AppError(409, 'Order has unresolved WhatsApp number ownership');
+        const { whatsappNumber, accessToken } = await getWhatsappContextById(
+          orgId,
+          order.whatsappNumberId
+        );
         const payload = buildOrderStatusPayload(contact.phone, {
           referenceId: order.referenceId,
           body: data.body || `Your order ${order.referenceId} status: ${data.status}`,
@@ -106,7 +116,12 @@ router.patch(
     const orderId = paramId(req);
     const data = paymentStatusSchema.parse(req.body);
 
-    const order = await updateOrderPaymentStatus(orgId, orderId, data.paymentStatus);
+    const order = await updateOrderPaymentStatus(
+      orgId,
+      orderId,
+      data.paymentStatus,
+      req.activeWhatsappNumberId
+    );
     if (!order) throw new AppError(404, 'Order not found');
 
     if (data.notifyContact && order.contactId) {
@@ -115,7 +130,11 @@ router.patch(
         select: { phone: true },
       });
       if (contact?.phone) {
-        const { whatsappNumber, accessToken } = await getOrgWhatsappContext(orgId);
+        if (!order.whatsappNumberId) throw new AppError(409, 'Order has unresolved WhatsApp number ownership');
+        const { whatsappNumber, accessToken } = await getWhatsappContextById(
+          orgId,
+          order.whatsappNumberId
+        );
         const payload = buildPaymentStatusPayload(contact.phone, {
           referenceId: order.referenceId,
           body: data.body || `Payment update for order ${order.referenceId}`,

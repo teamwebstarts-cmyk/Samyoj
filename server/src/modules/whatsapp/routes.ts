@@ -22,6 +22,7 @@ import { webhookQueue } from '../../config/queues';
 import { z } from 'zod';
 import { logError } from '../../errors';
 import { createModuleLogger } from '../../utils/logger';
+import { normalizePhoneIdentity } from '../../utils/phone';
 import {
   webhookHealth,
   trackWebhookFailed,
@@ -39,6 +40,10 @@ async function saveWhatsappConnection(
   connection: Awaited<ReturnType<typeof MetaWhatsAppService.buildConnectionDetails>>
 ) {
   const encryptedToken = MetaWhatsAppService.encryptToken(connection.accessToken);
+  const normalizedPhoneNumber = normalizePhoneIdentity(connection.phoneNumber);
+  if (!normalizedPhoneNumber) {
+    throw new AppError(400, 'Connected WhatsApp number has no usable phone identity');
+  }
   const metaCredentials = await resolveMetaCredentials(orgId);
 
   const ownedElsewhere = await prisma.whatsappNumber.findFirst({
@@ -67,6 +72,7 @@ async function saveWhatsappConnection(
         where: { id: existing.id },
         data: {
           phoneNumber: connection.phoneNumber,
+          normalizedPhoneNumber,
           wabaId: connection.wabaId,
           businessId: connection.businessId,
           accessToken: encryptedToken,
@@ -77,6 +83,7 @@ async function saveWhatsappConnection(
         data: {
           organizationId: orgId,
           phoneNumber: connection.phoneNumber,
+          normalizedPhoneNumber,
           phoneNumberId: connection.phoneNumberId,
           wabaId: connection.wabaId,
           businessId: connection.businessId,
@@ -402,6 +409,10 @@ router.post(
     }
 
     const encryptedToken = MetaWhatsAppService.encryptToken(data.accessToken);
+    const normalizedPhoneNumber = normalizePhoneIdentity(data.phoneNumber);
+    if (!normalizedPhoneNumber) {
+      throw new AppError(400, 'WhatsApp number has no usable phone identity');
+    }
 
     const existing = await prisma.whatsappNumber.findFirst({
       where: { organizationId: orgId, phoneNumberId: data.phoneNumberId },
@@ -412,6 +423,7 @@ router.post(
           where: { id: existing.id },
           data: {
             phoneNumber: data.phoneNumber,
+            normalizedPhoneNumber,
             wabaId: data.wabaId,
             businessId: data.businessId,
             accessToken: encryptedToken,
@@ -422,6 +434,7 @@ router.post(
           data: {
             organizationId: orgId,
             phoneNumber: data.phoneNumber,
+            normalizedPhoneNumber,
             phoneNumberId: data.phoneNumberId,
             wabaId: data.wabaId,
             businessId: data.businessId,

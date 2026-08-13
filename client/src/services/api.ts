@@ -455,6 +455,7 @@ export const templateApi = {
     language: string;
     libraryTemplateName: string;
     libraryTemplateButtonInputs?: Array<Record<string, unknown>>;
+    category?: 'UTILITY' | 'AUTHENTICATION';
   }) => api.post('/templates/from-library', data),
   resubmit: (name: string, data: Record<string, unknown>) =>
     api.post(`/templates/${name}/resubmit`, data),

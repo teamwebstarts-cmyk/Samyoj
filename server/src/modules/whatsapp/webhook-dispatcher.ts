@@ -266,6 +266,7 @@ async function handleUserPreferences(value: Record<string, unknown>, wabaId: str
     const updated = await prisma.contact.updateMany({
       where: {
         organizationId: number.organizationId,
+        whatsappNumberId: number.id,
         phone,
         OR: [{ consentAt: null }, { consentAt: { lte: occurredAt } }],
       },

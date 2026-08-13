@@ -501,10 +501,14 @@ export default function InboxPage() {
   useInboxDeepLink({ upsertConversation, openConversation: handleOpenConversation });
 
   const handleStartChat = async (phone: string, name?: string) => {
-    const { data } = await inboxApi.start({ phone, name });
+    const response = await inboxApi.start({ phone, name });
+    const { data } = response;
     const conversation = data.data as Conversation;
     upsertConversation(conversation, true);
     setNewChatOpen(false);
+    if (response.status === 200) {
+      toastSuccess('This conversation already exists. Opening the existing chat.');
+    }
     await handleOpenConversation(conversation);
   };
 

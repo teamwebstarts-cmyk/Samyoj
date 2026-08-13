@@ -1373,7 +1373,7 @@ export default function CampaignsPage() {
               <ModalCallout
                 icon={LayoutTemplate}
                 title="No approved templates yet"
-                description="Create a template and wait for approval before sending."
+                description="Add a Meta library template to use immediately, or create your own and wait for WhatsApp approval."
                 accent="amber"
               />
             )}

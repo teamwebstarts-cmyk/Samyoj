@@ -134,6 +134,7 @@ export const createFromLibrarySchema = z.object({
   language: z.string().min(2).default('en_US'),
   libraryTemplateName: z.string().min(1),
   libraryTemplateButtonInputs: z.array(z.record(z.unknown())).optional(),
+  category: z.enum(['UTILITY', 'AUTHENTICATION']).optional(),
 });
 
 export const testSendSchema = z.object({

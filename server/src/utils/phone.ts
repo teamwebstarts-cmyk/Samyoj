@@ -4,12 +4,17 @@ export type PhoneValidationResult =
   | { ok: true; phone: string }
   | { ok: false; error: string };
 
-export function normalizePhone(input: string): string {
+/** Stable digits-only identity used for number-scoped database keys. */
+export function normalizePhoneIdentity(input: string): string {
   let digits = input.replace(/\D/g, '');
   if (digits.startsWith('00')) {
     digits = digits.slice(2);
   }
   return digits;
+}
+
+export function normalizePhone(input: string): string {
+  return normalizePhoneIdentity(input);
 }
 
 export function validatePhone(input: string): PhoneValidationResult {

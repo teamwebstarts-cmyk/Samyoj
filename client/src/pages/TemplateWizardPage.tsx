@@ -40,7 +40,7 @@ import { invalidateFlowReferenceData } from '../components/flows/flowReferenceDa
 import { templateApi, whatsappApi } from '../services/api';
 import type { MessageTemplate } from '../types';
 import type { TemplateFormState } from '../utils/templateForm';
-import { formFromMessageTemplate } from '../utils/templateForm';
+import { formFromMessageTemplate, saveTemplateVariableMeta } from '../utils/templateForm';
 import { getTemplateRejectedReason } from '../utils/templateUtils';
 import { getTemplateRejectionGuide, getTemplateStatusHelp } from '../utils/templateRejectionGuide';
 import { toastError, toastSuccess } from '../utils/toast';
@@ -280,6 +280,7 @@ export default function TemplateWizardPage() {
         } else {
           await templateApi.create(payload);
         }
+        saveTemplateVariableMeta(resubmitNameParam || savedName, form.variableMeta);
         clearTemplateDraft();
         invalidateFlowReferenceData();
         invalidateApprovedTemplatesCache();

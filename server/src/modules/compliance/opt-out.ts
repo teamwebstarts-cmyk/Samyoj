@@ -16,18 +16,30 @@ export async function handleOptOut(
   organizationId: string,
   contactId: string,
   _conversationId: string,
-  _whatsappNumberId: string,
+  whatsappNumberId: string,
   occurredAt = new Date(),
   eventId?: string
 ): Promise<boolean> {
   const contact = await prisma.contact.findUniqueOrThrow({
     where: { id: contactId },
-    select: { phone: true, organizationId: true, consentAt: true, optedIn: true, consentDecision: true },
+    select: {
+      phone: true,
+      organizationId: true,
+      whatsappNumberId: true,
+      consentAt: true,
+      optedIn: true,
+      consentDecision: true,
+    },
   });
-  if (contact.organizationId !== organizationId) return false;
+  if (contact.organizationId !== organizationId || contact.whatsappNumberId !== whatsappNumberId) return false;
   if (Number.isNaN(occurredAt.getTime())) return false;
   const updated = await prisma.contact.updateMany({
-    where: { id: contactId, organizationId, OR: [{ consentAt: null }, { consentAt: { lte: occurredAt } }] },
+    where: {
+      id: contactId,
+      organizationId,
+      whatsappNumberId,
+      OR: [{ consentAt: null }, { consentAt: { lte: occurredAt } }],
+    },
     data: {
       optedIn: false,
       consentSource: 'STOP_KEYWORD',

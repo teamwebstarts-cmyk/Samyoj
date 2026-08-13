@@ -143,9 +143,26 @@ export default function CampaignTemplatePicker({
               {templates.length ? 'No templates match these filters.' : 'No approved templates yet.'}
             </p>
             {!templates.length && (
-              <p className="mt-1 text-[10px] text-slate-400">
-                Create a template and wait for approval before sending.
-              </p>
+              <div className="mt-2 space-y-2">
+                <p className="text-[10px] text-slate-400">
+                  Add a Meta library template to use immediately, or create your own for WhatsApp
+                  review.
+                </p>
+                <div className="flex flex-wrap justify-center gap-2">
+                  <Link
+                    to="/templates/library"
+                    className="rounded-md bg-emerald-600 px-2.5 py-1.5 text-[10px] font-bold text-white hover:bg-emerald-700"
+                  >
+                    Browse library
+                  </Link>
+                  <Link
+                    to="/templates/new"
+                    className="rounded-md border border-slate-200 px-2.5 py-1.5 text-[10px] font-bold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300"
+                  >
+                    Create template
+                  </Link>
+                </div>
+              </div>
             )}
           </div>
         ) : (

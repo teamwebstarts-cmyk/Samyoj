@@ -38,7 +38,13 @@ async function ensureContactAndConversation(
   contactPhone: string
 ) {
   let contact = await prisma.contact.findUnique({
-    where: { organizationId_phone: { organizationId: orgId, phone: contactPhone } },
+    where: {
+      organizationId_whatsappNumberId_normalizedPhone: {
+        organizationId: orgId,
+        whatsappNumberId,
+        normalizedPhone: contactPhone,
+      },
+    },
   });
 
   if (!contact) {
@@ -48,6 +54,8 @@ async function ensureContactAndConversation(
       data: {
         organizationId: orgId,
         phone: contactPhone,
+        normalizedPhone: contactPhone,
+        whatsappNumberId,
         optedIn: true,
         consentSource: 'INBOUND_CALL',
         consentAt: new Date(),
@@ -57,7 +65,7 @@ async function ensureContactAndConversation(
   }
 
   let conversation = await prisma.conversation.findFirst({
-    where: { organizationId: orgId, contactId: contact.id },
+    where: { organizationId: orgId, contactId: contact.id, whatsappNumberId },
     orderBy: { lastMessageAt: 'desc' },
   });
 
@@ -588,9 +596,11 @@ async function handleCallTerminate(orgId: string, call: CallWebhookEntry): Promi
 
   if (status === 'COMPLETED' && existing.conversationId) {
     const contact = await prisma.contact.findUnique({ where: { id: existing.contactId } });
-    const whatsappNumber = await prisma.whatsappNumber.findFirst({
-      where: { organizationId: orgId, isActive: true },
-    });
+    const whatsappNumber = existing.whatsappNumberId
+      ? await prisma.whatsappNumber.findFirst({
+          where: { id: existing.whatsappNumberId, organizationId: orgId, isActive: true },
+        })
+      : null;
     if (contact && whatsappNumber) {
       void triggerCallCompletedFlow({
         organizationId: orgId,

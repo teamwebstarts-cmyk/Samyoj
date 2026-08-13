@@ -153,6 +153,7 @@ export async function createOrderFromInbound(
   input: {
     contactId?: string;
     conversationId?: string;
+    whatsappNumberId: string;
     catalogId: string;
     referenceId: string;
     items: OrderLineItem[];
@@ -165,6 +166,7 @@ export async function createOrderFromInbound(
       organizationId,
       contactId: input.contactId,
       conversationId: input.conversationId,
+      whatsappNumberId: input.whatsappNumberId,
       catalogId: input.catalogId,
       referenceId: input.referenceId,
       items: input.items as unknown as Prisma.InputJsonValue,
@@ -182,10 +184,12 @@ export async function updateOrderStatus(
   organizationId: string,
   orderId: string,
   status: OrderStatus,
-  statusNote?: string
+  statusNote?: string,
+  whatsappNumberId?: string
 ) {
+  if (!whatsappNumberId) return null;
   const existing = await prisma.order.findFirst({
-    where: { id: orderId, organizationId },
+    where: { id: orderId, organizationId, whatsappNumberId },
   });
   if (!existing) return null;
 
@@ -198,10 +202,12 @@ export async function updateOrderStatus(
 export async function updateOrderPaymentStatus(
   organizationId: string,
   orderId: string,
-  paymentStatus: OrderPaymentStatus
+  paymentStatus: OrderPaymentStatus,
+  whatsappNumberId?: string
 ) {
+  if (!whatsappNumberId) return null;
   const existing = await prisma.order.findFirst({
-    where: { id: orderId, organizationId },
+    where: { id: orderId, organizationId, whatsappNumberId },
   });
   if (!existing) return null;
 
@@ -241,9 +247,10 @@ export async function listOrders(
   return { orders, total, page, limit };
 }
 
-export async function getOrder(organizationId: string, orderId: string) {
+export async function getOrder(organizationId: string, orderId: string, whatsappNumberId?: string) {
+  if (!whatsappNumberId) return null;
   return prisma.order.findFirst({
-    where: { id: orderId, organizationId },
+    where: { id: orderId, organizationId, whatsappNumberId },
     include: {
       contact: { select: { id: true, name: true, phone: true } },
       conversation: { select: { id: true, status: true } },

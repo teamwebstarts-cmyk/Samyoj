@@ -6,6 +6,7 @@ import {
   List,
   Mail,
   Megaphone,
+  MessageSquare,
   Plus,
   Send,
 } from 'lucide-react';
@@ -47,16 +48,23 @@ export default function TemplateWizardSubmitStep({
       <div className="template-wizard-card overflow-hidden">
         <div className="border-b border-slate-100 px-5 py-5 dark:border-slate-800">
           <div className="flex items-start gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
-              <Send className="h-5 w-5" />
+            <span
+              className={`flex h-10 w-10 items-center justify-center rounded-full ${
+                isApproved
+                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400'
+                  : 'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400'
+              }`}
+            >
+              {isApproved ? <CheckCircle2 className="h-5 w-5" /> : <Send className="h-5 w-5" />}
             </span>
             <div>
               <h2 className="text-[18px] font-bold text-slate-900 dark:text-white">
-                Template submitted successfully!
+                {isApproved ? 'Template ready to use' : 'Template submitted successfully!'}
               </h2>
               <p className="mt-1 text-[13px] text-slate-600 dark:text-slate-400">
-                Your template is now pending WhatsApp approval. You&apos;ll be notified as soon as
-                there&apos;s an update.
+                {isApproved
+                  ? 'Added from Meta’s library. You can send it from Campaigns and Inbox right away.'
+                  : 'Your template is now pending WhatsApp approval. You’ll be notified as soon as there’s an update.'}
               </p>
             </div>
           </div>
@@ -88,10 +96,10 @@ export default function TemplateWizardSubmitStep({
             </div>
             <div>
               <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
-                Estimated review time
+                {isApproved ? 'Review time' : 'Estimated review time'}
               </p>
               <p className="mt-1 text-[12px] font-semibold text-slate-800 dark:text-slate-200">
-                Up to 24 hours
+                {isApproved ? 'None — already approved' : 'Up to 24 hours'}
               </p>
             </div>
           </div>
@@ -105,11 +113,13 @@ export default function TemplateWizardSubmitStep({
                   : 'border-amber-200/80 bg-amber-50/70 dark:border-amber-900/40 dark:bg-amber-950/25'
             }`}
           >
-            <Clock
-              className={`mt-0.5 h-4 w-4 shrink-0 ${
-                isApproved ? 'text-emerald-600' : isRejected ? 'text-rose-600' : 'text-amber-600'
-              }`}
-            />
+            {isApproved ? (
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+            ) : (
+              <Clock
+                className={`mt-0.5 h-4 w-4 shrink-0 ${isRejected ? 'text-rose-600' : 'text-amber-600'}`}
+              />
+            )}
             <div>
               <p
                 className={`text-[12px] font-bold ${
@@ -156,13 +166,22 @@ export default function TemplateWizardSubmitStep({
               View all templates
             </Link>
             {isApproved ? (
-              <Link
-                to={campaignHref}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-[12px] font-semibold text-white shadow-sm transition hover:bg-violet-700"
-              >
-                <Megaphone className="h-4 w-4" />
-                Use in campaign
-              </Link>
+              <>
+                <Link
+                  to={campaignHref}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-[12px] font-semibold text-white shadow-sm transition hover:bg-violet-700"
+                >
+                  <Megaphone className="h-4 w-4" />
+                  Use in campaign
+                </Link>
+                <Link
+                  to="/inbox"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-4 py-2 text-[12px] font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                >
+                  <MessageSquare className="h-4 w-4" />
+                  Use in inbox
+                </Link>
+              </>
             ) : null}
             <button
               type="button"
@@ -179,24 +198,47 @@ export default function TemplateWizardSubmitStep({
           <p className="text-[13px] font-bold text-slate-900 dark:text-white">What happens next?</p>
           <ol className="mt-4 space-y-4">
             {[
-              {
-                icon: Clock,
-                tone: 'text-amber-600 bg-amber-100 dark:bg-amber-950/40',
-                title: 'Under review by WhatsApp',
-                body: 'WhatsApp will review your template for compliance and quality.',
-              },
-              {
-                icon: Mail,
-                tone: 'text-violet-600 bg-violet-100 dark:bg-violet-950/40',
-                title: "We'll notify you",
-                body: "You'll receive an in-app notification once the status is updated.",
-              },
-              {
-                icon: CheckCircle2,
-                tone: 'text-emerald-600 bg-emerald-100 dark:bg-emerald-950/40',
-                title: 'Use in campaigns & chats',
-                body: 'Once approved, you can start using this template right away.',
-              },
+              ...(isApproved
+                ? [
+                    {
+                      icon: CheckCircle2,
+                      tone: 'text-emerald-600 bg-emerald-100 dark:bg-emerald-950/40',
+                      title: 'Already approved',
+                      body: 'Meta reviewed this library copy. There is no 24-hour wait.',
+                    },
+                    {
+                      icon: Megaphone,
+                      tone: 'text-violet-600 bg-violet-100 dark:bg-violet-950/40',
+                      title: 'Send a campaign',
+                      body: 'Pick this template in Campaigns to message opted-in customers.',
+                    },
+                    {
+                      icon: MessageSquare,
+                      tone: 'text-sky-600 bg-sky-100 dark:bg-sky-950/40',
+                      title: 'Use in Inbox',
+                      body: 'When the 24-hour chat window is closed, send this template from a conversation.',
+                    },
+                  ]
+                : [
+                    {
+                      icon: Clock,
+                      tone: 'text-amber-600 bg-amber-100 dark:bg-amber-950/40',
+                      title: 'Under review by WhatsApp',
+                      body: 'WhatsApp will review your template for compliance and quality.',
+                    },
+                    {
+                      icon: Mail,
+                      tone: 'text-violet-600 bg-violet-100 dark:bg-violet-950/40',
+                      title: "We'll notify you",
+                      body: "You'll receive an in-app notification once the status is updated.",
+                    },
+                    {
+                      icon: CheckCircle2,
+                      tone: 'text-emerald-600 bg-emerald-100 dark:bg-emerald-950/40',
+                      title: 'Use in campaigns & chats',
+                      body: 'Once approved, you can start using this template right away.',
+                    },
+                  ]),
             ].map((step) => (
               <li key={step.title} className="flex gap-3">
                 <span

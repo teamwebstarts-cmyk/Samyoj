@@ -1,4 +1,4 @@
-import { CheckCircle2, Info, MessageCircle, ShieldCheck, Users } from 'lucide-react';
+import { Info, MessageCircle, ShieldCheck } from 'lucide-react';
 import type { MessageTemplate } from '../../../types';
 import type { CampaignWizardForm } from './campaignWizardModel';
 import type { AudiencePreviewMetrics } from '../CampaignAudiencePreview';
@@ -208,7 +208,7 @@ export default function CampaignWizardSummaryRail({
 
       <QuotaCard quota={quota} />
 
-      {variant === 'review' ? (
+      {variant === 'review' && (
         <>
           <section className="campaign-wizard-card overflow-hidden">
             <div className="border-b border-slate-100 px-3.5 py-3 dark:border-slate-800">
@@ -252,20 +252,6 @@ export default function CampaignWizardSummaryRail({
             </p>
           </div>
         </>
-      ) : (
-        <div className="flex items-start gap-2 rounded-xl border border-emerald-200/80 bg-emerald-50/70 px-3 py-2.5 dark:border-emerald-900/50 dark:bg-emerald-950/20">
-          <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-300" />
-          <p className="text-[10px] font-semibold leading-relaxed text-emerald-800 dark:text-emerald-200">
-            Delivery depends on template quality, user settings, and WhatsApp policies.
-          </p>
-        </div>
-      )}
-
-      {variant === 'audience' && (
-        <div className="hidden items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-[10px] font-semibold text-slate-500 dark:border-slate-800 dark:bg-slate-900/50 sm:flex">
-          <Users className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-          Audience eligibility is checked before saving and sending.
-        </div>
       )}
     </aside>
   );

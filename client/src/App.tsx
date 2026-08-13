@@ -28,6 +28,7 @@ import WhatsappCallbackPage from './pages/WhatsappCallbackPage';
 import CallsPage from './pages/CallsPage';
 import TemplatesPage from './pages/TemplatesPage';
 import TemplateWizardPage from './pages/TemplateWizardPage';
+import TemplateLibraryPage from './pages/TemplateLibraryPage';
 import ReportsPage from './pages/ReportsPage';
 import BillingPage from './pages/BillingPage';
 import ContentStudioPage from './pages/ContentStudioPage';
@@ -75,6 +76,7 @@ export default function App() {
                       <Route path="/campaigns/new" element={<CampaignWizardPage />} />
                       <Route path="/campaigns/:id/edit" element={<CampaignWizardPage />} />
                       <Route path="/templates" element={<TemplatesPage />} />
+                      <Route path="/templates/library" element={<TemplateLibraryPage />} />
                       <Route path="/templates/new" element={<TemplateWizardPage />} />
                       <Route path="/templates/:name/resubmit" element={<TemplateWizardPage />} />
                       <Route path="/content-studio" element={<ContentStudioPage />} />

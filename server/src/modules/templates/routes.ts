@@ -175,6 +175,7 @@ router.post(
       language: data.language,
       libraryTemplateName: data.libraryTemplateName,
       libraryTemplateButtonInputs: data.libraryTemplateButtonInputs,
+      category: data.category,
       allow_category_change: true,
     });
 

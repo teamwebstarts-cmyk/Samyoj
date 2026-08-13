@@ -74,6 +74,7 @@ router.get(
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const numberId = req.activeWhatsappNumberId;
+    const numberScope = numberId ? { whatsappNumberId: numberId } : { id: { in: [] as string[] } };
     const {
       search,
       status,
@@ -87,7 +88,7 @@ router.get(
 
     const where: Prisma.CampaignWhereInput = {
       organizationId: orgId,
-      ...(numberId ? { whatsappNumberId: numberId } : {}),
+      ...numberScope,
     };
     if (search) {
       where.OR = [
@@ -133,20 +134,20 @@ router.get(
         where: {
           organizationId: orgId,
           status: { in: ['RUNNING', 'SCHEDULED', 'PAUSED'] },
-          ...(numberId ? { whatsappNumberId: numberId } : {}),
+          ...numberScope,
         },
       }),
       prisma.campaign.count({
-        where: { organizationId: orgId, status: 'COMPLETED', ...(numberId ? { whatsappNumberId: numberId } : {}) },
+        where: { organizationId: orgId, status: 'COMPLETED', ...numberScope },
       }),
       prisma.campaign.aggregate({
-        where: { organizationId: orgId, ...(numberId ? { whatsappNumberId: numberId } : {}) },
+        where: { organizationId: orgId, ...numberScope },
         _sum: { sentCount: true },
       }),
     ]);
 
     const allTotal = await prisma.campaign.count({
-      where: { organizationId: orgId, ...(numberId ? { whatsappNumberId: numberId } : {}) },
+      where: { organizationId: orgId, ...numberScope },
     });
 
     sendSuccess(res, {
@@ -179,6 +180,8 @@ router.post(
   asyncHandler(async (req: Request, res: Response) => {
     const data = previewAudienceSchema.parse(req.body);
     const orgId = req.user!.organizationId!;
+    const whatsappNumberId = req.activeWhatsappNumberId;
+    if (!whatsappNumberId) throw new AppError(400, 'Connect a WhatsApp number before previewing an audience');
 
     const manualRecipients = (data.recipients || []).map((r) => ({
       phone: r.phone,
@@ -190,7 +193,8 @@ router.post(
       orgId,
       data.audienceType,
       data.audienceConfig,
-      manualRecipients
+      manualRecipients,
+      whatsappNumberId
     );
 
     sendSuccess(res, metrics);
@@ -205,6 +209,11 @@ router.post(
     const orgId = req.user!.organizationId!;
     const userId = req.user!.userId;
     validateCampaignTimezone(data.timezone, data.scheduledAt);
+    const whatsappNumberId = await validateCampaignNumber(
+      orgId,
+      data.whatsappNumberId,
+      req.activeWhatsappNumberId
+    );
 
     const manualRecipients = (data.recipients || []).map((r) => ({
       phone: r.phone,
@@ -216,18 +225,13 @@ router.post(
       orgId,
       data.audienceType,
       data.audienceConfig,
-      manualRecipients
+      manualRecipients,
+      whatsappNumberId
     );
 
     if (!resolved.length) {
       throw new AppError(400, 'Campaign must have at least one recipient');
     }
-    const whatsappNumberId = await validateCampaignNumber(
-      orgId,
-      data.whatsappNumberId,
-      req.activeWhatsappNumberId
-    );
-
     const campaign = await prisma.campaign.create({
       data: {
         organizationId: orgId,
@@ -377,7 +381,8 @@ router.patch(
         orgId,
         audienceType,
         audienceConfig,
-        manualRecipients
+        manualRecipients,
+        whatsappNumberId
       );
       if (!resolved.length) throw new AppError(400, 'Campaign must have at least one recipient');
       totalContacts = await persistRecipients(id, resolved);
@@ -494,6 +499,15 @@ router.post(
   '/:id/pause',
   ...adminGuard,
   asyncHandler(async (req: Request, res: Response) => {
+    const campaign = await prisma.campaign.findFirst({
+      where: {
+        id: paramId(req),
+        organizationId: req.user!.organizationId!,
+        ...(req.activeWhatsappNumberId ? { whatsappNumberId: req.activeWhatsappNumberId } : { id: { in: [] } }),
+      },
+      select: { id: true },
+    });
+    if (!campaign) throw new AppError(404, 'Campaign not found');
     await pauseCampaign(paramId(req), req.user!.organizationId!, req.user!.userId);
     sendSuccess(res, { paused: true });
   })
@@ -521,6 +535,15 @@ router.post(
   '/:id/cancel',
   ...adminGuard,
   asyncHandler(async (req: Request, res: Response) => {
+    const campaign = await prisma.campaign.findFirst({
+      where: {
+        id: paramId(req),
+        organizationId: req.user!.organizationId!,
+        ...(req.activeWhatsappNumberId ? { whatsappNumberId: req.activeWhatsappNumberId } : { id: { in: [] } }),
+      },
+      select: { id: true },
+    });
+    if (!campaign) throw new AppError(404, 'Campaign not found');
     await cancelCampaign(paramId(req), req.user!.organizationId!, req.user!.userId);
     sendSuccess(res, { cancelled: true });
   })

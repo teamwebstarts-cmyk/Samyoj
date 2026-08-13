@@ -55,10 +55,12 @@ router.post(
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const data = leadSchema.parse(req.body);
+    const whatsappNumberId = req.activeWhatsappNumberId;
+    if (!whatsappNumberId) throw new AppError(400, 'Connect a WhatsApp number before creating leads');
 
     if (data.contactId) {
       const contact = await prisma.contact.findFirst({
-        where: { id: data.contactId, organizationId: orgId },
+        where: { id: data.contactId, organizationId: orgId, whatsappNumberId },
       });
       if (!contact) throw new AppError(404, 'Contact not found');
     }
@@ -68,6 +70,7 @@ router.post(
         organizationId: orgId,
         title: data.title,
         contactId: data.contactId,
+        whatsappNumberId,
         stage: (data.stage?.toUpperCase() as never) || 'NEW',
         source: data.source,
         assignedAgentId: data.assignedAgentId,
@@ -94,14 +97,23 @@ router.patch(
     const id = paramId(req);
     const data = leadSchema.partial().parse(req.body);
 
-    const existing = await prisma.lead.findFirst({ where: { id, organizationId: orgId } });
+    const existing = await prisma.lead.findFirst({
+      where: { id, organizationId: orgId, whatsappNumberId: req.activeWhatsappNumberId },
+    });
     if (!existing) throw new AppError(404, 'Lead not found');
+    if (data.contactId) {
+      const contact = await prisma.contact.findFirst({
+        where: { id: data.contactId, organizationId: orgId, whatsappNumberId: req.activeWhatsappNumberId },
+      });
+      if (!contact) throw new AppError(404, 'Contact not found for the active WhatsApp number');
+    }
 
     const lead = await prisma.lead.update({
       where: { id },
       data: {
         ...(data.title !== undefined ? { title: data.title } : {}),
         ...(data.contactId !== undefined ? { contactId: data.contactId } : {}),
+        ...(req.activeWhatsappNumberId ? { whatsappNumberId: req.activeWhatsappNumberId } : {}),
         ...(data.stage !== undefined ? { stage: data.stage.toUpperCase() as never } : {}),
         ...(data.source !== undefined ? { source: data.source } : {}),
         ...(data.assignedAgentId !== undefined ? { assignedAgentId: data.assignedAgentId } : {}),
@@ -126,9 +138,11 @@ router.post(
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const contactId = req.params.contactId as string;
+    const whatsappNumberId = req.activeWhatsappNumberId;
+    if (!whatsappNumberId) throw new AppError(400, 'Connect a WhatsApp number before creating leads');
 
     const contact = await prisma.contact.findFirst({
-      where: { id: contactId, organizationId: orgId },
+      where: { id: contactId, organizationId: orgId, whatsappNumberId },
     });
     if (!contact) throw new AppError(404, 'Contact not found');
 
@@ -147,6 +161,7 @@ router.post(
       data: {
         organizationId: orgId,
         contactId: contact.id,
+        whatsappNumberId,
         title: contact.name || contact.phone,
         source: contact.source,
         stage: 'NEW',

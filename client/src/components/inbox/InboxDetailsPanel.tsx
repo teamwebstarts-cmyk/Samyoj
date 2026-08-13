@@ -213,7 +213,6 @@ export default function InboxDetailsPanel({
 
   useEffect(() => {
     onPanelOpenChange(false);
-    setHeaderAssignOpen(false);
     setLabelsPickerOpen(false);
     setShowNewLabel(false);
     setShowTagInput(false);

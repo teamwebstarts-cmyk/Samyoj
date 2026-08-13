@@ -233,10 +233,18 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
         }
 
         let contact = await prisma.contact.upsert({
-          where: { organizationId_phone: { organizationId: orgId, phone: contactPhone } },
+          where: {
+            organizationId_whatsappNumberId_normalizedPhone: {
+              organizationId: orgId,
+              whatsappNumberId: whatsappNumber.id,
+              normalizedPhone: contactPhone,
+            },
+          },
           create: {
             organizationId: orgId,
             phone: contactPhone,
+            normalizedPhone: contactPhone,
+            whatsappNumberId: whatsappNumber.id,
             name: contactName,
             optedIn: true,
             source: 'INBOUND',
@@ -445,6 +453,7 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
             await createOrderFromInbound(orgId, {
               contactId: contact.id,
               conversationId: conversation.id,
+              whatsappNumberId: whatsappNumber.id,
               catalogId: parsed.orderPayload.catalogId,
               referenceId,
               items,

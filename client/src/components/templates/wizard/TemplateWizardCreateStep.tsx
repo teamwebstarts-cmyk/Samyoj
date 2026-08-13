@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
-import { AlertCircle, FileText, Image, Loader2, Plus, Smile, Upload } from 'lucide-react';
+import { AlertCircle, BookOpen, FileText, Image, Loader2, Plus, Smile, Upload } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import AppInput from '../../ui/AppInput';
 import AppSelect from '../../ui/AppSelect';
 import AppTextarea from '../../ui/AppTextarea';
@@ -12,8 +13,28 @@ import {
   countTemplateVars,
 } from '../../../utils/templateUtils';
 import { messagingConsent } from '../../../utils/plainLanguage';
-import { syncFormExamples, type TemplateFormState } from '../../../utils/templateForm';
+import {
+  applyPurposePreset,
+  syncFormExamples,
+  TEMPLATE_PURPOSE_PRESETS,
+  type TemplateFormState,
+  type TemplateVariableMeta,
+} from '../../../utils/templateForm';
 import { toastError } from '../../../utils/toast';
+
+/** No-code insert chips: place {{n}} at cursor and pre-map the source in one click. */
+const INSERT_VARIABLE_CHIPS: Array<{
+  label: string;
+  description: string;
+  source: TemplateVariableMeta['suggestedSource'];
+}> = [
+  { label: 'Customer name', description: 'Customer name', source: 'contact.name' },
+  { label: 'Phone number', description: 'Phone number', source: 'contact.phone' },
+  { label: 'Email', description: 'Email address', source: 'contact.email' },
+  { label: 'Order number', description: 'Order number', source: 'custom' },
+  { label: 'Date / time', description: 'Date or time', source: 'custom' },
+  { label: 'Amount', description: 'Amount', source: 'custom' },
+];
 
 interface TemplateWizardCreateStepProps {
   form: TemplateFormState;
@@ -45,16 +66,38 @@ export default function TemplateWizardCreateStep({
     onChange(syncFormExamples({ ...form, ...patch }));
   };
 
-  const insertVariable = (target: 'body' | 'header') => {
+  const insertVariable = (
+    target: 'body' | 'header',
+    chip?: { description: string; source: TemplateVariableMeta['suggestedSource'] }
+  ) => {
     const text = target === 'body' ? form.body : form.header;
     const nextIndex = countTemplateVars(text) + 1;
     const token = `{{${nextIndex}}}`;
     const el = target === 'body' ? bodyRef.current : null;
+
+    const applyText = (nextText: string) => {
+      let variableMeta = form.variableMeta;
+      if (chip) {
+        const scope = target;
+        const existing = variableMeta.filter((m) => !(m.scope === scope && m.index === nextIndex));
+        variableMeta = [
+          ...existing,
+          { scope, index: nextIndex, description: chip.description, suggestedSource: chip.source },
+        ];
+      }
+      onChange(
+        syncFormExamples({
+          ...form,
+          ...(target === 'body' ? { body: nextText } : { header: nextText }),
+          variableMeta,
+        })
+      );
+    };
+
     if (el) {
       const start = el.selectionStart ?? text.length;
       const end = el.selectionEnd ?? text.length;
-      const next = `${text.slice(0, start)}${token}${text.slice(end)}`;
-      setForm(target === 'body' ? { body: next } : { header: next });
+      applyText(`${text.slice(0, start)}${token}${text.slice(end)}`);
       requestAnimationFrame(() => {
         el.focus();
         const pos = start + token.length;
@@ -62,7 +105,7 @@ export default function TemplateWizardCreateStep({
       });
       return;
     }
-    setForm(target === 'body' ? { body: `${text}${token}` } : { header: `${text}${token}` });
+    applyText(`${text}${token}`);
   };
 
   const handleHeaderUpload = async (file: File) => {
@@ -93,6 +136,42 @@ export default function TemplateWizardCreateStep({
 
   return (
     <div className="space-y-4">
+      {mode === 'create' && (
+        <div className="template-wizard-card p-4">
+          <p className="text-[13px] font-bold text-slate-900 dark:text-white">
+            Start from a purpose
+          </p>
+          <p className="mt-0.5 text-[11px] text-slate-500">
+            Pick what this message is for — we pre-fill the text and connect variables to contacts.
+          </p>
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {TEMPLATE_PURPOSE_PRESETS.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                onClick={() => onChange(applyPurposePreset(form, preset))}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left transition hover:border-violet-300 hover:bg-violet-50/50 dark:border-slate-700 dark:bg-slate-900/40 dark:hover:border-violet-700"
+              >
+                <p className="text-[12px] font-bold text-slate-900 dark:text-white">{preset.label}</p>
+                <p className="mt-0.5 text-[10px] leading-snug text-slate-500">{preset.hint}</p>
+              </button>
+            ))}
+            <Link
+              to="/templates/library"
+              className="rounded-xl border border-violet-200 bg-violet-50/60 px-3 py-2.5 text-left transition hover:border-violet-300 hover:bg-violet-50 dark:border-violet-800 dark:bg-violet-950/30 dark:hover:border-violet-700"
+            >
+              <p className="flex items-center gap-1.5 text-[12px] font-bold text-violet-800 dark:text-violet-200">
+                <BookOpen className="h-3.5 w-3.5" />
+                Meta library
+              </p>
+              <p className="mt-0.5 text-[10px] leading-snug text-violet-700/80 dark:text-violet-300/80">
+                Browse pre-approved templates — usually ready to send immediately
+              </p>
+            </Link>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-start gap-3 rounded-xl border border-rose-200/80 bg-rose-50/70 px-4 py-3 dark:border-rose-900/40 dark:bg-rose-950/25">
         <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />
         <div>
@@ -260,8 +339,21 @@ export default function TemplateWizardCreateStep({
             </div>
           </div>
           <p className="mb-2 text-[11px] text-slate-500">
-            Use {'{{1}}'}, {'{{2}}'} for placeholders like a name or order number.
+            Tap to insert a personalized field — no brackets to type. Each is connected to your contacts.
           </p>
+          <div className="mb-2 flex flex-wrap gap-1.5">
+            {INSERT_VARIABLE_CHIPS.map((chip) => (
+              <button
+                key={chip.label}
+                type="button"
+                onClick={() => insertVariable('body', chip)}
+                className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
+              >
+                <Plus className="h-3 w-3" />
+                {chip.label}
+              </button>
+            ))}
+          </div>
           <AppTextarea
             ref={bodyRef}
             id="template-body"

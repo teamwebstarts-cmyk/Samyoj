@@ -120,6 +120,8 @@ export function assertCampaignRecipientTemplates(
   campaignParams: TemplateParams | null | undefined,
   recipients: Array<{
     name?: string | null;
+    phone?: string | null;
+    email?: string | null;
     variables?: { body?: string[]; header?: string[] } | null;
   }>,
   options: { name?: string; language?: string; category?: string } = {}
@@ -129,7 +131,8 @@ export function assertCampaignRecipientTemplates(
       campaignParams,
       recipient.variables,
       recipient.name,
-      template
+      template,
+      { name: recipient.name, phone: recipient.phone, email: recipient.email }
     );
     const errors = templateValidationErrors(template, {
       name: options.name ?? template.name,

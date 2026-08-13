@@ -246,39 +246,40 @@ model Organization {
   createdAt             DateTime @default(now()) @map("created_at")
   updatedAt             DateTime @updatedAt @map("updated_at")
 
-  users                     OrganizationUser[]
-  whatsappNumbers           WhatsappNumber[]
-  contacts                  Contact[]
-  conversations             Conversation[]
-  automations               Automation[]
-  flows                     Flow[]
-  flowAssets                FlowAsset[]
-  campaigns                 Campaign[]
-  campaignQuotaLedgers      CampaignQuotaLedger[]
-  campaignQuotaReservations CampaignQuotaReservation[]
-  labels                    Label[]
-  aiBots                    AiBot[]
-  calls                     Call[]
-  aiUsageLogs               AiUsageLog[]
-  departments               TeamDepartment[]
-  teamInvites               TeamInvite[]
-  teamAuditLogs             TeamAuditLog[]
-  cannedReplies             CannedReply[]
-  paymentOrders             PaymentOrder[]
-  apiKeys                   ApiKey[]
-  webhookEndpoints          WebhookEndpoint[]
-  catalogProducts           CatalogProduct[]
-  orders                    Order[]
-  brandKit                  BrandKit?
-  contentDrafts             ContentDraft[]
-  generationJobs            GenerationJob[]
-  mediaAssets               MediaAsset[]
-  generationCredits         GenerationCreditLedger[]
-  approvalLogs              ApprovalLog[]
-  featureFlags              OrgFeatureFlag[]
-  leads                     Lead[]
-  tickets                   Ticket[]
-  providerWebhookEvents     ProviderWebhookEvent[]
+  users                          OrganizationUser[]
+  whatsappNumbers                WhatsappNumber[]
+  contacts                       Contact[]
+  conversations                  Conversation[]
+  automations                    Automation[]
+  flows                          Flow[]
+  flowAssets                     FlowAsset[]
+  campaigns                      Campaign[]
+  campaignQuotaLedgers           CampaignQuotaLedger[]
+  campaignQuotaReservations      CampaignQuotaReservation[]
+  labels                         Label[]
+  aiBots                         AiBot[]
+  calls                          Call[]
+  aiUsageLogs                    AiUsageLog[]
+  departments                    TeamDepartment[]
+  teamInvites                    TeamInvite[]
+  teamAuditLogs                  TeamAuditLog[]
+  cannedReplies                  CannedReply[]
+  paymentOrders                  PaymentOrder[]
+  apiKeys                        ApiKey[]
+  webhookEndpoints               WebhookEndpoint[]
+  catalogProducts                CatalogProduct[]
+  orders                         Order[]
+  brandKit                       BrandKit?
+  contentDrafts                  ContentDraft[]
+  generationJobs                 GenerationJob[]
+  mediaAssets                    MediaAsset[]
+  generationCredits              GenerationCreditLedger[]
+  approvalLogs                   ApprovalLog[]
+  featureFlags                   OrgFeatureFlag[]
+  leads                          Lead[]
+  tickets                        Ticket[]
+  providerWebhookEvents          ProviderWebhookEvent[]
+  whatsappNumberIsolationReports WhatsappNumberIsolationReport[]
 
   planExpiresAt      DateTime? @map("plan_expires_at")
   subscriptionStatus String    @default("active") @map("subscription_status")
@@ -488,54 +489,66 @@ model TeamAuditLog {
 }
 
 model WhatsappNumber {
-  id             String   @id @default(uuid())
-  organizationId String   @map("organization_id")
-  phoneNumber    String   @map("phone_number")
-  phoneNumberId  String   @map("phone_number_id")
-  wabaId         String   @map("waba_id")
-  businessId     String?  @map("business_id")
-  accessToken    String   @map("access_token")
-  webhookSecret  String?  @map("webhook_secret")
-  qualityRating  String?  @map("quality_rating")
-  isActive       Boolean  @default(true) @map("is_active")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  id                    String   @id @default(uuid())
+  organizationId        String   @map("organization_id")
+  phoneNumber           String   @map("phone_number")
+  normalizedPhoneNumber String   @map("normalized_phone_number")
+  phoneNumberId         String   @map("phone_number_id")
+  wabaId                String   @map("waba_id")
+  businessId            String?  @map("business_id")
+  accessToken           String   @map("access_token")
+  webhookSecret         String?  @map("webhook_secret")
+  qualityRating         String?  @map("quality_rating")
+  isActive              Boolean  @default(true) @map("is_active")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
 
   organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   conversations Conversation[]
   calls         Call[]
   campaigns     Campaign[]
+  contacts      Contact[]
+  tickets       Ticket[]
+  leads         Lead[]
+  orders        Order[]
 
   @@unique([phoneNumberId])
+  @@unique([organizationId, id])
+  @@unique([organizationId, normalizedPhoneNumber])
   @@map("whatsapp_numbers")
 }
 
 model Contact {
-  id              String        @id @default(uuid())
-  organizationId  String        @map("organization_id")
-  phone           String
-  name            String?
-  email           String?
-  tags            String[]      @default([])
-  notes           String?
-  optedIn         Boolean       @default(false) @map("opted_in")
-  consentSource   String?       @map("consent_source")
-  consentAt       DateTime?     @map("consent_at")
-  consentVersion  String?       @map("consent_version")
-  consentDecision Json?         @map("consent_decision")
-  optOutAt        DateTime?     @map("opt_out_at")
-  source          ContactSource @default(MANUAL)
-  createdAt       DateTime      @default(now()) @map("created_at")
-  updatedAt       DateTime      @updatedAt @map("updated_at")
+  id               String        @id @default(uuid())
+  organizationId   String        @map("organization_id")
+  phone            String
+  normalizedPhone  String        @map("normalized_phone")
+  whatsappNumberId String?       @map("whatsapp_number_id")
+  name             String?
+  email            String?
+  tags             String[]      @default([])
+  notes            String?
+  optedIn          Boolean       @default(false) @map("opted_in")
+  consentSource    String?       @map("consent_source")
+  consentAt        DateTime?     @map("consent_at")
+  consentVersion   String?       @map("consent_version")
+  consentDecision  Json?         @map("consent_decision")
+  optOutAt         DateTime?     @map("opt_out_at")
+  source           ContactSource @default(MANUAL)
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
 
-  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  conversations Conversation[]
-  calls         Call[]
-  orders        Order[]
-  leads         Lead[]
-  tickets       Ticket[]
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  whatsappNumber WhatsappNumber? @relation(fields: [organizationId, whatsappNumberId], references: [organizationId, id], onDelete: Restrict)
+  conversations  Conversation[]
+  calls          Call[]
+  orders         Order[]
+  leads          Lead[]
+  tickets        Ticket[]
 
-  @@unique([organizationId, phone])
+  @@unique([organizationId, whatsappNumberId, normalizedPhone])
+  @@unique([organizationId, id])
+  @@index([organizationId, whatsappNumberId])
   @@map("contacts")
 }
 
@@ -563,8 +576,8 @@ model Conversation {
   updatedAt          DateTime           @updatedAt @map("updated_at")
 
   organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  contact        Contact             @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  whatsappNumber WhatsappNumber?     @relation(fields: [whatsappNumberId], references: [id])
+  contact        Contact             @relation(fields: [organizationId, contactId], references: [organizationId, id], onDelete: Restrict)
+  whatsappNumber WhatsappNumber?     @relation(fields: [organizationId, whatsappNumberId], references: [organizationId, id], onDelete: Restrict)
   assignedAgent  User?               @relation("AssignedAgent", fields: [assignedAgentId], references: [id])
   activeBot      AiBot?              @relation("ActiveBot", fields: [activeBotId], references: [id])
   messages       Message[]
@@ -574,9 +587,10 @@ model Conversation {
   orders         Order[]
   tickets        Ticket[]
 
+  @@unique([organizationId, id])
+  @@unique([organizationId, contactId, whatsappNumberId])
   @@index([organizationId, lastMessageAt])
   @@index([organizationId, snoozedUntil])
-  @@unique([organizationId, contactId, whatsappNumberId])
   @@map("conversations")
 }
 
@@ -591,20 +605,22 @@ enum LeadStage {
 }
 
 model Lead {
-  id              String    @id @default(uuid())
-  organizationId  String    @map("organization_id")
-  contactId       String?   @map("contact_id")
-  title           String
-  stage           LeadStage @default(NEW)
-  source          String?
-  assignedAgentId String?   @map("assigned_agent_id")
-  notes           String?
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
+  id               String    @id @default(uuid())
+  organizationId   String    @map("organization_id")
+  contactId        String?   @map("contact_id")
+  whatsappNumberId String?   @map("whatsapp_number_id")
+  title            String
+  stage            LeadStage @default(NEW)
+  source           String?
+  assignedAgentId  String?   @map("assigned_agent_id")
+  notes            String?
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
 
-  organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  contact       Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
-  assignedAgent User?        @relation("AssignedLeads", fields: [assignedAgentId], references: [id])
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contact        Contact?        @relation(fields: [organizationId, contactId], references: [organizationId, id], onDelete: Restrict)
+  whatsappNumber WhatsappNumber? @relation(fields: [organizationId, whatsappNumberId], references: [organizationId, id], onDelete: Restrict)
+  assignedAgent  User?           @relation("AssignedLeads", fields: [assignedAgentId], references: [id])
 
   @@index([organizationId, stage])
   @@map("leads")
@@ -626,25 +642,28 @@ enum TicketPriority {
 }
 
 model Ticket {
-  id              String         @id @default(uuid())
-  organizationId  String         @map("organization_id")
-  conversationId  String?        @map("conversation_id")
-  contactId       String?        @map("contact_id")
-  title           String
-  status          TicketStatus   @default(OPEN)
-  priority        TicketPriority @default(MEDIUM)
-  category        String?
-  slaDueAt        DateTime?      @map("sla_due_at")
-  assignedAgentId String?        @map("assigned_agent_id")
-  createdAt       DateTime       @default(now()) @map("created_at")
-  updatedAt       DateTime       @updatedAt @map("updated_at")
+  id               String         @id @default(uuid())
+  organizationId   String         @map("organization_id")
+  conversationId   String?        @map("conversation_id")
+  contactId        String?        @map("contact_id")
+  whatsappNumberId String?        @map("whatsapp_number_id")
+  title            String
+  status           TicketStatus   @default(OPEN)
+  priority         TicketPriority @default(MEDIUM)
+  category         String?
+  slaDueAt         DateTime?      @map("sla_due_at")
+  assignedAgentId  String?        @map("assigned_agent_id")
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
 
-  organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  conversation  Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
-  contact       Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
-  assignedAgent User?         @relation("AssignedTickets", fields: [assignedAgentId], references: [id])
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  conversation   Conversation?   @relation(fields: [organizationId, conversationId], references: [organizationId, id], onDelete: Restrict)
+  contact        Contact?        @relation(fields: [organizationId, contactId], references: [organizationId, id], onDelete: Restrict)
+  whatsappNumber WhatsappNumber? @relation(fields: [organizationId, whatsappNumberId], references: [organizationId, id], onDelete: Restrict)
+  assignedAgent  User?           @relation("AssignedTickets", fields: [assignedAgentId], references: [id])
 
   @@index([organizationId, status])
+  @@index([organizationId, whatsappNumberId, status])
   @@map("tickets")
 }
 
@@ -687,9 +706,9 @@ model Call {
   updatedAt        DateTime      @updatedAt @map("updated_at")
 
   organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  contact        Contact         @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  conversation   Conversation?   @relation(fields: [conversationId], references: [id])
-  whatsappNumber WhatsappNumber? @relation(fields: [whatsappNumberId], references: [id])
+  contact        Contact         @relation(fields: [organizationId, contactId], references: [organizationId, id], onDelete: Cascade)
+  conversation   Conversation?   @relation(fields: [organizationId, conversationId], references: [organizationId, id], onDelete: Restrict)
+  whatsappNumber WhatsappNumber? @relation(fields: [organizationId, whatsappNumberId], references: [organizationId, id], onDelete: Restrict)
   aiBot          AiBot?          @relation(fields: [aiBotId], references: [id])
   assignedAgent  User?           @relation("AssignedCallAgent", fields: [assignedAgentId], references: [id])
 
@@ -970,11 +989,26 @@ model Campaign {
   updatedAt        DateTime       @updatedAt @map("updated_at")
 
   organization     Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  whatsappNumber   WhatsappNumber?           @relation(fields: [whatsappNumberId], references: [id], onDelete: SetNull)
+  whatsappNumber   WhatsappNumber?           @relation(fields: [organizationId, whatsappNumberId], references: [organizationId, id], onDelete: Restrict)
   recipients       CampaignRecipient[]
   quotaReservation CampaignQuotaReservation?
 
   @@map("campaigns")
+}
+
+model WhatsappNumberIsolationReport {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  entityType     String   @map("entity_type")
+  entityId       String?  @map("entity_id")
+  severity       String
+  details        Json
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, entityType, severity])
+  @@map("whatsapp_number_isolation_reports")
 }
 
 model CampaignQuotaLedger {
@@ -1014,25 +1048,25 @@ model CampaignQuotaReservation {
 }
 
 model CampaignRecipient {
-  id              String        @id @default(uuid())
-  campaignId      String        @map("campaign_id")
-  phone           String
-  name            String?
-  variables       Json?
-  status          MessageStatus @default(PENDING)
-  metaMessageId   String?       @unique @map("meta_message_id")
-  errorMessage    String?       @map("error_message")
-  retryCount      Int           @default(0) @map("retry_count")
-  claimToken           String?       @unique @map("claim_token")
-  claimedAt            DateTime?     @map("claimed_at")
-  providerCallStartedAt DateTime?    @map("provider_call_started_at")
-  providerStatusAt     DateTime?     @map("provider_status_at")
-  providerEventKey     String?       @map("provider_event_key")
-  consentSnapshot      Json?         @map("consent_snapshot")
-  sentAt          DateTime?     @map("sent_at")
-  deliveredAt     DateTime?     @map("delivered_at")
-  readAt          DateTime?     @map("read_at")
-  createdAt       DateTime      @default(now()) @map("created_at")
+  id                    String        @id @default(uuid())
+  campaignId            String        @map("campaign_id")
+  phone                 String
+  name                  String?
+  variables             Json?
+  status                MessageStatus @default(PENDING)
+  metaMessageId         String?       @unique @map("meta_message_id")
+  errorMessage          String?       @map("error_message")
+  retryCount            Int           @default(0) @map("retry_count")
+  claimToken            String?       @unique @map("claim_token")
+  claimedAt             DateTime?     @map("claimed_at")
+  providerCallStartedAt DateTime?     @map("provider_call_started_at")
+  providerStatusAt      DateTime?     @map("provider_status_at")
+  providerEventKey      String?       @map("provider_event_key")
+  consentSnapshot       Json?         @map("consent_snapshot")
+  sentAt                DateTime?     @map("sent_at")
+  deliveredAt           DateTime?     @map("delivered_at")
+  readAt                DateTime?     @map("read_at")
+  createdAt             DateTime      @default(now()) @map("created_at")
 
   campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
@@ -1055,11 +1089,11 @@ model AuditLog {
 }
 
 model ProviderWebhookEvent {
-  id             String       @id @default(uuid())
-  organizationId String       @map("organization_id")
-  eventKey       String       @map("event_key")
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  eventKey       String   @map("event_key")
   field          String
-  createdAt      DateTime     @default(now()) @map("created_at")
+  createdAt      DateTime @default(now()) @map("created_at")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
@@ -1108,28 +1142,30 @@ model CatalogProduct {
 }
 
 model Order {
-  id             String             @id @default(uuid())
-  organizationId String             @map("organization_id")
-  contactId      String?            @map("contact_id")
-  conversationId String?            @map("conversation_id")
-  referenceId    String             @map("reference_id")
-  catalogId      String?            @map("catalog_id")
-  status         OrderStatus        @default(PENDING)
-  paymentStatus  OrderPaymentStatus @default(PENDING) @map("payment_status")
-  items          Json
-  subtotalCents  Int                @default(0) @map("subtotal_cents")
-  taxCents       Int                @default(0) @map("tax_cents")
-  shippingCents  Int                @default(0) @map("shipping_cents")
-  totalCents     Int                @default(0) @map("total_cents")
-  currency       String             @default("INR")
-  statusNote     String?            @map("status_note")
-  metadata       Json?
-  createdAt      DateTime           @default(now()) @map("created_at")
-  updatedAt      DateTime           @updatedAt @map("updated_at")
+  id               String             @id @default(uuid())
+  organizationId   String             @map("organization_id")
+  contactId        String?            @map("contact_id")
+  conversationId   String?            @map("conversation_id")
+  whatsappNumberId String?            @map("whatsapp_number_id")
+  referenceId      String             @map("reference_id")
+  catalogId        String?            @map("catalog_id")
+  status           OrderStatus        @default(PENDING)
+  paymentStatus    OrderPaymentStatus @default(PENDING) @map("payment_status")
+  items            Json
+  subtotalCents    Int                @default(0) @map("subtotal_cents")
+  taxCents         Int                @default(0) @map("tax_cents")
+  shippingCents    Int                @default(0) @map("shipping_cents")
+  totalCents       Int                @default(0) @map("total_cents")
+  currency         String             @default("INR")
+  statusNote       String?            @map("status_note")
+  metadata         Json?
+  createdAt        DateTime           @default(now()) @map("created_at")
+  updatedAt        DateTime           @updatedAt @map("updated_at")
 
-  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  contact      Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
-  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contact        Contact?        @relation(fields: [organizationId, contactId], references: [organizationId, id], onDelete: Restrict)
+  conversation   Conversation?   @relation(fields: [organizationId, conversationId], references: [organizationId, id], onDelete: Restrict)
+  whatsappNumber WhatsappNumber? @relation(fields: [organizationId, whatsappNumberId], references: [organizationId, id], onDelete: Restrict)
 
   @@unique([organizationId, referenceId])
   @@index([organizationId, status])

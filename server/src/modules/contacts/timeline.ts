@@ -1,14 +1,19 @@
 import prisma from '../../config/database';
 
-export async function getContactTimeline(organizationId: string, contactId: string) {
+export async function getContactTimeline(
+  organizationId: string,
+  contactId: string,
+  whatsappNumberId?: string
+) {
+  if (!whatsappNumberId) return null;
   const contact = await prisma.contact.findFirst({
-    where: { id: contactId, organizationId },
+    where: { id: contactId, organizationId, whatsappNumberId },
   });
   if (!contact) return null;
 
   const [messages, calls, campaignRecipients, notes, conversations] = await Promise.all([
     prisma.message.findMany({
-      where: { conversation: { organizationId, contactId } },
+      where: { conversation: { organizationId, contactId, whatsappNumberId } },
       orderBy: { createdAt: 'desc' },
       take: 100,
       select: {
@@ -22,7 +27,7 @@ export async function getContactTimeline(organizationId: string, contactId: stri
       },
     }),
     prisma.call.findMany({
-      where: { organizationId, contactId },
+      where: { organizationId, contactId, whatsappNumberId },
       orderBy: { createdAt: 'desc' },
       take: 50,
       select: {
@@ -36,7 +41,7 @@ export async function getContactTimeline(organizationId: string, contactId: stri
     prisma.campaignRecipient.findMany({
       where: {
         phone: contact.phone,
-        campaign: { organizationId },
+        campaign: { organizationId, whatsappNumberId },
       },
       orderBy: { createdAt: 'desc' },
       take: 50,
@@ -46,7 +51,7 @@ export async function getContactTimeline(organizationId: string, contactId: stri
     }),
     prisma.internalNote.findMany({
       where: {
-        conversation: { organizationId, contactId },
+        conversation: { organizationId, contactId, whatsappNumberId },
       },
       orderBy: { createdAt: 'desc' },
       take: 50,
@@ -56,7 +61,7 @@ export async function getContactTimeline(organizationId: string, contactId: stri
       },
     }),
     prisma.conversation.findMany({
-      where: { organizationId, contactId },
+      where: { organizationId, contactId, whatsappNumberId },
       orderBy: { createdAt: 'desc' },
       take: 20,
       select: {

@@ -16,7 +16,74 @@ export interface TemplateVariableMeta {
   scope: 'body' | 'header';
   index: number;
   description: string;
-  suggestedSource?: 'contact.name' | 'contact.phone' | 'custom';
+  suggestedSource?: 'contact.name' | 'contact.phone' | 'contact.email' | 'custom';
+}
+
+/** Token written into campaign/inbox params; resolved per-recipient at send time. */
+export const CONTACT_SOURCE_TOKEN: Record<string, string> = {
+  'contact.name': '{{name}}',
+  'contact.phone': '{{phone}}',
+  'contact.email': '{{email}}',
+};
+
+/** Reverse lookup: sample/token value → source key. */
+export function sourceFromParamValue(value: string): string | undefined {
+  const v = value.trim();
+  for (const [source, token] of Object.entries(CONTACT_SOURCE_TOKEN)) {
+    if (token === v) return source;
+  }
+  return undefined;
+}
+
+export function tokenForSource(source?: string): string {
+  return (source && CONTACT_SOURCE_TOKEN[source]) || '';
+}
+
+/** Read the saved variable mapping for a template name (set in the wizard's Review step). */
+export function loadTemplateVariableMeta(templateName: string): TemplateVariableMeta[] {
+  try {
+    const raw = localStorage.getItem(`samyoj_template_meta_${templateName}`);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Persist the wizard's variable mapping so campaigns/inbox can auto-fill mapped variables. */
+export function saveTemplateVariableMeta(templateName: string, meta: TemplateVariableMeta[]) {
+  try {
+    if (!meta?.length) return;
+    localStorage.setItem(`samyoj_template_meta_${templateName}`, JSON.stringify(meta));
+  } catch {
+    /* storage full/blocked — non-fatal */
+  }
+}
+
+/** Human label for a mapped source, e.g. "customer name". */
+export function sourceLabel(source?: string): string {
+  if (source === 'contact.name') return 'customer name';
+  if (source === 'contact.phone') return 'phone number';
+  if (source === 'contact.email') return 'email';
+  return '';
+}
+
+/** Sample values so previews show realistic text instead of a raw {{name}} token. */
+export const TOKEN_PREVIEW_SAMPLE: Record<string, string> = {
+  '{{name}}': 'Rahul',
+  '{{phone}}': '+91 98765 43210',
+  '{{email}}': 'rahul@example.com',
+};
+
+/** Replace a resolution token with a friendly sample for live previews (send path is unaffected). */
+export function previewValueForParam(value: string): string {
+  return TOKEN_PREVIEW_SAMPLE[value.trim()] ?? value;
+}
+
+/** Map a params array for preview, converting any tokens to samples. */
+export function previewParams(params: string[]): string[] {
+  return params.map(previewValueForParam);
 }
 
 export interface TemplateFormState {
@@ -134,6 +201,7 @@ function syncVariableMeta(
 export function formFromLibraryEntry(entry: TemplateLibraryEntry): TemplateFormState {
   const body = entry.body || '';
   const header = entry.header || '';
+  const samples = entry.body_params || [];
   return syncFormExamples({
     name: '',
     language: entry.language || 'en_US',
@@ -147,8 +215,8 @@ export function formFromLibraryEntry(entry: TemplateLibraryEntry): TemplateFormS
     headerMediaHandle: '',
     footer: entry.footer || '',
     buttons: buttonsFromTemplate(entry),
-    bodyExamples: syncExamples(body, []),
-    headerExamples: syncExamples(header, []),
+    bodyExamples: samples.length ? samples : syncExamples(body, []),
+    headerExamples: syncExamples(header, entry.header_params || []),
     variableMeta: [],
     addSecurityRecommendation: true,
     authType: 'OTP',
@@ -233,6 +301,96 @@ export function syncFormExamples(form: TemplateFormState): TemplateFormState {
     ...withExamples,
     variableMeta: syncVariableMeta(withExamples),
   };
+}
+
+/** Purpose-based starter recipes: pre-fill category/body/vars with pre-mapped contact sources. */
+export interface TemplatePurposePreset {
+  id: string;
+  label: string;
+  hint: string;
+  category: TemplateFormState['category'];
+  body: string;
+  footer?: string;
+  /** description per body var index (1-based) → auto-mapped source */
+  variables: Array<{ description: string; source: TemplateVariableMeta['suggestedSource'] }>;
+}
+
+export const TEMPLATE_PURPOSE_PRESETS: TemplatePurposePreset[] = [
+  {
+    id: 'order_update',
+    label: 'Order update',
+    hint: 'Confirm or update a customer order',
+    category: 'UTILITY',
+    body: 'Hi {{1}}, your order {{2}} has been confirmed. We will notify you once it ships.',
+    variables: [
+      { description: 'Customer name', source: 'contact.name' },
+      { description: 'Order number', source: 'custom' },
+    ],
+  },
+  {
+    id: 'appointment_reminder',
+    label: 'Appointment reminder',
+    hint: 'Remind about an upcoming booking',
+    category: 'UTILITY',
+    body: 'Hi {{1}}, this is a reminder for your appointment on {{2}}. Reply to reschedule.',
+    variables: [
+      { description: 'Customer name', source: 'contact.name' },
+      { description: 'Date or time', source: 'custom' },
+    ],
+  },
+  {
+    id: 'offer_code',
+    label: 'Offer / promo code',
+    hint: 'Send a discount to opted-in customers',
+    category: 'MARKETING',
+    body: 'Hi {{1}}, here is your exclusive offer. Use code {{2}} at checkout.',
+    footer: 'Reply STOP to unsubscribe',
+    variables: [
+      { description: 'Customer name', source: 'contact.name' },
+      { description: 'Offer code', source: 'custom' },
+    ],
+  },
+  {
+    id: 'otp_login',
+    label: 'OTP / verification',
+    hint: 'Login or verification code',
+    category: 'AUTHENTICATION',
+    body: '{{1}} is your verification code. Do not share it with anyone.',
+    variables: [{ description: 'Verification code', source: 'custom' }],
+  },
+  {
+    id: 'feedback',
+    label: 'Feedback request',
+    hint: 'Ask how their experience was',
+    category: 'UTILITY',
+    body: 'Hi {{1}}, thank you for your recent visit. How was your experience with us?',
+    variables: [{ description: 'Customer name', source: 'contact.name' }],
+  },
+  {
+    id: 'welcome',
+    label: 'Welcome message',
+    hint: 'Greet a new subscriber',
+    category: 'MARKETING',
+    body: 'Welcome {{1}}! We are glad to have you. Explore our latest updates anytime.',
+    footer: 'Reply STOP to unsubscribe',
+    variables: [{ description: 'Customer name', source: 'contact.name' }],
+  },
+];
+
+export function applyPurposePreset(form: TemplateFormState, preset: TemplatePurposePreset): TemplateFormState {
+  const variableMeta: TemplateVariableMeta[] = preset.variables.map((v, i) => ({
+    scope: 'body' as const,
+    index: i + 1,
+    description: v.description,
+    suggestedSource: v.source,
+  }));
+  return syncFormExamples({
+    ...form,
+    category: preset.category,
+    body: preset.body,
+    footer: preset.footer ?? form.footer,
+    variableMeta,
+  });
 }
 
 export const AUTO_FILL_SAMPLES: Record<string, string[]> = {

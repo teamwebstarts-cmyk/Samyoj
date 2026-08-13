@@ -34,6 +34,24 @@ export const recipientSchema = z.object({
     .optional(),
 });
 
+/** Contact-field tokens a template variable can be mapped to. Resolved per-recipient at send. */
+export const CONTACT_FIELD_TOKENS = ['contact.name', 'contact.phone', 'contact.email'] as const;
+export type ContactFieldToken = (typeof CONTACT_FIELD_TOKENS)[number];
+
+const PARAM_TOKEN_RE = /^\{\{([a-z_]+)\}\}$/;
+export function isFieldToken(value?: string): boolean {
+  return typeof value === 'string' && PARAM_TOKEN_RE.test(value.trim());
+}
+/** Keep tokens only if they map to a real contact field; strip anything else. */
+export function sanitizeFieldToken(value?: string): string | undefined {
+  if (!value) return undefined;
+  const t = value.trim();
+  const m = t.match(PARAM_TOKEN_RE);
+  if (!m) return undefined;
+  const token = `contact.${m[1]}`;
+  return (CONTACT_FIELD_TOKENS as readonly string[]).includes(token) ? token : undefined;
+}
+
 export const templateParamsSchema = z
   .object({
     body: z.array(z.string()).optional(),

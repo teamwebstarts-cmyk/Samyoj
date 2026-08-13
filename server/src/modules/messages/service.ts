@@ -35,10 +35,18 @@ export async function recordOutboundInConversation(input: RecordOutboundInput) {
   const phone = phoneResult.phone;
 
   const contact = await prisma.contact.upsert({
-    where: { organizationId_phone: { organizationId: input.organizationId, phone } },
+    where: {
+      organizationId_whatsappNumberId_normalizedPhone: {
+        organizationId: input.organizationId,
+        whatsappNumberId: input.whatsappNumberId,
+        normalizedPhone: phone,
+      },
+    },
     create: {
       organizationId: input.organizationId,
       phone,
+      normalizedPhone: phone,
+      whatsappNumberId: input.whatsappNumberId,
       name: input.name,
       optedIn: true,
     },
@@ -120,8 +128,22 @@ export async function sendDirectMessage(organizationId: string, input: SendDirec
   const type = input.type || 'TEXT';
 
   const contact = await prisma.contact.upsert({
-    where: { organizationId_phone: { organizationId, phone } },
-    create: { organizationId, phone, name: input.name, optedIn: true, source: 'OUTBOUND' },
+    where: {
+      organizationId_whatsappNumberId_normalizedPhone: {
+        organizationId,
+        whatsappNumberId: whatsappNumber.id,
+        normalizedPhone: phone,
+      },
+    },
+    create: {
+      organizationId,
+      phone,
+      normalizedPhone: phone,
+      whatsappNumberId: whatsappNumber.id,
+      name: input.name,
+      optedIn: true,
+      source: 'OUTBOUND',
+    },
     update: { name: input.name || undefined },
   });
 

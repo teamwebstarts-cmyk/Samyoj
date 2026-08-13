@@ -106,6 +106,8 @@ export interface TemplateLibraryEntry {
   body?: string;
   footer?: string;
   body_params?: string[];
+  body_param_types?: string[];
+  header_params?: string[];
   buttons?: TemplateButton[];
 }
 
@@ -676,7 +678,9 @@ export class MetaWhatsAppService {
       limit?: number;
     }
   ): Promise<TemplateLibraryEntry[]> {
-    const params = new URLSearchParams({ limit: String(options?.limit || 100) });
+    const params = new URLSearchParams();
+    const limit = Math.min(Math.max(options?.limit || 100, 1), 100);
+    params.set('limit', String(limit));
     if (options?.search) params.set('search', options.search);
     if (options?.language) params.set('language', options.language);
     if (options?.topic) params.set('topic', options.topic);
@@ -700,11 +704,12 @@ export class MetaWhatsAppService {
       libraryTemplateName: string;
       libraryTemplateButtonInputs?: Array<Record<string, unknown>>;
       allow_category_change?: boolean;
+      category?: 'UTILITY' | 'AUTHENTICATION';
     }
   ): Promise<{ id: string; status: string; category: string }> {
     const body: Record<string, unknown> = {
       name: payload.name,
-      category: 'UTILITY',
+      category: payload.category === 'AUTHENTICATION' ? 'AUTHENTICATION' : 'UTILITY',
       language: payload.language,
       library_template_name: payload.libraryTemplateName,
     };

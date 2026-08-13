@@ -32,6 +32,10 @@ export const PAGE_META: Record<string, PageMeta> = {
     title: 'Templates',
     description: 'Approved message templates for outreach',
   },
+  '/templates/library': {
+    title: 'Template library',
+    description: 'Pre-approved Meta templates you can add and send immediately',
+  },
   '/content-studio': {
     title: 'Content Studio',
     description: 'Create on-brand copy and images',
@@ -113,6 +117,15 @@ export function isCampaignWizardRoute(pathname: string): boolean {
   return pathname === '/campaigns/new' || /^\/campaigns\/[^/]+\/edit$/.test(pathname);
 }
 
+/** Template create / library / resubmit use the same internal wizard scroll + footer. */
+export function isTemplateWizardRoute(pathname: string): boolean {
+  return (
+    pathname === '/templates/new' ||
+    pathname === '/templates/library' ||
+    /^\/templates\/[^/]+\/resubmit$/.test(pathname)
+  );
+}
+
 /** Campaigns and contacts list fill the viewport — table scrolls inside the shell card. */
 export function isListShellRoute(pathname: string, search = ''): boolean {
   if (pathname === '/campaigns') return true;
@@ -124,5 +137,9 @@ export function isListShellRoute(pathname: string, search = ''): boolean {
 }
 
 export function shouldShowMobileBottomNav(pathname: string): boolean {
-  return !isBuilderRoute(pathname) && !isCampaignWizardRoute(pathname);
+  return (
+    !isBuilderRoute(pathname) &&
+    !isCampaignWizardRoute(pathname) &&
+    !isTemplateWizardRoute(pathname)
+  );
 }

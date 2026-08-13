@@ -18,7 +18,6 @@ import ResponsiveDataView from '../components/ui/ResponsiveDataView';
 import Pagination from '../components/ui/Pagination';
 import SlideOver from '../components/ui/SlideOver';
 import TemplateDetailPanel from '../components/templates/TemplateDetailPanel';
-import TemplateLibraryPanel from '../components/templates/TemplateLibraryPanel';
 import TemplatePendingBanner from '../components/templates/TemplatePendingBanner';
 import TemplatesPageToolbar, {
   ALL_CATEGORIES,
@@ -33,13 +32,11 @@ import { getTemplateParts } from '../components/inbox/WhatsAppPreview';
 import { settingsApi, templateApi, whatsappApi } from '../services/api';
 import {
   duplicateTemplateForm,
-  formFromLibraryEntry,
-  formFromMessageTemplate,
 } from '../utils/templateForm';
 import {
   groupTemplatesByName,
 } from '../utils/templateUtils';
-import type { MessageTemplate, TemplateLibraryEntry } from '../types';
+import type { MessageTemplate } from '../types';
 import { toastError, toastSuccess } from '../utils/toast';
 import { invalidateFlowReferenceData } from '../components/flows/flowReferenceData';
 
@@ -58,7 +55,6 @@ export default function TemplatesPage() {
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [whatsappConnected, setWhatsappConnected] = useState<boolean | null>(null);
-  const [libraryOpen, setLibraryOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
   const [viewing, setViewing] = useState<MessageTemplate | null>(null);
   const [search, setSearch] = useState('');
@@ -236,14 +232,7 @@ export default function TemplatesPage() {
     navigate(`/templates/${encodeURIComponent(template.name)}/resubmit`);
   };
 
-  const handleUseLibraryReference = (entry: TemplateLibraryEntry | MessageTemplate) => {
-    const isLibrary = 'body' in entry && typeof (entry as TemplateLibraryEntry).body === 'string';
-    const nextForm = isLibrary
-      ? formFromLibraryEntry(entry as TemplateLibraryEntry)
-      : formFromMessageTemplate(entry as MessageTemplate);
-    setLibraryOpen(false);
-    navigate('/templates/new', { state: { form: nextForm } });
-  };
+  const openLibrary = () => navigate('/templates/library');
 
   const handleDelete = async (name: string) => {
     if (!confirm(`Delete template "${name}"?`)) return;
@@ -381,7 +370,7 @@ export default function TemplatesPage() {
             groupView={groupView}
             onToggleGroupView={() => setGroupView((v) => !v)}
             onRefresh={load}
-            onOpenLibrary={() => setLibraryOpen(true)}
+            onOpenLibrary={openLibrary}
             onCreate={openCreate}
           />
 
@@ -419,12 +408,16 @@ export default function TemplatesPage() {
                 description={
                   hasFilters
                     ? 'Try a different search word or filter.'
-                    : 'Templates are pre-approved messages you can send to customers anytime.'
+                    : 'Add a Meta library template to use immediately, or create your own for WhatsApp review.'
                 }
                 steps={
                   hasFilters
                     ? undefined
-                    : ['Create a new template or browse the library', 'Submit for WhatsApp approval', 'Use it in campaigns and chats']
+                    : [
+                        'Browse Meta’s library for templates you can use immediately',
+                        'Or create your own and wait for WhatsApp review',
+                        'Use approved templates in campaigns and chats',
+                      ]
                 }
                 action={
                   hasFilters ? undefined : (
@@ -432,7 +425,7 @@ export default function TemplatesPage() {
                       <AppButton
                         variant="secondary"
                         icon={<BookOpen size={16} />}
-                        onClick={() => setLibraryOpen(true)}
+                        onClick={openLibrary}
                       >
                         Browse library
                       </AppButton>
@@ -488,18 +481,6 @@ export default function TemplatesPage() {
           )}
         </div>
       </div>
-
-      <SlideOver
-        open={libraryOpen}
-        onClose={() => setLibraryOpen(false)}
-        title="Template library"
-        subtitle="Ready-made templates you can use or submit"
-        size="xl"
-        icon={BookOpen}
-        accent="violet"
-      >
-        <TemplateLibraryPanel onUseAsReference={handleUseLibraryReference} onCreated={() => load()} />
-      </SlideOver>
 
       <SlideOver
         open={viewOpen}

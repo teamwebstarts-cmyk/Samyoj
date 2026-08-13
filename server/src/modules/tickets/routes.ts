@@ -23,6 +23,32 @@ const ticketSchema = z.object({
   slaDueAt: z.string().datetime().optional(),
 });
 
+async function validateTicketScope(
+  organizationId: string,
+  whatsappNumberId: string,
+  conversationId?: string,
+  contactId?: string
+) {
+  const conversation = conversationId
+    ? await prisma.conversation.findFirst({
+        where: { id: conversationId, organizationId, whatsappNumberId },
+        select: { id: true, contactId: true, whatsappNumberId: true },
+      })
+    : null;
+  if (conversationId && !conversation) throw new AppError(400, 'Conversation does not belong to the active WhatsApp number');
+
+  const contact = contactId
+    ? await prisma.contact.findFirst({
+        where: { id: contactId, organizationId, whatsappNumberId },
+        select: { id: true },
+      })
+    : null;
+  if (contactId && !contact) throw new AppError(400, 'Contact does not belong to the active WhatsApp number');
+  if (conversation && contactId && conversation.contactId !== contactId) {
+    throw new AppError(400, 'Ticket contact must match the conversation contact');
+  }
+}
+
 router.get(
   '/',
   loadPermissions,
@@ -59,6 +85,9 @@ router.post(
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const data = ticketSchema.parse(req.body);
+    const whatsappNumberId = req.activeWhatsappNumberId;
+    if (!whatsappNumberId) throw new AppError(400, 'Connect a WhatsApp number before creating tickets');
+    await validateTicketScope(orgId, whatsappNumberId, data.conversationId, data.contactId);
 
     const ticket = await prisma.ticket.create({
       data: {
@@ -66,6 +95,7 @@ router.post(
         title: data.title,
         conversationId: data.conversationId,
         contactId: data.contactId,
+        whatsappNumberId,
         status: data.status || 'OPEN',
         priority: data.priority || 'MEDIUM',
         category: data.category,
@@ -101,7 +131,7 @@ router.post(
       .parse(req.body);
 
     const conversation = await prisma.conversation.findFirst({
-      where: { id: conversationId, organizationId: orgId },
+      where: { id: conversationId, organizationId: orgId, whatsappNumberId: req.activeWhatsappNumberId },
       include: { contact: true },
     });
     if (!conversation) throw new AppError(404, 'Conversation not found');
@@ -111,6 +141,7 @@ router.post(
         organizationId: orgId,
         conversationId: conversation.id,
         contactId: conversation.contactId,
+        whatsappNumberId: conversation.whatsappNumberId,
         title: title || `Ticket: ${conversation.contact.name || conversation.contact.phone}`,
         priority: priority || 'MEDIUM',
         category,
@@ -137,8 +168,20 @@ router.patch(
     const id = paramId(req);
     const data = ticketSchema.partial().parse(req.body);
 
-    const existing = await prisma.ticket.findFirst({ where: { id, organizationId: orgId } });
+    const existing = await prisma.ticket.findFirst({
+      where: { id, organizationId: orgId, whatsappNumberId: req.activeWhatsappNumberId },
+    });
     if (!existing) throw new AppError(404, 'Ticket not found');
+    const whatsappNumberId = req.activeWhatsappNumberId;
+    if (!whatsappNumberId) throw new AppError(400, 'Connect a WhatsApp number before updating tickets');
+    const conversationId = data.conversationId === undefined ? existing.conversationId : data.conversationId;
+    const contactId = data.contactId === undefined ? existing.contactId : data.contactId;
+    await validateTicketScope(
+      orgId,
+      whatsappNumberId,
+      conversationId ?? undefined,
+      contactId ?? undefined
+    );
 
     const ticket = await prisma.ticket.update({
       where: { id },
@@ -147,6 +190,8 @@ router.patch(
         ...(data.status !== undefined ? { status: data.status } : {}),
         ...(data.priority !== undefined ? { priority: data.priority } : {}),
         ...(data.category !== undefined ? { category: data.category } : {}),
+        ...(data.conversationId !== undefined ? { conversationId: data.conversationId } : {}),
+        ...(data.contactId !== undefined ? { contactId: data.contactId } : {}),
         ...(data.assignedAgentId !== undefined ? { assignedAgentId: data.assignedAgentId } : {}),
         ...(data.slaDueAt !== undefined ? { slaDueAt: new Date(data.slaDueAt) } : {}),
       },

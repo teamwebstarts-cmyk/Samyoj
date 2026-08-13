@@ -236,10 +236,12 @@ function buildAudienceScope(
   organizationId: string,
   groups: AudienceGroup[],
   operator: 'OR' | 'AND',
+  whatsappNumberId: string,
 ): Prisma.ContactWhereInput {
   const scopes = buildAudienceGroupScopes(groups);
   return {
     organizationId,
+    whatsappNumberId,
     [operator === 'AND' ? 'AND' : 'OR']: scopes,
   };
 }
@@ -258,12 +260,13 @@ export async function resolveAudienceRecipients(
   organizationId: string,
   audienceType: AudienceType,
   audienceConfig: AudienceConfig | null | undefined,
-  manualRecipients: ResolvedRecipient[] = []
+  manualRecipients: ResolvedRecipient[] = [],
+  whatsappNumberId: string
 ): Promise<ResolvedRecipient[]> {
   const groups = audienceConfig?.groups;
   if (groups?.length) {
     const contactWhere = addConsentFilter(
-      buildAudienceScope(organizationId, groups, audienceConfig?.operator || 'OR'),
+      buildAudienceScope(organizationId, groups, audienceConfig?.operator || 'OR', whatsappNumberId),
     );
     const contacts = await prisma.contact.findMany({
       where: contactWhere,
@@ -284,6 +287,7 @@ export async function resolveAudienceRecipients(
     const contacts = await prisma.contact.findMany({
       where: {
         organizationId,
+        whatsappNumberId,
         phone: { in: deduped.map((recipient) => recipient.phone) },
         optedIn: true,
         consentSource: { not: null },
@@ -296,7 +300,7 @@ export async function resolveAudienceRecipients(
     return deduped.filter((recipient) => optedIn.has(recipient.phone));
   }
 
-  const contactWhere: Prisma.ContactWhereInput = { organizationId };
+  const contactWhere: Prisma.ContactWhereInput = { organizationId, whatsappNumberId };
   // Broadcasts are always fail-closed. The legacy requireOptIn=false input is
   // intentionally ignored so API callers cannot bypass consent policy.
   contactWhere.optedIn = true;
@@ -340,11 +344,12 @@ export async function previewAudienceMetrics(
   organizationId: string,
   audienceType: AudienceType,
   audienceConfig: AudienceConfig | null | undefined,
-  manualRecipients: ResolvedRecipient[] = []
+  manualRecipients: ResolvedRecipient[] = [],
+  whatsappNumberId: string
 ) {
   const groups = audienceConfig?.groups;
   if (groups?.length) {
-    const scope = buildAudienceScope(organizationId, groups, audienceConfig?.operator || 'OR');
+    const scope = buildAudienceScope(organizationId, groups, audienceConfig?.operator || 'OR', whatsappNumberId);
     const [total, optedIn] = await Promise.all([
       prisma.contact.count({ where: scope }),
       prisma.contact.count({ where: addConsentFilter(scope) }),
@@ -370,6 +375,7 @@ export async function previewAudienceMetrics(
       const contacts = await prisma.contact.findMany({
         where: {
           organizationId,
+          whatsappNumberId,
           phone: { in: recipients.map((recipient) => recipient.phone) },
         },
         select: {
@@ -386,7 +392,7 @@ export async function previewAudienceMetrics(
       optedIn = recipients.filter((recipient) => eligiblePhones.has(recipient.phone)).length;
     }
   } else {
-    const scope: Prisma.ContactWhereInput = { organizationId };
+    const scope: Prisma.ContactWhereInput = { organizationId, whatsappNumberId };
     if (audienceType === 'TAGS') {
       const tags = audienceConfig?.tags?.filter(Boolean) || [];
       if (!tags.length) throw new AppError(400, 'At least one tag is required for tag-based audience');
@@ -678,10 +684,10 @@ export async function syncCampaignRecipientFromWebhook(
 }
 
 async function getWhatsappForCampaign(orgId: string, whatsappNumberId?: string | null) {
-  if (whatsappNumberId) {
-    return getWhatsappContextById(orgId, whatsappNumberId);
+  if (!whatsappNumberId) {
+    throw new AppError(409, 'Campaign has unresolved WhatsApp number ownership');
   }
-  return getOrgWhatsappContext(orgId);
+  return getWhatsappContextById(orgId, whatsappNumberId);
 }
 
 async function validateTemplate(
@@ -711,13 +717,17 @@ export async function queueCampaignSend(
     if (!current) return { recipientCount: 0, stale: true };
   }
   if (campaign.status === 'CANCELLED') throw new AppError(400, 'Campaign was cancelled');
+  if (!campaign.whatsappNumberId) {
+    throw new AppError(409, 'Campaign has unresolved WhatsApp number ownership');
+  }
 
   if (campaign.audienceType !== 'MANUAL') {
     const resolved = await resolveAudienceRecipients(
       campaign.organizationId,
       campaign.audienceType as AudienceType,
       campaign.audienceConfig as AudienceConfig | null,
-      []
+      [],
+      campaign.whatsappNumberId
     );
     if (!resolved.length) {
       throw new AppError(400, 'No recipients match the selected audience');
@@ -757,6 +767,7 @@ export async function queueCampaignSend(
   try {
     assertCampaignRecipientTemplates(template, templateParams, campaign.recipients.map((recipient) => ({
       name: recipient.name,
+      phone: recipient.phone,
       variables: recipient.variables as { body?: string[]; header?: string[] } | null,
     })), { name: campaign.templateName, language: templateLanguage, category: 'MARKETING' });
   } catch (error) {
@@ -876,18 +887,23 @@ export async function sendTestMessage(
   phone: string,
   userId?: string
 ) {
-  const contact = await prisma.contact.findUnique({
-    where: { organizationId_phone: { organizationId: campaign.organizationId, phone } },
-    select: { name: true, optedIn: true, consentSource: true, consentAt: true, optOutAt: true },
-  });
-  if (!contact || !hasAuditableCampaignConsent(contact)) {
-    throw new AppError(400, 'Test sends require an existing opted-in contact with recorded consent');
-  }
   const { whatsappNumber, wabaId, accessToken } = await getWhatsappForCampaign(
     campaign.organizationId,
     campaign.whatsappNumberId
   );
-
+  const contact = await prisma.contact.findUnique({
+    where: {
+      organizationId_whatsappNumberId_normalizedPhone: {
+        organizationId: campaign.organizationId,
+        whatsappNumberId: whatsappNumber.id,
+        normalizedPhone: phone,
+      },
+    },
+    select: { name: true, phone: true, email: true, optedIn: true, consentSource: true, consentAt: true, optOutAt: true },
+  });
+  if (!contact || !hasAuditableCampaignConsent(contact)) {
+    throw new AppError(400, 'Test sends require an existing opted-in contact with recorded consent');
+  }
   const template = await validateTemplate(
     campaign.organizationId,
     campaign.templateName,
@@ -899,7 +915,8 @@ export async function sendTestMessage(
     campaign.templateParams as TemplateParams | null,
     null,
     contact.name,
-    template
+    template,
+    { name: contact.name, phone: contact.phone, email: contact.email }
   );
   const components = buildTemplateComponents(templateParams, template);
   try {
@@ -935,6 +952,7 @@ export async function sendTestMessage(
 export async function pauseCampaign(campaignId: string, orgId: string, userId?: string) {
   const campaign = await prisma.campaign.findFirst({ where: { id: campaignId, organizationId: orgId } });
   if (!campaign) throw new AppError(404, 'Campaign not found');
+  if (!campaign.whatsappNumberId) throw new AppError(409, 'Campaign has unresolved WhatsApp number ownership');
   if (campaign.status !== 'RUNNING') throw new AppError(400, 'Only running campaigns can be paused');
 
   await prisma.$transaction(async (tx) => {
@@ -960,6 +978,9 @@ export async function resumeCampaign(
   campaign: Campaign & { recipients: CampaignRecipient[] },
   userId?: string
 ) {
+  if (!campaign.whatsappNumberId) {
+    throw new AppError(409, 'Campaign has unresolved WhatsApp number ownership');
+  }
   if (campaign.status !== 'PAUSED') throw new AppError(400, 'Only paused campaigns can be resumed');
 
   const transition = await prisma.$transaction(async (tx) => {
@@ -1069,6 +1090,7 @@ export async function resumeCampaign(
     const templateParams = (campaign.templateParams as TemplateParams | null) || undefined;
     assertCampaignRecipientTemplates(template, templateParams, pending.map((recipient) => ({
       name: recipient.name,
+      phone: recipient.phone,
       variables: recipient.variables as { body?: string[]; header?: string[] } | null,
     })), { name: campaign.templateName, language: templateLanguage, category: 'MARKETING' });
     const templateContent = applyTemplateParamsToPreview(template, templateParams, campaign.templateName);
@@ -1122,6 +1144,7 @@ export async function resumeCampaign(
 export async function cancelCampaign(campaignId: string, orgId: string, userId?: string) {
   const campaign = await prisma.campaign.findFirst({ where: { id: campaignId, organizationId: orgId } });
   if (!campaign) throw new AppError(404, 'Campaign not found');
+  if (!campaign.whatsappNumberId) throw new AppError(409, 'Campaign has unresolved WhatsApp number ownership');
   if (!['RUNNING', 'PAUSED', 'SCHEDULED'].includes(campaign.status)) {
     throw new AppError(400, 'Campaign cannot be cancelled in its current state');
   }
@@ -1160,6 +1183,9 @@ export async function retryFailedRecipients(
   campaign: Campaign & { recipients: CampaignRecipient[] },
   userId?: string
 ) {
+  if (!campaign.whatsappNumberId) {
+    throw new AppError(409, 'Campaign has unresolved WhatsApp number ownership');
+  }
   const failed = campaign.recipients.filter((r) => r.status === 'FAILED');
   if (!failed.length) throw new AppError(400, 'No failed recipients to retry');
 
@@ -1184,6 +1210,7 @@ export async function retryFailedRecipients(
   const templateParams = (campaign.templateParams as TemplateParams | null) || undefined;
   assertCampaignRecipientTemplates(template, templateParams, failed.map((recipient) => ({
     name: recipient.name,
+    phone: recipient.phone,
     variables: recipient.variables as { body?: string[]; header?: string[] } | null,
   })), { name: campaign.templateName, language: templateLanguage, category: 'MARKETING' });
   const templateContent = applyTemplateParamsToPreview(template, templateParams, campaign.templateName);
@@ -1285,6 +1312,9 @@ export async function duplicateCampaign(
   campaign: Campaign & { recipients: CampaignRecipient[] },
   userId?: string
 ) {
+  if (!campaign.whatsappNumberId) {
+    throw new AppError(409, 'Campaign has unresolved WhatsApp number ownership');
+  }
   const copy = await prisma.campaign.create({
     data: {
       organizationId: campaign.organizationId,

@@ -55,6 +55,9 @@ function buildContactWhere(
   whatsappNumberId?: string
 ): Prisma.ContactWhereInput {
   const andConditions: Prisma.ContactWhereInput[] = [];
+  if (!whatsappNumberId) {
+    andConditions.push({ id: { in: [] } });
+  }
 
   if (filters.search) {
     andConditions.push({
@@ -93,9 +96,7 @@ function buildContactWhere(
       },
     });
   } else if (whatsappNumberId) {
-    andConditions.push({
-      conversations: { some: { whatsappNumberId } },
-    });
+    andConditions.push({ whatsappNumberId });
   }
 
   const where: Prisma.ContactWhereInput = { organizationId: orgId };
@@ -180,7 +181,10 @@ export async function listContacts(
   const limit = parseInt(query.limit || '50');
   const skip = (page - 1) * limit;
 
-  const baseWhere = { organizationId: orgId };
+  const baseWhere: Prisma.ContactWhereInput = {
+    organizationId: orgId,
+    ...(whatsappNumberId ? { whatsappNumberId } : {}),
+  };
 
   const [contacts, total, totalAll, named, optedIn, active7d, tagged] = await Promise.all([
     prisma.contact.findMany({
@@ -217,14 +221,19 @@ export async function listContacts(
   };
 }
 
-export async function getContactDetail(orgId: string, contactId: string): Promise<ContactDetail> {
+export async function getContactDetail(
+  orgId: string,
+  contactId: string,
+  whatsappNumberId?: string
+): Promise<ContactDetail> {
+  if (!whatsappNumberId) throw new AppError(404, 'Contact not found');
   const contact = await prisma.contact.findFirst({
-    where: { id: contactId, organizationId: orgId },
+    where: { id: contactId, organizationId: orgId, whatsappNumberId },
   });
   if (!contact) throw new AppError(404, 'Contact not found');
 
   const conversations = await prisma.conversation.findMany({
-    where: { contactId, organizationId: orgId },
+    where: { contactId, organizationId: orgId, whatsappNumberId },
     orderBy: { lastMessageAt: 'desc' },
     select: {
       id: true,
@@ -258,7 +267,7 @@ export async function getContactDetail(orgId: string, contactId: string): Promis
           })
         : Promise.resolve([]),
       prisma.call.findMany({
-        where: { contactId, organizationId: orgId },
+        where: { contactId, organizationId: orgId, whatsappNumberId },
         orderBy: { createdAt: 'desc' },
         take: 10,
         select: {
@@ -271,7 +280,7 @@ export async function getContactDetail(orgId: string, contactId: string): Promis
         },
       }),
       prisma.campaignRecipient.findMany({
-        where: { phone: contact.phone, campaign: { organizationId: orgId } },
+        where: { phone: contact.phone, campaign: { organizationId: orgId, whatsappNumberId } },
         orderBy: { createdAt: 'desc' },
         take: 15,
         select: {
@@ -285,9 +294,9 @@ export async function getContactDetail(orgId: string, contactId: string): Promis
       conversationIds.length
         ? prisma.message.count({ where: { conversationId: { in: conversationIds } } })
         : Promise.resolve(0),
-      prisma.call.count({ where: { contactId, organizationId: orgId } }),
+      prisma.call.count({ where: { contactId, organizationId: orgId, whatsappNumberId } }),
       prisma.campaignRecipient.count({
-        where: { phone: contact.phone, campaign: { organizationId: orgId } },
+        where: { phone: contact.phone, campaign: { organizationId: orgId, whatsappNumberId } },
       }),
       prisma.lead.findFirst({
         where: { organizationId: orgId, contactId: contact.id },
@@ -345,11 +354,17 @@ export async function bulkUpdateContacts(
     action: 'delete' | 'addTags' | 'removeTags' | 'setOptedIn';
     tags?: string[];
     optedIn?: boolean;
-  }
+  },
+  whatsappNumberId?: string
 ) {
+  if (!whatsappNumberId) throw new AppError(400, 'Connect a WhatsApp number before updating contacts');
   const contacts = await prisma.contact.findMany({
-    where: { organizationId: orgId, id: { in: input.ids } },
-    select: { id: true, tags: true },
+    where: { organizationId: orgId, whatsappNumberId, id: { in: input.ids } },
+    select: {
+      id: true,
+      tags: true,
+      _count: { select: { conversations: true, calls: true, orders: true, leads: true, tickets: true } },
+    },
   });
 
   if (!contacts.length) throw new AppError(400, 'No matching contacts found');
@@ -357,13 +372,24 @@ export async function bulkUpdateContacts(
   const ids = contacts.map((c) => c.id);
 
   if (input.action === 'delete') {
-    await prisma.contact.deleteMany({ where: { id: { in: ids }, organizationId: orgId } });
+    const historical = contacts.filter((contact) =>
+      Object.values(contact._count).some((count) => count > 0)
+    );
+    if (historical.length) {
+      throw new AppError(
+        409,
+        `Cannot delete contacts with history. Archive or retain them instead (${historical
+          .map((contact) => contact.id)
+          .join(', ')})`
+      );
+    }
+    await prisma.contact.deleteMany({ where: { id: { in: ids }, organizationId: orgId, whatsappNumberId } });
     return { affected: ids.length };
   }
 
   if (input.action === 'setOptedIn') {
     await prisma.contact.updateMany({
-      where: { id: { in: ids }, organizationId: orgId },
+      where: { id: { in: ids }, organizationId: orgId, whatsappNumberId },
       data: { optedIn: Boolean(input.optedIn) },
     });
     return { affected: ids.length };
@@ -390,14 +416,15 @@ export async function bulkUpdateContacts(
   return { affected: ids.length };
 }
 
-export async function renameTag(orgId: string, from: string, to: string) {
+export async function renameTag(orgId: string, from: string, to: string, whatsappNumberId?: string) {
+  if (!whatsappNumberId) return { affected: 0 };
   const trimmedFrom = from.trim();
   const trimmedTo = to.trim();
   if (!trimmedFrom || !trimmedTo) throw new AppError(400, 'Both tag names are required');
   if (trimmedFrom === trimmedTo) throw new AppError(400, 'Tag names must be different');
 
   const contacts = await prisma.contact.findMany({
-    where: { organizationId: orgId, tags: { has: trimmedFrom } },
+    where: { organizationId: orgId, whatsappNumberId, tags: { has: trimmedFrom } },
     select: { id: true, tags: true },
   });
 
@@ -410,12 +437,13 @@ export async function renameTag(orgId: string, from: string, to: string) {
   return { affected: contacts.length };
 }
 
-export async function deleteTag(orgId: string, tag: string) {
+export async function deleteTag(orgId: string, tag: string, whatsappNumberId?: string) {
+  if (!whatsappNumberId) return { affected: 0 };
   const trimmed = tag.trim();
   if (!trimmed) throw new AppError(400, 'Tag name is required');
 
   const contacts = await prisma.contact.findMany({
-    where: { organizationId: orgId, tags: { has: trimmed } },
+    where: { organizationId: orgId, whatsappNumberId, tags: { has: trimmed } },
     select: { id: true, tags: true },
   });
 
@@ -438,7 +466,8 @@ export async function exportContacts(
     optedIn?: string;
     source?: string;
     format?: string;
-  }
+  },
+  whatsappNumberId?: string
 ) {
   const where = buildContactWhere(orgId, {
     search: filters.search,
@@ -446,7 +475,7 @@ export async function exportContacts(
     named: filters.named,
     optedIn: filters.optedIn,
     source: filters.source,
-  });
+  }, whatsappNumberId);
 
   const contacts = await prisma.contact.findMany({
     where,

@@ -461,6 +461,7 @@ export class AiVoiceCallSession {
               organizationId: this.ctx.organizationId,
               conversationId: this.ctx.conversationId,
               contactId: this.ctx.contactId,
+              whatsappNumberId: this.ctx.whatsappNumberId,
               title: `Callback requested: ${when}`,
               category: 'callback',
               priority: 'HIGH',

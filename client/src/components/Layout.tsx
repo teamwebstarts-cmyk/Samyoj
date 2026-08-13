@@ -9,6 +9,7 @@ import {
   isInboxRoute,
   isCallsShellRoute,
   isListShellRoute,
+  isTemplateWizardRoute,
   shouldShowMobileBottomNav,
 } from '../config/pageMeta';
 import AppTopbar from './layout/AppTopbar';
@@ -37,7 +38,8 @@ export default function Layout() {
   const lockMainScroll =
     isInboxRoute(pathname) ||
     isCallsShellRoute(pathname) ||
-    isListShellRoute(pathname, search);
+    isListShellRoute(pathname, search) ||
+    isTemplateWizardRoute(pathname);
 
   const handleLogout = () => {
     logout();

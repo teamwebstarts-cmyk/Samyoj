@@ -70,19 +70,12 @@ export function conversationFilter(numberId: string | undefined): Prisma.Convers
 
 export function contactsForNumberFilter(numberId: string | undefined): Prisma.ContactWhereInput {
   if (!numberId) return EMPTY_ID_FILTER;
-  return { conversations: { some: { whatsappNumberId: numberId } } };
+  return { whatsappNumberId: numberId };
 }
 
 export function leadsForNumberFilter(numberId: string | undefined): Prisma.LeadWhereInput {
   if (!numberId) return EMPTY_ID_FILTER;
-  return {
-    OR: [
-      { contactId: null },
-      { contact: contactsForNumberFilter(numberId) },
-      // Contacts not yet linked to a conversation (e.g. converted to lead before first chat)
-      { contact: { conversations: { none: {} } } },
-    ],
-  };
+  return { whatsappNumberId: numberId };
 }
 
 export function ticketsForNumberFilter(numberId: string | undefined): Prisma.TicketWhereInput {
@@ -100,12 +93,7 @@ export function ticketsForNumberFilter(numberId: string | undefined): Prisma.Tic
 
 export function ordersForNumberFilter(numberId: string | undefined): Prisma.OrderWhereInput {
   if (!numberId) return EMPTY_ID_FILTER;
-  return {
-    OR: [
-      { conversation: { whatsappNumberId: numberId } },
-      { conversationId: null, contact: { conversations: { some: { whatsappNumberId: numberId } } } },
-    ],
-  };
+  return { whatsappNumberId: numberId };
 }
 
 export function messagesForNumberFilter(numberId: string | undefined): Prisma.MessageWhereInput {

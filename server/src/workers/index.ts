@@ -376,7 +376,11 @@ const broadcastWorker = new Worker(
 
       const contact = await prisma.contact.findUnique({
         where: {
-          organizationId_phone: { organizationId, phone: recipient.phone },
+          organizationId_whatsappNumberId_normalizedPhone: {
+            organizationId,
+            whatsappNumberId: whatsappNumberDbId,
+            normalizedPhone: recipient.phone,
+          },
         },
         select: {
           optedIn: true, consentSource: true, consentAt: true, consentVersion: true,
@@ -453,7 +457,13 @@ const broadcastWorker = new Worker(
       // this commit races the external call and is therefore auditable/ambiguous.
       const sendBoundary = await prisma.$transaction(async (tx) => {
         const latestContact = await tx.contact.findUnique({
-          where: { organizationId_phone: { organizationId, phone: recipient.phone } },
+          where: {
+            organizationId_whatsappNumberId_normalizedPhone: {
+              organizationId,
+              whatsappNumberId: whatsappNumberDbId,
+              normalizedPhone: recipient.phone,
+            },
+          },
           select: {
             optedIn: true, consentSource: true, consentAt: true, consentVersion: true,
             consentDecision: true, optOutAt: true,
@@ -514,7 +524,8 @@ const broadcastWorker = new Worker(
         templateParams,
         recipient.variables,
         recipient.name,
-        templateMeta
+        templateMeta,
+        { name: recipient.name, phone: recipient.phone }
       );
       try {
         assertApprovedCampaignTemplate(templateMeta, {

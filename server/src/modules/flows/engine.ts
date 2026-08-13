@@ -9,6 +9,7 @@ import { createModuleLogger } from '../../utils/logger';
 import { withConversationLock } from './lock';
 import { incrementFlowStat } from './analytics';
 import { detectMessageLanguage } from './language';
+import { normalizePhoneIdentity } from '../../utils/phone';
 import { linkFlowNodes } from './link-nodes';
 import { matchInteractiveTextIntent, resolveInteractiveBranch, syncButtonNode } from './branch-resolve';
 import type { InteractiveMessageOptions } from '../messages/interactive';
@@ -218,8 +219,11 @@ async function updateContactField(contactId: string, field: string, value: strin
     return;
   }
   if (field === 'phone') {
-    const clean = value.replace(/\D/g, '');
-    await prisma.contact.update({ where: { id: contactId }, data: { phone: clean } });
+    const clean = normalizePhoneIdentity(value);
+    await prisma.contact.update({
+      where: { id: contactId },
+      data: { phone: clean, normalizedPhone: clean },
+    });
     return;
   }
   const contact = await prisma.contact.findUnique({ where: { id: contactId } });
