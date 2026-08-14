@@ -1,5 +1,7 @@
 # Palermo WhatsApp Platform — Production Runbook
 
+> **Correction (2026-08-15):** Workers are embedded in `whatsapp-api` via `startWorkers()`. Do not run PM2 `whatsapp-worker` or `npm run start:worker`. See `config/ecosystem.config.js` and `docs/deployment/DEPLOYMENT_GUIDE.md`.
+
 ## Architecture
 
 - **API**: Express on port 5000 (PM2: `whatsapp-api`)
