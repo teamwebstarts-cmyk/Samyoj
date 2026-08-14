@@ -42,7 +42,7 @@ export const PAGE_META: Record<string, PageMeta> = {
   },
   '/commerce': {
     title: 'Orders',
-    description: 'Track and fulfill WhatsApp catalog purchases',
+    description: 'Track catalog purchases from WhatsApp',
   },
   '/contacts': {
     title: 'Contacts',

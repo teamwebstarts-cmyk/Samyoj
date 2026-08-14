@@ -635,8 +635,10 @@ export const ticketApi = {
 export const commerceApi = {
   orders: (params?: Record<string, string>) => api.get('/commerce/orders', { params }),
   order: (id: string) => api.get(`/commerce/orders/${id}`),
-  updateStatus: (id: string, data: { status: string; statusNote?: string }) =>
-    api.patch(`/commerce/orders/${id}/status`, data),
+  updateStatus: (
+    id: string,
+    data: { status: string; statusNote?: string; notifyContact?: boolean; body?: string }
+  ) => api.patch(`/commerce/orders/${id}/status`, data),
 };
 
 export const teamApi = {

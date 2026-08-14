@@ -140,6 +140,10 @@ export interface Contact {
   tags: string[];
   notes?: string;
   optedIn?: boolean;
+  consentSource?: string | null;
+  consentAt?: string | null;
+  consentVersion?: string | null;
+  optOutAt?: string | null;
   customAttributes?: Record<string, string>;
   source?: ContactSource;
   createdAt?: string;
@@ -561,7 +565,7 @@ export interface WebhookHealth {
   lastError?: string | null;
   lastFbTraceId?: string | null;
   queueDepth?: number;
-  webhookUrl?: string;
+  webhookConfigured?: boolean;
   verifyTokenConfigured?: boolean;
   appSecretConfigured?: boolean;
 }
