@@ -37,13 +37,15 @@ import AppButton from '../components/ui/AppButton';
 import LoadingState from '../components/ui/LoadingState';
 import { invalidateApprovedTemplatesCache } from '../components/inbox/TemplateComposer';
 import { invalidateFlowReferenceData } from '../components/flows/flowReferenceData';
-import { templateApi, whatsappApi } from '../services/api';
+import { settingsApi, templateApi, whatsappApi } from '../services/api';
 import type { MessageTemplate } from '../types';
 import type { TemplateFormState } from '../utils/templateForm';
-import { formFromMessageTemplate, saveTemplateVariableMeta } from '../utils/templateForm';
+import { formFromMessageTemplate, persistTemplateVariableMeta } from '../utils/templateForm';
 import { getTemplateRejectedReason } from '../utils/templateUtils';
 import { getTemplateRejectionGuide, getTemplateStatusHelp } from '../utils/templateRejectionGuide';
-import { toastError, toastSuccess } from '../utils/toast';
+import { toastError, toastSuccess, toastWarning } from '../utils/toast';
+import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
+import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 
 type LocationState = {
   form?: TemplateFormState;
@@ -51,6 +53,7 @@ type LocationState = {
 };
 
 export default function TemplateWizardPage() {
+  const { activeNumber, resolved } = useWhatsAppNumber();
   const navigate = useNavigate();
   const location = useLocation();
   const { name: resubmitNameParam } = useParams();
@@ -73,35 +76,62 @@ export default function TemplateWizardPage() {
   const [rejectionReason, setRejectionReason] = useState<string | null>(null);
   const [resubmitStatus, setResubmitStatus] = useState<string | null>(null);
   const [submittedStatus, setSubmittedStatus] = useState<string>('PENDING');
+  const [mapFirstBodyVariableToName, setMapFirstBodyVariableToName] = useState(true);
   const errorRef = useRef<HTMLDivElement>(null);
+  const activeNumberIdRef = useRef<string | null>(null);
+  activeNumberIdRef.current = activeNumber?.id ?? null;
 
   useEffect(() => {
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
     templateApi
       .list({ all: 'true' })
       .then(({ data }) => {
+        if (requestNumberId !== activeNumberIdRef.current) return;
         const payload = data.data;
         const list = Array.isArray(payload) ? payload : payload?.templates || [];
         setExistingNames(new Set((list as MessageTemplate[]).map((t) => t.name)));
       })
-      .catch(() => setExistingNames(new Set()));
-  }, []);
+      .catch(() => {
+        if (requestNumberId === activeNumberIdRef.current) setExistingNames(new Set());
+      });
+  }, [activeNumber, resolved]);
 
   useEffect(() => {
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
     whatsappApi
       .numbers()
       .then(({ data }) => {
+        if (requestNumberId !== activeNumberIdRef.current) return;
         const numbers = Array.isArray(data.data) ? data.data : data.data?.numbers || [];
         setWhatsappConnected(numbers.length > 0);
       })
-      .catch(() => setWhatsappConnected(false));
+      .catch(() => {
+        if (requestNumberId === activeNumberIdRef.current) setWhatsappConnected(false);
+      });
+  }, [activeNumber, resolved]);
+
+  useEffect(() => {
+    settingsApi
+      .get()
+      .then(({ data }) => {
+        const value = data.data?.campaigns?.mapFirstBodyVariableToName;
+        if (typeof value === 'boolean') setMapFirstBodyVariableToName(value);
+      })
+      .catch(() => {
+        /* keep default */
+      });
   }, []);
 
   useEffect(() => {
-    if (!isResubmit || !resubmitNameParam) return;
+    if (!isResubmit || !resubmitNameParam || !resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
     setLoading(true);
     templateApi
       .get(resubmitNameParam)
       .then(({ data }) => {
+        if (requestNumberId !== activeNumberIdRef.current) return;
         const template = data.data as MessageTemplate;
         if (!canResubmitTemplateStatus(template.status)) {
           setResubmitBlocked(
@@ -116,8 +146,27 @@ export default function TemplateWizardPage() {
         toastError('Template not found');
         navigate('/templates');
       })
-      .finally(() => setLoading(false));
-  }, [isResubmit, resubmitNameParam, navigate]);
+      .finally(() => {
+        if (requestNumberId === activeNumberIdRef.current) setLoading(false);
+      });
+  }, [activeNumber, isResubmit, navigate, resolved, resubmitNameParam]);
+
+  useOnActiveNumberChange(({ isInitial }) => {
+    if (isInitial) return;
+    setWhatsappConnected(null);
+    setExistingNames(new Set());
+    setForm(createEmptyWizardForm());
+    setActiveStep(0);
+    setMaxReachableStep(0);
+    setSubmitResult(null);
+    setStageError(null);
+    setHeaderPreviewUrl(null);
+    setResubmitBlocked(null);
+    setRejectionReason(null);
+    setResubmitStatus(null);
+    setSubmittedStatus('PENDING');
+    setLoading(isResubmit);
+  });
 
   useEffect(() => {
     if (state.form) {
@@ -187,13 +236,19 @@ export default function TemplateWizardPage() {
 
   useEffect(() => {
     if (activeStep !== 2 || !submitResult?.templateName) return;
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
     let cancelled = false;
 
     const pollStatus = () => {
       templateApi
         .get(submitResult.templateName)
         .then(({ data }) => {
-          if (!cancelled && data.data?.status) {
+          if (
+            !cancelled &&
+            requestNumberId === activeNumberIdRef.current &&
+            data.data?.status
+          ) {
             setSubmittedStatus(String(data.data.status).toUpperCase());
           }
         })
@@ -208,7 +263,7 @@ export default function TemplateWizardPage() {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [activeStep, submitResult?.templateName]);
+  }, [activeNumber, activeStep, resolved, submitResult?.templateName]);
 
   const validateStep = useCallback(
     (step: number) => {
@@ -280,7 +335,15 @@ export default function TemplateWizardPage() {
         } else {
           await templateApi.create(payload);
         }
-        saveTemplateVariableMeta(resubmitNameParam || savedName, form.variableMeta);
+        await persistTemplateVariableMeta(resubmitNameParam || savedName, form.variableMeta, form.language).then(
+          (synced) => {
+            if (!synced) {
+              toastWarning(
+                'Template submitted, but the variable mapping could not sync for the team. Auto-fill may only work on this device until you save it again.',
+              );
+            }
+          },
+        );
         clearTemplateDraft();
         invalidateFlowReferenceData();
         invalidateApprovedTemplatesCache();
@@ -438,6 +501,7 @@ export default function TemplateWizardPage() {
                 onChange={setForm}
                 mode={mode}
                 onHeaderPreviewUrl={setHeaderPreviewUrl}
+                mapFirstBodyVariableToName={mapFirstBodyVariableToName}
               />
             )}
             {activeStep === 1 && (
@@ -452,6 +516,7 @@ export default function TemplateWizardPage() {
                 result={submitResult}
                 status={submittedStatus}
                 language={form.language}
+                category={form.category}
                 onCreateAnother={handleCreateAnother}
               />
             )}
@@ -463,9 +528,9 @@ export default function TemplateWizardPage() {
               filledPreview={filledPreview}
               previewButtons={previewButtons}
               headerPreviewUrl={headerPreviewUrl}
-              showEditLink={activeStep === 1 || activeStep === 2}
+              showEditLink={activeStep === 1}
               onEdit={() => goToStep(0)}
-              previewTitle={activeStep === 2 ? 'WhatsApp preview' : 'Live WhatsApp preview'}
+              previewTitle={activeStep === 2 ? 'Submitted template' : 'Live WhatsApp preview'}
               showTestButton={activeStep === 1}
               onTestTemplate={handleTestTemplate}
             />

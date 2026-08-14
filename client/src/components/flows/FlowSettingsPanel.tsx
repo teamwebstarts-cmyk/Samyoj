@@ -6,7 +6,9 @@ import AppInput from '../ui/AppInput';
 import AppSelect from '../ui/AppSelect';
 import AppTextarea from '../ui/AppTextarea';
 import { nodeMeta, triggerMeta } from './flowMeta';
-import type { FlowNode, FlowStatus, FlowTriggerType } from '../../types';
+import { flowAudienceState } from '../../utils/flow-live';
+import { campaignApi } from '../../services/api';
+import type { Campaign, FlowNode, FlowStatus, FlowTriggerType } from '../../types';
 
 const BASIC_TRIGGERS: FlowTriggerType[] = ['WELCOME', 'KEYWORD', 'OFF_HOURS', 'BUSINESS_HOURS'];
 const ADVANCED_TRIGGERS: FlowTriggerType[] = [
@@ -157,6 +159,9 @@ export default function FlowSettingsPanel({
 }: FlowSettingsPanelProps) {
   const [showMoreTriggers, setShowMoreTriggers] = useState(false);
   const [showMoreOptions, setShowMoreOptions] = useState(false);
+  const [campaignOptions, setCampaignOptions] = useState<Array<{ value: string; label: string }>>([
+    { value: '', label: 'Any campaign reply' },
+  ]);
 
   useEffect(() => {
     if (ADVANCED_TRIGGERS.includes(triggerType)) {
@@ -170,6 +175,29 @@ export default function FlowSettingsPanel({
     }
   }, [regexMatch, exactMatch, priority, nodes, startNodeId]);
 
+  useEffect(() => {
+    if (triggerType !== 'CAMPAIGN_REPLY') return;
+    let cancelled = false;
+    campaignApi
+      .list({ limit: '50' })
+      .then(({ data }) => {
+        if (cancelled) return;
+        const campaigns = (data.data.campaigns || []) as Campaign[];
+        const options = [
+          { value: '', label: 'Any campaign reply' },
+          ...campaigns.map((campaign) => ({ value: campaign.id, label: campaign.name })),
+        ];
+        if (campaignId && !options.some((option) => option.value === campaignId)) {
+          options.push({ value: campaignId, label: 'Saved campaign' });
+        }
+        setCampaignOptions(options);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [triggerType, campaignId]);
+
   const markDirty = () => onDirty?.();
 
   const startNodeOptions = nodes.map((n, i) => ({
@@ -178,6 +206,18 @@ export default function FlowSettingsPanel({
   }));
 
   const priorityValue = priority <= 30 ? '20' : priority >= 70 ? '80' : '50';
+  const audience = flowAudienceState({ status: flowStatus, enabled, isNew });
+  const live = audience === 'live';
+  const onTitle = live
+    ? 'Live — customers get this'
+    : enabled
+      ? 'On selected — still a draft until you publish'
+      : 'Off — customers will not get this';
+  const onSubtitle = live
+    ? 'Turn off anytime to stop this flow'
+    : enabled
+      ? 'Click Save to publish. Customers will not get this while it is a draft.'
+      : 'Turn on when you are ready, then Save so it is published and live.';
 
   return (
     <div className="min-w-0 space-y-6">
@@ -330,15 +370,16 @@ export default function FlowSettingsPanel({
       )}
 
       {triggerType === 'CAMPAIGN_REPLY' && (
-        <AppInput
+        <AppSelect
           label="Campaign (optional)"
           value={campaignId}
+          options={campaignOptions}
+          placeholder="Any campaign reply"
           onChange={(e) => {
             onCampaignIdChange(e.target.value);
             markDirty();
           }}
-          placeholder="Leave blank for any campaign reply"
-          hint="Only fill this if you want replies from one specific campaign"
+          hint="Leave as any campaign, or pick one so only that blast's replies start this flow"
         />
       )}
 
@@ -420,18 +461,16 @@ export default function FlowSettingsPanel({
         <StepLabel step={3} title="Turn it on" />
         <div
           className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3.5 transition ${
-            enabled
+            live
               ? 'border-emerald-200/80 bg-gradient-to-r from-emerald-50/80 to-white'
-              : 'border-neutral-200/80 bg-neutral-50/50'
+              : enabled
+                ? 'border-amber-200/80 bg-gradient-to-r from-amber-50/80 to-white'
+                : 'border-neutral-200/80 bg-neutral-50/50'
           }`}
         >
           <div className="min-w-0">
-            <p className="text-[12px] font-bold text-neutral-900">
-              {enabled ? 'Live — customers get auto-replies' : 'Paused — nothing is sent yet'}
-            </p>
-            <p className="mt-0.5 text-[11px] font-medium text-neutral-500">
-              {enabled ? 'Turn off anytime to stop this flow' : 'Turn on when you are ready to go live'}
-            </p>
+            <p className="text-[12px] font-bold text-neutral-900">{onTitle}</p>
+            <p className="mt-0.5 text-[11px] font-medium text-neutral-500">{onSubtitle}</p>
           </div>
           <button
             type="button"
@@ -442,7 +481,7 @@ export default function FlowSettingsPanel({
               markDirty();
             }}
             className={`relative h-7 w-12 shrink-0 rounded-full transition ${
-              enabled ? 'bg-emerald-500' : 'bg-neutral-300'
+              live ? 'bg-emerald-500' : enabled ? 'bg-amber-500' : 'bg-neutral-300'
             }`}
           >
             <span

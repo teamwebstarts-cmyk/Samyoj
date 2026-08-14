@@ -31,7 +31,8 @@ import {
 import { campaignJobClaimPrefix, isBroadcastJobContextValid } from '../modules/campaigns/worker-safety';
 import { releaseCampaignQuota } from '../modules/campaigns/quota';
 import { logCampaignAudit } from '../modules/campaigns/audit';
-import { assertApprovedCampaignTemplate } from '../modules/campaigns/template-validation';
+import { assertApprovedCampaignTemplate, assertApprovedTemplateIdentity } from '../modules/campaigns/template-validation';
+import { billingCategoryForTemplate } from '../modules/campaigns/types';
 import { trackWebhookFailed, trackWebhookProcessed } from '../modules/whatsapp/webhook-health';
 
 const log = createModuleLogger('worker');
@@ -118,7 +119,9 @@ const webhookWorker = new Worker(
     const payload = job.data?.payload;
     if (!payload) return;
     try {
-      await processWebhookPayload(payload);
+      await processWebhookPayload(payload, {
+        whatsappNumberId: job.data?.whatsappNumberId,
+      });
       await processWebhookFields(payload);
       trackWebhookProcessed();
     } catch (err) {
@@ -149,6 +152,7 @@ const messageWorker = new Worker(
     const {
       messageId,
       organizationId,
+      whatsappNumberId,
       phoneNumberId,
       encryptedToken,
       to,
@@ -178,6 +182,7 @@ const messageWorker = new Worker(
 
     await deliverOutboundMessage({
       organizationId,
+      whatsappNumberId,
       messageId,
       phoneNumberId,
       encryptedToken,
@@ -360,11 +365,9 @@ const broadcastWorker = new Worker(
     const { buildTemplateComponents, mergeTemplateParams } = await import('../modules/campaigns/template-params');
 
     const templateMeta = await MetaWhatsAppService.getMessageTemplate(wabaId, accessToken, templateName);
-    assertApprovedCampaignTemplate(templateMeta, {
+    assertApprovedTemplateIdentity(templateMeta, {
       name: templateName,
       language: lang,
-      category: 'MARKETING',
-      params: templateParams,
     });
 
     for (const recipient of recipients) {
@@ -432,7 +435,7 @@ const broadcastWorker = new Worker(
               businessId: campaign.whatsappNumber?.businessId,
               phoneNumberId: campaign.whatsappNumber?.phoneNumberId,
             },
-            category: 'MARKETING',
+            category: billingCategoryForTemplate(templateMeta?.category),
             policyVersion: 'campaign-consent-v1',
             contact,
           }),
@@ -466,7 +469,8 @@ const broadcastWorker = new Worker(
           },
           select: {
             optedIn: true, consentSource: true, consentAt: true, consentVersion: true,
-            consentDecision: true, optOutAt: true,
+            consentDecision: true, optOutAt: true, name: true, phone: true, email: true,
+            customAttributes: true,
           },
         });
         if (!latestContact || !hasAuditableCampaignConsent(latestContact)) {
@@ -485,7 +489,7 @@ const broadcastWorker = new Worker(
               providerCallStartedAt: null,
             },
           });
-          return { allowed: false, rejected: rejected.count === 1 };
+          return { allowed: false, rejected: rejected.count === 1, contact: latestContact };
         }
         const marked = await tx.campaignRecipient.updateMany({
           where: {
@@ -503,12 +507,12 @@ const broadcastWorker = new Worker(
               businessId: campaign.whatsappNumber?.businessId,
               phoneNumberId: campaign.whatsappNumber?.phoneNumberId,
             },
-            category: 'MARKETING',
+            category: billingCategoryForTemplate(templateMeta?.category),
             policyVersion: 'campaign-consent-v1',
             contact: latestContact,
           }) },
         });
-        return { allowed: marked.count === 1, rejected: false };
+        return { allowed: marked.count === 1, rejected: false, contact: latestContact };
       });
       if (!sendBoundary.allowed) {
         if (sendBoundary.rejected) {
@@ -523,15 +527,19 @@ const broadcastWorker = new Worker(
       const mergedParams = mergeTemplateParams(
         templateParams,
         recipient.variables,
-        recipient.name,
+        sendBoundary.contact?.name || recipient.name,
         templateMeta,
-        { name: recipient.name, phone: recipient.phone }
+        {
+          name: sendBoundary.contact?.name || recipient.name,
+          phone: sendBoundary.contact?.phone || recipient.phone,
+          email: sendBoundary.contact?.email,
+          customAttributes: sendBoundary.contact?.customAttributes,
+        }
       );
       try {
         assertApprovedCampaignTemplate(templateMeta, {
           name: templateName,
           language: lang,
-          category: 'MARKETING',
           params: mergedParams,
         });
       } catch (templateError) {
@@ -736,6 +744,10 @@ const flowWorker = new Worker(
     if (job.name === 'start-flow') {
       const { startFlowFromJob } = await import('../modules/flows/engine');
       await startFlowFromJob(job.data);
+    }
+    if (job.name === 'retry-inbound') {
+      const { handleInboundAutomations } = await import('../modules/automation/engine');
+      await handleInboundAutomations(job.data);
     }
   },
   {

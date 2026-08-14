@@ -63,8 +63,18 @@ export function describeCallEvent(options: {
  */
 export async function publishCallEventMessage(callId: string): Promise<void> {
   try {
-    const call = await prisma.call.findUnique({ where: { id: callId } });
-    if (!call?.conversationId) return;
+    const call = await prisma.call.findUnique({
+      where: { id: callId },
+      include: { conversation: { select: { id: true, organizationId: true, whatsappNumberId: true } } },
+    });
+    if (!call?.conversationId || !call.conversation) return;
+    if (
+      call.conversation.organizationId !== call.organizationId ||
+      call.conversation.whatsappNumberId !== call.whatsappNumberId
+    ) {
+      log.warn('Skipping call event for mismatched conversation number', { callId });
+      return;
+    }
     if (!TERMINAL.has(call.status)) return;
 
     const desc = describeCallEvent({

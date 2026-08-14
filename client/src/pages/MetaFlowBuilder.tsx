@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Eye, Plus, Rocket, Save, Settings2, Trash2 } from 'lucide-react';
 import AppButton from '../components/ui/AppButton';
@@ -10,6 +10,8 @@ import PageShell, { PAGE_GUTTER_X } from '../components/ui/PageShell';
 import { flowAssetsApi } from '../services/api';
 import { getErrorMessage } from '../utils/errors';
 import { toastError, toastSuccess } from '../utils/toast';
+import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
+import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 
 const FIELD_TYPES = [
   { value: 'text', label: 'Text' },
@@ -77,6 +79,7 @@ function fieldsFromFlowJson(flowJson: Record<string, unknown>): MetaFlowField[] 
 }
 
 export default function MetaFlowBuilder() {
+  const { activeNumber, resolved } = useWhatsAppNumber();
   const { id } = useParams();
   const navigate = useNavigate();
   const isNew = id === 'new';
@@ -91,12 +94,21 @@ export default function MetaFlowBuilder() {
   const [submitLabel, setSubmitLabel] = useState('Submit');
   const [fields, setFields] = useState<MetaFlowField[]>(DEFAULT_FIELDS);
   const [asset, setAsset] = useState<FlowAssetRecord | null>(null);
+  const activeNumberIdRef = useRef<string | null>(null);
+  activeNumberIdRef.current = activeNumber?.id ?? null;
+  const loadGenerationRef = useRef(0);
 
   const load = useCallback(async () => {
-    if (!id || isNew) return;
+    if (!id || isNew || !resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
+    const generation = ++loadGenerationRef.current;
     setLoading(true);
     try {
       const { data } = await flowAssetsApi.get(id);
+      if (
+        requestNumberId !== activeNumberIdRef.current ||
+        generation !== loadGenerationRef.current
+      ) return;
       const record = data.data as FlowAssetRecord;
       setAsset(record);
       setName(record.name);
@@ -106,15 +118,39 @@ export default function MetaFlowBuilder() {
       if (screens[0]?.title) setTitle(screens[0].title);
       setFields(fieldsFromFlowJson(flowJson));
     } catch (err) {
-      toastError(getErrorMessage(err, 'Failed to load Meta Flow'));
+      if (
+        requestNumberId === activeNumberIdRef.current &&
+        generation === loadGenerationRef.current
+      ) {
+        toastError(getErrorMessage(err, 'Failed to load Meta Flow'));
+      }
     } finally {
-      setLoading(false);
+      if (
+        requestNumberId === activeNumberIdRef.current &&
+        generation === loadGenerationRef.current
+      ) {
+        setLoading(false);
+      }
     }
-  }, [id, isNew]);
+  }, [activeNumber, id, isNew, resolved]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  useOnActiveNumberChange(({ isInitial }) => {
+    if (isInitial) return;
+    loadGenerationRef.current += 1;
+    setLoading(!isNew);
+    setAsset(null);
+    setName(isNew ? 'New Meta Flow' : '');
+    setDescription('');
+    setTitle('Tell us about yourself');
+    setSubmitLabel('Submit');
+    setFields(DEFAULT_FIELDS);
+    setMobileTab('setup');
+    if (!isNew) load();
+  });
 
   const previewJson = useMemo(() => {
     const formName = 'main_form';

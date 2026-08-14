@@ -19,6 +19,7 @@ import { commerceApi } from '../services/api';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 import { toastError, toastSuccess } from '../utils/toast';
 import { readNumberCache, writeNumberCache } from '../utils/whatsappNumberCache';
+import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 
 interface Order {
   id: string;
@@ -68,6 +69,7 @@ function formatDate(value: string) {
 }
 
 export default function CommercePage() {
+  const { activeNumber, resolved } = useWhatsAppNumber();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
@@ -77,6 +79,8 @@ export default function CommercePage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailData, setDetailData] = useState<Order | null>(null);
   const loadRef = useRef<() => void>(() => {});
+  const activeNumberIdRef = useRef<string | null>(null);
+  activeNumberIdRef.current = activeNumber?.id ?? null;
   const commerceSnapshotRef = useRef<CommerceNumberCache>({
     orders: [],
     statusFilter: '',
@@ -94,16 +98,23 @@ export default function CommercePage() {
   };
 
   const load = useCallback(() => {
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
     setLoading(true);
     const params: Record<string, string> = {};
     if (statusFilter) params.status = statusFilter;
 
     commerceApi
       .orders(params)
-      .then((res) => setOrders(res.data.data.orders || []))
+      .then((res) => {
+        if (requestNumberId !== activeNumberIdRef.current) return;
+        setOrders(res.data.data.orders || []);
+      })
       .catch(() => toastError('Failed to load orders'))
-      .finally(() => setLoading(false));
-  }, [statusFilter]);
+      .finally(() => {
+        if (requestNumberId === activeNumberIdRef.current) setLoading(false);
+      });
+  }, [activeNumber, resolved, statusFilter]);
 
   loadRef.current = load;
 
@@ -115,11 +126,15 @@ export default function CommercePage() {
       setOrders(cached.orders);
       setStatusFilter(cached.statusFilter);
       setSearch(cached.search);
-      setDetailOrder(cached.detailOrder);
-      setDetailData(cached.detailData);
-      setLoading(false);
+      setDetailOrder(null);
+      setDetailData(null);
+      setDetailLoading(false);
+      setUpdatingId(null);
+      setLoading(true);
+      loadRef.current();
       return;
     }
+    setOrders([]);
     setDetailOrder(null);
     setDetailData(null);
     loadRef.current();
@@ -130,17 +145,22 @@ export default function CommercePage() {
   }, [load]);
 
   const openOrderDetail = async (order: Order) => {
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
     setDetailOrder(order);
     setDetailData(null);
     setDetailLoading(true);
     try {
       const res = await commerceApi.order(order.id);
+      if (requestNumberId !== activeNumberIdRef.current) return;
       setDetailData(res.data.data as Order);
     } catch {
-      toastError('Failed to load order details');
-      setDetailOrder(null);
+      if (requestNumberId === activeNumberIdRef.current) {
+        toastError('Failed to load order details');
+        setDetailOrder(null);
+      }
     } finally {
-      setDetailLoading(false);
+      if (requestNumberId === activeNumberIdRef.current) setDetailLoading(false);
     }
   };
 

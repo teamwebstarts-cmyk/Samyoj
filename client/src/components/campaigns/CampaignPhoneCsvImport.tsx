@@ -1,13 +1,14 @@
 import { useRef, useState } from 'react';
 import { FileSpreadsheet, Upload } from 'lucide-react';
 import { toastError } from '../../utils/toast';
-import { parseContactImportFile } from '../../utils/contactImport';
+import { parseContactImportFile, type ContactImportRow } from '../../utils/contactImport';
 
 interface CampaignPhoneCsvImportProps {
   onPhonesImported: (phones: string[]) => void;
+  onRowsImported?: (rows: ContactImportRow[]) => void;
 }
 
-export default function CampaignPhoneCsvImport({ onPhonesImported }: CampaignPhoneCsvImportProps) {
+export default function CampaignPhoneCsvImport({ onPhonesImported, onRowsImported }: CampaignPhoneCsvImportProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [importErrors, setImportErrors] = useState<string[]>([]);
@@ -30,6 +31,7 @@ export default function CampaignPhoneCsvImport({ onPhonesImported }: CampaignPho
     }
 
     onPhonesImported(preview.rows.map((row) => row.phone));
+    onRowsImported?.(preview.rows);
     if (preview.errors.length) toastError(`${preview.errors.length} invalid row${preview.errors.length === 1 ? '' : 's'} skipped. Fix those rows and import them again if needed.`);
   };
 
@@ -84,7 +86,7 @@ export default function CampaignPhoneCsvImport({ onPhonesImported }: CampaignPho
       </p>
       <p className="mt-2 inline-flex items-center gap-1 text-[10px] font-semibold text-theme-muted">
         <FileSpreadsheet className="h-3 w-3" />
-        Add each person's phone number in the <code>phone</code> column
+        Add each person's phone number in the <code>phone</code> column. Extra columns become template variables.
       </p>
       {(importErrors.length > 0 || importedCount > 0) && (
         <div className="mt-3 text-left text-[11px]" aria-live="polite">

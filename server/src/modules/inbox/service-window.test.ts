@@ -4,7 +4,17 @@ import {
   extractMetaErrorFields,
   isWithin24HourWindow,
 } from '../whatsapp/meta.service';
+import { latestWindowOpenAt } from './service-window';
 import { nextUnreadCount } from './unread';
+
+describe('latestWindowOpenAt', () => {
+  it('picks the newest inbound or call timestamp', () => {
+    const older = new Date('2026-08-01T00:00:00.000Z');
+    const newer = new Date('2026-08-02T00:00:00.000Z');
+    expect(latestWindowOpenAt(older, null, newer)?.toISOString()).toBe(newer.toISOString());
+    expect(latestWindowOpenAt(undefined, null)).toBeNull();
+  });
+});
 
 describe('isWithin24HourWindow', () => {
   it('is closed when window never opened', () => {

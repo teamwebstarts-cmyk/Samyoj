@@ -21,6 +21,7 @@ const campaignSettingsSchema = z.object({
   dailyBudgetInr: z.number().min(0).max(1000000).optional(),
   batchSize: z.number().int().min(1).max(500).optional(),
   batchDelayMs: z.number().int().min(0).max(60000).optional(),
+  mapFirstBodyVariableToName: z.boolean().optional(),
 });
 
 const businessHoursSchema = z.object({

@@ -1,11 +1,15 @@
 import prisma from '../../config/database';
-import { automationQueue } from '../../config/queues';
+import { automationQueue, flowQueue } from '../../config/queues';
 import { generateBotReply, logAutomationRun, performHandoff } from '../ai/chatbot.service';
 import { hasEnabledBots } from '../ai/bot.service';
 import { withAiBotConversationLock } from '../ai/lock';
-import { deliverOutboundMessage } from '../messages/send.service';
+import { deliverOutboundMessage, isCswClosedError } from '../messages/send.service';
 import { MetaWhatsAppService } from '../whatsapp/meta.service';
 import { handleInboundFlow } from '../flows/engine';
+import { inboundLockRetryJobId } from '../flows/inbound-wait';
+import { decideInboundFunnel } from './inbound-funnel';
+import { hasRecentStaticReply } from './frequency';
+import { keywordMatches } from '../flows/trigger-match';
 import { getOrgBusinessHours, isWithinBusinessHours } from '../settings/business-hours';
 import { createModuleLogger } from '../../utils/logger';
 
@@ -32,6 +36,7 @@ export interface InboundAutomationPayload {
   messageType?: string;
   hasMedia?: boolean;
   waFlowResponse?: Record<string, unknown>;
+  lockRetry?: number;
 }
 
 async function checkBusinessHours(organizationId: string): Promise<boolean> {
@@ -66,8 +71,7 @@ export async function processRuleAutomations(
       : undefined;
 
     if (triggerType === 'KEYWORD' && context.message) {
-      const keyword = (config.keyword as string)?.toLowerCase();
-      if (keyword && context.message.toLowerCase().includes(keyword)) {
+      if (keywordMatches(context.message, { keyword: config.keyword as string | undefined })) {
         const message = (config.response as string) || (config.message as string);
         if (message) {
           return { id: automation.id, name: automation.name, triggerType, message, buttons };
@@ -94,8 +98,8 @@ export async function processRuleAutomations(
     }
 
     if (triggerType === 'LEAD_CAPTURE' && context.message) {
-      const keyword = (config.keyword as string)?.toLowerCase();
-      if (!keyword || context.message.toLowerCase().includes(keyword)) {
+      const keyword = config.keyword as string | undefined;
+      if (!keyword?.trim() || keywordMatches(context.message, { keyword })) {
         const message = (config.message as string) || null;
         if (message) {
           return {
@@ -194,16 +198,17 @@ export async function sendAutomationReply(
       durationMs: Date.now() - start,
     });
   } catch (err) {
+    const skippedCsw = isCswClosedError(err);
     await logAutomationRun({
       organizationId: payload.organizationId,
       conversationId: payload.conversationId,
       triggerType,
       action: 'send_reply',
-      status: 'failed',
+      status: skippedCsw ? 'skipped' : 'failed',
       error: err instanceof Error ? err.message : String(err),
       durationMs: Date.now() - start,
     });
-    throw err;
+    if (!skippedCsw) throw err;
   }
 }
 
@@ -351,6 +356,22 @@ export async function processAiChatbotJob(payload: InboundAutomationPayload): Pr
 }
 
 export async function handleInboundAutomations(payload: InboundAutomationPayload): Promise<void> {
+  const conversation = await prisma.conversation.findFirst({
+    where: { id: payload.conversationId, organizationId: payload.organizationId },
+    select: { botActive: true },
+  });
+  const paused = decideInboundFunnel({ botActive: conversation?.botActive });
+  if (paused.type === 'skip' && paused.reason === 'paused') {
+    await logAutomationRun({
+      organizationId: payload.organizationId,
+      conversationId: payload.conversationId,
+      triggerType: 'FLOW',
+      action: 'bot_paused',
+      status: 'skipped',
+    });
+    return;
+  }
+
   const flowHandled = await handleInboundFlow({
     organizationId: payload.organizationId,
     conversationId: payload.conversationId,
@@ -367,7 +388,68 @@ export async function handleInboundAutomations(payload: InboundAutomationPayload
     waFlowResponse: payload.waFlowResponse,
   });
 
-  if (flowHandled) return;
+  const afterFlow = decideInboundFunnel({
+    botActive: conversation?.botActive,
+    flowHandled,
+    lockRetry: payload.lockRetry,
+  });
+
+  if (afterFlow.type === 'requeue') {
+    const attempt = payload.lockRetry ?? 0;
+    const jobId = inboundLockRetryJobId(payload.conversationId);
+    try {
+      const existing = await flowQueue.getJob(jobId);
+      if (existing) await existing.remove();
+    } catch {
+      /* job may already have been consumed */
+    }
+    await flowQueue.add(
+      'retry-inbound',
+      { ...payload, lockRetry: attempt + 1 },
+      {
+        delay: Math.min(300 * (attempt + 1), 3000),
+        jobId,
+        attempts: 1,
+        removeOnComplete: 50,
+        removeOnFail: 100,
+      }
+    );
+    log.info('Requeued inbound — conversation lock busy', {
+      conversationId: payload.conversationId,
+      attempt: attempt + 1,
+    });
+    return;
+  }
+
+  if (afterFlow.type === 'skip' && afterFlow.reason === 'lock_giveup') {
+    log.warn('Giving up inbound requeue after lock busy', {
+      conversationId: payload.conversationId,
+      attempts: payload.lockRetry ?? 0,
+    });
+    return;
+  }
+
+  if (afterFlow.type === 'flow_done') return;
+
+  const optedOut = await prisma.contact.findFirst({
+    where: { id: payload.contactId, organizationId: payload.organizationId },
+    select: { optedIn: true },
+  });
+  const afterOptOut = decideInboundFunnel({
+    botActive: conversation?.botActive,
+    flowHandled: false,
+    optedIn: optedOut?.optedIn,
+  });
+  if (afterOptOut.type === 'skip') {
+    await logAutomationRun({
+      organizationId: payload.organizationId,
+      conversationId: payload.conversationId,
+      triggerType: 'STATIC',
+      action: afterOptOut.reason === 'paused' ? 'bot_paused' : 'opted_out',
+      status: 'skipped',
+    });
+    return;
+  }
 
   const staticReply = await resolveStaticAutoReply(payload.organizationId, {
     message: payload.content,
@@ -376,25 +458,46 @@ export async function handleInboundAutomations(payload: InboundAutomationPayload
   });
 
   if (staticReply) {
-    await sendAutomationReply(payload, staticReply.message, staticReply.triggerType, {
-      buttons: staticReply.buttons,
-      automationId: staticReply.id,
-      automationName: staticReply.name,
-    });
+    if (
+      await hasRecentStaticReply({
+        organizationId: payload.organizationId,
+        conversationId: payload.conversationId,
+        automationId: staticReply.id,
+      })
+    ) {
+      await logAutomationRun({
+        organizationId: payload.organizationId,
+        conversationId: payload.conversationId,
+        automationId: staticReply.id,
+        triggerType: staticReply.triggerType,
+        action: 'frequency_cap',
+        status: 'skipped',
+      });
+      log.info('Skipping auto-reply — frequency cap', {
+        conversationId: payload.conversationId,
+        automationId: staticReply.id,
+      });
+    } else {
+      await sendAutomationReply(payload, staticReply.message, staticReply.triggerType, {
+        buttons: staticReply.buttons,
+        automationId: staticReply.id,
+        automationName: staticReply.name,
+      });
 
-    if (staticReply.tag) {
-      const contact = await prisma.contact.findUnique({ where: { id: payload.contactId } });
-      if (contact && !contact.tags.includes(staticReply.tag)) {
-        await prisma.contact.update({
-          where: { id: payload.contactId },
-          data: { tags: { push: staticReply.tag } },
-        });
+      if (staticReply.tag) {
+        const contact = await prisma.contact.findUnique({ where: { id: payload.contactId } });
+        if (contact && !contact.tags.includes(staticReply.tag)) {
+          await prisma.contact.update({
+            where: { id: payload.contactId },
+            data: { tags: { push: staticReply.tag } },
+          });
+        }
       }
+      if (staticReply.handoff) {
+        await performHandoff(payload.organizationId, payload.conversationId, 'LEAD_CAPTURE');
+      }
+      return;
     }
-    if (staticReply.handoff) {
-      await performHandoff(payload.organizationId, payload.conversationId, 'LEAD_CAPTURE');
-    }
-    return;
   }
 
   await queueAiBotProcessing(payload);

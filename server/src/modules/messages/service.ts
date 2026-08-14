@@ -14,6 +14,7 @@ interface SendDirectMessageInput {
   type?: 'TEXT' | 'TEMPLATE';
   templateName?: string;
   templateLanguage?: string;
+  whatsappNumberId?: string;
 }
 
 export interface RecordOutboundInput {
@@ -124,7 +125,7 @@ export async function sendDirectMessage(organizationId: string, input: SendDirec
   if (!phoneResult.ok) throw new AppError(400, phoneResult.error);
   const phone = phoneResult.phone;
 
-  const { whatsappNumber } = await getOrgWhatsappContext(organizationId);
+  const { whatsappNumber } = await getOrgWhatsappContext(organizationId, input.whatsappNumberId);
   const type = input.type || 'TEXT';
 
   const contact = await prisma.contact.upsert({
@@ -148,7 +149,11 @@ export async function sendDirectMessage(organizationId: string, input: SendDirec
   });
 
   let conversation = await prisma.conversation.findFirst({
-    where: { organizationId, contactId: contact.id },
+    where: {
+      organizationId,
+      contactId: contact.id,
+      whatsappNumberId: whatsappNumber.id,
+    },
     include: {
       messages: {
         where: { direction: 'INBOUND' },
@@ -188,7 +193,7 @@ export async function sendDirectMessage(organizationId: string, input: SendDirec
   let messageMetadata: Record<string, unknown> | undefined;
 
   if (type === 'TEMPLATE' && input.templateName) {
-    const { wabaId, accessToken } = await getOrgWhatsappContext(organizationId);
+    const { wabaId, accessToken } = await getOrgWhatsappContext(organizationId, whatsappNumber.id);
     const template = await MetaWhatsAppService.getMessageTemplate(
       wabaId,
       accessToken,
@@ -219,6 +224,7 @@ export async function sendDirectMessage(organizationId: string, input: SendDirec
 
   const sentMessage = await deliverOutboundMessage({
     organizationId,
+    whatsappNumberId: whatsappNumber.id,
     messageId: message.id,
     phoneNumberId: whatsappNumber.phoneNumberId,
     encryptedToken: whatsappNumber.accessToken,

@@ -1,3 +1,5 @@
+import type { CampaignStatus } from '@prisma/client';
+
 export interface BroadcastJobContext {
   campaignId: string;
   organizationId: string;
@@ -41,6 +43,29 @@ export function canRollbackQueuedCampaign(input: {
   expectedRunVersion: number;
 }) {
   return input.status === 'RUNNING' && input.runVersion === input.expectedRunVersion;
+}
+
+export function canClaimManualCampaignRun(input: {
+  status: string;
+  runVersion: number;
+  expectedRunVersion: number;
+}) {
+  return (
+    (input.status === 'DRAFT' || input.status === 'SCHEDULED') &&
+    input.runVersion === input.expectedRunVersion
+  );
+}
+
+export function manualCampaignRunClaimWhere(campaignId: string, expectedRunVersion: number) {
+  return {
+    id: campaignId,
+    status: { in: ['DRAFT', 'SCHEDULED'] as CampaignStatus[] },
+    runVersion: expectedRunVersion,
+  };
+}
+
+export function materializedCampaignRunVersion(runVersion: number, bumpRunVersion: boolean) {
+  return runVersion + (bumpRunVersion ? 1 : 0);
 }
 
 export function buildCampaignJobId(

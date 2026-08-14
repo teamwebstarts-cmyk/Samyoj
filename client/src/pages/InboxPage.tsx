@@ -52,7 +52,7 @@ import type {
 
 export default function InboxPage() {
   const { user } = useAuth();
-  const { hasConnectedNumber, loading: numbersLoading } = useWhatsAppNumber();
+  const { hasConnectedNumber, activeNumber, resolved, loading: numbersLoading } = useWhatsAppNumber();
 
   const [search, setSearch] = useState('');
   const [chip, setChip] = useState<ListChip>('all');
@@ -132,6 +132,8 @@ export default function InboxPage() {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const activeNumberIdRef = useRef<string | null>(null);
+  activeNumberIdRef.current = activeNumber?.id ?? null;
   const searchInputRef = useRef<HTMLInputElement>(null);
   const composerInputRef = useRef<HTMLTextAreaElement>(null);
   const {
@@ -322,22 +324,32 @@ export default function InboxPage() {
   } = useInboxModals({ selected });
 
   useEffect(() => {
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
     teamApi.agents().then(({ data }) => setAgents(data.data.agents)).catch(console.error);
     cannedRepliesApi.list().then(({ data }) => setCannedReplies(data.data.replies)).catch(console.error);
     setAiBotsLoading(true);
     aiBotApi
       .list()
-      .then(({ data }) => setAiBots((data.data?.bots ?? []) as AiBot[]))
-      .catch(() => setAiBots([]))
-      .finally(() => setAiBotsLoading(false));
+      .then(({ data }) => {
+        if (requestNumberId !== activeNumberIdRef.current) return;
+        setAiBots((data.data?.bots ?? []) as AiBot[]);
+      })
+      .catch(() => {
+        if (requestNumberId === activeNumberIdRef.current) setAiBots([]);
+      })
+      .finally(() => {
+        if (requestNumberId === activeNumberIdRef.current) setAiBotsLoading(false);
+      });
     ticketApi.list().then((res) => {
+      if (requestNumberId !== activeNumberIdRef.current) return;
       const ids = new Set<string>();
       for (const t of res.data.data.tickets || []) {
         if (t.conversation?.id && !['RESOLVED', 'CLOSED'].includes(t.status)) ids.add(t.conversation.id);
       }
       setTicketConversationIds(ids);
     }).catch(console.error);
-  }, [setTicketConversationIds]);
+  }, [activeNumber, resolved, setTicketConversationIds]);
 
   // Tell the notification center which chat is open so background-message
   // alerts skip it.

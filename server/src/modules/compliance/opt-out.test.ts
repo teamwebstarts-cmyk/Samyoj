@@ -3,9 +3,20 @@ import { isConsentEventNewer, isOptInMessage, isOptOutMessage } from './opt-out'
 
 describe('consent message safety', () => {
   it('recognizes fail-closed STOP and explicit START messages', () => {
-    expect(isOptOutMessage('STOP please')).toBe(true);
+    expect(isOptOutMessage('STOP')).toBe(true);
+    expect(isOptOutMessage('stop!')).toBe(true);
+    expect(isOptOutMessage('unsubscribe')).toBe(true);
+    expect(isOptOutMessage('STOPALL')).toBe(true);
+    expect(isOptOutMessage('cancel')).toBe(true);
     expect(isOptInMessage('START')).toBe(true);
     expect(isOptInMessage('please start')).toBe(false);
+  });
+
+  it('does not treat support phrases as global opt-out', () => {
+    expect(isOptOutMessage('cancel my order')).toBe(false);
+    expect(isOptOutMessage('STOP please')).toBe(false);
+    expect(isOptOutMessage('please unsubscribe me later')).toBe(false);
+    expect(isOptOutMessage('end this chat for now')).toBe(false);
   });
 
   it('keeps consent decisions event-time ordered and idempotent', () => {

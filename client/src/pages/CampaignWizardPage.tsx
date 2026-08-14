@@ -20,10 +20,13 @@ import {
   type CampaignWizardForm,
 } from '../components/campaigns/wizard/campaignWizardModel';
 import { templateNeedsHeaderMedia } from '../components/campaigns/campaignPreviewUtils';
+import { templateDynamicUrlButtons, templateNeedsCoupon } from '../utils/templateForm';
 import AppButton from '../components/ui/AppButton';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import LoadingState from '../components/ui/LoadingState';
 import { useAuth } from '../contexts/AuthContext';
+import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
+import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 import { campaignApi, contactApi, templateApi, whatsappApi } from '../services/api';
 import { toastError, toastSuccess } from '../utils/toast';
 import { validatePhoneLines } from '../utils/phone';
@@ -53,6 +56,7 @@ export default function CampaignWizardPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { canManageTeam } = useAuth();
+  const { activeNumber, resolved } = useWhatsAppNumber();
   const isEdit = Boolean(id);
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
@@ -70,6 +74,8 @@ export default function CampaignWizardPage() {
   const [estimatedCost, setEstimatedCost] = useState<number | null>(null);
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
   const initializedFromQuery = useRef(false);
+  const activeNumberIdRef = useRef<string | null>(null);
+  activeNumberIdRef.current = activeNumber?.id ?? null;
 
   const selectedTemplate = useMemo(
     () => templates.find((template) => template.name === form.templateName),
@@ -99,47 +105,89 @@ export default function CampaignWizardPage() {
   const channelLabel = selectedNumber?.phoneNumber || 'Default WhatsApp number';
 
   const loadTemplates = useCallback(() => {
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
     setTemplatesLoading(true);
     templateApi
       .list({ status: 'APPROVED', all: 'true' })
       .then(({ data }) => {
+        if (requestNumberId !== activeNumberIdRef.current) return;
         const payload = data.data;
         const list = Array.isArray(payload) ? payload : payload?.templates || [];
         setTemplates(list as MessageTemplate[]);
       })
-      .catch(() => setTemplates([]))
-      .finally(() => setTemplatesLoading(false));
-  }, []);
+      .catch(() => {
+        if (requestNumberId === activeNumberIdRef.current) setTemplates([]);
+      })
+      .finally(() => {
+        if (requestNumberId === activeNumberIdRef.current) setTemplatesLoading(false);
+      });
+  }, [activeNumber, resolved]);
 
   useEffect(() => {
     if (!canManageTeam) {
       navigate('/campaigns', { replace: true });
       return;
     }
+    if (!resolved || !activeNumber) return;
     loadTemplates();
+    const requestNumberId = activeNumber.id;
     whatsappApi
       .numbers()
-      .then(({ data }) => setWhatsappNumbers(Array.isArray(data.data) ? data.data : []))
-      .catch(() => setWhatsappNumbers([]));
+      .then(({ data }) => {
+        if (requestNumberId === activeNumberIdRef.current) {
+          setWhatsappNumbers(Array.isArray(data.data) ? data.data : []);
+        }
+      })
+      .catch(() => {
+        if (requestNumberId === activeNumberIdRef.current) setWhatsappNumbers([]);
+      });
     contactApi
       .tags()
       .then(({ data }) => {
+        if (requestNumberId !== activeNumberIdRef.current) return;
         const tags = data.data.tags || [];
         setAvailableTags(tags.map((tag: string | { name: string }) => (typeof tag === 'string' ? tag : tag.name)));
       })
-      .catch(() => setAvailableTags([]));
+      .catch(() => {
+        if (requestNumberId === activeNumberIdRef.current) setAvailableTags([]);
+      });
     campaignApi
       .quota()
-      .then(({ data }) => setQuota(data.data as CampaignQuotaData))
-      .catch(() => setQuota(null));
-  }, [canManageTeam, loadTemplates, navigate]);
+      .then(({ data }) => {
+        if (requestNumberId === activeNumberIdRef.current) setQuota(data.data as CampaignQuotaData);
+      })
+      .catch(() => {
+        if (requestNumberId === activeNumberIdRef.current) setQuota(null);
+      });
+  }, [activeNumber, canManageTeam, loadTemplates, navigate, resolved]);
+
+  useOnActiveNumberChange(({ isInitial }) => {
+    if (isInitial) return;
+    setTemplates([]);
+    setWhatsappNumbers([]);
+    setAvailableTags([]);
+    setQuota(null);
+    setEditing(null);
+    setForm(createEmptyCampaignWizardForm());
+    setActiveStep(0);
+    setStageError(null);
+    setAudiencePreviewCount(null);
+    setAudienceMetrics(null);
+    setEstimatedCost(null);
+    setConfirmState(null);
+    setLoading(Boolean(isEdit));
+    loadTemplates();
+  });
 
   useEffect(() => {
-    if (!id) return;
+    if (!id || !resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
     setLoading(true);
     campaignApi
       .get(id)
       .then(({ data }) => {
+        if (requestNumberId !== activeNumberIdRef.current) return;
         const campaign = data.data as CampaignWizardDetail;
         if (!canEditCampaign(campaign.status)) {
           toastError('Only draft and scheduled campaigns can be edited.');
@@ -153,8 +201,10 @@ export default function CampaignWizardPage() {
         toastError(getErrorMessage(error, 'Campaign details could not load. Refresh and try again.'));
         navigate('/campaigns', { replace: true });
       })
-      .finally(() => setLoading(false));
-  }, [id, navigate]);
+      .finally(() => {
+        if (requestNumberId === activeNumberIdRef.current) setLoading(false);
+      });
+  }, [activeNumber, id, navigate, resolved]);
 
   useEffect(() => {
     if (!editing || !templates.length) return;
@@ -212,11 +262,14 @@ export default function CampaignWizardPage() {
       selectedTemplate.header || selectedTemplate.components?.find((component) => component.type === 'HEADER')?.text;
     const bodyCount = countTemplateVariables(bodyText);
     const headerCount = countTemplateVariables(headerText);
+    const urlCount = templateDynamicUrlButtons(selectedTemplate).length;
     setForm((previous) => ({
       ...previous,
       templateLanguage: selectedTemplate.language,
       bodyParams: Array.from({ length: bodyCount }, (_, index) => previous.bodyParams[index] || ''),
       headerParams: Array.from({ length: headerCount }, (_, index) => previous.headerParams[index] || ''),
+      buttonUrlSuffixes: Array.from({ length: urlCount }, (_, index) => previous.buttonUrlSuffixes[index] || ''),
+      couponCode: templateNeedsCoupon(selectedTemplate) ? previous.couponCode : '',
     }));
   }, [selectedTemplate]);
 
@@ -245,6 +298,13 @@ export default function CampaignWizardPage() {
     if (!canManageTeam) return null;
     let payload: Record<string, unknown>;
     try {
+      if (action !== 'draft') {
+        const stageErrorMessage = validateCampaignWizardStage(0, form, selectedTemplate);
+        if (stageErrorMessage) {
+          toastError(stageErrorMessage);
+          return null;
+        }
+      }
       if (selectedTemplate && templateNeedsHeaderMedia(selectedTemplate) && !form.headerMediaUrl.trim()) {
         toastError('Header media URL is required for this template');
         return null;

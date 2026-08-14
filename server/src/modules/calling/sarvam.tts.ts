@@ -48,7 +48,7 @@ export async function synthesizeSpeechSarvam(
       model,
       speaker,
       language_code: language,
-      pace: options?.pace ?? 1.0,
+      pace: options?.pace ?? 1.12,
       temperature: 0.6,
       speech_sample_rate: 48000,
     }),

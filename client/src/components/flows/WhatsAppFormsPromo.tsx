@@ -19,18 +19,20 @@ export default function WhatsAppFormsPromo() {
             <p className="text-[13px] font-extrabold text-theme-fg sm:text-[14px]">
               WhatsApp Forms
               <span className="ml-2 rounded-full bg-teal-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-teal-700 ring-1 ring-teal-500/15 dark:text-teal-300">
-                Advanced
+                Not a chat tree
               </span>
             </p>
             <p className="mt-0.5 text-[12px] leading-relaxed text-theme-secondary sm:text-[13px]">
-              Meta-native forms for surveys, bookings, and lead capture — filled inside WhatsApp.
+              Meta-native screens for surveys and bookings, filled inside WhatsApp. They are not the
+              conversation flows above. Add a <span className="font-semibold text-theme-fg">WhatsApp Form</span>{' '}
+              step when you edit a flow.
             </p>
           </div>
         </div>
 
         <Link to="/automations/flows/new" className="shrink-0 sm:ml-4">
           <AppButton variant="secondary" size="sm" icon={<ArrowRight size={14} />}>
-            Open flow builder
+            New conversation flow
           </AppButton>
         </Link>
       </div>

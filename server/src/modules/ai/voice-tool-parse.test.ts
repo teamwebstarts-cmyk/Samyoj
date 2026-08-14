@@ -22,6 +22,13 @@ describe('extractInlineToolCalls', () => {
     expect(cleanText).toBe('Sure.');
     expect(tools[0].name).toBe('request_human');
   });
+
+  it('extracts end_call so the agent can hang up', () => {
+    const raw = 'Thanks for calling. <tool_call>end_call</tool_call>';
+    const { cleanText, tools } = extractInlineToolCalls(raw);
+    expect(cleanText).toBe('Thanks for calling.');
+    expect(tools[0].name).toBe('end_call');
+  });
 });
 
 describe('hasOpenToolCallMarkup', () => {

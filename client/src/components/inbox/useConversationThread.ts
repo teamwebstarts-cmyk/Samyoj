@@ -11,6 +11,7 @@ import { inboxApi } from '../../services/api';
 import { toastError } from '../../utils/toast';
 import { logError } from '../../utils/errors';
 import type { Conversation, Message, ServiceWindowInfo } from '../../types';
+import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
 
 const MESSAGE_PAGE_LIMIT = 50;
 
@@ -40,6 +41,7 @@ export interface ConversationThread {
 
 /** Open-thread state: selected conversation, messages, service window, history loading. */
 export function useConversationThread({ setConversations, refreshUnread }: ThreadDeps): ConversationThread {
+  const { activeNumber, resolved } = useWhatsAppNumber();
   const [selected, setSelected] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [serviceWindow, setServiceWindow] = useState<ServiceWindowInfo | undefined>(undefined);
@@ -49,6 +51,8 @@ export function useConversationThread({ setConversations, refreshUnread }: Threa
   const [loadingEarlier, setLoadingEarlier] = useState(false);
   const selectedRef = useRef<Conversation | null>(null);
   const messagesRef = useRef<Message[]>([]);
+  const activeNumberIdRef = useRef<string | null>(null);
+  activeNumberIdRef.current = activeNumber?.id ?? null;
 
   useEffect(() => {
     selectedRef.current = selected;
@@ -101,6 +105,8 @@ export function useConversationThread({ setConversations, refreshUnread }: Threa
   const openConversation = useCallback(
     async (conv: Conversation) => {
       const requestId = conv.id;
+      const requestNumberId = activeNumber?.id ?? null;
+      if (!resolved || !requestNumberId) return;
       setSelected(conv);
       setThreadError(false);
       setThreadLoading(true);
@@ -114,7 +120,11 @@ export function useConversationThread({ setConversations, refreshUnread }: Threa
           inboxApi.get(conv.id),
         ]);
         // Ignore stale responses if user switched chats mid-flight.
-        if (selectedRef.current?.id !== requestId) return;
+        if (
+          selectedRef.current?.id !== requestId ||
+          requestNumberId !== activeNumberIdRef.current
+        )
+          return;
 
         const payload = msgRes.data?.data;
         const msgs = (payload?.messages ?? []) as Message[];
@@ -135,21 +145,29 @@ export function useConversationThread({ setConversations, refreshUnread }: Threa
           (err as { message?: string })?.message === 'canceled';
         if (aborted) return;
         // Only surface error if this chat is still selected.
-        if (selectedRef.current?.id !== requestId) return;
+        if (
+          selectedRef.current?.id !== requestId ||
+          requestNumberId !== activeNumberIdRef.current
+        )
+          return;
         console.error(err);
         setThreadError(true);
       } finally {
-        if (selectedRef.current?.id === requestId) {
+        if (
+          selectedRef.current?.id === requestId &&
+          requestNumberId === activeNumberIdRef.current
+        ) {
           setThreadLoading(false);
         }
       }
       markConversationRead(conv.id);
     },
-    [markConversationRead]
+    [activeNumber, markConversationRead, resolved]
   );
 
   const loadEarlierMessages = useCallback(async () => {
     const conv = selectedRef.current;
+    const requestNumberId = activeNumber?.id ?? null;
     const oldest = messagesRef.current[0];
     if (!conv || !oldest || loadingEarlier || !hasEarlier) return;
     setLoadingEarlier(true);
@@ -159,6 +177,7 @@ export function useConversationThread({ setConversations, refreshUnread }: Threa
         limit: String(MESSAGE_PAGE_LIMIT),
       });
       const older = (data.data.messages ?? []) as Message[];
+      if (requestNumberId !== activeNumberIdRef.current) return;
       setMessages((prev) => [...older.filter((o) => !prev.some((m) => m.id === o.id)), ...prev]);
       const hasMoreFlag = data.data.hasMore;
       setHasEarlier(
@@ -169,7 +188,7 @@ export function useConversationThread({ setConversations, refreshUnread }: Threa
     } finally {
       setLoadingEarlier(false);
     }
-  }, [loadingEarlier, hasEarlier]);
+  }, [activeNumber, hasEarlier, loadingEarlier]);
 
   return {
     selected,

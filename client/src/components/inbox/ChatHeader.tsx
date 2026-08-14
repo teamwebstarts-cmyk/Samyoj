@@ -17,6 +17,7 @@ import { useGlassTipProps } from './ComposerGlassTip';
 import type { PresenceViewer } from './useConversationPresence';
 import type { AiBot, Conversation, ServiceWindowInfo, TeamAgent } from '../../types';
 import { FOCUS_RING_CLASS } from '../../hooks/inboxA11y';
+import { waitingForLabel } from '../../utils/flow-waiting';
 
 interface ChatHeaderProps {
   conversation: Conversation;
@@ -205,6 +206,11 @@ export default function ChatHeader({
         <p className="hidden truncate text-[12.5px] font-medium text-theme-muted sm:block">
           {contact.phone}
         </p>
+        {waitingForLabel(conversation.activeFlow?.waitingFor) && (
+          <p className="truncate text-[11px] font-medium text-violet-700 dark:text-violet-300">
+            {waitingForLabel(conversation.activeFlow?.waitingFor)}
+          </p>
+        )}
         <PresenceRow viewers={viewers} />
       </div>
 
@@ -266,13 +272,13 @@ export default function ChatHeader({
               setBotMenuOpen((v) => !v);
             }}
             disabled={botToggling || botAssigning}
-            aria-label={`${botIsLive ? 'AI bot live' : 'AI bot off'} · ${botTipDetail}. Open bot menu`}
+            aria-label={`${botIsLive ? 'Automations live' : 'Automations off'} · ${botTipDetail}. Open bot menu`}
             aria-expanded={botMenuOpen}
             aria-haspopup="dialog"
             {...tipFor(
               botIsLive
-                ? `AI bot live · ${botTipDetail}`
-                : `AI bot off · ${botTipDetail}`
+                ? `Automations live · ${botTipDetail}`
+                : `Automations off · ${botTipDetail}`
             )}
             className={`relative flex h-8 max-w-[11.5rem] shrink-0 items-center gap-1.5 rounded-[10px] border px-2 transition disabled:cursor-not-allowed disabled:opacity-45 md:h-9 ${FOCUS_RING_CLASS} ${
               botMenuOpen

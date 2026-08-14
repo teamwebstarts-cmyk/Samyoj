@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -29,14 +29,24 @@ import FlowSettingsPanel from '../components/flows/FlowSettingsPanel';
 import FlowVersionsPanel from '../components/flows/FlowVersionsPanel';
 import { autoLayoutNodes, createNodeAtPosition } from '../components/flows/flowGraphUtils';
 import { prepareNodesForSave, validateFlow } from '../components/flows/flowUtils';
-import { flowApi } from '../services/api';
+import { flowApi, automationApi } from '../services/api';
 import { getErrorMessage, normalizeError } from '../utils/errors';
 import { toastError, toastSuccess, toastValidationErrors } from '../utils/toast';
+import { notifySaveConflicts } from '../utils/automation-conflicts';
+import {
+  flowAudienceBadgeClass,
+  flowAudienceLabel,
+  flowAudienceState,
+  flowSaveSuccessMessage,
+} from '../utils/flow-live';
 import type { FlowNode, FlowNodeType, FlowStatus, FlowTriggerType } from '../types';
+import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
+import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 
 type DesktopPanel = 'edit' | 'setup' | 'preview' | 'test' | 'analytics' | 'versions';
 
 export default function FlowBuilderPage() {
+  const { activeNumber, resolved } = useWhatsAppNumber();
   const { id } = useParams();
   const navigate = useNavigate();
   const isNew = id === 'new';
@@ -56,12 +66,16 @@ export default function FlowBuilderPage() {
   const [segmentTags, setSegmentTags] = useState('');
   const [campaignId, setCampaignId] = useState('');
   const [startNodeId, setStartNodeId] = useState('');
-  const [flowStatus, setFlowStatus] = useState<FlowStatus>('PUBLISHED');
+  const [flowStatus, setFlowStatus] = useState<FlowStatus>(isNew ? 'DRAFT' : 'PUBLISHED');
   const [priority, setPriority] = useState(50);
   const [enabled, setEnabled] = useState(false);
   const [nodes, setNodes] = useState<FlowNode[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
+  const activeNumberIdRef = useRef<string | null>(null);
+  activeNumberIdRef.current = activeNumber?.id ?? null;
+  const loadGenerationRef = useRef(0);
+  const validationGenerationRef = useRef(0);
 
   const triggerConfig = useMemo(() => {
     if (triggerType === 'KEYWORD') return { keyword, exactMatch, regex: regexMatch };
@@ -75,13 +89,23 @@ export default function FlowBuilderPage() {
   const selectedNode = selectedIndex >= 0 ? nodes[selectedIndex] : null;
 
   const linkedNodes = useMemo(() => prepareNodesForSave(nodes), [nodes]);
+  const audience = useMemo(
+    () => flowAudienceState({ status: flowStatus, enabled, isNew }),
+    [enabled, flowStatus, isNew]
+  );
 
   const load = useCallback(() => {
-    if (!id || isNew) return;
+    if (!id || isNew || !resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
+    const generation = ++loadGenerationRef.current;
     setLoading(true);
     flowApi
       .get(id)
       .then(({ data }) => {
+        if (
+          requestNumberId !== activeNumberIdRef.current ||
+          generation !== loadGenerationRef.current
+        ) return;
         const flow = data.data;
         setName(flow.name);
         setDescription(flow.description || '');
@@ -101,17 +125,33 @@ export default function FlowBuilderPage() {
         setNodes(laid);
         setSelectedNodeId(laid[0]?.id || null);
       })
-      .catch((err) => toastError(getErrorMessage(err, 'Failed to load flow')))
-      .finally(() => setLoading(false));
-  }, [id, isNew]);
+      .catch((err) => {
+        if (
+          requestNumberId === activeNumberIdRef.current &&
+          generation === loadGenerationRef.current
+        ) {
+          toastError(getErrorMessage(err, 'Failed to load flow'));
+        }
+      })
+      .finally(() => {
+        if (
+          requestNumberId === activeNumberIdRef.current &&
+          generation === loadGenerationRef.current
+        ) {
+          setLoading(false);
+        }
+      });
+  }, [activeNumber, id, isNew, resolved]);
 
   useEffect(load, [load]);
 
   const runServerValidation = useCallback(async () => {
-    if (nodes.length === 0) {
+    if (nodes.length === 0 || !resolved || !activeNumber) {
       setWarnings([]);
       return;
     }
+    const validationGeneration = ++validationGenerationRef.current;
+    const requestNumberId = activeNumber.id;
     try {
       const { data } = await flowApi.validate({
         name: name.trim() || 'Untitled',
@@ -120,8 +160,19 @@ export default function FlowBuilderPage() {
         nodes,
         startNodeId: startNodeId || nodes[0]?.id,
       });
-      setWarnings(data.data.warnings || []);
+      if (
+        requestNumberId === activeNumberIdRef.current &&
+        validationGeneration === validationGenerationRef.current
+      ) {
+        setWarnings(data.data.warnings || []);
+      }
     } catch (err) {
+      if (
+        requestNumberId !== activeNumberIdRef.current ||
+        validationGeneration !== validationGenerationRef.current
+      ) {
+        return;
+      }
       const normalized = normalizeError(err);
       const details = normalized.details;
       if (Array.isArray(details) && details.length > 0) {
@@ -138,7 +189,33 @@ export default function FlowBuilderPage() {
         setWarnings(normalized.message ? [normalized.message] : []);
       }
     }
-  }, [name, triggerType, triggerConfig, nodes, startNodeId]);
+  }, [activeNumber, name, nodes, resolved, startNodeId, triggerConfig, triggerType]);
+
+  useOnActiveNumberChange(({ isInitial }) => {
+    if (isInitial) return;
+    loadGenerationRef.current += 1;
+    validationGenerationRef.current += 1;
+    setLoading(!isNew);
+    setSaved(false);
+    setWarnings([]);
+    setSelectedNodeId(null);
+    setNodes([]);
+    setName('');
+    setDescription('');
+    setTriggerType('WELCOME');
+    setKeyword('');
+    setExactMatch(false);
+    setRegexMatch(false);
+    setContactTag('');
+    setSegmentTags('');
+    setCampaignId('');
+    setStartNodeId('');
+    setFlowStatus('DRAFT');
+    setPriority(50);
+    setEnabled(false);
+    if (isNew) return;
+    load();
+  });
 
   useEffect(() => {
     const timer = setTimeout(runServerValidation, 600);
@@ -209,6 +286,24 @@ export default function FlowBuilderPage() {
     };
   };
 
+  const warnLiveConflicts = async (asDraft: boolean) => {
+    if (asDraft || !enabled) return true;
+    try {
+      const { data } = await automationApi.previewConflicts({
+        kind: 'flow',
+        excludeId: isNew ? undefined : id,
+        name: name.trim(),
+        triggerType,
+        triggerConfig: triggerConfig as Record<string, unknown>,
+        enabled,
+        status: asDraft ? 'DRAFT' : 'PUBLISHED',
+      });
+      return notifySaveConflicts(data.data.conflicts || []);
+    } catch {
+      return true;
+    }
+  };
+
   const handleSave = async (asDraft = false) => {
     const preparedNodes = prepareNodesForSave(nodes);
     const validationErrors = validateFlow(name, triggerType, triggerConfig, keyword, preparedNodes);
@@ -221,15 +316,16 @@ export default function FlowBuilderPage() {
 
     setSaving(true);
     try {
+      if (!(await warnLiveConflicts(asDraft))) return;
       if (isNew) {
         const { data } = await flowApi.create(buildPayload(asDraft));
-        toastSuccess(asDraft ? 'Flow draft created' : 'Flow created');
+        toastSuccess(flowSaveSuccessMessage({ asDraft, enabled, isNew: true }));
         navigate(`/automations/flows/${data.data.id}`, { replace: true });
       } else {
         await flowApi.update(id!, buildPayload(asDraft));
-        if (!asDraft) setFlowStatus('PUBLISHED');
+        setFlowStatus(asDraft ? 'DRAFT' : 'PUBLISHED');
         setSaved(true);
-        toastSuccess(asDraft ? 'Draft saved' : 'Flow saved and live');
+        toastSuccess(flowSaveSuccessMessage({ asDraft, enabled, isNew: false }));
         setTimeout(() => setSaved(false), 2000);
       }
     } catch (err: unknown) {
@@ -243,11 +339,16 @@ export default function FlowBuilderPage() {
     if (!id || isNew) return;
     setSaving(true);
     try {
+      if (!(await warnLiveConflicts(false))) return;
       await flowApi.update(id, buildPayload());
       await flowApi.publish(id);
       setFlowStatus('PUBLISHED');
       setSaved(true);
-      toastSuccess('Flow published');
+      toastSuccess(
+        enabled
+          ? 'Published and live — customers can get this now.'
+          : 'Published, but still off. Turn on when you are ready.'
+      );
       setTimeout(() => setSaved(false), 2000);
     } catch (err: unknown) {
       toastError(getErrorMessage(err, 'Failed to publish flow'));
@@ -260,7 +361,7 @@ export default function FlowBuilderPage() {
     if (!id || isNew) return;
     try {
       const { data } = await flowApi.duplicate(id);
-      toastSuccess('Flow duplicated');
+      toastSuccess('Draft copy created — not live yet.');
       navigate(`/automations/flows/${data.data.id}`);
     } catch (err: unknown) {
       toastError(getErrorMessage(err, 'Failed to duplicate flow'));
@@ -403,17 +504,12 @@ export default function FlowBuilderPage() {
                   {nodes.length === 0 ? 'Add steps to connect' : `${nodes.length} steps`}
                 </span>
                 <span
-                  className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
-                    enabled ? 'bg-emerald-100 text-emerald-800' : 'bg-neutral-100 text-neutral-500'
+                  className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ring-1 ${
+                    flowAudienceBadgeClass(audience)
                   }`}
                 >
-                  {enabled ? 'On' : 'Off'}
+                  {flowAudienceLabel(audience)}
                 </span>
-                {flowStatus === 'DRAFT' && (
-                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-700">
-                    Draft
-                  </span>
-                )}
               </div>
             </div>
             {!isNew && (
@@ -433,7 +529,7 @@ export default function FlowBuilderPage() {
               loading={saving}
               onClick={() => handleSave(true)}
             >
-              Draft
+              Save draft
             </AppButton>
             <AppButton
               size="sm"

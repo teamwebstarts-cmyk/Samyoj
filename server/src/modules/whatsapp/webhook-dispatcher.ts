@@ -57,13 +57,61 @@ export const HANDLED_FIELDS = new Set([
   'account_alerts',
 ]);
 
-async function resolveOrgFromWaba(wabaId: string | undefined) {
+export function providerPhoneNumberId(value: Record<string, unknown>): {
+  phoneNumberId?: string;
+  ambiguous: boolean;
+} {
+  const metadata = value.metadata as Record<string, unknown> | undefined;
+  const nested = Array.isArray(value.user_preferences) ? value.user_preferences : [];
+  const candidates = [
+    value.phone_number_id,
+    value.phoneNumberId,
+    metadata?.phone_number_id,
+    ...nested.flatMap((item) => {
+      if (!item || typeof item !== 'object') return [];
+      const preference = item as Record<string, unknown>;
+      return [preference.phone_number_id, preference.phoneNumberId];
+    }),
+  ].filter((candidate): candidate is string => typeof candidate === 'string' && candidate.length > 0);
+  const unique = [...new Set(candidates)];
+  if (unique.length > 1) return { ambiguous: true };
+  return { phoneNumberId: unique[0], ambiguous: false };
+}
+
+export async function resolveOrgFromWaba(
+  wabaId: string | undefined,
+  value: Record<string, unknown> = {}
+) {
   if (!wabaId) return null;
-  const number = await prisma.whatsappNumber.findFirst({
+  const providerIdentity = providerPhoneNumberId(value);
+  if (providerIdentity.ambiguous) {
+    log.warn('WABA webhook has conflicting phone number identities', { wabaId });
+    return null;
+  }
+  if (providerIdentity.phoneNumberId) {
+    return prisma.whatsappNumber.findFirst({
+      where: {
+        wabaId,
+        phoneNumberId: providerIdentity.phoneNumberId,
+        isActive: true,
+      },
+      select: { organizationId: true, id: true },
+    });
+  }
+
+  const numbers = await prisma.whatsappNumber.findMany({
     where: { wabaId, isActive: true },
     select: { organizationId: true, id: true },
+    take: 2,
   });
-  return number;
+  if (numbers.length !== 1) {
+    log.warn('WABA-only webhook is ambiguous; refusing to route it', {
+      wabaId,
+      activeNumberCount: numbers.length,
+    });
+    return null;
+  }
+  return numbers[0];
 }
 
 async function resolveOrgFromPhoneNumberId(phoneNumberId: string | undefined) {
@@ -116,7 +164,7 @@ async function handleTemplateStatusUpdate(
   value: Record<string, unknown>,
   wabaId: string | undefined
 ) {
-  const number = await resolveOrgFromWaba(wabaId);
+  const number = await resolveOrgFromWaba(wabaId, value);
   if (!number) return;
 
   const event = (value.event as string) || '';
@@ -203,7 +251,7 @@ async function handleAccountStateUpdate(
   wabaId: string | undefined,
   field: string
 ) {
-  const number = await resolveOrgFromWaba(wabaId);
+  const number = await resolveOrgFromWaba(wabaId, value);
   if (!number) return;
   const safeState = {
     field,
@@ -225,7 +273,7 @@ function preferenceEntries(value: Record<string, unknown>) {
 }
 
 async function handleUserPreferences(value: Record<string, unknown>, wabaId: string | undefined) {
-  const number = await resolveOrgFromWaba(wabaId);
+  const number = await resolveOrgFromWaba(wabaId, value);
   if (!number) return;
 
   for (const preference of preferenceEntries(value)) {
@@ -303,7 +351,7 @@ async function handleUserPreferences(value: Record<string, unknown>, wabaId: str
 }
 
 async function handleAccountAlerts(value: Record<string, unknown>, wabaId: string | undefined) {
-  const number = await resolveOrgFromWaba(wabaId);
+  const number = await resolveOrgFromWaba(wabaId, value);
   if (!number) return;
 
   const alertType = (value.alert_type as string) || (value.event as string) || 'unknown';
@@ -338,7 +386,7 @@ export async function dispatchNonMessageWebhookFields(
       const value = (change.value as Record<string, unknown>) || {};
       const number = field === 'phone_number_quality_update'
         ? await resolveOrgFromPhoneNumberId(value.phone_number_id as string)
-        : await resolveOrgFromWaba(wabaId);
+        : await resolveOrgFromWaba(wabaId, value);
       if (number && !await claimProviderWebhookEvent(
         number.organizationId,
         providerWebhookEventKey(wabaId, field, value),
@@ -348,30 +396,42 @@ export async function dispatchNonMessageWebhookFields(
         continue;
       }
 
-      if (field === 'message_template_status_update') {
-        await handleTemplateStatusUpdate(value, wabaId);
-      } else if (field === 'message_template_quality_update') {
-        await handleTemplateStatusUpdate(value, wabaId);
-      } else if (field === 'message_template_components_update' || field === 'template_category_update') {
-        const number = await resolveOrgFromWaba(wabaId);
-        if (number) {
-          await appendOrgAlert(number.organizationId, 'templateStatus', {
-            field,
-            templateId: value.message_template_id || value.template_id,
-            templateName: value.message_template_name || value.name,
-            previousCategory: value.previous_category,
-            category: value.new_category || value.category,
-            components: value.components,
-          });
+      try {
+        if (field === 'message_template_status_update') {
+          await handleTemplateStatusUpdate(value, wabaId);
+        } else if (field === 'message_template_quality_update') {
+          await handleTemplateStatusUpdate(value, wabaId);
+        } else if (field === 'message_template_components_update' || field === 'template_category_update') {
+          const number = await resolveOrgFromWaba(wabaId, value);
+          if (number) {
+            await appendOrgAlert(number.organizationId, 'templateStatus', {
+              field,
+              templateId: value.message_template_id || value.template_id,
+              templateName: value.message_template_name || value.name,
+              previousCategory: value.previous_category,
+              category: value.new_category || value.category,
+              components: value.components,
+            });
+          }
+        } else if (field === 'phone_number_quality_update') {
+          await handlePhoneNumberQualityUpdate(value);
+        } else if (field === 'account_alerts') {
+          await handleAccountAlerts(value, wabaId);
+        } else if (field === 'user_preferences') {
+          await handleUserPreferences(value, wabaId);
+        } else {
+          await handleAccountStateUpdate(value, wabaId, field);
         }
-      } else if (field === 'phone_number_quality_update') {
-        await handlePhoneNumberQualityUpdate(value);
-      } else if (field === 'account_alerts') {
-        await handleAccountAlerts(value, wabaId);
-      } else if (field === 'user_preferences') {
-        await handleUserPreferences(value, wabaId);
-      } else {
-        await handleAccountStateUpdate(value, wabaId, field);
+      } catch (error) {
+        // The claim is only an idempotency marker after successful handling.
+        // Remove it on failure so BullMQ/Meta retries can run the event again.
+        await prisma.providerWebhookEvent.deleteMany({
+          where: {
+            organizationId: number?.organizationId,
+            eventKey: providerWebhookEventKey(wabaId, field, value),
+          },
+        });
+        throw error;
       }
     }
   }

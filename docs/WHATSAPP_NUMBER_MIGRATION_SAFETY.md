@@ -42,8 +42,11 @@ MIGRATION_BACKUP_FILE=/workspaces/Samyoj/.run/backups/<verified-dump>.dump \
   npm run db:migrate-reconciliation-safe
 ```
 
-This command is not a general migration bypass and cannot be used for a clean
-install or for an unexpected pending migration.
+The gate validates the file with `pg_restore --list`, rejecting arbitrary
+non-empty files. If `pg_restore` is unavailable on the host, it uses the
+Postgres Docker container as the documented fallback. This command is not a
+general migration bypass and cannot be used for a clean install or for an
+unexpected pending migration.
 
 The current migration scripts added for isolation never delete number,
 contact, conversation, ticket, campaign, call, lead, or order rows. Proven

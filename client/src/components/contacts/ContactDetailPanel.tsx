@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Activity,
@@ -27,6 +27,7 @@ import {
   formatContactRelativeTime,
 } from '../../utils/contactUtils';
 import type { Contact, ContactDetail } from '../../types';
+import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
 import {
   ContactConversationBadge,
   ContactOptInBadge,
@@ -79,29 +80,55 @@ export default function ContactDetailPanel({
   const [togglingOptIn, setTogglingOptIn] = useState(false);
   const [convertingLead, setConvertingLead] = useState(false);
   const [timeline, setTimeline] = useState<Array<{ id: string; type: string; title: string; detail?: string; at: string }>>([]);
+  const { activeNumber, resolved } = useWhatsAppNumber();
+  const activeNumberIdRef = useRef<string | null>(null);
+  activeNumberIdRef.current = activeNumber?.id ?? null;
+  const requestGenerationRef = useRef(0);
 
   useEffect(() => {
     if (!open || !contact?.id) {
+      requestGenerationRef.current += 1;
       setDetail(null);
       setTab('overview');
       setTimeline([]);
       return;
     }
 
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
+    const generation = ++requestGenerationRef.current;
     setLoading(true);
     Promise.all([
       contactApi.detail(contact.id),
       contactApi.timeline(contact.id).catch(() => null),
     ])
       .then(([detailRes, timelineRes]) => {
+        if (
+          requestNumberId !== activeNumberIdRef.current ||
+          generation !== requestGenerationRef.current
+        ) return;
         setDetail(detailRes.data.data as ContactDetail);
         if (timelineRes?.data?.data?.timeline) {
           setTimeline(timelineRes.data.data.timeline);
         }
       })
-      .catch(() => setDetail(null))
-      .finally(() => setLoading(false));
-  }, [open, contact?.id]);
+      .catch(() => {
+        if (
+          requestNumberId === activeNumberIdRef.current &&
+          generation === requestGenerationRef.current
+        ) {
+          setDetail(null);
+        }
+      })
+      .finally(() => {
+        if (
+          requestNumberId === activeNumberIdRef.current &&
+          generation === requestGenerationRef.current
+        ) {
+          setLoading(false);
+        }
+      });
+  }, [activeNumber, contact?.id, open, resolved]);
 
   const current = detail?.contact || contact;
   const primaryConversationId = detail?.conversations?.[0]?.id;

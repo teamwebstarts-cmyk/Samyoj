@@ -387,7 +387,7 @@ model ConversationCharge {
   periodEnd         DateTime @map("period_end")
   createdAt         DateTime @default(now()) @map("created_at")
 
-  @@unique([organizationId, wabaId, category, periodStart])
+  @@unique([organizationId, wabaId, phoneNumberId, category, periodStart], map: "conversation_charges_org_waba_phone_category_period_key")
   @@index([organizationId, periodStart])
   @@map("conversation_charges")
 }
@@ -528,6 +528,7 @@ model Contact {
   email            String?
   tags             String[]      @default([])
   notes            String?
+  customAttributes Json          @default("{}") @map("custom_attributes")
   optedIn          Boolean       @default(false) @map("opted_in")
   consentSource    String?       @map("consent_source")
   consentAt        DateTime?     @map("consent_at")

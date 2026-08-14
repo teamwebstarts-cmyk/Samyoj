@@ -5,6 +5,7 @@ import {
 } from './DetailsSectionCard';
 import StatsRow from './StatsRow';
 import { formatHandoffReason } from '../inboxUtils';
+import { waitingForLabel } from '../../../utils/flow-waiting';
 import type { Conversation } from '../../../types';
 
 interface ConversationActivityProps {
@@ -77,6 +78,7 @@ export default function ConversationActivity({
   const firstResponse = formatAbsolute(conversation.firstResponseAt);
   const handedOff = Boolean(conversation.botHandoffAt);
   const flow = conversation.activeFlow;
+  const waiting = waitingForLabel(flow?.waitingFor);
   // Only surface handling when there is live bot / handoff / flow — not a paused-default duplicate of Details → Automations.
   const showHandling = handedOff || botIsLive || Boolean(flow);
 
@@ -155,6 +157,7 @@ export default function ConversationActivity({
               <p className="px-1 text-[11.5px] text-theme-muted">
                 Flow: <span className="font-semibold text-theme-fg">{flow.flowName || 'Running'}</span>
                 {flow.currentStepLabel ? ` · ${flow.currentStepLabel}` : ''}
+                {waiting ? ` · ${waiting}` : ''}
               </p>
             )}
           </div>

@@ -19,6 +19,8 @@ import CampaignContactPicker from './CampaignContactPicker';
 import CampaignPhoneCsvImport from './CampaignPhoneCsvImport';
 import { PHONE_HINT, PHONE_PLACEHOLDER, validatePhone, validatePhoneLines } from '../../utils/phone';
 import { messagingConsent } from '../../utils/plainLanguage';
+import type { CampaignRecipientDetail } from './wizard/campaignWizardModel';
+import type { ContactImportRow } from '../../utils/contactImport';
 
 export type AudienceType = 'MANUAL' | 'TAGS' | 'CONTACTS' | 'ALL_OPTED_IN';
 
@@ -73,6 +75,8 @@ interface CampaignAudienceSectionProps {
   onAudienceOperatorChange?: (operator: 'OR' | 'AND') => void;
   phones: string;
   onPhonesChange: (phones: string) => void;
+  recipientDetails?: Record<string, CampaignRecipientDetail>;
+  onRecipientDetailsChange?: (details: Record<string, CampaignRecipientDetail>) => void;
   audienceTags: string;
   onAudienceTagsChange: (tags: string) => void;
   selectedContactIds: string[];
@@ -84,6 +88,7 @@ interface CampaignAudienceSectionProps {
   onPreviewCostChange?: (cost: number | null) => void;
   onPreviewMetricsChange?: (metrics: AudiencePreviewMetrics | null) => void;
   previewMetrics?: AudiencePreviewMetrics | null;
+  templateCategory?: string;
 }
 
 function parseTags(value: string) {
@@ -103,6 +108,8 @@ export default function CampaignAudienceSection({
   onAudienceOperatorChange,
   phones,
   onPhonesChange,
+  recipientDetails,
+  onRecipientDetailsChange,
   audienceTags,
   onAudienceTagsChange,
   selectedContactIds,
@@ -114,6 +121,7 @@ export default function CampaignAudienceSection({
   onPreviewCostChange,
   onPreviewMetricsChange,
   previewMetrics,
+  templateCategory,
 }: CampaignAudienceSectionProps) {
   const [manualInputOpen, setManualInputOpen] = useState(Boolean(phones.trim()));
   const selectedTags = useMemo(() => parseTags(audienceTags), [audienceTags]);
@@ -335,6 +343,24 @@ export default function CampaignAudienceSection({
                           const existing = phones.split('\n').map((p) => p.trim()).filter(Boolean);
                           onPhonesChange([...new Set([...existing, ...imported])].join('\n'));
                         }}
+                        onRowsImported={(rows: ContactImportRow[]) => {
+                          if (!onRecipientDetailsChange) return;
+                          const next = { ...(recipientDetails || {}) };
+                          for (const row of rows) {
+                            const body = row.extraValues || [];
+                            const named = row.customAttributes && Object.keys(row.customAttributes).length
+                              ? row.customAttributes
+                              : undefined;
+                            if (!row.name && !named && !body.some(Boolean)) continue;
+                            next[row.phone] = {
+                              ...(row.name ? { name: row.name } : {}),
+                              variables: {
+                                ...(named ? { attributes: named } : body.some(Boolean) ? { body } : {}),
+                              },
+                            };
+                          }
+                          onRecipientDetailsChange(next);
+                        }}
                       />
                     </div>
                   </details>
@@ -512,6 +538,7 @@ export default function CampaignAudienceSection({
           onCountChange={onPreviewCountChange}
           onCostChange={onPreviewCostChange}
           onMetricsChange={onPreviewMetricsChange}
+          templateCategory={templateCategory}
         />
       </div>
       </div>

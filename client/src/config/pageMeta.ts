@@ -82,10 +82,10 @@ export function getPageMeta(pathname: string): PageMeta {
   if (PAGE_META[pathname]) return PAGE_META[pathname];
 
   if (pathname.startsWith('/automations/flows/')) {
-    return { title: 'Flow Builder', description: 'Design conversation flows' };
+    return { title: 'Conversation flow', description: 'Design a multi-step chat tree' };
   }
   if (pathname.startsWith('/automations/meta-flows/')) {
-    return { title: 'WhatsApp Forms', description: 'Build WhatsApp Flow forms (advanced)' };
+    return { title: 'WhatsApp Form (advanced)', description: 'Meta Flow JSON — not a conversation flow' };
   }
 
   const match = Object.entries(PAGE_META).find(

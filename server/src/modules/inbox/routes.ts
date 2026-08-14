@@ -14,7 +14,8 @@ import { getOrgWhatsappContext } from '../whatsapp/context';
 import { getCachedMessageTemplate } from '../templates/cache';
 import { resolveActiveWhatsappNumber, conversationFilter, scopedConversationWhere, scopedConversationParent, ticketsForNumberFilter } from '../whatsapp/active-number';
 import { deliverOutboundMessage, type DeliverMessageType } from '../messages/send.service';
-import { sanitizeFieldToken } from '../campaigns/types';
+import { mergeTemplateParams } from '../campaigns/template-params';
+import { assertApprovedCampaignTemplate } from '../campaigns/template-validation';
 import { validateInteractive, type InteractiveMessageOptions } from '../messages/interactive';
 import { getMessageMediaBuffer, type MessageMediaMetadata } from '../media/download.service';
 import { storeOutboundMedia } from '../media/upload.service';
@@ -22,6 +23,7 @@ import { emitToOrg } from '../../realtime';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { parseActiveFlow } from '../flows/flow-state';
+import { pauseConversationAutomations, cancelFlowDelayJob } from '../flows/pause-automation';
 import type { FlowNode } from '../flows/types';
 import { resolveCs24hWindowOpensAt } from './service-window';
 import { buildSignedMediaPath, verifyMediaSignature, MEDIA_URL_TTL_SECONDS } from './media-url';
@@ -529,6 +531,7 @@ router.post(
 
     const sentMessage = await deliverOutboundMessage({
       organizationId: orgId,
+      whatsappNumberId: req.activeWhatsappNumberId,
       messageId: message.id,
       phoneNumberId: conversation.whatsappNumber.phoneNumberId,
       encryptedToken: conversation.whatsappNumber.accessToken,
@@ -577,7 +580,20 @@ router.get(
     });
 
     if (!conversation) throw new AppError(404, 'Conversation not found');
-    sendSuccess(res, conversation);
+
+    const parsed = parseActiveFlow(conversation.botState);
+    let activeFlow = parsed;
+    if (parsed) {
+      const flow = await prisma.flow.findFirst({
+        where: { id: parsed.flowId, organizationId: req.user!.organizationId! },
+        select: { name: true, nodes: true },
+      });
+      activeFlow = parseActiveFlow(conversation.botState, flow?.nodes as FlowNode[] | undefined) ?? parsed;
+      if (activeFlow && flow?.name) activeFlow.flowName = flow.name;
+    }
+
+    const { botState: _botState, ...rest } = conversation;
+    sendSuccess(res, { ...rest, activeFlow });
   })
 );
 
@@ -1106,6 +1122,7 @@ const templateParamsSchema = z
     header: z.array(z.string()).optional(),
     headerMediaUrl: z.string().url().optional(),
     couponCode: z.string().max(15).optional(),
+    buttonUrlSuffixes: z.array(z.string().max(2000)).optional(),
   })
   .optional();
 
@@ -1117,22 +1134,20 @@ type InboxTemplateParams = z.infer<NonNullable<typeof templateParamsSchema>>;
  */
 function resolveInboxTemplateParams(
   params: InboxTemplateParams | undefined,
-  contact: { name?: string | null; phone?: string | null; email?: string | null } | null | undefined
-): InboxTemplateParams | undefined {
-  if (!params) return params;
-  const resolveValue = (value: string): string => {
-    const token = sanitizeFieldToken(value);
-    if (token === 'contact.name') return contact?.name?.trim() || 'Valued customer';
-    if (token === 'contact.phone') return contact?.phone?.trim() || 'your registered number';
-    if (token === 'contact.email') return contact?.email?.trim() || 'your registered email';
-    if (value === '{{name}}') return contact?.name?.trim() || 'Valued customer';
-    return value;
-  };
-  return {
-    ...params,
-    body: params.body?.map(resolveValue),
-    header: params.header?.map(resolveValue),
-  };
+  contact: {
+    name?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    customAttributes?: unknown;
+  } | null | undefined,
+  template?: Parameters<typeof mergeTemplateParams>[3]
+) {
+  return mergeTemplateParams(params || null, null, contact?.name, template, {
+    name: contact?.name,
+    phone: contact?.phone,
+    email: contact?.email,
+    customAttributes: contact?.customAttributes,
+  });
 }
 
 const interactiveSchema = z
@@ -1459,7 +1474,20 @@ router.post(
         throw new AppError(400, 'Only approved templates can be sent');
       }
       messageContent = getTemplateDisplayText(template, data.templateName);
-      resolvedTemplateParams = resolveInboxTemplateParams(data.templateParams, conversation.contact);
+      resolvedTemplateParams = resolveInboxTemplateParams(
+        data.templateParams,
+        conversation.contact,
+        template
+      );
+      try {
+        assertApprovedCampaignTemplate(template, {
+          name: data.templateName,
+          language: data.templateLanguage || template.language || 'en_US',
+          params: resolvedTemplateParams,
+        });
+      } catch (error) {
+        throw new AppError(400, error instanceof Error ? error.message : String(error));
+      }
       messageMetadata = {
         templateName: data.templateName,
         templateLanguage: data.templateLanguage || template?.language || 'en_US',
@@ -1503,6 +1531,7 @@ router.post(
 
     const sentMessage = await deliverOutboundMessage({
       organizationId: orgId,
+      whatsappNumberId: req.activeWhatsappNumberId,
       messageId: message.id,
       phoneNumberId: conversation.whatsappNumber.phoneNumberId,
       encryptedToken: conversation.whatsappNumber.accessToken,
@@ -1536,6 +1565,7 @@ router.post(
 
     // Human agent took over — pause the bot so it does not dual-reply (automation/AI paths skip this route).
     if (conversation.botActive && !conversation.botHandoffAt) {
+      await pauseConversationAutomations(conversation.id);
       await prisma.conversation.update({
         where: { id: conversation.id },
         data: { botActive: false },
@@ -1663,6 +1693,12 @@ router.patch(
       select: { id: true },
     });
     if (!owned) throw new AppError(404, 'Conversation not found');
+
+    if (active === false) {
+      await pauseConversationAutomations(id);
+    } else if (resetHandoff) {
+      await cancelFlowDelayJob(id);
+    }
 
     const conversation = await prisma.conversation.update({
       where: { id },

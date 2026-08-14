@@ -8,6 +8,9 @@
  * → browser applies SDP *answer*. Inbound agent ring: opposite (answer Meta offer).
  */
 
+import { getActiveWhatsappNumberId } from '../services/api';
+import { isCurrentNumberRequest } from './whatsappWorkspace';
+
 const WINDOW_KEY = '__agentCallRtc';
 
 interface AgentCallRtc {
@@ -32,14 +35,18 @@ function setStored(val: AgentCallRtc | undefined) {
 
 /** Fetch the SDP answer directly (avoids axios interceptor logging 404s on every poll). */
 async function fetchSdpAnswer(callId: string): Promise<string | null> {
+  const numberId = getActiveWhatsappNumberId();
+  if (!numberId) return null;
   const res = await fetch(`/api/calling/${callId}/signaling`, {
     credentials: 'include',
     headers: {
       Authorization: `Bearer ${localStorage.getItem('accessToken') || ''}`,
+      'X-WhatsApp-Number-Id': numberId,
     },
   });
   if (!res.ok) return null;
   const body = (await res.json()) as SignalingRes;
+  if (!isCurrentNumberRequest(numberId, getActiveWhatsappNumberId())) return null;
   return body.data?.sdpAnswer || null;
 }
 

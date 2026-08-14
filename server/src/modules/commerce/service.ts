@@ -3,6 +3,8 @@ import { Prisma } from '@prisma/client';
 import prisma from '../../config/database';
 import type { SendMessagePayload } from '../whatsapp/meta.service';
 import { ordersForNumberFilter } from '../whatsapp/active-number';
+import { assertCatalogAvailableForNumber } from '../catalog/service';
+import { AppError } from '../../utils/response';
 
 export interface OrderLineItem {
   retailerId: string;
@@ -161,6 +163,35 @@ export async function createOrderFromInbound(
     metadata?: Record<string, unknown>;
   }
 ) {
+  const number = await prisma.whatsappNumber.findFirst({
+    where: { id: input.whatsappNumberId, organizationId, isActive: true },
+    select: { id: true },
+  });
+  if (!number) throw new AppError(400, 'WhatsApp number is not active for this organization');
+  await assertCatalogAvailableForNumber(
+    organizationId,
+    input.catalogId,
+    input.whatsappNumberId
+  );
+  const [contact, conversation] = await Promise.all([
+    input.contactId
+      ? prisma.contact.findFirst({
+          where: { id: input.contactId, organizationId, whatsappNumberId: input.whatsappNumberId },
+          select: { id: true },
+        })
+      : null,
+    input.conversationId
+      ? prisma.conversation.findFirst({
+          where: { id: input.conversationId, organizationId, whatsappNumberId: input.whatsappNumberId },
+          select: { id: true, contactId: true },
+        })
+      : null,
+  ]);
+  if (input.contactId && !contact) throw new AppError(400, 'Order contact is not on the active WhatsApp number');
+  if (input.conversationId && !conversation) throw new AppError(400, 'Order conversation is not on the active WhatsApp number');
+  if (conversation && contact && conversation.contactId !== contact.id) {
+    throw new AppError(400, 'Order contact must match the conversation contact');
+  }
   return prisma.order.create({
     data: {
       organizationId,

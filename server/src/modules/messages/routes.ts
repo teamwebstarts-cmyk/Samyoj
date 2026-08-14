@@ -5,6 +5,7 @@ import { sendSuccess, asyncHandler } from '../../utils/response';
 import { phoneFieldSchema } from '../../utils/phone';
 import { sendDirectMessage } from './service';
 import { z } from 'zod';
+import { resolveActiveWhatsappNumber } from '../whatsapp/active-number';
 
 const router = Router();
 
@@ -21,9 +22,13 @@ router.post(
   '/send',
   authenticateJwtOrApiKey,
   requireOrg,
+  resolveActiveWhatsappNumber,
   asyncHandler(async (req: Request, res: Response) => {
     const data = sendSchema.parse(req.body);
-    const result = await sendDirectMessage(req.user!.organizationId!, data);
+    const result = await sendDirectMessage(req.user!.organizationId!, {
+      ...data,
+      whatsappNumberId: req.activeWhatsappNumberId,
+    });
 
     sendSuccess(
       res,

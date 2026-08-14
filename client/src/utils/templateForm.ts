@@ -1,5 +1,6 @@
 import type { MessageTemplate, TemplateButton, TemplateLibraryEntry } from '../types';
 import { countTemplateVars } from './templateUtils';
+import { normalizeCustomKey } from './customAttributes';
 
 export type TemplateButtonType = 'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER' | 'COPY_CODE';
 export type HeaderFormat = 'NONE' | 'TEXT' | 'IMAGE' | 'VIDEO' | 'DOCUMENT';
@@ -16,7 +17,8 @@ export interface TemplateVariableMeta {
   scope: 'body' | 'header';
   index: number;
   description: string;
-  suggestedSource?: 'contact.name' | 'contact.phone' | 'contact.email' | 'custom';
+  suggestedSource?: 'contact.name' | 'contact.phone' | 'contact.email' | 'custom' | 'contact.custom';
+  customKey?: string;
 }
 
 /** Token written into campaign/inbox params; resolved per-recipient at send time. */
@@ -32,11 +34,28 @@ export function sourceFromParamValue(value: string): string | undefined {
   for (const [source, token] of Object.entries(CONTACT_SOURCE_TOKEN)) {
     if (token === v) return source;
   }
+  const match = v.match(/^\{\{([a-z][a-z0-9_]*)\}\}$/);
+  if (match && !['name', 'phone', 'email'].includes(match[1])) return 'contact.custom';
   return undefined;
 }
 
-export function tokenForSource(source?: string): string {
+export function customKeyFromParamValue(value: string): string | undefined {
+  const match = value.trim().match(/^\{\{([a-z][a-z0-9_]*)\}\}$/);
+  if (!match || ['name', 'phone', 'email'].includes(match[1])) return undefined;
+  return match[1];
+}
+
+export function tokenForSource(source?: string, customKey?: string): string {
+  if (source === 'contact.custom') {
+    const key = normalizeCustomKey(customKey || '');
+    return key ? `{{${key}}}` : '';
+  }
   return (source && CONTACT_SOURCE_TOKEN[source]) || '';
+}
+
+export function tokenForMeta(meta?: Pick<TemplateVariableMeta, 'suggestedSource' | 'customKey'>): string {
+  if (!meta?.suggestedSource || meta.suggestedSource === 'custom') return '';
+  return tokenForSource(meta.suggestedSource, meta.customKey);
 }
 
 /** Read the saved variable mapping for a template name (set in the wizard's Review step). */
@@ -54,18 +73,115 @@ export function loadTemplateVariableMeta(templateName: string): TemplateVariable
 /** Persist the wizard's variable mapping so campaigns/inbox can auto-fill mapped variables. */
 export function saveTemplateVariableMeta(templateName: string, meta: TemplateVariableMeta[]) {
   try {
-    if (!meta?.length) return;
-    localStorage.setItem(`samyoj_template_meta_${templateName}`, JSON.stringify(meta));
+    const key = `samyoj_template_meta_${templateName}`;
+    if (!meta?.length) {
+      localStorage.removeItem(key);
+      return;
+    }
+    localStorage.setItem(key, JSON.stringify(meta));
   } catch {
     /* storage full/blocked — non-fatal */
   }
 }
 
+export async function persistTemplateVariableMeta(
+  templateName: string,
+  meta: TemplateVariableMeta[],
+  language?: string,
+): Promise<boolean> {
+  saveTemplateVariableMeta(templateName, meta);
+  try {
+    const { templateApi } = await import('../services/api');
+    await templateApi.saveVariableMeta(templateName, { language, meta });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function fetchTemplateVariableMeta(
+  templateName: string,
+  language?: string,
+): Promise<TemplateVariableMeta[]> {
+  try {
+    const { templateApi } = await import('../services/api');
+    const { data } = await templateApi.getVariableMeta(templateName, language);
+    const meta = (data as { data?: { meta?: TemplateVariableMeta[] } })?.data?.meta;
+    if (Array.isArray(meta)) {
+      saveTemplateVariableMeta(templateName, meta);
+      return meta;
+    }
+  } catch {
+    /* fall through to local cache */
+  }
+  return loadTemplateVariableMeta(templateName);
+}
+
+export function getTemplateButtons(template?: {
+  buttons?: TemplateButton[];
+  components?: Array<{ type: string; buttons?: TemplateButton[] }>;
+}): TemplateButton[] {
+  if (!template) return [];
+  if (template.buttons?.length) return template.buttons;
+  return template.components?.find((c) => (c.type || '').toUpperCase() === 'BUTTONS')?.buttons || [];
+}
+
+export function templateNeedsCoupon(template?: Parameters<typeof getTemplateButtons>[0]): boolean {
+  return getTemplateButtons(template).some((b) => (b.type || '').toUpperCase() === 'COPY_CODE');
+}
+
+export function templateDynamicUrlButtons(template?: Parameters<typeof getTemplateButtons>[0]): TemplateButton[] {
+  return getTemplateButtons(template).filter(
+    (b) => (b.type || '').toUpperCase() === 'URL' && /\{\{\s*\d+\s*\}\}/.test(b.url || ''),
+  );
+}
+
+/** Show coupon / URL suffix on the WhatsApp preview without changing send params. */
+export function applySendExtrasToButtons(
+  buttons: TemplateButton[],
+  extras?: { couponCode?: string; buttonUrlSuffixes?: string[] },
+): TemplateButton[] {
+  if (!extras) return buttons;
+  let suffixIndex = 0;
+  return buttons.map((button) => {
+    const type = (button.type || '').toUpperCase();
+    if (type === 'COPY_CODE' && extras.couponCode?.trim()) {
+      return { ...button, text: extras.couponCode.trim() };
+    }
+    if (type === 'URL' && /\{\{\s*\d+\s*\}\}/.test(button.url || '')) {
+      const suffix = extras.buttonUrlSuffixes?.[suffixIndex]?.trim() || '';
+      suffixIndex += 1;
+      if (suffix && button.url) {
+        return { ...button, url: button.url.replace(/\{\{\s*\d+\s*\}\}/, suffix) };
+      }
+    }
+    return button;
+  });
+}
+
+export function humanizeParamValue(value: string): string {
+  const source = sourceFromParamValue(value);
+  if (source) return `Auto: ${sourceLabel(source, customKeyFromParamValue(value))}`;
+  return value;
+}
+
+export function variableDescription(
+  meta: TemplateVariableMeta[],
+  scope: 'body' | 'header',
+  index0: number,
+  fallback: string,
+): string {
+  const hit = meta.find((m) => m.scope === scope && m.index === index0 + 1);
+  const description = hit?.description?.trim();
+  return description || fallback;
+}
+
 /** Human label for a mapped source, e.g. "customer name". */
-export function sourceLabel(source?: string): string {
+export function sourceLabel(source?: string, customKey?: string): string {
   if (source === 'contact.name') return 'customer name';
   if (source === 'contact.phone') return 'phone number';
   if (source === 'contact.email') return 'email';
+  if (source === 'contact.custom') return customKey || 'custom field';
   return '';
 }
 
@@ -82,8 +198,27 @@ export function previewValueForParam(value: string): string {
 }
 
 /** Map a params array for preview, converting any tokens to samples. */
-export function previewParams(params: string[]): string[] {
-  return params.map(previewValueForParam);
+export function previewParams(
+  params: string[],
+  contact?: {
+    name?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    customAttributes?: Record<string, string> | null;
+  },
+): string[] {
+  return params.map((value) => {
+    const source = sourceFromParamValue(value);
+    if (source === 'contact.name' && contact?.name?.trim()) return contact.name.trim();
+    if (source === 'contact.phone' && contact?.phone?.trim()) return contact.phone.trim();
+    if (source === 'contact.email' && contact?.email?.trim()) return contact.email.trim();
+    if (source === 'contact.custom') {
+      const key = customKeyFromParamValue(value);
+      const live = key ? contact?.customAttributes?.[key]?.trim() : '';
+      if (live) return live;
+    }
+    return previewValueForParam(value);
+  });
 }
 
 export interface TemplateFormState {
@@ -182,6 +317,7 @@ function syncVariableMeta(
       index: i,
       description: prev?.description || inferVariableDescription(form.header, i),
       suggestedSource: prev?.suggestedSource,
+      customKey: prev?.customKey,
     });
   }
   for (let i = 1; i <= bodyCount; i++) {
@@ -193,6 +329,7 @@ function syncVariableMeta(
       suggestedSource:
         prev?.suggestedSource ||
         (i === 1 && /\b(hi|hello|dear)\s*\{\{1\}\}/i.test(form.body) ? 'contact.name' : 'custom'),
+      customKey: prev?.customKey,
     });
   }
   return next;
@@ -282,13 +419,6 @@ export function buildCreatePayload(form: TemplateFormState) {
   };
 }
 
-export function getTemplateButtons(
-  template: MessageTemplate | TemplateLibraryEntry
-): TemplateButton[] {
-  if (template.buttons?.length) return template.buttons;
-  return template.components?.find((c) => c.type === 'BUTTONS')?.buttons || [];
-}
-
 export function syncFormExamples(form: TemplateFormState): TemplateFormState {
   const bodyExamples = syncExamples(form.body, form.bodyExamples);
   const headerExamples = syncExamples(form.header, form.headerExamples);
@@ -312,7 +442,11 @@ export interface TemplatePurposePreset {
   body: string;
   footer?: string;
   /** description per body var index (1-based) → auto-mapped source */
-  variables: Array<{ description: string; source: TemplateVariableMeta['suggestedSource'] }>;
+  variables: Array<{
+    description: string;
+    source: TemplateVariableMeta['suggestedSource'];
+    customKey?: string;
+  }>;
 }
 
 export const TEMPLATE_PURPOSE_PRESETS: TemplatePurposePreset[] = [
@@ -324,7 +458,7 @@ export const TEMPLATE_PURPOSE_PRESETS: TemplatePurposePreset[] = [
     body: 'Hi {{1}}, your order {{2}} has been confirmed. We will notify you once it ships.',
     variables: [
       { description: 'Customer name', source: 'contact.name' },
-      { description: 'Order number', source: 'custom' },
+      { description: 'Order number', source: 'contact.custom', customKey: 'order_id' },
     ],
   },
   {
@@ -383,6 +517,7 @@ export function applyPurposePreset(form: TemplateFormState, preset: TemplatePurp
     index: i + 1,
     description: v.description,
     suggestedSource: v.source,
+    ...(v.customKey ? { customKey: v.customKey } : {}),
   }));
   return syncFormExamples({
     ...form,

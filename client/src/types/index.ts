@@ -140,6 +140,7 @@ export interface Contact {
   tags: string[];
   notes?: string;
   optedIn?: boolean;
+  customAttributes?: Record<string, string>;
   source?: ContactSource;
   createdAt?: string;
   updatedAt?: string;
@@ -262,6 +263,7 @@ export interface TemplateParams {
   header?: string[];
   headerMediaUrl?: string;
   couponCode?: string;
+  buttonUrlSuffixes?: string[];
 }
 
 export interface SendMessagePayload {
@@ -693,6 +695,9 @@ export interface FlowNode {
   branches?: Record<string, string>;
   templateName?: string;
   templateLanguage?: string;
+  templateCouponCode?: string;
+  templateButtonUrlSuffixes?: string[];
+  templateHeaderMediaUrl?: string;
   mediaUrl?: string;
   mediaType?: 'image' | 'document' | 'video' | 'audio';
   mediaCaption?: string;
@@ -727,6 +732,7 @@ export interface AutomationConflict {
   severity: 'warning' | 'error';
   message: string;
   items: string[];
+  links?: Array<{ label: string; href: string }>;
 }
 
 export interface AutomationAnalytics {
@@ -813,7 +819,13 @@ export interface Campaign {
   name: string;
   templateName: string;
   templateLanguage?: string;
-  templateParams?: { body?: string[]; header?: string[]; headerMediaUrl?: string };
+  templateParams?: {
+    body?: string[];
+    header?: string[];
+    headerMediaUrl?: string;
+    couponCode?: string;
+    buttonUrlSuffixes?: string[];
+  };
   audienceType?: 'MANUAL' | 'TAGS' | 'CONTACTS' | 'ALL_OPTED_IN';
   audienceConfig?: {
     tags?: string[];
@@ -846,7 +858,7 @@ export interface CampaignRecipient {
   sentAt?: string;
   deliveredAt?: string;
   readAt?: string;
-  variables?: { body?: string[]; header?: string[] };
+    variables?: { body?: string[]; header?: string[]; attributes?: Record<string, string> };
 }
 
 export interface CampaignAnalytics {

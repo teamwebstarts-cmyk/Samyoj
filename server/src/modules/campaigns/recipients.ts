@@ -1,7 +1,7 @@
 export interface ResolvedRecipient {
   phone: string;
   name?: string;
-  variables?: { body?: string[]; header?: string[] };
+  variables?: { body?: string[]; header?: string[]; attributes?: Record<string, string> };
 }
 
 export function hasAuditableCampaignConsent(contact: {

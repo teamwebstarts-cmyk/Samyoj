@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { dedupeRecipients, hasAuditableCampaignConsent } from './recipients';
 import { buildTemplateComponents, mergeTemplateParams } from './template-params';
-import { createCampaignSchema } from './types';
+import { billingCategoryForTemplate, createCampaignSchema } from './types';
 import { isAbsoluteInstant, parseMetaTimestamp } from './safety';
-import { templateValidationErrors } from './template-validation';
+import { assertApprovedTemplateIdentity, templateValidationErrors } from './template-validation';
 
 describe('dedupeRecipients', () => {
   it('removes duplicate phone numbers keeping first occurrence', () => {
@@ -76,6 +76,92 @@ describe('mergeTemplateParams', () => {
     );
     expect(merged.body).toEqual(['Alice']);
   });
+
+  it('resolves whole-value contact tokens without shifting positions', () => {
+    const merged = mergeTemplateParams(
+      { body: ['{{name}}', '{{email}}', 'order-9'] },
+      null,
+      'Rahul',
+      undefined,
+      { name: 'Rahul', phone: '9198', email: 'rahul@example.com' }
+    );
+    expect(merged.body).toEqual(['Rahul', 'rahul@example.com', 'order-9']);
+  });
+
+  it('keeps positional length when a contact field is empty', () => {
+    const merged = mergeTemplateParams(
+      { body: ['{{name}}', '{{email}}'] },
+      null,
+      null,
+      undefined,
+      { name: '', email: '' }
+    );
+    expect(merged.body).toHaveLength(2);
+    expect(merged.body?.[0]).toBe('Valued customer');
+    expect(merged.body?.[1]).toBe('your registered email');
+  });
+
+  it('does not drop empty positional slots', () => {
+    const merged = mergeTemplateParams({ body: ['', 'order-1'] }, null, 'Rahul');
+    expect(merged.body).toEqual(['-', 'order-1']);
+  });
+
+  it('replaces in-string {{name}} with the fallback when the contact has no name', () => {
+    const merged = mergeTemplateParams(
+      { body: ['Hello {{name}}'] },
+      null,
+      '',
+      undefined,
+      { name: '' }
+    );
+    expect(merged.body).toEqual(['Hello Valued customer']);
+  });
+
+  it('passes coupon and URL suffixes through merge', () => {
+    const merged = mergeTemplateParams(
+      { body: ['{{name}}'], couponCode: 'SAVE20', buttonUrlSuffixes: ['order-9'] },
+      null,
+      'Rahul',
+      undefined,
+      { name: 'Rahul' }
+    );
+    expect(merged.body).toEqual(['Rahul']);
+    expect(merged.couponCode).toBe('SAVE20');
+    expect(merged.buttonUrlSuffixes).toEqual(['order-9']);
+  });
+
+  it('resolves custom attribute tokens from the contact', () => {
+    const merged = mergeTemplateParams(
+      { body: ['{{name}}', '{{order_id}}'] },
+      null,
+      'Rahul',
+      undefined,
+      { name: 'Rahul', customAttributes: { order_id: 'ORD-1042' } }
+    );
+    expect(merged.body).toEqual(['Rahul', 'ORD-1042']);
+  });
+
+  it('overlays named CSV attributes onto contact custom fields', () => {
+    const merged = mergeTemplateParams(
+      { body: ['{{name}}', '{{order_id}}'] },
+      { attributes: { order_id: 'ORD-9' } },
+      'Rahul',
+      undefined,
+      { name: 'Rahul' }
+    );
+    expect(merged.body).toEqual(['Rahul', 'ORD-9']);
+  });
+
+  it('keeps positional length when a custom attribute is missing', () => {
+    const merged = mergeTemplateParams(
+      { body: ['{{order_id}}', 'static'] },
+      null,
+      'Rahul',
+      undefined,
+      { name: 'Rahul', customAttributes: {} }
+    );
+    expect(merged.body).toEqual(['-', 'static']);
+  });
 });
 
 describe('buildTemplateComponents', () => {
@@ -90,6 +176,41 @@ describe('buildTemplateComponents', () => {
         ],
       },
     ]);
+  });
+
+  it('emits copy-code and dynamic URL button components', () => {
+    const template = {
+      components: [
+        { type: 'BODY', text: 'Hi {{1}}' },
+        {
+          type: 'BUTTONS',
+          buttons: [
+            { type: 'URL', text: 'Track', url: 'https://example.com/{{1}}' },
+            { type: 'COPY_CODE', text: 'Copy code' },
+          ],
+        },
+      ],
+    };
+    const components = buildTemplateComponents(
+      { body: ['Rahul'], couponCode: 'SAVE20', buttonUrlSuffixes: ['order-9'] },
+      template as never
+    );
+    expect(components).toEqual(
+      expect.arrayContaining([
+        {
+          type: 'button',
+          sub_type: 'copy_code',
+          index: 1,
+          parameters: [{ type: 'coupon_code', coupon_code: 'SAVE20' }],
+        },
+        {
+          type: 'button',
+          sub_type: 'url',
+          index: '0',
+          parameters: [{ type: 'text', text: 'order-9' }],
+        },
+      ])
+    );
   });
 });
 
@@ -182,5 +303,100 @@ describe('approved template validation', () => {
       params: { body: ['Alice', 'Bob'] },
     });
     expect(errors.join(' ')).toContain('mixes numeric and named');
+  });
+
+  it('does not require MARKETING when category is omitted', () => {
+    const utility = { ...template, category: 'UTILITY', components: [{ type: 'BODY', text: 'Hi {{1}}' }] };
+    expect(templateValidationErrors(utility, {
+      name: 'sale_offer',
+      language: 'en_US',
+      params: { body: ['Rahul'] },
+    })).toEqual([]);
+  });
+
+  it('accepts a Utility template when category matches Utility', () => {
+    const utility = { ...template, category: 'UTILITY', components: [{ type: 'BODY', text: 'Hi {{1}}' }] };
+    expect(templateValidationErrors(utility, {
+      name: 'sale_offer',
+      language: 'en_US',
+      category: 'UTILITY',
+      params: { body: ['Rahul'] },
+    })).toEqual([]);
+  });
+});
+
+describe('assertApprovedTemplateIdentity', () => {
+  const approved = {
+    id: 't1',
+    name: 'order_update',
+    status: 'APPROVED',
+    category: 'UTILITY',
+    language: 'en_US',
+    components: [{ type: 'BODY', text: 'Hi {{1}}' }],
+  };
+
+  it('allows Utility templates without inspecting params', () => {
+    expect(() =>
+      assertApprovedTemplateIdentity(approved, { name: 'order_update', language: 'en_US' })
+    ).not.toThrow();
+  });
+
+  it('still rejects a language mismatch', () => {
+    expect(() =>
+      assertApprovedTemplateIdentity(approved, { name: 'order_update', language: 'hi' })
+    ).toThrow(/language/);
+  });
+});
+
+describe('copy-code and dynamic URL validation', () => {
+  const couponTemplate = {
+    id: 't2',
+    name: 'offer_code',
+    status: 'APPROVED',
+    category: 'MARKETING',
+    language: 'en_US',
+    components: [
+      { type: 'BODY', text: 'Use this code' },
+      {
+        type: 'BUTTONS',
+        buttons: [
+          { type: 'URL', text: 'Shop', url: 'https://shop.example/{{1}}' },
+          { type: 'COPY_CODE', text: 'Copy code' },
+        ],
+      },
+    ],
+  };
+
+  it('requires coupon and URL suffix when the approved template has those buttons', () => {
+    const errors = templateValidationErrors(couponTemplate, {
+      name: 'offer_code',
+      language: 'en_US',
+      params: { body: [] },
+    });
+    expect(errors.join(' ')).toContain('couponCode');
+    expect(errors.join(' ')).toContain('link suffix');
+  });
+
+  it('accepts coupon and URL suffix together', () => {
+    expect(
+      templateValidationErrors(couponTemplate, {
+        name: 'offer_code',
+        language: 'en_US',
+        params: { couponCode: 'SAVE20', buttonUrlSuffixes: ['summer'] },
+      })
+    ).toEqual([]);
+  });
+});
+
+describe('billingCategoryForTemplate', () => {
+  it('uses the template category for utility and authentication', () => {
+    expect(billingCategoryForTemplate('UTILITY')).toBe('UTILITY');
+    expect(billingCategoryForTemplate('AUTHENTICATION')).toBe('AUTHENTICATION');
+  });
+
+  it('falls back to marketing for unknown or missing categories', () => {
+    expect(billingCategoryForTemplate('MARKETING')).toBe('MARKETING');
+    expect(billingCategoryForTemplate(undefined)).toBe('MARKETING');
+    expect(billingCategoryForTemplate('service')).toBe('MARKETING');
   });
 });

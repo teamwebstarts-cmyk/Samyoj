@@ -1,11 +1,7 @@
 import { BadgeCheck, ChevronLeft, Info, Pencil, Send, Store } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { WhatsAppTemplateCard } from '../../inbox/WhatsAppPreview';
-import {
-  CATEGORY_OPTIONS,
-  countTemplateVars,
-  LANGUAGE_OPTIONS,
-} from '../../../utils/templateUtils';
+import { CATEGORY_OPTIONS, LANGUAGE_OPTIONS } from '../../../utils/templateUtils';
 import type { TemplateFormState } from '../../../utils/templateForm';
 import type { TemplateButton } from '../../../types';
 
@@ -35,24 +31,6 @@ function languageLabel(value: string) {
   return LANGUAGE_OPTIONS.find((o) => o.value === value)?.label || value;
 }
 
-function headerSummary(form: TemplateFormState) {
-  if (form.headerFormat === 'NONE') return 'None';
-  if (form.headerFormat === 'TEXT') return form.header ? `Text: "${form.header}"` : 'Text (empty)';
-  return `${form.headerFormat.charAt(0)}${form.headerFormat.slice(1).toLowerCase()} header`;
-}
-
-function buttonSummary(form: TemplateFormState) {
-  const filled = form.buttons.filter((b) => b.text.trim());
-  if (!filled.length) return 'None';
-  const types = filled.map((b) => {
-    if (b.type === 'URL') return 'Visit website';
-    if (b.type === 'PHONE_NUMBER') return 'Call phone number';
-    if (b.type === 'COPY_CODE') return 'Copy offer code';
-    return 'Quick reply';
-  });
-  return `${filled.length} button${filled.length > 1 ? 's' : ''} (${types.join(', ')})`;
-}
-
 export default function TemplateWizardPreviewPanel({
   form,
   filledPreview,
@@ -65,8 +43,6 @@ export default function TemplateWizardPreviewPanel({
   showTestButton,
   onTestTemplate,
 }: TemplateWizardPreviewPanelProps) {
-  const bodyVarCount = countTemplateVars(form.body);
-
   return (
     <div className="flex min-h-0 flex-col gap-4">
       <div className="template-wizard-card overflow-hidden">
@@ -78,6 +54,16 @@ export default function TemplateWizardPreviewPanel({
             )}
           </p>
           <div className="flex items-center gap-2">
+            {showEditLink && onEdit ? (
+              <button
+                type="button"
+                onClick={onEdit}
+                className="inline-flex items-center gap-1 text-[11px] font-semibold text-violet-600 hover:text-violet-700 dark:text-violet-400"
+              >
+                <Pencil className="h-3 w-3" />
+                Edit
+              </button>
+            ) : null}
             {showTestButton && onTestTemplate && (
               <button
                 type="button"
@@ -128,58 +114,21 @@ export default function TemplateWizardPreviewPanel({
               />
             </div>
           </div>
-        </div>
-      </div>
-
-      <div className="template-wizard-card overflow-hidden">
-        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 dark:border-slate-800">
-          <p className="text-[13px] font-bold text-slate-900 dark:text-white">Template summary</p>
-          {showEditLink && onEdit ? (
-            <button
-              type="button"
-              onClick={onEdit}
-              className="inline-flex items-center gap-1 text-[11px] font-semibold text-violet-600 hover:text-violet-700 dark:text-violet-400"
-            >
-              <Pencil className="h-3 w-3" />
-              Edit
-            </button>
-          ) : null}
-        </div>
-        <dl className="divide-y divide-slate-100 text-[12px] dark:divide-slate-800">
-          {[
-            ['Name', form.name || '—'],
-            ['Language', languageLabel(form.language)],
-            [
-              'Category',
-              <span
-                key="cat"
-                className="inline-flex rounded-md bg-sky-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-700 dark:bg-sky-950/50 dark:text-sky-300"
-              >
-                {categoryLabel(form.category)}
-              </span>,
-            ],
-            ['Header', headerSummary(form)],
-            [
-              'Body',
-              form.body
-                ? `${form.body.length} characters${bodyVarCount ? ` • ${bodyVarCount} variable${bodyVarCount > 1 ? 's' : ''}` : ''}`
-                : '—',
-            ],
-            ['Footer', form.footer || '—'],
-            ['Buttons', buttonSummary(form)],
-          ].map(([label, value]) => (
-            <div key={String(label)} className="grid grid-cols-[7rem_1fr] gap-2 px-4 py-2.5">
-              <dt className="font-medium text-slate-500">{label}</dt>
-              <dd className="min-w-0 font-semibold text-slate-800 dark:text-slate-200">{value}</dd>
+          {(form.name || form.category) && (
+            <div className="mt-3 flex items-center gap-2 px-0.5">
+              {form.category ? (
+                <span className="inline-flex shrink-0 rounded-md bg-sky-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-sky-700 dark:bg-sky-950/50 dark:text-sky-300">
+                  {categoryLabel(form.category)}
+                </span>
+              ) : null}
+              {form.name ? (
+                <p className="min-w-0 truncate font-mono text-[10px] text-slate-400" title={form.name}>
+                  {form.name}
+                </p>
+              ) : null}
             </div>
-          ))}
-        </dl>
-        {form.body && (
-          <div className="border-t border-slate-100 px-4 py-2.5 dark:border-slate-800">
-            <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Body preview</p>
-            <p className="mt-1 text-[11px] leading-relaxed text-slate-600 dark:text-slate-400">{form.body}</p>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

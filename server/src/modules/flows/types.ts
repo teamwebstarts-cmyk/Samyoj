@@ -89,6 +89,9 @@ export interface FlowNode {
   branches?: Record<string, string>;
   templateName?: string;
   templateLanguage?: string;
+  templateCouponCode?: string;
+  templateButtonUrlSuffixes?: string[];
+  templateHeaderMediaUrl?: string;
   mediaUrl?: string;
   mediaType?: 'image' | 'document' | 'video' | 'audio';
   mediaCaption?: string;
@@ -136,6 +139,8 @@ export interface FlowState {
   variables: Record<string, string>;
   attempts: number;
   resumeAt?: string;
+  /** Sticky A/B assignments, keyed by `${flowId}:${nodeId}`. Survives flow end. */
+  abSticky?: Record<string, 'a' | 'b'>;
 }
 
 export interface FlowStats {
@@ -160,7 +165,7 @@ export const DEFAULT_BUSINESS_HOURS: OrgBusinessHours = {
 };
 
 export const FLOW_NODE_LABELS: Partial<Record<FlowNodeType, string>> = {
-  wa_flow: 'Meta Form',
+  wa_flow: 'WhatsApp Form',
 };
 
 export interface InboundFlowPayload {

@@ -13,6 +13,7 @@ const SOURCE_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'contact.name', label: 'Auto: Customer name' },
   { value: 'contact.phone', label: 'Auto: Phone number' },
   { value: 'contact.email', label: 'Auto: Email' },
+  { value: 'contact.custom', label: 'Auto: Contact custom field' },
   { value: 'custom', label: 'Same value for everyone' },
 ];
 
@@ -55,8 +56,21 @@ export default function TemplateLibraryReviewStep({
       ...form,
       variableMeta: form.variableMeta.map((m) =>
         m.scope === 'body' && m.index === index
-          ? { ...m, suggestedSource: (source || undefined) as TemplateFormState['variableMeta'][number]['suggestedSource'] }
+          ? {
+              ...m,
+              suggestedSource: (source || undefined) as TemplateFormState['variableMeta'][number]['suggestedSource'],
+              customKey: source === 'contact.custom' ? m.customKey || '' : undefined,
+            }
           : m,
+      ),
+    });
+  };
+
+  const updateCustomKey = (index: number, customKey: string) => {
+    onChange({
+      ...form,
+      variableMeta: form.variableMeta.map((m) =>
+        m.scope === 'body' && m.index === index ? { ...m, customKey } : m,
       ),
     });
   };
@@ -173,6 +187,16 @@ export default function TemplateLibraryReviewStep({
                           </option>
                         ))}
                       </select>
+                      {meta.suggestedSource === 'contact.custom' && (
+                        <input
+                          type="text"
+                          value={meta.customKey || ''}
+                          onChange={(e) => updateCustomKey(meta.index, e.target.value)}
+                          placeholder="order_id"
+                          className="mt-1.5 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 font-mono text-[11px] dark:border-slate-700 dark:bg-slate-900"
+                          aria-label="Custom field key"
+                        />
+                      )}
                     </td>
                     <td className="py-2.5 font-medium text-slate-600 dark:text-slate-400">
                       {form.bodyExamples[meta.index - 1] || '—'}

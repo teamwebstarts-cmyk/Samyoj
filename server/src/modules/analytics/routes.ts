@@ -3,7 +3,11 @@ import prisma from '../../config/database';
 import { authenticate, requireOrg } from '../../middleware/auth';
 import { loadPermissions, requirePermission } from '../../middleware/permissions';
 import { sendSuccess, asyncHandler } from '../../utils/response';
-import { resolveActiveWhatsappNumber, conversationFilter, contactsForNumberFilter } from '../whatsapp/active-number';
+import {
+  resolveActiveWhatsappNumber,
+  analyticsConversationFilter,
+  contactsForNumberFilter,
+} from '../whatsapp/active-number';
 import {
   buildDailySeriesBuckets,
   resolveOverviewPeriod,
@@ -31,7 +35,7 @@ router.get(
     }
 
     const { since, until, previousSince, previousUntil, compareEnabled, period } = periodWindow;
-    const convScope = { organizationId: orgId, ...conversationFilter(numberId) };
+    const convScope = analyticsConversationFilter(orgId, numberId);
 
     if (period.mode === 'overall') {
       const firstMessage = await prisma.message.findFirst({
@@ -114,7 +118,7 @@ router.get(
           })
         : Promise.resolve(0),
       prisma.conversation.count({
-        where: { organizationId: orgId, status: 'OPEN', ...conversationFilter(numberId) },
+        where: { ...analyticsConversationFilter(orgId, numberId), status: 'OPEN' },
       }),
       prisma.contact.count({ where: { organizationId: orgId, ...contactsForNumberFilter(numberId) } }),
       prisma.message.findMany({
@@ -222,7 +226,12 @@ router.get(
     const numberId = req.activeWhatsappNumberId;
     const days = Math.min(90, Math.max(7, parseInt((req.query.days as string) || '30', 10)));
     const since = daysAgo(days);
-    const convScope = { organizationId: orgId, ...conversationFilter(numberId) };
+    const convScope = analyticsConversationFilter(orgId, numberId);
+    const scopedConversationRows = await prisma.conversation.findMany({
+      where: convScope,
+      select: { id: true },
+    });
+    const scopedConversationIds = scopedConversationRows.map((conversation) => conversation.id);
 
     const [
       messagesSent,
@@ -253,17 +262,21 @@ router.get(
         where: { direction: 'INBOUND', createdAt: { gte: since }, conversation: convScope },
       }),
       prisma.conversation.count({
-        where: { organizationId: orgId, status: 'OPEN', ...conversationFilter(numberId) },
+        where: { ...analyticsConversationFilter(orgId, numberId), status: 'OPEN' },
       }),
       prisma.conversation.count({
-        where: { organizationId: orgId, status: 'CLOSED', updatedAt: { gte: since }, ...conversationFilter(numberId) },
+        where: {
+          ...analyticsConversationFilter(orgId, numberId),
+          status: 'CLOSED',
+          updatedAt: { gte: since },
+        },
       }),
       prisma.contact.count({ where: { organizationId: orgId, ...contactsForNumberFilter(numberId) } }),
       prisma.campaign.aggregate({
         where: {
           organizationId: orgId,
           updatedAt: { gte: since },
-          ...(numberId ? { whatsappNumberId: numberId } : {}),
+          ...(numberId ? { whatsappNumberId: numberId } : { id: { in: [] } }),
         },
         _sum: { sentCount: true, deliveredCount: true, readCount: true, failedCount: true },
       }),
@@ -272,11 +285,15 @@ router.get(
           organizationId: orgId,
           status: 'COMPLETED',
           createdAt: { gte: since },
-          ...(numberId ? { whatsappNumberId: numberId } : {}),
+          ...(numberId ? { whatsappNumberId: numberId } : { id: { in: [] } }),
         },
       }),
       prisma.aiUsageLog.aggregate({
-        where: { organizationId: orgId, createdAt: { gte: since } },
+        where: {
+          organizationId: orgId,
+          conversationId: { in: scopedConversationIds },
+          createdAt: { gte: since },
+        },
         _sum: { totalTokens: true },
         _count: true,
       }),
@@ -294,15 +311,22 @@ router.get(
             where: {
               direction: 'OUTBOUND',
               createdAt: { gte: since },
-              conversation: { organizationId: orgId, assignedAgentId: m.userId },
+              conversation: {
+                ...convScope,
+                assignedAgentId: m.userId,
+              },
             },
           }),
           prisma.conversation.count({
-            where: { organizationId: orgId, assignedAgentId: m.userId, status: 'OPEN' },
+            where: {
+              ...convScope,
+              assignedAgentId: m.userId,
+              status: 'OPEN',
+            },
           }),
           prisma.conversation.count({
             where: {
-              organizationId: orgId,
+              ...convScope,
               assignedAgentId: m.userId,
               status: 'CLOSED',
               updatedAt: { gte: since },
@@ -356,12 +380,15 @@ router.get(
   '/leaderboard',
   authenticate,
   requireOrg,
+  resolveActiveWhatsappNumber,
   loadPermissions,
   requirePermission('viewAnalytics'),
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
+    const numberId = req.activeWhatsappNumberId;
     const days = Math.min(90, Math.max(1, parseInt((req.query.days as string) || '30', 10)));
     const since = daysAgo(days);
+    const convScope = analyticsConversationFilter(orgId, numberId);
 
     const members = await prisma.organizationUser.findMany({
       where: { organizationId: orgId },
@@ -375,12 +402,12 @@ router.get(
             where: {
               direction: 'OUTBOUND',
               createdAt: { gte: since },
-              conversation: { organizationId: orgId, assignedAgentId: m.userId },
+              conversation: { ...convScope, assignedAgentId: m.userId },
             },
           }),
           prisma.conversation.count({
             where: {
-              organizationId: orgId,
+              ...convScope,
               assignedAgentId: m.userId,
               status: 'CLOSED',
               updatedAt: { gte: since },
@@ -388,7 +415,7 @@ router.get(
           }),
           prisma.conversation.findMany({
             where: {
-              organizationId: orgId,
+              ...convScope,
               assignedAgentId: m.userId,
               firstResponseAt: { gte: since },
             },
@@ -428,15 +455,21 @@ router.get(
   '/templates',
   authenticate,
   requireOrg,
+  resolveActiveWhatsappNumber,
   loadPermissions,
   requirePermission('viewAnalytics'),
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
+    const numberId = req.activeWhatsappNumberId;
     const days = Math.min(90, Math.max(1, parseInt((req.query.days as string) || '30', 10)));
     const since = daysAgo(days);
 
     const campaigns = await prisma.campaign.findMany({
-      where: { organizationId: orgId, updatedAt: { gte: since } },
+      where: {
+        organizationId: orgId,
+        updatedAt: { gte: since },
+        ...(numberId ? { whatsappNumberId: numberId } : { id: { in: [] } }),
+      },
       select: {
         templateName: true,
         sentCount: true,
@@ -487,7 +520,12 @@ router.get(
     const numberId = req.activeWhatsappNumberId;
     const limit = Math.min(12, Math.max(1, parseInt((req.query.limit as string) || '4', 10)));
     const since = daysAgo(30);
-    const convScope = { organizationId: orgId, ...conversationFilter(numberId) };
+    const convScope = analyticsConversationFilter(orgId, numberId);
+    const scopedConversationRows = await prisma.conversation.findMany({
+      where: convScope,
+      select: { id: true },
+    });
+    const scopedConversationIds = scopedConversationRows.map((conversation) => conversation.id);
 
     type FeedItem = {
       id: string;
@@ -524,7 +562,7 @@ router.get(
           organizationId: orgId,
           status: { in: ['RUNNING', 'COMPLETED', 'SCHEDULED', 'PAUSED'] },
           updatedAt: { gte: since },
-          ...(numberId ? { whatsappNumberId: numberId } : {}),
+          ...(numberId ? { whatsappNumberId: numberId } : { id: { in: [] } }),
         },
         orderBy: { updatedAt: 'desc' },
         take: 6,
@@ -539,6 +577,7 @@ router.get(
       prisma.automationLog.findMany({
         where: {
           organizationId: orgId,
+          conversationId: { in: scopedConversationIds },
           createdAt: { gte: since },
         },
         orderBy: { createdAt: 'desc' },
@@ -556,6 +595,7 @@ router.get(
       prisma.aiUsageLog.findMany({
         where: {
           organizationId: orgId,
+          conversationId: { in: scopedConversationIds },
           createdAt: { gte: since },
         },
         orderBy: { createdAt: 'desc' },

@@ -105,6 +105,7 @@ export default function SettingsPage() {
     dailyBudgetInr: 5000,
     batchSize: 50,
     batchDelayMs: 1000,
+    mapFirstBodyVariableToName: true,
   });
   const [savingCampaigns, setSavingCampaigns] = useState(false);
   const [setupMeta, setSetupMeta] = useState({
@@ -1036,6 +1037,28 @@ export default function SettingsPage() {
                     }
                   />
                 </div>
+
+                <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-theme-border bg-theme-subtle/40 px-4 py-3.5">
+                  <input
+                    type="checkbox"
+                    checked={campaignSettings.mapFirstBodyVariableToName !== false}
+                    onChange={(e) =>
+                      setCampaignSettings((prev) => ({
+                        ...prev,
+                        mapFirstBodyVariableToName: e.target.checked,
+                      }))
+                    }
+                    className="mt-0.5 h-4 w-4 rounded border-theme-border text-emerald-600 focus:ring-emerald-500/30"
+                  />
+                  <div>
+                    <p className="text-[13px] font-semibold text-theme-fg">
+                      Map the first template variable to the customer name
+                    </p>
+                    <p className="text-[11px] font-medium text-theme-muted">
+                      When you add {'{{1}}'} in a new template, it is filled from the contact name at send time.
+                    </p>
+                  </div>
+                </label>
 
                 <p className="mt-4 text-[12px] font-medium leading-relaxed text-theme-muted">
                   Large campaigns are sent in small groups with a short pause between each group.

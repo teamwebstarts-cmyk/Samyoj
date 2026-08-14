@@ -1,8 +1,13 @@
 import prisma from '../../config/database';
 
-export async function getTemplateUsage(organizationId: string, templateName: string) {
+export async function getTemplateUsage(
+  organizationId: string,
+  templateName: string,
+  whatsappNumberId?: string
+) {
+  if (!whatsappNumberId) return { campaigns: [], totals: { campaignCount: 0, totalSent: 0, totalDelivered: 0, totalFailed: 0 } };
   const campaigns = await prisma.campaign.findMany({
-    where: { organizationId, templateName },
+    where: { organizationId, whatsappNumberId, templateName },
     select: {
       id: true,
       name: true,

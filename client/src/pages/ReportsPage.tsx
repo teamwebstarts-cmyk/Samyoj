@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   BarChart3,
@@ -34,6 +34,7 @@ import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 import { analyticsApi, complianceApi } from '../services/api';
 import type { ReportsData, SlaStats } from '../types';
 import { toastError } from '../utils/toast';
+import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 
 const periodOptions = [
   { value: '7', label: '7 days', shortLabel: '7d' },
@@ -49,6 +50,7 @@ const quickLinks = [
 ] as const;
 
 export default function ReportsPage() {
+  const { activeNumber, resolved } = useWhatsAppNumber();
   const [days, setDays] = useState('30');
   const [data, setData] = useState<ReportsData | null>(null);
   const [sla, setSla] = useState<SlaStats | null>(null);
@@ -56,8 +58,14 @@ export default function ReportsPage() {
   const [templateMetrics, setTemplateMetrics] = useState<TemplateMetric[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
+  const activeNumberIdRef = useRef<string | null>(null);
+  activeNumberIdRef.current = activeNumber?.id ?? null;
+  const loadGenerationRef = useRef(0);
 
   const load = useCallback(() => {
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
+    const generation = ++loadGenerationRef.current;
     setLoading(true);
     setLoadFailed(false);
     const period = parseInt(days, 10);
@@ -69,17 +77,33 @@ export default function ReportsPage() {
       analyticsApi.templates(period),
     ])
       .then(([reportsRes, slaRes, leaderboardRes, templatesRes]) => {
+        if (
+          requestNumberId !== activeNumberIdRef.current ||
+          generation !== loadGenerationRef.current
+        ) return;
         setData(reportsRes.data.data);
         setSla(slaRes.data.data);
         setLeaderboard(leaderboardRes.data.data.leaderboard || []);
         setTemplateMetrics(templatesRes.data.data.templates || []);
       })
       .catch(() => {
-        setLoadFailed(true);
-        toastError('Failed to load reports');
+        if (
+          requestNumberId === activeNumberIdRef.current &&
+          generation === loadGenerationRef.current
+        ) {
+          setLoadFailed(true);
+          toastError('Failed to load reports');
+        }
       })
-      .finally(() => setLoading(false));
-  }, [days]);
+      .finally(() => {
+        if (
+          requestNumberId === activeNumberIdRef.current &&
+          generation === loadGenerationRef.current
+        ) {
+          setLoading(false);
+        }
+      });
+  }, [activeNumber, days, resolved]);
 
   useEffect(() => {
     load();
@@ -87,6 +111,13 @@ export default function ReportsPage() {
 
   useOnActiveNumberChange(({ isInitial }) => {
     if (isInitial) return;
+    loadGenerationRef.current += 1;
+    setData(null);
+    setSla(null);
+    setLeaderboard([]);
+    setTemplateMetrics([]);
+    setLoading(true);
+    setLoadFailed(false);
     load();
   });
 

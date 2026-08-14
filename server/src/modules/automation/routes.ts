@@ -1,14 +1,16 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../../config/database';
-import { authenticate, requireOrg } from '../../middleware/auth';
+import { authenticate, requireOrg, loadOrgRole, requireOrgRole } from '../../middleware/auth';
 import { AppError, sendSuccess, asyncHandler, paramId } from '../../utils/response';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { processAutomations, isBusinessHours } from './engine';
 import { getAutomationAnalytics } from './analytics';
-import { detectAutomationConflicts } from './conflicts';
+import { detectAutomationConflicts, previewAutomationConflicts } from './conflicts';
 
 const router = Router();
+const memberGuard = [authenticate, requireOrg] as const;
+const adminGuard = [authenticate, requireOrg, loadOrgRole, requireOrgRole('OWNER', 'ADMIN')] as const;
 
 const automationSchema = z.object({
   name: z.string().min(1),
@@ -26,8 +28,7 @@ const automationSchema = z.object({
 
 router.get(
   '/analytics',
-  authenticate,
-  requireOrg,
+  ...memberGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const days = parseInt((req.query.days as string) || '30', 10);
@@ -38,8 +39,7 @@ router.get(
 
 router.get(
   '/conflicts',
-  authenticate,
-  requireOrg,
+  ...memberGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const conflicts = await detectAutomationConflicts(orgId);
@@ -47,10 +47,31 @@ router.get(
   })
 );
 
+const conflictPreviewSchema = z.object({
+  kind: z.enum(['automation', 'flow']),
+  excludeId: z.string().min(1).optional(),
+  name: z.string().min(1),
+  triggerType: z.string().min(1),
+  config: z.record(z.unknown()).optional(),
+  triggerConfig: z.record(z.unknown()).optional(),
+  enabled: z.boolean().optional(),
+  status: z.enum(['DRAFT', 'PUBLISHED']).optional(),
+});
+
+router.post(
+  '/conflicts/preview',
+  ...memberGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const proposed = conflictPreviewSchema.parse(req.body);
+    const conflicts = await previewAutomationConflicts(orgId, proposed);
+    sendSuccess(res, { conflicts });
+  })
+);
+
 router.get(
   '/',
-  authenticate,
-  requireOrg,
+  ...memberGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const { search, triggerType, enabled, page = '1', limit = '10' } = req.query;
@@ -93,8 +114,7 @@ router.get(
 
 router.post(
   '/',
-  authenticate,
-  requireOrg,
+  ...adminGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const data = automationSchema.parse(req.body);
 
@@ -116,8 +136,7 @@ const updateAutomationSchema = automationSchema.partial();
 
 router.patch(
   '/:id',
-  authenticate,
-  requireOrg,
+  ...adminGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const id = paramId(req);
     const existing = await prisma.automation.findFirst({
@@ -141,8 +160,7 @@ router.patch(
 
 router.delete(
   '/:id',
-  authenticate,
-  requireOrg,
+  ...adminGuard,
   asyncHandler(async (req: Request, res: Response) => {
     await prisma.automation.deleteMany({
       where: { id: paramId(req), organizationId: req.user!.organizationId! },

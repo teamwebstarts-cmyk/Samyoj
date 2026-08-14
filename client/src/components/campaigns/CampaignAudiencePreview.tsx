@@ -27,6 +27,7 @@ interface CampaignAudiencePreviewProps {
   onMetricsChange?: (metrics: AudiencePreviewMetrics | null) => void;
   variant?: 'default' | 'wizard';
   showMetrics?: boolean;
+  templateCategory?: string;
 }
 
 function formatMetric(value: number | null | undefined) {
@@ -46,6 +47,7 @@ export default function CampaignAudiencePreview({
   onMetricsChange,
   variant = 'default',
   showMetrics = true,
+  templateCategory,
 }: CampaignAudiencePreviewProps) {
   const [count, setCount] = useState<number | null>(null);
   const [costInr, setCostInr] = useState<number | null>(null);
@@ -214,7 +216,7 @@ export default function CampaignAudiencePreview({
             onCostChange?.(null);
             setError(messagingConsent.noMatchingAudience);
           } else {
-            const est = await billingApi.estimateCost(eligibleCount);
+            const est = await billingApi.estimateCost(eligibleCount, templateCategory);
             if (!cancelled) {
               setCostInr(est.data.data.estimatedCostInr);
               onCostChange?.(est.data.data.estimatedCostInr);
@@ -252,6 +254,7 @@ export default function CampaignAudiencePreview({
     requestedCount,
     audienceTypes,
     audienceOperator,
+    templateCategory,
     onCountChange,
     onCostChange,
     onMetricsChange,

@@ -194,7 +194,7 @@ export function validateFlow(
     if (node.type === 'tag' && !node.tag?.trim()) errors.push('Add Tag needs a tag name');
     if (node.type === 'template' && !node.templateName?.trim()) errors.push('Template Message needs a template');
     if (node.type === 'media' && !node.mediaUrl?.trim()) errors.push('Send Media needs a file link');
-    if (node.type === 'wa_flow' && !node.waFlowId?.trim()) errors.push('Meta Form needs a form selected');
+    if (node.type === 'wa_flow' && !node.waFlowId?.trim()) errors.push('WhatsApp Form needs a form selected');
     if (node.type === 'delay' && (!node.delaySeconds || node.delaySeconds < 1)) {
       errors.push('Wait step needs at least 1 second');
     }

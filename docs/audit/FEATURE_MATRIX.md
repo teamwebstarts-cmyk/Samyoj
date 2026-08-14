@@ -1,6 +1,6 @@
 # Feature Matrix — What's Built
 
-> Last updated: 2026-07-31
+> Last updated: 2026-08-14
 
 Legend:
 - **DONE** — Fully implemented (backend + frontend + DB)
@@ -75,14 +75,14 @@ Legend:
 
 | Feature | Status | Backend | Frontend | Notes |
 |---------|--------|---------|----------|-------|
-| Keyword triggers | DONE | `TriggerType.KEYWORD` | `AutomationsPage` | |
-| Welcome message | DONE | `TriggerType.WELCOME` | | |
-| Away message | DONE | `TriggerType.AWAY` | | |
-| Business hours auto-reply | DONE | `TriggerType.BUSINESS_HOURS` | | |
-| Lead capture | DONE | `TriggerType.LEAD_CAPTURE` | | |
-| AI chatbot trigger | DONE | `TriggerType.AI_CHATBOT` | | |
-| Automation analytics | DONE | `/api/automations/analytics` | `AutomationAnalyticsPanel` | |
-| Conflict detection | DONE | `/api/automations/conflicts` | `AutomationConflictsBanner` | |
+| Keyword triggers | DONE | `TriggerType.KEYWORD` | `AutomationsPage` | Word-boundary match via shared `keywordMatches`. Once per conversation / 24h (`send_reply` log) |
+| Welcome message | DONE | `TriggerType.WELCOME` | | New conversation only; also frequency-capped |
+| Away message | DONE | `TriggerType.AWAY` | | Org business hours |
+| Business hours auto-reply | DONE | `TriggerType.BUSINESS_HOURS` | | Dual during/away copy |
+| Lead capture | DONE | `TriggerType.LEAD_CAPTURE` | | Optional keyword; tags contact; frequency-capped |
+| AI chatbot trigger | PARTIAL | `TriggerType.AI_CHATBOT` enum only | Sent to AI Bots page | **Not matched** by the rule engine. AI is the inbound fallback queue, not this row type |
+| Automation analytics | DONE | `/api/automations/analytics` | `AutomationAnalyticsPanel` | Includes `skipped` (opt-out / CSW / frequency cap) |
+| Conflict detection | DONE | `GET /conflicts` + `POST /conflicts/preview` | Banner + save toast | Preview at save (warn, not hard-block). Banner links to the overlapping flow/auto-reply |
 
 ---
 
@@ -91,18 +91,18 @@ Legend:
 | Feature | Status | Backend | Frontend | Notes |
 |---------|--------|---------|----------|-------|
 | Visual flow editor | DONE | Flow CRUD | `FlowBuilderPage` | React Flow canvas |
-| 26 node types | DONE | `engine.ts` | `FlowStepNode` | message, buttons, list, question, tag, handoff, ai, assign, condition, end, template, delay, schedule, media, webhook, ab_split, language, set_variable, goto_flow, goto_step, request_callback, location, contact_card, wa_flow |
-| 10 trigger types | DONE | `FlowTriggerType` enum | `FlowSettingsPanel` | |
-| Draft/publish workflow | DONE | `FlowStatus` enum | Publish button | |
+| 26 node types | PARTIAL | `engine.ts` | `FlowStepNode` | `waitingFor: media` is typed but never set. CSW now gates non-template sends |
+| 11 trigger types | DONE | `FlowTriggerType` enum (11, not 10) | `FlowSettingsPanel` | `ANY_MESSAGE` is a true catch-all. `CAMPAIGN_REPLY` uses a campaign picker. New starts frequency-capped once / 24h per conversation |
+| Draft/publish workflow | DONE | `FlowStatus` enum | Publish / Save draft | **Live** = `PUBLISHED` **and** `enabled`. Match, in-progress, and delay resume all use that gate |
 | Version history | DONE | `FlowVersion` model | `FlowVersionsPanel` | Restore to any version |
 | Flow templates | DONE | `/api/flows/templates` | `FlowTemplatesSlideOver` | |
-| Flow simulation | DONE | `/api/flows/simulate` | `FlowTestPanel` | |
+| Flow simulation | DONE | `/api/flows/simulate` | `FlowTestPanel` | Dry-run only; not a live phone test |
 | Flow analytics | DONE | `/api/flows/:id/analytics` | `FlowAnalyticsPanel` | |
-| Flow validation | DONE | `/api/flows/validate` | `FlowValidationWarnings` | |
-| Duplicate flow | DONE | `/api/flows/:id/duplicate` | Flow card | |
-| Schedule flow | DONE | `/api/flows/:id/schedule` | Flow card | |
+| Flow validation | DONE | `/api/flows/validate` | `FlowValidationWarnings` | Reachability, dangerous send-loops, HTTPS webhook URLs, list row cap |
+| Duplicate flow | DONE | `/api/flows/:id/duplicate` | Flow card | OWNER/ADMIN mutation |
+| Schedule flow | BACKEND ONLY | `POST /api/flows/:id/schedule` | `flowApi.scheduleStart` unused | No builder control |
 | WhatsApp phone preview | DONE | — | `FlowPhoneMockup` | |
-| Mobile flow builder | DONE | — | `FlowMobileNav` | Bottom tab navigation |
+| Mobile flow builder | PARTIAL | — | `FlowMobileNav` | No version history on mobile |
 
 ---
 
@@ -172,7 +172,7 @@ Legend:
 |---------|--------|---------|----------|-------|
 | List templates (from Meta) | DONE | `GET /api/templates/` | `TemplatesPage` | |
 | Create template | DONE | `POST /api/templates/` | `TemplateCreateForm` | |
-| Meta template library | DONE | `/api/templates/library` | `TemplateLibraryPanel` | |
+| Meta template library | DONE | `/api/templates/library` | `/templates/library` | Clone Utility/Auth from Meta. Mapping stored on org settings. |
 | Template usage analytics | DONE | `/api/templates/:name/usage` | `TemplateDetailPanel` | |
 | Resubmit rejected | DONE | `/api/templates/:name/resubmit` | Template card | |
 | Test send | DONE | `/api/templates/:name/test-send` | Template card | |
@@ -316,7 +316,7 @@ Legend:
 
 | Feature | Status | Backend | Frontend | Notes |
 |---------|--------|---------|----------|-------|
-| WA Forms CRUD | DONE | `/api/wa-forms/*` | Meta flow builder | |
+| WA Forms CRUD | DONE | `/api/wa-forms/*` | `WaFormPicker` in conversation flows | Not the orphan `/automations/meta-flows` builder (`flow-assets`). Promo no longer opens the chat-tree builder as if it were Forms |
 | Flow assets CRUD | DONE | `/api/flows-assets/*` | — | |
 | Publish to Meta | DONE | `/api/flows-assets/:id/publish` | — | |
 | Encrypted data endpoint | DONE | `/api/flows-assets/data` | — | AES encryption |
@@ -341,8 +341,8 @@ Legend:
 | Auth & Users | 11 | All DONE |
 | WhatsApp Connection | 8 | All DONE |
 | Inbox & Messaging | 21 | All DONE |
-| Automations | 8 | All DONE |
-| Flow Builder | 13 | All DONE |
+| Automations | 8 | 7 DONE, 1 PARTIAL (`AI_CHATBOT` ghost type) |
+| Flow Builder | 13 | Mixed — schedule BACKEND ONLY; 2 PARTIAL |
 | AI Bot | 13 | All DONE |
 | Campaigns | 17 | All DONE |
 | Contacts & Leads | 9 | All DONE |
@@ -358,7 +358,7 @@ Legend:
 | Content Studio | 9 | All DONE |
 | WA Forms | 4 | All DONE |
 | Tickets | 4 | All DONE |
-| **TOTAL** | **184** | **All DONE** |
+| **TOTAL** | **184** | **Not all DONE — see category rows** |
 
 ### Not Yet Built (from docs/roadmap)
 
@@ -370,5 +370,5 @@ Legend:
 | Webhook signature rotation | PLANNED | AUDIT.md |
 | Rate limit per-plan tiers | PLANNED | AUDIT.md |
 | ESLint / Prettier | MISSING | No config files |
-| Client-side tests | MISSING | 0 test files |
+| Client-side tests | PARTIAL | 10 vitest files (inbox/flow-live/flow-waiting); no E2E |
 | End-to-end tests | MISSING | No E2E framework |

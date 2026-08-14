@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react';
 import AppButton from '../ui/AppButton';
 import AppInput from '../ui/AppInput';
@@ -6,9 +6,13 @@ import AppSelect from '../ui/AppSelect';
 import AppTextarea from '../ui/AppTextarea';
 import FlowStepPreview from './FlowStepPreview';
 import WaFormPicker from './WaFormPicker';
+import TemplateButtonExtras from '../templates/TemplateButtonExtras';
+import { templateDynamicUrlButtons } from '../../utils/templateForm';
+import { templateNeedsHeaderMedia } from '../campaigns/campaignPreviewUtils';
 import { getFlowReferenceData } from './flowReferenceData';
 import { nodeMeta } from './flowMeta';
-import type { AiBot, Flow, FlowNode, TeamAgent } from '../../types';
+import type { AiBot, Flow, FlowNode, MessageTemplate, TeamAgent } from '../../types';
+import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
 
 interface FlowNodePanelProps {
   node: FlowNode | null;
@@ -98,19 +102,25 @@ function FlowNodePanelForm({
   const [bots, setBots] = useState<AiBot[]>([]);
   const [agents, setAgents] = useState<TeamAgent[]>([]);
   const [flows, setFlows] = useState<Flow[]>([]);
-  const [templates, setTemplates] = useState<Array<{ name: string; language: string; status: string }>>([]);
+  const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const { activeNumber, resolved } = useWhatsAppNumber();
+  const activeNumberIdRef = useRef<string | null>(null);
+  activeNumberIdRef.current = activeNumber?.id ?? null;
 
   useEffect(() => {
-    getFlowReferenceData()
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
+    getFlowReferenceData(activeNumber.phoneNumberId)
       .then((data) => {
+        if (requestNumberId !== activeNumberIdRef.current) return;
         setBots(data.bots);
         setAgents(data.agents);
         setFlows(data.flows);
         setTemplates(data.templates);
       })
       .catch(() => {});
-  }, []);
+  }, [activeNumber, resolved]);
 
   const meta = nodeMeta[node.type];
   const Icon = meta.icon;
@@ -501,6 +511,33 @@ function FlowNodePanelForm({
             rows={2}
             placeholder="What the template roughly says..."
           />
+          <p className="text-[11px] leading-relaxed text-theme-secondary">
+            Mapped variables such as customer name, phone, and email are filled from this contact when the flow sends.
+            If this template needs a coupon, link suffix, or header image, set those here — the flow will skip this
+            step rather than send a broken message.
+          </p>
+          {templates.some((t) => t.name === node.templateName && templateNeedsHeaderMedia(t)) && (
+            <AppInput
+              label="Header media URL"
+              placeholder="https://..."
+              value={node.templateHeaderMediaUrl || ''}
+              onChange={(e) => onChange({ templateHeaderMediaUrl: e.target.value })}
+            />
+          )}
+          <TemplateButtonExtras
+            compact
+            template={templates.find((t) => t.name === node.templateName)}
+            couponCode={node.templateCouponCode || ''}
+            buttonUrlSuffixes={node.templateButtonUrlSuffixes || []}
+            onCouponChange={(value) => onChange({ templateCouponCode: value })}
+            onSuffixChange={(index, value) => {
+              const selected = templates.find((t) => t.name === node.templateName);
+              const count = selected ? templateDynamicUrlButtons(selected).length : index + 1;
+              const next = Array.from({ length: count }, (_, i) => node.templateButtonUrlSuffixes?.[i] || '');
+              next[index] = value;
+              onChange({ templateButtonUrlSuffixes: next });
+            }}
+          />
         </div>
       )}
 
@@ -641,8 +678,8 @@ function FlowNodePanelForm({
             hint="Max 20 characters — e.g. Fill form, Book now"
           />
           <p className="text-[11px] leading-relaxed text-neutral-500">
-            Meta Forms run inside WhatsApp and are different from your Automations. When the customer
-            submits, their answers are saved automatically and the automation continues.
+            WhatsApp Forms run inside WhatsApp and are different from this conversation flow. When the
+            customer submits, their answers are saved and the flow continues.
           </p>
         </div>
       )}

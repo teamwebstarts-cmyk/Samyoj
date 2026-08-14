@@ -4,11 +4,17 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
-import { whatsappApi, setActiveWhatsappNumberId } from '../services/api';
+import {
+  whatsappApi,
+  setActiveWhatsappNumberId,
+  setActiveWhatsappNumberResolved,
+} from '../services/api';
 import { useAuth } from './AuthContext';
+import { resolveActiveNumber, retainActiveNumberId } from '../utils/whatsappWorkspace';
 
 export interface WhatsappNumberOption {
   id: string;
@@ -21,8 +27,12 @@ export interface WhatsappNumberOption {
 interface WhatsAppNumberContextType {
   numbers: WhatsappNumberOption[];
   activeNumber: WhatsappNumberOption | null;
+  /** Stable Meta identity used by client persistence and page caches. */
+  activeNumberKey: string | null;
   /** At least one WhatsApp number is linked to the org */
   hasConnectedNumber: boolean;
+  /** True only after the current number list has resolved successfully or retained a known list. */
+  resolved: boolean;
   loading: boolean;
   hasMultiple: boolean;
   switchNumber: (id: string) => void;
@@ -49,41 +59,65 @@ export function WhatsAppNumberProvider({ children }: { children: ReactNode }) {
   const [numbers, setNumbers] = useState<WhatsappNumberOption[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [resolved, setResolved] = useState(false);
+  const requestGeneration = useRef(0);
+  const numbersRef = useRef<WhatsappNumberOption[]>([]);
+  numbersRef.current = numbers;
 
   const refreshNumbers = useCallback(async (options?: { silent?: boolean }) => {
     if (!orgId) {
       setNumbers([]);
       setActiveId(null);
       setActiveWhatsappNumberId(null);
+      setActiveWhatsappNumberResolved(false);
+      setResolved(false);
       setLoading(false);
       return;
     }
 
+    const generation = ++requestGeneration.current;
+    setActiveWhatsappNumberResolved(false);
+    setResolved(false);
     if (!options?.silent) setLoading(true);
     try {
       const { data } = await whatsappApi.numbers();
+      if (generation !== requestGeneration.current) return;
       const list = parseNumbers(data.data);
       setNumbers(list);
 
       setActiveId((prev) => {
         const stored = localStorage.getItem(storageKey(orgId));
-        const validStored = stored && list.some((n) => n.id === stored) ? stored : null;
-        const next = validStored ?? (prev && list.some((n) => n.id === prev) ? prev : null) ?? list[0]?.id ?? null;
+        const previousPhoneNumberId =
+          numbersRef.current.find((number) => number.id === prev)?.phoneNumberId ?? null;
+        const nextNumber = resolveActiveNumber(list, stored, previousPhoneNumberId);
+        const next = nextNumber?.id ?? null;
 
         setActiveWhatsappNumberId(next);
-        if (next) {
-          localStorage.setItem(storageKey(orgId), next);
+        if (nextNumber) {
+          localStorage.setItem(storageKey(orgId), nextNumber.phoneNumberId);
         } else {
           localStorage.removeItem(storageKey(orgId));
         }
+        setActiveWhatsappNumberResolved(Boolean(nextNumber));
+        setResolved(Boolean(nextNumber));
         return next;
       });
     } catch {
-      setNumbers([]);
-      setActiveId(null);
-      setActiveWhatsappNumberId(null);
+      if (generation !== requestGeneration.current) return;
+      // A transient list failure must not make pages fall back to an arbitrary
+      // server-side number or discard the last known workspace.
+      setActiveId((prev) => {
+        const retained = retainActiveNumberId(numbersRef.current, prev);
+        setActiveWhatsappNumberId(retained);
+        setActiveWhatsappNumberResolved(Boolean(retained));
+        setResolved(Boolean(retained));
+        return retained;
+      });
     } finally {
-      if (!options?.silent) setLoading(false);
+      if (generation === requestGeneration.current && !options?.silent) setLoading(false);
+      if (generation === requestGeneration.current && options?.silent) {
+        setLoading(false);
+      }
     }
   }, [orgId]);
 
@@ -96,27 +130,31 @@ export function WhatsAppNumberProvider({ children }: { children: ReactNode }) {
       if (!orgId || !numbers.some((n) => n.id === id)) return;
       setActiveId(id);
       setActiveWhatsappNumberId(id);
-      localStorage.setItem(storageKey(orgId), id);
+      const number = numbers.find((item) => item.id === id);
+      if (number) localStorage.setItem(storageKey(orgId), number.phoneNumberId);
     },
     [orgId, numbers]
   );
 
   const activeNumber = useMemo(
-    () => numbers.find((n) => n.id === activeId) ?? numbers[0] ?? null,
+    () => numbers.find((n) => n.id === activeId) ?? null,
     [numbers, activeId]
   );
+  const activeNumberKey = activeNumber?.phoneNumberId ?? null;
 
   const value = useMemo(
     () => ({
       numbers,
       activeNumber,
+      activeNumberKey,
       hasConnectedNumber: numbers.length > 0,
+      resolved,
       loading,
       hasMultiple: numbers.length > 1,
       switchNumber,
       refreshNumbers,
     }),
-    [numbers, activeNumber, loading, switchNumber, refreshNumbers]
+    [numbers, activeNumber, activeNumberKey, loading, resolved, switchNumber, refreshNumbers]
   );
 
   return (

@@ -27,6 +27,7 @@ import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { useReducedMotion } from '../../hooks/inboxA11y';
 import { useGlassTipProps } from './ComposerGlassTip';
 import { inboxApi } from '../../services/api';
+import { waitingForLabel } from '../../utils/flow-waiting';
 import type { MediaViewerItem } from './MediaViewer';
 import type { PresenceViewer } from './useConversationPresence';
 import type {
@@ -37,6 +38,7 @@ import type {
   SendMessagePayload,
   ServiceWindowInfo,
   TeamAgent,
+  TemplateParams,
 } from '../../types';
 
 const EPHEMERAL_MS = 2200;
@@ -107,7 +109,7 @@ interface ChatThreadProps {
   onSendTemplate: (payload: {
     templateName: string;
     templateLanguage: string;
-    templateParams?: { body?: string[]; header?: string[]; headerMediaUrl?: string };
+    templateParams?: TemplateParams;
   }) => void;
   onCancelTemplate: () => void;
   onOpenTemplateMode: () => void;
@@ -313,10 +315,10 @@ export default function ChatThread({
           <span className="min-w-0 truncate">
             <span className="font-bold">{flow.flowName || 'Automation'}</span>
             {flow.currentStepLabel && <> · {flow.currentStepLabel}</>}
-            {flow.waitingFor && (
+            {waitingForLabel(flow.waitingFor) && (
               <span className="text-violet-600 dark:text-violet-300">
                 {' '}
-                · waiting for {flow.waitingFor}
+                · {waitingForLabel(flow.waitingFor)}
               </span>
             )}
           </span>
@@ -836,6 +838,10 @@ export default function ChatThread({
                 sending={sending}
                 onCancel={onCancelTemplate}
                 windowClosed={!windowOpen}
+                contactName={conversation.contact?.name}
+                contactPhone={conversation.contact?.phone}
+                contactEmail={conversation.contact?.email}
+                contactCustomAttributes={conversation.contact?.customAttributes}
               />
             </div>
           ) : windowOpen ? (

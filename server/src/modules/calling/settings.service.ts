@@ -35,7 +35,15 @@ export function mergeCallingSettings(
     // Cold live transfer media is not production-ready — always message-only.
     liveTransferEnabled: false,
     transferMode: 'message_only',
+    maxCallDurationSec: clampCallDurationSec(
+      stored.maxCallDurationSec ?? base.maxCallDurationSec
+    ),
   };
+}
+
+function clampCallDurationSec(value: number): number {
+  if (!Number.isFinite(value)) return DEFAULT_CALLING_SETTINGS.maxCallDurationSec;
+  return Math.min(1800, Math.max(120, Math.round(value)));
 }
 
 export async function getOrgCallingSettings(organizationId: string): Promise<CallingSettings> {

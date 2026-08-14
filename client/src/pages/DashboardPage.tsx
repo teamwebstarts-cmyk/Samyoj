@@ -67,7 +67,7 @@ function extractCampaigns(payload: unknown): Campaign[] {
 }
 
 export default function DashboardPage() {
-  const { hasConnectedNumber, loading: numbersLoading } = useWhatsAppNumber();
+  const { hasConnectedNumber, activeNumber, resolved, loading: numbersLoading } = useWhatsAppNumber();
   const [metricsPeriod, setMetricsPeriod] = useState<MetricsPeriod>(DEFAULT_PERIOD);
   const [stats, setStats] = useState<AnalyticsOverview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -89,15 +89,19 @@ export default function DashboardPage() {
   const statsReqId = useRef(0);
   const hasStatsRef = useRef(false);
   const liveDataLoaded = useRef(false);
+  const activeNumberIdRef = useRef<string | null>(null);
+  activeNumberIdRef.current = activeNumber?.id ?? null;
 
   const onWaStatusChange = useCallback((status: WhatsAppGuideStatus) => {
     setWaStatus(status);
   }, []);
 
-  const connectionReady = waStatus.statusReady || !numbersLoading;
+  const connectionReady = (waStatus.statusReady || !numbersLoading) && resolved;
   const isConnected = waStatus.statusReady ? waStatus.connected : hasConnectedNumber;
 
   const loadStats = useCallback(() => {
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
     const reqId = ++statsReqId.current;
     if (hasStatsRef.current) setRefreshing(true);
     else setLoading(true);
@@ -105,7 +109,7 @@ export default function DashboardPage() {
     analyticsApi
       .overview(metricsPeriodToParams(metricsPeriod))
       .then(({ data }) => {
-        if (reqId !== statsReqId.current) return;
+        if (reqId !== statsReqId.current || requestNumberId !== activeNumberIdRef.current) return;
         const payload = data?.data;
         if (!payload || typeof payload !== 'object') {
           throw new Error('Invalid overview payload');
@@ -115,7 +119,7 @@ export default function DashboardPage() {
         setLoadFailed(false);
       })
       .catch(() => {
-        if (reqId !== statsReqId.current) return;
+        if (reqId !== statsReqId.current || requestNumberId !== activeNumberIdRef.current) return;
         setLoadFailed(true);
         if (!hasStatsRef.current) {
           toastError('Unable to load dashboard metrics. Please try again.');
@@ -124,13 +128,15 @@ export default function DashboardPage() {
         }
       })
       .finally(() => {
-        if (reqId !== statsReqId.current) return;
+        if (reqId !== statsReqId.current || requestNumberId !== activeNumberIdRef.current) return;
         setLoading(false);
         setRefreshing(false);
       });
-  }, [metricsPeriod]);
+  }, [activeNumber, metricsPeriod, resolved]);
 
   const loadSideData = useCallback(() => {
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
     setCampaignsLoading(true);
     setCampaignsError(false);
     Promise.allSettled([
@@ -138,6 +144,7 @@ export default function DashboardPage() {
       campaignApi.list({ status: 'DRAFT', limit: '20' }),
     ])
       .then(([scheduledResult, draftResult]) => {
+        if (requestNumberId !== activeNumberIdRef.current) return;
         const scheduled =
           scheduledResult.status === 'fulfilled'
             ? extractCampaigns(scheduledResult.value.data?.data)
@@ -161,11 +168,14 @@ export default function DashboardPage() {
           toastError('Some campaign lists could not load. Showing what we could.');
         }
       })
-      .finally(() => setCampaignsLoading(false));
+      .finally(() => {
+        if (requestNumberId === activeNumberIdRef.current) setCampaignsLoading(false);
+      });
 
     onboardingApi
       .status()
       .then(({ data }) => {
+        if (requestNumberId !== activeNumberIdRef.current) return;
         const payload = data?.data as OnboardingStatus | undefined;
         if (payload?.steps && Array.isArray(payload.steps)) {
           setOnboarding(payload);
@@ -176,6 +186,7 @@ export default function DashboardPage() {
         }
       })
       .catch(() => {
+        if (requestNumberId !== activeNumberIdRef.current) return;
         setOnboarding(null);
         setOnboardingError(true);
       });
@@ -185,17 +196,19 @@ export default function DashboardPage() {
     analyticsApi
       .activity(4)
       .then(({ data }) => {
+        if (requestNumberId !== activeNumberIdRef.current) return;
         const payload = data?.data as { items?: ActivityItem[] } | undefined;
         const list = Array.isArray(payload?.items) ? payload!.items! : [];
         setActivity(list);
         setActivityError(false);
       })
       .catch(() => {
+        if (requestNumberId !== activeNumberIdRef.current) return;
         setActivity([]);
         setActivityError(true);
       })
       .finally(() => setActivityLoading(false));
-  }, []);
+  }, [activeNumber, resolved]);
 
   // Load / refresh Live Metrics when connected (and whenever period changes via loadStats).
   useEffect(() => {

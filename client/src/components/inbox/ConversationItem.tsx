@@ -6,6 +6,7 @@ import { softStatusPillStyle } from './details/DetailsSectionCard';
 import { formatListTime, getMessagePreview } from './inboxUtils';
 import { useTheme } from '../../contexts/ThemeContext';
 import { FOCUS_RING_CLASS } from '../../hooks/inboxA11y';
+import { waitingForLabel } from '../../utils/flow-waiting';
 import type { Conversation } from '../../types';
 
 interface ConversationItemProps {
@@ -257,10 +258,18 @@ export default function ConversationItem({
             {activeFlow && (
               <span
                 className="inline-flex max-w-[90px] items-center gap-0.5 truncate rounded-md bg-violet-100/90 px-1.5 py-0.5 text-[9px] font-semibold text-violet-700 dark:bg-violet-900/40 dark:text-violet-300"
-                {...tipFor(activeFlow.currentStepLabel || 'Active flow')}
+                {...tipFor(
+                  waitingForLabel(activeFlow.waitingFor) ||
+                    activeFlow.currentStepLabel ||
+                    'Active flow'
+                )}
               >
                 <GitBranch className="h-2.5 w-2.5 shrink-0" />
-                <span className="truncate">{activeFlow.currentStepLabel || 'Flow'}</span>
+                <span className="truncate">
+                  {waitingForLabel(activeFlow.waitingFor, 'short') ||
+                    activeFlow.currentStepLabel ||
+                    'Flow'}
+                </span>
               </span>
             )}
         </div>

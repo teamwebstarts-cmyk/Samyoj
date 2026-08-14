@@ -34,7 +34,7 @@ import { publishCallEventMessage } from './call-event-message';
 
 const router = Router();
 
-const adminGuard = [authenticate, requireOrg, loadOrgRole, requireOrgRole('OWNER', 'ADMIN')];
+const adminGuard = [authenticate, requireOrg, resolveActiveWhatsappNumber, loadOrgRole, requireOrgRole('OWNER', 'ADMIN')];
 const memberGuard = [authenticate, requireOrg, resolveActiveWhatsappNumber];
 
 const listQuerySchema = z.object({
@@ -72,6 +72,7 @@ const callingSettingsSchema = z.object({
   sarvamSttPrompt: z.string().max(500).nullable().optional(),
   liveTransferEnabled: z.boolean().optional(),
   transferMode: z.enum(['live', 'message_only']).optional(),
+  maxCallDurationSec: z.number().int().min(120).max(1800).optional(),
 });
 
 const notesSchema = z.object({
@@ -97,7 +98,7 @@ router.get(
     const orgId = req.user!.organizationId!;
     const [number, callingSettings, redisActive] = await Promise.all([
       prisma.whatsappNumber.findFirst({
-        where: { organizationId: orgId, isActive: true },
+        where: { id: req.activeWhatsappNumberId, organizationId: orgId, isActive: true },
       }),
       getOrgCallingSettings(orgId),
       getOrgActiveCallCount(orgId),
@@ -150,12 +151,12 @@ router.get(
     const contactId = String(req.params.contactId);
 
     const contact = await prisma.contact.findFirst({
-      where: { id: contactId, organizationId: orgId },
+      where: { id: contactId, organizationId: orgId, whatsappNumberId: req.activeWhatsappNumberId },
     });
     if (!contact) throw new AppError(404, 'Contact not found');
 
     const number = await prisma.whatsappNumber.findFirst({
-      where: { organizationId: orgId, isActive: true },
+      where: { id: req.activeWhatsappNumberId, organizationId: orgId, isActive: true },
     });
 
     let granted = false;
@@ -214,12 +215,12 @@ router.post(
       .parse(req.body);
 
     const contact = await prisma.contact.findFirst({
-      where: { id: contactId, organizationId: orgId },
+      where: { id: contactId, organizationId: orgId, whatsappNumberId: req.activeWhatsappNumberId },
     });
     if (!contact) throw new AppError(404, 'Contact not found');
 
     const number = await prisma.whatsappNumber.findFirst({
-      where: { organizationId: orgId, isActive: true },
+      where: { id: req.activeWhatsappNumberId, organizationId: orgId, isActive: true },
     });
     if (!number) throw new AppError(400, 'No active WhatsApp number');
 
@@ -334,7 +335,7 @@ router.post(
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const number = await prisma.whatsappNumber.findFirst({
-      where: { organizationId: orgId, isActive: true },
+      where: { id: req.activeWhatsappNumberId, organizationId: orgId, isActive: true },
     });
     if (!number) throw new AppError(400, 'Connect a WhatsApp number first');
 
@@ -374,7 +375,7 @@ router.post(
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const number = await prisma.whatsappNumber.findFirst({
-      where: { organizationId: orgId, isActive: true },
+      where: { id: req.activeWhatsappNumberId, organizationId: orgId, isActive: true },
     });
     if (!number) throw new AppError(400, 'Connect a WhatsApp number first');
 
@@ -414,7 +415,7 @@ router.get(
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const days = Math.min(Number(req.query.days) || 30, 90);
-    const analytics = await getCallAnalytics(orgId, days);
+    const analytics = await getCallAnalytics(orgId, days, req.activeWhatsappNumberId);
     sendSuccess(res, analytics);
   })
 );
@@ -505,23 +506,33 @@ router.post(
     const data = callbackSchema.parse(req.body);
 
     const number = await prisma.whatsappNumber.findFirst({
-      where: { organizationId: orgId, isActive: true },
+      where: { id: req.activeWhatsappNumberId, organizationId: orgId, isActive: true },
     });
     if (!number) throw new AppError(400, 'Connect a WhatsApp number first');
 
     let contact = data.contactId
-      ? await prisma.contact.findFirst({ where: { id: data.contactId, organizationId: orgId } })
+      ? await prisma.contact.findFirst({
+          where: { id: data.contactId, organizationId: orgId, whatsappNumberId: req.activeWhatsappNumberId },
+        })
       : null;
 
     if (!contact && data.phone) {
       contact = await prisma.contact.findFirst({
-        where: { organizationId: orgId, phone: data.phone.replace(/\D/g, '') },
+        where: {
+          organizationId: orgId,
+          whatsappNumberId: req.activeWhatsappNumberId,
+          phone: data.phone.replace(/\D/g, ''),
+        },
       });
     }
 
     if (!contact) throw new AppError(400, 'Contact not found');
 
-    const unansweredCount = await getBicUnansweredCount(orgId, contact.phone);
+    const unansweredCount = await getBicUnansweredCount(
+      orgId,
+      req.activeWhatsappNumberId,
+      contact.phone
+    );
     if (unansweredCount >= BIC_UNANSWERED_BLOCK_AT) {
       throw new AppError(
         429,
@@ -579,13 +590,21 @@ router.post(
 
     let conversation = data.conversationId
       ? await prisma.conversation.findFirst({
-          where: { id: data.conversationId, organizationId: orgId },
+          where: {
+            id: data.conversationId,
+            organizationId: orgId,
+            whatsappNumberId: req.activeWhatsappNumberId,
+          },
         })
       : null;
 
     if (!conversation) {
       conversation = await prisma.conversation.findFirst({
-        where: { organizationId: orgId, contactId: contact.id },
+        where: {
+          organizationId: orgId,
+          contactId: contact.id,
+          whatsappNumberId: req.activeWhatsappNumberId,
+        },
         orderBy: { lastMessageAt: 'desc' },
       });
     }
@@ -668,7 +687,7 @@ router.get(
     const id = String(req.params.id);
 
     const call = await prisma.call.findFirst({
-      where: { id, organizationId: orgId },
+      where: { id, organizationId: orgId, whatsappNumberId: req.activeWhatsappNumberId },
     });
     if (!call) throw new AppError(404, 'Call not found');
 
@@ -731,7 +750,7 @@ router.get(
     const orgId = req.user!.organizationId!;
     const id = String(req.params.id);
     const call = await prisma.call.findFirst({
-      where: { id, organizationId: orgId },
+      where: { id, organizationId: orgId, whatsappNumberId: req.activeWhatsappNumberId },
       include: {
         contact: true,
         conversation: { select: { id: true, status: true } },
@@ -752,7 +771,9 @@ router.patch(
     const id = String(req.params.id);
     const { notes } = notesSchema.parse(req.body);
 
-    const call = await prisma.call.findFirst({ where: { id, organizationId: orgId } });
+    const call = await prisma.call.findFirst({
+      where: { id, organizationId: orgId, whatsappNumberId: req.activeWhatsappNumberId },
+    });
     if (!call) throw new AppError(404, 'Call not found');
 
     const metadata = ((call.metadata as Record<string, unknown>) || {});
@@ -778,7 +799,7 @@ router.delete(
     const id = String(req.params.id);
 
     const call = await prisma.call.findFirst({
-      where: { id, organizationId: orgId },
+      where: { id, organizationId: orgId, whatsappNumberId: req.activeWhatsappNumberId },
       select: { id: true },
     });
     if (!call) throw new AppError(404, 'Call not found');
@@ -797,7 +818,7 @@ router.post(
     const orgId = req.user!.organizationId!;
     const id = String(req.params.id);
     const call = await prisma.call.findFirst({
-      where: { id, organizationId: orgId },
+      where: { id, organizationId: orgId, whatsappNumberId: req.activeWhatsappNumberId },
       include: { whatsappNumber: true },
     });
     if (!call) throw new AppError(404, 'Call not found');

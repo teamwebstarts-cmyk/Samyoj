@@ -3,6 +3,7 @@ import { createModuleLogger } from '../../utils/logger';
 
 const log = createModuleLogger('flow-lock');
 const LOCK_TTL_SEC = 30;
+const LOCK_HEARTBEAT_MS = 10_000;
 const LOCK_PREFIX = 'flow:conv:';
 const MAX_RETRIES = 5;
 const RETRY_DELAY_MS = 80;
@@ -36,9 +37,19 @@ export async function withConversationLock<T>(
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     const acquired = await tryAcquireLock(conversationId, token);
     if (acquired) {
+      const redis = getRedis();
+      const key = `${LOCK_PREFIX}${conversationId}`;
+      const heartbeat = setInterval(() => {
+        void redis
+          .get(key)
+          .then((current) => (current === token ? redis.expire(key, LOCK_TTL_SEC) : undefined))
+          .catch(() => undefined);
+      }, LOCK_HEARTBEAT_MS);
+      heartbeat.unref?.();
       try {
         return await fn();
       } finally {
+        clearInterval(heartbeat);
         await releaseLock(conversationId, token);
       }
     }

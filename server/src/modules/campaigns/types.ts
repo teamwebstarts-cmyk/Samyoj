@@ -9,6 +9,8 @@ export interface TemplateParams {
   header?: string[];
   headerMediaUrl?: string;
   couponCode?: string;
+  /** Dynamic URL-button suffixes, in button order (templates whose URL contains {{1}}). */
+  buttonUrlSuffixes?: string[];
 }
 
 export interface AudienceConfig {
@@ -30,6 +32,7 @@ export const recipientSchema = z.object({
     .object({
       body: z.array(z.string()).optional(),
       header: z.array(z.string()).optional(),
+      attributes: z.record(z.string(), z.string().max(500)).optional(),
     })
     .optional(),
 });
@@ -38,18 +41,28 @@ export const recipientSchema = z.object({
 export const CONTACT_FIELD_TOKENS = ['contact.name', 'contact.phone', 'contact.email'] as const;
 export type ContactFieldToken = (typeof CONTACT_FIELD_TOKENS)[number];
 
-const PARAM_TOKEN_RE = /^\{\{([a-z_]+)\}\}$/;
+const PARAM_TOKEN_RE = /^\{\{([a-z][a-z0-9_]*)\}\}$/;
+const RESERVED_PARAM_KEYS = new Set(['name', 'phone', 'email']);
 export function isFieldToken(value?: string): boolean {
   return typeof value === 'string' && PARAM_TOKEN_RE.test(value.trim());
 }
-/** Keep tokens only if they map to a real contact field; strip anything else. */
+/** Keep tokens only if they map to a contact field or a custom attribute key. */
 export function sanitizeFieldToken(value?: string): string | undefined {
   if (!value) return undefined;
   const t = value.trim();
   const m = t.match(PARAM_TOKEN_RE);
   if (!m) return undefined;
-  const token = `contact.${m[1]}`;
-  return (CONTACT_FIELD_TOKENS as readonly string[]).includes(token) ? token : undefined;
+  const key = m[1];
+  if (RESERVED_PARAM_KEYS.has(key)) return `contact.${key}`;
+  return `custom.${key}`;
+}
+
+export function billingCategoryForTemplate(
+  category?: string | null
+): 'MARKETING' | 'UTILITY' | 'AUTHENTICATION' {
+  const normalized = (category || '').toUpperCase();
+  if (normalized === 'UTILITY' || normalized === 'AUTHENTICATION') return normalized;
+  return 'MARKETING';
 }
 
 export const templateParamsSchema = z
@@ -58,6 +71,7 @@ export const templateParamsSchema = z
     header: z.array(z.string()).optional(),
     headerMediaUrl: z.string().url().optional(),
     couponCode: z.string().max(15).optional(),
+    buttonUrlSuffixes: z.array(z.string().max(2000)).optional(),
   })
   .optional();
 
@@ -126,6 +140,8 @@ export interface CampaignSettings {
   dailyBudgetInr?: number;
   batchSize?: number;
   batchDelayMs?: number;
+  /** When creating a template, map the first body variable to the customer name. */
+  mapFirstBodyVariableToName?: boolean;
 }
 
 export const DEFAULT_CAMPAIGN_SETTINGS: CampaignSettings = {
@@ -133,4 +149,5 @@ export const DEFAULT_CAMPAIGN_SETTINGS: CampaignSettings = {
   dailyBudgetInr: 5000,
   batchSize: 50,
   batchDelayMs: 1000,
+  mapFirstBodyVariableToName: true,
 };

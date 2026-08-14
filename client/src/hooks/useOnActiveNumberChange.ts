@@ -4,6 +4,9 @@ import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 export interface ActiveNumberChangeEvent {
   numberId: string;
   previousNumberId: string | null;
+  /** Internal workspace row identity, which changes after reconnect. */
+  internalNumberId: string;
+  previousInternalNumberId: string | null;
   /** First resolved number after mount — use normal page load, not a switch */
   isInitial: boolean;
 }
@@ -13,26 +16,37 @@ export interface ActiveNumberChangeEvent {
  * Does not run on the first number resolution (isInitial === true).
  */
 export function useOnActiveNumberChange(handler: (event: ActiveNumberChangeEvent) => void) {
-  const { activeNumber, loading } = useWhatsAppNumber();
-  const numberId = activeNumber?.id ?? null;
+  const { activeNumber, resolved } = useWhatsAppNumber();
+  const numberId = activeNumber?.phoneNumberId ?? null;
+  const internalNumberId = activeNumber?.id ?? null;
   const prevRef = useRef<string | null>(null);
+  const previousInternalRef = useRef<string | null>(null);
   const initialRef = useRef(true);
   const handlerRef = useRef(handler);
   handlerRef.current = handler;
 
   useEffect(() => {
-    if (loading || !numberId) return;
+    if (!resolved || !numberId) return;
 
     const previousNumberId = prevRef.current;
+    const previousInternalNumberId = previousInternalRef.current;
     const isInitial = initialRef.current;
-    const changed = numberId !== previousNumberId;
+    const changed =
+      numberId !== previousNumberId || internalNumberId !== previousInternalNumberId;
 
     if (changed && !isInitial) {
-      handlerRef.current({ numberId, previousNumberId, isInitial: false });
+      handlerRef.current({
+        numberId,
+        previousNumberId,
+        internalNumberId: internalNumberId as string,
+        previousInternalNumberId,
+        isInitial: false,
+      });
     }
     if (changed) {
       prevRef.current = numberId;
+      previousInternalRef.current = internalNumberId;
       initialRef.current = false;
     }
-  }, [numberId, loading]);
+  }, [internalNumberId, numberId, resolved]);
 }

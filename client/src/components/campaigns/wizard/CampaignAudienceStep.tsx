@@ -72,6 +72,10 @@ export default function CampaignAudienceStep({
               onAudienceTypeChange={(audienceType) => setForm((previous) => ({ ...previous, audienceType }))}
               phones={form.phones}
               onPhonesChange={(phones) => setForm((previous) => ({ ...previous, phones }))}
+              recipientDetails={form.recipientDetails}
+              onRecipientDetailsChange={(recipientDetails) =>
+                setForm((previous) => ({ ...previous, recipientDetails }))
+              }
               audienceTags={form.audienceTags}
               onAudienceTagsChange={(audienceTags) =>
                 setForm((previous) => ({ ...previous, audienceTags }))
@@ -87,6 +91,7 @@ export default function CampaignAudienceStep({
               onPreviewCostChange={onPreviewCostChange}
               onPreviewMetricsChange={onPreviewMetricsChange}
               previewMetrics={audienceMetrics}
+              templateCategory={selectedTemplate?.category}
             />
           </div>
         </section>

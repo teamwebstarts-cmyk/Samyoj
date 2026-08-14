@@ -9,27 +9,37 @@ import {
   getFilledTemplatePreview,
   templateNeedsHeaderMedia,
 } from '../campaigns/campaignPreviewUtils';
+import TemplateButtonExtras from '../templates/TemplateButtonExtras';
 import { templateApi } from '../../services/api';
 import { countTemplateVars, getTemplateBodyText, getTemplateHeaderText } from '../../utils/templateUtils';
 import {
-  loadTemplateVariableMeta,
+  fetchTemplateVariableMeta,
   previewParams,
   sourceFromParamValue,
   sourceLabel,
-  tokenForSource,
+  templateDynamicUrlButtons,
+  templateNeedsCoupon,
+  tokenForMeta,
+  variableDescription,
+  type TemplateVariableMeta,
 } from '../../utils/templateForm';
-import type { MessageTemplate } from '../../types';
+import type { MessageTemplate, TemplateParams } from '../../types';
+import { asCustomAttributes } from '../../utils/customAttributes';
 
 interface TemplateComposerProps {
   onSend: (payload: {
     templateName: string;
     templateLanguage: string;
-    templateParams?: { body?: string[]; header?: string[]; headerMediaUrl?: string };
+    templateParams?: TemplateParams;
   }) => void;
   sending: boolean;
   onCancel: () => void;
   /** Show a compact 24h-window hint inside the form body (not a duplicate page title). */
   windowClosed?: boolean;
+  contactName?: string | null;
+  contactPhone?: string | null;
+  contactEmail?: string | null;
+  contactCustomAttributes?: Record<string, string> | unknown | null;
 }
 
 /** Session cache so reopening Template tab doesn’t flash empty / re-fetch every time. */
@@ -39,11 +49,44 @@ export function invalidateApprovedTemplatesCache() {
   approvedTemplatesCache = null;
 }
 
+function autoFillCaption(
+  source: string,
+  contact?: {
+    name?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    customAttributes?: Record<string, string>;
+  },
+  customKey?: string,
+) {
+  if (source === 'contact.name') {
+    const name = contact?.name?.trim();
+    return name ? `Auto: ${name}` : 'Auto: customer name · sent as “Valued customer” if empty';
+  }
+  if (source === 'contact.phone') {
+    const phone = contact?.phone?.trim();
+    return phone ? `Auto: ${phone}` : `Auto: ${sourceLabel(source)}`;
+  }
+  if (source === 'contact.email') {
+    const email = contact?.email?.trim();
+    return email ? `Auto: ${email}` : 'Auto: email · sent as “your registered email” if empty';
+  }
+  if (source === 'contact.custom') {
+    const live = customKey ? contact?.customAttributes?.[customKey]?.trim() : '';
+    return live ? `Auto: ${live}` : `Auto: ${sourceLabel(source, customKey)}`;
+  }
+  return `Auto: ${sourceLabel(source, customKey)}`;
+}
+
 export default function TemplateComposer({
   onSend,
   sending,
   onCancel,
   windowClosed,
+  contactName,
+  contactPhone,
+  contactEmail,
+  contactCustomAttributes,
 }: TemplateComposerProps) {
   const [templates, setTemplates] = useState<MessageTemplate[]>(() => approvedTemplatesCache ?? []);
   const [loading, setLoading] = useState(() => !approvedTemplatesCache);
@@ -53,6 +96,9 @@ export default function TemplateComposer({
   const [bodyParams, setBodyParams] = useState<string[]>([]);
   const [headerParams, setHeaderParams] = useState<string[]>([]);
   const [headerMediaUrl, setHeaderMediaUrl] = useState('');
+  const [couponCode, setCouponCode] = useState('');
+  const [buttonUrlSuffixes, setButtonUrlSuffixes] = useState<string[]>([]);
+  const [variableMeta, setVariableMeta] = useState<TemplateVariableMeta[]>([]);
 
   useEffect(() => {
     if (approvedTemplatesCache) {
@@ -98,31 +144,52 @@ export default function TemplateComposer({
       setBodyParams([]);
       setHeaderParams([]);
       setHeaderMediaUrl('');
+      setCouponCode('');
+      setButtonUrlSuffixes([]);
+      setVariableMeta([]);
       return;
     }
-    const meta = loadTemplateVariableMeta(selected.name);
     const bodyCount = countTemplateVars(getTemplateBodyText(selected));
     const headerCount = countTemplateVars(getTemplateHeaderText(selected));
-    setBodyParams(
-      Array.from({ length: bodyCount }, (_, i) => {
-        const m = meta.find((v) => v.scope === 'body' && v.index === i + 1);
-        const token = m?.suggestedSource && m.suggestedSource !== 'custom' ? tokenForSource(m.suggestedSource) : '';
-        return token;
-      }),
-    );
-    setHeaderParams(
-      Array.from({ length: headerCount }, (_, i) => {
-        const m = meta.find((v) => v.scope === 'header' && v.index === i + 1);
-        return m?.suggestedSource && m.suggestedSource !== 'custom' ? tokenForSource(m.suggestedSource) : '';
-      }),
-    );
+    setBodyParams(Array.from({ length: bodyCount }, () => ''));
+    setHeaderParams(Array.from({ length: headerCount }, () => ''));
     setHeaderMediaUrl('');
+    setCouponCode('');
+    setButtonUrlSuffixes(Array.from({ length: templateDynamicUrlButtons(selected).length }, () => ''));
+    let cancelled = false;
+    fetchTemplateVariableMeta(selected.name, selected.language).then((meta) => {
+      if (cancelled) return;
+      setVariableMeta(meta);
+      setBodyParams(
+        Array.from({ length: bodyCount }, (_, i) => {
+          const m = meta.find((v) => v.scope === 'body' && v.index === i + 1);
+          return tokenForMeta(m);
+        }),
+      );
+      setHeaderParams(
+        Array.from({ length: headerCount }, (_, i) => {
+          const m = meta.find((v) => v.scope === 'header' && v.index === i + 1);
+          return tokenForMeta(m);
+        }),
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [selected]);
 
+  const contactPreview = {
+    name: contactName,
+    phone: contactPhone,
+    email: contactEmail,
+    customAttributes: asCustomAttributes(contactCustomAttributes),
+  };
   const preview = selected
     ? getFilledTemplatePreview(selected, {
-        bodyParams: previewParams(bodyParams),
-        headerParams: previewParams(headerParams),
+        bodyParams: previewParams(bodyParams, contactPreview),
+        headerParams: previewParams(headerParams, contactPreview),
+        couponCode,
+        buttonUrlSuffixes,
       })
     : null;
 
@@ -130,16 +197,27 @@ export default function TemplateComposer({
     setTemplateName(name);
   };
 
+  const needsCoupon = selected ? templateNeedsCoupon(selected) : false;
+  const missingVars = [...bodyParams, ...headerParams].some((value) => !value.trim());
+  const missingCoupon = needsCoupon && !couponCode.trim();
+  const missingUrls = selected
+    ? templateDynamicUrlButtons(selected).some((_, index) => !buttonUrlSuffixes[index]?.trim())
+    : false;
+  const canSendTemplate = Boolean(selected) && !missingVars && !missingCoupon && !missingUrls
+    && (!selected || !templateNeedsHeaderMedia(selected) || Boolean(headerMediaUrl.trim()));
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selected) return;
+    if (!selected || !canSendTemplate) return;
     onSend({
       templateName: selected.name,
       templateLanguage: selected.language,
       templateParams: {
-        body: bodyParams.filter(Boolean),
-        header: headerParams.filter(Boolean),
+        body: bodyParams,
+        header: headerParams,
         headerMediaUrl: headerMediaUrl || undefined,
+        couponCode: couponCode.trim() || undefined,
+        buttonUrlSuffixes: buttonUrlSuffixes.some((value) => value.trim()) ? buttonUrlSuffixes : undefined,
       },
     });
   };
@@ -198,7 +276,11 @@ export default function TemplateComposer({
     );
   }
 
-  const hasVars = bodyParams.length > 0 || headerParams.length > 0 || Boolean(selected && templateNeedsHeaderMedia(selected));
+  const hasVars =
+    bodyParams.length > 0 ||
+    headerParams.length > 0 ||
+    Boolean(selected && templateNeedsHeaderMedia(selected)) ||
+    Boolean(selected && (templateNeedsCoupon(selected) || templateDynamicUrlButtons(selected).length > 0));
 
   return (
     <form
@@ -230,16 +312,17 @@ export default function TemplateComposer({
                   <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
                     {headerParams.map((value, i) => {
                       const source = sourceFromParamValue(value);
+                      const mapped = variableMeta.find((m) => m.scope === 'header' && m.index === i + 1);
                       if (source) {
                         return (
                           <div key={`inbox-header-${selected?.name ?? 't'}-${i}`}>
                             <p className="mb-1 text-[11px] font-semibold text-theme-secondary">
-                              Header {`{{${i + 1}}}`}
+                              Header {variableDescription(variableMeta, 'header', i, `{{${i + 1}}}`)}
                             </p>
                             <div className="flex h-9 items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 dark:border-emerald-800 dark:bg-emerald-950/30">
                               <Sparkles className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
                               <p className="text-[11px] font-bold text-emerald-800 dark:text-emerald-200">
-                                Auto: {sourceLabel(source)}
+                                {autoFillCaption(source, contactPreview, mapped?.customKey)}
                               </p>
                             </div>
                           </div>
@@ -248,7 +331,7 @@ export default function TemplateComposer({
                       return (
                         <AppInput
                           key={`inbox-header-${selected?.name ?? 't'}-${i}`}
-                          label={`Header {{${i + 1}}}`}
+                          label={`Header ${variableDescription(variableMeta, 'header', i, `{{${i + 1}}}`)}`}
                           value={headerParams[i]}
                           className="!h-9 text-[13px]"
                           labelClassName="text-[11px] font-semibold text-theme-secondary"
@@ -280,16 +363,17 @@ export default function TemplateComposer({
                   <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
                     {bodyParams.map((value, i) => {
                       const source = sourceFromParamValue(value);
+                      const mapped = variableMeta.find((m) => m.scope === 'body' && m.index === i + 1);
                       if (source) {
                         return (
                           <div key={`inbox-body-${selected?.name ?? 't'}-${i}`}>
                             <p className="mb-1 text-[11px] font-semibold text-theme-secondary">
-                              Body {`{{${i + 1}}}`}
+                              Body {variableDescription(variableMeta, 'body', i, `{{${i + 1}}}`)}
                             </p>
                             <div className="flex h-9 items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 dark:border-emerald-800 dark:bg-emerald-950/30">
                               <Sparkles className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
                               <p className="text-[11px] font-bold text-emerald-800 dark:text-emerald-200">
-                                Auto: {sourceLabel(source)}
+                                {autoFillCaption(source, contactPreview, mapped?.customKey)}
                               </p>
                             </div>
                           </div>
@@ -298,7 +382,7 @@ export default function TemplateComposer({
                       return (
                         <AppInput
                           key={`inbox-body-${selected?.name ?? 't'}-${i}`}
-                          label={`Body {{${i + 1}}}`}
+                          label={`Body ${variableDescription(variableMeta, 'body', i, `{{${i + 1}}}`)}`}
                           value={bodyParams[i]}
                           className="!h-9 text-[13px]"
                           labelClassName="text-[11px] font-semibold text-theme-secondary"
@@ -315,6 +399,22 @@ export default function TemplateComposer({
                     })}
                   </div>
                 )}
+
+                <TemplateButtonExtras
+                  compact
+                  template={selected}
+                  couponCode={couponCode}
+                  buttonUrlSuffixes={buttonUrlSuffixes}
+                  onCouponChange={setCouponCode}
+                  onSuffixChange={(index, value) => {
+                    setButtonUrlSuffixes((prev) => {
+                      const next = [...prev];
+                      while (next.length <= index) next.push('');
+                      next[index] = value;
+                      return next;
+                    });
+                  }}
+                />
               </div>
             )}
 
@@ -350,7 +450,7 @@ export default function TemplateComposer({
           size="sm"
           icon={<Send size={14} />}
           loading={sending}
-          disabled={!selected}
+          disabled={!canSendTemplate}
         >
           Send template
         </AppButton>

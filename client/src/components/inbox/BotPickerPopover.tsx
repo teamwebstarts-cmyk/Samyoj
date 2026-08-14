@@ -126,16 +126,18 @@ export default function BotPickerPopover({
       <div className="border-b border-theme-border/60 px-3 py-2.5">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[12px] font-semibold text-theme-fg">AI auto-replies</p>
+            <p className="text-[12px] font-semibold text-theme-fg">Automations</p>
             <p className="text-[10px] text-theme-muted">
-              {botIsLive ? 'Bot is replying in this chat' : 'Bot is paused for this chat'}
+              {botIsLive
+                ? 'Journeys, auto-replies, and AI are on for this chat'
+                : 'Paused — journeys, auto-replies, and AI will not send'}
             </p>
           </div>
           <button
             type="button"
             role="switch"
             aria-checked={botIsLive}
-            aria-label={botIsLive ? 'Pause AI bot' : 'Enable AI bot'}
+            aria-label={botIsLive ? 'Pause automations' : 'Enable automations'}
             disabled={toggleBusy}
             onClick={onToggleBot}
             className={`relative h-7 w-12 shrink-0 rounded-full transition disabled:cursor-not-allowed disabled:opacity-50 ${FOCUS_RING_CLASS} ${

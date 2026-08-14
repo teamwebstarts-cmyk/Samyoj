@@ -1,10 +1,13 @@
 import { validatePhone } from './phone';
+import { normalizeCustomKey } from './customAttributes';
 
 export interface ContactImportRow {
   phone: string;
   name?: string;
   tags?: string[];
   notes?: string;
+  customAttributes?: Record<string, string>;
+  extraValues?: string[];
 }
 
 export interface ContactImportPreview {
@@ -13,11 +16,11 @@ export interface ContactImportPreview {
   fileName?: string;
 }
 
-const TEMPLATE_HEADERS = ['phone', 'name', 'tags', 'notes'] as const;
+const TEMPLATE_HEADERS = ['phone', 'name', 'tags', 'notes', 'order_id'] as const;
 
 const TEMPLATE_SAMPLE_ROWS = [
-  ['919876543210', 'John Doe', 'vip,lead', 'Optional notes'],
-  ['14155552671', 'Jane Smith', '', ''],
+  ['919876543210', 'John Doe', 'vip,lead', 'Optional notes', 'ORD-1042'],
+  ['14155552671', 'Jane Smith', '', '', 'ORD-2210'],
 ];
 
 export const CONTACT_IMPORT_TEMPLATE_FILENAME = 'contacts-import-template.csv';
@@ -74,6 +77,28 @@ function parseCsvLine(line: string): string[] {
   return result.map((value) => value.replace(/^"|"$/g, '').trim());
 }
 
+const KNOWN_CONTACT_HEADERS = new Set(['phone', 'name', 'tags', 'notes', 'email', 'opted_in', 'source', 'created_at']);
+
+function extraColumnsFromHeader(headerCells: string[]): Array<{ index: number; key?: string }> {
+  return headerCells.flatMap((header, index) =>
+    header && !KNOWN_CONTACT_HEADERS.has(header) ? [{ index, key: normalizeCustomKey(header) || undefined }] : [],
+  );
+}
+
+function extraValuesFromCells(
+  cells: string[],
+  extras: Array<{ index: number; key?: string }>,
+): { extraValues: string[]; customAttributes: Record<string, string> } {
+  const extraValues: string[] = [];
+  const customAttributes: Record<string, string> = {};
+  extras.forEach(({ index, key }) => {
+    const value = (cells[index] || '').trim();
+    extraValues.push(value);
+    if (key && value) customAttributes[key] = value.slice(0, 500);
+  });
+  return { extraValues, customAttributes };
+}
+
 function parseTags(raw: string | undefined): string[] {
   if (!raw) return [];
   return raw
@@ -111,6 +136,10 @@ function parseCsvContacts(text: string): ContactImportPreview {
   const tagsIndex = hasHeader ? headerCells.indexOf('tags') : 2;
   const notesIndex = hasHeader ? headerCells.indexOf('notes') : 3;
 
+  const extras = hasHeader ? extraColumnsFromHeader(headerCells) : [];
+  const extrasForRow = (cellCount: number) =>
+    hasHeader ? extras : Array.from({ length: Math.max(0, cellCount - 4) }, (_, i) => ({ index: i + 4 }));
+
   const rows: ContactImportRow[] = [];
   const errors: string[] = [];
 
@@ -121,8 +150,9 @@ function parseCsvContacts(text: string): ContactImportPreview {
     const nameRaw = nameIndex >= 0 ? cells[nameIndex] : cells[1];
     const tagsRaw = tagsIndex >= 0 ? cells[tagsIndex] : cells[2];
     const notesRaw = notesIndex >= 0 ? cells[notesIndex] : cells[3];
+    const { extraValues, customAttributes } = extraValuesFromCells(cells, extrasForRow(cells.length));
 
-    if (!phoneRaw && !nameRaw && !tagsRaw && !notesRaw) return;
+    if (!phoneRaw && !nameRaw && !tagsRaw && !notesRaw && !extraValues.some(Boolean)) return;
 
     const phoneResult = validatePhone(phoneRaw);
     if (!phoneResult.ok) {
@@ -135,6 +165,8 @@ function parseCsvContacts(text: string): ContactImportPreview {
       name: nameRaw || undefined,
       tags: parseTags(tagsRaw),
       notes: notesRaw || undefined,
+      customAttributes: Object.keys(customAttributes).length ? customAttributes : undefined,
+      extraValues: extraValues.some(Boolean) ? extraValues : undefined,
     });
   });
 
@@ -181,11 +213,35 @@ function parseJsonContacts(text: string): ContactImportPreview {
         ? parseTags(record.tags)
         : [];
 
+    const customAttributes: Record<string, string> = {};
+    const extraValues: string[] = [];
+    if (record.customAttributes && typeof record.customAttributes === 'object' && !Array.isArray(record.customAttributes)) {
+      for (const [rawKey, rawValue] of Object.entries(record.customAttributes as Record<string, unknown>)) {
+        const key = normalizeCustomKey(rawKey);
+        if (!key || rawValue == null) continue;
+        const textValue = String(rawValue).trim();
+        if (!textValue) continue;
+        customAttributes[key] = textValue.slice(0, 500);
+        extraValues.push(textValue);
+      }
+    }
+    for (const [rawKey, rawValue] of Object.entries(record)) {
+      if (KNOWN_CONTACT_HEADERS.has(rawKey.toLowerCase()) || rawKey === 'customAttributes') continue;
+      if (rawValue == null || typeof rawValue === 'object') continue;
+      const key = normalizeCustomKey(rawKey);
+      const textValue = String(rawValue).trim();
+      if (!key || !textValue) continue;
+      customAttributes[key] = textValue.slice(0, 500);
+      extraValues.push(textValue);
+    }
+
     rows.push({
       phone: phoneResult.phone,
       name: record.name ? String(record.name) : undefined,
       tags,
       notes: record.notes ? String(record.notes) : undefined,
+      customAttributes: Object.keys(customAttributes).length ? customAttributes : undefined,
+      extraValues: extraValues.length ? extraValues : undefined,
     });
   });
 

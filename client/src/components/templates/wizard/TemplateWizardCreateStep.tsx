@@ -27,11 +27,12 @@ const INSERT_VARIABLE_CHIPS: Array<{
   label: string;
   description: string;
   source: TemplateVariableMeta['suggestedSource'];
+  customKey?: string;
 }> = [
   { label: 'Customer name', description: 'Customer name', source: 'contact.name' },
   { label: 'Phone number', description: 'Phone number', source: 'contact.phone' },
   { label: 'Email', description: 'Email address', source: 'contact.email' },
-  { label: 'Order number', description: 'Order number', source: 'custom' },
+  { label: 'Order number', description: 'Order number', source: 'contact.custom', customKey: 'order_id' },
   { label: 'Date / time', description: 'Date or time', source: 'custom' },
   { label: 'Amount', description: 'Amount', source: 'custom' },
 ];
@@ -41,6 +42,7 @@ interface TemplateWizardCreateStepProps {
   onChange: (form: TemplateFormState) => void;
   mode: 'create' | 'resubmit';
   onHeaderPreviewUrl?: (url: string | null) => void;
+  mapFirstBodyVariableToName?: boolean;
 }
 
 function fileToBase64(file: File): Promise<string> {
@@ -57,6 +59,7 @@ export default function TemplateWizardCreateStep({
   onChange,
   mode,
   onHeaderPreviewUrl,
+  mapFirstBodyVariableToName = true,
 }: TemplateWizardCreateStepProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
@@ -68,7 +71,7 @@ export default function TemplateWizardCreateStep({
 
   const insertVariable = (
     target: 'body' | 'header',
-    chip?: { description: string; source: TemplateVariableMeta['suggestedSource'] }
+    chip?: { description: string; source: TemplateVariableMeta['suggestedSource']; customKey?: string }
   ) => {
     const text = target === 'body' ? form.body : form.header;
     const nextIndex = countTemplateVars(text) + 1;
@@ -77,12 +80,23 @@ export default function TemplateWizardCreateStep({
 
     const applyText = (nextText: string) => {
       let variableMeta = form.variableMeta;
-      if (chip) {
+      const inferredChip =
+        chip ||
+        (target === 'body' && nextIndex === 1 && mapFirstBodyVariableToName
+          ? { description: 'Customer name', source: 'contact.name' as const }
+          : undefined);
+      if (inferredChip) {
         const scope = target;
         const existing = variableMeta.filter((m) => !(m.scope === scope && m.index === nextIndex));
         variableMeta = [
           ...existing,
-          { scope, index: nextIndex, description: chip.description, suggestedSource: chip.source },
+          {
+            scope,
+            index: nextIndex,
+            description: inferredChip.description,
+            suggestedSource: inferredChip.source,
+            ...(inferredChip.customKey ? { customKey: inferredChip.customKey } : {}),
+          },
         ];
       }
       onChange(

@@ -1,8 +1,14 @@
 import type { Campaign, CampaignRecipient, MessageTemplate } from '../../../types';
 import { validatePhoneLines } from '../../../utils/phone';
 import { templateNeedsHeaderMedia } from '../campaignPreviewUtils';
+import { templateDynamicUrlButtons, templateNeedsCoupon } from '../../../utils/templateForm';
 
 export type CampaignAudienceType = 'MANUAL' | 'TAGS' | 'CONTACTS' | 'ALL_OPTED_IN';
+
+export type CampaignRecipientDetail = {
+  name?: string;
+  variables?: { body?: string[]; header?: string[]; attributes?: Record<string, string> };
+};
 
 export interface CampaignWizardForm {
   name: string;
@@ -11,12 +17,15 @@ export interface CampaignWizardForm {
   bodyParams: string[];
   headerParams: string[];
   headerMediaUrl: string;
+  couponCode: string;
+  buttonUrlSuffixes: string[];
   audienceType: CampaignAudienceType;
   selectedAudienceTypes: CampaignAudienceType[];
   audienceOperator: 'OR' | 'AND';
   audienceTags: string;
   selectedContactIds: string[];
   phones: string;
+  recipientDetails: Record<string, CampaignRecipientDetail>;
   whatsappNumberId: string;
   scheduleEnabled: boolean;
   scheduledAt: string;
@@ -46,18 +55,40 @@ export function createEmptyCampaignWizardForm(): CampaignWizardForm {
     bodyParams: [],
     headerParams: [],
     headerMediaUrl: '',
+    couponCode: '',
+    buttonUrlSuffixes: [],
     audienceType: 'ALL_OPTED_IN',
     selectedAudienceTypes: ['ALL_OPTED_IN'],
     audienceOperator: 'OR',
     audienceTags: '',
     selectedContactIds: [],
     phones: '',
+    recipientDetails: {},
     whatsappNumberId: '',
     scheduleEnabled: false,
     scheduledAt: '',
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
     testPhone: '',
   };
+}
+
+export function recipientsFromPhones(
+  phones: string[],
+  details?: Record<string, CampaignRecipientDetail>,
+) {
+  return phones.map((phone) => {
+    const extra = details?.[phone];
+    const hasVars = Boolean(
+      extra?.variables?.body?.length ||
+        extra?.variables?.header?.length ||
+        (extra?.variables?.attributes && Object.keys(extra.variables.attributes).length),
+    );
+    return {
+      phone,
+      ...(extra?.name ? { name: extra.name } : {}),
+      ...(hasVars ? { variables: extra?.variables } : {}),
+    };
+  });
 }
 
 export function countTemplateVariables(text?: string) {
@@ -103,12 +134,25 @@ export function campaignToWizardForm(
     bodyParams: campaign.templateParams?.body || Array(countTemplateVariables(bodyText)).fill(''),
     headerParams: campaign.templateParams?.header || Array(countTemplateVariables(headerText)).fill(''),
     headerMediaUrl: campaign.templateParams?.headerMediaUrl || '',
+    couponCode: campaign.templateParams?.couponCode || '',
+    buttonUrlSuffixes: campaign.templateParams?.buttonUrlSuffixes || [],
     audienceType,
     selectedAudienceTypes,
     audienceOperator: campaign.audienceConfig?.operator || 'OR',
     audienceTags: (groupedTags || campaign.audienceConfig?.tags || []).join(', '),
     selectedContactIds: groupedContactIds || campaign.audienceConfig?.contactIds || [],
     phones: (campaign.recipients || []).map((recipient) => recipient.phone).join('\n'),
+    recipientDetails: Object.fromEntries(
+      (campaign.recipients || [])
+        .filter((recipient) => recipient.name || recipient.variables)
+        .map((recipient) => [
+          recipient.phone,
+          {
+            ...(recipient.name ? { name: recipient.name } : {}),
+            ...(recipient.variables ? { variables: recipient.variables } : {}),
+          },
+        ]),
+    ),
     whatsappNumberId: campaign.whatsappNumberId || '',
     scheduleEnabled: Boolean(campaign.scheduledAt),
     scheduledAt: toDateTimeLocalValue(campaign.scheduledAt),
@@ -131,6 +175,10 @@ export function buildCampaignPayload(
       body: form.bodyParams,
       header: form.headerParams,
       headerMediaUrl: form.headerMediaUrl || undefined,
+      couponCode: form.couponCode.trim() || undefined,
+      buttonUrlSuffixes: form.buttonUrlSuffixes.some((value) => value.trim())
+        ? form.buttonUrlSuffixes
+        : undefined,
     },
   };
 
@@ -174,7 +222,7 @@ export function buildCampaignPayload(
       ),
     ];
     if (!phones.length) throw new Error('Add at least one valid phone number');
-    payload.recipients = phones.map((phone) => ({ phone }));
+    payload.recipients = recipientsFromPhones(phones, form.recipientDetails);
   } else if (hasTags || form.audienceType === 'TAGS') {
     payload.audienceConfig = {
       tags: form.audienceTags
@@ -217,6 +265,13 @@ export function validateCampaignWizardStage(
     }
     if (selectedTemplate && templateNeedsHeaderMedia(selectedTemplate) && !form.headerMediaUrl.trim()) {
       return 'Add the required header media URL before continuing.';
+    }
+    if (selectedTemplate && templateNeedsCoupon(selectedTemplate) && !form.couponCode.trim()) {
+      return 'Add the copy-code / coupon for this template.';
+    }
+    const dynamicUrls = selectedTemplate ? templateDynamicUrlButtons(selectedTemplate) : [];
+    if (dynamicUrls.some((_, index) => !form.buttonUrlSuffixes[index]?.trim())) {
+      return 'Add the website link suffix for each trackable button.';
     }
   }
 

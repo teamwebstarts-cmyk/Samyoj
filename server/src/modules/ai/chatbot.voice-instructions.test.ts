@@ -3,6 +3,8 @@ import {
   embedVoiceInstructions,
   extractVoiceInstructions,
   stripVoiceInstructions,
+  relaxClippedVoiceLines,
+  VOICE_SAFETY_RULES,
 } from './voice-instructions';
 
 describe('extractVoiceInstructions', () => {
@@ -38,5 +40,26 @@ describe('stripVoiceInstructions / embedVoiceInstructions', () => {
     const embedded = embedVoiceInstructions('Be warm.', 'Keep replies short on calls.');
     expect(extractVoiceInstructions(embedded)).toBe('Keep replies short on calls.');
     expect(stripVoiceInstructions(embedded)).toBe('Be warm.');
+  });
+});
+
+describe('VOICE_SAFETY_RULES', () => {
+  it('asks for a natural phone turn, not a clipped 5-15 word IVR', () => {
+    expect(VOICE_SAFETY_RULES).not.toMatch(/5-15 words/i);
+    expect(VOICE_SAFETY_RULES).toMatch(/one or two spoken sentences/i);
+    expect(VOICE_SAFETY_RULES).toMatch(/Hinglish/i);
+    expect(VOICE_SAFETY_RULES).toMatch(/end_call/);
+    expect(VOICE_SAFETY_RULES).toMatch(/continuous thought/i);
+  });
+});
+
+describe('relaxClippedVoiceLines', () => {
+  it('removes old 15-word call caps from stored bot instructions', () => {
+    const relaxed = relaxClippedVoiceLines(
+      'Be warm. Voice replies must be under 15 words, one sentence. Help the customer.'
+    );
+    expect(relaxed).not.toMatch(/under 15 words/i);
+    expect(relaxed).toMatch(/Be warm/);
+    expect(relaxed).toMatch(/Help the customer/);
   });
 });

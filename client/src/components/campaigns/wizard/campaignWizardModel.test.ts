@@ -101,4 +101,21 @@ describe('campaignWizardModel', () => {
       },
     });
   });
+
+  it('includes extra CSV columns as per-recipient template variables', () => {
+    const form = {
+      ...createEmptyCampaignWizardForm(),
+      name: 'CSV offer',
+      templateName: template.name,
+      audienceType: 'MANUAL' as const,
+      phones: '919123456789',
+      recipientDetails: {
+        '919123456789': { name: 'Asha', variables: { body: ['ORD-1042'] } },
+      },
+    };
+
+    expect(buildCampaignPayload(form).recipients).toEqual([
+      { phone: '919123456789', name: 'Asha', variables: { body: ['ORD-1042'] } },
+    ]);
+  });
 });

@@ -50,7 +50,7 @@ export function useConversationList({
   page,
   pageSize,
 }: ListFilters) {
-  const { hasConnectedNumber, loading: numbersLoading } = useWhatsAppNumber();
+  const { hasConnectedNumber, activeNumber, resolved, loading: numbersLoading } = useWhatsAppNumber();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -62,14 +62,15 @@ export function useConversationList({
 
   const load = useCallback(async () => {
     const requestId = ++requestRef.current;
+    const requestNumberId = activeNumber?.id ?? null;
 
     // Wait for number context; never show another number's / orphan chats while disconnected.
-    if (numbersLoading) {
+    if (numbersLoading || !resolved) {
       setLoading(true);
       setError(false);
       return;
     }
-    if (!hasConnectedNumber) {
+    if (!hasConnectedNumber || !requestNumberId) {
       setConversations([]);
       setTotal(0);
       setError(false);
@@ -90,7 +91,7 @@ export function useConversationList({
       });
 
       const { data } = await inboxApi.list(params);
-      if (requestId !== requestRef.current) return;
+      if (requestId !== requestRef.current || requestNumberId !== activeNumber?.id) return;
       const payload = data.data as {
         conversations?: Conversation[];
         total?: number;
@@ -100,10 +101,10 @@ export function useConversationList({
       setTotal(payload.total ?? 0);
       setConversations(list);
     } catch (err) {
-      if (requestId === requestRef.current) setError(true);
+      if (requestId === requestRef.current && requestNumberId === activeNumber?.id) setError(true);
       console.error(err);
     } finally {
-      if (requestId === requestRef.current) {
+      if (requestId === requestRef.current && requestNumberId === activeNumber?.id) {
         setLoading(false);
       }
     }
@@ -115,6 +116,8 @@ export function useConversationList({
     page,
     pageSize,
     hasConnectedNumber,
+    activeNumber,
+    resolved,
     numbersLoading,
   ]);
 

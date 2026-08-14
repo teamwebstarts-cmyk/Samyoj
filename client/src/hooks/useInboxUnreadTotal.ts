@@ -13,12 +13,12 @@ function parseTotal(payload: unknown): number {
 
 /** Fetches org unread total for the sidebar badge. Polls + refreshes on focus / number switch. */
 export function useInboxUnreadTotal() {
-  const { hasConnectedNumber, loading: numbersLoading } = useWhatsAppNumber();
+  const { hasConnectedNumber, activeNumber, resolved, loading: numbersLoading } = useWhatsAppNumber();
   const [total, setTotal] = useState(0);
 
   const refresh = useCallback(async () => {
-    if (numbersLoading) return;
-    if (!hasConnectedNumber) {
+    if (numbersLoading || !resolved) return;
+    if (!hasConnectedNumber || !activeNumber) {
       setTotal(0);
       return;
     }
@@ -28,7 +28,7 @@ export function useInboxUnreadTotal() {
     } catch {
       // Keep last known count on transient failures
     }
-  }, [hasConnectedNumber, numbersLoading]);
+  }, [activeNumber, hasConnectedNumber, numbersLoading, resolved]);
 
   useEffect(() => {
     void refresh();

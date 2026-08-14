@@ -128,7 +128,7 @@ export async function resolvePendingCallAccessToken(
     ? { id: pending.whatsappNumberId }
     : { phoneNumberId: pending.phoneNumberId };
   const number = await prisma.whatsappNumber.findFirst({
-    where: { ...where, organizationId: pending.organizationId },
+    where: { ...where, organizationId: pending.organizationId, isActive: true },
   });
   if (!number) return null;
   const { MetaWhatsAppService } = await import('../whatsapp/meta.service');
@@ -182,15 +182,23 @@ function normalizePhoneDigits(phone: string): string {
   return phone.replace(/\D/g, '');
 }
 
-function bicUnansweredKey(orgId: string, contactPhone: string): string {
-  return `${BIC_UNANSWERED_PREFIX}${orgId}:${normalizePhoneDigits(contactPhone)}`;
+export function buildBicUnansweredKey(
+  orgId: string,
+  whatsappNumberId: string,
+  contactPhone: string
+): string {
+  return `${BIC_UNANSWERED_PREFIX}${orgId}:${whatsappNumberId}:${normalizePhoneDigits(contactPhone)}`;
 }
 
 type BicUnansweredState = { count: number; lastAt: number };
 
-async function readBicState(orgId: string, contactPhone: string): Promise<BicUnansweredState> {
+async function readBicState(
+  orgId: string,
+  whatsappNumberId: string,
+  contactPhone: string
+): Promise<BicUnansweredState> {
   const redis = getRedis();
-  const raw = await redis.get(bicUnansweredKey(orgId, contactPhone));
+  const raw = await redis.get(buildBicUnansweredKey(orgId, whatsappNumberId, contactPhone));
   if (!raw) return { count: 0, lastAt: 0 };
   try {
     const parsed = JSON.parse(raw) as BicUnansweredState;
@@ -204,9 +212,14 @@ async function readBicState(orgId: string, contactPhone: string): Promise<BicUna
   return { count: 0, lastAt: 0 };
 }
 
-export async function getBicUnansweredCount(orgId: string, contactPhone: string): Promise<number> {
+export async function getBicUnansweredCount(
+  orgId: string,
+  whatsappNumberId: string | undefined | null,
+  contactPhone: string
+): Promise<number> {
+  if (!whatsappNumberId) return BIC_UNANSWERED_BLOCK_AT;
   try {
-    const state = await readBicState(orgId, contactPhone);
+    const state = await readBicState(orgId, whatsappNumberId, contactPhone);
     if (state.count <= 0) return 0;
     // Time-based release: after cooldown, allow dialing again (counter soft-resets).
     if (
@@ -214,7 +227,7 @@ export async function getBicUnansweredCount(orgId: string, contactPhone: string)
       state.lastAt > 0 &&
       Date.now() - state.lastAt >= BIC_UNANSWERED_COOLDOWN_MS
     ) {
-      await clearBicUnanswered(orgId, contactPhone);
+      await clearBicUnanswered(orgId, whatsappNumberId, contactPhone);
       return 0;
     }
     return state.count;
@@ -229,11 +242,15 @@ export async function getBicUnansweredCount(orgId: string, contactPhone: string)
 }
 
 /** Increment consecutive unanswered outbound BIC counter (TTL 7d). Returns new count. */
-export async function incrBicUnanswered(orgId: string, contactPhone: string): Promise<number> {
+export async function incrBicUnanswered(
+  orgId: string,
+  whatsappNumberId: string,
+  contactPhone: string
+): Promise<number> {
   try {
     const redis = getRedis();
-    const key = bicUnansweredKey(orgId, contactPhone);
-    const prev = await readBicState(orgId, contactPhone);
+    const key = buildBicUnansweredKey(orgId, whatsappNumberId, contactPhone);
+    const prev = await readBicState(orgId, whatsappNumberId, contactPhone);
     const next: BicUnansweredState = { count: prev.count + 1, lastAt: Date.now() };
     await redis.set(key, JSON.stringify(next), 'EX', BIC_UNANSWERED_TTL_SEC);
     return next.count;
@@ -247,10 +264,15 @@ export async function incrBicUnanswered(orgId: string, contactPhone: string): Pr
 }
 
 /** Clear consecutive unanswered counter after a BIC call is answered. */
-export async function clearBicUnanswered(orgId: string, contactPhone: string): Promise<void> {
+export async function clearBicUnanswered(
+  orgId: string,
+  whatsappNumberId: string | undefined | null,
+  contactPhone: string
+): Promise<void> {
+  if (!whatsappNumberId) return;
   try {
     const redis = getRedis();
-    await redis.del(bicUnansweredKey(orgId, contactPhone));
+    await redis.del(buildBicUnansweredKey(orgId, whatsappNumberId, contactPhone));
   } catch (err) {
     log.warn('BIC unanswered clear failed', {
       orgId,
@@ -269,10 +291,12 @@ export async function recordBicUnansweredIfNeeded(call: {
   direction: string;
   answeredAt?: Date | null;
   organizationId: string;
+  whatsappNumberId?: string | null;
   toPhone: string;
 }): Promise<void> {
   if (call.direction !== 'BUSINESS_INITIATED') return;
   if (call.answeredAt) return;
+  if (!call.whatsappNumberId) return;
   try {
     if (call.id) {
       const redis = getRedis();
@@ -291,5 +315,5 @@ export async function recordBicUnansweredIfNeeded(call: {
       error: err instanceof Error ? err.message : String(err),
     });
   }
-  await incrBicUnanswered(call.organizationId, call.toPhone);
+  await incrBicUnanswered(call.organizationId, call.whatsappNumberId, call.toPhone);
 }

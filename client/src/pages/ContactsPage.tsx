@@ -10,9 +10,11 @@ import ContactTable from '../components/contacts/ContactTable';
 import ContactCard from '../components/contacts/ContactCard';
 import ContactTagManager from '../components/contacts/ContactTagManager';
 import ImportContactsModal from '../components/contacts/ImportContactsModal';
+import type { ContactImportRow } from '../utils/contactImport';
 import AppButton from '../components/ui/AppButton';
 import AppInput from '../components/ui/AppInput';
 import AppTextarea from '../components/ui/AppTextarea';
+import { asCustomAttributes, parseCustomAttributeLines, stringifyCustomAttributes } from '../utils/customAttributes';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import EmptyState from '../components/ui/EmptyState';
 import ListToolbar from '../components/ui/ListToolbar';
@@ -27,6 +29,7 @@ import { ModalCallout } from '../components/ui/modalUi';
 import { DEFAULT_PAGE_SIZE } from '../constants/pagination';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
+import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { contactApi } from '../services/api';
 import { downloadBlob } from '../utils/contactUtils';
 import { PHONE_HINT, PHONE_PLACEHOLDER, validatePhone } from '../utils/phone';
@@ -35,7 +38,7 @@ import { readNumberCache, writeNumberCache } from '../utils/whatsappNumberCache'
 import { messagingConsent } from '../utils/plainLanguage';
 import type { Contact, ContactSummary, ContactTag } from '../types';
 
-const emptyForm = { phone: '', name: '', email: '', tags: '', notes: '', optedIn: true };
+const emptyForm = { phone: '', name: '', email: '', tags: '', notes: '', customAttributes: '', optedIn: true };
 
 const CONTACTS_CACHE_KEY = 'contacts';
 
@@ -51,6 +54,7 @@ type ContactsNumberCache = {
 };
 
 export default function ContactsPage() {
+  const { activeNumber, resolved } = useWhatsAppNumber();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const viewTab = searchParams.get('tab') === 'pipeline' ? 'pipeline' : 'all';
@@ -98,6 +102,8 @@ export default function ContactsPage() {
 
   const debouncedSearch = useDebouncedValue(search);
   const loadRef = useRef<() => void>(() => {});
+  const activeNumberIdRef = useRef<string | null>(null);
+  activeNumberIdRef.current = activeNumber?.id ?? null;
   const contactsSnapshotRef = useRef<ContactsNumberCache>({
     contacts: [],
     total: 0,
@@ -122,15 +128,20 @@ export default function ContactsPage() {
   const tagNames = useMemo(() => availableTags.map((t) => t.name), [availableTags]);
 
   const refreshTags = useCallback(() => {
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
     contactApi
       .tags()
-      .then(({ data }) => setAvailableTags(data.data.tags || []))
+      .then(({ data }) => {
+        if (requestNumberId !== activeNumberIdRef.current) return;
+        setAvailableTags(data.data.tags || []);
+      })
       .catch(console.error);
-  }, []);
+  }, [activeNumber, resolved]);
 
   useEffect(() => {
     refreshTags();
-  }, [refreshTags]);
+  }, [refreshTags, resolved, activeNumber?.id]);
 
   const listParams = useMemo(() => {
     const params: Record<string, string> = {
@@ -150,10 +161,13 @@ export default function ContactsPage() {
   }, [debouncedSearch, tagFilter, sourceFilter, quickFilter, page]);
 
   const load = useCallback(() => {
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
     setLoading(true);
     contactApi
       .list(listParams)
       .then(({ data }) => {
+        if (requestNumberId !== activeNumberIdRef.current) return;
         setContacts(data.data.contacts);
         setTotal(data.data.total);
         setSummary(
@@ -161,20 +175,23 @@ export default function ContactsPage() {
         );
       })
       .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [listParams]);
+      .finally(() => {
+        if (requestNumberId === activeNumberIdRef.current) setLoading(false);
+      });
+  }, [activeNumber, listParams, resolved]);
 
   loadRef.current = load;
 
   // Deep-link from Inbox “View full contact”
   useEffect(() => {
     const id = searchParams.get('highlight');
-    if (!id) return;
+    if (!id || !resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
     let cancelled = false;
     contactApi
       .get(id)
       .then(({ data }) => {
-        if (cancelled) return;
+        if (cancelled || requestNumberId !== activeNumberIdRef.current) return;
         const contact = (data.data?.contact ?? data.data) as Contact;
         if (!contact?.id) return;
         setDetailContact(contact);
@@ -192,7 +209,7 @@ export default function ContactsPage() {
     return () => {
       cancelled = true;
     };
-  }, [searchParams, setSearchParams]);
+  }, [activeNumber, resolved, searchParams, setSearchParams]);
 
   useOnActiveNumberChange(({ numberId, previousNumberId, isInitial }) => {
     if (isInitial) return;
@@ -214,13 +231,29 @@ export default function ContactsPage() {
       setDetailContact(null);
       setDetailOpen(false);
       setSelectedIds([]);
-      setLoading(false);
+      setDeleteTarget(null);
+      setBulkDeleteOpen(false);
+      setBulkTagOpen(false);
+      setSlideOpen(false);
+      setEditing(null);
+      setForm(emptyForm);
+      setLoading(true);
+      loadRef.current();
       return;
     }
 
     setDetailContact(null);
     setDetailOpen(false);
     setSelectedIds([]);
+    setContacts([]);
+    setTotal(0);
+    setSummary({ total: 0, named: 0, optedIn: 0, active7d: 0, tagged: 0 });
+    setDeleteTarget(null);
+    setBulkDeleteOpen(false);
+    setBulkTagOpen(false);
+    setSlideOpen(false);
+    setEditing(null);
+    setForm(emptyForm);
     loadRef.current();
   });
 
@@ -245,6 +278,7 @@ export default function ContactsPage() {
       email: contact.email || '',
       tags: contact.tags.join(', '),
       notes: contact.notes || '',
+      customAttributes: stringifyCustomAttributes(asCustomAttributes(contact.customAttributes)),
       optedIn: contact.optedIn ?? false,
     });
     setSlideOpen(true);
@@ -287,6 +321,7 @@ export default function ContactsPage() {
           email: form.email || undefined,
           tags,
           notes: form.notes || undefined,
+          customAttributes: parseCustomAttributeLines(form.customAttributes),
           optedIn: form.optedIn,
         });
       } else {
@@ -296,6 +331,7 @@ export default function ContactsPage() {
           email: form.email || undefined,
           tags,
           notes: form.notes || undefined,
+          customAttributes: parseCustomAttributeLines(form.customAttributes),
           optedIn: form.optedIn,
         });
       }
@@ -347,9 +383,7 @@ export default function ContactsPage() {
     setDeleteTarget(contact);
   };
 
-  const handleImportContacts = async (
-    rows: Array<{ phone: string; name?: string; tags?: string[]; notes?: string }>
-  ) => {
+  const handleImportContacts = async (rows: ContactImportRow[]) => {
     await contactApi.import(rows);
     load();
     refreshTags();
@@ -809,6 +843,16 @@ export default function ContactsPage() {
             value={form.notes}
             onChange={(e) => setForm({ ...form, notes: e.target.value })}
             rows={3}
+          />
+          <AppTextarea
+            id="contact-custom-attributes"
+            label="Custom fields"
+            hint="Used in templates as {{order_id}}. One per line: key=value"
+            placeholder={'order_id=ORD-1042\ncity=Mumbai'}
+            value={form.customAttributes}
+            onChange={(e) => setForm({ ...form, customAttributes: e.target.value })}
+            rows={3}
+            className="font-mono text-[13px]"
           />
           <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-theme-border bg-theme-subtle/40 px-4 py-3.5">
             <input

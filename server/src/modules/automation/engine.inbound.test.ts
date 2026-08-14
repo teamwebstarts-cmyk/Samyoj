@@ -1,0 +1,173 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('../../config/database', () => ({
+  default: {
+    conversation: { findFirst: vi.fn() },
+    contact: { findFirst: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
+    automation: { findMany: vi.fn() },
+    message: { create: vi.fn() },
+    automationLog: { findFirst: vi.fn(), create: vi.fn() },
+  },
+}));
+
+vi.mock('../flows/engine', () => ({
+  handleInboundFlow: vi.fn(),
+}));
+
+vi.mock('../../config/queues', () => ({
+  flowQueue: { getJob: vi.fn(), add: vi.fn() },
+  automationQueue: { getJob: vi.fn(), add: vi.fn() },
+}));
+
+vi.mock('../ai/chatbot.service', () => ({
+  logAutomationRun: vi.fn(),
+  performHandoff: vi.fn(),
+  generateBotReply: vi.fn(),
+}));
+
+vi.mock('../ai/bot.service', () => ({
+  hasEnabledBots: vi.fn(),
+}));
+
+vi.mock('../ai/lock', () => ({
+  withAiBotConversationLock: vi.fn(async (_id: string, fn: () => Promise<unknown>) => fn()),
+}));
+
+vi.mock('../messages/send.service', () => ({
+  deliverOutboundMessage: vi.fn(),
+  isCswClosedError: () => false,
+}));
+
+vi.mock('../whatsapp/meta.service', () => ({
+  MetaWhatsAppService: {
+    decryptToken: vi.fn(),
+    sendTypingIndicator: vi.fn(),
+  },
+}));
+
+vi.mock('../settings/business-hours', () => ({
+  getOrgBusinessHours: vi.fn(),
+  isWithinBusinessHours: vi.fn(() => true),
+}));
+
+import prisma from '../../config/database';
+import { flowQueue, automationQueue } from '../../config/queues';
+import { logAutomationRun } from '../ai/chatbot.service';
+import { hasEnabledBots } from '../ai/bot.service';
+import { handleInboundFlow } from '../flows/engine';
+import { FLOW_LOCK_BUSY } from '../flows/inbound-wait';
+import { handleInboundAutomations } from './engine';
+
+const conversationMock = vi.mocked(prisma.conversation.findFirst);
+const contactMock = vi.mocked(prisma.contact.findFirst);
+const automationMock = vi.mocked(prisma.automation.findMany);
+const logFindMock = vi.mocked(prisma.automationLog.findFirst);
+const flowHandled = vi.mocked(handleInboundFlow);
+const flowQueueAdd = vi.mocked(flowQueue.add);
+const flowQueueGetJob = vi.mocked(flowQueue.getJob);
+const automationQueueAdd = vi.mocked(automationQueue.add);
+const logRun = vi.mocked(logAutomationRun);
+const botsEnabled = vi.mocked(hasEnabledBots);
+
+const payload = {
+  organizationId: 'org-1',
+  conversationId: 'conv-1',
+  contactId: 'contact-1',
+  messageId: 'msg-1',
+  contactPhone: '919999999999',
+  phoneNumberId: 'phone-1',
+  encryptedToken: 'token',
+  content: 'price please',
+  isNewConversation: false,
+};
+
+describe('handleInboundAutomations', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    conversationMock.mockResolvedValue({ botActive: true } as never);
+    contactMock.mockResolvedValue({ optedIn: true } as never);
+    automationMock.mockResolvedValue([]);
+    logFindMock.mockResolvedValue(null);
+    flowQueueGetJob.mockResolvedValue(undefined);
+    flowQueueAdd.mockResolvedValue({} as never);
+    automationQueueAdd.mockResolvedValue({} as never);
+    botsEnabled.mockResolvedValue(true);
+    vi.mocked(automationQueue.getJob).mockResolvedValue(undefined);
+  });
+
+  it('skips flow, static, and AI when Inbox paused the bot', async () => {
+    conversationMock.mockResolvedValue({ botActive: false } as never);
+
+    await handleInboundAutomations(payload);
+
+    expect(flowHandled).not.toHaveBeenCalled();
+    expect(automationMock).not.toHaveBeenCalled();
+    expect(automationQueueAdd).not.toHaveBeenCalled();
+    expect(logRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: 'conv-1',
+        action: 'bot_paused',
+        status: 'skipped',
+      })
+    );
+  });
+
+  it('requeues on FLOW_LOCK_BUSY instead of falling through to AI', async () => {
+    flowHandled.mockResolvedValue(FLOW_LOCK_BUSY);
+
+    await handleInboundAutomations(payload);
+
+    expect(flowQueueAdd).toHaveBeenCalledWith(
+      'retry-inbound',
+      expect.objectContaining({ conversationId: 'conv-1', lockRetry: 1 }),
+      expect.objectContaining({ jobId: 'flow-retry-conv-1' })
+    );
+    expect(automationMock).not.toHaveBeenCalled();
+    expect(automationQueueAdd).not.toHaveBeenCalled();
+  });
+
+  it('does not run static auto-replies when a flow handled the inbound', async () => {
+    flowHandled.mockResolvedValue(true);
+
+    await handleInboundAutomations(payload);
+
+    expect(automationMock).not.toHaveBeenCalled();
+    expect(automationQueueAdd).not.toHaveBeenCalled();
+  });
+
+  it('skips static auto-replies when the contact opted out', async () => {
+    flowHandled.mockResolvedValue(false);
+    contactMock.mockResolvedValue({ optedIn: false } as never);
+
+    await handleInboundAutomations(payload);
+
+    expect(automationMock).not.toHaveBeenCalled();
+    expect(automationQueueAdd).not.toHaveBeenCalled();
+    expect(logRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'opted_out',
+        status: 'skipped',
+      })
+    );
+  });
+
+  it('queues the AI bot when no flow and no static rule match', async () => {
+    flowHandled.mockResolvedValue(false);
+    conversationMock
+      .mockResolvedValueOnce({ botActive: true } as never)
+      .mockResolvedValueOnce({
+        botActive: true,
+        botHandoffAt: null,
+        assignedAgentId: null,
+        status: 'OPEN',
+      } as never);
+
+    await handleInboundAutomations(payload);
+
+    expect(automationQueueAdd).toHaveBeenCalledWith(
+      'ai-chatbot',
+      expect.objectContaining({ conversationId: 'conv-1' }),
+      expect.objectContaining({ jobId: 'ai-bot-conv-1' })
+    );
+  });
+});

@@ -6,7 +6,8 @@ import { MetaWhatsAppService } from '../whatsapp/meta.service';
 import { getOrgWhatsappContext } from '../whatsapp/context';
 import { resolveMetaCredentials } from '../whatsapp/org-meta.service';
 import { resolveActiveWhatsappNumber } from '../whatsapp/active-number';
-import { buildTemplateComponents } from '../campaigns/template-params';
+import { buildTemplateComponents, mergeTemplateParams } from '../campaigns/template-params';
+import { assertApprovedCampaignTemplate } from '../campaigns/template-validation';
 import { buildTemplateComponents as buildCreateComponents } from './builder';
 import { getTemplateUsage } from './analytics';
 import { invalidateTemplateCache } from './cache';
@@ -15,6 +16,9 @@ import {
   createFromLibrarySchema,
   testSendSchema,
 } from './types';
+import { getTemplateVariableMeta, saveTemplateVariableMeta } from './variable-meta';
+import prisma from '../../config/database';
+import { normalizePhoneIdentity } from '../../utils/phone';
 
 const router = Router();
 
@@ -84,8 +88,54 @@ router.get(
   requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
     const name = req.params.name as string;
-    const usage = await getTemplateUsage(req.user!.organizationId!, name);
+    const usage = await getTemplateUsage(
+      req.user!.organizationId!,
+      name,
+      req.activeWhatsappNumberId
+    );
     sendSuccess(res, usage);
+  })
+);
+
+const variableMetaSchema = z.object({
+  language: z.string().optional(),
+  meta: z.array(
+    z.object({
+      scope: z.enum(['body', 'header']),
+      index: z.number().int().min(1),
+      description: z.string().max(200).default(''),
+      suggestedSource: z.enum(['contact.name', 'contact.phone', 'contact.email', 'custom', 'contact.custom']).optional(),
+      customKey: z.string().max(64).optional(),
+    })
+  ),
+});
+
+router.get(
+  '/:name/variable-meta',
+  authenticate,
+  requireOrg,
+  asyncHandler(async (req: Request, res: Response) => {
+    const name = req.params.name as string;
+    const language = typeof req.query.language === 'string' ? req.query.language : undefined;
+    const meta = await getTemplateVariableMeta(req.user!.organizationId!, name, language);
+    sendSuccess(res, { meta });
+  })
+);
+
+router.put(
+  '/:name/variable-meta',
+  authenticate,
+  requireOrg,
+  asyncHandler(async (req: Request, res: Response) => {
+    const name = req.params.name as string;
+    const data = variableMetaSchema.parse(req.body);
+    const meta = await saveTemplateVariableMeta(
+      req.user!.organizationId!,
+      name,
+      data.meta,
+      data.language
+    );
+    sendSuccess(res, { meta });
   })
 );
 
@@ -206,7 +256,40 @@ router.post(
     }
 
     const templateLanguage = language || template.language || 'en_US';
-    const components = buildTemplateComponents(templateParams || null, template);
+    const contact = await prisma.contact.findUnique({
+      where: {
+        organizationId_whatsappNumberId_normalizedPhone: {
+          organizationId: orgId,
+          whatsappNumberId: whatsappNumber.id,
+          normalizedPhone: normalizePhoneIdentity(phone),
+        },
+      },
+      select: { name: true, phone: true, email: true, customAttributes: true },
+    });
+    const resolvedParams = mergeTemplateParams(
+      templateParams || null,
+      null,
+      contact?.name,
+      template,
+      contact
+        ? {
+            name: contact.name,
+            phone: contact.phone,
+            email: contact.email,
+            customAttributes: contact.customAttributes,
+          }
+        : { phone }
+    );
+    try {
+      assertApprovedCampaignTemplate(template, {
+        name,
+        language: templateLanguage,
+        params: resolvedParams,
+      });
+    } catch (error) {
+      throw new AppError(400, error instanceof Error ? error.message : String(error));
+    }
+    const components = buildTemplateComponents(resolvedParams, template);
 
     const result = await MetaWhatsAppService.sendMessage(phoneNumberId, accessToken, {
       to: phone,

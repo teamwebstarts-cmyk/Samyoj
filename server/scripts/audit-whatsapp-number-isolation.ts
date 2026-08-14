@@ -292,7 +292,8 @@ async function main() {
     SELECT c.organization_id, c.id AS entity_id,
       jsonb_build_object('phone', c.phone) AS details
     FROM contacts c
-    WHERE NOT EXISTS (SELECT 1 FROM conversations cv WHERE cv.contact_id = c.id)
+    WHERE c.whatsapp_number_id IS NULL
+      AND NOT EXISTS (SELECT 1 FROM conversations cv WHERE cv.contact_id = c.id)
   `);
   const orphanConversations = await query(`
     SELECT organization_id, id AS entity_id,

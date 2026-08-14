@@ -25,11 +25,13 @@ export interface CallingSettings {
   sarvamSttPrompt: string | null;
   liveTransferEnabled: boolean;
   transferMode: TransferMode;
+  /** Auto hang-up so AI calls cannot burn credits forever. */
+  maxCallDurationSec: number;
 }
 
 export const DEFAULT_CALLING_SETTINGS: CallingSettings = {
   aiAutoAnswer: true,
-  aiGreeting: 'Hello! Thank you for calling. How can I help you today?',
+  aiGreeting: 'Hi, thanks for calling. How can I help?',
   defaultBotId: null,
   routingMode: 'ai_then_agents',
   agentRingTimeoutSec: 25,
@@ -42,7 +44,7 @@ export const DEFAULT_CALLING_SETTINGS: CallingSettings = {
     'Sorry we missed your call! Reply here on WhatsApp and our team will help you shortly.',
   recordingConsentEnabled: false,
   recordingConsentMessage:
-    'This call may be recorded for quality and training purposes.',
+    'This call may be recorded.',
   ttsVoice: null,
   ttsLanguage: null,
   deepgramLanguage: null,
@@ -52,4 +54,5 @@ export const DEFAULT_CALLING_SETTINGS: CallingSettings = {
   sarvamSttPrompt: null,
   liveTransferEnabled: false,
   transferMode: 'message_only',
+  maxCallDurationSec: 480,
 };

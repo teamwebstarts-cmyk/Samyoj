@@ -188,6 +188,12 @@ app.use(
   rawJsonBodyParser
 );
 
+app.use(
+  '/api/flows-assets/webhook/nfm',
+  express.raw({ type: 'application/json', limit: '1mb' }),
+  rawJsonBodyParser
+);
+
 app.use(express.json({ limit: '10mb' }));
 
 app.use(requestLogger);

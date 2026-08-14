@@ -5,6 +5,7 @@ import { requireOrg } from '../../middleware/auth';
 import { sendSuccess, asyncHandler, AppError } from '../../utils/response';
 import { phoneFieldSchema } from '../../utils/phone';
 import { sendDirectMessage } from '../messages/service';
+import { resolveActiveWhatsappNumber } from '../whatsapp/active-number';
 
 const router = Router();
 
@@ -22,6 +23,7 @@ router.post(
   '/',
   authenticateApiKey,
   requireOrg,
+  resolveActiveWhatsappNumber,
   asyncHandler(async (req: Request, res: Response) => {
     const data = inboundSchema.parse(req.body);
     const orgId = req.user!.organizationId!;
@@ -37,6 +39,7 @@ router.post(
       type: data.type,
       templateName: data.templateName,
       templateLanguage: data.templateLanguage,
+      whatsappNumberId: req.activeWhatsappNumberId,
     });
 
     sendSuccess(

@@ -1,6 +1,11 @@
 import { Copy, GitBranch, Hash, Layers, PauseCircle, PlayCircle, Pencil, Trash2 } from 'lucide-react';
 import AppButton from '../ui/AppButton';
 import { triggerMeta } from './flowMeta';
+import {
+  flowAudienceBadgeClass,
+  flowAudienceLabel,
+  flowAudienceState,
+} from '../../utils/flow-live';
 import type { Flow } from '../../types';
 
 interface FlowCardProps {
@@ -15,6 +20,7 @@ export default function FlowCard({ flow, onOpen, onToggle, onDuplicate, onDelete
   const trigger = triggerMeta[flow.triggerType];
   const keyword = flow.triggerConfig?.keyword as string | undefined;
   const stepCount = flow.nodes?.length || 0;
+  const audience = flowAudienceState(flow);
 
   return (
     <article className="bg-white transition-colors hover:bg-neutral-50/80 dark:bg-neutral-950 dark:hover:bg-neutral-900/50">
@@ -31,13 +37,9 @@ export default function FlowCard({ flow, onOpen, onToggle, onDuplicate, onDelete
           <div className="flex items-start justify-between gap-2">
             <h3 className="truncate text-label font-extrabold text-theme-fg">{flow.name}</h3>
             <span
-              className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ring-1 ${
-                flow.enabled
-                  ? 'bg-emerald-500/10 text-emerald-800 ring-emerald-500/20 dark:text-emerald-300'
-                  : 'bg-theme-subtle text-theme-muted ring-theme-border'
-              }`}
+              className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ring-1 ${flowAudienceBadgeClass(audience)}`}
             >
-              {flow.enabled ? 'On' : 'Off'}
+              {flowAudienceLabel(audience)}
             </span>
           </div>
 

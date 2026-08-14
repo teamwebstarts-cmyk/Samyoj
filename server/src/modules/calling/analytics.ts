@@ -19,14 +19,19 @@ export interface CallAnalytics {
 
 export async function getCallAnalytics(
   organizationId: string,
-  days = 30
+  days = 30,
+  whatsappNumberId?: string
 ): Promise<CallAnalytics> {
   const since = new Date();
   since.setDate(since.getDate() - days);
   since.setHours(0, 0, 0, 0);
 
   const calls = await prisma.call.findMany({
-    where: { organizationId, createdAt: { gte: since } },
+    where: {
+      organizationId,
+      ...(whatsappNumberId ? { whatsappNumberId } : { id: { in: [] } }),
+      createdAt: { gte: since },
+    },
     select: {
       status: true,
       handler: true,

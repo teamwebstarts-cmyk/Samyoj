@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../../config/database';
-import { authenticate, requireOrg } from '../../middleware/auth';
+import { authenticate, requireOrg, loadOrgRole, requireOrgRole } from '../../middleware/auth';
 import { AppError, sendSuccess, asyncHandler, paramId } from '../../utils/response';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
@@ -18,6 +18,8 @@ import {
 import type { FlowNode } from './types';
 
 const router = Router();
+const memberGuard = [authenticate, requireOrg] as const;
+const adminGuard = [authenticate, requireOrg, loadOrgRole, requireOrgRole('OWNER', 'ADMIN')] as const;
 
 const nodeTypes = [
   'message', 'buttons', 'list', 'question', 'tag', 'remove_tag', 'handoff', 'ai', 'assign', 'condition', 'end',
@@ -144,17 +146,22 @@ function assertValidFlow(data: z.infer<typeof flowSchema>) {
   return result;
 }
 
-router.get('/templates', authenticate, requireOrg, asyncHandler(async (_req, res) => {
+router.get('/templates', ...memberGuard, asyncHandler(async (_req, res) => {
   sendSuccess(res, { templates: FLOW_TEMPLATES });
 }));
 
-router.get('/', authenticate, requireOrg, asyncHandler(async (req, res) => {
+router.get('/', ...memberGuard, asyncHandler(async (req, res) => {
   const orgId = req.user!.organizationId!;
   const { search, enabled, page = '1', limit = '10' } = req.query;
   const where: Prisma.FlowWhereInput = { organizationId: orgId };
-  if (search) where.name = { contains: search as string, mode: 'insensitive' };
-  if (enabled === 'true') where.enabled = true;
-  if (enabled === 'false') where.enabled = false;
+    if (search) where.name = { contains: search as string, mode: 'insensitive' };
+    if (enabled === 'true') {
+      where.enabled = true;
+      where.status = 'PUBLISHED';
+    }
+    if (enabled === 'false') {
+      where.OR = [{ enabled: false }, { status: 'DRAFT' }];
+    }
 
   const pageNum = parseInt(page as string);
   const limitNum = parseInt(limit as string);
@@ -167,8 +174,13 @@ router.get('/', authenticate, requireOrg, asyncHandler(async (req, res) => {
       take: limitNum,
     }),
     prisma.flow.count({ where }),
-    prisma.flow.count({ where: { organizationId: orgId, enabled: true } }),
-    prisma.flow.count({ where: { organizationId: orgId, enabled: false } }),
+    prisma.flow.count({ where: { organizationId: orgId, enabled: true, status: 'PUBLISHED' } }),
+    prisma.flow.count({
+      where: {
+        organizationId: orgId,
+        NOT: { enabled: true, status: 'PUBLISHED' },
+      },
+    }),
   ]);
 
   sendSuccess(res, {
@@ -180,7 +192,7 @@ router.get('/', authenticate, requireOrg, asyncHandler(async (req, res) => {
   });
 }));
 
-router.post('/validate', authenticate, requireOrg, asyncHandler(async (req, res) => {
+router.post('/validate', ...memberGuard, asyncHandler(async (req, res) => {
   const data = withLinkedNodes(flowSchema.parse(req.body));
   const result = validateFlowGraph(
     data.nodes,
@@ -191,7 +203,7 @@ router.post('/validate', authenticate, requireOrg, asyncHandler(async (req, res)
   sendSuccess(res, result);
 }));
 
-router.post('/simulate', authenticate, requireOrg, asyncHandler(async (req, res) => {
+router.post('/simulate', ...memberGuard, asyncHandler(async (req, res) => {
   const body = z.object({
     triggerType: z.string(),
     triggerConfig: z.record(z.unknown()).default({}),
@@ -210,7 +222,7 @@ router.post('/simulate', authenticate, requireOrg, asyncHandler(async (req, res)
   sendSuccess(res, result);
 }));
 
-router.get('/:id', authenticate, requireOrg, asyncHandler(async (req, res) => {
+router.get('/:id', ...memberGuard, asyncHandler(async (req, res) => {
   const flow = await prisma.flow.findFirst({
     where: { id: paramId(req), organizationId: req.user!.organizationId! },
   });
@@ -218,19 +230,19 @@ router.get('/:id', authenticate, requireOrg, asyncHandler(async (req, res) => {
   sendSuccess(res, flow);
 }));
 
-router.get('/:id/analytics', authenticate, requireOrg, asyncHandler(async (req, res) => {
+router.get('/:id/analytics', ...memberGuard, asyncHandler(async (req, res) => {
   const analytics = await getFlowAnalytics(paramId(req), req.user!.organizationId!);
   if (!analytics) throw new AppError(404, 'Flow not found');
   sendSuccess(res, analytics);
 }));
 
-router.get('/:id/versions', authenticate, requireOrg, asyncHandler(async (req, res) => {
+router.get('/:id/versions', ...memberGuard, asyncHandler(async (req, res) => {
   const versions = await getFlowVersions(paramId(req), req.user!.organizationId!);
   if (!versions) throw new AppError(404, 'Flow not found');
   sendSuccess(res, { versions });
 }));
 
-router.post('/:id/duplicate', authenticate, requireOrg, asyncHandler(async (req, res) => {
+router.post('/:id/duplicate', ...adminGuard, asyncHandler(async (req, res) => {
   const source = await prisma.flow.findFirst({
     where: { id: paramId(req), organizationId: req.user!.organizationId! },
   });
@@ -253,21 +265,21 @@ router.post('/:id/duplicate', authenticate, requireOrg, asyncHandler(async (req,
   sendSuccess(res, flow, 201);
 }));
 
-router.post('/:id/publish', authenticate, requireOrg, asyncHandler(async (req, res) => {
+router.post('/:id/publish', ...adminGuard, asyncHandler(async (req, res) => {
   const note = (req.body as { note?: string }).note;
   const version = await publishFlowDraft(paramId(req), req.user!.organizationId!, note);
   if (!version) throw new AppError(400, 'No draft to publish');
   sendSuccess(res, { version });
 }));
 
-router.post('/:id/restore/:version', authenticate, requireOrg, asyncHandler(async (req, res) => {
+router.post('/:id/restore/:version', ...adminGuard, asyncHandler(async (req, res) => {
   const version = parseInt(String(req.params.version));
   const restored = await restoreFlowVersion(paramId(req), req.user!.organizationId!, version);
   if (!restored) throw new AppError(404, 'Version not found');
   sendSuccess(res, { restored: true, version });
 }));
 
-router.post('/', authenticate, requireOrg, asyncHandler(async (req, res) => {
+router.post('/', ...adminGuard, asyncHandler(async (req, res) => {
   const data = withLinkedNodes(flowSchema.parse(req.body));
   assertValidFlow(data);
 
@@ -290,7 +302,7 @@ router.post('/', authenticate, requireOrg, asyncHandler(async (req, res) => {
   sendSuccess(res, flow, 201);
 }));
 
-router.post('/from-template/:templateId', authenticate, requireOrg, asyncHandler(async (req, res) => {
+router.post('/from-template/:templateId', ...adminGuard, asyncHandler(async (req, res) => {
   const templateId = req.params.templateId as string;
   const template = FLOW_TEMPLATES.find((t) => t.id === templateId);
   if (!template) throw new AppError(404, 'Template not found');
@@ -314,7 +326,7 @@ const updateFlowSchema = flowSchema.partial().extend({
   saveAsDraft: z.boolean().optional(),
 });
 
-router.patch('/:id', authenticate, requireOrg, asyncHandler(async (req, res) => {
+router.patch('/:id', ...adminGuard, asyncHandler(async (req, res) => {
   const id = paramId(req);
   const existing = await prisma.flow.findFirst({
     where: { id, organizationId: req.user!.organizationId! },
@@ -377,7 +389,7 @@ router.patch('/:id', authenticate, requireOrg, asyncHandler(async (req, res) => 
   sendSuccess(res, flow);
 }));
 
-router.post('/:id/schedule', authenticate, requireOrg, asyncHandler(async (req, res) => {
+router.post('/:id/schedule', ...adminGuard, asyncHandler(async (req, res) => {
   const orgId = req.user!.organizationId!;
   const flowId = paramId(req);
   const { conversationId, delaySeconds = 60 } = req.body as { conversationId?: string; delaySeconds?: number };
@@ -410,7 +422,7 @@ router.post('/:id/schedule', authenticate, requireOrg, asyncHandler(async (req, 
   sendSuccess(res, { scheduled: true, delaySeconds: Number(delaySeconds) });
 }));
 
-router.delete('/:id', authenticate, requireOrg, asyncHandler(async (req, res) => {
+router.delete('/:id', ...adminGuard, asyncHandler(async (req, res) => {
   await prisma.flow.deleteMany({
     where: { id: paramId(req), organizationId: req.user!.organizationId! },
   });

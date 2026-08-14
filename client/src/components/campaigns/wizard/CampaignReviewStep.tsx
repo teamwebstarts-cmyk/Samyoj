@@ -16,6 +16,7 @@ import AppButton from '../../ui/AppButton';
 import AppInput from '../../ui/AppInput';
 import { WhatsAppTemplatePreview } from '../../inbox/WhatsAppPreview';
 import { getFilledTemplatePreview } from '../campaignPreviewUtils';
+import { humanizeParamValue, previewParams } from '../../../utils/templateForm';
 import { messagingConsent } from '../../../utils/plainLanguage';
 import type { MessageTemplate } from '../../../types';
 import type { CampaignWizardForm } from './campaignWizardModel';
@@ -56,7 +57,11 @@ export default function CampaignReviewStep({
 }: CampaignReviewStepProps) {
   const filledPreview = selectedTemplate
     ? {
-        ...getFilledTemplatePreview(selectedTemplate, form),
+        ...getFilledTemplatePreview(selectedTemplate, {
+          ...form,
+          bodyParams: previewParams(form.bodyParams),
+          headerParams: previewParams(form.headerParams),
+        }),
         headerMediaUrl: form.headerMediaUrl || undefined,
       }
     : null;
@@ -75,8 +80,18 @@ export default function CampaignReviewStep({
   const estimatedFailed = audienceMetrics?.estimatedFailed;
   const estimatedReach = audienceMetrics?.estimatedReach ?? optedInCount;
   const variableRows = [
-    ...form.headerParams.map((value, index) => ({ label: `Header variable ${index + 1}`, value })),
-    ...form.bodyParams.map((value, index) => ({ label: `Body variable ${index + 1}`, value })),
+    ...form.headerParams.map((value, index) => ({
+      label: `Header variable ${index + 1}`,
+      value: humanizeParamValue(value),
+    })),
+    ...form.bodyParams.map((value, index) => ({
+      label: `Body variable ${index + 1}`,
+      value: humanizeParamValue(value),
+    })),
+    ...(form.couponCode.trim() ? [{ label: 'Copy code', value: form.couponCode.trim() }] : []),
+    ...form.buttonUrlSuffixes
+      .map((value, index) => ({ label: `Link suffix ${index + 1}`, value: value.trim() }))
+      .filter((row) => row.value),
   ];
 
   return (

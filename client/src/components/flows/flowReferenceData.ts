@@ -1,19 +1,22 @@
 import { aiBotApi, flowApi, teamApi, templateApi } from '../../services/api';
-import type { AiBot, Flow, TeamAgent } from '../../types';
+import type { AiBot, Flow, MessageTemplate, TeamAgent } from '../../types';
 
 export type FlowReferenceData = {
   bots: AiBot[];
   agents: TeamAgent[];
   flows: Flow[];
-  templates: Array<{ name: string; language: string; status: string }>;
+  templates: MessageTemplate[];
 };
 
 let cache: FlowReferenceData | null = null;
+let cacheScope: string | null = null;
 let inflight: Promise<FlowReferenceData> | null = null;
+let inflightScope: string | null = null;
 
-export function getFlowReferenceData(): Promise<FlowReferenceData> {
-  if (cache) return Promise.resolve(cache);
-  if (!inflight) {
+export function getFlowReferenceData(scopeKey: string): Promise<FlowReferenceData> {
+  if (cache && cacheScope === scopeKey) return Promise.resolve(cache);
+  if (!inflight || inflightScope !== scopeKey) {
+    inflightScope = scopeKey;
     inflight = Promise.all([
       aiBotApi.list(),
       teamApi.agents(),
@@ -27,10 +30,14 @@ export function getFlowReferenceData(): Promise<FlowReferenceData> {
           flows: flowsRes.data.data.flows || [],
           templates: templatesRes.data.data.templates || [],
         };
+        cacheScope = scopeKey;
         return cache;
       })
       .finally(() => {
-        inflight = null;
+        if (inflightScope === scopeKey) {
+          inflight = null;
+          inflightScope = null;
+        }
       });
   }
   return inflight;
@@ -38,5 +45,7 @@ export function getFlowReferenceData(): Promise<FlowReferenceData> {
 
 export function invalidateFlowReferenceData() {
   cache = null;
+  cacheScope = null;
   inflight = null;
+  inflightScope = null;
 }

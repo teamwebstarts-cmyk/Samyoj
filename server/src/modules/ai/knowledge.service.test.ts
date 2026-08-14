@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   EMBEDDING_MATCH_THRESHOLD,
+  expandKnowledgeQuery,
   formatKnowledgeContext,
   tokenSearch,
 } from './knowledge.service';
@@ -23,6 +24,22 @@ describe('tokenSearch', () => {
     expect(result[0].score).toBeGreaterThan(0);
   });
 
+  it('matches Hindi query tokens to the Hindi FAQ', () => {
+    const hindiItems = [
+      { id: 'refund', title: 'Refund', content: 'Refunds take 5 days', sourceType: 'FAQ' },
+      {
+        id: 'hours',
+        title: 'व्यवसाय समय',
+        content: 'सुबह 9 बजे से शाम 6 बजे तक खुला',
+        sourceType: 'FAQ',
+      },
+      { id: 'ship', title: 'Shipping', content: 'Ships in 3 days', sourceType: 'FAQ' },
+    ];
+    const result = tokenSearch(hindiItems, 'समय क्या है', 5);
+    expect(result[0].id).toBe('hours');
+    expect(result[0].score).toBeGreaterThan(1);
+  });
+
   it('respects the limit', () => {
     const many = Array.from({ length: 10 }, (_, i) => ({
       id: String(i),
@@ -31,6 +48,12 @@ describe('tokenSearch', () => {
       sourceType: 'FAQ' as const,
     }));
     expect(tokenSearch(many, 'common', 3)).toHaveLength(3);
+  });
+});
+
+describe('expandKnowledgeQuery', () => {
+  it('adds hours aliases for spoken timing questions', () => {
+    expect(expandKnowledgeQuery('shop timing kya hai')).toMatch(/hours/i);
   });
 });
 

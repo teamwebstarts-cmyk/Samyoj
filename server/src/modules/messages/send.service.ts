@@ -1,15 +1,24 @@
 import type { MessageType } from '@prisma/client';
 import prisma from '../../config/database';
 import { AppError } from '../../utils/response';
-import { MetaWhatsAppService, extractMetaErrorFields } from '../whatsapp/meta.service';
+import { MetaWhatsAppService, extractMetaErrorFields, isWithin24HourWindow } from '../whatsapp/meta.service';
 import { getOrgWhatsappContext } from '../whatsapp/context';
 import { buildTemplateComponents } from '../campaigns/template-params';
 import { emitToOrg } from '../../realtime';
 import { buildInteractivePayload, type InteractiveMessageOptions } from './interactive';
 import { normalizePhone } from '../../utils/phone';
 import { createModuleLogger } from '../../utils/logger';
+import { resolveCs24hWindowOpensAt } from '../inbox/service-window';
 
 const log = createModuleLogger('messages');
+
+export const CSW_CLOSED_CODE = 'CSW_CLOSED';
+export const META_CSW_ERROR_CODE = 131047;
+
+export function isCswClosedError(error: unknown): boolean {
+  if (error instanceof AppError && error.code === CSW_CLOSED_CODE) return true;
+  return extractMetaErrorFields(error).metaCode === META_CSW_ERROR_CODE;
+}
 
 export type DeliverMessageType =
   | 'TEXT'
@@ -49,6 +58,7 @@ function formatContactForWhatsApp(contact: { name: string; phone: string; email?
 
 interface DeliverMessageInput {
   organizationId: string;
+  whatsappNumberId?: string;
   messageId: string;
   phoneNumberId: string;
   encryptedToken: string;
@@ -57,7 +67,7 @@ interface DeliverMessageInput {
   type: DeliverMessageType;
   templateName?: string;
   templateLanguage?: string;
-  templateParams?: { body?: string[]; header?: string[]; headerMediaUrl?: string; couponCode?: string };
+  templateParams?: { body?: string[]; header?: string[]; headerMediaUrl?: string; couponCode?: string; buttonUrlSuffixes?: string[] };
   buttons?: Array<{ id: string; title: string }>;
   interactive?: InteractiveMessageOptions;
   location?: { latitude: number; longitude: number; name?: string; address?: string };
@@ -177,6 +187,70 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
   const accessToken = MetaWhatsAppService.decryptToken(input.encryptedToken);
 
   try {
+    if (input.whatsappNumberId) {
+      const ownedMessage = await prisma.message.findFirst({
+        where: {
+          id: input.messageId,
+          conversation: {
+            organizationId: input.organizationId,
+            whatsappNumberId: input.whatsappNumberId,
+          },
+        },
+        select: { id: true },
+      });
+      if (!ownedMessage) {
+        throw new AppError(404, 'Message does not belong to the active WhatsApp number');
+      }
+    }
+
+    if (input.type !== 'TEMPLATE') {
+      const messageRow = await prisma.message.findUnique({
+        where: { id: input.messageId },
+        select: {
+          conversationId: true,
+          metadata: true,
+          conversation: { select: { cs24hWindowOpensAt: true } },
+        },
+      });
+      if (messageRow) {
+        const windowOpensAt = await resolveCs24hWindowOpensAt(
+          messageRow.conversationId,
+          messageRow.conversation?.cs24hWindowOpensAt
+        );
+        if (!isWithin24HourWindow(windowOpensAt)) {
+          const errorMessage =
+            'Customer service window closed. Free-form messages cannot be sent. Use a template.';
+          log.warn('Skipped free-form send — customer service window closed', {
+            organizationId: input.organizationId,
+            conversationId: messageRow.conversationId,
+            messageId: input.messageId,
+            type: input.type,
+            metaCode: META_CSW_ERROR_CODE,
+          });
+          await prisma.message.update({
+            where: { id: input.messageId },
+            data: {
+              status: 'FAILED',
+              metadata: {
+                ...((messageRow.metadata as Record<string, unknown>) || {}),
+                error: errorMessage,
+                metaCode: META_CSW_ERROR_CODE,
+                skippedCsw: true,
+              },
+            },
+          });
+          emitToOrg(input.organizationId, 'message:status', {
+            messageId: input.messageId,
+            status: 'FAILED',
+            error: errorMessage,
+            metaCode: META_CSW_ERROR_CODE,
+            conversationId: messageRow.conversationId,
+          });
+          throw new AppError(400, errorMessage, CSW_CLOSED_CODE);
+        }
+      }
+    }
+
     let result;
     const context = input.contextMessageId
       ? { context: { message_id: input.contextMessageId } }
@@ -184,7 +258,10 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
     if (input.type === 'TEMPLATE' && input.templateName) {
       let components: unknown[] = [];
       if (input.templateParams) {
-        const { wabaId, accessToken: orgToken } = await getOrgWhatsappContext(input.organizationId);
+        const { wabaId, accessToken: orgToken } = await getOrgWhatsappContext(
+          input.organizationId,
+          input.whatsappNumberId
+        );
         const template = await MetaWhatsAppService.getMessageTemplate(
           wabaId,
           orgToken,
@@ -367,6 +444,10 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
 
     return message;
   } catch (error) {
+    if (error instanceof AppError && error.code === CSW_CLOSED_CODE) {
+      throw error;
+    }
+
     const { message: errorMessage, metaCode, metaSubcode, fbtraceId } = extractMetaErrorFields(error);
 
     // Merge the error into existing metadata so send params (mediaPath,
@@ -411,6 +492,8 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
       conversationId: message.conversationId,
     });
 
-    throw new AppError(502, errorMessage);
+    throw metaCode === META_CSW_ERROR_CODE
+      ? new AppError(400, errorMessage, CSW_CLOSED_CODE)
+      : new AppError(502, errorMessage);
   }
 }

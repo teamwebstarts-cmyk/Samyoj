@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -76,6 +76,8 @@ import {
   DEFAULT_GREETING,
 } from '../components/calls/CallingSettingsForm';
 import { aiBotApi, callingApi } from '../services/api';
+import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
+import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 import { toastError, toastSuccess } from '../utils/toast';
 import type {
   AiBot,
@@ -276,6 +278,7 @@ function SetupBanner({
 }
 
 export default function AiBotPage() {
+  const { activeNumber, resolved } = useWhatsAppNumber();
   const [bots, setBots] = useState<AiBot[]>([]);
   const [setupStatus, setSetupStatus] = useState<BotSetupStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -319,15 +322,26 @@ export default function AiBotPage() {
   const [greetingDraft, setGreetingDraft] = useState('');
   /** Voice instructions stored separately so Personality UI can edit chat text without the VOICE block. */
   const [storedVoiceInstructions, setStoredVoiceInstructions] = useState<string | null>(null);
+  const activeNumberIdRef = useRef<string | null>(null);
+  activeNumberIdRef.current = activeNumber?.id ?? null;
+  const requestGenerationRef = useRef(0);
+  const analyticsGenerationRef = useRef(0);
+  const detailGenerationRef = useRef(0);
 
   const loadVoiceSettings = useCallback(async () => {
-    if (!editing) return;
+    if (!editing || !resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
+    const generation = ++requestGenerationRef.current;
     setVoiceSettingsLoading(true);
     try {
       const [settingsRes, statusRes] = await Promise.all([
         callingApi.settings(),
         callingApi.status(),
       ]);
+      if (
+        requestNumberId !== activeNumberIdRef.current ||
+        generation !== requestGenerationRef.current
+      ) return;
       const merged: CallingSettings = { ...voiceSettings, ...settingsRes.data.data };
       setVoiceSettings(merged);
       setGreetingDraft(merged.aiGreeting || DEFAULT_GREETING);
@@ -336,9 +350,14 @@ export default function AiBotPage() {
     } catch {
       toastError('Could not load voice settings.');
     } finally {
-      setVoiceSettingsLoading(false);
+      if (
+        requestNumberId === activeNumberIdRef.current &&
+        generation === requestGenerationRef.current
+      ) {
+        setVoiceSettingsLoading(false);
+      }
     }
-  }, [editing]);
+  }, [activeNumber, editing, resolved]);
 
   const saveVoiceSettings = async (updates: Partial<CallingSettings>) => {
     if (!voiceSettings) return;
@@ -383,18 +402,34 @@ export default function AiBotPage() {
   }, [slideTab, editing, loadVoiceSettings]);
 
   const load = useCallback(async () => {
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
+    const generation = ++requestGenerationRef.current;
     setLoading(true);
     try {
       const [listRes, statusRes] = await Promise.all([aiBotApi.list(), aiBotApi.status()]);
+      if (
+        requestNumberId !== activeNumberIdRef.current ||
+        generation !== requestGenerationRef.current
+      ) return;
       setBots(listRes.data.data.bots);
       setSetupStatus(statusRes.data.data);
     } catch (err) {
+      if (
+        requestNumberId !== activeNumberIdRef.current ||
+        generation !== requestGenerationRef.current
+      ) return;
       console.error(err);
       toastError('Failed to load AI bots');
     } finally {
-      setLoading(false);
+      if (
+        requestNumberId === activeNumberIdRef.current &&
+        generation === requestGenerationRef.current
+      ) {
+        setLoading(false);
+      }
     }
-  }, []);
+  }, [activeNumber, resolved]);
 
   useEffect(() => {
     load();
@@ -424,16 +459,46 @@ export default function AiBotPage() {
   }, [bots, search, statusFilter]);
 
   const loadAnalytics = async (botId: string) => {
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
+    const generation = ++analyticsGenerationRef.current;
     setAnalyticsLoading(true);
     try {
       const { data } = await aiBotApi.analytics(botId);
+      if (
+        requestNumberId !== activeNumberIdRef.current ||
+        generation !== analyticsGenerationRef.current
+      ) return;
       setAnalytics(data.data);
     } catch {
-      setAnalytics(null);
+      if (
+        requestNumberId === activeNumberIdRef.current &&
+        generation === analyticsGenerationRef.current
+      ) {
+        setAnalytics(null);
+      }
     } finally {
-      setAnalyticsLoading(false);
+      if (
+        requestNumberId === activeNumberIdRef.current &&
+        generation === analyticsGenerationRef.current
+      ) {
+        setAnalyticsLoading(false);
+      }
     }
   };
+
+  useOnActiveNumberChange(({ isInitial }) => {
+    if (isInitial) return;
+    requestGenerationRef.current += 1;
+    analyticsGenerationRef.current += 1;
+    detailGenerationRef.current += 1;
+    setBots([]);
+    setSetupStatus(null);
+    setLoading(true);
+    setEditing(null);
+    setSlideOpen(false);
+    resetSlideState();
+  });
 
   const resetSlideState = () => {
     setSlideTab('personality');
@@ -534,6 +599,9 @@ export default function AiBotPage() {
   };
 
   const openEdit = async (bot: AiBot) => {
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
+    const generation = ++detailGenerationRef.current;
     setEditing(bot);
     const { chatInstructions, voiceInstructions } = stripVoiceInstructionsBlock(bot.instructions);
     setForm({
@@ -557,18 +625,36 @@ export default function AiBotPage() {
 
     try {
       const { data } = await aiBotApi.get(bot.id);
+      if (
+        requestNumberId !== activeNumberIdRef.current ||
+        generation !== detailGenerationRef.current
+      ) return;
       const items = data.data.knowledgeItems || [];
       setFaqs(items);
       setSeededTitles(computeSeededTitles(items));
     } catch {
-      setFaqs([]);
+      if (
+        requestNumberId === activeNumberIdRef.current &&
+        generation === detailGenerationRef.current
+      ) {
+        setFaqs([]);
+      }
     }
     loadAnalytics(bot.id);
     try {
       const { data } = await aiBotApi.versions(bot.id);
+      if (
+        requestNumberId !== activeNumberIdRef.current ||
+        generation !== detailGenerationRef.current
+      ) return;
       setVersions(data.data.versions || []);
     } catch {
-      setVersions([]);
+      if (
+        requestNumberId === activeNumberIdRef.current &&
+        generation === detailGenerationRef.current
+      ) {
+        setVersions([]);
+      }
     }
   };
 
@@ -1654,13 +1740,13 @@ export default function AiBotPage() {
                       }
                     }}
                     title="Use this brain for WhatsApp calls"
-                    description="When Calls is set to AI, this brain answers voice calls"
+                    description="This bot’s Train answers and personality are what the caller hears"
                     icon={Globe}
                   />
 
                   <p className="rounded-xl border border-sky-200/60 bg-sky-50/50 px-3 py-2.5 text-[12px] font-medium text-theme-secondary dark:border-sky-800/40 dark:bg-sky-950/20">
-                    Voice rules are injected automatically — short replies, no formatting, and language
-                    matching for calls. Manage routing and business hours in{' '}
+                    Chat and calls share one brain. Train FAQs here, then turn this on so the same
+                    answers are spoken on the call. Routing and hours live in{' '}
                     <Link to="/calls?panel=settings" className="font-bold text-sky-700 underline">
                       Calls → Customize
                     </Link>

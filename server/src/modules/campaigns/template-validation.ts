@@ -78,12 +78,22 @@ export function templateValidationErrors(
   if (header?.format && header.format.toUpperCase() !== 'TEXT' && !input.params?.headerMediaUrl) {
     errors.push(`header requires an approved ${header.format.toLowerCase()} media URL`);
   }
-  const hasCopyCode = template.components?.some((component) =>
-    component.type.toUpperCase() === 'BUTTONS' &&
-    component.buttons?.some((button) => button.type.toUpperCase() === 'COPY_CODE')
-  );
+  const buttons = template.components?.find((component) => component.type.toUpperCase() === 'BUTTONS')?.buttons || [];
+  const hasCopyCode = buttons.some((button) => (button.type || '').toUpperCase() === 'COPY_CODE');
   if (input.params?.couponCode && !hasCopyCode) {
     errors.push('couponCode was supplied but the approved template has no COPY_CODE button');
+  }
+  if (hasCopyCode && !input.params?.couponCode?.trim()) {
+    errors.push('copy-code button requires a couponCode');
+  }
+  const dynamicUrlCount = buttons.filter(
+    (button) => (button.type || '').toUpperCase() === 'URL' && /\{\{/.test(button.url || '')
+  ).length;
+  if (dynamicUrlCount > 0) {
+    const suffixes = input.params?.buttonUrlSuffixes || [];
+    if (dynamicUrlCount > suffixes.filter((value) => value?.trim()).length) {
+      errors.push(`dynamic URL button(s) require ${dynamicUrlCount} link suffix(es)`);
+    }
   }
   return errors;
 }
@@ -98,10 +108,30 @@ export function assertApprovedCampaignTemplate(
   return template;
 }
 
+/** Name / language / APPROVED only. Do not pass unmerged params or a forced MARKETING category. */
+export function assertApprovedTemplateIdentity(
+  template: MessageTemplate | null | undefined,
+  input: Pick<TemplateValidationInput, 'name' | 'language'>
+) {
+  if (!template) throw new Error(`Template "${input.name}" was not found on the connected WhatsApp account`);
+  const errors: string[] = [];
+  if (template.name !== input.name) {
+    errors.push(`name "${input.name}" does not match approved template "${template.name}"`);
+  }
+  if (template.status.toUpperCase() !== 'APPROVED') {
+    errors.push(`status is ${template.status}, not APPROVED`);
+  }
+  if (input.language !== template.language) {
+    errors.push(`language "${input.language}" is not approved; use "${template.language}"`);
+  }
+  if (errors.length) throw new Error(`Approved template mismatch: ${errors.join('; ')}`);
+  return template;
+}
+
 export function buildValidatedTemplateComponents(
   template: MessageTemplate,
   campaignParams: TemplateParams | null | undefined,
-  recipientVariables: { body?: string[]; header?: string[] } | null | undefined,
+  recipientVariables: { body?: string[]; header?: string[]; attributes?: Record<string, string> } | null | undefined,
   recipientName?: string | null
 ) {
   const params = mergeTemplateParams(campaignParams, recipientVariables, recipientName);
@@ -122,7 +152,8 @@ export function assertCampaignRecipientTemplates(
     name?: string | null;
     phone?: string | null;
     email?: string | null;
-    variables?: { body?: string[]; header?: string[] } | null;
+    customAttributes?: Record<string, string> | unknown | null;
+    variables?: { body?: string[]; header?: string[]; attributes?: Record<string, string> } | null;
   }>,
   options: { name?: string; language?: string; category?: string } = {}
 ) {
@@ -132,12 +163,17 @@ export function assertCampaignRecipientTemplates(
       recipient.variables,
       recipient.name,
       template,
-      { name: recipient.name, phone: recipient.phone, email: recipient.email }
+      {
+        name: recipient.name,
+        phone: recipient.phone,
+        email: recipient.email,
+        customAttributes: recipient.customAttributes,
+      }
     );
     const errors = templateValidationErrors(template, {
       name: options.name ?? template.name,
       language: options.language ?? template.language,
-      category: options.category ?? template.category,
+      category: options.category,
       params,
     });
     if (errors.length) {

@@ -14,6 +14,8 @@ import {
   renameTag,
 } from './service';
 import { resolveActiveWhatsappNumber } from '../whatsapp/active-number';
+import { asCustomAttributes } from '../../utils/custom-attributes';
+import { Prisma } from '@prisma/client';
 
 const router = Router();
 
@@ -28,6 +30,8 @@ router.get(
   })
 );
 
+const customAttributesSchema = z.record(z.string().max(64), z.string().max(500)).optional();
+
 const contactSchema = z.object({
   phone: phoneFieldSchema,
   name: z.string().optional(),
@@ -35,6 +39,7 @@ const contactSchema = z.object({
   tags: z.array(z.string()).optional(),
   notes: z.string().optional(),
   optedIn: z.boolean().optional(),
+  customAttributes: customAttributesSchema,
 });
 
 router.post(
@@ -44,6 +49,7 @@ router.post(
     const whatsappNumberId = req.activeWhatsappNumberId;
     if (!whatsappNumberId) throw new AppError(400, 'Connect a WhatsApp number before creating contacts');
 
+    const customAttributes = asCustomAttributes(data.customAttributes) as Prisma.InputJsonValue;
     const contact = await prisma.contact.upsert({
       where: {
         organizationId_whatsappNumberId_normalizedPhone: {
@@ -62,6 +68,7 @@ router.post(
         tags: data.tags || [],
         notes: data.notes,
         optedIn: data.optedIn ?? false,
+        customAttributes,
         source: 'MANUAL',
       },
       update: {
@@ -69,6 +76,7 @@ router.post(
         email: data.email || undefined,
         tags: data.tags,
         notes: data.notes,
+        customAttributes,
         ...(data.optedIn !== undefined ? { optedIn: data.optedIn } : {}),
       },
     });
@@ -83,7 +91,13 @@ router.post(
   requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
     const { contacts } = req.body as {
-      contacts: Array<{ phone: string; name?: string; tags?: string[]; notes?: string }>;
+      contacts: Array<{
+        phone: string;
+        name?: string;
+        tags?: string[];
+        notes?: string;
+        customAttributes?: Record<string, string>;
+      }>;
     };
 
     if (!Array.isArray(contacts)) throw new AppError(400, 'Contacts array required');
@@ -97,6 +111,22 @@ router.post(
       const c = contacts[i];
       const result = validatePhone(c.phone);
       if (!result.ok) throw new AppError(400, `Contact ${i + 1}: ${result.error}`);
+
+      const incomingAttrs = asCustomAttributes(c.customAttributes);
+      const existing = await prisma.contact.findUnique({
+        where: {
+          organizationId_whatsappNumberId_normalizedPhone: {
+            organizationId: orgId,
+            whatsappNumberId,
+            normalizedPhone: result.phone,
+          },
+        },
+        select: { customAttributes: true },
+      });
+      const customAttributes = {
+        ...asCustomAttributes(existing?.customAttributes),
+        ...incomingAttrs,
+      } as Prisma.InputJsonValue;
 
       await prisma.contact.upsert({
         where: {
@@ -114,9 +144,10 @@ router.post(
           name: c.name,
           tags: c.tags || [],
           notes: c.notes,
+          customAttributes,
           source: 'IMPORT',
         },
-        update: { name: c.name, tags: c.tags, notes: c.notes },
+        update: { name: c.name, tags: c.tags, notes: c.notes, customAttributes },
       });
       imported++;
     }
@@ -271,6 +302,7 @@ const updateContactSchema = z.object({
   tags: z.array(z.string()).optional(),
   notes: z.string().optional(),
   optedIn: z.boolean().optional(),
+  customAttributes: customAttributesSchema,
 });
 
 router.patch(
@@ -289,11 +321,15 @@ router.patch(
     });
     if (!existing) throw new AppError(404, 'Contact not found');
 
+    const { customAttributes, ...rest } = data;
     const contact = await prisma.contact.update({
       where: { id },
       data: {
-        ...data,
+        ...rest,
         email: data.email === '' ? null : data.email,
+        ...(customAttributes !== undefined
+          ? { customAttributes: asCustomAttributes(customAttributes) as Prisma.InputJsonValue }
+          : {}),
       },
     });
 

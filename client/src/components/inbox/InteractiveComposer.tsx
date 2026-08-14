@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { Plus, Send, Trash2 } from 'lucide-react';
 import AppButton from '../ui/AppButton';
 import AppInput from '../ui/AppInput';
@@ -23,6 +23,7 @@ import {
   type ListSection,
   type PreviewModel,
 } from './InteractiveComposerParts';
+import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
 
 export type { InteractiveComposerMode };
 
@@ -62,6 +63,7 @@ export default function InteractiveComposer({
   serviceWindow: _serviceWindow,
 }: InteractiveComposerProps) {
   void _serviceWindow;
+  const { activeNumber, resolved } = useWhatsAppNumber();
   const [header, setHeader] = useState('');
   const [body, setBody] = useState('');
   const [footer, setFooter] = useState('');
@@ -79,12 +81,21 @@ export default function InteractiveComposer({
   const [templateName, setTemplateName] = useState('');
   const [couponCode, setCouponCode] = useState('');
   const [bodyParams, setBodyParams] = useState<string[]>([]);
+  const activeNumberIdRef = useRef<string | null>(null);
+  activeNumberIdRef.current = activeNumber?.id ?? null;
+  const requestGenerationRef = useRef(0);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || !resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
+    const generation = ++requestGenerationRef.current;
     templateApi
       .list({ status: 'APPROVED', all: 'true' })
       .then(({ data }) => {
+        if (
+          requestNumberId !== activeNumberIdRef.current ||
+          generation !== requestGenerationRef.current
+        ) return;
         const payload = data.data;
         const list = Array.isArray(payload) ? payload : payload?.templates || [];
         const withCopyCode = list.filter((template: MessageTemplate) =>
@@ -93,8 +104,16 @@ export default function InteractiveComposer({
         setCopyCodeTemplates(withCopyCode);
         if (withCopyCode.length) setTemplateName(withCopyCode[0].name);
       })
-      .catch(() => setCopyCodeTemplates([]));
-  }, [open]);
+      .catch(() => {
+        if (
+          requestNumberId === activeNumberIdRef.current &&
+          generation === requestGenerationRef.current
+        ) {
+          setCopyCodeTemplates([]);
+          setTemplateName('');
+        }
+      });
+  }, [activeNumber, open, resolved]);
 
   const selectedTemplate = useMemo(
     () => copyCodeTemplates.find((template) => template.name === templateName),
@@ -167,7 +186,7 @@ export default function InteractiveComposer({
         templateName: selectedTemplate.name,
         templateLanguage: selectedTemplate.language,
         templateParams: {
-          body: bodyParams.filter(Boolean),
+          body: bodyParams,
           couponCode: couponCode.trim().slice(0, LIMITS.couponCode),
         },
       });

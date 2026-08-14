@@ -55,9 +55,10 @@ export async function pollConversationAnalytics(): Promise<void> {
 
         await prisma.conversationCharge.upsert({
           where: {
-            organizationId_wabaId_category_periodStart: {
+            organizationId_wabaId_phoneNumberId_category_periodStart: {
               organizationId: number.organizationId,
               wabaId: number.wabaId,
+              phoneNumberId: number.phoneNumberId,
               category,
               periodStart,
             },

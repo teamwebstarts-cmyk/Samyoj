@@ -4,6 +4,8 @@ import { Bell, LifeBuoy, MessageSquare } from 'lucide-react';
 import { ticketApi } from '../../services/api';
 import { isSlaBreached, type TicketItem } from '../tickets/TicketCard';
 import { useSocket } from '../../hooks/useSocket';
+import { useOnActiveNumberChange } from '../../hooks/useOnActiveNumberChange';
+import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
 import {
   dismissInboxNotification,
   getOpenConversationId,
@@ -18,23 +20,43 @@ interface NotificationCenterProps {
 }
 
 export default function NotificationCenter({ unreadInbox = 0 }: NotificationCenterProps) {
+  const { activeNumber, resolved } = useWhatsAppNumber();
   const [open, setOpen] = useState(false);
   const [tickets, setTickets] = useState<TicketItem[]>([]);
   const ref = useRef<HTMLDivElement>(null);
+  const activeNumberIdRef = useRef<string | null>(null);
+  activeNumberIdRef.current = activeNumber?.id ?? null;
+  const requestGenerationRef = useRef(0);
   const messageAlerts = useInboxMessageNotifications();
 
   const load = useCallback(() => {
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
+    const generation = ++requestGenerationRef.current;
     ticketApi
       .list({ status: 'OPEN' })
-      .then((res) => setTickets(res.data.data.tickets || []))
+      .then((res) => {
+        if (
+          requestNumberId === activeNumberIdRef.current &&
+          generation === requestGenerationRef.current
+        ) {
+          setTickets(res.data.data.tickets || []);
+        }
+      })
       .catch(() => {});
-  }, []);
+  }, [activeNumber, resolved]);
 
   useEffect(() => {
     load();
     const interval = setInterval(load, 60_000);
     return () => clearInterval(interval);
   }, [load]);
+
+  useOnActiveNumberChange(() => {
+    requestGenerationRef.current += 1;
+    setTickets([]);
+    load();
+  });
 
   // Background-message alerts: only when the tab is hidden or a different
   // conversation is open — the open thread already surfaces new messages.
@@ -45,7 +67,17 @@ export default function NotificationCenter({ unreadInbox = 0 }: NotificationCent
       conversation?: Conversation;
       contact?: Conversation['contact'];
       message?: Message;
+      whatsappNumberId?: string;
+      numberId?: string;
     };
+    if (
+      (payload.whatsappNumberId || payload.numberId) &&
+      activeNumber &&
+      ![activeNumber.id, activeNumber.phoneNumberId].includes(
+        payload.whatsappNumberId ?? payload.numberId ?? ''
+      )
+    )
+      return;
     const conversationId = payload.conversationId ?? payload.conversation?.id;
     if (!conversationId || payload.message?.direction !== 'INBOUND') return;
     const openId = getOpenConversationId();

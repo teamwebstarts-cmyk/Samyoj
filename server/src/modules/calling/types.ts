@@ -52,4 +52,6 @@ export interface ActiveCallContext {
   sttMode?: string;
   /** Sarvam STT language (independent of TTS language). */
   sttLanguage?: string;
+  /** Auto hang-up after this many seconds. */
+  maxCallDurationSec?: number;
 }

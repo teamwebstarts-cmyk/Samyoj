@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Check } from 'lucide-react';
 import SearchInput from '../ui/SearchInput';
 import { contactApi } from '../../services/api';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import type { Contact } from '../../types';
 import Pagination from '../ui/Pagination';
+import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
 
 interface CampaignContactPickerProps {
   variant?: 'default' | 'wizard';
@@ -35,6 +36,7 @@ export default function CampaignContactPicker({
   selectedIds,
   onChange,
 }: CampaignContactPickerProps) {
+  const { activeNumber, resolved } = useWhatsAppNumber();
   const compact = variant === 'wizard';
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,8 +46,14 @@ export default function CampaignContactPicker({
   const [total, setTotal] = useState(0);
   const [showSelected, setShowSelected] = useState(false);
   const debouncedSearch = useDebouncedValue(search);
+  const activeNumberIdRef = useRef<string | null>(null);
+  activeNumberIdRef.current = activeNumber?.id ?? null;
+  const requestGenerationRef = useRef(0);
 
   const load = useCallback(() => {
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
+    const generation = ++requestGenerationRef.current;
     setLoading(true);
     const params: Record<string, string> = { page: String(page), limit: '10' };
     if (debouncedSearch) params.search = debouncedSearch;
@@ -53,18 +61,33 @@ export default function CampaignContactPicker({
     contactApi
       .list(params)
       .then(({ data }) => {
+        if (
+          requestNumberId !== activeNumberIdRef.current ||
+          generation !== requestGenerationRef.current
+        ) return;
         const next = data.data.contacts as Contact[];
         setContacts(next);
         setTotal(data.data.total ?? next.length);
         setError(null);
       })
       .catch(() => {
+        if (
+          requestNumberId !== activeNumberIdRef.current ||
+          generation !== requestGenerationRef.current
+        ) return;
         setContacts([]);
         setTotal(0);
         setError('Could not load contacts. Refresh this section and try again.');
       })
-      .finally(() => setLoading(false));
-  }, [debouncedSearch, page]);
+      .finally(() => {
+        if (
+          requestNumberId === activeNumberIdRef.current &&
+          generation === requestGenerationRef.current
+        ) {
+          setLoading(false);
+        }
+      });
+  }, [activeNumber, debouncedSearch, page, resolved]);
 
   useEffect(() => {
     load();

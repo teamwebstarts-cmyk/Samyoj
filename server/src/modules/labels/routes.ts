@@ -5,6 +5,7 @@ import { authenticate, requireOrg } from '../../middleware/auth';
 import { loadPermissions, requirePermission } from '../../middleware/permissions';
 import { AppError, sendSuccess, asyncHandler, paramId } from '../../utils/response';
 import { emitToOrg } from '../../realtime';
+import { resolveActiveWhatsappNumber, conversationFilter } from '../whatsapp/active-number';
 
 const router = Router();
 
@@ -17,6 +18,7 @@ router.get(
   '/',
   authenticate,
   requireOrg,
+  resolveActiveWhatsappNumber,
   loadPermissions,
   requirePermission('manageInbox'),
   asyncHandler(async (req: Request, res: Response) => {
@@ -24,7 +26,15 @@ router.get(
     const labels = await prisma.label.findMany({
       where: { organizationId: orgId },
       orderBy: { name: 'asc' },
-      include: { _count: { select: { conversations: true } } },
+      include: {
+        _count: {
+          select: {
+            conversations: {
+              where: { conversation: conversationFilter(req.activeWhatsappNumberId) },
+            },
+          },
+        },
+      },
     });
     sendSuccess(res, {
       labels: labels.map(({ _count, ...label }) => ({
@@ -39,6 +49,7 @@ router.post(
   '/',
   authenticate,
   requireOrg,
+  resolveActiveWhatsappNumber,
   loadPermissions,
   requirePermission('manageInbox'),
   asyncHandler(async (req: Request, res: Response) => {
@@ -65,6 +76,7 @@ router.patch(
   '/:id',
   authenticate,
   requireOrg,
+  resolveActiveWhatsappNumber,
   loadPermissions,
   requirePermission('manageInbox'),
   asyncHandler(async (req: Request, res: Response) => {
@@ -90,6 +102,7 @@ router.delete(
   '/:id',
   authenticate,
   requireOrg,
+  resolveActiveWhatsappNumber,
   loadPermissions,
   requirePermission('manageInbox'),
   asyncHandler(async (req: Request, res: Response) => {
@@ -108,6 +121,7 @@ router.post(
   '/conversations/:conversationId',
   authenticate,
   requireOrg,
+  resolveActiveWhatsappNumber,
   loadPermissions,
   requirePermission('manageInbox'),
   asyncHandler(async (req: Request, res: Response) => {
@@ -116,7 +130,9 @@ router.post(
     const conversationId = req.params.conversationId as string;
 
     const [conversation, label] = await Promise.all([
-      prisma.conversation.findFirst({ where: { id: conversationId, organizationId: orgId } }),
+      prisma.conversation.findFirst({
+        where: { id: conversationId, organizationId: orgId, ...conversationFilter(req.activeWhatsappNumberId) },
+      }),
       prisma.label.findFirst({ where: { id: labelId, organizationId: orgId } }),
     ]);
     if (!conversation) throw new AppError(404, 'Conversation not found');
@@ -144,6 +160,7 @@ router.delete(
   '/conversations/:conversationId/:labelId',
   authenticate,
   requireOrg,
+  resolveActiveWhatsappNumber,
   loadPermissions,
   requirePermission('manageInbox'),
   asyncHandler(async (req: Request, res: Response) => {
@@ -152,13 +169,13 @@ router.delete(
     const labelId = req.params.labelId as string;
 
     const conversation = await prisma.conversation.findFirst({
-      where: { id: conversationId, organizationId: orgId },
+      where: { id: conversationId, organizationId: orgId, ...conversationFilter(req.activeWhatsappNumberId) },
     });
     if (!conversation) throw new AppError(404, 'Conversation not found');
 
-    await prisma.conversationLabel.deleteMany({
-      where: { conversationId, labelId },
-    });
+    const label = await prisma.label.findFirst({ where: { id: labelId, organizationId: orgId } });
+    if (!label) throw new AppError(404, 'Label not found');
+    await prisma.conversationLabel.deleteMany({ where: { conversationId, labelId } });
 
     const labels = await prisma.conversationLabel.findMany({
       where: { conversationId },

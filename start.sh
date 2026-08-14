@@ -93,11 +93,8 @@ docker compose exec -T redis redis-cli ping >/dev/null 2>&1 ||
 ok "Docker containers running"
 
 info "Applying pending database migrations..."
-if ! (cd server && npx prisma migrate deploy); then
-  warn "migrate deploy failed — trying to baseline existing schema..."
-  (cd server && npx prisma migrate resolve --applied 20250617000000_init >/dev/null 2>&1 || true)
-  (cd server && npx prisma migrate deploy) || fail "Database migrations failed."
-fi
+(cd server && npm run db:migrate-startup-safe) ||
+  fail "Database migrations were refused by the fail-closed safety workflow. Follow docs/WHATSAPP_NUMBER_MIGRATION_SAFETY.md."
 ok "Database schema is current"
 
 if ! is_running tunnel; then

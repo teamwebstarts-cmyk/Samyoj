@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   BookOpen,
@@ -39,6 +39,8 @@ import {
 import type { MessageTemplate } from '../types';
 import { toastError, toastSuccess } from '../utils/toast';
 import { invalidateFlowReferenceData } from '../components/flows/flowReferenceData';
+import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
+import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 
 const PENDING_POLL_MS = 30_000;
 
@@ -50,6 +52,7 @@ interface TemplateRejectionAlert {
 }
 
 export default function TemplatesPage() {
+  const { activeNumber, resolved } = useWhatsAppNumber();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
@@ -65,30 +68,44 @@ export default function TemplatesPage() {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
   const [rejectionAlerts, setRejectionAlerts] = useState<TemplateRejectionAlert[]>([]);
+  const activeNumberIdRef = useRef<string | null>(null);
+  activeNumberIdRef.current = activeNumber?.id ?? null;
 
   const debouncedSearch = useDebouncedValue(search);
 
   const loadAlerts = useCallback(() => {
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
     settingsApi
       .alerts()
       .then(({ data }) => {
+        if (requestNumberId !== activeNumberIdRef.current) return;
         const list = (data.data?.templateRejections || []) as TemplateRejectionAlert[];
         setRejectionAlerts(list);
       })
-      .catch(() => setRejectionAlerts([]));
-  }, []);
+      .catch(() => {
+        if (requestNumberId === activeNumberIdRef.current) setRejectionAlerts([]);
+      });
+  }, [activeNumber, resolved]);
 
   const checkWhatsapp = useCallback(() => {
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
     whatsappApi
       .numbers()
       .then(({ data }) => {
+        if (requestNumberId !== activeNumberIdRef.current) return;
         const numbers = Array.isArray(data.data) ? data.data : data.data?.numbers || [];
         setWhatsappConnected(numbers.length > 0);
       })
-      .catch(() => setWhatsappConnected(false));
-  }, []);
+      .catch(() => {
+        if (requestNumberId === activeNumberIdRef.current) setWhatsappConnected(false);
+      });
+  }, [activeNumber, resolved]);
 
   const load = useCallback(() => {
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
     setLoading(true);
     const params: Record<string, string> = { all: 'true' };
     if (statusFilter !== ALL_STATUSES) params.status = statusFilter;
@@ -96,35 +113,53 @@ export default function TemplatesPage() {
     templateApi
       .list(params)
       .then(({ data }) => {
+        if (requestNumberId !== activeNumberIdRef.current) return;
         const payload = data.data;
         const list = Array.isArray(payload) ? payload : payload?.templates || [];
         setTemplates(list);
       })
       .catch((err: unknown) => {
+        if (requestNumberId !== activeNumberIdRef.current) return;
         const msg =
           (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
             ?.error?.message || 'Failed to load templates.';
         toastError(msg);
         setTemplates([]);
       })
-      .finally(() => setLoading(false));
-  }, [statusFilter]);
+      .finally(() => {
+        if (requestNumberId === activeNumberIdRef.current) setLoading(false);
+      });
+  }, [activeNumber, resolved, statusFilter]);
 
   useEffect(() => {
     checkWhatsapp();
     load();
     loadAlerts();
-  }, [checkWhatsapp, load, loadAlerts]);
+  }, [activeNumber?.id, checkWhatsapp, load, loadAlerts, resolved]);
+
+  useOnActiveNumberChange(({ isInitial }) => {
+    if (isInitial) return;
+    setTemplates([]);
+    setViewing(null);
+    setViewOpen(false);
+    setRejectionAlerts([]);
+    setPage(1);
+    setLoading(true);
+    load();
+  });
 
   const refreshViewingTemplate = useCallback((name: string) => {
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
     templateApi
       .get(name)
       .then(({ data }) => {
+        if (requestNumberId !== activeNumberIdRef.current) return;
         const fresh = data.data as MessageTemplate;
         setViewing((current) => (current?.name === name ? fresh : current));
       })
       .catch(() => {});
-  }, []);
+  }, [activeNumber, resolved]);
 
   const handleSocketEvent = useCallback(
     (event: string, data: unknown) => {
@@ -170,7 +205,8 @@ export default function TemplatesPage() {
 
   useEffect(() => {
     const viewName = searchParams.get('view');
-    if (!viewName || loading) return;
+    if (!viewName || loading || !resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
 
     const next = new URLSearchParams(searchParams);
     next.delete('view');
@@ -187,7 +223,7 @@ export default function TemplatesPage() {
     templateApi
       .get(viewName)
       .then(({ data }) => {
-        if (cancelled) return;
+        if (cancelled || requestNumberId !== activeNumberIdRef.current) return;
         setViewing(data.data as MessageTemplate);
         setViewOpen(true);
       })
@@ -195,13 +231,15 @@ export default function TemplatesPage() {
         /* not found — list stays closed */
       })
       .finally(() => {
-        if (!cancelled) setSearchParams(next, { replace: true });
+        if (!cancelled && requestNumberId === activeNumberIdRef.current) {
+          setSearchParams(next, { replace: true });
+        }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [loading, searchParams, setSearchParams, templates]);
+  }, [activeNumber, loading, resolved, searchParams, setSearchParams, templates]);
 
   const stats = useMemo(
     () => ({

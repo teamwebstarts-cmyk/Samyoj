@@ -11,6 +11,7 @@ export async function handleMissedCallFollowUp(params: {
   callId: string;
   conversationId?: string | null;
   contactId: string;
+  whatsappNumberId?: string | null;
   customMessage?: string;
 }): Promise<void> {
   const settings = await getOrgCallingSettings(params.organizationId);
@@ -19,6 +20,12 @@ export async function handleMissedCallFollowUp(params: {
 
   const message = params.customMessage?.trim() || settings.missedCallMessage;
   if (!message) return;
+  if (!params.whatsappNumberId) {
+    log.warn('Missed call follow-up skipped — call has no WhatsApp number identity', {
+      callId: params.callId,
+    });
+    return;
+  }
 
   let conversationId = params.conversationId;
 
@@ -27,6 +34,7 @@ export async function handleMissedCallFollowUp(params: {
       where: {
         organizationId: params.organizationId,
         contactId: params.contactId,
+        whatsappNumberId: params.whatsappNumberId || undefined,
       },
       orderBy: { lastMessageAt: 'desc' },
     });
@@ -38,7 +46,13 @@ export async function handleMissedCallFollowUp(params: {
     return;
   }
 
-  const contact = await prisma.contact.findUnique({ where: { id: params.contactId } });
+  const contact = await prisma.contact.findFirst({
+    where: {
+      id: params.contactId,
+      organizationId: params.organizationId,
+      whatsappNumberId: params.whatsappNumberId || undefined,
+    },
+  });
   if (!contact) return;
 
   // Opt-out first: do not trigger missed-call flows or WA auto messages.
@@ -51,8 +65,13 @@ export async function handleMissedCallFollowUp(params: {
   }
 
   const whatsappNumber = await prisma.whatsappNumber.findFirst({
-    where: { organizationId: params.organizationId, isActive: true },
+    where: {
+      id: params.whatsappNumberId || undefined,
+      organizationId: params.organizationId,
+      isActive: true,
+    },
   });
+  if (!whatsappNumber) return;
 
   if (conversationId && whatsappNumber) {
     const flowHandled = await triggerMissedCallFlow({
@@ -74,6 +93,7 @@ export async function handleMissedCallFollowUp(params: {
       phone: contact.phone,
       name: contact.name || undefined,
       content: message,
+      whatsappNumberId: whatsappNumber.id,
     });
     log.info('Missed call follow-up sent', { callId: params.callId, conversationId });
   } catch (err) {

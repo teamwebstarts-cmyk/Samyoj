@@ -1,6 +1,6 @@
 import prisma from '../../config/database';
 import { Prisma } from '@prisma/client';
-import { deliverOutboundMessage, toDbMessageType, type DeliverMessageType } from '../messages/send.service';
+import { deliverOutboundMessage, isCswClosedError, toDbMessageType, type DeliverMessageType } from '../messages/send.service';
 import { logAutomationRun, performHandoff } from '../ai/chatbot.service';
 import { queueAiBotProcessing } from '../automation/engine';
 import { getOrgBusinessHours, isWithinBusinessHours } from '../settings/business-hours';
@@ -13,15 +13,68 @@ import { normalizePhoneIdentity } from '../../utils/phone';
 import { linkFlowNodes } from './link-nodes';
 import { matchInteractiveTextIntent, resolveInteractiveBranch, syncButtonNode } from './branch-resolve';
 import type { InteractiveMessageOptions } from '../messages/interactive';
+import type { TemplateParams } from '../campaigns/types';
+import { assertSafeWebhookUrl } from '../../utils/safe-webhook-url';
+import { partitionFlowsForMatch } from './match-order';
+import { keywordMatches, wantsHandoff } from './trigger-match';
+import { extractAbSticky } from './ab-sticky';
+import { LIVE_FLOW_WHERE, isBotPaused } from './live';
+import { hasRecentFlowStart } from '../automation/frequency';
+import { cancelFlowDelayJob, clearFlowWaitState } from './pause-automation';
 import {
-  HANDOFF_KEYWORDS,
+  FLOW_LOCK_BUSY,
+  flowDelayJobId,
+  hasWaFlowResponse,
+  shouldInterruptWait,
+  type HandleInboundFlowResult,
+} from './inbound-wait';
+import {
   type FlowNode,
   type FlowState,
   type FlowTriggerConfig,
   type InboundFlowPayload,
 } from './types';
+import { getCachedMessageTemplate } from '../templates/cache';
+import { getTemplateVariableMeta, tokensFromVariableMeta } from '../templates/variable-meta';
+import { mergeTemplateParams } from '../campaigns/template-params';
+import { templatePlaceholderProfile, assertApprovedCampaignTemplate } from '../campaigns/template-validation';
+import { MetaWhatsAppService } from '../whatsapp/meta.service';
 
 const log = createModuleLogger('flow-engine');
+
+async function skipCappedFlowStart(params: {
+  organizationId: string;
+  conversationId: string;
+  flowId: string;
+}): Promise<boolean> {
+  if (!(await hasRecentFlowStart(params))) return false;
+  await logAutomationRun({
+    organizationId: params.organizationId,
+    conversationId: params.conversationId,
+    flowId: params.flowId,
+    triggerType: 'FLOW',
+    action: 'frequency_cap',
+    status: 'skipped',
+  });
+  log.info('Skipping flow start — frequency cap', params);
+  return true;
+}
+
+async function recordFlowStart(params: {
+  organizationId: string;
+  conversationId: string;
+  flowId: string;
+}): Promise<void> {
+  await incrementFlowStat(params.flowId, 'starts');
+  await logAutomationRun({
+    organizationId: params.organizationId,
+    conversationId: params.conversationId,
+    flowId: params.flowId,
+    triggerType: 'FLOW',
+    action: 'start',
+    status: 'success',
+  });
+}
 
 function parseNodes(raw: unknown): FlowNode[] {
   if (!Array.isArray(raw)) return [];
@@ -35,19 +88,25 @@ function getFlowState(botState: unknown): FlowState | null {
   if (!state.flowId || !state.currentNodeId) return null;
   return {
     flowId: state.flowId as string,
+    flowName: state.flowName as string | undefined,
     currentNodeId: state.currentNodeId as string,
     waitingFor: (state.waitingFor as FlowState['waitingFor']) || null,
     variables: (state.variables as Record<string, string>) || {},
     attempts: (state.attempts as number) || 0,
     resumeAt: state.resumeAt as string | undefined,
+    abSticky: extractAbSticky(state),
   };
 }
 
 async function saveFlowState(conversationId: string, state: FlowState | null): Promise<void> {
-  await prisma.conversation.update({
-    where: { id: conversationId },
-    data: { botState: state ? (state as unknown as Prisma.InputJsonValue) : Prisma.JsonNull },
-  });
+  if (state) {
+    await prisma.conversation.update({
+      where: { id: conversationId },
+      data: { botState: state as unknown as Prisma.InputJsonValue },
+    });
+    return;
+  }
+  await clearFlowWaitState(conversationId);
 }
 
 function findNode(nodes: FlowNode[], nodeId: string): FlowNode | undefined {
@@ -76,11 +135,6 @@ function isValidPhone(value: string): boolean {
   return /^\+?[\d\s\-()]{7,15}$/.test(value.trim());
 }
 
-function wantsHandoff(message: string): boolean {
-  const lower = message.toLowerCase();
-  return HANDOFF_KEYWORDS.some((kw) => lower.includes(kw));
-}
-
 function matchTextIntent(node: FlowNode, content: string): string | null {
   return matchInteractiveTextIntent(node, content);
 }
@@ -105,26 +159,11 @@ async function hasRecentCampaignMessage(
   });
 }
 
-function keywordMatches(content: string, config: FlowTriggerConfig): boolean {
-  const keyword = config.keyword?.toLowerCase();
-  if (!keyword) return false;
-  const lower = content.toLowerCase();
-  if (config.regex) {
-    try {
-      return new RegExp(keyword, 'i').test(content);
-    } catch {
-      return false;
-    }
-  }
-  if (config.exactMatch) return lower.trim() === keyword;
-  return lower.includes(keyword);
-}
-
 async function logNode(
   flowId: string,
   payload: InboundFlowPayload,
   node: FlowNode,
-  status: 'success' | 'failed',
+  status: 'success' | 'failed' | 'skipped',
   output?: unknown,
   error?: string,
   durationMs?: number
@@ -153,6 +192,7 @@ async function sendFlowMessage(
     interactive?: InteractiveMessageOptions;
     templateName?: string;
     templateLanguage?: string;
+    templateParams?: { body?: string[]; header?: string[]; headerMediaUrl?: string; couponCode?: string; buttonUrlSuffixes?: string[] };
     mediaUrl?: string;
     mediaCaption?: string;
     flowId?: string;
@@ -199,6 +239,7 @@ async function sendFlowMessage(
     interactive: options?.interactive,
     templateName: options?.templateName,
     templateLanguage: options?.templateLanguage,
+    templateParams: options?.templateParams,
     location: options?.location,
     contacts: options?.contacts,
     waFlow: options?.waFlow,
@@ -287,6 +328,32 @@ async function assignToAgent(
   });
 }
 
+async function skipIfOptedOut(
+  organizationId: string,
+  contactId: string,
+  conversationId: string,
+  flowId?: string
+): Promise<boolean> {
+  const contact = await prisma.contact.findFirst({
+    where: { id: contactId, organizationId },
+    select: { optedIn: true },
+  });
+  if (contact?.optedIn !== false) return false;
+
+  await cancelFlowDelayJob(conversationId);
+  await saveFlowState(conversationId, null);
+  await logAutomationRun({
+    organizationId,
+    conversationId,
+    flowId,
+    triggerType: 'FLOW',
+    action: 'opted_out',
+    status: 'skipped',
+  });
+  log.info('Flow skipped — contact opted out', { conversationId, contactId });
+  return true;
+}
+
 async function callWebhook(
   node: FlowNode,
   payload: InboundFlowPayload,
@@ -302,20 +369,35 @@ async function callWebhook(
     timestamp: new Date().toISOString(),
   };
 
-  const res = await fetch(node.webhookUrl, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: method === 'POST' ? JSON.stringify(body) : undefined,
-    signal: AbortSignal.timeout(10000),
-  });
-  const text = await res.text().catch(() => '');
-  variables.webhook_status = String(res.status);
-  variables.webhook_ok = res.ok ? 'true' : 'false';
-  variables.webhook_body = text.slice(0, 2000);
-  if (node.webhookVariable) {
-    variables[node.webhookVariable] = text.slice(0, 500);
+  try {
+    await assertSafeWebhookUrl(node.webhookUrl);
+    const res = await fetch(node.webhookUrl, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: method === 'POST' ? JSON.stringify(body) : undefined,
+      signal: AbortSignal.timeout(10000),
+      redirect: 'error',
+    });
+    const text = await res.text().catch(() => '');
+    variables.webhook_status = String(res.status);
+    variables.webhook_ok = res.ok ? 'true' : 'false';
+    variables.webhook_body = text.slice(0, 2000);
+    if (node.webhookVariable) {
+      variables[node.webhookVariable] = text.slice(0, 500);
+    }
+    return { ok: res.ok, status: res.status, body: text };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    variables.webhook_status = '0';
+    variables.webhook_ok = 'false';
+    variables.webhook_body = message.slice(0, 2000);
+    log.warn('Flow webhook blocked or failed', {
+      conversationId: payload.conversationId,
+      url: node.webhookUrl,
+      error: message,
+    });
+    return { ok: false, status: 0, body: message };
   }
-  return { ok: res.ok, status: res.status, body: text };
 }
 
 async function executeNode(
@@ -428,7 +510,7 @@ async function executeNode(
           return { done: true, nextNodeId: null, waitingFor: null };
         }
         const target = await prisma.flow.findFirst({
-          where: { id: node.targetFlowId, organizationId: payload.organizationId, enabled: true, status: 'PUBLISHED' },
+          where: { id: node.targetFlowId, organizationId: payload.organizationId, ...LIVE_FLOW_WHERE },
         });
         if (!target) {
           await logNode(flowId, payload, node, 'failed', undefined, 'Target flow not found', Date.now() - start);
@@ -542,12 +624,94 @@ async function executeNode(
 
       case 'template': {
         if (node.templateName) {
-          await sendFlowMessage(payload, node.text || `Template: ${node.templateName}`, state.variables, contactName, 'TEMPLATE', {
-            templateName: node.templateName,
-            templateLanguage: node.templateLanguage,
-          });
+          try {
+            const contact = await prisma.contact.findUnique({
+              where: { id: payload.contactId },
+              select: { name: true, phone: true, email: true, customAttributes: true },
+            });
+            const waNumber = await prisma.whatsappNumber.findFirst({
+              where: { organizationId: payload.organizationId, phoneNumberId: payload.phoneNumberId },
+              select: { wabaId: true },
+            });
+            if (!waNumber?.wabaId) {
+              throw new Error('WhatsApp account is not connected for this flow');
+            }
+            const accessToken = MetaWhatsAppService.decryptToken(payload.encryptedToken);
+            const template = await getCachedMessageTemplate(
+              payload.organizationId,
+              waNumber.wabaId,
+              accessToken,
+              node.templateName
+            );
+            if (!template) {
+              throw new Error(`Template "${node.templateName}" was not found on the connected WhatsApp account`);
+            }
+            const mapping = await getTemplateVariableMeta(
+              payload.organizationId,
+              node.templateName,
+              node.templateLanguage || template.language
+            );
+            const tokens = tokensFromVariableMeta(mapping);
+            const bodyComp = template.components?.find((c) => c.type?.toUpperCase() === 'BODY');
+            const headerComp = template.components?.find((c) => c.type?.toUpperCase() === 'HEADER');
+            const bodyCount =
+              templatePlaceholderProfile(bodyComp?.text).numeric.length +
+              templatePlaceholderProfile(bodyComp?.text).named.length;
+            const headerCount =
+              templatePlaceholderProfile(headerComp?.text).numeric.length +
+              templatePlaceholderProfile(headerComp?.text).named.length;
+            const templateParams = mergeTemplateParams(
+              {
+                body: Array.from({ length: bodyCount }, (_, i) => tokens.body?.[i] || ''),
+                header: Array.from({ length: headerCount }, (_, i) => tokens.header?.[i] || ''),
+                couponCode: node.templateCouponCode,
+                buttonUrlSuffixes: node.templateButtonUrlSuffixes,
+                headerMediaUrl: node.templateHeaderMediaUrl,
+              },
+              null,
+              contact?.name,
+              template,
+              contact || undefined
+            );
+            assertApprovedCampaignTemplate(template, {
+              name: node.templateName,
+              language: node.templateLanguage || template.language,
+              params: templateParams,
+            });
+            await sendFlowMessage(
+              payload,
+              node.text || `Template: ${node.templateName}`,
+              state.variables,
+              contactName,
+              'TEMPLATE',
+              {
+                templateName: node.templateName,
+                templateLanguage: node.templateLanguage || template.language,
+                templateParams,
+              }
+            );
+            await logNode(flowId, payload, node, 'success', undefined, undefined, Date.now() - start);
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            log.warn('Flow template send failed', {
+              templateName: node.templateName,
+              error: message,
+            });
+            await logNode(flowId, payload, node, 'failed', undefined, message, Date.now() - start);
+            return { done: true, nextNodeId: null, waitingFor: null };
+          }
+        } else {
+          await logNode(
+            flowId,
+            payload,
+            node,
+            'failed',
+            undefined,
+            'Template name is missing on this flow step',
+            Date.now() - start
+          );
+          return { done: true, nextNodeId: null, waitingFor: null };
         }
-        await logNode(flowId, payload, node, 'success', undefined, undefined, Date.now() - start);
         return { done: false, nextNodeId: node.next || null, waitingFor: null };
       }
 
@@ -581,6 +745,7 @@ async function executeNode(
         state.waitingFor = 'delay';
         state.resumeAt = new Date(Date.now() + delayMs).toISOString();
         await saveFlowState(payload.conversationId, state);
+        await cancelFlowDelayJob(payload.conversationId);
         await flowQueue.add(
           'resume-flow',
           {
@@ -596,7 +761,7 @@ async function executeNode(
             messageId: payload.messageId,
             isNewConversation: payload.isNewConversation,
           },
-          { delay: delayMs, jobId: `flow-delay-${payload.conversationId}-${Date.now()}` }
+          { delay: delayMs, jobId: flowDelayJobId(payload.conversationId) }
         );
         await logNode(
           flowId,
@@ -707,9 +872,15 @@ async function executeNode(
 
       case 'ab_split': {
         const ratio = Math.min(Math.max(node.splitRatio ?? 50, 1), 99) / 100;
-        const branchKey = Math.random() < ratio ? 'a' : 'b';
+        const stickyKey = `${flowId}:${node.id}`;
+        const sticky = state.abSticky?.[stickyKey];
+        const branchKey: 'a' | 'b' =
+          sticky === 'a' || sticky === 'b' ? sticky : Math.random() < ratio ? 'a' : 'b';
+        if (!sticky) {
+          state.abSticky = { ...state.abSticky, [stickyKey]: branchKey };
+        }
         const nextId = node.branches?.[branchKey] || node.next || null;
-        await logNode(flowId, payload, node, 'success', { branch: branchKey }, undefined, Date.now() - start);
+        await logNode(flowId, payload, node, 'success', { branch: branchKey, sticky: Boolean(sticky) }, undefined, Date.now() - start);
         return { done: false, nextNodeId: nextId, waitingFor: null };
       }
 
@@ -727,15 +898,19 @@ async function executeNode(
       }
     }
   } catch (err) {
+    const skippedCsw = isCswClosedError(err);
     await logNode(
       flowId,
       payload,
       node,
-      'failed',
-      undefined,
+      skippedCsw ? 'skipped' : 'failed',
+      skippedCsw ? { reason: 'csw_closed', metaCode: 131047 } : undefined,
       err instanceof Error ? err.message : String(err),
       Date.now() - start
     );
+    if (skippedCsw) {
+      return { done: true, nextNodeId: null, waitingFor: null };
+    }
     throw err;
   }
 }
@@ -833,19 +1008,29 @@ async function matchFlow(
   const withinHours = isWithinBusinessHours(hours);
 
   const flows = await prisma.flow.findMany({
-    where: { organizationId, enabled: true, status: 'PUBLISHED' },
+    where: { organizationId, ...LIVE_FLOW_WHERE },
     orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }],
   });
 
-  for (const flow of flows) {
-    if (await flowMatchesTrigger(flow, payload, withinHours, contactTags)) {
-      return {
-        id: flow.id,
-        name: flow.name,
-        nodes: parseNodes(flow.nodes),
-        startNodeId: flow.startNodeId,
-      };
+  const { primary, catchAll } = partitionFlowsForMatch(flows);
+
+  for (const flow of [...primary, ...catchAll]) {
+    if (!(await flowMatchesTrigger(flow, payload, withinHours, contactTags))) continue;
+    if (
+      await skipCappedFlowStart({
+        organizationId,
+        conversationId: payload.conversationId,
+        flowId: flow.id,
+      })
+    ) {
+      continue;
     }
+    return {
+      id: flow.id,
+      name: flow.name,
+      nodes: parseNodes(flow.nodes),
+      startNodeId: flow.startNodeId,
+    };
   }
 
   return null;
@@ -854,6 +1039,11 @@ async function matchFlow(
 function applyLanguageFromMessage(state: FlowState, content?: string): void {
   if (!content?.trim() || state.variables.language) return;
   state.variables.language = detectMessageLanguage(content);
+}
+
+function seedAbSticky(state: FlowState, botState: unknown): void {
+  const sticky = extractAbSticky(botState);
+  if (Object.keys(sticky).length) state.abSticky = { ...sticky, ...state.abSticky };
 }
 
 function validateAnswer(field: string, value: string): boolean {
@@ -866,7 +1056,8 @@ function validateAnswer(field: string, value: string): boolean {
 async function recoverFlowFromButtonReply(
   payload: InboundFlowPayload,
   contactName?: string | null,
-  contactTags?: string[]
+  contactTags?: string[],
+  botState?: unknown
 ): Promise<boolean> {
   if (!payload.buttonReplyId) return false;
 
@@ -886,7 +1077,7 @@ async function recoverFlowFromButtonReply(
   if (!flowId) return false;
 
   const flow = await prisma.flow.findFirst({
-    where: { id: flowId, organizationId: payload.organizationId, enabled: true },
+    where: { id: flowId, organizationId: payload.organizationId, ...LIVE_FLOW_WHERE },
   });
   if (!flow) return false;
 
@@ -914,6 +1105,7 @@ async function recoverFlowFromButtonReply(
     attempts: 0,
   };
   if (contactName) state.variables.name = contactName;
+  seedAbSticky(state, botState);
 
   log.info('Recovering flow from button reply', {
     flowId: flow.id,
@@ -932,30 +1124,53 @@ async function processInboundFlow(payload: InboundFlowPayload): Promise<boolean>
   });
 
   if (!conversation) return false;
+  if (isBotPaused(conversation)) return false;
   if (conversation.botHandoffAt) return false;
   if (conversation.assignedAgentId && conversation.status !== 'OPEN') return false;
+
+  if (await skipIfOptedOut(payload.organizationId, payload.contactId, payload.conversationId)) {
+    return true;
+  }
 
   const contactTags = conversation.contact?.tags || [];
 
   if (payload.content && wantsHandoff(payload.content)) {
-    const existingState = getFlowState(conversation.botState);
-    if (existingState) {
+    const existingHandoffState = getFlowState(conversation.botState);
+    if (existingHandoffState) {
+      await cancelFlowDelayJob(payload.conversationId);
       await saveFlowState(payload.conversationId, null);
       await performHandoff(payload.organizationId, payload.conversationId, 'USER_REQUEST');
       return true;
     }
   }
 
-  const existingState = getFlowState(conversation.botState);
+  let existingState = getFlowState(conversation.botState);
+
+  if (existingState && shouldInterruptWait(existingState.waitingFor, payload)) {
+    if (existingState.waitingFor === 'delay') {
+      await cancelFlowDelayJob(payload.conversationId);
+    }
+    await logAutomationRun({
+      organizationId: payload.organizationId,
+      conversationId: payload.conversationId,
+      flowId: existingState.flowId,
+      triggerType: 'FLOW',
+      action: existingState.waitingFor === 'delay' ? 'delay_interrupted' : 'form_wait_interrupted',
+      status: 'skipped',
+      output: { reason: 'inbound_during_wait' },
+    });
+    await saveFlowState(payload.conversationId, null);
+    existingState = null;
+  }
 
   if (existingState) {
     applyLanguageFromMessage(existingState, payload.content);
-    if (existingState.waitingFor === 'delay') return true;
 
     const flow = await prisma.flow.findFirst({
-      where: { id: existingState.flowId, organizationId: payload.organizationId, enabled: true },
+      where: { id: existingState.flowId, organizationId: payload.organizationId, ...LIVE_FLOW_WHERE },
     });
     if (!flow) {
+      await cancelFlowDelayJob(payload.conversationId);
       await saveFlowState(payload.conversationId, null);
       return false;
     }
@@ -1063,7 +1278,10 @@ async function processInboundFlow(payload: InboundFlowPayload): Promise<boolean>
           contactTags
         );
       }
-      return true;
+      log.info('Meta Form wait with no form payload; treating as interrupt miss', {
+        conversationId: payload.conversationId,
+        flowId: flow.id,
+      });
     }
 
     if (existingState.waitingFor === 'text' && (payload.content || payload.hasMedia)) {
@@ -1143,11 +1361,19 @@ async function processInboundFlow(payload: InboundFlowPayload): Promise<boolean>
     return true;
   }
 
+  if (hasWaFlowResponse(payload)) {
+    log.info('Ignoring NFM reply with no waiting form', {
+      conversationId: payload.conversationId,
+    });
+    return true;
+  }
+
   if (payload.buttonReplyId) {
     const recovered = await recoverFlowFromButtonReply(
       payload,
       conversation.contact?.name,
-      contactTags
+      contactTags,
+      conversation.botState
     );
     if (recovered) return true;
   }
@@ -1168,9 +1394,14 @@ async function processInboundFlow(payload: InboundFlowPayload): Promise<boolean>
   };
 
   if (conversation.contact?.name) state.variables.name = conversation.contact.name;
+  seedAbSticky(state, conversation.botState);
   applyLanguageFromMessage(state, payload.content);
 
-  await incrementFlowStat(matched.id, 'starts');
+  await recordFlowStart({
+    organizationId: payload.organizationId,
+    conversationId: payload.conversationId,
+    flowId: matched.id,
+  });
   log.info('Starting flow', { flowId: matched.id, conversationId: payload.conversationId });
 
   return runFromNode(
@@ -1184,9 +1415,10 @@ async function processInboundFlow(payload: InboundFlowPayload): Promise<boolean>
   );
 }
 
-export async function handleInboundFlow(payload: InboundFlowPayload): Promise<boolean> {
+export async function handleInboundFlow(payload: InboundFlowPayload): Promise<HandleInboundFlowResult> {
   const result = await withConversationLock(payload.conversationId, () => processInboundFlow(payload));
-  return result ?? false;
+  if (result === null) return FLOW_LOCK_BUSY;
+  return result;
 }
 
 export async function resumeFlowAfterDelay(jobData: {
@@ -1202,52 +1434,77 @@ export async function resumeFlowAfterDelay(jobData: {
   messageId: string;
   isNewConversation: boolean;
 }): Promise<void> {
-  if (!jobData.nextNodeId) {
+  const nextNodeId = jobData.nextNodeId;
+  if (!nextNodeId) {
     await saveFlowState(jobData.conversationId, null);
     return;
   }
 
-  const flow = await prisma.flow.findFirst({
-    where: { id: jobData.flowId, organizationId: jobData.organizationId, enabled: true },
+  await withConversationLock(jobData.conversationId, async () => {
+    const flow = await prisma.flow.findFirst({
+      where: { id: jobData.flowId, organizationId: jobData.organizationId, ...LIVE_FLOW_WHERE },
+    });
+    if (!flow) {
+      await saveFlowState(jobData.conversationId, null);
+      return;
+    }
+
+    const conversation = await prisma.conversation.findFirst({
+      where: { id: jobData.conversationId, organizationId: jobData.organizationId },
+      include: { contact: true },
+    });
+    if (!conversation || conversation.botHandoffAt) return;
+    if (isBotPaused(conversation)) {
+      await saveFlowState(jobData.conversationId, null);
+      return;
+    }
+
+    if (
+      await skipIfOptedOut(
+        jobData.organizationId,
+        jobData.contactId,
+        jobData.conversationId,
+        jobData.flowId
+      )
+    ) {
+      return;
+    }
+
+    const latest = await prisma.conversation.findFirst({
+      where: { id: jobData.conversationId, organizationId: jobData.organizationId },
+      include: { contact: true },
+    });
+    if (!latest || latest.botHandoffAt || isBotPaused(latest)) return;
+
+    const state = getFlowState(latest.botState);
+    if (!state || state.flowId !== jobData.flowId) return;
+    if (state.waitingFor !== 'delay') return;
+
+    state.waitingFor = null;
+    state.variables = { ...state.variables, ...jobData.variables };
+
+    const payload: InboundFlowPayload = {
+      organizationId: jobData.organizationId,
+      conversationId: jobData.conversationId,
+      contactId: jobData.contactId,
+      messageId: jobData.messageId,
+      contactPhone: jobData.contactPhone,
+      phoneNumberId: jobData.phoneNumberId,
+      encryptedToken: jobData.encryptedToken,
+      content: '',
+      isNewConversation: jobData.isNewConversation,
+    };
+
+    await runFromNode(
+      payload,
+      jobData.flowId,
+      parseNodes(flow.nodes),
+      nextNodeId,
+      state,
+      latest.contact?.name,
+      latest.contact?.tags || []
+    );
   });
-  if (!flow) {
-    await saveFlowState(jobData.conversationId, null);
-    return;
-  }
-
-  const conversation = await prisma.conversation.findFirst({
-    where: { id: jobData.conversationId, organizationId: jobData.organizationId },
-    include: { contact: true },
-  });
-  if (!conversation || conversation.botHandoffAt) return;
-
-  const state = getFlowState(conversation.botState);
-  if (!state || state.flowId !== jobData.flowId) return;
-
-  state.waitingFor = null;
-  state.variables = { ...state.variables, ...jobData.variables };
-
-  const payload: InboundFlowPayload = {
-    organizationId: jobData.organizationId,
-    conversationId: jobData.conversationId,
-    contactId: jobData.contactId,
-    messageId: jobData.messageId,
-    contactPhone: jobData.contactPhone,
-    phoneNumberId: jobData.phoneNumberId,
-    encryptedToken: jobData.encryptedToken,
-    content: '',
-    isNewConversation: jobData.isNewConversation,
-  };
-
-  await runFromNode(
-    payload,
-    jobData.flowId,
-    parseNodes(flow.nodes),
-    jobData.nextNodeId,
-    state,
-    conversation.contact?.name,
-    conversation.contact?.tags || []
-  );
 }
 
 export async function triggerMissedCallFlow(params: {
@@ -1261,8 +1518,7 @@ export async function triggerMissedCallFlow(params: {
   const flows = await prisma.flow.findMany({
     where: {
       organizationId: params.organizationId,
-      enabled: true,
-      status: 'PUBLISHED',
+      ...LIVE_FLOW_WHERE,
       triggerType: 'MISSED_CALL',
     },
     orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }],
@@ -1270,54 +1526,76 @@ export async function triggerMissedCallFlow(params: {
 
   if (flows.length === 0) return false;
 
-  const flow = flows[0];
-  const nodes = parseNodes(flow.nodes);
-  const startNode = getStartNode(nodes, flow.startNodeId);
-  if (!startNode) return false;
-
   const conversation = await prisma.conversation.findFirst({
     where: { id: params.conversationId, organizationId: params.organizationId },
     include: { contact: true },
   });
-  if (!conversation || conversation.botHandoffAt) return false;
+  if (!conversation || conversation.botHandoffAt || isBotPaused(conversation)) return false;
 
-  const state: FlowState = {
-    flowId: flow.id,
-    flowName: flow.name,
-    currentNodeId: startNode.id,
-    waitingFor: null,
-    variables: {},
-    attempts: 0,
-  };
-  if (conversation.contact?.name) state.variables.name = conversation.contact.name;
+  for (const flow of flows) {
+    const nodes = parseNodes(flow.nodes);
+    const startNode = getStartNode(nodes, flow.startNodeId);
+    if (!startNode) continue;
 
-  const payload: InboundFlowPayload = {
-    organizationId: params.organizationId,
-    conversationId: params.conversationId,
-    contactId: params.contactId,
-    messageId: '',
-    contactPhone: params.contactPhone,
-    phoneNumberId: params.phoneNumberId,
-    encryptedToken: params.encryptedToken,
-    content: '',
-    isNewConversation: false,
-  };
+    if (await skipIfOptedOut(params.organizationId, params.contactId, params.conversationId, flow.id)) {
+      return true;
+    }
 
-  await incrementFlowStat(flow.id, 'starts');
-  log.info('Starting missed-call flow', { flowId: flow.id, conversationId: params.conversationId });
+    if (
+      await skipCappedFlowStart({
+        organizationId: params.organizationId,
+        conversationId: params.conversationId,
+        flowId: flow.id,
+      })
+    ) {
+      continue;
+    }
 
-  return withConversationLock(params.conversationId, async () => {
-    await runFromNode(
-      payload,
-      flow.id,
-      nodes,
-      startNode.id,
-      state,
-      conversation.contact?.name,
-      conversation.contact?.tags || []
-    );
-    return true;
-  }).then((r) => r ?? false);
+    const state: FlowState = {
+      flowId: flow.id,
+      flowName: flow.name,
+      currentNodeId: startNode.id,
+      waitingFor: null,
+      variables: {},
+      attempts: 0,
+    };
+    if (conversation.contact?.name) state.variables.name = conversation.contact.name;
+    seedAbSticky(state, conversation.botState);
+
+    const payload: InboundFlowPayload = {
+      organizationId: params.organizationId,
+      conversationId: params.conversationId,
+      contactId: params.contactId,
+      messageId: '',
+      contactPhone: params.contactPhone,
+      phoneNumberId: params.phoneNumberId,
+      encryptedToken: params.encryptedToken,
+      content: '',
+      isNewConversation: false,
+    };
+
+    await recordFlowStart({
+      organizationId: params.organizationId,
+      conversationId: params.conversationId,
+      flowId: flow.id,
+    });
+    log.info('Starting missed-call flow', { flowId: flow.id, conversationId: params.conversationId });
+
+    return withConversationLock(params.conversationId, async () => {
+      await runFromNode(
+        payload,
+        flow.id,
+        nodes,
+        startNode.id,
+        state,
+        conversation.contact?.name,
+        conversation.contact?.tags || []
+      );
+      return true;
+    }).then((r) => r ?? false);
+  }
+
+  return false;
 }
 
 async function triggerEventFlow(
@@ -1334,62 +1612,83 @@ async function triggerEventFlow(
   const flows = await prisma.flow.findMany({
     where: {
       organizationId: params.organizationId,
-      enabled: true,
-      status: 'PUBLISHED',
+      ...LIVE_FLOW_WHERE,
       triggerType,
     },
     orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }],
   });
   if (flows.length === 0) return false;
 
-  const flow = flows[0];
-  const nodes = parseNodes(flow.nodes);
-  const startNode = getStartNode(nodes, flow.startNodeId);
-  if (!startNode) return false;
-
   const conversation = await prisma.conversation.findFirst({
     where: { id: params.conversationId, organizationId: params.organizationId },
     include: { contact: true },
   });
-  if (!conversation || conversation.botHandoffAt) return false;
+  if (!conversation || conversation.botHandoffAt || isBotPaused(conversation)) return false;
 
-  const state: FlowState = {
-    flowId: flow.id,
-    flowName: flow.name,
-    currentNodeId: startNode.id,
-    waitingFor: null,
-    variables: {},
-    attempts: 0,
-  };
-  if (conversation.contact?.name) state.variables.name = conversation.contact.name;
+  for (const flow of flows) {
+    const nodes = parseNodes(flow.nodes);
+    const startNode = getStartNode(nodes, flow.startNodeId);
+    if (!startNode) continue;
 
-  const payload: InboundFlowPayload = {
-    organizationId: params.organizationId,
-    conversationId: params.conversationId,
-    contactId: params.contactId,
-    messageId: '',
-    contactPhone: params.contactPhone,
-    phoneNumberId: params.phoneNumberId,
-    encryptedToken: params.encryptedToken,
-    content: '',
-    isNewConversation: false,
-  };
+    if (await skipIfOptedOut(params.organizationId, params.contactId, params.conversationId, flow.id)) {
+      return true;
+    }
 
-  await incrementFlowStat(flow.id, 'starts');
-  log.info('Starting event flow', { flowId: flow.id, triggerType, conversationId: params.conversationId });
+    if (
+      await skipCappedFlowStart({
+        organizationId: params.organizationId,
+        conversationId: params.conversationId,
+        flowId: flow.id,
+      })
+    ) {
+      continue;
+    }
 
-  return withConversationLock(params.conversationId, async () => {
-    await runFromNode(
-      payload,
-      flow.id,
-      nodes,
-      startNode.id,
-      state,
-      conversation.contact?.name,
-      conversation.contact?.tags || []
-    );
-    return true;
-  }).then((r) => r ?? false);
+    const state: FlowState = {
+      flowId: flow.id,
+      flowName: flow.name,
+      currentNodeId: startNode.id,
+      waitingFor: null,
+      variables: {},
+      attempts: 0,
+    };
+    if (conversation.contact?.name) state.variables.name = conversation.contact.name;
+    seedAbSticky(state, conversation.botState);
+
+    const payload: InboundFlowPayload = {
+      organizationId: params.organizationId,
+      conversationId: params.conversationId,
+      contactId: params.contactId,
+      messageId: '',
+      contactPhone: params.contactPhone,
+      phoneNumberId: params.phoneNumberId,
+      encryptedToken: params.encryptedToken,
+      content: '',
+      isNewConversation: false,
+    };
+
+    await recordFlowStart({
+      organizationId: params.organizationId,
+      conversationId: params.conversationId,
+      flowId: flow.id,
+    });
+    log.info('Starting event flow', { flowId: flow.id, triggerType, conversationId: params.conversationId });
+
+    return withConversationLock(params.conversationId, async () => {
+      await runFromNode(
+        payload,
+        flow.id,
+        nodes,
+        startNode.id,
+        state,
+        conversation.contact?.name,
+        conversation.contact?.tags || []
+      );
+      return true;
+    }).then((r) => r ?? false);
+  }
+
+  return false;
 }
 
 export async function triggerCallCompletedFlow(params: {
@@ -1444,7 +1743,7 @@ export async function startFlowFromJob(jobData: {
   isNewConversation: boolean;
 }): Promise<void> {
   const flow = await prisma.flow.findFirst({
-    where: { id: jobData.flowId, organizationId: jobData.organizationId, enabled: true, status: 'PUBLISHED' },
+    where: { id: jobData.flowId, organizationId: jobData.organizationId, ...LIVE_FLOW_WHERE },
   });
   if (!flow) return;
 
@@ -1456,7 +1755,21 @@ export async function startFlowFromJob(jobData: {
     where: { id: jobData.conversationId, organizationId: jobData.organizationId },
     include: { contact: true },
   });
-  if (!conversation || conversation.botHandoffAt) return;
+  if (!conversation || conversation.botHandoffAt || isBotPaused(conversation)) return;
+
+  if (await skipIfOptedOut(jobData.organizationId, jobData.contactId, jobData.conversationId, flow.id)) {
+    return;
+  }
+
+  if (
+    await skipCappedFlowStart({
+      organizationId: jobData.organizationId,
+      conversationId: jobData.conversationId,
+      flowId: flow.id,
+    })
+  ) {
+    return;
+  }
 
   const state: FlowState = {
     flowId: flow.id,
@@ -1467,6 +1780,7 @@ export async function startFlowFromJob(jobData: {
     attempts: 0,
   };
   if (conversation.contact?.name) state.variables.name = conversation.contact.name;
+  seedAbSticky(state, conversation.botState);
 
   const payload: InboundFlowPayload = {
     organizationId: jobData.organizationId,
@@ -1480,7 +1794,11 @@ export async function startFlowFromJob(jobData: {
     isNewConversation: jobData.isNewConversation,
   };
 
-  await incrementFlowStat(flow.id, 'starts');
+  await recordFlowStart({
+    organizationId: jobData.organizationId,
+    conversationId: jobData.conversationId,
+    flowId: flow.id,
+  });
   await withConversationLock(jobData.conversationId, () =>
     runFromNode(
       payload,

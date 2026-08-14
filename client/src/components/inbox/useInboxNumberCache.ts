@@ -87,7 +87,10 @@ export function useInboxNumberCache(deps: NumberCacheDeps) {
       setAgentFilter(cached.agentFilter);
       setPage(cached.page ?? 1);
       if (cached.pageSize) setPageSize(cached.pageSize);
-      setListLoading(false);
+      // Warm-start the UI, but always revalidate so a long-lived snapshot
+      // cannot hide new conversations after a restore or switch.
+      setListLoading(true);
+      reloadList();
       return;
     }
     setPage(1);

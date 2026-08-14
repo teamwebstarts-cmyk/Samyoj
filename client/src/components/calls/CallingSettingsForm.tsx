@@ -41,9 +41,10 @@ export interface CallingSettings {
   sarvamSttPrompt?: string | null;
   liveTransferEnabled?: boolean;
   transferMode?: 'live' | 'message_only';
+  maxCallDurationSec?: number;
 }
 
-export const DEFAULT_GREETING = 'Hello! Thank you for calling. How can I help you today?';
+export const DEFAULT_GREETING = 'Hi, thanks for calling. How can I help?';
 
 const defaultSettings: CallingSettings = {
   aiAutoAnswer: true,
@@ -57,12 +58,13 @@ const defaultSettings: CallingSettings = {
   missedCallAutoMessage: true,
   missedCallMessage: 'Sorry we missed your call! Reply here and we will help you shortly.',
   recordingConsentEnabled: false,
-  recordingConsentMessage: 'This call may be recorded for quality purposes.',
+  recordingConsentMessage: 'This call may be recorded.',
   liveTransferEnabled: false,
   transferMode: 'message_only',
   sarvamTtsSpeaker: 'shubh',
   sarvamSttLanguage: 'hi-IN',
   sarvamSttPrompt: null,
+  maxCallDurationSec: 480,
 };
 
 // Top 10 Sarvam voices — officially recommended for multilingual voice agents.
@@ -296,7 +298,7 @@ export default function CallingSettingsForm({ initialSection = 'who' }: CallingS
                       setSettings((s) => ({ ...s, defaultBotId: e.target.value || null }))
                     }
                     options={[
-                      { value: '', label: 'Use conversation default' },
+                      { value: '', label: 'Auto — use the trained brain' },
                       ...bots.map((b) => ({ value: b.id, label: b.name })),
                     ]}
                   />
@@ -589,6 +591,26 @@ export default function CallingSettingsForm({ initialSection = 'who' }: CallingS
                     }))
                   }
                 />
+                <AppInput
+                  className="mt-3"
+                  label="Max AI call length (minutes)"
+                  type="number"
+                  min={2}
+                  max={30}
+                  value={String(Math.round((settings.maxCallDurationSec ?? 480) / 60))}
+                  onChange={(e) =>
+                    setSettings((s) => ({
+                      ...s,
+                      maxCallDurationSec: Math.min(
+                        1800,
+                        Math.max(120, (parseInt(e.target.value, 10) || 8) * 60)
+                      ),
+                    }))
+                  }
+                />
+                <p className="mt-1 text-[12px] text-neutral-500">
+                  The AI hangs up after this so long calls do not burn credits. Default 8 minutes.
+                </p>
                 <label className="mt-4 flex items-center gap-2 text-[13px] font-semibold text-neutral-800 dark:text-neutral-200">
                   <input
                     type="checkbox"

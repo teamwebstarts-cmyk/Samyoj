@@ -5,7 +5,18 @@ import { Link } from 'react-router-dom';
 import AppInput from '../../ui/AppInput';
 import AppSelect from '../../ui/AppSelect';
 import { WhatsAppTemplatePreview } from '../../inbox/WhatsAppPreview';
-import { CONTACT_SOURCE_TOKEN, loadTemplateVariableMeta, previewParams, sourceFromParamValue, sourceLabel } from '../../../utils/templateForm';
+import TemplateButtonExtras from '../../templates/TemplateButtonExtras';
+import {
+  fetchTemplateVariableMeta,
+  previewParams,
+  sourceFromParamValue,
+  sourceLabel,
+  templateDynamicUrlButtons,
+  templateNeedsCoupon,
+  tokenForMeta,
+  variableDescription,
+  type TemplateVariableMeta,
+} from '../../../utils/templateForm';
 import {
   getFilledTemplatePreview,
   getTemplateHeaderFormat,
@@ -13,6 +24,7 @@ import {
   templateNeedsHeaderMedia,
 } from '../campaignPreviewUtils';
 import type { MessageTemplate } from '../../../types';
+import { getQualityLabel } from '../../../utils/templateUtils';
 import type { CampaignWizardForm } from './campaignWizardModel';
 import CampaignTemplatePicker from './CampaignTemplatePicker';
 
@@ -25,14 +37,13 @@ interface CampaignMessageStepProps {
   whatsappNumbers: Array<{ id: string; phoneNumber: string }>;
 }
 
-const fallbackVariableLabels = ['Business name', 'Offer discount', 'Offer valid till', 'Promo code'];
-
-function getVariableLabel(template: MessageTemplate, index: number) {
+function getVariableLabel(template: MessageTemplate, index: number, meta: TemplateVariableMeta[]) {
   const body = template.body || template.components?.find((component) => component.type === 'BODY')?.text || '';
   const namedVariables = [...body.matchAll(/\{\{([a-zA-Z_][\w-]*)\}\}/g)].map((match) => match[1]);
-  return namedVariables[index]
+  const named = namedVariables[index]
     ? namedVariables[index].replace(/[_-]+/g, ' ').replace(/\b\w/g, (character) => character.toUpperCase())
-    : fallbackVariableLabels[index] || `Message variable ${index + 1}`;
+    : `Message variable ${index + 1}`;
+  return variableDescription(meta, 'body', index, named);
 }
 
 function getLastUpdatedLabel(template: MessageTemplate) {
@@ -53,6 +64,7 @@ export default function CampaignMessageStep({
   whatsappNumbers,
 }: CampaignMessageStepProps) {
   const [previewLanguage, setPreviewLanguage] = useState(form.templateLanguage || selectedTemplate?.language || '');
+  const [templateMeta, setTemplateMeta] = useState<TemplateVariableMeta[]>([]);
   const filledPreview = selectedTemplate
     ? {
         ...getFilledTemplatePreview(selectedTemplate, {
@@ -64,22 +76,35 @@ export default function CampaignMessageStep({
       }
     : null;
   const showHeaderMedia = selectedTemplate ? templateNeedsHeaderMedia(selectedTemplate) : false;
-  const templateMeta = useMemo(
-    () => (selectedTemplate ? loadTemplateVariableMeta(selectedTemplate.name) : []),
-    [selectedTemplate],
-  );
-  /** body var index (0-based) → mapped source, from the wizard's saved mapping. */
-  const bodySourceByIndex = useMemo(() => {
-    const map = new Map<number, string>();
+  const needsCoupon = selectedTemplate ? templateNeedsCoupon(selectedTemplate) : false;
+  const dynamicUrls = selectedTemplate ? templateDynamicUrlButtons(selectedTemplate) : [];
+  const hasSendExtras = needsCoupon || dynamicUrls.length > 0;
+
+  useEffect(() => {
+    if (!selectedTemplate) {
+      setTemplateMeta([]);
+      return;
+    }
+    let cancelled = false;
+    fetchTemplateVariableMeta(selectedTemplate.name, selectedTemplate.language).then((meta) => {
+      if (!cancelled) setTemplateMeta(meta);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedTemplate?.name, selectedTemplate?.language]);
+  /** body var index (0-based) → saved mapping. */
+  const bodyMetaByIndex = useMemo(() => {
+    const map = new Map<number, TemplateVariableMeta>();
     for (const m of templateMeta) {
-      if (m.scope === 'body' && m.suggestedSource) map.set(m.index - 1, m.suggestedSource);
+      if (m.scope === 'body') map.set(m.index - 1, m);
     }
     return map;
   }, [templateMeta]);
-  const headerSourceByIndex = useMemo(() => {
-    const map = new Map<number, string>();
+  const headerMetaByIndex = useMemo(() => {
+    const map = new Map<number, TemplateVariableMeta>();
     for (const m of templateMeta) {
-      if (m.scope === 'header' && m.suggestedSource) map.set(m.index - 1, m.suggestedSource);
+      if (m.scope === 'header') map.set(m.index - 1, m);
     }
     return map;
   }, [templateMeta]);
@@ -87,15 +112,13 @@ export default function CampaignMessageStep({
   // Auto-fill mapped variables (body + header) with their resolution token. Empty slots only.
   useEffect(() => {
     if (!selectedTemplate) return;
-    if (!bodySourceByIndex.size && !headerSourceByIndex.size) return;
+    if (!bodyMetaByIndex.size && !headerMetaByIndex.size) return;
     setForm((previous) => {
       let changed = false;
-      const fill = (params: string[], sourceByIndex: Map<number, string>) => {
+      const fill = (params: string[], metaByIndex: Map<number, TemplateVariableMeta>) => {
         const next = [...params];
         for (let i = 0; i < next.length; i += 1) {
-          const source = sourceByIndex.get(i);
-          if (!source || source === 'custom') continue;
-          const token = CONTACT_SOURCE_TOKEN[source];
+          const token = tokenForMeta(metaByIndex.get(i));
           if (token && !(next[i] || '').trim()) {
             next[i] = token;
             changed = true;
@@ -103,11 +126,11 @@ export default function CampaignMessageStep({
         }
         return next;
       };
-      const bodyParams = fill(previous.bodyParams, bodySourceByIndex);
-      const headerParams = fill(previous.headerParams, headerSourceByIndex);
+      const bodyParams = fill(previous.bodyParams, bodyMetaByIndex);
+      const headerParams = fill(previous.headerParams, headerMetaByIndex);
       return changed ? { ...previous, bodyParams, headerParams } : previous;
     });
-  }, [selectedTemplate, bodySourceByIndex, headerSourceByIndex, setForm]);
+  }, [selectedTemplate, bodyMetaByIndex, headerMetaByIndex, setForm]);
   const previewLanguages = useMemo(
     () =>
       selectedTemplate
@@ -125,6 +148,8 @@ export default function CampaignMessageStep({
       ...previous,
       templateName: template.name,
       templateLanguage: template.language,
+      couponCode: previous.templateName === template.name ? previous.couponCode : '',
+      buttonUrlSuffixes: previous.templateName === template.name ? previous.buttonUrlSuffixes : [],
     }));
   };
 
@@ -247,7 +272,34 @@ export default function CampaignMessageStep({
                   </p>
                 </div>
 
-                {form.bodyParams.length === 0 && form.headerParams.length === 0 && !showHeaderMedia ? (
+                {(selectedTemplate.category || '').toUpperCase() === 'UTILITY' && (
+                  <div className="flex items-start gap-2 rounded-lg border border-amber-100 bg-amber-50/70 px-2.5 py-2 dark:border-amber-900/50 dark:bg-amber-950/20">
+                    <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-300" />
+                    <p className="text-[10px] font-medium leading-relaxed text-amber-800 dark:text-amber-200">
+                      This is a Utility template for order updates and confirmations — not promotions.
+                    </p>
+                  </div>
+                )}
+                {(selectedTemplate.category || '').toUpperCase() === 'AUTHENTICATION' && (
+                  <div className="flex items-start gap-2 rounded-lg border border-amber-100 bg-amber-50/70 px-2.5 py-2 dark:border-amber-900/50 dark:bg-amber-950/20">
+                    <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-300" />
+                    <p className="text-[10px] font-medium leading-relaxed text-amber-800 dark:text-amber-200">
+                      Authentication templates are for one-time passwords and verification codes.
+                    </p>
+                  </div>
+                )}
+                {(getQualityLabel(selectedTemplate.quality_score?.score)?.label === 'Medium quality' ||
+                  getQualityLabel(selectedTemplate.quality_score?.score)?.label === 'Low quality') && (
+                  <div className="flex items-start gap-2 rounded-lg border border-amber-100 bg-amber-50/70 px-2.5 py-2 dark:border-amber-900/50 dark:bg-amber-950/20">
+                    <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-300" />
+                    <p className="text-[10px] font-medium leading-relaxed text-amber-800 dark:text-amber-200">
+                      WhatsApp rates this template as {getQualityLabel(selectedTemplate.quality_score?.score)?.label.toLowerCase()}.
+                      Delivery can pause if quality drops further.
+                    </p>
+                  </div>
+                )}
+
+                {form.bodyParams.length === 0 && form.headerParams.length === 0 && !showHeaderMedia && !hasSendExtras ? (
                   <div className="flex min-h-[150px] flex-1 flex-col items-center justify-center rounded-lg border border-dashed border-emerald-200 bg-emerald-50/45 px-4 text-center dark:border-emerald-900/50 dark:bg-emerald-950/15">
                     <CheckCircle2 className="h-6 w-6 text-emerald-600 dark:text-emerald-300" />
                     <p className="mt-2 text-[11px] font-extrabold text-emerald-900 dark:text-emerald-200">
@@ -260,17 +312,18 @@ export default function CampaignMessageStep({
                 ) : (
                   <>
                     {form.bodyParams.map((value, index) => {
-                      const source = bodySourceByIndex.get(index) || sourceFromParamValue(value);
+                      const mapped = bodyMetaByIndex.get(index);
+                      const source = mapped?.suggestedSource || sourceFromParamValue(value);
                       if (source && source !== 'custom') {
                         return (
                           <div key={`body-param-${index}`}>
                             <p className="mb-1 text-[11px] font-bold text-slate-600 dark:text-slate-300">
-                              {index + 1}. {getVariableLabel(selectedTemplate, index)}
+                              {index + 1}. {getVariableLabel(selectedTemplate, index, templateMeta)}
                             </p>
                             <div className="flex h-9 items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 dark:border-emerald-800 dark:bg-emerald-950/30">
                               <Sparkles className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
                               <p className="text-[11px] font-bold text-emerald-800 dark:text-emerald-200">
-                                Auto-filled from contact ({sourceLabel(source)})
+                                Auto-filled from contact ({sourceLabel(source, mapped?.customKey)})
                               </p>
                             </div>
                           </div>
@@ -280,7 +333,7 @@ export default function CampaignMessageStep({
                         <AppInput
                           key={`body-param-${index}`}
                           id={`body-param-${index}`}
-                          label={`${index + 1}. ${getVariableLabel(selectedTemplate, index)} *`}
+                          label={`${index + 1}. ${getVariableLabel(selectedTemplate, index, templateMeta)} *`}
                           hint={`${value.length} characters`}
                           placeholder={index === 0 ? 'Name or other value' : 'Enter a value'}
                           value={value}
@@ -292,17 +345,19 @@ export default function CampaignMessageStep({
                     })}
 
                     {form.headerParams.map((value, index) => {
-                      const source = headerSourceByIndex.get(index) || sourceFromParamValue(value);
+                      const mapped = headerMetaByIndex.get(index);
+                      const source = mapped?.suggestedSource || sourceFromParamValue(value);
+                      const headerLabel = variableDescription(templateMeta, 'header', index, 'Header detail');
                       if (source && source !== 'custom') {
                         return (
                           <div key={`header-param-${index}`}>
                             <p className="mb-1 text-[11px] font-bold text-slate-600 dark:text-slate-300">
-                              {index + 1}. Header detail
+                              {index + 1}. {headerLabel}
                             </p>
                             <div className="flex h-9 items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 dark:border-emerald-800 dark:bg-emerald-950/30">
                               <Sparkles className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
                               <p className="text-[11px] font-bold text-emerald-800 dark:text-emerald-200">
-                                Auto-filled from contact ({sourceLabel(source)})
+                                Auto-filled from contact ({sourceLabel(source, mapped?.customKey)})
                               </p>
                             </div>
                           </div>
@@ -312,7 +367,7 @@ export default function CampaignMessageStep({
                         <AppInput
                           key={`header-param-${index}`}
                           id={`header-param-${index}`}
-                          label={`${index + 1}. Header detail *`}
+                          label={`${index + 1}. ${headerLabel} *`}
                           hint={`${value.length} characters`}
                           value={value}
                           onChange={(event) => updateHeaderParam(index, event.target.value)}
@@ -340,6 +395,21 @@ export default function CampaignMessageStep({
                         required
                       />
                     )}
+
+                    <TemplateButtonExtras
+                      template={selectedTemplate}
+                      couponCode={form.couponCode}
+                      buttonUrlSuffixes={form.buttonUrlSuffixes}
+                      onCouponChange={(value) => setForm((previous) => ({ ...previous, couponCode: value }))}
+                      onSuffixChange={(index, value) =>
+                        setForm((previous) => {
+                          const buttonUrlSuffixes = [...previous.buttonUrlSuffixes];
+                          while (buttonUrlSuffixes.length <= index) buttonUrlSuffixes.push('');
+                          buttonUrlSuffixes[index] = value;
+                          return { ...previous, buttonUrlSuffixes };
+                        })
+                      }
+                    />
 
                     <div className="flex items-start gap-2 rounded-lg border border-sky-100 bg-sky-50/70 px-2.5 py-2 dark:border-sky-900/50 dark:bg-sky-950/20">
                       <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-sky-600 dark:text-sky-300" />

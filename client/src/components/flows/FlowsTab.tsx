@@ -29,9 +29,18 @@ import WhatsAppFormsPromo from './WhatsAppFormsPromo';
 import { DEFAULT_PAGE_SIZE } from '../../constants/pagination';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { useOnActiveNumberChange } from '../../hooks/useOnActiveNumberChange';
+import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
 import { flowApi } from '../../services/api';
 import { getErrorMessage } from '../../utils/errors';
-import { toastError, toastSuccess } from '../../utils/toast';
+import { toastError, toastSuccess, toastWarning } from '../../utils/toast';
+import {
+  DRAFT_ENABLE_HINT,
+  flowAudienceBadgeClass,
+  flowAudienceLabel,
+  flowAudienceState,
+  flowToggleSuccessMessage,
+  isUnpublishedFlow,
+} from '../../utils/flow-live';
 import { triggerMeta } from './flowMeta';
 import type { Flow, FlowTemplate } from '../../types';
 
@@ -54,6 +63,7 @@ export default function FlowsTab({
   onSummaryChange,
   onNewFlow,
 }: FlowsTabProps) {
+  const { activeNumber, resolved } = useWhatsAppNumber();
   const navigate = useNavigate();
   const [flows, setFlows] = useState<Flow[]>([]);
   const [templates, setTemplates] = useState<FlowTemplate[]>([]);
@@ -63,10 +73,14 @@ export default function FlowsTab({
   const [statusFilter, setStatusFilter] = useState('');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const activeNumberIdRef = useRef<string | null>(null);
+  activeNumberIdRef.current = activeNumber?.id ?? null;
 
   const debouncedSearch = useDebouncedValue(search);
 
   const load = useCallback(() => {
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
     setLoading(true);
     const params: Record<string, string> = {
       page: String(page),
@@ -79,13 +93,16 @@ export default function FlowsTab({
     flowApi
       .list(params)
       .then(({ data }) => {
+        if (requestNumberId !== activeNumberIdRef.current) return;
         setFlows(data.data.flows);
         setTotal(data.data.total ?? data.data.flows.length);
         onSummaryChange?.(data.data.summary);
       })
       .catch((err) => toastError(getErrorMessage(err, 'Failed to load flows')))
-      .finally(() => setLoading(false));
-  }, [debouncedSearch, statusFilter, page, onSummaryChange]);
+      .finally(() => {
+        if (requestNumberId === activeNumberIdRef.current) setLoading(false);
+      });
+  }, [activeNumber, debouncedSearch, onSummaryChange, page, resolved, statusFilter]);
 
   const loadRef = useRef(load);
   loadRef.current = load;
@@ -96,11 +113,15 @@ export default function FlowsTab({
   });
 
   useEffect(() => {
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
     flowApi
       .templates()
-      .then(({ data }) => setTemplates(data.data.templates))
+      .then(({ data }) => {
+        if (requestNumberId === activeNumberIdRef.current) setTemplates(data.data.templates);
+      })
       .catch((err) => toastError(getErrorMessage(err, 'Failed to load flow templates')));
-  }, []);
+  }, [activeNumber, resolved]);
 
   useEffect(() => {
     setPage(1);
@@ -113,7 +134,7 @@ export default function FlowsTab({
     try {
       const { data } = await flowApi.fromTemplate(templateId);
       onTemplatesOpenChange(false);
-      toastSuccess('Flow created from template');
+      toastSuccess('Draft created from template — not live yet.');
       navigate(`/automations/flows/${data.data.id}`);
     } catch (err: unknown) {
       toastError(getErrorMessage(err, 'Failed to create flow from template'));
@@ -123,9 +144,14 @@ export default function FlowsTab({
   };
 
   const toggleEnabled = async (flow: Flow) => {
+    const turningOn = !flow.enabled;
+    if (turningOn && isUnpublishedFlow(flow)) {
+      toastWarning(DRAFT_ENABLE_HINT);
+      return;
+    }
     try {
-      await flowApi.update(flow.id, { enabled: !flow.enabled });
-      toastSuccess(flow.enabled ? 'Flow paused' : 'Flow activated');
+      await flowApi.update(flow.id, { enabled: turningOn });
+      toastSuccess(flowToggleSuccessMessage(turningOn));
       load();
     } catch (err: unknown) {
       toastError(getErrorMessage(err, 'Failed to update flow status'));
@@ -146,7 +172,7 @@ export default function FlowsTab({
   const handleDuplicate = async (flowId: string) => {
     try {
       const { data } = await flowApi.duplicate(flowId);
-      toastSuccess('Flow duplicated');
+      toastSuccess('Draft copy created — not live yet.');
       navigate(`/automations/flows/${data.data.id}`);
     } catch (err: unknown) {
       toastError(getErrorMessage(err, 'Failed to duplicate flow'));
@@ -172,7 +198,7 @@ export default function FlowsTab({
               isSearchable={false}
               options={[
                 { value: '', label: 'All statuses' },
-                { value: 'active', label: 'On' },
+                { value: 'active', label: 'Live' },
                 { value: 'paused', label: 'Off' },
               ]}
               onChange={(e) => setStatusFilter(e.target.value)}
@@ -207,7 +233,7 @@ export default function FlowsTab({
                   ? 'Try a different search word or filter.'
                   : 'Build a step-by-step chat guide — like a menu that walks customers through options.'
               }
-              steps={hasFilters ? undefined : ['Pick a ready-made template (easiest)', 'Or build from scratch', 'Turn it on when you are happy with it']}
+              steps={hasFilters ? undefined : ['Pick a ready-made template (easiest)', 'Or build from scratch', 'Save to publish, then turn it on']}
               action={
                 !hasFilters ? (
                   <div className="grid w-full max-w-md grid-cols-1 gap-2 sm:grid-cols-2">
@@ -275,6 +301,7 @@ export default function FlowsTab({
                   {flows.map((flow) => {
                     const trigger = triggerMeta[flow.triggerType];
                     const keyword = flow.triggerConfig?.keyword as string | undefined;
+                    const audience = flowAudienceState(flow);
 
                     return (
                       <tr
@@ -324,13 +351,9 @@ export default function FlowsTab({
                         </td>
                         <td className="px-5 py-3.5">
                           <span
-                            className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${
-                              flow.enabled
-                                ? 'bg-emerald-500/10 text-emerald-800 ring-emerald-500/20 dark:text-emerald-300'
-                                : 'bg-theme-subtle text-theme-muted ring-theme-border'
-                            }`}
+                            className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${flowAudienceBadgeClass(audience)}`}
                           >
-                            {flow.enabled ? 'On' : 'Off'}
+                            {flowAudienceLabel(audience)}
                           </span>
                         </td>
                         <td className="px-5 py-3.5 text-right">

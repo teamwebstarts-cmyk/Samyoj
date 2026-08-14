@@ -1,4 +1,5 @@
 import { getTemplateParts } from '../inbox/WhatsAppPreview';
+import { applySendExtrasToButtons } from '../../utils/templateForm';
 import type { MessageTemplate } from '../../types';
 
 export function applyParamsToText(text: string, params: string[]) {
@@ -10,7 +11,13 @@ export function applyParamsToText(text: string, params: string[]) {
 
 export function getFilledTemplatePreview(
   template: MessageTemplate,
-  params: { bodyParams: string[]; headerParams: string[]; headerMediaUrl?: string }
+  params: {
+    bodyParams: string[];
+    headerParams: string[];
+    headerMediaUrl?: string;
+    couponCode?: string;
+    buttonUrlSuffixes?: string[];
+  }
 ) {
   const parts = getTemplateParts(template);
   return {
@@ -18,6 +25,10 @@ export function getFilledTemplatePreview(
     header: parts.header ? applyParamsToText(parts.header, params.headerParams) : undefined,
     headerMediaUrl: params.headerMediaUrl || undefined,
     body: parts.body && parts.body !== '—' ? applyParamsToText(parts.body, params.bodyParams) : parts.body,
+    buttons: applySendExtrasToButtons(parts.buttons, {
+      couponCode: params.couponCode,
+      buttonUrlSuffixes: params.buttonUrlSuffixes,
+    }),
   };
 }
 

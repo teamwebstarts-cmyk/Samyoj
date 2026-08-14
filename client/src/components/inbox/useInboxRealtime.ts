@@ -5,6 +5,7 @@ import { useSocket, type SocketState } from '../../hooks/useSocket';
 import { logError } from '../../utils/errors';
 import type { Conversation, Message, ServiceWindowInfo } from '../../types';
 import { emitChatNotice } from './chatNoticeBus';
+import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
 
 function softCatch(action: string, conversationId?: string) {
   return (err: unknown) => {
@@ -41,6 +42,7 @@ export function useInboxRealtime({
   refreshUnread,
   reloadList,
 }: RealtimeDeps): { socketState: SocketState; socketRef: RefObject<Socket | null> } {
+  const { activeNumber, resolved } = useWhatsAppNumber();
   const handleSocketEvent = useCallback(
     (event: string, data: unknown) => {
       const payload = data as {
@@ -57,7 +59,17 @@ export function useInboxRealtime({
         activeBot?: { id: string; name: string } | null;
         reason?: string;
         summary?: string | null;
+        whatsappNumberId?: string;
+        numberId?: string;
       };
+      if (!resolved || !activeNumber) return;
+      const eventNumberId = payload.whatsappNumberId ?? payload.numberId;
+      if (
+        eventNumberId &&
+        eventNumberId !== activeNumber.id &&
+        eventNumberId !== activeNumber.phoneNumberId
+      )
+        return;
       const openId = selectedRef.current?.id;
 
       if (event === 'message:new') {
@@ -236,6 +248,8 @@ export function useInboxRealtime({
       upsertConversation,
       markConversationRead,
       refreshUnread,
+      activeNumber,
+      resolved,
     ]
   );
 
@@ -243,6 +257,8 @@ export function useInboxRealtime({
 
   const prevStatusRef = useRef(socketState.status);
   useEffect(() => {
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
     const prev = prevStatusRef.current;
     prevStatusRef.current = socketState.status;
     // Catch up after a real disconnect. Reconnect goes disconnected → connecting
@@ -259,6 +275,7 @@ export function useInboxRealtime({
         inboxApi
           .messages(openId)
           .then(({ data }) => {
+            if (requestNumberId !== activeNumber.id) return;
             setMessages((data.data.messages ?? []) as Message[]);
             setServiceWindow(data.data.serviceWindow ?? undefined);
           })
@@ -272,6 +289,8 @@ export function useInboxRealtime({
     selectedRef,
     setMessages,
     setServiceWindow,
+    activeNumber,
+    resolved,
   ]);
 
   return { socketState, socketRef };

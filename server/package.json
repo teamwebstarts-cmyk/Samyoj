@@ -19,6 +19,7 @@
     "db:validate-migration-chain": "tsx scripts/validate-migration-chain.ts",
     "db:backup": "tsx scripts/backup-database.ts",
     "db:migrate-reconciliation-safe": "tsx scripts/migrate-reconciliation-safe.ts",
+    "db:migrate-startup-safe": "tsx scripts/migrate-startup-safe.ts",
     "db:migrate": "npm run db:validate-migration-chain && npm run db:preflight-number-isolation && prisma migrate deploy",
     "db:migrate-safe": "npm run db:validate-migration-chain && npm run db:preflight-number-isolation && prisma migrate deploy",
     "db:push": "prisma db push",

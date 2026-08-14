@@ -12,32 +12,11 @@ import { WhatsAppWebRtcBridge } from './webrtc-bridge';
 import { publishCallEventMessage } from './call-event-message';
 import type { ActiveCallContext, TranscriptEntry } from './types';
 import type { ToolCallResult } from '../ai/sarvam-chat.service';
-import { extractInlineToolCalls, hasOpenToolCallMarkup } from '../ai/voice-tool-parse';
+import { extractInlineToolCalls } from '../ai/voice-tool-parse';
+import { isVoiceBackchannel, wantsCallbackOnCall, wantsEndCall, wantsHumanOnCall } from './voice-intent';
+import { isLikelyTtsEcho, joinSpokenTurns, prepareSpokenText, splitForTts } from './spoken-text';
 
 const log = createModuleLogger('ai-voice-agent');
-
-/** Split text into sentence-sized chunks for per-utterance TTS synthesis. */
-function splitIntoSentences(text: string): string[] {
-  const trimmed = text.trim();
-  if (!trimmed) return [];
-  if (trimmed.length <= 500) return [trimmed];
-
-  // Split on sentence boundaries: period, question mark, exclamation, semicolon,
-  // or Hindi/Marathi-style sentence endings (। and ॥).
-  const raw = trimmed.split(/(?<=[.!?;।॥])\s+/);
-  const chunks: string[] = [];
-  let current = '';
-  for (const part of raw) {
-    if (current && (current.length + part.length > 450)) {
-      chunks.push(current.trimEnd());
-      current = part;
-    } else {
-      current = current ? `${current} ${part}` : part;
-    }
-  }
-  if (current.trim()) chunks.push(current.trim());
-  return chunks.length ? chunks : [trimmed];
-}
 
 export class AiVoiceCallSession {
   private bridge: WhatsAppWebRtcBridge | null = null;
@@ -46,6 +25,12 @@ export class AiVoiceCallSession {
   private processing = false;
   private speaking = false;
   private ended = false;
+  private abortSpeak = false;
+  private queuedSpeech: string | null = null;
+  private lastSpokenText = '';
+  private speakingEndedAt = 0;
+  private wrappingUp = false;
+  private maxDurationTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly ctx: ActiveCallContext;
   // Latency tracking
   private sttLatenciesMs: number[] = [];
@@ -85,15 +70,18 @@ export class AiVoiceCallSession {
         if (languageDetected && languageDetected !== 'unknown' && languageDetected !== 'auto') {
           this.ctx.ttsLanguage = languageDetected;
         }
+        if (this.ended || this.wrappingUp) return;
+        if (this.processing || this.speaking) {
+          this.queueInterrupt(text);
+          return;
+        }
         void this.handleUserSpeech(text);
       },
       onSpeechStart: () => {
         this.lastSpeechTimestamp = Date.now();
       },
-        // Do NOT reset this.speaking here. Resetting it while the bot is still
-        // playing TTS lets the bot's own audio echo back into STT, causing the
-        // repeated-transcript loop (e.g. "perfect perfect perfect..."). The
-        // bridge guard (this.speaking) keeps echo out during playback.
+        // Keep sending mic audio while the bot talks so the caller can interrupt.
+        // Echo of our own TTS is dropped in queueInterrupt / isLikelyTtsEcho.
       onError: (err) => {
         log.error('Sarvam transcriber error during call', { callId: this.ctx.callId, error: err.message });
       },
@@ -105,9 +93,10 @@ export class AiVoiceCallSession {
     });
 
     this.bridge.setAudioHandler((samples, sampleRate) => {
-      if (this.ended || this.speaking || !this.transcriber) return;
+      if (this.ended || !this.transcriber) return;
       // Only buffer PCM when recording is explicitly consent-enabled.
-      if (this.ctx.recordingEnabled) {
+      // Skip while we are playing TTS so the recording is the caller, not echo.
+      if (this.ctx.recordingEnabled && !this.speaking) {
         const buf = Buffer.from(samples.buffer, samples.byteOffset, samples.byteLength);
         this.recordingBuffer.push(buf);
         this.recordingSampleRate = sampleRate;
@@ -141,31 +130,32 @@ export class AiVoiceCallSession {
       },
     });
 
-    if (this.ctx.consentMessage) {
-      await this.speak(this.ctx.consentMessage, 'system');
-    }
-    await this.speak(this.ctx.greeting || 'Hello! How can I help you today?', 'system');
+    const opening = joinSpokenTurns(
+      this.ctx.consentMessage,
+      this.ctx.greeting || 'Hi, thanks for calling. How can I help?'
+    );
+    if (opening) await this.speak(opening, 'system');
+    this.armMaxDurationTimer();
     log.info('AI voice call session started', { callId: this.ctx.callId });
   }
 
   private async handleUserSpeech(text: string): Promise<void> {
-    if (this.ended || this.processing || this.speaking) return;
+    if (this.ended || this.wrappingUp || this.processing || this.speaking) return;
     const trimmed = text.trim();
     if (trimmed.length < 2) return;
+    if (isVoiceBackchannel(trimmed)) {
+      log.debug('Ignoring backchannel on call', { callId: this.ctx.callId, text: trimmed });
+      return;
+    }
 
     log.info('Processing caller speech', { callId: this.ctx.callId, text: trimmed });
 
     this.processing = true;
+    this.abortSpeak = false;
     await this.appendTranscript('user', trimmed);
 
     try {
-      // Fast-path tools without waiting on LLM when intent is obvious.
-      const lower = trimmed.toLowerCase();
-      if (
-        /\b(human|agent|person|manager|representative|team member|talk to (a |someone|an )?human|speak to (a |someone|an )?human)\b/i.test(
-          lower
-        )
-      ) {
+      if (wantsHumanOnCall(trimmed)) {
         await this.handleToolCall({
           id: 'kw',
           name: 'request_human',
@@ -173,12 +163,7 @@ export class AiVoiceCallSession {
         });
         return;
       }
-      if (
-        /\b(call( me)? back|callback|call later|schedule(\s+(a\s+)?)?(call|callback)?|वापस\s*कॉल|कॉल\s*बैक)\b/i.test(
-          lower
-        ) ||
-        /schedule|callback_time|call.*head|head.*call|manager.*call|call.*manager/i.test(lower)
-      ) {
+      if (wantsCallbackOnCall(trimmed)) {
         await this.handleToolCall({
           id: 'kw',
           name: 'schedule_callback',
@@ -186,86 +171,18 @@ export class AiVoiceCallSession {
         });
         return;
       }
+      if (wantsEndCall(trimmed)) {
+        await this.handleToolCall({
+          id: 'kw',
+          name: 'end_call',
+          arguments: { reason: 'Customer asked to hang up' },
+        });
+        return;
+      }
 
-      // Stream LLM → speak each new sentence once (never re-speak earlier chunks).
       let rawAccum = '';
-      let spokenParts: string[] = [];
+      let spokenText = '';
       let directHandled = false;
-
-      const unspokenRemainder = (cleanFull: string): string => {
-        let rest = cleanFull.trim();
-        for (const part of spokenParts) {
-          const p = part.trim();
-          if (!p) continue;
-          if (rest.startsWith(p)) {
-            rest = rest.slice(p.length).trimStart();
-            continue;
-          }
-          // Allow a single space/join mismatch between streamed chunks.
-          const joined = `${p} `;
-          if (rest.startsWith(joined)) {
-            rest = rest.slice(joined.length).trimStart();
-          }
-        }
-        return rest.trim();
-      };
-
-      const speakNewSentences = async (cleanFull: string, flushAll: boolean) => {
-        let rest = unspokenRemainder(cleanFull);
-        if (!rest) return;
-
-        if (!flushAll) {
-          const parts = rest.split(/(?<=[.!?।॥])\s+/);
-          if (parts.length > 1) {
-            const ready = parts.slice(0, -1).join(' ').trim();
-            rest = parts[parts.length - 1] || '';
-            if (ready && !/<tool_call>/i.test(ready)) {
-              if (!validateOutboundReply(ready).safe) {
-                await this.speak(
-                  "I'll have our team follow up with you on WhatsApp shortly.",
-                  'assistant'
-                );
-                await this.performHandoffAndTransfer('BLOCKED_CONTENT', 'BLOCKED_CONTENT');
-                throw new Error('blocked_outbound');
-              }
-              spokenParts.push(ready);
-              await this.speak(ready, 'assistant', { recordTranscript: false });
-            }
-          } else if (rest.length > 100 && /\s/.test(rest) && !/<tool_call>/i.test(rest)) {
-            const cut = rest.lastIndexOf(' ');
-            if (cut > 30) {
-              const ready = rest.slice(0, cut).trim();
-              if (ready) {
-                if (!validateOutboundReply(ready).safe) {
-                  await this.speak(
-                    "I'll have our team follow up with you on WhatsApp shortly.",
-                    'assistant'
-                  );
-                  await this.performHandoffAndTransfer('BLOCKED_CONTENT', 'BLOCKED_CONTENT');
-                  throw new Error('blocked_outbound');
-                }
-                spokenParts.push(ready);
-                await this.speak(ready, 'assistant', { recordTranscript: false });
-              }
-            }
-          }
-          return;
-        }
-
-        // Final flush — only the never-spoken tail.
-        if (!validateOutboundReply(rest).safe) {
-          if (spokenParts.length === 0) {
-            await this.speak(
-              "I'll have our team follow up with you on WhatsApp shortly.",
-              'assistant'
-            );
-          }
-          await this.performHandoffAndTransfer('BLOCKED_CONTENT', 'BLOCKED_CONTENT');
-          throw new Error('blocked_outbound');
-        }
-        spokenParts.push(rest);
-        await this.speak(rest, 'assistant', { recordTranscript: false });
-      };
 
       for await (const event of streamVoiceBotReply({
         organizationId: this.ctx.organizationId,
@@ -274,18 +191,12 @@ export class AiVoiceCallSession {
         channel: 'voice',
         botId: this.ctx.aiBotId ?? undefined,
       })) {
+        if (this.abortSpeak || this.ended) break;
+
         if (event.type === 'direct' && event.result) {
           directHandled = true;
           const result = event.result;
-          if (result.skipReason === 'blocked_after_stream' && spokenParts.length > 0) {
-            if (result.handoff && shouldEndVoiceCallOnHandoff(result.handoffReason)) {
-              await this.performHandoffAndTransfer(
-                result.handoffReason || 'BLOCKED_CONTENT',
-                result.handoffReason || 'BLOCKED_CONTENT'
-              );
-            }
-            break;
-          }
+          if (this.abortSpeak || this.ended) break;
           if (result.skipped && !result.reply) {
             await this.speak(
               result.skipReason === 'ai_not_configured'
@@ -297,15 +208,23 @@ export class AiVoiceCallSession {
           }
           if (result.reply) {
             const cleaned = extractInlineToolCalls(result.reply);
-            if (cleaned.cleanText) await this.speak(cleaned.cleanText, 'assistant');
+            if (cleaned.cleanText && !this.abortSpeak) {
+              spokenText = cleaned.cleanText;
+              await this.speak(cleaned.cleanText, 'assistant');
+            }
+            if (this.abortSpeak || this.ended) break;
             for (const tool of cleaned.tools) {
               await this.handleToolCall({ id: 'inline', name: tool.name, arguments: tool.arguments });
             }
           }
-          if (result.toolCalls?.length) {
+          if (result.toolCalls?.length && !this.abortSpeak && !this.ended) {
             for (const tool of result.toolCalls) await this.handleToolCall(tool);
           }
-          if (result.handoff && shouldEndVoiceCallOnHandoff(result.handoffReason)) {
+          if (
+            result.handoff &&
+            shouldEndVoiceCallOnHandoff(result.handoffReason) &&
+            !this.abortSpeak
+          ) {
             await this.performHandoffAndTransfer(
               result.handoffReason || 'VOICE_HANDOFF',
               result.handoffReason || 'VOICE_HANDOFF'
@@ -316,17 +235,10 @@ export class AiVoiceCallSession {
 
         if (event.type === 'delta' && event.content) {
           rawAccum += event.content;
-          if (hasOpenToolCallMarkup(rawAccum)) continue;
-          const stripped = extractInlineToolCalls(rawAccum);
-          try {
-            await speakNewSentences(stripped.cleanText, false);
-          } catch (err) {
-            if (err instanceof Error && err.message === 'blocked_outbound') return;
-            throw err;
-          }
         }
 
         if (event.type === 'done') {
+          if (this.abortSpeak || this.ended) break;
           const parsed = extractInlineToolCalls((event.content || rawAccum || '').trim());
           const tools = [
             ...(event.tools || []),
@@ -336,38 +248,38 @@ export class AiVoiceCallSession {
               arguments: t.arguments,
             })),
           ];
-          try {
-            await speakNewSentences(parsed.cleanText, true);
-          } catch (err) {
-            if (err instanceof Error && err.message === 'blocked_outbound') return;
-            throw err;
-          }
 
-          const full = spokenParts.join(' ').trim();
-          if (full) {
-            await this.appendTranscript('assistant', full);
-            log.info('Speaking AI reply on call (streamed)', {
+          if (parsed.cleanText) {
+            if (!validateOutboundReply(parsed.cleanText).safe) {
+              await this.speak(
+                "I'll have our team follow up with you on WhatsApp shortly.",
+                'assistant'
+              );
+              await this.performHandoffAndTransfer('BLOCKED_CONTENT', 'BLOCKED_CONTENT');
+              return;
+            }
+            spokenText = parsed.cleanText;
+            await this.speak(parsed.cleanText, 'assistant');
+            log.info('Speaking AI reply on call', {
               callId: this.ctx.callId,
-              chars: full.length,
+              chars: parsed.cleanText.length,
             });
-          } else if (!spokenParts.length && tools.length === 0) {
+          } else if (tools.length === 0) {
             await this.speak(
               'Sorry, I am having trouble right now. Please try again in a moment.',
               'assistant'
             );
           }
 
+          if (this.abortSpeak || this.ended) break;
           for (const tool of tools) await this.handleToolCall(tool);
 
           if (
             event.result?.handoff &&
             tools.length === 0 &&
-            shouldEndVoiceCallOnHandoff(event.result.handoffReason)
+            shouldEndVoiceCallOnHandoff(event.result.handoffReason) &&
+            !this.abortSpeak
           ) {
-            if (spokenParts.length === 0 && event.result.reply) {
-              const cleaned = extractInlineToolCalls(event.result.reply).cleanText;
-              if (cleaned) await this.speak(cleaned, 'assistant');
-            }
             await this.performHandoffAndTransfer(
               event.result.handoffReason || 'LOW_CONFIDENCE',
               event.result.handoffReason || 'LOW_CONFIDENCE'
@@ -376,7 +288,7 @@ export class AiVoiceCallSession {
         }
       }
 
-      if (!directHandled && spokenParts.length === 0 && !this.ended) {
+      if (!directHandled && !spokenText && !this.ended && !this.abortSpeak) {
         await this.speak('Sorry, I am having trouble right now. Please try again in a moment.', 'assistant');
       }
     } catch (err) {
@@ -395,11 +307,17 @@ export class AiVoiceCallSession {
       await this.end('voice_error');
     } finally {
       this.processing = false;
+      const next = this.abortSpeak ? this.queuedSpeech : null;
+      this.queuedSpeech = null;
+      this.abortSpeak = false;
+      if (next && !this.ended) {
+        void this.handleUserSpeech(next);
+      }
     }
   }
 
   /**
-   * Dispatch Sarvam function-call results: request_human, schedule_callback.
+   * Dispatch Sarvam function-call results: request_human, schedule_callback, end_call.
    */
   private async handleToolCall(tool: ToolCallResult): Promise<void> {
     log.info('Voice tool call', { callId: this.ctx.callId, tool: tool.name });
@@ -407,39 +325,20 @@ export class AiVoiceCallSession {
     switch (tool.name) {
       case 'request_human': {
         const reason = (tool.arguments.reason as string) || 'Customer requested human';
+        await this.speak(
+          "I'll have someone from the team message you on WhatsApp. Thanks for calling.",
+          'assistant'
+        );
+        await this.performHandoffAndTransfer('TOOL_REQUEST_HUMAN', reason);
+        break;
+      }
 
-        // Check if any agents are actually online before promising to connect.
-        try {
-          const { getEligibleAgents } = await import('../team/assignment');
-          const agents = await getEligibleAgents(this.ctx.organizationId);
-          const onlineAgents = agents.filter((a) => a.availability === 'ONLINE');
-
-          if (onlineAgents.length > 0) {
-            // Message-only handoff — do not promise a live connect until media transfer works.
-            await this.speak(
-              "I'll connect you with our team on WhatsApp chat now. Thanks for calling — someone will reply shortly.",
-              'assistant'
-            );
-            await this.performHandoffAndTransfer('TOOL_REQUEST_HUMAN', reason);
-          } else {
-            // No agents online — offer callback gracefully
-            await this.speak(
-              "Our team isn't available on call right now. Would you like us to call you back? Just tell me a time that works.",
-              'assistant'
-            );
-            // Let customer respond — the next speech turn will either:
-            // - Trigger schedule_callback if the brain recognizes a time request
-            // - Or the caller stays silent → we follow up via WhatsApp
-            this.scheduleSilenceTimeout();
-          }
-        } catch {
-          // Fallback if agent check fails — still hand off via Inbox (no live hold promise).
-          await this.speak(
-            "I'll have our team follow up with you on WhatsApp shortly.",
-            'assistant'
-          );
-          await this.performHandoffAndTransfer('TOOL_REQUEST_HUMAN', reason);
-        }
+      case 'end_call': {
+        await this.speak(
+          "Thanks for calling. I'll hang up now. Message us on WhatsApp if you need anything else.",
+          'assistant'
+        );
+        await this.end('ai_hangup');
         break;
       }
 
@@ -524,7 +423,7 @@ export class AiVoiceCallSession {
         }
 
         await this.speak(
-          `I've noted your request. Someone from our team will call you ${when}. They'll also message you here on WhatsApp.`,
+          `Got it. Someone from the team will call you ${when}. They'll also message you here on WhatsApp.`,
           'assistant'
         );
         await this.performHandoffAndTransfer(
@@ -544,23 +443,6 @@ export class AiVoiceCallSession {
         await this.performHandoffAndTransfer('FALLBACK', 'Unknown tool');
         break;
     }
-  }
-
-  /** If the caller stays silent after being offered a callback, wrap up gracefully. */
-  private silenceTimer: ReturnType<typeof setTimeout> | null = null;
-
-  private scheduleSilenceTimeout(): void {
-    if (this.silenceTimer) clearTimeout(this.silenceTimer);
-    this.silenceTimer = setTimeout(() => {
-      if (!this.ended) {
-        void this.speak(
-          "I'll have someone message you on WhatsApp shortly. Thanks for calling!",
-          'assistant'
-        ).then(() => {
-          void this.end('no_agents_callback_offered');
-        });
-      }
-    }, 8000);
   }
 
   /**
@@ -594,28 +476,100 @@ export class AiVoiceCallSession {
     opts?: { recordTranscript?: boolean }
   ): Promise<void> {
     if (!this.bridge || this.ended) return;
+    const spoken = prepareSpokenText(text);
+    if (!spoken) return;
     this.speaking = true;
+    this.lastSpokenText = spoken;
     try {
       if (opts?.recordTranscript !== false) {
-        await this.appendTranscript(role, text);
+        await this.appendTranscript(role, spoken);
       }
 
-      // Split long replies into sentences so each is a separate Sarvam TTS call.
-      // Bulbul v3 handles up to 2500 chars but shorter per-request keeps latency low.
-      const sentences = splitIntoSentences(text);
-      for (const sentence of sentences) {
-        if (this.ended || !this.bridge) break;
+      const chunks = splitForTts(spoken);
+      const ttsOpts = {
+        speaker: this.ctx.ttsVoice,
+        language: this.ctx.ttsLanguage,
+      };
+      let pending = chunks[0]
+        ? synthesizeSpeechSarvam(chunks[0], ttsOpts)
+        : null;
+
+      for (let i = 0; i < chunks.length; i++) {
+        if (this.ended || this.abortSpeak || !this.bridge || !pending) {
+          this.bridge?.stopPlayback();
+          break;
+        }
         const ttsStart = Date.now();
-        const audio = await synthesizeSpeechSarvam(sentence, {
-          speaker: this.ctx.ttsVoice,
-          language: this.ctx.ttsLanguage,
-        });
+        const audio = await pending;
         this.ttsLatenciesMs.push(Date.now() - ttsStart);
+        if (this.ended || this.abortSpeak || !this.bridge) {
+          this.bridge.stopPlayback();
+          break;
+        }
+        pending =
+          i + 1 < chunks.length
+            ? synthesizeSpeechSarvam(chunks[i + 1], ttsOpts)
+            : null;
         await this.bridge.playPcm(audio.samples, audio.sampleRate);
       }
     } finally {
       this.speaking = false;
+      this.speakingEndedAt = Date.now();
     }
+  }
+
+  private queueInterrupt(text: string): void {
+    if (this.wrappingUp || this.ended) return;
+    const trimmed = text.trim();
+    if (trimmed.length < 8 || isVoiceBackchannel(trimmed)) return;
+    const echoWindow = Date.now() - this.speakingEndedAt < 1200 || this.speaking;
+    if (echoWindow && isLikelyTtsEcho(trimmed, this.lastSpokenText)) {
+      log.debug('Ignoring TTS echo on call', { callId: this.ctx.callId, text: trimmed });
+      return;
+    }
+    this.queuedSpeech = trimmed;
+    this.abortSpeak = true;
+    this.bridge?.stopPlayback();
+    log.info('Caller interrupted AI', {
+      callId: this.ctx.callId,
+      text: trimmed,
+      speaking: this.speaking,
+    });
+  }
+
+  private armMaxDurationTimer(): void {
+    if (this.maxDurationTimer) clearTimeout(this.maxDurationTimer);
+    const maxMs = Math.max(120_000, (this.ctx.maxCallDurationSec ?? 480) * 1000);
+    this.maxDurationTimer = setTimeout(() => {
+      void this.hangUpForDuration();
+    }, maxMs);
+  }
+
+  private async hangUpForDuration(): Promise<void> {
+    if (this.ended || this.wrappingUp) return;
+    this.wrappingUp = true;
+    this.abortSpeak = true;
+    this.queuedSpeech = null;
+    this.bridge?.stopPlayback();
+    const waitFrom = Date.now();
+    while (this.speaking && Date.now() - waitFrom < 2000) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    if (this.ended) return;
+    this.abortSpeak = false;
+    log.info('AI call hit max duration', {
+      callId: this.ctx.callId,
+      maxCallDurationSec: this.ctx.maxCallDurationSec ?? 480,
+    });
+    try {
+      await this.speak(
+        "I need to wrap this call here. Our team can continue on WhatsApp. Thanks for calling.",
+        'assistant'
+      );
+    } catch {
+      // still hang up
+    }
+    await this.end('max_duration');
   }
 
   private async appendTranscript(role: TranscriptEntry['role'], text: string): Promise<void> {
@@ -649,9 +603,9 @@ export class AiVoiceCallSession {
     if (this.ended) return;
     this.ended = true;
 
-    if (this.silenceTimer) {
-      clearTimeout(this.silenceTimer);
-      this.silenceTimer = null;
+    if (this.maxDurationTimer) {
+      clearTimeout(this.maxDurationTimer);
+      this.maxDurationTimer = null;
     }
 
     // Post-call summary: store AI summary in metadata

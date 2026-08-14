@@ -361,13 +361,20 @@ export class MetaWhatsAppService {
     stored: { phoneNumber: string; phoneNumberId: string; wabaId: string },
     accessToken: string
   ): Promise<{ wabaId: string; phoneNumberId: string; phoneNumber: string; updated: boolean }> {
-    const normalizedStoredPhone = stored.phoneNumber.replace(/\D/g, '');
+    const normalizedStoredPhone = stored.phoneNumber.replace(/\D/g, '').replace(/^00/, '');
 
     try {
       const phones = await this.listPhoneNumbersForWaba(stored.wabaId, accessToken);
-      const match = phones.find(
-        (p) => p.id === stored.phoneNumberId || p.displayPhoneNumber === normalizedStoredPhone
+      const displayedPhoneMatch = phones.find(
+        (p) => p.displayPhoneNumber.replace(/\D/g, '').replace(/^00/, '') === normalizedStoredPhone
       );
+      const providerIdMatch = phones.find((p) => p.id === stored.phoneNumberId);
+      if (displayedPhoneMatch && providerIdMatch && displayedPhoneMatch.id !== providerIdMatch.id) {
+        throw new Error(
+          'WhatsApp connection identity mismatch: the stored phone and provider phone ID refer to different numbers.'
+        );
+      }
+      const match = displayedPhoneMatch || providerIdMatch;
       if (match) {
         return {
           wabaId: stored.wabaId,
@@ -386,10 +393,16 @@ export class MetaWhatsAppService {
       throw new Error('No phone numbers found on your WhatsApp Business Account.');
     }
 
-    const selected =
-      available.find((p) => p.phoneNumberId === stored.phoneNumberId) ||
-      available.find((p) => p.phoneNumber === normalizedStoredPhone) ||
-      (available.length === 1 ? available[0] : undefined);
+    const displayedPhoneMatch = available.find(
+      (p) => p.phoneNumber.replace(/\D/g, '').replace(/^00/, '') === normalizedStoredPhone
+    );
+    const providerIdMatch = available.find((p) => p.phoneNumberId === stored.phoneNumberId);
+    if (displayedPhoneMatch && providerIdMatch && displayedPhoneMatch.phoneNumberId !== providerIdMatch.phoneNumberId) {
+      throw new Error(
+        'WhatsApp connection identity mismatch: the stored phone and provider phone ID refer to different numbers.'
+      );
+    }
+    const selected = displayedPhoneMatch || providerIdMatch;
 
     if (!selected) {
       throw new Error(

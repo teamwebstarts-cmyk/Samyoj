@@ -50,16 +50,23 @@ export async function getOrgWhatsappContext(
     return getWhatsappContextById(organizationId, preferredWhatsappNumberId);
   }
 
-  const whatsappNumber = await prisma.whatsappNumber.findFirst({
+  const activeNumbers = await prisma.whatsappNumber.findMany({
     where: { organizationId, isActive: true },
     orderBy: { updatedAt: 'desc' },
+    take: 2,
   });
 
-  if (!whatsappNumber) {
+  if (activeNumbers.length === 0) {
     throw new AppError(400, 'No WhatsApp number connected. Connect WhatsApp in Settings first.');
   }
+  if (activeNumbers.length > 1) {
+    throw new AppError(
+      400,
+      'Select an active WhatsApp number before performing this operation.'
+    );
+  }
 
-  return resolveWhatsappContext(whatsappNumber);
+  return resolveWhatsappContext(activeNumbers[0]);
 }
 
 export async function getWhatsappContextById(organizationId: string, whatsappNumberId: string) {

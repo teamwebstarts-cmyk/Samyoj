@@ -1,6 +1,8 @@
 import prisma from '../../config/database';
 import { AppError } from '../../utils/response';
 import type { Contact, ContactSource, Prisma } from '@prisma/client';
+import { sortContactIdsForLock } from './locking';
+import { asCustomAttributes } from '../../utils/custom-attributes';
 
 export interface ContactListItem extends Contact {
   lastActiveAt: Date | null;
@@ -202,7 +204,7 @@ export async function listContacts(
     prisma.contact.count({
       where: {
         ...baseWhere,
-        conversations: { some: { lastMessageAt: { gte: sevenDaysAgo } } },
+        conversations: { some: { whatsappNumberId, lastMessageAt: { gte: sevenDaysAgo } } },
       },
     }),
     prisma.contact.count({
@@ -299,7 +301,7 @@ export async function getContactDetail(
         where: { phone: contact.phone, campaign: { organizationId: orgId, whatsappNumberId } },
       }),
       prisma.lead.findFirst({
-        where: { organizationId: orgId, contactId: contact.id },
+        where: { organizationId: orgId, contactId: contact.id, whatsappNumberId },
         select: { id: true, stage: true, title: true },
       }),
     ]);
@@ -372,19 +374,45 @@ export async function bulkUpdateContacts(
   const ids = contacts.map((c) => c.id);
 
   if (input.action === 'delete') {
-    const historical = contacts.filter((contact) =>
-      Object.values(contact._count).some((count) => count > 0)
-    );
-    if (historical.length) {
-      throw new AppError(
-        409,
-        `Cannot delete contacts with history. Archive or retain them instead (${historical
-          .map((contact) => contact.id)
-          .join(', ')})`
+    return prisma.$transaction(async (tx) => {
+      const matching = await tx.contact.findMany({
+        where: { organizationId: orgId, whatsappNumberId, id: { in: ids } },
+        select: { id: true },
+      });
+      if (!matching.length) throw new AppError(400, 'No matching contacts found');
+
+      // Lock every parent before checking history. Foreign-key inserts acquire
+      // a conflicting key-share lock, so concurrent history writes cannot race
+      // this check and be removed by the delete.
+      const lockOrder = sortContactIdsForLock(matching.map((contact) => contact.id));
+      for (const contactId of lockOrder) {
+        await tx.$queryRaw`SELECT id FROM contacts WHERE id = ${contactId} FOR UPDATE`;
+      }
+
+      const locked = await tx.contact.findMany({
+        where: { organizationId: orgId, whatsappNumberId, id: { in: matching.map((contact) => contact.id) } },
+        select: {
+          id: true,
+          _count: { select: { conversations: true, calls: true, orders: true, leads: true, tickets: true } },
+        },
+      });
+      const historical = locked.filter((contact) =>
+        Object.values(contact._count).some((count) => count > 0)
       );
-    }
-    await prisma.contact.deleteMany({ where: { id: { in: ids }, organizationId: orgId, whatsappNumberId } });
-    return { affected: ids.length };
+      if (historical.length) {
+        throw new AppError(
+          409,
+          `Cannot delete contacts with history. Archive or retain them instead (${historical
+            .map((contact) => contact.id)
+            .join(', ')})`
+        );
+      }
+
+      const deleted = await tx.contact.deleteMany({
+        where: { id: { in: locked.map((contact) => contact.id) }, organizationId: orgId, whatsappNumberId },
+      });
+      return { affected: deleted.count };
+    });
   }
 
   if (input.action === 'setOptedIn') {
@@ -489,14 +517,19 @@ export async function exportContacts(
       optedIn: true,
       source: true,
       createdAt: true,
+      customAttributes: true,
     },
   });
 
   if (filters.format === 'csv') {
-    const headers = ['phone', 'name', 'email', 'tags', 'notes', 'opted_in', 'source', 'created_at'];
+    const extraKeys = [
+      ...new Set(contacts.flatMap((c) => Object.keys(asCustomAttributes(c.customAttributes)))),
+    ].sort();
+    const headers = ['phone', 'name', 'email', 'tags', 'notes', 'opted_in', 'source', 'created_at', ...extraKeys];
     const escape = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
-    const rows = contacts.map((c) =>
-      [
+    const rows = contacts.map((c) => {
+      const attrs = asCustomAttributes(c.customAttributes);
+      return [
         c.phone,
         c.name || '',
         c.email || '',
@@ -505,10 +538,11 @@ export async function exportContacts(
         c.optedIn ? 'true' : 'false',
         c.source,
         c.createdAt.toISOString(),
+        ...extraKeys.map((key) => attrs[key] || ''),
       ]
         .map(escape)
-        .join(',')
-    );
+        .join(',');
+    });
     return { contentType: 'text/csv', body: [headers.join(','), ...rows].join('\n') + '\n' };
   }
 

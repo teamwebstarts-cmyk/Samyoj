@@ -1,8 +1,25 @@
 import { describe, expect, it, vi } from 'vitest';
 import { NON_MESSAGE_WEBHOOK_FIELDS } from '../calling/call.processor';
-import { HANDLED_FIELDS, providerWebhookEventKey } from './webhook-dispatcher';
+import {
+  HANDLED_FIELDS,
+  providerWebhookEventKey,
+  providerPhoneNumberId,
+  resolveOrgFromWaba,
+} from './webhook-dispatcher';
 import { META_WEBHOOK_FIELDS, MetaWhatsAppService } from './meta.service';
 import { config } from '../../config';
+import prisma from '../../config/database';
+
+vi.mock('../../config/database', () => ({
+  default: {
+    whatsappNumber: {
+      findFirst: vi.fn(),
+      findMany: vi.fn(),
+    },
+  },
+}));
+
+const whatsappNumberMock = vi.mocked(prisma.whatsappNumber);
 
 describe('non-message webhook dispatch wiring', () => {
   it('routes every supported account, template, and phone event through the dispatcher', () => {
@@ -33,6 +50,39 @@ describe('non-message webhook dispatch wiring', () => {
       .toBe('account_alerts:evt-1');
     expect(providerWebhookEventKey('waba-1', 'quality', { rating: 'RED' }))
       .toBe(providerWebhookEventKey('waba-1', 'quality', { rating: 'RED' }));
+  });
+
+  it('fails closed when a WABA-only preference event matches multiple active numbers', async () => {
+    whatsappNumberMock.findMany.mockResolvedValue([
+      { id: 'number-1', organizationId: 'org-1' },
+      { id: 'number-2', organizationId: 'org-1' },
+    ] as never);
+
+    await expect(resolveOrgFromWaba('waba-1', { user_preferences: [{ wa_id: '9199' }] }))
+      .resolves.toBeNull();
+  });
+
+  it('uses the exact phone number identity when a preference event includes it', async () => {
+    whatsappNumberMock.findFirst.mockResolvedValue({
+      id: 'number-2',
+      organizationId: 'org-1',
+    } as never);
+
+    expect(providerPhoneNumberId({
+      metadata: { phone_number_id: 'meta-phone-2' },
+      user_preferences: [{ wa_id: '9199' }],
+    })).toEqual({ phoneNumberId: 'meta-phone-2', ambiguous: false });
+    await expect(resolveOrgFromWaba('waba-1', {
+      metadata: { phone_number_id: 'meta-phone-2' },
+    })).resolves.toEqual({ id: 'number-2', organizationId: 'org-1' });
+    expect(whatsappNumberMock.findFirst).toHaveBeenCalledWith({
+      where: {
+        wabaId: 'waba-1',
+        phoneNumberId: 'meta-phone-2',
+        isActive: true,
+      },
+      select: { organizationId: true, id: true },
+    });
   });
 
   it('waits for WABA linking before registering the app webhook', async () => {

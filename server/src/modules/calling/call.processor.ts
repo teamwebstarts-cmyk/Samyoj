@@ -32,6 +32,13 @@ const log = createModuleLogger('call-processor');
 
 const ringTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
 
+export function callMatchesWebhookNumber(
+  storedWhatsappNumberId: string | null | undefined,
+  webhookWhatsappNumberId: string
+): boolean {
+  return Boolean(storedWhatsappNumberId) && storedWhatsappNumberId === webhookWhatsappNumberId;
+}
+
 async function ensureContactAndConversation(
   orgId: string,
   whatsappNumberId: string,
@@ -115,6 +122,7 @@ async function markCallMissed(
     callId,
     conversationId,
     contactId,
+    whatsappNumberId: existing?.whatsappNumberId,
     customMessage,
   });
 }
@@ -140,6 +148,7 @@ async function startAiSession(params: {
   sttPrompt?: string;
   sttMode?: string;
   sttLanguage?: string;
+  maxCallDurationSec?: number;
 }): Promise<void> {
   const session = new AiVoiceCallSession({
     callId: params.callRecord.id,
@@ -162,6 +171,7 @@ async function startAiSession(params: {
     sttPrompt: params.sttPrompt,
     sttMode: params.sttMode,
     sttLanguage: params.sttLanguage,
+    maxCallDurationSec: params.maxCallDurationSec,
   });
 
   registerCallSession(params.callRecord.metaCallId, session);
@@ -296,6 +306,7 @@ async function ringAgentsForCall(params: {
           sttPrompt: resolveEffectiveVoiceConfig(params.settings).sarvamSttPrompt || undefined,
           sttMode: resolveEffectiveVoiceConfig(params.settings).sarvamMode,
           sttLanguage: resolveEffectiveVoiceConfig(params.settings).sarvamSttLanguage || undefined,
+          maxCallDurationSec: params.settings.maxCallDurationSec,
         });
         return;
       }
@@ -334,7 +345,11 @@ async function handleCallConnect(
 
   if (call.biz_opaque_callback_data) {
     const linked = await prisma.call.findFirst({
-      where: { id: call.biz_opaque_callback_data, organizationId: orgId },
+      where: {
+        id: call.biz_opaque_callback_data,
+        organizationId: orgId,
+        whatsappNumberId,
+      },
     });
     if (linked && linked.metaCallId.startsWith('pending-') && linked.metaCallId !== metaCallId) {
       await prisma.call.update({
@@ -345,6 +360,14 @@ async function handleCallConnect(
   }
 
   const existingCall = await prisma.call.findUnique({ where: { metaCallId } });
+  if (existingCall && !callMatchesWebhookNumber(existingCall.whatsappNumberId, whatsappNumberId)) {
+    log.warn('Ignoring call connect for a different WhatsApp number', {
+      metaCallId,
+      storedWhatsappNumberId: existingCall.whatsappNumberId,
+      webhookWhatsappNumberId: whatsappNumberId,
+    });
+    return;
+  }
   if (
     existingCall &&
     existingCall.direction === 'BUSINESS_INITIATED' &&
@@ -380,7 +403,7 @@ async function handleCallConnect(
     });
 
     await registerActiveCall(metaCallId, orgId);
-    await clearBicUnanswered(orgId, existingCall.toPhone);
+    await clearBicUnanswered(orgId, existingCall.whatsappNumberId, existingCall.toPhone);
 
     emitToOrg(orgId, 'call:updated', {
       callId: existingCall.id,
@@ -524,12 +547,19 @@ async function handleCallConnect(
     sttPrompt: voice.sarvamSttPrompt || undefined,
     sttMode: voice.sarvamMode,
     sttLanguage: voice.sarvamSttLanguage || undefined,
+    maxCallDurationSec: settings.maxCallDurationSec,
   });
 }
 
-async function handleCallTerminate(orgId: string, call: CallWebhookEntry): Promise<void> {
+async function handleCallTerminate(
+  orgId: string,
+  whatsappNumberId: string,
+  call: CallWebhookEntry
+): Promise<void> {
   const metaCallId = call.id;
-  const existing = await prisma.call.findUnique({ where: { metaCallId } });
+  const existing = await prisma.call.findFirst({
+    where: { metaCallId, organizationId: orgId, whatsappNumberId },
+  });
   if (!existing) return;
 
   clearRingTimeout(metaCallId);
@@ -591,11 +621,20 @@ async function handleCallTerminate(orgId: string, call: CallWebhookEntry): Promi
       callId: existing.id,
       conversationId: existing.conversationId,
       contactId: existing.contactId,
+      whatsappNumberId: existing.whatsappNumberId,
     });
   }
 
   if (status === 'COMPLETED' && existing.conversationId) {
-    const contact = await prisma.contact.findUnique({ where: { id: existing.contactId } });
+    const contact = existing.whatsappNumberId
+      ? await prisma.contact.findFirst({
+          where: {
+            id: existing.contactId,
+            organizationId: orgId,
+            whatsappNumberId: existing.whatsappNumberId,
+          },
+        })
+      : null;
     const whatsappNumber = existing.whatsappNumberId
       ? await prisma.whatsappNumber.findFirst({
           where: { id: existing.whatsappNumberId, organizationId: orgId, isActive: true },
@@ -664,10 +703,9 @@ export async function processCallWebhookPayload(payload: Record<string, unknown>
             });
           }
         } else if (event === 'terminate') {
-          await endCallSession(call.id, 'remote_terminate').catch(() => undefined);
-          await handleCallTerminate(orgId, call);
+          await handleCallTerminate(orgId, whatsappNumber.id, call);
         } else if (event === 'dtmf') {
-          await handleCallDtmf(orgId, call);
+          await handleCallDtmf(orgId, whatsappNumber.id, call);
         }
       }
     }
@@ -707,12 +745,18 @@ export async function processWebhookFields(payload: Record<string, unknown>): Pr
 export { clearRingTimeout };
 
 /** Handle DTMF tones sent by the caller during a live call. */
-async function handleCallDtmf(orgId: string, call: CallWebhookEntry): Promise<void> {
+async function handleCallDtmf(
+  orgId: string,
+  whatsappNumberId: string,
+  call: CallWebhookEntry
+): Promise<void> {
   const metaCallId = call.id;
   const tone = call.dtmf;
   if (!tone) return;
 
-  const existing = await prisma.call.findUnique({ where: { metaCallId } });
+  const existing = await prisma.call.findFirst({
+    where: { metaCallId, organizationId: orgId, whatsappNumberId },
+  });
   if (!existing) return;
 
   log.info('DTMF received', { metaCallId, tone, callId: existing.id });

@@ -34,6 +34,7 @@ import PageSizeSelect from '../components/inbox/PageSizeSelect';
 import { type PageSize } from '../components/inbox/useConversationList';
 import { FOCUS_RING_CLASS } from '../hooks/inboxA11y';
 import { readNumberCache, writeNumberCache } from '../utils/whatsappNumberCache';
+import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 
 interface CallRecord {
   id: string;
@@ -106,6 +107,7 @@ function parseCall(raw: CallRecord): CallRecord {
 }
 
 export default function CallsPage() {
+  const { activeNumber, resolved } = useWhatsAppNumber();
   const { callId: routeCallId } = useParams();
   const navigate = useNavigate();
 
@@ -174,12 +176,16 @@ export default function CallsPage() {
   const searchRef = useRef(search);
   const chipRef = useRef(chip);
   const pageSizeRef = useRef(pageSize);
+  const activeNumberIdRef = useRef<string | null>(null);
+  activeNumberIdRef.current = activeNumber?.id ?? null;
   pageRef.current = page;
   searchRef.current = search;
   chipRef.current = chip;
   pageSizeRef.current = pageSize;
 
   const loadCalls = useCallback(async (opts?: { skeleton?: boolean }) => {
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
     const params: Record<string, string> = {
       page: String(pageRef.current),
       limit: String(pageSizeRef.current),
@@ -199,20 +205,24 @@ export default function CallsPage() {
         items: CallRecord[];
         pagination: { total: number };
       };
+      if (requestNumberId !== activeNumberIdRef.current) return;
       setCalls(payload.items.map(parseCall));
       setTotalCalls(payload.pagination.total);
     } finally {
       if (showSkeleton) setListLoading(false);
     }
-  }, []);
+  }, [activeNumber, resolved]);
 
   const load = useCallback(async () => {
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
     try {
       const [statusRes, analyticsRes] = await Promise.all([
         callingApi.status(),
         callingApi.analytics(7).catch(() => null),
         loadCalls(),
       ]);
+      if (requestNumberId !== activeNumberIdRef.current) return;
       setStatus(statusRes.data.data);
       const analyticsData = analyticsRes?.data?.data as
         | {
@@ -238,7 +248,7 @@ export default function CallsPage() {
       toastError('Could not load calls. Please refresh the page.');
     } finally {
     }
-  }, [loadCalls]);
+  }, [activeNumber, loadCalls, resolved]);
 
   const filtersBootstrapped = useRef(false);
   useEffect(() => {
@@ -251,8 +261,11 @@ export default function CallsPage() {
 
   const loadCallDetail = useCallback(
     async (callId: string, opts?: { syncNotes?: boolean }) => {
+      if (!resolved || !activeNumber) return null;
+      const requestNumberId = activeNumber.id;
       try {
         const { data } = await callingApi.get(callId);
+        if (requestNumberId !== activeNumberIdRef.current) return null;
         const parsed = parseCall(data.data as CallRecord);
         setCalls((prev) => {
           const exists = prev.some((c) => c.id === callId);
@@ -269,7 +282,7 @@ export default function CallsPage() {
         return null;
       }
     },
-    []
+    [activeNumber, resolved]
   );
 
   loadRef.current = load;
@@ -288,21 +301,29 @@ export default function CallsPage() {
       setPage(cached.page);
       setSearch(cached.search);
       setChip(cached.chip ?? '');
-      setSelectedCallId(cached.selectedCallId);
-      setNotes(cached.notes);
-      setRailPanel(
-        cached.railPanel === 'settings' || cached.railPanel === 'help' ? cached.railPanel : null
-      );
+      setSelectedCallId(null);
+      setNotes('');
+      setNotesDirty(false);
+      setCallMenu(null);
+      setDeleteCallTarget(null);
+      setRailPanel(null);
+      navigate('/calls');
+      setListLoading(true);
+      void loadRef.current();
       return;
     }
 
     setSelectedCallId(null);
+    setCalls([]);
+    setTotalCalls(0);
     setNotes('');
     setNotesDirty(false);
     setPage(1);
     setSearch('');
     setChip('');
     setRailPanel(null);
+    setCallMenu(null);
+    setDeleteCallTarget(null);
     navigate('/calls');
     void loadRef.current();
   });

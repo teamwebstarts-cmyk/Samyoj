@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { whatsappApi } from '../services/api';
+import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
+import { useOnActiveNumberChange } from './useOnActiveNumberChange';
 import type { WebhookHealth, WebhookStatus } from '../types';
 
 export type InboundHealth =
@@ -22,19 +24,24 @@ interface UseWebhookHealthResult {
  * to render the banner, an amber transient, or nothing.
  */
 export function useWebhookHealth(enabled = true): UseWebhookHealthResult {
+  const { activeNumber, resolved } = useWhatsAppNumber();
   const [health, setHealth] = useState<InboundHealth>({ state: 'unknown' });
   const inFlightRef = useRef(false);
   const mountedRef = useRef(true);
+  const numberIdRef = useRef<string | null>(null);
+  numberIdRef.current = activeNumber?.id ?? null;
 
   const refresh = async () => {
     if (inFlightRef.current) return;
+    if (!enabled || !resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
     inFlightRef.current = true;
     try {
       const [statusRes, healthRes] = await Promise.all([
         whatsappApi.webhookStatus().catch(() => null),
         whatsappApi.webhookHealth().catch(() => null),
       ]);
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || requestNumberId !== numberIdRef.current) return;
       const status = (statusRes?.data?.data ?? null) as WebhookStatus | null;
       const proc = (healthRes?.data?.data ?? null) as WebhookHealth | null;
 
@@ -66,6 +73,11 @@ export function useWebhookHealth(enabled = true): UseWebhookHealthResult {
     }
   };
 
+  useOnActiveNumberChange(() => {
+    setHealth({ state: 'loading' });
+    void refresh();
+  });
+
   useEffect(() => {
     mountedRef.current = true;
     if (!enabled) {
@@ -82,7 +94,7 @@ export function useWebhookHealth(enabled = true): UseWebhookHealthResult {
       clearInterval(interval);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled]);
+  }, [activeNumber?.id, enabled, resolved]);
 
   return { health, refresh };
 }

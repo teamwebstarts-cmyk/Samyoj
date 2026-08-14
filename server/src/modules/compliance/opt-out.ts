@@ -5,11 +5,26 @@ import { randomUUID } from 'node:crypto';
 
 const log = createModuleLogger('opt-out');
 
-const OPT_OUT_KEYWORDS = ['stop', 'unsubscribe', 'cancel', 'opt out', 'opt-out', 'remove me'];
+/**
+ * Exact-token STOP list. Prefix matching "cancel my order" must not opt the
+ * contact out (that used to skip the entire inbound automation pipeline).
+ * Trailing punctuation is ignored so "STOP!" still works.
+ */
+const OPT_OUT_KEYWORDS = new Set([
+  'stop',
+  'stopall',
+  'unsubscribe',
+  'cancel',
+  'end',
+  'quit',
+  'opt out',
+  'opt-out',
+  'remove me',
+]);
 
 export function isOptOutMessage(text: string): boolean {
-  const normalized = text.trim().toLowerCase();
-  return OPT_OUT_KEYWORDS.some((kw) => normalized === kw || normalized.startsWith(`${kw} `));
+  const normalized = text.trim().toLowerCase().replace(/[.!?,;:]+$/g, '').trim();
+  return OPT_OUT_KEYWORDS.has(normalized);
 }
 
 export async function handleOptOut(
@@ -63,6 +78,7 @@ export async function handleOptOut(
       content:
         'You have been unsubscribed. You will no longer receive marketing messages. Reply START to opt back in.',
       type: 'TEXT',
+      whatsappNumberId,
     });
   } catch (err) {
     log.warn('Opt-out confirmation message failed', { error: String(err) });
@@ -75,16 +91,26 @@ export async function handleOptIn(
   organizationId: string,
   contactId: string,
   occurredAt = new Date(),
-  eventId: string = randomUUID()
+  eventId: string = randomUUID(),
+  whatsappNumberId?: string
 ): Promise<boolean> {
   if (Number.isNaN(occurredAt.getTime())) return false;
   const current = await prisma.contact.findFirst({
-    where: { id: contactId, organizationId },
+    where: {
+      id: contactId,
+      organizationId,
+      ...(whatsappNumberId ? { whatsappNumberId } : {}),
+    },
     select: { consentAt: true },
   });
   if (!current) return false;
   const updated = await prisma.contact.updateMany({
-    where: { id: contactId, organizationId, OR: [{ consentAt: null }, { consentAt: { lte: occurredAt } }] },
+    where: {
+      id: contactId,
+      organizationId,
+      ...(whatsappNumberId ? { whatsappNumberId } : {}),
+      OR: [{ consentAt: null }, { consentAt: { lte: occurredAt } }],
+    },
     data: {
       optedIn: true,
       consentSource: 'START_KEYWORD',

@@ -206,4 +206,23 @@ router.patch(
   })
 );
 
+router.delete(
+  '/:id',
+  authenticate,
+  requireOrg,
+  loadPermissions,
+  requirePermission('manageInbox'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const id = paramId(req);
+    const existing = await prisma.ticket.findFirst({
+      where: { id, organizationId: orgId, whatsappNumberId: req.activeWhatsappNumberId },
+      select: { id: true },
+    });
+    if (!existing) throw new AppError(404, 'Ticket not found');
+    await prisma.ticket.delete({ where: { id } });
+    sendSuccess(res, { deleted: true });
+  })
+);
+
 export default router;

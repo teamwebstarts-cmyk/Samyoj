@@ -4,7 +4,7 @@ import { config } from '../../config';
 import { authenticate, requireOrg, loadOrgRole, requireOrgRole } from '../../middleware/auth';
 import { AppError, sendSuccess, asyncHandler } from '../../utils/response';
 import { MetaWhatsAppService } from './meta.service';
-import { signConnectPending, verifyConnectPending } from './connect-pending';
+import { consumeConnectPending, createConnectPending } from './connect-pending';
 import {
   resolveOAuthRedirectUri,
   signConnectOAuthState,
@@ -23,6 +23,9 @@ import { z } from 'zod';
 import { logError } from '../../errors';
 import { createModuleLogger } from '../../utils/logger';
 import { normalizePhoneIdentity } from '../../utils/phone';
+import {
+  resolveActiveWhatsappNumberId,
+} from './active-number';
 import {
   webhookHealth,
   trackWebhookFailed,
@@ -46,50 +49,44 @@ async function saveWhatsappConnection(
   }
   const metaCredentials = await resolveMetaCredentials(orgId);
 
-  const ownedElsewhere = await prisma.whatsappNumber.findFirst({
-    where: {
-      phoneNumberId: connection.phoneNumberId,
-      organizationId: { not: orgId },
-    },
-    select: { id: true, organizationId: true },
-  });
-  if (ownedElsewhere) {
+  const [providerOwner, phoneOwner] = await Promise.all([
+    prisma.whatsappNumber.findFirst({
+      where: { phoneNumberId: connection.phoneNumberId, organizationId: { not: orgId } },
+      select: { id: true, organizationId: true },
+    }),
+    prisma.whatsappNumber.findFirst({
+      where: { normalizedPhoneNumber, organizationId: { not: orgId } },
+      select: { id: true, organizationId: true },
+    }),
+  ]);
+  if (providerOwner || phoneOwner) {
     throw new AppError(
       409,
       'This WhatsApp number is already connected to another organization. Disconnect it there first, or contact support.'
     );
   }
 
-  const existing = await prisma.whatsappNumber.findFirst({
-    where: {
-      organizationId: orgId,
-      phoneNumberId: connection.phoneNumberId,
-    },
-  });
-
-  const whatsappNumber = existing
-    ? await prisma.whatsappNumber.update({
-        where: { id: existing.id },
-        data: {
-          phoneNumber: connection.phoneNumber,
-          normalizedPhoneNumber,
-          wabaId: connection.wabaId,
-          businessId: connection.businessId,
-          accessToken: encryptedToken,
-          isActive: true,
-        },
-      })
-    : await prisma.whatsappNumber.create({
-        data: {
-          organizationId: orgId,
-          phoneNumber: connection.phoneNumber,
-          normalizedPhoneNumber,
-          phoneNumberId: connection.phoneNumberId,
-          wabaId: connection.wabaId,
-          businessId: connection.businessId,
-          accessToken: encryptedToken,
-        },
-      });
+  const [existingByPhone, existingByProvider] = await Promise.all([
+    prisma.whatsappNumber.findFirst({
+      where: { organizationId: orgId, normalizedPhoneNumber },
+    }),
+    prisma.whatsappNumber.findFirst({
+      where: { organizationId: orgId, phoneNumberId: connection.phoneNumberId },
+    }),
+  ]);
+  if (existingByPhone && existingByProvider && existingByPhone.id !== existingByProvider.id) {
+    throw new AppError(
+      409,
+      'WhatsApp connection identity mismatch. The displayed phone and provider phone ID belong to different saved numbers.'
+    );
+  }
+  if (existingByProvider && existingByProvider.normalizedPhoneNumber !== normalizedPhoneNumber) {
+    throw new AppError(
+      409,
+      'WhatsApp connection identity mismatch. Reconnect using the verified displayed phone for this number.'
+    );
+  }
+  const existing = existingByPhone || existingByProvider;
 
   try {
     await MetaWhatsAppService.ensureWabaSubscribed(
@@ -122,6 +119,37 @@ async function saveWhatsappConnection(
     }
   }
 
+  // Update the canonical workspace in one transaction. Matching by the verified
+  // displayed phone first lets a provider ID rotate without creating a second
+  // workspace or moving history.
+  const whatsappNumber = await prisma.$transaction(async (tx) => {
+    if (existing) {
+      return tx.whatsappNumber.update({
+        where: { id: existing.id },
+        data: {
+          phoneNumber: connection.phoneNumber,
+          normalizedPhoneNumber,
+          phoneNumberId: connection.phoneNumberId,
+          wabaId: connection.wabaId,
+          businessId: connection.businessId,
+          accessToken: encryptedToken,
+          isActive: true,
+        },
+      });
+    }
+    return tx.whatsappNumber.create({
+      data: {
+        organizationId: orgId,
+        phoneNumber: connection.phoneNumber,
+        normalizedPhoneNumber,
+        phoneNumberId: connection.phoneNumberId,
+        wabaId: connection.wabaId,
+        businessId: connection.businessId,
+        accessToken: encryptedToken,
+      },
+    });
+  });
+
   return { whatsappNumber, webhookConfigured };
 }
 
@@ -134,8 +162,7 @@ const metaAdminGuard = [authenticate, requireOrg, loadOrgRole, requireOrgRole('O
 
 router.get(
   '/meta-config',
-  authenticate,
-  requireOrg,
+  ...metaAdminGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const settings = await getOrgMetaSettings(req.user!.organizationId!);
     sendSuccess(res, sanitizeMetaSettingsForClient(settings));
@@ -191,8 +218,7 @@ router.get(
 
 router.post(
   '/connect/callback',
-  authenticate,
-  requireOrg,
+  ...metaAdminGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const { code, state } = req.body as { code?: string; state?: string };
     if (!code) throw new AppError(400, 'Authorization code required');
@@ -297,7 +323,7 @@ router.post(
       });
     }
 
-    const pendingToken = signConnectPending({
+    const pendingToken = await createConnectPending({
       organizationId: orgId,
       userId,
       accessToken,
@@ -330,23 +356,19 @@ const selectPhoneSchema = z.object({
 
 router.post(
   '/connect/select',
-  authenticate,
-  requireOrg,
+  ...metaAdminGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const data = selectPhoneSchema.parse(req.body);
     const orgId = req.user!.organizationId!;
-    const metaCredentials = await resolveMetaCredentials(orgId);
-
-    let pending;
-    try {
-      pending = verifyConnectPending(data.pendingToken);
-    } catch {
+    const pending = await consumeConnectPending(data.pendingToken, {
+      organizationId: orgId,
+      userId: req.user!.userId,
+    });
+    if (!pending) {
       throw new AppError(400, 'Connect session expired. Please connect WhatsApp again from Settings.');
     }
 
-    if (pending.organizationId !== orgId || pending.userId !== req.user!.userId) {
-      throw new AppError(403, 'Invalid connect session');
-    }
+    const metaCredentials = await resolveMetaCredentials(orgId);
 
     const phones = await MetaWhatsAppService.listAvailablePhoneNumbers(
       pending.accessToken,
@@ -378,78 +400,16 @@ router.post(
   })
 );
 
-const connectSchema = z.object({
-  code: z.string(),
-  phoneNumber: z.string(),
-  phoneNumberId: z.string(),
-  wabaId: z.string(),
-  businessId: z.string().optional(),
-  accessToken: z.string(),
-});
-
 router.post(
   '/connect',
   ...metaAdminGuard,
   asyncHandler(async (req: Request, res: Response) => {
-    const data = connectSchema.parse(req.body);
-    const orgId = req.user!.organizationId!;
-
-    const ownedElsewhere = await prisma.whatsappNumber.findFirst({
-      where: {
-        phoneNumberId: data.phoneNumberId,
-        organizationId: { not: orgId },
-      },
-      select: { id: true },
-    });
-    if (ownedElsewhere) {
-      throw new AppError(
-        409,
-        'This WhatsApp number is already connected to another organization. Disconnect it there first, or contact support.'
-      );
-    }
-
-    const encryptedToken = MetaWhatsAppService.encryptToken(data.accessToken);
-    const normalizedPhoneNumber = normalizePhoneIdentity(data.phoneNumber);
-    if (!normalizedPhoneNumber) {
-      throw new AppError(400, 'WhatsApp number has no usable phone identity');
-    }
-
-    const existing = await prisma.whatsappNumber.findFirst({
-      where: { organizationId: orgId, phoneNumberId: data.phoneNumberId },
-    });
-
-    const whatsappNumber = existing
-      ? await prisma.whatsappNumber.update({
-          where: { id: existing.id },
-          data: {
-            phoneNumber: data.phoneNumber,
-            normalizedPhoneNumber,
-            wabaId: data.wabaId,
-            businessId: data.businessId,
-            accessToken: encryptedToken,
-            isActive: true,
-          },
-        })
-      : await prisma.whatsappNumber.create({
-          data: {
-            organizationId: orgId,
-            phoneNumber: data.phoneNumber,
-            normalizedPhoneNumber,
-            phoneNumberId: data.phoneNumberId,
-            wabaId: data.wabaId,
-            businessId: data.businessId,
-            accessToken: encryptedToken,
-          },
-        });
-
-    sendSuccess(
-      res,
-      {
-        id: whatsappNumber.id,
-        phoneNumber: whatsappNumber.phoneNumber,
-        isActive: whatsappNumber.isActive,
-      },
-      201
+    // Legacy endpoint accepted a raw Meta token from the client. Keep the
+    // route as an explicit migration error so old clients fail closed without
+    // persisting attacker-supplied credentials.
+    throw new AppError(
+      410,
+      'Legacy WhatsApp credential connect is disabled. Use Connect WhatsApp in Settings.'
     );
   })
 );
@@ -507,18 +467,15 @@ router.get(
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const metaCredentials = await resolveMetaCredentials(orgId);
-    const headerId =
-      typeof req.headers['x-whatsapp-number-id'] === 'string'
-        ? req.headers['x-whatsapp-number-id']
-        : undefined;
-    const number = headerId
+    const numberId = await resolveActiveWhatsappNumberId(
+      orgId,
+      req.headers['x-whatsapp-number-id']
+    );
+    const number = numberId
       ? await prisma.whatsappNumber.findFirst({
-          where: { id: headerId, organizationId: orgId, isActive: true },
+          where: { id: numberId, organizationId: orgId, isActive: true },
         })
-      : await prisma.whatsappNumber.findFirst({
-          where: { organizationId: orgId, isActive: true },
-          orderBy: { updatedAt: 'desc' },
-        });
+      : null;
     if (!number) {
       return sendSuccess(res, {
         connected: false,
@@ -560,18 +517,15 @@ router.post(
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const metaCredentials = await resolveMetaCredentials(orgId);
-    const headerId =
-      typeof req.headers['x-whatsapp-number-id'] === 'string'
-        ? req.headers['x-whatsapp-number-id']
-        : undefined;
-    const number = headerId
+    const numberId = await resolveActiveWhatsappNumberId(
+      orgId,
+      req.headers['x-whatsapp-number-id']
+    );
+    const number = numberId
       ? await prisma.whatsappNumber.findFirst({
-          where: { id: headerId, organizationId: orgId, isActive: true },
+          where: { id: numberId, organizationId: orgId, isActive: true },
         })
-      : await prisma.whatsappNumber.findFirst({
-          where: { organizationId: orgId, isActive: true },
-          orderBy: { updatedAt: 'desc' },
-        });
+      : null;
     if (!number) throw new AppError(400, 'Connect a WhatsApp number first');
 
     const accessToken = MetaWhatsAppService.decryptToken(number.accessToken);
@@ -771,9 +725,20 @@ router.post('/webhook', async (req: Request, res: Response) => {
   trackWebhookReceived();
 
   try {
+    const routedNumber = metaPhoneNumberId
+      ? await prisma.whatsappNumber.findFirst({
+          where: { phoneNumberId: metaPhoneNumberId, isActive: true },
+          select: { id: true },
+        })
+      : null;
     const job = await webhookQueue.add(
       'process-webhook',
-      { payload, requestId, receivedAt: new Date().toISOString() },
+      {
+        payload,
+        requestId,
+        receivedAt: new Date().toISOString(),
+        whatsappNumberId: routedNumber?.id,
+      },
       { attempts: 4 }
     );
     log.info('Webhook queued for processing', {

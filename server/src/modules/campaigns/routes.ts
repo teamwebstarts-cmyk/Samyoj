@@ -350,6 +350,7 @@ router.patch(
     );
 
     let totalContacts = existing.totalContacts;
+    let campaignRunVersion = existing.runVersion;
 
     if (data.recipients || data.audienceType || data.audienceConfig) {
       const audienceType = (data.audienceType || existing.audienceType) as AudienceType;
@@ -373,7 +374,7 @@ router.patch(
         manualRecipients = existingRecipients.map((r) => ({
           phone: r.phone,
           name: r.name ?? undefined,
-          variables: r.variables as { body?: string[]; header?: string[] } | undefined,
+          variables: r.variables as { body?: string[]; header?: string[]; attributes?: Record<string, string> } | undefined,
         }));
       }
 
@@ -385,7 +386,8 @@ router.patch(
         whatsappNumberId
       );
       if (!resolved.length) throw new AppError(400, 'Campaign must have at least one recipient');
-      totalContacts = await persistRecipients(id, resolved);
+      totalContacts = await persistRecipients(id, resolved, existing.runVersion);
+      campaignRunVersion += 1;
     }
 
     const scheduledAt =
@@ -395,8 +397,14 @@ router.patch(
           ? new Date(data.scheduledAt)
           : undefined;
 
-    const campaign = await prisma.campaign.update({
-      where: { id },
+    const updated = await prisma.campaign.updateMany({
+      where: {
+        id,
+        organizationId: orgId,
+        whatsappNumberId: existing.whatsappNumberId,
+        status: { in: ['DRAFT', 'SCHEDULED'] },
+        runVersion: campaignRunVersion,
+      },
       data: {
         name: data.name,
         templateName: data.templateName,
@@ -407,6 +415,7 @@ router.patch(
         whatsappNumberId,
         timezone: data.timezone,
         totalContacts,
+        runVersion: { increment: 1 },
         ...(scheduledAt !== undefined
           ? {
               scheduledAt,
@@ -414,8 +423,15 @@ router.patch(
             }
           : {}),
       },
+    });
+    if (updated.count !== 1) {
+      throw new AppError(409, 'Campaign changed while it was being edited; try again');
+    }
+    const campaign = await prisma.campaign.findUnique({
+      where: { id },
       include: { recipients: true },
     });
+    if (!campaign) throw new AppError(404, 'Campaign not found');
 
     await logCampaignAudit(orgId, req.user!.userId, 'campaign.update', { campaignId: id });
     sendSuccess(res, campaign);

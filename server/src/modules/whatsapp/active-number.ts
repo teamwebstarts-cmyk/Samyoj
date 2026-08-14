@@ -30,12 +30,21 @@ export async function resolveActiveWhatsappNumberId(
     return found.id;
   }
 
-  const fallback = await prisma.whatsappNumber.findFirst({
+  // Never choose by recency: that silently moves a request into another
+  // workspace when an organization has more than one connected number.
+  const activeNumbers = await prisma.whatsappNumber.findMany({
     where: { organizationId, isActive: true },
     orderBy: { updatedAt: 'desc' },
+    take: 2,
     select: { id: true },
   });
-  return fallback?.id;
+  if (activeNumbers.length > 1) {
+    throw new AppError(
+      409,
+      'Select a WhatsApp number with X-WhatsApp-Number-Id before using this feature.'
+    );
+  }
+  return activeNumbers[0]?.id;
 }
 
 /** Attach active WhatsApp number from request header (validated against org). */
@@ -46,10 +55,14 @@ export async function resolveActiveWhatsappNumber(
 ) {
   try {
     if (!req.user?.organizationId) return next();
-    req.activeWhatsappNumberId = await resolveActiveWhatsappNumberId(
+    const activeNumberId = await resolveActiveWhatsappNumberId(
       req.user.organizationId,
       req.headers[WA_NUMBER_HEADER]
     );
+    if (!activeNumberId) {
+      throw new AppError(400, 'Connect a WhatsApp number before using this feature.');
+    }
+    req.activeWhatsappNumberId = activeNumberId;
     next();
   } catch (err) {
     next(err);
@@ -80,15 +93,7 @@ export function leadsForNumberFilter(numberId: string | undefined): Prisma.LeadW
 
 export function ticketsForNumberFilter(numberId: string | undefined): Prisma.TicketWhereInput {
   if (!numberId) return EMPTY_ID_FILTER;
-  return {
-    OR: [
-      { conversation: { whatsappNumberId: numberId } },
-      {
-        conversationId: null,
-        contact: { conversations: { some: { whatsappNumberId: numberId } } },
-      },
-    ],
-  };
+  return { whatsappNumberId: numberId };
 }
 
 export function ordersForNumberFilter(numberId: string | undefined): Prisma.OrderWhereInput {
@@ -96,9 +101,21 @@ export function ordersForNumberFilter(numberId: string | undefined): Prisma.Orde
   return { whatsappNumberId: numberId };
 }
 
+export function campaignsForNumberFilter(numberId: string | undefined): Prisma.CampaignWhereInput {
+  if (!numberId) return EMPTY_ID_FILTER;
+  return { whatsappNumberId: numberId };
+}
+
 export function messagesForNumberFilter(numberId: string | undefined): Prisma.MessageWhereInput {
   if (!numberId) return EMPTY_ID_FILTER;
   return { conversation: { whatsappNumberId: numberId } };
+}
+
+export function analyticsConversationFilter(
+  organizationId: string,
+  numberId: string | undefined
+): Prisma.ConversationWhereInput {
+  return { organizationId, ...conversationFilter(numberId) };
 }
 
 /**

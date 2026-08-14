@@ -76,7 +76,7 @@ export const config = {
     aiAutoAnswer: process.env.CALLING_AI_AUTO_ANSWER !== 'false',
     aiGreeting:
       process.env.CALLING_AI_GREETING ||
-      'Hello! Thank you for calling. How can I help you today?',
+      'Hi, thanks for calling. How can I help?',
   },
   email: {
     from: process.env.EMAIL_FROM || 'noreply@whatsapp-platform.local',

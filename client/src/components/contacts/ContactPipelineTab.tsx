@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshCw, Target, X } from 'lucide-react';
 import ContactAvatar from '../inbox/ContactAvatar';
 import LeadCard, { type LeadItem } from '../leads/LeadCard';
@@ -18,6 +18,7 @@ import ResponsiveDataView from '../ui/ResponsiveDataView';
 import { leadApi } from '../../services/api';
 import { toastError, toastSuccess } from '../../utils/toast';
 import { useOnActiveNumberChange } from '../../hooks/useOnActiveNumberChange';
+import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
 
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString(undefined, {
@@ -33,28 +34,60 @@ interface ContactPipelineTabProps {
 }
 
 export default function ContactPipelineTab({ onStatsChange, refreshToken = 0 }: ContactPipelineTabProps) {
+  const { activeNumber, resolved } = useWhatsAppNumber();
   const [leads, setLeads] = useState<LeadItem[]>([]);
   const [stage, setStage] = useState<LeadStageFilter>('');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const activeNumberIdRef = useRef<string | null>(null);
+  activeNumberIdRef.current = activeNumber?.id ?? null;
+  const requestGenerationRef = useRef(0);
 
   const load = useCallback(() => {
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
+    const generation = ++requestGenerationRef.current;
     setLoading(true);
     leadApi
       .list({
         _t: String(Date.now()),
       })
-      .then((res) => setLeads(res.data.data.leads || []))
-      .catch(() => toastError('Failed to load pipeline'))
-      .finally(() => setLoading(false));
-  }, []);
+      .then((res) => {
+        if (
+          requestNumberId === activeNumberIdRef.current &&
+          generation === requestGenerationRef.current
+        ) {
+          setLeads(res.data.data.leads || []);
+        }
+      })
+      .catch(() => {
+        if (
+          requestNumberId === activeNumberIdRef.current &&
+          generation === requestGenerationRef.current
+        ) {
+          toastError('Failed to load pipeline');
+        }
+      })
+      .finally(() => {
+        if (
+          requestNumberId === activeNumberIdRef.current &&
+          generation === requestGenerationRef.current
+        ) {
+          setLoading(false);
+        }
+      });
+  }, [activeNumber, resolved]);
 
   useEffect(() => {
     load();
   }, [load, refreshToken]);
 
   useOnActiveNumberChange(() => {
+    requestGenerationRef.current += 1;
+    setLeads([]);
+    setUpdatingId(null);
+    setLoading(true);
     load();
   });
 

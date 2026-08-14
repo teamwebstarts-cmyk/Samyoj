@@ -19,9 +19,28 @@ export const EMBEDDING_MATCH_THRESHOLD = 0.7;
 function tokenize(text: string): string[] {
   return text
     .toLowerCase()
-    .replace(/[^\w\s]/g, ' ')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .split(/\s+/)
-    .filter((t) => t.length > 2);
+    .filter((t) => t.length > 1);
+}
+
+/** Spoken / Hinglish aliases so a call transcript can hit the Train FAQ. */
+export function expandKnowledgeQuery(query: string): string {
+  const extra: string[] = [];
+  if (/(hour|timing|timings|open|khula|samay|समय|खुल|टाइम)/i.test(query)) {
+    extra.push('hours', 'open', 'timing', 'समय');
+  }
+  if (/(price|pricing|cost|rate|kitna|keemat|कीमत|दाम|रेट)/i.test(query)) {
+    extra.push('price', 'pricing', 'cost', 'कीमत');
+  }
+  if (/(refund|return|wapas|वापस|वापिसी)/i.test(query)) {
+    extra.push('refund', 'return');
+  }
+  if (/(order|booking|track|status|डिलीवरी|delivery)/i.test(query)) {
+    extra.push('order', 'delivery', 'track');
+  }
+  if (extra.length === 0) return query;
+  return `${query} ${extra.join(' ')}`;
 }
 
 export function tokenSearch(
@@ -76,13 +95,15 @@ export async function searchKnowledgeBase(
 
   if (items.length === 0) return [];
 
+  const searchQuery = expandKnowledgeQuery(query);
+
   const withEmbeddings = items.filter(
     (item) => Array.isArray(item.embedding) && (item.embedding as number[]).length > 0
   );
 
   if (withEmbeddings.length > 0 && organizationId) {
     try {
-      const queryEmbedding = await createEmbedding(organizationId, query, { botId });
+      const queryEmbedding = await createEmbedding(organizationId, searchQuery, { botId });
       if (queryEmbedding.length > 0) {
         const scored = withEmbeddings
           .map((item) => ({
@@ -110,7 +131,7 @@ export async function searchKnowledgeBase(
     }
   }
 
-  return tokenSearch(items, query, limit);
+  return tokenSearch(items, searchQuery, limit);
 }
 
 export function formatKnowledgeContext(matches: KnowledgeMatch[]): string {

@@ -140,11 +140,13 @@ export const createFromLibrarySchema = z.object({
 export const testSendSchema = z.object({
   phone: z.string().min(8),
   language: z.string().optional(),
-  templateParams: z
-    .object({
-      body: z.array(z.string()).optional(),
-      header: z.array(z.string()).optional(),
-      headerMediaUrl: z.string().url().optional(),
-    })
-    .optional(),
+    templateParams: z
+      .object({
+        body: z.array(z.string()).optional(),
+        header: z.array(z.string()).optional(),
+        headerMediaUrl: z.string().url().optional(),
+        couponCode: z.string().max(15).optional(),
+        buttonUrlSuffixes: z.array(z.string().max(2000)).optional(),
+      })
+      .optional(),
 });

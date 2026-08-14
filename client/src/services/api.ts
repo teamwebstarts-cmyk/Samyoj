@@ -7,13 +7,35 @@ const API_URL = apiBaseUrl;
 
 /** Active WhatsApp number sent with every API request for data isolation */
 let activeWhatsappNumberId: string | null = null;
+let activeWhatsappNumberResolved = false;
 
 export function setActiveWhatsappNumberId(id: string | null) {
   activeWhatsappNumberId = id;
 }
 
+export function setActiveWhatsappNumberResolved(resolved: boolean) {
+  activeWhatsappNumberResolved = resolved;
+}
+
 export function getActiveWhatsappNumberId() {
   return activeWhatsappNumberId;
+}
+
+export class WhatsappNumberScopeError extends Error {
+  code = 'WHATSAPP_NUMBER_SCOPE_UNRESOLVED';
+
+  constructor(message = 'The active WhatsApp number is still resolving') {
+    super(message);
+    this.name = 'WhatsappNumberScopeError';
+  }
+}
+
+export function isNumberScopedUrl(url?: string) {
+  if (!url) return false;
+  const path = url.replace(/^https?:\/\/[^/]+/i, '').replace(/^\/api(?=\/)/, '');
+  return /^\/(inbox|contacts|calling|ai-bot|campaigns|templates|flows(?:-assets)?|automations|analytics|tickets|commerce|leads|wa-forms)(?:\/|$)/.test(
+    path
+  );
 }
 
 const api = axios.create({
@@ -23,6 +45,13 @@ const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
+  if (isNumberScopedUrl(config.url)) {
+    if (!activeWhatsappNumberResolved || !activeWhatsappNumberId) {
+      return Promise.reject(new WhatsappNumberScopeError());
+    }
+    (config as typeof config & { __whatsappNumberId?: string }).__whatsappNumberId =
+      activeWhatsappNumberId;
+  }
   const token = localStorage.getItem('accessToken');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -34,7 +63,21 @@ api.interceptors.request.use((config) => {
 });
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const requestNumberId = (response.config as typeof response.config & {
+      __whatsappNumberId?: string;
+    }).__whatsappNumberId;
+    if (
+      requestNumberId &&
+      activeWhatsappNumberId &&
+      requestNumberId !== activeWhatsappNumberId
+    ) {
+      return Promise.reject(
+        new WhatsappNumberScopeError('The response belongs to a previous WhatsApp number')
+      );
+    }
+    return response;
+  },
   async (error) => {
     const original = error.config;
     const aborted =
@@ -273,6 +316,16 @@ export const automationApi = {
   delete: (id: string) => api.delete(`/automations/${id}`),
   analytics: (days = 30) => api.get('/automations/analytics', { params: { days: String(days) } }),
   conflicts: () => api.get('/automations/conflicts'),
+  previewConflicts: (data: {
+    kind: 'automation' | 'flow';
+    excludeId?: string;
+    name: string;
+    triggerType: string;
+    config?: Record<string, unknown>;
+    triggerConfig?: Record<string, unknown>;
+    enabled?: boolean;
+    status?: 'DRAFT' | 'PUBLISHED';
+  }) => api.post('/automations/conflicts/preview', data),
 };
 
 export const flowApi = {
@@ -311,6 +364,7 @@ export const settingsApi = {
     dailyBudgetInr?: number;
     batchSize?: number;
     batchDelayMs?: number;
+    mapFirstBodyVariableToName?: boolean;
   }) => api.patch('/settings/campaigns', data),
 };
 
@@ -400,7 +454,13 @@ export const contactApi = {
   create: (data: Record<string, unknown>) => api.post('/contacts', data),
   update: (id: string, data: Record<string, unknown>) => api.patch(`/contacts/${id}`, data),
   delete: (id: string) => api.delete(`/contacts/${id}`),
-  import: (contacts: Array<{ phone: string; name?: string; tags?: string[]; notes?: string }>) =>
+  import: (contacts: Array<{
+    phone: string;
+    name?: string;
+    tags?: string[];
+    notes?: string;
+    customAttributes?: Record<string, string>;
+  }>) =>
     api.post('/contacts/import', { contacts }),
   bulk: (data: {
     ids: string[];
@@ -449,6 +509,23 @@ export const templateApi = {
   library: (params?: Record<string, string>) => api.get('/templates/library', { params }),
   get: (name: string) => api.get(`/templates/${name}`),
   usage: (name: string) => api.get(`/templates/${name}/usage`),
+  getVariableMeta: (name: string, language?: string) =>
+    api.get(`/templates/${encodeURIComponent(name)}/variable-meta`, {
+      params: language ? { language } : undefined,
+    }),
+  saveVariableMeta: (
+    name: string,
+    data: {
+      language?: string;
+      meta: Array<{
+        scope: 'body' | 'header';
+        index: number;
+        description: string;
+        suggestedSource?: 'contact.name' | 'contact.phone' | 'contact.email' | 'custom' | 'contact.custom';
+        customKey?: string;
+      }>;
+    }
+  ) => api.put(`/templates/${encodeURIComponent(name)}/variable-meta`, data),
   create: (data: Record<string, unknown>) => api.post('/templates', data),
   createFromLibrary: (data: {
     name: string;
@@ -464,7 +541,13 @@ export const templateApi = {
     data: {
       phone: string;
       language?: string;
-      templateParams?: { body?: string[]; header?: string[]; headerMediaUrl?: string };
+      templateParams?: {
+        body?: string[];
+        header?: string[];
+        headerMediaUrl?: string;
+        couponCode?: string;
+        buttonUrlSuffixes?: string[];
+      };
     }
   ) => api.post(`/templates/${name}/test-send`, data),
   uploadHeader: (data: { data: string; mimeType: string }) =>

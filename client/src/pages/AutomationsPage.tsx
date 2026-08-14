@@ -23,6 +23,7 @@ import AutomationTipCard, { AiBotLink } from '../components/automations/Automati
 import FlowsTab, { type FlowSummary } from '../components/flows/FlowsTab';
 import { getErrorMessage } from '../utils/errors';
 import { toastError, toastSuccess, toastValidationErrors } from '../utils/toast';
+import { notifySaveConflicts } from '../utils/automation-conflicts';
 import SegmentedControl from '../components/ui/SegmentedControl';
 import AppButton from '../components/ui/AppButton';
 import AppInput from '../components/ui/AppInput';
@@ -43,6 +44,7 @@ import SlideOver, { SlideOverFooter } from '../components/ui/SlideOver';
 import { DEFAULT_PAGE_SIZE } from '../constants/pagination';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
+import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { automationApi } from '../services/api';
 import { WhatsAppMessagePreview } from '../components/inbox/WhatsAppPreview';
 import InteractiveMessageCard from '../components/inbox/InteractiveMessageCard';
@@ -177,8 +179,8 @@ type AutomationTab = 'flows' | 'quick' | 'analytics';
 
 const heroCopy: Record<AutomationTab, { title: string; description: string }> = {
   flows: {
-    title: 'Multi-step flows',
-    description: 'Guide customers through menus, questions, and handoffs step by step.',
+    title: 'Conversation flows',
+    description: 'Multi-step chat trees. Different from one-message auto-replies and from WhatsApp Forms.',
   },
   quick: {
     title: 'Auto-replies',
@@ -186,14 +188,15 @@ const heroCopy: Record<AutomationTab, { title: string; description: string }> = 
   },
   analytics: {
     title: 'Automation stats',
-    description: 'See how often your auto-replies and flows run.',
+    description: 'See how often your auto-replies and conversation flows run.',
   },
 };
 
 export default function AutomationsPage() {
+  const { activeNumber, resolved } = useWhatsAppNumber();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = (searchParams.get('tab') as AutomationTab) || 'quick';
+  const activeTab = (searchParams.get('tab') as AutomationTab) || 'flows';
 
   const [automations, setAutomations] = useState<Automation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -212,12 +215,16 @@ export default function AutomationsPage() {
   const [conflicts, setConflicts] = useState<AutomationConflict[]>([]);
   const [analytics, setAnalytics] = useState<AutomationAnalytics | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const activeNumberIdRef = useRef<string | null>(null);
+  activeNumberIdRef.current = activeNumber?.id ?? null;
 
   const debouncedSearch = useDebouncedValue(search);
   const hasFilters = Boolean(search || triggerFilter || statusFilter);
   const showPagination = total > DEFAULT_PAGE_SIZE;
 
   const load = useCallback(() => {
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
     setLoading(true);
     const params: Record<string, string> = {
       page: String(page),
@@ -231,13 +238,16 @@ export default function AutomationsPage() {
     automationApi
       .list(params)
       .then(({ data }) => {
+        if (requestNumberId !== activeNumberIdRef.current) return;
         setAutomations(data.data.automations);
         setTotal(data.data.total);
         setSummary(data.data.summary);
       })
       .catch((err) => toastError(getErrorMessage(err, 'Failed to load automations')))
-      .finally(() => setLoading(false));
-  }, [page, debouncedSearch, triggerFilter, statusFilter]);
+      .finally(() => {
+        if (requestNumberId === activeNumberIdRef.current) setLoading(false);
+      });
+  }, [activeNumber, debouncedSearch, page, resolved, statusFilter, triggerFilter]);
 
   const loadRef = useRef(load);
   loadRef.current = load;
@@ -256,21 +266,28 @@ export default function AutomationsPage() {
   }, [load, activeTab]);
 
   useEffect(() => {
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
     automationApi
       .conflicts()
-      .then(({ data }) => setConflicts(data.data.conflicts || []))
+      .then(({ data }) => {
+        if (requestNumberId === activeNumberIdRef.current) setConflicts(data.data.conflicts || []);
+      })
       .catch(() => {});
-  }, [summary.active, summary.paused, flowSummary.active, flowSummary.paused, activeTab]);
+  }, [activeNumber, activeTab, flowSummary.active, flowSummary.paused, resolved, summary.active, summary.paused]);
 
   useEffect(() => {
-    if (activeTab !== 'analytics') return;
+    if (activeTab !== 'analytics' || !resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
     setAnalyticsLoading(true);
     automationApi
       .analytics(30)
-      .then(({ data }) => setAnalytics(data.data))
+      .then(({ data }) => {
+        if (requestNumberId === activeNumberIdRef.current) setAnalytics(data.data);
+      })
       .catch((err) => toastError(getErrorMessage(err, 'Failed to load analytics')))
       .finally(() => setAnalyticsLoading(false));
-  }, [activeTab]);
+  }, [activeNumber, activeTab, resolved]);
 
   const openCreate = (triggerType = 'KEYWORD') => {
     setEditing(null);
@@ -338,6 +355,24 @@ export default function AutomationsPage() {
     }
     if (form.buttons.length > 0) config.buttons = form.buttons.slice(0, 3);
 
+    const enabled = editing ? editing.enabled : true;
+    try {
+      const { data: preview } = await automationApi.previewConflicts({
+        kind: 'automation',
+        excludeId: editing?.id,
+        name: form.name.trim(),
+        triggerType: form.triggerType,
+        config,
+        enabled,
+      });
+      if (!notifySaveConflicts(preview.data.conflicts || [])) {
+        setSaving(false);
+        return;
+      }
+    } catch {
+      /* preview is best-effort; still allow save */
+    }
+
     try {
       if (editing) {
         await automationApi.update(editing.id, {
@@ -402,7 +437,7 @@ export default function AutomationsPage() {
   const SelectedTriggerIcon = selectedTrigger.icon;
 
   const setTab = (tab: AutomationTab) => {
-    setSearchParams(tab === 'quick' ? {} : { tab });
+    setSearchParams(tab === 'flows' ? {} : { tab });
   };
 
   const addQuickReplyButton = () => {
@@ -417,8 +452,8 @@ export default function AutomationsPage() {
     activeTab === 'flows'
       ? [
           { label: 'Total flows', value: flowSummary.total },
-          { label: 'Active', value: flowSummary.active, tone: 'text-emerald-700 dark:text-emerald-300' },
-          { label: 'Paused', value: flowSummary.paused, tone: 'text-amber-700 dark:text-amber-300' },
+          { label: 'Live', value: flowSummary.active, tone: 'text-emerald-700 dark:text-emerald-300' },
+          { label: 'Off', value: flowSummary.paused, tone: 'text-amber-700 dark:text-amber-300' },
         ]
       : activeTab === 'analytics'
         ? [
@@ -449,8 +484,8 @@ export default function AutomationsPage() {
           value={activeTab}
           onChange={setTab}
           options={[
-            { value: 'quick', label: 'Auto-replies', shortLabel: 'Replies', icon: MessageSquareQuote },
             { value: 'flows', label: 'Conversation flows', shortLabel: 'Flows', icon: GitBranch },
+            { value: 'quick', label: 'Auto-replies', shortLabel: 'Replies', icon: MessageSquareQuote },
             { value: 'analytics', label: 'Performance', shortLabel: 'Stats', icon: BarChart3 },
           ]}
           ariaLabel="Automation sections"
@@ -459,8 +494,8 @@ export default function AutomationsPage() {
         <AutomationConflictsBanner conflicts={conflicts} />
 
         {activeTab === 'flows' && (
-          <AutomationTipCard icon={GitBranch} title="Multi-step flows">
-            Build menus, collect answers, and route to your team. For a single automatic message, use{' '}
+          <AutomationTipCard icon={GitBranch} title="Conversation flows">
+            Menus, questions, and handoffs — a chat tree. For one automatic message, use{' '}
             <button
               type="button"
               onClick={() => setTab('quick')}
@@ -468,7 +503,7 @@ export default function AutomationsPage() {
             >
               Auto-replies
             </button>
-            .
+            . WhatsApp Forms are a step inside a flow, not this list.
           </AutomationTipCard>
         )}
 

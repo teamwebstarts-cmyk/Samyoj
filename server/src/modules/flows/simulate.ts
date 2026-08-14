@@ -1,5 +1,8 @@
 import { getOrgBusinessHours, isWithinBusinessHours } from '../settings/business-hours';
 import { linkFlowNodes } from './link-nodes';
+import { matchInteractiveTextIntent } from './branch-resolve';
+import { detectMessageLanguage } from './language';
+import { keywordMatches } from './trigger-match';
 import type { FlowNode, FlowTriggerConfig } from './types';
 
 export interface SimulateInput {
@@ -18,21 +21,6 @@ export interface SimulateStep {
   type: string;
   action: string;
   branch?: string;
-}
-
-function keywordMatches(content: string, config: FlowTriggerConfig): boolean {
-  const keyword = config.keyword?.toLowerCase().trim();
-  if (!keyword) return false;
-  const lower = content.toLowerCase();
-  if (config.regex) {
-    try {
-      return new RegExp(keyword, 'i').test(content);
-    } catch {
-      return false;
-    }
-  }
-  if (config.exactMatch) return lower.trim() === keyword;
-  return lower.includes(keyword);
 }
 
 function nodeAction(node: FlowNode): string {
@@ -165,8 +153,10 @@ export async function simulateFlow(input: SimulateInput): Promise<{
       reason = 'Triggered by missed call event';
       break;
     case 'CAMPAIGN_REPLY':
-      triggered = Boolean(input.message);
-      reason = triggered ? 'Reply after campaign message' : 'No campaign context';
+      triggered = hasContent;
+      reason = hasContent
+        ? 'Preview only: live CAMPAIGN_REPLY also needs a recent campaign send on this chat'
+        : 'No campaign context';
       break;
     case 'CALL_COMPLETED':
       triggered = true;
@@ -187,6 +177,9 @@ export async function simulateFlow(input: SimulateInput): Promise<{
 
   const steps: SimulateStep[] = [];
   const variables: Record<string, string> = {};
+  if (input.message?.trim()) {
+    variables.language = detectMessageLanguage(input.message);
+  }
   let currentId: string | null = startId;
   let iterations = 0;
 
@@ -209,10 +202,16 @@ export async function simulateFlow(input: SimulateInput): Promise<{
         currentId = node.next || null;
         continue;
       }
-      const firstBtn = node.buttons?.[0];
-      if (firstBtn) {
-        steps.push({ nodeId: node.id, type: 'user', action: `[Taps: ${firstBtn.title}]` });
-        currentId = nextFromNode(node, firstBtn.id);
+      const intentId = matchInteractiveTextIntent(node, input.message);
+      const chosen =
+        (intentId ? node.buttons?.find((b) => b.id === intentId) : undefined) || node.buttons?.[0];
+      if (chosen) {
+        steps.push({
+          nodeId: node.id,
+          type: 'user',
+          action: intentId ? `[Taps: ${chosen.title}]` : `[Preview taps first: ${chosen.title}]`,
+        });
+        currentId = nextFromNode(node, chosen.id);
       } else {
         currentId = node.next || null;
       }
@@ -248,7 +247,8 @@ export async function simulateFlow(input: SimulateInput): Promise<{
     }
 
     if (node.type === 'language') {
-      const branchKey = 'default';
+      const branchKey =
+        node.languageCode && variables.language === node.languageCode ? 'match' : 'default';
       steps.push({ nodeId: node.id, type: node.type, action: `Language branch: ${branchKey}`, branch: branchKey });
       currentId = nextFromNode(node, branchKey);
       continue;

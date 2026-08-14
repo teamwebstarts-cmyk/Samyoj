@@ -25,6 +25,7 @@ import { ticketApi } from '../services/api';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 import { toastError, toastSuccess } from '../utils/toast';
 import { readNumberCache, writeNumberCache } from '../utils/whatsappNumberCache';
+import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 
 const TICKETS_CACHE_KEY = 'tickets';
 
@@ -44,6 +45,7 @@ function formatSla(value?: string | null) {
 }
 
 export default function TicketsPage() {
+  const { activeNumber, resolved } = useWhatsAppNumber();
   const [tickets, setTickets] = useState<TicketItem[]>([]);
   const [status, setStatus] = useState('');
   const [search, setSearch] = useState('');
@@ -51,6 +53,8 @@ export default function TicketsPage() {
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [detailTicket, setDetailTicket] = useState<TicketItem | null>(null);
   const loadRef = useRef<() => void>(() => {});
+  const activeNumberIdRef = useRef<string | null>(null);
+  activeNumberIdRef.current = activeNumber?.id ?? null;
   const ticketsSnapshotRef = useRef<TicketsNumberCache>({
     tickets: [],
     status: '',
@@ -61,10 +65,13 @@ export default function TicketsPage() {
   ticketsSnapshotRef.current = { tickets, status, search, detailTicket };
 
   const load = useCallback(() => {
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
     setLoading(true);
     ticketApi
       .list(status ? { status } : undefined)
       .then((res) => {
+        if (requestNumberId !== activeNumberIdRef.current) return;
         const next = res.data.data.tickets || [];
         setTickets(next);
         setDetailTicket((current) => {
@@ -73,8 +80,10 @@ export default function TicketsPage() {
         });
       })
       .catch(() => toastError('Failed to load tickets'))
-      .finally(() => setLoading(false));
-  }, [status]);
+      .finally(() => {
+        if (requestNumberId === activeNumberIdRef.current) setLoading(false);
+      });
+  }, [activeNumber, resolved, status]);
 
   loadRef.current = load;
 
@@ -86,10 +95,13 @@ export default function TicketsPage() {
       setTickets(cached.tickets);
       setStatus(cached.status);
       setSearch(cached.search);
-      setDetailTicket(cached.detailTicket);
-      setLoading(false);
+      setDetailTicket(null);
+      setResolvingId(null);
+      setLoading(true);
+      loadRef.current();
       return;
     }
+    setTickets([]);
     setDetailTicket(null);
     loadRef.current();
   });

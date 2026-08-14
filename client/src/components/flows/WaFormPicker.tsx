@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { FormInput, Plus, RefreshCw } from 'lucide-react';
 import AppButton from '../ui/AppButton';
 import AppInput from '../ui/AppInput';
@@ -10,6 +10,7 @@ import { waFormsApi } from '../../services/api';
 import { getErrorMessage } from '../../utils/errors';
 import { toastError, toastSuccess } from '../../utils/toast';
 import type { WaFormFieldInput, WhatsAppForm } from '../../types';
+import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
 
 const FIELD_TYPES = [
   { value: 'text', label: 'Text' },
@@ -36,6 +37,7 @@ interface WaFormPickerProps {
 }
 
 export default function WaFormPicker({ value, onChange }: WaFormPickerProps) {
+  const { activeNumber, resolved } = useWhatsAppNumber();
   const [forms, setForms] = useState<WhatsAppForm[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -45,21 +47,41 @@ export default function WaFormPicker({ value, onChange }: WaFormPickerProps) {
   const [formTitle, setFormTitle] = useState('Tell us about yourself');
   const [submitLabel, setSubmitLabel] = useState('Submit');
   const [fields, setFields] = useState<WaFormFieldInput[]>(DEFAULT_FIELDS);
+  const activeNumberIdRef = useRef<string | null>(null);
+  activeNumberIdRef.current = activeNumber?.id ?? null;
+  const requestGenerationRef = useRef(0);
 
   const load = useCallback(async (silent = false) => {
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
+    const generation = ++requestGenerationRef.current;
     if (!silent) setLoading(true);
     else setRefreshing(true);
     try {
       const { data } = await waFormsApi.list();
+      if (
+        requestNumberId !== activeNumberIdRef.current ||
+        generation !== requestGenerationRef.current
+      ) return;
       const list = (data.data.forms || []) as WhatsAppForm[];
       setForms(list);
     } catch (err) {
-      toastError(getErrorMessage(err, 'Failed to load forms'));
+      if (
+        requestNumberId === activeNumberIdRef.current &&
+        generation === requestGenerationRef.current
+      ) {
+        toastError(getErrorMessage(err, 'Failed to load forms'));
+      }
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (
+        requestNumberId === activeNumberIdRef.current &&
+        generation === requestGenerationRef.current
+      ) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
-  }, []);
+  }, [activeNumber, resolved]);
 
   useEffect(() => {
     load();
@@ -159,7 +181,7 @@ export default function WaFormPicker({ value, onChange }: WaFormPickerProps) {
           bare
           title="No forms yet"
           description="Create one here — we'll handle the WhatsApp setup for you."
-          steps={['Tap Create new form below', 'Add fields like name and email', 'Use it in a Meta Form flow step']}
+          steps={['Tap Create new form below', 'Add fields like name and email', 'Use it in a WhatsApp Form step']}
         />
       )}
 

@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { Prisma } from '@prisma/client';
 import prisma from '../../config/database';
-import { authenticate, requireOrg } from '../../middleware/auth';
+import { authenticate, requireOrg, loadOrgRole, requireOrgRole } from '../../middleware/auth';
 import { AppError, sendSuccess, asyncHandler, paramId } from '../../utils/response';
 import { MetaWhatsAppService } from '../whatsapp/meta.service';
 import { getOrgWhatsappContext } from '../whatsapp/context';
@@ -12,15 +12,17 @@ import {
 } from './types';
 import { handleNfmReply } from './nfm-handler';
 import dataEndpointRoutes from './data-endpoint.routes';
+import { verifyWebhookSignatureForPayload } from '../whatsapp/org-meta.service';
 
 const router = Router();
+const memberGuard = [authenticate, requireOrg] as const;
+const adminGuard = [authenticate, requireOrg, loadOrgRole, requireOrgRole('OWNER', 'ADMIN')] as const;
 
 router.use('/data', dataEndpointRoutes);
 
 router.get(
   '/',
-  authenticate,
-  requireOrg,
+  ...memberGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const { search, status, page = '1', limit = '20' } = req.query;
@@ -48,8 +50,7 @@ router.get(
 
 router.get(
   '/:id',
-  authenticate,
-  requireOrg,
+  ...memberGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const asset = await prisma.flowAsset.findFirst({
       where: { id: paramId(req), organizationId: req.user!.organizationId! },
@@ -61,8 +62,7 @@ router.get(
 
 router.post(
   '/',
-  authenticate,
-  requireOrg,
+  ...adminGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const data = createFlowAssetSchema.parse(req.body);
     const flowJson = resolveFlowJson(data);
@@ -84,8 +84,7 @@ router.post(
 
 router.patch(
   '/:id',
-  authenticate,
-  requireOrg,
+  ...adminGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const id = paramId(req);
     const existing = await prisma.flowAsset.findFirst({
@@ -119,8 +118,7 @@ router.patch(
 
 router.delete(
   '/:id',
-  authenticate,
-  requireOrg,
+  ...adminGuard,
   asyncHandler(async (req: Request, res: Response) => {
     await prisma.flowAsset.deleteMany({
       where: { id: paramId(req), organizationId: req.user!.organizationId! },
@@ -131,8 +129,7 @@ router.delete(
 
 router.post(
   '/:id/publish',
-  authenticate,
-  requireOrg,
+  ...adminGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const id = paramId(req);
     const orgId = req.user!.organizationId!;
@@ -185,6 +182,19 @@ router.post(
 router.post(
   '/webhook/nfm',
   asyncHandler(async (req: Request, res: Response) => {
+    const signature = req.headers['x-hub-signature-256'];
+    if (!signature || typeof signature !== 'string') {
+      throw new AppError(401, 'Missing webhook signature');
+    }
+    const rawBody = req.rawBody || JSON.stringify(req.body ?? {});
+    const payload =
+      req.body && typeof req.body === 'object' && !Array.isArray(req.body)
+        ? (req.body as Record<string, unknown>)
+        : {};
+    const valid = await verifyWebhookSignatureForPayload(signature, rawBody, payload);
+    if (!valid) {
+      throw new AppError(401, 'Invalid signature');
+    }
     const result = await handleNfmReply(req.body);
     sendSuccess(res, result);
   })

@@ -201,9 +201,9 @@ export const nodeMeta: Record<
     shadow: 'shadow-[0_4px_14px_rgba(59,130,246,0.3)]',
   },
   wa_flow: {
-    label: 'Meta Form',
+    label: 'WhatsApp Form',
     description:
-      'A form customers fill inside WhatsApp. This is a Meta Form — not the same as your Automations.',
+      'A Meta-native form customers fill inside WhatsApp — not the same as this conversation flow.',
     icon: FormInput,
     color: 'text-teal-700',
     gradient: 'from-teal-500 to-cyan-600',

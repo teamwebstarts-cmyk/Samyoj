@@ -29,7 +29,10 @@ function mapInboundMessageType(
   return 'TEXT';
 }
 
-export async function processWebhookPayload(payload: Record<string, unknown>) {
+export async function processWebhookPayload(
+  payload: Record<string, unknown>,
+  context?: { whatsappNumberId?: string }
+) {
   const startTime = Date.now();
 
   if (payload.object !== 'whatsapp_business_account') return;
@@ -44,7 +47,11 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
       if (!phoneNumberId) continue;
 
       const whatsappNumber = await prisma.whatsappNumber.findFirst({
-        where: { phoneNumberId, isActive: true },
+        where: {
+          phoneNumberId,
+          isActive: true,
+          ...(context?.whatsappNumberId ? { id: context.whatsappNumberId } : {}),
+        },
       });
       if (!whatsappNumber) {
         log.warn('No active WhatsApp number for inbound webhook', {
@@ -536,7 +543,7 @@ export async function processWebhookPayload(payload: Record<string, unknown>) {
             continue;
           }
           if (isOptInMessage(textContent)) {
-            await handleOptIn(orgId, contact.id, inboundTimestamp, metaMessageId);
+            await handleOptIn(orgId, contact.id, inboundTimestamp, metaMessageId, whatsappNumber.id);
           }
         }
 

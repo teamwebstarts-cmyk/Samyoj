@@ -1,5 +1,6 @@
 import prisma from '../../config/database';
 import logger from '../../utils/logger';
+import { parseActiveFlow } from '../flows/flow-state';
 
 export interface NfmReplyPayload {
   flow_token?: string;
@@ -126,6 +127,24 @@ export async function handleNfmReply(body: NfmWebhookBody): Promise<{
       flowToken,
     });
     return { handled: false, conversationId };
+  }
+
+  if (conversation.contact.optedIn === false) {
+    logger.info('NFM reply skipped — contact opted out', {
+      source: 'flows-assets',
+      conversationId,
+    });
+    return { handled: true, conversationId, flowAssetId };
+  }
+
+  const waiting = parseActiveFlow(conversation.botState);
+  if (waiting?.waitingFor !== 'wa_flow') {
+    logger.info('NFM reply ignored — conversation is not waiting for a form', {
+      source: 'flows-assets',
+      conversationId,
+      waitingFor: waiting?.waitingFor ?? null,
+    });
+    return { handled: true, conversationId, flowAssetId };
   }
 
   const { handleInboundAutomations } = await import('../automation/engine');

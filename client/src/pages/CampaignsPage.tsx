@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowRight,
@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import CampaignAnalyticsPanel from '../components/campaigns/CampaignAnalyticsPanel';
 import CampaignAudienceSection from '../components/campaigns/CampaignAudienceSection';
+import { recipientsFromPhones, type CampaignRecipientDetail } from '../components/campaigns/wizard/campaignWizardModel';
 import CampaignHero from '../components/campaigns/CampaignHero';
 import CampaignTable, { CampaignListPagination, type CampaignSortKey } from '../components/campaigns/CampaignTable';
 import CampaignCard from '../components/campaigns/CampaignCard';
@@ -52,7 +53,9 @@ import { WhatsAppTemplatePreview } from '../components/inbox/WhatsAppPreview';
 import { InboxGlassTipProvider } from '../components/inbox/ComposerGlassTip';
 import { DEFAULT_PAGE_SIZE } from '../constants/pagination';
 import { useAuth } from '../contexts/AuthContext';
+import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 import { useSocket } from '../hooks/useSocket';
 import { campaignApi, contactApi, templateApi, whatsappApi } from '../services/api';
 import { toastError, toastSuccess } from '../utils/toast';
@@ -74,10 +77,13 @@ const emptyForm = {
   bodyParams: [] as string[],
   headerParams: [] as string[],
   headerMediaUrl: '',
+  couponCode: '',
+  buttonUrlSuffixes: [] as string[],
   audienceType: 'MANUAL' as AudienceType,
   audienceTags: '',
   selectedContactIds: [] as string[],
   phones: '',
+  recipientDetails: {} as Record<string, CampaignRecipientDetail>,
   whatsappNumberId: '',
   scheduleEnabled: false,
   scheduledAt: '',
@@ -121,10 +127,23 @@ function campaignToForm(campaign: CampaignDetail, templates: MessageTemplate[]) 
     bodyParams: campaign.templateParams?.body || Array(bodyCount).fill(''),
     headerParams: campaign.templateParams?.header || Array(headerCount).fill(''),
     headerMediaUrl: campaign.templateParams?.headerMediaUrl || '',
+    couponCode: campaign.templateParams?.couponCode || '',
+    buttonUrlSuffixes: campaign.templateParams?.buttonUrlSuffixes || [],
     audienceType: (campaign.audienceType || 'MANUAL') as AudienceType,
     audienceTags: (campaign.audienceConfig?.tags || []).join(', '),
     selectedContactIds: campaign.audienceConfig?.contactIds || [],
     phones: (campaign.recipients || []).map((r) => r.phone).join('\n'),
+    recipientDetails: Object.fromEntries(
+      (campaign.recipients || [])
+        .filter((r) => r.name || r.variables)
+        .map((r) => [
+          r.phone,
+          {
+            ...(r.name ? { name: r.name } : {}),
+            ...(r.variables ? { variables: r.variables } : {}),
+          },
+        ]),
+    ),
     whatsappNumberId: campaign.whatsappNumberId || '',
     scheduleEnabled: Boolean(campaign.scheduledAt),
     scheduledAt: toDateTimeLocalValue(campaign.scheduledAt),
@@ -145,6 +164,10 @@ function buildPayload(form: typeof emptyForm, options?: { clearSchedule?: boolea
       body: form.bodyParams,
       header: form.headerParams,
       headerMediaUrl: form.headerMediaUrl || undefined,
+      couponCode: form.couponCode.trim() || undefined,
+      buttonUrlSuffixes: form.buttonUrlSuffixes.some((value) => value.trim())
+        ? form.buttonUrlSuffixes
+        : undefined,
     },
   };
 
@@ -162,7 +185,7 @@ function buildPayload(form: typeof emptyForm, options?: { clearSchedule?: boolea
       return result.ok ? result.phones : [];
     }))];
     if (!phones.length) throw new Error('Add at least one valid phone number');
-    payload.recipients = phones.map((phone) => ({ phone }));
+    payload.recipients = recipientsFromPhones(phones, form.recipientDetails);
   } else if (form.audienceType === 'TAGS') {
     payload.audienceConfig = {
       tags: form.audienceTags
@@ -194,6 +217,7 @@ function buildPayload(form: typeof emptyForm, options?: { clearSchedule?: boolea
 
 export default function CampaignsPage() {
   const { canManageTeam } = useAuth();
+  const { activeNumber, resolved } = useWhatsAppNumber();
   const isBelowLg = useIsBelowLg();
   const navigate = useNavigate();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -227,6 +251,8 @@ export default function CampaignsPage() {
   const [recipientTotal, setRecipientTotal] = useState(0);
   const [recipientPage, setRecipientPage] = useState(1);
   const [recipientStatusFilter, setRecipientStatusFilter] = useState('');
+  const activeNumberIdRef = useRef<string | null>(null);
+  activeNumberIdRef.current = activeNumber?.id ?? null;
   const [activeStep, setActiveStep] = useState(0);
   const [stageError, setStageError] = useState<string | null>(null);
   const [detailSection, setDetailSection] = useState<'overview' | 'recipients' | 'errors'>('overview');
@@ -273,17 +299,41 @@ export default function CampaignsPage() {
   const [searchParams] = useSearchParams();
 
   const loadTemplates = useCallback(() => {
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
     templateApi
       .list({ status: 'APPROVED', all: 'true' })
       .then(({ data }) => {
+        if (requestNumberId !== activeNumberIdRef.current) return;
         const payload = data.data;
         const list = Array.isArray(payload) ? payload : payload?.templates || [];
         setTemplates(list as MessageTemplate[]);
       })
-      .catch(() => setTemplates([]));
-  }, []);
+      .catch(() => {
+        if (requestNumberId === activeNumberIdRef.current) setTemplates([]);
+      });
+  }, [activeNumber, resolved]);
+
+  const loadWorkspaceOptions = useCallback(() => {
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
+    Promise.all([whatsappApi.numbers(), contactApi.tags()])
+      .then(([numbersRes, tagsRes]) => {
+        if (requestNumberId !== activeNumberIdRef.current) return;
+        setWhatsappNumbers(Array.isArray(numbersRes.data.data) ? numbersRes.data.data : []);
+        const tags = tagsRes.data.data.tags || [];
+        setAvailableTags(tags.map((t: string | { name: string }) => (typeof t === 'string' ? t : t.name)));
+      })
+      .catch(() => {
+        if (requestNumberId !== activeNumberIdRef.current) return;
+        setWhatsappNumbers([]);
+        setAvailableTags([]);
+      });
+  }, [activeNumber, resolved]);
 
   const loadLifecycleSummary = useCallback(() => {
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
     const statuses = [
       ['drafts', 'DRAFT'],
       ['scheduled', 'SCHEDULED'],
@@ -298,15 +348,18 @@ export default function CampaignsPage() {
       })
     )
       .then((counts) => {
+        if (requestNumberId !== activeNumberIdRef.current) return;
         setLifecycleSummary((previous) => ({
           ...previous,
           ...Object.fromEntries(counts),
         }));
       })
       .catch(() => {});
-  }, []);
+  }, [activeNumber, resolved]);
 
   const loadCampaigns = useCallback((showLoading = false) => {
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
     if (showLoading) setLoading(true);
 
     const params: Record<string, string> = {
@@ -322,6 +375,7 @@ export default function CampaignsPage() {
     campaignApi
       .list(params)
       .then(({ data }) => {
+        if (requestNumberId !== activeNumberIdRef.current) return;
         setCampaigns(data.data.campaigns);
         setTotal(data.data.total);
         loadLifecycleSummary();
@@ -329,10 +383,14 @@ export default function CampaignsPage() {
       .catch((err: unknown) => {
         toastError(getErrMsg(err, 'Campaigns could not load. Refresh the page and try again.'));
       })
-      .finally(() => setLoading(false));
-  }, [page, pageSize, debouncedSearch, statusFilter, period, sortBy, sortDir, loadLifecycleSummary]);
+      .finally(() => {
+        if (requestNumberId === activeNumberIdRef.current) setLoading(false);
+      });
+  }, [activeNumber, debouncedSearch, loadLifecycleSummary, page, pageSize, period, resolved, sortBy, sortDir, statusFilter]);
 
   const loadDetailExtras = useCallback(async (campaignId: string) => {
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
     setAnalyticsLoading(true);
     setAnalyticsError(null);
     try {
@@ -344,16 +402,19 @@ export default function CampaignsPage() {
           ...(recipientStatusFilter ? { status: recipientStatusFilter } : {}),
         }),
       ]);
+      if (requestNumberId !== activeNumberIdRef.current) return;
       setAnalytics(analyticsRes.data.data as CampaignAnalytics);
       setRecipients(recipientsRes.data.data.recipients);
       setRecipientTotal(recipientsRes.data.data.total);
     } catch {
-      setAnalyticsError('Details unavailable. Refresh the campaign and try again.');
-      setAnalytics(null);
+      if (requestNumberId === activeNumberIdRef.current) {
+        setAnalyticsError('Details unavailable. Refresh the campaign and try again.');
+        setAnalytics(null);
+      }
     } finally {
-      setAnalyticsLoading(false);
+      if (requestNumberId === activeNumberIdRef.current) setAnalyticsLoading(false);
     }
-  }, [recipientPage, recipientStatusFilter]);
+  }, [activeNumber, recipientPage, recipientStatusFilter, resolved]);
 
   useEffect(() => {
     setPage(1);
@@ -361,15 +422,31 @@ export default function CampaignsPage() {
 
   useEffect(() => {
     loadTemplates();
-    whatsappApi.numbers().then(({ data }) => setWhatsappNumbers(Array.isArray(data.data) ? data.data : [])).catch(() => {});
-    contactApi
-      .tags()
-      .then(({ data }) => {
-        const tags = data.data.tags || [];
-        setAvailableTags(tags.map((t: string | { name: string }) => (typeof t === 'string' ? t : t.name)));
-      })
-      .catch(() => {});
-  }, [loadTemplates]);
+    loadWorkspaceOptions();
+  }, [activeNumber?.id, loadTemplates, loadWorkspaceOptions, resolved]);
+
+  useOnActiveNumberChange(({ isInitial }) => {
+    if (isInitial) return;
+    setCampaigns([]);
+    setTemplates([]);
+    setWhatsappNumbers([]);
+    setAvailableTags([]);
+    setEditing(null);
+    setViewOnly(false);
+    setSlideOpen(false);
+    setForm(emptyForm);
+    setAnalytics(null);
+    setAnalyticsError(null);
+    setRecipients([]);
+    setRecipientTotal(0);
+    setAudiencePreviewCount(null);
+    setConfirmState(null);
+    setActiveStep(0);
+    setPage(1);
+    loadTemplates();
+    loadWorkspaceOptions();
+    loadCampaigns(true);
+  });
 
   useEffect(() => {
     if (!canManageTeam) return;
@@ -438,18 +515,25 @@ export default function CampaignsPage() {
   };
 
   const loadCampaignDetail = async (campaign: Campaign) => {
+    if (!resolved || !activeNumber) return null;
+    const requestNumberId = activeNumber.id;
     const { data } = await campaignApi.get(campaign.id);
+    if (requestNumberId !== activeNumberIdRef.current) return null;
     return data.data as CampaignDetail;
   };
 
   const refreshOpenCampaign = async (campaignId: string) => {
     const full = await loadCampaignDetail({ id: campaignId } as Campaign);
+    if (!full) return;
     setEditing((current) => (current?.id === campaignId ? full : current));
   };
 
   const openView = async (campaign: Campaign) => {
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
     try {
       const full = await loadCampaignDetail(campaign);
+      if (!full || requestNumberId !== activeNumberIdRef.current) return;
       setEditing(full);
       setViewOnly(true);
       setForm(campaignToForm(full, templates));
@@ -506,6 +590,7 @@ export default function CampaignsPage() {
 
       if (andSend && campaignId) {
         const full = await loadCampaignDetail({ id: campaignId } as Campaign);
+        if (!full) return null;
         setEditing(full);
         setForm(campaignToForm(full, templates));
         setViewOnly(true);
@@ -652,11 +737,8 @@ export default function CampaignsPage() {
       const { data } = await campaignApi.duplicate(editing.id);
       const copy = data.data as CampaignDetail;
       loadCampaigns(false);
-      setEditing(copy);
-      setViewOnly(false);
-      setForm(campaignToForm(copy, templates));
-      loadTemplates();
       toastSuccess('Campaign duplicated — review and send when ready');
+      navigate(`/campaigns/${copy.id}/edit`);
     } catch (err: unknown) {
       toastError(getErrMsg(err, 'Campaign could not be duplicated. Try again.'));
     }
@@ -1027,8 +1109,10 @@ export default function CampaignsPage() {
                       size="sm"
                       variant="secondary"
                       onClick={() => {
-                        setViewOnly(false);
-                        loadTemplates();
+                        if (!editing) return;
+                        const campaign = editing;
+                        closeSlide();
+                        openEdit(campaign);
                       }}
                     >
                       Edit campaign
@@ -1294,6 +1378,8 @@ export default function CampaignsPage() {
                 onAudienceTypeChange={(audienceType) => setForm({ ...form, audienceType })}
                 phones={form.phones}
                 onPhonesChange={(phones) => setForm({ ...form, phones })}
+                recipientDetails={form.recipientDetails}
+                onRecipientDetailsChange={(recipientDetails) => setForm({ ...form, recipientDetails })}
                 audienceTags={form.audienceTags}
                 onAudienceTagsChange={(audienceTags) => setForm({ ...form, audienceTags })}
                 selectedContactIds={form.selectedContactIds}

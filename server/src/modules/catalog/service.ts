@@ -1,6 +1,7 @@
 import prisma from '../../config/database';
 import { MetaWhatsAppService } from '../whatsapp/meta.service';
 import { getOrgWhatsappContext } from '../whatsapp/context';
+import { AppError } from '../../utils/response';
 
 interface MetaCatalogProduct {
   id?: string;
@@ -18,8 +19,7 @@ interface MetaCatalog {
   name?: string;
 }
 
-export async function listMetaCatalogs(organizationId: string): Promise<MetaCatalog[]> {
-  const { wabaId, accessToken } = await getOrgWhatsappContext(organizationId);
+async function fetchCatalogs(wabaId: string, accessToken: string): Promise<MetaCatalog[]> {
   const data = await MetaWhatsAppService.graphGetPublic<{ data?: MetaCatalog[] }>(
     `/${wabaId}/product_catalogs?fields=id,name`,
     accessToken
@@ -27,11 +27,36 @@ export async function listMetaCatalogs(organizationId: string): Promise<MetaCata
   return data.data || [];
 }
 
+export async function listMetaCatalogs(
+  organizationId: string,
+  whatsappNumberId?: string
+): Promise<MetaCatalog[]> {
+  const { wabaId, accessToken } = await getOrgWhatsappContext(organizationId, whatsappNumberId);
+  return fetchCatalogs(wabaId, accessToken);
+}
+
+export async function assertCatalogAvailableForNumber(
+  organizationId: string,
+  catalogId: string,
+  whatsappNumberId: string
+): Promise<void> {
+  const { wabaId, accessToken } = await getOrgWhatsappContext(organizationId, whatsappNumberId);
+  const catalogs = await fetchCatalogs(wabaId, accessToken);
+  if (!catalogs.some((catalog) => catalog.id === catalogId)) {
+    throw new AppError(400, 'Catalog is not available on the active WhatsApp number');
+  }
+}
+
 export async function syncCatalogProducts(
   organizationId: string,
-  catalogId: string
+  catalogId: string,
+  whatsappNumberId?: string
 ): Promise<{ synced: number; catalogId: string }> {
-  const { accessToken } = await getOrgWhatsappContext(organizationId);
+  const { accessToken } = await getOrgWhatsappContext(organizationId, whatsappNumberId);
+  if (!whatsappNumberId) {
+    throw new AppError(400, 'Select an active WhatsApp number before syncing a catalog');
+  }
+  await assertCatalogAvailableForNumber(organizationId, catalogId, whatsappNumberId);
 
   const products: MetaCatalogProduct[] = [];
   let nextUrl: string | null =
@@ -103,15 +128,23 @@ export async function syncCatalogProducts(
 
 export async function listCatalogProducts(
   organizationId: string,
-  query: { catalogId?: string; search?: string; page?: number; limit?: number }
+  query: { catalogId?: string; search?: string; page?: number; limit?: number },
+  whatsappNumberId?: string
 ) {
   const page = Math.max(1, query.page || 1);
   const limit = Math.min(100, Math.max(1, query.limit || 50));
   const skip = (page - 1) * limit;
 
+  const catalogs = await listMetaCatalogs(organizationId, whatsappNumberId);
+  const activeCatalogIds = catalogs.map((catalog) => catalog.id);
+  if (query.catalogId && !activeCatalogIds.includes(query.catalogId)) {
+    throw new AppError(404, 'Catalog is not available on the active WhatsApp number');
+  }
   const where = {
     organizationId,
-    ...(query.catalogId ? { metaCatalogId: query.catalogId } : {}),
+    metaCatalogId: query.catalogId
+      ? query.catalogId
+      : { in: activeCatalogIds },
     ...(query.search
       ? {
           OR: [

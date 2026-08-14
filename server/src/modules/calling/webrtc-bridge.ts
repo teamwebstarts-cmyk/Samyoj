@@ -82,6 +82,7 @@ export class WhatsAppWebRtcBridge {
   private audioSink: InstanceType<typeof RTCAudioSink> | null = null;
   private onAudioFrame: AudioFrameHandler | null = null;
   private playbackQueue: Int16Array[] = [];
+  private playbackEpoch = 0;
   private playbackInterval: ReturnType<typeof setInterval> | null = null;
   private inboundFrames = 0;
   private onDisconnect: DisconnectHandler | null = null;
@@ -241,6 +242,12 @@ export class WhatsAppWebRtcBridge {
     }, this.frameIntervalMs);
   }
 
+  /** Drop queued TTS immediately so the caller can barge in. */
+  stopPlayback(): void {
+    this.playbackEpoch += 1;
+    this.playbackQueue = [];
+  }
+
   async playPcm(samples: Int16Array, sampleRate: number): Promise<void> {
     const targetRate = this.sampleRate;
     let pcm = samples;
@@ -254,7 +261,9 @@ export class WhatsAppWebRtcBridge {
       pcm = resampled;
     }
 
+    const epoch = this.playbackEpoch;
     for (let offset = 0; offset < pcm.length; offset += this.frameSize) {
+      if (this.playbackEpoch !== epoch) return;
       const chunk = pcm.subarray(offset, offset + this.frameSize);
       const frame = new Int16Array(this.frameSize);
       frame.set(chunk);
@@ -262,7 +271,11 @@ export class WhatsAppWebRtcBridge {
     }
 
     const durationMs = (pcm.length / targetRate) * 1000;
-    await new Promise((resolve) => setTimeout(resolve, durationMs + 100));
+    const deadline = Date.now() + durationMs + 40;
+    while (Date.now() < deadline) {
+      if (this.playbackEpoch !== epoch) return;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
   }
 
   close(): void {
@@ -270,6 +283,7 @@ export class WhatsAppWebRtcBridge {
       clearInterval(this.playbackInterval);
       this.playbackInterval = null;
     }
+    this.playbackEpoch += 1;
     this.playbackQueue = [];
     this.audioSink?.stop();
     this.audioSink = null;

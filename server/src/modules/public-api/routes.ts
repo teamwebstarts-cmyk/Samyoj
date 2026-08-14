@@ -8,6 +8,7 @@ import { phoneFieldSchema } from '../../utils/phone';
 import { sendDirectMessage } from '../messages/service';
 import { getOrgUsage } from '../billing/usage.service';
 import { getOrgFeatureFlags } from '../settings/feature-flags';
+import { resolveActiveWhatsappNumber, conversationFilter, contactsForNumberFilter } from '../whatsapp/active-number';
 
 const router = Router();
 
@@ -31,6 +32,7 @@ router.post(
   '/messages',
   authenticateApiKey,
   requireOrg,
+  resolveActiveWhatsappNumber,
   asyncHandler(async (req: Request, res: Response) => {
     const data = sendSchema.parse(req.body);
     const orgId = req.user!.organizationId!;
@@ -39,7 +41,10 @@ router.post(
       throw new AppError(400, 'templateName is required for TEMPLATE messages');
     }
 
-    const result = await sendDirectMessage(orgId, data);
+    const result = await sendDirectMessage(orgId, {
+      ...data,
+      whatsappNumberId: req.activeWhatsappNumberId,
+    });
     sendSuccess(
       res,
       {
@@ -57,6 +62,7 @@ router.get(
   '/contacts',
   authenticateApiKey,
   requireOrg,
+  resolveActiveWhatsappNumber,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const page = Math.max(1, parseInt(String(req.query.page || '1'), 10));
@@ -65,7 +71,7 @@ router.get(
 
     const [contacts, total] = await Promise.all([
       prisma.contact.findMany({
-        where: { organizationId: orgId },
+        where: { organizationId: orgId, ...contactsForNumberFilter(req.activeWhatsappNumberId) },
         orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
@@ -78,7 +84,9 @@ router.get(
           createdAt: true,
         },
       }),
-      prisma.contact.count({ where: { organizationId: orgId } }),
+      prisma.contact.count({
+        where: { organizationId: orgId, ...contactsForNumberFilter(req.activeWhatsappNumberId) },
+      }),
     ]);
 
     sendSuccess(res, { contacts, page, limit, total });
@@ -89,6 +97,7 @@ router.get(
   '/conversations',
   authenticateApiKey,
   requireOrg,
+  resolveActiveWhatsappNumber,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const status = req.query.status as string | undefined;
@@ -98,6 +107,7 @@ router.get(
 
     const where = {
       organizationId: orgId,
+      ...conversationFilter(req.activeWhatsappNumberId),
       ...(status ? { status: status as 'OPEN' | 'PENDING' | 'CLOSED' } : {}),
     };
 
@@ -122,6 +132,7 @@ router.get(
   '/usage',
   authenticateApiKey,
   requireOrg,
+  resolveActiveWhatsappNumber,
   asyncHandler(async (req: Request, res: Response) => {
     const usage = await getOrgUsage(req.user!.organizationId!);
     sendSuccess(res, usage);
@@ -132,6 +143,7 @@ router.get(
   '/feature-flags',
   authenticateApiKey,
   requireOrg,
+  resolveActiveWhatsappNumber,
   asyncHandler(async (req: Request, res: Response) => {
     const flags = await getOrgFeatureFlags(req.user!.organizationId!);
     sendSuccess(res, { flags });

@@ -218,6 +218,7 @@ export function sourceFromLibraryParamType(
   const t = normalizeLibraryParamType(paramType);
   if (t === 'PHONE_NUMBER' || t === 'PHONE') return 'contact.phone';
   if (t === 'EMAIL') return 'contact.email';
+  if (t === 'NUMBER') return 'contact.custom';
   return 'custom';
 }
 
@@ -253,7 +254,8 @@ export function applyLibrarySamplesToForm(
     let source = sourceFromLibraryParamType(paramType);
     const description = descriptionFromLibraryParam(form.body, meta.index, paramType, sample);
     if (description === 'Customer name') source = 'contact.name';
-    return { ...meta, description, suggestedSource: source };
+    const customKey = source === 'contact.custom' ? (description === 'Order number' ? 'order_id' : 'reference_id') : undefined;
+    return { ...meta, description, suggestedSource: source, ...(customKey ? { customKey } : {}) };
   });
   const bodyExamples = form.bodyExamples.map((val, i) => val.trim() || samples[i] || val);
   return syncFormExamples({ ...form, variableMeta, bodyExamples });

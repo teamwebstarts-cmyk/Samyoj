@@ -78,28 +78,63 @@ export async function decideCallRoute(organizationId: string): Promise<CallRoute
   return { mode: 'missed', reason: 'no_handlers' };
 }
 
+export function pickCallBotId(input: {
+  assignedCallBotId?: string | null;
+  conversationBotId?: string | null;
+  bots: Array<{ id: string; enabled: boolean; isDefault: boolean; knowledgeCount: number }>;
+}): string | null {
+  const enabled = input.bots.filter((bot) => bot.enabled);
+  if (enabled.length === 0) return null;
+  const ids = new Set(enabled.map((bot) => bot.id));
+
+  if (input.assignedCallBotId && ids.has(input.assignedCallBotId)) {
+    return input.assignedCallBotId;
+  }
+
+  const trained = [...enabled].sort((a, b) => b.knowledgeCount - a.knowledgeCount);
+  if (trained[0].knowledgeCount > 0) return trained[0].id;
+
+  const orgDefault = enabled.find((bot) => bot.isDefault);
+  if (orgDefault) return orgDefault.id;
+
+  if (input.conversationBotId && ids.has(input.conversationBotId)) {
+    return input.conversationBotId;
+  }
+
+  return enabled[0].id;
+}
+
 export async function resolveCallBot(
   organizationId: string,
   settings: CallingSettings,
   conversationId: string
 ) {
-  if (settings.defaultBotId) {
-    const bot = await prisma.aiBot.findFirst({
-      where: { id: settings.defaultBotId, organizationId, enabled: true },
-    });
-    if (bot) return bot;
-  }
+  const [bots, conversation] = await Promise.all([
+    prisma.aiBot.findMany({
+      where: { organizationId, enabled: true },
+      include: { _count: { select: { knowledgeItems: true } } },
+      orderBy: { createdAt: 'asc' },
+    }),
+    prisma.conversation.findFirst({
+      where: { id: conversationId, organizationId },
+      select: { activeBotId: true },
+    }),
+  ]);
 
-  const conversation = await prisma.conversation.findFirst({
-    where: { id: conversationId, organizationId },
-    include: { activeBot: true },
+  const pickedId = pickCallBotId({
+    assignedCallBotId: settings.defaultBotId,
+    conversationBotId: conversation?.activeBotId ?? null,
+    bots: bots.map((bot) => ({
+      id: bot.id,
+      enabled: bot.enabled,
+      isDefault: bot.isDefault,
+      knowledgeCount: bot._count.knowledgeItems,
+    })),
   });
 
-  if (conversation?.activeBot?.enabled) return conversation.activeBot;
+  const picked = pickedId ? bots.find((bot) => bot.id === pickedId) : null;
+  if (picked) return picked;
 
-  const { resolveBotForConversation, ensureDefaultBot } = await import('../ai/bot.service');
-  return (
-    (await resolveBotForConversation(organizationId, conversation!, '')) ??
-    (await ensureDefaultBot(organizationId))
-  );
+  const { ensureDefaultBot } = await import('../ai/bot.service');
+  return ensureDefaultBot(organizationId);
 }

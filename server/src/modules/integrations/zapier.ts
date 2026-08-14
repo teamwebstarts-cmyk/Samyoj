@@ -6,6 +6,7 @@ import { requireOrg } from '../../middleware/auth';
 import { sendSuccess, asyncHandler } from '../../utils/response';
 import { phoneFieldSchema } from '../../utils/phone';
 import { sendDirectMessage } from '../messages/service';
+import { resolveActiveWhatsappNumber } from '../whatsapp/active-number';
 
 const router = Router();
 
@@ -90,6 +91,7 @@ router.post(
   '/subscribe',
   authenticateApiKey,
   requireOrg,
+  resolveActiveWhatsappNumber,
   asyncHandler(async (req: Request, res: Response) => {
     const data = z
       .object({
@@ -135,6 +137,7 @@ router.delete(
   '/unsubscribe',
   authenticateApiKey,
   requireOrg,
+  resolveActiveWhatsappNumber,
   asyncHandler(async (req: Request, res: Response) => {
     const data = z
       .object({
@@ -179,9 +182,13 @@ router.post(
   '/actions/send-message',
   authenticateApiKey,
   requireOrg,
+  resolveActiveWhatsappNumber,
   asyncHandler(async (req: Request, res: Response) => {
     const data = sendActionSchema.parse(req.body);
-    const result = await sendDirectMessage(req.user!.organizationId!, data);
+    const result = await sendDirectMessage(req.user!.organizationId!, {
+      ...data,
+      whatsappNumberId: req.activeWhatsappNumberId,
+    });
 
     sendSuccess(res, {
       messageId: result.message.id,

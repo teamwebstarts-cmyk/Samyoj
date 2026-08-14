@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, ArrowRight, BookOpen, Sparkles } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowLeft, ArrowRight, BookOpen, CheckCircle2, LayoutGrid, Sparkles } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import TemplateLibraryBrowseStep, {
   type LibraryListItem,
@@ -26,7 +26,7 @@ import { templateApi, whatsappApi } from '../services/api';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import type { MessageTemplate, TemplateLibraryEntry } from '../types';
 import type { TemplateFormState } from '../utils/templateForm';
-import { saveTemplateVariableMeta } from '../utils/templateForm';
+import { persistTemplateVariableMeta } from '../utils/templateForm';
 import {
   canCloneFromMetaLibrary,
   isLibraryQuickPickActive,
@@ -43,8 +43,10 @@ import {
   type LibrarySourceTab,
 } from '../utils/templateLibrary';
 import { previewParams } from '../utils/templateForm';
-import { toastError, toastSuccess } from '../utils/toast';
+import { toastError, toastSuccess, toastWarning } from '../utils/toast';
 import { mapTemplateApiError } from '../components/templates/wizard/templateWizardModel';
+import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
+import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 
 function itemKey(item: LibraryListItem) {
   return `${item.source}:${item.name}:${item.language || ''}`;
@@ -78,6 +80,7 @@ function buildLibraryButtonInputs(item: LibraryListItem, buttonUrl: string, butt
 }
 
 export default function TemplateLibraryPage() {
+  const { activeNumber, resolved } = useWhatsAppNumber();
   const navigate = useNavigate();
   const [whatsappConnected, setWhatsappConnected] = useState<boolean | null>(null);
   const [activeStep, setActiveStep] = useState(0);
@@ -103,20 +106,29 @@ export default function TemplateLibraryPage() {
   const [addingName, setAddingName] = useState<string | null>(null);
   const [submitResult, setSubmitResult] = useState<TemplateWizardSubmitResult | null>(null);
   const [submittedStatus, setSubmittedStatus] = useState('PENDING');
+  const activeNumberIdRef = useRef<string | null>(null);
+  activeNumberIdRef.current = activeNumber?.id ?? null;
 
   const debouncedSearch = useDebouncedValue(search);
 
   useEffect(() => {
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
     whatsappApi
       .numbers()
       .then(({ data }) => {
+        if (requestNumberId !== activeNumberIdRef.current) return;
         const numbers = Array.isArray(data.data) ? data.data : data.data?.numbers || [];
         setWhatsappConnected(numbers.length > 0);
       })
-      .catch(() => setWhatsappConnected(false));
-  }, []);
+      .catch(() => {
+        if (requestNumberId === activeNumberIdRef.current) setWhatsappConnected(false);
+      });
+  }, [activeNumber, resolved]);
 
   const loadMeta = useCallback(() => {
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
     setLoadingMeta(true);
     const params: Record<string, string> = { language, limit: '100' };
     if (debouncedSearch) params.search = debouncedSearch;
@@ -127,38 +139,69 @@ export default function TemplateLibraryPage() {
     templateApi
       .library(params)
       .then(({ data }) => {
+        if (requestNumberId !== activeNumberIdRef.current) return;
         setMetaEntries(Array.isArray(data.data) ? data.data : []);
       })
       .catch((err: unknown) => {
+        if (requestNumberId !== activeNumberIdRef.current) return;
         const msg =
           (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
             ?.error?.message || 'Failed to load Meta template library.';
         toastError(msg);
         setMetaEntries([]);
       })
-      .finally(() => setLoadingMeta(false));
-  }, [debouncedSearch, language, topicFilter, industryFilter, usecaseFilter]);
+      .finally(() => {
+        if (requestNumberId === activeNumberIdRef.current) setLoadingMeta(false);
+      });
+  }, [activeNumber, debouncedSearch, industryFilter, language, resolved, topicFilter, usecaseFilter]);
 
   const loadAccount = useCallback(() => {
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
     setLoadingAccount(true);
     templateApi
       .list({ all: 'true' })
       .then(({ data }) => {
+        if (requestNumberId !== activeNumberIdRef.current) return;
         const payload = data.data;
         const list = Array.isArray(payload) ? payload : payload?.templates || [];
         setAccountEntries(list);
       })
-      .catch(() => setAccountEntries([]))
-      .finally(() => setLoadingAccount(false));
-  }, []);
+      .catch(() => {
+        if (requestNumberId === activeNumberIdRef.current) setAccountEntries([]);
+      })
+      .finally(() => {
+        if (requestNumberId === activeNumberIdRef.current) setLoadingAccount(false);
+      });
+  }, [activeNumber, resolved]);
 
   useEffect(() => {
     loadMeta();
-  }, [loadMeta]);
+  }, [loadMeta, resolved, activeNumber?.id]);
 
   useEffect(() => {
     loadAccount();
-  }, [loadAccount]);
+  }, [loadAccount, resolved, activeNumber?.id]);
+
+  useOnActiveNumberChange(({ isInitial }) => {
+    if (isInitial) return;
+    setMetaEntries([]);
+    setAccountEntries([]);
+    setSelectedItem(null);
+    setForm(createEmptyWizardForm());
+    setCreateName('');
+    setButtonUrl('');
+    setButtonPhone('');
+    setStageError(null);
+    setSubmitResult(null);
+    setSubmittedStatus('PENDING');
+    setActiveStep(0);
+    setMaxReachableStep(0);
+    setLoadingMeta(true);
+    setLoadingAccount(true);
+    loadMeta();
+    loadAccount();
+  });
 
   const existingNames = useMemo(
     () => new Set(accountEntries.map((t) => t.name)),
@@ -299,7 +342,12 @@ export default function TemplateLibraryPage() {
     });
     const status = String((data as { data?: { status?: string } })?.data?.status || 'APPROVED').toUpperCase();
     const mapped = wizardFormFromLibraryItem(item, item.source);
-    saveTemplateVariableMeta(name, mapped.variableMeta);
+    const mappingSynced = await persistTemplateVariableMeta(name, mapped.variableMeta, item.language || language);
+    if (!mappingSynced) {
+      toastWarning(
+        'Template added, but the variable mapping could not sync for the team. Auto-fill may only work on this device.',
+      );
+    }
     setAccountEntries((prev) =>
       prev.some((t) => t.name === name)
         ? prev
@@ -493,14 +541,39 @@ export default function TemplateLibraryPage() {
 
       <div className="template-wizard-header mb-4 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex items-start gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300">
-            <BookOpen className="h-5 w-5" />
+          <span
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+              activeStep === 2
+                ? submittedStatus === 'APPROVED'
+                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
+                  : 'bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300'
+                : 'bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300'
+            }`}
+          >
+            {activeStep === 2 ? (
+              submittedStatus === 'APPROVED' ? (
+                <CheckCircle2 className="h-5 w-5" />
+              ) : (
+                <Sparkles className="h-5 w-5" />
+              )
+            ) : (
+              <BookOpen className="h-5 w-5" />
+            )}
           </span>
           <div>
             <h1 className="text-[20px] font-extrabold tracking-tight text-slate-900 dark:text-white sm:text-[22px]">
               {stepTitle}
             </h1>
             <p className="mt-0.5 text-[12px] font-medium text-slate-500">{stepSubtitle}</p>
+            {activeStep === 2 && (
+              <Link
+                to="/templates"
+                className="mt-2 inline-flex items-center gap-1.5 text-[12px] font-semibold text-violet-600 hover:text-violet-700 dark:text-violet-400"
+              >
+                <LayoutGrid className="h-3.5 w-3.5" />
+                Back to template list
+              </Link>
+            )}
           </div>
         </div>
         <TemplateWizardStepper
@@ -586,29 +659,29 @@ export default function TemplateLibraryPage() {
                 result={submitResult}
                 status={submittedStatus}
                 language={form.language}
+                category={form.category}
                 onCreateAnother={handleCreateAnother}
               />
             )}
           </div>
 
-          {activeStep < 2 && (
-            <aside className="min-w-0 xl:sticky xl:top-4 xl:self-start">
-              <TemplateWizardPreviewPanel
-                form={form}
-                filledPreview={filledPreview}
-                previewButtons={previewButtons}
-                previewTitle="WhatsApp preview"
-              />
-              {activeStep === 1 && (
-                <div className="mt-4 hidden xl:block">
-                  <TemplateWizardPolicyFooter />
-                </div>
-              )}
-            </aside>
-          )}
+          <aside className="min-w-0 xl:sticky xl:top-4 xl:self-start">
+            <TemplateWizardPreviewPanel
+              form={form}
+              filledPreview={filledPreview}
+              previewButtons={previewButtons}
+              previewTitle={activeStep === 2 ? 'Submitted template' : 'WhatsApp preview'}
+              showEditLink={false}
+            />
+            {(activeStep === 1 || activeStep === 2) && (
+              <div className="mt-4 hidden xl:block">
+                <TemplateWizardPolicyFooter />
+              </div>
+            )}
+          </aside>
         </div>
 
-        {activeStep === 1 && (
+        {(activeStep === 1 || activeStep === 2) && (
           <div className="mt-4 xl:hidden">
             <TemplateWizardPolicyFooter />
           </div>

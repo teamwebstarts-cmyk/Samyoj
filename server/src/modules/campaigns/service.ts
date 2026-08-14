@@ -24,6 +24,7 @@ import type {
   AudienceType,
   TemplateParams,
 } from './types';
+import { billingCategoryForTemplate } from './types';
 import { dedupeRecipients, hasAuditableCampaignConsent, type ResolvedRecipient } from './recipients';
 import { Prisma } from '@prisma/client';
 import type { Campaign, CampaignRecipient, CampaignStatus } from '@prisma/client';
@@ -37,12 +38,58 @@ import {
   shouldReleaseQuotaAfterWebhook,
 } from './safety';
 import { getRedis } from '../../config/redis';
-import { buildCampaignJobId, canRollbackQueuedCampaign } from './worker-safety';
+import { normalizePhoneIdentity } from '../../utils/phone';
+import {
+  buildCampaignJobId,
+  canRollbackQueuedCampaign,
+  manualCampaignRunClaimWhere,
+  materializedCampaignRunVersion,
+} from './worker-safety';
 import { assertApprovedCampaignTemplate, assertCampaignRecipientTemplates } from './template-validation';
 
 const EDITABLE_STATUSES: CampaignStatus[] = ['DRAFT', 'SCHEDULED'];
 const STUCK_RUNNING_MS = 6 * 60 * 60 * 1000;
 const PAUSE_RECLAIM_MESSAGE = 'Campaign paused before provider send';
+
+async function withLiveContactFields(
+  organizationId: string,
+  whatsappNumberId: string | null | undefined,
+  recipients: Array<{
+    name?: string | null;
+    phone: string;
+    variables?: { body?: string[]; header?: string[]; attributes?: Record<string, string> } | null;
+  }>
+) {
+  if (!whatsappNumberId || recipients.length === 0) {
+    return recipients.map((recipient) => ({
+      name: recipient.name,
+      phone: recipient.phone,
+      email: undefined as string | undefined,
+      customAttributes: undefined as unknown,
+      variables: recipient.variables,
+    }));
+  }
+  const phones = [...new Set(recipients.map((recipient) => normalizePhoneIdentity(recipient.phone)))];
+  const contacts = await prisma.contact.findMany({
+    where: {
+      organizationId,
+      whatsappNumberId,
+      normalizedPhone: { in: phones },
+    },
+    select: { normalizedPhone: true, name: true, phone: true, email: true, customAttributes: true },
+  });
+  const byPhone = new Map(contacts.map((contact) => [contact.normalizedPhone, contact]));
+  return recipients.map((recipient) => {
+    const live = byPhone.get(normalizePhoneIdentity(recipient.phone));
+    return {
+      name: live?.name || recipient.name,
+      phone: live?.phone || recipient.phone,
+      email: live?.email,
+      customAttributes: live?.customAttributes,
+      variables: recipient.variables,
+    };
+  });
+}
 
 type CampaignRunSnapshot = {
   status: CampaignStatus;
@@ -732,12 +779,23 @@ export async function queueCampaignSend(
     if (!resolved.length) {
       throw new AppError(400, 'No recipients match the selected audience');
     }
-    await persistRecipients(campaign.id, resolved);
+    const materializedRunVersion = materializedCampaignRunVersion(
+      campaign.runVersion,
+      claimedRunVersion === undefined
+    );
+    await persistRecipients(
+      campaign.id,
+      resolved,
+      campaign.runVersion,
+      { bumpRunVersion: claimedRunVersion === undefined }
+    );
     const refreshed = await prisma.campaign.findFirst({
-      where: { id: campaign.id },
+      where: { id: campaign.id, runVersion: materializedRunVersion },
       include: { recipients: true },
     });
-    if (!refreshed) throw new AppError(404, 'Campaign not found');
+    if (!refreshed) {
+      throw new AppError(409, 'Campaign changed while recipients were being materialized; try again');
+    }
     campaign = refreshed;
   }
 
@@ -745,9 +803,6 @@ export async function queueCampaignSend(
     await prisma.campaign.update({ where: { id: campaign.id }, data: { status: 'COMPLETED' } });
     throw new AppError(400, 'Campaign has no recipients');
   }
-
-  await assertDailySendQuota(campaign.organizationId, campaign.recipients.length);
-  await assertDailyBudget(campaign.organizationId, campaign.recipients.length, 'MARKETING');
 
   const { whatsappNumber, wabaId, accessToken } = await getWhatsappForCampaign(
     campaign.organizationId,
@@ -762,14 +817,27 @@ export async function queueCampaignSend(
     wabaId,
     accessToken
   );
+  const billingCategory = billingCategoryForTemplate(template.category);
+
+  await assertDailySendQuota(campaign.organizationId, campaign.recipients.length);
+  await assertDailyBudget(campaign.organizationId, campaign.recipients.length, billingCategory);
   const templateLanguage = campaign.templateLanguage || template.language || 'en_US';
   const templateParams = (campaign.templateParams as TemplateParams | null) || undefined;
   try {
-    assertCampaignRecipientTemplates(template, templateParams, campaign.recipients.map((recipient) => ({
-      name: recipient.name,
-      phone: recipient.phone,
-      variables: recipient.variables as { body?: string[]; header?: string[] } | null,
-    })), { name: campaign.templateName, language: templateLanguage, category: 'MARKETING' });
+    assertCampaignRecipientTemplates(
+      template,
+      templateParams,
+      await withLiveContactFields(
+        campaign.organizationId,
+        whatsappNumber.id,
+        campaign.recipients.map((recipient) => ({
+          name: recipient.name,
+          phone: recipient.phone,
+          variables: recipient.variables as { body?: string[]; header?: string[]; attributes?: Record<string, string> } | null,
+        }))
+      ),
+      { name: campaign.templateName, language: templateLanguage }
+    );
   } catch (error) {
     throw new AppError(400, error instanceof Error ? error.message : String(error));
   }
@@ -777,7 +845,7 @@ export async function queueCampaignSend(
   const runSnapshot = snapshotCampaignRun(campaign);
   const claimedRun = claimedRunVersion === undefined
     ? await prisma.campaign.updateMany({
-        where: { id: campaign.id, status: { in: ['DRAFT', 'SCHEDULED'] } },
+        where: manualCampaignRunClaimWhere(campaign.id, campaign.runVersion),
         data: {
           status: 'RUNNING',
           runVersion: { increment: 1 },
@@ -809,7 +877,7 @@ export async function queueCampaignSend(
       campaign.id,
       run.runVersion,
       campaign.recipients.length,
-      'MARKETING'
+      billingCategory
     );
     await prisma.campaign.update({
       where: { id: campaign.id },
@@ -923,7 +991,6 @@ export async function sendTestMessage(
     assertApprovedCampaignTemplate(template, {
       name: campaign.templateName,
       language: templateLanguage,
-      category: 'MARKETING',
       params: templateParams,
     });
   } catch (error) {
@@ -1088,11 +1155,20 @@ export async function resumeCampaign(
     );
     const templateLanguage = campaign.templateLanguage || template.language || 'en_US';
     const templateParams = (campaign.templateParams as TemplateParams | null) || undefined;
-    assertCampaignRecipientTemplates(template, templateParams, pending.map((recipient) => ({
-      name: recipient.name,
-      phone: recipient.phone,
-      variables: recipient.variables as { body?: string[]; header?: string[] } | null,
-    })), { name: campaign.templateName, language: templateLanguage, category: 'MARKETING' });
+    assertCampaignRecipientTemplates(
+      template,
+      templateParams,
+      await withLiveContactFields(
+        campaign.organizationId,
+        whatsappNumber.id,
+        pending.map((recipient) => ({
+          name: recipient.name,
+          phone: recipient.phone,
+          variables: recipient.variables as { body?: string[]; header?: string[]; attributes?: Record<string, string> } | null,
+        }))
+      ),
+      { name: campaign.templateName, language: templateLanguage }
+    );
     const templateContent = applyTemplateParamsToPreview(template, templateParams, campaign.templateName);
 
     const totalBatches = Math.ceil(pending.length / batchSize);
@@ -1189,8 +1265,6 @@ export async function retryFailedRecipients(
   const failed = campaign.recipients.filter((r) => r.status === 'FAILED');
   if (!failed.length) throw new AppError(400, 'No failed recipients to retry');
 
-  await assertDailySendQuota(campaign.organizationId, failed.length);
-  await assertDailyBudget(campaign.organizationId, failed.length, 'MARKETING');
   const settings = await getCampaignSettings(campaign.organizationId);
   const batchSize = settings.batchSize ?? 50;
   const batchDelayMs = settings.batchDelayMs ?? 1000;
@@ -1206,13 +1280,25 @@ export async function retryFailedRecipients(
     wabaId,
     accessToken
   );
+  const billingCategory = billingCategoryForTemplate(template.category);
+  await assertDailySendQuota(campaign.organizationId, failed.length);
+  await assertDailyBudget(campaign.organizationId, failed.length, billingCategory);
   const templateLanguage = campaign.templateLanguage || template.language || 'en_US';
   const templateParams = (campaign.templateParams as TemplateParams | null) || undefined;
-  assertCampaignRecipientTemplates(template, templateParams, failed.map((recipient) => ({
-    name: recipient.name,
-    phone: recipient.phone,
-    variables: recipient.variables as { body?: string[]; header?: string[] } | null,
-  })), { name: campaign.templateName, language: templateLanguage, category: 'MARKETING' });
+  assertCampaignRecipientTemplates(
+    template,
+    templateParams,
+    await withLiveContactFields(
+      campaign.organizationId,
+      whatsappNumber.id,
+      failed.map((recipient) => ({
+        name: recipient.name,
+        phone: recipient.phone,
+        variables: recipient.variables as { body?: string[]; header?: string[]; attributes?: Record<string, string> } | null,
+      }))
+    ),
+    { name: campaign.templateName, language: templateLanguage }
+  );
   const templateContent = applyTemplateParamsToPreview(template, templateParams, campaign.templateName);
   const runSnapshot = snapshotCampaignRun(campaign);
   const retryRun = await prisma.campaign.updateMany({
@@ -1238,7 +1324,7 @@ export async function retryFailedRecipients(
       campaign.id,
       retryVersion.runVersion,
       failed.length,
-      'MARKETING'
+      billingCategory
     );
     const reset = await prisma.campaignRecipient.updateMany({
       where: { id: { in: failed.map((r) => r.id) }, status: 'FAILED' },
@@ -1349,11 +1435,12 @@ export async function duplicateCampaign(
 }
 
 export async function getCampaignAnalytics(campaignId: string, orgId: string, whatsappNumberId?: string) {
+  if (!whatsappNumberId) return null;
   const campaign = await prisma.campaign.findFirst({
     where: {
       id: campaignId,
       organizationId: orgId,
-      ...(whatsappNumberId ? { whatsappNumberId } : {}),
+      whatsappNumberId,
     },
     include: {
       recipients: {
@@ -1488,24 +1575,47 @@ export function canEditCampaign(status: string) {
 
 export async function persistRecipients(
   campaignId: string,
-  recipients: ResolvedRecipient[]
+  recipients: ResolvedRecipient[],
+  expectedRunVersion?: number,
+  options: { bumpRunVersion?: boolean } = {}
 ) {
   const deduped = dedupeRecipients(recipients);
-  await prisma.$transaction([
-    prisma.campaignRecipient.deleteMany({ where: { campaignId } }),
-    prisma.campaignRecipient.createMany({
+  const bumpRunVersion = options.bumpRunVersion ?? true;
+  await prisma.$transaction(async (tx) => {
+    if (expectedRunVersion !== undefined) {
+      await tx.$queryRaw`SELECT id FROM campaigns WHERE id = ${campaignId} FOR UPDATE`;
+      const current = await tx.campaign.findFirst({
+        where: {
+          id: campaignId,
+          status: { in: bumpRunVersion ? ['DRAFT', 'SCHEDULED'] : ['RUNNING'] },
+          runVersion: expectedRunVersion,
+        },
+        select: { id: true },
+      });
+      if (!current) {
+        throw new AppError(409, 'Campaign changed while recipients were being updated; try again');
+      }
+      if (bumpRunVersion) {
+        await tx.campaign.update({
+          where: { id: campaignId },
+          data: { runVersion: { increment: 1 } },
+        });
+      }
+    }
+    await tx.campaignRecipient.deleteMany({ where: { campaignId } });
+    await tx.campaignRecipient.createMany({
       data: deduped.map((r) => ({
         campaignId,
         phone: r.phone,
         name: r.name,
         variables: r.variables ? (r.variables as object) : undefined,
       })),
-    }),
-    prisma.campaign.update({
+    });
+    await tx.campaign.update({
       where: { id: campaignId },
       data: { totalContacts: deduped.length },
-    }),
-  ]);
+    });
+  });
   return deduped.length;
 }
 

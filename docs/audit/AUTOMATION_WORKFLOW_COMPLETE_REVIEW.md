@@ -1,11 +1,13 @@
 # Automation & Workflow — Complete Review
 
-**Date:** 2026-08-14  
+**Date:** 2026-08-14 (first pass + same-day recheck / expansion)  
 **Branch reviewed:** `call-ui-improvemnet`  
 **Mode:** Research + code audit only. **No application code was changed.**  
 **Audience:** Product + engineering, before any polish / bugfix / feature work.
 
-This document is the working brief for making Automations a production-grade WhatsApp CRM surface: what we already built, how it connects, what Meta actually allows, what competitors do, what is broken or misleading, and what to do next after review.
+This document is the working brief for making Automations a production-grade WhatsApp CRM surface: what we already built, how it connects, what Meta actually allows, what competitors do, what is broken or misleading, POCs of every major path, and what to do next after review.
+
+**Recheck (pass 2):** Re-opened engines, webhook processor, opt-out, simulate, validation, interactive send limits, inbox `activeFlow`, APIs, and builder copy. New high findings: `cancel` is treated as a global STOP; ANY_MESSAGE UI copy is false; Redis lock TTL is 30s with no refresh; waiting for a Meta Form swallows other messages the same way delay does; Try-it simulate does not match live campaign/language/button behavior. Sections 17–24 are the extra inventory.
 
 ---
 
@@ -413,6 +415,27 @@ Severity = user/data/Meta-risk, not ticket count.
     - Why: intern/agent can take over every inbound chat.  
     - Evidence: routes use `authenticate` + `requireOrg` only.
 
+10a. **`cancel` (and prefix matches) are global opt-out**  
+    - Why: Customer types “cancel my order” in a journey → webhook treats it as STOP, **skips automations entirely**, sets `optedIn: false`. Support bot dies mid-tree.  
+    - Evidence: `OPT_OUT_KEYWORDS` includes `cancel`; `isOptOutMessage` uses `normalized === kw || normalized.startsWith(\`${kw} \`)` in `server/src/modules/compliance/opt-out.ts`. Then `webhook.processor.ts` `continue`s before `handleInboundAutomations`.  
+    - Fix: exact-token STOP list (`stop`, `unsubscribe`, `stopall`); never prefix-match `cancel`.  
+    - Verify: send “cancel my order” during a question step — today no next node runs.
+
+10b. **ANY_MESSAGE settings copy is a lie**  
+    - Why: UI says “runs when no other flow matches” (catch-all). Engine matches ANY_MESSAGE as soon as it is the first published+enabled flow in **priority desc** order, even if a keyword flow exists with lower priority.  
+    - Evidence: `FlowSettingsPanel.tsx` InfoNote vs `matchFlow` loop in `flows/engine.ts` (`orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }]`) and `flowMatchesTrigger` `ANY_MESSAGE` = `Boolean(content) && !isNewConversation`.  
+    - Fix: either change copy (“runs on every returning message unless a higher-priority flow matches”) or implement true catch-all (only if no other flow matched).
+
+10c. **Redis flow lock TTL 30s, no extend**  
+    - Why: Webhook node waits up to 10s; several Meta sends can exceed 30s; lock expires; a second inbound can start another `runFromNode` or fall through to AI.  
+    - Evidence: `LOCK_TTL_SEC = 30` in `flows/lock.ts`; `handleInboundFlow` returns `result ?? false` so lock miss **falls through** to auto-reply + AI.  
+    - Fix: refresh lock while executing; on lock miss, **requeue** the inbound instead of returning false.
+
+10d. **Waiting for Meta Form swallows inbound**  
+    - Why: Same deaf-bot symptom as delay. Customer texts instead of submitting the form → `waitingFor === 'wa_flow'` and no `waFlowResponse` → `return true`.  
+    - Evidence: `processInboundFlow` wa_flow branch in `flows/engine.ts`.  
+    - Fix: reminder message, timeout, or “type skip” path.
+
 ### Medium
 
 11. Keyword auto-reply is **substring** (`includes`), flow keyword can be regex — inconsistent, accidental matches.  
@@ -454,15 +477,18 @@ Grouped so we do not boil the ocean. **Do not implement until this doc is accept
 
 1. CSW-aware send + template fallback + log Meta error 131047 in Automations Performance.  
 2. Honor `optedIn` in flow engine + delay resume.  
-3. Delay: do not swallow inbound.  
-4. Publish/enabled honesty in UI.  
-5. Naming: Auto-replies vs Conversation journeys vs WhatsApp Forms.  
-6. OWNER/ADMIN for publish/delete.  
-7. Engine + inbound pipeline tests (happy path + delay + handoff + opt-out + CSW).  
-8. Cycle detection in validate.  
-9. Webhook SSRF allowlist.  
-10. Authenticate or sign NFM webhook.  
-11. Correct `FEATURE_MATRIX` statuses.
+3. Delay **and Meta Form wait**: do not swallow inbound.  
+4. Tighten STOP list — do not prefix-match `cancel`.  
+5. ANY_MESSAGE: honest copy **or** true catch-all matcher.  
+6. Refresh conversation lock; on miss, requeue (do not fall through to AI).  
+7. Publish/enabled honesty in UI.  
+8. Naming: Auto-replies vs Conversation journeys vs WhatsApp Forms.  
+9. OWNER/ADMIN for publish/delete.  
+10. Engine + inbound pipeline tests (happy path + delay + handoff + opt-out + CSW + cancel-my-order).  
+11. Cycle detection in validate.  
+12. Webhook SSRF allowlist.  
+13. Authenticate or sign NFM webhook.  
+14. Correct `FEATURE_MATRIX` statuses.
 
 ### Phase B — Smoothness users feel
 
@@ -576,13 +602,334 @@ No code in this pass. This is the checklist for the next implementation chat.
 
 If you accept Phase A:
 
-> “Implement Phase A from `docs/audit/AUTOMATION_WORKFLOW_COMPLETE_REVIEW.md` — CSW, opt-out, delay interrupt, publish honesty, naming, role gates, engine tests, cycle detection, webhook SSRF, NFM auth. No new node types.”
+> “Implement Phase A from `docs/audit/AUTOMATION_WORKFLOW_COMPLETE_REVIEW.md` — CSW, optedIn on resume, delay/form-wait interrupt, STOP keyword tightening (`cancel` prefix), ANY_MESSAGE copy vs matcher, lock refresh, publish honesty, naming, role gates, engine tests, cycle detection, webhook SSRF, NFM auth. No new node types.”
 
 Until then: **no code.**
 
 ---
 
-## 16. Sources
+## 16. Sources (pass 1 + pass 2)
+
+### Code
+
+- `server/src/modules/automation/engine.ts`, `routes.ts`, `conflicts.ts`, `analytics.ts`  
+- `server/src/modules/flows/engine.ts`, `types.ts`, `validation.ts`, `simulate.ts`, `lock.ts`, `flow-state.ts`  
+- `server/src/modules/flows-assets/routes.ts`, `nfm-handler.ts`  
+- `server/src/modules/compliance/opt-out.ts`  
+- `server/src/modules/messages/interactive.ts` (`CORE_LIMITS`)  
+- `server/src/modules/settings/business-hours.ts`  
+- `server/src/workers/webhook.processor.ts`, `server/src/workers/index.ts`  
+- `server/prisma/schema.prisma`  
+- `client/src/pages/AutomationsPage.tsx`, `FlowBuilderPage.tsx`, `MetaFlowBuilder.tsx`  
+- `client/src/components/flows/FlowSettingsPanel.tsx`, `WhatsAppFormsPromo.tsx`, `flowUtils.ts`  
+- `client/src/components/automations/AutomationAnalyticsPanel.tsx`  
+- `client/src/services/api.ts`  
+- `docs/audit/FEATURE_MATRIX.md`, `docs/AUDIT.md`, `docs/audit/FEATURES_6-10_DEEP_REVIEW.md`, `docs/WHATSAPP_API_DOCUMENTATION.md`
+
+### Meta / policy
+
+- https://developers.facebook.com/documentation/business-messaging/whatsapp/messages/send-messages  
+- https://developers.facebook.com/docs/whatsapp/pricing/  
+- https://developers.facebook.com/docs/whatsapp/overview/getting-opt-in/  
+- https://whatsappbusiness.com/policy/  
+- https://developers.facebook.com/documentation/business-messaging/whatsapp/flows  
+- https://developers.facebook.com/docs/whatsapp/flows/reference/flowjson/
+
+### Competitors
+
+- WATI / Interakt / AiSensy / Respond.io / ManyChat public roundups (2026)
+
+Pass-2 file-level list is repeated in §24.
+
+---
+
+## 17. Self-Q&A (questions this review asked itself)
+
+These are the questions a senior owner would ask. Answers are from current code, not product marketing.
+
+### Q1. If a customer messages us, what exactly can reply?
+
+**A.** Only if the public webhook is live. Then: (1) an in-progress journey waiting for button/text/form, or a newly matched published+enabled journey; else (2) the first matching auto-reply in KEYWORD → WELCOME → LEAD_CAPTURE → AWAY → BUSINESS_HOURS order; else (3) AI bot if enabled, `botActive`, not handed off, not opted out, and no assigned agent unless conversation status is OPEN.
+
+### Q2. What is “new conversation”? Does welcome fire on campaign replies?
+
+**A.** `isNew = !priorConversation` in `webhook.processor.ts` — the unique key is org + contact + WhatsApp number. If a campaign already created that conversation (`recordOutboundInConversation`), the customer’s first reply is **not** new. Welcome will not fire. `CAMPAIGN_REPLY` can. This is actually the right CRM behavior if campaigns always write `metadata.campaignId` (the worker does).
+
+### Q3. Does STOP really stop journeys?
+
+**A.** The STOP **message itself** never enters the automation engine (`continue` after `handleOptOut`). Confirmation text is sent via `sendDirectMessage`. **Already-queued delay/schedule jobs still run** and do not re-read `optedIn`. So STOP during a 2-hour delay does not cancel the delayed send.
+
+### Q4. Can a normal support sentence opt someone out?
+
+**A.** Yes. Keywords: `stop`, `unsubscribe`, `cancel`, `opt out`, `opt-out`, `remove me`. Match is exact **or starts with `keyword `**. “Cancel my order”, “stop calling me” (starts with `stop `) all opt out. `START` / `subscribe` opt back in (exact only).
+
+### Q5. What variables can a builder use in `{{mustache}}`?
+
+**A.** Interpolation is `\{\{(\w+)\}\}` in `interpolate()`. Always: `name` (contact name or `"there"`). Question nodes store `name` / `email` / `phone` / custom field. `set_variable` stores arbitrary keys. Webhook stores `webhook_status`, `webhook_ok`, `webhook_body`, optional `webhookVariable`. Meta Form answers become `form_<key>` plus `_form_response`. Language detector may set `language`. Missing keys become empty string (except `name`). No `{{phone}}` unless a question or variable set it. No liquid logic.
+
+### Q6. Does “Try it” equal a real WhatsApp send?
+
+**A.** No. `POST /api/flows/simulate` walks the graph in memory (max 30 steps). It **auto-taps the first button**, **auto-selects the first list row**, **fakes “Sample answer”** on questions, **always language-branches `default`**, **treats CAMPAIGN_REPLY as “any non-empty message”** (does not look up `metadata.campaignId`), **treats MISSED_CALL / CALL_COMPLETED as always true**. It does not call Meta, webhooks, or AI. Keep the panel; label it “preview path,” add “Send test to my number” later.
+
+### Q7. What does validation actually catch?
+
+**A.** Empty graph, duplicate ids, broken `next`/branch refs, keyword/tag/segment required fields, URL/call button fields, reply buttons without labels/branches, list without sections, goto targets, lat/lng, contact card, wa_flow id, condition variable, schedule time, template name, media URL, webhook URL, delay ≥ 1s. Unreachable nodes = **warnings**. **No** cycle detection, **no** Meta 10-row list cap, **no** CSW, **no** SSRF URL check. Send-time `interactive.ts` **does** enforce 3 buttons / 10 list rows / char limits — so an invalid list can “save” and fail when it runs.
+
+### Q8. Which inbound types even reach automations?
+
+**A.** Status callbacks (sent/delivered/read/failed) do **not**. Message objects do, including text, buttons, list replies, nfm_reply, media, location, contacts, orders, referrals — after persist. Empty-body media: KEYWORD/ANY_MESSAGE/hours flows that require `content` will not match; **CONTACT_TAG / SEGMENT still can** (no content required). Opt-out texts never reach the engine.
+
+### Q9. How do buttons recover if `botState` was lost?
+
+**A.** `recoverFlowFromButtonReply`: last OUTBOUND INTERACTIVE in 24h with `metadata.flowId`, find a buttons/list node whose id matches `buttonReplyId`, jump to that branch. Good. Does not recover list rows if metadata missing `flowId`.
+
+### Q10. Is FEATURE_MATRIX “Schedule flow DONE on Flow card” true?
+
+**A.** Backend `POST /api/flows/:id/schedule` exists (`conversationId` + `delaySeconds`, max 7 days) and `flowApi.scheduleStart` is in the client API module. **Zero UI call sites.** Not on the flow card.
+
+### Q11. Are WhatsApp Forms and Conversation flows the same Meta product?
+
+**A.** No. Meta “WhatsApp Flows” = native multi-screen UI + optional encrypted data endpoint + `nfm_reply`. Samyoj “conversation flow” = our JSON node graph sending ordinary Cloud API messages. Promo CTA “Open flow builder” → `/automations/flows/new` is the **wrong** product. Live attach path is `wa_flow` node + `WaFormPicker` + `waFormsApi` (`/api/wa-forms`). Orphan: `MetaFlowBuilder` + `flowAssetsApi` (`/api/flows-assets`). Two form backends.
+
+### Q12. What does the inbox show?
+
+**A.** List rows: `activeFlow` chip (`parseActiveFlow` on `botState`). Thread: dismissible notice with flow name + “View flow.” Details panel activity mentions the running flow. Agent send / bot toggle can clear `botState` (`inbox/routes.ts`). Outbound bubbles with `metadata.source = flow|automation` get a divider label (`inboxUtils.ts`).
+
+### Q13. Business hours — whose clock?
+
+**A.** Live path: `Organization.settings.businessHours` `{ startHour, endHour, days[], timezone }` via `Intl` zoned weekday+hour. Default **09:00–18:00, Mon–Fri, UTC** if unset. Inclusive start, exclusive end (`hour < endHour`). Dead helper in automation engine still uses **server local** weekend/hours — unused by `resolveStaticAutoReply`.
+
+### Q14. Accessibility of the builder?
+
+**A.** Hub tabs and auto-reply form use normal buttons/inputs. `FlowCanvas.tsx` has **no `aria-` / `role` matches** in a repo search — canvas is pointer-first. Mobile builder has no version history. Keyboard users and screen readers cannot meaningfully author a journey. Competitor bar: ManyChat/WATI are also weak here; we should not claim “accessible” until nodes are list-editable without the canvas.
+
+### Q15. What is still good that pass 1 under-sold?
+
+**A.** Question retries (`maxRetries` default 2) then handoff `VALIDATION_FAILED`. Intent routes on buttons can match typed text. `acceptMedia` on questions (separate from unused `waitingFor: media`). Interactive send validation (3×20 buttons, 10 list rows). Campaign worker metadata. Opt-out **message** short-circuit (the keyword list is the bug, not the short-circuit). Timezone-aware hours. Button recovery. Inbox active-flow chip.
+
+---
+
+## 18. API catalog (what the UI can call)
+
+All JSON APIs below are `authenticate` + `requireOrg` unless noted. No OWNER/ADMIN.
+
+### Auto-replies — `/api/automations`
+
+| Method | Path | Notes |
+|--------|------|--------|
+| GET | `/` | Search, `triggerType`, `enabled`, page/limit. Summary active/paused counts |
+| POST | `/` | Zod allows `AI_CHATBOT` even though UI cannot create it. `enabled` defaults **true** |
+| PATCH | `/:id` | Org-scoped |
+| DELETE | `/:id` | `deleteMany` by id+org |
+| GET | `/analytics?days=30` | Loads **max 5000** logs then aggregates. Returns `byTrigger`, `byAction`, `byStatus`, `daily`, `recent[50]` |
+| GET | `/conflicts` | Enabled automations vs published enabled flows |
+
+UI Performance tab uses totals, `byTrigger`, `recent`. **Does not chart `byAction` or `daily`.**
+
+### Conversation journeys — `/api/flows`
+
+| Method | Path | Notes |
+|--------|------|--------|
+| GET | `/templates` | Ships 6 starter graphs (`FLOW_TEMPLATES` in `types.ts`) |
+| GET | `/` | List |
+| GET | `/:id` | Includes nodes / draft |
+| POST | `/` | Create |
+| PATCH | `/:id` | If nodes and not DRAFT, writes `FlowVersion` |
+| DELETE | `/:id` | |
+| POST | `/validate` | `validateFlowGraph` |
+| POST | `/simulate` | Dry run (see Q6) |
+| POST | `/from-template/:templateId` | |
+| POST | `/:id/duplicate` | |
+| POST | `/:id/publish` | |
+| GET | `/:id/versions` | |
+| POST | `/:id/restore/:version` | |
+| GET | `/:id/analytics` | `Flow.stats` + logs |
+| POST | `/:id/schedule` | **API-only:** start this flow on a conversation after N seconds (1s–7d) |
+
+### WhatsApp Forms (two stacks)
+
+| Client | Server | Used by |
+|--------|--------|---------|
+| `waFormsApi` | `/api/wa-forms` | `WaFormPicker` inside `wa_flow` step |
+| `flowAssetsApi` | `/api/flows-assets` | Orphan `MetaFlowBuilder`. Publish to Meta. Encrypted ` /data` endpoint. **POST `/webhook/nfm` has no auth** |
+
+---
+
+## 19. Starter templates we already ship (built-in POCs)
+
+These are the product’s own reference journeys (`FLOW_TEMPLATES`). Use them as the first live tests.
+
+| Id | Trigger | What it does | Watch-outs |
+|----|---------|--------------|------------|
+| `welcome-menu` | WELCOME | Greet `{{name}}`, 3 buttons Sales/Support/Pricing, collect name, tag, handoff | Emoji in button titles (ok inside CSW). Welcome only if conversation is truly new |
+| `lead-capture` | KEYWORD `demo` | Name, email, phone, tag `hot-lead`, assign, handoff | Email/phone regex retries then human |
+| `after-hours` | OFF_HOURS | Away copy, collect message, tag | Requires Settings hours; first inbound still in CSW so free-form is legal |
+| `campaign-followup` | CAMPAIGN_REPLY | Thanks + More info / Talk to agent | Needs a prior campaign outbound with `metadata.campaignId`. Simulate will **false-pass** without that |
+| `missed-call-followup` | MISSED_CALL | Sorry + callback / chat | Event trigger from calling, not inbound match. May be outside CSW if a call does not open a window |
+| `support-triage` | ANY_MESSAGE | Billing / Technical / Other→AI | **Not** a true catch-all; priority can steal from keyword journeys |
+
+Palette groups (`NODE_CATEGORIES`): Messages · Do something · Rules & timing. All 25 distinct node types appear (condition listed once).
+
+---
+
+## 20. End-to-end POCs (write these as test scripts later)
+
+Each POC is “given / when / then” against **current** code. Expected = today, not after Phase A.
+
+### POC-A — Keyword auto-reply (happy)
+
+1. Create auto-reply KEYWORD `price`, message “Our plans start at ₹999”, 2 buttons, enabled.  
+2. From a **returning** contact (conversation already exists), text `What is the price?`.  
+3. **Then:** substring match fires; interactive with ≤3 buttons; inbox divider `source: automation`; log `send_reply` success.  
+4. **Also then:** `surprise` does not match; `price` inside `unpriced` **does** match (bug/limit).
+
+### POC-B — Welcome vs campaign
+
+1. Brand-new phone, never seen: text `Hi`. **Then:** WELCOME auto-reply or WELCOME journey (journey wins if both on). `isNew=true`.  
+2. Run a campaign to that phone first (worker writes conversation + `campaignId`). Then they reply `Hi`. **Then:** not welcome; `CAMPAIGN_REPLY` journey can start if published.
+
+### POC-C — Journey menu + typed intent + human
+
+1. Publish `welcome-menu` (or equivalent), enabled, high priority.  
+2. New contact texts anything. **Then:** greeting + 3 buttons.  
+3. Type `agent` instead of tapping. **Then:** `wantsHandoff` (`agent` substring) **clears the whole flow and hands off** before button wait — even on the first message of the tree if they said “agent” as the trigger text.  
+4. **Trap:** `agency` also contains `agent`.
+
+### POC-D — Delay deafness
+
+1. Journey: message → delay 60s → message “Still there?”. Enable.  
+2. Trigger it. At t=10s customer texts `hello`.  
+3. **Today:** inbound stored in inbox, **no bot reply**, delay still fires at 60s. Health `totalReceived` increments (webhook worked). User thinks WhatsApp is broken.
+
+### POC-E — STOP vs cancel
+
+1. Mid-question, text `STOP`. **Then:** opted out, confirmation SMS-style text, no further engine.  
+2. Mid-question, text `cancel my order`. **Today:** same as STOP (prefix `cancel `). Wrong for a commerce bot.
+
+### POC-F — Opt-out vs delayed send
+
+1. Delay 2 hours. At t=5min customer texts `STOP`.  
+2. **Today:** delay job still sends free-form later unless Meta rejects. Flow engine never reads `optedIn`.
+
+### POC-G — 24h window
+
+1. Inbound, journey delay 25 hours (schedule node or long delay; engine caps delay node at **24h**, schedule at **7d**).  
+2. **Today:** delay node cannot exceed 86400000 ms. Use **schedule** for >24h. Resume sends TEXT without CSW check → likely **131047**. Error may sit on message status, not Automations Performance (failed logs only if `sendFlowMessage` throws).
+
+### POC-H — Try it vs live
+
+1. CAMPAIGN_REPLY journey, empty campaign id, Try it with message `hi`. **Simulate:** triggered.  
+2. Live with no campaign outbound in last 168h: **not** triggered.  
+3. Language node Try it: always `default`. Live: script detector may set `language`.
+
+### POC-I — Forms
+
+1. Add `wa_flow` step, pick form via `WaFormPicker`, publish journey.  
+2. Customer opens form, submits. `nfm_reply` → parser and/or `/flows-assets/webhook/nfm` → variables `form_*`.  
+3. If they text instead of submitting: **swallowed**.  
+4. Hitting `/automations/meta-flows/new` is a **second** editor not linked from the hub.
+
+### POC-J — AI coexistence
+
+1. No journeys, default AI bot on, `botActive`. Text a question. **Then:** 1.5s debounce, one AI reply.  
+2. Keyword journey matches same text. **Then:** journey only; AI skipped because `handleInboundFlow` returned true.  
+3. Journey `ai` node: flow state cleared, AI queued.  
+4. Assigned agent + status ≠ OPEN: both flow and AI skip.
+
+### POC-K — Lock fallthrough
+
+1. Two inbound messages <80ms apart while first `executeNode` holds the lock.  
+2. After 5 retries (~1.2s) lock still busy → `null` → `handleInboundFlow` false → **auto-reply and/or AI also fire**. Possible double reply.
+
+### POC-L — Infra false negative
+
+1. Automations page looks healthy (rules listed). Tunnel down.  
+2. Phone send: nothing. `webhook/health` `totalReceived` unchanged. **Do not debug the canvas.**
+
+### POC-M — Hours
+
+1. Settings hours 9–18 IST, days Mon–Fri. OFF_HOURS journey + AWAY auto-reply both on.  
+2. Saturday 11:00 IST: journey wins; banner `off_hours_away_overlap`.  
+3. If hours never set: UTC 9–18 weekdays — India evenings look “open” incorrectly.
+
+---
+
+## 21. Message & wait-state matrix
+
+| Inbound | `waitingFor` | What happens today |
+|---------|--------------|--------------------|
+| Text / button id | `button` | Resolve branch or intentRoutes; else nag “tap a button”; stay waiting |
+| Empty | `button` | `return true` (handled, no nag) |
+| Text | `text` (question) | Validate email/phone/name; retry then handoff |
+| Media | `text` + `acceptMedia` | Store `[image]` etc. and continue |
+| Media | `text` without accept | Validate as text (usually fail) |
+| `nfm_reply` | `wa_flow` | Copy fields to `form_*`, continue `next` |
+| Anything else | `wa_flow` | Swallow |
+| Anything | `delay` | Swallow; delay job still owns resume |
+| Human keywords | any existing state | Clear state, `USER_REQUEST` handoff, **true** (AI will not also run) |
+| STOP family | — | Never enters engine |
+| Status webhooks | — | Never enters engine |
+
+Delay cap: `min(delaySeconds*1000, 24h)`. Schedule: `min(target-now, 7d)`.
+
+Handoff keywords (`includes`): `human`, `agent`, `representative`, `talk to someone`, `real person`.
+
+---
+
+## 22. Accessibility, language, and operator UX (collectively)
+
+| Surface | Today | Better |
+|---------|-------|--------|
+| Automations hub | Default tab Auto-replies; three tabs; conflicts banner no links | Explain priority in one sentence; deep-link conflicts; default to journeys or a chooser |
+| Auto-reply form | Keyword, message, hours pair, lead tag/handoff, max 3 buttons sliced to 20 chars | Shared keyword matcher with journeys; warn substring |
+| Journey settings | ANY_MESSAGE catch-all copy is false; campaign = optional free text | Catch-all only if last in match; campaign picker |
+| Canvas | No aria on `FlowCanvas`; mobile no history | Node list mode; restore on mobile |
+| Try it | Simulate | Dual: preview path + send-to-me |
+| Performance | 5000-log cap; no daily chart; `skipped` almost never written by engines | Write `skipped` for CSW/opt-out; chart `daily` |
+| Inbox | Chip + notice | Pause journey, “waiting for button/form”, jump to builder |
+| Errors | Meta 131047 on message status, easy to miss | Surface on Performance + flow stats |
+| i18n | Language node + script detect | No builder i18n; Hindi UI not in scope |
+| Roles | Any member publishes | OWNER/ADMIN |
+
+---
+
+## 23. Pass-2 corrections to pass-1 wording
+
+| Pass 1 said | Pass 2 correction |
+|-------------|-------------------|
+| Opt-out is skipped by flow engine | True for **resume/delay**. The STOP **inbound** is skipped earlier in the webhook (good). The `cancel` prefix is the extra landmine. |
+| List 10-row limit unclear | **Enforced at send** (`CORE_LIMITS.maxTotalRows = 10` in `interactive.ts`). **Not** enforced in `validateFlowGraph`. |
+| Analytics ignores `byAction` and `daily` | Confirmed. It **does** show `skipped` totals and `recent` actions. Engines rarely write `skipped`. |
+| 26 node types | 25 unique types in the union; condition+webhook_ok is a condition subtype. Palette has 25. |
+| “10 trigger types” in FEATURE_MATRIX | 11 enum values. |
+| Old July review: keyword is exact-only | **False.** Auto-reply is `includes`; flow keyword is includes / exact / regex. |
+
+---
+
+## 24. Recheck sources (added)
+
+- `server/src/modules/compliance/opt-out.ts` (`OPT_OUT_KEYWORDS`, prefix match, START/subscribe)  
+- `server/src/workers/webhook.processor.ts` (`isNew`, opt-out `continue`, then automations)  
+- `server/src/modules/flows/simulate.ts` (first-button auto-tap, CAMPAIGN_REPLY any message, language `default`)  
+- `server/src/modules/flows/validation.ts` (no cycles, no list-row cap)  
+- `server/src/modules/flows/lock.ts` (30s NX lock, 5 retries)  
+- `server/src/modules/messages/interactive.ts` (`CORE_LIMITS`)  
+- `server/src/modules/flows/flow-state.ts` + `inbox/routes.ts` (`activeFlow`)  
+- `server/src/modules/flows-assets/nfm-handler.ts` (token `conversationId:nodeId:uuid`, unauthenticated caller)  
+- `server/src/modules/settings/business-hours.ts`  
+- `client/src/components/flows/FlowSettingsPanel.tsx` (ANY_MESSAGE InfoNote, campaign free text)  
+- `client/src/pages/FlowBuilderPage.tsx` (`enabled` initial `false`)  
+- `client/src/components/flows/WhatsAppFormsPromo.tsx`  
+- `client/src/components/automations/AutomationAnalyticsPanel.tsx`  
+- `client/src/services/api.ts` (`automationApi`, `flowApi.scheduleStart`, `waFormsApi`, `flowAssetsApi`)
+
+**Updated confidence:** High on opt-out prefix, ANY_MESSAGE copy vs match, simulate mismatches, lock TTL, list send limits, inbox activeFlow, schedule API-without-UI. Medium remains: whether a **voice call** always opens CSW on this Cloud API version; whether production Meta app posts NFM to the main webhook, the dedicated route, or both (double-handle risk).
+
+---
+
+Until you approve Phase A (now including: tighten STOP keywords, fix ANY_MESSAGE copy or matcher, lock refresh, form-wait timeout): **no application code.**
+
+*End of review (pass 2). Implementation waits for explicit approval.*
 
 ### Code (this pass)
 

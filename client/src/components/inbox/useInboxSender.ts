@@ -5,7 +5,7 @@ import { useDraft } from './useDraft';
 import { MEDIA_LIMITS, MEDIA_LIMIT_LABELS } from './mediaLimits';
 import { emitChatNotice } from './chatNoticeBus';
 import type { PendingAttachment } from './ChatComposer';
-import type { Conversation, Message, SendMessagePayload, ServiceWindowInfo } from '../../types';
+import type { Conversation, Message, SendMessagePayload, ServiceWindowInfo, TemplateParams } from '../../types';
 
 export { MEDIA_LIMITS, MEDIA_LIMIT_LABELS, VOICE_MAX_SECONDS } from './mediaLimits';
 
@@ -309,7 +309,7 @@ export function useInboxSender({
   const handleSendTemplate = async (payload: {
     templateName: string;
     templateLanguage: string;
-    templateParams?: { body?: string[]; header?: string[]; headerMediaUrl?: string };
+    templateParams?: TemplateParams;
   }) =>
     sendPayload({
       type: 'TEMPLATE',

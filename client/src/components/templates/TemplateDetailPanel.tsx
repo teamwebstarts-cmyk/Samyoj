@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { BarChart3, Copy, Megaphone, Pencil, TestTube2, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { ModalPreviewCard } from '../ui/modalUi';
@@ -11,9 +11,18 @@ import { getFilledTemplatePreview, templateNeedsHeaderMedia } from '../campaigns
 import { templateApi } from '../../services/api';
 import { getTemplateRejectedReason, getQualityLabel, countTemplateVars, getTemplateBodyText, getTemplateHeaderText } from '../../utils/templateUtils';
 import { getTemplateRejectionGuide, getTemplateStatusHelp } from '../../utils/templateRejectionGuide';
+import TemplateButtonExtras from './TemplateButtonExtras';
+import {
+  fetchTemplateVariableMeta,
+  previewParams,
+  templateDynamicUrlButtons,
+  templateNeedsCoupon,
+  tokenForMeta,
+} from '../../utils/templateForm';
 import type { MessageTemplate, TemplateUsage } from '../../types';
 import { toastError, toastSuccess } from '../../utils/toast';
 import { PHONE_PLACEHOLDER } from '../../utils/phone';
+import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
 
 interface TemplateDetailPanelProps {
   template: MessageTemplate;
@@ -33,7 +42,12 @@ export default function TemplateDetailPanel({
   const [bodyParams, setBodyParams] = useState<string[]>([]);
   const [headerParams, setHeaderParams] = useState<string[]>([]);
   const [headerMediaUrl, setHeaderMediaUrl] = useState('');
+  const [couponCode, setCouponCode] = useState('');
+  const [buttonUrlSuffixes, setButtonUrlSuffixes] = useState<string[]>([]);
   const [testing, setTesting] = useState(false);
+  const { activeNumber, resolved } = useWhatsAppNumber();
+  const activeNumberIdRef = useRef<string | null>(null);
+  activeNumberIdRef.current = activeNumber?.id ?? null;
 
   const parts = getTemplateParts(template);
   const quality = getQualityLabel(template.quality_score?.score);
@@ -43,31 +57,73 @@ export default function TemplateDetailPanel({
   const needsMedia = templateNeedsHeaderMedia(template);
 
   useEffect(() => {
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
     templateApi
       .usage(template.name)
-      .then(({ data }) => setUsage(data.data as TemplateUsage))
-      .catch(() => setUsage(null));
-  }, [template.name]);
+      .then(({ data }) => {
+        if (requestNumberId === activeNumberIdRef.current) {
+          setUsage(data.data as TemplateUsage);
+        }
+      })
+      .catch(() => {
+        if (requestNumberId === activeNumberIdRef.current) setUsage(null);
+      });
+  }, [activeNumber, resolved, template.name]);
 
   useEffect(() => {
-    setBodyParams(Array(countTemplateVars(getTemplateBodyText(template))).fill(''));
-    setHeaderParams(Array(countTemplateVars(getTemplateHeaderText(template))).fill(''));
-    setHeaderMediaUrl('');
+    let cancelled = false;
+    fetchTemplateVariableMeta(template.name, template.language).then((meta) => {
+      if (cancelled) return;
+      setBodyParams(
+        Array.from({ length: countTemplateVars(getTemplateBodyText(template)) }, (_, i) => {
+          const mapped = meta.find((item) => item.scope === 'body' && item.index === i + 1);
+          return tokenForMeta(mapped);
+        }),
+      );
+      setHeaderParams(
+        Array.from({ length: countTemplateVars(getTemplateHeaderText(template)) }, (_, i) => {
+          const mapped = meta.find((item) => item.scope === 'header' && item.index === i + 1);
+          return tokenForMeta(mapped);
+        }),
+      );
+      setHeaderMediaUrl('');
+      setCouponCode('');
+      setButtonUrlSuffixes(Array.from({ length: templateDynamicUrlButtons(template).length }, () => ''));
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [template]);
 
-  const filledPreview = getFilledTemplatePreview(template, { bodyParams, headerParams });
+  const filledPreview = getFilledTemplatePreview(template, {
+    bodyParams: previewParams(bodyParams),
+    headerParams: previewParams(headerParams),
+    couponCode,
+    buttonUrlSuffixes,
+  });
 
   const handleTestSend = async () => {
     if (!testPhone.trim()) return;
+    if (templateNeedsCoupon(template) && !couponCode.trim()) {
+      toastError('Add the copy-code / coupon for this template.');
+      return;
+    }
+    if (templateDynamicUrlButtons(template).some((_, index) => !buttonUrlSuffixes[index]?.trim())) {
+      toastError('Add the website link suffix for each trackable button.');
+      return;
+    }
     setTesting(true);
     try {
       await templateApi.testSend(template.name, {
         phone: testPhone.trim(),
         language: template.language,
         templateParams: {
-          body: bodyParams.filter(Boolean),
-          header: headerParams.filter(Boolean),
+          body: bodyParams,
+          header: headerParams,
           headerMediaUrl: headerMediaUrl || undefined,
+          couponCode: couponCode.trim() || undefined,
+          buttonUrlSuffixes: buttonUrlSuffixes.some((value) => value.trim()) ? buttonUrlSuffixes : undefined,
         },
       });
       toastSuccess('Test template sent');
@@ -176,6 +232,23 @@ export default function TemplateDetailPanel({
                 onChange={(e) => setHeaderMediaUrl(e.target.value)}
               />
             )}
+            <div className="mt-3 space-y-3">
+              <TemplateButtonExtras
+                compact
+                template={template}
+                couponCode={couponCode}
+                buttonUrlSuffixes={buttonUrlSuffixes}
+                onCouponChange={setCouponCode}
+                onSuffixChange={(index, value) => {
+                  setButtonUrlSuffixes((prev) => {
+                    const next = [...prev];
+                    while (next.length <= index) next.push('');
+                    next[index] = value;
+                    return next;
+                  });
+                }}
+              />
+            </div>
 
             <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
               <AppInput
