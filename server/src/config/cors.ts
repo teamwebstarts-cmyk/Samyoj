@@ -12,16 +12,19 @@ function isNgrokHost(hostname: string): boolean {
   );
 }
 
-/** Origins allowed for browser CORS / Socket.IO (local + Codespaces + ngrok share + CLIENT_URL). */
+/** Origins allowed for browser CORS / Socket.IO (CLIENT_URL + configured webhook host; localhost/Codespaces/ngrok only in non-production). */
 export function isAllowedCorsOrigin(origin: string | undefined): boolean {
   if (!origin) return true;
 
   try {
     const url = new URL(origin);
     if (url.origin === new URL(config.clientUrl).origin) return true;
-    if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') return true;
-    if (isCodespaceHost(url.hostname)) return true;
-    if (isNgrokHost(url.hostname)) return true;
+    // Dev-only wildcards — production must use CLIENT_URL / META_WEBHOOK_URL, not any localhost/ngrok host.
+    if (config.nodeEnv !== 'production') {
+      if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') return true;
+      if (isCodespaceHost(url.hostname)) return true;
+      if (isNgrokHost(url.hostname)) return true;
+    }
     // Combined share proxy uses the same public host as META_WEBHOOK_URL.
     const webhookUrl = config.meta.webhookUrl;
     if (webhookUrl) {
