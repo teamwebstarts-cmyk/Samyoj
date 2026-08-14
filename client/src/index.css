@@ -1407,8 +1407,8 @@
   .campaign-review-top-grid {
     display: grid;
     min-width: 0;
-    grid-template-columns: minmax(0, 1fr) 220px;
-    grid-template-rows: auto auto;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    grid-template-rows: auto auto auto;
     gap: 0.75rem;
   }
 
@@ -1517,8 +1517,7 @@
     padding: 0.625rem;
   }
 
-  .dark .campaign-review-template-tile,
-  .dark .campaign-review-detail-tile {
+  .dark .campaign-review-template-tile {
     border-color: rgba(51, 65, 85, 0.8);
     background: rgba(15, 23, 42, 0.55);
   }
@@ -1572,8 +1571,10 @@
   }
 
   .campaign-review-preview-card {
+    display: flex;
     grid-column: 2;
-    grid-row: 1 / span 2;
+    grid-row: 1 / span 3;
+    flex-direction: column;
   }
 
   .campaign-review-preview-card .campaign-review-section-header {
@@ -1582,7 +1583,8 @@
 
   .campaign-review-preview-body {
     display: flex;
-    min-height: 15.25rem;
+    min-height: 22rem;
+    flex: 1;
     align-items: center;
     justify-content: center;
     background: linear-gradient(180deg, rgba(248, 250, 252, 0.82), rgba(241, 245, 249, 0.38));
@@ -1603,7 +1605,8 @@
 
   .campaign-review-phone-frame {
     display: flex;
-    width: min(100%, 12rem);
+    width: min(100%, 16.5rem);
+    min-height: 22rem;
     flex-direction: column;
     overflow: hidden;
     border: 3px solid rgb(15, 23, 42);
@@ -1634,7 +1637,8 @@
   }
 
   .campaign-review-phone-body {
-    min-height: 12.25rem;
+    min-height: 18.5rem;
+    flex: 1;
     overflow: hidden;
     background-color: #efeae2;
     background-image: var(--chat-wallpaper-wash), var(--chat-wallpaper);
@@ -1656,9 +1660,19 @@
     background: rgb(0, 92, 75);
   }
 
+  .campaign-review-message-card {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
   .campaign-review-audience-card {
     grid-column: 1;
     grid-row: 2;
+  }
+
+  .campaign-review-schedule-card {
+    grid-column: 1;
+    grid-row: 3;
   }
 
   .campaign-review-audience-grid {
@@ -1685,23 +1699,14 @@
     color: rgb(110, 231, 183);
   }
 
-  .campaign-review-schedule-card,
-  .campaign-review-delivery-card {
+  .campaign-review-schedule-card {
     padding: 0.75rem;
   }
 
-  .campaign-review-schedule-card .campaign-review-section-header,
-  .campaign-review-delivery-card .campaign-review-section-header {
+  .campaign-review-schedule-card .campaign-review-section-header {
     min-height: 0;
     border-bottom: 0;
     padding: 0 0 0.625rem;
-  }
-
-  .campaign-review-schedule-grid {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(14rem, 0.95fr);
-    align-items: end;
-    gap: 0.75rem;
   }
 
   .campaign-review-radio-row {
@@ -1730,70 +1735,9 @@
     background: rgba(6, 78, 59, 0.25);
   }
 
-  .campaign-review-delivery-note {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.5rem;
-    border: 1px solid rgba(219, 234, 254, 0.95);
-    border-radius: 0.625rem;
-    background: rgba(239, 246, 255, 0.72);
-    padding: 0.625rem 0.75rem;
-    color: rgb(71, 85, 105);
-    font-size: 0.5625rem;
-    font-weight: 600;
-    line-height: 1.45;
-  }
-
-  .dark .campaign-review-delivery-note {
-    border-color: rgba(30, 64, 175, 0.45);
-    background: rgba(23, 37, 84, 0.35);
-    color: rgb(148, 163, 184);
-  }
-
-  .campaign-review-detail-tile {
-    min-width: 0;
-    border: 1px solid rgba(226, 232, 240, 0.85);
-    border-radius: 0.625rem;
-    background: rgba(248, 250, 252, 0.7);
-    padding: 0.625rem 0.75rem;
-  }
-
-  .campaign-review-detail-tile p {
-    color: rgb(148, 163, 184);
-    font-size: 0.5625rem;
-    font-weight: 700;
-  }
-
-  .campaign-review-detail-tile strong {
-    display: block;
-    overflow: hidden;
-    margin-top: 0.25rem;
-    color: var(--color-text);
-    font-size: 0.625rem;
-    font-weight: 800;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .campaign-review-consent {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.5rem;
-    border: 1px solid rgba(167, 243, 208, 0.9);
-    border-radius: 0.625rem;
-    background: rgba(236, 253, 245, 0.72);
-    padding: 0.625rem 0.75rem;
-  }
-
-  .dark .campaign-review-consent {
-    border-color: rgba(6, 78, 59, 0.55);
-    background: rgba(6, 78, 59, 0.25);
-  }
-
   @media (max-width: 767px) {
     .campaign-review-top-grid,
-    .campaign-review-message-grid,
-    .campaign-review-schedule-grid {
+    .campaign-review-message-grid {
       display: flex;
       flex-direction: column;
     }
@@ -1804,6 +1748,10 @@
 
     .campaign-review-audience-card {
       order: 3;
+    }
+
+    .campaign-review-schedule-card {
+      order: 4;
     }
 
     .campaign-review-preview-body {
@@ -1822,7 +1770,7 @@
 
     .campaign-review-top-grid {
       gap: 0.5rem;
-      grid-template-columns: minmax(0, 1fr) 190px;
+      grid-template-columns: minmax(0, 1fr) 260px;
     }
 
     .campaign-review-section-header {
@@ -1837,8 +1785,8 @@
     }
 
     .campaign-review-preview-body {
-      min-height: 12.5rem;
-      padding: 0.375rem;
+      min-height: 18rem;
+      padding: 0.5rem;
     }
 
     .campaign-review-preview-surface {
@@ -1846,13 +1794,8 @@
       max-height: none;
     }
 
-    .campaign-review-schedule-card,
-    .campaign-review-delivery-card {
+    .campaign-review-schedule-card {
       padding: 0.625rem;
-    }
-
-    .campaign-review-schedule-grid {
-      gap: 0.5rem;
     }
   }
 

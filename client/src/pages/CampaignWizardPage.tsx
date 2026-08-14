@@ -22,6 +22,7 @@ import {
 import { templateNeedsHeaderMedia } from '../components/campaigns/campaignPreviewUtils';
 import { templateDynamicUrlButtons, templateNeedsCoupon } from '../utils/templateForm';
 import AppButton from '../components/ui/AppButton';
+import TemplateIssueAlert from '../components/templates/TemplateIssueAlert';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import LoadingState from '../components/ui/LoadingState';
 import { useAuth } from '../contexts/AuthContext';
@@ -504,14 +505,7 @@ export default function CampaignWizardPage() {
           }
         }}
       >
-        {stageError && (
-          <div
-            className="mb-3 rounded-lg border border-red-200/80 bg-red-50/80 px-3 py-2.5 text-[11px] font-semibold text-red-800 dark:border-red-900/50 dark:bg-red-950/25 dark:text-red-300"
-            role="alert"
-          >
-            {stageError}
-          </div>
-        )}
+        {stageError && <TemplateIssueAlert message={stageError} className="mb-3" />}
         {renderStage()}
       </form>
 

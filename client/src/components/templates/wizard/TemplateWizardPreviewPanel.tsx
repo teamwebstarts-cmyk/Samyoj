@@ -143,7 +143,7 @@ export function TemplateWizardPolicyFooter() {
       <span className="mt-0.5 font-bold">Important</span>
       <p>
         Do not create the same or very similar templates multiple times. Repeated rejections may affect
-        your WABA quality.{' '}
+        your WhatsApp account quality.{' '}
         <Link
           to="https://developers.facebook.com/docs/whatsapp/message-templates/guidelines/"
           target="_blank"

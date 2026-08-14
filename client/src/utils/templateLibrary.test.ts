@@ -17,11 +17,11 @@ describe('libraryButtonUrlError', () => {
       'http://localhost:3000/templates/library',
       'http://localhost:3000',
     );
-    expect(message).toMatch(/localhost|Samyoj/i);
+    expect(message).toMatch(/live website|computer|Samyoj/i);
   });
 
   it('rejects http that is not a public site even after upgrade when host is local', () => {
-    expect(libraryButtonUrlError('http://127.0.0.1:8000')).toMatch(/localhost|public/i);
+    expect(libraryButtonUrlError('http://127.0.0.1:8000')).toMatch(/computer|live website/i);
   });
 
   it('accepts a public https store URL', () => {

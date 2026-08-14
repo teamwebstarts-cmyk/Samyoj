@@ -120,7 +120,7 @@ export default function TemplateWizardReviewStep({
               No variables in this template
             </p>
             <p className="mt-1 text-[11px] text-slate-500">
-              You can continue to submit — sample values are only required when placeholders are used.
+              You can continue to submit — examples are only needed when the message has personal fields.
             </p>
           </div>
         )}

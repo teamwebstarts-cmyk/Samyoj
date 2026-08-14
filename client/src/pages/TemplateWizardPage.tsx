@@ -33,6 +33,7 @@ import {
 } from '../components/templates/wizard/templateWizardModel';
 import { getFilledTemplatePreview } from '../components/campaigns/campaignPreviewUtils';
 import AppAlert from '../components/ui/AppAlert';
+import TemplateIssueAlert from '../components/templates/TemplateIssueAlert';
 import AppButton from '../components/ui/AppButton';
 import LoadingState from '../components/ui/LoadingState';
 import { invalidateApprovedTemplatesCache } from '../components/inbox/TemplateComposer';
@@ -484,12 +485,8 @@ export default function TemplateWizardPage() {
         )}
 
         {stageError && (
-          <div
-            ref={errorRef}
-            className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-[12px] font-semibold text-red-800 dark:border-red-900/50 dark:bg-red-950/25 dark:text-red-300"
-            role="alert"
-          >
-            {stageError}
+          <div ref={errorRef}>
+            <TemplateIssueAlert message={stageError} className="mb-4" />
           </div>
         )}
 

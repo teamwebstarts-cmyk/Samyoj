@@ -33,7 +33,7 @@ function validateVariableText(field: string, text: string, issues: TemplateValid
   if (missing.length) {
     issues.push({
       field,
-      message: `Use sequential placeholders starting at {{1}} — missing {{${missing[0]}}}`,
+      message: `Number personal fields in order starting at {{1}} — {{${missing[0]}}} is missing`,
       severity: 'error',
     });
   }
@@ -42,7 +42,7 @@ function validateVariableText(field: string, text: string, issues: TemplateValid
   if (invalid?.length) {
     issues.push({
       field,
-      message: 'Only numbered placeholders are allowed (e.g. {{1}}, {{2}})',
+      message: 'Personal fields must be numbered, like {{1}} and {{2}}',
       severity: 'error',
     });
   }
@@ -51,14 +51,14 @@ function validateVariableText(field: string, text: string, issues: TemplateValid
   if (/^\{\{\d+\}\}/.test(trimmed)) {
     issues.push({
       field,
-      message: 'Text cannot start with a placeholder',
+      message: 'Don’t start the message with a personal field — add a greeting first',
       severity: 'error',
     });
   }
   if (/\{\{\d+\}\}$/.test(trimmed)) {
     issues.push({
       field,
-      message: 'Text cannot end with a placeholder',
+      message: 'Don’t end the message with a personal field — add a few words after it',
       severity: 'error',
     });
   }
@@ -227,11 +227,15 @@ export function validateTemplateForm(form: {
   const issues: TemplateValidationIssue[] = [];
 
   if (!form.name.trim()) {
-    issues.push({ field: 'name', message: 'Template name is required', severity: 'error' });
+    issues.push({
+      field: 'name',
+      message: 'Give this template a name',
+      severity: 'error',
+    });
   } else if (!/^[a-z0-9_]+$/.test(form.name)) {
     issues.push({
       field: 'name',
-      message: 'Use lowercase letters, numbers, and underscores only',
+      message: 'Use a simple name like order_update — only small letters, numbers, and _',
       severity: 'error',
     });
   } else if (form.name.length > 512) {
@@ -239,7 +243,7 @@ export function validateTemplateForm(form: {
   }
 
   if (!form.body.trim()) {
-    issues.push({ field: 'body', message: 'Body text is required', severity: 'error' });
+    issues.push({ field: 'body', message: 'Write the message customers will read', severity: 'error' });
   } else if (form.body.length > 1024) {
     issues.push({ field: 'body', message: 'Body must be 1,024 characters or fewer', severity: 'error' });
   } else {
@@ -262,7 +266,7 @@ export function validateTemplateForm(form: {
     if (filled < bodyVars) {
       issues.push({
         field: 'bodyExamples',
-        message: `Add sample values for all ${bodyVars} body variable(s)`,
+        message: `Add an example for each personal field (${bodyVars} still needed)`,
         severity: 'error',
       });
     }
@@ -321,7 +325,7 @@ export function validateTemplateForm(form: {
     for (const btn of form.buttons) {
       if (!btn.text.trim()) continue;
       if (btn.type === 'URL' && !btn.url?.trim()) {
-        issues.push({ field: 'buttons', message: 'URL is required for website buttons', severity: 'error' });
+        issues.push({ field: 'buttons', message: 'Add the website for this button', severity: 'error' });
       }
       if (btn.type === 'PHONE_NUMBER' && !btn.phone_number?.trim()) {
         issues.push({ field: 'buttons', message: 'Phone number is required for call buttons', severity: 'error' });
@@ -402,7 +406,7 @@ export function getTemplateApprovalChecklist(form: {
       label: 'Body has clear, readable text',
       passed: Boolean(form.body.trim()) && !errors.has('body') && !mostlyVariables,
       severity: 'error',
-      hint: mostlyVariables ? 'Add more fixed text around your placeholders' : undefined,
+      hint: mostlyVariables ? 'Add more normal words around the personal fields' : undefined,
     },
     {
       id: 'samples',

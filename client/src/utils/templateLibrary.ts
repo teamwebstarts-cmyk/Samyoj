@@ -310,34 +310,34 @@ function isPrivateOrLocalHost(hostname: string): boolean {
 export function libraryButtonUrlError(raw: string, appOrigin?: string): string | null {
   const value = normalizeWebsiteUrl(raw);
   if (!value) {
-    return 'Enter the HTTPS website customers open when they tap the button.';
+    return 'Add your website link here';
   }
 
   let parsed: URL;
   try {
     parsed = new URL(value);
   } catch {
-    return 'Enter a full website URL, like https://yourstore.com/verify';
+    return 'That doesn’t look like a website. Paste a full web address.';
   }
 
   if (parsed.protocol !== 'https:') {
-    return 'WhatsApp only allows HTTPS links. Use https://, not http://';
+    return 'This website link isn’t secure enough. Use an address that starts with https://, not http://';
   }
 
   if (isPrivateOrLocalHost(parsed.hostname)) {
-    return 'Don’t use localhost or this Samyoj page. WhatsApp opens the link on the customer’s phone — use your public site, like https://yourstore.com/verify';
+    return 'Use your live website, not this Samyoj page or a link that only works on your computer.';
   }
 
   const host = parsed.hostname.toLowerCase();
   if (host === 'example.com' || host.endsWith('.example.com')) {
-    return 'Replace the example URL with your real website.';
+    return 'Replace the sample address with your real website.';
   }
 
   if (appOrigin) {
     try {
       const here = new URL(appOrigin);
       if (parsed.hostname.toLowerCase() === here.hostname.toLowerCase()) {
-        return 'That’s this Samyoj screen, not a customer website. Use a public HTTPS page such as https://yourstore.com/verify';
+        return 'That’s this Samyoj screen, not a customer website.';
       }
     } catch {
       /* ignore */

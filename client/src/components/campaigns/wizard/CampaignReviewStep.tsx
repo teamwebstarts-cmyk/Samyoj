@@ -6,10 +6,8 @@ import {
   Edit3,
   Gift,
   Globe2,
-  Info,
   MessageCircle,
   MoreVertical,
-  Smartphone,
   Users,
 } from 'lucide-react';
 import AppButton from '../../ui/AppButton';
@@ -17,7 +15,6 @@ import AppInput from '../../ui/AppInput';
 import { WhatsAppTemplatePreview } from '../../inbox/WhatsAppPreview';
 import { getFilledTemplatePreview } from '../campaignPreviewUtils';
 import { humanizeParamValue, previewParams } from '../../../utils/templateForm';
-import { messagingConsent } from '../../../utils/plainLanguage';
 import type { MessageTemplate } from '../../../types';
 import type { CampaignWizardForm } from './campaignWizardModel';
 import type { CampaignQuotaData } from './CampaignWizardSummaryRail';
@@ -187,7 +184,7 @@ export default function CampaignReviewStep({
                 </div>
               </section>
 
-              <section className="campaign-review-section campaign-review-preview-card row-span-2">
+              <section className="campaign-review-section campaign-review-preview-card">
                 <div className="campaign-review-section-header">
                   <div className="flex items-center gap-1.5">
                     <span className="text-[10px] font-extrabold text-slate-700 dark:text-slate-200">Preview message</span>
@@ -269,9 +266,8 @@ export default function CampaignReviewStep({
                   </p>
                 )}
               </section>
-            </div>
 
-            <section className="campaign-review-section campaign-review-schedule-card">
+              <section className="campaign-review-section campaign-review-schedule-card">
               <div className="campaign-review-section-header">
                 <div className="flex items-center gap-2">
                   <span className="campaign-review-icon campaign-review-icon--emerald">
@@ -280,8 +276,7 @@ export default function CampaignReviewStep({
                   <h3>Schedule &amp; delivery</h3>
                 </div>
               </div>
-              <div className="campaign-review-schedule-grid">
-                <div className="space-y-1.5">
+              <div className="space-y-1.5">
                   {[
                     { value: false, title: 'Send now', description: 'Campaign will start sending immediately.' },
                     { value: true, title: 'Schedule for later', description: 'Choose a date and time to schedule your campaign.' },
@@ -330,50 +325,8 @@ export default function CampaignReviewStep({
                       </div>
                     </div>
                   )}
-                </div>
-                <div className="campaign-review-delivery-note">
-                  <Info className="h-3.5 w-3.5 shrink-0 text-sky-600 dark:text-sky-300" />
-                  <p>
-                    Campaign will be delivered as per WhatsApp and template quality, user settings, and rate limits.
-                  </p>
-                </div>
               </div>
             </section>
-
-            <section className="campaign-review-section campaign-review-delivery-card">
-              <div className="campaign-review-section-header">
-                <div className="flex items-center gap-2">
-                  <span className="campaign-review-icon campaign-review-icon--emerald">
-                    <Smartphone className="h-3.5 w-3.5" strokeWidth={2.25} />
-                  </span>
-                  <h3>Delivery details</h3>
-                </div>
-              </div>
-              <div className="grid gap-2 sm:grid-cols-2">
-                <div className="campaign-review-detail-tile">
-                  <p>WhatsApp channel</p>
-                  <strong>{channelLabel}</strong>
-                </div>
-                <div className="campaign-review-detail-tile">
-                  <p>Campaign timezone</p>
-                  <strong>{form.timezone || browserTimezone}</strong>
-                </div>
-              </div>
-              {estimatedCost != null && estimatedCost > 0 && (
-                <p className="mt-2 text-[9px] font-semibold text-amber-700 dark:text-amber-300">
-                  Estimated campaign cost: ₹{estimatedCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                </p>
-              )}
-            </section>
-
-            <div className="campaign-review-consent">
-              <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-300" />
-              <div>
-                <p className="text-[10px] font-extrabold text-emerald-900 dark:text-emerald-200">Before you send</p>
-                <p className="mt-0.5 text-[9px] font-medium leading-relaxed text-emerald-800 dark:text-emerald-300">
-                  {messagingConsent.campaignNotice}
-                </p>
-              </div>
             </div>
           </div>
         </main>

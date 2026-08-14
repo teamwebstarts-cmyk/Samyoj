@@ -18,6 +18,7 @@ import {
 } from '../components/templates/wizard/templateWizardModel';
 import { getFilledTemplatePreview } from '../components/campaigns/campaignPreviewUtils';
 import AppAlert from '../components/ui/AppAlert';
+import TemplateIssueAlert from '../components/templates/TemplateIssueAlert';
 import AppButton from '../components/ui/AppButton';
 import LoadingState from '../components/ui/LoadingState';
 import { invalidateApprovedTemplatesCache } from '../components/inbox/TemplateComposer';
@@ -148,7 +149,7 @@ export default function TemplateLibraryPage() {
         if (requestNumberId !== activeNumberIdRef.current) return;
         const msg =
           (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
-            ?.error?.message || 'Failed to load Meta template library.';
+            ?.error?.message || 'Couldn’t load ready-made templates. Refresh and try again.';
         toastError(msg);
         setMetaEntries([]);
       })
@@ -304,7 +305,7 @@ export default function TemplateLibraryPage() {
     if (!selected) return 'Select a template first.';
     if (!canCloneFromMetaLibrary(selected)) return null;
     if (!/^[a-z0-9_]+$/.test(createName.trim())) {
-      return 'Template name must be lowercase letters, numbers, and underscores only.';
+      return 'Use a simple name like order_update — only small letters, numbers, and _';
     }
     if (existingNames.has(createName.trim())) {
       return 'A template with this name already exists. Choose a different name.';
@@ -590,19 +591,12 @@ export default function TemplateLibraryPage() {
       </div>
 
       <div className="template-wizard-scroll min-h-0 flex-1">
-        {stageError && (
-          <div
-            className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-[12px] font-semibold text-red-800 dark:border-red-900/50 dark:bg-red-950/25 dark:text-red-300"
-            role="alert"
-          >
-            {stageError}
-          </div>
-        )}
+        {stageError && <TemplateIssueAlert message={stageError} className="mb-4" />}
 
         {sourceTab === 'meta' && categoryFilter === 'ALL' && activeStep === 0 && (
           <AppAlert variant="info" className="mb-4">
-            Meta&apos;s library has Utility and Authentication templates only. Marketing templates are
-            created in the editor, not cloned from this catalog.
+            These ready-made templates are for orders, accounts, and login codes. Create promotional
+            messages in the editor instead.
           </AppAlert>
         )}
 

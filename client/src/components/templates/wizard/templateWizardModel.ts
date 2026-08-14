@@ -175,7 +175,10 @@ export function mapTemplateApiError(message: string): string {
   if (lower.includes('resubmit') || lower.includes('rejected') || lower.includes('paused')) {
     return message;
   }
-  return message || 'Failed to save template. Check your content and try again.';
+  if (/#\d{3,}|error code|oauth|graph\.facebook|invalid parameter|permission denied/i.test(lower)) {
+    return 'WhatsApp couldn’t save this template. Check the website link and message text, then try again.';
+  }
+  return message || 'Couldn’t save the template. Check your message and try again.';
 }
 
 export function canResubmitTemplateStatus(status?: string) {

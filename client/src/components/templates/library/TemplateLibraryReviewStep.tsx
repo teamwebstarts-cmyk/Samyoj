@@ -106,7 +106,7 @@ export default function TemplateLibraryReviewStep({
             id="library-template-name"
             label="Your template name"
             placeholder="my_delivery_update"
-            hint="Lowercase letters, numbers, and underscores only."
+                  hint="Lowercase letters, numbers, and _ only — like order_update."
             value={createName}
             onChange={(e) => onCreateNameChange(e.target.value.toLowerCase().replace(/\s/g, '_'))}
             required
@@ -119,7 +119,10 @@ export default function TemplateLibraryReviewStep({
           {needsButtons && (
             <div className="mt-4 space-y-3">
               <p className="text-[12px] font-bold text-slate-800 dark:text-slate-200">
-                Button details required by Meta
+                Where should the button take customers?
+              </p>
+              <p className="text-[11px] text-slate-500">
+                WhatsApp opens this on their phone. Use a page on your live website.
               </p>
               {urlButton && (
                 <AppInput
@@ -155,8 +158,8 @@ export default function TemplateLibraryReviewStep({
           <div className="border-b border-slate-100 px-4 py-3 dark:border-slate-800">
             <p className="text-[13px] font-bold text-slate-900 dark:text-white">Variables</p>
             <p className="text-[11px] text-slate-500">
-              Sample values come from Meta. “Filled from” connects each one to a contact field for
-              campaigns and inbox.
+              Sample values come from WhatsApp. “Filled from” connects each one to a contact so campaigns
+              can fill it automatically.
             </p>
           </div>
           <div className="overflow-x-auto px-4 py-3">

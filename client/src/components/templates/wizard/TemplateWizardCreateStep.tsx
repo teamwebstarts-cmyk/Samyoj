@@ -213,8 +213,8 @@ export default function TemplateWizardCreateStep({
             WhatsApp must approve this first
           </p>
           <p className="mt-0.5 text-[12px] leading-relaxed text-rose-800/90 dark:text-rose-300/90">
-            Only approved templates can be used in campaigns. Add sample values for every placeholder to
-            improve approval chances.
+            Only approved templates can be used in campaigns. Add example names and numbers for every
+            personal field so WhatsApp can review a realistic message.
           </p>
         </div>
       </div>
@@ -230,8 +230,8 @@ export default function TemplateWizardCreateStep({
         <div className="rounded-xl border border-sky-200/70 bg-sky-50/60 px-4 py-3 text-[12px] text-sky-900 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-200">
           <p className="font-semibold">Utility template guidelines</p>
           <p className="mt-1">
-            Use for transactional updates (orders, appointments, account alerts). Avoid promotional
-            language — Meta may recategorize or reject miscategorized templates.
+            Use for order updates, appointments, and account alerts. Avoid sales language — WhatsApp may
+            treat it as a promo and reject it.
           </p>
         </div>
       )}
