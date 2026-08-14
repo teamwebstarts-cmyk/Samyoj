@@ -14,6 +14,16 @@ export function clientMeta(req: Request) {
   };
 }
 
+export async function revokeRefreshSessionsForUser(
+  userId: string,
+  db: { refreshToken: { updateMany: typeof prisma.refreshToken.updateMany } } = prisma
+) {
+  await db.refreshToken.updateMany({
+    where: { userId, revokedAt: null },
+    data: { revokedAt: new Date() },
+  });
+}
+
 export async function createSession(payload: JwtPayload, req: Request) {
   const accessToken = signAccessToken(payload);
   const refreshToken = signRefreshToken(payload);

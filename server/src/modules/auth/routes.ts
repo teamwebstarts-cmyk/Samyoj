@@ -21,6 +21,7 @@ import {
   authLoginLimiter,
   authRegisterLimiter,
   authForgotLimiter,
+  consumeAccountThrottle,
 } from './rate-limit';
 
 const router = Router();
@@ -59,6 +60,9 @@ router.post(
   asyncHandler(async (req: Request, res: Response) => {
     const data = registerSchema.parse(req.body);
     const email = data.email.toLowerCase().trim();
+    if (!(await consumeAccountThrottle(`register:${email}`, 5, 60 * 60))) {
+      throw new AppError(429, 'Too many accounts created for that email. Try again later.');
+    }
     const passwordHash = await bcrypt.hash(data.password, 12);
 
     let result: { user: { id: string; name: string; email: string; role: string }; org: { id: string; companyName: string } };
@@ -137,6 +141,9 @@ router.post(
   asyncHandler(async (req: Request, res: Response) => {
     const data = loginSchema.parse(req.body);
     const email = data.email.toLowerCase().trim();
+    if (!(await consumeAccountThrottle(`login:${email}`, 10, 15 * 60))) {
+      throw new AppError(429, 'Too many login attempts. Try again in 15 minutes.');
+    }
 
     const user = await prisma.user.findUnique({
       where: { email },
@@ -299,6 +306,9 @@ router.post(
   asyncHandler(async (req: Request, res: Response) => {
     const { email } = z.object({ email: z.string().email() }).parse(req.body);
     const normalized = email.toLowerCase().trim();
+    if (!(await consumeAccountThrottle(`forgot:${normalized}`, 5, 60 * 60))) {
+      throw new AppError(429, 'Too many reset requests. Try again later.');
+    }
 
     const user = await prisma.user.findUnique({ where: { email: normalized } });
     if (user) {
@@ -336,6 +346,10 @@ router.post(
 
     if (!resetToken || resetToken.usedAt || resetToken.expiresAt < new Date()) {
       throw new AppError(400, 'Invalid or expired reset link');
+    }
+
+    if (!(await consumeAccountThrottle(`reset:${resetToken.userId}`, 8, 60 * 60))) {
+      throw new AppError(429, 'Too many reset requests. Try again later.');
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
