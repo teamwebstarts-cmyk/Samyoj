@@ -11,8 +11,8 @@ import { clientBuildExists, getClientPaths } from './config/paths';
 import { validateConfig } from './config/validate';
 import { initSentry } from './config/sentry';
 import { errorHandler, logError, setupGlobalErrorHandlers } from './errors';
-import { verifyAccessToken } from './utils/jwt';
 import logger, { requestLogger } from './utils/logger';
+import { socketAuthMiddleware } from './middleware/socket-auth';
 import prisma from './config/database';
 import Redis from 'ioredis';
 
@@ -63,27 +63,18 @@ const io = new Server(httpServer, {
   },
 });
 
-// Socket.IO auth & rooms
-io.use((socket, next) => {
-  const token = socket.handshake.auth.token;
-  if (!token) {
-    logError(new Error('Authentication required'), { source: 'socket', path: '/connect' });
-    return next(new Error('Authentication required'));
-  }
-  try {
-    const user = verifyAccessToken(token);
-    socket.data.user = user;
-    next();
-  } catch (err) {
-    logError(err, { source: 'socket', path: '/connect' });
-    next(new Error('Invalid token'));
-  }
-});
+// Socket.IO auth & rooms — JWT + OrganizationUser membership (same as HTTP requireOrg)
+io.use(socketAuthMiddleware);
 
 startPresenceSweeper(io);
 
 io.on('connection', (socket) => {
   const user = socket.data.user;
+  if (!user) {
+    socket.disconnect(true);
+    return;
+  }
+  // Membership already verified in socketAuthMiddleware — never join org:{jwtOrgId} otherwise.
   if (user.organizationId) {
     socket.join(`org:${user.organizationId}`);
   }
@@ -92,14 +83,6 @@ io.on('connection', (socket) => {
   }
 
   registerPresenceHandlers(io, socket);
-
-  socket.on('join:conversation', (conversationId: string) => {
-    socket.join(`conversation:${conversationId}`);
-  });
-
-  socket.on('leave:conversation', (conversationId: string) => {
-    socket.leave(`conversation:${conversationId}`);
-  });
 
   socket.on('error', (err) => {
     logError(err, {
@@ -217,11 +200,20 @@ app.get('/health', async (_req, res) => {
     checks.redis = 'error';
   }
 
+  let workersStarted = false;
+  try {
+    const { areWorkersStarted } = await import('./workers/index');
+    workersStarted = areWorkersStarted();
+  } catch {
+    workersStarted = false;
+  }
+
   const healthy = Object.values(checks).every((v) => v === 'ok');
   res.status(healthy ? 200 : 503).json({
     status: healthy ? 'ok' : 'degraded',
     timestamp: new Date().toISOString(),
     checks,
+    workersStarted,
     version: '1.0.0',
   });
 });
