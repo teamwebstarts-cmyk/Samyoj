@@ -1,83 +1,52 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Package, RefreshCw, Settings2, ShoppingBag } from 'lucide-react';
-import ContactAvatar from '../components/inbox/ContactAvatar';
-import CommerceOrderCard, { nextAction } from '../components/commerce/CommerceOrderCard';
+import { RefreshCw, Settings2, ShoppingBag } from 'lucide-react';
+import CommerceEmptyWorkspace from '../components/commerce/CommerceEmptyWorkspace';
 import CommerceOrderDetailPanel from '../components/commerce/CommerceOrderDetailPanel';
+import CommerceOrderList from '../components/commerce/CommerceOrderList';
+import { emptyOrderCounts, ORDER_STATUS_CHIPS, type CommerceOrder, type OrderCounts } from '../components/commerce/commerceUi';
 import AppButton from '../components/ui/AppButton';
-import AppSelect from '../components/ui/AppSelect';
-import DataTable from '../components/ui/DataTable';
 import EmptyState from '../components/ui/EmptyState';
 import ListToolbar from '../components/ui/ListToolbar';
 import LoadingState from '../components/ui/LoadingState';
 import PageHero from '../components/ui/PageHero';
 import PageShell from '../components/ui/PageShell';
-import ResponsiveDataView from '../components/ui/ResponsiveDataView';
-import StatusBadge from '../components/ui/StatusBadge';
-import { TableTextButton } from '../components/ui/TableActions';
+import Pagination from '../components/ui/Pagination';
+import { FOCUS_RING_CLASS } from '../hooks/inboxA11y';
 import { commerceApi } from '../services/api';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
-import { toastError, toastSuccess } from '../utils/toast';
+import { useSocket } from '../hooks/useSocket';
+import { toastError, toastSuccess, toastWarning } from '../utils/toast';
 import { readNumberCache, writeNumberCache } from '../utils/whatsappNumberCache';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
-
-interface Order {
-  id: string;
-  referenceId: string;
-  status: string;
-  paymentStatus: string;
-  totalCents: number;
-  currency: string;
-  createdAt: string;
-  contact?: { name?: string | null; phone: string } | null;
-}
+import { DEFAULT_PAGE_SIZE } from '../constants/pagination';
 
 const COMMERCE_CACHE_KEY = 'commerce';
 
 type CommerceNumberCache = {
-  orders: Order[];
+  orders: CommerceOrder[];
   statusFilter: string;
   search: string;
-  detailOrder: Order | null;
-  detailData: Order | null;
+  page: number;
+  total: number;
+  counts: OrderCounts;
 };
 
-const statusFilterOptions = [
-  { value: '', label: 'All statuses' },
-  { value: 'PENDING', label: 'Pending' },
-  { value: 'PROCESSING', label: 'Processing' },
-  { value: 'SHIPPED', label: 'Shipped' },
-  { value: 'COMPLETED', label: 'Completed' },
-  { value: 'CANCELED', label: 'Canceled' },
-];
-
-function formatMoney(cents: number, currency: string) {
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: currency || 'INR',
-  }).format(cents / 100);
-}
-
-function formatDate(value: string) {
-  return new Date(value).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
 export default function CommercePage() {
-  const { activeNumber, resolved } = useWhatsAppNumber();
-  const [orders, setOrders] = useState<Order[]>([]);
+  const { activeNumber, resolved, hasConnectedNumber, loading: numbersLoading } = useWhatsAppNumber();
+  const [orders, setOrders] = useState<CommerceOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [counts, setCounts] = useState<OrderCounts>(emptyOrderCounts);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
-  const [detailOrder, setDetailOrder] = useState<Order | null>(null);
+  const [detailOrder, setDetailOrder] = useState<CommerceOrder | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [detailData, setDetailData] = useState<Order | null>(null);
+  const [detailData, setDetailData] = useState<CommerceOrder | null>(null);
+  const [exampleOpen, setExampleOpen] = useState(false);
   const loadRef = useRef<() => void>(() => {});
   const activeNumberIdRef = useRef<string | null>(null);
   activeNumberIdRef.current = activeNumber?.id ?? null;
@@ -85,36 +54,48 @@ export default function CommercePage() {
     orders: [],
     statusFilter: '',
     search: '',
-    detailOrder: null,
-    detailData: null,
+    page: 1,
+    total: 0,
+    counts: emptyOrderCounts,
   });
+
+  const debouncedSearch = useDebouncedValue(search);
+  const pageSize = DEFAULT_PAGE_SIZE;
 
   commerceSnapshotRef.current = {
     orders,
     statusFilter,
     search,
-    detailOrder,
-    detailData,
+    page,
+    total,
+    counts,
   };
 
   const load = useCallback(() => {
     if (!resolved || !activeNumber) return;
     const requestNumberId = activeNumber.id;
     setLoading(true);
-    const params: Record<string, string> = {};
+    const params: Record<string, string> = {
+      page: String(page),
+      limit: String(pageSize),
+    };
     if (statusFilter) params.status = statusFilter;
+    if (debouncedSearch.trim()) params.search = debouncedSearch.trim();
 
     commerceApi
       .orders(params)
       .then((res) => {
         if (requestNumberId !== activeNumberIdRef.current) return;
-        setOrders(res.data.data.orders || []);
+        const payload = res.data.data || {};
+        setOrders(payload.orders || []);
+        setTotal(payload.total || 0);
+        setCounts(payload.counts || emptyOrderCounts);
       })
       .catch(() => toastError('Failed to load orders'))
       .finally(() => {
         if (requestNumberId === activeNumberIdRef.current) setLoading(false);
       });
-  }, [activeNumber, resolved, statusFilter]);
+  }, [activeNumber, resolved, statusFilter, debouncedSearch, page, pageSize]);
 
   loadRef.current = load;
 
@@ -126,17 +107,27 @@ export default function CommercePage() {
       setOrders(cached.orders);
       setStatusFilter(cached.statusFilter);
       setSearch(cached.search);
+      setPage(cached.page || 1);
+      setTotal(cached.total || 0);
+      setCounts(cached.counts || emptyOrderCounts);
       setDetailOrder(null);
       setDetailData(null);
       setDetailLoading(false);
       setUpdatingId(null);
+      setExampleOpen(false);
       setLoading(true);
       loadRef.current();
       return;
     }
     setOrders([]);
+    setStatusFilter('');
+    setSearch('');
+    setPage(1);
+    setTotal(0);
+    setCounts(emptyOrderCounts);
     setDetailOrder(null);
     setDetailData(null);
+    setExampleOpen(false);
     loadRef.current();
   });
 
@@ -144,34 +135,61 @@ export default function CommercePage() {
     load();
   }, [load]);
 
-  const openOrderDetail = async (order: Order) => {
+  useSocket((event, data) => {
+    if (event !== 'order:new' && event !== 'order:updated') return;
+    const payload = data as { whatsappNumberId?: string | null };
+    const currentNumberId = activeNumberIdRef.current;
+    if (payload.whatsappNumberId && currentNumberId && payload.whatsappNumberId !== currentNumberId) {
+      return;
+    }
+    loadRef.current();
+  });
+
+  const openOrderDetail = async (order: CommerceOrder) => {
+    setExampleOpen(false);
     if (!resolved || !activeNumber) return;
     const requestNumberId = activeNumber.id;
     setDetailOrder(order);
-    setDetailData(null);
+    setDetailData(order);
     setDetailLoading(true);
     try {
       const res = await commerceApi.order(order.id);
       if (requestNumberId !== activeNumberIdRef.current) return;
-      setDetailData(res.data.data as Order);
+      setDetailData(res.data.data as CommerceOrder);
     } catch {
       if (requestNumberId === activeNumberIdRef.current) {
         toastError('Failed to load order details');
         setDetailOrder(null);
+        setDetailData(null);
       }
     } finally {
       if (requestNumberId === activeNumberIdRef.current) setDetailLoading(false);
     }
   };
 
-  const updateStatus = async (id: string, status: string) => {
+  const updateStatus = async (
+    id: string,
+    status: string,
+    options?: { statusNote?: string; notifyContact?: boolean }
+  ) => {
+    const notifyContact = options?.notifyContact ?? true;
     setUpdatingId(id);
     try {
-      await commerceApi.updateStatus(id, { status });
-      toastSuccess('Order updated');
+      const res = await commerceApi.updateStatus(id, {
+        status,
+        statusNote: options?.statusNote,
+        notifyContact,
+      });
+      const notified = Boolean(res.data.data?.notified);
+      if (notifyContact && notified) toastSuccess('Customer notified on WhatsApp');
+      else if (notifyContact && !notified) {
+        toastWarning('Order updated, but WhatsApp could not be notified');
+      } else {
+        toastSuccess('Order updated');
+      }
       load();
       if (detailOrder?.id === id) {
-        setDetailData((prev) => (prev ? { ...prev, status } : prev));
+        setDetailData((prev) => (prev ? { ...prev, status, statusNote: options?.statusNote ?? prev.statusNote } : prev));
         setDetailOrder((prev) => (prev ? { ...prev, status } : prev));
       }
     } catch {
@@ -181,69 +199,131 @@ export default function CommercePage() {
     }
   };
 
-  const filteredOrders = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return orders;
-    return orders.filter((order) => {
-      const customer = order.contact?.name || order.contact?.phone || '';
-      return (
-        order.referenceId.toLowerCase().includes(q) ||
-        customer.toLowerCase().includes(q)
-      );
-    });
-  }, [orders, search]);
-
-  const stats = useMemo(
-    () => ({
-      total: orders.length,
-      pending: orders.filter((o) => o.status === 'PENDING').length,
-      completed: orders.filter((o) => o.status === 'COMPLETED').length,
-    }),
-    [orders]
-  );
-
   const hasActiveFilters = Boolean(search || statusFilter);
+  const inProgress = counts.processing + counts.shipped;
+  const showStats = counts.total > 0;
+  const showNeedsActionBanner = counts.pending > 0 && statusFilter !== 'PENDING';
+
+  const changeStatusFilter = (value: string) => {
+    setStatusFilter(value);
+    setPage(1);
+  };
+
+  if (numbersLoading || !resolved) {
+    return (
+      <PageShell>
+        <div className="p-6">
+          <LoadingState label="Loading orders..." />
+        </div>
+      </PageShell>
+    );
+  }
+
+  if (!hasConnectedNumber) {
+    return (
+      <PageShell>
+        <div className="p-4 sm:p-6">
+          <EmptyState
+            icon={Settings2}
+            title="Connect WhatsApp first"
+            description="Orders appear here after customers buy from your WhatsApp catalog."
+            steps={['Open Settings', 'Connect your WhatsApp number', 'Come back here to track orders']}
+            action={
+              <Link to="/settings">
+                <AppButton icon={<Settings2 size={16} />}>Go to Settings</AppButton>
+              </Link>
+            }
+          />
+        </div>
+      </PageShell>
+    );
+  }
 
   return (
     <PageShell>
       <div className="space-y-4 sm:space-y-5">
         <PageHero
-          badge="Commerce"
+          variant="clean"
+          badge="Orders"
           badgeIcon={ShoppingBag}
           title="Orders"
-          description="Track and fulfill catalog purchases received through WhatsApp."
-          accent="emerald"
-          stats={[
-            { label: 'Total', value: stats.total },
-            {
-              label: 'Pending',
-              value: stats.pending,
-              tone: 'text-amber-700 dark:text-amber-300',
-            },
-            {
-              label: 'Completed',
-              value: stats.completed,
-              tone: 'text-emerald-700 dark:text-emerald-300',
-            },
-          ]}
+          description="Track catalog purchases from WhatsApp and keep customers updated."
+          stats={
+            showStats
+              ? [
+                  {
+                    label: 'To prepare',
+                    value: counts.pending,
+                    tone: 'text-amber-600',
+                  },
+                  {
+                    label: 'In progress',
+                    value: inProgress,
+                    tone: 'text-sky-700 dark:text-sky-300',
+                  },
+                  {
+                    label: 'Complete',
+                    value: counts.completed,
+                    tone: 'text-emerald-600',
+                  },
+                ]
+              : undefined
+          }
         />
+
+        {showNeedsActionBanner && (
+          <div className="flex flex-col gap-3 rounded-2xl border border-amber-200/80 bg-amber-50/80 px-4 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-amber-500/20 dark:bg-amber-950/20">
+            <div>
+              <p className="text-[13px] font-bold text-amber-900 dark:text-amber-200">
+                {counts.pending} order{counts.pending === 1 ? '' : 's'} waiting to be prepared
+              </p>
+              <p className="mt-0.5 text-[12px] text-amber-800/80 dark:text-amber-300/80">
+                Start preparing, then tell the customer on WhatsApp.
+              </p>
+            </div>
+            <AppButton variant="secondary" size="sm" onClick={() => changeStatusFilter('PENDING')}>
+              View orders
+            </AppButton>
+          </div>
+        )}
 
         <div className="inbox-shell overflow-hidden">
           <ListToolbar
             embedded
+            compactMobile
             stackFilters
             search={search}
-            onSearchChange={setSearch}
-            searchPlaceholder="Search reference or customer..."
+            onSearchChange={(value) => {
+              setSearch(value);
+              setPage(1);
+            }}
+            searchPlaceholder="Search name or phone..."
             filters={
-              <AppSelect
-                className="w-full sm:w-[148px]"
-                value={statusFilter}
-                placeholder="All statuses"
-                isSearchable={false}
-                options={statusFilterOptions}
-                onChange={(e) => setStatusFilter(e.target.value)}
-              />
+              <div
+                className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                role="tablist"
+                aria-label="Order status"
+              >
+                {ORDER_STATUS_CHIPS.map((chip) => {
+                  const active = statusFilter === chip.value;
+                  return (
+                    <button
+                      key={chip.value || 'all'}
+                      type="button"
+                      role="tab"
+                      aria-selected={active}
+                      onClick={() => changeStatusFilter(chip.value)}
+                      className={`inline-flex h-8 shrink-0 items-center rounded-lg px-2.5 text-[12px] font-semibold transition ${FOCUS_RING_CLASS} ${
+                        active
+                          ? 'bg-whatsapp-600 text-white shadow-[0_1px_3px_rgba(37,211,102,0.3)]'
+                          : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700'
+                      }`}
+                    >
+                      {chip.label}
+                    </button>
+                  );
+                })}
+              </div>
             }
             actions={
               <AppButton variant="secondary" size="sm" icon={<RefreshCw size={15} />} onClick={load}>
@@ -252,108 +332,38 @@ export default function CommercePage() {
             }
           />
 
-          {loading ? (
+          {loading && orders.length === 0 ? (
             <div className="p-6">
               <LoadingState label="Loading orders..." />
             </div>
-          ) : filteredOrders.length === 0 ? (
-            <div className="p-4 sm:p-6">
-              <EmptyState
-                icon={Package}
-                variant={hasActiveFilters ? 'filter' : 'default'}
-                title={hasActiveFilters ? 'No orders match your filters' : 'No orders yet'}
-                description={
-                  hasActiveFilters
-                    ? 'Try a different search word or order status.'
-                    : 'Orders show up here when customers buy from your WhatsApp product catalog.'
-                }
-                steps={
-                  hasActiveFilters
-                    ? undefined
-                    : ['Connect WhatsApp in Settings', 'Add products to your catalog', 'Share the catalog link with customers']
-                }
-                action={
-                  !hasActiveFilters ? (
-                    <Link to="/settings?tab=whatsapp">
-                      <AppButton variant="secondary" icon={<Settings2 size={16} />}>
-                        Set up catalog
-                      </AppButton>
-                    </Link>
-                  ) : undefined
-                }
-              />
-            </div>
-          ) : (
-            <ResponsiveDataView
-              items={filteredOrders}
-              cardClassName="divide-y divide-neutral-200 dark:divide-neutral-800 lg:hidden"
-              tableClassName="px-4 sm:px-5 pt-4 sm:pb-5"
-              renderCard={(order) => (
-                <CommerceOrderCard
-                  key={order.id}
-                  order={order}
-                  onUpdateStatus={updateStatus}
-                  formatMoney={formatMoney}
-                  formatDate={formatDate}
-                  onClick={() => void openOrderDetail(order)}
-                  updating={updatingId === order.id}
-                />
-              )}
-              renderTable={() => (
-                <DataTable headers={['Reference', 'Customer', 'Total', 'Status', 'Payment', 'Actions']} serialNo={false}>
-                  {filteredOrders.map((order) => {
-                    const action = nextAction(order.status);
-                    const customer = order.contact?.name || order.contact?.phone || '—';
-
-                    return (
-                      <tr
-                        key={order.id}
-                        className="group cursor-pointer transition-colors hover:bg-theme-subtle/40"
-                        onClick={() => void openOrderDetail(order)}
-                      >
-                        <td className="min-w-[140px]">
-                          <p className="font-mono text-[12px] font-semibold text-theme-fg">{order.referenceId}</p>
-                          <p className="mt-0.5 text-[11px] text-theme-muted">{formatDate(order.createdAt)}</p>
-                        </td>
-                        <td className="min-w-[160px]">
-                          <div className="flex items-center gap-2.5">
-                            <ContactAvatar
-                              name={order.contact?.name || undefined}
-                              phone={order.contact?.phone || order.referenceId}
-                              size="sm"
-                            />
-                            <span className="truncate font-medium text-theme-fg">{customer}</span>
-                          </div>
-                        </td>
-                        <td className="whitespace-nowrap font-semibold tabular-nums text-theme-fg">
-                          {formatMoney(order.totalCents, order.currency)}
-                        </td>
-                        <td className="whitespace-nowrap">
-                          <StatusBadge status={order.status} />
-                        </td>
-                        <td className="whitespace-nowrap">
-                          <StatusBadge status={order.paymentStatus} />
-                        </td>
-                        <td onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center justify-end">
-                            {action ? (
-                              <TableTextButton
-                                variant="neutral"
-                                onClick={() => void updateStatus(order.id, action.next)}
-                              >
-                                {action.label}
-                              </TableTextButton>
-                            ) : (
-                              <span className="text-[12px] text-theme-muted">—</span>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </DataTable>
-              )}
+          ) : orders.length === 0 ? (
+            <CommerceEmptyWorkspace
+              mode={hasActiveFilters ? 'filter' : 'empty'}
+              onOpenExample={(order) => {
+                setExampleOpen(true);
+                setDetailOrder(order);
+                setDetailData(order);
+                setDetailLoading(false);
+              }}
             />
+          ) : (
+            <>
+              <CommerceOrderList
+                orders={orders}
+                onOpen={(order) => void openOrderDetail(order)}
+                onUpdateStatus={(id, status) => void updateStatus(id, status)}
+                updatingId={updatingId}
+              />
+              <div className="border-t border-theme-border px-4 py-3 sm:px-5">
+                <Pagination
+                  page={page}
+                  pageSize={pageSize}
+                  total={total}
+                  onPageChange={setPage}
+                  itemLabel="orders"
+                />
+              </div>
+            </>
           )}
         </div>
       </div>
@@ -361,15 +371,15 @@ export default function CommercePage() {
       <CommerceOrderDetailPanel
         order={detailData || detailOrder}
         open={Boolean(detailOrder)}
-        loading={detailLoading}
+        loading={detailLoading && !detailData}
+        preview={exampleOpen}
         onClose={() => {
           setDetailOrder(null);
           setDetailData(null);
+          setExampleOpen(false);
         }}
         onUpdateStatus={updateStatus}
         updating={detailOrder ? updatingId === detailOrder.id : false}
-        formatMoney={formatMoney}
-        formatDate={formatDate}
       />
     </PageShell>
   );
