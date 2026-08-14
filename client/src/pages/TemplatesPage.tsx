@@ -11,8 +11,8 @@ import AppButton from '../components/ui/AppButton';
 import TemplateTable, { type TemplateTableRow } from '../components/templates/TemplateTable';
 import TemplateCard from '../components/templates/TemplateCard';
 import EmptyState from '../components/ui/EmptyState';
-import LoadingState from '../components/ui/LoadingState';
 import PageHero from '../components/ui/PageHero';
+import TemplatesListSkeleton from '../components/templates/TemplatesListSkeleton';
 import PageShell from '../components/ui/PageShell';
 import ResponsiveDataView from '../components/ui/ResponsiveDataView';
 import Pagination from '../components/ui/Pagination';
@@ -349,6 +349,8 @@ export default function TemplatesPage() {
     categoryFilter !== ALL_CATEGORIES ||
     languageFilter !== ALL_LANGUAGES;
 
+  const showListSkeleton = loading && templates.length === 0;
+
   const toggleGroup = (name: string) => {
     setExpandedGroups((prev) => {
       const next = new Set(prev);
@@ -388,10 +390,10 @@ export default function TemplatesPage() {
           title="Message templates"
           description="Create and manage approved templates for campaigns and outreach."
           stats={[
-            { label: 'Total', value: stats.total },
-            { label: 'Approved', value: stats.approved, tone: 'text-emerald-600' },
-            { label: 'Pending', value: stats.pending, tone: 'text-amber-600' },
-            { label: 'Rejected', value: stats.rejected, tone: 'text-red-600' },
+            { label: 'Total', value: showListSkeleton ? '—' : stats.total },
+            { label: 'Approved', value: showListSkeleton ? '—' : stats.approved, tone: 'text-emerald-600' },
+            { label: 'Pending', value: showListSkeleton ? '—' : stats.pending, tone: 'text-amber-600' },
+            { label: 'Rejected', value: showListSkeleton ? '—' : stats.rejected, tone: 'text-red-600' },
           ]}
         />
 
@@ -412,6 +414,10 @@ export default function TemplatesPage() {
             onCreate={openCreate}
           />
 
+          {showListSkeleton ? (
+            <TemplatesListSkeleton />
+          ) : (
+            <>
           <TemplatePendingBanner pending={stats.pending} />
 
           {rejectionAlerts.length > 0 && (
@@ -433,11 +439,7 @@ export default function TemplatesPage() {
             </div>
           )}
 
-          {loading ? (
-            <div className="p-6">
-              <LoadingState label="Loading templates..." />
-            </div>
-          ) : filteredTemplates.length === 0 ? (
+          {filteredTemplates.length === 0 ? (
             <div className="p-4 sm:p-6">
               <EmptyState
                 icon={FileText}
@@ -515,6 +517,8 @@ export default function TemplatesPage() {
                   className="!border-t-0"
                 />
               </div>
+            </>
+          )}
             </>
           )}
         </div>

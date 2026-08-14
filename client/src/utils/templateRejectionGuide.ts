@@ -138,12 +138,20 @@ export function getTemplateRejectionGuide(reason?: string | null): TemplateRejec
   };
 }
 
+/** Meta does not publish a hard SLA. Typical Cloud API review window. */
+export const TEMPLATE_REVIEW_ETA = {
+  short: 'Usually within 24h',
+  typical: 'Usually a few minutes to 24 hours',
+  detail:
+    'WhatsApp reviews this template. Most decisions come in a few minutes to 24 hours; busy periods can take up to 48 hours. We check every 30 seconds and notify you when the status changes.',
+};
+
 export function getTemplateStatusHelp(status: string): { title: string; message: string } | null {
   const upper = status.toUpperCase();
   if (upper === 'PENDING') {
     return {
       title: 'Waiting for WhatsApp review',
-      message: 'Review usually takes a few minutes to 48 hours. You will be notified when the status changes.',
+      message: TEMPLATE_REVIEW_ETA.detail,
     };
   }
   if (upper === 'PAUSED') {

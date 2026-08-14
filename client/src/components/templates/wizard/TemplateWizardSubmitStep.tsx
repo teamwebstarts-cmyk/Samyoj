@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { formatSubmissionDate, type TemplateWizardSubmitResult } from './templateWizardModel';
+import { TEMPLATE_REVIEW_ETA } from '../../../utils/templateRejectionGuide';
 import { CATEGORY_OPTIONS, LANGUAGE_OPTIONS } from '../../../utils/templateUtils';
 import { toastSuccess } from '../../../utils/toast';
 
@@ -85,7 +86,7 @@ export default function TemplateWizardSubmitStep({
           icon: Clock,
           tone: 'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400',
           title: 'WhatsApp review',
-          body: 'Quality and policy check. Most templates finish within 24 hours.',
+          body: `Quality and policy check. ${TEMPLATE_REVIEW_ETA.typical}.`,
         },
         {
           icon: Mail,
@@ -260,7 +261,7 @@ export default function TemplateWizardSubmitStep({
               {isApproved ? 'Review time' : 'Estimated review'}
             </p>
             <p className="mt-1 text-[12px] font-semibold text-slate-800 dark:text-slate-200">
-              {isApproved ? 'None — already approved' : 'Up to 24 hours'}
+              {isApproved ? 'None — already approved' : TEMPLATE_REVIEW_ETA.typical}
             </p>
           </div>
         </div>

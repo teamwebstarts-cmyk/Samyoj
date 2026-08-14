@@ -441,6 +441,7 @@ export interface TemplatePurposePreset {
   category: TemplateFormState['category'];
   body: string;
   footer?: string;
+  buttons?: TemplateButtonForm[];
   /** description per body var index (1-based) → auto-mapped source */
   variables: Array<{
     description: string;
@@ -449,11 +450,12 @@ export interface TemplatePurposePreset {
   }>;
 }
 
+/** Three starters shown on Create. OTP / auth lives in Meta’s library (special AUTH payload). */
 export const TEMPLATE_PURPOSE_PRESETS: TemplatePurposePreset[] = [
   {
     id: 'order_update',
     label: 'Order update',
-    hint: 'Confirm or update a customer order',
+    hint: 'Confirm or ship an order',
     category: 'UTILITY',
     body: 'Hi {{1}}, your order {{2}} has been confirmed. We will notify you once it ships.',
     variables: [
@@ -464,7 +466,7 @@ export const TEMPLATE_PURPOSE_PRESETS: TemplatePurposePreset[] = [
   {
     id: 'appointment_reminder',
     label: 'Appointment reminder',
-    hint: 'Remind about an upcoming booking',
+    hint: 'Remind about a booking',
     category: 'UTILITY',
     body: 'Hi {{1}}, this is a reminder for your appointment on {{2}}. Reply to reschedule.',
     variables: [
@@ -474,42 +476,32 @@ export const TEMPLATE_PURPOSE_PRESETS: TemplatePurposePreset[] = [
   },
   {
     id: 'offer_code',
-    label: 'Offer / promo code',
-    hint: 'Send a discount to opted-in customers',
+    label: 'Offer / promo',
+    hint: 'Discount for opted-in customers',
     category: 'MARKETING',
     body: 'Hi {{1}}, here is your exclusive offer. Use code {{2}} at checkout.',
     footer: 'Reply STOP to unsubscribe',
+    buttons: [
+      {
+        type: 'COPY_CODE',
+        text: 'Copy code',
+        url: '',
+        phone_number: '',
+        example: 'SAVE20',
+      },
+    ],
     variables: [
       { description: 'Customer name', source: 'contact.name' },
       { description: 'Offer code', source: 'custom' },
     ],
   },
-  {
-    id: 'otp_login',
-    label: 'OTP / verification',
-    hint: 'Login or verification code',
-    category: 'AUTHENTICATION',
-    body: '{{1}} is your verification code. Do not share it with anyone.',
-    variables: [{ description: 'Verification code', source: 'custom' }],
-  },
-  {
-    id: 'feedback',
-    label: 'Feedback request',
-    hint: 'Ask how their experience was',
-    category: 'UTILITY',
-    body: 'Hi {{1}}, thank you for your recent visit. How was your experience with us?',
-    variables: [{ description: 'Customer name', source: 'contact.name' }],
-  },
-  {
-    id: 'welcome',
-    label: 'Welcome message',
-    hint: 'Greet a new subscriber',
-    category: 'MARKETING',
-    body: 'Welcome {{1}}! We are glad to have you. Explore our latest updates anytime.',
-    footer: 'Reply STOP to unsubscribe',
-    variables: [{ description: 'Customer name', source: 'contact.name' }],
-  },
 ];
+
+const PRESET_NAME_IDS = new Set(TEMPLATE_PURPOSE_PRESETS.map((preset) => preset.id));
+
+function sampleForVariable(description: string, index: number): string {
+  return AUTO_FILL_SAMPLES[description]?.[0] || (description === 'Customer name' ? 'Rahul' : `Sample ${index}`);
+}
 
 export function applyPurposePreset(form: TemplateFormState, preset: TemplatePurposePreset): TemplateFormState {
   const variableMeta: TemplateVariableMeta[] = preset.variables.map((v, i) => ({
@@ -519,13 +511,28 @@ export function applyPurposePreset(form: TemplateFormState, preset: TemplatePurp
     suggestedSource: v.source,
     ...(v.customKey ? { customKey: v.customKey } : {}),
   }));
-  return syncFormExamples({
+  const keepName = form.name.trim() && !PRESET_NAME_IDS.has(form.name);
+  const next = syncFormExamples({
     ...form,
+    name: keepName ? form.name : preset.id,
     category: preset.category,
     body: preset.body,
-    footer: preset.footer ?? form.footer,
+    header: '',
+    headerFormat: 'NONE',
+    headerMediaHandle: '',
+    footer: preset.footer ?? '',
+    buttons: preset.buttons ? preset.buttons.map((button) => ({ ...button })) : [],
     variableMeta,
+    addSecurityRecommendation: preset.category === 'AUTHENTICATION',
+    authType: 'OTP',
   });
+  return {
+    ...next,
+    bodyExamples: next.bodyExamples.map((value, index) => {
+      if (value.trim()) return value;
+      return sampleForVariable(preset.variables[index]?.description || '', index + 1);
+    }),
+  };
 }
 
 export const AUTO_FILL_SAMPLES: Record<string, string[]> = {
@@ -535,6 +542,7 @@ export const AUTO_FILL_SAMPLES: Record<string, string[]> = {
   Amount: ['₹1,299', '₹499', '₹2,450'],
   'Reference ID': ['REF-8821', 'TRK-4412', 'ID-99001'],
   'Verification code': ['482910', '739201', '105482'],
+  'Offer code': ['SAVE20', 'WELCOME10', 'FLAT100'],
   'Product name': ['Premium Plan', 'Blue Sneakers', 'Annual subscription'],
   Location: ['Mumbai', 'Delhi', 'Bangalore'],
 };

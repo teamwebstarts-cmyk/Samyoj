@@ -1,4 +1,5 @@
 import { Clock } from 'lucide-react';
+import { TEMPLATE_REVIEW_ETA } from '../../utils/templateRejectionGuide';
 
 interface TemplatePendingBannerProps {
   pending: number;
@@ -18,7 +19,9 @@ export default function TemplatePendingBanner({ pending }: TemplatePendingBanner
             : 'No templates are waiting for approval'}
         </p>
         <p className="mt-0.5 text-[12px] font-medium text-amber-800/85 dark:text-amber-300/80">
-          Auto-refreshes every 30s
+          {pending > 0
+            ? `${TEMPLATE_REVIEW_ETA.typical}. We check every 30 seconds.`
+            : 'New submissions usually take a few minutes to 24 hours.'}
         </p>
       </div>
     </div>

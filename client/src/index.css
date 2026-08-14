@@ -1868,6 +1868,10 @@
     }
   }
 
+  .template-wizard-split {
+    @apply grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(400px,460px)];
+  }
+
   .template-wizard-header {
     flex-shrink: 0;
   }

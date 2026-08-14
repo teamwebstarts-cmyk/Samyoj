@@ -279,3 +279,70 @@ export function suggestedTemplateName(libraryName: string): string {
     .replace(/^_|_$/g, '')
     .slice(0, 512);
 }
+
+/** Upgrade http → https and add https:// when the user typed a bare domain. */
+export function normalizeWebsiteUrl(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return '';
+  if (/^https:\/\//i.test(trimmed)) return trimmed;
+  if (/^http:\/\//i.test(trimmed)) return `https://${trimmed.slice(trimmed.indexOf('://') + 3)}`;
+  if (trimmed.startsWith('//')) return `https:${trimmed}`;
+  if (/^[a-z0-9.-]+[:/]/i.test(trimmed) || /^[a-z0-9.-]+\.[a-z]{2,}/i.test(trimmed)) {
+    return `https://${trimmed}`;
+  }
+  return trimmed;
+}
+
+function isPrivateOrLocalHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '0.0.0.0') return true;
+  if (host.endsWith('.local') || host.endsWith('.localhost')) return true;
+  if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)) return true;
+  if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(host)) return true;
+  if (/^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(host)) return true;
+  return false;
+}
+
+/**
+ * WhatsApp URL buttons must be a public https:// page the customer can open on their phone.
+ * This Samyoj admin URL / localhost will never work.
+ */
+export function libraryButtonUrlError(raw: string, appOrigin?: string): string | null {
+  const value = normalizeWebsiteUrl(raw);
+  if (!value) {
+    return 'Enter the HTTPS website customers open when they tap the button.';
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return 'Enter a full website URL, like https://yourstore.com/verify';
+  }
+
+  if (parsed.protocol !== 'https:') {
+    return 'WhatsApp only allows HTTPS links. Use https://, not http://';
+  }
+
+  if (isPrivateOrLocalHost(parsed.hostname)) {
+    return 'Don’t use localhost or this Samyoj page. WhatsApp opens the link on the customer’s phone — use your public site, like https://yourstore.com/verify';
+  }
+
+  const host = parsed.hostname.toLowerCase();
+  if (host === 'example.com' || host.endsWith('.example.com')) {
+    return 'Replace the example URL with your real website.';
+  }
+
+  if (appOrigin) {
+    try {
+      const here = new URL(appOrigin);
+      if (parsed.hostname.toLowerCase() === here.hostname.toLowerCase()) {
+        return 'That’s this Samyoj screen, not a customer website. Use a public HTTPS page such as https://yourstore.com/verify';
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  return null;
+}

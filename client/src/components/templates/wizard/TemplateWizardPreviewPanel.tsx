@@ -1,4 +1,4 @@
-import { BadgeCheck, ChevronLeft, Info, Pencil, Send, Store } from 'lucide-react';
+import { BadgeCheck, ChevronLeft, Pencil, Send, Store } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { WhatsAppTemplateCard } from '../../inbox/WhatsAppPreview';
 import { CATEGORY_OPTIONS, LANGUAGE_OPTIONS } from '../../../utils/templateUtils';
@@ -46,42 +46,46 @@ export default function TemplateWizardPreviewPanel({
   return (
     <div className="flex min-h-0 flex-col gap-4">
       <div className="template-wizard-card overflow-hidden">
-        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 dark:border-slate-800">
-          <p className="flex items-center gap-1.5 text-[13px] font-bold text-slate-900 dark:text-white">
-            {previewTitle}
-            {showTestButton && (
-              <Info className="h-3.5 w-3.5 text-slate-400" aria-hidden />
-            )}
-          </p>
-          <div className="flex items-center gap-2">
-            {showEditLink && onEdit ? (
-              <button
-                type="button"
-                onClick={onEdit}
-                className="inline-flex items-center gap-1 text-[11px] font-semibold text-violet-600 hover:text-violet-700 dark:text-violet-400"
-              >
-                <Pencil className="h-3 w-3" />
-                Edit
-              </button>
-            ) : null}
-            {showTestButton && onTestTemplate && (
-              <button
-                type="button"
-                onClick={onTestTemplate}
-                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-              >
-                <Send className="h-3 w-3" />
-                Test template
-              </button>
-            )}
-            <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+        <div className="border-b border-slate-100 px-4 py-3 dark:border-slate-800">
+          <div className="flex items-start justify-between gap-3">
+            <p className="min-w-0 text-[13px] font-bold leading-5 text-slate-900 dark:text-white">
+              {previewTitle}
+            </p>
+            <span
+              className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+              title={languageLabel(languageOverride || form.language)}
+            >
               {languageLabel(languageOverride || form.language)}
             </span>
           </div>
+          {(showEditLink && onEdit) || (showTestButton && onTestTemplate) ? (
+            <div className="mt-3 flex items-center gap-2">
+              {showTestButton && onTestTemplate ? (
+                <button
+                  type="button"
+                  onClick={onTestTemplate}
+                  className="inline-flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 text-[12px] font-semibold text-white shadow-sm transition hover:bg-emerald-700"
+                >
+                  <Send className="h-3.5 w-3.5 shrink-0" />
+                  Test template
+                </button>
+              ) : null}
+              {showEditLink && onEdit ? (
+                <button
+                  type="button"
+                  onClick={onEdit}
+                  className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                  Edit
+                </button>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
-        <div className="template-wizard-phone-frame p-4">
-          <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-[#efeae2] shadow-sm dark:border-slate-700">
+        <div className="template-wizard-phone-frame p-5">
+          <div className="mx-auto w-full max-w-[360px] overflow-hidden rounded-[1.35rem] border border-slate-200/80 bg-[#efeae2] shadow-sm dark:border-slate-700">
             <div className="flex items-center gap-2 bg-[#075e54] px-3 py-2.5 text-white">
               <ChevronLeft className="h-4 w-4 opacity-80" />
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/15">
@@ -109,13 +113,12 @@ export default function TemplateWizardPreviewPanel({
                 buttons={previewButtons}
                 time="12:30 PM"
                 status="read"
-                compact
                 className="w-full"
               />
             </div>
           </div>
           {(form.name || form.category) && (
-            <div className="mt-3 flex items-center gap-2 px-0.5">
+            <div className="mx-auto mt-3 flex w-full max-w-[360px] items-center gap-2 px-0.5">
               {form.category ? (
                 <span className="inline-flex shrink-0 rounded-md bg-sky-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-sky-700 dark:bg-sky-950/50 dark:text-sky-300">
                   {categoryLabel(form.category)}

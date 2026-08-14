@@ -6,6 +6,7 @@ import {
   isFlowLibraryTemplate,
   libraryNeedsButtonInputs,
   humanizeLibraryName,
+  normalizeWebsiteUrl,
 } from '../../../utils/templateLibrary';
 
 const SOURCE_OPTIONS: Array<{ value: string; label: string }> = [
@@ -26,6 +27,7 @@ interface TemplateLibraryReviewStepProps {
   nameError?: string | null;
   buttonUrl: string;
   onButtonUrlChange: (value: string) => void;
+  buttonUrlError?: string | null;
   buttonPhone: string;
   onButtonPhoneChange: (value: string) => void;
 }
@@ -39,6 +41,7 @@ export default function TemplateLibraryReviewStep({
   nameError,
   buttonUrl,
   onButtonUrlChange,
+  buttonUrlError,
   buttonPhone,
   onButtonPhoneChange,
 }: TemplateLibraryReviewStepProps) {
@@ -122,10 +125,12 @@ export default function TemplateLibraryReviewStep({
                 <AppInput
                   id="library-button-url"
                   label={`${urlButton.text || 'Website'} URL`}
-                  placeholder="https://yourstore.com/order"
-                  hint="Must be HTTPS. Used when the customer taps the button."
+                  placeholder="https://yourstore.com/verify"
+                  hint="Customers open this in WhatsApp. Use a public https:// page — not this Samyoj screen."
                   value={buttonUrl}
+                  error={buttonUrlError || undefined}
                   onChange={(e) => onButtonUrlChange(e.target.value)}
+                  onBlur={(e) => onButtonUrlChange(normalizeWebsiteUrl(e.target.value))}
                   required
                 />
               )}

@@ -493,7 +493,7 @@ export default function TemplateWizardPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
+        <div className="template-wizard-split">
           <div className="min-w-0">
             {activeStep === 0 && (
               <TemplateWizardCreateStep

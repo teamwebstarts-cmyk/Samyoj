@@ -1,3 +1,4 @@
+import { TEMPLATE_REVIEW_ETA } from '../../utils/templateRejectionGuide';
 import { getQualityLabel } from '../../utils/templateUtils';
 
 const statusTextClass: Record<string, string> = {
@@ -48,6 +49,14 @@ export default function TemplateStatusCell({
         </span>
       ) : (
         <span className="text-[13px] text-theme-muted">—</span>
+      )}
+      {upper === 'PENDING' && (
+        <span
+          className="text-[11px] font-medium text-theme-muted"
+          title={TEMPLATE_REVIEW_ETA.detail}
+        >
+          {TEMPLATE_REVIEW_ETA.short}
+        </span>
       )}
       {quality && upper === 'APPROVED' && (
         <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-theme-muted">

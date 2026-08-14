@@ -30,11 +30,13 @@ import { persistTemplateVariableMeta } from '../utils/templateForm';
 import {
   canCloneFromMetaLibrary,
   isLibraryQuickPickActive,
+  libraryButtonUrlError,
   libraryCloneCategory,
   libraryNeedsButtonInputs,
   libraryNeedsOtpButton,
   libraryWizardStages,
   matchesLibraryCategoryFilter,
+  normalizeWebsiteUrl,
   suggestedTemplateName,
   uniqueLibraryTemplateName,
   wizardFormFromLibraryItem,
@@ -310,8 +312,9 @@ export default function TemplateLibraryPage() {
     if (libraryNeedsButtonInputs(selected)) {
       const needsUrl = (selected.buttons || []).some((b) => b.type?.toUpperCase() === 'URL');
       const needsPhone = (selected.buttons || []).some((b) => b.type?.toUpperCase() === 'PHONE_NUMBER');
-      if (needsUrl && !/^https:\/\//i.test(buttonUrl.trim())) {
-        return 'Enter an HTTPS website URL for the button.';
+      if (needsUrl) {
+        const urlError = libraryButtonUrlError(buttonUrl, window.location.origin);
+        if (urlError) return urlError;
       }
       if (needsPhone && buttonPhone.replace(/\D/g, '').length < 8) {
         return 'Enter a valid phone number with country code for the call button.';
@@ -325,14 +328,15 @@ export default function TemplateLibraryPage() {
     if (libraryNeedsButtonInputs(item)) {
       const needsUrl = (item.buttons || []).some((b) => b.type?.toUpperCase() === 'URL');
       const needsPhone = (item.buttons || []).some((b) => b.type?.toUpperCase() === 'PHONE_NUMBER');
-      if (needsUrl && !/^https:\/\//i.test(buttonUrl.trim())) {
-        throw new Error('Enter an HTTPS website URL for the button.');
+      if (needsUrl) {
+        const urlError = libraryButtonUrlError(buttonUrl, window.location.origin);
+        if (urlError) throw new Error(urlError);
       }
       if (needsPhone && buttonPhone.replace(/\D/g, '').length < 8) {
         throw new Error('Enter a valid phone number with country code for the call button.');
       }
     }
-    const buttonInputs = buildLibraryButtonInputs(item, buttonUrl, buttonPhone);
+    const buttonInputs = buildLibraryButtonInputs(item, normalizeWebsiteUrl(buttonUrl), buttonPhone);
     const { data } = await templateApi.createFromLibrary({
       name,
       language: item.language || language || 'en_US',
@@ -602,7 +606,7 @@ export default function TemplateLibraryPage() {
           </AppAlert>
         )}
 
-        <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
+        <div className="template-wizard-split">
           <div className="min-w-0">
             {activeStep === 0 && (
               <TemplateLibraryBrowseStep
@@ -650,6 +654,12 @@ export default function TemplateLibraryPage() {
                 nameError={nameError}
                 buttonUrl={buttonUrl}
                 onButtonUrlChange={setButtonUrl}
+                buttonUrlError={
+                  (selected.buttons || []).some((b) => b.type?.toUpperCase() === 'URL') &&
+                  buttonUrl.trim()
+                    ? libraryButtonUrlError(buttonUrl, window.location.origin)
+                    : null
+                }
                 buttonPhone={buttonPhone}
                 onButtonPhoneChange={setButtonPhone}
               />
