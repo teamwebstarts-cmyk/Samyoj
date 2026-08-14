@@ -1,0 +1,28 @@
+---
+description: Test-deploy vs customer production; workers stay embedded in the API; do not claim production-ready
+alwaysApply: true
+---
+
+# Testing-deploy vs customer production
+
+**Test-deploy:** yes (`bash start.sh`). **Customer production:** **NO** until HttpOnly cookies (JWT still in `localStorage`). Do not rewrite AUTH to cookies unless the user asks.
+
+## Workers
+
+Embedded in the API (`startWorkers()` in `server/src/index.ts`). PM2 runs **whatsapp-api only**. `npm run start:worker` / `dev:worker` must **exit 1**. Do not start PM2 `whatsapp-worker`.
+
+## Already done — do not redo
+
+- Socket.IO handshake: OrganizationUser check; conversation rooms org+number scoped
+- Production OAuth redirects: no arbitrary ngrok/localhost wildcards (mirrors CORS)
+- `.env` chmod 600, logs 640 in start/setup
+- socket.io-parser 4.2.7, nodemailer 9.0.5
+- Webhook claim/complete: migration `20260814220000_webhook_durability`
+- Inbox: no `setHeaderAssignOpen`; start-chat upserts existing conversation
+
+## Still open — do not claim fixed
+
+- Socket membership is connect-time (live sockets until reconnect)
+- Email verification disabled/theater
+- Backup restore drill untested
+- Inbound unproven until a **new** phone reply increments `totalReceived`

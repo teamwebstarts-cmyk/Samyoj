@@ -1,0 +1,33 @@
+---
+description: Billing research pointer — TARGET spec vs CURRENT CODE; do not implement unless the user explicitly asks
+alwaysApply: true
+---
+
+# Samyoj billing (research, not shipped)
+
+Do **not** re-research billing from scratch. Do **not** implement billing from these docs unless the user explicitly asks. Docs are spec, not shipped code.
+
+## Canonical sources
+
+- Target pack (index): `docs/billing/` — start at `docs/billing/README.md`
+- Current-code audit: `docs/audit/BILLING_SYSTEM_REVIEW.md`
+- Prices / SKUs: `docs/billing/01-PRICING-CATALOG.md`
+- Meta commercial + partner: `docs/billing/17-META-WHATSAPP-BILLING-AND-POLICY.md`
+
+## TARGET vs CURRENT CODE
+
+- **TARGET:** Launch 14-day trial, then Starter / Growth / Pro / Enterprise, billed monthly / quarterly / yearly (user prices in `01-PRICING-CATALOG.md`).
+- **CURRENT CODE:** old one-shot Razorpay Order — Starter (free) / Growth ₹3999 / Business ₹11999 / Enterprise; `activatePlan` ≈ now + 30 days. **Do not treat that as product truth.**
+
+## Two ledgers (never mix)
+
+1. **Samyoj SaaS** — Razorpay (INR). Plan price is software only.
+2. **Meta Cloud API** — billed on the customer WABA. Never fold Meta message fees into the Samyoj plan price.
+
+Meta facts: per-message pricing since **1 Jul 2025**; service messages paid from **1 Oct 2026**; India INR WABA migration by **31 Dec 2026**. Partner model: **Tech Provider**. Details in doc 17.
+
+## Architecture (when asked to implement)
+
+Razorpay **Subscriptions** collect SaaS fees. Samyoj issues **GST invoices** and owns entitlements/dunning. Meta bills the WABA. Two invoices, two ledgers.
+
+Zero: do not ship the TARGET catalog into live plans/checkout until the user explicitly asks.

@@ -1,0 +1,26 @@
+---
+description: Isolate WhatsApp data by number workspace; never pick latest number or delete history on disconnect
+alwaysApply: true
+---
+
+# WhatsApp number isolation
+
+Shared Postgres. Each connected number is a durable workspace via `whatsappNumberId`.
+
+## Do
+
+- Scope contacts, tags, consent, inbox, campaigns, and tickets by `whatsappNumberId`.
+- Reconnect the same normalized displayed phone to the **same** workspace even if Meta `phoneNumberId` changes (`saveWhatsappConnection`).
+- Disconnect = soft (`isActive=false`). Do **not** delete number rows or conversation history.
+- Client persists Meta `phoneNumberId`; HTTP uses current DB id `X-WhatsApp-Number-Id`.
+- Multiple active numbers + missing header → **409**. Never pick “latest”.
+- Contacts unique `(organizationId, whatsappNumberId, normalizedPhone)`.
+- Campaign send is fail-closed: `optedIn` + `consentSource` + `consentAt` + no `optOutAt`.
+
+## Don't
+
+- Raw `prisma migrate deploy` on fresh installs. Historical `20260808120000_unique_whatsapp_phone_number_id` **DELETEs** duplicate `WhatsappNumber` rows. Use `db:migrate-startup-safe` / reconciliation allowlist + backup.
+- Org-wide queries when the number header is missing (use the empty-id filter).
+- Trust old Inbox/AUDIT docs that say disconnect deletes numbers or nulls `whatsappNumberId`.
+
+Code: `server/src/modules/whatsapp/active-number.ts`, `client/src/contexts/WhatsAppNumberContext.tsx`.
