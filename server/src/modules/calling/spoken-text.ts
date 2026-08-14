@@ -51,6 +51,25 @@ export function splitForTts(text: string): string[] {
   return chunks.length ? chunks : [trimmed.slice(0, TTS_MAX_CHARS)];
 }
 
+/** Mute mic→STT while TTS plays and for this tail so speakerphone echo is not transcribed. */
+export const STT_ECHO_TAIL_MS = 400;
+
+export function shouldMuteCallStt(
+  speaking: boolean,
+  speakingEndedAt: number,
+  now: number,
+  echoTailMs = STT_ECHO_TAIL_MS
+): boolean {
+  if (speaking) return true;
+  if (speakingEndedAt <= 0) return false;
+  return now - speakingEndedAt < echoTailMs;
+}
+
+/** Barge-in only while waiting on LLM/TTS — never while the bot is playing audio. */
+export function shouldQueueVoiceInterrupt(processing: boolean, speaking: boolean): boolean {
+  return processing && !speaking;
+}
+
 export function isLikelyTtsEcho(heard: string, spoken: string): boolean {
   const a = normalizeVoiceText(heard);
   const b = normalizeVoiceText(spoken);

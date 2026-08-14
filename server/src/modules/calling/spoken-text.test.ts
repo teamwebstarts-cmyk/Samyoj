@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { joinSpokenTurns, isLikelyTtsEcho, prepareSpokenText, splitForTts } from './spoken-text';
+import {
+  joinSpokenTurns,
+  isLikelyTtsEcho,
+  prepareSpokenText,
+  shouldMuteCallStt,
+  shouldQueueVoiceInterrupt,
+  splitForTts,
+  STT_ECHO_TAIL_MS,
+} from './spoken-text';
 
 describe('prepareSpokenText', () => {
   it('strips markdown and urls so Bulbul does not read stars', () => {
@@ -45,5 +53,23 @@ describe('isLikelyTtsEcho', () => {
         'आप कौन सा brand देखना चाहेंगे'
       )
     ).toBe(false);
+  });
+});
+
+describe('shouldMuteCallStt', () => {
+  it('mutes while TTS is playing and for the echo tail after', () => {
+    expect(shouldMuteCallStt(true, 0, 10_000)).toBe(true);
+    expect(shouldMuteCallStt(false, 10_000, 10_000 + STT_ECHO_TAIL_MS - 1)).toBe(true);
+    expect(shouldMuteCallStt(false, 10_000, 10_000 + STT_ECHO_TAIL_MS)).toBe(false);
+    expect(shouldMuteCallStt(false, 0, 10_000)).toBe(false);
+  });
+});
+
+describe('shouldQueueVoiceInterrupt', () => {
+  it('allows interrupt only while waiting on LLM/TTS, not while speaking', () => {
+    expect(shouldQueueVoiceInterrupt(true, false)).toBe(true);
+    expect(shouldQueueVoiceInterrupt(true, true)).toBe(false);
+    expect(shouldQueueVoiceInterrupt(false, true)).toBe(false);
+    expect(shouldQueueVoiceInterrupt(false, false)).toBe(false);
   });
 });
