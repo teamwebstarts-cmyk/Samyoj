@@ -28,11 +28,35 @@ export function authenticate(req: Request, _res: Response, next: NextFunction) {
   }
 }
 
-export function requireOrg(req: Request, _res: Response, next: NextFunction) {
-  if (!req.user?.organizationId) {
-    return next(new AppError(403, 'Organization context required'));
+/** True when the user is an OrganizationUser (or an org-bound API key). Same rule as HTTP requireOrg. */
+export async function hasActiveOrgMembership(userId: string, organizationId: string): Promise<boolean> {
+  // API keys are already bound to an organization; they are not OrganizationUsers.
+  if (userId === 'api-key') return true;
+
+  const membership = await prisma.organizationUser.findUnique({
+    where: {
+      organizationId_userId: { organizationId, userId },
+    },
+    select: { id: true },
+  });
+
+  return Boolean(membership);
+}
+
+export async function requireOrg(req: Request, _res: Response, next: NextFunction) {
+  try {
+    if (!req.user?.organizationId) {
+      return next(new AppError(403, 'Organization context required'));
+    }
+
+    if (!(await hasActiveOrgMembership(req.user.userId, req.user.organizationId))) {
+      return next(new AppError(403, 'Not a member of this organization'));
+    }
+
+    next();
+  } catch (err) {
+    next(err);
   }
-  next();
 }
 
 export async function loadOrgRole(req: Request, _res: Response, next: NextFunction) {
