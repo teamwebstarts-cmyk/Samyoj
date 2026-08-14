@@ -5,12 +5,20 @@ import { authenticate, requireOrg } from '../../middleware/auth';
 import { loadPermissions, requirePermission } from '../../middleware/permissions';
 import { sendSuccess, asyncHandler, AppError, paramId } from '../../utils/response';
 import { computeSlaDueAt } from '../sla/service';
+import { emitToOrg } from '../../realtime';
+import { emitTicketEvent } from './events';
 
 import { resolveActiveWhatsappNumber, ticketsForNumberFilter } from '../whatsapp/active-number';
 
 const router = Router();
 
 router.use(authenticate, requireOrg, resolveActiveWhatsappNumber);
+
+const ticketInclude = {
+  contact: { select: { id: true, phone: true, name: true } },
+  conversation: { select: { id: true, status: true } },
+  assignedAgent: { select: { id: true, name: true } },
+} as const;
 
 const ticketSchema = z.object({
   title: z.string().min(1),
@@ -19,7 +27,7 @@ const ticketSchema = z.object({
   status: z.enum(['OPEN', 'PENDING', 'WAITING', 'RESOLVED', 'CLOSED']).optional(),
   priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']).optional(),
   category: z.string().optional(),
-  assignedAgentId: z.string().uuid().optional(),
+  assignedAgentId: z.string().uuid().nullable().optional(),
   slaDueAt: z.string().datetime().optional(),
 });
 
@@ -49,6 +57,42 @@ async function validateTicketScope(
   }
 }
 
+async function assertAgentInOrg(organizationId: string, userId: string) {
+  const member = await prisma.organizationUser.findFirst({
+    where: { organizationId, userId },
+    select: { userId: true },
+  });
+  if (!member) throw new AppError(400, 'That teammate is not in this workspace');
+}
+
+async function saveTicketNote(params: {
+  conversationId: string;
+  userId?: string;
+  content?: string;
+  organizationId: string;
+  whatsappNumberId?: string | null;
+}) {
+  const content = params.content?.trim();
+  const userId = params.userId;
+  if (!content || !userId || userId === 'api-key') return;
+
+  try {
+    await prisma.internalNote.create({
+      data: {
+        conversationId: params.conversationId,
+        userId,
+        content,
+      },
+    });
+    emitToOrg(params.organizationId, 'conversation:updated', {
+      conversationId: params.conversationId,
+      whatsappNumberId: params.whatsappNumberId ?? null,
+    });
+  } catch {
+    // Ticket still created if the private note cannot be saved.
+  }
+}
+
 router.get(
   '/',
   loadPermissions,
@@ -64,11 +108,7 @@ router.get(
         ...(status ? { status: status as never } : {}),
         ...ticketsForNumberFilter(numberId),
       },
-      include: {
-        contact: { select: { id: true, phone: true, name: true } },
-        conversation: { select: { id: true, status: true } },
-        assignedAgent: { select: { id: true, name: true } },
-      },
+      include: ticketInclude,
       orderBy: { updatedAt: 'desc' },
     });
 
@@ -88,6 +128,7 @@ router.post(
     const whatsappNumberId = req.activeWhatsappNumberId;
     if (!whatsappNumberId) throw new AppError(400, 'Connect a WhatsApp number before creating tickets');
     await validateTicketScope(orgId, whatsappNumberId, data.conversationId, data.contactId);
+    if (data.assignedAgentId) await assertAgentInOrg(orgId, data.assignedAgentId);
 
     const ticket = await prisma.ticket.create({
       data: {
@@ -99,16 +140,13 @@ router.post(
         status: data.status || 'OPEN',
         priority: data.priority || 'MEDIUM',
         category: data.category,
-        assignedAgentId: data.assignedAgentId,
+        assignedAgentId: data.assignedAgentId ?? undefined,
         slaDueAt: data.slaDueAt ? new Date(data.slaDueAt) : computeSlaDueAt(),
       },
-      include: {
-        contact: { select: { id: true, phone: true, name: true } },
-        conversation: { select: { id: true, status: true } },
-        assignedAgent: { select: { id: true, name: true } },
-      },
+      include: ticketInclude,
     });
 
+    emitTicketEvent(orgId, 'ticket:new', ticket);
     sendSuccess(res, ticket, 201);
   })
 );
@@ -122,11 +160,12 @@ router.post(
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const conversationId = req.params.conversationId as string;
-    const { title, priority, category } = z
+    const { title, priority, category, description } = z
       .object({
         title: z.string().optional(),
         priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']).optional(),
         category: z.string().optional(),
+        description: z.string().max(2000).optional(),
       })
       .parse(req.body);
 
@@ -147,12 +186,18 @@ router.post(
         category,
         slaDueAt: computeSlaDueAt(),
       },
-      include: {
-        contact: { select: { id: true, phone: true, name: true } },
-        conversation: { select: { id: true, status: true } },
-      },
+      include: ticketInclude,
     });
 
+    await saveTicketNote({
+      conversationId: conversation.id,
+      userId: req.user?.userId,
+      content: description,
+      organizationId: orgId,
+      whatsappNumberId: conversation.whatsappNumberId,
+    });
+
+    emitTicketEvent(orgId, 'ticket:new', ticket);
     sendSuccess(res, ticket, 201);
   })
 );
@@ -182,6 +227,7 @@ router.patch(
       conversationId ?? undefined,
       contactId ?? undefined
     );
+    if (data.assignedAgentId) await assertAgentInOrg(orgId, data.assignedAgentId);
 
     const ticket = await prisma.ticket.update({
       where: { id },
@@ -195,13 +241,10 @@ router.patch(
         ...(data.assignedAgentId !== undefined ? { assignedAgentId: data.assignedAgentId } : {}),
         ...(data.slaDueAt !== undefined ? { slaDueAt: new Date(data.slaDueAt) } : {}),
       },
-      include: {
-        contact: { select: { id: true, phone: true, name: true } },
-        conversation: { select: { id: true, status: true } },
-        assignedAgent: { select: { id: true, name: true } },
-      },
+      include: ticketInclude,
     });
 
+    emitTicketEvent(orgId, 'ticket:updated', ticket);
     sendSuccess(res, ticket);
   })
 );
@@ -217,10 +260,11 @@ router.delete(
     const id = paramId(req);
     const existing = await prisma.ticket.findFirst({
       where: { id, organizationId: orgId, whatsappNumberId: req.activeWhatsappNumberId },
-      select: { id: true },
+      select: { id: true, whatsappNumberId: true, conversationId: true, status: true },
     });
     if (!existing) throw new AppError(404, 'Ticket not found');
     await prisma.ticket.delete({ where: { id } });
+    emitTicketEvent(orgId, 'ticket:updated', existing);
     sendSuccess(res, { deleted: true });
   })
 );
