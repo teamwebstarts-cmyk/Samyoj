@@ -1,6 +1,11 @@
 import type { Server, Socket } from 'socket.io';
 import prisma from '../../config/database';
 import logger from '../../utils/logger';
+import {
+  conversationRoomAllowed,
+  parseConversationJoinPayload,
+  resolveSocketWhatsappNumberId,
+} from './conversation-room';
 
 // Ephemeral, in-memory conversation presence ("X is viewing"). No DB writes:
 // entries live only while clients heartbeat via `conversation:viewing`.
@@ -37,15 +42,23 @@ async function resolveUserName(userId: string): Promise<string> {
   return name;
 }
 
-async function ownsConversation(
+function handshakeWhatsappNumberId(socket: Socket): string | undefined {
+  const raw = socket.handshake.auth?.whatsappNumberId;
+  return typeof raw === 'string' && raw.trim() ? raw.trim() : undefined;
+}
+
+async function canJoinConversationRoom(
+  socket: Socket,
+  organizationId: string,
   conversationId: string,
-  organizationId: string
+  requestedNumberId?: string
 ): Promise<boolean> {
-  const conversation = await prisma.conversation.findFirst({
-    where: { id: conversationId, organizationId },
-    select: { id: true },
-  });
-  return Boolean(conversation);
+  const numberId = await resolveSocketWhatsappNumberId(
+    organizationId,
+    requestedNumberId || handshakeWhatsappNumberId(socket) || socket.data.activeWhatsappNumberId
+  );
+  socket.data.activeWhatsappNumberId = numberId;
+  return conversationRoomAllowed(conversationId, organizationId, numberId);
 }
 
 function removeViewer(
@@ -89,29 +102,50 @@ export function registerPresenceHandlers(io: Server, socket: Socket): void {
 
   socket.on(
     'join:conversation',
-    async (conversationId: string, ack?: (reply: unknown) => void) => {
-      socket.join(roomOf(conversationId));
-      if (typeof ack === 'function') {
-        try {
-          const allowed = await ownsConversation(conversationId, organizationId);
-          ack(allowed ? { viewers: viewersList(conversationId) } : { viewers: [] });
-        } catch (err) {
-          logger.error('join:conversation ack failed', {
-            source: 'presence',
-            conversationId,
-            error: err instanceof Error ? err.message : err,
-          });
-          ack({ viewers: [] });
+    async (payload: unknown, ack?: (reply: unknown) => void) => {
+      const parsed = parseConversationJoinPayload(payload);
+      const reply = (body: unknown) => {
+        if (typeof ack === 'function') ack(body);
+      };
+      if (!parsed) {
+        reply({ viewers: [] });
+        return;
+      }
+      try {
+        const allowed = await canJoinConversationRoom(
+          socket,
+          organizationId,
+          parsed.conversationId,
+          parsed.whatsappNumberId
+        );
+        if (!allowed) {
+          reply({ viewers: [] });
+          return;
         }
+        socket.join(roomOf(parsed.conversationId));
+        reply({ viewers: viewersList(parsed.conversationId) });
+      } catch (err) {
+        logger.error('join:conversation failed', {
+          source: 'presence',
+          conversationId: parsed.conversationId,
+          error: err instanceof Error ? err.message : err,
+        });
+        reply({ viewers: [] });
       }
     }
   );
 
-  socket.on('conversation:viewing', async (payload: { conversationId?: string }) => {
+  socket.on('conversation:viewing', async (payload: { conversationId?: string; whatsappNumberId?: string }) => {
     const conversationId = payload?.conversationId;
     if (typeof conversationId !== 'string' || !conversationId) return;
     try {
-      if (!(await ownsConversation(conversationId, organizationId))) return;
+      const allowed = await canJoinConversationRoom(
+        socket,
+        organizationId,
+        conversationId,
+        payload?.whatsappNumberId
+      );
+      if (!allowed) return;
 
       socket.join(roomOf(conversationId));
       viewing.add(conversationId);
