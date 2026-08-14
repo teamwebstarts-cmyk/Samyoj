@@ -8,6 +8,12 @@ import { emitToOrg } from '../realtime';
 import { logError } from '../errors';
 import { createModuleLogger } from '../utils/logger';
 import { parseMetaTimestamp } from '../modules/campaigns/safety';
+import { handleOutboundStatusWebhook } from '../modules/whatsapp/provider-status';
+import {
+  inboundConversationRepairWhere,
+  inboundConversationSideEffectData,
+  needsInboundConversationRepair,
+} from '../modules/whatsapp/inbound-side-effects';
 
 const log = createModuleLogger('webhook');
 
@@ -74,109 +80,17 @@ export async function processWebhookPayload(
       for (const status of (value.statuses as Array<Record<string, unknown>>) || []) {
         const metaMessageId = status.id as string;
         const statusValue = (status.status as string)?.toUpperCase();
-        if (!statusValue) continue;
+        if (!metaMessageId || !statusValue) continue;
         const statusTimestamp = parseMetaTimestamp(status.timestamp);
-
-        const STATUS_RANK: Record<string, number> = {
-          PENDING: 0,
-          SENT: 1,
-          DELIVERED: 2,
-          READ: 3,
-          FAILED: 4,
-        };
-
-        const existingMsg = await prisma.message.findFirst({
-          where: {
-            metaMessageId,
-            conversation: {
-              organizationId: orgId,
-              whatsappNumber: { phoneNumberId },
-            },
-          },
-          select: { id: true, status: true, metadata: true },
-        });
-        const { syncCampaignRecipientFromWebhook } = await import('../modules/campaigns/service');
-        await syncCampaignRecipientFromWebhook(metaMessageId, statusValue, {
+        await handleOutboundStatusWebhook({
           organizationId: orgId,
+          whatsappNumberId: whatsappNumber.id,
           phoneNumberId,
-          timestamp: statusTimestamp,
-          errors: status.errors,
+          metaMessageId,
+          statusValue,
+          statusTimestamp,
+          status,
         });
-        if (!existingMsg) continue;
-
-        const existingMeta = (existingMsg.metadata as Record<string, unknown>) || {};
-        const parsedExistingStatusAt = typeof existingMeta.providerStatusAt === 'string'
-          ? new Date(existingMeta.providerStatusAt)
-          : null;
-        const existingStatusAt = parsedExistingStatusAt && !Number.isNaN(parsedExistingStatusAt.getTime())
-          ? parsedExistingStatusAt
-          : null;
-        const hasValidEventTime = Boolean(statusTimestamp && !Number.isNaN(statusTimestamp.getTime()));
-        const isOlderOrDuplicate = Boolean(
-          hasValidEventTime &&
-          existingStatusAt &&
-          statusTimestamp!.getTime() <= existingStatusAt.getTime()
-        );
-        const currentRank = STATUS_RANK[existingMsg.status] ?? -1;
-        const nextRank = STATUS_RANK[statusValue] ?? -1;
-        // Don't regress ticks (e.g. sent after read). FAILED can replace a
-        // milestone only when Meta supplied a newer event timestamp.
-        const shouldUpdateStatus =
-          !isOlderOrDuplicate &&
-          (statusValue === 'FAILED'
-            ? (!existingStatusAt || hasValidEventTime)
-            : nextRank >= currentRank);
-
-        const statusMeta: Record<string, unknown> = { ...existingMeta };
-        if (!isOlderOrDuplicate && status.pricing) statusMeta.pricing = status.pricing;
-        if (!isOlderOrDuplicate && status.errors) statusMeta.errors = status.errors;
-        if (!isOlderOrDuplicate && status.conversation) {
-          statusMeta.conversationId = (status.conversation as { id?: string })?.id;
-        }
-        if (hasValidEventTime && !isOlderOrDuplicate) {
-          statusMeta.providerStatusAt = statusTimestamp!.toISOString();
-          statusMeta.providerEventKey = `${metaMessageId}:${statusValue}:${statusTimestamp!.toISOString()}`;
-        }
-
-        await prisma.message.updateMany({
-          where: {
-            metaMessageId,
-            conversation: {
-              organizationId: orgId,
-              whatsappNumber: { phoneNumberId },
-            },
-          },
-          data: {
-            ...(shouldUpdateStatus ? { status: statusValue as never } : {}),
-            metadata: statusMeta as Prisma.InputJsonValue,
-          },
-        });
-
-        const msg = await prisma.message.findFirst({
-          where: {
-            metaMessageId,
-            conversation: {
-              organizationId: orgId,
-              whatsappNumber: { phoneNumberId },
-            },
-          },
-          include: { conversation: true },
-        });
-
-        if (msg && shouldUpdateStatus) {
-          log.info('Message status updated', {
-            messageId: msg.id,
-            metaMessageId,
-            status: statusValue,
-            organizationId: orgId,
-          });
-          emitToOrg(orgId, 'message:status', {
-            messageId: msg.id,
-            status: statusValue,
-            conversationId: msg.conversationId,
-          });
-        }
-
       }
 
       for (const msg of (value.messages as Array<Record<string, unknown>>) || []) {
@@ -285,7 +199,6 @@ export async function processWebhookPayload(
         });
 
         const isNew = !priorConversation;
-        const { computeSlaDueAt } = await import('../modules/sla/service');
 
         const inboundType = mapInboundMessageType(msg.type as string | undefined);
         let inboundMetadata: Record<string, unknown> | undefined = parsed.waFlowResponse
@@ -329,16 +242,27 @@ export async function processWebhookPayload(
 
         let message;
         try {
-          message = await prisma.message.create({
-            data: {
-              conversationId: conversation.id,
-              metaMessageId: msg.id as string,
-              direction: 'INBOUND',
-              type: inboundType,
-              content: parsed.content,
-              status: 'DELIVERED',
-              metadata: inboundMetadata as Prisma.InputJsonValue,
-            },
+          message = await prisma.$transaction(async (tx) => {
+            const created = await tx.message.create({
+              data: {
+                conversationId: conversation.id,
+                metaMessageId: msg.id as string,
+                direction: 'INBOUND',
+                type: inboundType,
+                content: parsed.content,
+                status: 'DELIVERED',
+                metadata: inboundMetadata as Prisma.InputJsonValue,
+              },
+            });
+            const conversationState = await tx.conversation.findUnique({
+              where: { id: conversation.id },
+              select: { firstResponseAt: true, slaDueAt: true },
+            });
+            await tx.conversation.update({
+              where: { id: conversation.id },
+              data: inboundConversationSideEffectData(inboundTimestamp, conversationState),
+            });
+            return created;
           });
         } catch (err) {
           // Meta may retry the same webhook; metaMessageId is unique.
@@ -347,30 +271,36 @@ export async function processWebhookPayload(
               metaMessageId,
               organizationId: orgId,
             });
+            const existing = await prisma.message.findFirst({
+              where: {
+                metaMessageId,
+                conversation: { organizationId: orgId, whatsappNumberId: whatsappNumber.id },
+              },
+              select: { conversationId: true },
+            });
+            if (existing) {
+              const conversationState = await prisma.conversation.findUnique({
+                where: { id: existing.conversationId },
+                select: { lastMessageAt: true, firstResponseAt: true, slaDueAt: true },
+              });
+              if (needsInboundConversationRepair(conversationState?.lastMessageAt, inboundTimestamp)) {
+                const repaired = await prisma.conversation.updateMany({
+                  where: inboundConversationRepairWhere(existing.conversationId, inboundTimestamp),
+                  data: inboundConversationSideEffectData(inboundTimestamp, conversationState ?? null),
+                });
+                if (repaired.count === 1) {
+                  log.info('Repaired inbound conversation side-effects after duplicate insert', {
+                    metaMessageId,
+                    conversationId: existing.conversationId,
+                    organizationId: orgId,
+                  });
+                }
+              }
+            }
             continue;
           }
           throw err;
         }
-
-        // The unique metaMessageId insert is the commit point. Only its winner
-        // may mutate unread/timestamps/SLA state, so concurrent Meta retries
-        // cannot double-apply conversation side effects.
-        const updateData: Prisma.ConversationUpdateInput = {
-          lastMessageAt: inboundTimestamp,
-          cs24hWindowOpensAt: inboundTimestamp,
-          unreadCount: { increment: 1 },
-        };
-        const conversationState = await prisma.conversation.findUnique({
-          where: { id: conversation.id },
-          select: { firstResponseAt: true, slaDueAt: true },
-        });
-        if (!conversationState?.firstResponseAt && !conversationState?.slaDueAt) {
-          updateData.slaDueAt = computeSlaDueAt();
-        }
-        await prisma.conversation.update({
-          where: { id: conversation.id },
-          data: updateData,
-        });
 
         if (parsed.metadata?.mediaId) {
           try {

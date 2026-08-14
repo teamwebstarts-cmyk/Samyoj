@@ -37,6 +37,13 @@ import { trackWebhookFailed, trackWebhookProcessed } from '../modules/whatsapp/w
 
 const log = createModuleLogger('worker');
 
+if (require.main === module && process.env.SAMYOJ_EMBEDDED_WORKERS === '1') {
+  log.error(
+    'SAMYOJ_EMBEDDED_WORKERS=1: refusing to start a second BullMQ consumer. Workers already run inside the API. Do not run npm run start:worker / whatsapp-worker.'
+  );
+  process.exit(1);
+}
+
 const connection = { url: config.redisUrl };
 
 let io: Server | null = null;
@@ -106,7 +113,12 @@ async function cleanStaleCampaignJob(job: Job, input: {
   );
 }
 
+export function areWorkersStarted(): boolean {
+  return workersStarted;
+}
+
 export function startWorkers(): void {
+  process.env.SAMYOJ_EMBEDDED_WORKERS = '1';
   if (workersStarted) return;
   workersStarted = true;
 
@@ -629,6 +641,15 @@ const broadcastWorker = new Worker(
             },
           });
         }
+        if (metaMessageId) {
+          const { reconcileUnmatchedProviderStatuses } = await import('../modules/whatsapp/provider-status');
+          await reconcileUnmatchedProviderStatuses({
+            organizationId,
+            metaMessageId,
+            whatsappNumberId: whatsappNumberDbId,
+            phoneNumberId,
+          });
+        }
         const { reconcileCampaignCounters } = await import('../modules/campaigns/service');
         await reconcileCampaignCounters(campaignId);
 
@@ -877,6 +898,9 @@ setInterval(() => {
 
 if (require.main === module) {
   setupGlobalErrorHandlers();
+  log.warn(
+    'Standalone worker process started. This deploy model embeds workers in the API — do not also run dist/index.js with startWorkers(), or jobs will be consumed twice.'
+  );
 
   checkRedisConnection()
     .then((ok) => {
