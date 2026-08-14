@@ -203,6 +203,10 @@ export function useSocket(onEvent?: (event: string, data: unknown) => void) {
       'template:status',
       'whatsapp:quality',
       'whatsapp:account-alert',
+      'order:new',
+      'order:updated',
+      'ticket:new',
+      'ticket:updated',
     ];
 
     for (const event of events) {
