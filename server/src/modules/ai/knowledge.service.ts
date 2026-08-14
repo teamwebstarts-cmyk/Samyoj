@@ -19,7 +19,7 @@ export const EMBEDDING_MATCH_THRESHOLD = 0.7;
 function tokenize(text: string): string[] {
   return text
     .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/[^\p{L}\p{N}\p{M}\s]/gu, ' ')
     .split(/\s+/)
     .filter((t) => t.length > 1);
 }
@@ -49,17 +49,9 @@ export function tokenSearch(
   limit: number
 ): KnowledgeMatch[] {
   const queryTokens = new Set(tokenize(query));
-  if (queryTokens.size === 0) {
-    return items.slice(0, limit).map((item) => ({
-      id: item.id,
-      title: item.title,
-      content: item.content,
-      score: 1,
-      sourceType: item.sourceType,
-    }));
-  }
+  if (queryTokens.size === 0) return [];
 
-  const scored = items
+  return items
     .map((item) => {
       const haystack = `${item.title} ${item.content}`.toLowerCase();
       let score = 0;
@@ -69,9 +61,7 @@ export function tokenSearch(
       return { ...item, score };
     })
     .filter((item) => item.score > 0)
-    .sort((a, b) => b.score - a.score);
-
-  return (scored.length > 0 ? scored : items.slice(0, limit).map((i) => ({ ...i, score: 1 })))
+    .sort((a, b) => b.score - a.score)
     .slice(0, limit)
     .map((item) => ({
       id: item.id,

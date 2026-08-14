@@ -12,10 +12,14 @@ describe('tokenSearch', () => {
     { id: '2', title: 'Refund policy', content: 'Refunds take 5 to 7 days', sourceType: 'FAQ' },
   ];
 
-  it('returns all items (score 1) when query has no tokens', () => {
-    const result = tokenSearch(items, '   ', 5);
-    expect(result).toHaveLength(2);
-    expect(result.every((r) => r.score === 1)).toBe(true);
+  it('returns empty when query has no tokens', () => {
+    expect(tokenSearch(items, '   ', 5)).toEqual([]);
+    expect(tokenSearch(items, '', 5)).toEqual([]);
+  });
+
+  it('does not dump latest FAQs when nothing matches', () => {
+    const result = tokenSearch(items, 'Nike T-shirt discount code', 5);
+    expect(result).toEqual([]);
   });
 
   it('ranks matching items above non-matching', () => {
@@ -40,6 +44,39 @@ describe('tokenSearch', () => {
     expect(result[0].score).toBeGreaterThan(1);
   });
 
+  it('keeps Devanagari combining marks so Hindi compounds still match', () => {
+    const hindiItems = [
+      { id: 'refund', title: 'Refund', content: 'Refunds take 5 days', sourceType: 'FAQ' },
+      {
+        id: 'hours',
+        title: 'व्यवसाय समय',
+        content: 'सुबह 9 बजे से शाम 6 बजे तक खुला हैं',
+        sourceType: 'FAQ',
+      },
+    ];
+    const result = tokenSearch(hindiItems, 'खुले हैं', 5);
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('hours');
+  });
+
+  it('ranks Hindi timing queries after expandKnowledgeQuery aliases', () => {
+    const hindiItems = [
+      { id: 'refund', title: 'Refund', content: 'Refunds take 5 days', sourceType: 'FAQ' },
+      {
+        id: 'hours',
+        title: 'व्यवसाय समय',
+        content: 'सुबह 9 बजे से शाम 6 बजे तक खुला',
+        sourceType: 'FAQ',
+      },
+      { id: 'ship', title: 'Shipping', content: 'Ships in 3 days', sourceType: 'FAQ' },
+    ];
+    const expanded = expandKnowledgeQuery('समय क्या है');
+    expect(expanded).toMatch(/timing|hours/i);
+    const result = tokenSearch(hindiItems, expanded, 5);
+    expect(result[0].id).toBe('hours');
+    expect(result[0].score).toBeGreaterThan(0);
+  });
+
   it('respects the limit', () => {
     const many = Array.from({ length: 10 }, (_, i) => ({
       id: String(i),
@@ -54,6 +91,16 @@ describe('tokenSearch', () => {
 describe('expandKnowledgeQuery', () => {
   it('adds hours aliases for spoken timing questions', () => {
     expect(expandKnowledgeQuery('shop timing kya hai')).toMatch(/hours/i);
+  });
+
+  it('lets tokenSearch rank hours FAQs from a timing query', () => {
+    const items = [
+      { id: '1', title: 'Business hours', content: 'We are open 9 AM to 6 PM', sourceType: 'FAQ' },
+      { id: '2', title: 'Refund policy', content: 'Refunds take 5 to 7 days', sourceType: 'FAQ' },
+    ];
+    const result = tokenSearch(items, expandKnowledgeQuery('shop timing kya hai'), 5);
+    expect(result[0].id).toBe('1');
+    expect(result.map((r) => r.id)).not.toContain('2');
   });
 });
 
