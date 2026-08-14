@@ -1,9 +1,16 @@
 import prisma from '../../config/database';
 import { config } from '../../config';
-import { decrypt, encrypt } from '../../utils/crypto';
+import { decrypt } from '../../utils/crypto';
 import { AppError } from '../../utils/response';
 import type { MetaCredentials } from './meta.service';
 import { MetaWhatsAppService } from './meta.service';
+
+export const ORG_META_CREDENTIALS_LOCKED_MESSAGE =
+  'Org Meta App credentials can no longer be saved. Platform credentials live in server .env (META_APP_ID / META_APP_SECRET).';
+
+export function rejectOrgMetaConfigWrite(): never {
+  throw new AppError(410, ORG_META_CREDENTIALS_LOCKED_MESSAGE);
+}
 
 export interface OrgMetaSettings {
   appId?: string;
@@ -12,10 +19,9 @@ export interface OrgMetaSettings {
 }
 
 export interface OrgMetaSettingsClient {
-  appId?: string;
   hasAppSecret?: boolean;
   configured?: boolean;
-  /** True when using platform META_APP_ID/SECRET from .env (not org override) */
+  /** True when platform META_APP_ID/SECRET from .env are set (source of truth). */
   usingPlatform?: boolean;
 }
 
@@ -35,69 +41,71 @@ export function sanitizeMetaSettingsForClient(settings: OrgMetaSettings): OrgMet
   const platformConfigured = Boolean(config.meta.appId && config.meta.appSecret);
 
   return {
-    // Never expose platform App ID to the client UI
-    appId: orgConfigured ? appId : undefined,
     hasAppSecret: hasOrgSecret || platformConfigured,
     configured: orgConfigured || platformConfigured,
-    usingPlatform: !orgConfigured && platformConfigured,
+    usingPlatform: platformConfigured,
   };
 }
 
 export async function saveOrgMetaSettings(
-  organizationId: string,
-  input: { appId?: string; appSecret?: string }
+  _organizationId: string,
+  _input: { appId?: string; appSecret?: string } = {}
 ): Promise<OrgMetaSettingsClient> {
-  const appId = input.appId?.trim() || config.meta.appId;
-  if (appId && !/^\d+$/.test(appId)) {
-    throw new AppError(400, 'Meta App ID must be a numeric value from developers.facebook.com');
+  rejectOrgMetaConfigWrite();
+}
+
+function orgMetaHasLeftoverSecrets(meta: OrgMetaSettings): boolean {
+  return Boolean(meta.appId || meta.appSecret || meta.appSecretEncrypted);
+}
+
+/**
+ * When platform .env credentials are set, delete leftover org App ID/Secret
+ * from organization.settings.meta. Does nothing if platform env is missing
+ * (those leftovers are then the only working credentials).
+ */
+export async function stripLeftoverOrgMetaCredentials(organizationId: string): Promise<boolean> {
+  if (!config.meta.appId || !config.meta.appSecret) {
+    return false;
   }
 
   const org = await prisma.organization.findUnique({
     where: { id: organizationId },
     select: { settings: true },
   });
-  const current = (org?.settings as Record<string, unknown>) || {};
-  const existing = (current.meta as OrgMetaSettings) || {};
+  const settings = { ...((org?.settings as Record<string, unknown>) || {}) };
+  const meta = { ...((settings.meta as OrgMetaSettings) || {}) };
+  if (!orgMetaHasLeftoverSecrets(meta)) {
+    return false;
+  }
 
-  const next: OrgMetaSettings = {
-    ...existing,
-    ...(appId ? { appId } : {}),
-  };
-
-  if (input.appSecret?.trim()) {
-    next.appSecretEncrypted = encrypt(input.appSecret.trim());
-    delete next.appSecret;
-  } else if (!existing.appSecretEncrypted && !existing.appSecret && !config.meta.appSecret) {
-    throw new AppError(400, 'Meta App Secret is required');
+  delete meta.appId;
+  delete meta.appSecret;
+  delete meta.appSecretEncrypted;
+  if (Object.keys(meta).length === 0) {
+    delete settings.meta;
+  } else {
+    settings.meta = meta;
   }
 
   await prisma.organization.update({
     where: { id: organizationId },
-    data: {
-      settings: {
-        ...current,
-        meta: next,
-      } as object,
-    },
+    data: { settings: settings as object },
   });
-
-  return sanitizeMetaSettingsForClient(next);
+  return true;
 }
 
 export async function resolveMetaCredentials(organizationId: string): Promise<MetaCredentials> {
+  if (config.meta.appId && config.meta.appSecret) {
+    return { appId: config.meta.appId, appSecret: config.meta.appSecret };
+  }
+
   const orgSettings = await getOrgMetaSettings(organizationId);
   const appSecret = orgSettings.appSecretEncrypted
     ? decrypt(orgSettings.appSecretEncrypted)
     : orgSettings.appSecret;
 
-  // Priority 1: Per-org override (advanced users who want to use their own App)
   if (orgSettings.appId && appSecret) {
     return { appId: orgSettings.appId, appSecret };
-  }
-
-  // Priority 2: Platform default (from .env — used by all normal users)
-  if (config.meta.appId && config.meta.appSecret) {
-    return { appId: config.meta.appId, appSecret: config.meta.appSecret };
   }
 
   throw new AppError(
