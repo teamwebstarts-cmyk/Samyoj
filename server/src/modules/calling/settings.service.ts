@@ -90,7 +90,7 @@ export async function saveOrgCallingSettings(
   return {
     settings: merged,
     warning: requestedLive
-      ? 'Live voice transfer coming soon — human handoff stays in Inbox for now.'
+      ? 'Live voice transfer is not available. The team is notified on WhatsApp instead.'
       : undefined,
   };
 }

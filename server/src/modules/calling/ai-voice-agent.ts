@@ -14,7 +14,14 @@ import type { ActiveCallContext, TranscriptEntry } from './types';
 import type { ToolCallResult } from '../ai/sarvam-chat.service';
 import { extractInlineToolCalls } from '../ai/voice-tool-parse';
 import { isVoiceBackchannel, wantsCallbackOnCall, wantsEndCall, wantsHumanOnCall } from './voice-intent';
-import { isLikelyTtsEcho, joinSpokenTurns, prepareSpokenText, splitForTts } from './spoken-text';
+import {
+  isLikelyTtsEcho,
+  joinSpokenTurns,
+  prepareSpokenText,
+  shouldMuteCallStt,
+  shouldQueueVoiceInterrupt,
+  splitForTts,
+} from './spoken-text';
 
 const log = createModuleLogger('ai-voice-agent');
 
@@ -71,17 +78,19 @@ export class AiVoiceCallSession {
           this.ctx.ttsLanguage = languageDetected;
         }
         if (this.ended || this.wrappingUp) return;
-        if (this.processing || this.speaking) {
+        // Never barge-in while TTS is playing (or during the echo tail) — that caused
+        // speakerphone echo to be treated as the caller talking over the bot.
+        if (shouldMuteCallStt(this.speaking, this.speakingEndedAt, Date.now())) return;
+        if (shouldQueueVoiceInterrupt(this.processing, this.speaking)) {
           this.queueInterrupt(text);
           return;
         }
         void this.handleUserSpeech(text);
       },
       onSpeechStart: () => {
+        // Do not clear `speaking` here — that re-opened STT onto TTS echo ("perfect perfect").
         this.lastSpeechTimestamp = Date.now();
       },
-        // Keep sending mic audio while the bot talks so the caller can interrupt.
-        // Echo of our own TTS is dropped in queueInterrupt / isLikelyTtsEcho.
       onError: (err) => {
         log.error('Sarvam transcriber error during call', { callId: this.ctx.callId, error: err.message });
       },
@@ -101,6 +110,7 @@ export class AiVoiceCallSession {
         this.recordingBuffer.push(buf);
         this.recordingSampleRate = sampleRate;
       }
+      if (shouldMuteCallStt(this.speaking, this.speakingEndedAt, Date.now())) return;
       this.transcriber.sendPcm(samples, sampleRate);
     });
 
@@ -145,6 +155,15 @@ export class AiVoiceCallSession {
     if (trimmed.length < 2) return;
     if (isVoiceBackchannel(trimmed)) {
       log.debug('Ignoring backchannel on call', { callId: this.ctx.callId, text: trimmed });
+      return;
+    }
+
+    if (
+      this.speakingEndedAt > 0 &&
+      Date.now() - this.speakingEndedAt < 1200 &&
+      isLikelyTtsEcho(trimmed, this.lastSpokenText)
+    ) {
+      log.debug('Ignoring TTS echo on call', { callId: this.ctx.callId, text: trimmed });
       return;
     }
 
@@ -520,10 +539,11 @@ export class AiVoiceCallSession {
 
   private queueInterrupt(text: string): void {
     if (this.wrappingUp || this.ended) return;
+    // Gap interrupt only: user talks while we wait on LLM / next TTS clip.
+    if (!shouldQueueVoiceInterrupt(this.processing, this.speaking)) return;
     const trimmed = text.trim();
     if (trimmed.length < 8 || isVoiceBackchannel(trimmed)) return;
-    const echoWindow = Date.now() - this.speakingEndedAt < 1200 || this.speaking;
-    if (echoWindow && isLikelyTtsEcho(trimmed, this.lastSpokenText)) {
+    if (isLikelyTtsEcho(trimmed, this.lastSpokenText)) {
       log.debug('Ignoring TTS echo on call', { callId: this.ctx.callId, text: trimmed });
       return;
     }

@@ -350,22 +350,15 @@ export default function CallingSettingsForm({ initialSection = 'who' }: CallingS
                 />
                 <BehaviorRow
                   label="When caller asks for a person"
-                  hint="Live voice transfer coming soon — human handoff stays in Inbox for now."
+                  hint="The team is notified on WhatsApp. Live voice transfer is not available."
                   control={
                     <AppSelect
                       value="message"
                       disabled
                       onChange={() => {
-                        /* Live transfer disabled until media works */
+                        /* Message-only handoff — live transfer is not available */
                       }}
-                      options={[
-                        { value: 'message', label: 'Message on WhatsApp' },
-                        {
-                          value: 'live',
-                          label: 'Connect live if team online (coming soon)',
-                          disabled: true,
-                        },
-                      ]}
+                      options={[{ value: 'message', label: 'Message on WhatsApp' }]}
                     />
                   }
                 />
