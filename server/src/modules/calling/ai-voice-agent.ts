@@ -2,6 +2,8 @@ import prisma from '../../config/database';
 import { unregisterActiveCall } from './session-store';
 import { createModuleLogger } from '../../utils/logger';
 import { emitToOrg } from '../../realtime';
+import { computeSlaDueAt } from '../sla/service';
+import { emitTicketEvent } from '../tickets/events';
 import { createChatCompletion } from '../ai/chat-completion.service';
 import { performHandoff, streamVoiceBotReply } from '../ai/chatbot.service';
 import { shouldEndVoiceCallOnHandoff, validateOutboundReply } from '../ai/guardrails';
@@ -384,8 +386,10 @@ export class AiVoiceCallSession {
               category: 'callback',
               priority: 'HIGH',
               status: 'OPEN',
+              slaDueAt: computeSlaDueAt(),
             },
           });
+          emitTicketEvent(this.ctx.organizationId, 'ticket:new', ticket);
 
           const noteAuthor = await prisma.organizationUser.findFirst({
             where: {
