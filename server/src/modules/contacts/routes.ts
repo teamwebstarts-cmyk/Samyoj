@@ -16,6 +16,7 @@ import {
 import { resolveActiveWhatsappNumber } from '../whatsapp/active-number';
 import { asCustomAttributes } from '../../utils/custom-attributes';
 import { Prisma } from '@prisma/client';
+import { contactConsentData, contactCreateConsentFields } from './consent';
 
 const router = Router();
 
@@ -67,9 +68,9 @@ router.post(
         email: data.email || undefined,
         tags: data.tags || [],
         notes: data.notes,
-        optedIn: data.optedIn ?? false,
         customAttributes,
         source: 'MANUAL',
+        ...contactCreateConsentFields(data.optedIn, 'MANUAL'),
       },
       update: {
         name: data.name,
@@ -77,7 +78,7 @@ router.post(
         tags: data.tags,
         notes: data.notes,
         customAttributes,
-        ...(data.optedIn !== undefined ? { optedIn: data.optedIn } : {}),
+        ...(data.optedIn !== undefined ? contactConsentData(data.optedIn, 'MANUAL') : {}),
       },
     });
 
@@ -321,12 +322,13 @@ router.patch(
     });
     if (!existing) throw new AppError(404, 'Contact not found');
 
-    const { customAttributes, ...rest } = data;
+    const { customAttributes, optedIn, ...rest } = data;
     const contact = await prisma.contact.update({
       where: { id },
       data: {
         ...rest,
         email: data.email === '' ? null : data.email,
+        ...(optedIn !== undefined ? contactConsentData(optedIn, 'MANUAL') : {}),
         ...(customAttributes !== undefined
           ? { customAttributes: asCustomAttributes(customAttributes) as Prisma.InputJsonValue }
           : {}),

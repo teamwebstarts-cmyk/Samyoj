@@ -3,6 +3,7 @@ import { AppError } from '../../utils/response';
 import type { Contact, ContactSource, Prisma } from '@prisma/client';
 import { sortContactIdsForLock } from './locking';
 import { asCustomAttributes } from '../../utils/custom-attributes';
+import { AUDITABLE_CONSENT_WHERE, contactConsentData, contactListOptedInWhere } from './consent';
 
 export interface ContactListItem extends Contact {
   lastActiveAt: Date | null;
@@ -80,10 +81,9 @@ function buildContactWhere(
   } else if (filters.named === 'false') {
     andConditions.push({ OR: [{ name: null }, { name: '' }] });
   }
-  if (filters.optedIn === 'true') {
-    andConditions.push({ optedIn: true });
-  } else if (filters.optedIn === 'false') {
-    andConditions.push({ optedIn: false });
+  const optedInWhere = contactListOptedInWhere(filters.optedIn);
+  if (optedInWhere) {
+    andConditions.push(optedInWhere);
   }
   if (filters.source) {
     andConditions.push({ source: filters.source as ContactSource });
@@ -200,7 +200,7 @@ export async function listContacts(
     prisma.contact.count({
       where: { ...baseWhere, AND: [{ name: { not: null } }, { NOT: { name: '' } }] },
     }),
-    prisma.contact.count({ where: { ...baseWhere, optedIn: true } }),
+    prisma.contact.count({ where: { ...baseWhere, ...AUDITABLE_CONSENT_WHERE } }),
     prisma.contact.count({
       where: {
         ...baseWhere,
@@ -418,7 +418,7 @@ export async function bulkUpdateContacts(
   if (input.action === 'setOptedIn') {
     await prisma.contact.updateMany({
       where: { id: { in: ids }, organizationId: orgId, whatsappNumberId },
-      data: { optedIn: Boolean(input.optedIn) },
+      data: contactConsentData(Boolean(input.optedIn), 'MANUAL_BULK'),
     });
     return { affected: ids.length };
   }
