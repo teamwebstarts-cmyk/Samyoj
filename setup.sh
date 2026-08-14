@@ -48,6 +48,9 @@ for dir in server client; do
   fi
 done
 chmod 600 server/.env client/.env
+if [[ -d .run/logs ]]; then
+  find .run/logs -type f -exec chmod 640 {} + 2>/dev/null || true
+fi
 
 for key in JWT_SECRET JWT_REFRESH_SECRET ENCRYPTION_KEY META_VERIFY_TOKEN; do
   value="$(env_value "$key")"
@@ -98,6 +101,7 @@ if [[ "$NGROK_CONFIGURED" != true ]]; then
   set_env_value NGROK_AUTHTOKEN "$NGROK_AUTH_TOKEN"
 fi
 ok "ngrok authentication is configured"
+chmod 600 server/.env client/.env
 
 for key in META_APP_ID META_APP_SECRET META_VERIFY_TOKEN ENCRYPTION_KEY; do
   value="$(env_value "$key")"

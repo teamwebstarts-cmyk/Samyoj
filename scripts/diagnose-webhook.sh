@@ -47,10 +47,12 @@ if [ -n "$HEALTH" ]; then
   ok "Server is running"
   TOTAL=$(echo "$HEALTH" | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['totalReceived'])" 2>/dev/null || echo "?")
   ERRS=$(echo "$HEALTH" | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['totalErrors'])" 2>/dev/null || echo "?")
-  WEBHOOK_URL=$(echo "$HEALTH" | python3 -c "import sys,json; print(json.load(sys.stdin)['data'].get('webhookUrl',''))" 2>/dev/null || echo "")
+  CONFIGURED=$(echo "$HEALTH" | python3 -c "import sys,json; print(json.load(sys.stdin)['data'].get('webhookConfigured',''))" 2>/dev/null || echo "")
+  WEBHOOK_URL=$(grep -m1 '^META_WEBHOOK_URL=' /workspaces/Samyoj/server/.env 2>/dev/null | cut -d= -f2- || echo "")
   info "Webhooks received (from Meta or tests): $TOTAL"
   info "Webhook errors: $ERRS"
-  info "META_WEBHOOK_URL: ${WEBHOOK_URL:-not set}"
+  info "webhookConfigured: ${CONFIGURED:-unknown}"
+  info "META_WEBHOOK_URL (from server/.env): ${WEBHOOK_URL:-not set}"
 else
   fail "Server not reachable on localhost:8000 — start it with: cd server && npm run dev"
 fi

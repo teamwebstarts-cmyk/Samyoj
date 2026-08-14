@@ -75,6 +75,24 @@ restart_api() {
 ENCRYPTION_KEY="$(grep -m1 '^ENCRYPTION_KEY=' server/.env | cut -d= -f2- || true)"
 [[ "$ENCRYPTION_KEY" =~ ^[0-9a-fA-F]{64}$ ]] ||
   fail "ENCRYPTION_KEY must be exactly 64 hexadecimal characters. Run bash setup.sh."
+unset ENCRYPTION_KEY
+
+harden_local_permissions() {
+  chmod 600 server/.env
+  if [[ -f client/.env ]]; then
+    chmod 600 client/.env
+  fi
+  if [[ -d "$LOG_DIR" ]]; then
+    find "$LOG_DIR" -type f -exec chmod 640 {} + 2>/dev/null || true
+  fi
+  local env_mode
+  env_mode="$(stat -c '%a' server/.env 2>/dev/null || true)"
+  if [[ -n "$env_mode" && "$env_mode" != "600" ]]; then
+    warn "server/.env permissions are ${env_mode}; expected 600"
+  fi
+}
+
+harden_local_permissions
 
 info "Starting Docker containers..."
 docker compose up -d
@@ -172,6 +190,8 @@ for attempt in {1..30}; do
 done
 curl -fsS http://localhost:3000 >/dev/null 2>&1 ||
   fail "Client did not become reachable. See .run/logs/client.log"
+
+harden_local_permissions
 
 echo ""
 ok "All services started (inbound webhook required and verified)."
