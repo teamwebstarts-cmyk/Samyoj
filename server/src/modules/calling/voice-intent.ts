@@ -12,8 +12,7 @@ export function wantsHumanOnCall(text: string): boolean {
     /\b(real (human|person|agent|support)|human please|agent please|customer care|customer service|customer support|support team|live agent)\b/i.test(
       t
     ) ||
-    /(किसी से बात|इंसान से बात|एजेंट से बात|मानव से बात|सपोर्ट टीम|सपोर्ट से बात|टीम से बात|बात करवा)/.test(t) ||
-    /(support.{0,24}बात|बात.{0,24}support)/i.test(t)
+    /(किसी से बात|इंसान से बात|एजेंट से बात|मानव से बात|सपोर्ट टीम|सपोर्ट से बात|बात करवा)/.test(t)
   );
 }
 
@@ -30,8 +29,11 @@ export function wantsCallbackOnCall(text: string): boolean {
 export function wantsEndCall(text: string): boolean {
   const t = text.trim();
   if (!t || wantsCallbackOnCall(t)) return false;
+  // Lone "bye" is too greedy (can be backchannel / STT fragment). Require a clear closer.
   if (
-    /^(bye|goodbye|bye bye|that's all|thats all|nothing else|i'm done|im done)[.!?।]*$/i.test(t)
+    /^(goodbye|good\s*bye|bye bye|bye-bye|that's all|thats all|nothing else|i'm done|im done)[.!?।]*$/i.test(
+      t
+    )
   ) {
     return true;
   }
@@ -39,7 +41,7 @@ export function wantsEndCall(text: string): boolean {
     /\b(hang\s*up|end (the )?call|cut (the )?call|disconnect (the )?call|you can (hang up|cut|disconnect))\b/i.test(
       t
     ) ||
-    /(कॉल\s*काट|कॉल\s*रख|call\s*रख|रख\s*दे|काट\s*दो|बस हो गया|इतना ही काफी|कॉल खत्म)/i.test(t)
+    /(कॉल\s*काट|कॉल\s*रख|call\s*रख|कॉल खत्म)/i.test(t)
   );
 }
 
