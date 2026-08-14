@@ -1,8 +1,9 @@
 # Samyoj Deployment Log — 2026-08-15
 
-> Intended: code-update deploy of branch `call-ui-improvemnet` to GCE VM `samyoj-server` (`asia-south1-c`), live `https://app.samyoj.com`.
-> This is **not** a first-time install. Billing TARGET catalog was **not** to be shipped as product code.
-> **Result: BLOCKED before any VM mutation.** Production left untouched.
+> Code-update deploy of branch `call-ui-improvemnet` to GCE VM `samyoj-server` (`asia-south1-c`), live `https://app.samyoj.com`.
+> This is **not** a first-time install. Billing TARGET catalog (`docs/billing/`) was **not** shipped as live checkout.
+
+Earlier this calendar day a Codespace attempt was **blocked** (no GCP credentials / no SSH). Production was not mutated then. After `gcloud auth` on this Codespace, the deploy completed.
 
 ---
 
@@ -10,118 +11,88 @@
 
 | Item | Value |
 |------|--------|
-| Deploy result | **FAIL / blocked** — no SSH to the VM |
-| Live URL | `https://app.samyoj.com` (still the 2026-08-08 build) |
-| Git SHA on VM | **unknown this session** (last recorded: `fa0cb5b` + later uncommitted VM drift; could not re-verify) |
-| Local workspace SHA intended to ship | `3290011` (`call-ui-improvemnet`, matches `origin/call-ui-improvemnet`) |
-| Migrations applied | **none** (did not reach the VM) |
-| Production `.env` | **not read, not written** |
-| Billing TARGET catalog | **not deployed** (and was never going to be; live `plans.ts` still Growth ₹3999 / Business ₹11999) |
+| Deploy result | **SUCCESS** |
+| Live URL | `https://app.samyoj.com` |
+| Branch | `call-ui-improvemnet` |
+| VM git SHA | **`92e2605`** (`92e2605ffba8f1ed114105f31f0e45f0c088131b`) — *Refactor ticket components for improved UI and functionality* |
+| Previous prod SHA | `fa0cb5b` (2026-08-08) + 11 VM-only working-tree files |
+| Local workspace SHA shipped | `92e2605` (matches `origin/call-ui-improvemnet`) |
+| Production `.env` | **unchanged** (sha256 `dd42a999…8c807e25`). Webhook still `https://app.samyoj.com/api/whatsapp/webhook`. No ngrok/localhost. Local `.env` was **not** copied. |
+| Billing TARGET catalog | **not shipped**. Live `plans.ts`: Starter Free / Growth ₹3,999 / Business ₹11,999 / Enterprise Custom |
+| PM2 | `whatsapp-api` **online** only. Leftover `whatsapp-worker` **deleted** (workers embedded in API). |
+| systemd `pm2-samyoj` | enabled + active (untouched; already reboot-safe) |
+| Disk | cleaned 74% → **51%** (4.6G free) |
 
 ---
 
-## Job 1 (memory) — done in this Codespace
-
-Cursor rules (not a copy of the 19 billing docs):
-
-- Created: `.cursor/rules/billing-research.mdc` (`alwaysApply: true`)
-- Pointer added (≤5 lines) in `.cursor/rules/whatsapp-dev-setup.mdc`
-- Pointer added in `.cursor/rules/session-memory.mdc`
-
-Canonical pack remains `docs/billing/` (README = index). Current-code audit: `docs/audit/BILLING_SYSTEM_REVIEW.md`.
-
----
-
-## Phase 0 — Snapshot (what could be captured without SSH)
-
-### Public live checks (2026-08-14 ~19:12 UTC)
-
-| Check | Result |
-|-------|--------|
-| `https://app.samyoj.com/` | **200** |
-| `https://app.samyoj.com/login` | **200** |
-| `http://app.samyoj.com/` | **301** → `https://app.samyoj.com/` |
-| `GET https://app.samyoj.com/health` | `{"status":"ok","checks":{"api":"ok","database":"ok","redis":"ok"},"version":"1.0.0"}` |
-| `GET /api/whatsapp/webhook/health` (public) | HTTP 200. `totalReceived: 22`, `totalProcessed: 22`, `totalErrors: 0`, `lastReceivedAt: 2026-08-10T18:21:53.398Z`, `verifyTokenConfigured: true`, `appSecretConfigured: true` |
-| Webhook challenge with wrong token | HTTP **403** `Forbidden — verify_token mismatch` (endpoint alive) |
-
-**Note:** live public webhook health still returns `webhookUrl`, `lastError`, `lastFbTraceId`. Current local code (`toPublicWebhookHealth`) strips those. That difference is evidence production is still on the 2026-08-08 tree (plus later VM-only patches), not this workspace.
-
-### Local git (this Codespace)
+## Pre-deploy snapshot (2026-08-14 ~19:28 UTC)
 
 | Item | Value |
 |------|--------|
-| Branch | `call-ui-improvemnet` tracking `origin/call-ui-improvemnet` |
-| HEAD | `3290011` — *Add remaining billing research docs through implementation blueprint.* |
-| Commits since last known prod SHA `fa0cb5b` | **108** |
-| Prisma migrations **not** on the 2026-08-08 deploy | 12 files (campaign safety/boundaries, webhook idempotency, WhatsApp number isolation + reconcile, conversation charges by phone, contact custom attributes, webhook durability) |
-| Billing product code vs `fa0cb5b` | `plans.ts` **unchanged** (old one-shot prices). Only `usage.service.ts` (+2/−1) in `server/src/modules/billing` |
-| Uncommitted on local | `client/src/components/inbox/ConversationItem.tsx` (1 line deleted) — not part of this blocked deploy |
+| SSH | `gcloud compute ssh samyoj-server --zone=asia-south1-c` as login user `codespace` → OK |
+| App user / path | `samyoj` @ `/home/samyoj/Samyoj` |
+| Node / npm | v20.20.2 / 10.8.2 |
+| Git | `call-ui-improvemnet` @ `fa0cb5b` |
+| Disk | 74% (2.5G free) — cleaned before build |
+| PM2 | `whatsapp-api` + **`whatsapp-worker`** both online (6D uptime) |
+| Health | `api`/`database`/`redis` ok |
+| Public webhook health (old build) | `totalReceived: 22`, still leaked `webhookUrl` / `lastError` / `lastFbTraceId` |
+| Prisma | 4 applied (`init`, `auth_email_verified`, `add_conversation_favorite`, `unique_whatsapp_phone_number_id`) |
+| `.env` (safe) | `NODE_ENV=production`, URLs `https://app.samyoj.com`, `META_WEBHOOK_URL=https://app.samyoj.com/api/whatsapp/webhook`, Meta + Sarvam keys set, no `NGROK_AUTHTOKEN` |
 
-### VM (could not capture)
+### VM-only uncommitted files (inventoried **before** any overwrite)
 
-Could not run: disk `df`, `pm2 list`, `git status` / SHA on `/home/samyoj/Samyoj`, nginx, or `.env` key inventory.
+Backed up to `/home/samyoj/backups/vm-only-20260815-1928/` (+ `working-tree.diff`). **Did not `git reset --hard`.**
 
-Last known from `docs/deployment/DEPLOY_LOG_2026-08-08.md` (do not treat as re-verified today):
+| File | VM-only intent | Already in `92e2605`? |
+|------|----------------|------------------------|
+| `client/src/pages/RegisterPage.tsx` | skip email verification / auto-login | identical |
+| `server/src/modules/ai/guardrails.ts` | `shouldEndVoiceCallOnHandoff` | identical |
+| `server/src/realtime.ts` | Redis pub/sub bridge | identical |
+| `server/src/modules/auth/routes.ts` | email verification disabled | yes (local had extra later commits) |
+| `client/src/components/inbox/ChatThread.tsx` | hide `isCallSummary` bubbles | yes |
+| `client/src/components/inbox/inboxUtils.ts` | `isAgentOnlyChatMessage` | yes |
+| `client/src/types/index.ts` | `isCallSummary` | yes |
+| `server/src/modules/ai/chatbot.service.ts` | no instant NO_KB_MATCH handoff | yes |
+| `server/src/modules/calling/ai-voice-agent.ts` | call summary as internal note | yes |
+| `server/src/modules/calling/settings.service.ts` | Sarvam STT lang fallback | yes |
+| `server/src/modules/inbox/routes.ts` | filter legacy call-summary rows | yes |
 
-- Path `/home/samyoj/Samyoj`, user `samyoj`
-- Branch `call-ui-improvemnet` @ `fa0cb5b` plus **VM-only** working-tree drift: email verification skip, Redis realtime bridge, Sarvam env, later call/inbox patches
-- PM2 then ran **both** `whatsapp-api` and `whatsapp-worker`. Current repo embeds workers in the API (`config/ecosystem.config.js`); a future successful deploy must `pm2 delete whatsapp-worker` so there is not a second BullMQ consumer
-- Production webhook: `https://app.samyoj.com/api/whatsapp/webhook` (messages + calls), **not** localhost/ngrok
-
-Email-verification skip and Redis realtime **are already in this workspace** (`server/src/modules/auth/routes.ts`, `client/src/pages/RegisterPage.tsx`, `server/src/realtime.ts`). A future rsync/git sync should still **diff VM vs local** before overwrite — do **not** `git reset --hard` on the VM until that inventory exists.
-
----
-
-## Phase 1 — Access attempt
-
-1. `gcloud` was **not installed** in this Codespace (`command not found`). `~/.config/gcloud` from the 2026-08-08 session is **gone**.
-2. Installed Google Cloud SDK **580.0.0** to `/home/codespace/google-cloud-sdk`.
-3. `gcloud auth list` → **No credentialed accounts.**
-4. `gcloud auth print-access-token` → *You do not currently have an active account selected.*
-5. Direct SSH: `samyoj@34.47.220.76` and `codespace@34.47.220.76` → **Permission denied (publickey)**. No `~/.ssh/id_*` or `google_compute_engine` key.
-6. No GCP service-account JSON in the workspace. Local `server/.env` has no `GOOGLE_APPLICATION_CREDENTIALS`. No `CLOUDSDK_AUTH_ACCESS_TOKEN`.
-7. GitHub CLI is authed as `Nir-Bhay`; that does **not** grant GCE SSH. CI workflow is GitHub-hosted tests only (no deploy job).
-
-**Exact blocker:** this environment has the `gcloud` CLI but **zero GCP user/ADC credentials**, so `gcloud compute ssh samyoj-server --zone=asia-south1-c` cannot run. Did not invent access. Did not change the VM.
-
-### How to unblock (human, this Codespace)
-
-```bash
-export PATH="$HOME/google-cloud-sdk/bin:$PATH"
-gcloud auth login          # browser / --no-launch-browser
-gcloud config set project project-cf2ff302-9e0b-42b0-a1b
-gcloud compute ssh samyoj-server --zone=asia-south1-c --command='whoami'
-```
-
-Or export a short-lived `CLOUDSDK_AUTH_ACCESS_TOKEN` from a machine that is already logged in as the project owner. Then re-run the 2026-08-15 code-update procedure (snapshot → preserve VM-only files → rsync/pull **without** copying local `.env` → `pg_dump` → `prisma migrate deploy` → build → PM2 API-only → webhook verify).
+Working tree was cleaned with `git checkout -- <those 11 files>` **after** the backup, then fast-forward pull. No VM-only semantic fix was dropped.
 
 ---
 
-## What was NOT done (safety)
+## Phase log
 
-- No `git reset --hard` on the VM
-- No copy of local `.env` / ngrok / localhost URLs into production
-- No TARGET billing catalog implementation (`docs/billing/` is spec only)
-- No `prisma migrate deploy` / `migrate dev` / `reset`
-- No password resets
-- No Meta App ID/Secret in Settings UI
-- No secrets committed
-- No git config changes, no force-push
+### Phase 0 — Snapshot
+- Status: DONE. Public site 200; health ok; GCP account `nirbhayhiwse37@gmail.com`; project `project-cf2ff302-9e0b-42b0-a1b`.
 
----
+### Phase 1 — Disk cleanup
+- Status: DONE. `journalctl --vacuum-size=200M` (~472M), truncated syslog + ops-agent logs, `apt-get clean`.
+- Result: **74% → 50%** (4.6G free). Post-build **51%**.
 
-## What a successful retry should ship (application code, not billing spec)
+### Phase 2 — Backups
+- Status: DONE.
+  - `.env` copy: `/home/samyoj/backups/server.env.bak-20260814-193129` (chmod 600)
+  - `pg_dump`: `/home/samyoj/backups/whatsapp_platform-20260814-193129.sql.gz` (43,731 bytes, gzip OK, 50 `CREATE TABLE`)
+  - VM-only source: `/home/samyoj/backups/vm-only-20260815-1928/`
 
-Bring this workspace (`3290011` + confirm VM-only leftovers) onto `/home/samyoj/Samyoj` **excluding** `server/.env`, `node_modules`, and `dist`. Then:
+### Phase 3 — Sync code
+- Status: DONE. `git fetch` + `git pull --ff-only origin call-ui-improvemnet` (`fa0cb5b` → `92e2605`).
+- `.env` sha256 unchanged. `META_WEBHOOK_URL` still production HTTPS.
 
-- `npm ci` (server + client), `prisma generate`, **backup then** `prisma migrate deploy` (12 pending since 2026-08-08; isolation migration `20260813230000` clones contacts — backup first)
-- Build client + server
-- PM2: **`whatsapp-api` only**; delete leftover `whatsapp-worker`
-- Confirm `META_WEBHOOK_URL=https://app.samyoj.com/api/whatsapp/webhook`; re-check Graph subscription fields `messages` + `calls`
-- Do **not** change Razorpay plan prices
+### Phase 4 — Install
+- Status: DONE. `server` `npm ci` + `npx prisma generate` (Prisma 6.19.3). `client` `npm ci`.
 
-### Migrations that would apply (after `pg_dump`)
+### Phase 5 — Migrate
+- Status: DONE. `npx prisma migrate deploy` applied **12** migrations. Schema up to date (16 total).
+- `npm run db:validate-migration-chain` **exits 1** on this repo because historical `20260808120000_unique_whatsapp_phone_number_id` contains `DELETE FROM` (already applied 2026-08-08; **not** re-run).
+- Pre-migrate isolation preflight **could not run** (script queries `contacts.whatsapp_number_id` before that column exists).
+- Post-migrate preflight: **no blockers**, no review rows.
+- Row counts unchanged (1 WhatsApp number, 3 contacts, 3 conversations, 36 messages, 1 campaign, 10 calls) — isolation did not need to clone contacts.
+- **Not used:** `prisma migrate reset` / `migrate dev`.
+
+Applied:
 
 - `20260808235900_campaign_safety`
 - `20260809001500_campaign_phase1_boundaries`
@@ -136,18 +107,90 @@ Bring this workspace (`3290011` + confirm VM-only leftovers) onto `/home/samyoj/
 - `20260814143000_contact_custom_attributes`
 - `20260814220000_webhook_durability`
 
+### Phase 6 — Build
+- Status: DONE. Server `tsc` → `server/dist/index.js`. Client vite → `client/dist/assets/index-BJPYrl-b.js` (2.13 MB / 591 KB gzip). Benign Vite public-asset runtime-resolve warnings (same as 2026-08-08).
+
+### Phase 7 — Restart
+- Status: DONE. `pm2 delete whatsapp-worker`; `pm2 restart config/ecosystem.config.js --update-env`; `pm2 save`.
+- Startup: embedded workers started (10 queues), WebSocket ready, Sarvam pre-warmed, `API server started` port 8000 `production`.
+- `nginx -t` OK (existing harmless `:80` `server_name` conflict warning).
+
+---
+
+## Post-deploy verification
+
+| Check | Result |
+|-------|--------|
+| `https://app.samyoj.com/` | **200**, bundle `assets/index-BJPYrl-b.js` |
+| `https://app.samyoj.com/login` | **200** |
+| `http://app.samyoj.com/` | **301** → `https://app.samyoj.com/` |
+| `GET /health` (local + public) | `{"status":"ok","checks":{"api":"ok","database":"ok","redis":"ok"},"workersStarted":true}` |
+| `GET /api/whatsapp/webhook/health` (local + public) | HTTP 200; `webhookConfigured: true`; **no** `webhookUrl` / `lastError` / `lastFbTraceId` (new `toPublicWebhookHealth`) |
+| Webhook challenge (localhost, real token) | body `ping` |
+| Webhook challenge (public, wrong token) | HTTP **403** |
+| PM2 | `whatsapp-api` online; **no** `whatsapp-worker` |
+| In-memory webhook counters | `totalReceived: 0` after restart — **not** proof inbound is dead. Last live inbound before this deploy was `2026-08-10T18:21:53Z` (`totalReceived: 22`). Prove with a **new** phone reply. |
+
+---
+
+## Leftover on VM (after deploy)
+
+Untracked only (secrets; **do not commit**):
+
+- `server/.env.bak-20260808-144316`
+- `server/.env.bak-fullsync-20260808-180628`
+- `server/.env.bak-metacreds-20260808-150400`
+- `server/.env.bak-sarvam-20260808-180119`
+
+Preserved off-tree: `/home/samyoj/backups/vm-only-20260815-1928/`, env bak, pg_dump.
+
+Working tree has **no** remaining modified source files.
+
+---
+
+## What was NOT done (safety)
+
+- No copy of local `server/.env` / ngrok / localhost into production
+- No TARGET billing catalog as live checkout (`docs/billing/` is spec; `plans.ts` unchanged vs `fa0cb5b`)
+- No `prisma migrate reset` / `migrate dev`
+- No `git reset --hard`
+- No force-push, no secrets committed, no git config changes
+- No Meta App ID/Secret in Settings UI
+- Did not claim customer-production-ready (auth still `localStorage` JWT, etc.)
+
+---
+
+## Errors / notes
+
+1. `db:validate-migration-chain` always fails while the historical unique-phone `DELETE` file exists in `prisma/migrations`, even when that migration is already applied. Deploy used `prisma migrate deploy` after `pg_dump` + confirming that migration was already in `_prisma_migrations`.
+2. Isolation preflight cannot run **before** `20260813230000` (missing `contacts.whatsapp_number_id`). Ran cleanly after migrate.
+3. SMTP / Google OAuth still unset in prod `.env` (startup warnings only; email verification is already disabled in code).
+4. Duplicate nginx `:80` `server_name` warning unchanged (harmless).
+5. In-memory webhook counters reset on PM2 restart.
+
 ---
 
 ## Rollback
 
-**Not applicable — production was not changed.**
-
-If a later session does complete the deploy, rollback of **code** (not schema) would be:
+**Code** (schema stays new unless you restore the dump):
 
 ```bash
+# VM-only patches from before this pull:
+#   /home/samyoj/backups/vm-only-20260815-1928/
 sudo -u samyoj bash -c 'cd /home/samyoj/Samyoj && git checkout fa0cb5b'
-# restore any VM-only files inventoried before overwrite
-# then npm ci + prisma generate + build client/server + pm2 restart config/ecosystem.config.js
+# restore the 11 files from the vm-only backup if you need that exact tree
+sudo -u samyoj bash -c 'cd /home/samyoj/Samyoj/server && npm ci && npx prisma generate && npm run build'
+sudo -u samyoj bash -c 'cd /home/samyoj/Samyoj/client && npm ci && npm run build'
+sudo -u samyoj bash -c 'cd /home/samyoj/Samyoj && pm2 restart config/ecosystem.config.js --update-env && pm2 save'
 ```
 
-Schema rollback after the 12 migrations would need the `pg_dump` taken **immediately before** `migrate deploy` (restore: `gunzip -c <backup>.sql.gz | psql "$DATABASE_URL"`). Last known backup from 2026-08-08: `/home/samyoj/backups/whatsapp_platform-20260808-144221.sql.gz` (too old for a 2026-08-15 schema rollback).
+**Schema** (only if rolling back across the 12 migrations):
+
+```bash
+# /home/samyoj/backups/whatsapp_platform-20260814-193129.sql.gz
+# gunzip -c <file> | psql "$DATABASE_URL"
+```
+
+Do **not** use the 2026-08-08 dump (`whatsapp_platform-20260808-144221.sql.gz`) for this rollback — it predates later production data.
+
+Rolling back code to `fa0cb5b` **without** restoring the dump will break (new columns/tables the old code does not expect).
