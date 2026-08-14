@@ -27,22 +27,74 @@ export function providerWebhookEventKey(
   return `${entryId || 'unknown'}:${field}:${createHash('sha256').update(stableValue(value)).digest('hex')}`;
 }
 
-async function claimProviderWebhookEvent(
+export const PROVIDER_WEBHOOK_CLAIM_STALE_MS = 60_000;
+
+export async function claimProviderWebhookEvent(
   organizationId: string,
   eventKey: string,
   field: string
 ): Promise<boolean> {
   try {
     await prisma.providerWebhookEvent.create({
-      data: { organizationId, eventKey, field },
+      data: { organizationId, eventKey, field, status: 'PROCESSING', claimedAt: new Date() },
     });
     return true;
   } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-      return false;
+    if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') {
+      throw error;
     }
-    throw error;
   }
+
+  const existing = await prisma.providerWebhookEvent.findUnique({
+    where: { organizationId_eventKey: { organizationId, eventKey } },
+  });
+  if (!existing) {
+    try {
+      await prisma.providerWebhookEvent.create({
+        data: { organizationId, eventKey, field, status: 'PROCESSING', claimedAt: new Date() },
+      });
+      return true;
+    } catch (retryError) {
+      if (retryError instanceof Prisma.PrismaClientKnownRequestError && retryError.code === 'P2002') {
+        return false;
+      }
+      throw retryError;
+    }
+  }
+  if (existing.status === 'COMPLETED') return false;
+  if (existing.status !== 'PROCESSING') return false;
+
+  const ageMs = Date.now() - existing.claimedAt.getTime();
+  if (ageMs < PROVIDER_WEBHOOK_CLAIM_STALE_MS) return false;
+
+  const reclaimed = await prisma.providerWebhookEvent.updateMany({
+    where: {
+      id: existing.id,
+      status: 'PROCESSING',
+      claimedAt: existing.claimedAt,
+    },
+    data: { claimedAt: new Date(), field },
+  });
+  return reclaimed.count === 1;
+}
+
+export async function completeProviderWebhookEvent(
+  organizationId: string,
+  eventKey: string
+): Promise<void> {
+  await prisma.providerWebhookEvent.updateMany({
+    where: { organizationId, eventKey, status: 'PROCESSING' },
+    data: { status: 'COMPLETED', processedAt: new Date() },
+  });
+}
+
+export async function releaseProviderWebhookEvent(
+  organizationId: string,
+  eventKey: string
+): Promise<void> {
+  await prisma.providerWebhookEvent.deleteMany({
+    where: { organizationId, eventKey, status: 'PROCESSING' },
+  });
 }
 
 export const HANDLED_FIELDS = new Set([
@@ -387,11 +439,8 @@ export async function dispatchNonMessageWebhookFields(
       const number = field === 'phone_number_quality_update'
         ? await resolveOrgFromPhoneNumberId(value.phone_number_id as string)
         : await resolveOrgFromWaba(wabaId, value);
-      if (number && !await claimProviderWebhookEvent(
-        number.organizationId,
-        providerWebhookEventKey(wabaId, field, value),
-        field
-      )) {
+      const eventKey = providerWebhookEventKey(wabaId, field, value);
+      if (number && !await claimProviderWebhookEvent(number.organizationId, eventKey, field)) {
         log.info('Duplicate provider webhook skipped', { field, organizationId: number.organizationId });
         continue;
       }
@@ -422,15 +471,13 @@ export async function dispatchNonMessageWebhookFields(
         } else {
           await handleAccountStateUpdate(value, wabaId, field);
         }
+        if (number) {
+          await completeProviderWebhookEvent(number.organizationId, eventKey);
+        }
       } catch (error) {
-        // The claim is only an idempotency marker after successful handling.
-        // Remove it on failure so BullMQ/Meta retries can run the event again.
-        await prisma.providerWebhookEvent.deleteMany({
-          where: {
-            organizationId: number?.organizationId,
-            eventKey: providerWebhookEventKey(wabaId, field, value),
-          },
-        });
+        if (number) {
+          await releaseProviderWebhookEvent(number.organizationId, eventKey);
+        }
         throw error;
       }
     }
