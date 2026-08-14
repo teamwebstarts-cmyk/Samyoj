@@ -14,7 +14,11 @@ import {
   setActiveWhatsappNumberResolved,
 } from '../services/api';
 import { useAuth } from './AuthContext';
-import { resolveActiveNumber, retainActiveNumberId } from '../utils/whatsappWorkspace';
+import {
+  afterWhatsappNumbersFetch,
+  resolveActiveNumber,
+  retainActiveNumberId,
+} from '../utils/whatsappWorkspace';
 
 export interface WhatsappNumberOption {
   id: string;
@@ -31,7 +35,7 @@ interface WhatsAppNumberContextType {
   activeNumberKey: string | null;
   /** At least one WhatsApp number is linked to the org */
   hasConnectedNumber: boolean;
-  /** True only after the current number list has resolved successfully or retained a known list. */
+  /** True after GET /whatsapp/numbers has settled, including an empty (not connected) list. */
   resolved: boolean;
   loading: boolean;
   hasMultiple: boolean;
@@ -98,8 +102,9 @@ export function WhatsAppNumberProvider({ children }: { children: ReactNode }) {
         } else {
           localStorage.removeItem(storageKey(orgId));
         }
-        setActiveWhatsappNumberResolved(Boolean(nextNumber));
-        setResolved(Boolean(nextNumber));
+        const settled = afterWhatsappNumbersFetch(Boolean(nextNumber));
+        setActiveWhatsappNumberResolved(settled.numberScopeResolved);
+        setResolved(settled.workspaceResolved);
         return next;
       });
     } catch {
@@ -109,8 +114,9 @@ export function WhatsAppNumberProvider({ children }: { children: ReactNode }) {
       setActiveId((prev) => {
         const retained = retainActiveNumberId(numbersRef.current, prev);
         setActiveWhatsappNumberId(retained);
-        setActiveWhatsappNumberResolved(Boolean(retained));
-        setResolved(Boolean(retained));
+        const settled = afterWhatsappNumbersFetch(Boolean(retained));
+        setActiveWhatsappNumberResolved(settled.numberScopeResolved);
+        setResolved(settled.workspaceResolved);
         return retained;
       });
     } finally {

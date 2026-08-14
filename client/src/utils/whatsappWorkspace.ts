@@ -35,6 +35,18 @@ export function retainActiveNumberId(
     : null;
 }
 
+/**
+ * After GET /whatsapp/numbers finishes (success or failure), the workspace is
+ * settled even if the org has no number yet. Pages should show Connect WhatsApp,
+ * not spin forever. Number-scoped APIs still need an active id.
+ */
+export function afterWhatsappNumbersFetch(activeNumberFound: boolean) {
+  return {
+    workspaceResolved: true as const,
+    numberScopeResolved: activeNumberFound,
+  };
+}
+
 export function isCurrentNumberRequest(
   requestNumberId: string | null | undefined,
   currentNumberId: string | null | undefined

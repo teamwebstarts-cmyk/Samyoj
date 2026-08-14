@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  afterWhatsappNumbersFetch,
   isCurrentNumberRequest,
   resolveActiveNumber,
   retainActiveNumberId,
@@ -33,5 +34,19 @@ describe('WhatsApp workspace restoration', () => {
 
   it('always revalidates a restored snapshot', () => {
     expect(shouldRevalidateNumberCache()).toBe(true);
+  });
+
+  it('settles the workspace when the org has no WhatsApp number yet', () => {
+    expect(afterWhatsappNumbersFetch(false)).toEqual({
+      workspaceResolved: true,
+      numberScopeResolved: false,
+    });
+  });
+
+  it('enables number-scoped APIs only when a number was selected', () => {
+    expect(afterWhatsappNumbersFetch(true)).toEqual({
+      workspaceResolved: true,
+      numberScopeResolved: true,
+    });
   });
 });
