@@ -16,6 +16,8 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import AppSelect from '../../ui/AppSelect';
+import AppButton from '../../ui/AppButton';
+import AppAlert from '../../ui/AppAlert';
 import SearchInput from '../../ui/SearchInput';
 import SegmentedControl from '../../ui/SegmentedControl';
 import StatusBadge from '../../ui/StatusBadge';
@@ -66,6 +68,8 @@ interface TemplateLibraryBrowseStepProps {
   addingName?: string | null;
   metaCount: number;
   accountCount: number;
+  loadError?: string | null;
+  onRetry?: () => void;
 }
 
 const QUICK_PICK_ICONS: Record<string, LucideIcon> = {
@@ -221,6 +225,8 @@ export default function TemplateLibraryBrowseStep({
   addingName,
   metaCount,
   accountCount,
+  loadError,
+  onRetry,
 }: TemplateLibraryBrowseStepProps) {
   return (
     <div className="space-y-4">
@@ -347,15 +353,47 @@ export default function TemplateLibraryBrowseStep({
       <div className="template-wizard-card overflow-hidden">
         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2.5 dark:border-slate-800">
           <p className="text-[13px] font-bold text-slate-900 dark:text-white">
-            {loading ? 'Loading templates…' : `${items.length} template${items.length === 1 ? '' : 's'}`}
+            {loading && items.length === 0 && !loadError
+              ? 'Loading templates…'
+              : `${items.length} template${items.length === 1 ? '' : 's'}`}
           </p>
           <p className="text-[10px] font-medium text-slate-400">
             {sourceTab === 'meta' ? 'Usually ready immediately' : 'On your WhatsApp account'}
           </p>
         </div>
 
-        {loading ? (
+        {loadError && items.length > 0 ? (
+          <div className="border-b border-theme-border px-4 py-2.5">
+            <AppAlert variant="error">
+              <p className="font-semibold">Couldn’t refresh this list</p>
+              <p className="mt-1 text-[12px] font-medium opacity-90">{loadError}</p>
+              {onRetry ? (
+                <AppButton className="mt-2" variant="secondary" size="sm" onClick={onRetry}>
+                  Try again
+                </AppButton>
+              ) : null}
+            </AppAlert>
+          </div>
+        ) : null}
+
+        {loading && items.length === 0 && !loadError ? (
           <LoadingState className="py-10" label="Loading templates…" />
+        ) : loadError && items.length === 0 ? (
+          <div className="px-4 py-10 text-center">
+            <p className="text-[13px] font-semibold text-slate-800 dark:text-slate-100">
+              {sourceTab === 'meta'
+                ? 'Couldn’t load ready-made templates'
+                : 'Couldn’t load account templates'}
+            </p>
+            <p className="mt-1 text-[12px] font-medium text-slate-500">
+              This is not an empty library — WhatsApp didn’t return the list. Try again.
+            </p>
+            {onRetry ? (
+              <AppButton className="mt-3" variant="secondary" size="sm" onClick={onRetry}>
+                Try again
+              </AppButton>
+            ) : null}
+          </div>
         ) : items.length === 0 ? (
           <p className="px-4 py-10 text-center text-[13px] font-medium text-slate-500">
             {sourceTab === 'meta'

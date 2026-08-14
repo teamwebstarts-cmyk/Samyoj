@@ -29,12 +29,12 @@ import type { MessageTemplate, TemplateLibraryEntry } from '../types';
 import type { TemplateFormState } from '../utils/templateForm';
 import { persistTemplateVariableMeta } from '../utils/templateForm';
 import {
+  buildLibraryButtonInputs,
   canCloneFromMetaLibrary,
   isLibraryQuickPickActive,
   libraryButtonUrlError,
   libraryCloneCategory,
   libraryNeedsButtonInputs,
-  libraryNeedsOtpButton,
   libraryWizardStages,
   matchesLibraryCategoryFilter,
   normalizeWebsiteUrl,
@@ -55,33 +55,6 @@ function itemKey(item: LibraryListItem) {
   return `${item.source}:${item.name}:${item.language || ''}`;
 }
 
-function buildLibraryButtonInputs(item: LibraryListItem, buttonUrl: string, buttonPhone: string) {
-  const inputs: Array<Record<string, unknown>> = [];
-  for (const btn of item.buttons || []) {
-    const type = (btn.type || '').toUpperCase();
-    if (type === 'URL' && buttonUrl.trim()) {
-      const base = buttonUrl.trim();
-      inputs.push({
-        type: 'URL',
-        url: {
-          base_url: base.includes('{{') ? base : `${base.replace(/\/$/, '')}/{{1}}`,
-          url_suffix_example: base,
-        },
-      });
-    }
-    if (type === 'PHONE_NUMBER' && buttonPhone.trim()) {
-      inputs.push({ type: 'PHONE_NUMBER', phone_number: buttonPhone.trim() });
-    }
-    if (type === 'OTP') {
-      inputs.push({ type: 'OTP', otp_type: 'COPY_CODE' });
-    }
-  }
-  if (libraryNeedsOtpButton(item) && !inputs.some((i) => i.type === 'OTP')) {
-    inputs.push({ type: 'OTP', otp_type: 'COPY_CODE' });
-  }
-  return inputs;
-}
-
 export default function TemplateLibraryPage() {
   const { activeNumber, resolved } = useWhatsAppNumber();
   const navigate = useNavigate();
@@ -93,6 +66,8 @@ export default function TemplateLibraryPage() {
   const [accountEntries, setAccountEntries] = useState<MessageTemplate[]>([]);
   const [loadingMeta, setLoadingMeta] = useState(true);
   const [loadingAccount, setLoadingAccount] = useState(true);
+  const [metaLoadError, setMetaLoadError] = useState<string | null>(null);
+  const [accountLoadError, setAccountLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<LibraryCategoryFilter>('ALL');
   const [topicFilter, setTopicFilter] = useState('');
@@ -144,6 +119,7 @@ export default function TemplateLibraryPage() {
       .then(({ data }) => {
         if (requestNumberId !== activeNumberIdRef.current) return;
         setMetaEntries(Array.isArray(data.data) ? data.data : []);
+        setMetaLoadError(null);
       })
       .catch((err: unknown) => {
         if (requestNumberId !== activeNumberIdRef.current) return;
@@ -151,7 +127,7 @@ export default function TemplateLibraryPage() {
           (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
             ?.error?.message || 'Couldn’t load ready-made templates. Refresh and try again.';
         toastError(msg);
-        setMetaEntries([]);
+        setMetaLoadError(msg);
       })
       .finally(() => {
         if (requestNumberId === activeNumberIdRef.current) setLoadingMeta(false);
@@ -169,9 +145,14 @@ export default function TemplateLibraryPage() {
         const payload = data.data;
         const list = Array.isArray(payload) ? payload : payload?.templates || [];
         setAccountEntries(list);
+        setAccountLoadError(null);
       })
-      .catch(() => {
-        if (requestNumberId === activeNumberIdRef.current) setAccountEntries([]);
+      .catch((err: unknown) => {
+        if (requestNumberId !== activeNumberIdRef.current) return;
+        const msg =
+          (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
+            ?.error?.message || 'Couldn’t load account templates. Refresh and try again.';
+        setAccountLoadError(msg);
       })
       .finally(() => {
         if (requestNumberId === activeNumberIdRef.current) setLoadingAccount(false);
@@ -190,6 +171,8 @@ export default function TemplateLibraryPage() {
     if (isInitial) return;
     setMetaEntries([]);
     setAccountEntries([]);
+    setMetaLoadError(null);
+    setAccountLoadError(null);
     setSelectedItem(null);
     setForm(createEmptyWizardForm());
     setCreateName('');
@@ -633,6 +616,8 @@ export default function TemplateLibraryPage() {
                 addingName={addingName}
                 metaCount={metaEntries.length}
                 accountCount={accountEntries.length}
+                loadError={sourceTab === 'meta' ? metaLoadError : accountLoadError}
+                onRetry={sourceTab === 'meta' ? loadMeta : loadAccount}
               />
             )}
             {activeStep === 1 && selected && (

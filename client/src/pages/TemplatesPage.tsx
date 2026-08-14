@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
+  AlertCircle,
   BookOpen,
   FileText,
   Plus,
@@ -57,6 +58,7 @@ export default function TemplatesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [whatsappConnected, setWhatsappConnected] = useState<boolean | null>(null);
   const [viewOpen, setViewOpen] = useState(false);
   const [viewing, setViewing] = useState<MessageTemplate | null>(null);
@@ -117,6 +119,7 @@ export default function TemplatesPage() {
         const payload = data.data;
         const list = Array.isArray(payload) ? payload : payload?.templates || [];
         setTemplates(list);
+        setLoadError(null);
       })
       .catch((err: unknown) => {
         if (requestNumberId !== activeNumberIdRef.current) return;
@@ -124,7 +127,7 @@ export default function TemplatesPage() {
           (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
             ?.error?.message || 'Failed to load templates.';
         toastError(msg);
-        setTemplates([]);
+        setLoadError(msg);
       })
       .finally(() => {
         if (requestNumberId === activeNumberIdRef.current) setLoading(false);
@@ -140,6 +143,7 @@ export default function TemplatesPage() {
   useOnActiveNumberChange(({ isInitial }) => {
     if (isInitial) return;
     setTemplates([]);
+    setLoadError(null);
     setViewing(null);
     setViewOpen(false);
     setRejectionAlerts([]);
@@ -349,7 +353,7 @@ export default function TemplatesPage() {
     categoryFilter !== ALL_CATEGORIES ||
     languageFilter !== ALL_LANGUAGES;
 
-  const showListSkeleton = loading && templates.length === 0;
+  const showListSkeleton = loading && templates.length === 0 && !loadError;
 
   const toggleGroup = (name: string) => {
     setExpandedGroups((prev) => {
@@ -420,6 +424,18 @@ export default function TemplatesPage() {
             <>
           <TemplatePendingBanner pending={stats.pending} />
 
+          {loadError && templates.length > 0 && (
+            <div className="border-b border-theme-border px-4 py-2.5 sm:px-5">
+              <AppAlert variant="error">
+                <p className="font-semibold">Couldn’t load the latest templates</p>
+                <p className="mt-1 text-[12px] font-medium opacity-90">{loadError}</p>
+                <AppButton className="mt-2" variant="secondary" size="sm" onClick={load}>
+                  Try again
+                </AppButton>
+              </AppAlert>
+            </div>
+          )}
+
           {rejectionAlerts.length > 0 && (
             <div className="border-b border-theme-border px-4 py-2.5 sm:px-5">
               <AppAlert variant="error">
@@ -439,7 +455,18 @@ export default function TemplatesPage() {
             </div>
           )}
 
-          {filteredTemplates.length === 0 ? (
+          {loadError && templates.length === 0 ? (
+            <div className="p-4 sm:p-6">
+              <EmptyState
+                icon={AlertCircle}
+                variant="error"
+                title="Couldn’t load templates"
+                description="This is not an empty account — WhatsApp didn’t return your template list. Try again."
+                hint={loadError}
+                action={<AppButton onClick={load}>Try again</AppButton>}
+              />
+            </div>
+          ) : filteredTemplates.length === 0 ? (
             <div className="p-4 sm:p-6">
               <EmptyState
                 icon={FileText}
