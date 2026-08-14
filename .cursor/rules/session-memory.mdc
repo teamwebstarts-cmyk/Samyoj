@@ -1,0 +1,20 @@
+---
+description: Load Samyoj session memory so agents do not re-research calling, Train, automations, or production status
+alwaysApply: true
+---
+
+# Session memory (read before re-auditing)
+
+Before re-researching AI calls, Train/FAQ, automations leftovers, WhatsApp connect hardening, or “are we production-ready?”, read:
+
+- `docs/memory/README.md`
+- `docs/memory/SESSION_2026-08-14.md`
+- `docs/memory/STATUS_AND_FUTURE.md`
+
+**Do not redo** work listed there. **Do not** start Phase C automations or live WebRTC transfer unless the user explicitly asks.
+
+**Status:** test-deploy yes; customer production no.
+
+**Speech:** Sarvam STT/TTS + `sarvam-105b-conversations` on calls. Azure embeddings only. One AiBot for chat and voice.
+
+**Public webhook health** no longer returns `webhookUrl` — use `META_WEBHOOK_URL` in `server/.env`. Settings App ID/Secret stay out of the UI.

@@ -56,15 +56,15 @@ Workers are **embedded in the API** (`startWorkers()` in `server/src/index.ts`).
 | Direction | Tunnel? | Broken symptom |
 |-----------|---------|----------------|
 | Outbound Samyoj → phone | No | Send works on localhost |
-| Inbound phone → Inbox | **Yes** | Send works, replies never appear; health `totalReceived: 0`, `webhookUrl: ""` |
+| Inbound phone → Inbox | **Yes** | Send works, replies never appear; health `totalReceived: 0` |
 
 ## Inbox replies missing — diagnose first
 
 When user says message receive nahi ho raha / Inbox empty for new replies:
 
 1. `curl -s http://localhost:8000/api/whatsapp/webhook/health`
-2. Expect non-empty `webhookUrl`, tunnel process alive (`.run/logs/tunnel.log`)
-3. Confirm `META_WEBHOOK_URL` in `server/.env` matches live tunnel
+2. Expect HTTP 200 and `webhookConfigured: true`; tunnel process alive (`.run/logs/tunnel.log`)
+3. Confirm `META_WEBHOOK_URL` in `server/.env` matches live tunnel (public health does not return the URL)
 4. Restart API after any `.env` webhook change (`start.sh` does this)
 5. `cd server && npm run setup-webhook`
 6. Ask user to send a **new** phone reply (old messages do not replay)

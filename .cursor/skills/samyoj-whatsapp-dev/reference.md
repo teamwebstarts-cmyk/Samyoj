@@ -15,8 +15,9 @@ Typical failure chain:
 Health signal:
 
 ```json
-{ "totalReceived": 0, "webhookUrl": "" }
+{ "totalReceived": 0, "webhookConfigured": true }
 ```
+Tunnel URL lives in `server/.env` `META_WEBHOOK_URL`, not in this public JSON.
 
 ## Runtime layout
 
