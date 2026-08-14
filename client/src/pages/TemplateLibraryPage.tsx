@@ -23,7 +23,7 @@ import AppButton from '../components/ui/AppButton';
 import LoadingState from '../components/ui/LoadingState';
 import { invalidateApprovedTemplatesCache } from '../components/inbox/TemplateComposer';
 import { invalidateFlowReferenceData } from '../components/flows/flowReferenceData';
-import { templateApi, whatsappApi } from '../services/api';
+import { templateApi } from '../services/api';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import type { MessageTemplate, TemplateLibraryEntry } from '../types';
 import type { TemplateFormState } from '../utils/templateForm';
@@ -46,6 +46,7 @@ import {
   type LibrarySourceTab,
 } from '../utils/templateLibrary';
 import { previewParams } from '../utils/templateForm';
+import { getErrorMessage } from '../utils/errors';
 import { toastError, toastSuccess, toastWarning } from '../utils/toast';
 import { mapTemplateApiError } from '../components/templates/wizard/templateWizardModel';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
@@ -56,9 +57,8 @@ function itemKey(item: LibraryListItem) {
 }
 
 export default function TemplateLibraryPage() {
-  const { activeNumber, resolved } = useWhatsAppNumber();
+  const { activeNumber, resolved, hasConnectedNumber, loading: numbersLoading } = useWhatsAppNumber();
   const navigate = useNavigate();
-  const [whatsappConnected, setWhatsappConnected] = useState<boolean | null>(null);
   const [activeStep, setActiveStep] = useState(0);
   const [maxReachableStep, setMaxReachableStep] = useState(0);
   const [sourceTab, setSourceTab] = useState<LibrarySourceTab>('meta');
@@ -89,21 +89,6 @@ export default function TemplateLibraryPage() {
 
   const debouncedSearch = useDebouncedValue(search);
 
-  useEffect(() => {
-    if (!resolved || !activeNumber) return;
-    const requestNumberId = activeNumber.id;
-    whatsappApi
-      .numbers()
-      .then(({ data }) => {
-        if (requestNumberId !== activeNumberIdRef.current) return;
-        const numbers = Array.isArray(data.data) ? data.data : data.data?.numbers || [];
-        setWhatsappConnected(numbers.length > 0);
-      })
-      .catch(() => {
-        if (requestNumberId === activeNumberIdRef.current) setWhatsappConnected(false);
-      });
-  }, [activeNumber, resolved]);
-
   const loadMeta = useCallback(() => {
     if (!resolved || !activeNumber) return;
     const requestNumberId = activeNumber.id;
@@ -123,9 +108,7 @@ export default function TemplateLibraryPage() {
       })
       .catch((err: unknown) => {
         if (requestNumberId !== activeNumberIdRef.current) return;
-        const msg =
-          (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
-            ?.error?.message || 'Couldn’t load ready-made templates. Refresh and try again.';
+        const msg = getErrorMessage(err, 'Couldn’t load ready-made templates. Refresh and try again.');
         toastError(msg);
         setMetaLoadError(msg);
       })
@@ -149,10 +132,9 @@ export default function TemplateLibraryPage() {
       })
       .catch((err: unknown) => {
         if (requestNumberId !== activeNumberIdRef.current) return;
-        const msg =
-          (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
-            ?.error?.message || 'Couldn’t load account templates. Refresh and try again.';
-        setAccountLoadError(msg);
+        setAccountLoadError(
+          getErrorMessage(err, 'Couldn’t load account templates. Refresh and try again.'),
+        );
       })
       .finally(() => {
         if (requestNumberId === activeNumberIdRef.current) setLoadingAccount(false);
@@ -395,12 +377,9 @@ export default function TemplateLibraryPage() {
       try {
         await cloneFromLibrary(selected, createName.trim());
       } catch (err: unknown) {
-        const raw =
-          err instanceof Error
-            ? err.message
-            : (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
-                ?.error?.message || 'Failed to add template from library.';
-        setStageError(mapTemplateApiError(raw));
+        setStageError(
+          mapTemplateApiError(getErrorMessage(err, 'Failed to add template from library.')),
+        );
       } finally {
         setSaving(false);
       }
@@ -439,12 +418,9 @@ export default function TemplateLibraryPage() {
     try {
       await cloneFromLibrary(item, suggestedTemplateName(item.name));
     } catch (err: unknown) {
-      const raw =
-        err instanceof Error
-          ? err.message
-          : (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
-              ?.error?.message || 'Failed to add template from library.';
-      setStageError(mapTemplateApiError(raw));
+      setStageError(
+        mapTemplateApiError(getErrorMessage(err, 'Failed to add template from library.')),
+      );
       setActiveStep(1);
       setMaxReachableStep((prev) => Math.max(prev, 1));
     } finally {
@@ -471,7 +447,7 @@ export default function TemplateLibraryPage() {
     setStageError(null);
   };
 
-  if (whatsappConnected === null) {
+  if (numbersLoading && !hasConnectedNumber) {
     return (
       <div className="template-wizard-page">
         <LoadingState label="Loading…" />
@@ -479,7 +455,7 @@ export default function TemplateLibraryPage() {
     );
   }
 
-  if (!whatsappConnected) {
+  if (!hasConnectedNumber) {
     return (
       <div className="template-wizard-page">
         <div className="template-wizard-card mx-auto max-w-lg p-6 text-center">

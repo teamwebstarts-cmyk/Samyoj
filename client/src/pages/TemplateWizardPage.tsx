@@ -38,7 +38,7 @@ import AppButton from '../components/ui/AppButton';
 import LoadingState from '../components/ui/LoadingState';
 import { invalidateApprovedTemplatesCache } from '../components/inbox/TemplateComposer';
 import { invalidateFlowReferenceData } from '../components/flows/flowReferenceData';
-import { settingsApi, templateApi, whatsappApi } from '../services/api';
+import { settingsApi, templateApi } from '../services/api';
 import type { MessageTemplate } from '../types';
 import type { TemplateFormState } from '../utils/templateForm';
 import { formFromMessageTemplate, persistTemplateVariableMeta } from '../utils/templateForm';
@@ -54,7 +54,7 @@ type LocationState = {
 };
 
 export default function TemplateWizardPage() {
-  const { activeNumber, resolved } = useWhatsAppNumber();
+  const { activeNumber, resolved, hasConnectedNumber, loading: numbersLoading } = useWhatsAppNumber();
   const navigate = useNavigate();
   const location = useLocation();
   const { name: resubmitNameParam } = useParams();
@@ -64,7 +64,6 @@ export default function TemplateWizardPage() {
   const mode: TemplateWizardMode = isResubmit ? 'resubmit' : state.mode || 'create';
 
   const [loading, setLoading] = useState(isResubmit);
-  const [whatsappConnected, setWhatsappConnected] = useState<boolean | null>(null);
   const [form, setForm] = useState<TemplateFormState>(() => state.form || createEmptyWizardForm());
   const [activeStep, setActiveStep] = useState(0);
   const [maxReachableStep, setMaxReachableStep] = useState(0);
@@ -94,22 +93,7 @@ export default function TemplateWizardPage() {
         setExistingNames(new Set((list as MessageTemplate[]).map((t) => t.name)));
       })
       .catch(() => {
-        if (requestNumberId === activeNumberIdRef.current) setExistingNames(new Set());
-      });
-  }, [activeNumber, resolved]);
-
-  useEffect(() => {
-    if (!resolved || !activeNumber) return;
-    const requestNumberId = activeNumber.id;
-    whatsappApi
-      .numbers()
-      .then(({ data }) => {
-        if (requestNumberId !== activeNumberIdRef.current) return;
-        const numbers = Array.isArray(data.data) ? data.data : data.data?.numbers || [];
-        setWhatsappConnected(numbers.length > 0);
-      })
-      .catch(() => {
-        if (requestNumberId === activeNumberIdRef.current) setWhatsappConnected(false);
+        /* keep names already loaded — a failed refresh is not an empty account */
       });
   }, [activeNumber, resolved]);
 
@@ -154,7 +138,6 @@ export default function TemplateWizardPage() {
 
   useOnActiveNumberChange(({ isInitial }) => {
     if (isInitial) return;
-    setWhatsappConnected(null);
     setExistingNames(new Set());
     setForm(createEmptyWizardForm());
     setActiveStep(0);
@@ -397,7 +380,7 @@ export default function TemplateWizardPage() {
     navigate('/templates/new', { replace: true, state: {} });
   };
 
-  if (loading || whatsappConnected === null) {
+  if (numbersLoading && !hasConnectedNumber) {
     return (
       <div className="template-wizard-page">
         <LoadingState label="Loading…" />
@@ -405,7 +388,7 @@ export default function TemplateWizardPage() {
     );
   }
 
-  if (!whatsappConnected) {
+  if (!hasConnectedNumber) {
     return (
       <div className="template-wizard-page">
         <div className="template-wizard-card mx-auto max-w-lg p-6 text-center">
@@ -417,6 +400,14 @@ export default function TemplateWizardPage() {
             Go to Settings
           </Link>
         </div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="template-wizard-page">
+        <LoadingState label="Loading…" />
       </div>
     );
   }

@@ -30,7 +30,7 @@ import { DEFAULT_PAGE_SIZE } from '../constants/pagination';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useSocket } from '../hooks/useSocket';
 import { getTemplateParts } from '../components/inbox/WhatsAppPreview';
-import { settingsApi, templateApi, whatsappApi } from '../services/api';
+import { settingsApi, templateApi } from '../services/api';
 import {
   duplicateTemplateForm,
 } from '../utils/templateForm';
@@ -53,13 +53,12 @@ interface TemplateRejectionAlert {
 }
 
 export default function TemplatesPage() {
-  const { activeNumber, resolved } = useWhatsAppNumber();
+  const { activeNumber, resolved, hasConnectedNumber, loading: numbersLoading } = useWhatsAppNumber();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [whatsappConnected, setWhatsappConnected] = useState<boolean | null>(null);
   const [viewOpen, setViewOpen] = useState(false);
   const [viewing, setViewing] = useState<MessageTemplate | null>(null);
   const [search, setSearch] = useState('');
@@ -87,21 +86,6 @@ export default function TemplatesPage() {
       })
       .catch(() => {
         if (requestNumberId === activeNumberIdRef.current) setRejectionAlerts([]);
-      });
-  }, [activeNumber, resolved]);
-
-  const checkWhatsapp = useCallback(() => {
-    if (!resolved || !activeNumber) return;
-    const requestNumberId = activeNumber.id;
-    whatsappApi
-      .numbers()
-      .then(({ data }) => {
-        if (requestNumberId !== activeNumberIdRef.current) return;
-        const numbers = Array.isArray(data.data) ? data.data : data.data?.numbers || [];
-        setWhatsappConnected(numbers.length > 0);
-      })
-      .catch(() => {
-        if (requestNumberId === activeNumberIdRef.current) setWhatsappConnected(false);
       });
   }, [activeNumber, resolved]);
 
@@ -135,10 +119,9 @@ export default function TemplatesPage() {
   }, [activeNumber, resolved, statusFilter]);
 
   useEffect(() => {
-    checkWhatsapp();
     load();
     loadAlerts();
-  }, [activeNumber?.id, checkWhatsapp, load, loadAlerts, resolved]);
+  }, [activeNumber?.id, load, loadAlerts, resolved]);
 
   useOnActiveNumberChange(({ isInitial }) => {
     if (isInitial) return;
@@ -364,7 +347,17 @@ export default function TemplatesPage() {
     });
   };
 
-  if (whatsappConnected === false) {
+  if (numbersLoading && !hasConnectedNumber) {
+    return (
+      <PageShell>
+        <div className="p-4 sm:p-6">
+          <TemplatesListSkeleton />
+        </div>
+      </PageShell>
+    );
+  }
+
+  if (!hasConnectedNumber) {
     return (
       <PageShell>
         <div className="p-4 sm:p-6">
