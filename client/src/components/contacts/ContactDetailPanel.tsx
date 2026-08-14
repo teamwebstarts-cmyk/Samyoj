@@ -27,6 +27,7 @@ import {
   formatContactRelativeTime,
 } from '../../utils/contactUtils';
 import type { Contact, ContactDetail } from '../../types';
+import { contactGetsCampaignMessages } from '../../utils/contactConsent';
 import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
 import {
   ContactConversationBadge,
@@ -132,6 +133,7 @@ export default function ContactDetailPanel({
 
   const current = detail?.contact || contact;
   const primaryConversationId = detail?.conversations?.[0]?.id;
+  const getsCampaignMessages = current ? contactGetsCampaignMessages(current) : false;
 
   if (!current) return null;
 
@@ -139,7 +141,7 @@ export default function ContactDetailPanel({
     if (!current.id) return;
     setTogglingOptIn(true);
     try {
-      await contactApi.update(current.id, { optedIn: !current.optedIn });
+      await contactApi.update(current.id, { optedIn: !getsCampaignMessages });
       onUpdated();
       const { data } = await contactApi.detail(current.id);
       setDetail(data.data as ContactDetail);
@@ -226,7 +228,7 @@ export default function ContactDetailPanel({
               <div className="min-w-0 flex-1 space-y-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <ContactSourceBadge source={current.source} />
-                  <ContactOptInBadge optedIn={current.optedIn} />
+                  <ContactOptInBadge optedIn={getsCampaignMessages} />
                   {current.conversation?.status && (
                     <ContactConversationBadge status={current.conversation.status} />
                   )}
@@ -279,7 +281,7 @@ export default function ContactDetailPanel({
                 onClick={handleToggleOptIn}
                 loading={togglingOptIn}
               >
-                {current.optedIn ? messagingConsent.stopMessages : messagingConsent.allowMessages}
+                {getsCampaignMessages ? messagingConsent.stopMessages : messagingConsent.allowMessages}
               </AppButton>
             </div>
           </ModalPanel>

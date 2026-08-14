@@ -3,6 +3,7 @@ import ContactAvatar from '../inbox/ContactAvatar';
 import Pagination from '../ui/Pagination';
 import { TableIconButton, TableTextButton } from '../ui/TableActions';
 import type { Contact } from '../../types';
+import { contactGetsCampaignMessages } from '../../utils/contactConsent';
 import {
   ContactActiveIndicator,
   ContactConversationBadge,
@@ -149,7 +150,7 @@ export default function ContactTable({
 
                   <td className="min-w-[150px] px-5">
                     <div className="flex flex-col items-start gap-1.5">
-                      <ContactOptInBadge optedIn={contact.optedIn} />
+                      <ContactOptInBadge optedIn={contactGetsCampaignMessages(contact)} />
                       {contact.conversation?.status && (
                         <ContactConversationBadge status={contact.conversation.status} />
                       )}

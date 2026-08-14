@@ -36,9 +36,10 @@ import { PHONE_HINT, PHONE_PLACEHOLDER, validatePhone } from '../utils/phone';
 import { toastError, toastSuccess } from '../utils/toast';
 import { readNumberCache, writeNumberCache } from '../utils/whatsappNumberCache';
 import { messagingConsent } from '../utils/plainLanguage';
+import { contactGetsCampaignMessages } from '../utils/contactConsent';
 import type { Contact, ContactSummary, ContactTag } from '../types';
 
-const emptyForm = { phone: '', name: '', email: '', tags: '', notes: '', customAttributes: '', optedIn: true };
+const emptyForm = { phone: '', name: '', email: '', tags: '', notes: '', customAttributes: '', optedIn: false };
 
 const CONTACTS_CACHE_KEY = 'contacts';
 
@@ -279,7 +280,7 @@ export default function ContactsPage() {
       tags: contact.tags.join(', '),
       notes: contact.notes || '',
       customAttributes: stringifyCustomAttributes(asCustomAttributes(contact.customAttributes)),
-      optedIn: contact.optedIn ?? false,
+      optedIn: contactGetsCampaignMessages(contact),
     });
     setSlideOpen(true);
   };
