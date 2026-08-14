@@ -10,7 +10,7 @@ export function mapWhatsAppOAuthError(err: unknown): AppError {
   if (lower.includes('validating client secret') || lower.includes('client_secret')) {
     return new AppError(
       400,
-      'Meta App Secret is wrong for this App ID. Open Settings → WhatsApp → Configure Meta app and paste the App Secret from Meta → Settings → Basic.'
+      'Meta App Secret does not match this App ID. The platform administrator must set META_APP_ID and META_APP_SECRET in the server environment.'
     );
   }
 
@@ -38,7 +38,7 @@ export function mapWhatsAppOAuthError(err: unknown): AppError {
   if (lower.includes('meta app credentials are not configured')) {
     return new AppError(
       400,
-      'Meta App ID / Secret not configured. Save them in Settings → WhatsApp → Configure Meta app first.'
+      'WhatsApp is not configured on this server. The platform administrator must set META_APP_ID and META_APP_SECRET in the server environment.'
     );
   }
 

@@ -25,10 +25,8 @@ function tryParseOrigin(value: string): URL | null {
 /**
  * Allow redirect URIs that match our known frontend origins:
  * - CLIENT_URL / META_REDIRECT_URI from env
- * - localhost / 127.0.0.1 (local + Codespace port-forward)
- * - *.app.github.dev / *.githubpreview.dev (Codespaces)
- * - ngrok share tunnels (*.ngrok-free.dev / *.ngrok-free.app / *.ngrok.io)
  * - Current META_WEBHOOK_URL origin (combined UI+API share proxy)
+ * - localhost / Codespaces / ngrok — only when NODE_ENV is not production (mirrors cors.ts)
  */
 export function isAllowedOAuthRedirectUri(redirectUri: string): boolean {
   const parsed = tryParseOrigin(redirectUri);
@@ -47,15 +45,18 @@ export function isAllowedOAuthRedirectUri(redirectUri: string): boolean {
 
   if (allowedOrigins.has(parsed.origin)) return true;
 
-  const host = parsed.hostname;
-  if (host === 'localhost' || host === '127.0.0.1') return true;
-  if (host.endsWith('.app.github.dev') || host.endsWith('.githubpreview.dev')) return true;
-  if (
-    host.endsWith('.ngrok-free.dev') ||
-    host.endsWith('.ngrok-free.app') ||
-    host.endsWith('.ngrok.io')
-  ) {
-    return true;
+  // Dev-only wildcards — production must use CLIENT_URL / META_REDIRECT_URI / META_WEBHOOK_URL.
+  if (config.nodeEnv !== 'production') {
+    const host = parsed.hostname;
+    if (host === 'localhost' || host === '127.0.0.1') return true;
+    if (host.endsWith('.app.github.dev') || host.endsWith('.githubpreview.dev')) return true;
+    if (
+      host.endsWith('.ngrok-free.dev') ||
+      host.endsWith('.ngrok-free.app') ||
+      host.endsWith('.ngrok.io')
+    ) {
+      return true;
+    }
   }
 
   return false;
@@ -78,12 +79,14 @@ export function signConnectOAuthState(
   return jwt.sign(
     { ...payload, type: 'whatsapp_connect_oauth' as const },
     config.jwt.secret,
-    { expiresIn: '30m' }
+    { algorithm: 'HS256', expiresIn: '30m' }
   );
 }
 
 export function verifyConnectOAuthState(token: string): WhatsappConnectOAuthState {
-  const decoded = jwt.verify(token, config.jwt.secret) as WhatsappConnectOAuthState;
+  const decoded = jwt.verify(token, config.jwt.secret, {
+    algorithms: ['HS256'],
+  }) as WhatsappConnectOAuthState;
   if (decoded.type !== 'whatsapp_connect_oauth') {
     throw new Error('Invalid OAuth state');
   }
