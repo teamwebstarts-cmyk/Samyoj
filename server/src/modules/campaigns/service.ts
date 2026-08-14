@@ -26,6 +26,7 @@ import type {
 } from './types';
 import { billingCategoryForTemplate } from './types';
 import { dedupeRecipients, hasAuditableCampaignConsent, type ResolvedRecipient } from './recipients';
+import { AUDITABLE_CONSENT_WHERE } from '../contacts/consent';
 import { Prisma } from '@prisma/client';
 import type { Campaign, CampaignRecipient, CampaignStatus } from '@prisma/client';
 import {
@@ -296,10 +297,7 @@ function buildAudienceScope(
 function addConsentFilter(scope: Prisma.ContactWhereInput): Prisma.ContactWhereInput {
   return {
     ...scope,
-    optedIn: true,
-    consentSource: { not: null },
-    consentAt: { not: null },
-    optOutAt: null,
+    ...AUDITABLE_CONSENT_WHERE,
   };
 }
 

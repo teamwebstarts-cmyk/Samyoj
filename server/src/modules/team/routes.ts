@@ -21,6 +21,7 @@ import {
   type TeamSettings,
 } from './types';
 import type { OrgRole } from '@prisma/client';
+import { revokeRefreshSessionsForUser } from '../auth/session';
 
 const router = Router();
 
@@ -1202,6 +1203,7 @@ router.delete(
         data: { assignedAgentId: null },
       });
       await tx.organizationUser.delete({ where: { id: membership.id } });
+      await revokeRefreshSessionsForUser(userId, tx);
     });
 
     await logTeamAudit({

@@ -413,6 +413,15 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
       where: { id: input.messageId },
       data: { metaMessageId, status: 'SENT' },
     });
+    if (metaMessageId) {
+      const { reconcileUnmatchedProviderStatuses } = await import('../whatsapp/provider-status');
+      await reconcileUnmatchedProviderStatuses({
+        organizationId: input.organizationId,
+        metaMessageId,
+        whatsappNumberId: input.whatsappNumberId,
+        phoneNumberId: input.phoneNumberId,
+      });
+    }
 
     const conversation = await prisma.conversation.findUnique({
       where: { id: message.conversationId },

@@ -94,6 +94,15 @@ export async function recordOutboundInConversation(input: RecordOutboundInput) {
     data: { lastMessageAt: new Date() },
   });
 
+  if (input.metaMessageId) {
+    const { reconcileUnmatchedProviderStatuses } = await import('../whatsapp/provider-status');
+    await reconcileUnmatchedProviderStatuses({
+      organizationId: input.organizationId,
+      metaMessageId: input.metaMessageId,
+      whatsappNumberId: input.whatsappNumberId,
+    });
+  }
+
   const conversationSummary = await prisma.conversation.findUnique({
     where: { id: conversation.id },
     select: { id: true, lastMessageAt: true, unreadCount: true },
