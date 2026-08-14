@@ -452,8 +452,13 @@ export class MetaWhatsAppService {
   }
 
   private static async graphGet<T>(path: string, accessToken: string): Promise<T> {
-    const separator = path.includes('?') ? '&' : '?';
-    const res = await fetch(`${META_BASE}${path}${separator}access_token=${accessToken}`);
+    const url = new URL(`${META_BASE}${path.startsWith('/') ? path : `/${path}`}`);
+    // paging.next from Meta often embeds access_token — never send it on the query string.
+    url.searchParams.delete('access_token');
+    url.searchParams.delete('appsecret_proof');
+    const res = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
     const data = (await res.json()) as T & GraphError;
     if (!res.ok) {
       throw new Error((data as GraphError).error?.message || `Graph API request failed: ${path}`);
@@ -474,7 +479,8 @@ export class MetaWhatsAppService {
     const creds = requireMetaCredentials(credentials);
     const appToken = `${creds.appId}|${creds.appSecret}`;
     const debugRes = await fetch(
-      `${META_BASE}/debug_token?input_token=${encodeURIComponent(accessToken)}&access_token=${encodeURIComponent(appToken)}`
+      `${META_BASE}/debug_token?input_token=${encodeURIComponent(accessToken)}`,
+      { headers: { Authorization: `Bearer ${appToken}` } }
     );
     const debugData = (await debugRes.json()) as {
       data?: {
