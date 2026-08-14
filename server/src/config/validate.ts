@@ -9,26 +9,46 @@ function isValidEncryptionKey(key: string): boolean {
   return /^[0-9a-fA-F]{64}$/.test(key);
 }
 
-function looksWeakSecret(secret: string): boolean {
+export function looksWeakSecret(secret: string): boolean {
   return !secret || secret.length < 32 || secret === DEFAULT_JWT_SECRET || secret === DEFAULT_JWT_REFRESH;
+}
+
+/** Weak JWT fallbacks are allowed only for explicit local development. */
+export function jwtDevFallbackAllowed(nodeEnv = process.env.NODE_ENV): boolean {
+  return nodeEnv === 'development';
+}
+
+export function jwtSecretErrors(
+  nodeEnv: string | undefined,
+  secret: string,
+  refreshSecret: string
+): string[] {
+  const errors: string[] = [];
+  if (looksWeakSecret(secret) && !jwtDevFallbackAllowed(nodeEnv)) {
+    errors.push('JWT_SECRET must be a strong secret (32+ chars), not the default');
+  }
+  if (looksWeakSecret(refreshSecret) && !jwtDevFallbackAllowed(nodeEnv)) {
+    errors.push('JWT_REFRESH_SECRET must be a strong secret (32+ chars), not the default');
+  }
+  return errors;
 }
 
 export function validateConfig(): void {
   const errors: string[] = [];
   const warnings: string[] = [];
   const isProd = config.nodeEnv === 'production';
+  const allowDevJwt = jwtDevFallbackAllowed(process.env.NODE_ENV);
 
   if (!config.databaseUrl) {
     errors.push('DATABASE_URL is required');
   }
 
-  if (looksWeakSecret(config.jwt.secret)) {
-    if (isProd) errors.push('JWT_SECRET must be a strong secret (32+ chars), not the default');
-    else warnings.push('JWT_SECRET is weak/default — generate a strong value for any shared env');
+  errors.push(...jwtSecretErrors(process.env.NODE_ENV, config.jwt.secret, config.jwt.refreshSecret));
+  if (allowDevJwt && looksWeakSecret(config.jwt.secret)) {
+    warnings.push('JWT_SECRET is weak/default — generate a strong value for any shared env');
   }
-  if (looksWeakSecret(config.jwt.refreshSecret)) {
-    if (isProd) errors.push('JWT_REFRESH_SECRET must be a strong secret (32+ chars), not the default');
-    else warnings.push('JWT_REFRESH_SECRET is weak/default — generate a strong value for any shared env');
+  if (allowDevJwt && looksWeakSecret(config.jwt.refreshSecret)) {
+    warnings.push('JWT_REFRESH_SECRET is weak/default — generate a strong value for any shared env');
   }
 
   if (isProd) {
