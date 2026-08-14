@@ -3,11 +3,14 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import AppInput from '../../ui/AppInput';
 import AppSelect from '../../ui/AppSelect';
+import AppButton from '../../ui/AppButton';
 import type { MessageTemplate } from '../../../types';
 
 interface CampaignTemplatePickerProps {
   templates: MessageTemplate[];
   templatesLoading?: boolean;
+  templatesLoadError?: string | null;
+  onRetryTemplates?: () => void;
   value: string;
   onChange: (template: MessageTemplate) => void;
 }
@@ -40,6 +43,8 @@ const templateIconTones = [
 export default function CampaignTemplatePicker({
   templates,
   templatesLoading = false,
+  templatesLoadError = null,
+  onRetryTemplates,
   value,
   onChange,
 }: CampaignTemplatePickerProps) {
@@ -120,7 +125,17 @@ export default function CampaignTemplatePicker({
       </div>
 
       <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto p-3 sm:p-3.5">
-        {templatesLoading ? (
+        {templatesLoadError && templates.length > 0 ? (
+          <div className="rounded-lg border border-amber-200/80 bg-amber-50/80 px-2.5 py-2 text-[10px] font-semibold text-amber-900 dark:border-amber-800/40 dark:bg-amber-950/20 dark:text-amber-200">
+            <p>Couldn’t refresh templates. Showing the last loaded list.</p>
+            {onRetryTemplates ? (
+              <AppButton className="mt-2" variant="secondary" size="sm" onClick={onRetryTemplates}>
+                Try again
+              </AppButton>
+            ) : null}
+          </div>
+        ) : null}
+        {templatesLoading && templates.length === 0 && !templatesLoadError ? (
           <div className="space-y-2" role="status" aria-label="Loading approved templates">
             {[0, 1, 2, 3, 4].map((item) => (
               <div
@@ -136,6 +151,20 @@ export default function CampaignTemplatePicker({
                 <span className="h-4 w-12 animate-pulse rounded-md bg-slate-100 dark:bg-slate-800" />
               </div>
             ))}
+          </div>
+        ) : templatesLoadError && templates.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-slate-200 px-3 py-8 text-center dark:border-slate-800">
+            <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-200">
+              Couldn’t load approved templates
+            </p>
+            <p className="mt-1 text-[10px] text-slate-400">
+              This is not an empty list — WhatsApp didn’t return templates. Try again.
+            </p>
+            {onRetryTemplates ? (
+              <AppButton className="mt-3" variant="secondary" size="sm" onClick={onRetryTemplates}>
+                Try again
+              </AppButton>
+            ) : null}
           </div>
         ) : filteredTemplates.length === 0 ? (
           <div className="rounded-lg border border-dashed border-slate-200 px-3 py-8 text-center dark:border-slate-800">

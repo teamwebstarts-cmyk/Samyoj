@@ -222,6 +222,7 @@ export default function CampaignsPage() {
   const navigate = useNavigate();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
+  const [templatesLoadError, setTemplatesLoadError] = useState<string | null>(null);
   const [whatsappNumbers, setWhatsappNumbers] = useState<Array<{ id: string; phoneNumber: string }>>([]);
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -308,9 +309,11 @@ export default function CampaignsPage() {
         const payload = data.data;
         const list = Array.isArray(payload) ? payload : payload?.templates || [];
         setTemplates(list as MessageTemplate[]);
+        setTemplatesLoadError(null);
       })
       .catch(() => {
-        if (requestNumberId === activeNumberIdRef.current) setTemplates([]);
+        if (requestNumberId !== activeNumberIdRef.current) return;
+        setTemplatesLoadError('Couldn’t load approved templates. Try again.');
       });
   }, [activeNumber, resolved]);
 
@@ -429,6 +432,7 @@ export default function CampaignsPage() {
     if (isInitial) return;
     setCampaigns([]);
     setTemplates([]);
+    setTemplatesLoadError(null);
     setWhatsappNumbers([]);
     setAvailableTags([]);
     setEditing(null);
@@ -1455,14 +1459,21 @@ export default function CampaignsPage() {
                 )}
             </ModalSection>}
 
-            {templates.length === 0 && (
+            {templatesLoadError && templates.length === 0 ? (
+              <ModalCallout
+                icon={LayoutTemplate}
+                title="Couldn’t load approved templates"
+                description="This is not an empty list — WhatsApp didn’t return templates. Close this and try again."
+                accent="amber"
+              />
+            ) : templates.length === 0 ? (
               <ModalCallout
                 icon={LayoutTemplate}
                 title="No approved templates yet"
                 description="Add a Meta library template to use immediately, or create your own and wait for WhatsApp approval."
                 accent="amber"
               />
-            )}
+            ) : null}
             <div className="flex items-center justify-between gap-2 border-t border-theme-border pt-4">
                   <button
                 type="button"

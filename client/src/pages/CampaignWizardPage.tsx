@@ -57,12 +57,13 @@ export default function CampaignWizardPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { canManageTeam } = useAuth();
-  const { activeNumber, resolved } = useWhatsAppNumber();
+  const { activeNumber, resolved, hasConnectedNumber, loading: numbersLoading } = useWhatsAppNumber();
   const isEdit = Boolean(id);
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(true);
+  const [templatesLoadError, setTemplatesLoadError] = useState<string | null>(null);
   const [whatsappNumbers, setWhatsappNumbers] = useState<Array<{ id: string; phoneNumber: string }>>([]);
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [quota, setQuota] = useState<CampaignQuotaData | null>(null);
@@ -105,7 +106,11 @@ export default function CampaignWizardPage() {
   const channelLabel = selectedNumber?.phoneNumber || 'Default WhatsApp number';
 
   const loadTemplates = useCallback(() => {
-    if (!resolved || !activeNumber) return;
+    if (!resolved) return;
+    if (!activeNumber) {
+      setTemplatesLoading(false);
+      return;
+    }
     const requestNumberId = activeNumber.id;
     setTemplatesLoading(true);
     templateApi
@@ -115,9 +120,13 @@ export default function CampaignWizardPage() {
         const payload = data.data;
         const list = Array.isArray(payload) ? payload : payload?.templates || [];
         setTemplates(list as MessageTemplate[]);
+        setTemplatesLoadError(null);
       })
-      .catch(() => {
-        if (requestNumberId === activeNumberIdRef.current) setTemplates([]);
+      .catch((error: unknown) => {
+        if (requestNumberId !== activeNumberIdRef.current) return;
+        setTemplatesLoadError(
+          getErrorMessage(error, 'Couldn’t load approved templates. Try again.'),
+        );
       })
       .finally(() => {
         if (requestNumberId === activeNumberIdRef.current) setTemplatesLoading(false);
@@ -165,6 +174,7 @@ export default function CampaignWizardPage() {
   useOnActiveNumberChange(({ isInitial }) => {
     if (isInitial) return;
     setTemplates([]);
+    setTemplatesLoadError(null);
     setWhatsappNumbers([]);
     setAvailableTags([]);
     setQuota(null);
@@ -420,6 +430,8 @@ export default function CampaignWizardPage() {
           setForm={setForm}
           templates={templates}
           templatesLoading={templatesLoading}
+          templatesLoadError={templatesLoadError}
+          onRetryTemplates={loadTemplates}
           selectedTemplate={selectedTemplate}
           whatsappNumbers={whatsappNumbers}
         />
@@ -461,6 +473,34 @@ export default function CampaignWizardPage() {
       />
     );
   };
+
+  if (numbersLoading && !hasConnectedNumber) {
+    return (
+      <div className="campaign-wizard-page">
+        <div className="flex min-h-0 flex-1 items-center justify-center">
+          <LoadingState label="Loading…" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!hasConnectedNumber) {
+    return (
+      <div className="campaign-wizard-page">
+        <div className="flex min-h-0 flex-1 items-center justify-center p-6">
+          <div className="campaign-wizard-card mx-auto max-w-lg p-6 text-center">
+            <p className="text-[15px] font-bold text-slate-900 dark:text-white">Connect WhatsApp first</p>
+            <p className="mt-2 text-[13px] text-slate-600">
+              You need to link your WhatsApp Business number before sending a campaign.
+            </p>
+            <AppButton className="mt-4" onClick={() => navigate('/settings')}>
+              Go to Settings
+            </AppButton>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (

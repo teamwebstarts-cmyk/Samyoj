@@ -33,6 +33,8 @@ interface CampaignMessageStepProps {
   setForm: Dispatch<SetStateAction<CampaignWizardForm>>;
   templates: MessageTemplate[];
   templatesLoading: boolean;
+  templatesLoadError?: string | null;
+  onRetryTemplates?: () => void;
   selectedTemplate?: MessageTemplate;
   whatsappNumbers: Array<{ id: string; phoneNumber: string }>;
 }
@@ -60,6 +62,8 @@ export default function CampaignMessageStep({
   setForm,
   templates,
   templatesLoading,
+  templatesLoadError = null,
+  onRetryTemplates,
   selectedTemplate,
   whatsappNumbers,
 }: CampaignMessageStepProps) {
@@ -180,6 +184,8 @@ export default function CampaignMessageStep({
         <CampaignTemplatePicker
           templates={templates}
           templatesLoading={templatesLoading}
+          templatesLoadError={templatesLoadError}
+          onRetryTemplates={onRetryTemplates}
           value={form.templateName}
           onChange={selectTemplate}
         />
