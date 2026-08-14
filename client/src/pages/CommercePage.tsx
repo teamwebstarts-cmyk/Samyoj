@@ -46,7 +46,6 @@ export default function CommercePage() {
   const [detailOrder, setDetailOrder] = useState<CommerceOrder | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailData, setDetailData] = useState<CommerceOrder | null>(null);
-  const [exampleOpen, setExampleOpen] = useState(false);
   const loadRef = useRef<() => void>(() => {});
   const activeNumberIdRef = useRef<string | null>(null);
   activeNumberIdRef.current = activeNumber?.id ?? null;
@@ -114,7 +113,6 @@ export default function CommercePage() {
       setDetailData(null);
       setDetailLoading(false);
       setUpdatingId(null);
-      setExampleOpen(false);
       setLoading(true);
       loadRef.current();
       return;
@@ -127,7 +125,6 @@ export default function CommercePage() {
     setCounts(emptyOrderCounts);
     setDetailOrder(null);
     setDetailData(null);
-    setExampleOpen(false);
     loadRef.current();
   });
 
@@ -146,7 +143,6 @@ export default function CommercePage() {
   });
 
   const openOrderDetail = async (order: CommerceOrder) => {
-    setExampleOpen(false);
     if (!resolved || !activeNumber) return;
     const requestNumberId = activeNumber.id;
     setDetailOrder(order);
@@ -337,15 +333,7 @@ export default function CommercePage() {
               <LoadingState label="Loading orders..." />
             </div>
           ) : orders.length === 0 ? (
-            <CommerceEmptyWorkspace
-              mode={hasActiveFilters ? 'filter' : 'empty'}
-              onOpenExample={(order) => {
-                setExampleOpen(true);
-                setDetailOrder(order);
-                setDetailData(order);
-                setDetailLoading(false);
-              }}
-            />
+            <CommerceEmptyWorkspace mode={hasActiveFilters ? 'filter' : 'empty'} />
           ) : (
             <>
               <CommerceOrderList
@@ -372,11 +360,9 @@ export default function CommercePage() {
         order={detailData || detailOrder}
         open={Boolean(detailOrder)}
         loading={detailLoading && !detailData}
-        preview={exampleOpen}
         onClose={() => {
           setDetailOrder(null);
           setDetailData(null);
-          setExampleOpen(false);
         }}
         onUpdateStatus={updateStatus}
         updating={detailOrder ? updatingId === detailOrder.id : false}

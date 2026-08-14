@@ -19,7 +19,6 @@ interface CommerceOrderListProps {
   onOpen: (order: CommerceOrder) => void;
   onUpdateStatus?: (id: string, status: string) => void;
   updatingId?: string | null;
-  preview?: boolean;
 }
 
 export default function CommerceOrderList({
@@ -27,19 +26,15 @@ export default function CommerceOrderList({
   onOpen,
   onUpdateStatus,
   updatingId,
-  preview = false,
 }: CommerceOrderListProps) {
   return (
     <ResponsiveDataView
       items={orders}
-      cardClassName={`divide-y divide-neutral-200 dark:divide-neutral-800 lg:hidden ${
-        preview ? 'pointer-events-auto' : ''
-      }`}
+      cardClassName="divide-y divide-neutral-200 dark:divide-neutral-800 lg:hidden"
       tableClassName="px-4 sm:px-5 pt-4 sm:pb-5"
       renderCard={(order) => (
         <CommerceOrderCard
           order={order}
-          preview={preview}
           onUpdateStatus={(id, status) => onUpdateStatus?.(id, status)}
           onClick={() => onOpen(order)}
           updating={updatingId === order.id}
@@ -88,10 +83,7 @@ export default function CommerceOrderList({
                     {action ? (
                       <TableTextButton
                         variant="primary"
-                        onClick={() => {
-                          if (preview) onOpen(order);
-                          else onUpdateStatus?.(order.id, action.next);
-                        }}
+                        onClick={() => onUpdateStatus?.(order.id, action.next)}
                       >
                         {updatingId === order.id ? 'Updating…' : action.label}
                       </TableTextButton>

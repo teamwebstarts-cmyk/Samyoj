@@ -37,7 +37,6 @@ interface CommerceOrderDetailPanelProps {
   ) => Promise<void> | void;
   updating?: boolean;
   loading?: boolean;
-  preview?: boolean;
 }
 
 export default function CommerceOrderDetailPanel({
@@ -47,7 +46,6 @@ export default function CommerceOrderDetailPanel({
   onUpdateStatus,
   updating,
   loading,
-  preview = false,
 }: CommerceOrderDetailPanelProps) {
   const [notifyCustomer, setNotifyCustomer] = useState(true);
   const [statusNote, setStatusNote] = useState('');
@@ -72,7 +70,6 @@ export default function CommerceOrderDetailPanel({
     : orderStatusCustomerMessage(previewStatus, order.referenceId);
 
   const runUpdate = async (status: string) => {
-    if (preview) return;
     await onUpdateStatus(order.id, status, {
       statusNote: statusNote.trim() || undefined,
       notifyContact: notifyCustomer,
@@ -95,7 +92,7 @@ export default function CommerceOrderDetailPanel({
             <AppButton variant="secondary" size="sm" onClick={onClose} className="sm:flex-1">
               Close
             </AppButton>
-            {action && !preview && (
+            {action && (
               <AppButton
                 size="sm"
                 loading={updating}
@@ -112,12 +109,6 @@ export default function CommerceOrderDetailPanel({
           <LoadingState label="Loading order details..." />
         ) : (
           <div className="space-y-5">
-            {preview && (
-              <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/80 px-3.5 py-2.5 text-[12px] leading-relaxed text-emerald-800 dark:border-emerald-500/20 dark:bg-emerald-950/30 dark:text-emerald-300">
-                Example only. Real catalog orders appear here automatically from WhatsApp — nothing
-                is saved or sent.
-              </div>
-            )}
             <div className="flex items-center gap-3">
               <ContactAvatar
                 name={order.contact?.name || undefined}
@@ -233,7 +224,7 @@ export default function CommerceOrderDetailPanel({
               </ModalSection>
             )}
 
-            {conversationId && !preview && (
+            {conversationId && (
               <Link to={`/inbox?conversation=${conversationId}`} onClick={onClose}>
                 <AppButton variant="secondary" icon={<Inbox size={16} />} className="w-full">
                   Message customer
@@ -241,7 +232,7 @@ export default function CommerceOrderDetailPanel({
               </Link>
             )}
 
-            {canCancelOrder(order.status) && !preview && (
+            {canCancelOrder(order.status) && (
               <button
                 type="button"
                 className="w-full text-center text-[12px] font-semibold text-rose-600 hover:underline dark:text-rose-400"

@@ -17,7 +17,6 @@ interface CommerceOrderCardProps {
   onUpdateStatus?: (id: string, status: string) => void;
   onClick?: () => void;
   updating?: boolean;
-  preview?: boolean;
 }
 
 export default function CommerceOrderCard({
@@ -25,7 +24,6 @@ export default function CommerceOrderCard({
   onUpdateStatus,
   onClick,
   updating,
-  preview = false,
 }: CommerceOrderCardProps) {
   const customer = customerDisplayName(order);
   const action = nextAction(order.status);
@@ -67,8 +65,7 @@ export default function CommerceOrderCard({
             loading={updating}
             onClick={(e) => {
               e.stopPropagation();
-              if (preview) onClick?.();
-              else onUpdateStatus?.(order.id, action.next);
+              onUpdateStatus?.(order.id, action.next);
             }}
           >
             {action.label}
