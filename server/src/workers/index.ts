@@ -13,8 +13,7 @@ import { processAiChatbotJob } from '../modules/automation/engine';
 import { executeWebhookDelivery } from '../modules/integrations/dispatch';
 import { processCompliancePurge } from './compliance-purge.processor';
 import { pollConversationAnalytics, pollQualityRatings } from '../modules/billing/usage.service';
-import { attachWorkerErrorHandlers, logError, setupGlobalErrorHandlers } from '../errors';
-import { checkRedisConnection } from '../config/redis';
+import { attachWorkerErrorHandlers, logError } from '../errors';
 import { createModuleLogger } from '../utils/logger';
 import { hasAuditableCampaignConsent } from '../modules/campaigns/recipients';
 import {
@@ -37,9 +36,9 @@ import { trackWebhookFailed, trackWebhookProcessed } from '../modules/whatsapp/w
 
 const log = createModuleLogger('worker');
 
-if (require.main === module && process.env.SAMYOJ_EMBEDDED_WORKERS === '1') {
+if (require.main === module) {
   log.error(
-    'SAMYOJ_EMBEDDED_WORKERS=1: refusing to start a second BullMQ consumer. Workers already run inside the API. Do not run npm run start:worker / whatsapp-worker.'
+    'Workers are embedded in the API (startWorkers()). Do not start a second consumer via npm run start:worker / whatsapp-worker.'
   );
   process.exit(1);
 }
@@ -896,24 +895,5 @@ setInterval(() => {
 }, 60_000);
 }
 
-if (require.main === module) {
-  setupGlobalErrorHandlers();
-  log.warn(
-    'Standalone worker process started. This deploy model embeds workers in the API — do not also run dist/index.js with startWorkers(), or jobs will be consumed twice.'
-  );
-
-  checkRedisConnection()
-    .then((ok) => {
-      if (!ok) {
-        log.error(
-          `Redis not reachable at ${config.redisUrl}. Start Redis from the repo root: docker compose up -d`
-        );
-        process.exit(1);
-      }
-      startWorkers();
-    })
-    .catch((err) => {
-      logError(err, { source: 'startup', path: 'workers.main' });
-      process.exit(1);
-    });
-}
+// Standalone entry is refused at module load (`require.main === module` above).
+// In-process `startWorkers()` from `src/index.ts` remains the only supported path.
