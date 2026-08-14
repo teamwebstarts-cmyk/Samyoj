@@ -11,6 +11,7 @@ import {
 } from '../campaigns/campaignPreviewUtils';
 import TemplateButtonExtras from '../templates/TemplateButtonExtras';
 import { templateApi } from '../../services/api';
+import { getErrorMessage } from '../../utils/errors';
 import { countTemplateVars, getTemplateBodyText, getTemplateHeaderText } from '../../utils/templateUtils';
 import {
   fetchTemplateVariableMeta,
@@ -90,6 +91,7 @@ export default function TemplateComposer({
 }: TemplateComposerProps) {
   const [templates, setTemplates] = useState<MessageTemplate[]>(() => approvedTemplatesCache ?? []);
   const [loading, setLoading] = useState(() => !approvedTemplatesCache);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [templateName, setTemplateName] = useState(
     () => approvedTemplatesCache?.[0]?.name ?? '',
   );
@@ -100,17 +102,9 @@ export default function TemplateComposer({
   const [buttonUrlSuffixes, setButtonUrlSuffixes] = useState<string[]>([]);
   const [variableMeta, setVariableMeta] = useState<TemplateVariableMeta[]>([]);
 
-  useEffect(() => {
-    if (approvedTemplatesCache) {
-      setTemplates(approvedTemplatesCache);
-      setLoading(false);
-      if (!templateName && approvedTemplatesCache.length) {
-        setTemplateName(approvedTemplatesCache[0].name);
-      }
-      return;
-    }
-
+  const loadApprovedTemplates = () => {
     let cancelled = false;
+    setLoading(true);
     templateApi
       .list({ status: 'APPROVED', all: 'true' })
       .then(({ data }) => {
@@ -119,18 +113,34 @@ export default function TemplateComposer({
         const list = Array.isArray(payload) ? payload : payload?.templates || [];
         approvedTemplatesCache = list;
         setTemplates(list);
+        setLoadError(null);
         if (list.length) setTemplateName((prev) => prev || list[0].name);
       })
-      .catch(() => {
-        if (!cancelled) setTemplates([]);
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setLoadError(getErrorMessage(err, 'Couldn’t load approved templates. Try again.'));
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
-
     return () => {
       cancelled = true;
     };
+  };
+
+  useEffect(() => {
+    if (approvedTemplatesCache) {
+      setTemplates(approvedTemplatesCache);
+      setLoading(false);
+      setLoadError(null);
+      if (!templateName && approvedTemplatesCache.length) {
+        setTemplateName(approvedTemplatesCache[0].name);
+      }
+      return;
+    }
+
+    return loadApprovedTemplates();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate once; cache handles revisits
   }, []);
 
@@ -234,7 +244,7 @@ export default function TemplateComposer({
       />
     ) : null;
 
-  if (loading) {
+  if (loading && templates.length === 0 && !loadError) {
     return (
       <div className="bg-theme-surface px-3 py-3 sm:px-4">
         <div className="inbox-skeleton-shimmer mb-2 h-3 w-24 rounded" />
@@ -242,6 +252,25 @@ export default function TemplateComposer({
         <div className="mt-3 flex justify-end gap-2">
           <div className="inbox-skeleton-shimmer h-9 w-16 rounded-xl" />
           <div className="inbox-skeleton-shimmer h-9 w-28 rounded-xl" />
+        </div>
+      </div>
+    );
+  }
+
+  if (loadError && templates.length === 0) {
+    return (
+      <div className="bg-theme-surface px-4 py-4">
+        <p className="text-[13px] font-bold text-theme-fg">Couldn’t load approved templates</p>
+        <p className="mt-1 text-[12px] text-theme-secondary">
+          This is not an empty list — WhatsApp didn’t return templates. Try again.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <AppButton type="button" size="sm" onClick={() => loadApprovedTemplates()}>
+            Try again
+          </AppButton>
+          <AppButton type="button" variant="ghost" size="sm" onClick={onCancel}>
+            Cancel
+          </AppButton>
         </div>
       </div>
     );
