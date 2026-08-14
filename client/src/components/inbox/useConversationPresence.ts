@@ -1,5 +1,6 @@
 import { useEffect, useState, type RefObject } from 'react';
 import type { Socket } from 'socket.io-client';
+import { getActiveWhatsappNumberId } from '../../services/api';
 
 const HEARTBEAT_MS = 25_000;
 
@@ -38,12 +39,14 @@ export function useConversationPresence({
     const excludeSelf = (list: PresenceViewer[]) =>
       list.filter((viewer) => viewer.id !== currentUserId);
 
-    socket.emit('join:conversation', conversationId, (reply: unknown) => {
+    const whatsappNumberId = getActiveWhatsappNumberId() || undefined;
+
+    socket.emit('join:conversation', { conversationId, whatsappNumberId }, (reply: unknown) => {
       const ack = reply as { viewers?: PresenceViewer[] };
       setViewers(excludeSelf(ack?.viewers ?? []));
     });
 
-    const beat = () => socket.emit('conversation:viewing', { conversationId });
+    const beat = () => socket.emit('conversation:viewing', { conversationId, whatsappNumberId });
     beat();
     const heartbeat = window.setInterval(beat, HEARTBEAT_MS);
 

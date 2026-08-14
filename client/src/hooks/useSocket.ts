@@ -4,6 +4,7 @@ import { logError } from '../utils/errors';
 import { socketBaseUrl } from '../services/utils';
 import { ensureFreshAccessToken } from '../services/api';
 import { getAccessToken, getRefreshToken } from '../utils/authStorage';
+import { getActiveWhatsappNumberId } from '../services/api';
 
 export type SocketConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
@@ -64,7 +65,10 @@ export function useSocket(onEvent?: (event: string, data: unknown) => void) {
       // string captured at mount stays expired after the axios interceptor
       // refreshes localStorage — that killed Inbox realtime after ~15m.
       auth: (cb) => {
-        cb({ token: getAccessToken() || '' });
+        cb({
+          token: getAccessToken() || '',
+          whatsappNumberId: getActiveWhatsappNumberId() || undefined,
+        });
       },
       withCredentials: true,
       // Polling first — WebSocket WS proxying is flaky through Vite dev
