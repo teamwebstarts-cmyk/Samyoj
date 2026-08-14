@@ -13,9 +13,10 @@ import {
 import { mapWhatsAppOAuthError } from './oauth-errors';
 import {
   getOrgMetaSettings,
+  rejectOrgMetaConfigWrite,
   resolveMetaCredentials,
   sanitizeMetaSettingsForClient,
-  saveOrgMetaSettings,
+  stripLeftoverOrgMetaCredentials,
   verifyWebhookSignatureForPayload,
 } from './org-meta.service';
 import { webhookQueue } from '../../config/queues';
@@ -23,15 +24,17 @@ import { z } from 'zod';
 import { logError } from '../../errors';
 import { createModuleLogger } from '../../utils/logger';
 import { normalizePhoneIdentity } from '../../utils/phone';
+import { inboundWebhookSignatureGate } from './webhook-signature-gate';
 import {
   resolveActiveWhatsappNumberId,
 } from './active-number';
 import {
-  webhookHealth,
+  toPublicWebhookHealth,
   trackWebhookFailed,
   trackWebhookProcessed,
   trackWebhookQueued,
   trackWebhookReceived,
+  webhookHealth,
 } from './webhook-health';
 
 const log = createModuleLogger('whatsapp');
@@ -153,18 +156,19 @@ async function saveWhatsappConnection(
   return { whatsappNumber, webhookConfigured };
 }
 
-const metaConfigSchema = z.object({
-  appId: z.string().min(1).optional(), // Optional: normal users use platform App ID from .env
-  appSecret: z.string().optional(),     // Optional: normal users use platform secret from .env
-});
-
 const metaAdminGuard = [authenticate, requireOrg, loadOrgRole, requireOrgRole('OWNER', 'ADMIN')];
 
 router.get(
   '/meta-config',
   ...metaAdminGuard,
   asyncHandler(async (req: Request, res: Response) => {
-    const settings = await getOrgMetaSettings(req.user!.organizationId!);
+    const orgId = req.user!.organizationId!;
+    try {
+      await stripLeftoverOrgMetaCredentials(orgId);
+    } catch {
+      /* leftover strip is best-effort; still return a sanitized payload */
+    }
+    const settings = await getOrgMetaSettings(orgId);
     sendSuccess(res, sanitizeMetaSettingsForClient(settings));
   })
 );
@@ -172,10 +176,9 @@ router.get(
 router.patch(
   '/meta-config',
   ...metaAdminGuard,
-  asyncHandler(async (req: Request, res: Response) => {
-    const data = metaConfigSchema.parse(req.body);
-    const saved = await saveOrgMetaSettings(req.user!.organizationId!, data);
-    sendSuccess(res, saved);
+  asyncHandler(async () => {
+    // Fail closed like POST /connect: org App ID/Secret overrides are gone.
+    rejectOrgMetaConfigWrite();
   })
 );
 
@@ -192,6 +195,12 @@ router.get(
     } catch (err) {
       log.warn('connect-url blocked: Meta credentials missing', { organizationId: orgId, userId });
       throw err;
+    }
+
+    try {
+      await stripLeftoverOrgMetaCredentials(orgId);
+    } catch {
+      /* leftover strip is best-effort; Connect still uses platform .env */
     }
 
     const redirectUri = resolveOAuthRedirectUri(
@@ -621,13 +630,15 @@ router.get('/webhook/health', async (_req: Request, res: Response) => {
     // Redis may be unreachable
   }
 
-  sendSuccess(res, {
-    ...webhookHealth,
-    queueDepth,
-    webhookUrl: config.meta.webhookUrl,
-    verifyTokenConfigured: Boolean(config.meta.verifyToken),
-    appSecretConfigured: Boolean(config.meta.appSecret),
-  });
+  sendSuccess(
+    res,
+    toPublicWebhookHealth({
+      queueDepth,
+      webhookConfigured: Boolean(config.meta.webhookUrl),
+      verifyTokenConfigured: Boolean(config.meta.verifyToken),
+      appSecretConfigured: Boolean(config.meta.appSecret),
+    })
+  );
 });
 
 // =============================================================================
@@ -683,16 +694,22 @@ router.post('/webhook', async (req: Request, res: Response) => {
   // --- 3. Signature validation ---
   const signature = req.headers['x-hub-signature-256'] as string;
   const rawBody = req.rawBody || JSON.stringify(payload);
+  const signatureGate = inboundWebhookSignatureGate({
+    nodeEnv: config.nodeEnv,
+    hasSignature: Boolean(signature),
+    hasGlobalSecret: Boolean(config.meta.appSecret),
+  });
 
-  if (config.nodeEnv === 'production') {
-    const hasGlobalSecret = Boolean(config.meta.appSecret);
-    if (!hasGlobalSecret && !signature) {
+  if (signatureGate.action === 'reject') {
+    if (signatureGate.reason === 'unconfigured') {
       log.error('Webhook signature verification not configured', { requestId, source: 'webhook' });
       return res.status(503).send('Webhook verification not configured');
     }
+    log.warn('Webhook missing signature header', { requestId, source: 'webhook' });
+    return res.status(401).send('Missing signature');
   }
 
-  if (signature) {
+  if (signatureGate.action === 'verify') {
     try {
       const valid = await verifyWebhookSignatureForPayload(signature, rawBody, payload);
       if (!valid) {
@@ -712,9 +729,6 @@ router.post('/webhook', async (req: Request, res: Response) => {
       });
       return res.status(500).send('Signature verification error');
     }
-  } else if (config.nodeEnv === 'production') {
-    log.warn('Webhook missing signature header', { requestId, source: 'webhook' });
-    return res.status(401).send('Missing signature');
   }
 
   // --- 4. Ack Meta immediately — process asynchronously ---
