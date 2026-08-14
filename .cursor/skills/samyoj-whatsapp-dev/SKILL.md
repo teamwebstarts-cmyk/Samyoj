@@ -49,7 +49,7 @@ Samyoj run:
 
 `start.sh` must hard-fail if public webhook challenge is not `ping`. Do not claim success with empty `META_WEBHOOK_URL`.
 
-Workers are **embedded in the API** (`startWorkers()` in `server/src/index.ts`). Do **not** also run `npm run dev:worker` in local dev — that duplicates consumers.
+Workers are **embedded in the API** (`startWorkers()` in `server/src/index.ts`). `npm run start:worker` / `dev:worker` **exit 1**. Do not run PM2 `whatsapp-worker`.
 
 ## Outbound vs inbound
 
@@ -103,13 +103,17 @@ Do not use the vulnerable `ngrok` npm package; use the official ngrok CLI.
 
 ### Known security follow-ups (next hardening)
 
-Prioritize before production:
+Already done (do not redo): unique `phoneNumberId`; opaque Redis `pendingToken` (no Meta token in JWT); legacy `POST /whatsapp/connect` **410**; Connect/disconnect/GET meta-config **OWNER/ADMIN**; `PATCH /meta-config` **410**; leftover org Meta stripped on Connect + GET when platform `.env` is set; **no Cloudflare** tunnel fallback.
 
-1. Remove legacy `POST /whatsapp/connect` (raw token injection)
-2. Unique DB constraint on `phoneNumberId` (cross-tenant webhook risk)
-3. Stop putting Meta access token inside client-visible `pendingToken` JWT
-4. Remove/lock down `/meta-config` override APIs for normal orgs
-5. OWNER/ADMIN-only for connect/disconnect
+Still open (do not claim customer production):
+
+1. Auth tokens in `localStorage` (XSS) — HttpOnly cookies not started
+2. Socket membership is connect-time; live sockets until reconnect
+3. Email verification disabled/theater
+4. Backup restore drill untested
+5. Inbound unproven until a **new** phone reply (`totalReceived`)
+6. Meta token-exchange still puts `client_secret` in the query string
+7. Do not re-add App ID/Secret UI unless the user explicitly asks
 
 ## Setup script expectations
 
@@ -122,10 +126,11 @@ Prioritize before production:
 
 ## Docs (source of truth)
 
+- `docs/memory/` (session status — test-deploy yes; customer production no)
 - `docs/DEV_SETUP_CHECKLIST.md`
 - `docs/WHATSAPP_CONNECT_DEVELOPER_GUIDE.md`
 - `docs/audit/WHATSAPP_CONNECTION_FLOW_ANALYSIS.md`
-- Always-apply rule: `.cursor/rules/whatsapp-dev-setup.mdc`
+- Always-apply: `.cursor/rules/whatsapp-dev-setup.mdc`, `whatsapp-number-isolation.mdc`, `testing-deploy.mdc`, `session-memory.mdc`
 
 ## Deeper reference
 

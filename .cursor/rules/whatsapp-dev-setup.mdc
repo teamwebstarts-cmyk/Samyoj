@@ -42,8 +42,17 @@ If user says "message receive nahi ho raha":
 5. Ask user to send a **new** reply from phone to the business number
 6. Prefer infra fix over rewriting Inbox UI
 
+Workers are **embedded in the API** (`startWorkers()`). `npm run start:worker` / `dev:worker` **exit 1**. Do not run PM2 `whatsapp-worker`.
+
+## Testing deploy vs production
+
+- **Testing deploy of this existing app:** `bash start.sh` (or `setup.sh` first time). That is internal using + testing, not production.
+- **Customer production / production-ready pipeline:** **No** until `docs/memory/STATUS_AND_FUTURE.md` says otherwise. Do not restart a launch that claims the product is production-complete.
+
 ## Source of truth docs
 
+- `docs/memory/` (session status — read before re-auditing)
 - `docs/WHATSAPP_CONNECT_DEVELOPER_GUIDE.md`
 - `docs/DEV_SETUP_CHECKLIST.md` (quick runbook)
 - `docs/audit/WHATSAPP_CONNECTION_FLOW_ANALYSIS.md`
+- Billing (spec only, not shipped): `docs/billing/` + `.cursor/rules/billing-research.mdc`. Do not implement TARGET pricing unless the user explicitly asks. Never mix Meta Cloud API fees into Samyoj SaaS plan price.

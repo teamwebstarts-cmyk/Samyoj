@@ -9,14 +9,13 @@ Use as a working sheet. Mark only after evidence.
 - [ ] `resolveMetaCredentials` falls back to platform env
 - [ ] OAuth redirect URI comes from browser origin
 - [ ] OAuth state signed, bound to user+org, expires
-- [ ] Legacy `POST /whatsapp/connect` removed or admin-gated
-- [ ] `/meta-config` removed or non-user-facing
+- [ ] Legacy `POST /whatsapp/connect` is 410 (OAuth only)
+- [ ] `PATCH /meta-config` is 410; GET sanitized `{configured, hasAppSecret, usingPlatform}` — no App ID in Settings UI
 
 ## Inbound webhook
 
 - [ ] Tunnel process running (ngrok only)
-- [ ] `META_WEBHOOK_URL` non-empty and matches tunnel
-- [ ] API health `webhookUrl` matches `.env`
+- [ ] `META_WEBHOOK_URL` in `.env` is non-empty and matches the live tunnel; public `/webhook/health` has `webhookConfigured` (no `webhookUrl` / `lastError` / Facebook trace in that JSON)
 - [ ] Public challenge body is exactly `ping`
 - [ ] `setup-webhook` succeeds for connected WABA
 - [ ] New phone reply increments `totalReceived`
@@ -34,11 +33,11 @@ Use as a working sheet. Mark only after evidence.
 
 ## Security / tenancy
 
-- [ ] `phoneNumberId` unique in Prisma
+- [ ] `phoneNumberId` unique in Prisma (landed — re-verify)
 - [ ] Webhook lookup cannot cross tenants on duplicates
-- [ ] Pending OAuth token is opaque server-side (no Meta token in JWT)
-- [ ] Meta `client_secret` not in URL query if avoidable
-- [ ] Connect/disconnect require OWNER/ADMIN
+- [ ] Pending OAuth token is opaque server-side (landed — re-verify)
+- [ ] Meta `client_secret` not in URL query if avoidable (**still query** as of 2026-08-15)
+- [ ] Connect/disconnect require OWNER/ADMIN (landed — re-verify)
 - [ ] Unauthenticated `/webhook/health` does not over-expose internals (or is restricted)
 
 ## Auth (if in scope)

@@ -1,20 +1,21 @@
 ---
-description: Load Samyoj session memory so agents do not re-research calling, Train, automations, or production status
+description: Load Samyoj session memory so agents do not re-research calling, Train, automations, templates, or production status
 alwaysApply: true
 ---
 
 # Session memory (read before re-auditing)
 
-Before re-researching AI calls, Train/FAQ, automations leftovers, WhatsApp connect hardening, or “are we production-ready?”, read:
+Before re-researching AI calls, Train/FAQ, automations leftovers, WhatsApp connect, templates, billing, or “are we production-ready?”, read:
 
 - `docs/memory/README.md`
-- `docs/memory/SESSION_2026-08-14.md`
 - `docs/memory/STATUS_AND_FUTURE.md`
+- `docs/memory/SESSION_2026-08-15.md` (number isolation, workers, campaign wizard, templates/Connect; test-deploy vs production)
+- `docs/memory/SESSION_2026-08-14.md` (calls / Train / automations)
 
-**Do not redo** work listed there. **Do not** start Phase C automations or live WebRTC transfer unless the user explicitly asks.
+**Do not redo** work listed there. **Do not** start Phase C automations, live WebRTC transfer, or billing implementation unless the user explicitly asks. Billing pointer: `.cursor/rules/billing-research.mdc` → `docs/billing/` (TARGET spec) vs `docs/audit/BILLING_SYSTEM_REVIEW.md` (current code).
 
-**Status:** test-deploy yes; customer production no.
+**Status:** internal testing deploy of this build = yes (`bash start.sh`). Customer production / production-ready pipeline = **no**.
 
 **Speech:** Sarvam STT/TTS + `sarvam-105b-conversations` on calls. Azure embeddings only. One AiBot for chat and voice.
 
-**Public webhook health** no longer returns `webhookUrl` — use `META_WEBHOOK_URL` in `server/.env`. Settings App ID/Secret stay out of the UI.
+**Public webhook health** returns counters + `webhookConfigured` only — no `webhookUrl`, no `lastError`, no Facebook trace. Use `META_WEBHOOK_URL` in `server/.env`. Settings App ID/Secret stay out of the UI.

@@ -62,17 +62,17 @@ curl -s http://localhost:8000/api/whatsapp/webhook/health
 5. API embeds workers — dual worker process in local is wrong.
 6. Do not recommend inventing secrets or sharing full `.env` casually.
 
-## Known high-risk backlog (verify still present)
+## Known high-risk backlog
+
+**Closed in code as of 2026-08-15 (re-verify, do not re-implement):** unique `phoneNumberId`; opaque Redis pending OAuth (no Meta token in JWT); `POST /whatsapp/connect` and `PATCH /meta-config` **410**; Connect/disconnect OWNER/ADMIN; no Cloudflare fallback.
 
 Treat as **Critical/High** until code proves removed:
 
-1. Legacy `POST /whatsapp/connect` accepting arbitrary phone/token (tenancy risk)
-2. No unique `phoneNumberId` → cross-org webhook misroute possible
-3. Meta long-lived token inside client-visible `pendingToken` JWT
-4. `/meta-config` still writable/readable despite UI removal
-5. Connect/disconnect without OWNER/ADMIN role gates
-6. Secrets in query strings for Meta token/webhook calls
-7. Auth: tokens in localStorage, weak brute-force, refresh rotation gaps (`AUTH_DEEP_REVIEW.md`)
+1. Auth tokens in `localStorage` (XSS). Refresh rotation exists; cookie migration does not. `AUTH_DEEP_REVIEW.md` is stale on rotation.
+2. Meta token-exchange still puts `client_secret` in the query string
+3. Socket membership is connect-time (live sockets until reconnect)
+4. Email verification theater (`emailVerifiedAt` set on register)
+5. Leftover PM2 `whatsapp-worker` on old hosts (delete it). `npm run start:worker` / standalone `workers/index.js` now exit 1.
 
 ## Scoring rules
 

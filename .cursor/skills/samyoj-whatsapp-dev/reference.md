@@ -73,7 +73,8 @@ Interakt / Wati / AiSensy style: user never enters App ID/Secret. Platform Meta 
 | Fix tunnel when `totalReceived: 0` | Rebuild Inbox UI first |
 | Ask for real `NGROK_AUTHTOKEN` once | Fabricate authtokens |
 
-## Related audit leftovers
+## Related leftovers (honest)
 
-- Legacy `/whatsapp/connect` and `/meta-config` still exist server-side — remove in security hardening pass.
-- Auth deep review lives in `docs/audit/AUTH_DEEP_REVIEW.md` (separate from WhatsApp inbound).
+Closed in code: unique `phoneNumberId`; opaque Redis pending OAuth; legacy `POST /connect` and `PATCH /meta-config` **410**; OWNER/ADMIN connect/disconnect; no Cloudflare fallback; workers embedded (`start:worker` exits 1).
+
+Still open: tokens in `localStorage`; socket membership connect-time; email verification theater; backup restore untested; inbound unproven until a new phone reply. Session: `docs/memory/STATUS_AND_FUTURE.md`.
