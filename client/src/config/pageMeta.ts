@@ -54,7 +54,7 @@ export const PAGE_META: Record<string, PageMeta> = {
   },
   '/tickets': {
     title: 'Tickets',
-    description: 'Support issues with reply deadlines',
+    description: 'Follow up on chats that need a reply',
   },
   '/team': {
     title: 'Team',
