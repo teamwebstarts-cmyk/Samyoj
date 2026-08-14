@@ -93,7 +93,13 @@ export default function PageHero({
           <div
             className={`w-full lg:w-auto ${
               isClean
-                ? 'grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3'
+                ? `grid gap-2.5 sm:gap-3 ${
+                    stats.length === 3
+                      ? 'grid-cols-3'
+                      : stats.length >= 4
+                        ? 'grid-cols-2 sm:grid-cols-4'
+                        : 'grid-cols-2'
+                  }`
                 : `grid gap-2 sm:gap-3 ${stats.length >= 4 ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'}`
             }`}
           >
@@ -118,7 +124,7 @@ export default function PageHero({
                 <p
                   className={
                     isClean
-                      ? 'mt-0.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400 sm:text-[10px] dark:text-slate-500'
+                      ? 'mt-0.5 truncate text-[9px] font-semibold uppercase tracking-wide text-slate-400 sm:text-[10px] dark:text-slate-500'
                       : 'mt-0.5 truncate text-[9px] font-bold uppercase tracking-wide text-theme-muted sm:text-[10px]'
                   }
                 >

@@ -8,6 +8,7 @@ export interface TicketItem {
   createdAt?: string;
   updatedAt: string;
   contact?: { id: string; name?: string | null; phone: string } | null;
+  conversationId?: string | null;
   conversation?: { id: string; status: string } | null;
   assignedAgent?: { id: string; name: string } | null;
 }
@@ -28,9 +29,9 @@ export const TICKET_PRIORITIES = [
 ] as const;
 
 export const ticketStatusLabels: Record<string, string> = {
-  OPEN: 'Needs reply',
+  OPEN: 'Open',
   PENDING: 'On hold',
-  WAITING: 'Waiting on them',
+  WAITING: 'Waiting',
   RESOLVED: 'Resolved',
   CLOSED: 'Closed',
 };
@@ -63,7 +64,7 @@ export function canResolve(status: string) {
 }
 
 export function ticketConversationId(ticket: TicketItem) {
-  return ticket.conversation?.id ?? null;
+  return ticket.conversation?.id ?? ticket.conversationId ?? null;
 }
 
 export function ticketContactLabel(ticket: TicketItem) {
@@ -87,7 +88,7 @@ export function nextTicketAction(status: string): { next: string; label: string 
 
 export function ticketUpdateToast(data: { status?: string; assignedAgentId?: string | null; priority?: string }) {
   if (data.status === 'RESOLVED') return 'Ticket resolved';
-  if (data.status === 'OPEN') return 'Ticket reopened';
+  if (data.status === 'OPEN') return 'Ticket needs a reply';
   if (data.status === 'WAITING') return 'Waiting on the customer';
   if (data.status === 'PENDING') return 'Ticket on hold';
   if (data.status === 'CLOSED') return 'Ticket closed';

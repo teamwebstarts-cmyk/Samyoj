@@ -68,8 +68,8 @@ export default function TicketList({ tickets, onOpen, onUpdateStatus, updatingId
                     </div>
                   </div>
                 </td>
-                <td className="min-w-[160px]">
-                  <p className="text-[13px] font-medium text-theme-fg">{ticket.title}</p>
+                <td className="min-w-[160px] max-w-[280px]">
+                  <p className="truncate text-[13px] font-medium text-theme-fg">{ticket.title}</p>
                   <p className="mt-0.5 text-[11px] text-theme-muted">
                     {ticketPriorityLabel(ticket.priority)}
                     {ticket.assignedAgent?.name ? ` · ${ticket.assignedAgent.name}` : ''}

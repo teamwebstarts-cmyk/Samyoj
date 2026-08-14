@@ -259,7 +259,7 @@ export default function GlobalSearch({ open, onClose }: GlobalSearchProps) {
               type: 'ticket',
               title: t.title,
               subtitle: contact || undefined,
-              href: '/tickets',
+              href: `/tickets?ticket=${t.id}`,
             });
           }
         }

@@ -188,7 +188,7 @@ export default function NotificationCenter({ unreadInbox = 0 }: NotificationCent
             {breached.map((ticket) => (
               <Link
                 key={ticket.id}
-                to="/tickets"
+                to={`/tickets?ticket=${ticket.id}`}
                 onClick={() => setOpen(false)}
                 className="flex items-start gap-3 rounded-xl px-3 py-2.5 transition hover:bg-theme-subtle"
               >

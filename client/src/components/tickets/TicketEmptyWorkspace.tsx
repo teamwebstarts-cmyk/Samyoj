@@ -5,23 +5,29 @@ import InboxEmptyIcon from '../inbox/InboxEmptyIcon';
 
 const FLOW = [
   { title: 'Open a WhatsApp chat', detail: 'Pick the customer who still needs a follow-up.' },
-  { title: 'Create a ticket', detail: 'Use the ticket icon in chat details. Add a title if you want.' },
+  { title: 'Create a ticket', detail: 'Open chat details and tap the ticket icon. Add a title if you want.' },
   { title: 'It shows up here', detail: 'Reply from Inbox before the deadline, then resolve it.' },
 ];
 
 interface TicketEmptyWorkspaceProps {
   mode: 'empty' | 'filter';
+  onClearFilters?: () => void;
 }
 
-export default function TicketEmptyWorkspace({ mode }: TicketEmptyWorkspaceProps) {
+export default function TicketEmptyWorkspace({ mode, onClearFilters }: TicketEmptyWorkspaceProps) {
   if (mode === 'filter') {
     return (
-      <div className="flex flex-col items-center px-6 py-14 text-center">
+      <div className="flex flex-col items-center px-4 py-14 text-center sm:px-6">
         <InboxEmptyIcon icon={Search} tone="muted" size="md" />
         <h3 className="mt-5 text-[15px] font-bold tracking-tight text-theme-fg">No tickets match</h3>
         <p className="mt-2 max-w-sm text-[13px] leading-relaxed text-theme-secondary">
           Try a different name, phone, or status.
         </p>
+        {onClearFilters && (
+          <AppButton variant="secondary" size="sm" className="mt-4" onClick={onClearFilters}>
+            Clear filters
+          </AppButton>
+        )}
       </div>
     );
   }
@@ -30,7 +36,7 @@ export default function TicketEmptyWorkspace({ mode }: TicketEmptyWorkspaceProps
     <div className="px-4 py-6 sm:px-6 sm:py-8">
       <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
         <div className="max-w-xl">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <InboxEmptyIcon icon={LifeBuoy} size="sm" />
             <div>
               <h3 className="text-[16px] font-bold tracking-tight text-theme-fg">No tickets yet</h3>
@@ -71,9 +77,9 @@ export default function TicketEmptyWorkspace({ mode }: TicketEmptyWorkspaceProps
           </div>
         </div>
 
-        <div className="min-w-[220px] rounded-2xl border border-theme-border bg-[#f7faf9] p-4 dark:bg-slate-900/40">
+        <div className="w-full min-w-0 rounded-2xl border border-theme-border bg-[#f7faf9] p-4 lg:max-w-xs dark:bg-slate-900/40">
           <p className="text-[11px] font-bold uppercase tracking-wide text-theme-muted">How it connects</p>
-          <div className="mt-3 flex items-center gap-2 text-[12px] font-semibold text-theme-fg">
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-[12px] font-semibold text-theme-fg">
             <MessageSquare className="h-3.5 w-3.5 text-emerald-600" />
             Chat
             <ArrowRight className="h-3.5 w-3.5 text-theme-muted" />

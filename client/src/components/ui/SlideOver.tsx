@@ -119,11 +119,11 @@ export default function SlideOver({
                     Step {step.current} of {step.total}
                   </p>
                 )}
-                <h2 id="slideover-title" className="text-title tracking-tight">
+                <h2 id="slideover-title" className="truncate text-title tracking-tight">
                   {title}
                 </h2>
                 {subtitle && (
-                  <p className="mt-1 text-[12.5px] font-medium leading-relaxed text-theme-muted">
+                  <p className="mt-1 truncate text-[12.5px] font-medium leading-relaxed text-theme-muted">
                     {subtitle}
                   </p>
                 )}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { LifeBuoy, RefreshCw, Settings2 } from 'lucide-react';
 import TicketDetailPanel from '../components/tickets/TicketDetailPanel';
 import TicketEmptyWorkspace from '../components/tickets/TicketEmptyWorkspace';
@@ -36,6 +36,7 @@ type TicketsNumberCache = {
 
 export default function TicketsPage() {
   const { activeNumber, resolved, hasConnectedNumber, loading: numbersLoading } = useWhatsAppNumber();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [tickets, setTickets] = useState<TicketItem[]>([]);
   const [status, setStatus] = useState('');
   const [search, setSearch] = useState('');
@@ -101,6 +102,18 @@ export default function TicketsPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    const ticketId = searchParams.get('ticket');
+    if (!ticketId || loading) return;
+    const found = tickets.find((ticket) => ticket.id === ticketId);
+    if (found) {
+      setStatus('');
+      setSearch('');
+      setDetailTicket(found);
+    }
+    setSearchParams({}, { replace: true });
+  }, [searchParams, setSearchParams, tickets, loading]);
 
   useSocket((event, data) => {
     if (event !== 'ticket:new' && event !== 'ticket:updated') return;
@@ -200,7 +213,7 @@ export default function TicketsPage() {
             showStats
               ? [
                   {
-                    label: 'Needs reply',
+                    label: 'Open',
                     value: stats.open,
                     tone: 'text-amber-600',
                   },
@@ -229,7 +242,12 @@ export default function TicketsPage() {
                 Open the chat and reply, then mark the ticket resolved.
               </p>
             </div>
-            <AppButton variant="secondary" size="sm" onClick={() => setStatus('overdue')}>
+            <AppButton
+              variant="secondary"
+              size="sm"
+              className="w-full shrink-0 sm:w-auto"
+              onClick={() => setStatus('overdue')}
+            >
               View overdue
             </AppButton>
           </div>
@@ -282,7 +300,17 @@ export default function TicketsPage() {
               <LoadingState label="Loading tickets..." />
             </div>
           ) : filteredTickets.length === 0 ? (
-            <TicketEmptyWorkspace mode={hasActiveFilters ? 'filter' : 'empty'} />
+            <TicketEmptyWorkspace
+              mode={hasActiveFilters ? 'filter' : 'empty'}
+              onClearFilters={
+                hasActiveFilters
+                  ? () => {
+                      setSearch('');
+                      setStatus('');
+                    }
+                  : undefined
+              }
+            />
           ) : (
             <TicketList
               tickets={filteredTickets}

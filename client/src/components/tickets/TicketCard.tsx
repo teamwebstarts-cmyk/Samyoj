@@ -68,11 +68,11 @@ export default function TicketCard({ ticket, onUpdateStatus, updating, onClick }
       </button>
 
       {(conversationId || action) && (
-        <div className="flex gap-2 border-t border-theme-border/60 bg-theme-subtle/20 px-3 py-2.5">
+        <div className="flex flex-col gap-2 border-t border-theme-border/60 bg-theme-subtle/20 px-3 py-2.5 min-[400px]:flex-row">
           {conversationId && (
             <Link
               to={`/inbox?conversation=${conversationId}`}
-              className={action ? 'flex-1' : 'w-full'}
+              className={action ? 'min-[400px]:flex-1' : 'w-full'}
               onClick={(e) => e.stopPropagation()}
             >
               <AppButton variant="secondary" size="sm" fullWidth icon={<MessageSquare size={14} />}>
@@ -85,7 +85,7 @@ export default function TicketCard({ ticket, onUpdateStatus, updating, onClick }
               variant="secondary"
               size="sm"
               fullWidth
-              className={conversationId ? 'flex-1' : 'w-full'}
+              className={conversationId ? 'min-[400px]:flex-1' : 'w-full'}
               loading={updating}
               icon={canResolve(ticket.status) ? <CheckCircle2 size={14} /> : undefined}
               onClick={(e) => {

@@ -249,7 +249,7 @@ export default function ConversationItem({
             {slaBadge(conversation, tipFor)}
             {hasTicket && (
               <span
-                className="inline-flex items-center gap-0.5 rounded-md bg-violet-100/90 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-violet-700 dark:bg-violet-900/40 dark:text-violet-300"
+                className="inline-flex items-center gap-0.5 rounded-md bg-emerald-100/90 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
                 {...tipFor('Has open ticket')}
               >
                 <LifeBuoy className="h-2.5 w-2.5 shrink-0" />

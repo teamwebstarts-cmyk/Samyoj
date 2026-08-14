@@ -14,7 +14,6 @@ import {
   TICKET_PRIORITIES,
   canResolve,
   formatReplyBy,
-  isSlaBreached,
   nextTicketAction,
   ticketContactLabel,
   ticketConversationId,
@@ -50,7 +49,6 @@ export default function TicketDetailPanel({
 
   if (!ticket) return null;
 
-  const breached = isSlaBreached(ticket);
   const contactLabel = ticketContactLabel(ticket);
   const conversationId = ticketConversationId(ticket);
   const reply = formatReplyBy(ticket.slaDueAt);
@@ -58,6 +56,13 @@ export default function TicketDetailPanel({
   const created = ticket.createdAt
     ? new Date(ticket.createdAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
     : null;
+  const agentOptions = [
+    { value: '', label: 'Unassigned' },
+    ...agents.map((agent) => ({ value: agent.id, label: agent.name })),
+  ];
+  if (ticket.assignedAgent && !agents.some((agent) => agent.id === ticket.assignedAgent?.id)) {
+    agentOptions.push({ value: ticket.assignedAgent.id, label: ticket.assignedAgent.name });
+  }
 
   return (
     <SlideOver
@@ -121,7 +126,6 @@ export default function TicketDetailPanel({
                 }`}
               >
                 {reply.text}
-                {breached ? ' · Overdue' : ''}
               </dd>
               {reply.exact && (
                 <p className="mt-0.5 text-[12px] text-theme-muted">{reply.exact}</p>
@@ -139,10 +143,8 @@ export default function TicketDetailPanel({
                   value={ticket.assignedAgent?.id || ''}
                   placeholder="Unassigned"
                   isSearchable={agents.length > 6}
-                  options={[
-                    { value: '', label: 'Unassigned' },
-                    ...agents.map((agent) => ({ value: agent.id, label: agent.name })),
-                  ]}
+                  disabled={updating}
+                  options={agentOptions}
                   onChange={(e) =>
                     void onUpdate(ticket.id, { assignedAgentId: e.target.value || null })
                   }
@@ -170,7 +172,7 @@ export default function TicketDetailPanel({
           <div
             role="group"
             aria-label="Ticket priority"
-            className="grid grid-cols-4 gap-1 rounded-xl bg-theme-subtle/80 p-1 ring-1 ring-theme-border/70"
+            className="grid grid-cols-2 gap-1 rounded-xl bg-theme-subtle/80 p-1 ring-1 ring-theme-border/70 sm:grid-cols-4"
           >
             {TICKET_PRIORITIES.map((priority) => {
               const selected = ticket.priority === priority.value;
@@ -207,9 +209,20 @@ export default function TicketDetailPanel({
             Waiting on the customer
           </AppButton>
         )}
+        {(ticket.status === 'WAITING' || ticket.status === 'PENDING') && (
+          <AppButton
+            variant="secondary"
+            size="sm"
+            className="w-full"
+            disabled={updating}
+            onClick={() => void onUpdate(ticket.id, { status: 'OPEN' })}
+          >
+            Mark as needs reply
+          </AppButton>
+        )}
 
         {conversationId && (
-          <Link to={`/inbox?conversation=${conversationId}`} onClick={onClose}>
+          <Link to={`/inbox?conversation=${conversationId}`} onClick={onClose} className="block">
             <AppButton variant="secondary" icon={<Inbox size={16} />} className="w-full">
               Open linked chat
             </AppButton>

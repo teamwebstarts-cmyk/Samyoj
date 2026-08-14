@@ -22,6 +22,7 @@ const FILTER_CHIPS: Array<{ chip: ListChip; label: string }> = [
   { chip: 'open', label: 'Open' },
   { chip: 'favourites', label: 'Favorites' },
   { chip: 'pending', label: 'Pending' },
+  { chip: 'hasTicket', label: 'Tickets' },
 ];
 
 interface InboxListHeaderProps {

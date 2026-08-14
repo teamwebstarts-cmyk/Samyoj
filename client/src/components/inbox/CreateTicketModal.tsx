@@ -83,7 +83,7 @@ export default function CreateTicketModal({
           <div
             role="group"
             aria-label="Ticket priority"
-            className="grid grid-cols-4 gap-1 rounded-xl bg-theme-subtle/80 p-1 ring-1 ring-theme-border/70"
+            className="grid grid-cols-2 gap-1 rounded-xl bg-theme-subtle/80 p-1 ring-1 ring-theme-border/70 sm:grid-cols-4"
           >
             {PRIORITIES.map((p) => {
               const selected = priority === p.value;
@@ -108,18 +108,18 @@ export default function CreateTicketModal({
 
         <AppTextarea
           label="Private note (optional)"
-          hint="Saved on this chat for your team. The customer will not see it."
+          hint="Team only"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder="What still needs to happen?"
+          placeholder="What still needs to happen? The customer will not see this."
           rows={3}
         />
 
-        <div className="flex justify-end gap-2 border-t border-theme-border/60 pt-3.5">
-          <AppButton variant="secondary" onClick={onClose} disabled={submitting}>
+        <div className="flex flex-col-reverse gap-2 border-t border-theme-border/60 pt-3.5 sm:flex-row sm:justify-end">
+          <AppButton variant="secondary" onClick={onClose} disabled={submitting} className="w-full sm:w-auto">
             Cancel
           </AppButton>
-          <AppButton type="submit" loading={submitting} disabled={!title.trim()}>
+          <AppButton type="submit" loading={submitting} disabled={!title.trim()} className="w-full sm:w-auto">
             Create ticket
           </AppButton>
         </div>
