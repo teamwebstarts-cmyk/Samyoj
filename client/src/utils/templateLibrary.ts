@@ -304,8 +304,9 @@ function isPrivateOrLocalHost(hostname: string): boolean {
 }
 
 /**
- * WhatsApp URL buttons must be a public https:// page the customer can open on their phone.
- * This Samyoj admin URL / localhost will never work.
+ * WhatsApp URL buttons must open on the customer’s phone.
+ * Reject localhost / private IPs. Do not reject the same public hostname as
+ * this app — a merchant may host the store and Samyoj on one domain.
  */
 export function libraryButtonUrlError(raw: string, appOrigin?: string): string | null {
   const value = normalizeWebsiteUrl(raw);
@@ -336,7 +337,9 @@ export function libraryButtonUrlError(raw: string, appOrigin?: string): string |
   if (appOrigin) {
     try {
       const here = new URL(appOrigin);
-      if (parsed.hostname.toLowerCase() === here.hostname.toLowerCase()) {
+      const sameHost = parsed.hostname.toLowerCase() === here.hostname.toLowerCase();
+      const crmPath = /^\/(templates|inbox|campaigns|settings|dashboard)(\/|$)/i.test(parsed.pathname);
+      if (sameHost && crmPath) {
         return 'That’s this Samyoj screen, not a customer website.';
       }
     } catch {
@@ -345,4 +348,133 @@ export function libraryButtonUrlError(raw: string, appOrigin?: string): string |
   }
 
   return null;
+}
+
+const LIBRARY_URL_PLACEHOLDER_RE = /\{\{\d+\}\}/;
+const DEFAULT_URL_SUFFIX_EXAMPLE = 'demo';
+
+export function libraryUrlIsDynamic(url?: string | null): boolean {
+  return LIBRARY_URL_PLACEHOLDER_RE.test(url || '');
+}
+
+function firstUrlPlaceholder(url?: string | null): string {
+  return url?.match(LIBRARY_URL_PLACEHOLDER_RE)?.[0] || '{{1}}';
+}
+
+function isUsableSuffixSample(segment: string): boolean {
+  if (!segment || segment.length > 80) return false;
+  if (LIBRARY_URL_PLACEHOLDER_RE.test(segment)) return false;
+  if (/[:/?#]/.test(segment)) return false;
+  return true;
+}
+
+function pathnameSegments(pathname: string): string[] {
+  return pathname.split('/').filter(Boolean);
+}
+
+function lastPathSegment(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const parts = pathnameSegments(parsed.pathname);
+    return parts.length ? decodeURIComponent(parts[parts.length - 1]) : '';
+  } catch {
+    const parts = url.replace(/\/$/, '').split('/');
+    return parts[parts.length - 1] || '';
+  }
+}
+
+/**
+ * Meta library URL buttons are often static (`https://www.example.com/`).
+ * Dynamic ones include `{{1}}`. `url_suffix_example` is the {{n}} sample
+ * (last path segment or a short token), not the merchant's full URL — except
+ * when the library button itself is a static HTTPS link.
+ *
+ * @see https://developers.facebook.com/docs/whatsapp/cloud-api/guides/send-message-templates/template-library/
+ */
+export function buildLibraryUrlInput(
+  userUrl: string,
+  libraryUrl?: string | null,
+): { base_url: string; url_suffix_example: string } {
+  const user = userUrl.trim();
+  const placeholder = libraryUrlIsDynamic(user)
+    ? firstUrlPlaceholder(user)
+    : firstUrlPlaceholder(libraryUrl);
+
+  if (libraryUrlIsDynamic(user)) {
+    const last = lastPathSegment(user);
+    return {
+      base_url: user,
+      url_suffix_example: isUsableSuffixSample(last) ? last : DEFAULT_URL_SUFFIX_EXAMPLE,
+    };
+  }
+
+  if (!libraryUrlIsDynamic(libraryUrl)) {
+    return { base_url: user, url_suffix_example: user };
+  }
+
+  let origin = user.replace(/\/$/, '');
+  let segments: string[] = [];
+  try {
+    const parsed = new URL(user);
+    origin = parsed.origin;
+    segments = pathnameSegments(parsed.pathname);
+  } catch {
+    /* keep origin from the raw string */
+  }
+
+  const last = segments[segments.length - 1] || '';
+  if (last && isUsableSuffixSample(last)) {
+    const prefix = segments.slice(0, -1);
+    const prefixPath = prefix.length ? `/${prefix.join('/')}` : '';
+    return {
+      base_url: `${origin}${prefixPath}/${placeholder}`,
+      url_suffix_example: last,
+    };
+  }
+
+  let libraryPath = `/${placeholder}`;
+  try {
+    const lib = new URL(libraryUrl || '');
+    const path = decodeURIComponent(lib.pathname || '');
+    if (path && libraryUrlIsDynamic(path)) {
+      libraryPath = path.startsWith('/') ? path : `/${path}`;
+    }
+  } catch {
+    /* default /{{1}} */
+  }
+
+  return {
+    base_url: `${origin}${libraryPath}`,
+    url_suffix_example: DEFAULT_URL_SUFFIX_EXAMPLE,
+  };
+}
+
+export function buildLibraryButtonInputs(
+  item: { buttons?: TemplateButton[]; category?: string },
+  buttonUrl: string,
+  buttonPhone: string,
+): Array<Record<string, unknown>> {
+  const inputs: Array<Record<string, unknown>> = [];
+  const url = buttonUrl.trim();
+  const phone = buttonPhone.trim();
+
+  for (const btn of item.buttons || []) {
+    const type = (btn.type || '').toUpperCase();
+    if (type === 'URL' && url) {
+      inputs.push({
+        type: 'URL',
+        url: buildLibraryUrlInput(url, btn.url),
+      });
+    }
+    if (type === 'PHONE_NUMBER' && phone) {
+      inputs.push({ type: 'PHONE_NUMBER', phone_number: phone });
+    }
+    if (type === 'OTP') {
+      inputs.push({ type: 'OTP', otp_type: 'COPY_CODE' });
+    }
+  }
+  if (libraryNeedsOtpButton(item) && !inputs.some((input) => input.type === 'OTP')) {
+    inputs.push({ type: 'OTP', otp_type: 'COPY_CODE' });
+  }
+  return inputs;
 }
