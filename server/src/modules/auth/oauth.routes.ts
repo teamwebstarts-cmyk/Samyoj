@@ -6,7 +6,7 @@ import prisma from '../../config/database';
 import { sendSuccess, asyncHandler, AppError } from '../../utils/response';
 import { config } from '../../config';
 import logger from '../../utils/logger';
-import { authOAuthLimiter } from './rate-limit';
+import { authOAuthLimiter, consumeAccountThrottle } from './rate-limit';
 import {
   createSession,
   storeOAuthState,
@@ -15,6 +15,7 @@ import {
   consumeOAuthExchangeCode,
   newOAuthState,
 } from './session';
+import { googleEmailIsAcceptable, oauthBlockedByTwoFactor } from './oauth-policy';
 
 const router = Router();
 
@@ -89,18 +90,23 @@ router.get(
   })
 );
 
+function redirectOAuthError(res: Response, reason: string) {
+  const fail = new URL(`${config.clientUrl}/login`);
+  fail.searchParams.set('oauth', 'error');
+  fail.searchParams.set('reason', reason);
+  res.redirect(fail.toString());
+}
+
 router.get(
   '/google/callback',
+  authOAuthLimiter,
   asyncHandler(async (req: Request, res: Response) => {
     const code = typeof req.query.code === 'string' ? req.query.code : undefined;
     const state = typeof req.query.state === 'string' ? req.query.state : undefined;
     const oauthError = typeof req.query.error === 'string' ? req.query.error : undefined;
 
     if (oauthError) {
-      const fail = new URL(`${config.clientUrl}/login`);
-      fail.searchParams.set('oauth', 'error');
-      fail.searchParams.set('reason', oauthError);
-      res.redirect(fail.toString());
+      redirectOAuthError(res, oauthError);
       return;
     }
 
@@ -140,9 +146,18 @@ router.get(
     };
 
     if (!profile.email) throw new AppError(400, 'Google account has no email');
+    if (!googleEmailIsAcceptable(profile)) {
+      redirectOAuthError(res, 'unverified_email');
+      return;
+    }
+
+    const email = profile.email.toLowerCase();
+    if (!(await consumeAccountThrottle(`oauth:${email}`, 10, 15 * 60))) {
+      throw new AppError(429, 'Too many OAuth attempts. Try again later.');
+    }
 
     let user = await prisma.user.findUnique({
-      where: { email: profile.email.toLowerCase() },
+      where: { email },
       include: { organizations: { take: 1 } },
     });
 
@@ -157,7 +172,7 @@ router.get(
         const newUser = await tx.user.create({
           data: {
             name: profile.name || profile.email.split('@')[0],
-            email: profile.email.toLowerCase(),
+            email,
             passwordHash,
             emailVerifiedAt: new Date(),
             role: 'ADMIN',
@@ -201,9 +216,9 @@ router.get(
         userId: user.id,
         provider: 'google',
         providerAccountId: profile.id,
-        email: profile.email.toLowerCase(),
+        email,
       },
-      update: { email: profile.email.toLowerCase(), userId: user.id },
+      update: { email, userId: user.id },
     });
 
     const membership = user.organizations[0];
@@ -226,6 +241,15 @@ router.get(
         data: { organizationId: org.id, userId: user.id, role: 'OWNER' },
       });
       finalOrgId = org.id;
+    }
+
+    const twoFactorMembership = await prisma.organizationUser.findFirst({
+      where: { userId: user.id, twoFactorEnabled: true },
+      select: { twoFactorEnabled: true },
+    });
+    if (oauthBlockedByTwoFactor(twoFactorMembership?.twoFactorEnabled)) {
+      redirectOAuthError(res, '2fa_required');
+      return;
     }
 
     const session = await createSession(
