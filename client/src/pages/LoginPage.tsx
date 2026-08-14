@@ -41,21 +41,17 @@ export default function LoginPage() {
       if (reason) {
         console.warn('[auth] Google OAuth redirect error:', reason);
       }
+      const oauthErrors: Record<string, string> = {
+        '2fa_required':
+          'This account requires two-factor authentication. Sign in with email and your authenticator code.',
+        unverified_email:
+          'Google sign-in requires a verified email address. Verify it on your Google account or use email sign-in.',
+      };
       toastError(
-        'Google sign-in was cancelled or could not be completed. Please try again or use email sign-in.'
+        (reason && oauthErrors[reason]) ||
+          'Google sign-in was cancelled or could not be completed. Please try again or use email sign-in.'
       );
       navigate('/login', { replace: true });
-      return;
-    }
-
-    // Legacy URL tokens (migrate away) — still hydrate then strip from URL
-    const accessToken = searchParams.get('accessToken');
-    const refreshToken = searchParams.get('refreshToken');
-    if (oauth && accessToken && refreshToken) {
-      setAuthTokens(accessToken, refreshToken);
-      void refreshSession().then(() => {
-        navigate(safeReturnTo(searchParams.get('returnTo')) || '/', { replace: true });
-      });
       return;
     }
 
