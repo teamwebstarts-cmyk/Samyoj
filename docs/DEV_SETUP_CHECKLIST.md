@@ -30,7 +30,7 @@ bash stop.sh --all # also stop Postgres + Redis
 4. ✅ Starts Docker (Postgres + Redis) + waits for ready  
 5. ✅ `npm install` (server + client)  
 6. ✅ Prisma migrate  
-7. ✅ Starts public tunnel before API (ngrok preferred, Cloudflare fallback)  
+7. ✅ Starts public tunnel before API (ngrok only — no Cloudflare fallback)  
 8. ✅ Verifies public webhook challenge (`ping`) before claiming success  
 9. ✅ Registers Meta webhook when a WhatsApp number is connected  
 10. ✅ Starts API + Client  
@@ -66,7 +66,9 @@ In `server/.env` (never in UI):
 ```bash
 curl -s http://localhost:8000/health
 curl -s http://localhost:8000/api/whatsapp/webhook/health
-# Expect: webhookUrl = current tunnel, after a phone reply totalReceived > 0
+# Expect: HTTP 200, verifyTokenConfigured/appSecretConfigured booleans, webhookConfigured true when META_WEBHOOK_URL is set.
+# The live tunnel URL is not in this public JSON — read it from server/.env META_WEBHOOK_URL.
+# After a phone reply: totalReceived > 0
 ```
 
 ---

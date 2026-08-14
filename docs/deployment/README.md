@@ -55,7 +55,7 @@ Full details: [KNOWN ISSUES in DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md#7-know
 ```
 app.samyoj.com (SSL: Certbot, valid till 2026-10-16)
 └── Nginx (:80 → 301 → :443) → proxy → 127.0.0.1:8000
-    └── Node Express (PM2: whatsapp-api + whatsapp-worker)
+    └── Node Express (PM2: whatsapp-api; BullMQ workers embedded — do not run whatsapp-worker)
         ├── PostgreSQL 17.10 @ localhost:5432 (whatsapp_platform)
         └── Redis 7 @ localhost:6379
 ```
@@ -65,3 +65,4 @@ app.samyoj.com (SSL: Certbot, valid till 2026-10-16)
 - **Runs as user:** `samyoj`
 - **Server code branch on VM:** `release/7July26` (Jul 9) — ⚠️ outdated vs dev
 - **Current live status:** ✅ Healthy (`api/db/redis all ok`)
+- **Workers:** embedded in `whatsapp-api` (`startWorkers()`). `npm run start:worker` / PM2 `whatsapp-worker` is **unsupported** (duplicate BullMQ consumers).

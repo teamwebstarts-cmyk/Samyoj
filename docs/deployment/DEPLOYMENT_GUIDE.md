@@ -32,8 +32,8 @@
                                                 │ (reverse proxy + WebSocket)
                         ┌───────────────────────▼────────────────────┐
                         │  NODE APP (Express, port 8000)             │
-                        │  PM2: whatsapp-api  (dist/index.js)        │
-                        │  PM2: whatsapp-worker (dist/workers/index) │
+                        │  PM2: whatsapp-api (dist/index.js)         │
+                        │  BullMQ workers: embedded (startWorkers)   │
                         │  Serves API + client/dist (SPA)            │
                         └───────┬────────────────────┬───────────────┘
                                 │                    │
@@ -48,7 +48,9 @@
 - **Everything runs on ONE VM** (`samyoj-server`) — Node, Postgres, Redis, Nginx
 - **Nginx** terminates SSL and proxies to the Node app on port 8000
 - **Node app serves BOTH** the API (`/api/*`) and the built React frontend (`client/dist/`)
-- **PM2** keeps two processes alive: `whatsapp-api` (the server) + `whatsapp-worker` (BullMQ background jobs)
+- **PM2** runs **one** process: `whatsapp-api` (`dist/index.js`). BullMQ workers are **embedded** via `startWorkers()` in the API.
+- Do **not** also run `whatsapp-worker`, `npm run start:worker`, or `npm run dev:worker` — a second consumer duplicates jobs and can drop Inbox realtime (Socket.IO lives only on the API process).
+- Existing hosts with a leftover `whatsapp-worker`: `pm2 delete whatsapp-worker && pm2 start config/ecosystem.config.js && pm2 save`
 - WebSocket (Socket.IO) works through Nginx via `Upgrade` headers
 
 ---
@@ -76,7 +78,7 @@
 | PostgreSQL 17.10 | ✅ active | `localhost:5432`, DB `whatsapp_platform` |
 | Redis | ✅ active | `localhost:6379` |
 | PM2 `whatsapp-api` | ✅ online | 8 days uptime, 5 restarts |
-| PM2 `whatsapp-worker` | ✅ online | 8 days uptime |
+| PM2 `whatsapp-worker` | ⚠️ **do not run** | Legacy second consumer. Delete if present: `pm2 delete whatsapp-worker`. Workers now run inside `whatsapp-api`. |
 | PM2 systemd (`pm2-samyoj`) | ⚠️ **enabled but inactive** | won't auto-start on reboot |
 
 ### Code on server
@@ -263,6 +265,9 @@ sudo -u samyoj bash -c 'cd /home/samyoj/Samyoj/server && npm run build'   # → 
 ### Step 7 — Restart PM2
 
 ```bash
+# If a leftover whatsapp-worker exists from older deploys, delete it first
+# (workers are embedded in the API — a second process duplicates BullMQ consumers).
+sudo -u samyoj pm2 delete whatsapp-worker 2>/dev/null || true
 sudo -u samyoj bash -c 'cd /home/samyoj/Samyoj && pm2 restart config/ecosystem.config.js'
 sudo -u samyoj pm2 save
 ```
@@ -324,6 +329,7 @@ sudo -u samyoj bash -c 'cd /home/samyoj/Samyoj/server && npx tsx scripts/setup-w
 | 9 | Code outdated (Jul 9) vs dev (100+ commits) | 🟠 | Pull latest branch |
 | 10 | Broken symlink `sites-enabled` in repo | 🟡 | `rm /home/samyoj/Samyoj/sites-enabled` (untracked, safe) |
 | 11 | `LOG_LEVEL=debug` in production | 🟡 | Set `info` |
+| 12 | Leftover PM2 `whatsapp-worker` | 🔴 | `pm2 delete whatsapp-worker` — workers are embedded in `whatsapp-api`. `npm run start:worker` is unsupported (`SAMYOJ_EMBEDDED_WORKERS=1` refuses a second consumer). |
 
 ---
 
@@ -425,7 +431,8 @@ sudo -u samyoj pm2 logs whatsapp-api --lines 30 --nostream
 
 # === LOGS ===
 sudo tail -50 /home/samyoj/.pm2/logs/whatsapp-api-out-0.log
-sudo tail -20 /home/samyoj/.pm2/logs/whatsapp-worker-out-1.log
+# There is no whatsapp-worker process. `npm run start:worker` is unsupported
+# (SAMYOJ_EMBEDDED_WORKERS=1 after API startWorkers(); a second consumer is refused).
 
 # === SSL ===
 sudo openssl x509 -enddate -noout -in /etc/letsencrypt/live/app.samyoj.com/fullchain.pem
