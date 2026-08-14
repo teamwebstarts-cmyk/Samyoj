@@ -279,6 +279,7 @@ model Organization {
   leads                          Lead[]
   tickets                        Ticket[]
   providerWebhookEvents          ProviderWebhookEvent[]
+  unmatchedProviderStatuses      UnmatchedProviderStatus[]
   whatsappNumberIsolationReports WhatsappNumberIsolationReport[]
 
   planExpiresAt      DateTime? @map("plan_expires_at")
@@ -503,14 +504,15 @@ model WhatsappNumber {
   createdAt             DateTime @default(now()) @map("created_at")
   updatedAt             DateTime @updatedAt @map("updated_at")
 
-  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  conversations Conversation[]
-  calls         Call[]
-  campaigns     Campaign[]
-  contacts      Contact[]
-  tickets       Ticket[]
-  leads         Lead[]
-  orders        Order[]
+  organization              Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  conversations             Conversation[]
+  calls                     Call[]
+  campaigns                 Campaign[]
+  contacts                  Contact[]
+  tickets                   Ticket[]
+  leads                     Lead[]
+  orders                    Order[]
+  unmatchedProviderStatuses UnmatchedProviderStatus[]
 
   @@unique([phoneNumberId])
   @@unique([organizationId, id])
@@ -1090,17 +1092,42 @@ model AuditLog {
 }
 
 model ProviderWebhookEvent {
-  id             String   @id @default(uuid())
-  organizationId String   @map("organization_id")
-  eventKey       String   @map("event_key")
+  id             String    @id @default(uuid())
+  organizationId String    @map("organization_id")
+  eventKey       String    @map("event_key")
   field          String
-  createdAt      DateTime @default(now()) @map("created_at")
+  status         String    @default("COMPLETED")
+  claimedAt      DateTime  @default(now()) @map("claimed_at")
+  processedAt    DateTime? @map("processed_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, eventKey])
   @@index([organizationId, createdAt])
+  @@index([organizationId, status, claimedAt])
   @@map("provider_webhook_events")
+}
+
+/// Delivery/read ticks that arrived before the local Meta message id was saved.
+model UnmatchedProviderStatus {
+  id               String    @id @default(uuid())
+  organizationId   String    @map("organization_id")
+  whatsappNumberId String?   @map("whatsapp_number_id")
+  metaMessageId    String    @map("meta_message_id")
+  status           String
+  recipientPhone   String?   @map("recipient_phone")
+  eventAt          DateTime  @map("event_at")
+  payload          Json?
+  appliedAt        DateTime? @map("applied_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  whatsappNumber WhatsappNumber? @relation(fields: [organizationId, whatsappNumberId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, metaMessageId, status, eventAt])
+  @@index([organizationId, metaMessageId, appliedAt])
+  @@map("unmatched_provider_statuses")
 }
 
 enum OrderStatus {
