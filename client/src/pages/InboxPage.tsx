@@ -277,6 +277,33 @@ export default function InboxPage() {
     enabled: true,
   });
 
+  const {
+    ticketModalOpen,
+    setTicketModalOpen,
+    ticketSubmitting,
+    ticketConversationIds,
+    setTicketConversationIds,
+    handleSubmitTicket,
+  } = useInboxModals({ selected });
+
+  const refreshOpenTicketChips = useCallback(() => {
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
+    ticketApi
+      .list()
+      .then((res) => {
+        if (requestNumberId !== activeNumberIdRef.current) return;
+        const ids = new Set<string>();
+        for (const t of res.data.data.tickets || []) {
+          if (t.conversation?.id && !['RESOLVED', 'CLOSED'].includes(t.status)) {
+            ids.add(t.conversation.id);
+          }
+        }
+        setTicketConversationIds(ids);
+      })
+      .catch(console.error);
+  }, [activeNumber, resolved, setTicketConversationIds]);
+
   const { socketState, socketRef } = useInboxRealtime({
     selectedRef,
     conversationsRef,
@@ -288,6 +315,7 @@ export default function InboxPage() {
     markConversationRead,
     refreshUnread,
     reloadList: () => void loadConversations(),
+    onTicketEvent: refreshOpenTicketChips,
   });
 
   const viewers = useConversationPresence({
@@ -314,15 +342,6 @@ export default function InboxPage() {
     deleting,
   } = useConversationActions({ conversations, selected, setSelected, upsertConversation, removeConversation });
 
-  const {
-    ticketModalOpen,
-    setTicketModalOpen,
-    ticketSubmitting,
-    ticketConversationIds,
-    setTicketConversationIds,
-    handleSubmitTicket,
-  } = useInboxModals({ selected });
-
   useEffect(() => {
     if (!resolved || !activeNumber) return;
     const requestNumberId = activeNumber.id;
@@ -341,15 +360,8 @@ export default function InboxPage() {
       .finally(() => {
         if (requestNumberId === activeNumberIdRef.current) setAiBotsLoading(false);
       });
-    ticketApi.list().then((res) => {
-      if (requestNumberId !== activeNumberIdRef.current) return;
-      const ids = new Set<string>();
-      for (const t of res.data.data.tickets || []) {
-        if (t.conversation?.id && !['RESOLVED', 'CLOSED'].includes(t.status)) ids.add(t.conversation.id);
-      }
-      setTicketConversationIds(ids);
-    }).catch(console.error);
-  }, [activeNumber, resolved, setTicketConversationIds]);
+    refreshOpenTicketChips();
+  }, [activeNumber, resolved, refreshOpenTicketChips]);
 
   // Tell the notification center which chat is open so background-message
   // alerts skip it.

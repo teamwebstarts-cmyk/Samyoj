@@ -24,6 +24,7 @@ interface RealtimeDeps {
   markConversationRead: (conversationId: string) => void;
   refreshUnread: () => Promise<void>;
   reloadList: () => void;
+  onTicketEvent?: () => void;
 }
 
 /**
@@ -41,8 +42,11 @@ export function useInboxRealtime({
   markConversationRead,
   refreshUnread,
   reloadList,
+  onTicketEvent,
 }: RealtimeDeps): { socketState: SocketState; socketRef: RefObject<Socket | null> } {
   const { activeNumber, resolved } = useWhatsAppNumber();
+  const onTicketEventRef = useRef(onTicketEvent);
+  onTicketEventRef.current = onTicketEvent;
   const handleSocketEvent = useCallback(
     (event: string, data: unknown) => {
       const payload = data as {
@@ -236,6 +240,10 @@ export function useInboxRealtime({
             });
           }
         }
+      }
+
+      if (event === 'ticket:new' || event === 'ticket:updated') {
+        onTicketEventRef.current?.();
       }
     },
     [

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ticketApi } from '../../services/api';
-import { toastError } from '../../utils/toast';
+import { toastError, toastSuccess } from '../../utils/toast';
 import type { TicketFormValues } from './CreateTicketModal';
 import type { Conversation } from '../../types';
 
@@ -21,6 +21,7 @@ export function useInboxModals({ selected }: ModalsDeps) {
       await ticketApi.fromConversation(selected.id, { ...values });
       setTicketConversationIds((prev) => new Set(prev).add(selected.id));
       setTicketModalOpen(false);
+      toastSuccess('Ticket created — it now appears on Tickets');
     } catch {
       toastError('Could not create ticket');
     } finally {

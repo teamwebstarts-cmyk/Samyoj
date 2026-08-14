@@ -439,10 +439,10 @@ export default function InboxDetailsPanel({
     <>
       <button
         type="button"
-        aria-label="Convert to ticket"
+        aria-label="Create ticket"
         onClick={onConvertToTicket}
-        className={`${btn} text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-950/40`}
-        {...tipFor('Convert to ticket', opts.tipSide)}
+        className={`${btn} text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/40`}
+        {...tipFor('Create ticket', opts.tipSide)}
       >
         <Ticket className="h-4 w-4" strokeWidth={iconStroke} />
       </button>

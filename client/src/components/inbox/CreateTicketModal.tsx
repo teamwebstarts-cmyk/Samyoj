@@ -64,7 +64,7 @@ export default function CreateTicketModal({
       open={open}
       onClose={onClose}
       title="Create ticket"
-      subtitle="Track this chat as a support ticket"
+      subtitle="This chat will show on the Tickets page with a reply deadline."
       icon={LifeBuoy}
       iconClassName="bg-whatsapp-500/10 text-whatsapp-700 ring-1 ring-whatsapp-500/15 dark:bg-whatsapp-950/40 dark:text-whatsapp-300 dark:ring-whatsapp-500/20"
     >
@@ -107,10 +107,11 @@ export default function CreateTicketModal({
         </div>
 
         <AppTextarea
-          label="Description (optional)"
+          label="Private note (optional)"
+          hint="Saved on this chat for your team. The customer will not see it."
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder="Add context for the team..."
+          placeholder="What still needs to happen?"
           rows={3}
         />
 

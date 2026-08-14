@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Bell, LifeBuoy, MessageSquare } from 'lucide-react';
 import { ticketApi } from '../../services/api';
-import { isSlaBreached, type TicketItem } from '../tickets/TicketCard';
+import { isSlaBreached, type TicketItem } from '../tickets/ticketUi';
 import { useSocket } from '../../hooks/useSocket';
 import { useOnActiveNumberChange } from '../../hooks/useOnActiveNumberChange';
 import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
@@ -34,7 +34,7 @@ export default function NotificationCenter({ unreadInbox = 0 }: NotificationCent
     const requestNumberId = activeNumber.id;
     const generation = ++requestGenerationRef.current;
     ticketApi
-      .list({ status: 'OPEN' })
+      .list()
       .then((res) => {
         if (
           requestNumberId === activeNumberIdRef.current &&
@@ -61,6 +61,19 @@ export default function NotificationCenter({ unreadInbox = 0 }: NotificationCent
   // Background-message alerts: only when the tab is hidden or a different
   // conversation is open — the open thread already surfaces new messages.
   useSocket((event, data) => {
+    if (event === 'ticket:new' || event === 'ticket:updated') {
+      const payload = data as { whatsappNumberId?: string; numberId?: string };
+      if (
+        (payload.whatsappNumberId || payload.numberId) &&
+        activeNumber &&
+        ![activeNumber.id, activeNumber.phoneNumberId].includes(
+          payload.whatsappNumberId ?? payload.numberId ?? ''
+        )
+      )
+        return;
+      load();
+      return;
+    }
     if (event !== 'message:new') return;
     const payload = data as {
       conversationId?: string;
