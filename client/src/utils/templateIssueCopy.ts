@@ -15,7 +15,7 @@ const KNOWN_ISSUES: Array<{ match: RegExp; issue: FriendlyIssue }> = [
     },
   },
   {
-    match: /https:\/\/, not http|isn’t secure|not http/i,
+    match: /https:\/\/, not http|isn.?t secure enough/i,
     issue: {
       title: 'This website link isn’t ready yet',
       detail:
@@ -41,7 +41,7 @@ const KNOWN_ISSUES: Array<{ match: RegExp; issue: FriendlyIssue }> = [
     },
   },
   {
-    match: /replace the (example|sample)|real website/i,
+    match: /replace the sample address with your real website/i,
     issue: {
       title: 'Use your real website',
       detail: 'Swap the sample address for the page customers should actually visit.',
@@ -57,7 +57,7 @@ const KNOWN_ISSUES: Array<{ match: RegExp; issue: FriendlyIssue }> = [
     },
   },
   {
-    match: /already exists|duplicate|same name/i,
+    match: /template with this name already exists|already exists\. Choose a different name|duplicate.*template|same name/i,
     issue: {
       title: 'That name is already in use',
       detail: 'Pick a slightly different name, or delete the old template first.',
@@ -71,7 +71,7 @@ const KNOWN_ISSUES: Array<{ match: RegExp; issue: FriendlyIssue }> = [
     },
   },
   {
-    match: /phone number with country code|valid phone/i,
+    match: /phone number with country code/i,
     issue: {
       title: 'Add the phone number for the call button',
       detail: 'Include the country code so WhatsApp can place the call.',
@@ -79,7 +79,8 @@ const KNOWN_ISSUES: Array<{ match: RegExp; issue: FriendlyIssue }> = [
     },
   },
   {
-    match: /placeholder/i,
+    match:
+      /placeholders cannot be placed|personal fields? (must be numbered|in order)|don.?t (start|end) the message with a personal field/i,
     issue: {
       title: 'A personal field needs a small fix',
       detail:
@@ -87,7 +88,7 @@ const KNOWN_ISSUES: Array<{ match: RegExp; issue: FriendlyIssue }> = [
     },
   },
   {
-    match: /sample value/i,
+    match: /add sample values for all .+ header variable|add an example for each personal field/i,
     issue: {
       title: 'Add an example for each personal field',
       detail: 'WhatsApp reviews a filled-in example, like a real name or order number, before they approve the message.',
