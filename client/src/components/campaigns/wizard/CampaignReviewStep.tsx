@@ -11,7 +11,6 @@ import {
   Users,
 } from 'lucide-react';
 import AppButton from '../../ui/AppButton';
-import AppInput from '../../ui/AppInput';
 import { WhatsAppTemplatePreview } from '../../inbox/WhatsAppPreview';
 import { getFilledTemplatePreview } from '../campaignPreviewUtils';
 import { humanizeParamValue, previewParams } from '../../../utils/templateForm';
@@ -20,6 +19,7 @@ import type { CampaignWizardForm } from './campaignWizardModel';
 import type { CampaignQuotaData } from './CampaignWizardSummaryRail';
 import type { AudiencePreviewMetrics } from '../CampaignAudiencePreview';
 import CampaignWizardSummaryRail from './CampaignWizardSummaryRail';
+import CampaignSchedulePicker from './CampaignSchedulePicker';
 
 interface CampaignReviewStepProps {
   form: CampaignWizardForm;
@@ -31,7 +31,6 @@ interface CampaignReviewStepProps {
   excludedCount: number;
   estimatedCost?: number | null;
   quota: CampaignQuotaData | null;
-  browserTimezone: string;
   minScheduleDateTime: string;
   onEditMessage: () => void;
   onEditAudience: () => void;
@@ -47,7 +46,6 @@ export default function CampaignReviewStep({
   excludedCount,
   estimatedCost,
   quota,
-  browserTimezone,
   minScheduleDateTime,
   onEditMessage,
   onEditAudience,
@@ -305,24 +303,12 @@ export default function CampaignReviewStep({
                     </label>
                   ))}
                   {form.scheduleEnabled && (
-                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                      <AppInput
-                        id="scheduled-at"
-                        label="Send date and time"
-                        type="datetime-local"
+                    <div className="mt-2">
+                      <CampaignSchedulePicker
                         value={form.scheduledAt}
                         min={minScheduleDateTime}
-                        onChange={(event) =>
-                          setForm((previous) => ({ ...previous, scheduledAt: event.target.value }))
-                        }
-                        labelClassName="text-[10px] font-bold text-slate-600 dark:text-slate-300"
-                        className="!h-8 rounded-lg text-[11px]"
-                        required
+                        onChange={(scheduledAt) => setForm((previous) => ({ ...previous, scheduledAt }))}
                       />
-                      <div className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 dark:border-slate-700 dark:bg-slate-950">
-                        <p className="text-[9px] font-extrabold text-slate-700 dark:text-slate-300">Browser timezone</p>
-                        <p className="mt-1 truncate text-[10px] font-semibold text-slate-500">{browserTimezone}</p>
-                      </div>
                     </div>
                   )}
               </div>

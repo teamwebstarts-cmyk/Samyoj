@@ -82,7 +82,6 @@ export default function CampaignWizardPage() {
     () => templates.find((template) => template.name === form.templateName),
     [form.templateName, templates],
   );
-  const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
   const manualLines = form.phones
     .split('\n')
     .map((line) => line.trim())
@@ -456,7 +455,6 @@ export default function CampaignWizardPage() {
         excludedCount={excludedSelectedContacts}
         estimatedCost={estimatedCost}
         quota={quota}
-        browserTimezone={browserTimezone}
         minScheduleDateTime={getCampaignScheduleMinimum()}
         onEditMessage={() => navigateToStep(0)}
         onEditAudience={() => navigateToStep(1)}
