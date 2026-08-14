@@ -4,6 +4,7 @@ import { z } from 'zod';
 import prisma from '../../config/database';
 import { authenticate, requireOrg } from '../../middleware/auth';
 import { AppError, sendSuccess, asyncHandler, paramId } from '../../utils/response';
+import { logError } from '../../errors';
 import { MetaWhatsAppService } from '../whatsapp/meta.service';
 import { getWhatsappContextById } from '../whatsapp/context';
 import { resolveActiveWhatsappNumber } from '../whatsapp/active-number';
@@ -12,6 +13,7 @@ import {
   buildPaymentStatusPayload,
   getOrder,
   listOrders,
+  orderStatusCustomerMessage,
   updateOrderPaymentStatus,
   updateOrderStatus,
 } from './service';
@@ -25,8 +27,10 @@ router.get(
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const status = req.query.status as OrderStatus | undefined;
+    const search = typeof req.query.search === 'string' ? req.query.search : undefined;
     const result = await listOrders(orgId, {
       status,
+      search,
       page: req.query.page ? parseInt(req.query.page as string, 10) : undefined,
       limit: req.query.limit ? parseInt(req.query.limit as string, 10) : undefined,
       whatsappNumberId: req.activeWhatsappNumberId,
@@ -72,32 +76,44 @@ router.patch(
     );
     if (!order) throw new AppError(404, 'Order not found');
 
+    let notified = false;
     if (data.notifyContact && order.contactId) {
-      const contact = await prisma.contact.findUnique({
-        where: { id: order.contactId },
-        select: { phone: true },
-      });
-      if (contact?.phone) {
-        if (!order.whatsappNumberId) throw new AppError(409, 'Order has unresolved WhatsApp number ownership');
-        const { whatsappNumber, accessToken } = await getWhatsappContextById(
-          orgId,
-          order.whatsappNumberId
-        );
-        const payload = buildOrderStatusPayload(contact.phone, {
-          referenceId: order.referenceId,
-          body: data.body || `Your order ${order.referenceId} status: ${data.status}`,
-          status: data.status,
-          description: data.statusNote,
+      try {
+        const contact = await prisma.contact.findUnique({
+          where: { id: order.contactId },
+          select: { phone: true },
         });
-        await MetaWhatsAppService.sendMessage(
-          whatsappNumber.phoneNumberId,
-          accessToken,
-          payload
-        );
+        if (contact?.phone) {
+          if (!order.whatsappNumberId) throw new AppError(409, 'Order has unresolved WhatsApp number ownership');
+          const { whatsappNumber, accessToken } = await getWhatsappContextById(
+            orgId,
+            order.whatsappNumberId
+          );
+          const payload = buildOrderStatusPayload(contact.phone, {
+            referenceId: order.referenceId,
+            body: data.body || orderStatusCustomerMessage(data.status, order.referenceId),
+            status: data.status,
+            description: data.statusNote,
+          });
+          await MetaWhatsAppService.sendMessage(
+            whatsappNumber.phoneNumberId,
+            accessToken,
+            payload
+          );
+          notified = true;
+        }
+      } catch (err) {
+        if (err instanceof AppError) throw err;
+        logError(err, {
+          source: 'api',
+          action: 'Order status notify failed',
+          orderId,
+          organizationId: orgId,
+        });
       }
     }
 
-    sendSuccess(res, order);
+    sendSuccess(res, { ...order, notified });
   })
 );
 

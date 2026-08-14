@@ -1,6 +1,7 @@
 import type { OrderPaymentStatus, OrderStatus } from '@prisma/client';
 import { Prisma } from '@prisma/client';
 import prisma from '../../config/database';
+import { emitToOrg } from '../../realtime';
 import type { SendMessagePayload } from '../whatsapp/meta.service';
 import { ordersForNumberFilter } from '../whatsapp/active-number';
 import { assertCatalogAvailableForNumber } from '../catalog/service';
@@ -11,6 +12,144 @@ export interface OrderLineItem {
   name: string;
   quantity: number;
   amountCents: number;
+  imageUrl?: string;
+}
+
+export interface OrderCounts {
+  total: number;
+  pending: number;
+  processing: number;
+  shipped: number;
+  completed: number;
+  canceled: number;
+}
+
+type StoredOrderItem = {
+  retailerId?: string;
+  name?: string;
+  quantity?: number;
+  amountCents?: number;
+  priceCents?: number;
+  imageUrl?: string | null;
+};
+
+export function orderStatusCustomerMessage(status: OrderStatus, referenceId: string): string {
+  switch (status) {
+    case 'PENDING':
+      return `We received your order ${referenceId}. We'll start preparing it shortly.`;
+    case 'PROCESSING':
+      return `We're preparing your order ${referenceId}.`;
+    case 'PARTIALLY_SHIPPED':
+      return `Part of your order ${referenceId} is on the way.`;
+    case 'SHIPPED':
+      return `Your order ${referenceId} is on the way.`;
+    case 'COMPLETED':
+      return `Your order ${referenceId} is complete. Thank you!`;
+    case 'CANCELED':
+      return `Your order ${referenceId} was canceled.`;
+    default:
+      return `Your order ${referenceId} was updated.`;
+  }
+}
+
+function readStoredItems(value: unknown): StoredOrderItem[] {
+  return Array.isArray(value) ? (value as StoredOrderItem[]) : [];
+}
+
+function catalogKey(catalogId: string, retailerId: string) {
+  return `${catalogId}:${retailerId}`;
+}
+
+async function catalogProductLookup(
+  organizationId: string,
+  pairs: Array<{ catalogId: string; retailerId: string }>
+) {
+  const catalogIds = [...new Set(pairs.map((pair) => pair.catalogId).filter(Boolean))];
+  const retailerIds = [...new Set(pairs.map((pair) => pair.retailerId).filter(Boolean))];
+  if (!catalogIds.length || !retailerIds.length) {
+    return new Map<string, { name: string; imageUrl: string | null }>();
+  }
+
+  const products = await prisma.catalogProduct.findMany({
+    where: {
+      organizationId,
+      metaCatalogId: { in: catalogIds },
+      retailerId: { in: retailerIds },
+    },
+    select: { metaCatalogId: true, retailerId: true, name: true, imageUrl: true },
+  });
+
+  return new Map(
+    products.map((product) => [
+      catalogKey(product.metaCatalogId, product.retailerId),
+      { name: product.name, imageUrl: product.imageUrl },
+    ])
+  );
+}
+
+function applyCatalogNames(
+  catalogId: string | null | undefined,
+  items: StoredOrderItem[],
+  lookup: Map<string, { name: string; imageUrl: string | null }>
+): StoredOrderItem[] {
+  if (!catalogId) return items;
+  return items.map((item) => {
+    if (!item.retailerId) return item;
+    const product = lookup.get(catalogKey(catalogId, item.retailerId));
+    if (!product) return item;
+    const hasFriendlyName = Boolean(item.name && item.name !== item.retailerId);
+    return {
+      ...item,
+      name: hasFriendlyName ? item.name : product.name,
+      imageUrl: item.imageUrl || product.imageUrl || undefined,
+    };
+  });
+}
+
+async function withCatalogNames<T extends { catalogId?: string | null; items: unknown }>(
+  organizationId: string,
+  orders: T[]
+): Promise<T[]> {
+  const pairs = orders.flatMap((order) => {
+    if (!order.catalogId) return [];
+    return readStoredItems(order.items)
+      .map((item) => item.retailerId)
+      .filter((retailerId): retailerId is string => Boolean(retailerId))
+      .map((retailerId) => ({ catalogId: order.catalogId as string, retailerId }));
+  });
+  if (!pairs.length) return orders;
+
+  const lookup = await catalogProductLookup(organizationId, pairs);
+  return orders.map((order) => ({
+    ...order,
+    items: applyCatalogNames(order.catalogId, readStoredItems(order.items), lookup),
+  }));
+}
+
+function emptyCounts(): OrderCounts {
+  return { total: 0, pending: 0, processing: 0, shipped: 0, completed: 0, canceled: 0 };
+}
+
+function toCounts(rows: Array<{ status: OrderStatus; _count: { _all: number } }>): OrderCounts {
+  const counts = emptyCounts();
+  for (const row of rows) {
+    const n = row._count._all;
+    counts.total += n;
+    if (row.status === 'PENDING') counts.pending += n;
+    else if (row.status === 'PROCESSING') counts.processing += n;
+    else if (row.status === 'SHIPPED' || row.status === 'PARTIALLY_SHIPPED') counts.shipped += n;
+    else if (row.status === 'COMPLETED') counts.completed += n;
+    else if (row.status === 'CANCELED') counts.canceled += n;
+  }
+  return counts;
+}
+
+function statusWhere(status?: OrderStatus): Prisma.OrderWhereInput {
+  if (!status) return {};
+  if (status === 'SHIPPED') {
+    return { status: { in: ['SHIPPED', 'PARTIALLY_SHIPPED'] } };
+  }
+  return { status };
 }
 
 export interface OrderAmounts {
@@ -192,7 +331,14 @@ export async function createOrderFromInbound(
   if (conversation && contact && conversation.contactId !== contact.id) {
     throw new AppError(400, 'Order contact must match the conversation contact');
   }
-  return prisma.order.create({
+
+  const lookup = await catalogProductLookup(
+    organizationId,
+    input.items.map((item) => ({ catalogId: input.catalogId, retailerId: item.retailerId }))
+  );
+  const items = applyCatalogNames(input.catalogId, input.items, lookup);
+
+  const order = await prisma.order.create({
     data: {
       organizationId,
       contactId: input.contactId,
@@ -200,7 +346,7 @@ export async function createOrderFromInbound(
       whatsappNumberId: input.whatsappNumberId,
       catalogId: input.catalogId,
       referenceId: input.referenceId,
-      items: input.items as unknown as Prisma.InputJsonValue,
+      items: items as unknown as Prisma.InputJsonValue,
       subtotalCents: input.amounts.subtotalCents,
       taxCents: input.amounts.taxCents,
       shippingCents: input.amounts.shippingCents,
@@ -208,7 +354,19 @@ export async function createOrderFromInbound(
       currency: input.amounts.currency,
       metadata: input.metadata as Prisma.InputJsonValue | undefined,
     },
+    include: {
+      contact: { select: { id: true, name: true, phone: true } },
+    },
   });
+
+  emitToOrg(organizationId, 'order:new', {
+    orderId: order.id,
+    whatsappNumberId: order.whatsappNumberId,
+    status: order.status,
+    referenceId: order.referenceId,
+  });
+
+  return order;
 }
 
 export async function updateOrderStatus(
@@ -224,10 +382,18 @@ export async function updateOrderStatus(
   });
   if (!existing) return null;
 
-  return prisma.order.update({
+  const updated = await prisma.order.update({
     where: { id: orderId },
     data: { status, statusNote },
   });
+
+  emitToOrg(organizationId, 'order:updated', {
+    orderId: updated.id,
+    whatsappNumberId: updated.whatsappNumberId,
+    status: updated.status,
+  });
+
+  return updated;
 }
 
 export async function updateOrderPaymentStatus(
@@ -250,19 +416,41 @@ export async function updateOrderPaymentStatus(
 
 export async function listOrders(
   organizationId: string,
-  query: { status?: OrderStatus; page?: number; limit?: number; whatsappNumberId?: string }
+  query: {
+    status?: OrderStatus;
+    search?: string;
+    page?: number;
+    limit?: number;
+    whatsappNumberId?: string;
+  }
 ) {
   const page = Math.max(1, query.page || 1);
   const limit = Math.min(100, Math.max(1, query.limit || 50));
   const skip = (page - 1) * limit;
+  const search = query.search?.trim();
 
-  const where = {
+  const numberFilter = ordersForNumberFilter(query.whatsappNumberId);
+  const where: Prisma.OrderWhereInput = {
     organizationId,
-    ...(query.status ? { status: query.status } : {}),
-    ...ordersForNumberFilter(query.whatsappNumberId),
+    ...statusWhere(query.status),
+    ...numberFilter,
+    ...(search
+      ? {
+          OR: [
+            { referenceId: { contains: search, mode: 'insensitive' } },
+            { contact: { name: { contains: search, mode: 'insensitive' } } },
+            { contact: { phone: { contains: search, mode: 'insensitive' } } },
+          ],
+        }
+      : {}),
   };
 
-  const [orders, total] = await Promise.all([
+  const countWhere: Prisma.OrderWhereInput = {
+    organizationId,
+    ...numberFilter,
+  };
+
+  const [orders, total, grouped] = await Promise.all([
     prisma.order.findMany({
       where,
       orderBy: { createdAt: 'desc' },
@@ -270,21 +458,31 @@ export async function listOrders(
       take: limit,
       include: {
         contact: { select: { id: true, name: true, phone: true } },
+        conversation: { select: { id: true } },
       },
     }),
     prisma.order.count({ where }),
+    prisma.order.groupBy({
+      by: ['status'],
+      where: countWhere,
+      _count: { _all: true },
+    }),
   ]);
 
-  return { orders, total, page, limit };
+  const enriched = await withCatalogNames(organizationId, orders);
+  return { orders: enriched, total, page, limit, counts: toCounts(grouped) };
 }
 
 export async function getOrder(organizationId: string, orderId: string, whatsappNumberId?: string) {
   if (!whatsappNumberId) return null;
-  return prisma.order.findFirst({
+  const order = await prisma.order.findFirst({
     where: { id: orderId, organizationId, whatsappNumberId },
     include: {
       contact: { select: { id: true, name: true, phone: true } },
       conversation: { select: { id: true, status: true } },
     },
   });
+  if (!order) return null;
+  const [enriched] = await withCatalogNames(organizationId, [order]);
+  return enriched;
 }
