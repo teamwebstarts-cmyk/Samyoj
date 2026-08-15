@@ -46,9 +46,11 @@ import contentStudioRoutes from './modules/content-studio/routes';
 import publicApiRoutes from './modules/public-api/routes';
 import leadRoutes from './modules/leads/routes';
 import ticketRoutes from './modules/tickets/routes';
+import opsRoutes from './modules/ops/routes';
 import { setRealtimeIO } from './realtime';
 import { registerPresenceHandlers, startPresenceSweeper } from './modules/inbox/presence';
 import { initTelemetry } from './config/telemetry';
+import { attachOpsErrorFileTransport } from './modules/ops/error-log';
 
 const app = express();
 const httpServer = createServer(app);
@@ -249,6 +251,7 @@ app.use('/api/content-studio', contentStudioRoutes);
 app.use('/api/v1', publicApiRoutes);
 app.use('/api/leads', leadRoutes);
 app.use('/api/tickets', ticketRoutes);
+app.use('/api/ops', opsRoutes);
 
 const { clientDist, clientPublic } = getClientPaths();
 const serveClient = config.nodeEnv === 'production' || clientBuildExists();
@@ -304,6 +307,7 @@ async function listen(): Promise<void> {
 async function start() {
   validateConfig();
   initTelemetry();
+  attachOpsErrorFileTransport();
   await initSentry();
   setupGlobalErrorHandlers();
   setRealtimeIO(io);
@@ -333,6 +337,9 @@ async function start() {
   const redisAvailable = await checkRedisConnection();
 
   if (redisAvailable) {
+    const { hydrateWebhookHealth } = await import('./modules/whatsapp/webhook-health');
+    await hydrateWebhookHealth();
+
     const { setSocketIO, startWorkers } = await import('./workers/index');
     setSocketIO(io);
     startWorkers();

@@ -169,6 +169,14 @@ export async function tryAcquireCallConnectLock(metaCallId: string, ttlSec = 30)
   }
 }
 
+export async function releaseCallConnectLock(metaCallId: string): Promise<void> {
+  try {
+    await getRedis().del(`${CONNECT_LOCK_PREFIX}${metaCallId}`);
+  } catch {
+    // ignore
+  }
+}
+
 // ─── Outbound BIC unanswered cooldown (Meta quality / permission protection) ───
 
 const BIC_UNANSWERED_PREFIX = 'call:bic:unanswered:';

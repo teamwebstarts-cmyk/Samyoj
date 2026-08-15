@@ -1,5 +1,23 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('../../config/redis', () => ({
+  getRedis: () => ({
+    incr: vi.fn().mockResolvedValue(1),
+    set: vi.fn().mockResolvedValue('OK'),
+    mget: vi.fn().mockResolvedValue(['12', '8', '7', '1', '2026-08-15T14:34:40.000Z']),
+  }),
+}));
+
+vi.mock('../../config/database', () => ({
+  default: {
+    providerWebhookEvent: {
+      findFirst: vi.fn().mockResolvedValue(null),
+    },
+  },
+}));
+
 import {
+  hydrateWebhookHealth,
   toPublicWebhookHealth,
   trackWebhookFailed,
   trackWebhookProcessed,
@@ -21,6 +39,7 @@ describe('webhook health lifecycle', () => {
     expect(webhookHealth.totalProcessed).toBe(snapshot.totalProcessed + 1);
     expect(webhookHealth.totalFailed).toBe(snapshot.totalFailed + 1);
     expect(webhookHealth.lastError).toBe('worker failed');
+    expect(webhookHealth.lastReceivedAt).toBeTruthy();
   });
 
   it('omits the live webhook URL from the public health payload', () => {
@@ -43,5 +62,15 @@ describe('webhook health lifecycle', () => {
     expect(JSON.stringify(payload)).not.toContain('ngrok');
     expect(JSON.stringify(payload)).not.toContain('http');
     expect(JSON.stringify(payload)).not.toContain('worker failed');
+  });
+
+  it('hydrates lastReceivedAt from Redis after a process restart', async () => {
+    const previous = webhookHealth.lastReceivedAt;
+    webhookHealth.lastReceivedAt = null;
+    webhookHealth.totalReceived = 0;
+    await hydrateWebhookHealth();
+    expect(webhookHealth.lastReceivedAt).toBe('2026-08-15T14:34:40.000Z');
+    expect(webhookHealth.totalReceived).toBeGreaterThanOrEqual(12);
+    webhookHealth.lastReceivedAt = previous;
   });
 });

@@ -38,7 +38,17 @@ export function mergeCallingSettings(
     maxCallDurationSec: clampCallDurationSec(
       stored.maxCallDurationSec ?? base.maxCallDurationSec
     ),
+    ttsLanguage: normalizeVoiceLang(stored.ttsLanguage),
+    deepgramLanguage: normalizeVoiceLang(stored.deepgramLanguage),
+    sarvamSttLanguage: normalizeVoiceLang(stored.sarvamSttLanguage),
   };
+}
+
+function normalizeVoiceLang(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === 'unknown') return null;
+  return trimmed;
 }
 
 function clampCallDurationSec(value: number): number {

@@ -4,7 +4,7 @@ import { createModuleLogger } from '../../utils/logger';
 import { isSarvamSttConfigured } from './sarvam.stt';
 import { isSarvamTtsConfigured } from './sarvam.tts';
 import type { CallAction } from './types';
-import { sanitizeWhatsAppSdp } from './whatsapp-sdp';
+import { sanitizeWhatsAppSdp, summarizeWhatsAppSdp } from './whatsapp-sdp';
 
 const log = createModuleLogger('meta-calling');
 const META_BASE = `https://graph.facebook.com/${config.meta.apiVersion}`;
@@ -84,12 +84,25 @@ export class MetaCallingService {
       body.call_id = callId;
     }
     if (session) {
+      const role = session.sdp_type === 'answer' ? 'answer' : 'offer';
+      const sdp = sanitizeWhatsAppSdp(session.sdp, role);
+      const summary = summarizeWhatsAppSdp(sdp);
+      if (summary.candidateCount === 0) {
+        log.error('SDP has no usable ICE candidates after sanitize', {
+          action,
+          callId: isNewOutbound ? undefined : callId,
+          ...summary,
+        });
+      } else {
+        log.info('Meta call action SDP ready', {
+          action,
+          sdpType: session.sdp_type,
+          ...summary,
+        });
+      }
       body.session = {
         sdp_type: session.sdp_type,
-        sdp: sanitizeWhatsAppSdp(
-          session.sdp,
-          session.sdp_type === 'answer' ? 'answer' : 'offer'
-        ),
+        sdp,
       };
     }
     if (to) {

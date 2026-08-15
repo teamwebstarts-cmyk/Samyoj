@@ -64,21 +64,32 @@ describe('WhatsApp SDP sanitize', () => {
     expect(isUsableWhatsAppIceCandidate('a=candidate:1 1 udp 1 1.2.3.4 9 typ host')).toBe(true);
   });
 
-  it('does not drop extra m-lines on answers so they still match Meta offers', () => {
+  it('keeps a single audio m-line on answers and forces setup:active', () => {
     const answer = [
       'v=0',
       'o=- 1 2 IN IP4 127.0.0.1',
       's=-',
       't=0 0',
+      'a=group:BUNDLE 0 1',
+      'a=ice-options:trickle',
       'm=audio 9 UDP/TLS/RTP/SAVPF 111',
       'a=mid:0',
       'a=sendrecv',
+      'a=setup:actpass',
       'a=fingerprint:sha-256 AA:BB',
+      'a=candidate:1 1 udp 2130706431 1.2.3.4 54000 typ host',
+      'm=audio 9 UDP/TLS/RTP/SAVPF 111',
+      'a=mid:1',
+      'a=recvonly',
       '',
     ].join('\n');
     const out = sanitizeWhatsAppSdp(answer, 'answer');
-    expect(out).toContain('m=audio');
+    expect(out.match(/^m=audio /gm)?.length).toBe(1);
     expect(out).toContain('a=fingerprint:SHA-256 AA:BB');
+    expect(out).toContain('a=setup:active');
+    expect(out).not.toMatch(/actpass/i);
+    expect(out).not.toMatch(/trickle/i);
     expect(out).toContain('\r\n');
+    expect(out).toContain('1.2.3.4');
   });
 });

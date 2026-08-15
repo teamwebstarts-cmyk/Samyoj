@@ -1670,7 +1670,14 @@ router.patch(
       activeBotId?: string | null;
     } = {};
 
-    if (typeof active === 'boolean') data.botActive = active;
+    if (typeof active === 'boolean') {
+      data.botActive = active;
+      if (active) {
+        data.botHandoffAt = null;
+        data.botHandoffReason = null;
+        data.botState = null;
+      }
+    }
     if (resetHandoff) {
       data.botHandoffAt = null;
       data.botHandoffReason = null;

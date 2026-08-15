@@ -196,9 +196,6 @@ export async function generateBotReply(
     if (!conversation!.botActive) {
       return { reply: null, handoff: false, skipped: true, skipReason: 'bot_paused' };
     }
-    if (conversation!.botHandoffAt) {
-      return { reply: null, handoff: false, skipped: true, skipReason: 'handoff_done' };
-    }
     if (conversation!.assignedAgentId && conversation!.status !== 'OPEN') {
       return { reply: null, handoff: false, skipped: true, skipReason: 'agent_assigned' };
     }

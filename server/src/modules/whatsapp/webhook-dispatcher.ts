@@ -97,6 +97,32 @@ export async function releaseProviderWebhookEvent(
   });
 }
 
+/** Durable receipt for every Meta POST (health + ops). Idempotency stays on claim/meta ids. */
+export async function recordProviderWebhookReceipt(params: {
+  organizationId: string;
+  eventKey: string;
+  field: string;
+}): Promise<void> {
+  try {
+    await prisma.providerWebhookEvent.create({
+      data: {
+        organizationId: params.organizationId,
+        eventKey: params.eventKey,
+        field: params.field,
+        status: 'RECEIVED',
+        claimedAt: new Date(),
+      },
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') return;
+    log.warn('Could not record webhook receipt', {
+      organizationId: params.organizationId,
+      field: params.field,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
 export const HANDLED_FIELDS = new Set([
   'message_template_status_update',
   'message_template_quality_update',

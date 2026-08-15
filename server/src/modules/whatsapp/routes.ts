@@ -29,6 +29,7 @@ import {
   resolveActiveWhatsappNumberId,
 } from './active-number';
 import {
+  hydrateWebhookHealth,
   toPublicWebhookHealth,
   trackWebhookFailed,
   trackWebhookProcessed,
@@ -630,6 +631,8 @@ router.get('/webhook/health', async (_req: Request, res: Response) => {
     // Redis may be unreachable
   }
 
+  await hydrateWebhookHealth();
+
   sendSuccess(
     res,
     toPublicWebhookHealth({
@@ -742,9 +745,32 @@ router.post('/webhook', async (req: Request, res: Response) => {
     const routedNumber = metaPhoneNumberId
       ? await prisma.whatsappNumber.findFirst({
           where: { phoneNumberId: metaPhoneNumberId, isActive: true },
-          select: { id: true },
+          select: { id: true, organizationId: true },
         })
       : null;
+
+    if (routedNumber?.organizationId) {
+      const { recordProviderWebhookReceipt } = await import('./webhook-dispatcher');
+      void recordProviderWebhookReceipt({
+        organizationId: routedNumber.organizationId,
+        eventKey: `receipt:${requestId}`,
+        field: field || 'unknown',
+      });
+    }
+
+    // Inbound WhatsApp calls must pre-accept within seconds. Do not wait for
+    // the BullMQ message worker — the connect lock de-dupes the queued retry.
+    if (callCount > 0) {
+      const { processWebhookFields } = await import('../calling/call.processor');
+      void processWebhookFields(payload).catch((err) => {
+        logError(err, {
+          source: 'webhook',
+          action: 'Inline call webhook processing failed',
+          requestId,
+        });
+      });
+    }
+
     const job = await webhookQueue.add(
       'process-webhook',
       {

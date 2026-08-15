@@ -170,4 +170,24 @@ describe('handleInboundAutomations', () => {
       expect.objectContaining({ jobId: 'ai-bot-conv-1' })
     );
   });
+
+  it('still queues AI when botActive is true even if a stale botHandoffAt remains', async () => {
+    flowHandled.mockResolvedValue(false);
+    conversationMock
+      .mockResolvedValueOnce({ botActive: true } as never)
+      .mockResolvedValueOnce({
+        botActive: true,
+        botHandoffAt: new Date('2026-08-08T18:24:28.068Z'),
+        assignedAgentId: null,
+        status: 'OPEN',
+      } as never);
+
+    await handleInboundAutomations(payload);
+
+    expect(automationQueueAdd).toHaveBeenCalledWith(
+      'ai-chatbot',
+      expect.objectContaining({ conversationId: 'conv-1' }),
+      expect.objectContaining({ jobId: 'ai-bot-conv-1' })
+    );
+  });
 });

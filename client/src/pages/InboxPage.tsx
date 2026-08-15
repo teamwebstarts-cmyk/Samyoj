@@ -600,7 +600,7 @@ export default function InboxPage() {
     setBulkDeleteOpen(false);
   }, [runBulk]);
 
-  const botIsLive = selected?.botActive !== false && !selected?.botHandoffAt;
+  const botIsLive = selected?.botActive !== false;
   const contextMenuConversation = useMemo(
     () => conversations.find((c) => c.id === contextMenu?.conversationId) ?? null,
     [contextMenu, conversations]

@@ -230,7 +230,7 @@ export async function queueAiBotProcessing(payload: InboundAutomationPayload): P
   const conversation = await prisma.conversation.findFirst({
     where: { id: payload.conversationId, organizationId: payload.organizationId },
   });
-  if (!conversation?.botActive || conversation.botHandoffAt) {
+  if (!conversation?.botActive) {
     log.info('AI bot skipped for conversation', {
       conversationId: payload.conversationId,
       botActive: conversation?.botActive,

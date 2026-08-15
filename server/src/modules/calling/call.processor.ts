@@ -24,6 +24,7 @@ import {
   storePendingCall,
   storePendingCallWithTtl,
   tryAcquireCallConnectLock,
+  releaseCallConnectLock,
   unregisterActiveCall,
 } from './session-store';
 import type { CallWebhookEntry } from './types';
@@ -414,6 +415,22 @@ async function handleCallConnect(
     return;
   }
 
+  if (getCallSession(metaCallId)) {
+    log.info('Call session already running — ignoring duplicate connect', { metaCallId });
+    return;
+  }
+  if (
+    existingCall &&
+    (existingCall.status === 'CONNECTED' || existingCall.status === 'RINGING') &&
+    existingCall.handler === 'AI'
+  ) {
+    log.info('Inbound call already being handled — ignoring duplicate connect', {
+      metaCallId,
+      status: existingCall.status,
+    });
+    return;
+  }
+
   if (!sessionSdp) {
     log.warn('Call connect webhook missing SDP', { metaCallId, direction });
     return;
@@ -439,7 +456,7 @@ async function handleCallConnect(
 
   await prisma.conversation.update({
     where: { id: conversation.id },
-    data: { botActive: true, activeBotId: bot.id },
+    data: { botActive: true, activeBotId: bot.id, botHandoffAt: null, botHandoffReason: null },
   });
 
   const callRecord = await prisma.call.upsert({
@@ -697,6 +714,7 @@ export async function processCallWebhookPayload(payload: Record<string, unknown>
               call
             );
           } catch (err) {
+            await releaseCallConnectLock(call.id);
             log.error('Call connect handler failed', {
               metaCallId: call.id,
               error: err instanceof Error ? err.message : String(err),

@@ -1,7 +1,7 @@
 import wrtc from '@roamhq/wrtc';
 import { createModuleLogger } from '../../utils/logger';
 import { pcmBytesToInt16 } from './audio-utils';
-import { sanitizeWhatsAppSdp } from './whatsapp-sdp';
+import { normalizeMetaOfferSdp, sanitizeWhatsAppSdp } from './whatsapp-sdp';
 
 const log = createModuleLogger('webrtc-bridge');
 
@@ -24,7 +24,7 @@ const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
 export type AudioFrameHandler = (samples: Int16Array, sampleRate: number) => void;
 export type DisconnectHandler = (reason: string) => void;
 
-function waitForIceGathering(pc: InstanceType<typeof RTCPeerConnection>, timeoutMs = 5000): Promise<void> {
+function waitForIceGathering(pc: InstanceType<typeof RTCPeerConnection>, timeoutMs = 8000): Promise<void> {
   if (pc.iceGatheringState === 'complete') return Promise.resolve();
 
   return new Promise((resolve) => {
@@ -166,7 +166,6 @@ export class WhatsAppWebRtcBridge {
 
     this.audioSource = new RTCAudioSource();
     const outboundTrack = this.audioSource.createTrack();
-    this.pc.addTrack(outboundTrack);
 
     this.pc.ontrack = (event: { track: MediaStreamTrack; streams: MediaStream[] }) => {
       const [track] = event.streams[0]?.getAudioTracks() || [event.track];
@@ -192,12 +191,43 @@ export class WhatsAppWebRtcBridge {
 
     this.setupConnectionMonitor();
 
+    // Apply Meta's offer first, then attach our send track onto that transceiver.
+    // addTrack *before* setRemoteDescription can emit a second audio m-line;
+    // Meta then rejects accept SDP and the WhatsApp call keeps ringing.
     await this.pc.setRemoteDescription(
-      new RTCSessionDescription({ type: 'offer', sdp: sdpOffer })
+      new RTCSessionDescription({ type: 'offer', sdp: normalizeMetaOfferSdp(sdpOffer) })
     );
+
+    const transceivers = (
+      this.pc as unknown as {
+        getTransceivers?: () => Array<{
+          receiver?: { track?: { kind?: string } | null };
+          sender?: { replaceTrack: (track: MediaStreamTrack | null) => Promise<void> };
+          direction?: string;
+        }>;
+      }
+    ).getTransceivers?.() || [];
+    const audioTx =
+      transceivers.find((t) => t.receiver?.track?.kind === 'audio') || transceivers[0];
+    try {
+      if (audioTx?.sender?.replaceTrack) {
+        await audioTx.sender.replaceTrack(outboundTrack);
+        if (audioTx.direction === 'recvonly' || audioTx.direction === 'inactive') {
+          audioTx.direction = 'sendrecv';
+        }
+      } else {
+        this.pc.addTrack(outboundTrack);
+      }
+    } catch (err) {
+      log.warn('Could not attach audio track onto offer transceiver; falling back to addTrack', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      this.pc.addTrack(outboundTrack);
+    }
+
     const answer = await this.pc.createAnswer();
     await this.pc.setLocalDescription(answer);
-    await waitForIceGathering(this.pc);
+    await waitForIceGathering(this.pc, 8000);
 
     const localSdp = this.pc.localDescription?.sdp;
     if (!localSdp) {
