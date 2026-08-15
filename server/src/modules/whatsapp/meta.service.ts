@@ -1,5 +1,14 @@
 import { config } from '../../config';
 import { decrypt, encrypt } from '../../utils/crypto';
+import { createModuleLogger } from '../../utils/logger';
+import {
+  isDurablePublicWebhookUrl,
+  isEphemeralWebhookUrl,
+  shouldReplaceAppWebhookCallback,
+  webhookUrlHost,
+} from './webhook-url';
+
+const log = createModuleLogger('meta-whatsapp');
 
 const META_BASE = `https://graph.facebook.com/${config.meta.apiVersion}`;
 export const META_WEBHOOK_FIELDS = [
@@ -965,7 +974,49 @@ export class MetaWhatsAppService {
     return `${creds.appId}|${creds.appSecret}`;
   }
 
+  static async getAppWebhookSubscriptions(
+    credentials?: MetaCredentials
+  ): Promise<Array<{ object: string; active: boolean; callbackUrl: string; fields: string[] }>> {
+    const creds = requireMetaCredentials(credentials);
+    const data = await this.graphGet<{
+      data?: Array<{
+        object?: string;
+        active?: boolean;
+        callback_url?: string;
+        fields?: Array<{ name?: string } | string>;
+      }>;
+    }>(`/${creds.appId}/subscriptions`, this.getAppAccessToken(credentials));
+
+    return (data.data || []).map((item) => ({
+      object: item.object || '',
+      active: item.active !== false,
+      callbackUrl: item.callback_url || '',
+      fields: (item.fields || []).map((field) => (typeof field === 'string' ? field : field.name || '')),
+    }));
+  }
+
   static async registerAppWebhook(callbackUrl: string, credentials?: MetaCredentials): Promise<void> {
+    if (config.nodeEnv === 'production' && isEphemeralWebhookUrl(callbackUrl)) {
+      throw new Error(
+        'Production META_WEBHOOK_URL cannot be ngrok or localhost. Use https://app.samyoj.com/api/whatsapp/webhook'
+      );
+    }
+
+    let currentUrl: string | undefined;
+    try {
+      const existing = await this.getAppWebhookSubscriptions(credentials);
+      currentUrl = existing.find((item) => item.object === 'whatsapp_business_account')?.callbackUrl;
+    } catch (err) {
+      log.warn('Could not read current Meta app webhook subscription', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+
+    const decision = shouldReplaceAppWebhookCallback(currentUrl, callbackUrl);
+    if (!decision.replace) {
+      throw new Error(decision.reason);
+    }
+
     const creds = requireMetaCredentials(credentials);
     const params = new URLSearchParams({
       object: 'whatsapp_business_account',
@@ -984,6 +1035,12 @@ export class MetaWhatsAppService {
     if (!res.ok && !data.success) {
       throw new Error(data.error?.message || 'Failed to register app webhook');
     }
+
+    log.info('App webhook registered', {
+      host: webhookUrlHost(callbackUrl),
+      fields: META_WEBHOOK_FIELDS.join(','),
+      previousHost: currentUrl ? webhookUrlHost(currentUrl) : undefined,
+    });
   }
 
   private static async postSubscribeWaba(wabaId: string, token: string): Promise<void> {
@@ -1012,20 +1069,75 @@ export class MetaWhatsAppService {
     throw error;
   }
 
+  /** Pin WABA delivery to a durable HTTPS URL so local ngrok cannot steal production inbound. */
+  private static async postWabaCallbackOverride(
+    wabaId: string,
+    token: string,
+    callbackUrl: string
+  ): Promise<void> {
+    const res = await fetch(`${META_BASE}/${wabaId}/subscribed_apps`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        override_callback_uri: callbackUrl,
+        verify_token: config.meta.verifyToken,
+      }),
+    });
+    const data = (await res.json()) as { success?: boolean } & GraphError;
+    if (res.ok || data.success) return;
+    throw new Error(data.error?.message || 'Failed to set WABA webhook override');
+  }
+
+  private static async pinDurableWabaWebhookOverride(
+    wabaId: string,
+    token: string,
+    credentials?: MetaCredentials
+  ): Promise<void> {
+    const callbackUrl = config.meta.webhookUrl;
+    if (!isDurablePublicWebhookUrl(callbackUrl)) return;
+
+    try {
+      await this.postWabaCallbackOverride(wabaId, token, callbackUrl);
+      log.info('WABA webhook override pinned', { host: webhookUrlHost(callbackUrl), wabaId });
+      return;
+    } catch (firstErr) {
+      try {
+        await this.postWabaCallbackOverride(wabaId, this.getAppAccessToken(credentials), callbackUrl);
+        log.info('WABA webhook override pinned with app token', {
+          host: webhookUrlHost(callbackUrl),
+          wabaId,
+        });
+        return;
+      } catch (secondErr) {
+        const first = firstErr instanceof Error ? firstErr.message : String(firstErr);
+        const second = secondErr instanceof Error ? secondErr.message : String(secondErr);
+        log.error('Could not pin WABA webhook override; app-level callback still applies', {
+          wabaId,
+          host: webhookUrlHost(callbackUrl),
+          error: first,
+          appTokenError: second !== first ? second : undefined,
+        });
+      }
+    }
+  }
+
   /** Links the WABA to this Meta app so Cloud API can send messages (required even without webhooks). */
   static async ensureWabaSubscribed(
     wabaId: string,
     accessToken: string,
     credentials?: MetaCredentials
   ): Promise<void> {
+    let usedToken = accessToken;
     try {
       await this.postSubscribeWaba(wabaId, accessToken);
-      return;
     } catch (userErr) {
       const userMessage = userErr instanceof Error ? userErr.message : String(userErr);
       try {
-        await this.postSubscribeWaba(wabaId, this.getAppAccessToken(credentials));
-        return;
+        usedToken = this.getAppAccessToken(credentials);
+        await this.postSubscribeWaba(wabaId, usedToken);
       } catch (appErr) {
         const status = (userErr as { statusCode?: number }).statusCode;
         if (
@@ -1042,6 +1154,8 @@ export class MetaWhatsAppService {
         );
       }
     }
+
+    await this.pinDurableWabaWebhookOverride(wabaId, usedToken, credentials);
   }
 
   static async subscribeWabaToApp(
@@ -1064,8 +1178,8 @@ export class MetaWhatsAppService {
       );
     }
 
-    await this.ensureWabaSubscribed(wabaId, accessToken, credentials);
     await this.registerAppWebhook(callbackUrl, credentials);
+    await this.ensureWabaSubscribed(wabaId, accessToken, credentials);
     return { callbackUrl };
   }
 
@@ -1080,6 +1194,8 @@ export class MetaWhatsAppService {
         'META_WEBHOOK_URL is not set. Use an HTTPS tunnel URL ending with /api/whatsapp/webhook'
       );
     }
+
+    await this.registerAppWebhook(callbackUrl, credentials);
 
     let subscribedWabas = 0;
     const failures: Array<{ phoneNumber: string; wabaId: string; error: string }> = [];
@@ -1104,7 +1220,6 @@ export class MetaWhatsAppService {
       );
     }
 
-    await this.registerAppWebhook(callbackUrl, credentials);
     return { callbackUrl, subscribedWabas, failures };
   }
 

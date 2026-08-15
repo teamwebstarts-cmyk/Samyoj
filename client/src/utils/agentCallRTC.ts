@@ -96,8 +96,8 @@ async function waitForIceGathering(pc: RTCPeerConnection): Promise<void> {
 }
 
 /**
- * Mic must be sendrecv. Using addTransceiver+replaceTrack avoids recvonly offers
- * that cause one-way audio (hear customer, they cannot hear agent).
+ * Mic must be sendrecv. addTrack (not addTransceiver + offerToReceiveAudio)
+ * keeps a single audio m-line — Meta rejects multi-stream SDP (138008).
  */
 async function addMicrophoneSendRecv(pc: RTCPeerConnection): Promise<MediaStream> {
   const stream = await navigator.mediaDevices.getUserMedia({
@@ -114,9 +114,7 @@ async function addMicrophoneSendRecv(pc: RTCPeerConnection): Promise<MediaStream
     throw new Error('No microphone track');
   }
   track.enabled = true;
-
-  const transceiver = pc.addTransceiver('audio', { direction: 'sendrecv' });
-  await transceiver.sender.replaceTrack(track);
+  pc.addTrack(track, stream);
   (pc as unknown as Record<string, MediaStream>)._localStream = stream;
   return stream;
 }
@@ -140,6 +138,24 @@ function ensureLocalAudioSending(pc: RTCPeerConnection): void {
   }
 }
 
+/** Meta requires SHA-256 (capitalized) fingerprints, CRLF, and a single audio stream. */
+function sanitizeAgentSdp(sdp: string): string {
+  const lines = sdp
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .split('\n')
+    .map((line) => line.trimEnd())
+    .filter((line) => {
+      if (!line) return false;
+      if (/^a=extmap-allow-mixed$/i.test(line)) return false;
+      if (/^a=fingerprint:sha-384\b/i.test(line)) return false;
+      if (/^a=fingerprint:sha-512\b/i.test(line)) return false;
+      return true;
+    })
+    .map((line) => line.replace(/^a=fingerprint:sha-256/i, 'a=fingerprint:SHA-256'));
+  return `${lines.join('\r\n')}\r\n`;
+}
+
 /** Create a browser WebRTC offer, grab mic, return the SDP offer string. */
 export async function createAgentOffer(): Promise<string | null> {
   cleanupAgentCall();
@@ -157,23 +173,29 @@ export async function createAgentOffer(): Promise<string | null> {
     return null;
   }
 
-  const offer = await pc.createOffer({
-    offerToReceiveAudio: true,
-    offerToReceiveVideo: false,
-  });
+  const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
   await waitForIceGathering(pc);
   ensureLocalAudioSending(pc);
 
-  const sdpOffer = pc.localDescription?.sdp;
-  if (!sdpOffer) {
+  const raw = pc.localDescription?.sdp;
+  if (!raw) {
     pc.close();
     return null;
   }
 
+  const sdpOffer = sanitizeAgentSdp(raw);
+
   // Guard: offer must advertise send (not recvonly) or Meta will not pull agent mic.
   if (/a=recvonly/i.test(sdpOffer) && !/a=sendrecv|a=sendonly/i.test(sdpOffer)) {
     console.error('[webrtc] Offer is recvonly — aborting outbound call setup');
+    cleanupAgentCall();
+    pc.close();
+    return null;
+  }
+
+  if ((sdpOffer.match(/^m=audio /gm) || []).length !== 1 || /^m=video /m.test(sdpOffer)) {
+    console.error('[webrtc] Offer is not a single audio stream — aborting outbound call setup');
     cleanupAgentCall();
     pc.close();
     return null;
@@ -219,7 +241,7 @@ export async function createAgentAnswer(sdpOffer: string): Promise<string> {
   }
 
   setStored({ pc, remoteAudio, callId: '', connected: true });
-  return sdp;
+  return sanitizeAgentSdp(sdp);
 }
 
 /** Apply the SDP answer returned by Meta (via polling or socket). */

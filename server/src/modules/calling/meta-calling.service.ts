@@ -4,6 +4,7 @@ import { createModuleLogger } from '../../utils/logger';
 import { isSarvamSttConfigured } from './sarvam.stt';
 import { isSarvamTtsConfigured } from './sarvam.tts';
 import type { CallAction } from './types';
+import { sanitizeWhatsAppSdp } from './whatsapp-sdp';
 
 const log = createModuleLogger('meta-calling');
 const META_BASE = `https://graph.facebook.com/${config.meta.apiVersion}`;
@@ -83,7 +84,13 @@ export class MetaCallingService {
       body.call_id = callId;
     }
     if (session) {
-      body.session = session;
+      body.session = {
+        sdp_type: session.sdp_type,
+        sdp: sanitizeWhatsAppSdp(
+          session.sdp,
+          session.sdp_type === 'answer' ? 'answer' : 'offer'
+        ),
+      };
     }
     if (to) {
       body.to = to.replace(/\D/g, '');

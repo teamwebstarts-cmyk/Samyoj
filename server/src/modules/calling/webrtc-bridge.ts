@@ -1,6 +1,7 @@
 import wrtc from '@roamhq/wrtc';
 import { createModuleLogger } from '../../utils/logger';
 import { pcmBytesToInt16 } from './audio-utils';
+import { sanitizeWhatsAppSdp } from './whatsapp-sdp';
 
 const log = createModuleLogger('webrtc-bridge');
 
@@ -43,8 +44,8 @@ function waitForIceGathering(pc: InstanceType<typeof RTCPeerConnection>, timeout
   });
 }
 
-function normalizeSdpFingerprint(sdp: string): string {
-  return sdp.replace(/a=fingerprint:sha-256/gi, 'a=fingerprint:SHA-256');
+function normalizeSdpFingerprint(sdp: string, role: 'offer' | 'answer'): string {
+  return sanitizeWhatsAppSdp(sdp, role);
 }
 
 function toMonoInt16(samples: Int16Array, channelCount: number, numberOfFrames?: number): Int16Array {
@@ -157,7 +158,7 @@ export class WhatsAppWebRtcBridge {
     this.startPlaybackLoop();
     const localSdp = this.pc.localDescription?.sdp;
     if (!localSdp) throw new Error('Failed to generate WebRTC SDP offer');
-    return normalizeSdpFingerprint(localSdp);
+    return normalizeSdpFingerprint(localSdp, 'offer');
   }
 
   async createAnswerFromOffer(sdpOffer: string): Promise<string> {
@@ -204,7 +205,7 @@ export class WhatsAppWebRtcBridge {
     }
 
     this.startPlaybackLoop();
-    return normalizeSdpFingerprint(localSdp);
+    return normalizeSdpFingerprint(localSdp, 'answer');
   }
 
   private startPlaybackLoop(): void {

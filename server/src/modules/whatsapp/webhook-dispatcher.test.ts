@@ -85,7 +85,7 @@ describe('non-message webhook dispatch wiring', () => {
     });
   });
 
-  it('waits for WABA linking before registering the app webhook', async () => {
+  it('registers the app webhook before linking the WABA so override can verify', async () => {
     const order: string[] = [];
     const previousUrl = config.meta.webhookUrl;
     config.meta.webhookUrl = 'https://example.test/api/whatsapp/webhook';
@@ -98,7 +98,7 @@ describe('non-message webhook dispatch wiring', () => {
         appId: 'app',
         appSecret: 'secret',
       });
-      expect(order).toEqual(['subscribe', 'register']);
+      expect(order).toEqual(['register', 'subscribe']);
     } finally {
       config.meta.webhookUrl = previousUrl;
       subscribe.mockRestore();

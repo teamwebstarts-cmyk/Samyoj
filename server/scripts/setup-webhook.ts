@@ -34,6 +34,9 @@ async function main() {
   logger.info('Registering webhook', { webhookUrl: config.meta.webhookUrl });
   await waitForWebhookReachable(config.meta.webhookUrl);
 
+  // Register the app callback first so Meta can verify it before WABA override.
+  await MetaWhatsAppService.registerAppWebhook(config.meta.webhookUrl);
+
   const numbers = await prisma.whatsappNumber.findMany({
     where: { isActive: true },
     orderBy: { createdAt: 'desc' },
@@ -73,12 +76,14 @@ async function main() {
     );
   }
 
-  await MetaWhatsAppService.registerAppWebhook(config.meta.webhookUrl);
+  const subscriptions = await MetaWhatsAppService.getAppWebhookSubscriptions();
+  const wabaSub = subscriptions.find((item) => item.object === 'whatsapp_business_account');
 
   logger.info('Webhook setup complete', {
     callbackUrl: config.meta.webhookUrl,
     subscribedWabas: subscribedCount,
     skippedWabas: failures.length,
+    fields: wabaSub?.fields,
     failures: failures.length > 0 ? failures : undefined,
   });
 }
