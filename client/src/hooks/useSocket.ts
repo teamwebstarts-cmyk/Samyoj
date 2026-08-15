@@ -71,9 +71,9 @@ export function useSocket(onEvent?: (event: string, data: unknown) => void) {
         });
       },
       withCredentials: true,
-      // Polling first — WebSocket WS proxying is flaky through Vite dev
-      // proxy. In prod (nginx) WebSocket works fine.
-      transports: ['polling', 'websocket'],
+      // Dev: polling first (Vite WS proxy is flaky). Prod: websocket first so
+      // antivirus XHR wrappers do not wrap Engine.IO long-polls.
+      transports: import.meta.env.DEV ? ['polling', 'websocket'] : ['websocket', 'polling'],
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,

@@ -124,6 +124,31 @@ function formatContextLines(context?: ClientErrorContext): string[] {
   return lines;
 }
 
+/** Antivirus / extension XHR wrappers (e.g. Kaspersky `200.js`) are not our app. */
+export function isInjectedScriptNoise(
+  err: unknown,
+  extra?: { filename?: string; stack?: string }
+): boolean {
+  const filename = extra?.filename || '';
+  const stack =
+    extra?.stack ||
+    (err instanceof Error ? err.stack || '' : '');
+  const message =
+    err instanceof Error
+      ? err.message
+      : typeof err === 'string'
+        ? err
+        : err == null
+          ? ''
+          : String(err);
+  const blob = `${filename}\n${stack}\n${message}`;
+  if (/\bM_ID\b/.test(blob)) return true;
+  // Also match stack frames: `at Z (200.js:1:761)`
+  if (/(?:^|[/?(\s])200\.js(?:\?|:|$)/i.test(blob)) return true;
+  if (/(?:^|[/?(\s])requests\.js(?:\?|:|$)/i.test(blob)) return true;
+  return false;
+}
+
 export function logError(err: unknown, context?: ClientErrorContext): NormalizedClientError {
   const normalized = normalizeError(err);
   const source = (context?.source || 'unknown').toUpperCase();
@@ -162,6 +187,14 @@ export function logError(err: unknown, context?: ClientErrorContext): Normalized
 
 export function setupGlobalErrorHandlers(): void {
   window.addEventListener('error', (event) => {
+    if (
+      isInjectedScriptNoise(event.error || event.message, {
+        filename: event.filename,
+        stack: event.error instanceof Error ? event.error.stack : undefined,
+      })
+    ) {
+      return;
+    }
     logError(event.error || event.message, {
       source: 'global',
       action: 'Uncaught error',
@@ -170,6 +203,10 @@ export function setupGlobalErrorHandlers(): void {
   });
 
   window.addEventListener('unhandledrejection', (event) => {
+    if (isInjectedScriptNoise(event.reason)) {
+      event.preventDefault();
+      return;
+    }
     logError(event.reason, {
       source: 'global',
       action: 'Unhandled promise rejection',

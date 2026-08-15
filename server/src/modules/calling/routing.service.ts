@@ -80,8 +80,7 @@ export async function decideCallRoute(organizationId: string): Promise<CallRoute
 
 export function pickCallBotId(input: {
   assignedCallBotId?: string | null;
-  conversationBotId?: string | null;
-  bots: Array<{ id: string; enabled: boolean; isDefault: boolean; knowledgeCount: number }>;
+  bots: Array<{ id: string; enabled: boolean; isDefault: boolean }>;
 }): string | null {
   const enabled = input.bots.filter((bot) => bot.enabled);
   if (enabled.length === 0) return null;
@@ -91,15 +90,8 @@ export function pickCallBotId(input: {
     return input.assignedCallBotId;
   }
 
-  const trained = [...enabled].sort((a, b) => b.knowledgeCount - a.knowledgeCount);
-  if (trained[0].knowledgeCount > 0) return trained[0].id;
-
   const orgDefault = enabled.find((bot) => bot.isDefault);
   if (orgDefault) return orgDefault.id;
-
-  if (input.conversationBotId && ids.has(input.conversationBotId)) {
-    return input.conversationBotId;
-  }
 
   return enabled[0].id;
 }
@@ -107,28 +99,20 @@ export function pickCallBotId(input: {
 export async function resolveCallBot(
   organizationId: string,
   settings: CallingSettings,
-  conversationId: string
+  _conversationId: string
 ) {
-  const [bots, conversation] = await Promise.all([
-    prisma.aiBot.findMany({
-      where: { organizationId, enabled: true },
-      include: { _count: { select: { knowledgeItems: true } } },
-      orderBy: { createdAt: 'asc' },
-    }),
-    prisma.conversation.findFirst({
-      where: { id: conversationId, organizationId },
-      select: { activeBotId: true },
-    }),
-  ]);
+
+  const bots = await prisma.aiBot.findMany({
+    where: { organizationId, enabled: true },
+    orderBy: { createdAt: 'asc' },
+  });
 
   const pickedId = pickCallBotId({
     assignedCallBotId: settings.defaultBotId,
-    conversationBotId: conversation?.activeBotId ?? null,
     bots: bots.map((bot) => ({
       id: bot.id,
       enabled: bot.enabled,
       isDefault: bot.isDefault,
-      knowledgeCount: bot._count.knowledgeItems,
     })),
   });
 

@@ -1736,17 +1736,17 @@ export default function AiBotPage() {
                         setVoiceSettings((prev) =>
                           prev ? { ...prev, defaultBotId: null } : prev
                         );
-                        toastSuccess('Bot unassigned from calls.');
+                        toastSuccess('Calls will use the default support bot.');
                       }
                     }}
                     title="Use this brain for WhatsApp calls"
-                    description="This bot’s Train answers and personality are what the caller hears"
+                    description="Turn off to let the default support bot answer calls instead"
                     icon={Globe}
                   />
 
                   <p className="rounded-xl border border-sky-200/60 bg-sky-50/50 px-3 py-2.5 text-[12px] font-medium text-theme-secondary dark:border-sky-800/40 dark:bg-sky-950/20">
-                    Chat and calls share one brain. Train FAQs here, then turn this on so the same
-                    answers are spoken on the call. Routing and hours live in{' '}
+                    If you do not pick a bot, calls use the default support bot. Train FAQs on that
+                    bot (or turn this on to use this one). Routing and hours live in{' '}
                     <Link to="/calls?panel=settings" className="font-bold text-sky-700 underline">
                       Calls → Customize
                     </Link>

@@ -2,36 +2,51 @@ import { describe, expect, it } from 'vitest';
 import { pickCallBotId } from './routing.service';
 
 describe('pickCallBotId', () => {
-  const empty = { id: 'empty', enabled: true, isDefault: true, knowledgeCount: 0 };
-  const trained = { id: 'trained', enabled: true, isDefault: false, knowledgeCount: 8 };
-  const chatBot = { id: 'chat', enabled: true, isDefault: false, knowledgeCount: 1 };
+  const empty = { id: 'empty', enabled: true, isDefault: true };
+  const trained = { id: 'trained', enabled: true, isDefault: false };
+  const chatBot = { id: 'chat', enabled: true, isDefault: false };
 
   it('uses the brain assigned for WhatsApp calls', () => {
     expect(
       pickCallBotId({
         assignedCallBotId: 'chat',
-        conversationBotId: 'empty',
         bots: [empty, trained, chatBot],
       })
     ).toBe('chat');
   });
 
-  it('prefers the trained brain over an empty default or a chat-sticky bot', () => {
+  it('uses the default support bot when the user has not assigned a call brain', () => {
     expect(
       pickCallBotId({
         assignedCallBotId: null,
-        conversationBotId: 'chat',
         bots: [empty, trained, chatBot],
+      })
+    ).toBe('empty');
+  });
+
+  it('does not pick a trained non-default bot over the org default', () => {
+    expect(
+      pickCallBotId({
+        assignedCallBotId: null,
+        bots: [trained, empty, chatBot],
+      })
+    ).toBe('empty');
+  });
+
+  it('falls back to the first enabled bot when nobody is marked default', () => {
+    expect(
+      pickCallBotId({
+        assignedCallBotId: null,
+        bots: [trained, chatBot],
       })
     ).toBe('trained');
   });
 
-  it('falls back to the org default when nobody has Train items', () => {
+  it('ignores a disabled assigned bot and uses the default support bot', () => {
     expect(
       pickCallBotId({
-        assignedCallBotId: null,
-        conversationBotId: null,
-        bots: [empty, { ...chatBot, knowledgeCount: 0 }],
+        assignedCallBotId: 'chat',
+        bots: [empty, trained, { ...chatBot, enabled: false }],
       })
     ).toBe('empty');
   });

@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { getErrorMessage, logError } from '../utils/errors';
+import { accessTokenNeedsRefresh, getAccessToken, getRefreshToken } from '../utils/authStorage';
 import type { AgentAvailability, OrgRole, TeamPermissions, TeamSettings } from '../types';
 import { apiBaseUrl } from './utils';
 
@@ -42,9 +43,11 @@ const api = axios.create({
   baseURL: API_URL,
   withCredentials: true,
   headers: { 'Content-Type': 'application/json' },
+  // Fetch avoids antivirus XHR wrappers that throw on `M_ID` (Kaspersky `200.js`).
+  adapter: 'fetch' as const,
 });
 
-api.interceptors.request.use((config) => {
+api.interceptors.request.use(async (config) => {
   if (isNumberScopedUrl(config.url)) {
     if (!activeWhatsappNumberResolved || !activeWhatsappNumberId) {
       return Promise.reject(new WhatsappNumberScopeError());
@@ -52,7 +55,19 @@ api.interceptors.request.use((config) => {
     (config as typeof config & { __whatsappNumberId?: string }).__whatsappNumberId =
       activeWhatsappNumberId;
   }
-  const token = localStorage.getItem('accessToken');
+  const isRefreshCall = /\/auth\/refresh(?:\?|$)/.test(config.url || '');
+  let token = getAccessToken();
+  if (!isRefreshCall && accessTokenNeedsRefresh(token)) {
+    const refreshToken = getRefreshToken();
+    if (refreshToken) {
+      try {
+        const tokens = await refreshAccessTokenSingleFlight(refreshToken);
+        token = tokens.accessToken;
+      } catch {
+        // 401 response interceptor handles logout if refresh is dead
+      }
+    }
+  }
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -151,8 +166,10 @@ async function refreshAccessTokenSingleFlight(refreshToken: string) {
  * but the socket must refresh explicitly or realtime dies until page reload.
  */
 export async function ensureFreshAccessToken(): Promise<string | null> {
-  const refreshToken = localStorage.getItem('refreshToken');
-  if (!refreshToken) return localStorage.getItem('accessToken');
+  const accessToken = getAccessToken();
+  if (!accessTokenNeedsRefresh(accessToken)) return accessToken;
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return accessToken;
   try {
     const tokens = await refreshAccessTokenSingleFlight(refreshToken);
     return tokens.accessToken;

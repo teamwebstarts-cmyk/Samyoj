@@ -50,6 +50,7 @@ describe('VOICE_SAFETY_RULES', () => {
     expect(VOICE_SAFETY_RULES).toMatch(/Hinglish/i);
     expect(VOICE_SAFETY_RULES).toMatch(/end_call/);
     expect(VOICE_SAFETY_RULES).toMatch(/continuous thought/i);
+    expect(VOICE_SAFETY_RULES).toMatch(/previous spoken turn/i);
   });
 });
 

@@ -29,6 +29,16 @@ export function getHandoffKeywords(botKeywords?: string[]): string[] {
   return DEFAULT_HANDOFF_KEYWORDS;
 }
 
+/** Org default Support Bot when the user has not picked a specific brain. */
+export function pickDefaultSupportBot<T extends { enabled: boolean; isDefault: boolean }>(
+  bots: T[]
+): T | null {
+  if (bots.length === 0) return null;
+  const enabled = bots.filter((bot) => bot.enabled);
+  const pool = enabled.length > 0 ? enabled : bots;
+  return pool.find((bot) => bot.isDefault) ?? pool[0] ?? null;
+}
+
 export async function listBots(organizationId: string) {
   return prisma.aiBot.findMany({
     where: { organizationId },
@@ -55,10 +65,11 @@ export async function getBot(organizationId: string, botId: string) {
 }
 
 export async function ensureDefaultBot(organizationId: string): Promise<AiBot> {
-  const existing = await prisma.aiBot.findFirst({
+  const bots = await prisma.aiBot.findMany({
     where: { organizationId },
-    orderBy: { createdAt: 'asc' },
+    orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
   });
+  const existing = pickDefaultSupportBot(bots);
   if (existing) return existing;
 
   return prisma.aiBot.create({
@@ -100,12 +111,7 @@ export async function resolveBotForConversation(
     return keywordMatches.sort((a, b) => b.triggerKeywords.length - a.triggerKeywords.length)[0];
   }
 
-  const defaultBot = bots.find((b) => b.isDefault);
-  if (defaultBot) return defaultBot;
-
-  if (bots.length === 1) return bots[0];
-
-  return null;
+  return pickDefaultSupportBot(bots);
 }
 
 export async function setConversationBot(conversationId: string, botId: string): Promise<void> {

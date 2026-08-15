@@ -70,6 +70,32 @@ export function consumeOAuthReturnPath() {
   return path && path.startsWith('/') && !path.startsWith('//') ? path : null;
 }
 
+export function readJwtExpMs(token: string | null | undefined): number | null {
+  if (!token) return null;
+  const parts = token.split('.');
+  if (parts.length < 2) return null;
+  try {
+    const padded = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const pad = padded.length % 4 === 0 ? '' : '='.repeat(4 - (padded.length % 4));
+    const json = JSON.parse(atob(padded + pad)) as { exp?: unknown };
+    return typeof json.exp === 'number' ? json.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Refresh only when the access JWT is missing or within `skewMs` of expiry. */
+export function accessTokenNeedsRefresh(
+  token: string | null | undefined,
+  now = Date.now(),
+  skewMs = 60_000
+): boolean {
+  if (!token) return true;
+  const expMs = readJwtExpMs(token);
+  if (expMs == null) return false;
+  return now >= expMs - skewMs;
+}
+
 export function isRequestAborted(err: unknown): boolean {
   const e = err as { code?: string; name?: string; message?: string };
   return (

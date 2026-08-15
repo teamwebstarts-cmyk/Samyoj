@@ -260,7 +260,8 @@ export class AiVoiceCallSession {
 
         if (event.type === 'done') {
           if (this.abortSpeak || this.ended) break;
-          const parsed = extractInlineToolCalls((event.content || rawAccum || '').trim());
+          const doneSpoken = (event.content ?? '').trim();
+          const parsed = extractInlineToolCalls((doneSpoken || rawAccum || '').trim());
           const tools = [
             ...(event.tools || []),
             ...parsed.tools.map((t, i) => ({
@@ -526,7 +527,7 @@ export class AiVoiceCallSession {
         const audio = await pending;
         this.ttsLatenciesMs.push(Date.now() - ttsStart);
         if (this.ended || this.abortSpeak || !this.bridge) {
-          this.bridge.stopPlayback();
+          this.bridge?.stopPlayback();
           break;
         }
         pending =

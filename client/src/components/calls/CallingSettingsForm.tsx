@@ -298,7 +298,7 @@ export default function CallingSettingsForm({ initialSection = 'who' }: CallingS
                       setSettings((s) => ({ ...s, defaultBotId: e.target.value || null }))
                     }
                     options={[
-                      { value: '', label: 'Auto — use the trained brain' },
+                      { value: '', label: 'Default support bot' },
                       ...bots.map((b) => ({ value: b.id, label: b.name })),
                     ]}
                   />
