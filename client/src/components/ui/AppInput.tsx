@@ -16,7 +16,7 @@ interface AppInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'siz
 const sizeClasses: Record<AppInputSize, string> = {
   md: 'h-11 text-body',
   lg: 'h-12 text-body',
-  xl: 'h-[56px] text-[14.5px]',
+  xl: 'h-12 text-[14px]',
 };
 
 const AppInput = forwardRef<HTMLInputElement, AppInputProps>(function AppInput(
