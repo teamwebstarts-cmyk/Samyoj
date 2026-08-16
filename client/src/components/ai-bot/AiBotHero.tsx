@@ -5,6 +5,7 @@ interface AiBotHeroProps {
   activeCount: number;
   knowledgeTotal: number;
   totalBots: number;
+  channel?: 'CHAT' | 'CALL';
 }
 
 const iconTones = {
@@ -49,7 +50,13 @@ function MetricCard({
 }
 
 /** AI Bots page hero — title + description, analytics as clean metric cards. */
-export default function AiBotHero({ activeCount, knowledgeTotal, totalBots }: AiBotHeroProps) {
+export default function AiBotHero({
+  activeCount,
+  knowledgeTotal,
+  totalBots,
+  channel = 'CHAT',
+}: AiBotHeroProps) {
+  const calling = channel === 'CALL';
   return (
     <section
       aria-label="AI bots overview"
@@ -60,10 +67,12 @@ export default function AiBotHero({ activeCount, knowledgeTotal, totalBots }: Ai
       <div className="relative flex flex-col gap-3.5 sm:gap-5 xl:flex-row xl:items-end xl:justify-between xl:gap-8">
         <div className="min-w-0 max-w-xl">
           <h1 className="text-[1.25rem] font-extrabold tracking-tight text-neutral-950 sm:text-[1.5rem] md:text-[1.65rem]">
-            Your WhatsApp AI bots
+            Your {calling ? 'calling' : 'chat'} bots
           </h1>
           <p className="mt-1 max-w-md text-[12px] font-medium leading-relaxed text-neutral-500 sm:mt-1.5 sm:text-[14px]">
-            Train once — they reply instantly and hand tricky chats to your team.
+            {calling
+              ? 'These bots answer the phone. Chat bots are on the Chat tab and stay separate.'
+              : 'These bots reply in WhatsApp chat. Calling bots are on the Calling tab and stay separate.'}
           </p>
         </div>
 
