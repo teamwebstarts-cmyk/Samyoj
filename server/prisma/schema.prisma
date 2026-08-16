@@ -160,6 +160,88 @@ enum CampaignReservationStatus {
   RELEASED
 }
 
+enum PlatformRole {
+  SUPER_ADMIN
+  SUPPORT
+  ANALYST
+}
+
+enum PlatformProductArea {
+  AUTH
+  CONNECT
+  INBOX
+  CONTACTS
+  CAMPAIGNS
+  AUTOMATIONS
+  CALLS
+  AI
+  BILLING
+  TEMPLATES
+}
+
+enum PlatformProductEventName {
+  LOGIN_OK             @map("login_ok")
+  LOGIN_FAIL           @map("login_fail")
+  REGISTER             @map("register")
+  INVITE_ACCEPT        @map("invite_accept")
+  WHATSAPP_OAUTH_START @map("whatsapp_oauth_start")
+  WHATSAPP_CONNECTED   @map("whatsapp_connected")
+  WHATSAPP_DISCONNECT  @map("whatsapp_disconnect")
+  INBOX_OPEN           @map("inbox_open")
+  MESSAGE_OUT          @map("message_out")
+  MESSAGE_IN           @map("message_in")
+  CONTACT_CREATED      @map("contact_created")
+  CSV_IMPORTED         @map("csv_imported")
+  CAMPAIGN_DRAFT       @map("campaign_draft")
+  CAMPAIGN_SENT        @map("campaign_sent")
+  CAMPAIGN_FAILED      @map("campaign_failed")
+  FLOW_PUBLISHED       @map("flow_published")
+  AUTOMATION_RAN       @map("automation_ran")
+  AUTOMATION_ERROR     @map("automation_error")
+  CALL_STARTED         @map("call_started")
+  CALL_ENDED           @map("call_ended")
+  CALL_FAILED          @map("call_failed")
+  AI_CHAT              @map("ai_chat")
+  AI_CALL              @map("ai_call")
+  STT                  @map("stt")
+  TTS                  @map("tts")
+  EMBED                @map("embed")
+  CHECKOUT_START       @map("checkout_start")
+  PAYMENT_OK           @map("payment_ok")
+  PAYMENT_FAIL         @map("payment_fail")
+  TEMPLATE_SYNC        @map("template_sync")
+  TEMPLATE_REJECTED    @map("template_rejected")
+}
+
+enum PlatformActivationStage {
+  REGISTERED
+  NOT_CONNECTED
+  CONNECTED_EMPTY
+  CONTACTS_READY
+  OUTBOUND_ONLY
+  LIVE
+}
+
+enum PlatformMetaErrorCategory {
+  AUTHENTICATION
+  RATE_LIMIT
+  DELIVERY
+  POLICY
+  SERVICE_WINDOW
+  TEMPLATE
+  UNKNOWN
+}
+
+enum PlatformOutreachChannel {
+  EMAIL
+}
+
+enum PlatformOutreachStatus {
+  QUEUED
+  SENT
+  FAILED
+}
+
 model User {
   id              String    @id @default(uuid())
   name            String
@@ -281,11 +363,174 @@ model Organization {
   providerWebhookEvents          ProviderWebhookEvent[]
   unmatchedProviderStatuses      UnmatchedProviderStatus[]
   whatsappNumberIsolationReports WhatsappNumberIsolationReport[]
+  productEvents                  ProductEvent[]
+  healthSnapshots                OrgHealthSnapshot[]
+  metaErrorStats                 MetaErrorStat[]
+  platformAuditLogs              PlatformAuditLog[]
+  outreachLogs                   OutreachLog[]
 
   planExpiresAt      DateTime? @map("plan_expires_at")
   subscriptionStatus String    @default("active") @map("subscription_status")
 
   @@map("organizations")
+}
+
+/// Samyoj staff identity. It is deliberately unrelated to User and OrganizationUser.
+model PlatformOperator {
+  id                  String       @id @default(uuid())
+  email               String       @unique
+  passwordHash        String       @map("password_hash")
+  role                PlatformRole
+  totpSecretEncrypted String?      @map("totp_secret_encrypted")
+  mfaEnabledAt        DateTime?    @map("mfa_enabled_at")
+  disabledAt          DateTime?    @map("disabled_at")
+  createdAt           DateTime     @default(now()) @map("created_at")
+  updatedAt           DateTime     @updatedAt @map("updated_at")
+
+  sessions     PlatformSession[]
+  auditLogs    PlatformAuditLog[]
+  outreachLogs OutreachLog[]
+
+  @@index([role, disabledAt])
+  @@map("platform_operators")
+}
+
+/// Opaque browser sessions. Raw session and CSRF tokens are never persisted.
+model PlatformSession {
+  id            String    @id @default(uuid())
+  operatorId    String    @map("operator_id")
+  tokenHash     String    @unique @map("token_hash")
+  csrfTokenHash String    @map("csrf_token_hash")
+  mfaVerifiedAt DateTime? @map("mfa_verified_at")
+  expiresAt     DateTime  @map("expires_at")
+  lastSeenAt    DateTime  @default(now()) @map("last_seen_at")
+  revokedAt     DateTime? @map("revoked_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  operator PlatformOperator @relation(fields: [operatorId], references: [id], onDelete: Cascade)
+
+  @@index([operatorId, revokedAt, expiresAt])
+  @@index([expiresAt])
+  @@map("platform_sessions")
+}
+
+/// Coarse, allowlisted org-level usage only. There is intentionally no free-form metadata or user/contact/message relation.
+model ProductEvent {
+  id             String                   @id @default(uuid())
+  organizationId String                   @map("organization_id")
+  area           PlatformProductArea
+  name           PlatformProductEventName
+  count          Int                      @default(1)
+  occurredAt     DateTime                 @default(now()) @map("occurred_at")
+  createdAt      DateTime                 @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, occurredAt])
+  @@index([area, name, occurredAt])
+  @@index([occurredAt])
+  @@map("product_events")
+}
+
+/// Queryable daily health roll-up with explicit counts; no copied customer records or payload JSON.
+model OrgHealthSnapshot {
+  id                   String                  @id @default(uuid())
+  organizationId       String                  @map("organization_id")
+  stage                PlatformActivationStage
+  activeNumberCount    Int                     @default(0) @map("active_number_count")
+  contactCount         Int                     @default(0) @map("contact_count")
+  conversationCount    Int                     @default(0) @map("conversation_count")
+  outboundMessageCount Int                     @default(0) @map("outbound_message_count")
+  inboundMessageCount  Int                     @default(0) @map("inbound_message_count")
+  campaignCount        Int                     @default(0) @map("campaign_count")
+  callCount            Int                     @default(0) @map("call_count")
+  aiTokensMonth        Int                     @default(0) @map("ai_tokens_month")
+  lastLoginAt          DateTime?               @map("last_login_at")
+  plan                 String
+  qualityRating        String?                 @map("quality_rating")
+  aiInactive           Boolean                 @default(false) @map("ai_inactive")
+  billingRisk          Boolean                 @default(false) @map("billing_risk")
+  qualityRisk          Boolean                 @default(false) @map("quality_risk")
+  webhookStale         Boolean                 @default(false) @map("webhook_stale")
+  capturedAt           DateTime                @default(now()) @map("captured_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, capturedAt])
+  @@index([stage, capturedAt])
+  @@index([capturedAt])
+  @@map("org_health_snapshots")
+}
+
+/// Daily Meta error aggregate. sampleTitle must be a redacted short title, never a Graph payload or identifier.
+model MetaErrorStat {
+  id               String                    @id @default(uuid())
+  organizationId   String                    @map("organization_id")
+  whatsappNumberId String?                   @map("whatsapp_number_id")
+  scopeKey         String                    @map("scope_key")
+  code             Int
+  category         PlatformMetaErrorCategory
+  count            Int                       @default(1)
+  sampleTitle      String?                   @map("sample_title")
+  bucketDate       DateTime                  @map("bucket_date")
+  lastAt           DateTime                  @map("last_at")
+  createdAt        DateTime                  @default(now()) @map("created_at")
+  updatedAt        DateTime                  @updatedAt @map("updated_at")
+
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  whatsappNumber WhatsappNumber? @relation(fields: [organizationId, whatsappNumberId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, scopeKey, code, bucketDate])
+  @@index([organizationId, whatsappNumberId])
+  @@index([code, lastAt])
+  @@index([organizationId, lastAt])
+  @@index([lastAt])
+  @@map("meta_error_stats")
+}
+
+/// Platform-only audit. beforeState/afterState are restricted to sanitized, allowlisted control values.
+model PlatformAuditLog {
+  id             String   @id @default(uuid())
+  operatorId     String   @map("operator_id")
+  organizationId String?  @map("organization_id")
+  action         String
+  targetType     String?  @map("target_type")
+  targetId       String?  @map("target_id")
+  reason         String?
+  beforeState    Json?    @map("before_state")
+  afterState     Json?    @map("after_state")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  operator     PlatformOperator @relation(fields: [operatorId], references: [id], onDelete: Restrict)
+  organization Organization?    @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  @@index([operatorId, createdAt])
+  @@index([organizationId, createdAt])
+  @@index([action, createdAt])
+  @@index([createdAt])
+  @@map("platform_audit_logs")
+}
+
+/// Outreach records the server-owned template, status and org only; recipient addresses and message bodies are not copied.
+model OutreachLog {
+  id             String                  @id @default(uuid())
+  organizationId String                  @map("organization_id")
+  operatorId     String                  @map("operator_id")
+  channel        PlatformOutreachChannel
+  templateId     String                  @map("template_id")
+  status         PlatformOutreachStatus  @default(QUEUED)
+  errorCode      String?                 @map("error_code")
+  sentAt         DateTime?               @map("sent_at")
+  createdAt      DateTime                @default(now()) @map("created_at")
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  operator     PlatformOperator @relation(fields: [operatorId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, createdAt])
+  @@index([operatorId, createdAt])
+  @@index([status, createdAt])
+  @@index([createdAt])
+  @@map("outreach_logs")
 }
 
 enum PaymentStatus {
@@ -513,13 +758,14 @@ model WhatsappNumber {
   leads                     Lead[]
   orders                    Order[]
   unmatchedProviderStatuses UnmatchedProviderStatus[]
+  metaErrorStats            MetaErrorStat[]
 
+  @@unique([organizationId, id])
+  @@unique([organizationId, normalizedPhoneNumber])
   // Global unique on phoneNumberId cannot stay: inactive org A + active org B
   // must both exist (SAMYOJ-49). Partial unique WHERE is_active = true lives in SQL
   // (Prisma cannot express it). Lookups still use this index.
   @@index([phoneNumberId])
-  @@unique([organizationId, id])
-  @@unique([organizationId, normalizedPhoneNumber])
   @@map("whatsapp_numbers")
 }
 
@@ -541,6 +787,8 @@ model Contact {
   consentDecision  Json?         @map("consent_decision")
   optOutAt         DateTime?     @map("opt_out_at")
   source           ContactSource @default(MANUAL)
+  /** When false, inbound calls from this contact skip AI (human ring, then missed). Global AI calling off still wins. */
+  callingAiEnabled Boolean       @default(true) @map("calling_ai_enabled")
   createdAt        DateTime      @default(now()) @map("created_at")
   updatedAt        DateTime      @updatedAt @map("updated_at")
 
@@ -559,28 +807,28 @@ model Contact {
 }
 
 model Conversation {
-  id                   String               @id @default(uuid())
-  organizationId       String               @map("organization_id")
-  contactId            String               @map("contact_id")
-  whatsappNumberId     String?              @map("whatsapp_number_id")
-  assignedAgentId      String?              @map("assigned_agent_id")
-  activeBotId          String?              @map("active_bot_id")
-  botAssignmentSource  BotAssignmentSource? @map("bot_assignment_source")
-  status               ConversationStatus   @default(OPEN)
-  botActive            Boolean              @default(true) @map("bot_active")
-  botHandoffAt         DateTime?            @map("bot_handoff_at")
-  botHandoffReason     String?              @map("bot_handoff_reason")
-  botState             Json?                @map("bot_state")
-  lastMessageAt        DateTime?            @map("last_message_at")
-  cs24hWindowOpensAt   DateTime?            @map("cs24h_window_opens_at")
-  unreadCount          Int                  @default(0) @map("unread_count")
-  firstResponseAt      DateTime?            @map("first_response_at")
-  slaDueAt             DateTime?            @map("sla_due_at")
-  slaBreached          Boolean              @default(false) @map("sla_breached")
-  snoozedUntil         DateTime?            @map("snoozed_until")
-  isFavorite           Boolean              @default(false) @map("is_favorite")
-  createdAt            DateTime             @default(now()) @map("created_at")
-  updatedAt            DateTime             @updatedAt @map("updated_at")
+  id                  String               @id @default(uuid())
+  organizationId      String               @map("organization_id")
+  contactId           String               @map("contact_id")
+  whatsappNumberId    String?              @map("whatsapp_number_id")
+  assignedAgentId     String?              @map("assigned_agent_id")
+  activeBotId         String?              @map("active_bot_id")
+  botAssignmentSource BotAssignmentSource? @map("bot_assignment_source")
+  status              ConversationStatus   @default(OPEN)
+  botActive           Boolean              @default(true) @map("bot_active")
+  botHandoffAt        DateTime?            @map("bot_handoff_at")
+  botHandoffReason    String?              @map("bot_handoff_reason")
+  botState            Json?                @map("bot_state")
+  lastMessageAt       DateTime?            @map("last_message_at")
+  cs24hWindowOpensAt  DateTime?            @map("cs24h_window_opens_at")
+  unreadCount         Int                  @default(0) @map("unread_count")
+  firstResponseAt     DateTime?            @map("first_response_at")
+  slaDueAt            DateTime?            @map("sla_due_at")
+  slaBreached         Boolean              @default(false) @map("sla_breached")
+  snoozedUntil        DateTime?            @map("snoozed_until")
+  isFavorite          Boolean              @default(false) @map("is_favorite")
+  createdAt           DateTime             @default(now()) @map("created_at")
+  updatedAt           DateTime             @updatedAt @map("updated_at")
 
   organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   contact        Contact             @relation(fields: [organizationId, contactId], references: [organizationId, id], onDelete: Restrict)
@@ -645,6 +893,11 @@ enum TicketStatus {
 enum BotAssignmentSource {
   MANUAL
   APPLIED
+}
+
+enum AiBotChannel {
+  CHAT
+  CALL
 }
 
 enum TicketPriority {
@@ -863,21 +1116,28 @@ model FlowAsset {
 }
 
 model AiBot {
-  id                String   @id @default(uuid())
-  organizationId    String   @map("organization_id")
+  id                String       @id @default(uuid())
+  organizationId    String       @map("organization_id")
   name              String
-  enabled           Boolean  @default(true)
-  isDefault         Boolean  @default(false) @map("is_default")
-  instructions      String   @default("")
-  handoffMessage    String   @default("Let me connect you with our team. Someone will reply shortly.") @map("handoff_message")
-  triggerKeywords   String[] @default([]) @map("trigger_keywords")
-  handoffKeywords   String[] @default([]) @map("handoff_keywords")
-  businessHoursOnly Boolean  @default(false) @map("business_hours_only")
-  temperature       Float    @default(0.7)
-  maxTokens         Int      @default(500) @map("max_tokens")
-  rateLimitPerMin   Int      @default(30) @map("rate_limit_per_min")
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+  enabled           Boolean      @default(true)
+  isDefault         Boolean      @default(false) @map("is_default")
+  channel           AiBotChannel @default(CHAT)
+  instructions      String       @default("")
+  handoffMessage    String       @default("Let me connect you with our team. Someone will reply shortly.") @map("handoff_message")
+  triggerKeywords   String[]     @default([]) @map("trigger_keywords")
+  handoffKeywords   String[]     @default([]) @map("handoff_keywords")
+  offerHandoff      Boolean      @default(true) @map("offer_handoff")
+  businessHoursOnly Boolean      @default(false) @map("business_hours_only")
+  temperature       Float        @default(0.7)
+  maxTokens         Int          @default(500) @map("max_tokens")
+  rateLimitPerMin   Int          @default(30) @map("rate_limit_per_min")
+  voiceGreeting     String?      @map("voice_greeting")
+  voiceSpeaker      String?      @map("voice_speaker")
+  voiceLanguage     String?      @map("voice_language")
+  businessWebsite   String?      @map("business_website")
+  businessNotes     String?      @map("business_notes")
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
 
   organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   knowledgeItems KnowledgeBaseItem[]
@@ -887,6 +1147,7 @@ model AiBot {
   auditLogs      AiBotAuditLog[]
 
   @@index([organizationId])
+  @@index([organizationId, channel])
   @@map("ai_bots")
 }
 
@@ -926,6 +1187,7 @@ model AiUsageLog {
   organizationId   String   @map("organization_id")
   botId            String?  @map("bot_id")
   conversationId   String?  @map("conversation_id")
+  whatsappNumberId String?  @map("whatsapp_number_id")
   action           String
   promptTokens     Int      @default(0) @map("prompt_tokens")
   completionTokens Int      @default(0) @map("completion_tokens")
@@ -935,6 +1197,7 @@ model AiUsageLog {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId, createdAt])
+  @@index([organizationId, whatsappNumberId, createdAt])
   @@map("ai_usage_logs")
 }
 
@@ -976,34 +1239,34 @@ model AutomationLog {
 }
 
 model Campaign {
-  id               String         @id @default(uuid())
-  organizationId   String         @map("organization_id")
-  name             String
-  templateName     String         @map("template_name")
-  templateLanguage String?        @map("template_language")
-  templateParams   Json?          @map("template_params")
-  audienceType     String         @default("MANUAL") @map("audience_type")
-  audienceConfig   Json?          @map("audience_config")
-  whatsappNumberId String?        @map("whatsapp_number_id")
-  status           CampaignStatus @default(DRAFT)
-  runVersion       Int            @default(0) @map("run_version")
-  scheduledAt      DateTime?      @map("scheduled_at")
-  timezone         String?
-  repeatIntervalDays    Int?      @map("repeat_interval_days")
-  repeatUntil           DateTime? @map("repeat_until")
-  repeatMaxOccurrences  Int?      @map("repeat_max_occurrences")
-  repeatOccurrenceCount Int       @default(0) @map("repeat_occurrence_count")
-  pausedAt         DateTime?      @map("paused_at")
-  cancelledAt      DateTime?      @map("cancelled_at")
-  totalContacts    Int            @default(0) @map("total_contacts")
-  sentCount        Int            @default(0) @map("sent_count")
-  deliveredCount   Int            @default(0) @map("delivered_count")
-  readCount        Int            @default(0) @map("read_count")
-  failedCount      Int            @default(0) @map("failed_count")
-  createdById      String?        @map("created_by_id")
-  sentById         String?        @map("sent_by_id")
-  createdAt        DateTime       @default(now()) @map("created_at")
-  updatedAt        DateTime       @updatedAt @map("updated_at")
+  id                    String         @id @default(uuid())
+  organizationId        String         @map("organization_id")
+  name                  String
+  templateName          String         @map("template_name")
+  templateLanguage      String?        @map("template_language")
+  templateParams        Json?          @map("template_params")
+  audienceType          String         @default("MANUAL") @map("audience_type")
+  audienceConfig        Json?          @map("audience_config")
+  whatsappNumberId      String?        @map("whatsapp_number_id")
+  status                CampaignStatus @default(DRAFT)
+  runVersion            Int            @default(0) @map("run_version")
+  scheduledAt           DateTime?      @map("scheduled_at")
+  timezone              String?
+  repeatIntervalDays    Int?           @map("repeat_interval_days")
+  repeatUntil           DateTime?      @map("repeat_until")
+  repeatMaxOccurrences  Int?           @map("repeat_max_occurrences")
+  repeatOccurrenceCount Int            @default(0) @map("repeat_occurrence_count")
+  pausedAt              DateTime?      @map("paused_at")
+  cancelledAt           DateTime?      @map("cancelled_at")
+  totalContacts         Int            @default(0) @map("total_contacts")
+  sentCount             Int            @default(0) @map("sent_count")
+  deliveredCount        Int            @default(0) @map("delivered_count")
+  readCount             Int            @default(0) @map("read_count")
+  failedCount           Int            @default(0) @map("failed_count")
+  createdById           String?        @map("created_by_id")
+  sentById              String?        @map("sent_by_id")
+  createdAt             DateTime       @default(now()) @map("created_at")
+  updatedAt             DateTime       @updatedAt @map("updated_at")
 
   organization     Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   whatsappNumber   WhatsappNumber?           @relation(fields: [organizationId, whatsappNumberId], references: [organizationId, id], onDelete: Restrict)
