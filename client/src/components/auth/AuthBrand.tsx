@@ -1,23 +1,30 @@
-import { PLATFORM_LOGO_SRC } from '../layout/PlatformBrand';
+import { PLATFORM_MARK_SRC } from '../layout/PlatformBrand';
 
-/** Auth pages — Samyoj logo with soft white blend into mint canvas */
+/** Auth pages — circular mark + wordmark + green tagline (login mockup). */
 export default function AuthBrand({ compact = false }: { compact?: boolean }) {
   return (
-    <div className={`relative inline-flex ${compact ? 'max-w-[180px]' : 'max-w-[220px]'}`}>
-      {/* Soft white halo so JPEG white box merges into #F7FAF8 */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -inset-x-5 -inset-y-3 rounded-2xl bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.98)_28%,rgba(255,255,255,0.72)_52%,rgba(247,250,248,0)_78%)]"
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -inset-x-3 -inset-y-2 rounded-xl bg-white/70 blur-[6px]"
-      />
+    <div className="inline-flex items-center gap-3">
       <img
-        src={PLATFORM_LOGO_SRC}
-        alt="Samyoj — WhatsApp Automation & CRM"
-        className={`relative z-10 ${compact ? 'h-9' : 'h-11'} w-auto max-w-full object-contain object-left`}
+        src={PLATFORM_MARK_SRC}
+        alt=""
+        className={`shrink-0 object-contain ${compact ? 'h-9 w-9' : 'h-[3.35rem] w-[3.35rem]'}`}
       />
+      <div className="min-w-0 leading-none">
+        <p
+          className={`font-extrabold tracking-[-0.03em] text-[#12182A] ${
+            compact ? 'text-[1.2rem]' : 'text-[1.62rem]'
+          }`}
+        >
+          samyoj
+        </p>
+        <p
+          className={`mt-1.5 font-semibold uppercase tracking-[0.055em] text-[#0A8954] ${
+            compact ? 'text-[8.5px]' : 'text-[11px]'
+          }`}
+        >
+          WhatsApp Automation &amp; CRM
+        </p>
+      </div>
     </div>
   );
 }
