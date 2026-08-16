@@ -115,14 +115,14 @@ export default function LoginPage() {
 
   return (
     <AuthLayout
-      title={requires2FA ? 'Two-factor authentication' : 'Welcome'}
+      title={requires2FA ? 'Two-factor authentication' : 'Welcome back'}
       subtitle={
         requires2FA
           ? 'Enter the 6-digit code from your authenticator app to continue.'
-          : 'Sign in to continue to your workspace'
+          : 'Sign in to continue to your workspace.'
       }
     >
-      <form onSubmit={handleSubmit} className="space-y-5">
+      <form onSubmit={handleSubmit} className="space-y-4">
         {!requires2FA ? (
           <>
             <AuthInput
@@ -209,11 +209,11 @@ export default function LoginPage() {
           </div>
         )}
 
-        <div className="pt-3">
+        <div className="pt-1">
           <AuthButton loading={loading} loadingText="Signing in...">
-            <span className="flex items-center gap-2.5">
+            <span className="flex items-center gap-2">
               {requires2FA ? 'Verify & sign in' : 'Sign in'}
-              <ArrowRight className="h-[18px] w-[18px]" strokeWidth={2.35} />
+              <ArrowRight className="h-[17px] w-[17px]" strokeWidth={2.4} />
             </span>
           </AuthButton>
         </div>
@@ -227,16 +227,6 @@ export default function LoginPage() {
               void signInWithGoogle(safeReturnTo(searchParams.get('returnTo')) || undefined)
             }
           />
-
-          <p className="mt-7 text-center text-[13.5px] text-slate-600">
-            Don&apos;t have an account?{' '}
-            <Link
-              to="/register"
-              className="font-semibold text-[#0A8954] underline-offset-2 transition hover:text-[#087A4A] hover:underline"
-            >
-              Create one free
-            </Link>
-          </p>
         </>
       )}
     </AuthLayout>

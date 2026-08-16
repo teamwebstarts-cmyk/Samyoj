@@ -180,16 +180,6 @@ export default function RegisterPage() {
 
       <AuthDivider label="or" />
       <GoogleAuthButton onClick={signInWithGoogle} label="Continue with Google" />
-
-      <p className="mt-4 text-center text-[13px] text-slate-600">
-        Already have an account?{' '}
-        <Link
-          to="/login"
-          className="font-semibold text-[#0A8954] transition hover:text-[#087A4A]"
-        >
-          Sign in
-        </Link>
-      </p>
     </AuthLayout>
   );
 }
