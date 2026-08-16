@@ -5,6 +5,7 @@ import prisma from '../../../config/database';
 import { authenticate, requireOrg } from '../../../middleware/auth';
 import { AppError, sendSuccess, asyncHandler, paramId } from '../../../utils/response';
 import { createChatCompletion, isAiConfigured } from '../../ai/chat-completion.service';
+import { resolveActiveWhatsappNumberId } from '../../whatsapp/active-number';
 import { assertBudget, recordUsage } from '../shared/cost-guard';
 import { policyGuard } from '../shared/policy-guard';
 
@@ -24,6 +25,10 @@ router.post(
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const data = generateSchema.parse(req.body);
+    const numberId = await resolveActiveWhatsappNumberId(
+      orgId,
+      req.headers['x-whatsapp-number-id']
+    );
 
     if (!(await isAiConfigured(orgId))) {
       throw new AppError(503, 'AI is not configured for this organization');
@@ -68,6 +73,8 @@ router.post(
         ],
         maxTokens: 800,
         temperature: 0.7,
+        usageAction: 'content_studio',
+        whatsappNumberId: numberId,
       });
 
       const policy = policyGuard({

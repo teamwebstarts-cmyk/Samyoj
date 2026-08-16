@@ -16,6 +16,7 @@ import {
   saveFlowVersion,
 } from './versioning';
 import type { FlowNode } from './types';
+import { emitProductEvent } from '../platform/events';
 
 const router = Router();
 const memberGuard = [authenticate, requireOrg] as const;
@@ -269,6 +270,10 @@ router.post('/:id/publish', ...adminGuard, asyncHandler(async (req, res) => {
   const note = (req.body as { note?: string }).note;
   const version = await publishFlowDraft(paramId(req), req.user!.organizationId!, note);
   if (!version) throw new AppError(400, 'No draft to publish');
+  emitProductEvent({
+    organizationId: req.user!.organizationId!,
+    name: 'FLOW_PUBLISHED',
+  });
   sendSuccess(res, { version });
 }));
 
@@ -299,6 +304,12 @@ router.post('/', ...adminGuard, asyncHandler(async (req, res) => {
   });
 
   await saveFlowVersion(flow.id, data.nodes, data.triggerType, data.triggerConfig as Record<string, unknown>, 'Initial version');
+  if (flow.status === 'PUBLISHED') {
+    emitProductEvent({
+      organizationId: req.user!.organizationId!,
+      name: 'FLOW_PUBLISHED',
+    });
+  }
   sendSuccess(res, flow, 201);
 }));
 
