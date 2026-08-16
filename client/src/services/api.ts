@@ -418,31 +418,37 @@ export const callingApi = {
 export const aiBotApi = {
   status: () => api.get('/ai-bot/status'),
   providerStatus: () => api.get('/ai-bot/provider-status'),
-  list: () => api.get('/ai-bot'),
+  list: (channel?: 'CHAT' | 'CALL') =>
+    api.get('/ai-bot', { params: channel ? { channel } : undefined }),
   get: (id: string) => api.get(`/ai-bot/${id}`),
   create: (data: Record<string, unknown>) => api.post('/ai-bot', data),
   update: (id: string, data: Record<string, unknown>) => api.patch(`/ai-bot/${id}`, data),
   delete: (id: string) => api.delete(`/ai-bot/${id}`),
+  generatePersonality: (data: {
+    intent: string;
+    channel: 'CHAT' | 'CALL';
+    botId?: string;
+    businessWebsite?: string;
+    businessNotes?: string;
+  }) => api.post('/ai-bot/generate-personality', data),
+  generateTraining: (
+    botId: string,
+    data: { intent: string; businessWebsite?: string; businessNotes?: string }
+  ) => api.post(`/ai-bot/${botId}/generate-training`, data),
+  setCallingAi: (enabled: boolean) => api.patch('/ai-bot/calling-ai', { enabled }),
   addFaq: (botId: string, data: { title: string; content: string }) =>
     api.post(`/ai-bot/${botId}/faq`, data),
   updateFaq: (botId: string, faqId: string, data: { title?: string; content?: string }) =>
     api.patch(`/ai-bot/${botId}/faq/${faqId}`, data),
   deleteFaq: (botId: string, faqId: string) => api.delete(`/ai-bot/${botId}/faq/${faqId}`),
-  test: (botId: string, message: string) => api.post(`/ai-bot/${botId}/test`, { message }),
-  analytics: (botId: string, days = 30) =>
-    api.get(`/ai-bot/${botId}/analytics`, { params: { days: String(days) } }),
-  versions: (botId: string) => api.get(`/ai-bot/${botId}/versions`),
-  audit: (botId: string) => api.get(`/ai-bot/${botId}/audit`),
-  restoreVersion: (botId: string, version: number) =>
-    api.post(`/ai-bot/${botId}/restore/${version}`),
-  ingestUrl: (botId: string, data: { url: string; title?: string }) =>
-    api.post(`/ai-bot/${botId}/ingest/url`, data),
-  ingestPdf: (botId: string, data: { filename: string; dataBase64: string }) =>
-    api.post(`/ai-bot/${botId}/ingest/pdf`, data),
-  seedKnowledge: (
+  test: (
     botId: string,
-    items: Array<{ title: string; content: string }>
-  ) => api.post(`/ai-bot/${botId}/seed-knowledge`, { items }),
+    data: {
+      message: string;
+      instructions?: string;
+      history?: Array<{ role: 'user' | 'assistant'; content: string }>;
+    }
+  ) => api.post(`/ai-bot/${botId}/test`, data),
   applyToAllChats: (botId: string) => api.post(`/ai-bot/${botId}/apply-all`),
   removeFromAllChats: (botId: string) => api.post(`/ai-bot/${botId}/remove-all`),
 };

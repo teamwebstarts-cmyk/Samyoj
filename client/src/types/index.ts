@@ -146,6 +146,7 @@ export interface Contact {
   optOutAt?: string | null;
   customAttributes?: Record<string, string>;
   source?: ContactSource;
+  callingAiEnabled?: boolean;
   createdAt?: string;
   updatedAt?: string;
   lastActiveAt?: string | null;
@@ -244,8 +245,9 @@ export interface MessageMetadata {
   metaErrorTitle?: string;
   /** Centered WhatsApp-style call notice in the thread. */
   isCallEvent?: boolean;
-  /** Legacy agent-only call summary rows (hidden from chat thread). */
+  /** Agent-only call summary (Inbox/Calls). Never send to WhatsApp. */
   isCallSummary?: boolean;
+  agentOnly?: boolean;
   callId?: string;
   callStatus?: string;
   callDirection?: string;
@@ -469,16 +471,26 @@ export interface AiBot {
   name: string;
   enabled: boolean;
   isDefault: boolean;
+  channel?: 'CHAT' | 'CALL';
   instructions: string;
   handoffMessage: string;
   triggerKeywords: string[];
   handoffKeywords: string[];
+  offerHandoff?: boolean;
   businessHoursOnly: boolean;
   temperature: number;
   maxTokens: number;
   rateLimitPerMin: number;
+  voiceGreeting?: string | null;
+  voiceSpeaker?: string | null;
+  voiceLanguage?: string | null;
+  businessWebsite?: string | null;
+  businessNotes?: string | null;
+  answersCalls?: boolean;
   knowledgeItems?: KnowledgeBaseItem[];
   _count?: { knowledgeItems: number };
+  /** True when this bot is applied to all non-Inbox-pick chats on the selected number. */
+  appliedToAll?: boolean;
 }
 
 export interface BotAnalytics {
@@ -510,6 +522,41 @@ export interface KnowledgeBaseItem {
   sourceType?: 'FAQ' | 'URL' | 'PDF' | 'DOCUMENT';
   sourceUrl?: string | null;
   hasEmbedding?: boolean;
+}
+
+export interface AiUsageSurface {
+  action: string;
+  label: string;
+  requests: number;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
+export interface AiUsageSummary {
+  periodDays: number;
+  totalRequests: number;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  monthTokens: number;
+  monthPromptTokens?: number;
+  monthCompletionTokens?: number;
+  monthRequests?: number;
+  monthlyTokenLimit: number | null;
+  monthRemaining?: number | null;
+  surfaces: AiUsageSurface[];
+  unitNote?: string;
+  byAction?: Record<
+    string,
+    | number
+    | {
+        requests: number;
+        promptTokens: number;
+        completionTokens: number;
+        totalTokens: number;
+      }
+  >;
 }
 
 export interface BotTestResult {
@@ -568,17 +615,6 @@ export interface WebhookHealth {
   webhookConfigured?: boolean;
   verifyTokenConfigured?: boolean;
   appSecretConfigured?: boolean;
-}
-
-export interface AiUsageSummary {
-  periodDays: number;
-  totalRequests: number;
-  totalTokens: number;
-  promptTokens: number;
-  completionTokens: number;
-  monthTokens: number;
-  monthlyTokenLimit: number | null;
-  byAction: Record<string, number>;
 }
 
 export interface AiBotVersion {
