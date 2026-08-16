@@ -39,6 +39,7 @@ stop_service() {
   rm -f "$pid_file"
 }
 
+stop_service admin
 stop_service client
 stop_service api
 stop_service tunnel
