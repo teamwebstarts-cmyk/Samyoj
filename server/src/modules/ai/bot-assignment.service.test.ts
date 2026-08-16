@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import prisma from '../../config/database';
 import {
+  appliedBotIdsForNumber,
   applyAllConversationWhere,
   applyBotToAllChats,
   removeAppliedConversationWhere,
@@ -10,7 +11,7 @@ import {
 vi.mock('../../config/database', () => ({
   default: {
     aiBot: { findFirst: vi.fn() },
-    conversation: { updateMany: vi.fn() },
+    conversation: { updateMany: vi.fn(), findMany: vi.fn() },
   },
 }));
 
@@ -49,7 +50,7 @@ describe('removeAppliedConversationWhere', () => {
 
 describe('applyBotToAllChats', () => {
   it('sets APPLIED on non-MANUAL chats for this number only', async () => {
-    aiBotMock.findFirst.mockResolvedValue({ id: 'bot-a' } as never);
+    aiBotMock.findFirst.mockResolvedValue({ id: 'bot-a', channel: 'CHAT' } as never);
     conversationMock.updateMany.mockResolvedValue({ count: 4 } as never);
 
     await expect(
@@ -81,6 +82,18 @@ describe('applyBotToAllChats', () => {
     expect(conversationMock.updateMany).not.toHaveBeenCalled();
   });
 
+  it('rejects calling bots so Inbox apply-all stays chat-only', async () => {
+    aiBotMock.findFirst.mockResolvedValue({ id: 'call-1', channel: 'CALL' } as never);
+    await expect(
+      applyBotToAllChats({
+        organizationId: 'org-1',
+        whatsappNumberId: 'wa-1',
+        botId: 'call-1',
+      })
+    ).rejects.toMatchObject({ statusCode: 400 });
+    expect(conversationMock.updateMany).not.toHaveBeenCalled();
+  });
+
   it('404s when the bot is not in this org', async () => {
     aiBotMock.findFirst.mockResolvedValue(null);
     await expect(
@@ -95,7 +108,7 @@ describe('applyBotToAllChats', () => {
 
 describe('removeBotFromAllChats', () => {
   it('reverts only APPLIED rows for that bot; MANUAL stays', async () => {
-    aiBotMock.findFirst.mockResolvedValue({ id: 'bot-a' } as never);
+    aiBotMock.findFirst.mockResolvedValue({ id: 'bot-a', channel: 'CHAT' } as never);
     conversationMock.updateMany.mockResolvedValue({ count: 2 } as never);
 
     await expect(
@@ -113,5 +126,28 @@ describe('removeBotFromAllChats', () => {
         botAssignmentSource: null,
       },
     });
+  });
+});
+
+describe('appliedBotIdsForNumber', () => {
+  it('returns bot ids that have APPLIED rows on this number', async () => {
+    conversationMock.findMany.mockResolvedValue([{ activeBotId: 'bot-a' }] as never);
+
+    await expect(appliedBotIdsForNumber('org-1', 'wa-1')).resolves.toEqual(new Set(['bot-a']));
+    expect(conversationMock.findMany).toHaveBeenCalledWith({
+      where: {
+        organizationId: 'org-1',
+        whatsappNumberId: 'wa-1',
+        botAssignmentSource: 'APPLIED',
+        activeBotId: { not: null },
+      },
+      select: { activeBotId: true },
+      distinct: ['activeBotId'],
+    });
+  });
+
+  it('returns empty when the number id is missing', async () => {
+    await expect(appliedBotIdsForNumber('org-1', '')).resolves.toEqual(new Set());
+    expect(conversationMock.findMany).not.toHaveBeenCalled();
   });
 });

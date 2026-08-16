@@ -27,6 +27,25 @@ export function removeAppliedConversationWhere(
   };
 }
 
+/** Bots that currently have apply-all rows on this number (for the All-chats switch). */
+export async function appliedBotIdsForNumber(
+  organizationId: string,
+  whatsappNumberId: string
+): Promise<Set<string>> {
+  if (!whatsappNumberId) return new Set();
+  const rows = await prisma.conversation.findMany({
+    where: {
+      organizationId,
+      whatsappNumberId,
+      botAssignmentSource: 'APPLIED',
+      activeBotId: { not: null },
+    },
+    select: { activeBotId: true },
+    distinct: ['activeBotId'],
+  });
+  return new Set(rows.map((row) => row.activeBotId).filter((id): id is string => Boolean(id)));
+}
+
 export async function applyBotToAllChats(input: {
   organizationId: string;
   whatsappNumberId: string;
@@ -39,9 +58,12 @@ export async function applyBotToAllChats(input: {
 
   const bot = await prisma.aiBot.findFirst({
     where: { id: botId, organizationId },
-    select: { id: true },
+    select: { id: true, channel: true },
   });
   if (!bot) throw new AppError(404, 'Bot not found');
+  if (bot.channel === 'CALL') {
+    throw new AppError(400, 'Apply to all chats is for chat bots only.');
+  }
 
   const result = await prisma.conversation.updateMany({
     where: applyAllConversationWhere(organizationId, whatsappNumberId),

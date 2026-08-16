@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { pickDefaultSupportBot } from './bot.service';
+import { pickDefaultSupportBot, getHandoffKeywords } from './bot.service';
 
 describe('pickDefaultSupportBot', () => {
   const support = { id: 'support', enabled: true, isDefault: true };
@@ -25,5 +25,19 @@ describe('pickDefaultSupportBot', () => {
 
   it('returns null when there are no bots', () => {
     expect(pickDefaultSupportBot([])).toBeNull();
+  });
+});
+
+describe('getHandoffKeywords', () => {
+  it('returns platform defaults when the bot offers a person', () => {
+    expect(getHandoffKeywords([], true).length).toBeGreaterThan(0);
+  });
+
+  it('returns nothing when the bot should not offer a person', () => {
+    expect(getHandoffKeywords(['human'], false)).toEqual([]);
+  });
+
+  it('uses the bot’s own words when they are set', () => {
+    expect(getHandoffKeywords(['talk to a person'], true)).toEqual(['talk to a person']);
   });
 });

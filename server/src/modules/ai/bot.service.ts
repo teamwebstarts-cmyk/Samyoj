@@ -1,5 +1,6 @@
 import prisma from '../../config/database';
-import type { AiBot, Conversation } from '@prisma/client';
+import type { AiBot, AiBotChannel, Conversation } from '@prisma/client';
+import { SAFE_CHAT_TEMPERATURE, SAFE_CHAT_MAX_TOKENS, SAFE_RATE_LIMIT_PER_MIN } from './ai-constants';
 
 export const DEFAULT_INSTRUCTIONS = `You are a professional, friendly, and empathetic customer support agent. You handle any kind of business — retail, service, tech, education, or anything else.
 
@@ -24,7 +25,8 @@ export const DEFAULT_INSTRUCTIONS = `You are a professional, friendly, and empat
 
 const DEFAULT_HANDOFF_KEYWORDS = ['human', 'agent', 'representative', 'talk to someone', 'real person', 'manager', 'supervisor', 'किसी से बात करनी', 'एजेंट'];
 
-export function getHandoffKeywords(botKeywords?: string[]): string[] {
+export function getHandoffKeywords(botKeywords?: string[], offerHandoff = true): string[] {
+  if (!offerHandoff) return [];
   if (botKeywords && botKeywords.length > 0) return botKeywords;
   return DEFAULT_HANDOFF_KEYWORDS;
 }
@@ -39,9 +41,9 @@ export function pickDefaultSupportBot<T extends { enabled: boolean; isDefault: b
   return pool.find((bot) => bot.isDefault) ?? pool[0] ?? null;
 }
 
-export async function listBots(organizationId: string) {
+export async function listBots(organizationId: string, channel?: AiBotChannel) {
   return prisma.aiBot.findMany({
-    where: { organizationId },
+    where: { organizationId, ...(channel ? { channel } : {}) },
     orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
     include: { _count: { select: { knowledgeItems: true } } },
   });
@@ -64,22 +66,16 @@ export async function getBot(organizationId: string, botId: string) {
   };
 }
 
-export async function ensureDefaultBot(organizationId: string): Promise<AiBot> {
+/**
+ * Return the existing default chat bot if one is enabled.
+ * Never creates a bot — pausing / turning AI off must stay off (SAMYOJ-52).
+ */
+export async function ensureDefaultBot(organizationId: string): Promise<AiBot | null> {
   const bots = await prisma.aiBot.findMany({
-    where: { organizationId },
+    where: { organizationId, channel: 'CHAT' },
     orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
   });
-  const existing = pickDefaultSupportBot(bots);
-  if (existing) return existing;
-
-  return prisma.aiBot.create({
-    data: {
-      organizationId,
-      name: 'Support Bot',
-      isDefault: true,
-      instructions: DEFAULT_INSTRUCTIONS,
-    },
-  });
+  return pickDefaultSupportBot(bots);
 }
 
 export async function resolveBotForConversation(
@@ -89,13 +85,18 @@ export async function resolveBotForConversation(
 ): Promise<AiBot | null> {
   if (conversation.activeBotId) {
     const active = await prisma.aiBot.findFirst({
-      where: { id: conversation.activeBotId, organizationId, enabled: true },
+      where: {
+        id: conversation.activeBotId,
+        organizationId,
+        enabled: true,
+        channel: 'CHAT',
+      },
     });
     if (active) return active;
   }
 
   const bots = await prisma.aiBot.findMany({
-    where: { organizationId, enabled: true },
+    where: { organizationId, enabled: true, channel: 'CHAT' },
     orderBy: { createdAt: 'asc' },
   });
 
@@ -125,6 +126,7 @@ export async function clearDefaultFlag(organizationId: string, exceptBotId?: str
   await prisma.aiBot.updateMany({
     where: {
       organizationId,
+      channel: 'CHAT',
       ...(exceptBotId ? { id: { not: exceptBotId } } : {}),
     },
     data: { isDefault: false },
@@ -133,7 +135,15 @@ export async function clearDefaultFlag(organizationId: string, exceptBotId?: str
 
 export async function hasEnabledBots(organizationId: string): Promise<boolean> {
   const count = await prisma.aiBot.count({
-    where: { organizationId, enabled: true },
+    where: { organizationId, enabled: true, channel: 'CHAT' },
   });
   return count > 0;
+}
+
+export function hardcodedBotLlmDefaults() {
+  return {
+    temperature: SAFE_CHAT_TEMPERATURE,
+    maxTokens: SAFE_CHAT_MAX_TOKENS,
+    rateLimitPerMin: SAFE_RATE_LIMIT_PER_MIN,
+  };
 }
