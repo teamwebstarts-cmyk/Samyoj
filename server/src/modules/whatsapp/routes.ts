@@ -38,6 +38,7 @@ import {
   trackWebhookReceived,
   webhookHealth,
 } from './webhook-health';
+import { emitProductEvent } from '../platform/events';
 
 const log = createModuleLogger('whatsapp');
 
@@ -92,6 +93,10 @@ async function saveWhatsappConnection(
     wabaId: connection.wabaId,
     businessId: connection.businessId,
     encryptedToken,
+  });
+  emitProductEvent({
+    organizationId: orgId,
+    name: 'WHATSAPP_CONNECTED',
   });
 
   return { whatsappNumber, webhookConfigured };
@@ -160,6 +165,10 @@ router.get(
       userId,
       redirectUri,
       appId: metaCredentials.appId,
+    });
+    emitProductEvent({
+      organizationId: orgId,
+      name: 'WHATSAPP_OAUTH_START',
     });
 
     sendSuccess(res, { url, state, redirectUri });
@@ -385,6 +394,10 @@ router.delete(
         isActive: false,
         accessToken: MetaWhatsAppService.encryptToken(''),
       },
+    });
+    emitProductEvent({
+      organizationId: orgId,
+      name: 'WHATSAPP_DISCONNECT',
     });
 
     sendSuccess(res, { disconnected: true });

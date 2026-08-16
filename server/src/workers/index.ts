@@ -33,6 +33,8 @@ import { logCampaignAudit } from '../modules/campaigns/audit';
 import { assertApprovedCampaignTemplate, assertApprovedTemplateIdentity } from '../modules/campaigns/template-validation';
 import { billingCategoryForTemplate } from '../modules/campaigns/types';
 import { trackWebhookFailed, trackWebhookProcessed } from '../modules/whatsapp/webhook-health';
+import { safeRecordMetaSendFailure } from '../modules/platform/meta-errors';
+import { startPlatformTelemetryWorker } from '../modules/platform/worker';
 
 const log = createModuleLogger('worker');
 
@@ -120,6 +122,7 @@ export function startWorkers(): void {
   process.env.SAMYOJ_EMBEDDED_WORKERS = '1';
   if (workersStarted) return;
   workersStarted = true;
+  startPlatformTelemetryWorker();
 
 // Webhook worker — handle inbound messages + status ticks (processWebhookPayload)
 // as well as voice-call webhooks (processWebhookFields). Both share the same
@@ -660,6 +663,11 @@ const broadcastWorker = new Worker(
       } catch (err) {
         const classified = classifyProviderError(err);
         const errorMessage = classified.message;
+        void safeRecordMetaSendFailure({
+          organizationId,
+          whatsappNumberId: whatsappNumberDbId,
+          error: err,
+        });
         logError(err, {
           source: 'worker',
           queueName: 'broadcast-queue',
@@ -893,6 +901,7 @@ setInterval(() => {
     .then(({ processScheduledCampaigns }) => processScheduledCampaigns())
     .catch((err) => logError(err, { source: 'worker', action: 'processScheduledCampaigns' }));
 }, 60_000);
+
 }
 
 // Standalone entry is refused at module load (`require.main === module` above).
