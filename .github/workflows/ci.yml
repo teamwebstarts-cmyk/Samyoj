@@ -74,3 +74,19 @@ jobs:
       - name: Build
         working-directory: client
         run: npm run build
+
+  admin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: admin/package-lock.json
+      - name: Install admin deps
+        working-directory: admin
+        run: npm ci
+      - name: Build
+        working-directory: admin
+        run: npm run build
