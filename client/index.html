@@ -23,6 +23,51 @@
         var density = localStorage.getItem(densityKey);
         document.documentElement.dataset.density =
           density === 'compact' ? 'compact' : 'comfortable';
+
+        var textSizeKey = 'samyoj:text-size:v1';
+        var textSize = localStorage.getItem(textSizeKey);
+        var rootPx = textSize === 'small' ? '14px' : textSize === 'large' ? '18px' : '16px';
+        document.documentElement.dataset.textSize =
+          textSize === 'small' || textSize === 'large' ? textSize : 'default';
+        document.documentElement.style.setProperty('--app-root-font-size', rootPx);
+
+        var fontKey = 'samyoj:font-family:v1';
+        var fontId = localStorage.getItem(fontKey) || 'jakarta';
+        var fontStacks = {
+          jakarta: '"Plus Jakarta Sans", system-ui, sans-serif',
+          inter: 'Inter, system-ui, sans-serif',
+          geist: 'Geist, system-ui, sans-serif',
+          'ibm-plex': '"IBM Plex Sans", system-ui, sans-serif',
+          'source-sans': '"Source Sans 3", system-ui, sans-serif',
+          roboto: 'Roboto, system-ui, sans-serif',
+          'public-sans': '"Public Sans", system-ui, sans-serif',
+          figtree: 'Figtree, system-ui, sans-serif',
+          noto: '"Noto Sans", system-ui, sans-serif',
+          atkinson: '"Atkinson Hyperlegible", system-ui, sans-serif',
+          system: 'system-ui, -apple-system, "Segoe UI", sans-serif',
+        };
+        var fontHrefs = {
+          inter: 'https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap',
+          geist: 'https://fonts.googleapis.com/css2?family=Geist:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap',
+          'ibm-plex': 'https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap',
+          'source-sans': 'https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap',
+          roboto: 'https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,400;0,500;0,700;1,400&display=swap',
+          'public-sans': 'https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap',
+          figtree: 'https://fonts.googleapis.com/css2?family=Figtree:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap',
+          noto: 'https://fonts.googleapis.com/css2?family=Noto+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap',
+          atkinson: 'https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400;1,700&display=swap',
+        };
+        var stack = fontStacks[fontId] || fontStacks.jakarta;
+        document.documentElement.dataset.fontFamily = fontStacks[fontId] ? fontId : 'jakarta';
+        document.documentElement.style.setProperty('--app-font-family', stack);
+        var href = fontHrefs[fontId];
+        if (href) {
+          var fontLink = document.createElement('link');
+          fontLink.id = 'samyoj-app-font';
+          fontLink.rel = 'stylesheet';
+          fontLink.href = href;
+          document.head.appendChild(fontLink);
+        }
       })();
     </script>
   </head>

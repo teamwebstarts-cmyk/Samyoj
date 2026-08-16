@@ -5,7 +5,7 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+        sans: ['var(--app-font-family)', 'system-ui', 'sans-serif'],
         chat: ['var(--chat-font)'],
       },
       fontSize: {
