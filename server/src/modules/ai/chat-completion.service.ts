@@ -115,7 +115,7 @@ async function createAzureCompletion(
     },
     body: JSON.stringify({
       messages: options.messages,
-      temperature: options.temperature ?? 0.7,
+      temperature: options.temperature ?? 0.2,
       max_tokens: options.maxTokens ?? 500,
     }),
   });
@@ -145,7 +145,8 @@ async function createAzureCompletion(
       organizationId: options.organizationId,
       botId: options.botId,
       conversationId: options.conversationId,
-      action: 'chat',
+      whatsappNumberId: options.whatsappNumberId,
+      action: options.usageAction || 'chat_bot',
       usage,
     });
   }
