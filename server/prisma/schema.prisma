@@ -514,7 +514,10 @@ model WhatsappNumber {
   orders                    Order[]
   unmatchedProviderStatuses UnmatchedProviderStatus[]
 
-  @@unique([phoneNumberId])
+  // Global unique on phoneNumberId cannot stay: inactive org A + active org B
+  // must both exist (SAMYOJ-49). Partial unique WHERE is_active = true lives in SQL
+  // (Prisma cannot express it). Lookups still use this index.
+  @@index([phoneNumberId])
   @@unique([organizationId, id])
   @@unique([organizationId, normalizedPhoneNumber])
   @@map("whatsapp_numbers")
@@ -556,27 +559,28 @@ model Contact {
 }
 
 model Conversation {
-  id                 String             @id @default(uuid())
-  organizationId     String             @map("organization_id")
-  contactId          String             @map("contact_id")
-  whatsappNumberId   String?            @map("whatsapp_number_id")
-  assignedAgentId    String?            @map("assigned_agent_id")
-  activeBotId        String?            @map("active_bot_id")
-  status             ConversationStatus @default(OPEN)
-  botActive          Boolean            @default(true) @map("bot_active")
-  botHandoffAt       DateTime?          @map("bot_handoff_at")
-  botHandoffReason   String?            @map("bot_handoff_reason")
-  botState           Json?              @map("bot_state")
-  lastMessageAt      DateTime?          @map("last_message_at")
-  cs24hWindowOpensAt DateTime?          @map("cs24h_window_opens_at")
-  unreadCount        Int                @default(0) @map("unread_count")
-  firstResponseAt    DateTime?          @map("first_response_at")
-  slaDueAt           DateTime?          @map("sla_due_at")
-  slaBreached        Boolean            @default(false) @map("sla_breached")
-  snoozedUntil       DateTime?          @map("snoozed_until")
-  isFavorite         Boolean            @default(false) @map("is_favorite")
-  createdAt          DateTime           @default(now()) @map("created_at")
-  updatedAt          DateTime           @updatedAt @map("updated_at")
+  id                   String               @id @default(uuid())
+  organizationId       String               @map("organization_id")
+  contactId            String               @map("contact_id")
+  whatsappNumberId     String?              @map("whatsapp_number_id")
+  assignedAgentId      String?              @map("assigned_agent_id")
+  activeBotId          String?              @map("active_bot_id")
+  botAssignmentSource  BotAssignmentSource? @map("bot_assignment_source")
+  status               ConversationStatus   @default(OPEN)
+  botActive            Boolean              @default(true) @map("bot_active")
+  botHandoffAt         DateTime?            @map("bot_handoff_at")
+  botHandoffReason     String?              @map("bot_handoff_reason")
+  botState             Json?                @map("bot_state")
+  lastMessageAt        DateTime?            @map("last_message_at")
+  cs24hWindowOpensAt   DateTime?            @map("cs24h_window_opens_at")
+  unreadCount          Int                  @default(0) @map("unread_count")
+  firstResponseAt      DateTime?            @map("first_response_at")
+  slaDueAt             DateTime?            @map("sla_due_at")
+  slaBreached          Boolean              @default(false) @map("sla_breached")
+  snoozedUntil         DateTime?            @map("snoozed_until")
+  isFavorite           Boolean              @default(false) @map("is_favorite")
+  createdAt            DateTime             @default(now()) @map("created_at")
+  updatedAt            DateTime             @updatedAt @map("updated_at")
 
   organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   contact        Contact             @relation(fields: [organizationId, contactId], references: [organizationId, id], onDelete: Restrict)
@@ -594,6 +598,7 @@ model Conversation {
   @@unique([organizationId, contactId, whatsappNumberId])
   @@index([organizationId, lastMessageAt])
   @@index([organizationId, snoozedUntil])
+  @@index([organizationId, whatsappNumberId, botAssignmentSource])
   @@map("conversations")
 }
 
@@ -635,6 +640,11 @@ enum TicketStatus {
   WAITING
   RESOLVED
   CLOSED
+}
+
+enum BotAssignmentSource {
+  MANUAL
+  APPLIED
 }
 
 enum TicketPriority {
@@ -979,6 +989,10 @@ model Campaign {
   runVersion       Int            @default(0) @map("run_version")
   scheduledAt      DateTime?      @map("scheduled_at")
   timezone         String?
+  repeatIntervalDays    Int?      @map("repeat_interval_days")
+  repeatUntil           DateTime? @map("repeat_until")
+  repeatMaxOccurrences  Int?      @map("repeat_max_occurrences")
+  repeatOccurrenceCount Int       @default(0) @map("repeat_occurrence_count")
   pausedAt         DateTime?      @map("paused_at")
   cancelledAt      DateTime?      @map("cancelled_at")
   totalContacts    Int            @default(0) @map("total_contacts")
@@ -1070,10 +1084,11 @@ model CampaignRecipient {
   deliveredAt           DateTime?     @map("delivered_at")
   readAt                DateTime?     @map("read_at")
   createdAt             DateTime      @default(now()) @map("created_at")
+  runGeneration         Int           @default(0) @map("run_generation")
 
   campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
-  @@unique([campaignId, phone])
+  @@unique([campaignId, phone, runGeneration])
   @@index([campaignId, status])
   @@map("campaign_recipients")
 }

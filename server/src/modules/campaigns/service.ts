@@ -24,7 +24,8 @@ import type {
   AudienceType,
   TemplateParams,
 } from './types';
-import { billingCategoryForTemplate } from './types';
+import { billingCategoryForTemplate, campaignRepeatWrite } from './types';
+import { nextRepeatInstant, shouldScheduleRepeat } from './timezone';
 import { dedupeRecipients, hasAuditableCampaignConsent, type ResolvedRecipient } from './recipients';
 import { AUDITABLE_CONSENT_WHERE } from '../contacts/consent';
 import { Prisma } from '@prisma/client';
@@ -597,6 +598,11 @@ export async function finalizeCampaignIfDone(campaignId: string, expectedRunVers
         failed: campaign.failedCount,
       });
     }
+    await prisma.campaign.updateMany({
+      where: { id: campaignId, status: 'COMPLETED' },
+      data: { repeatOccurrenceCount: { increment: 1 } },
+    });
+    await scheduleNextRepeatIfNeeded(campaignId);
   }
   await releaseCampaignQuota(campaignId, runVersion);
 }
@@ -797,7 +803,8 @@ export async function queueCampaignSend(
     campaign = refreshed;
   }
 
-  if (!campaign.recipients.length) {
+  const sendRecipients = campaign.recipients.filter((row) => row.status === 'PENDING');
+  if (!sendRecipients.length) {
     await prisma.campaign.update({ where: { id: campaign.id }, data: { status: 'COMPLETED' } });
     throw new AppError(400, 'Campaign has no recipients');
   }
@@ -817,8 +824,8 @@ export async function queueCampaignSend(
   );
   const billingCategory = billingCategoryForTemplate(template.category);
 
-  await assertDailySendQuota(campaign.organizationId, campaign.recipients.length);
-  await assertDailyBudget(campaign.organizationId, campaign.recipients.length, billingCategory);
+  await assertDailySendQuota(campaign.organizationId, sendRecipients.length);
+  await assertDailyBudget(campaign.organizationId, sendRecipients.length, billingCategory);
   const templateLanguage = campaign.templateLanguage || template.language || 'en_US';
   const templateParams = (campaign.templateParams as TemplateParams | null) || undefined;
   try {
@@ -828,7 +835,7 @@ export async function queueCampaignSend(
       await withLiveContactFields(
         campaign.organizationId,
         whatsappNumber.id,
-        campaign.recipients.map((recipient) => ({
+        sendRecipients.map((recipient) => ({
           name: recipient.name,
           phone: recipient.phone,
           variables: recipient.variables as { body?: string[]; header?: string[]; attributes?: Record<string, string> } | null,
@@ -851,6 +858,7 @@ export async function queueCampaignSend(
           deliveredCount: 0,
           readCount: 0,
           failedCount: 0,
+          totalContacts: sendRecipients.length,
           pausedAt: null,
           cancelledAt: null,
           sentById: userId ?? null,
@@ -863,10 +871,16 @@ export async function queueCampaignSend(
   }
   const run = await prisma.campaign.findUnique({ where: { id: campaign.id }, select: { runVersion: true } });
   if (!run) throw new AppError(404, 'Campaign not found');
+  if (claimedRunVersion !== undefined) {
+    await prisma.campaign.updateMany({
+      where: { id: campaign.id, status: 'RUNNING', runVersion: run.runVersion },
+      data: { totalContacts: sendRecipients.length },
+    });
+  }
   const settings = await getCampaignSettings(campaign.organizationId);
   const batchSize = settings.batchSize ?? 50;
   const batchDelayMs = settings.batchDelayMs ?? 1000;
-  const totalBatches = Math.ceil(campaign.recipients.length / batchSize);
+  const totalBatches = Math.ceil(sendRecipients.length / batchSize);
 
   const queuedJobIds: string[] = [];
   try {
@@ -874,7 +888,7 @@ export async function queueCampaignSend(
       campaign.organizationId,
       campaign.id,
       run.runVersion,
-      campaign.recipients.length,
+      sendRecipients.length,
       billingCategory
     );
     await prisma.campaign.update({
@@ -884,6 +898,7 @@ export async function queueCampaignSend(
     const reset = await prisma.campaignRecipient.updateMany({
       where: {
         campaignId: campaign.id,
+        status: 'PENDING',
         campaign: { status: 'RUNNING', runVersion: run.runVersion },
       },
       data: {
@@ -898,11 +913,11 @@ export async function queueCampaignSend(
         readAt: null,
       },
     });
-    if (reset.count !== campaign.recipients.length) {
+    if (reset.count !== sendRecipients.length) {
       throw new AppError(409, 'Campaign changed before recipients could be queued');
     }
-    for (let i = 0; i < campaign.recipients.length; i += batchSize) {
-    const batch = campaign.recipients.slice(i, i + batchSize);
+    for (let i = 0; i < sendRecipients.length; i += batchSize) {
+    const batch = sendRecipients.slice(i, i + batchSize);
     const batchIndex = Math.floor(i / batchSize);
     const jobId = buildCampaignJobId(campaign.id, run.runVersion, 'batch', batch[0].id);
     await broadcastQueue.add(
@@ -945,7 +960,7 @@ export async function queueCampaignSend(
     status: 'RUNNING',
   });
 
-  return { recipientCount: campaign.recipients.length };
+  return { recipientCount: sendRecipients.length };
 }
 
 export async function sendTestMessage(
@@ -1399,6 +1414,8 @@ export async function duplicateCampaign(
   if (!campaign.whatsappNumberId) {
     throw new AppError(409, 'Campaign has unresolved WhatsApp number ownership');
   }
+  const maxGen = campaign.recipients.reduce((max, row) => Math.max(max, row.runGeneration ?? 0), 0);
+  const latestRecipients = campaign.recipients.filter((row) => (row.runGeneration ?? 0) === maxGen);
   const copy = await prisma.campaign.create({
     data: {
       organizationId: campaign.organizationId,
@@ -1410,11 +1427,14 @@ export async function duplicateCampaign(
       audienceConfig: campaign.audienceConfig ?? undefined,
       whatsappNumberId: campaign.whatsappNumberId,
       timezone: campaign.timezone,
+      repeatIntervalDays: campaign.repeatIntervalDays,
+      repeatUntil: campaign.repeatUntil,
+      repeatMaxOccurrences: campaign.repeatMaxOccurrences,
       status: 'DRAFT',
-      totalContacts: campaign.recipients.length,
+      totalContacts: latestRecipients.length,
       createdById: userId ?? null,
       recipients: {
-        create: campaign.recipients.map((r) => ({
+        create: latestRecipients.map((r) => ({
           phone: r.phone,
           name: r.name,
           variables: r.variables ?? undefined,
@@ -1571,6 +1591,205 @@ export function canEditCampaign(status: string) {
   return EDITABLE_STATUSES.includes(status as CampaignStatus);
 }
 
+export function canRescheduleCampaign(status: string) {
+  return status === 'DRAFT' || status === 'SCHEDULED' || status === 'COMPLETED';
+}
+
+async function nextRecipientGeneration(campaignId: string) {
+  const leftover = await prisma.campaignRecipient.aggregate({
+    where: { campaignId },
+    _max: { runGeneration: true },
+  });
+  return leftover._max.runGeneration == null ? 0 : leftover._max.runGeneration + 1;
+}
+
+async function seedPendingRecipientRun(
+  campaignId: string,
+  recipients: ResolvedRecipient[],
+  runGeneration: number
+) {
+  const deduped = dedupeRecipients(recipients);
+  if (!deduped.length) return 0;
+  await prisma.campaignRecipient.createMany({
+    data: deduped.map((r) => ({
+      campaignId,
+      phone: r.phone,
+      name: r.name,
+      variables: r.variables ? (r.variables as object) : undefined,
+      runGeneration,
+    })),
+  });
+  return deduped.length;
+}
+
+async function resolveRepeatAudience(campaign: Campaign): Promise<ResolvedRecipient[]> {
+  if (!campaign.whatsappNumberId) {
+    throw new AppError(409, 'Campaign has unresolved WhatsApp number ownership');
+  }
+  if (campaign.audienceType === 'MANUAL') {
+    const maxGen = await prisma.campaignRecipient.aggregate({
+      where: { campaignId: campaign.id },
+      _max: { runGeneration: true },
+    });
+    const generation = maxGen._max.runGeneration ?? 0;
+    const previous = await prisma.campaignRecipient.findMany({
+      where: { campaignId: campaign.id, runGeneration: generation },
+      select: { phone: true, name: true, variables: true },
+    });
+    return resolveAudienceRecipients(
+      campaign.organizationId,
+      'MANUAL',
+      campaign.audienceConfig as AudienceConfig | null,
+      previous.map((row) => ({
+        phone: row.phone,
+        name: row.name ?? undefined,
+        variables: row.variables as ResolvedRecipient['variables'],
+      })),
+      campaign.whatsappNumberId
+    );
+  }
+  return resolveAudienceRecipients(
+    campaign.organizationId,
+    campaign.audienceType as AudienceType,
+    campaign.audienceConfig as AudienceConfig | null,
+    [],
+    campaign.whatsappNumberId
+  );
+}
+
+export async function scheduleNextRepeatIfNeeded(campaignId: string) {
+  const campaign = await prisma.campaign.findUnique({ where: { id: campaignId } });
+  if (!campaign || campaign.status !== 'COMPLETED' || campaign.cancelledAt) return false;
+  if (!campaign.repeatIntervalDays || campaign.repeatIntervalDays < 1) return false;
+
+  const nextAt = nextRepeatInstant({
+    lastScheduledAt: campaign.scheduledAt,
+    completedAt: new Date(),
+    intervalDays: campaign.repeatIntervalDays,
+    timeZone: campaign.timezone,
+  });
+  if (
+    !shouldScheduleRepeat({
+      repeatIntervalDays: campaign.repeatIntervalDays,
+      repeatUntil: campaign.repeatUntil,
+      repeatMaxOccurrences: campaign.repeatMaxOccurrences,
+      repeatOccurrenceCount: campaign.repeatOccurrenceCount,
+      nextAt,
+    })
+  ) {
+    return false;
+  }
+
+  let resolved: ResolvedRecipient[];
+  try {
+    resolved = await resolveRepeatAudience(campaign);
+  } catch (err) {
+    await logCampaignAudit(campaign.organizationId, undefined, 'campaign.repeat_seed_failed', {
+      campaignId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return false;
+  }
+  if (!resolved.length) return false;
+
+  const pending = await prisma.campaignRecipient.count({
+    where: { campaignId, status: 'PENDING' },
+  });
+  if (pending === 0) {
+    await seedPendingRecipientRun(campaignId, resolved, await nextRecipientGeneration(campaignId));
+  }
+
+  const claimed = await prisma.campaign.updateMany({
+    where: { id: campaignId, status: 'COMPLETED', cancelledAt: null },
+    data: {
+      status: 'SCHEDULED',
+      scheduledAt: nextAt,
+      sentCount: 0,
+      deliveredCount: 0,
+      readCount: 0,
+      failedCount: 0,
+      totalContacts: resolved.length,
+      pausedAt: null,
+    },
+  });
+  if (claimed.count !== 1) return false;
+  emitToOrg(campaign.organizationId, 'campaign:status', { campaignId, status: 'SCHEDULED' });
+  await logCampaignAudit(campaign.organizationId, undefined, 'campaign.repeat_scheduled', {
+    campaignId,
+    scheduledAt: nextAt.toISOString(),
+    intervalDays: campaign.repeatIntervalDays,
+  });
+  return true;
+}
+
+export async function rescheduleCampaign(
+  campaign: Campaign,
+  scheduledAt: Date,
+  extras?: {
+    timezone?: string;
+    repeatIntervalDays?: number | null;
+    repeatUntil?: string | null;
+    repeatMaxOccurrences?: number | null;
+  }
+) {
+  if (campaign.status === 'RUNNING') {
+    throw new AppError(409, 'Cannot reschedule a campaign that is currently sending');
+  }
+  if (campaign.status === 'PAUSED') {
+    throw new AppError(409, 'Resume or cancel this campaign before changing the send time');
+  }
+  if (campaign.status === 'CANCELLED') {
+    throw new AppError(400, 'Cancelled campaigns cannot be rescheduled');
+  }
+  if (!canRescheduleCampaign(campaign.status)) {
+    throw new AppError(400, 'This campaign cannot be rescheduled');
+  }
+  if (scheduledAt.getTime() <= Date.now()) {
+    throw new AppError(400, 'Pick a future send time');
+  }
+
+  const repeatWrite = extras ? campaignRepeatWrite(extras) : {};
+
+  if (campaign.status === 'COMPLETED') {
+    const pending = await prisma.campaignRecipient.count({
+      where: { campaignId: campaign.id, status: 'PENDING' },
+    });
+    if (pending === 0) {
+      const resolved = await resolveRepeatAudience(campaign);
+      if (!resolved.length) {
+        throw new AppError(400, 'No recipients match the selected audience');
+      }
+      await seedPendingRecipientRun(campaign.id, resolved, await nextRecipientGeneration(campaign.id));
+      await prisma.campaign.update({
+        where: { id: campaign.id },
+        data: {
+          status: 'SCHEDULED',
+          scheduledAt,
+          timezone: extras?.timezone ?? campaign.timezone,
+          ...repeatWrite,
+          sentCount: 0,
+          deliveredCount: 0,
+          readCount: 0,
+          failedCount: 0,
+          totalContacts: resolved.length,
+          pausedAt: null,
+        },
+      });
+      return;
+    }
+  }
+
+  await prisma.campaign.update({
+    where: { id: campaign.id },
+    data: {
+      scheduledAt,
+      timezone: extras?.timezone ?? campaign.timezone,
+      ...repeatWrite,
+      status: 'SCHEDULED',
+    },
+  });
+}
+
 export async function persistRecipients(
   campaignId: string,
   recipients: ResolvedRecipient[],
@@ -1600,13 +1819,20 @@ export async function persistRecipients(
         });
       }
     }
-    await tx.campaignRecipient.deleteMany({ where: { campaignId } });
+    await tx.campaignRecipient.deleteMany({ where: { campaignId, status: 'PENDING' } });
+    const leftover = await tx.campaignRecipient.aggregate({
+      where: { campaignId },
+      _max: { runGeneration: true },
+    });
+    const runGeneration =
+      leftover._max.runGeneration == null ? 0 : leftover._max.runGeneration + 1;
     await tx.campaignRecipient.createMany({
       data: deduped.map((r) => ({
         campaignId,
         phone: r.phone,
         name: r.name,
         variables: r.variables ? (r.variables as object) : undefined,
+        runGeneration,
       })),
     });
     await tx.campaign.update({

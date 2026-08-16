@@ -4,6 +4,8 @@ import prisma from '../../config/database';
 import { config } from '../../config';
 import { authenticate, requireOrg, loadOrgRole, requireOrgRole } from '../../middleware/auth';
 import { AppError, asyncHandler, paramId, sendSuccess } from '../../utils/response';
+import { resolveActiveWhatsappNumber } from '../whatsapp/active-number';
+import { applyBotToAllChats, removeBotFromAllChats } from '../ai/bot-assignment.service';
 import { redactText } from '../../utils/pii-redaction';
 import {
   clearDefaultFlag,
@@ -49,6 +51,13 @@ const faqSchema = z.object({
 
 const adminGuard = [authenticate, requireOrg, loadOrgRole, requireOrgRole('OWNER', 'ADMIN')];
 const readGuard = [authenticate, requireOrg];
+const numberAdminGuard = [
+  authenticate,
+  requireOrg,
+  resolveActiveWhatsappNumber,
+  loadOrgRole,
+  requireOrgRole('OWNER', 'ADMIN'),
+];
 
 router.get(
   '/status',
@@ -319,6 +328,42 @@ router.delete(
     }
 
     sendSuccess(res, { deleted: true });
+  })
+);
+
+router.post(
+  '/:id/apply-all',
+  ...numberAdminGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const numberId = req.activeWhatsappNumberId;
+    if (!numberId) {
+      throw new AppError(400, 'Connect a WhatsApp number before using this feature.');
+    }
+    const result = await applyBotToAllChats({
+      organizationId: orgId,
+      whatsappNumberId: numberId,
+      botId: paramId(req),
+    });
+    sendSuccess(res, result);
+  })
+);
+
+router.post(
+  '/:id/remove-all',
+  ...numberAdminGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const numberId = req.activeWhatsappNumberId;
+    if (!numberId) {
+      throw new AppError(400, 'Connect a WhatsApp number before using this feature.');
+    }
+    const result = await removeBotFromAllChats({
+      organizationId: orgId,
+      whatsappNumberId: numberId,
+      botId: paramId(req),
+    });
+    sendSuccess(res, result);
   })
 );
 

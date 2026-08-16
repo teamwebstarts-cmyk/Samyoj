@@ -11,6 +11,7 @@ import {
   isRequestAborted,
   restoreAuthBackupIfNeeded,
   setAuthTokens,
+  adoptLegacyLocalStorageTokens,
 } from '../utils/authStorage';
 
 interface AuthContextType {
@@ -89,6 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     restoreAuthBackupIfNeeded();
+    adoptLegacyLocalStorageTokens();
 
     const boot = async () => {
       const token = getAccessToken();
@@ -174,6 +176,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const onPageShow = (event: PageTransitionEvent) => {
       if (!event.persisted) return;
       restoreAuthBackupIfNeeded();
+      adoptLegacyLocalStorageTokens();
       if (!user && (getAccessToken() || getRefreshToken())) {
         void authApi
           .me()

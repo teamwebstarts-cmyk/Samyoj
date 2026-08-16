@@ -2,11 +2,13 @@ import {
   BookOpen,
   Clock,
   Hash,
+  MessagesSquare,
   Pause,
   Pencil,
   Play,
   Star,
   Trash2,
+  UserMinus,
 } from 'lucide-react';
 import type { AiBot } from '../../types';
 import { AiBotStatusCell } from './AiBotListCells';
@@ -17,10 +19,19 @@ interface AiBotCardProps {
   onEdit: () => void;
   onToggle: () => void;
   onDelete: () => void;
+  onApplyAll: () => void;
+  onRemoveAll: () => void;
 }
 
 /** Compact mobile/tablet bot row — fits more bots on screen. */
-export default function AiBotCard({ bot, onEdit, onToggle, onDelete }: AiBotCardProps) {
+export default function AiBotCard({
+  bot,
+  onEdit,
+  onToggle,
+  onDelete,
+  onApplyAll,
+  onRemoveAll,
+}: AiBotCardProps) {
   const faqCount = bot._count?.knowledgeItems ?? 0;
   const triggers = bot.triggerKeywords;
   const avatar = getAiBotAvatar(bot.id, bot.enabled);
@@ -111,6 +122,26 @@ export default function AiBotCard({ bot, onEdit, onToggle, onDelete }: AiBotCard
           >
             {bot.enabled ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
             <span className="hidden sm:inline">{bot.enabled ? 'Pause' : 'On'}</span>
+          </button>
+          <button
+            type="button"
+            onClick={onApplyAll}
+            aria-label="Apply this bot to all chats"
+            title="Apply to all chats"
+            className="inline-flex h-8 items-center justify-center gap-1 rounded-lg border border-sky-200/80 bg-sky-50 px-2 text-[11px] font-bold text-sky-800 transition hover:bg-sky-100 dark:border-sky-500/30 dark:bg-sky-950/40 dark:text-sky-300 sm:px-2.5"
+          >
+            <MessagesSquare className="h-3.5 w-3.5" />
+            <span className="hidden lg:inline">All chats</span>
+          </button>
+          <button
+            type="button"
+            onClick={onRemoveAll}
+            aria-label="Remove this bot from all chats"
+            title="Remove from all chats"
+            className="inline-flex h-8 items-center justify-center gap-1 rounded-lg border border-theme-border bg-theme-surface px-2 text-[11px] font-bold text-theme-secondary transition hover:bg-theme-subtle hover:text-theme-fg sm:px-2.5"
+          >
+            <UserMinus className="h-3.5 w-3.5" />
+            <span className="hidden lg:inline">Remove</span>
           </button>
           <button
             type="button"

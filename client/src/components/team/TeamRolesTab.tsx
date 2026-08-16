@@ -15,7 +15,7 @@ import {
   Users,
 } from 'lucide-react';
 import AppButton from '../ui/AppButton';
-import LoadingState from '../ui/LoadingState';
+import { FormPageSkeleton } from '../ui/ListLayoutSkeleton';
 import { teamApi } from '../../services/api';
 import { toastError, toastSuccess } from '../../utils/toast';
 import type { OrgRole, RolePermissionsMatrix, TeamPermissions } from '../../types';
@@ -167,11 +167,7 @@ export default function TeamRolesTab({ canManage }: TeamRolesTabProps) {
   };
 
   if (loading || !matrix) {
-    return (
-      <div className="p-6">
-        <LoadingState label="Loading roles & permissions..." />
-      </div>
-    );
+    return <FormPageSkeleton label="Loading roles and permissions" blocks={5} />;
   }
 
   let serialNo = 0;

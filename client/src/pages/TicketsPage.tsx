@@ -14,7 +14,7 @@ import {
 import AppButton from '../components/ui/AppButton';
 import EmptyState from '../components/ui/EmptyState';
 import ListToolbar from '../components/ui/ListToolbar';
-import LoadingState from '../components/ui/LoadingState';
+import { SplitListSkeleton } from '../components/ui/ListLayoutSkeleton';
 import PageHero from '../components/ui/PageHero';
 import PageShell from '../components/ui/PageShell';
 import { FOCUS_RING_CLASS } from '../hooks/inboxA11y';
@@ -173,8 +173,8 @@ export default function TicketsPage() {
   if (numbersLoading || !resolved) {
     return (
       <PageShell>
-        <div className="p-6">
-          <LoadingState label="Loading tickets..." />
+        <div className="space-y-4 p-4 sm:p-6">
+          <SplitListSkeleton label="Loading tickets" />
         </div>
       </PageShell>
     );
@@ -296,9 +296,7 @@ export default function TicketsPage() {
           />
 
           {loading && tickets.length === 0 ? (
-            <div className="p-6">
-              <LoadingState label="Loading tickets..." />
-            </div>
+            <SplitListSkeleton label="Loading tickets" />
           ) : filteredTickets.length === 0 ? (
             <TicketEmptyWorkspace
               mode={hasActiveFilters ? 'filter' : 'empty'}

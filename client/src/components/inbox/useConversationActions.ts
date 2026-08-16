@@ -134,7 +134,7 @@ export function useConversationActions({
             : `Chatbot set to ${updated.activeBot.name}`
           : needsEnable
             ? 'Default chatbot enabled'
-            : 'Using org default chatbot',
+            : 'Chatbot updated',
         { icon: 'bot' }
       );
     } catch (err: unknown) {

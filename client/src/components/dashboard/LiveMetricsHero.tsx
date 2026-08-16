@@ -110,22 +110,7 @@ export default function LiveMetricsHero({
   period,
   onPeriodChange,
 }: LiveMetricsHeroProps) {
-  const delivery = parseRate(deliveryRate);
-  const read = parseRate(readRate);
-  const healthScore = Math.round((delivery + read) / 2);
   const compareLabel = metricsPeriodCompareLabel(period);
-
-  const healthDelta =
-    typeof deliveryDelta === 'number' &&
-    Number.isFinite(deliveryDelta) &&
-    typeof readRateDelta === 'number' &&
-    Number.isFinite(readRateDelta)
-      ? Math.round(((deliveryDelta + readRateDelta) / 2) * 10) / 10
-      : typeof deliveryDelta === 'number' && Number.isFinite(deliveryDelta)
-        ? deliveryDelta
-        : typeof readRateDelta === 'number' && Number.isFinite(readRateDelta)
-          ? readRateDelta
-          : null;
 
   return (
     <section
@@ -159,7 +144,7 @@ export default function LiveMetricsHero({
             </p>
           </div>
 
-          <div className="grid w-full grid-cols-1 gap-2.5 sm:grid-cols-3 sm:gap-3 lg:w-auto lg:min-w-[min(100%,30rem)] lg:max-w-2xl xl:min-w-[34rem]">
+          <div className="grid w-full grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-3 lg:w-auto lg:min-w-[min(100%,22rem)] lg:max-w-xl xl:min-w-[26rem]">
             <MiniMetricCard
               label="Delivery"
               value={formatRateDisplay(deliveryRate)}
@@ -170,12 +155,6 @@ export default function LiveMetricsHero({
               label="Read rate"
               value={formatRateDisplay(readRate)}
               delta={readRateDelta}
-              compareLabel={compareLabel}
-            />
-            <MiniMetricCard
-              label="Health score"
-              value={`${healthScore}%`}
-              delta={healthDelta}
               compareLabel={compareLabel}
             />
           </div>

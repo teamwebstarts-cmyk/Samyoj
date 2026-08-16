@@ -6,6 +6,10 @@ This is **session memory**, not a second feature matrix. Short, path-backed, hon
 
 | File | Use |
 |------|-----|
+| [SESSION_2026-08-16.md](./SESSION_2026-08-16.md) | Product sets 1–4 researched + filed. **Shipped 2026-08-16:** 47, 48, 50, 51, 53, 54, 55, 58, 46, 49 (Pick A sessionStorage). **Still open:** 52, 56, 59. Recheck: [DICTATION_RECHECK_2026-08-16.md](./DICTATION_RECHECK_2026-08-16.md). |
+| [PRODUCT_TASKS_2026-08-16.md](./PRODUCT_TASKS_2026-08-16.md) | Spec: current code vs wanted behavior (sets 1–4) |
+| [../product/CALLS_AI_USAGE_ADMIN_2026-08-16.md](../product/CALLS_AI_USAGE_ADMIN_2026-08-16.md) | Durable set-3 product doc (Calls recents, summary, AI Reports, admin). Copy to Confluence when wiki is connected. |
+| [../product/INBOX_CONTACT_AND_CALLING_AI_2026-08-16.md](../product/INBOX_CONTACT_AND_CALLING_AI_2026-08-16.md) | Durable set-4 product doc (Inbox New chat = Contacts fields; strip AI from Calling settings). |
 | [SESSION_2026-08-15.md](./SESSION_2026-08-15.md) | Number isolation, workers embedded, campaign wizard UX, templates/Connect leftovers; **test-deploy vs production** |
 | [SESSION_2026-08-14.md](./SESSION_2026-08-14.md) | Calls/Train/automations Phase B + earlier WhatsApp lock-down |
 | [STATUS_AND_FUTURE.md](./STATUS_AND_FUTURE.md) | Test-deploy vs production, leftovers, do-not-redo |
@@ -15,7 +19,9 @@ Cursor always-apply pointer: `.cursor/rules/session-memory.mdc`.
 
 ---
 
-## Current honest status (2026-08-15)
+## Current honest status (2026-08-16)
+
+Same production answer as 15 Aug. **New:** product dictation sets 1–4 are documented and in Jira. **Shipped in code 2026-08-16:** 47, 48, 50, 51, 53, 54, 55, 58, **46**, **49** (user testing locally). **Still not built:** 52, 56, 59. More items still coming from the user.
 
 - **Customer production go-live / production-ready pipeline: NO.** Do not restart a launch that claims the product is production-complete.
 - **Internal using + testing of this existing build: YES.** `bash start.sh` = Docker + API `:8000` + UI `:3000` + ngrok-only inbound. That is a **testing deploy**, not production.

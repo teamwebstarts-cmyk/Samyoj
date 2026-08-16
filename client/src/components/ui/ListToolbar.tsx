@@ -103,5 +103,5 @@ export default function ListToolbar({
     return <div className={`border-b border-theme-border ${embeddedPad} ${className}`}>{content}</div>;
   }
 
-  return <div className={`dashboard-card p-4 ${className}`}>{content}</div>;
+  return <div className={`dashboard-card p-[var(--card-pad)] ${className}`}>{content}</div>;
 }

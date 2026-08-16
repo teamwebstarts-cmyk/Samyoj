@@ -10,7 +10,7 @@ import AppSelect from '../components/ui/AppSelect';
 import DataTable from '../components/ui/DataTable';
 import EmptyState from '../components/ui/EmptyState';
 import ListToolbar from '../components/ui/ListToolbar';
-import LoadingState from '../components/ui/LoadingState';
+import ListLayoutSkeleton from '../components/ui/ListLayoutSkeleton';
 import PageHeader from '../components/ui/PageHeader';
 import PageHero from '../components/ui/PageHero';
 import PageShell from '../components/ui/PageShell';
@@ -230,8 +230,11 @@ export default function LeadsPage() {
           }
         />
 
-        {loading ? (
-          <LoadingState label="Loading leads…" />
+        {loading && leads.length === 0 ? (
+          <ListLayoutSkeleton
+            label="Loading leads"
+            tableHeaders={['Lead', 'Stage', 'Owner', 'Updated', 'Actions']}
+          />
         ) : (
           <ResponsiveDataView
             items={filteredLeads}

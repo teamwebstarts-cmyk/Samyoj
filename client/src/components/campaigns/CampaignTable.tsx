@@ -2,6 +2,7 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
+  CalendarClock,
   Download,
   Eye,
   Pause,
@@ -21,6 +22,7 @@ import {
   getCampaignRelativeLabel,
   getAudienceLabel,
   getStatusMeta,
+  canRescheduleCampaign,
 } from './campaignUi';
 
 export type CampaignSortKey = 'name' | 'status' | 'totalContacts' | 'progress' | 'createdAt';
@@ -44,6 +46,7 @@ interface CampaignTableProps {
   onDelete?: (campaign: Campaign) => void;
   onExport?: (campaign: Campaign) => void;
   onRetry?: (campaign: Campaign) => void;
+  onReschedule?: (campaign: Campaign) => void;
   /** When false, pagination is rendered by the parent (e.g. list shell footer). */
   showPagination?: boolean;
 }
@@ -74,6 +77,7 @@ export default function CampaignTable({
   onDelete,
   onExport,
   onRetry,
+  onReschedule,
   showPagination = true,
 }: CampaignTableProps) {
   return (
@@ -139,6 +143,7 @@ export default function CampaignTable({
               const showExport = Boolean(onExport && (campaign.status === 'COMPLETED' || campaign.status === 'FAILED' || campaign.sentCount > 0));
               const showRetry = Boolean(onRetry && campaign.status === 'FAILED' && campaign.failedCount > 0);
               const showSend = Boolean(onSend && editable);
+              const showReschedule = Boolean(onReschedule && canRescheduleCampaign(campaign.status));
 
               return (
                 <tr key={campaign.id} className="border-b border-slate-100 transition hover:bg-slate-50/70 dark:border-slate-800/80 dark:hover:bg-slate-900/40">
@@ -310,6 +315,11 @@ export default function CampaignTable({
                         {showExport && (
                           <button type="button" onClick={() => onExport?.(campaign)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-fg hover:bg-theme-subtle">
                             <Download className="h-3.5 w-3.5" /> Export results
+                          </button>
+                        )}
+                        {showReschedule && (
+                          <button type="button" onClick={() => onReschedule?.(campaign)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-fg hover:bg-theme-subtle">
+                            <CalendarClock className="h-3.5 w-3.5" /> Reschedule
                           </button>
                         )}
                         {editable && onDelete && !showDelete && (

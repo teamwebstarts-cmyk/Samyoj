@@ -226,6 +226,21 @@ export function getCampaignPrimaryLabel(campaign: Campaign, action: CampaignPrim
   return 'View';
 }
 
+export function canRescheduleCampaign(status: string) {
+  return status === 'DRAFT' || status === 'SCHEDULED' || status === 'COMPLETED';
+}
+
+export function formatCampaignRepeatLabel(campaign: Campaign) {
+  if (!campaign.repeatIntervalDays) return null;
+  const days = campaign.repeatIntervalDays;
+  const cadence = days === 1 ? 'Repeats every day' : `Repeats every ${days} days`;
+  const sent = campaign.repeatOccurrenceCount ?? 0;
+  const max = campaign.repeatMaxOccurrences;
+  if (max) return `${cadence} · ${sent}/${max} sent`;
+  if (sent) return `${cadence} · ${sent} sent`;
+  return cadence;
+}
+
 export const audienceLabels: Record<string, string> = {
   MANUAL: 'Phone numbers',
   TAGS: 'Contact tags',

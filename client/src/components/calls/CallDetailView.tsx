@@ -50,6 +50,7 @@ interface CallDetailViewProps {
   conversationId?: string | null;
   contactId?: string | null;
   transcript?: TranscriptEntry[] | null;
+  summary?: string | null;
   notes?: string;
   onNotesChange?: (value: string) => void;
   onSaveNotes?: () => void;
@@ -92,6 +93,7 @@ export default function CallDetailView({
   agentName,
   conversationId,
   transcript,
+  summary,
   notes = '',
   onNotesChange,
   onSaveNotes,
@@ -318,7 +320,7 @@ export default function CallDetailView({
             <span className="font-bold text-neutral-900 dark:text-neutral-100">Type</span>
             <span className="text-neutral-300 dark:text-neutral-600">:</span>
             <span className="font-semibold text-neutral-700 dark:text-neutral-200">
-              {inbound ? 'Inbound call' : 'Outbound call'}
+              {inbound ? 'Incoming call' : 'Outgoing call'}
             </span>
           </span>
         </span>
@@ -384,7 +386,18 @@ export default function CallDetailView({
       )}
 
       <div ref={scrollRef} className="inbox-placeholder-bg min-h-0 flex-1 overflow-y-auto">
+        {summary ? (
+          <div className="mx-3 mt-3 rounded-2xl border border-violet-200/80 bg-violet-50/90 px-3.5 py-2.5 shadow-sm dark:border-violet-900/50 dark:bg-violet-950/40 sm:mx-4">
+            <p className="text-[10.5px] font-bold uppercase tracking-wide text-violet-700 dark:text-violet-300">
+              Call summary
+            </p>
+            <p className="mt-1 text-[13px] font-medium leading-snug text-neutral-800 dark:text-neutral-100">
+              {summary}
+            </p>
+          </div>
+        ) : null}
         {!transcript?.length ? (
+          summary && !active ? null : (
           <div className="flex h-full min-h-[140px] items-center justify-center p-6 sm:p-8">
             <div className="rounded-2xl border border-white/60 bg-white/80 px-5 py-4 text-center shadow-sm">
               <p className="text-[13px] font-semibold text-neutral-700">
@@ -406,11 +419,12 @@ export default function CallDetailView({
                   : tone === 'missed'
                     ? 'Customer didn’t connect — notes still help your team.'
                     : handler === 'AGENT'
-                      ? 'Agent outbound/inbound calls don’t store an AI speech transcript.'
+                      ? 'Agent incoming/outgoing calls don’t store an AI speech transcript.'
                       : 'Transcript appears once someone speaks.'}
               </p>
             </div>
           </div>
+          )
         ) : (
           <div className="px-3 py-4 sm:px-5">
             <div className="mx-auto max-w-2xl space-y-3">

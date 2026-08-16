@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { GitBranch, Users, Zap } from 'lucide-react';
 import AppSelect from '../ui/AppSelect';
-import LoadingState from '../ui/LoadingState';
+import { FormPageSkeleton } from '../ui/ListLayoutSkeleton';
 import ProgressBar from '../ui/ProgressBar';
 import SectionCard from '../ui/SectionCard';
 import { teamApi } from '../../services/api';
@@ -39,7 +39,7 @@ export default function TeamSettingsTab({ canManage }: TeamSettingsTabProps) {
     }
   };
 
-  if (loading || !settings) return <LoadingState label="Loading team settings..." />;
+  if (loading || !settings) return <FormPageSkeleton label="Loading team settings" blocks={3} />;
 
   const seatPct = Math.min(100, Math.round((settings.seatsUsed / settings.seatLimit) * 100));
 

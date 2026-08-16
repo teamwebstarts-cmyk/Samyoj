@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, HelpCircle, Settings, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Settings, Trash2 } from 'lucide-react';
 import { callingApi } from '../services/api';
 import { useSocket } from '../hooks/useSocket';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
@@ -8,9 +8,7 @@ import CallDetailView from '../components/calls/CallDetailView';
 import CallFiltersBar from '../components/calls/CallFiltersBar';
 import CallListItem from '../components/calls/CallListItem';
 import { CallsListEmpty, CallsSelectEmpty } from '../components/calls/CallPlaceholder';
-import CallsRailPanel from '../components/calls/CallsRailPanel';
 import CallingSettingsStage from '../components/calls/CallingSettingsStage';
-import CallsSetupSheet from '../components/calls/CallsSetupSheet';
 import {
   formatPhoneDisplay,
   isActiveCallStatus,
@@ -46,7 +44,7 @@ interface CallRecord {
   toPhone: string;
   durationSeconds?: number | null;
   transcript?: unknown;
-  metadata?: { notes?: string } | null;
+  metadata?: { notes?: string; summary?: string } | null;
   createdAt: string;
   contact?: { id?: string; name?: string | null; phone: string };
   aiBot?: { name: string } | null;
@@ -82,7 +80,7 @@ type CallsNumberCache = {
   railPanel: string | null;
 };
 
-type RailPanel = 'settings' | 'help' | null;
+type RailPanel = 'settings' | null;
 
 /** Map UI chip → API list params. */
 function chipToParams(chip: string): { status?: string; handler?: string; direction?: string } {
@@ -95,6 +93,8 @@ function chipToParams(chip: string): { status?: string; handler?: string; direct
       return { handler: 'AI' };
     case 'human':
       return { handler: 'AGENT' };
+    case 'in':
+      return { direction: 'USER_INITIATED' };
     case 'out':
       return { direction: 'BUSINESS_INITIATED' };
     default:
@@ -114,7 +114,6 @@ export default function CallsPage() {
   const [calls, setCalls] = useState<CallRecord[]>([]);
   const [status, setStatus] = useState<CallingStatus | null>(null);
   const [listLoading, setListLoading] = useState(false);
-  const [enabling, setEnabling] = useState(false);
   const [ending, setEnding] = useState(false);
   const [callingBack, setCallingBack] = useState(false);
   const [callingBackId, setCallingBackId] = useState<string | null>(null);
@@ -139,7 +138,6 @@ export default function CallsPage() {
       setRailPanel('settings');
     }
   }, [searchParams]);
-  const [setupSheetOpen, setSetupSheetOpen] = useState(false);
   const [analytics, setAnalytics] = useState<{
     today: number;
     missed: number;
@@ -396,27 +394,6 @@ export default function CallsPage() {
     }
   });
 
-  const handleEnableCalling = useCallback(async () => {
-    setEnabling(true);
-    try {
-      await callingApi.enable();
-      toastSuccess('Voice calls are now enabled on your WhatsApp number.');
-      await load();
-    } catch (err: unknown) {
-      const body = (err as { response?: { data?: { error?: { message?: string; hints?: string[] } } } })
-        ?.response?.data?.error;
-      toastError(body?.message || 'Could not enable calls. Check your WhatsApp Business settings.');
-      if (body?.hints?.length) {
-        setStatus((prev) => (prev ? { ...prev, enableHints: body.hints } : prev));
-      }
-    } finally {
-      setEnabling(false);
-    }
-  }, [load]);
-
-  const callingEnabled = status?.callingEnabled ?? status?.callingSettings?.calling?.status === 'ENABLED';
-  const botReady = Boolean(status?.configured);
-
   const selectedCall = useMemo(
     () => (selectedCallId ? calls.find((c) => c.id === selectedCallId) ?? null : null),
     [calls, selectedCallId]
@@ -622,18 +599,6 @@ export default function CallsPage() {
 
   return (
     <PageShell inbox>
-      {setupSheetOpen && (
-        <CallsSetupSheet
-          whatsappConnected={Boolean(status?.whatsappConnected)}
-          callingEnabled={Boolean(callingEnabled)}
-          botReady={botReady}
-          onEnableCalling={() => void handleEnableCalling()}
-          enabling={enabling}
-          enableHints={status?.enableHints}
-          onClose={() => setSetupSheetOpen(false)}
-        />
-      )}
-
       <div className="flex h-full min-h-0 flex-1 overflow-hidden">
         <div className="inbox-shell relative flex h-full min-h-0 w-full flex-1 flex-row overflow-hidden md:rounded-2xl">
         {/* List pane */}
@@ -673,6 +638,7 @@ export default function CallsPage() {
                           name={call.contact?.name}
                           phone={phone}
                           status={call.status}
+                          direction={call.direction}
                           handler={call.handler}
                           durationSeconds={call.durationSeconds}
                           preview={transcriptPreview(call.transcript)}
@@ -727,6 +693,7 @@ export default function CallsPage() {
                 agentName={selectedCall.assignedAgent?.name}
                 conversationId={selectedCall.conversation?.id}
                 transcript={selectedTranscript}
+                summary={selectedCall.metadata?.summary || null}
                 notes={notes}
                 onNotesChange={(value) => {
                   setNotes(value);
@@ -760,15 +727,6 @@ export default function CallsPage() {
           )}
         </div>
 
-        {/* Rail side panel — Help only (settings now lives in the stage) */}
-        {railPanel === 'help' && (
-          <CallsRailPanel
-            panel="help"
-            onClose={() => setRailPanel(null)}
-            onOpenSetup={() => setSetupSheetOpen(true)}
-          />
-        )}
-
         {/* Customize rail — desktop only */}
         <div className={`w-[72px] shrink-0 flex-col border-l border-neutral-200 bg-neutral-50/70 dark:border-neutral-800 dark:bg-neutral-900/50 ${railPanel === 'settings' ? 'hidden' : 'hidden md:flex'}`}>
           <RailIconButton
@@ -776,12 +734,6 @@ export default function CallsPage() {
             label="Settings"
             active={railPanel === 'settings'}
             onClick={() => toggleRail('settings')}
-          />
-          <RailIconButton
-            icon={HelpCircle}
-            label="Help"
-            active={railPanel === 'help'}
-            onClick={() => toggleRail('help')}
           />
         </div>
         </div>

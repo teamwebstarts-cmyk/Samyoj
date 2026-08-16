@@ -8,6 +8,7 @@ import {
   ChevronDown,
   Clock,
   Copy,
+  FileText,
   Info,
   Phone,
   PhoneIncoming,
@@ -379,6 +380,7 @@ export default function MessageBubble({
   const type = message.type?.toUpperCase();
   const isSticker = Boolean(message.metadata?.isSticker);
   const isCallEvent = Boolean(message.metadata?.isCallEvent) || message.content === '[call]';
+  const isCallSummary = Boolean(message.metadata?.isCallSummary);
   const isMediaMessage = ['IMAGE', 'VIDEO', 'AUDIO', 'DOCUMENT'].includes(type);
   const isInteractive = type === 'INTERACTIVE';
   const isContactCard = type === 'CONTACTS';
@@ -712,6 +714,10 @@ export default function MessageBubble({
   /** Size to content; cap against the thread — never `min-w-0` (that collapsed short texts to 1 letter wide). */
   const bubbleMaxClass = 'w-fit max-w-[min(100%,75%)] sm:max-w-[min(100%,65%)]';
 
+  if (isCallSummary) {
+    return <CallSummaryCard message={message} />;
+  }
+
   if (isCallEvent) {
     return <CallEventPill message={message} />;
   }
@@ -1035,6 +1041,28 @@ export function DateDivider({ label }: { label: string }) {
       <span className="rounded-full bg-chat-bubble-received/95 px-3.5 py-1 text-[11.5px] font-semibold tracking-wide text-chat-timestamp shadow-[0_1px_1px_rgba(11,20,26,0.06)]">
         {label}
       </span>
+    </div>
+  );
+}
+
+function CallSummaryCard({ message }: { message: Message }) {
+  const time = formatMessageTime(message.createdAt);
+  return (
+    <div
+      className="flex items-center justify-center px-3 py-2.5"
+      role="status"
+      data-message-id={message.id}
+    >
+      <div className="w-full max-w-[min(100%,22rem)] rounded-2xl border border-violet-200/80 bg-violet-50/90 px-3.5 py-2.5 text-left shadow-[0_1px_1px_rgba(11,20,26,0.06)] dark:border-violet-900/50 dark:bg-violet-950/40">
+        <p className="inline-flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-wide text-violet-700 dark:text-violet-300">
+          <FileText className="h-3 w-3 shrink-0" strokeWidth={2.25} />
+          Call summary
+          {time ? <span className="font-medium text-violet-600/80 dark:text-violet-400/80">· {time}</span> : null}
+        </p>
+        <p className="mt-1 text-[13px] font-medium leading-snug text-neutral-800 dark:text-neutral-100">
+          {message.content}
+        </p>
+      </div>
     </div>
   );
 }

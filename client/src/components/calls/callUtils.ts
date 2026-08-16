@@ -31,6 +31,15 @@ export function formatCallTime(iso: string): string {
   return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
+/** List title: contact name, or a short unknown label — never a full +91 line. */
+export function callListTitle(name?: string | null, phone?: string): string {
+  const trimmed = name?.trim();
+  if (trimmed) return trimmed;
+  const digits = (phone || '').replace(/\D/g, '');
+  if (digits.length >= 4) return `Unknown · ${digits.slice(-4)}`;
+  return 'Unknown';
+}
+
 export function formatPhoneDisplay(phone: string): string {
   const digits = phone.replace(/\D/g, '');
   if (digits.length >= 12 && digits.startsWith('91')) {

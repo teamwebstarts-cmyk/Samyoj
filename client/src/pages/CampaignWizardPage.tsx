@@ -24,7 +24,7 @@ import { templateDynamicUrlButtons, templateNeedsCoupon } from '../utils/templat
 import AppButton from '../components/ui/AppButton';
 import TemplateIssueAlert from '../components/templates/TemplateIssueAlert';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
-import LoadingState from '../components/ui/LoadingState';
+import { WizardPageSkeleton } from '../components/ui/ListLayoutSkeleton';
 import { useAuth } from '../contexts/AuthContext';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
@@ -480,13 +480,7 @@ export default function CampaignWizardPage() {
   };
 
   if (numbersLoading && !hasConnectedNumber) {
-    return (
-      <div className="campaign-wizard-page">
-        <div className="flex min-h-0 flex-1 items-center justify-center">
-          <LoadingState label="Loading…" />
-        </div>
-      </div>
-    );
+    return <WizardPageSkeleton label="Loading" />;
   }
 
   if (!hasConnectedNumber) {
@@ -508,13 +502,7 @@ export default function CampaignWizardPage() {
   }
 
   if (loading) {
-    return (
-      <div className="campaign-wizard-page">
-        <div className="flex min-h-0 flex-1 items-center justify-center">
-          <LoadingState label="Loading campaign…" />
-        </div>
-      </div>
-    );
+    return <WizardPageSkeleton label="Loading campaign" />;
   }
 
   return (

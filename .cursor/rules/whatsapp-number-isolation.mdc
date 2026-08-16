@@ -12,6 +12,7 @@ Shared Postgres. Each connected number is a durable workspace via `whatsappNumbe
 - Scope contacts, tags, consent, inbox, campaigns, and tickets by `whatsappNumberId`.
 - Reconnect the same normalized displayed phone to the **same** workspace even if Meta `phoneNumberId` changes (`saveWhatsappConnection`).
 - Disconnect = soft (`isActive=false`). Do **not** delete number rows or conversation history.
+- After this org disconnects, another org may connect the same Meta id and gets a **new empty** workspace — never this org’s row (SAMYOJ-49). While this org is **active**, the other org 409s. Webhook routing stays `phoneNumberId` + `isActive: true`.
 - Client persists Meta `phoneNumberId`; HTTP uses current DB id `X-WhatsApp-Number-Id`.
 - Multiple active numbers + missing header → **409**. Never pick “latest”.
 - Contacts unique `(organizationId, whatsappNumberId, normalizedPhone)`.
@@ -23,4 +24,4 @@ Shared Postgres. Each connected number is a durable workspace via `whatsappNumbe
 - Org-wide queries when the number header is missing (use the empty-id filter).
 - Trust old Inbox/AUDIT docs that say disconnect deletes numbers or nulls `whatsappNumberId`.
 
-Code: `server/src/modules/whatsapp/active-number.ts`, `client/src/contexts/WhatsAppNumberContext.tsx`.
+Code: `server/src/modules/whatsapp/active-number.ts`, `server/src/modules/whatsapp/save-connection.ts`, `client/src/contexts/WhatsAppNumberContext.tsx`.

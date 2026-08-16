@@ -4,6 +4,8 @@ import { AuthProvider } from './contexts/AuthContext';
 import { WhatsAppNumberProvider } from './contexts/WhatsAppNumberContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { DensityProvider } from './contexts/DensityContext';
+import { CardSpacingProvider } from './contexts/CardSpacingContext';
+import { PageGutterProvider } from './contexts/PageGutterContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -46,6 +48,8 @@ export default function App() {
     <ErrorBoundary>
       <ThemeProvider>
         <DensityProvider>
+        <CardSpacingProvider>
+        <PageGutterProvider>
         <AuthProvider>
           <WhatsAppNumberProvider>
             <AppToaster />
@@ -106,6 +110,8 @@ export default function App() {
             </BrowserRouter>
           </WhatsAppNumberProvider>
         </AuthProvider>
+        </PageGutterProvider>
+        </CardSpacingProvider>
         </DensityProvider>
       </ThemeProvider>
     </ErrorBoundary>

@@ -1,8 +1,8 @@
-import { Calendar, LayoutTemplate, Users } from 'lucide-react';
+import { Calendar, LayoutTemplate, Repeat, Users } from 'lucide-react';
 import { ModalPanel } from '../ui/modalUi';
 import StatusBadge from '../ui/StatusBadge';
 import type { Campaign } from '../../types';
-import { campaignProgress, formatCampaignDate, getAudienceLabel, getStatusMeta } from './campaignUi';
+import { campaignProgress, formatCampaignDate, formatCampaignRepeatLabel, getAudienceLabel, getStatusMeta } from './campaignUi';
 
 interface CampaignDetailHeaderProps {
   campaign: Campaign;
@@ -10,6 +10,7 @@ interface CampaignDetailHeaderProps {
 
 export default function CampaignDetailHeader({ campaign }: CampaignDetailHeaderProps) {
   const scheduledLabel = formatCampaignDate(campaign.scheduledAt, campaign.timezone);
+  const repeatLabel = formatCampaignRepeatLabel(campaign);
   const progress = campaignProgress(campaign.sentCount, campaign.totalContacts);
 
   return (
@@ -34,6 +35,12 @@ export default function CampaignDetailHeader({ campaign }: CampaignDetailHeaderP
           <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800 ring-1 ring-amber-100 dark:bg-amber-950/40 dark:text-amber-300">
             <Calendar className="h-3 w-3" />
             {scheduledLabel}
+          </span>
+        )}
+        {repeatLabel && (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-50 px-2.5 py-0.5 text-[11px] font-semibold text-violet-800 ring-1 ring-violet-100 dark:bg-violet-950/40 dark:text-violet-300">
+            <Repeat className="h-3 w-3" />
+            {repeatLabel}
           </span>
         )}
       </div>

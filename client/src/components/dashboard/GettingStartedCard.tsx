@@ -24,7 +24,7 @@ export default function GettingStartedCard({
   totalSteps,
 }: GettingStartedCardProps) {
   return (
-    <section className="dashboard-card flex h-auto flex-col justify-between rounded-2xl sm:rounded-3xl p-3.5 sm:p-4 md:p-5 lg:p-6 bg-white border border-neutral-100/90 shadow-xs">
+    <section className="dashboard-card flex h-auto flex-col justify-between rounded-2xl border border-neutral-100/90 bg-white p-[var(--card-pad)] shadow-xs sm:rounded-3xl">
       {/* Card Header: Icon + Title + Progress Badge */}
       <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
         <div className="flex min-w-0 items-center gap-2 sm:gap-2.5">

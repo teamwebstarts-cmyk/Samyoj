@@ -142,3 +142,158 @@ export async function publishCallEventMessage(callId: string): Promise<void> {
     });
   }
 }
+
+/**
+ * System chat card for an AI post-call summary (never an inbound customer bubble).
+ * Idempotent via metaMessageId = `call-summary:<callId>`.
+ */
+export async function publishCallSummaryMessage(input: {
+  callId: string;
+  organizationId: string;
+  conversationId: string;
+  summary: string;
+  createdAt?: Date;
+  emit?: boolean;
+}): Promise<void> {
+  const summary = input.summary.trim();
+  if (!summary) return;
+
+  const conversation = await prisma.conversation.findFirst({
+    where: { id: input.conversationId, organizationId: input.organizationId },
+    select: { id: true, whatsappNumberId: true, lastMessageAt: true },
+  });
+  if (!conversation) return;
+
+  const call = await prisma.call.findUnique({
+    where: { id: input.callId },
+    select: { whatsappNumberId: true },
+  });
+  if (
+    call?.whatsappNumberId &&
+    conversation.whatsappNumberId &&
+    call.whatsappNumberId !== conversation.whatsappNumberId
+  ) {
+    log.warn('Skipping call summary for mismatched conversation number', { callId: input.callId });
+    return;
+  }
+
+  const metadata = { isCallSummary: true, callId: input.callId };
+  const createdAt = input.createdAt;
+
+  try {
+    const message = await prisma.message.upsert({
+    where: { metaMessageId: `call-summary:${input.callId}` },
+    create: {
+      conversationId: conversation.id,
+      metaMessageId: `call-summary:${input.callId}`,
+      direction: 'OUTBOUND',
+      type: 'TEXT',
+      content: summary,
+      status: 'READ',
+      metadata,
+      ...(createdAt ? { createdAt } : {}),
+    },
+    update: {
+      content: summary,
+      metadata,
+      status: 'READ',
+    },
+  });
+
+  const shouldTouchConversation =
+    !conversation.lastMessageAt || message.createdAt >= conversation.lastMessageAt;
+  if (shouldTouchConversation) {
+    await prisma.conversation.update({
+      where: { id: conversation.id },
+      data: { lastMessageAt: message.createdAt },
+    });
+  }
+
+  if (input.emit === false) return;
+
+  emitToOrg(input.organizationId, 'message:new', {
+    conversationId: conversation.id,
+    message,
+    conversation: {
+      id: conversation.id,
+      lastMessageAt: shouldTouchConversation ? message.createdAt : conversation.lastMessageAt,
+      lastMessage: {
+        id: message.id,
+        direction: message.direction,
+        type: message.type,
+        content: message.content,
+        status: message.status,
+        createdAt: message.createdAt,
+      },
+    },
+  });
+  } catch (err) {
+    log.warn('Failed to publish call summary message', {
+      callId: input.callId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+function callMetadataSummary(metadata: unknown): string | null {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null;
+  const summary = (metadata as { summary?: unknown }).summary;
+  if (typeof summary !== 'string') return null;
+  const trimmed = summary.trim();
+  return trimmed || null;
+}
+
+/**
+ * Best-effort Inbox cards for older AI calls that have Call.metadata.summary
+ * but never got a `call-summary:<id>` message. Fail closed — never breaks GET.
+ */
+export async function backfillCallSummaryMessages(input: {
+  conversationId: string;
+  organizationId: string;
+  whatsappNumberId?: string | null;
+}): Promise<void> {
+  try {
+    const calls = await prisma.call.findMany({
+      where: {
+        conversationId: input.conversationId,
+        organizationId: input.organizationId,
+        ...(input.whatsappNumberId ? { whatsappNumberId: input.whatsappNumberId } : {}),
+      },
+      select: { id: true, metadata: true, endedAt: true, createdAt: true },
+      take: 100,
+      orderBy: { createdAt: 'desc' },
+    });
+    const withSummary = calls
+      .map((call) => ({ call, summary: callMetadataSummary(call.metadata) }))
+      .filter((row): row is { call: (typeof calls)[number]; summary: string } => Boolean(row.summary));
+    if (withSummary.length === 0) return;
+
+    const existing = await prisma.message.findMany({
+      where: {
+        conversationId: input.conversationId,
+        metaMessageId: { in: withSummary.map(({ call }) => `call-summary:${call.id}`) },
+      },
+      select: { metaMessageId: true },
+    });
+    const have = new Set(existing.map((row) => row.metaMessageId));
+    await Promise.all(
+      withSummary
+        .filter(({ call }) => !have.has(`call-summary:${call.id}`))
+        .map(({ call, summary }) =>
+          publishCallSummaryMessage({
+            callId: call.id,
+            organizationId: input.organizationId,
+            conversationId: input.conversationId,
+            summary,
+            createdAt: call.endedAt || call.createdAt,
+            emit: false,
+          })
+        )
+    );
+  } catch (err) {
+    log.warn('Failed to backfill call summary messages', {
+      conversationId: input.conversationId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}

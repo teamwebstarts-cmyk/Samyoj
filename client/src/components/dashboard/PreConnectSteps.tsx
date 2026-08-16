@@ -128,14 +128,14 @@ export default function PreConnectSteps({
 
   return (
     <section id="preconnect-steps" aria-label="Get started in 4 easy steps" className="scroll-mt-20">
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(240px,280px)] lg:items-stretch lg:gap-4">
+      <div className="card-grid grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(240px,280px)] lg:items-stretch">
         {/* One parent card: heading + 4 steps */}
-        <div className="rounded-2xl border border-neutral-100 bg-white p-3 shadow-[0_4px_12px_rgba(15,23,42,0.05)] sm:p-3.5 md:p-4">
-          <h3 className="mb-3 text-[16px] font-bold tracking-tight text-neutral-900 sm:mb-3.5 sm:text-[18px]">
+        <div className="rounded-2xl border border-neutral-100 bg-white p-[var(--card-pad)] shadow-[0_4px_12px_rgba(15,23,42,0.05)]">
+          <h3 className="mb-[var(--card-gap)] text-[16px] font-bold tracking-tight text-neutral-900 sm:text-[18px]">
             Get started in 4 easy steps
           </h3>
 
-          <div className="grid grid-cols-1 gap-3 min-[640px]:grid-cols-2 lg:grid-cols-4 lg:gap-3 xl:gap-4">
+          <div className="card-grid grid grid-cols-1 min-[640px]:grid-cols-2 lg:grid-cols-4">
             {STEPS.map((step, index) => {
               const t = TONE[step.tone];
               const ctaClass = `mt-3 inline-flex w-auto max-w-full items-center justify-center gap-1 self-start rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition sm:text-[11.5px] ${t.btn} disabled:opacity-60`;
@@ -189,7 +189,7 @@ export default function PreConnectSteps({
         </div>
 
         {/* Watch Setup Video — separate card beside */}
-        <article className="flex min-w-0 flex-col rounded-2xl border border-neutral-100 bg-white p-3.5 shadow-[0_4px_12px_rgba(15,23,42,0.05)] sm:p-4">
+        <article className="flex min-w-0 flex-col rounded-2xl border border-neutral-100 bg-white p-[var(--card-pad)] shadow-[0_4px_12px_rgba(15,23,42,0.05)]">
           <div className="flex items-center gap-2">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-sky-50 text-sky-600">
               <Video className="h-3.5 w-3.5" strokeWidth={2.1} />

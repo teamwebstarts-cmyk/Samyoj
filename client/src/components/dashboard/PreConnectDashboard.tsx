@@ -32,7 +32,7 @@ export default function PreConnectDashboard() {
   }, []);
 
   return (
-    <div className="space-y-5 pb-4 sm:space-y-7 sm:pb-2 lg:space-y-8">
+    <div className="dashboard-stack pb-4 sm:pb-2">
       <PreConnectHero
         connecting={connecting}
         onConnect={connect}
@@ -55,12 +55,12 @@ export default function PreConnectDashboard() {
 
 export function PreConnectSkeleton() {
   return (
-    <div className="animate-pulse space-y-5 sm:space-y-7">
+    <div className="dashboard-stack animate-pulse">
       <div className="h-[280px] rounded-2xl bg-neutral-100/90 sm:h-[340px] sm:rounded-[1.25rem]" />
       <div>
-        <div className="mb-3 h-5 w-52 rounded bg-neutral-100 sm:mb-4" />
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_280px]">
-          <div className="grid grid-cols-1 gap-3 min-[640px]:grid-cols-2 xl:grid-cols-4">
+        <div className="mb-[var(--card-gap)] h-5 w-52 rounded bg-neutral-100" />
+        <div className="card-grid grid grid-cols-1 lg:grid-cols-[1fr_280px]">
+          <div className="card-grid grid grid-cols-1 min-[640px]:grid-cols-2 xl:grid-cols-4">
             {Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="h-44 rounded-2xl bg-neutral-100/90" />
             ))}
@@ -69,8 +69,8 @@ export function PreConnectSkeleton() {
         </div>
       </div>
       <div>
-        <div className="mb-3 h-5 w-64 rounded bg-neutral-100" />
-        <div className="grid grid-cols-2 gap-3 xl:grid-cols-6">
+        <div className="mb-[var(--card-gap)] h-5 w-64 rounded bg-neutral-100" />
+        <div className="card-grid grid grid-cols-2 xl:grid-cols-6">
           {Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="h-36 rounded-2xl bg-neutral-100/80" />
           ))}

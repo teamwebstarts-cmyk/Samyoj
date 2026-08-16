@@ -847,6 +847,10 @@ export interface Campaign {
   failedCount: number;
   scheduledAt?: string;
   timezone?: string;
+  repeatIntervalDays?: number | null;
+  repeatUntil?: string | null;
+  repeatMaxOccurrences?: number | null;
+  repeatOccurrenceCount?: number;
   pausedAt?: string;
   cancelledAt?: string;
   createdAt?: string;

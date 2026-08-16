@@ -1,4 +1,5 @@
 import {
+  CalendarClock,
   Download,
   Eye,
   Pause,
@@ -19,6 +20,7 @@ import {
   getCampaignRelativeLabel,
   getAudienceLabel,
   getStatusMeta,
+  canRescheduleCampaign,
 } from './campaignUi';
 
 interface CampaignCardProps {
@@ -31,6 +33,7 @@ interface CampaignCardProps {
   onDelete?: () => void;
   onExport?: () => void;
   onRetry?: () => void;
+  onReschedule?: () => void;
 }
 
 export default function CampaignCard({
@@ -43,6 +46,7 @@ export default function CampaignCard({
   onDelete,
   onExport,
   onRetry,
+  onReschedule,
 }: CampaignCardProps) {
   const meta = getStatusMeta(campaign.status);
   const StatusIcon = meta.icon;
@@ -64,6 +68,7 @@ export default function CampaignCard({
   const showDelete = Boolean(onDelete && campaign.status === 'DRAFT');
   const showExport = Boolean(onExport && (campaign.status === 'COMPLETED' || campaign.status === 'FAILED' || campaign.sentCount > 0));
   const showRetry = Boolean(onRetry && campaign.status === 'FAILED' && campaign.failedCount > 0);
+  const showReschedule = Boolean(onReschedule && canRescheduleCampaign(campaign.status));
 
   return (
     <article className="bg-white transition-colors hover:bg-slate-50/80 dark:bg-neutral-950 dark:hover:bg-neutral-900/50">
@@ -169,10 +174,24 @@ export default function CampaignCard({
         {showRetry && (
           <AppButton size="sm" variant="secondary" icon={<RefreshCw size={14} />} onClick={onRetry} />
         )}
+        {showReschedule && (
+          <AppButton
+            size="sm"
+            variant="secondary"
+            icon={<CalendarClock size={14} />}
+            onClick={onReschedule}
+            aria-label="Reschedule campaign"
+          />
+        )}
         {showDelete && (
           <AppButton size="sm" variant="secondary" icon={<Trash2 size={14} />} onClick={onDelete} />
         )}
         <CampaignActionsMenu>
+          {showReschedule && (
+            <button type="button" onClick={onReschedule} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-fg hover:bg-theme-subtle">
+              <CalendarClock className="h-3.5 w-3.5" /> Reschedule
+            </button>
+          )}
           {editable && onEdit && primaryAction !== 'edit' && (
             <button type="button" onClick={onEdit} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-fg hover:bg-theme-subtle">
               <Pencil className="h-3.5 w-3.5" /> Edit campaign

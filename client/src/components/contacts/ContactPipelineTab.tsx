@@ -13,7 +13,7 @@ import AppButton from '../ui/AppButton';
 import DataTable from '../ui/DataTable';
 import EmptyState from '../ui/EmptyState';
 import ListToolbar from '../ui/ListToolbar';
-import LoadingState from '../ui/LoadingState';
+import ListLayoutSkeleton from '../ui/ListLayoutSkeleton';
 import ResponsiveDataView from '../ui/ResponsiveDataView';
 import { leadApi } from '../../services/api';
 import { toastError, toastSuccess } from '../../utils/toast';
@@ -192,10 +192,11 @@ export default function ContactPipelineTab({ onStatsChange, refreshToken = 0 }: 
         </div>
       </div>
 
-      {loading ? (
-        <div className="p-6">
-          <LoadingState label="Loading pipeline…" />
-        </div>
+      {loading && leads.length === 0 ? (
+        <ListLayoutSkeleton
+          label="Loading pipeline"
+          tableHeaders={['Lead', 'Stage', 'Owner', 'Updated']}
+        />
       ) : filteredLeads.length === 0 ? (
         <div className="p-4 sm:p-6">
           <EmptyState

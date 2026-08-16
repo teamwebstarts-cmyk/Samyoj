@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowRight,
+  CalendarClock,
   Copy,
   Download,
   LayoutTemplate,
@@ -23,6 +24,8 @@ import CampaignCard from '../components/campaigns/CampaignCard';
 import CampaignDetailHeader from '../components/campaigns/CampaignDetailHeader';
 import CampaignQuotaBanner from '../components/campaigns/CampaignQuotaBanner';
 import CampaignRecipientTable from '../components/campaigns/CampaignRecipientTable';
+import CampaignRescheduleDialog from '../components/campaigns/CampaignRescheduleDialog';
+import type { CampaignReschedulePayload } from '../components/campaigns/CampaignRescheduleDialog';
 import CampaignActionsMenu from '../components/campaigns/CampaignActionsMenu';
 import CampaignStatusFilter from '../components/campaigns/CampaignStatusFilter';
 import {
@@ -43,8 +46,7 @@ import AppSelect from '../components/ui/AppSelect';
 import EmptyState from '../components/ui/EmptyState';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import ListToolbar from '../components/ui/ListToolbar';
-import { useIsBelowLg } from '../hooks/useBreakpoint';
-import LoadingState from '../components/ui/LoadingState';
+import ListLayoutSkeleton from '../components/ui/ListLayoutSkeleton';
 import PageShell from '../components/ui/PageShell';
 import Pagination from '../components/ui/Pagination';
 import ResponsiveDataView from '../components/ui/ResponsiveDataView';
@@ -55,6 +57,7 @@ import { DEFAULT_PAGE_SIZE } from '../constants/pagination';
 import { useAuth } from '../contexts/AuthContext';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { useIsBelowLg } from '../hooks/useBreakpoint';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 import { useSocket } from '../hooks/useSocket';
 import { campaignApi, contactApi, templateApi, whatsappApi } from '../services/api';
@@ -108,6 +111,10 @@ const periodFilterOptions = [
 
 function canEditCampaign(status: string) {
   return status === 'DRAFT' || status === 'SCHEDULED';
+}
+
+function canRescheduleCampaign(status: string) {
+  return status === 'DRAFT' || status === 'SCHEDULED' || status === 'COMPLETED';
 }
 
 function countVars(text?: string) {
@@ -265,6 +272,8 @@ export default function CampaignsPage() {
     variant: 'danger' | 'default';
     onConfirm: () => void | Promise<void>;
   } | null>(null);
+  const [rescheduleTarget, setRescheduleTarget] = useState<Campaign | null>(null);
+  const [rescheduleSaving, setRescheduleSaving] = useState(false);
 
   const debouncedSearch = useDebouncedValue(search);
   const hasFilters = Boolean(search || statusFilter || period);
@@ -445,6 +454,7 @@ export default function CampaignsPage() {
     setRecipientTotal(0);
     setAudiencePreviewCount(null);
     setConfirmState(null);
+    setRescheduleTarget(null);
     setActiveStep(0);
     setPage(1);
     loadTemplates();
@@ -831,6 +841,25 @@ export default function CampaignsPage() {
     );
   };
 
+  const handleRescheduleSave = async (payload: CampaignReschedulePayload) => {
+    if (!rescheduleTarget) return;
+    setRescheduleSaving(true);
+    try {
+      await campaignApi.reschedule(rescheduleTarget.id, payload);
+      toastSuccess('Campaign rescheduled');
+      const campaignId = rescheduleTarget.id;
+      setRescheduleTarget(null);
+      loadCampaigns(false);
+      if (editing?.id === campaignId) {
+        await refreshOpenCampaign(campaignId);
+      }
+    } catch (err: unknown) {
+      toastError(getErrMsg(err, 'Could not reschedule this campaign. Refresh and try again.'));
+    } finally {
+      setRescheduleSaving(false);
+    }
+  };
+
   const handleSort = (key: CampaignSortKey) => {
     if (sortBy === key) {
       setSortDir((dir) => (dir === 'asc' ? 'desc' : 'asc'));
@@ -910,10 +939,12 @@ export default function CampaignsPage() {
             }
           />
 
-          {loading ? (
-            <div className="p-6">
-              <LoadingState label="Loading campaigns…" />
-            </div>
+          {loading && campaigns.length === 0 ? (
+            <ListLayoutSkeleton
+              label="Loading campaigns"
+              withProgress
+              tableHeaders={['Campaign', 'Status', 'Audience', 'Progress', 'Created', 'Actions']}
+            />
           ) : campaigns.length === 0 ? (
             <div className="p-4 sm:p-6">
               {hasFilters ? (
@@ -1038,6 +1069,11 @@ export default function CampaignsPage() {
                       onDelete={canManageTeam ? () => handleDeleteItem(c) : undefined}
                       onExport={() => handleExport(c.id, c.name)}
                       onRetry={canManageTeam ? () => handleRetry(c.id) : undefined}
+                      onReschedule={
+                        canManageTeam && canRescheduleCampaign(c.status)
+                          ? () => setRescheduleTarget(c)
+                          : undefined
+                      }
                     />
                   )}
                   renderTable={() => (
@@ -1061,6 +1097,7 @@ export default function CampaignsPage() {
                       onDelete={canManageTeam ? handleDeleteItem : undefined}
                       onExport={(c) => handleExport(c.id, c.name)}
                       onRetry={canManageTeam ? (c) => handleRetry(c.id) : undefined}
+                      onReschedule={canManageTeam ? setRescheduleTarget : undefined}
                     />
                   )}
                 />
@@ -1104,6 +1141,16 @@ export default function CampaignsPage() {
           viewOnly ? (
             <div className="flex w-full flex-col gap-2.5">
               <div className="flex flex-wrap items-center justify-end gap-2">
+                {canManageTeam && editing && canRescheduleCampaign(editing.status) && (
+                  <AppButton
+                    size="sm"
+                    variant="secondary"
+                    icon={<CalendarClock size={14} />}
+                    onClick={() => setRescheduleTarget(editing)}
+                  >
+                    Reschedule
+                  </AppButton>
+                )}
                 {canManageTeam && editing && canEditCampaign(editing.status) && (
                   <>
                     <AppButton size="sm" icon={<Play size={14} />} onClick={() => handleSend(editing.id)}>
@@ -1490,6 +1537,15 @@ export default function CampaignsPage() {
           </form>
         )}
       </SlideOver>
+      <CampaignRescheduleDialog
+        campaign={rescheduleTarget}
+        open={Boolean(rescheduleTarget)}
+        loading={rescheduleSaving}
+        onClose={() => {
+          if (!rescheduleSaving) setRescheduleTarget(null);
+        }}
+        onSave={(payload) => void handleRescheduleSave(payload)}
+      />
       <ConfirmDialog
         open={Boolean(confirmState)}
         onClose={() => setConfirmState(null)}

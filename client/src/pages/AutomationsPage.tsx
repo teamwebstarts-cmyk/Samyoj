@@ -32,7 +32,7 @@ import AppTextarea from '../components/ui/AppTextarea';
 import DataTable from '../components/ui/DataTable';
 import EmptyState from '../components/ui/EmptyState';
 import ListToolbar from '../components/ui/ListToolbar';
-import LoadingState from '../components/ui/LoadingState';
+import ListLayoutSkeleton from '../components/ui/ListLayoutSkeleton';
 import PageHero from '../components/ui/PageHero';
 import PageShell from '../components/ui/PageShell';
 import ResponsiveDataView from '../components/ui/ResponsiveDataView';
@@ -561,10 +561,11 @@ export default function AutomationsPage() {
               }
             />
 
-            {loading ? (
-              <div className="p-6">
-                <LoadingState label="Loading automations..." />
-              </div>
+            {loading && automations.length === 0 ? (
+              <ListLayoutSkeleton
+                label="Loading automations"
+                tableHeaders={['Auto-reply', 'Type', 'Status', 'Updated', 'Actions']}
+              />
             ) : automations.length === 0 ? (
               <div className="space-y-6 p-4 sm:p-6">
                 <EmptyState

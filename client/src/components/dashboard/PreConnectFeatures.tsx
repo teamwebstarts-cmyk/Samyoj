@@ -58,7 +58,7 @@ export default function PreConnectFeatures() {
   return (
     <section id="preconnect-features" aria-label="Powerful features" className="scroll-mt-20">
       {/* Parent shell matching design: heading + cards in one bordered surface */}
-      <div className="rounded-2xl border border-neutral-100 bg-[#F8FAFB] p-4 shadow-[0_4px_12px_rgba(15,23,42,0.04)] sm:p-5 md:rounded-[1.25rem] md:p-6">
+      <div className="rounded-2xl border border-neutral-100 bg-[#F8FAFB] p-[var(--card-pad)] shadow-[0_4px_12px_rgba(15,23,42,0.04)] md:rounded-[1.25rem]">
         <div className="max-w-3xl">
           <h3 className="text-[17px] font-bold tracking-tight text-neutral-900 sm:text-[19px]">
             Powerful features to grow your business
@@ -68,7 +68,7 @@ export default function PreConnectFeatures() {
           </p>
         </div>
 
-        <div className="mt-4 grid grid-cols-1 items-stretch gap-2.5 min-[480px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-[repeat(5,minmax(0,1fr))_minmax(220px,1.55fr)] xl:gap-2.5">
+        <div className="card-grid mt-[var(--card-gap)] grid grid-cols-1 items-stretch min-[480px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-[repeat(5,minmax(0,1fr))_minmax(220px,1.55fr)]">
           {FEATURES.map((f) => {
             const Icon = f.icon;
             return (

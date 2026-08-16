@@ -114,7 +114,7 @@ export default function UpcomingCampaignsCard({
   onRetry,
 }: UpcomingCampaignsCardProps) {
   return (
-    <section className="dashboard-card flex h-full flex-col rounded-2xl border border-neutral-100/90 bg-white p-3 shadow-xs sm:rounded-3xl sm:p-3.5">
+    <section className="dashboard-card flex h-full flex-col rounded-2xl border border-neutral-100/90 bg-white p-[var(--card-pad)] shadow-xs sm:rounded-3xl">
       {/* Card Header: Icon + Title + Info + View All Link */}
       <div className="flex shrink-0 items-start justify-between gap-2 sm:items-center sm:gap-3">
         <div className="flex min-w-0 items-center gap-2 sm:gap-2.5">

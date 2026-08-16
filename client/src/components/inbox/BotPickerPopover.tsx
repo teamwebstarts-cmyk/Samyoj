@@ -10,14 +10,14 @@ import { useAuth } from '../../contexts/AuthContext';
 export interface BotPickerPopoverProps {
   bots: AiBot[];
   loading?: boolean;
-  /** Conversation's assigned bot id; null = org default (Auto). */
+  /** Conversation's assigned bot id; null follows the AI Bot page default. */
   activeBotId: string | null;
   botIsLive: boolean;
   botToggling?: boolean;
   botAssigning?: boolean;
   anchorRef: RefObject<HTMLElement | null>;
   onToggleBot: () => void;
-  onSelectBot: (botId: string | null) => void;
+  onSelectBot: (botId: string) => void;
   onClose: () => void;
 }
 
@@ -98,11 +98,24 @@ export default function BotPickerPopover({
     return () => document.removeEventListener('mousedown', onDoc);
   }, [anchorRef, onClose]);
 
-  const pick = (botId: string | null) => {
+  const pick = (botId: string) => {
     if (botAssigning) return;
+    // Following the AI Bot page default: the default row is check-marked, but
+    // tapping it must not pin bot.id — that would stop later Default changes.
+    const followingDefault = activeBotId === null;
+    if (followingDefault && defaultBot?.id === botId) {
+      onClose();
+      return;
+    }
+    if (activeBotId === botId) {
+      onClose();
+      return;
+    }
     onSelectBot(botId);
     onClose();
   };
+
+  const selectedBotId = activeBotId ?? defaultBot?.id ?? null;
 
   const busy = botAssigning || loading;
   const toggleBusy = botToggling || botAssigning;
@@ -164,32 +177,8 @@ export default function BotPickerPopover({
           <p className="px-3 py-3 text-[12px] text-theme-muted">Loading bots…</p>
         ) : (
           <>
-            <button
-              type="button"
-              role="option"
-              aria-selected={activeBotId === null}
-              disabled={busy}
-              onClick={() => pick(null)}
-              className={`flex w-full items-start gap-2 px-3 py-2 text-left transition hover:bg-theme-subtle disabled:opacity-50 ${FOCUS_RING_CLASS} ${
-                activeBotId === null ? 'bg-whatsapp-500/8' : ''
-              }`}
-            >
-              <Bot className="mt-0.5 h-3.5 w-3.5 shrink-0 text-theme-muted" strokeWidth={2.1} />
-              <span className="min-w-0 flex-1">
-                <span className="block text-[13px] font-semibold tracking-tight text-theme-fg">
-                  Auto · default
-                </span>
-                <span className="block text-[11px] leading-snug text-theme-muted">
-                  {defaultBot ? `Uses ${defaultBot.name}` : 'Org default chatbot'}
-                </span>
-              </span>
-              {activeBotId === null && (
-                <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-whatsapp-600" />
-              )}
-            </button>
-
             {enabledBots.map((bot) => {
-              const selected = activeBotId === bot.id;
+              const selected = selectedBotId === bot.id;
               const hint =
                 truncateHint(bot.instructions) ||
                 (bot._count?.knowledgeItems != null
@@ -245,7 +234,7 @@ export default function BotPickerPopover({
 
             {activeBotId && !enabledBots.some((b) => b.id === activeBotId) && (
               <p className="px-3 py-2 text-[11px] text-amber-700 dark:text-amber-400">
-                Assigned bot is unavailable — pick another or Auto.
+                Assigned bot is unavailable — pick another enabled bot.
               </p>
             )}
           </>

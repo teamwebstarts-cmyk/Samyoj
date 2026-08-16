@@ -9,6 +9,7 @@ import { RoleBadge } from '../components/team/AvailabilityBadge';
 import { roleLabels } from '../components/team/teamUi';
 import type { OrgRole } from '../types';
 import { toastError, toastSuccess } from '../utils/toast';
+import { setAuthTokens } from '../utils/authStorage';
 
 interface InvitePreview {
   email: string;
@@ -55,8 +56,7 @@ export default function AcceptInvitePage() {
         name: name.trim() || undefined,
         password,
       });
-      localStorage.setItem('accessToken', data.data.accessToken);
-      localStorage.setItem('refreshToken', data.data.refreshToken);
+      setAuthTokens(data.data.accessToken, data.data.refreshToken);
       toastSuccess(`Welcome to ${data.data.organization.companyName}!`);
       navigate('/');
       window.location.reload();

@@ -8,7 +8,7 @@ export default function PreConnectProTip({ onGetStarted }: PreConnectProTipProps
   return (
     <section
       aria-label="Pro tip"
-      className="flex flex-col gap-3 rounded-2xl border border-emerald-100/90 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-5 sm:py-4"
+      className="flex flex-col gap-[var(--card-gap)] rounded-2xl border border-emerald-100/90 p-[var(--card-pad)] sm:flex-row sm:items-center sm:justify-between"
       style={{ background: 'linear-gradient(90deg, #E8F8EE 0%, #F0FDF6 55%, #ECFDF5 100%)' }}
     >
       <div className="flex min-w-0 items-start gap-3 sm:items-center">

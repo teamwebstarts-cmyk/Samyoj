@@ -524,8 +524,16 @@ export default function InboxPage() {
 
   useInboxDeepLink({ upsertConversation, openConversation: handleOpenConversation });
 
-  const handleStartChat = async (phone: string, name?: string) => {
-    const response = await inboxApi.start({ phone, name });
+  const handleStartChat = async (payload: {
+    phone: string;
+    name?: string;
+    email?: string;
+    tags?: string[];
+    notes?: string;
+    customAttributes?: Record<string, string>;
+    optedIn?: boolean;
+  }) => {
+    const response = await inboxApi.start(payload);
     const { data } = response;
     const conversation = data.data as Conversation;
     upsertConversation(conversation, true);

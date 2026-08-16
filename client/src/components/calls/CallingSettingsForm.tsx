@@ -245,12 +245,6 @@ export default function CallingSettingsForm({ initialSection = 'who' }: CallingS
                 </button>
               );
             })}
-            <Link
-              to="/calls"
-              className="mt-2 hidden rounded-xl border border-dashed border-neutral-200 px-3.5 py-3 text-[12.5px] font-semibold text-neutral-400 hover:border-emerald-200 hover:text-emerald-700 lg:mt-auto lg:block dark:border-neutral-700"
-            >
-              Setup guide on Calls page
-            </Link>
           </nav>
 
           {/* Main + how it works */}

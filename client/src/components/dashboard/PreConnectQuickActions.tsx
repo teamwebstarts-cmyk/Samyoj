@@ -44,7 +44,7 @@ export default function PreConnectQuickActions({ onExploreFeatures }: PreConnect
   return (
     <aside
       aria-label="Quick actions"
-      className="flex w-full min-w-[260px] flex-col rounded-2xl border border-neutral-200/80 bg-white p-3.5 shadow-[0_8px_24px_rgba(15,23,42,0.06)] sm:min-w-[280px] sm:p-4"
+      className="flex w-full min-w-[260px] flex-col rounded-2xl border border-neutral-200/80 bg-white p-[var(--card-pad)] shadow-[0_8px_24px_rgba(15,23,42,0.06)] sm:min-w-[280px]"
     >
       <div className="mb-3 flex items-center gap-2">
         <span className="flex h-7 w-7 items-center justify-center text-sky-500">

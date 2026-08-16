@@ -11,7 +11,7 @@ import { MetaCallingService } from './meta-calling.service';
 import { SarvamStreamTranscriber, isSarvamSttConfigured } from './sarvam.stt';
 import { synthesizeSpeechSarvam, isSarvamTtsConfigured } from './sarvam.tts';
 import { WhatsAppWebRtcBridge } from './webrtc-bridge';
-import { publishCallEventMessage } from './call-event-message';
+import { publishCallEventMessage, publishCallSummaryMessage } from './call-event-message';
 import type { ActiveCallContext, TranscriptEntry } from './types';
 import type { ToolCallResult } from '../ai/sarvam-chat.service';
 import { extractInlineToolCalls } from '../ai/voice-tool-parse';
@@ -787,6 +787,20 @@ export class AiVoiceCallSession {
 
   private async persistCallSummaryNote(summary: string, reason: string): Promise<void> {
     if (!this.ctx.conversationId) return;
+
+    try {
+      await publishCallSummaryMessage({
+        callId: this.ctx.callId,
+        organizationId: this.ctx.organizationId,
+        conversationId: this.ctx.conversationId,
+        summary,
+      });
+    } catch (err) {
+      log.warn('Failed to publish call summary in Inbox', {
+        callId: this.ctx.callId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
 
     const noteAuthor = await prisma.organizationUser.findFirst({
       where: {

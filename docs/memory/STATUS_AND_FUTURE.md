@@ -2,7 +2,13 @@
 
 Last updated: **2026-08-16**.
 
-Working Jira backlog: project **SAMYOJ**, epic [SAMYOJ-8](https://teamwebstarts.atlassian.net/browse/SAMYOJ-8). New problems → file a Task (`.cursor/rules/jira-task-backlog.mdc`). Do not start a ticket unless asked.
+Working Jira backlog (trimmed, major only): epic [SAMYOJ-8](https://teamwebstarts.atlassian.net/browse/SAMYOJ-8). New problems → merge into an existing open ticket or file one major Task (`.cursor/rules/jira-task-backlog.mdc`). Do not start a ticket unless asked.
+
+**2026-08-16 product sets** — spec: [PRODUCT_TASKS_2026-08-16.md](./PRODUCT_TASKS_2026-08-16.md). Durable copy: [docs/product/CALLS_AI_USAGE_ADMIN_2026-08-16.md](../product/CALLS_AI_USAGE_ADMIN_2026-08-16.md), [docs/product/INBOX_CONTACT_AND_CALLING_AI_2026-08-16.md](../product/INBOX_CONTACT_AND_CALLING_AI_2026-08-16.md). User has more items still to dictate.
+
+**Landed in code 2026-08-16** (user testing locally now; **not** customer production): [SAMYOJ-47](https://teamwebstarts.atlassian.net/browse/SAMYOJ-47) card spacing, [SAMYOJ-48](https://teamwebstarts.atlassian.net/browse/SAMYOJ-48) skeletons, [SAMYOJ-50](https://teamwebstarts.atlassian.net/browse/SAMYOJ-50) campaign repeat, [SAMYOJ-51](https://teamwebstarts.atlassian.net/browse/SAMYOJ-51) dashboard chrome, [SAMYOJ-53](https://teamwebstarts.atlassian.net/browse/SAMYOJ-53) Inbox Auto·default, [SAMYOJ-54](https://teamwebstarts.atlassian.net/browse/SAMYOJ-54) Calls recents, [SAMYOJ-55](https://teamwebstarts.atlassian.net/browse/SAMYOJ-55) post-call summary, [SAMYOJ-58](https://teamwebstarts.atlassian.net/browse/SAMYOJ-58) Inbox New chat contact fields, [SAMYOJ-46](https://teamwebstarts.atlassian.net/browse/SAMYOJ-46) apply/unapply bot all chats, [SAMYOJ-49](https://teamwebstarts.atlassian.net/browse/SAMYOJ-49) tab-scoped `sessionStorage` JWTs (Pick A) + cross-org number after disconnect.
+
+**Still open — do not start until after local test:** [SAMYOJ-52](https://teamwebstarts.atlassian.net/browse/SAMYOJ-52) AI Bot Chat vs Calling, [SAMYOJ-56](https://teamwebstarts.atlassian.net/browse/SAMYOJ-56) Reports AI usage, [SAMYOJ-59](https://teamwebstarts.atlassian.net/browse/SAMYOJ-59) strip AI from Calls Customize (Relates 52; land with/after 52). Deferred: [SAMYOJ-57](https://teamwebstarts.atlassian.net/browse/SAMYOJ-57) platform admin (with 12 / 26 / 35).
 
 ## Ready or not
 
@@ -42,7 +48,7 @@ Full map: `docs/memory/RESEARCH_MAP.md`. Short version:
 | Inbound Inbox replies | Infra, not Inbox UI. `bash start.sh` + live ngrok; `META_WEBHOOK_URL` must match; send a **new** phone reply. Symptom: send works, `totalReceived: 0`. |
 | Live Graph proof of library clone | Clone `account_creation_confirmation` with real `https://yourstore.com/verify` (not localhost). If Graph rejects suffix sample, next smallest change is full reconstructed URL as `url_suffix_example` — **don’t guess now**. |
 | Live agent on the **same phone call** | WebRTC media transfer not production-ready; settings force `message_only`. Copy is honest. Do not promise “please hold”. |
-| Access + refresh in `localStorage` | XSS risk. Full cookie/httpOnly migration = **future**. Refresh **does** rotate now (`rotateRefreshSession`). `docs/audit/AUTH_DEEP_REVIEW.md` (July) is **stale on rotation**. |
+| Access + refresh in `sessionStorage` (per tab) | XSS can still read them. HttpOnly cookies = **SAMYOJ-3**, deferred (Pick A for SAMYOJ-49). Refresh **does** rotate (`rotateRefreshSession`). `docs/audit/AUTH_DEEP_REVIEW.md` (July) is **stale on rotation** and still talks `localStorage`. |
 | `GET /oauth/access_token?client_secret=` | Meta token-exchange URL; not the Graph GET helper. POST would be a contract change. |
 | Leftover org App Secret in DB | Stripped on Connect + GET `/meta-config` when platform `.env` is set (`stripLeftoverOrgMetaCredentials`). **No** one-shot migration of every org. PATCH is 410. Do not re-add UI. |
 | Interrupt **while** TTS is playing | Disabled on purpose (echo loop on speaker). Gap interrupt only. Do not add AEC/WebSocket TTS unless user explicitly asks. |
@@ -60,7 +66,8 @@ Full map: `docs/memory/RESEARCH_MAP.md`. Short version:
 
 ## Do not redo (already built)
 
-- Re-research “is Train connected to calls?” — yes, `pickCallBotId` + `searchKnowledgeBase`.
+- Re-research “is Train connected to calls?” — yes, `pickCallBotId` + `searchKnowledgeBase`. **SAMYOJ-52 will split chat vs calling bots; until then this is still one brain. Do not start 52 this pass.**
+- Re-do 2026-08-16 shipped product tickets: 47 card spacing, 48 skeletons, 50 campaign repeat, 51 dashboard chrome, 53 Inbox Auto·default, 54 Calls recents, 55 post-call summary, 58 Inbox New chat fields, 46 apply/unapply bot all chats, 49 tab-scoped sessionStorage + cross-org number after disconnect.
 - Re-split TTS on every `।` / `.` for “lower latency” — that was the रुक-रुक gap.
 - Re-enable STT during TTS playback — echo loop.
 - Re-dump latest FAQs when search misses — hallucination.

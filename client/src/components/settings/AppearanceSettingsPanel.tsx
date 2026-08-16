@@ -1,13 +1,15 @@
 import { Palette } from 'lucide-react';
 import DensityToggle from '../ui/DensityToggle';
 import ThemeToggle from '../ui/ThemeToggle';
+import CardSpacingSlider from '../ui/CardSpacingSlider';
+import PageGutterSlider from '../ui/PageGutterSlider';
 import SettingsPanel from './SettingsPanel';
 
 export default function AppearanceSettingsPanel() {
   return (
     <SettingsPanel
       title="Appearance"
-      description="Theme and how much fits on your screen."
+      description="Theme, density, card spacing, and page side space."
       icon={Palette}
       accent="violet"
     >
@@ -29,6 +31,26 @@ export default function AppearanceSettingsPanel() {
           </p>
           <div className="mt-3 max-w-sm">
             <DensityToggle />
+          </div>
+        </div>
+
+        <div className="border-t border-theme-border pt-6">
+          <p className="text-[13px] font-bold text-theme-fg">Card spacing</p>
+          <p className="mt-1 text-[12px] font-medium text-theme-secondary">
+            How far apart cards sit on the dashboard and other card screens. Independent of density.
+          </p>
+          <div className="mt-3">
+            <CardSpacingSlider />
+          </div>
+        </div>
+
+        <div className="border-t border-theme-border pt-6">
+          <p className="text-[13px] font-bold text-theme-fg">Page side space</p>
+          <p className="mt-1 text-[12px] font-medium text-theme-secondary">
+            Left and right inset around the middle cards. Slide toward Much wider for large empty edges. Independent of card spacing.
+          </p>
+          <div className="mt-3">
+            <PageGutterSlider />
           </div>
         </div>
       </div>

@@ -2,7 +2,6 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import {
   AlertTriangle,
-  ArrowRight,
   ShieldCheck,
   WifiOff,
 } from 'lucide-react';
@@ -22,7 +21,6 @@ function MetricRow({
   subtitle,
   count,
   to,
-  cta,
   icon,
   iconAccent,
 }: {
@@ -30,14 +28,17 @@ function MetricRow({
   subtitle: string;
   count: number;
   to: string;
-  cta: string;
   icon: ReactNode;
   iconAccent: 'emerald' | 'rose';
 }) {
   const urgent = count > 0;
 
   return (
-    <div className="flex flex-col gap-1.5 rounded-xl border border-neutral-100/90 bg-white px-2.5 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-2 sm:px-3 sm:py-2.5">
+    <Link
+      to={to}
+      title={subtitle}
+      className="flex flex-col gap-1.5 rounded-xl border border-neutral-100/90 bg-white px-2.5 py-2 transition hover:border-neutral-200 hover:bg-neutral-50/80 sm:flex-row sm:items-center sm:justify-between sm:gap-2 sm:px-3 sm:py-2.5"
+    >
       <div className="flex min-w-0 items-center gap-2">
         <span
           className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
@@ -57,25 +58,16 @@ function MetricRow({
           </p>
         </div>
       </div>
-      <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
-        <span
-          className={`inline-flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-[12px] font-extrabold tabular-nums ring-1 ${
-            urgent
-              ? 'bg-rose-50 text-rose-600 ring-rose-100/80'
-              : 'bg-neutral-50 text-neutral-500 ring-neutral-100'
-          }`}
-        >
-          {count}
-        </span>
-        <Link
-          to={to}
-          className="inline-flex items-center gap-0.5 rounded-lg border border-neutral-200/90 bg-white px-2.5 py-1.5 text-[11px] font-bold text-neutral-800 transition hover:bg-neutral-50 sm:text-[11.5px]"
-        >
-          {cta}
-          <ArrowRight className="h-3 w-3 text-neutral-500" strokeWidth={2.25} />
-        </Link>
-      </div>
-    </div>
+      <span
+        className={`inline-flex h-7 min-w-7 shrink-0 items-center justify-center self-end rounded-full px-2 text-[12px] font-extrabold tabular-nums ring-1 sm:self-auto ${
+          urgent
+            ? 'bg-rose-50 text-rose-600 ring-rose-100/80'
+            : 'bg-neutral-50 text-neutral-500 ring-neutral-100'
+        }`}
+      >
+        {count}
+      </span>
+    </Link>
   );
 }
 
@@ -83,41 +75,34 @@ function AlertRow({
   title,
   subtitle,
   to,
-  cta,
 }: {
   title: string;
   subtitle: string;
   to: string;
-  cta: string;
 }) {
   return (
-    <div className="flex flex-col gap-1.5 rounded-xl border border-amber-100/80 bg-white px-2.5 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-2 sm:px-3 sm:py-2.5">
-      <div className="flex min-w-0 items-center gap-2">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
-          <WifiOff className="h-3.5 w-3.5 stroke-[2.2]" />
-        </span>
-        <div className="min-w-0">
-          <p className="text-[12.5px] font-bold leading-snug text-neutral-900 sm:text-[13px]">
-            {title}
-          </p>
-          <p className="mt-0.5 truncate text-[10.5px] font-medium leading-snug text-neutral-500 sm:text-[11px]">
-            {subtitle}
-          </p>
-        </div>
+    <Link
+      to={to}
+      title={subtitle}
+      className="flex items-center gap-2 rounded-xl border border-amber-100/80 bg-white px-2.5 py-2 transition hover:border-amber-200 hover:bg-amber-50/50 sm:px-3 sm:py-2.5"
+    >
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
+        <WifiOff className="h-3.5 w-3.5 stroke-[2.2]" />
+      </span>
+      <div className="min-w-0">
+        <p className="text-[12.5px] font-bold leading-snug text-neutral-900 sm:text-[13px]">
+          {title}
+        </p>
+        <p className="mt-0.5 truncate text-[10.5px] font-medium leading-snug text-neutral-500 sm:text-[11px]">
+          {subtitle}
+        </p>
       </div>
-      <Link
-        to={to}
-        className="inline-flex shrink-0 items-center gap-0.5 self-end rounded-lg border border-neutral-200/90 bg-white px-2.5 py-1.5 text-[11px] font-bold text-neutral-800 transition hover:bg-neutral-50 sm:self-auto sm:text-[11.5px]"
-      >
-        {cta}
-        <ArrowRight className="h-3 w-3 text-neutral-500" strokeWidth={2.25} />
-      </Link>
-    </div>
+    </Link>
   );
 }
 
 const CARD =
-  'dashboard-card flex h-full flex-col rounded-2xl border p-3 shadow-xs sm:rounded-3xl sm:p-3.5';
+  'dashboard-card flex h-full flex-col rounded-2xl border p-[var(--card-pad)] shadow-xs sm:rounded-3xl';
 
 export default function NeedsAttentionCard({
   openChats,
@@ -237,7 +222,6 @@ export default function NeedsAttentionCard({
               title="WhatsApp not connected"
               subtitle="Connect a business number to send and receive"
               to="/settings?tab=whatsapp"
-              cta="Connect"
             />
           )}
 
@@ -246,7 +230,6 @@ export default function NeedsAttentionCard({
               title="Incoming messages off"
               subtitle="Replies from customers may not reach Inbox"
               to="/settings?tab=whatsapp"
-              cta="Enable"
             />
           )}
 
@@ -257,7 +240,6 @@ export default function NeedsAttentionCard({
                 subtitle="Customers waiting for reply"
                 count={openChats}
                 to="/inbox"
-                cta="Open Inbox"
                 iconAccent="emerald"
                 icon={<OpenChatsWaitingSvg className="h-4 w-4" />}
               />
@@ -267,23 +249,12 @@ export default function NeedsAttentionCard({
                 subtitle="Messages failed to deliver"
                 count={failedMessages}
                 to="/reports"
-                cta="View Failures"
                 iconAccent="rose"
                 icon={<FailedMessagesSvg className="h-4 w-4" />}
               />
             </>
           )}
         </div>
-      </div>
-
-      <div className="mt-auto pt-2.5">
-        <Link
-          to="/reports"
-          className="inline-flex items-center gap-1 text-[12px] font-bold text-emerald-600 transition hover:text-emerald-700 hover:underline"
-        >
-          View all alerts
-          <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.25} />
-        </Link>
       </div>
     </section>
   );

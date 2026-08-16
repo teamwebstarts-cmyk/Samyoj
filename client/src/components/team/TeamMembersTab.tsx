@@ -8,7 +8,7 @@ import ConfirmDialog from '../ui/ConfirmDialog';
 import DataTable, { TableSerialCell } from '../ui/DataTable';
 import EmptyState from '../ui/EmptyState';
 import ListToolbar from '../ui/ListToolbar';
-import LoadingState from '../ui/LoadingState';
+import ListLayoutSkeleton from '../ui/ListLayoutSkeleton';
 import ResponsiveDataView from '../ui/ResponsiveDataView';
 import { TableIconButton } from '../ui/TableActions';
 import SlideOver, { SlideOverFooter } from '../ui/SlideOver';
@@ -286,10 +286,11 @@ export default function TeamMembersTab({
           }
         />
 
-        {loading ? (
-          <div className="p-6">
-            <LoadingState label="Loading team..." />
-          </div>
+        {loading && members.length === 0 ? (
+          <ListLayoutSkeleton
+            label="Loading team"
+            tableHeaders={['Member', 'Role', 'Status', 'Actions']}
+          />
         ) : filteredMembers.length === 0 ? (
           <div className="p-4 sm:p-6">{emptyState}</div>
         ) : (

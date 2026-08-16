@@ -169,7 +169,7 @@ export default function DashboardQuickActions() {
   }, [open]);
 
   return (
-    <section className="dashboard-card flex h-full flex-col rounded-2xl border border-neutral-100/90 bg-white p-2.5 shadow-xs sm:rounded-2xl sm:p-3">
+    <section className="dashboard-card flex h-full flex-col rounded-2xl border border-neutral-100/90 bg-white p-[var(--card-pad)] shadow-xs sm:rounded-2xl">
       <div className="flex items-center gap-1.5 sm:gap-2">
         <IconWell accent="emerald" size="sm">
           <Scan className="h-3.5 w-3.5 stroke-[2.2]" />

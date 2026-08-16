@@ -3,7 +3,7 @@ import { ClipboardList, RefreshCw } from 'lucide-react';
 import AppButton from '../ui/AppButton';
 import DataTable from '../ui/DataTable';
 import EmptyState from '../ui/EmptyState';
-import LoadingState from '../ui/LoadingState';
+import ListLayoutSkeleton from '../ui/ListLayoutSkeleton';
 import { teamApi } from '../../services/api';
 import { auditActionLabels, formatRelativeTime } from './teamUi';
 
@@ -41,10 +41,8 @@ export default function TeamAuditTab() {
         </AppButton>
       </div>
 
-      {loading ? (
-        <div className="p-6">
-          <LoadingState label="Loading audit log…" />
-        </div>
+      {loading && logs.length === 0 ? (
+        <ListLayoutSkeleton label="Loading audit log" tableHeaders={['Action', 'Actor', 'Target', 'When']} />
       ) : logs.length === 0 ? (
         <div className="p-4 sm:p-6">
           <EmptyState

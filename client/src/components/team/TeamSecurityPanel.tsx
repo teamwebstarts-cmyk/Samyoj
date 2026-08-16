@@ -7,12 +7,13 @@ import {
 } from 'lucide-react';
 import AppButton from '../ui/AppButton';
 import AppInput from '../ui/AppInput';
-import LoadingState from '../ui/LoadingState';
+import { FormPageSkeleton } from '../ui/ListLayoutSkeleton';
 import SectionCard from '../ui/SectionCard';
 import { useAuth } from '../../contexts/AuthContext';
 import { teamApi } from '../../services/api';
 import type { UserSession } from '../../types';
 import { toastError, toastSuccess } from '../../utils/toast';
+import { getRefreshToken } from '../../utils/authStorage';
 import { formatJoinedDate } from './teamUi';
 
 export default function TeamSecurityPanel() {
@@ -98,7 +99,7 @@ export default function TeamSecurityPanel() {
   };
 
   const revokeAll = async () => {
-    const current = localStorage.getItem('refreshToken') ?? undefined;
+    const current = getRefreshToken() ?? undefined;
     try {
       await teamApi.sessions.revokeAll(current);
       toastSuccess('All other sessions revoked');
@@ -108,7 +109,7 @@ export default function TeamSecurityPanel() {
     }
   };
 
-  if (loading) return <LoadingState label="Loading security settings..." />;
+  if (loading) return <FormPageSkeleton label="Loading security settings" blocks={3} />;
 
   return (
     <div className="space-y-5">

@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Info, LineChart } from 'lucide-react';
 import IconWell from './icons/IconWell';
@@ -20,6 +22,118 @@ interface MessagePerformanceDonutProps {
   onPeriodChange?: (period: MetricsPeriod) => void;
 }
 
+type SegmentKey = 'delivered' | 'read' | 'failed' | 'pending';
+
+type Segment = {
+  key: SegmentKey;
+  label: string;
+  color: string;
+  meaning: string;
+  count: number;
+  pct: number;
+};
+
+const SEGMENT_META: Record<SegmentKey, { label: string; color: string; meaning: string }> = {
+  delivered: {
+    label: 'Delivered',
+    color: '#25D366',
+    meaning: 'Reached the phone, not opened yet.',
+  },
+  read: {
+    label: 'Read',
+    color: '#3B82F6',
+    meaning: 'Opened by the customer.',
+  },
+  failed: {
+    label: 'Failed',
+    color: '#EF4444',
+    meaning: 'Did not send.',
+  },
+  pending: {
+    label: 'Pending',
+    color: '#8B5CF6',
+    meaning: 'Still sending or waiting.',
+  },
+};
+
+function PerformanceHoverTip({
+  segments,
+  active,
+  x,
+  y,
+}: {
+  segments: Segment[];
+  active: Segment;
+  x: number;
+  y: number;
+}) {
+  if (typeof document === 'undefined') return null;
+
+  const maxCount = Math.max(...segments.map((s) => s.count), 1);
+  const pad = 12;
+  const left = Math.min(Math.max(x + 16, pad), window.innerWidth - 240);
+  const top = Math.min(Math.max(y - 12, pad), window.innerHeight - pad);
+
+  return createPortal(
+    <div
+      role="tooltip"
+      className="pointer-events-none fixed z-[260] w-[220px] -translate-y-full rounded-xl border border-neutral-200/80 bg-white/95 p-2.5 shadow-[0_8px_28px_rgba(15,23,42,0.14)] backdrop-blur-md dark:border-white/10 dark:bg-zinc-900/95"
+      style={{ left, top }}
+    >
+      <p className="px-1 pb-1.5 text-[10px] font-bold uppercase tracking-wide text-neutral-400">
+        {active.label}
+        <span className="ml-1 font-semibold normal-case tracking-normal text-neutral-500">
+          {active.meaning}
+        </span>
+      </p>
+      <ul>
+        {segments.map((seg, index) => {
+          const on = seg.key === active.key;
+          return (
+            <li
+              key={seg.key}
+              className={`px-1 py-1.5 ${index > 0 ? 'border-t border-neutral-100 dark:border-white/10' : ''} ${
+                on ? 'rounded-lg bg-neutral-50 dark:bg-white/5' : ''
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <span
+                    className="h-2 w-2 shrink-0 rounded-full"
+                    style={{ backgroundColor: seg.color }}
+                    aria-hidden
+                  />
+                  <span
+                    className={`truncate text-[12px] ${
+                      on ? 'font-extrabold text-neutral-900 dark:text-white' : 'font-semibold text-neutral-600 dark:text-neutral-300'
+                    }`}
+                  >
+                    {seg.label}
+                  </span>
+                </span>
+                <span className="text-[12px] font-extrabold tabular-nums text-neutral-900 dark:text-white">
+                  {seg.count.toLocaleString()}
+                </span>
+              </div>
+              <span className="mt-1.5 block h-1 overflow-hidden rounded-full bg-neutral-100 dark:bg-white/10">
+                <span
+                  className="block h-full rounded-full"
+                  style={{
+                    width: `${Math.max(6, (seg.count / maxCount) * 100)}%`,
+                    backgroundColor: seg.color,
+                    opacity: seg.count === 0 ? 0.25 : 1,
+                  }}
+                />
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>,
+    document.body,
+  );
+}
+
 export default function MessagePerformanceDonut({
   messagesSent,
   messagesDelivered,
@@ -39,21 +153,29 @@ export default function MessagePerformanceDonut({
       ? messagesDeliveredOnly
       : Math.max(0, deliveredReached - messagesRead);
 
-  const deliveredOnlyPctNum = messagesSent ? (deliveredOnly / messagesSent) * 100 : 0;
-  const readPctNum = messagesSent ? (messagesRead / messagesSent) * 100 : 0;
-  const failPctNum = messagesSent ? (messagesFailed / messagesSent) * 100 : 0;
-  const pendPctNum = messagesSent ? (messagesPending / messagesSent) * 100 : 0;
+  const segments: Segment[] = (
+    [
+      { key: 'delivered' as const, count: deliveredOnly },
+      { key: 'read' as const, count: messagesRead },
+      { key: 'failed' as const, count: messagesFailed },
+      { key: 'pending' as const, count: messagesPending },
+    ] as const
+  ).map((row) => {
+    const meta = SEGMENT_META[row.key];
+    const pct = messagesSent ? (row.count / messagesSent) * 100 : 0;
+    return {
+      ...row,
+      ...meta,
+      pct: Math.min(100, Math.max(0, pct)),
+    };
+  });
 
-  const R = 54;
+  const R = 64;
   const C = 2 * Math.PI * R;
-  const stroke = 14;
+  const stroke = 22;
 
-  const segments = [
-    { key: 'delivered', color: '#25D366', pct: Math.min(100, Math.max(0, deliveredOnlyPctNum)) },
-    { key: 'read', color: '#3B82F6', pct: Math.min(100, Math.max(0, readPctNum)) },
-    { key: 'failed', color: '#EF4444', pct: Math.min(100, Math.max(0, failPctNum)) },
-    { key: 'pending', color: '#8B5CF6', pct: Math.min(100, Math.max(0, pendPctNum)) },
-  ];
+  const [hoveredKey, setHoveredKey] = useState<SegmentKey | null>(null);
+  const [tipPos, setTipPos] = useState<{ x: number; y: number } | null>(null);
 
   let runningOffset = 0;
   const ringArcs = segments
@@ -66,44 +188,17 @@ export default function MessagePerformanceDonut({
     })
     .filter((a): a is NonNullable<typeof a> => a !== null);
 
-  const legend = [
-    {
-      key: 'delivered',
-      label: 'Delivered',
-      labelFull: 'Delivered (not read yet)',
-      value: deliveredOnly.toLocaleString(),
-      color: 'bg-[#25D366]',
-      bar: 'bg-[#25D366]',
-      share: Math.min(100, deliveredOnlyPctNum),
-    },
-    {
-      key: 'read',
-      label: 'Read',
-      labelFull: 'Read',
-      value: messagesRead.toLocaleString(),
-      color: 'bg-[#3B82F6]',
-      bar: 'bg-[#3B82F6]',
-      share: Math.min(100, readPctNum),
-    },
-    {
-      key: 'failed',
-      label: 'Failed',
-      labelFull: 'Failed',
-      value: messagesFailed.toLocaleString(),
-      color: 'bg-[#EF4444]',
-      bar: 'bg-[#EF4444]',
-      share: Math.min(100, failPctNum),
-    },
-    {
-      key: 'pending',
-      label: 'Pending',
-      labelFull: 'Pending',
-      value: messagesPending.toLocaleString(),
-      color: 'bg-[#8B5CF6]',
-      bar: 'bg-[#8B5CF6]',
-      share: Math.min(100, pendPctNum),
-    },
-  ];
+  const hovered = segments.find((s) => s.key === hoveredKey) ?? null;
+
+  const showTip = (key: SegmentKey, event: { clientX: number; clientY: number }) => {
+    setHoveredKey(key);
+    setTipPos({ x: event.clientX, y: event.clientY });
+  };
+
+  const hideTip = () => {
+    setHoveredKey(null);
+    setTipPos(null);
+  };
 
   const periodControl =
     period ? (
@@ -119,7 +214,10 @@ export default function MessagePerformanceDonut({
     );
 
   return (
-    <section className="dashboard-card flex h-full flex-col rounded-2xl border border-neutral-100/90 bg-white p-3 shadow-xs sm:rounded-3xl sm:p-3.5">
+    <section className="dashboard-card flex h-full flex-col rounded-2xl border border-neutral-100/90 bg-white p-[var(--card-pad)] shadow-xs sm:rounded-3xl">
+      {hovered && tipPos ? (
+        <PerformanceHoverTip segments={segments} active={hovered} x={tipPos.x} y={tipPos.y} />
+      ) : null}
       <div className="flex shrink-0 items-start justify-between gap-2 sm:items-center sm:gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <IconWell accent="emerald" size="sm" round={false}>
@@ -132,7 +230,7 @@ export default function MessagePerformanceDonut({
             {!isEmpty && (
               <span
                 className="hidden text-neutral-400 sm:inline"
-                title="Segments are exclusive latest statuses: Delivered (unread), Read, Failed, Pending."
+                title="Each color is the latest status: Delivered (unread), Read, Failed, Pending."
               >
                 <Info className="h-3.5 w-3.5 shrink-0 stroke-[1.8]" aria-hidden />
               </span>
@@ -153,16 +251,19 @@ export default function MessagePerformanceDonut({
           </p>
         </div>
       ) : (
-        <div className="mt-3 flex min-h-0 flex-1 flex-col items-center justify-center gap-3 sm:gap-3.5 lg:flex-row lg:items-center lg:justify-between lg:gap-2.5">
-          <div className="relative mx-auto aspect-square w-[min(100%,8.25rem)] shrink-0 sm:w-[min(100%,8.75rem)] lg:mx-0 lg:w-[8.5rem] xl:w-[9rem]">
+        <div className="mt-3 flex min-h-0 flex-1 flex-col items-center justify-center">
+          <div className="relative mx-auto aspect-square w-[min(100%,11rem)] shrink-0 sm:w-[min(100%,12rem)]" onMouseLeave={hideTip}>
             <svg
-              viewBox="0 0 160 160"
+              viewBox="0 0 180 180"
               className="h-full w-full -rotate-90 transform"
-              aria-hidden="true"
+              role="img"
+              aria-label={segments
+                .map((s) => `${s.label} ${s.count.toLocaleString()}`)
+                .join(', ')}
             >
               <circle
-                cx="80"
-                cy="80"
+                cx="90"
+                cy="90"
                 r={R}
                 fill="none"
                 stroke="#F1F5F9"
@@ -171,52 +272,51 @@ export default function MessagePerformanceDonut({
               {ringArcs.map((arc) => (
                 <circle
                   key={arc.key}
-                  cx="80"
-                  cy="80"
+                  cx="90"
+                  cy="90"
                   r={R}
                   fill="none"
                   stroke={arc.color}
-                  strokeWidth={stroke}
+                  strokeWidth={hoveredKey === arc.key ? stroke + 4 : stroke}
                   strokeDasharray={`${arc.len} ${C - arc.len}`}
                   strokeDashoffset={arc.dashoffset}
                   strokeLinecap="butt"
+                  className="cursor-pointer transition-[stroke-width] duration-150"
+                  style={{ pointerEvents: 'stroke' }}
+                  onMouseEnter={(event) => showTip(arc.key, event)}
+                  onMouseMove={(event) => showTip(arc.key, event)}
+                  onClick={() => setHoveredKey((k) => (k === arc.key ? null : arc.key))}
                 />
               ))}
             </svg>
-            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-              <span className="text-[1.25rem] font-extrabold leading-none tracking-tight tabular-nums text-neutral-900 sm:text-[1.35rem]">
-                {messagesSent.toLocaleString()}
-              </span>
-              <span className="mt-1 text-[10px] font-medium leading-none text-neutral-500">
-                Total sent
-              </span>
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
+              {hovered ? (
+                <span
+                  className="inline-flex max-w-[8.5rem] flex-col items-center rounded-xl px-2.5 py-1.5 text-white shadow-sm"
+                  style={{ backgroundColor: hovered.color }}
+                >
+                  <span className="text-[10px] font-bold uppercase tracking-wide">
+                    {hovered.label}
+                  </span>
+                  <span className="mt-0.5 text-[15px] font-extrabold leading-none tabular-nums">
+                    {hovered.count.toLocaleString()}
+                    <span className="ml-1 text-[11px] font-semibold opacity-90">
+                      {Math.round(hovered.pct)}%
+                    </span>
+                  </span>
+                </span>
+              ) : (
+                <>
+                  <span className="text-[1.45rem] font-extrabold leading-none tracking-tight tabular-nums text-neutral-900 sm:text-[1.6rem]">
+                    {messagesSent.toLocaleString()}
+                  </span>
+                  <span className="mt-1 text-[10px] font-medium leading-none text-neutral-500">
+                    Total sent
+                  </span>
+                </>
+              )}
             </div>
           </div>
-
-          <ul className="m-0 w-full max-w-[12.5rem] min-w-0 list-none space-y-2 overflow-visible p-0 sm:max-w-[13rem] lg:ml-auto lg:w-[48%] lg:max-w-[11.5rem] lg:shrink-0">
-            {legend.map((item) => (
-              <li key={item.key} className="min-w-0">
-                <div className="flex min-w-0 items-center gap-1.5">
-                  <span className={`h-2 w-2 shrink-0 rounded-full ${item.color}`} aria-hidden />
-                  <span
-                    className="min-w-0 flex-1 truncate text-[11.5px] font-semibold text-neutral-800 sm:text-[12px]"
-                    title={item.labelFull}
-                  >
-                    {item.label}
-                  </span>
-                  <span className="shrink-0 whitespace-nowrap text-right text-[11px] font-bold tabular-nums text-neutral-900 sm:text-[11.5px]">
-                    {item.value}
-                  </span>
-                </div>
-                <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-neutral-100">
-                  <div
-                    className={`h-full rounded-full ${item.bar} transition-[width] duration-300`}
-                    style={{ width: `${Math.max(item.share > 0 ? 3 : 0, item.share)}%` }}
-                  />
-                </div>
-              </li>
-            ))}
-          </ul>
         </div>
       )}
 

@@ -1,11 +1,9 @@
-import { Loader2, Phone, PhoneOutgoing } from 'lucide-react';
+import { Loader2, PhoneIncoming, PhoneMissed, PhoneOff, PhoneOutgoing } from 'lucide-react';
 import ContactAvatar from '../inbox/ContactAvatar';
 import {
-  callStatusLabel,
-  callStatusTone,
+  callListTitle,
   formatCallTime,
   formatDuration,
-  formatPhoneDisplay,
   isActiveCallStatus,
 } from './callUtils';
 
@@ -13,6 +11,7 @@ interface CallListItemProps {
   name?: string | null;
   phone: string;
   status: string;
+  direction?: string;
   handler: string;
   durationSeconds?: number | null;
   preview?: string;
@@ -26,52 +25,44 @@ interface CallListItemProps {
   callingBack?: boolean;
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const tone = callStatusTone(status);
-  const label = callStatusLabel(status);
+function CallTypeGlyph({
+  direction,
+  status,
+}: {
+  direction?: string;
+  status: string;
+}) {
+  const missed = status === 'MISSED' || status === 'REJECTED';
+  const outbound = direction === 'BUSINESS_INITIATED';
+  const live = isActiveCallStatus(status);
 
-  const classes =
-    tone === 'live'
-      ? 'bg-emerald-50 text-emerald-700 ring-emerald-200/80'
-      : tone === 'missed'
-        ? 'bg-rose-50 text-rose-700 ring-rose-200/80'
-        : tone === 'completed'
-          ? 'bg-sky-50 text-sky-700 ring-sky-200/80'
-          : tone === 'failed'
-            ? 'bg-amber-50 text-amber-700 ring-amber-200/80'
-            : 'bg-neutral-100 text-neutral-600 ring-neutral-200';
+  const DirectionIcon = outbound ? PhoneOutgoing : PhoneIncoming;
+  const directionClass = outbound ? 'text-emerald-600' : 'text-sky-600';
 
-  return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${classes}`}
-    >
-      {tone === 'live' && (
-        <span className="relative flex h-1.5 w-1.5">
+  if (live) {
+    return (
+      <span className="relative inline-flex items-center" title={outbound ? 'Outgoing' : 'Incoming'}>
+        <DirectionIcon className={`h-3.5 w-3.5 ${directionClass}`} strokeWidth={2.25} />
+        <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-emerald-500">
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-          <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
         </span>
-      )}
-      {label}
-    </span>
-  );
-}
-
-function WaveIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 16 12" fill="currentColor" aria-hidden>
-      <rect x="0" y="4" width="2" height="4" rx="1" />
-      <rect x="3.5" y="2" width="2" height="8" rx="1" />
-      <rect x="7" y="0" width="2" height="12" rx="1" />
-      <rect x="10.5" y="2" width="2" height="8" rx="1" />
-      <rect x="14" y="4" width="2" height="4" rx="1" />
-    </svg>
-  );
+      </span>
+    );
+  }
+  if (status === 'FAILED') {
+    return <PhoneOff className="h-3.5 w-3.5 text-amber-500" strokeWidth={2.25} />;
+  }
+  if (missed) {
+    return <PhoneMissed className="h-3.5 w-3.5 text-rose-500" strokeWidth={2.25} />;
+  }
+  return <DirectionIcon className={`h-3.5 w-3.5 ${directionClass}`} strokeWidth={2.25} />;
 }
 
 export default function CallListItem({
   name,
   phone,
   status,
+  direction,
   durationSeconds,
   createdAt,
   selected,
@@ -81,8 +72,12 @@ export default function CallListItem({
   callingBack,
 }: CallListItemProps) {
   const active = isActiveCallStatus(status);
-  const displayName = name || formatPhoneDisplay(phone);
-  const duration = formatDuration(durationSeconds ?? (active ? 0 : 0));
+  const missed = status === 'MISSED' || status === 'REJECTED';
+  const displayName = callListTitle(name, phone);
+  const duration =
+    active || (durationSeconds != null && durationSeconds > 0)
+      ? formatDuration(durationSeconds ?? 0)
+      : '';
 
   return (
     <button
@@ -107,29 +102,30 @@ export default function CallListItem({
         <p className="flex items-center gap-2">
           <span
             className={`truncate text-[14px] leading-snug tracking-tight ${
-              active ? 'font-extrabold text-neutral-900 dark:text-neutral-50' : 'font-extrabold text-neutral-900 dark:text-neutral-100'
+              missed
+                ? 'font-extrabold text-rose-600 dark:text-rose-400'
+                : active
+                  ? 'font-extrabold text-neutral-900 dark:text-neutral-50'
+                  : 'font-extrabold text-neutral-900 dark:text-neutral-100'
             }`}
           >
             {displayName}
           </span>
-          <StatusBadge status={status} />
           <span className="ml-auto shrink-0 text-[11px] font-semibold tabular-nums text-neutral-500">
             {formatCallTime(createdAt)}
           </span>
         </p>
         <p className="mt-0.5 flex items-baseline justify-between gap-2">
           <span className="truncate text-[12px] font-medium text-neutral-500">
-            {formatPhoneDisplay(phone)}
+            {duration}
           </span>
           <span
             className={`inline-flex shrink-0 items-center gap-1 text-[11px] font-semibold tabular-nums ${
               active ? 'text-emerald-600' : 'text-neutral-500'
             }`}
           >
-            {duration}
-            {active ? (
-              <WaveIcon className="h-3 w-3 text-emerald-500" />
-            ) : onCallBack ? (
+            <CallTypeGlyph direction={direction} status={status} />
+            {onCallBack && !active ? (
               <button
                 type="button"
                 aria-label={callingBack ? 'Calling…' : 'Call back'}
@@ -147,9 +143,7 @@ export default function CallListItem({
                   <PhoneOutgoing className="h-3 w-3" strokeWidth={2.25} />
                 )}
               </button>
-            ) : (
-              <Phone className="h-3 w-3 text-neutral-600 dark:text-neutral-400" strokeWidth={2.25} />
-            )}
+            ) : null}
           </span>
         </p>
       </div>

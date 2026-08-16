@@ -28,6 +28,7 @@ import { inboundWebhookSignatureGate } from './webhook-signature-gate';
 import {
   resolveActiveWhatsappNumberId,
 } from './active-number';
+import { saveWhatsappNumberWorkspace } from './save-connection';
 import {
   hydrateWebhookHealth,
   toPublicWebhookHealth,
@@ -47,50 +48,10 @@ async function saveWhatsappConnection(
   connection: Awaited<ReturnType<typeof MetaWhatsAppService.buildConnectionDetails>>
 ) {
   const encryptedToken = MetaWhatsAppService.encryptToken(connection.accessToken);
-  const normalizedPhoneNumber = normalizePhoneIdentity(connection.phoneNumber);
-  if (!normalizedPhoneNumber) {
+  if (!normalizePhoneIdentity(connection.phoneNumber)) {
     throw new AppError(400, 'Connected WhatsApp number has no usable phone identity');
   }
   const metaCredentials = await resolveMetaCredentials(orgId);
-
-  const [providerOwner, phoneOwner] = await Promise.all([
-    prisma.whatsappNumber.findFirst({
-      where: { phoneNumberId: connection.phoneNumberId, organizationId: { not: orgId } },
-      select: { id: true, organizationId: true },
-    }),
-    prisma.whatsappNumber.findFirst({
-      where: { normalizedPhoneNumber, organizationId: { not: orgId } },
-      select: { id: true, organizationId: true },
-    }),
-  ]);
-  if (providerOwner || phoneOwner) {
-    throw new AppError(
-      409,
-      'This WhatsApp number is already connected to another organization. Disconnect it there first, or contact support.'
-    );
-  }
-
-  const [existingByPhone, existingByProvider] = await Promise.all([
-    prisma.whatsappNumber.findFirst({
-      where: { organizationId: orgId, normalizedPhoneNumber },
-    }),
-    prisma.whatsappNumber.findFirst({
-      where: { organizationId: orgId, phoneNumberId: connection.phoneNumberId },
-    }),
-  ]);
-  if (existingByPhone && existingByProvider && existingByPhone.id !== existingByProvider.id) {
-    throw new AppError(
-      409,
-      'WhatsApp connection identity mismatch. The displayed phone and provider phone ID belong to different saved numbers.'
-    );
-  }
-  if (existingByProvider && existingByProvider.normalizedPhoneNumber !== normalizedPhoneNumber) {
-    throw new AppError(
-      409,
-      'WhatsApp connection identity mismatch. Reconnect using the verified displayed phone for this number.'
-    );
-  }
-  const existing = existingByPhone || existingByProvider;
 
   try {
     await MetaWhatsAppService.ensureWabaSubscribed(
@@ -123,35 +84,14 @@ async function saveWhatsappConnection(
     }
   }
 
-  // Update the canonical workspace in one transaction. Matching by the verified
-  // displayed phone first lets a provider ID rotate without creating a second
-  // workspace or moving history.
-  const whatsappNumber = await prisma.$transaction(async (tx) => {
-    if (existing) {
-      return tx.whatsappNumber.update({
-        where: { id: existing.id },
-        data: {
-          phoneNumber: connection.phoneNumber,
-          normalizedPhoneNumber,
-          phoneNumberId: connection.phoneNumberId,
-          wabaId: connection.wabaId,
-          businessId: connection.businessId,
-          accessToken: encryptedToken,
-          isActive: true,
-        },
-      });
-    }
-    return tx.whatsappNumber.create({
-      data: {
-        organizationId: orgId,
-        phoneNumber: connection.phoneNumber,
-        normalizedPhoneNumber,
-        phoneNumberId: connection.phoneNumberId,
-        wabaId: connection.wabaId,
-        businessId: connection.businessId,
-        accessToken: encryptedToken,
-      },
-    });
+  // In-org: same displayed phone reuses the workspace. Cross-org: 409 while the
+  // other org is active; after soft-disconnect, B gets a new empty row (SAMYOJ-49).
+  const { whatsappNumber } = await saveWhatsappNumberWorkspace(orgId, {
+    phoneNumber: connection.phoneNumber,
+    phoneNumberId: connection.phoneNumberId,
+    wabaId: connection.wabaId,
+    businessId: connection.businessId,
+    encryptedToken,
   });
 
   return { whatsappNumber, webhookConfigured };
@@ -436,8 +376,9 @@ router.delete(
     });
     if (!number) throw new AppError(404, 'WhatsApp number not found');
 
-    // Soft-deactivate: keep the row + conversation/call links so reconnecting the
-    // same Meta phoneNumberId restores Inbox history (saveWhatsappConnection upserts).
+    // Soft-deactivate: keep the row + conversation/call links. Reconnecting in
+    // *this* org restores Inbox history. Another org may then connect the same
+    // Meta id and gets a new empty workspace — A's row is never reassigned.
     await prisma.whatsappNumber.update({
       where: { id },
       data: {

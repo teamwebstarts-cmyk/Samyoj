@@ -30,6 +30,10 @@ export interface CampaignWizardForm {
   scheduleEnabled: boolean;
   scheduledAt: string;
   timezone: string;
+  repeatEnabled: boolean;
+  repeatIntervalDays: string;
+  repeatUntil: string;
+  repeatMaxOccurrences: string;
   testPhone: string;
 }
 
@@ -68,6 +72,10 @@ export function createEmptyCampaignWizardForm(): CampaignWizardForm {
     scheduleEnabled: false,
     scheduledAt: '',
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+    repeatEnabled: false,
+    repeatIntervalDays: '2',
+    repeatUntil: '',
+    repeatMaxOccurrences: '',
     testPhone: '',
   };
 }
@@ -156,7 +164,12 @@ export function campaignToWizardForm(
     whatsappNumberId: campaign.whatsappNumberId || '',
     scheduleEnabled: Boolean(campaign.scheduledAt),
     scheduledAt: toDateTimeLocalValue(campaign.scheduledAt),
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+    timezone: campaign.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+    repeatEnabled: Boolean(campaign.repeatIntervalDays),
+    repeatIntervalDays: campaign.repeatIntervalDays ? String(campaign.repeatIntervalDays) : '2',
+    repeatUntil: toDateTimeLocalValue(campaign.repeatUntil),
+    repeatMaxOccurrences: campaign.repeatMaxOccurrences ? String(campaign.repeatMaxOccurrences) : '',
+    testPhone: '',
   };
 }
 
@@ -249,6 +262,18 @@ export function buildCampaignPayload(
     payload.scheduledAt = null;
   }
 
+  const interval = Number.parseInt(form.repeatIntervalDays, 10);
+  if (form.repeatEnabled && interval >= 1) {
+    payload.repeatIntervalDays = interval;
+    payload.repeatUntil = form.repeatUntil ? new Date(form.repeatUntil).toISOString() : null;
+    const max = Number.parseInt(form.repeatMaxOccurrences, 10);
+    payload.repeatMaxOccurrences = max >= 1 ? max : null;
+  } else {
+    payload.repeatIntervalDays = null;
+    payload.repeatUntil = null;
+    payload.repeatMaxOccurrences = null;
+  }
+
   return payload;
 }
 
@@ -290,6 +315,11 @@ export function validateCampaignWizardStage(
     if (new Date(form.scheduledAt).getTime() <= Date.now()) {
       return 'Choose a future time for the campaign.';
     }
+  }
+
+  if (stage === 2 && form.repeatEnabled) {
+    const interval = Number.parseInt(form.repeatIntervalDays, 10);
+    if (!Number.isFinite(interval) || interval < 1) return 'Repeat interval must be at least 1 day.';
   }
 
   return null;

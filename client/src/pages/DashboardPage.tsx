@@ -14,8 +14,6 @@ import MessagePerformanceDonut from '../components/dashboard/MessagePerformanceD
 import UpcomingCampaignsCard from '../components/dashboard/UpcomingCampaignsCard';
 import GettingStartedCard from '../components/dashboard/GettingStartedCard';
 import DashboardQuickActions from '../components/dashboard/DashboardQuickActions';
-import RecentActivityCard from '../components/dashboard/RecentActivityCard';
-import AiSuggestionCard from '../components/dashboard/AiSuggestionCard';
 import PageShell from '../components/ui/PageShell';
 import EmptyState from '../components/ui/EmptyState';
 import AppButton from '../components/ui/AppButton';
@@ -24,7 +22,6 @@ import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { analyticsApi, campaignApi, onboardingApi } from '../services/api';
 import { toastError } from '../utils/toast';
 import type { AnalyticsOverview, Campaign } from '../types';
-import type { ActivityItem } from '../components/dashboard/RecentActivityCard';
 
 const DEFAULT_PERIOD: MetricsPeriod = DEFAULT_METRICS_PERIOD;
 
@@ -78,9 +75,6 @@ export default function DashboardPage() {
   const [campaignsError, setCampaignsError] = useState(false);
   const [onboarding, setOnboarding] = useState<OnboardingStatus | null>(null);
   const [onboardingError, setOnboardingError] = useState(false);
-  const [activity, setActivity] = useState<ActivityItem[]>([]);
-  const [activityLoading, setActivityLoading] = useState(true);
-  const [activityError, setActivityError] = useState(false);
   const [waStatus, setWaStatus] = useState<WhatsAppGuideStatus>({
     connected: false,
     incomingEnabled: null,
@@ -190,24 +184,6 @@ export default function DashboardPage() {
         setOnboarding(null);
         setOnboardingError(true);
       });
-
-    setActivityLoading(true);
-    setActivityError(false);
-    analyticsApi
-      .activity(4)
-      .then(({ data }) => {
-        if (requestNumberId !== activeNumberIdRef.current) return;
-        const payload = data?.data as { items?: ActivityItem[] } | undefined;
-        const list = Array.isArray(payload?.items) ? payload!.items! : [];
-        setActivity(list);
-        setActivityError(false);
-      })
-      .catch(() => {
-        if (requestNumberId !== activeNumberIdRef.current) return;
-        setActivity([]);
-        setActivityError(true);
-      })
-      .finally(() => setActivityLoading(false));
   }, [activeNumber, resolved]);
 
   // Load / refresh Live Metrics when connected (and whenever period changes via loadStats).
@@ -237,7 +213,7 @@ export default function DashboardPage() {
   if (!connectionReady) {
     return (
       <PageShell>
-        <div className="space-y-3 pb-5 sm:space-y-4 sm:pb-6">
+        <div className="dashboard-stack pb-5 sm:pb-6">
           <PreConnectSkeleton />
         </div>
       </PageShell>
@@ -247,7 +223,7 @@ export default function DashboardPage() {
   if (!isConnected) {
     return (
       <PageShell>
-        <div className="space-y-3 pb-5 sm:space-y-4 sm:pb-6">
+        <div className="dashboard-stack pb-5 sm:pb-6">
           <PreConnectDashboard />
         </div>
       </PageShell>
@@ -256,7 +232,7 @@ export default function DashboardPage() {
 
   return (
     <PageShell>
-      <div className="space-y-3 pb-5 sm:space-y-4 sm:pb-6">
+      <div className="dashboard-stack pb-5 sm:pb-6">
         <WhatsAppConnectGuide onStatusChange={onWaStatusChange} />
 
         {loading && !stats ? (
@@ -285,7 +261,7 @@ export default function DashboardPage() {
               onPeriodChange={setMetricsPeriod}
             />
 
-            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 md:items-stretch lg:mt-3.5 lg:grid-cols-3 lg:items-stretch lg:gap-3">
+            <div className="card-grid mt-[var(--card-gap)] grid grid-cols-1 md:grid-cols-2 md:items-stretch lg:grid-cols-3 lg:items-stretch">
               <NeedsAttentionCard
                 openChats={stats.activeConversations}
                 failedMessages={stats.failedMessages}
@@ -311,7 +287,7 @@ export default function DashboardPage() {
             </div>
 
             <div
-              className={`mt-3 grid grid-cols-1 gap-3 lg:mt-4 lg:gap-4 ${showChecklist || onboardingError ? 'lg:grid-cols-5 lg:items-stretch' : ''
+              className={`card-grid mt-[var(--card-gap)] grid grid-cols-1 ${showChecklist || onboardingError ? 'lg:grid-cols-5 lg:items-stretch' : ''
                 }`}
             >
               <div className={`min-w-0 ${showChecklist || onboardingError ? 'lg:col-span-3' : ''}`}>
@@ -328,7 +304,7 @@ export default function DashboardPage() {
               )}
               {onboardingError && !showChecklist && (
                 <div className="min-w-0 lg:col-span-2">
-                  <div className="dashboard-card flex flex-col justify-center rounded-2xl border-amber-100 bg-amber-50/40 p-4">
+                  <div className="dashboard-card flex flex-col justify-center rounded-2xl border-amber-100 bg-amber-50/40 p-[var(--card-pad)]">
                     <p className="text-[13px] font-bold text-neutral-900">Couldn&apos;t load checklist</p>
                     <p className="mt-0.5 text-[12px] text-neutral-600">
                       Setup steps are temporarily unavailable.
@@ -343,26 +319,6 @@ export default function DashboardPage() {
                   </div>
                 </div>
               )}
-            </div>
-
-            <div className="mt-3 grid grid-cols-1 gap-3 lg:mt-3.5 lg:grid-cols-5 lg:items-stretch lg:gap-3">
-              <div className="min-w-0 lg:col-span-3 lg:h-full">
-                <RecentActivityCard
-                  items={activity}
-                  loading={activityLoading}
-                  error={activityError}
-                  onRetry={() => loadSideData()}
-                />
-              </div>
-              <div className="min-w-0 lg:col-span-2 lg:h-full">
-                <AiSuggestionCard
-                  readRate={stats.readRate}
-                  readRateDelta={stats.deltas?.readRate}
-                  messagesSent={stats.messagesSent}
-                  failedMessages={stats.failedMessages}
-                  openChats={stats.activeConversations}
-                />
-              </div>
             </div>
           </div>
         ) : null}

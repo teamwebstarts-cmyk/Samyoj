@@ -16,6 +16,7 @@ import {
   processScheduledCampaigns,
   queueCampaignSend,
   recipientsToCsv,
+  rescheduleCampaign,
   resolveAudienceRecipients,
   resumeCampaign,
   retryFailedRecipients,
@@ -26,8 +27,10 @@ import { getDailySendUsage } from './quota';
 import {
   createCampaignSchema,
   previewAudienceSchema,
+  rescheduleCampaignSchema,
   testSendSchema,
   updateCampaignSchema,
+  campaignRepeatWrite,
   type AudienceType,
 } from './types';
 import { resolveActiveWhatsappNumber } from '../whatsapp/active-number';
@@ -245,6 +248,7 @@ router.post(
         status: data.scheduledAt ? 'SCHEDULED' : 'DRAFT',
         scheduledAt: data.scheduledAt ? new Date(data.scheduledAt) : null,
         timezone: data.timezone,
+        ...campaignRepeatWrite(data),
         totalContacts: resolved.length,
         createdById: userId,
         recipients: {
@@ -273,15 +277,21 @@ router.get(
         organizationId: req.user!.organizationId!,
         ...(req.activeWhatsappNumberId ? { whatsappNumberId: req.activeWhatsappNumberId } : {}),
       },
-      include: {
-        recipients: {
-          orderBy: { createdAt: 'asc' },
-          take: 500,
-        },
-      },
     });
     if (!campaign) throw new AppError(404, 'Campaign not found');
-    sendSuccess(res, campaign);
+    const latestGeneration = await prisma.campaignRecipient.aggregate({
+      where: { campaignId: campaign.id },
+      _max: { runGeneration: true },
+    });
+    const recipients = await prisma.campaignRecipient.findMany({
+      where: {
+        campaignId: campaign.id,
+        runGeneration: latestGeneration._max.runGeneration ?? 0,
+      },
+      orderBy: { createdAt: 'asc' },
+      take: 500,
+    });
+    sendSuccess(res, { ...campaign, recipients });
   })
 );
 
@@ -303,7 +313,14 @@ router.get(
     });
     if (!campaign) throw new AppError(404, 'Campaign not found');
 
-    const where: Prisma.CampaignRecipientWhereInput = { campaignId: id };
+    const latestGeneration = await prisma.campaignRecipient.aggregate({
+      where: { campaignId: id },
+      _max: { runGeneration: true },
+    });
+    const where: Prisma.CampaignRecipientWhereInput = {
+      campaignId: id,
+      runGeneration: latestGeneration._max.runGeneration ?? 0,
+    };
     if (status) where.status = status as Prisma.EnumMessageStatusFilter['equals'];
 
     const pageNum = parseInt(page as string);
@@ -416,6 +433,7 @@ router.patch(
         timezone: data.timezone,
         totalContacts,
         runVersion: { increment: 1 },
+        ...campaignRepeatWrite(data),
         ...(scheduledAt !== undefined
           ? {
               scheduledAt,
@@ -434,6 +452,39 @@ router.patch(
     if (!campaign) throw new AppError(404, 'Campaign not found');
 
     await logCampaignAudit(orgId, req.user!.userId, 'campaign.update', { campaignId: id });
+    sendSuccess(res, campaign);
+  })
+);
+
+router.post(
+  '/:id/reschedule',
+  ...adminGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const data = rescheduleCampaignSchema.parse(req.body);
+    const id = paramId(req);
+    const orgId = req.user!.organizationId!;
+    validateCampaignTimezone(data.timezone, data.scheduledAt);
+
+    const existing = await prisma.campaign.findFirst({
+      where: {
+        id,
+        organizationId: orgId,
+        ...(req.activeWhatsappNumberId ? { whatsappNumberId: req.activeWhatsappNumberId } : {}),
+      },
+    });
+    if (!existing) throw new AppError(404, 'Campaign not found');
+
+    await rescheduleCampaign(existing, new Date(data.scheduledAt), {
+      timezone: data.timezone,
+      repeatIntervalDays: data.repeatIntervalDays,
+      repeatUntil: data.repeatUntil,
+      repeatMaxOccurrences: data.repeatMaxOccurrences,
+    });
+    const campaign = await prisma.campaign.findUnique({ where: { id } });
+    await logCampaignAudit(orgId, req.user!.userId, 'campaign.reschedule', {
+      campaignId: id,
+      scheduledAt: data.scheduledAt,
+    });
     sendSuccess(res, campaign);
   })
 );

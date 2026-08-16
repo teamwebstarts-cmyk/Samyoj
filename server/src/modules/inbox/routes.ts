@@ -27,7 +27,7 @@ import { pauseConversationAutomations, cancelFlowDelayJob } from '../flows/pause
 import type { FlowNode } from '../flows/types';
 import { resolveCs24hWindowOpensAt } from './service-window';
 import { buildSignedMediaPath, verifyMediaSignature, MEDIA_URL_TTL_SECONDS } from './media-url';
-import { nextUnreadCount } from './unread';
+import { inboxStartCreateData, inboxStartMergeUpdate } from '../contacts/merge';
 
 const router = Router();
 
@@ -311,6 +311,11 @@ router.get(
 const startChatSchema = z.object({
   phone: phoneFieldSchema,
   name: z.string().optional(),
+  email: z.string().email().optional().or(z.literal('')),
+  tags: z.array(z.string()).optional(),
+  notes: z.string().optional(),
+  optedIn: z.boolean().optional(),
+  customAttributes: z.record(z.string().max(64), z.string().max(500)).optional(),
 });
 
 router.post(
@@ -321,6 +326,17 @@ router.post(
     const phone = data.phone;
 
     const { whatsappNumber } = await getOrgWhatsappContext(orgId, req.activeWhatsappNumberId);
+
+    const existingContact = await prisma.contact.findUnique({
+      where: {
+        organizationId_whatsappNumberId_normalizedPhone: {
+          organizationId: orgId,
+          whatsappNumberId: whatsappNumber.id,
+          normalizedPhone: phone,
+        },
+      },
+      select: { tags: true, customAttributes: true },
+    });
 
     const contact = await prisma.contact.upsert({
       where: {
@@ -335,11 +351,10 @@ router.post(
         phone,
         normalizedPhone: phone,
         whatsappNumberId: whatsappNumber.id,
-        name: data.name,
-        optedIn: true,
         source: 'OUTBOUND',
+        ...inboxStartCreateData(data),
       },
-      update: { name: data.name || undefined },
+      update: existingContact ? inboxStartMergeUpdate(existingContact, data) : {},
     });
 
     const existingConversation = await prisma.conversation.findUnique({
@@ -732,7 +747,9 @@ router.get(
 
     // Ensure finished WhatsApp calls appear as centered chat pills (idempotent).
     try {
-      const { publishCallEventMessage } = await import('../calling/call-event-message');
+      const { publishCallEventMessage, backfillCallSummaryMessages } = await import(
+        '../calling/call-event-message'
+      );
       const terminalCalls = await prisma.call.findMany({
         where: {
           conversationId: id,
@@ -757,8 +774,13 @@ router.get(
             .map((c) => publishCallEventMessage(c.id))
         );
       }
+      await backfillCallSummaryMessages({
+        conversationId: id,
+        organizationId: req.user!.organizationId!,
+        whatsappNumberId: conversation.whatsappNumberId,
+      });
     } catch {
-      /* call pills are best-effort */
+      /* call pills / summary cards are best-effort */
     }
 
     const limitNum = parseInt(limit as string, 10);
@@ -775,12 +797,6 @@ router.get(
     });
     const hasMore = messages.length > take;
     if (hasMore) messages = messages.slice(0, take);
-
-    // Legacy call summaries were wrongly stored as inbound chat bubbles — hide from thread.
-    messages = messages.filter((msg) => {
-      const meta = msg.metadata as { isCallSummary?: boolean } | null;
-      return !meta?.isCallSummary;
-    });
 
     const templateNames = new Set<string>();
     for (const msg of messages) {
@@ -1668,6 +1684,7 @@ router.patch(
       botState?: null;
       status?: 'OPEN';
       activeBotId?: string | null;
+      botAssignmentSource?: 'MANUAL' | null;
     } = {};
 
     if (typeof active === 'boolean') {
@@ -1691,8 +1708,13 @@ router.patch(
           where: { id: activeBotId, organizationId: orgId },
         });
         if (!bot) throw new AppError(404, 'Bot not found');
+        data.activeBotId = activeBotId;
+        data.botAssignmentSource = 'MANUAL';
+      } else {
+        // Follow the AI Bot page default — do not pin as MANUAL.
+        data.activeBotId = null;
+        data.botAssignmentSource = null;
       }
-      data.activeBotId = activeBotId || null;
     }
 
     const owned = await prisma.conversation.findFirst({

@@ -4,7 +4,7 @@ import { FOCUS_RING_CLASS } from '../../hooks/inboxA11y';
 interface CallFiltersBarProps {
   search: string;
   onSearchChange: (value: string) => void;
-  /** Combined chip filter: '' | 'live' | 'missed' | 'ai' | 'human' | 'out' */
+  /** Combined chip filter: '' | 'live' | 'missed' | 'in' | 'out' | 'ai' | 'human' */
   chip: string;
   onChipChange: (value: string) => void;
 }
@@ -13,9 +13,10 @@ const CHIPS: Array<{ value: string; label: string }> = [
   { value: '', label: 'All' },
   { value: 'live', label: 'Live' },
   { value: 'missed', label: 'Missed' },
+  { value: 'in', label: 'Incoming' },
+  { value: 'out', label: 'Outgoing' },
   { value: 'ai', label: 'AI' },
   { value: 'human', label: 'Human' },
-  { value: 'out', label: 'Out' },
 ];
 
 export default function CallFiltersBar({

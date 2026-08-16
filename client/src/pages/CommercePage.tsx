@@ -8,7 +8,7 @@ import { emptyOrderCounts, ORDER_STATUS_CHIPS, type CommerceOrder, type OrderCou
 import AppButton from '../components/ui/AppButton';
 import EmptyState from '../components/ui/EmptyState';
 import ListToolbar from '../components/ui/ListToolbar';
-import LoadingState from '../components/ui/LoadingState';
+import { SplitListSkeleton } from '../components/ui/ListLayoutSkeleton';
 import PageHero from '../components/ui/PageHero';
 import PageShell from '../components/ui/PageShell';
 import Pagination from '../components/ui/Pagination';
@@ -208,8 +208,8 @@ export default function CommercePage() {
   if (numbersLoading || !resolved) {
     return (
       <PageShell>
-        <div className="p-6">
-          <LoadingState label="Loading orders..." />
+        <div className="space-y-4 p-4 sm:p-6">
+          <SplitListSkeleton label="Loading orders" />
         </div>
       </PageShell>
     );
@@ -329,9 +329,7 @@ export default function CommercePage() {
           />
 
           {loading && orders.length === 0 ? (
-            <div className="p-6">
-              <LoadingState label="Loading orders..." />
-            </div>
+            <SplitListSkeleton label="Loading orders" />
           ) : orders.length === 0 ? (
             <CommerceEmptyWorkspace mode={hasActiveFilters ? 'filter' : 'empty'} />
           ) : (

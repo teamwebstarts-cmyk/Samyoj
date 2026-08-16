@@ -4,7 +4,7 @@ import AppButton from '../ui/AppButton';
 import AppInput from '../ui/AppInput';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import EmptyState from '../ui/EmptyState';
-import LoadingState from '../ui/LoadingState';
+import ListLayoutSkeleton from '../ui/ListLayoutSkeleton';
 import SlideOver, { SlideOverFooter } from '../ui/SlideOver';
 import { ModalCallout, ModalPanel, ModalSection } from '../ui/modalUi';
 import { teamApi } from '../../services/api';
@@ -83,10 +83,8 @@ export default function TeamDepartmentsTab({ canManage, onChanged }: TeamDepartm
         </div>
       )}
 
-      {loading ? (
-        <div className="p-6">
-          <LoadingState label="Loading departments..." />
-        </div>
+      {loading && departments.length === 0 ? (
+        <ListLayoutSkeleton label="Loading departments" rows={6} tableHeaders={['Department', 'Members', 'Actions']} />
       ) : departments.length === 0 ? (
         <div className="p-4 sm:p-6">
           <EmptyState

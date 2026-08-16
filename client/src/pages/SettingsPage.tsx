@@ -29,7 +29,7 @@ import SettingsStatusPill from '../components/settings/SettingsStatusPill';
 import AppAlert from '../components/ui/AppAlert';
 import AppButton from '../components/ui/AppButton';
 import AppInput from '../components/ui/AppInput';
-import LoadingState from '../components/ui/LoadingState';
+import { SettingsLayoutSkeleton } from '../components/ui/ListLayoutSkeleton';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import PageHeader from '../components/ui/PageHeader';
 import PageHero from '../components/ui/PageHero';
@@ -450,6 +450,15 @@ export default function SettingsPage() {
     { text: 'Invite your team members', done: setupMeta.teamCount > 1 },
   ];
 
+  if (loading) {
+    return (
+      <PageShell>
+        <PageHeader />
+        <SettingsLayoutSkeleton />
+      </PageShell>
+    );
+  }
+
   return (
     <PageShell>
       <PageHeader
@@ -553,9 +562,7 @@ export default function SettingsPage() {
                   icon={Smartphone}
                   accent="emerald"
                 >
-                  {loading ? (
-                    <LoadingState label="Loading connection..." />
-                  ) : numbers.length > 0 ? (
+                  {numbers.length > 0 ? (
                     <div className="space-y-3">
                       {numbers.map((number) => (
                         <div

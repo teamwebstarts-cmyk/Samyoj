@@ -16,6 +16,7 @@ import {
   FlaskConical,
   Globe,
   MessageSquare,
+  MessagesSquare,
   PauseCircle,
   PlayCircle,
   Plus,
@@ -24,6 +25,7 @@ import {
   Volume2,
   Star,
   Trash2,
+  UserMinus,
   XCircle,
   Zap,
   HeartHandshake,
@@ -56,12 +58,13 @@ import AiBotStatusFilter from '../components/ai-bot/AiBotStatusFilter';
 import { AiBotKnowledgeCell, AiBotStartsWhenCell, AiBotStatusCell } from '../components/ai-bot/AiBotListCells';
 import { botChip, getAiBotAvatar } from '../components/ai-bot/aiBotVisuals';
 import AppButton from '../components/ui/AppButton';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
 import AppInput from '../components/ui/AppInput';
 import AppSelect from '../components/ui/AppSelect';
 import AppTextarea from '../components/ui/AppTextarea';
 import DataTable, { TableSerialCell } from '../components/ui/DataTable';
 import ListToolbar from '../components/ui/ListToolbar';
-import LoadingState from '../components/ui/LoadingState';
+import ListLayoutSkeleton, { FormPageSkeleton } from '../components/ui/ListLayoutSkeleton';
 import PageShell from '../components/ui/PageShell';
 import ResponsiveDataView from '../components/ui/ResponsiveDataView';
 import RowActions from '../components/ui/RowActions';
@@ -313,6 +316,10 @@ export default function AiBotPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [setupExpanded, setSetupExpanded] = useState(true);
+  const [bulkAction, setBulkAction] = useState<{ type: 'apply' | 'remove'; bot: AiBot } | null>(
+    null
+  );
+  const [bulkLoading, setBulkLoading] = useState(false);
 
   // Voice / AI call configuration (reads org-level calling settings)
   const [voiceSettings, setVoiceSettings] = useState<CallingSettings | null>(null);
@@ -765,6 +772,38 @@ export default function AiBotPage() {
     load();
   };
 
+  const confirmBulkBotAction = async () => {
+    if (!bulkAction) return;
+    setBulkLoading(true);
+    try {
+      if (bulkAction.type === 'apply') {
+        const { data } = await aiBotApi.applyToAllChats(bulkAction.bot.id);
+        const updated = Number(data.data?.updated ?? 0);
+        toastSuccess(
+          updated > 0
+            ? `${bulkAction.bot.name} will reply in ${updated} chat${updated === 1 ? '' : 's'} on this number. Inbox picks were left as they are.`
+            : `No chats to update — they already follow this bot, or every chat has an Inbox pick.`
+        );
+      } else {
+        const { data } = await aiBotApi.removeFromAllChats(bulkAction.bot.id);
+        const updated = Number(data.data?.updated ?? 0);
+        toastSuccess(
+          updated > 0
+            ? `Removed ${bulkAction.bot.name} from ${updated} chat${updated === 1 ? '' : 's'}. Chats go back to your default bot. Inbox picks stay.`
+            : `${bulkAction.bot.name} was not applied to all chats on this number.`
+        );
+      }
+      setBulkAction(null);
+    } catch (err: unknown) {
+      toastError(
+        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
+          ?.message || 'Could not update chats'
+      );
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this bot?')) return;
     await aiBotApi.delete(id);
@@ -938,6 +977,7 @@ export default function AiBotPage() {
   const hasFilters = Boolean(search || statusFilter);
 
   return (
+    <>
     <PageShell>
       <div className="space-y-4 sm:space-y-5">
         <AiBotHero
@@ -975,10 +1015,11 @@ export default function AiBotPage() {
             }
           />
 
-          {loading ? (
-            <div className="p-6">
-              <LoadingState label="Loading bots..." />
-            </div>
+          {loading && bots.length === 0 ? (
+            <ListLayoutSkeleton
+              label="Loading bots"
+              tableHeaders={['Bot', 'Status', 'Knowledge', 'Updated', 'Actions']}
+            />
           ) : bots.length === 0 ? (
             <div className="space-y-5 p-4 sm:p-6">
               <AiBotListEmpty
@@ -1017,6 +1058,8 @@ export default function AiBotPage() {
                   onEdit={() => openEdit(bot)}
                   onToggle={() => toggleEnabled(bot)}
                   onDelete={() => handleDelete(bot.id)}
+                  onApplyAll={() => setBulkAction({ type: 'apply', bot })}
+                  onRemoveAll={() => setBulkAction({ type: 'remove', bot })}
                 />
               )}
               renderTable={() => (
@@ -1092,6 +1135,20 @@ export default function AiBotPage() {
                           >
                             {bot.enabled ? 'Pause' : 'Activate'}
                           </TableTextButton>
+                          <TableTextButton
+                            onClick={() => setBulkAction({ type: 'apply', bot })}
+                            icon={MessagesSquare}
+                            variant="neutral"
+                          >
+                            All chats
+                          </TableTextButton>
+                          <TableTextButton
+                            onClick={() => setBulkAction({ type: 'remove', bot })}
+                            icon={UserMinus}
+                            variant="neutral"
+                          >
+                            Remove
+                          </TableTextButton>
                           <RowActions onEdit={() => openEdit(bot)} onDelete={() => handleDelete(bot.id)} />
                         </div>
                       </td>
@@ -1116,13 +1173,16 @@ export default function AiBotPage() {
         <div className="flex items-start gap-2.5 rounded-xl border border-sky-200/50 bg-sky-50/40 px-3.5 py-2.5 dark:border-sky-500/20 dark:bg-sky-950/20">
           <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-sky-600 dark:text-sky-400" strokeWidth={2} />
           <p className="min-w-0 text-[12px] leading-relaxed text-theme-secondary">
-            <span className="font-bold text-theme-fg">Per-chat control</span>
+            <span className="font-bold text-theme-fg">This number’s chats</span>
             {' — '}
-            Pause AI for one customer from{' '}
+            Use <span className="font-semibold text-theme-fg">All chats</span> to let this bot
+            reply everywhere on the connected WhatsApp number. Chats where you already picked a
+            bot in{' '}
             <Link to="/inbox" className="font-bold text-sky-700 underline underline-offset-2 dark:text-sky-400">
               Inbox
             </Link>{' '}
-            without affecting other chats.
+            stay as they are. Pause still only turns the bot off — it does not change who it is
+            assigned to.
           </p>
         </div>
       </div>
@@ -1624,7 +1684,7 @@ export default function AiBotPage() {
             )}
 
             {voiceSettingsLoading && (
-              <LoadingState label="Loading voice settings…" />
+              <FormPageSkeleton label="Loading voice settings" blocks={3} />
             )}
 
             {voiceSettings && !voiceSettingsLoading && (
@@ -1922,5 +1982,41 @@ export default function AiBotPage() {
         )}
       </SlideOver>
     </PageShell>
+    <ConfirmDialog
+      open={Boolean(bulkAction)}
+      onClose={() => {
+        if (!bulkLoading) setBulkAction(null);
+      }}
+      onConfirm={() => void confirmBulkBotAction()}
+      loading={bulkLoading}
+      variant={bulkAction?.type === 'remove' ? 'danger' : 'default'}
+      icon={bulkAction?.type === 'remove' ? UserMinus : MessagesSquare}
+      title={
+        bulkAction?.type === 'remove'
+          ? `Remove ${bulkAction.bot.name} from all chats?`
+          : `Use ${bulkAction?.bot.name ?? 'this bot'} in all chats?`
+      }
+      description={
+        bulkAction?.type === 'remove'
+          ? `This only affects chats on the WhatsApp number you have selected. Chats where you already picked a bot in Inbox will keep that pick — even if it is ${bulkAction.bot.name}.`
+          : `Every chat on this WhatsApp number that still follows the default (or a previous “all chats” apply) will start using ${bulkAction?.bot.name ?? 'this bot'}. Chats where you already chose a bot in Inbox stay as they are.`
+      }
+      details={
+        bulkAction?.type === 'remove'
+          ? [
+              'Inbox personal picks stay',
+              'Chats go back to your default bot',
+              'Pause / Activate is unchanged',
+            ]
+          : [
+              'Inbox personal picks stay',
+              'Only this WhatsApp number',
+              'Pause / Activate is unchanged',
+            ]
+      }
+      confirmLabel={bulkAction?.type === 'remove' ? 'Remove from all chats' : 'Apply to all chats'}
+      cancelLabel="Not now"
+    />
+    </>
   );
 }

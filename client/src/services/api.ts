@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { getErrorMessage, logError } from '../utils/errors';
-import { accessTokenNeedsRefresh, getAccessToken, getRefreshToken } from '../utils/authStorage';
+import { accessTokenNeedsRefresh, clearAuthTokens, getAccessToken, getRefreshToken, setAuthTokens } from '../utils/authStorage';
 import type { AgentAvailability, OrgRole, TeamPermissions, TeamSettings } from '../types';
 import { apiBaseUrl } from './utils';
 
@@ -105,7 +105,7 @@ api.interceptors.response.use(
     }
     if (error.response?.status === 401 && original && !original._retry) {
       original._retry = true;
-      const refreshToken = localStorage.getItem('refreshToken');
+      const refreshToken = getRefreshToken();
       if (refreshToken) {
         try {
           const tokens = await refreshAccessTokenSingleFlight(refreshToken);
@@ -118,8 +118,7 @@ api.interceptors.response.use(
             method: original.method?.toUpperCase(),
             url: original.url,
           });
-          localStorage.removeItem('accessToken');
-          localStorage.removeItem('refreshToken');
+          clearAuthTokens();
           const returnTo = `${window.location.pathname}${window.location.search}`;
           if (!window.location.pathname.startsWith('/login')) {
             window.location.href = `/login?returnTo=${encodeURIComponent(returnTo)}`;
@@ -149,8 +148,7 @@ async function refreshAccessTokenSingleFlight(refreshToken: string) {
     .then(({ data }) => {
       const accessToken = data.data.accessToken as string;
       const nextRefresh = (data.data.refreshToken as string) || refreshToken;
-      localStorage.setItem('accessToken', accessToken);
-      localStorage.setItem('refreshToken', nextRefresh);
+      setAuthTokens(accessToken, nextRefresh);
       return { accessToken, refreshToken: nextRefresh };
     })
     .finally(() => {
@@ -203,7 +201,15 @@ export const authApi = {
 export const inboxApi = {
   list: (params?: Record<string, string>) => api.get('/inbox', { params }),
   unreadTotal: () => api.get('/inbox/unread-total'),
-  start: (data: { phone: string; name?: string }) => api.post('/inbox/start', data),
+  start: (data: {
+    phone: string;
+    name?: string;
+    email?: string;
+    tags?: string[];
+    notes?: string;
+    customAttributes?: Record<string, string>;
+    optedIn?: boolean;
+  }) => api.post('/inbox/start', data),
   get: (id: string) => api.get(`/inbox/${id}`),
   messages: (id: string, params?: Record<string, string>) =>
     api.get(`/inbox/${id}/messages`, { params }),
@@ -437,6 +443,8 @@ export const aiBotApi = {
     botId: string,
     items: Array<{ title: string; content: string }>
   ) => api.post(`/ai-bot/${botId}/seed-knowledge`, { items }),
+  applyToAllChats: (botId: string) => api.post(`/ai-bot/${botId}/apply-all`),
+  removeFromAllChats: (botId: string) => api.post(`/ai-bot/${botId}/remove-all`),
 };
 
 export const campaignApi = {
@@ -453,6 +461,7 @@ export const campaignApi = {
   resume: (id: string) => api.post(`/campaigns/${id}/resume`),
   cancel: (id: string) => api.post(`/campaigns/${id}/cancel`),
   retryFailed: (id: string) => api.post(`/campaigns/${id}/retry-failed`),
+  reschedule: (id: string, data: Record<string, unknown>) => api.post(`/campaigns/${id}/reschedule`, data),
   duplicate: (id: string) => api.post(`/campaigns/${id}/duplicate`),
   stats: (id: string) => api.get(`/campaigns/${id}/stats`),
   analytics: (id: string) => api.get(`/campaigns/${id}/analytics`),

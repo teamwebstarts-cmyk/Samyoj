@@ -5,7 +5,7 @@ import AppInput from '../ui/AppInput';
 import AppSelect from '../ui/AppSelect';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import EmptyState from '../ui/EmptyState';
-import LoadingState from '../ui/LoadingState';
+import ListLayoutSkeleton from '../ui/ListLayoutSkeleton';
 import SlideOver, { SlideOverFooter } from '../ui/SlideOver';
 import { ModalCallout, ModalPanel, ModalSection } from '../ui/modalUi';
 import { teamApi } from '../../services/api';
@@ -106,10 +106,8 @@ export default function TeamInvitesTab({ departments, canManage }: TeamInvitesTa
         </div>
       )}
 
-      {loading ? (
-        <div className="p-6">
-          <LoadingState label="Loading invites..." />
-        </div>
+      {loading && invites.length === 0 ? (
+        <ListLayoutSkeleton label="Loading invites" tableHeaders={['Invite', 'Role', 'Status', 'Actions']} />
       ) : invites.length === 0 ? (
         <div className="p-4 sm:p-6">
           <EmptyState

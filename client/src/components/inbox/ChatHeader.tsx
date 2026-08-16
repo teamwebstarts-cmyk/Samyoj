@@ -138,14 +138,14 @@ export default function ChatHeader({
     if (conversation.activeBot?.name) return conversation.activeBot.name;
     const enabled = bots.filter((b) => b.enabled);
     const defaultBot = enabled.find((b) => b.isDefault) ?? enabled[0];
-    return defaultBot ? 'Auto' : 'AI Bot';
+    return defaultBot?.name || 'AI Bot';
   }, [conversation.activeBot?.name, bots]);
 
   const botTipDetail = useMemo(() => {
     if (conversation.activeBot?.name) return conversation.activeBot.name;
     const enabled = bots.filter((b) => b.enabled);
     const defaultBot = enabled.find((b) => b.isDefault) ?? enabled[0];
-    return defaultBot ? `Auto · ${defaultBot.name}` : 'Choose chatbot';
+    return defaultBot?.name || 'Choose chatbot';
   }, [conversation.activeBot?.name, bots]);
 
   const avatarPresence =

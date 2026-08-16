@@ -94,6 +94,12 @@ export const audienceConfigSchema = z
   })
   .optional();
 
+export const repeatIntervalSchema = z.number().int().min(1).max(365).nullable().optional();
+export const repeatMaxOccurrencesSchema = z.number().int().min(1).max(500).nullable().optional();
+export const repeatUntilSchema = z.string().datetime({ offset: false }).refine((value) => value.endsWith('Z'), {
+  message: 'repeatUntil must be an absolute UTC ISO instant ending in Z',
+}).nullable().optional();
+
 export const createCampaignSchema = z.object({
   name: z.string().min(1),
   templateName: z.string().min(1),
@@ -108,6 +114,9 @@ export const createCampaignSchema = z.object({
     message: 'scheduledAt must be an absolute UTC ISO instant ending in Z',
   }).optional(),
   timezone: z.string().optional(),
+  repeatIntervalDays: repeatIntervalSchema,
+  repeatUntil: repeatUntilSchema,
+  repeatMaxOccurrences: repeatMaxOccurrencesSchema,
 });
 
 export const updateCampaignSchema = z.object({
@@ -123,7 +132,42 @@ export const updateCampaignSchema = z.object({
     message: 'scheduledAt must be an absolute UTC ISO instant ending in Z',
   }).nullable().optional(),
   timezone: z.string().optional(),
+  repeatIntervalDays: repeatIntervalSchema,
+  repeatUntil: repeatUntilSchema,
+  repeatMaxOccurrences: repeatMaxOccurrencesSchema,
 });
+
+export const rescheduleCampaignSchema = z.object({
+  scheduledAt: z.string().datetime({ offset: false }).refine((value) => value.endsWith('Z'), {
+    message: 'scheduledAt must be an absolute UTC ISO instant ending in Z',
+  }),
+  timezone: z.string().optional(),
+  repeatIntervalDays: repeatIntervalSchema,
+  repeatUntil: repeatUntilSchema,
+  repeatMaxOccurrences: repeatMaxOccurrencesSchema,
+});
+
+export function campaignRepeatWrite(data: {
+  repeatIntervalDays?: number | null;
+  repeatUntil?: string | null;
+  repeatMaxOccurrences?: number | null;
+}) {
+  const write: {
+    repeatIntervalDays?: number | null;
+    repeatUntil?: Date | null;
+    repeatMaxOccurrences?: number | null;
+  } = {};
+  if (data.repeatIntervalDays !== undefined) write.repeatIntervalDays = data.repeatIntervalDays;
+  if (data.repeatUntil !== undefined) {
+    write.repeatUntil = data.repeatUntil ? new Date(data.repeatUntil) : null;
+  }
+  if (data.repeatMaxOccurrences !== undefined) write.repeatMaxOccurrences = data.repeatMaxOccurrences;
+  if (data.repeatIntervalDays === null) {
+    write.repeatUntil = null;
+    write.repeatMaxOccurrences = null;
+  }
+  return write;
+}
 
 export const testSendSchema = z.object({
   phone: phoneFieldSchema,

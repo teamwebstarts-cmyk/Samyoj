@@ -112,7 +112,7 @@ export default function OutboundLiveCallBar() {
       className="pointer-events-none fixed inset-x-0 bottom-0 z-[100] flex justify-center px-3 pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-5"
       role="status"
       aria-live="polite"
-      aria-label={`Outbound call with ${call.contactName}`}
+      aria-label={`Outgoing call with ${call.contactName}`}
     >
       <div className="pointer-events-auto flex w-auto max-w-[min(100%,42rem)] animate-[slideUp_0.28s_ease-out] items-center gap-2.5 rounded-2xl border border-emerald-200/80 bg-theme-surface/95 px-3 py-2.5 shadow-[0_12px_40px_rgba(15,23,42,0.12)] backdrop-blur-md sm:gap-3 sm:rounded-[1.25rem] sm:px-4 sm:py-3 dark:border-emerald-800/50 dark:bg-neutral-950/90 dark:shadow-[0_12px_40px_rgba(0,0,0,0.45)]">
         <span className="relative flex h-10 w-10 shrink-0 items-center justify-center">

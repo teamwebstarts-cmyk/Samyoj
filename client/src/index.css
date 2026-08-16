@@ -130,6 +130,12 @@
     --density-page-py-lg: 1.25rem;
     --density-stack-gap: 1rem;
     --density-nav-item-h: 2.5rem;
+
+    /* Card layouts — Appearance slider overrides these on html; new screens must use the vars. */
+    --card-gap: 1rem;
+    --card-pad: 0.875rem;
+    /* Page left/right inset — Appearance “Page side space” overrides on html. */
+    --page-gutter-x: 2.5rem;
   }
 
   html[data-density='compact'] {
@@ -141,6 +147,9 @@
     --density-page-py-lg: 1rem;
     --density-stack-gap: 0.75rem;
     --density-nav-item-h: 2.25rem;
+    --card-gap: 0.75rem;
+    --card-pad: 0.75rem;
+    --page-gutter-x: 2rem;
   }
 
   .dark {
@@ -940,6 +949,17 @@
     -webkit-backdrop-filter: blur(12px);
   }
 
+  /* Stacked / gridded card layouts — use instead of hardcoded gap-3 */
+  .dashboard-stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--card-gap);
+  }
+
+  .card-grid {
+    gap: var(--card-gap);
+  }
+
   /* Tiny soft elevation — use on list shells that sit stacked on a page */
   .dashboard-card-soft {
     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
@@ -1222,7 +1242,22 @@
   }
 
   .page-gutter-x {
-    @apply px-3 sm:px-4 lg:px-6;
+    padding-left: clamp(0.75rem, calc(var(--page-gutter-x) * 0.22), 1.25rem);
+    padding-right: clamp(0.75rem, calc(var(--page-gutter-x) * 0.22), 1.25rem);
+  }
+
+  @media (min-width: 640px) {
+    .page-gutter-x {
+      padding-left: clamp(1rem, calc(var(--page-gutter-x) * 0.35), 2.25rem);
+      padding-right: clamp(1rem, calc(var(--page-gutter-x) * 0.35), 2.25rem);
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .page-gutter-x {
+      padding-left: var(--page-gutter-x);
+      padding-right: var(--page-gutter-x);
+    }
   }
 
   .page-shell {

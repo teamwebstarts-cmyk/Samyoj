@@ -15,7 +15,7 @@ import AppSelect from '../ui/AppSelect';
 import DataTable from '../ui/DataTable';
 import EmptyState from '../ui/EmptyState';
 import ListToolbar from '../ui/ListToolbar';
-import LoadingState from '../ui/LoadingState';
+import ListLayoutSkeleton from '../ui/ListLayoutSkeleton';
 import ResponsiveDataView from '../ui/ResponsiveDataView';
 import SectionCard from '../ui/SectionCard';
 import Pagination from '../ui/Pagination';
@@ -218,10 +218,11 @@ export default function FlowsTab({
           }
         />
 
-        {loading ? (
-          <div className="p-6">
-            <LoadingState label="Loading flows..." />
-          </div>
+        {loading && flows.length === 0 ? (
+          <ListLayoutSkeleton
+            label="Loading flows"
+            tableHeaders={['Flow', 'Trigger', 'Status', 'Updated', 'Actions']}
+          />
         ) : flows.length === 0 ? (
           <div className="space-y-5 p-4 sm:p-6">
             <EmptyState

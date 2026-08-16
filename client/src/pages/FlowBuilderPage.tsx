@@ -14,7 +14,7 @@ import {
   Smartphone,
 } from 'lucide-react';
 import AppButton from '../components/ui/AppButton';
-import LoadingState from '../components/ui/LoadingState';
+import { CanvasPageSkeleton } from '../components/ui/ListLayoutSkeleton';
 import PageShell from '../components/ui/PageShell';
 import FlowAnalyticsPanel from '../components/flows/FlowAnalyticsPanel';
 import FlowBuilderSidePanel, { type FlowBuilderPanelTab } from '../components/flows/FlowBuilderSidePanel';
@@ -476,8 +476,8 @@ export default function FlowBuilderPage() {
 
   if (loading) {
     return (
-      <PageShell>
-        <LoadingState label="Loading flow builder..." />
+      <PageShell fullBleed className="!max-w-none !px-0">
+        <CanvasPageSkeleton label="Loading flow builder" />
       </PageShell>
     );
   }

@@ -22,6 +22,7 @@ import type { CampaignQuotaData } from './CampaignWizardSummaryRail';
 import type { AudiencePreviewMetrics } from '../CampaignAudiencePreview';
 import CampaignWizardSummaryRail from './CampaignWizardSummaryRail';
 import CampaignSchedulePicker from './CampaignSchedulePicker';
+import CampaignRepeatFields from '../CampaignRepeatFields';
 
 interface CampaignReviewStepProps {
   form: CampaignWizardForm;
@@ -322,6 +323,18 @@ export default function CampaignReviewStep({
                       />
                     </div>
                   )}
+                  <div className="mt-2">
+                    <CampaignRepeatFields
+                      value={{
+                        repeatEnabled: form.repeatEnabled,
+                        repeatIntervalDays: form.repeatIntervalDays,
+                        repeatUntil: form.repeatUntil,
+                        repeatMaxOccurrences: form.repeatMaxOccurrences,
+                      }}
+                      onChange={(repeat) => setForm((previous) => ({ ...previous, ...repeat }))}
+                      minUntil={minScheduleDateTime}
+                    />
+                  </div>
               </div>
             </section>
             </div>

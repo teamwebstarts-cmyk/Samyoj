@@ -5,7 +5,6 @@ import {
   Inbox,
   Link2,
   LogOut,
-  MoreHorizontal,
   Settings2,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -96,7 +95,6 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
   const [connecting, setConnecting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [enablingIncoming, setEnablingIncoming] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
 
   const emitStatus = useCallback(
     (
@@ -216,15 +214,6 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
     toastError(event.message || 'WhatsApp connection failed');
   });
 
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setMenuOpen(false);
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [menuOpen]);
-
   const handleConnect = () => {
     const start = (url: string) => {
       setConnecting(true);
@@ -283,7 +272,6 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
 
   const handleEnableIncoming = async () => {
     setEnablingIncoming(true);
-    setMenuOpen(false);
     try {
       const { data } = await whatsappApi.setupWebhook();
       const payload = data?.data as { callbackUrl?: string; subscribed?: boolean } | undefined;
@@ -314,7 +302,6 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
     if (!confirmed) return;
 
     setDisconnecting(true);
-    setMenuOpen(false);
     try {
       await whatsappApi.disconnect(number.id);
       setNumber(null);
@@ -346,7 +333,7 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
   if (loadError) {
     return (
       <section aria-label="WhatsApp connection">
-        <div className="dashboard-card flex flex-col gap-3 rounded-2xl border-amber-100 bg-amber-50/40 p-3.5 sm:flex-row sm:items-center sm:justify-between sm:p-4">
+        <div className="dashboard-card flex flex-col gap-[var(--card-gap)] rounded-2xl border-amber-100 bg-amber-50/40 p-[var(--card-pad)] sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
             <IconWell accent="amber" size="lg">
               <AlertCircle className="h-5 w-5" strokeWidth={2} />
@@ -399,10 +386,10 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
     return (
       <section
         aria-label="WhatsApp connection"
-        className={menuOpen ? 'relative z-50' : 'relative z-10'}
+        className="relative z-10"
       >
         <div
-          className={`dashboard-card flex flex-col gap-3 rounded-2xl p-3.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:p-4 ${cardClass}`}
+          className={`dashboard-card flex flex-col gap-[var(--card-gap)] rounded-2xl p-[var(--card-pad)] sm:flex-row sm:items-center sm:justify-between ${cardClass}`}
         >
           <div className="flex min-w-0 items-start gap-3 sm:items-center">
             <div className="relative shrink-0">
@@ -523,52 +510,13 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
 
             <button
               type="button"
-              onClick={() => setMenuOpen((o) => !o)}
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-neutral-200 bg-white text-neutral-600 transition hover:bg-neutral-50 sm:h-10 sm:w-10"
-              aria-label="Connection options"
-              aria-expanded={menuOpen}
-              aria-haspopup="menu"
+              onClick={() => void handleDisconnect()}
+              disabled={disconnecting}
+              className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-white px-3.5 text-[12.5px] font-semibold text-rose-700 transition hover:bg-rose-50 disabled:opacity-50 sm:h-10 sm:flex-none sm:px-4 sm:text-[13px]"
             >
-              <MoreHorizontal className="h-4 w-4" />
+              <LogOut className="h-3.5 w-3.5" />
+              {disconnecting ? 'Disconnecting…' : 'Disconnect'}
             </button>
-
-            {menuOpen && (
-              <>
-                <button
-                  type="button"
-                  className="fixed inset-0 z-40 cursor-default"
-                  aria-label="Close menu"
-                  onClick={() => setMenuOpen(false)}
-                />
-                <div
-                  role="menu"
-                  className="absolute right-0 top-full z-50 mt-1.5 min-w-[180px] rounded-xl border border-neutral-200 bg-white p-1 shadow-lg"
-                >
-                {(incomingOff || incomingUnknown) && (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => void handleEnableIncoming()}
-                      disabled={enablingIncoming}
-                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] font-semibold text-neutral-800 transition hover:bg-neutral-50 disabled:opacity-50"
-                    >
-                      <Inbox className="h-3.5 w-3.5 text-whatsapp-600" />
-                      Enable incoming
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => void handleDisconnect()}
-                    disabled={disconnecting}
-                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] font-semibold text-rose-700 transition hover:bg-rose-50 disabled:opacity-50"
-                  >
-                    <LogOut className="h-3.5 w-3.5" />
-                    Disconnect
-                  </button>
-                </div>
-              </>
-            )}
           </div>
         </div>
       </section>
@@ -577,7 +525,7 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
 
   return (
     <section aria-label="WhatsApp connection">
-      <div className="dashboard-card rounded-2xl border border-neutral-100/90 bg-white p-3.5 sm:p-4">
+      <div className="dashboard-card rounded-2xl border border-neutral-100/90 bg-white p-[var(--card-pad)]">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <div className="flex gap-3">
             <IconWell accent="whatsapp" size="lg">

@@ -7,7 +7,7 @@ interface ListCardProps {
 
 export default function ListCard({ children, className = '' }: ListCardProps) {
   return (
-    <div className={`dashboard-card p-4 transition hover:shadow-panel sm:p-5 ${className}`}>
+    <div className={`dashboard-card p-[var(--card-pad)] transition hover:shadow-panel ${className}`}>
       {children}
     </div>
   );

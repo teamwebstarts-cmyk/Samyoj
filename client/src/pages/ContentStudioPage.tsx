@@ -13,7 +13,7 @@ import AppButton from '../components/ui/AppButton';
 import AppInput from '../components/ui/AppInput';
 import AppTextarea from '../components/ui/AppTextarea';
 import EmptyState from '../components/ui/EmptyState';
-import LoadingState from '../components/ui/LoadingState';
+import { FormPageSkeleton } from '../components/ui/ListLayoutSkeleton';
 import PageHero from '../components/ui/PageHero';
 import PageShell from '../components/ui/PageShell';
 import SegmentedControl from '../components/ui/SegmentedControl';
@@ -267,7 +267,7 @@ export default function ContentStudioPage() {
   if (loading) {
     return (
       <PageShell>
-        <LoadingState label="Loading Content Studio…" />
+        <FormPageSkeleton label="Loading Content Studio" blocks={5} />
       </PageShell>
     );
   }

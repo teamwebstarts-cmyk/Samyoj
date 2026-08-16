@@ -5,7 +5,7 @@ import AppButton from '../components/ui/AppButton';
 import AppInput from '../components/ui/AppInput';
 import AppSelect from '../components/ui/AppSelect';
 import AppTextarea from '../components/ui/AppTextarea';
-import LoadingState from '../components/ui/LoadingState';
+import { CanvasPageSkeleton } from '../components/ui/ListLayoutSkeleton';
 import PageShell, { PAGE_GUTTER_X } from '../components/ui/PageShell';
 import { flowAssetsApi } from '../services/api';
 import { getErrorMessage } from '../utils/errors';
@@ -270,8 +270,8 @@ export default function MetaFlowBuilder() {
 
   if (loading) {
     return (
-      <PageShell>
-        <LoadingState label="Loading Meta Flow builder..." />
+      <PageShell fullBleed>
+        <CanvasPageSkeleton label="Loading Meta Flow builder" />
       </PageShell>
     );
   }

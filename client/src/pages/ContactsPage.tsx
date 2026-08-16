@@ -12,13 +12,13 @@ import ContactTagManager from '../components/contacts/ContactTagManager';
 import ImportContactsModal from '../components/contacts/ImportContactsModal';
 import type { ContactImportRow } from '../utils/contactImport';
 import AppButton from '../components/ui/AppButton';
-import AppInput from '../components/ui/AppInput';
-import AppTextarea from '../components/ui/AppTextarea';
+import ContactFieldsForm from '../components/contacts/ContactFieldsForm';
+import { emptyContactForm, parseContactTagList, type ContactFormValues } from '../components/contacts/contactForm';
 import { asCustomAttributes, parseCustomAttributeLines, stringifyCustomAttributes } from '../utils/customAttributes';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import EmptyState from '../components/ui/EmptyState';
 import ListToolbar from '../components/ui/ListToolbar';
-import LoadingState from '../components/ui/LoadingState';
+import ListLayoutSkeleton from '../components/ui/ListLayoutSkeleton';
 import PageHero from '../components/ui/PageHero';
 import PageShell from '../components/ui/PageShell';
 import ResponsiveDataView from '../components/ui/ResponsiveDataView';
@@ -32,14 +32,14 @@ import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { contactApi } from '../services/api';
 import { downloadBlob } from '../utils/contactUtils';
-import { PHONE_HINT, PHONE_PLACEHOLDER, validatePhone } from '../utils/phone';
+import { PHONE_HINT, validatePhone } from '../utils/phone';
 import { toastError, toastSuccess } from '../utils/toast';
 import { readNumberCache, writeNumberCache } from '../utils/whatsappNumberCache';
 import { messagingConsent } from '../utils/plainLanguage';
 import { contactGetsCampaignMessages } from '../utils/contactConsent';
 import type { Contact, ContactSummary, ContactTag } from '../types';
 
-const emptyForm = { phone: '', name: '', email: '', tags: '', notes: '', customAttributes: '', optedIn: false };
+const emptyForm = emptyContactForm;
 
 const CONTACTS_CACHE_KEY = 'contacts';
 
@@ -84,7 +84,7 @@ export default function ContactsPage() {
   const [detailContact, setDetailContact] = useState<Contact | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [editing, setEditing] = useState<Contact | null>(null);
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState<ContactFormValues>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkTags, setBulkTags] = useState('');
@@ -299,10 +299,7 @@ export default function ContactsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const tags = form.tags
-      .split(',')
-      .map((t) => t.trim())
-      .filter(Boolean);
+    const tags = parseContactTagList(form.tags);
 
     let phone: string | undefined;
     if (!editing) {
@@ -625,10 +622,11 @@ export default function ContactsPage() {
               onClearFilters={clearFilters}
             />
 
-            {loading ? (
-              <div className="p-6">
-                <LoadingState label="Loading contacts..." />
-              </div>
+            {loading && contacts.length === 0 ? (
+              <ListLayoutSkeleton
+                label="Loading contacts"
+                tableHeaders={['Contact', 'Tags', 'Source', 'Updated', 'Actions']}
+              />
             ) : contacts.length === 0 ? (
               <div className="p-4 sm:p-6">
                 <EmptyState
@@ -803,72 +801,13 @@ export default function ContactsPage() {
             />
           )}
 
-          <AppInput
-            id="contact-phone"
-            label="Phone"
-            placeholder={PHONE_PLACEHOLDER}
-            value={form.phone}
-            onChange={(e) => setForm({ ...form, phone: e.target.value })}
-            required
-            disabled={!!editing}
-            hint={editing ? 'Phone cannot be changed' : PHONE_HINT}
-            inputMode="tel"
+          <ContactFieldsForm
+            form={form}
+            onChange={setForm}
+            phoneMode="plain"
+            phoneDisabled={!!editing}
+            phoneHint={editing ? 'Phone cannot be changed' : PHONE_HINT}
           />
-          <AppInput
-            id="contact-name"
-            label="Name"
-            placeholder="Customer name"
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-          />
-          <AppInput
-            id="contact-email"
-            label="Email"
-            placeholder="customer@example.com"
-            type="email"
-            value={form.email}
-            onChange={(e) => setForm({ ...form, email: e.target.value })}
-          />
-          <AppInput
-            id="contact-tags"
-            label="Tags"
-            hint="Comma separated"
-            placeholder="vip, lead"
-            value={form.tags}
-            onChange={(e) => setForm({ ...form, tags: e.target.value })}
-          />
-          <AppTextarea
-            id="contact-notes"
-            label="Notes"
-            placeholder="Internal notes about this contact..."
-            value={form.notes}
-            onChange={(e) => setForm({ ...form, notes: e.target.value })}
-            rows={3}
-          />
-          <AppTextarea
-            id="contact-custom-attributes"
-            label="Custom fields"
-            hint="Used in templates as {{order_id}}. One per line: key=value"
-            placeholder={'order_id=ORD-1042\ncity=Mumbai'}
-            value={form.customAttributes}
-            onChange={(e) => setForm({ ...form, customAttributes: e.target.value })}
-            rows={3}
-            className="font-mono text-[13px]"
-          />
-          <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-theme-border bg-theme-subtle/40 px-4 py-3.5">
-            <input
-              type="checkbox"
-              checked={form.optedIn}
-              onChange={(e) => setForm({ ...form, optedIn: e.target.checked })}
-              className="h-4 w-4 rounded border-theme-border text-emerald-600 focus:ring-emerald-500/30"
-            />
-            <div>
-              <p className="text-[13px] font-semibold text-theme-fg">{messagingConsent.allowCampaignMessages}</p>
-              <p className="text-[11px] font-medium text-theme-muted">
-                {messagingConsent.allowCampaignHint}
-              </p>
-            </div>
-          </label>
         </form>
       </SlideOver>
 

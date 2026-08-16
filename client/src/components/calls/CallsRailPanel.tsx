@@ -37,12 +37,12 @@ function HelpBody({ onOpenSetup }: { onOpenSetup: () => void }) {
   const tips = [
     {
       icon: PhoneOutgoing,
-      title: 'Outbound',
+      title: 'Outgoing',
       body: 'Start a call from Inbox — no tunnel needed.',
     },
     {
       icon: PhoneIncoming,
-      title: 'Inbound',
+      title: 'Incoming',
       body: 'Callers need calling enabled on your WhatsApp number.',
     },
     {
