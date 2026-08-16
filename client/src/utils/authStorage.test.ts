@@ -5,11 +5,13 @@ import {
   backupAuthBeforeOAuth,
   clearAuthBackup,
   clearAuthTokens,
+  discardClonedSession,
   getAccessToken,
   getRefreshToken,
   readJwtExpMs,
   restoreAuthBackupIfNeeded,
   setAuthTokens,
+  __resetAuthLockForTests,
 } from './authStorage';
 
 function jwtWithExp(expSeconds: number): string {
@@ -45,6 +47,7 @@ function memoryStorage(): Storage {
 beforeEach(() => {
   vi.stubGlobal('sessionStorage', memoryStorage());
   vi.stubGlobal('localStorage', memoryStorage());
+  __resetAuthLockForTests();
 });
 
 describe('accessTokenNeedsRefresh', () => {
@@ -97,11 +100,11 @@ describe('tab-scoped sessionStorage JWTs (SAMYOJ-49 Pick A)', () => {
     expect(localStorage.getItem('accessToken')).toBeNull();
   });
 
-  it('adopts leftover localStorage JWTs once, then strips the shared keys', () => {
+  it('strips leftover localStorage JWTs without logging a blank tab in', () => {
     localStorage.setItem('accessToken', 'legacy-access');
     localStorage.setItem('refreshToken', 'legacy-refresh');
-    expect(adoptLegacyLocalStorageTokens()).toBe(true);
-    expect(getAccessToken()).toBe('legacy-access');
+    expect(adoptLegacyLocalStorageTokens()).toBe(false);
+    expect(getAccessToken()).toBeNull();
     expect(localStorage.getItem('accessToken')).toBeNull();
     expect(localStorage.getItem('refreshToken')).toBeNull();
   });
@@ -149,5 +152,13 @@ describe('tab-scoped sessionStorage JWTs (SAMYOJ-49 Pick A)', () => {
     expect(getAccessToken()).toBe('stay');
     expect(sessionStorage.getItem('samyoj_auth_backup')).toBeNull();
     expect(localStorage.getItem('samyoj_oauth_auth_handoff')).toBeNull();
+  });
+});
+
+describe('discardClonedSession', () => {
+  it('keeps tokens when no other tab owns this session', async () => {
+    setAuthTokens('access-a', 'refresh-a');
+    await expect(discardClonedSession()).resolves.toBe(false);
+    expect(getAccessToken()).toBe('access-a');
   });
 });

@@ -1,8 +1,12 @@
 /**
  * Live JWTs live in sessionStorage (per tab) — SAMYOJ-49 Pick A.
  *
- * localStorage is NOT the live session. Logout in this tab only clears this
- * tab’s sessionStorage; other tabs keep their own tokens.
+ * A new tab/window starts logged out. Chrome copies sessionStorage on
+ * duplicate / Ctrl+click; discardClonedSession drops that clone when another
+ * live tab already owns the same token pair.
+ *
+ * localStorage is NOT the live session. Leftover JWT keys are stripped, not
+ * adopted into a blank tab.
  *
  * localStorage keys that are not live JWTs:
  * - `samyoj_oauth_auth_handoff`: short-lived copy so a Facebook OAuth *popup*
@@ -108,27 +112,109 @@ export function isWhatsAppOAuthReturn(): boolean {
   return window.location.pathname.startsWith('/settings/whatsapp/callback');
 }
 
-/**
- * One-time lift after SAMYOJ-49: first tab that boots with leftover localStorage
- * JWTs adopts them into this tab’s sessionStorage and deletes the shared keys
- * so other tabs cannot keep using the old browser-wide session.
- */
-export function adoptLegacyLocalStorageTokens(): boolean {
-  if (getAccessToken() || getRefreshToken()) {
-    stripLegacyLocalJwtKeys();
-    return false;
+const AUTH_LOCK_CHANNEL = 'samyoj-auth-lock';
+const AUTH_LOCK_WAIT_MS = 60;
+
+type AuthLockMsg = { type: 'ping' | 'pong'; fp: string; from: string };
+
+let authInstanceId = '';
+let authLockChannel: BroadcastChannel | null = null;
+
+function getAuthInstanceId(): string {
+  if (!authInstanceId) {
+    authInstanceId =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `t-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   }
-  const accessToken = readStorage(localStorage, ACCESS_KEY);
-  const refreshToken = readStorage(localStorage, REFRESH_KEY);
-  if (!accessToken && !refreshToken) return false;
-  if (accessToken && refreshToken) {
-    setAuthTokens(accessToken, refreshToken);
+  return authInstanceId;
+}
+
+function sessionFingerprint(): string | null {
+  const access = getAccessToken();
+  const refresh = getRefreshToken();
+  if (!access && !refresh) return null;
+  return `${refresh || ''}|${access || ''}`;
+}
+
+function ensureAuthLockChannel(): BroadcastChannel | null {
+  if (typeof BroadcastChannel === 'undefined') return null;
+  if (authLockChannel) return authLockChannel;
+  try {
+    authLockChannel = new BroadcastChannel(AUTH_LOCK_CHANNEL);
+  } catch {
+    return null;
+  }
+  const replyIfOwner = (event: MessageEvent<AuthLockMsg>) => {
+    const data = event.data;
+    const from = getAuthInstanceId();
+    if (!data || data.from === from || data.type !== 'ping') return;
+    const fp = sessionFingerprint();
+    if (fp && data.fp === fp) {
+      authLockChannel?.postMessage({ type: 'pong', fp, from });
+    }
+  };
+  authLockChannel.addEventListener('message', replyIfOwner);
+  authLockChannel.onmessage = replyIfOwner;
+  return authLockChannel;
+}
+
+async function pingForDuplicateOwner(fp: string): Promise<boolean> {
+  const ch = ensureAuthLockChannel();
+  if (!ch) return false;
+  const from = getAuthInstanceId();
+  let duplicate = false;
+  const onPong = (event: MessageEvent<AuthLockMsg>) => {
+    const data = event.data;
+    if (data?.type === 'pong' && data.fp === fp && data.from !== from) duplicate = true;
+  };
+  ch.addEventListener('message', onPong);
+  ch.postMessage({ type: 'ping', fp, from });
+  await new Promise((resolve) => {
+    setTimeout(resolve, AUTH_LOCK_WAIT_MS);
+  });
+  ch.removeEventListener('message', onPong);
+  return duplicate;
+}
+
+/**
+ * Chrome copies sessionStorage when a tab is duplicated or opened via Ctrl+click.
+ * If another live tab already owns this token pair, drop it here so a new window
+ * starts logged out. Explicit login in this tab (new refresh token) is kept.
+ */
+export async function discardClonedSession(): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+  if (isWhatsAppOAuthReturn()) return false;
+  const fp = sessionFingerprint();
+  if (!fp) return false;
+
+  const duplicate = await pingForDuplicateOwner(fp);
+
+  if (duplicate) {
+    clearAuthTokens();
     return true;
   }
-  if (accessToken) writeStorage(sessionStorage, ACCESS_KEY, accessToken);
-  if (refreshToken) writeStorage(sessionStorage, REFRESH_KEY, refreshToken);
+  return false;
+}
+
+/** Test-only: drop the BroadcastChannel singleton between cases. */
+export function __resetAuthLockForTests() {
+  authInstanceId = '';
+  try {
+    authLockChannel?.close();
+  } catch {
+    // ignore
+  }
+  authLockChannel = null;
+}
+
+/**
+ * Leftover localStorage JWTs must not log a blank tab in. Strip them.
+ * Live session is sessionStorage only (plus clone discard below).
+ */
+export function adoptLegacyLocalStorageTokens(): boolean {
   stripLegacyLocalJwtKeys();
-  return true;
+  return false;
 }
 
 /** Call right before leaving the app for Meta OAuth (popup or full-page redirect). */
