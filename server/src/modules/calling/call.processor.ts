@@ -10,8 +10,8 @@ import {
   removeCallSession,
 } from './call-session.manager';
 import { isCallingConfigured, MetaCallingService } from './meta-calling.service';
-import { decideCallRoute, resolveCallBot } from './routing.service';
-import { getOrgCallingSettings, resolveEffectiveVoiceConfig } from './settings.service';
+import { decideCallRoute, resolveCallBot, shouldAiAnswerAfterAgentTimeout } from './routing.service';
+import { getOrgCallingSettings, resolveCallVoiceConfig } from './settings.service';
 import { triggerCallCompletedFlow } from '../flows/engine';
 import { handleMissedCallFollowUp } from './missed-call.service';
 import { publishCallEventMessage } from './call-event-message';
@@ -139,7 +139,7 @@ async function startAiSession(params: {
   fromPhone: string;
   toPhone: string;
   direction: string;
-  botId: string;
+  botId: string | null;
   sdpOffer: string;
   consentMessage?: string;
   recordingEnabled?: boolean;
@@ -163,7 +163,7 @@ async function startAiSession(params: {
     fromPhone: params.fromPhone,
     toPhone: params.toPhone,
     direction: params.direction as 'USER_INITIATED' | 'BUSINESS_INITIATED',
-    aiBotId: params.botId,
+    aiBotId: params.botId || undefined,
     greeting: params.greeting,
     consentMessage: params.consentMessage,
     recordingEnabled: params.recordingEnabled === true,
@@ -202,6 +202,11 @@ async function startAiSession(params: {
       status: 'FAILED',
     });
     void publishCallEventMessage(params.callRecord.id);
+    const { emitProductEvent } = await import('../platform/events');
+    emitProductEvent({
+      organizationId: params.orgId,
+      name: 'CALL_FAILED',
+    });
     try {
       await MetaCallingService.reject(
         params.phoneNumberId,
@@ -236,8 +241,9 @@ async function ringAgentsForCall(params: {
   sdpOffer: string;
   agentIds: string[];
   timeoutSec: number;
-  botId: string;
+  botId: string | null;
   settings: Awaited<ReturnType<typeof getOrgCallingSettings>>;
+  contactCallingAiEnabled?: boolean | null;
 }): Promise<void> {
   await storePendingCallWithTtl(params.callRecord.metaCallId, {
     callId: params.callRecord.id,
@@ -282,8 +288,15 @@ async function ringAgentsForCall(params: {
 
       await removePendingCall(params.callRecord.metaCallId);
 
-      if (params.settings.aiAutoAnswer && isCallingConfigured()) {
+      if (
+        shouldAiAnswerAfterAgentTimeout({
+          aiAutoAnswer: params.settings.aiAutoAnswer,
+          hasBot: Boolean(params.botId) && isCallingConfigured(),
+          contactCallingAiEnabled: params.contactCallingAiEnabled,
+        })
+      ) {
         emitToOrg(params.orgId, 'call:ring_timeout', { callId: params.callRecord.id });
+        const timeoutVoice = resolveCallVoiceConfig(params.settings);
         await startAiSession({
           orgId: params.orgId,
           callRecord: params.callRecord,
@@ -301,12 +314,12 @@ async function ringAgentsForCall(params: {
             ? params.settings.recordingConsentMessage
             : undefined,
           recordingEnabled: params.settings.recordingConsentEnabled === true,
-          greeting: resolveEffectiveVoiceConfig(params.settings).aiGreeting,
-          ttsVoice: resolveEffectiveVoiceConfig(params.settings).ttsVoice,
-          ttsLanguage: resolveEffectiveVoiceConfig(params.settings).ttsLanguage,
-          sttPrompt: resolveEffectiveVoiceConfig(params.settings).sarvamSttPrompt || undefined,
-          sttMode: resolveEffectiveVoiceConfig(params.settings).sarvamMode,
-          sttLanguage: resolveEffectiveVoiceConfig(params.settings).sarvamSttLanguage || undefined,
+          greeting: timeoutVoice.aiGreeting,
+          ttsVoice: timeoutVoice.ttsVoice,
+          ttsLanguage: timeoutVoice.ttsLanguage,
+          sttPrompt: timeoutVoice.sarvamSttPrompt || undefined,
+          sttMode: timeoutVoice.sarvamMode,
+          sttLanguage: timeoutVoice.sarvamSttLanguage || undefined,
           maxCallDurationSec: params.settings.maxCallDurationSec,
         });
         return;
@@ -454,11 +467,6 @@ async function handleCallConnect(
   const settings = await getOrgCallingSettings(orgId);
   const bot = await resolveCallBot(orgId, settings, conversation.id);
 
-  await prisma.conversation.update({
-    where: { id: conversation.id },
-    data: { botActive: true, activeBotId: bot.id, botHandoffAt: null, botHandoffReason: null },
-  });
-
   const callRecord = await prisma.call.upsert({
     where: { metaCallId },
     create: {
@@ -466,7 +474,7 @@ async function handleCallConnect(
       contactId: contact.id,
       conversationId: conversation.id,
       whatsappNumberId,
-      aiBotId: bot.id,
+      aiBotId: bot?.id ?? null,
       metaCallId,
       direction,
       status: 'CONNECTING',
@@ -477,8 +485,16 @@ async function handleCallConnect(
     update: {
       status: 'CONNECTING',
       conversationId: conversation.id,
+      aiBotId: bot?.id ?? undefined,
     },
   });
+  if (!existingCall) {
+    const { emitProductEvent } = await import('../platform/events');
+    emitProductEvent({
+      organizationId: orgId,
+      name: 'CALL_STARTED',
+    });
+  }
 
   emitToOrg(orgId, 'call:incoming', {
     callId: callRecord.id,
@@ -491,7 +507,7 @@ async function handleCallConnect(
     status: 'CONNECTING',
   });
 
-  const route = await decideCallRoute(orgId);
+  const route = await decideCallRoute(orgId, contact);
 
   if (route.mode === 'missed') {
     log.info('Call routed to missed', { metaCallId, reason: route.reason });
@@ -527,8 +543,9 @@ async function handleCallConnect(
       sdpOffer,
       agentIds: route.agentIds,
       timeoutSec: settings.agentRingTimeoutSec,
-      botId: bot.id,
+      botId: bot?.id ?? null,
       settings,
+      contactCallingAiEnabled: contact.callingAiEnabled,
     });
     return;
   }
@@ -539,7 +556,13 @@ async function handleCallConnect(
     return;
   }
 
-  const voice = resolveEffectiveVoiceConfig(settings);
+  if (!bot) {
+    log.info('No calling bot available for AI answer', { metaCallId });
+    await markCallMissed(orgId, callRecord.id, conversation.id, contact.id, 'no_calling_bot');
+    return;
+  }
+
+  const voice = resolveCallVoiceConfig(settings, bot);
 
   await startAiSession({
     orgId,
@@ -609,6 +632,11 @@ async function handleCallTerminate(
       durationSeconds: duration,
       startedAt: call.start_time ? new Date(Number(call.start_time) * 1000) : existing.startedAt,
     },
+  });
+  const { emitProductEvent } = await import('../platform/events');
+  emitProductEvent({
+    organizationId: orgId,
+    name: status === 'FAILED' ? 'CALL_FAILED' : 'CALL_ENDED',
   });
 
   // Unanswered outbound (never connected) increments Meta quality cooldown.
@@ -819,7 +847,7 @@ export async function handleLiveTransfer(params: {
   direction: string;
   reason: string;
   transcriptSummary: string;
-  botId: string;
+  botId: string | null;
   ttsVoice?: string;
   ttsLanguage?: string;
   preferTeam?: string;

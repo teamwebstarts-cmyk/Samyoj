@@ -29,8 +29,9 @@ import { acceptCallWithAgentAnswer, declineCallAsAgent } from './agent-call.serv
 import { clearRingTimeout } from './call.processor';
 import { logTeamAudit } from '../team/audit';
 import { emitToOrg, emitToUser } from '../../realtime';
-import { resolveActiveWhatsappNumber } from '../whatsapp/active-number';
-import { publishCallEventMessage } from './call-event-message';
+import { resolveActiveWhatsappNumber, resolveActiveWhatsappNumberId } from '../whatsapp/active-number';
+import { recordAiUsage } from '../ai/org-ai.service';
+import { charUsage } from '../ai/ai-usage-actions';
 
 const router = Router();
 
@@ -278,12 +279,33 @@ router.get(
   })
 );
 
+const TELEPHONY_SETTING_KEYS = [
+  'agentRingTimeoutSec',
+  'maxConcurrentCalls',
+  'afterHoursMode',
+  'afterHoursMessage',
+  'missedCallAutoMessage',
+  'missedCallMessage',
+  'recordingConsentEnabled',
+  'recordingConsentMessage',
+  'liveTransferEnabled',
+  'transferMode',
+  'maxCallDurationSec',
+] as const;
+
 router.patch(
   '/settings',
   ...adminGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
-    const data = callingSettingsSchema.parse(req.body);
+    const parsed = callingSettingsSchema.parse(req.body);
+    // SAMYOJ-59: this endpoint is telephony-only. AI chrome lives on the calling bot.
+    const data = Object.fromEntries(
+      TELEPHONY_SETTING_KEYS.filter((key) => parsed[key] !== undefined).map((key) => [
+        key,
+        parsed[key],
+      ])
+    ) as Partial<typeof parsed>;
     const { settings: saved, warning } = await saveOrgCallingSettings(orgId, data);
 
     await logTeamAudit({
@@ -297,10 +319,11 @@ router.patch(
   })
 );
 
-/** Preview Bulbul TTS for Customize → Voice (platform Sarvam key; no org key). */
+/** Preview Bulbul TTS for AI Bot → Calling (platform Sarvam key; no org key). */
 router.post(
   '/voice/preview',
-  ...memberGuard,
+  authenticate,
+  requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
     if (!isSarvamTtsConfigured()) {
       throw new AppError(400, 'Sarvam voice is not configured on this server yet.');
@@ -313,10 +336,27 @@ router.post(
       })
       .parse(req.body);
 
+    let numberId: string | undefined;
+    try {
+      numberId = await resolveActiveWhatsappNumberId(
+        req.user!.organizationId!,
+        req.headers['x-whatsapp-number-id']
+      );
+    } catch (err) {
+      if (err instanceof AppError && err.statusCode === 409) throw err;
+      numberId = undefined;
+    }
+
     try {
       const preview = await previewSpeechSarvam(body.text, {
         speaker: body.speaker,
         language: body.language,
+      });
+      void recordAiUsage({
+        organizationId: req.user!.organizationId!,
+        whatsappNumberId: numberId,
+        action: 'tts',
+        usage: charUsage(0, body.text.length),
       });
       sendSuccess(res, preview);
     } catch (err) {
@@ -478,7 +518,7 @@ router.get(
         skip,
         take: query.limit,
         include: {
-          contact: { select: { id: true, name: true, phone: true } },
+          contact: { select: { id: true, name: true, phone: true, callingAiEnabled: true } },
           aiBot: { select: { id: true, name: true } },
           assignedAgent: { select: { id: true, name: true } },
           conversation: { select: { id: true } },
@@ -626,13 +666,27 @@ router.post(
       },
     });
 
-    const metaCallId = await MetaCallingService.initiateOutboundCall(
-      number.phoneNumberId,
-      accessToken,
-      contact.phone,
-      { sdp_type: 'offer', sdp: sdpOffer },
-      call.id
-    );
+    const { emitProductEvent } = await import('../platform/events');
+    let metaCallId: string;
+    try {
+      metaCallId = await MetaCallingService.initiateOutboundCall(
+        number.phoneNumberId,
+        accessToken,
+        contact.phone,
+        { sdp_type: 'offer', sdp: sdpOffer },
+        call.id
+      );
+      emitProductEvent({
+        organizationId: orgId,
+        name: 'CALL_STARTED',
+      });
+    } catch (error) {
+      emitProductEvent({
+        organizationId: orgId,
+        name: 'CALL_FAILED',
+      });
+      throw error;
+    }
 
     const updatedCall =
       metaCallId === placeholderMetaCallId
@@ -781,7 +835,7 @@ router.patch(
       where: { id },
       data: { metadata: { ...metadata, notes } },
       include: {
-        contact: { select: { id: true, name: true, phone: true } },
+        contact: { select: { id: true, name: true, phone: true, callingAiEnabled: true } },
         assignedAgent: { select: { id: true, name: true } },
       },
     });
