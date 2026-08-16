@@ -18,7 +18,7 @@ export default function AiBotStatusFilter({ value, onChange }: AiBotStatusFilter
     <div
       role="tablist"
       aria-label="Filter bots by status"
-      className="inline-flex h-10 w-full max-w-full items-stretch overflow-x-auto rounded-xl border border-neutral-200/90 bg-neutral-50/95 dark:border-neutral-700 dark:bg-neutral-900/80 sm:w-auto"
+      className="inline-flex min-h-10 max-w-full flex-wrap items-stretch rounded-xl border border-neutral-200/90 bg-neutral-50/95 dark:border-neutral-700 dark:bg-neutral-900/80 sm:h-10 sm:w-auto sm:flex-nowrap"
     >
       {OPTIONS.map((option, index) => {
         const isActive = value === option.value;
