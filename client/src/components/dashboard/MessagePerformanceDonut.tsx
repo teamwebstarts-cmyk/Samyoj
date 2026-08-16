@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Info, LineChart } from 'lucide-react';
@@ -57,78 +57,62 @@ const SEGMENT_META: Record<SegmentKey, { label: string; color: string; meaning: 
 };
 
 function PerformanceHoverTip({
-  segments,
   active,
-  x,
-  y,
+  sent,
+  chartRect,
 }: {
-  segments: Segment[];
   active: Segment;
-  x: number;
-  y: number;
+  sent: number;
+  chartRect: DOMRect;
 }) {
   if (typeof document === 'undefined') return null;
 
-  const maxCount = Math.max(...segments.map((s) => s.count), 1);
   const pad = 12;
-  const left = Math.min(Math.max(x + 16, pad), window.innerWidth - 240);
-  const top = Math.min(Math.max(y - 12, pad), window.innerHeight - pad);
+  const tipW = 208;
+  const spaceRight = window.innerWidth - chartRect.right - pad;
+  const placeLeft = spaceRight < tipW + 8;
+  const left = placeLeft
+    ? Math.max(pad, chartRect.left - tipW - 10)
+    : Math.min(chartRect.right + 10, window.innerWidth - tipW - pad);
+  const top = Math.min(
+    Math.max(chartRect.top + chartRect.height / 2, pad + 40),
+    window.innerHeight - pad,
+  );
 
   return createPortal(
     <div
       role="tooltip"
-      className="pointer-events-none fixed z-[260] w-[220px] -translate-y-full rounded-xl border border-neutral-200/80 bg-white/95 p-2.5 shadow-[0_8px_28px_rgba(15,23,42,0.14)] backdrop-blur-md dark:border-white/10 dark:bg-zinc-900/95"
+      className="pointer-events-none fixed z-[260] w-[208px] -translate-y-1/2 rounded-xl border border-neutral-200/80 bg-white/95 p-2.5 shadow-[0_8px_28px_rgba(15,23,42,0.14)] backdrop-blur-md dark:border-white/10 dark:bg-zinc-900/95"
       style={{ left, top }}
     >
-      <p className="px-1 pb-1.5 text-[10px] font-bold uppercase tracking-wide text-neutral-400">
-        {active.label}
-        <span className="ml-1 font-semibold normal-case tracking-normal text-neutral-500">
-          {active.meaning}
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span
+            className="h-2.5 w-2.5 shrink-0 rounded-full"
+            style={{ backgroundColor: active.color }}
+            aria-hidden
+          />
+          <span className="truncate text-[13px] font-extrabold text-neutral-900 dark:text-white">
+            {active.label}
+          </span>
         </span>
+        <span className="text-[13px] font-extrabold tabular-nums text-neutral-900 dark:text-white">
+          {active.count.toLocaleString()}
+        </span>
+      </div>
+      <p className="mt-1 text-[11px] font-medium leading-snug text-neutral-500 dark:text-neutral-400">
+        {active.meaning} {active.count.toLocaleString()} of {sent.toLocaleString()} sent (
+        {Math.round(active.pct)}%).
       </p>
-      <ul>
-        {segments.map((seg, index) => {
-          const on = seg.key === active.key;
-          return (
-            <li
-              key={seg.key}
-              className={`px-1 py-1.5 ${index > 0 ? 'border-t border-neutral-100 dark:border-white/10' : ''} ${
-                on ? 'rounded-lg bg-neutral-50 dark:bg-white/5' : ''
-              }`}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span className="flex min-w-0 items-center gap-1.5">
-                  <span
-                    className="h-2 w-2 shrink-0 rounded-full"
-                    style={{ backgroundColor: seg.color }}
-                    aria-hidden
-                  />
-                  <span
-                    className={`truncate text-[12px] ${
-                      on ? 'font-extrabold text-neutral-900 dark:text-white' : 'font-semibold text-neutral-600 dark:text-neutral-300'
-                    }`}
-                  >
-                    {seg.label}
-                  </span>
-                </span>
-                <span className="text-[12px] font-extrabold tabular-nums text-neutral-900 dark:text-white">
-                  {seg.count.toLocaleString()}
-                </span>
-              </div>
-              <span className="mt-1.5 block h-1 overflow-hidden rounded-full bg-neutral-100 dark:bg-white/10">
-                <span
-                  className="block h-full rounded-full"
-                  style={{
-                    width: `${Math.max(6, (seg.count / maxCount) * 100)}%`,
-                    backgroundColor: seg.color,
-                    opacity: seg.count === 0 ? 0.25 : 1,
-                  }}
-                />
-              </span>
-            </li>
-          );
-        })}
-      </ul>
+      <span className="mt-2 block h-1.5 overflow-hidden rounded-full bg-neutral-100 dark:bg-white/10">
+        <span
+          className="block h-full rounded-full"
+          style={{
+            width: `${Math.max(8, active.pct)}%`,
+            backgroundColor: active.color,
+          }}
+        />
+      </span>
     </div>,
     document.body,
   );
@@ -145,6 +129,7 @@ export default function MessagePerformanceDonut({
   period,
   onPeriodChange,
 }: MessagePerformanceDonutProps) {
+  const chartRef = useRef<HTMLDivElement>(null);
   const isEmpty = messagesSent <= 0;
 
   const deliveredReached = messagesDelivered;
@@ -175,7 +160,6 @@ export default function MessagePerformanceDonut({
   const stroke = 22;
 
   const [hoveredKey, setHoveredKey] = useState<SegmentKey | null>(null);
-  const [tipPos, setTipPos] = useState<{ x: number; y: number } | null>(null);
 
   let runningOffset = 0;
   const ringArcs = segments
@@ -189,15 +173,14 @@ export default function MessagePerformanceDonut({
     .filter((a): a is NonNullable<typeof a> => a !== null);
 
   const hovered = segments.find((s) => s.key === hoveredKey) ?? null;
+  const chartRect = chartRef.current?.getBoundingClientRect() ?? null;
 
-  const showTip = (key: SegmentKey, event: { clientX: number; clientY: number }) => {
+  const showTip = (key: SegmentKey) => {
     setHoveredKey(key);
-    setTipPos({ x: event.clientX, y: event.clientY });
   };
 
   const hideTip = () => {
     setHoveredKey(null);
-    setTipPos(null);
   };
 
   const periodControl =
@@ -215,8 +198,8 @@ export default function MessagePerformanceDonut({
 
   return (
     <section className="dashboard-card flex h-full flex-col rounded-2xl border border-neutral-100/90 bg-white p-[var(--card-pad)] shadow-xs sm:rounded-3xl">
-      {hovered && tipPos ? (
-        <PerformanceHoverTip segments={segments} active={hovered} x={tipPos.x} y={tipPos.y} />
+      {hovered && chartRect ? (
+        <PerformanceHoverTip active={hovered} sent={messagesSent} chartRect={chartRect} />
       ) : null}
       <div className="flex shrink-0 items-start justify-between gap-2 sm:items-center sm:gap-3">
         <div className="flex min-w-0 items-center gap-2">
@@ -252,7 +235,11 @@ export default function MessagePerformanceDonut({
         </div>
       ) : (
         <div className="mt-3 flex min-h-0 flex-1 flex-col items-center justify-center">
-          <div className="relative mx-auto aspect-square w-[min(100%,11rem)] shrink-0 sm:w-[min(100%,12rem)]" onMouseLeave={hideTip}>
+          <div
+            ref={chartRef}
+            className="relative mx-auto aspect-square w-[min(100%,11rem)] shrink-0 sm:w-[min(100%,12rem)]"
+            onMouseLeave={hideTip}
+          >
             <svg
               viewBox="0 0 180 180"
               className="h-full w-full -rotate-90 transform"
@@ -277,44 +264,25 @@ export default function MessagePerformanceDonut({
                   r={R}
                   fill="none"
                   stroke={arc.color}
-                  strokeWidth={hoveredKey === arc.key ? stroke + 4 : stroke}
+                  strokeWidth={stroke}
                   strokeDasharray={`${arc.len} ${C - arc.len}`}
                   strokeDashoffset={arc.dashoffset}
                   strokeLinecap="butt"
-                  className="cursor-pointer transition-[stroke-width] duration-150"
+                  className="cursor-pointer"
                   style={{ pointerEvents: 'stroke' }}
-                  onMouseEnter={(event) => showTip(arc.key, event)}
-                  onMouseMove={(event) => showTip(arc.key, event)}
-                  onClick={() => setHoveredKey((k) => (k === arc.key ? null : arc.key))}
+                  onMouseEnter={() => showTip(arc.key)}
+                  onMouseMove={() => showTip(arc.key)}
                 />
               ))}
+              <circle cx="90" cy="90" r={R - stroke / 2 - 2} fill="#ffffff" />
             </svg>
-            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
-              {hovered ? (
-                <span
-                  className="inline-flex max-w-[8.5rem] flex-col items-center rounded-xl px-2.5 py-1.5 text-white shadow-sm"
-                  style={{ backgroundColor: hovered.color }}
-                >
-                  <span className="text-[10px] font-bold uppercase tracking-wide">
-                    {hovered.label}
-                  </span>
-                  <span className="mt-0.5 text-[15px] font-extrabold leading-none tabular-nums">
-                    {hovered.count.toLocaleString()}
-                    <span className="ml-1 text-[11px] font-semibold opacity-90">
-                      {Math.round(hovered.pct)}%
-                    </span>
-                  </span>
-                </span>
-              ) : (
-                <>
-                  <span className="text-[1.45rem] font-extrabold leading-none tracking-tight tabular-nums text-neutral-900 sm:text-[1.6rem]">
-                    {messagesSent.toLocaleString()}
-                  </span>
-                  <span className="mt-1 text-[10px] font-medium leading-none text-neutral-500">
-                    Total sent
-                  </span>
-                </>
-              )}
+            <div className="pointer-events-none absolute inset-0 z-[1] flex flex-col items-center justify-center px-6 text-center">
+              <span className="text-[1.45rem] font-extrabold leading-none tracking-tight tabular-nums text-neutral-900 sm:text-[1.6rem]">
+                {messagesSent.toLocaleString()}
+              </span>
+              <span className="mt-1 text-[10px] font-medium leading-none text-neutral-500">
+                Total sent
+              </span>
             </div>
           </div>
         </div>

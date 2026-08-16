@@ -24,7 +24,7 @@ export default function GettingStartedCard({
   totalSteps,
 }: GettingStartedCardProps) {
   return (
-    <section className="dashboard-card flex h-auto flex-col justify-between rounded-2xl border border-neutral-100/90 bg-white p-[var(--card-pad)] shadow-xs sm:rounded-3xl">
+    <section className="dashboard-card flex h-full flex-col justify-between rounded-2xl border border-neutral-100/90 bg-white p-[var(--card-pad)] shadow-xs sm:rounded-2xl">
       {/* Card Header: Icon + Title + Progress Badge */}
       <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
         <div className="flex min-w-0 items-center gap-2 sm:gap-2.5">
@@ -41,7 +41,7 @@ export default function GettingStartedCard({
       </div>
 
       {/* Card Body: Left Checklist Items + Right Illustration */}
-      <div className="mt-3 sm:mt-3.5 flex items-center justify-between gap-3 sm:gap-4">
+      <div className="mt-3 flex min-h-0 flex-1 items-center justify-between gap-3 sm:mt-3.5 sm:gap-4">
         <ul className="min-w-0 flex-1 space-y-1 sm:space-y-1.5">
           {steps.map((step) => {
             const Row = (
