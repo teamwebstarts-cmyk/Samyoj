@@ -104,7 +104,6 @@ export default function CampaignAudienceStep({
           audienceMetrics={audienceMetrics}
           estimatedCost={estimatedCost}
           quota={quota}
-          variant="audience"
         />
       </div>
 

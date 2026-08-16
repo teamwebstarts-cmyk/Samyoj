@@ -139,7 +139,7 @@ export default function UpcomingCampaignsCard({
 
       {/* Main Content Area */}
       {loading ? (
-        <div className="mt-2.5 flex flex-1 flex-col justify-center gap-2 sm:gap-2.5">
+        <div className="mt-2.5 flex flex-1 flex-col justify-start gap-2 sm:gap-2.5">
           {Array.from({ length: 3 }).map((_, i) => (
             <div
               key={i}
@@ -148,7 +148,7 @@ export default function UpcomingCampaignsCard({
           ))}
         </div>
       ) : error ? (
-        <div className="my-4 flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-amber-200 bg-amber-50/40 px-4 py-6 text-center">
+        <div className="mt-2.5 flex flex-1 flex-col items-center justify-start rounded-2xl border border-dashed border-amber-200 bg-amber-50/40 px-4 py-6 text-center">
           <IconWell accent="amber" size="md">
             <Send className="h-4 w-4" strokeWidth={2} />
           </IconWell>
@@ -169,7 +169,7 @@ export default function UpcomingCampaignsCard({
           )}
         </div>
       ) : campaigns.length === 0 ? (
-        <div className="mt-2.5 flex min-h-0 flex-1 flex-col items-center justify-center px-2 text-center">
+        <div className="mt-2.5 flex min-h-0 flex-1 flex-col items-center justify-start px-2 text-center">
           <CampaignEmptyIllustrationSvg className="h-16 w-16 sm:h-[4.5rem] sm:w-[4.5rem]" />
           <h3 className="mt-2 text-[13px] font-bold tracking-tight text-neutral-900 sm:text-[13.5px]">
             No campaigns yet
@@ -186,7 +186,7 @@ export default function UpcomingCampaignsCard({
           </Link>
         </div>
       ) : (
-        <ul className="mt-2.5 flex min-h-0 flex-1 flex-col justify-center gap-2 sm:gap-2.5">
+        <ul className="mt-2.5 flex min-h-0 flex-1 flex-col justify-start gap-2 sm:gap-2.5">
           {campaigns.slice(0, 3).map((c, idx) => {
             const visual = getCampaignVisual(c, idx);
             const Icon = visual.icon;
