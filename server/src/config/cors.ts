@@ -41,9 +41,27 @@ export function isAllowedCorsOrigin(origin: string | undefined): boolean {
   return false;
 }
 
+/** Platform CORS is exact-origin only, including in development. */
+export function isAllowedPlatformCorsOrigin(origin: string | undefined): boolean {
+  if (!origin) return true;
+
+  try {
+    return new URL(origin).origin === new URL(config.platformAdminUrl).origin;
+  } catch {
+    return false;
+  }
+}
+
 export function corsOriginDelegate(
   origin: string | undefined,
   callback: (err: Error | null, allow?: boolean) => void
 ): void {
   callback(null, isAllowedCorsOrigin(origin));
+}
+
+export function platformCorsOriginDelegate(
+  origin: string | undefined,
+  callback: (err: Error | null, allow?: boolean) => void
+): void {
+  callback(null, isAllowedPlatformCorsOrigin(origin));
 }
