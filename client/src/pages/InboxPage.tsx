@@ -352,7 +352,11 @@ export default function InboxPage() {
       .list()
       .then(({ data }) => {
         if (requestNumberId !== activeNumberIdRef.current) return;
-        setAiBots((data.data?.bots ?? []) as AiBot[]);
+        setAiBots(
+          ((data.data?.bots ?? []) as AiBot[]).filter(
+            (bot) => (bot.channel ?? 'CHAT') === 'CHAT'
+          )
+        );
       })
       .catch(() => {
         if (requestNumberId === activeNumberIdRef.current) setAiBots([]);

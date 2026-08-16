@@ -290,11 +290,11 @@ export default function DashboardPage() {
               className={`card-grid mt-[var(--card-gap)] grid grid-cols-1 ${showChecklist || onboardingError ? 'lg:grid-cols-5 lg:items-stretch' : ''
                 }`}
             >
-              <div className={`min-w-0 ${showChecklist || onboardingError ? 'lg:col-span-3' : ''}`}>
+              <div className={`min-w-0 ${showChecklist || onboardingError ? 'lg:col-span-3 lg:h-full' : ''}`}>
                 <DashboardQuickActions />
               </div>
               {showChecklist && onboarding && (
-                <div className="min-w-0 lg:col-span-2">
+                <div className="min-w-0 lg:col-span-2 lg:h-full">
                   <GettingStartedCard
                     steps={onboarding.steps}
                     completedCount={onboarding.completedCount}
@@ -303,8 +303,8 @@ export default function DashboardPage() {
                 </div>
               )}
               {onboardingError && !showChecklist && (
-                <div className="min-w-0 lg:col-span-2">
-                  <div className="dashboard-card flex flex-col justify-center rounded-2xl border-amber-100 bg-amber-50/40 p-[var(--card-pad)]">
+                <div className="min-w-0 lg:col-span-2 lg:h-full">
+                  <div className="dashboard-card flex h-full flex-col justify-center rounded-2xl border-amber-100 bg-amber-50/40 p-[var(--card-pad)]">
                     <p className="text-[13px] font-bold text-neutral-900">Couldn&apos;t load checklist</p>
                     <p className="mt-0.5 text-[12px] text-neutral-600">
                       Setup steps are temporarily unavailable.
