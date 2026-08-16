@@ -14,6 +14,7 @@ import {
   inboundConversationSideEffectData,
   needsInboundConversationRepair,
 } from '../modules/whatsapp/inbound-side-effects';
+import { emitProductEvent } from '../modules/platform/events';
 
 const log = createModuleLogger('webhook');
 
@@ -301,6 +302,10 @@ export async function processWebhookPayload(
           }
           throw err;
         }
+        emitProductEvent({
+          organizationId: orgId,
+          name: 'MESSAGE_IN',
+        });
 
         if (parsed.metadata?.mediaId) {
           try {

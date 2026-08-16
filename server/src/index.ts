@@ -6,9 +6,10 @@ import rateLimit from 'express-rate-limit';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { config } from './config';
-import { corsOriginDelegate } from './config/cors';
-import { clientBuildExists, getClientPaths } from './config/paths';
+import { corsOriginDelegate, platformCorsOriginDelegate } from './config/cors';
+import { clientBuildExists, getAdminPaths, getClientPaths, adminBuildExists } from './config/paths';
 import { validateConfig } from './config/validate';
+import { isPlatformAdminHost } from './config/admin-host';
 import { initSentry } from './config/sentry';
 import { errorHandler, logError, setupGlobalErrorHandlers } from './errors';
 import logger, { requestLogger } from './utils/logger';
@@ -46,7 +47,7 @@ import contentStudioRoutes from './modules/content-studio/routes';
 import publicApiRoutes from './modules/public-api/routes';
 import leadRoutes from './modules/leads/routes';
 import ticketRoutes from './modules/tickets/routes';
-import opsRoutes from './modules/ops/routes';
+import platformRoutes from './modules/platform/routes';
 import { setRealtimeIO } from './realtime';
 import { registerPresenceHandlers, startPresenceSweeper } from './modules/inbox/presence';
 import { initTelemetry } from './config/telemetry';
@@ -54,6 +55,15 @@ import { attachOpsErrorFileTransport } from './modules/ops/error-log';
 
 const app = express();
 const httpServer = createServer(app);
+const customerCors = cors({
+  origin: corsOriginDelegate,
+  credentials: true,
+});
+const platformCors = cors({
+  origin: platformCorsOriginDelegate,
+  credentials: true,
+  allowedHeaders: ['Content-Type', 'x-platform-csrf-token'],
+});
 
 app.set('trust proxy', 1);
 app.set('etag', false);
@@ -127,10 +137,12 @@ app.use(
   })
 );
 app.use(
-  cors({
-    origin: corsOriginDelegate,
-    credentials: true,
-  })
+  (req, res, next) => {
+    const isPlatformPath =
+      req.path === '/api/platform' || req.path.startsWith('/api/platform/');
+    const applyCors = isPlatformPath ? platformCors : customerCors;
+    applyCors(req, res, next);
+  }
 );
 
 app.use(
@@ -253,12 +265,45 @@ app.use('/api/content-studio', contentStudioRoutes);
 app.use('/api/v1', publicApiRoutes);
 app.use('/api/leads', leadRoutes);
 app.use('/api/tickets', ticketRoutes);
-app.use('/api/ops', opsRoutes);
+app.use('/api/platform', platformRoutes);
 
 const { clientDist, clientPublic } = getClientPaths();
+const { adminDist, adminPublic } = getAdminPaths();
 const serveClient = config.nodeEnv === 'production' || clientBuildExists();
+const serveAdmin = config.nodeEnv === 'production' || adminBuildExists();
+
+if (serveAdmin) {
+  app.use((req, res, next) => {
+    if (!isPlatformAdminHost(req.get('host'), config.platformAdminUrl)) {
+      return next();
+    }
+    if (
+      req.path.startsWith('/api') ||
+      req.path === '/health' ||
+      req.path.startsWith('/socket.io')
+    ) {
+      return next();
+    }
+    express.static(adminPublic)(req, res, (err) => {
+      if (err) return next(err);
+      express.static(adminDist)(req, res, (staticErr) => {
+        if (staticErr) return next(staticErr);
+        if (req.method !== 'GET') return next();
+        res.sendFile(path.join(adminDist, 'index.html'), (sendErr) => {
+          if (sendErr) next(sendErr);
+        });
+      });
+    });
+  });
+}
 
 if (serveClient) {
+  app.use((req, res, next) => {
+    if (isPlatformAdminHost(req.get('host'), config.platformAdminUrl)) {
+      return next();
+    }
+    next();
+  });
   app.use(express.static(clientPublic));
   app.use(express.static(clientDist));
 
@@ -269,6 +314,9 @@ if (serveClient) {
       req.path === '/health' ||
       req.path.startsWith('/socket.io')
     ) {
+      return next();
+    }
+    if (isPlatformAdminHost(req.get('host'), config.platformAdminUrl)) {
       return next();
     }
     res.sendFile(path.join(clientDist, 'index.html'), (err) => {
