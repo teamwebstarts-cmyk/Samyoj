@@ -1,6 +1,6 @@
 # Inbox new contact fields + strip AI calling from Calls settings
 
-Durable product research for later implementation and for copying into Confluence when that product is connected. Dictated 2026-08-16 (set 4). Agent memory + Jira mapping: `docs/memory/PRODUCT_TASKS_2026-08-16.md` §13–14. **Shipped in code 2026-08-16:** Inbox New chat = Contacts optional fields (SAMYOJ-58). **Not built:** strip AI calling from Calls Customize (SAMYOJ-59; land with/after SAMYOJ-52).
+Durable product research for later implementation and for copying into Confluence when that product is connected. Dictated 2026-08-16 (set 4). Agent memory + Jira mapping: `docs/memory/PRODUCT_TASKS_2026-08-16.md` §13–14. **Shipped in code 2026-08-16:** Inbox New chat = Contacts optional fields (SAMYOJ-58). Strip AI calling from Calls Customize (SAMYOJ-59; landed with SAMYOJ-52).
 
 Atlassian note (2026-08-16): the connected site `teamwebstarts.atlassian.net` currently exposes **Jira only**. Confluence wiki API returns 404. This file is the documentation space until Confluence is enabled.
 
