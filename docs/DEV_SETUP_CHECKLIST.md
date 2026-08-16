@@ -9,7 +9,7 @@
 
 ```bash
 bash setup.sh
-# Installs deps, configures .env, starts Docker + API + Client + tunnel
+# Installs deps, configures .env, starts Docker + API + Client + Admin + tunnel
 ```
 
 ## Quick start (after first setup)
@@ -25,15 +25,15 @@ bash stop.sh --all # also stop Postgres + Redis
 ## What setup.sh does automatically
 
 1. ✅ Prereqs check (Node 20.19+, Docker, npm, official ngrok CLI)  
-2. ✅ Copies `.env.example` → `.env` and generates local JWT/encryption secrets  
+2. ✅ Copies `.env.example` → `.env` (server, client, admin) and generates local JWT/encryption secrets  
 3. ✅ Uses ngrok config/`NGROK_AUTHTOKEN`, or securely prompts once  
 4. ✅ Starts Docker (Postgres + Redis) + waits for ready  
-5. ✅ `npm install` (server + client)  
+5. ✅ `npm ci` (server + client + admin)  
 6. ✅ Prisma migrate  
 7. ✅ Starts public tunnel before API (ngrok only — no Cloudflare fallback)  
 8. ✅ Verifies public webhook challenge (`ping`) before claiming success  
 9. ✅ Registers Meta webhook when a WhatsApp number is connected  
-10. ✅ Starts API + Client  
+10. ✅ Starts API `:8000` + Client `:3000` + Admin `:3001`  
 
 ---
 
@@ -65,6 +65,8 @@ In `server/.env` (never in UI):
 
 ```bash
 curl -s http://localhost:8000/health
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3000
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3001
 curl -s http://localhost:8000/api/whatsapp/webhook/health
 # Expect: HTTP 200, verifyTokenConfigured/appSecretConfigured booleans, webhookConfigured true when META_WEBHOOK_URL is set.
 # The live tunnel URL is not in this public JSON — read it from server/.env META_WEBHOOK_URL.

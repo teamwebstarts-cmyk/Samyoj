@@ -3,6 +3,7 @@ import { lazy, Suspense } from 'react';
 import { AuthProvider } from './contexts/AuthContext';
 import { WhatsAppNumberProvider } from './contexts/WhatsAppNumberContext';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { TypographyProvider } from './contexts/TypographyContext';
 import { DensityProvider } from './contexts/DensityContext';
 import { CardSpacingProvider } from './contexts/CardSpacingContext';
 import { PageGutterProvider } from './contexts/PageGutterContext';
@@ -47,6 +48,7 @@ export default function App() {
   return (
     <ErrorBoundary>
       <ThemeProvider>
+        <TypographyProvider>
         <DensityProvider>
         <CardSpacingProvider>
         <PageGutterProvider>
@@ -113,6 +115,7 @@ export default function App() {
         </PageGutterProvider>
         </CardSpacingProvider>
         </DensityProvider>
+        </TypographyProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );
