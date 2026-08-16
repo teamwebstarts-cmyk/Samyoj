@@ -7,10 +7,10 @@ This is **session memory**, not a second feature matrix. Short, path-backed, hon
 | File | Use |
 |------|-----|
 | [PROMPT_POINT_MATCH_2026-08-16.md](./PROMPT_POINT_MATCH_2026-08-16.md) | **Your four prompts → each point → Jira → done / not built / partial.** Start here for “kya hua / kya baki.” |
-| [SESSION_2026-08-17.md](./SESSION_2026-08-17.md) | AI Bot UX + per-contact calling AI (SAMYOJ-69). Test-deploy only. |
+| [SESSION_2026-08-17.md](./SESSION_2026-08-17.md) | AI Bot UX + per-contact calling AI (SAMYOJ-69) + **SAMYOJ-57** platform admin first release. Test-deploy only. |
 | [PRODUCT_TASKS_2026-08-16.md](./PRODUCT_TASKS_2026-08-16.md) | Spec: current code vs wanted behavior (sets 1–4) |
 | [../product/CALLS_AI_USAGE_ADMIN_2026-08-16.md](../product/CALLS_AI_USAGE_ADMIN_2026-08-16.md) | Durable set-3 product doc (Calls recents, summary, AI Reports). Copy to Confluence when wiki is connected. |
-| [../product/PLATFORM_ADMIN_2026-08-16.md](../product/PLATFORM_ADMIN_2026-08-16.md) | **SAMYOJ-57** platform operator console — research complete, not built. Read before re-designing admin. |
+| [../product/PLATFORM_ADMIN_2026-08-16.md](../product/PLATFORM_ADMIN_2026-08-16.md) | **SAMYOJ-57** platform operator console — first release in code 2026-08-17 (`admin/` `:3001`). Remaining: 35 / 56 honesty / impersonation / SMTP. |
 | [../product/INBOX_CONTACT_AND_CALLING_AI_2026-08-16.md](../product/INBOX_CONTACT_AND_CALLING_AI_2026-08-16.md) | Durable set-4 product doc (Inbox New chat = Contacts fields; strip AI from Calling settings). |
 | [SESSION_2026-08-15.md](./SESSION_2026-08-15.md) | Number isolation, workers embedded, campaign wizard UX, templates/Connect leftovers; **test-deploy vs production** |
 | [SESSION_2026-08-14.md](./SESSION_2026-08-14.md) | Calls/Train/automations Phase B + earlier WhatsApp lock-down |
@@ -23,10 +23,10 @@ Cursor always-apply pointer: `.cursor/rules/session-memory.mdc`.
 
 ## Current honest status (2026-08-17)
 
-Same production answer as 15–16 Aug. **Shipped in code 2026-08-16:** 47, 48, 50, 51, 53, 54, 55, 58, **46**, **49**, **52**, **56**, **59**. **2026-08-17:** [SAMYOJ-68](https://teamwebstarts.atlassian.net/browse/SAMYOJ-68) login split, [SAMYOJ-69](https://teamwebstarts.atlassian.net/browse/SAMYOJ-69) per-contact calling AI, plus 52/59 AI Bot UX (When they call / P14 on the bot). User testing locally. More items still coming from the user.
+Same production answer as 15–16 Aug. **Shipped in code 2026-08-16:** 47, 48, 50, 51, 53, 54, 55, 58, **46**, **49**, **52**, **56**, **59**. **2026-08-17:** [SAMYOJ-68](https://teamwebstarts.atlassian.net/browse/SAMYOJ-68) login split, [SAMYOJ-69](https://teamwebstarts.atlassian.net/browse/SAMYOJ-69) per-contact calling AI, plus 52/59 AI Bot UX (When they call / P14 on the bot), **[SAMYOJ-57](https://teamwebstarts.atlassian.net/browse/SAMYOJ-57) platform admin first release** (`admin/` `:3001`). User testing locally. More items still coming from the user.
 
 - **Customer production go-live / production-ready pipeline: NO.** Do not restart a launch that claims the product is production-complete.
-- **Internal using + testing of this existing build: YES.** `bash start.sh` = Docker + API `:8000` + UI `:3000` + ngrok-only inbound. That is a **testing deploy**, not production.
+- **Internal using + testing of this existing build: YES.** `bash start.sh` = Docker + API `:8000` + UI `:3000` + Admin `:3001` + ngrok-only inbound. That is a **testing deploy**, not production.
 - Prove inbound with a **new** phone reply (old messages do not replay). Public `GET /api/whatsapp/webhook/health` returns counters + `webhookConfigured` — **not** `webhookUrl`, **not** `lastError`, **not** a Facebook trace id. Use `META_WEBHOOK_URL` in `server/.env`.
 - Speech: **Sarvam** (Saaras STT, Bulbul TTS, `sarvam-105b-conversations` on calls). Embeddings **Azure**. **Separate** Chat vs Calling `AiBot` rows (`channel` CHAT / CALL).
 - Billing: audit + blueprint docs exist. **Not built this session.** Do not start billing code unless asked.

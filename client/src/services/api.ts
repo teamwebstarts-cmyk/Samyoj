@@ -451,6 +451,7 @@ export const aiBotApi = {
   ) => api.post(`/ai-bot/${botId}/test`, data),
   applyToAllChats: (botId: string) => api.post(`/ai-bot/${botId}/apply-all`),
   removeFromAllChats: (botId: string) => api.post(`/ai-bot/${botId}/remove-all`),
+  audit: (botId: string) => api.get(`/ai-bot/${botId}/audit`),
 };
 
 export const campaignApi = {

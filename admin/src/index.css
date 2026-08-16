@@ -30,6 +30,24 @@ body {
   outline-offset: 2px;
 }
 
+.skip-to-content {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  padding: 0.5rem 1rem;
+  border-radius: 0 0 0.5rem 0.5rem;
+  background: var(--sage);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.8125rem;
+  text-decoration: none;
+}
+.skip-to-content:focus,
+.skip-to-content:focus-visible {
+  left: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -56,6 +74,17 @@ body {
   height: 2px;
   background: var(--dust);
   z-index: 0;
+}
+
+.lifecycle-progress {
+  position: absolute;
+  left: 8%;
+  top: 15px;
+  height: 2px;
+  width: calc((100% - 16%) * var(--progress, 0));
+  background: var(--sage);
+  z-index: 0;
+  pointer-events: none;
 }
 
 .lifecycle-station {

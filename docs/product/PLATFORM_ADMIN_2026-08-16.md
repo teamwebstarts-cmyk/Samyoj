@@ -1,12 +1,40 @@
-# Platform admin console — research & design (SAMYOJ-57)
+# Platform admin console (SAMYOJ-57)
 
-**Status:** Research complete. **Do not implement in this session.** Next coding session uses this file as the spec.  
-**Date:** 2026-08-16.  
-**Jira:** [SAMYOJ-57](https://teamwebstarts.atlassian.net/browse/SAMYOJ-57) (was deferred; this dictation un-defers **research**. Build still waits until we start the ticket).  
-**Relates:** [SAMYOJ-56](https://teamwebstarts.atlassian.net/browse/SAMYOJ-56) AI usage ledger, [SAMYOJ-35](https://teamwebstarts.atlassian.net/browse/SAMYOJ-35) billing TARGET, [SAMYOJ-3](https://teamwebstarts.atlassian.net/browse/SAMYOJ-3) cookies (do not mix).  
-**Older stub:** `docs/product/CALLS_AI_USAGE_ADMIN_2026-08-16.md` §4. This file replaces that stub.
+**Status (2026-08-17):** First release is **in code** for internal test-deploy. Customer production is still **no**.  
+**Date:** research 2026-08-16; shipped 2026-08-17.  
+**Jira:** [SAMYOJ-57](https://teamwebstarts.atlassian.net/browse/SAMYOJ-57) — comment on this ticket; do not file a sibling.  
+**Relates:** [SAMYOJ-56](https://teamwebstarts.atlassian.net/browse/SAMYOJ-56) STT/TTS ledger honesty still open, [SAMYOJ-35](https://teamwebstarts.atlassian.net/browse/SAMYOJ-35) billing TARGET not shipped, [SAMYOJ-3](https://teamwebstarts.atlassian.net/browse/SAMYOJ-3) customer cookies (do not mix).  
+**Older stub:** `docs/product/CALLS_AI_USAGE_ADMIN_2026-08-16.md` §4.
 
 This is **not** the customer Dashboard (`/`). It is a **Samyoj operator** product: how *our paying/trial orgs* use Samyoj, where they get stuck, what Meta errors they hit, how much AI they burn, and whether they paid. End WhatsApp customers of those orgs stay out of this console.
+
+## Shipped vs remaining (2026-08-17)
+
+| Shipped (test-deploy) | Still remaining |
+|-----------------------|-----------------|
+| Additive migration `20260817003000_platform_schema_auth` (apply with `npm run db:migrate-startup-safe`, never raw `prisma migrate deploy` on a path that would hit `20260808120000`) | [SAMYOJ-35](https://teamwebstarts.atlassian.net/browse/SAMYOJ-35) TARGET Razorpay Subscriptions / GST / dunning. Admin shows **current** plan, expiry, `PaymentOrder`, extend/comp only. |
+| `/api/platform/*`: cookie session, CSRF, mandatory TOTP, RBAC (`SUPER_ADMIN` / `SUPPORT` / `ANALYST`). Org JWT cannot call these routes. | [SAMYOJ-56](https://teamwebstarts.atlassian.net/browse/SAMYOJ-56) STT/TTS coverage is still under-logged. Admin rolls up `AiUsageLog` honestly — do not claim listening/speaking units are complete. |
+| Tenant `GET /api/ops/recent-errors` **removed** (404). Meta errors live under platform only. | Impersonation / “view as org” — **not built**, not this release. |
+| `admin/` Vite app on `:3001` (`PLATFORM_ADMIN_URL`). `bash start.sh` launches it. | WhatsApp outreach to the business number — **not built**. Email templates only. |
+| Overview, accounts, AI caps/flags, current billing, Meta error aggregates, operators, sessions, audit, email outreach APIs + UI | Email outreach **needs `SMTP_HOST`**. Unset SMTP logs the letter and the helper still returns success — operators can see SENT without a real mailbox. |
+| CLI `cd server && npm run platform:bootstrap-operator` (password via `PLATFORM_OPERATOR_PASSWORD` only; `--password` is rejected). First operator is `SUPER_ADMIN`. Locked after any operator exists. | Privacy-policy sentence for account telemetry — docs only until counsel ships copy. |
+
+**Do not expand this ticket into** impersonation, WhatsApp outreach, or TARGET subscriptions.
+
+### Bootstrap an operator and open admin
+
+1. `bash start.sh` (API `:8000`, customer UI `:3000`, admin `:3001`).
+2. Create the first operator (once):
+
+```bash
+cd server
+PLATFORM_OPERATOR_PASSWORD='ChooseAStrongPass1' npm run platform:bootstrap-operator -- --email you@samyoj.com
+```
+
+Password rules: 8+ characters, upper + lower + number, not a common password. Do not pass `--password` on the command line.
+
+3. Open `http://localhost:3001`. Sign in with that email/password. First login requires TOTP enrollment, then a 6-digit code on later logins.
+4. Optional: `cd server && npm run platform:backfill-telemetry` to snapshot existing orgs.
 
 ---
 
@@ -20,7 +48,7 @@ A separate, dark-ops console where Samyoj staff see **org-level** health (login 
 
 | Layer | Today | Use for admin? |
 |-------|--------|----------------|
-| Jira | SAMYOJ-57 To Do, empty comments until this spec | Parent ticket. Do not file a sibling. |
+| Jira | SAMYOJ-57 In Progress; first-release comment 2026-08-17 | Parent ticket. Do not file a sibling. |
 | Customer UI | Dashboard, Reports, Billing, Inbox, Calls, Campaigns, AI Bot, Settings | **Never** mount admin here. |
 | Auth | JWT in `sessionStorage` (SAMYOJ-49). `User.role` `ADMIN`/`AGENT` is the **org founder**, set on register (`auth/routes.ts`). `OrgRole` OWNER/ADMIN/SUPERVISOR/AGENT. | **Cannot** reuse `User.role = ADMIN` as platform staff. |
 | Membership | `OrganizationUser.lastActiveAt` on login + availability ping | Last-seen for *agents inside an org*. |
@@ -30,10 +58,10 @@ A separate, dark-ops console where Samyoj staff see **org-level** health (login 
 | Meta usage poll | `pollConversationAnalytics` → `ConversationCharge`. `pollQualityRatings` → `WhatsappNumber.qualityRating`. | Surface GREEN/YELLOW/RED + category counts. Cost is **Meta’s**, never fold into SaaS. |
 | Feature flags | `OrgFeatureFlag` + `KNOWN_FEATURE_FLAGS` (content_studio, calling, commerce, public_api, …) | Admin can enable/disable per org. |
 | Audit | `AuditLog` (org, sparse), `TeamAuditLog` (team actions) | Incomplete. New `PlatformAuditLog` for operator writes. |
-| Stub ops | `GET /api/ops/recent-errors` | **Unsafe.** Gated as org OWNER/ADMIN but queries **all orgs’** webhook events and failed calls, plus process-global `webhookHealth`. Do **not** reuse. Fix or delete when building. |
-| PII | `redactText` on ops error file | Keep redaction. |
+| Stub ops | `GET /api/ops/recent-errors` | **Removed (2026-08-17).** Org JWTs get 404. Replacement is `/api/platform/errors` (operators only). |
+| PII | `redactText` on ops error file | Keep redaction. Platform APIs must not return `wa_id`, `wamid`, tokens, or message bodies. |
 
-There is **no** platform-admin SPA, **no** `PlatformOperator` table, **no** product-event stream.
+**Shipped 2026-08-17:** separate `admin/` SPA, `PlatformOperator` + session/audit/telemetry tables, allowlisted `ProductEvent` stream. Research rows below are the original 2026-08-16 inventory.
 
 ---
 
@@ -41,8 +69,8 @@ There is **no** platform-admin SPA, **no** `PlatformOperator` table, **no** prod
 
 ```
 Customer Samyoj          Platform Samyoj
-app.samyoj.com           admin.samyoj.com   (or ops.samyoj.com)
-Org JWT                  Platform JWT
+app.samyoj.com           admin.samyoj.com   (local: :3000 / :3001)
+Org JWT (sessionStorage) HttpOnly platform cookie + CSRF + TOTP
 Org Dashboard            Operator console
 Sees own Inbox           Never sees Inbox threads
 Pays SaaS + Meta         Sees who paid / who stalled
@@ -50,7 +78,7 @@ Pays SaaS + Meta         Sees who paid / who stalled
 
 **UI rule:** customer chrome (sidebar Inbox/Campaigns) never appears on admin. Admin chrome never appears for orgs. Different origin preferred so a stolen org JWT cannot call `/api/platform/*`.
 
-**Auth rule:** platform operators are **not** `OrganizationUser` rows. New table (below). Login is email + password (or Google) **allowlisted**. MFA required before go-live. Session: HttpOnly cookie is ideal here even while customer app stays on SAMYOJ-49 `sessionStorage` — operators are few and XSS on admin is worse.
+**Auth rule:** platform operators are **not** `OrganizationUser` rows. Login is email + password; Google SSO was not in this release. MFA (TOTP) is mandatory. Session is an HttpOnly `SameSite=Strict` cookie while the customer app stays on SAMYOJ-49 `sessionStorage`.
 
 ---
 
@@ -291,34 +319,32 @@ Activation research (PQL / health scores): login frequency + core action (here: 
 
 ---
 
-## 12. Build order (next sessions)
+## 12. Build order
 
-Do **not** start until this ticket is explicitly picked. Then:
+| Phase | Status | Notes |
+|-------|--------|-------|
+| **A** | **Shipped** | `PlatformOperator` + `admin` app + funnel stages + cookie/CSRF/TOTP/RBAC |
+| **B** | **Shipped** (honest gap) | Account file, quality, counts, AI roll-up + token cap. STT/TTS units still SAMYOJ-56. |
+| **C** | **Shipped API/UI** | Email templates to org OWNER only. Real send needs `SMTP_HOST`. |
+| **D** | **Shipped** | `ProductEvent` + `MetaErrorStat` + Errors home |
+| **E** | **Partial** | Current billing view + extend/comp. TARGET subscriptions = SAMYOJ-35. |
+| **F** | **Not this release** | Impersonation / kill switch |
 
-| Phase | Ship | Depends |
-|-------|------|---------|
-| **A** | `PlatformOperator` + `admin` app + Accounts list + funnel stages from **existing** SQL (no ProductEvent yet) | Auth isolation |
-| **B** | Account file: WhatsApp quality, counts, AI roll-up + token cap PATCH | SAMYOJ-56 for honest STT/TTS |
-| **C** | Outreach email queue (S1/S2) | SMTP |
-| **D** | `ProductEvent` + MetaErrorStat + Errors home | Send-path hook |
-| **E** | Billing extend/comp + flags | SAMYOJ-35 for real subscriptions |
-| **F** | Impersonation / kill switch | Legal |
-
-Customer production still **no** until SAMYOJ-3. Admin can ship internally on the same test-deploy.
+Customer production still **no** until SAMYOJ-3. Admin is on the same test-deploy (`bash start.sh` → `:3001`).
 
 ---
 
 ## 13. Done when (implementation)
 
-- Separate host or app; org JWT cannot call platform APIs.  
-- Funnel S0–S8 from real tables.  
-- No message bodies / customer phones in admin DB or UI.  
-- AI cap editable per org; usage visible.  
-- Meta error codes clustered.  
-- Outreach to **owner email** for “logged in, not connected.”  
-- `/api/ops/recent-errors` no longer leaks other tenants.  
-- Privacy policy sentence exists.  
-- SAMYOJ-57 marked Done only after Phase A–D, not after this doc.
+- Separate host or app; org JWT cannot call platform APIs. **Done** (`admin/` + origin-gated `/api/platform`).  
+- Funnel stages from real tables. **Done** (REGISTERED → LIVE + independent flags).  
+- No message bodies / customer phones in admin DB or UI. **Done** as a contract (tests + redaction).  
+- AI cap editable per org; usage visible. **Done** (SAMYOJ-56 STT/TTS still incomplete).  
+- Meta error codes clustered. **Done**.  
+- Outreach to **owner email**. **Done** as templates; SMTP still required for a real mailbox.  
+- `/api/ops/recent-errors` no longer leaks other tenants. **Done** (route removed).  
+- Privacy policy sentence exists. **Not shipped** (counsel copy).  
+- Do **not** mark SAMYOJ-57 customer-production Done. Test-deploy first release is in code; 35 / 56 honesty / impersonation / SMTP remain.
 
 ---
 
@@ -403,7 +429,7 @@ Official Meta / WhatsApp first, then BSP hubs, SaaS ops, privacy, then our repo.
 61. `server/src/modules/ai/org-ai.service.ts`, `ai-usage-actions.ts`  
 62. `server/src/modules/analytics/routes.ts`  
 63. `server/src/modules/billing/usage.service.ts`  
-64. `server/src/modules/ops/routes.ts` (**tenant leak**)  
+64. `server/src/modules/ops/error-log.ts` (tenant `/api/ops` route **removed** 2026-08-17)  
 65. `server/src/middleware/auth.ts`, `modules/auth/routes.ts` (User.role ADMIN = founder)
 
 ---

@@ -183,8 +183,8 @@ You said **30+** tasks. **14** items from these prompts are filed (SAMYOJ-46–5
 ### P25. Future platform admin dashboard (logins, APIs, features per customer)
 
 - **You asked:** Later: admin (not the customer Dashboard) — who logged in, what they use, APIs, AI in depth, user-friendly.
-- **Jira:** [SAMYOJ-57](https://teamwebstarts.atlassian.net/browse/SAMYOJ-57) — To Do; **research complete**
-- **Code:** **Not built.** Canonical spec: `docs/product/PLATFORM_ADMIN_2026-08-16.md`. Do not implement until the ticket is picked.
+- **Jira:** [SAMYOJ-57](https://teamwebstarts.atlassian.net/browse/SAMYOJ-57) — In Progress; **first release in code 2026-08-17**
+- **Code:** **Partial.** `admin/` `:3001` + `/api/platform/*` (cookie, CSRF, TOTP, RBAC). Spec: `docs/product/PLATFORM_ADMIN_2026-08-16.md`. Remaining: TARGET billing (35), STT/TTS honesty (56), impersonation, SMTP. Do not rebuild.
 
 ### P26. Documentation in our space for later
 
@@ -225,8 +225,8 @@ You said **30+** tasks. **14** items from these prompts are filed (SAMYOJ-46–5
 | | Count | Keys |
 |--|-------|------|
 | **Done in code** | 13 tickets | 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 58, 59 |
-| **Not built (next when you say)** | 0 from these prompts besides deferred | |
-| **Deferred (filed)** | 1 | **57** (P25) |
+| **Partial (first release)** | 1 | **57** (P25) — admin app + `/api/platform`; remaining 35/56/impersonation/SMTP |
+| **Not built (next when you say)** | 0 from these prompts besides remaining 57 slices | |
 | **Already was** | 1 point | P4 in-org numbers |
 | **Later you said** | 1 point | P14 full Customize rewrite |
 
@@ -236,7 +236,7 @@ You said **30+** tasks. **14** items from these prompts are filed (SAMYOJ-46–5
 
 ## Do not start until you ask
 
-1. SAMYOJ-57 admin
+1. SAMYOJ-57 remaining slices only (TARGET billing, STT/TTS honesty, impersonation, SMTP) — do not rebuild the admin app
 2. Cookies (SAMYOJ-3) — conflicts with tab sessions unless you pick
 
-Customer production = **no**. Test this batch locally: `http://localhost:3000`.
+Customer production = **no**. Test this batch locally: `http://localhost:3000` (customer) and `http://localhost:3001` (platform admin).

@@ -2,7 +2,7 @@
 
 **Implementation note (2026-08-16, later the same day):** these tickets **shipped in code** — [SAMYOJ-47](https://teamwebstarts.atlassian.net/browse/SAMYOJ-47), [48](https://teamwebstarts.atlassian.net/browse/SAMYOJ-48), [50](https://teamwebstarts.atlassian.net/browse/SAMYOJ-50), [51](https://teamwebstarts.atlassian.net/browse/SAMYOJ-51), [53](https://teamwebstarts.atlassian.net/browse/SAMYOJ-53), [54](https://teamwebstarts.atlassian.net/browse/SAMYOJ-54), [55](https://teamwebstarts.atlassian.net/browse/SAMYOJ-55), [58](https://teamwebstarts.atlassian.net/browse/SAMYOJ-58). **Same evening:** [SAMYOJ-46](https://teamwebstarts.atlassian.net/browse/SAMYOJ-46) apply/unapply bot all chats, [SAMYOJ-49](https://teamwebstarts.atlassian.net/browse/SAMYOJ-49) tab-scoped `sessionStorage` JWTs (Pick A) + cross-org number after disconnect. **Night pass:** [SAMYOJ-52](https://teamwebstarts.atlassian.net/browse/SAMYOJ-52) Chat vs Calling AI bots, [SAMYOJ-59](https://teamwebstarts.atlassian.net/browse/SAMYOJ-59) strip AI from Calls Customize, [SAMYOJ-56](https://teamwebstarts.atlassian.net/browse/SAMYOJ-56) Reports AI usage. User is testing locally (`bash start.sh`). **Not customer production.**
 
-**Do not start this pass:** [SAMYOJ-57](https://teamwebstarts.atlassian.net/browse/SAMYOJ-57) **research done** 2026-08-16 — spec [`docs/product/PLATFORM_ADMIN_2026-08-16.md`](../product/PLATFORM_ADMIN_2026-08-16.md); **do not implement** until that ticket is picked.
+**2026-08-17:** [SAMYOJ-57](https://teamwebstarts.atlassian.net/browse/SAMYOJ-57) **first release in code** — spec [`docs/product/PLATFORM_ADMIN_2026-08-16.md`](../product/PLATFORM_ADMIN_2026-08-16.md); `admin/` `:3001` + `/api/platform/*`. Remaining: 35 TARGET billing, 56 STT/TTS honesty, impersonation, SMTP. Do not rebuild A–D.
 
 User-dictated work. Originally research-only. Set 1 = §1–6. Set 2 = §7–8 (AI Bot). Set 3 = §9–12 (Calls UX, post-call summary, AI Reports, future admin). Set 4 = §13–14 (Inbox new-contact fields, strip AI from Calling settings). More items still coming. Full session note: [SESSION_2026-08-16.md](./SESSION_2026-08-16.md). Durable copy for later Confluence: [docs/product/CALLS_AI_USAGE_ADMIN_2026-08-16.md](../product/CALLS_AI_USAGE_ADMIN_2026-08-16.md) (set 3) and [docs/product/INBOX_CONTACT_AND_CALLING_AI_2026-08-16.md](../product/INBOX_CONTACT_AND_CALLING_AI_2026-08-16.md) (set 4).
 
@@ -429,9 +429,9 @@ Long-form copy for later (Confluence not connected): [docs/product/CALLS_AI_USAG
 
 **Problem:** Operators need a Samyoj-wide admin view of how **each customer org** uses the product (funnel, features, AI, billing, Meta errors) — not the org Dashboard.
 
-**Canonical spec (2026-08-16):** [`docs/product/PLATFORM_ADMIN_2026-08-16.md`](../product/PLATFORM_ADMIN_2026-08-16.md). Research complete. **Do not implement** until SAMYOJ-57 is picked.
+**Canonical spec (2026-08-16, shipped 2026-08-17):** [`docs/product/PLATFORM_ADMIN_2026-08-16.md`](../product/PLATFORM_ADMIN_2026-08-16.md). First release is in code (`admin/` `:3001`, `/api/platform/*`). Do **not** rebuild. Remaining: SAMYOJ-35 TARGET, SAMYOJ-56 STT/TTS honesty, impersonation, SMTP.
 
-**Today:** no platform admin app. `User.role = ADMIN` is the org founder, not Samyoj staff. `GET /api/ops/recent-errors` is org-gated but **unscoped** (cross-tenant) — do not reuse.
+**Today:** operator console exists. `User.role = ADMIN` is still the org founder, not Samyoj staff. `GET /api/ops/recent-errors` is **removed**.
 
 ---
 
@@ -442,7 +442,7 @@ Long-form copy for later (Confluence not connected): [docs/product/CALLS_AI_USAG
 | §9 Calls recents UX | [SAMYOJ-54](https://teamwebstarts.atlassian.net/browse/SAMYOJ-54) — **shipped 2026-08-16** |
 | §10 Post-call summary Inbox + Calls | [SAMYOJ-55](https://teamwebstarts.atlassian.net/browse/SAMYOJ-55) — **shipped 2026-08-16** |
 | §11 Reports AI usage | [SAMYOJ-56](https://teamwebstarts.atlassian.net/browse/SAMYOJ-56) — **shipped 2026-08-16** (units, not Meta fees) |
-| §12 Platform admin dashboard | [SAMYOJ-57](https://teamwebstarts.atlassian.net/browse/SAMYOJ-57) — research done; not built |
+| §12 Platform admin dashboard | [SAMYOJ-57](https://teamwebstarts.atlassian.net/browse/SAMYOJ-57) — **first release shipped 2026-08-17**; remaining 35/56/impersonation/SMTP |
 
 ---
 

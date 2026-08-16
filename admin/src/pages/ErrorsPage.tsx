@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TriangleAlert } from 'lucide-react';
 import { platformRequest } from '../api';
-import { EmptyState, Notice, StatusBadge } from '../components/ui';
+import { EmptyState, Notice } from '../components/ui';
 import { formatCount, formatWhen } from '../lib/format';
 
 type Errors = {

@@ -1,3 +1,5 @@
+export { maskBusinessPhone } from './masking';
+
 export const CSRF_COOKIE = 'samyoj_platform_csrf';
 export const CSRF_HEADER = 'x-platform-csrf-token';
 
@@ -15,9 +17,9 @@ export function clearCsrfToken(): void {
   csrfMemory = null;
 }
 
-/** Prefer the JSON-issued token. Cookie path is /api/platform, so document.cookie on / cannot see it. */
+/** CSRF cookie is Path=/ and readable. Memory covers JSON tokens from login/enroll/csrf. */
 export function resolveCsrfToken(): string | null {
-  return getCsrfToken() ?? readCookie(CSRF_COOKIE);
+  return readCookie(CSRF_COOKIE) ?? getCsrfToken();
 }
 
 export function readCookie(name: string): string | null {

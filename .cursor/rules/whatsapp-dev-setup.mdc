@@ -13,12 +13,13 @@ alwaysApply: true
 2. `docker compose up -d` (Postgres + Redis — done by scripts)
 3. `cd server && npm run dev` (API `:8000` — done by scripts)
 4. `cd client && npm run dev` (UI `:3000` — done by scripts)
-5. **Inbound tunnel** (required for Inbox replies):
+5. `cd admin && npm run dev` (Platform Admin `:3001` — done by scripts; `start.sh` already launches this)
+6. **Inbound tunnel** (required for Inbox replies):
    - `setup.sh` / `start.sh` auto-starts `scripts/dev-tunnel.sh` (**ngrok only** — no Cloudflare/cloudflared)
    - Fail clearly if `NGROK_AUTHTOKEN` / ngrok auth is missing (do not fall back)
    - Avoid: free ngrok custom domain `samyoj-dev.ngrok-free.app` (`ERR_NGROK_313`); use random ngrok URL
-6. The scripts wait for the tunnel URL, then start the API so `config.meta.webhookUrl` is current
-7. Verify: `curl -s http://localhost:8000/api/whatsapp/webhook/health` and public tunnel returns challenge `ping` (use Node `fetch` if Codespace curl DNS fails)
+7. The scripts wait for the tunnel URL, then start the API so `config.meta.webhookUrl` is current
+8. Verify: `curl -s http://localhost:8000/api/whatsapp/webhook/health` and public tunnel returns challenge `ping` (use Node `fetch` if Codespace curl DNS fails). Also `curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3001` for Admin.
 
 ## Product rule — WhatsApp Connect UI
 

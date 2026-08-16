@@ -76,6 +76,10 @@ ENCRYPTION_KEY="$(grep -m1 '^ENCRYPTION_KEY=' server/.env | cut -d= -f2- || true
 [[ "$ENCRYPTION_KEY" =~ ^[0-9a-fA-F]{64}$ ]] ||
   fail "ENCRYPTION_KEY must be exactly 64 hexadecimal characters. Run bash setup.sh."
 unset ENCRYPTION_KEY
+if ! grep -q '^PLATFORM_ADMIN_URL=' server/.env; then
+  printf '\nPLATFORM_ADMIN_URL=http://localhost:3001\n' >> server/.env
+  ok "Set PLATFORM_ADMIN_URL=http://localhost:3001"
+fi
 
 harden_local_permissions() {
   chmod 600 server/.env

@@ -9,7 +9,7 @@ Before re-researching AI calls, Train/FAQ, automations leftovers, WhatsApp conne
 
 - `docs/memory/README.md`
 - `docs/memory/STATUS_AND_FUTURE.md`
-- `docs/memory/SESSION_2026-08-16.md` + `docs/memory/PRODUCT_TASKS_2026-08-16.md` (product sets 1–4). **Landed 2026-08-16:** 47, 48, 50, 51, 53, 54, 55, 58, **46**, **49** (Pick A `sessionStorage`; SAMYOJ-3 cookies deferred), **52**, **56**, **59**. Recheck: `docs/memory/DICTATION_RECHECK_2026-08-16.md`. **SAMYOJ-57** spec: `docs/product/PLATFORM_ADMIN_2026-08-16.md` (research done; do not implement until asked).
+- `docs/memory/SESSION_2026-08-16.md` + `docs/memory/PRODUCT_TASKS_2026-08-16.md` (product sets 1–4). **Landed 2026-08-16:** 47, 48, 50, 51, 53, 54, 55, 58, **46**, **49** (Pick A `sessionStorage`; SAMYOJ-3 cookies deferred), **52**, **56**, **59**. Recheck: `docs/memory/DICTATION_RECHECK_2026-08-16.md`. **SAMYOJ-57** first release: `docs/product/PLATFORM_ADMIN_2026-08-16.md` (`admin/` `:3001`). Remaining: 35 TARGET, 56 STT/TTS honesty, impersonation, SMTP. Do not rebuild.
 - `docs/memory/SESSION_2026-08-15.md` (number isolation, workers, campaign wizard, templates/Connect; test-deploy vs production)
 - `docs/memory/SESSION_2026-08-14.md` (calls / Train / automations)
 

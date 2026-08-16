@@ -26,6 +26,7 @@ import { parseActiveFlow } from '../flows/flow-state';
 import { pauseConversationAutomations, cancelFlowDelayJob } from '../flows/pause-automation';
 import type { FlowNode } from '../flows/types';
 import { resolveCs24hWindowOpensAt } from './service-window';
+import { nextUnreadCount } from './unread';
 import { buildSignedMediaPath, verifyMediaSignature, MEDIA_URL_TTL_SECONDS } from './media-url';
 import { inboxStartCreateData, inboxStartMergeUpdate } from '../contacts/merge';
 

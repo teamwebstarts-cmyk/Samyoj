@@ -106,12 +106,16 @@ export function AccountDetailPage() {
 
   useEffect(() => {
     if (!id || tab !== 'Errors') return;
-    void platformRequest(`/errors?organizationId=${id}`).then(setErrors);
+    void platformRequest<{ recent: Array<{ code: number; count: number; sampleTitle: string | null; title?: string }> }>(
+      `/errors?organizationId=${id}`
+    ).then(setErrors);
   }, [id, tab]);
 
   useEffect(() => {
     if (!id || tab !== 'Outreach') return;
-    void platformRequest(`/orgs/${id}/outreach`).then(setOutreach);
+    void platformRequest<{ rows: Array<{ id: string; templateId: string; status: string; createdAt: string }> }>(
+      `/orgs/${id}/outreach`
+    ).then(setOutreach);
   }, [id, tab]);
 
   function openTab(next: (typeof TABS)[number]) {
@@ -473,7 +477,9 @@ export function AccountDetailPage() {
             })
               .then(() => {
                 closeDrawer();
-                void platformRequest(`/orgs/${detail.id}/outreach`).then(setOutreach);
+                void platformRequest<{
+                  rows: Array<{ id: string; templateId: string; status: string; createdAt: string }>;
+                }>(`/orgs/${detail.id}/outreach`).then(setOutreach);
               })
               .catch((err) => setSaveError(err instanceof ApiError ? err.message : 'Send failed'))
               .finally(() => setSaving(false));

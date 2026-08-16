@@ -57,7 +57,10 @@ In `server/.env` (never in UI):
 - `META_VERIFY_TOKEN`
 - `NGROK_AUTHTOKEN` (required for inbound tunnel; or ngrok already authenticated locally)
 - `META_WEBHOOK_URL` (set by tunnel script)
+- `PLATFORM_ADMIN_URL` (admin origin for `/api/platform` CORS; local `http://localhost:3001`)
 - `META_REDIRECT_URI=http://localhost:3000/settings/whatsapp/callback`
+
+First platform operator (once): `cd server && PLATFORM_OPERATOR_PASSWORD='ChooseAStrongPass1' npm run platform:bootstrap-operator -- --email you@samyoj.com` then open `http://localhost:3001`.
 
 ---
 

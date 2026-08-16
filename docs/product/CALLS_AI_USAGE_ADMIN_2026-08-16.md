@@ -1,6 +1,6 @@
 # Calls history, post-call summary, AI usage reports, platform admin
 
-Durable product research for later implementation and for copying into Confluence when that product is connected. Dictated 2026-08-16 (set 3). Agent memory + Jira mapping: `docs/memory/PRODUCT_TASKS_2026-08-16.md` §9–12. **Shipped in code 2026-08-16:** §1 Calls recents (SAMYOJ-54), §2 post-call summary (SAMYOJ-55), §3 AI usage reports (SAMYOJ-56). **Not built:** platform admin (SAMYOJ-57, deferred).
+Durable product research for later implementation and for copying into Confluence when that product is connected. Dictated 2026-08-16 (set 3). Agent memory + Jira mapping: `docs/memory/PRODUCT_TASKS_2026-08-16.md` §9–12. **Shipped in code 2026-08-16:** §1 Calls recents (SAMYOJ-54), §2 post-call summary (SAMYOJ-55), §3 AI usage reports (SAMYOJ-56). **Shipped 2026-08-17 (test-deploy):** platform admin first release (SAMYOJ-57) — see [`PLATFORM_ADMIN_2026-08-16.md`](PLATFORM_ADMIN_2026-08-16.md).
 
 Atlassian note (2026-08-16): the connected site `teamwebstarts.atlassian.net` currently exposes **Jira only** (`read:jira-work`, `write:jira-work`). Confluence wiki API returns 404. This file is the documentation space until Confluence is enabled.
 
@@ -96,11 +96,11 @@ Number-scoped like the rest of Reports.
 
 ---
 
-## 4. Future — platform admin dashboard
+## 4. Platform admin dashboard
 
-Canonical spec (research 2026-08-16): [`docs/product/PLATFORM_ADMIN_2026-08-16.md`](PLATFORM_ADMIN_2026-08-16.md). Jira **SAMYOJ-57**. Do not implement until that ticket is picked.
+Canonical spec: [`docs/product/PLATFORM_ADMIN_2026-08-16.md`](PLATFORM_ADMIN_2026-08-16.md). Jira **SAMYOJ-57**. **First release shipped 2026-08-17** (`admin/` `:3001`, `/api/platform/*`). Remaining: SAMYOJ-35 TARGET, SAMYOJ-56 STT/TTS honesty, impersonation, SMTP. Do not rebuild.
 
-Not the org Dashboard. Operator console: funnel (login → Connect → contacts → send → AI → paid), AI caps, billing view, Meta error codes. **Do not log message bodies, customer phones, or Meta tokens.**
+Not the org Dashboard. Operator console: funnel (login → Connect → contacts → send → AI → paid), AI caps, current billing view, Meta error codes. **Do not log message bodies, customer phones, or Meta tokens.**
 
 ---
 
@@ -111,4 +111,4 @@ Not the org Dashboard. Operator console: funnel (login → Connect → contacts 
 | Calls recents UX | SAMYOJ-54 |
 | Post-call summary in Inbox + Calls | SAMYOJ-55 |
 | Reports AI usage section | SAMYOJ-56 |
-| Platform admin dashboard (future) | SAMYOJ-57 (deferred) |
+| Platform admin dashboard | SAMYOJ-57 (first release 2026-08-17; remaining 35/56/impersonation/SMTP) |

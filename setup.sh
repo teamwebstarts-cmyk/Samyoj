@@ -52,6 +52,11 @@ if [[ -d .run/logs ]]; then
   find .run/logs -type f -exec chmod 640 {} + 2>/dev/null || true
 fi
 
+if ! grep -q '^PLATFORM_ADMIN_URL=' server/.env; then
+  set_env_value PLATFORM_ADMIN_URL "http://localhost:3001"
+  ok "Set PLATFORM_ADMIN_URL=http://localhost:3001"
+fi
+
 for key in JWT_SECRET JWT_REFRESH_SECRET ENCRYPTION_KEY META_VERIFY_TOKEN; do
   value="$(env_value "$key")"
   if [[ -z "$value" || "$value" == replace-* ]]; then

@@ -221,7 +221,11 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
           data: { status: 'READ' },
         });
       }
-      return prisma.message.findUnique({ where: { id: input.messageId } });
+      const existing = await prisma.message.findUnique({ where: { id: input.messageId } });
+      if (!existing) {
+        throw new AppError(404, 'Message not found');
+      }
+      return existing;
     }
 
     if (input.type !== 'TEMPLATE') {

@@ -19,13 +19,21 @@ function rememberCsrf(data: unknown): void {
   if (typeof token === 'string' && token.length > 0) setCsrfToken(token);
 }
 
+function isLogin(path: string, method: string): boolean {
+  return method === 'POST' && path === '/auth/login';
+}
+
 export async function platformRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const method = (init.method || 'GET').toUpperCase();
   const headers = new Headers(init.headers);
   if (init.body && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
-  const csrf = resolveCsrfToken();
-  if (csrf) headers.set(CSRF_HEADER, csrf);
+  const mutating = !['GET', 'HEAD', 'OPTIONS'].includes(method);
+  if (mutating && !isLogin(path, method)) {
+    const csrf = resolveCsrfToken();
+    if (csrf) headers.set(CSRF_HEADER, csrf);
+  }
 
   const response = await fetch(`/api/platform${path}`, {
     ...init,

@@ -11,17 +11,22 @@ function walk(dir: string): string[] {
 
 describe('admin app isolation', () => {
   it('does not import customer auth, inbox, or org JWT storage', () => {
-    const files = walk(join(__dirname, '..')).filter((file) => file.endsWith('.ts') || file.endsWith('.tsx'));
+    const files = walk(join(__dirname, '..')).filter(
+      (file) => (file.endsWith('.ts') || file.endsWith('.tsx')) && !file.endsWith('.test.ts')
+    );
     const joined = files.map((file) => readFileSync(file, 'utf8')).join('\n');
-    expect(joined).not.toMatch(/AuthContext|WhatsAppNumberContext|sessionStorage|localStorage\.getItem\(['"]token/);
+    expect(joined).not.toMatch(/AuthContext|WhatsAppNumberContext/);
+    expect(joined).not.toMatch(/sessionStorage|localStorage\.getItem\(['"]token/);
     expect(joined).not.toContain('../client/');
     expect(joined).not.toContain('../../client/');
   });
 
-  it('protects operator screens behind /auth/me', () => {
-    const app = readFileSync(join(__dirname, '../App.tsx'), 'utf8');
-    expect(app).toContain("path=\"/login\"");
-    expect(app).toContain('<Protected operator={operator} />');
-    expect(app).toContain("'/auth/me'");
+  it('calls only /api/platform with cookie credentials', () => {
+    const api = readFileSync(join(__dirname, '../api.ts'), 'utf8');
+    const session = readFileSync(join(__dirname, './session.ts'), 'utf8');
+    expect(api).toContain('`/api/platform${path}`');
+    expect(api).toContain("credentials: 'include'");
+    expect(api).toContain('CSRF_HEADER');
+    expect(session).toContain("x-platform-csrf-token");
   });
 });

@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ApiError, platformRequest, refreshPlatformCsrf } from '../api';
+import { platformRequest, refreshPlatformCsrf } from '../api';
 import { can, type PlatformPermission } from '../lib/rbac';
 import { clearCsrfToken } from '../lib/session';
 import type { Operator } from '../types';
@@ -47,10 +47,8 @@ export function OperatorProvider({ children }: { children: ReactNode }) {
       logout: async () => {
         try {
           await platformRequest('/auth/logout', { method: 'POST', body: '{}' });
-        } catch (error) {
-          if (!(error instanceof ApiError && error.status === 401)) {
-            // Still drop the local session so a failed logout cannot leave a stale operator.
-          }
+        } catch {
+          // Drop the local session even if logout already expired.
         }
         clearCsrfToken();
         setOperator(null);

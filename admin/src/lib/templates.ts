@@ -10,5 +10,5 @@ export const OUTREACH_TEMPLATES = [
 export type OutreachTemplateId = (typeof OUTREACH_TEMPLATES)[number]['id'];
 
 export function outreachTemplateLabel(id: string): string {
-  return OUTREACH_TEMPLATES.find((row) => row.id === id)?.label ?? id.replaceAll('_', ' ');
+  return OUTREACH_TEMPLATES.find((row) => row.id === id)?.label ?? id.replace(/_/g, ' ');
 }
