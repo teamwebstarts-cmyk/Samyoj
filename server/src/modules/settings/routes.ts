@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../../config/database';
 import { authenticate, requireOrg, loadOrgRole, requireOrgRole } from '../../middleware/auth';
-import { sendSuccess, asyncHandler } from '../../utils/response';
+import { sendSuccess, asyncHandler, AppError } from '../../utils/response';
 import { z } from 'zod';
 import { DEFAULT_BUSINESS_HOURS } from '../flows/types';
 import {
@@ -13,6 +13,7 @@ import {
 import { DEFAULT_CAMPAIGN_SETTINGS, type CampaignSettings } from '../campaigns/types';
 import { getOrgCallingSettings } from '../calling/settings.service';
 import { getOrgFeatureFlags, setFeatureFlag } from './feature-flags';
+import { resolveActiveWhatsappNumberId } from '../whatsapp/active-number';
 
 const router = Router();
 
@@ -76,7 +77,11 @@ router.get(
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const days = parseInt(String(req.query.days || '30'), 10);
-    const usage = await getOrgUsageSummary(orgId, days);
+    const numberId = await resolveActiveWhatsappNumberId(
+      orgId,
+      req.headers['x-whatsapp-number-id']
+    );
+    const usage = await getOrgUsageSummary(orgId, days, numberId);
     sendSuccess(res, usage);
   })
 );

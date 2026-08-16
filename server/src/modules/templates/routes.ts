@@ -19,10 +19,26 @@ import {
 import { getTemplateVariableMeta, saveTemplateVariableMeta } from './variable-meta';
 import prisma from '../../config/database';
 import { normalizePhoneIdentity } from '../../utils/phone';
+import { emitProductEvent } from '../platform/events';
 
 const router = Router();
 
 router.use(authenticate, requireOrg, resolveActiveWhatsappNumber);
+
+function emitTemplateSyncTelemetry(
+  organizationId: string,
+  templates: Array<{ status?: string }>
+): void {
+  emitProductEvent({ organizationId, name: 'TEMPLATE_SYNC' });
+  const rejected = templates.filter((template) => template.status?.toUpperCase() === 'REJECTED').length;
+  if (rejected > 0) {
+    emitProductEvent({
+      organizationId,
+      name: 'TEMPLATE_REJECTED',
+      count: rejected,
+    });
+  }
+}
 
 const uploadHeaderSchema = z.object({
   data: z.string().min(1),
@@ -44,6 +60,7 @@ router.get(
       const templates = await MetaWhatsAppService.listAllMessageTemplates(wabaId, accessToken, {
         status: status as string | undefined,
       });
+      emitTemplateSyncTelemetry(req.user!.organizationId!, templates);
       sendSuccess(res, { templates, paging: null });
       return;
     }
@@ -53,6 +70,7 @@ router.get(
       after: after as string | undefined,
     });
 
+    emitTemplateSyncTelemetry(req.user!.organizationId!, result.templates);
     sendSuccess(res, result);
   })
 );
