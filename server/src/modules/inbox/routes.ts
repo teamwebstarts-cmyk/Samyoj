@@ -164,6 +164,11 @@ router.get(
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const numberId = req.activeWhatsappNumberId;
+    const { emitProductEvent } = await import('../platform/events');
+    emitProductEvent({
+      organizationId: orgId,
+      name: 'INBOX_OPEN',
+    });
     const {
       status,
       search,
