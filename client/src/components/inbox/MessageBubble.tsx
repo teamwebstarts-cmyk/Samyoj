@@ -8,7 +8,6 @@ import {
   ChevronDown,
   Clock,
   Copy,
-  FileText,
   Info,
   Phone,
   PhoneIncoming,
@@ -38,6 +37,7 @@ import {
   unsupportedTypeFromContent,
 } from './unsupportedMessage';
 import type { Message } from '../../types';
+import CallSummaryNote from '../calls/CallSummaryNote';
 
 const ACTION_MENU_WIDTH = 160;
 const REACT_MENU_WIDTH = 232;
@@ -633,7 +633,7 @@ export default function MessageBubble({
 
   const actionMenu = selectMode ? null : (
     <div
-      className={`absolute top-1 z-10 ${isOutbound ? 'left-1' : 'right-1'} ${
+      className={`absolute top-1 z-10 ${isOutbound ? 'right-1' : 'left-1'} ${
         menuOpen || reactOpen ? 'opacity-100' : 'opacity-0 group-hover/bubble:opacity-100 focus-within:opacity-100'
       } transition-opacity`}
     >
@@ -1046,24 +1046,12 @@ export function DateDivider({ label }: { label: string }) {
 }
 
 function CallSummaryCard({ message }: { message: Message }) {
-  const time = formatMessageTime(message.createdAt);
   return (
-    <div
-      className="flex items-center justify-center px-3 py-2.5"
-      role="status"
-      data-message-id={message.id}
-    >
-      <div className="w-full max-w-[min(100%,22rem)] rounded-2xl border border-violet-200/80 bg-violet-50/90 px-3.5 py-2.5 text-left shadow-[0_1px_1px_rgba(11,20,26,0.06)] dark:border-violet-900/50 dark:bg-violet-950/40">
-        <p className="inline-flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-wide text-violet-700 dark:text-violet-300">
-          <FileText className="h-3 w-3 shrink-0" strokeWidth={2.25} />
-          Call summary
-          {time ? <span className="font-medium text-violet-600/80 dark:text-violet-400/80">· {time}</span> : null}
-        </p>
-        <p className="mt-1 text-[13px] font-medium leading-snug text-neutral-800 dark:text-neutral-100">
-          {message.content}
-        </p>
-      </div>
-    </div>
+    <CallSummaryNote
+      summary={message.content}
+      time={formatMessageTime(message.createdAt)}
+      messageId={message.id}
+    />
   );
 }
 

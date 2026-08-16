@@ -23,6 +23,7 @@ const FILTER_CHIPS: Array<{ chip: ListChip; label: string }> = [
   { chip: 'favourites', label: 'Favorites' },
   { chip: 'pending', label: 'Pending' },
   { chip: 'hasTicket', label: 'Tickets' },
+  { chip: 'botActive', label: 'AI Bot' },
 ];
 
 interface InboxListHeaderProps {
@@ -378,7 +379,7 @@ export default function InboxListHeader({
           role="tablist"
           aria-label="Filter conversations"
           aria-live="polite"
-          className="mt-1.5 flex flex-wrap items-center gap-1"
+          className="-mx-1 mt-1 flex min-w-0 flex-nowrap items-center gap-1 overflow-x-auto overscroll-x-contain px-1 touch-pan-x [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
         >
           {FILTER_CHIPS.map((item) => {
             const active = chip === item.chip;
@@ -390,7 +391,7 @@ export default function InboxListHeader({
                 aria-selected={active}
                 data-testid={`inbox-filter-chip-${item.chip}`}
                 onClick={() => onChipChange(item.chip)}
-                className={`inline-flex h-7 shrink-0 items-center justify-center rounded-md px-2 text-[11px] font-semibold transition ${FOCUS_RING_CLASS} ${
+                className={`inline-flex h-7 shrink-0 items-center justify-center whitespace-nowrap rounded-md px-2 text-[12px] font-semibold leading-none transition ${FOCUS_RING_CLASS} ${
                   active
                     ? 'bg-whatsapp-600 text-white shadow-[0_1px_2px_rgba(37,211,102,0.28)] dark:bg-whatsapp-500'
                     : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700'
