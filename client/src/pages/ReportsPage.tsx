@@ -19,6 +19,7 @@ import ReportsBreakdownCard from '../components/reports/ReportsBreakdownCard';
 import ReportsLeaderboardTable, {
   type LeaderboardAgent,
 } from '../components/reports/ReportsLeaderboardTable';
+import ReportsAiUsageSection from '../components/reports/ReportsAiUsageSection';
 import ReportsSkeleton from '../components/reports/ReportsSkeleton';
 import ReportsSlaPanel from '../components/reports/ReportsSlaPanel';
 import ReportsTemplateTable, {
@@ -31,8 +32,8 @@ import PageHero from '../components/ui/PageHero';
 import PageShell from '../components/ui/PageShell';
 import SegmentedControl from '../components/ui/SegmentedControl';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
-import { analyticsApi, complianceApi } from '../services/api';
-import type { ReportsData, SlaStats } from '../types';
+import { analyticsApi, complianceApi, settingsApi } from '../services/api';
+import type { AiUsageSummary, ReportsData, SlaStats } from '../types';
 import { toastError } from '../utils/toast';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 
@@ -44,15 +45,16 @@ const periodOptions = [
 
 const quickLinks = [
   { to: '/automations?tab=analytics', icon: Zap, label: 'Automation stats' },
-  { to: '/ai-bot', icon: Bot, label: 'AI bot analytics' },
+  { to: '/ai-bot', icon: Bot, label: 'AI bots' },
   { to: '/campaigns', icon: Send, label: 'Campaign performance' },
-  { to: '/calls', icon: PhoneCall, label: 'Call analytics' },
+  { to: '/calls', icon: PhoneCall, label: 'Call history' },
 ] as const;
 
 export default function ReportsPage() {
   const { activeNumber, resolved } = useWhatsAppNumber();
   const [days, setDays] = useState('30');
   const [data, setData] = useState<ReportsData | null>(null);
+  const [aiUsage, setAiUsage] = useState<AiUsageSummary | null>(null);
   const [sla, setSla] = useState<SlaStats | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardAgent[]>([]);
   const [templateMetrics, setTemplateMetrics] = useState<TemplateMetric[]>([]);
@@ -75,8 +77,9 @@ export default function ReportsPage() {
       complianceApi.sla(),
       analyticsApi.leaderboard(period),
       analyticsApi.templates(period),
+      settingsApi.aiUsage(period).catch(() => null),
     ])
-      .then(([reportsRes, slaRes, leaderboardRes, templatesRes]) => {
+      .then(([reportsRes, slaRes, leaderboardRes, templatesRes, usageRes]) => {
         if (
           requestNumberId !== activeNumberIdRef.current ||
           generation !== loadGenerationRef.current
@@ -85,6 +88,7 @@ export default function ReportsPage() {
         setSla(slaRes.data.data);
         setLeaderboard(leaderboardRes.data.data.leaderboard || []);
         setTemplateMetrics(templatesRes.data.data.templates || []);
+        setAiUsage(usageRes ? (usageRes.data.data as AiUsageSummary) : null);
       })
       .catch(() => {
         if (
@@ -113,6 +117,7 @@ export default function ReportsPage() {
     if (isInitial) return;
     loadGenerationRef.current += 1;
     setData(null);
+    setAiUsage(null);
     setSla(null);
     setLeaderboard([]);
     setTemplateMetrics([]);
@@ -321,13 +326,11 @@ export default function ReportsPage() {
                 ]}
               />
               <ReportsBreakdownCard
-                title="AI & Calls"
-                subtitle="Auto-replies & phone calls"
-                icon={Bot}
+                title="Calls"
+                subtitle="Phone calls on this number"
+                icon={PhoneCall}
                 accent="sky"
                 metrics={[
-                  { label: 'AI requests', value: data.ai.requests, tone: 'sky' },
-                  { label: 'AI usage', value: data.ai.totalTokens, tone: 'violet' },
                   { label: 'Calls completed', value: data.calls.completed, tone: 'emerald' },
                   { label: 'Messages received', value: data.messaging.inbound, tone: 'amber' },
                 ]}
@@ -350,6 +353,8 @@ export default function ReportsPage() {
                 ]}
               />
             </div>
+
+            {aiUsage && <ReportsAiUsageSection usage={aiUsage} />}
 
             <ReportsAgentTable agents={data.agentPerformance} periodDays={data.periodDays} />
             <ReportsLeaderboardTable agents={leaderboard} periodDays={data.periodDays} />

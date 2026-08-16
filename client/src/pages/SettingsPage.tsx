@@ -59,6 +59,17 @@ interface WhatsappNumber {
   createdAt: string;
 }
 
+function usageSurfaceRequests(usage: AiUsageSummary, action: string): number {
+  const surface = usage.surfaces?.find(
+    (row) => row.action === action || (action === 'chat' && row.action === 'chat_bot')
+  );
+  if (surface) return surface.requests;
+  const raw = usage.byAction?.[action] ?? usage.byAction?.[action === 'chat' ? 'chat_bot' : action];
+  if (typeof raw === 'number') return raw;
+  if (raw && typeof raw === 'object' && 'requests' in raw) return raw.requests;
+  return 0;
+}
+
 function formatHour(hour: number) {
   const normalized = hour === 24 ? 0 : hour;
   const period = normalized >= 12 ? 'PM' : 'AM';
@@ -947,12 +958,12 @@ export default function SettingsPage() {
                     />
                     <SettingsStat
                       label="Chat usage"
-                      value={aiUsage.byAction.chat || 0}
+                      value={usageSurfaceRequests(aiUsage, 'chat_bot')}
                       tone="text-sky-700 dark:text-sky-400"
                     />
                     <SettingsStat
                       label="Search usage"
-                      value={aiUsage.byAction.embedding || 0}
+                      value={usageSurfaceRequests(aiUsage, 'embedding')}
                       tone="text-emerald-700 dark:text-emerald-400"
                     />
                   </div>
