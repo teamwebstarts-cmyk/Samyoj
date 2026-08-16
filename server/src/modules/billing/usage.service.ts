@@ -153,6 +153,13 @@ export async function pollTemplateRejections(): Promise<void> {
 
       if (!rejected.templates.length) continue;
 
+      const { emitProductEvent } = await import('../platform/events');
+      emitProductEvent({
+        organizationId: number.organizationId,
+        name: 'TEMPLATE_REJECTED',
+        count: rejected.templates.length,
+      });
+
       const org = await prisma.organization.findUnique({
         where: { id: number.organizationId },
         select: { settings: true },

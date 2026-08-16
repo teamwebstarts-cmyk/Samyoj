@@ -128,6 +128,12 @@ router.post(
       },
     });
 
+    const { emitProductEvent } = await import('../platform/events');
+    emitProductEvent({
+      organizationId: orgId,
+      name: 'CHECKOUT_START',
+    });
+
     sendSuccess(res, {
       orderId: order.id,
       amount: order.amount,
@@ -182,6 +188,14 @@ router.post(
 
     const org = await activatePlan(orgId, data.planId);
 
+    if (paymentOrder.status !== 'CAPTURED') {
+      const { emitProductEvent } = await import('../platform/events');
+      emitProductEvent({
+        organizationId: orgId,
+        name: 'PAYMENT_OK',
+      });
+    }
+
     sendSuccess(res, {
       plan: org.plan,
       planExpiresAt: org.planExpiresAt,
@@ -228,6 +242,28 @@ router.post(
             source: 'razorpay',
             organizationId,
             planId,
+          });
+          const { emitProductEvent } = await import('../platform/events');
+          emitProductEvent({ organizationId, name: 'PAYMENT_OK' });
+        }
+      }
+    }
+    if (event.event === 'payment.failed') {
+      const orderId = event.payload?.payment?.entity?.order_id;
+      if (orderId) {
+        const failedOrder = await prisma.paymentOrder.findUnique({
+          where: { razorpayOrderId: orderId },
+          select: { id: true, organizationId: true, status: true },
+        });
+        if (failedOrder && failedOrder.status !== 'CAPTURED') {
+          await prisma.paymentOrder.update({
+            where: { id: failedOrder.id },
+            data: { status: 'FAILED' },
+          });
+          const { emitProductEvent } = await import('../platform/events');
+          emitProductEvent({
+            organizationId: failedOrder.organizationId,
+            name: 'PAYMENT_FAIL',
           });
         }
       }
