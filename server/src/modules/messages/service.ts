@@ -6,6 +6,7 @@ import { getTemplateDisplayText, isWithin24HourWindow, MetaWhatsAppService } fro
 import { deliverOutboundMessage } from './send.service';
 import { emitToOrg } from '../../realtime';
 import type { MessageStatus, MessageType } from '@prisma/client';
+import { emitProductEvent } from '../platform/events';
 
 interface SendDirectMessageInput {
   phone: string;
@@ -124,6 +125,10 @@ export async function recordOutboundInConversation(input: RecordOutboundInput) {
           },
         }
       : undefined,
+  });
+  emitProductEvent({
+    organizationId: input.organizationId,
+    name: 'MESSAGE_OUT',
   });
 
   return { message, conversation, contact };

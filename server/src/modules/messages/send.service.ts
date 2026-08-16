@@ -9,6 +9,8 @@ import { buildInteractivePayload, type InteractiveMessageOptions } from './inter
 import { normalizePhone } from '../../utils/phone';
 import { createModuleLogger } from '../../utils/logger';
 import { resolveCs24hWindowOpensAt } from '../inbox/service-window';
+import { isAgentOnlyChatMetadata } from './agent-only';
+import { emitProductEvent } from '../platform/events';
 
 const log = createModuleLogger('messages');
 
@@ -201,6 +203,25 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
       if (!ownedMessage) {
         throw new AppError(404, 'Message does not belong to the active WhatsApp number');
       }
+    }
+
+    const agentOnlyRow = await prisma.message.findUnique({
+      where: { id: input.messageId },
+      select: { id: true, metadata: true, status: true, conversationId: true },
+    });
+    if (isAgentOnlyChatMetadata(agentOnlyRow?.metadata)) {
+      log.info('Skipped Cloud send — agent-only chat row', {
+        organizationId: input.organizationId,
+        messageId: input.messageId,
+        conversationId: agentOnlyRow?.conversationId,
+      });
+      if (agentOnlyRow?.status && agentOnlyRow.status !== 'READ') {
+        return prisma.message.update({
+          where: { id: input.messageId },
+          data: { status: 'READ' },
+        });
+      }
+      return prisma.message.findUnique({ where: { id: input.messageId } });
     }
 
     if (input.type !== 'TEMPLATE') {
@@ -450,6 +471,10 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
       status: 'SENT',
       conversationId: message.conversationId,
     });
+    emitProductEvent({
+      organizationId: input.organizationId,
+      name: 'MESSAGE_OUT',
+    });
 
     return message;
   } catch (error) {
@@ -458,7 +483,6 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
     }
 
     const { message: errorMessage, metaCode, metaSubcode, fbtraceId } = extractMetaErrorFields(error);
-
     // Merge the error into existing metadata so send params (mediaPath,
     // templateName, interactive, …) survive for POST /inbox/messages/:id/retry.
     const existing = await prisma.message.findUnique({
@@ -476,6 +500,14 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
       metaSubcode,
       fbtraceId,
       error: errorMessage,
+    });
+
+    const { emitMetaErrorStat } = await import('../platform/meta-errors');
+    emitMetaErrorStat({
+      organizationId: input.organizationId,
+      whatsappNumberId: input.whatsappNumberId,
+      code: metaCode,
+      sampleTitle: errorMessage,
     });
 
     const message = await prisma.message.update({
