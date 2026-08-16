@@ -31,3 +31,19 @@ export function clientBuildExists(): boolean {
   const { clientDist } = getClientPaths();
   return fs.existsSync(path.join(clientDist, 'index.html'));
 }
+
+/** Paths to the operator admin Vite package (build output: admin/dist). */
+export function getAdminPaths() {
+  const repoRoot = findRepoRoot(__dirname);
+  const adminRoot = path.join(repoRoot, 'admin');
+  return {
+    adminRoot,
+    adminDist: path.join(adminRoot, 'dist'),
+    adminPublic: path.join(adminRoot, 'public'),
+  };
+}
+
+export function adminBuildExists(): boolean {
+  const { adminDist } = getAdminPaths();
+  return fs.existsSync(path.join(adminDist, 'index.html'));
+}

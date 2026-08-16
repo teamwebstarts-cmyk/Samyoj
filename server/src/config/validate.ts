@@ -33,6 +33,30 @@ export function jwtSecretErrors(
   return errors;
 }
 
+export function platformAdminUrlErrors(
+  nodeEnv: string | undefined,
+  value: string
+): string[] {
+  try {
+    const url = new URL(value);
+    const isOriginOnly =
+      url.pathname === '/' &&
+      !url.search &&
+      !url.hash &&
+      !url.username &&
+      !url.password;
+    if (!isOriginOnly) {
+      return ['PLATFORM_ADMIN_URL must be an origin without a path, query, or credentials'];
+    }
+    if (nodeEnv === 'production' && url.protocol !== 'https:') {
+      return ['PLATFORM_ADMIN_URL must use HTTPS in production'];
+    }
+    return [];
+  } catch {
+    return ['PLATFORM_ADMIN_URL must be a valid absolute URL'];
+  }
+}
+
 export function validateConfig(): void {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -44,6 +68,7 @@ export function validateConfig(): void {
   }
 
   errors.push(...jwtSecretErrors(process.env.NODE_ENV, config.jwt.secret, config.jwt.refreshSecret));
+  errors.push(...platformAdminUrlErrors(process.env.NODE_ENV, config.platformAdminUrl));
   if (allowDevJwt && looksWeakSecret(config.jwt.secret)) {
     warnings.push('JWT_SECRET is weak/default — generate a strong value for any shared env');
   }
@@ -52,6 +77,9 @@ export function validateConfig(): void {
   }
 
   if (isProd) {
+    if (!process.env.PLATFORM_ADMIN_URL) {
+      errors.push('PLATFORM_ADMIN_URL is required in production');
+    }
     if (!config.encryptionKey || !isValidEncryptionKey(config.encryptionKey)) {
       errors.push('ENCRYPTION_KEY must be a 64-character hex string in production');
     }

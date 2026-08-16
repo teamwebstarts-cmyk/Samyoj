@@ -4,6 +4,7 @@ dotenv.config();
 const defaultPort = 8000;
 const defaultBaseUrl = `http://localhost:${defaultPort}`;
 const defaultClientUrl = 'http://localhost:3000';
+const defaultPlatformAdminUrl = 'http://localhost:3001';
 
 function resolveBrainProvider(): 'sarvam' | 'azure' {
   const v = (process.env.AI_BRAIN_PROVIDER || 'sarvam').toLowerCase();
@@ -15,6 +16,7 @@ export const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   logLevel: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'debug'),
   clientUrl: process.env.CLIENT_URL || defaultClientUrl,
+  platformAdminUrl: process.env.PLATFORM_ADMIN_URL || defaultPlatformAdminUrl,
   baseUrl:
     process.env.BASE_URL ||
     process.env.SERVER_URL ||
