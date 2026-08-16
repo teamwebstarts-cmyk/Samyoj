@@ -47,6 +47,7 @@ import {
   manualCampaignRunClaimWhere,
   materializedCampaignRunVersion,
 } from './worker-safety';
+import { emitProductEvent } from '../platform/events';
 import { assertApprovedCampaignTemplate, assertCampaignRecipientTemplates } from './template-validation';
 
 const EDITABLE_STATUSES: CampaignStatus[] = ['DRAFT', 'SCHEDULED'];
@@ -584,6 +585,10 @@ export async function finalizeCampaignIfDone(campaignId: string, expectedRunVers
   const { campaign, status, runVersion } = finalized;
 
   emitToOrg(campaign.organizationId, 'campaign:status', { campaignId, status });
+  emitProductEvent({
+    organizationId: campaign.organizationId,
+    name: status === 'COMPLETED' ? 'CAMPAIGN_SENT' : 'CAMPAIGN_FAILED',
+  });
 
   if (status === 'COMPLETED') {
     const owner = await prisma.organizationUser.findFirst({

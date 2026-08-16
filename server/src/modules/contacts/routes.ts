@@ -17,6 +17,7 @@ import { resolveActiveWhatsappNumber } from '../whatsapp/active-number';
 import { asCustomAttributes } from '../../utils/custom-attributes';
 import { Prisma } from '@prisma/client';
 import { contactConsentData, contactCreateConsentFields } from './consent';
+import { emitProductEvent } from '../platform/events';
 
 const router = Router();
 
@@ -80,6 +81,10 @@ router.post(
         customAttributes,
         ...(data.optedIn !== undefined ? contactConsentData(data.optedIn, 'MANUAL') : {}),
       },
+    });
+    emitProductEvent({
+      organizationId: req.user!.organizationId!,
+      name: 'CONTACT_CREATED',
     });
 
     sendSuccess(res, contact, 201);
@@ -151,6 +156,13 @@ router.post(
         update: { name: c.name, tags: c.tags, notes: c.notes, customAttributes },
       });
       imported++;
+    }
+    if (imported > 0) {
+      emitProductEvent({
+        organizationId: orgId,
+        name: 'CSV_IMPORTED',
+        count: imported,
+      });
     }
 
     sendSuccess(res, { imported });
@@ -303,6 +315,7 @@ const updateContactSchema = z.object({
   tags: z.array(z.string()).optional(),
   notes: z.string().optional(),
   optedIn: z.boolean().optional(),
+  callingAiEnabled: z.boolean().optional(),
   customAttributes: customAttributesSchema,
 });
 
