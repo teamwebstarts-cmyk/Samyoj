@@ -11,6 +11,10 @@ export interface OrgAiSettings {
   embeddingDeployment?: string;
   apiVersion?: string;
   monthlyTokenLimit?: number;
+  /** Platform-admin kill switch for WhatsApp chat AI. Default true. */
+  chatEnabled?: boolean;
+  /** Platform-admin kill switch for calling AI. Default true. */
+  callingEnabled?: boolean;
 }
 
 export interface ResolvedAiConfig {

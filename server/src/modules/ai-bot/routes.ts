@@ -4,21 +4,34 @@ import prisma from '../../config/database';
 import { config } from '../../config';
 import { authenticate, requireOrg, loadOrgRole, requireOrgRole } from '../../middleware/auth';
 import { AppError, asyncHandler, paramId, sendSuccess } from '../../utils/response';
-import { resolveActiveWhatsappNumber } from '../whatsapp/active-number';
-import { applyBotToAllChats, removeBotFromAllChats } from '../ai/bot-assignment.service';
+import { resolveActiveWhatsappNumber, resolveActiveWhatsappNumberId } from '../whatsapp/active-number';
+import {
+  appliedBotIdsForNumber,
+  applyBotToAllChats,
+  removeBotFromAllChats,
+} from '../ai/bot-assignment.service';
 import { redactText } from '../../utils/pii-redaction';
 import {
   clearDefaultFlag,
   DEFAULT_INSTRUCTIONS,
-  ensureDefaultBot,
   getBot,
+  hardcodedBotLlmDefaults,
   listBots,
 } from '../ai/bot.service';
 import { generateBotReply } from '../ai/chatbot.service';
 import { getBotAnalytics } from '../ai/analytics';
 import { isAiConfiguredForOrg, getOrgAiSettings, resolveAiConfig } from '../ai/org-ai.service';
-import { upsertKnowledgeEmbedding } from '../ai/knowledge.service';
+import { assertCanAddKnowledge, upsertKnowledgeEmbedding } from '../ai/knowledge.service';
 import { ingestUrlKnowledge, ingestPdfKnowledge } from '../ai/knowledge-ingest.service';
+import { generatePersonalityInstructions } from '../ai/generate-personality.service';
+import { generateTrainingFaqs } from '../ai/generate-training.service';
+import { getOrgCallingSettings, saveOrgCallingSettings } from '../calling/settings.service';
+import { DEFAULT_CALLING_SETTINGS } from '../calling/calling-settings.types';
+import {
+  publicKnowledgeHasEmbedding,
+  resolveAiBotTestChannel,
+  sanitizeAiBotTestHistory,
+} from './test-preview';
 import {
   createBotVersion,
   listBotAuditLogs,
@@ -31,22 +44,27 @@ const router = Router();
 
 const botSchema = z.object({
   name: z.string().min(1).max(80),
+  channel: z.enum(['CHAT', 'CALL']).optional(),
   enabled: z.boolean().optional(),
   isDefault: z.boolean().optional(),
   instructions: z.string().max(8000).optional(),
   handoffMessage: z.string().max(500).optional(),
   triggerKeywords: z.array(z.string().min(1)).max(20).optional(),
   handoffKeywords: z.array(z.string().min(1)).max(20).optional(),
+  offerHandoff: z.boolean().optional(),
   businessHoursOnly: z.boolean().optional(),
-  temperature: z.number().min(0).max(2).optional(),
-  maxTokens: z.number().int().min(50).max(2000).optional(),
-  rateLimitPerMin: z.number().int().min(5).max(200).optional(),
-  changeNote: z.string().max(200).optional(),
+  voiceGreeting: z.string().max(500).optional().nullable(),
+  voiceSpeaker: z.string().max(40).optional().nullable(),
+  voiceLanguage: z.string().max(20).optional().nullable(),
+  businessWebsite: z.string().max(300).optional().nullable(),
+  businessNotes: z.string().max(2000).optional().nullable(),
+  answersCalls: z.boolean().optional(),
+  callingAiEnabled: z.boolean().optional(),
 });
 
 const faqSchema = z.object({
   title: z.string().min(1).max(200),
-  content: z.string().min(1).max(5000),
+  content: z.string().min(1).max(2000),
 });
 
 const adminGuard = [authenticate, requireOrg, loadOrgRole, requireOrgRole('OWNER', 'ADMIN')];
@@ -64,7 +82,6 @@ router.get(
   ...readGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
-    await ensureDefaultBot(orgId);
 
     const [bots, whatsappCount, azureOk, knowledgeItems] = await Promise.all([
       prisma.aiBot.findMany({ where: { organizationId: orgId } }),
@@ -81,18 +98,18 @@ router.get(
       (item) => Array.isArray(item.embedding) && (item.embedding as number[]).length > 0
     ).length;
 
-    const activeBots = bots.filter((b) => b.enabled);
-    const defaultBot = bots.find((b) => b.isDefault && b.enabled);
+    const activeChatBots = bots.filter((b) => b.enabled && b.channel !== 'CALL');
+    const defaultBot = bots.find((b) => b.isDefault && b.enabled && b.channel !== 'CALL');
 
     const checks = [
       { id: 'whatsapp', label: 'WhatsApp number connected', ok: whatsappCount > 0 },
       { id: 'ai', label: 'AI service configured', ok: azureOk },
-      { id: 'active', label: 'At least one bot is active', ok: activeBots.length > 0 },
-      { id: 'default', label: 'Default bot is set', ok: Boolean(defaultBot) },
-      { id: 'knowledge', label: 'Knowledge base has content', ok: knowledgeCount > 0, optional: true },
+      { id: 'active', label: 'At least one chat bot is on', ok: activeChatBots.length > 0, optional: true },
+      { id: 'default', label: 'Default chat bot is set', ok: Boolean(defaultBot), optional: true },
+      { id: 'knowledge', label: 'Training has answers', ok: knowledgeCount > 0, optional: true },
       {
         id: 'embeddings',
-        label: 'Semantic search ready (embeddings indexed)',
+        label: 'Answers are Ready',
         ok: knowledgeCount === 0 || embeddedCount > 0,
         optional: true,
       },
@@ -101,7 +118,7 @@ router.get(
     sendSuccess(res, {
       ready: checks.filter((c) => !c.optional).every((c) => c.ok),
       checks,
-      activeBots: activeBots.length,
+      activeBots: activeChatBots.length,
       totalBots: bots.length,
       azureConfigured: azureOk,
     });
@@ -131,10 +148,34 @@ router.get(
   ...readGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
-    await ensureDefaultBot(orgId);
-    const bots = await listBots(orgId);
+    const channelParam = String(req.query.channel || '').toUpperCase();
+    const channel =
+      channelParam === 'CHAT' || channelParam === 'CALL' ? channelParam : undefined;
+    const bots = await listBots(orgId, channel);
     const azureConfigured = await isAiConfiguredForOrg(orgId);
-    sendSuccess(res, { bots, azureConfigured });
+    const callingSettings = await getOrgCallingSettings(orgId);
+    let appliedIds = new Set<string>();
+    try {
+      const numberId = await resolveActiveWhatsappNumberId(
+        orgId,
+        req.headers['x-whatsapp-number-id']
+      );
+      if (numberId) appliedIds = await appliedBotIdsForNumber(orgId, numberId);
+    } catch (err) {
+      if (!(err instanceof AppError && (err.statusCode === 409 || err.statusCode === 400))) {
+        throw err;
+      }
+    }
+    sendSuccess(res, {
+      bots: bots.map((bot) => ({
+        ...bot,
+        appliedToAll: appliedIds.has(bot.id),
+        answersCalls: bot.channel === 'CALL' && callingSettings.defaultBotId === bot.id,
+      })),
+      azureConfigured,
+      callingAiEnabled: callingSettings.aiAutoAnswer,
+      answeringCallBotId: callingSettings.defaultBotId,
+    });
   })
 );
 
@@ -144,30 +185,65 @@ router.post(
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const data = botSchema.parse(req.body);
+    const channel = data.channel === 'CALL' ? 'CALL' : 'CHAT';
+    const llm = hardcodedBotLlmDefaults();
 
-    if (data.isDefault) {
+    if (channel === 'CHAT' && data.isDefault) {
       await clearDefaultFlag(orgId);
     }
 
-    const botCount = await prisma.aiBot.count({ where: { organizationId: orgId } });
+    const chatCount = await prisma.aiBot.count({
+      where: { organizationId: orgId, channel: 'CHAT' },
+    });
+    const callingSettings = await getOrgCallingSettings(orgId);
+
     const bot = await prisma.aiBot.create({
       data: {
         organizationId: orgId,
         name: data.name,
+        channel,
         enabled: data.enabled ?? true,
-        isDefault: data.isDefault ?? botCount === 0,
+        isDefault: channel === 'CHAT' ? (data.isDefault ?? chatCount === 0) : false,
         instructions: data.instructions || DEFAULT_INSTRUCTIONS,
         handoffMessage:
           data.handoffMessage || 'Let me connect you with our team. Someone will reply shortly.',
         triggerKeywords: data.triggerKeywords || [],
         handoffKeywords: data.handoffKeywords || [],
+        offerHandoff: data.offerHandoff ?? true,
         businessHoursOnly: data.businessHoursOnly ?? false,
-        temperature: data.temperature ?? 0.7,
-        maxTokens: data.maxTokens ?? 500,
-        rateLimitPerMin: data.rateLimitPerMin ?? 30,
+        temperature: llm.temperature,
+        maxTokens: llm.maxTokens,
+        rateLimitPerMin: llm.rateLimitPerMin,
+        voiceGreeting:
+          channel === 'CALL'
+            ? data.voiceGreeting?.trim() || callingSettings.aiGreeting || DEFAULT_CALLING_SETTINGS.aiGreeting
+            : null,
+        voiceSpeaker:
+          channel === 'CALL'
+            ? data.voiceSpeaker || callingSettings.sarvamTtsSpeaker || 'shubh'
+            : null,
+        voiceLanguage:
+          channel === 'CALL'
+            ? data.voiceLanguage || callingSettings.sarvamSttLanguage || 'hi-IN'
+            : null,
+        businessWebsite: data.businessWebsite?.trim() || null,
+        businessNotes: data.businessNotes?.trim() || null,
       },
       include: { _count: { select: { knowledgeItems: true } } },
     });
+
+    if (channel === 'CALL') {
+      const callingUpdates: { defaultBotId?: string; aiAutoAnswer?: boolean } = {};
+      if (data.answersCalls || !callingSettings.defaultBotId) {
+        callingUpdates.defaultBotId = bot.id;
+      }
+      if (data.callingAiEnabled !== undefined) {
+        callingUpdates.aiAutoAnswer = data.callingAiEnabled;
+      }
+      if (Object.keys(callingUpdates).length > 0) {
+        await saveOrgCallingSettings(orgId, callingUpdates);
+      }
+    }
 
     await createBotVersion(bot, req.user!.userId, 'Initial version');
     await logBotAudit({
@@ -177,7 +253,71 @@ router.post(
       action: 'create',
     });
 
-    sendSuccess(res, bot, 201);
+    sendSuccess(
+      res,
+      {
+        ...bot,
+        answersCalls: channel === 'CALL' && (data.answersCalls || !callingSettings.defaultBotId),
+      },
+      201
+    );
+  })
+);
+
+router.post(
+  '/generate-personality',
+  ...adminGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const { intent, channel, botId, businessWebsite, businessNotes } = z
+      .object({
+        intent: z.string().min(8).max(800),
+        channel: z.enum(['CHAT', 'CALL']).default('CHAT'),
+        botId: z.string().uuid().optional(),
+        businessWebsite: z.string().max(300).optional().nullable(),
+        businessNotes: z.string().max(2000).optional().nullable(),
+      })
+      .parse(req.body);
+
+    let numberId: string | undefined;
+    try {
+      numberId = await resolveActiveWhatsappNumberId(orgId, req.headers['x-whatsapp-number-id']);
+    } catch (err) {
+      if (err instanceof AppError && (err.statusCode === 409 || err.statusCode === 400)) {
+        throw err;
+      }
+      throw err;
+    }
+
+    const instructions = await generatePersonalityInstructions({
+      organizationId: orgId,
+      intent,
+      channel,
+      botId,
+      whatsappNumberId: numberId,
+      businessWebsite,
+      businessNotes,
+    });
+    sendSuccess(res, { instructions });
+  })
+);
+
+router.patch(
+  '/calling-ai',
+  ...adminGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const { enabled } = z.object({ enabled: z.boolean() }).parse(req.body);
+    const current = await getOrgCallingSettings(orgId);
+    const saved = await saveOrgCallingSettings(orgId, {
+      aiAutoAnswer: enabled,
+      // After Who answers left Customize, turning AI off must not leave ai_only
+      // with nowhere to ring the team.
+      ...(!enabled && current.routingMode === 'ai_only'
+        ? { routingMode: 'ai_then_agents' as const }
+        : {}),
+    });
+    sendSuccess(res, { callingAiEnabled: saved.settings.aiAutoAnswer });
   })
 );
 
@@ -246,7 +386,11 @@ router.get(
     const orgId = req.user!.organizationId!;
     const bot = await getBot(orgId, paramId(req));
     if (!bot) throw new AppError(404, 'Bot not found');
-    sendSuccess(res, bot);
+    const callingSettings = await getOrgCallingSettings(orgId);
+    sendSuccess(res, {
+      ...bot,
+      answersCalls: bot.channel === 'CALL' && callingSettings.defaultBotId === bot.id,
+    });
   })
 );
 
@@ -261,18 +405,47 @@ router.patch(
     const existing = await prisma.aiBot.findFirst({ where: { id, organizationId: orgId } });
     if (!existing) throw new AppError(404, 'Bot not found');
 
-    if (data.isDefault) {
+    if (existing.channel === 'CHAT' && data.isDefault) {
       await clearDefaultFlag(orgId, id);
     }
 
-    const { changeNote, ...updateData } = data;
+    const {
+      answersCalls,
+      callingAiEnabled,
+      channel: _channel,
+      isDefault,
+      ...updateData
+    } = data;
+    void _channel;
 
     const bot = await prisma.aiBot.update({
       where: { id },
-      data: updateData,
+      data: {
+        ...updateData,
+        ...(existing.channel === 'CHAT' && isDefault !== undefined ? { isDefault } : {}),
+        ...(existing.channel === 'CALL' ? { isDefault: false } : {}),
+        ...(existing.channel === 'CALL' && answersCalls === true ? { enabled: true } : {}),
+      },
       include: { knowledgeItems: { orderBy: { createdAt: 'asc' } } },
     });
 
+    if (existing.channel === 'CALL') {
+      const callingUpdates: { defaultBotId?: string | null; aiAutoAnswer?: boolean } = {};
+      if (answersCalls === true) {
+        callingUpdates.defaultBotId = id;
+        if (callingAiEnabled !== false) callingUpdates.aiAutoAnswer = true;
+      }
+      if (answersCalls === false) {
+        const current = await getOrgCallingSettings(orgId);
+        if (current.defaultBotId === id) callingUpdates.defaultBotId = null;
+      }
+      if (callingAiEnabled !== undefined) callingUpdates.aiAutoAnswer = callingAiEnabled;
+      if (Object.keys(callingUpdates).length > 0) {
+        await saveOrgCallingSettings(orgId, callingUpdates);
+      }
+    }
+
+    const callingSettings = await getOrgCallingSettings(orgId);
     const { knowledgeItems, ...rest } = bot;
     const shapedBot = {
       ...rest,
@@ -280,9 +453,10 @@ router.patch(
         ...item,
         hasEmbedding: Array.isArray(embedding) && (embedding as unknown[]).length > 0,
       })),
+      answersCalls: bot.channel === 'CALL' && callingSettings.defaultBotId === bot.id,
     };
 
-    await createBotVersion(bot, req.user!.userId, changeNote);
+    await createBotVersion(bot, req.user!.userId);
     await logBotAudit({
       botId: bot.id,
       organizationId: orgId,
@@ -305,9 +479,6 @@ router.delete(
     const existing = await prisma.aiBot.findFirst({ where: { id, organizationId: orgId } });
     if (!existing) throw new AppError(404, 'Bot not found');
 
-    const total = await prisma.aiBot.count({ where: { organizationId: orgId } });
-    if (total <= 1) throw new AppError(400, 'You need at least one bot');
-
     await logBotAudit({
       botId: id,
       organizationId: orgId,
@@ -317,13 +488,24 @@ router.delete(
 
     await prisma.aiBot.delete({ where: { id } });
 
-    if (existing.isDefault) {
+    if (existing.channel === 'CHAT' && existing.isDefault) {
       const next = await prisma.aiBot.findFirst({
-        where: { organizationId: orgId },
+        where: { organizationId: orgId, channel: 'CHAT' },
         orderBy: { createdAt: 'asc' },
       });
       if (next) {
         await prisma.aiBot.update({ where: { id: next.id }, data: { isDefault: true } });
+      }
+    }
+
+    if (existing.channel === 'CALL') {
+      const calling = await getOrgCallingSettings(orgId);
+      if (calling.defaultBotId === id) {
+        const nextCall = await prisma.aiBot.findFirst({
+          where: { organizationId: orgId, channel: 'CALL', enabled: true },
+          orderBy: { createdAt: 'asc' },
+        });
+        await saveOrgCallingSettings(orgId, { defaultBotId: nextCall?.id ?? null });
       }
     }
 
@@ -368,6 +550,51 @@ router.post(
 );
 
 router.post(
+  '/:id/generate-training',
+  ...adminGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const botId = paramId(req);
+    const { intent, businessWebsite, businessNotes } = z
+      .object({
+        intent: z.string().min(8).max(800),
+        businessWebsite: z.string().max(300).optional().nullable(),
+        businessNotes: z.string().max(2000).optional().nullable(),
+      })
+      .parse(req.body);
+
+    const bot = await prisma.aiBot.findFirst({
+      where: { id: botId, organizationId: orgId },
+      include: { knowledgeItems: { select: { title: true } } },
+    });
+    if (!bot) throw new AppError(404, 'Bot not found');
+
+    let numberId: string | undefined;
+    try {
+      numberId = await resolveActiveWhatsappNumberId(orgId, req.headers['x-whatsapp-number-id']);
+    } catch (err) {
+      if (err instanceof AppError && (err.statusCode === 409 || err.statusCode === 400)) {
+        throw err;
+      }
+      throw err;
+    }
+
+    const items = await generateTrainingFaqs({
+      organizationId: orgId,
+      intent,
+      channel: bot.channel === 'CALL' ? 'CALL' : 'CHAT',
+      botId,
+      existingTitles: bot.knowledgeItems.map((item) => item.title),
+      existingCount: bot.knowledgeItems.length,
+      whatsappNumberId: numberId,
+      businessWebsite: businessWebsite ?? bot.businessWebsite,
+      businessNotes: businessNotes ?? bot.businessNotes,
+    });
+    sendSuccess(res, { items });
+  })
+);
+
+router.post(
   '/:id/faq',
   ...adminGuard,
   asyncHandler(async (req: Request, res: Response) => {
@@ -378,14 +605,27 @@ router.post(
     const bot = await prisma.aiBot.findFirst({ where: { id: botId, organizationId: orgId } });
     if (!bot) throw new AppError(404, 'Bot not found');
 
+    await assertCanAddKnowledge({ botId, title: data.title, content: data.content });
+
     const item = await prisma.knowledgeBaseItem.create({
       data: { botId, title: redactText(data.title), content: redactText(data.content), sourceType: 'FAQ' },
     });
 
-    await upsertKnowledgeEmbedding(orgId, item.id, item.title, item.content, botId);
-    const { embedding, ...faqItem } = item;
-    void embedding;
-    sendSuccess(res, { ...faqItem, hasEmbedding: false }, 201);
+    await upsertKnowledgeEmbedding(
+      orgId,
+      item.id,
+      item.title,
+      item.content,
+      botId,
+      await resolveActiveWhatsappNumberId(orgId, req.headers['x-whatsapp-number-id'])
+    );
+    const refreshed = await prisma.knowledgeBaseItem.findUnique({ where: { id: item.id } });
+    const { embedding, ...faqItem } = refreshed || item;
+    sendSuccess(
+      res,
+      { ...faqItem, hasEmbedding: publicKnowledgeHasEmbedding(embedding) },
+      201
+    );
   })
 );
 
@@ -401,6 +641,18 @@ router.patch(
     const bot = await prisma.aiBot.findFirst({ where: { id: botId, organizationId: orgId } });
     if (!bot) throw new AppError(404, 'Bot not found');
 
+    const existingFaq = await prisma.knowledgeBaseItem.findFirst({
+      where: { id: faqId, botId },
+    });
+    if (!existingFaq) throw new AppError(404, 'FAQ not found');
+
+    await assertCanAddKnowledge({
+      botId,
+      title: data.title ?? existingFaq.title,
+      content: data.content ?? existingFaq.content,
+      exceptItemId: faqId,
+    });
+
     const item = await prisma.knowledgeBaseItem.updateMany({
       where: { id: faqId, botId },
       data: {
@@ -413,10 +665,21 @@ router.patch(
 
     const updated = await prisma.knowledgeBaseItem.findUnique({ where: { id: faqId } });
     if (updated) {
-      await upsertKnowledgeEmbedding(orgId, updated.id, updated.title, updated.content, botId);
-      const { embedding, ...faqUpdated } = updated;
-      void embedding;
-      sendSuccess(res, { ...faqUpdated, hasEmbedding: Array.isArray(updated.embedding) && updated.embedding.length > 0 });
+      await upsertKnowledgeEmbedding(
+        orgId,
+        updated.id,
+        updated.title,
+        updated.content,
+        botId,
+        await resolveActiveWhatsappNumberId(orgId, req.headers['x-whatsapp-number-id'])
+      );
+      const refreshed = await prisma.knowledgeBaseItem.findUnique({ where: { id: faqId } });
+      const source = refreshed || updated;
+      const { embedding, ...faqUpdated } = source;
+      sendSuccess(res, {
+        ...faqUpdated,
+        hasEmbedding: publicKnowledgeHasEmbedding(embedding),
+      });
     } else {
       sendSuccess(res, updated);
     }
@@ -455,6 +718,14 @@ router.post(
 
     const bot = await prisma.aiBot.findFirst({ where: { id: botId, organizationId: orgId } });
     if (!bot) throw new AppError(404, 'Bot not found');
+    const numberId = await resolveActiveWhatsappNumberId(
+      orgId,
+      req.headers['x-whatsapp-number-id']
+    );
+
+    for (const item of items) {
+      await assertCanAddKnowledge({ botId, title: item.title, content: item.content });
+    }
 
     const created = await prisma.$transaction(async (tx) => {
       const results: { id: string; title: string; content: string }[] = [];
@@ -469,7 +740,7 @@ router.post(
 
     void Promise.all(
       created.map((item) =>
-        upsertKnowledgeEmbedding(orgId, item.id, item.title, item.content, botId)
+        upsertKnowledgeEmbedding(orgId, item.id, item.title, item.content, botId, numberId)
       )
     ).catch(() => {});
 
@@ -531,10 +802,32 @@ router.post(
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const botId = paramId(req);
-    const { message } = z.object({ message: z.string().min(1).max(2000) }).parse(req.body);
+    const { message, instructions, history } = z
+      .object({
+        message: z.string().min(1).max(2000),
+        instructions: z.string().max(8000).optional(),
+        history: z
+          .array(
+            z.object({
+              role: z.enum(['user', 'assistant']),
+              content: z.string().min(1).max(2000),
+            })
+          )
+          .max(12)
+          .optional(),
+      })
+      .parse(req.body);
 
     const bot = await prisma.aiBot.findFirst({ where: { id: botId, organizationId: orgId } });
     if (!bot) throw new AppError(404, 'Bot not found');
+
+    let numberId: string | undefined;
+    try {
+      numberId = await resolveActiveWhatsappNumberId(orgId, req.headers['x-whatsapp-number-id']);
+    } catch (err) {
+      if (err instanceof AppError && err.statusCode === 409) throw err;
+      numberId = undefined;
+    }
 
     const result = await generateBotReply({
       organizationId: orgId,
@@ -542,6 +835,10 @@ router.post(
       inboundMessage: message,
       botId,
       testMode: true,
+      channel: resolveAiBotTestChannel(bot.channel),
+      instructionsOverride: instructions?.trim() || undefined,
+      liveVoiceTurns: sanitizeAiBotTestHistory(history),
+      whatsappNumberId: numberId,
     });
 
     sendSuccess(res, result);
