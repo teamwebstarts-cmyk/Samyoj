@@ -1,14 +1,22 @@
 # Status, leftovers, do not redo
 
-Last updated: **2026-08-16**.
+Last updated: **2026-08-17** (Jira sync after per-contact calling AI).
+
+**2026-08-17 login chrome ([SAMYOJ-68](https://teamwebstarts.atlassian.net/browse/SAMYOJ-68) Done):** split `/login` + register vs product mockup; hero `/brand/auth-login-hero.png`. Auth APIs unchanged. Not customer production.
+
+**2026-08-17 AI Bot UX (SAMYOJ-52 / 59 iteration, test-deploy):** ListToolbar desktop one row / mobile stack; Write personality richer + business extras; Train Write answers; Setup 2×2 + About the business; Calling All-calls; 4 voices + preview; Train/Try it on calling; telephony on calling-bot **When they call** (P14 Customize home now on the bot; Calls Customize editor removed); compact empty states. Additive SQL `20260816220000` + `20260816231500`. Not customer production.
+
+**2026-08-17 per-contact calling AI ([SAMYOJ-69](https://teamwebstarts.atlassian.net/browse/SAMYOJ-69) Done):** Contact `callingAiEnabled`; Call detail chip AI answers / Person only; global Off still wins; Person only → human then miss, no AI fallback. Migration `20260817001000`. Relates 52/53. Do **not** apply `20260817003000_platform_schema_auth` (SAMYOJ-57). Not customer production.
 
 Working Jira backlog (trimmed, major only): epic [SAMYOJ-8](https://teamwebstarts.atlassian.net/browse/SAMYOJ-8). New problems → merge into an existing open ticket or file one major Task (`.cursor/rules/jira-task-backlog.mdc`). Do not start a ticket unless asked.
 
 **2026-08-16 product sets** — spec: [PRODUCT_TASKS_2026-08-16.md](./PRODUCT_TASKS_2026-08-16.md). Durable copy: [docs/product/CALLS_AI_USAGE_ADMIN_2026-08-16.md](../product/CALLS_AI_USAGE_ADMIN_2026-08-16.md), [docs/product/INBOX_CONTACT_AND_CALLING_AI_2026-08-16.md](../product/INBOX_CONTACT_AND_CALLING_AI_2026-08-16.md). User has more items still to dictate.
 
-**Landed in code 2026-08-16** (user testing locally now; **not** customer production): [SAMYOJ-47](https://teamwebstarts.atlassian.net/browse/SAMYOJ-47) card spacing, [SAMYOJ-48](https://teamwebstarts.atlassian.net/browse/SAMYOJ-48) skeletons, [SAMYOJ-50](https://teamwebstarts.atlassian.net/browse/SAMYOJ-50) campaign repeat, [SAMYOJ-51](https://teamwebstarts.atlassian.net/browse/SAMYOJ-51) dashboard chrome, [SAMYOJ-53](https://teamwebstarts.atlassian.net/browse/SAMYOJ-53) Inbox Auto·default, [SAMYOJ-54](https://teamwebstarts.atlassian.net/browse/SAMYOJ-54) Calls recents, [SAMYOJ-55](https://teamwebstarts.atlassian.net/browse/SAMYOJ-55) post-call summary, [SAMYOJ-58](https://teamwebstarts.atlassian.net/browse/SAMYOJ-58) Inbox New chat contact fields, [SAMYOJ-46](https://teamwebstarts.atlassian.net/browse/SAMYOJ-46) apply/unapply bot all chats, [SAMYOJ-49](https://teamwebstarts.atlassian.net/browse/SAMYOJ-49) tab-scoped `sessionStorage` JWTs (Pick A) + cross-org number after disconnect.
+**Landed in code 2026-08-16** (user testing locally now; **not** customer production): [SAMYOJ-47](https://teamwebstarts.atlassian.net/browse/SAMYOJ-47) card spacing, [SAMYOJ-48](https://teamwebstarts.atlassian.net/browse/SAMYOJ-48) skeletons, [SAMYOJ-50](https://teamwebstarts.atlassian.net/browse/SAMYOJ-50) campaign repeat, [SAMYOJ-51](https://teamwebstarts.atlassian.net/browse/SAMYOJ-51) dashboard chrome, [SAMYOJ-53](https://teamwebstarts.atlassian.net/browse/SAMYOJ-53) Inbox Auto·default, [SAMYOJ-54](https://teamwebstarts.atlassian.net/browse/SAMYOJ-54) Calls recents, [SAMYOJ-55](https://teamwebstarts.atlassian.net/browse/SAMYOJ-55) post-call summary, [SAMYOJ-58](https://teamwebstarts.atlassian.net/browse/SAMYOJ-58) Inbox New chat contact fields, [SAMYOJ-46](https://teamwebstarts.atlassian.net/browse/SAMYOJ-46) apply/unapply bot all chats, [SAMYOJ-49](https://teamwebstarts.atlassian.net/browse/SAMYOJ-49) tab-scoped `sessionStorage` JWTs (Pick A) + cross-org number after disconnect, [SAMYOJ-52](https://teamwebstarts.atlassian.net/browse/SAMYOJ-52) AI Bot Chat vs Calling, [SAMYOJ-59](https://teamwebstarts.atlassian.net/browse/SAMYOJ-59) strip AI from Calls Customize, [SAMYOJ-56](https://teamwebstarts.atlassian.net/browse/SAMYOJ-56) Reports AI usage.
 
-**Still open — do not start until after local test:** [SAMYOJ-52](https://teamwebstarts.atlassian.net/browse/SAMYOJ-52) AI Bot Chat vs Calling, [SAMYOJ-56](https://teamwebstarts.atlassian.net/browse/SAMYOJ-56) Reports AI usage, [SAMYOJ-59](https://teamwebstarts.atlassian.net/browse/SAMYOJ-59) strip AI from Calls Customize (Relates 52; land with/after 52). Deferred: [SAMYOJ-57](https://teamwebstarts.atlassian.net/browse/SAMYOJ-57) platform admin (with 12 / 26 / 35).
+**Landed 2026-08-17 (same, not customer production):** [SAMYOJ-68](https://teamwebstarts.atlassian.net/browse/SAMYOJ-68) login/register split; [SAMYOJ-69](https://teamwebstarts.atlassian.net/browse/SAMYOJ-69) per-contact calling AI. Follow-up polish stayed on 51 / 52 / 53 / 55 / 56 / 59 (no extra tickets).
+
+**Still open (real leftovers):** [SAMYOJ-2](https://teamwebstarts.atlassian.net/browse/SAMYOJ-2) inbound, [SAMYOJ-3](https://teamwebstarts.atlassian.net/browse/SAMYOJ-3) cookies/tenancy, [SAMYOJ-5](https://teamwebstarts.atlassian.net/browse/SAMYOJ-5) automations send-when-shouldn’t, [SAMYOJ-6](https://teamwebstarts.atlassian.net/browse/SAMYOJ-6) restore drill, [SAMYOJ-11](https://teamwebstarts.atlassian.net/browse/SAMYOJ-11) Graph template clone. **Deferred until asked:** [SAMYOJ-12](https://teamwebstarts.atlassian.net/browse/SAMYOJ-12) live transfer, [SAMYOJ-26](https://teamwebstarts.atlassian.net/browse/SAMYOJ-26) Phase C, [SAMYOJ-35](https://teamwebstarts.atlassian.net/browse/SAMYOJ-35) billing, [SAMYOJ-57](https://teamwebstarts.atlassian.net/browse/SAMYOJ-57) platform admin (spec written; In Progress for research only — do not code).
 
 ## Ready or not
 
@@ -45,6 +53,8 @@ Full map: `docs/memory/RESEARCH_MAP.md`. Short version:
 
 | Leftover | Why not / next |
 |----------|----------------|
+| Pending Prisma `20260817003000_platform_schema_auth` | SAMYOJ-57 schema only. Do not apply until that ticket is picked. SAMYOJ-52/56 SQL `20260816220000`, bot business details `20260816231500`, and contact calling AI `20260817001000` **are** the additive 16–17 Aug migrations. |
+| Preconnect hero video | Play uses `VITE_PRECONNECT_VIDEO_URL`, which is **unset**. Env leftover — not a Jira. |
 | Inbound Inbox replies | Infra, not Inbox UI. `bash start.sh` + live ngrok; `META_WEBHOOK_URL` must match; send a **new** phone reply. Symptom: send works, `totalReceived: 0`. |
 | Live Graph proof of library clone | Clone `account_creation_confirmation` with real `https://yourstore.com/verify` (not localhost). If Graph rejects suffix sample, next smallest change is full reconstructed URL as `url_suffix_example` — **don’t guess now**. |
 | Live agent on the **same phone call** | WebRTC media transfer not production-ready; settings force `message_only`. Copy is honest. Do not promise “please hold”. |
@@ -60,14 +70,19 @@ Full map: `docs/memory/RESEARCH_MAP.md`. Short version:
 | Socket membership is connect-time | Live sockets stay until reconnect; membership is not re-checked per event. |
 | Email verification theater | Register sets `emailVerifiedAt` immediately. Do not claim verified-email auth. |
 | Backup restore drill | Untested. Do not claim DR-ready. |
+| Train Ready needs Azure embeddings | Vector Ready is Azure-only. No embeddings key → training stays Learning. Not a new Jira. |
+| Unused files on disk | `professionalBrains.ts`, `CallsRailPanel.tsx` linger off-page. Not product misses. |
+| Speaker outside the four voices | Calling UI offers Shubh / Ratan / Priya / Ishita. Other Sarvam speakers are not in that picker. |
+| Pickup save vs bot Save footer | When they call pickup can save separately from the bot editor Save footer. Honest UX leftover, not a new Task. |
 | `npm run start:worker` second consumer | **Closed:** scripts + standalone entry **exit 1**. `startWorkers()` inside the API is the only path. |
 
 ---
 
 ## Do not redo (already built)
 
-- Re-research “is Train connected to calls?” — yes, `pickCallBotId` + `searchKnowledgeBase`. **SAMYOJ-52 will split chat vs calling bots; until then this is still one brain. Do not start 52 this pass.**
-- Re-do 2026-08-16 shipped product tickets: 47 card spacing, 48 skeletons, 50 campaign repeat, 51 dashboard chrome, 53 Inbox Auto·default, 54 Calls recents, 55 post-call summary, 58 Inbox New chat fields, 46 apply/unapply bot all chats, 49 tab-scoped sessionStorage + cross-org number after disconnect.
+- Re-research “is Train connected to calls?” — yes, `pickCallBotId` + `searchKnowledgeBase`. Chat vs calling bots are split (`AiBot.channel`, SAMYOJ-52). Do not rebuild the engines.
+- Re-do 2026-08-16 shipped product tickets: 47 card spacing, 48 skeletons, 50 campaign repeat, 51 dashboard chrome, 53 Inbox Auto·default, 54 Calls recents, 55 post-call summary, 58 Inbox New chat fields, 46 apply/unapply bot all chats, 49 tab-scoped sessionStorage + cross-org number after disconnect, 52 Chat vs Calling AI bots, 59 strip Customize AI, 56 Reports AI usage.
+- Re-do 2026-08-17: 68 login chrome, 69 per-contact calling AI, 52/59 When they call telephony, Inbox chips, summary flat border, preconnect trim.
 - Re-split TTS on every `।` / `.` for “lower latency” — that was the रुक-रुक gap.
 - Re-enable STT during TTS playback — echo loop.
 - Re-dump latest FAQs when search misses — hallucination.

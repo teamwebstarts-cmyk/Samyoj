@@ -1,6 +1,6 @@
 # Calls history, post-call summary, AI usage reports, platform admin
 
-Durable product research for later implementation and for copying into Confluence when that product is connected. Dictated 2026-08-16 (set 3). Agent memory + Jira mapping: `docs/memory/PRODUCT_TASKS_2026-08-16.md` §9–12. **Shipped in code 2026-08-16:** §1 Calls recents (SAMYOJ-54), §2 post-call summary (SAMYOJ-55). **Not built:** AI usage reports (SAMYOJ-56), platform admin (SAMYOJ-57, deferred).
+Durable product research for later implementation and for copying into Confluence when that product is connected. Dictated 2026-08-16 (set 3). Agent memory + Jira mapping: `docs/memory/PRODUCT_TASKS_2026-08-16.md` §9–12. **Shipped in code 2026-08-16:** §1 Calls recents (SAMYOJ-54), §2 post-call summary (SAMYOJ-55), §3 AI usage reports (SAMYOJ-56). **Not built:** platform admin (SAMYOJ-57, deferred).
 
 Atlassian note (2026-08-16): the connected site `teamwebstarts.atlassian.net` currently exposes **Jira only** (`read:jira-work`, `write:jira-work`). Confluence wiki API returns 404. This file is the documentation space until Confluence is enabled.
 
@@ -96,18 +96,11 @@ Number-scoped like the rest of Reports.
 
 ---
 
-## 4. Future — platform admin dashboard (deferred)
+## 4. Future — platform admin dashboard
 
-Not the org Dashboard. A **Samyoj operator** console across customers:
+Canonical spec (research 2026-08-16): [`docs/product/PLATFORM_ADMIN_2026-08-16.md`](PLATFORM_ADMIN_2026-08-16.md). Jira **SAMYOJ-57**. Do not implement until that ticket is picked.
 
-- Who logged in / who did not (last seen).
-- Per-org / per-user: which features they use (Inbox, Calls, Campaigns, AI Bot, Automations, …) and which they ignore.
-- API/activity in a **user-friendly** way (not a raw dump of every Express route). Group by product area.
-- Deep AI usage (same ledger as §3, rolled up per customer).
-
-**Do not log message bodies, tokens of customer chat, or Meta tokens.** Counters and feature names only.
-
-There is no such app today. `AuditLog` / `TeamAuditLog` are org-scoped and incomplete. This ticket stays **deferred** until we are asked to build it. Spec lives here so we do not re-research from zero.
+Not the org Dashboard. Operator console: funnel (login → Connect → contacts → send → AI → paid), AI caps, billing view, Meta error codes. **Do not log message bodies, customer phones, or Meta tokens.**
 
 ---
 
