@@ -8,7 +8,6 @@ import {
   MessageSquare,
   Mic,
   MicOff,
-  MoreVertical,
   Pause,
   PhoneForwarded,
   PhoneIncoming,
@@ -18,9 +17,11 @@ import {
   User,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import CallSummaryNote from './CallSummaryNote';
 import ContactAvatar from '../inbox/ContactAvatar';
 import AppButton from '../ui/AppButton';
 import { getAgentPeerConnection } from '../../utils/agentCallRTC';
+import { FOCUS_RING_CLASS } from '../../hooks/inboxA11y';
 import {
   callStatusLabel,
   callStatusTone,
@@ -49,6 +50,9 @@ interface CallDetailViewProps {
   agentName?: string | null;
   conversationId?: string | null;
   contactId?: string | null;
+  callingAiEnabled?: boolean;
+  onCallingAiChange?: (enabled: boolean) => void;
+  callingAiSaving?: boolean;
   transcript?: TranscriptEntry[] | null;
   summary?: string | null;
   notes?: string;
@@ -92,6 +96,10 @@ export default function CallDetailView({
   botName,
   agentName,
   conversationId,
+  contactId,
+  callingAiEnabled = true,
+  onCallingAiChange,
+  callingAiSaving,
   transcript,
   summary,
   notes = '',
@@ -109,9 +117,7 @@ export default function CallDetailView({
   const displayName = name || formatPhoneDisplay(phone);
   const tone = callStatusTone(status);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const moreRef = useRef<HTMLDivElement>(null);
   const [liveElapsed, setLiveElapsed] = useState(durationSeconds ?? 0);
-  const [moreOpen, setMoreOpen] = useState(false);
   const [muted, setMuted] = useState(false);
 
   useEffect(() => {
@@ -130,22 +136,6 @@ export default function CallDetailView({
     if (!active || !scrollRef.current) return;
     scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [transcript?.length, active]);
-
-  useEffect(() => {
-    if (!moreOpen) return;
-    const onDoc = (e: MouseEvent) => {
-      if (!moreRef.current?.contains(e.target as Node)) setMoreOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setMoreOpen(false);
-    };
-    document.addEventListener('mousedown', onDoc);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDoc);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [moreOpen]);
 
   const inbound = direction !== 'BUSINESS_INITIATED';
   const handlerLabel =
@@ -212,10 +202,19 @@ export default function CallDetailView({
               )}
             </span>
           </div>
-          <p className="truncate text-[12px] font-medium text-theme-muted">{formatPhoneDisplay(phone)}</p>
+          <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-1.5">
+            <p className="truncate text-[12px] font-medium text-theme-muted">{formatPhoneDisplay(phone)}</p>
+            {contactId && onCallingAiChange ? (
+              <CallingAiChip
+                enabled={callingAiEnabled !== false}
+                saving={callingAiSaving}
+                onToggle={() => onCallingAiChange(callingAiEnabled === false)}
+              />
+            ) : null}
+          </div>
         </div>
 
-        <div className="relative flex shrink-0 items-center gap-1.5 sm:gap-2" ref={moreRef}>
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           {!active && onCallBack && (
             <AppButton
               variant="secondary"
@@ -260,51 +259,6 @@ export default function CallDetailView({
               <PhoneOff className="h-3.5 w-3.5" />
               End call
             </AppButton>
-          )}
-
-          <button
-            type="button"
-            className="flex h-9 w-9 items-center justify-center rounded-xl border border-neutral-200 text-neutral-500 hover:bg-neutral-50 dark:border-neutral-700"
-            aria-label="More"
-            aria-expanded={moreOpen}
-            onClick={() => setMoreOpen((v) => !v)}
-          >
-            <MoreVertical className="h-4 w-4" />
-          </button>
-          {moreOpen && (
-            <div className="absolute right-0 top-11 z-20 w-44 rounded-xl border border-neutral-200 bg-white py-1 shadow-lg dark:border-neutral-700 dark:bg-neutral-900">
-              <button
-                type="button"
-                className="block w-full px-3 py-2 text-left text-[12px] font-semibold text-neutral-700 hover:bg-neutral-50 dark:text-neutral-200"
-                onClick={() => {
-                  void navigator.clipboard?.writeText(phone);
-                  setMoreOpen(false);
-                }}
-              >
-                Copy number
-              </button>
-              {conversationId && (
-                <Link
-                  to={`/inbox?conversation=${conversationId}`}
-                  className="block px-3 py-2 text-[12px] font-semibold text-neutral-700 hover:bg-neutral-50 dark:text-neutral-200"
-                  onClick={() => setMoreOpen(false)}
-                >
-                  Open chat
-                </Link>
-              )}
-              {onNotesChange && (
-                <button
-                  type="button"
-                  className="block w-full px-3 py-2 text-left text-[12px] font-semibold text-neutral-700 hover:bg-neutral-50 dark:text-neutral-200"
-                  onClick={() => {
-                    setMoreOpen(false);
-                    document.getElementById('call-notes')?.focus();
-                  }}
-                >
-                  Focus notes
-                </button>
-              )}
-            </div>
           )}
         </div>
       </div>
@@ -387,13 +341,8 @@ export default function CallDetailView({
 
       <div ref={scrollRef} className="inbox-placeholder-bg min-h-0 flex-1 overflow-y-auto">
         {summary ? (
-          <div className="mx-3 mt-3 rounded-2xl border border-violet-200/80 bg-violet-50/90 px-3.5 py-2.5 shadow-sm dark:border-violet-900/50 dark:bg-violet-950/40 sm:mx-4">
-            <p className="text-[10.5px] font-bold uppercase tracking-wide text-violet-700 dark:text-violet-300">
-              Call summary
-            </p>
-            <p className="mt-1 text-[13px] font-medium leading-snug text-neutral-800 dark:text-neutral-100">
-              {summary}
-            </p>
+          <div className="mx-3 mt-3 sm:mx-4">
+            <CallSummaryNote summary={summary} />
           </div>
         ) : null}
         {!transcript?.length ? (
@@ -524,6 +473,50 @@ export default function CallDetailView({
         </div>
       )}
     </div>
+  );
+}
+
+function CallingAiChip({
+  enabled,
+  saving,
+  onToggle,
+}: {
+  enabled: boolean;
+  saving?: boolean;
+  onToggle: () => void;
+}) {
+  const short = enabled ? 'AI answers' : 'Person only';
+  const hint = enabled
+    ? 'AI answers this person on their next call. Turn off to send them to a human.'
+    : 'Person only — humans pick up. Missed if nobody is free.';
+
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={saving}
+      aria-pressed={enabled}
+      aria-label={enabled ? 'AI answers this person' : 'Person only'}
+      title={hint}
+      className={`inline-flex h-7 max-w-[9.5rem] shrink-0 items-center gap-1 rounded-full border px-2 text-[11px] font-semibold tracking-tight transition disabled:cursor-not-allowed disabled:opacity-45 ${FOCUS_RING_CLASS} ${
+        enabled
+          ? 'border-emerald-300/80 bg-emerald-50 text-emerald-800 hover:bg-emerald-100/80 dark:border-emerald-700/50 dark:bg-emerald-950/40 dark:text-emerald-200'
+          : 'border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300'
+      }`}
+    >
+      <span
+        className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+          enabled ? 'bg-emerald-500' : 'bg-neutral-300 dark:bg-neutral-600'
+        }`}
+        aria-hidden
+      />
+      {enabled ? (
+        <Bot className="h-3 w-3 shrink-0" strokeWidth={2.25} aria-hidden />
+      ) : (
+        <User className="h-3 w-3 shrink-0" strokeWidth={2.25} aria-hidden />
+      )}
+      <span className="min-w-0 truncate">{short}</span>
+    </button>
   );
 }
 

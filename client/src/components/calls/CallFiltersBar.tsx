@@ -63,8 +63,16 @@ export default function CallFiltersBar({
             onClick={() => onChipChange(c.value)}
             className={`inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[11.5px] font-semibold transition ${FOCUS_RING_CLASS} ${
               active
-                ? 'bg-whatsapp-600 text-white shadow-[0_1px_3px_rgba(37,211,102,0.3)] dark:bg-whatsapp-500 dark:text-white'
-                : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700'
+                ? c.value === 'missed'
+                  ? 'bg-[#FF3B30] text-white shadow-sm'
+                  : c.value === 'in'
+                    ? 'bg-[#007AFF] text-white shadow-sm'
+                    : c.value === 'out'
+                      ? 'bg-[#34C759] text-white shadow-sm'
+                      : 'bg-whatsapp-600 text-white shadow-[0_1px_3px_rgba(37,211,102,0.3)] dark:bg-whatsapp-500 dark:text-white'
+                : c.value === 'missed'
+                  ? 'bg-red-50 text-[#FF3B30] hover:bg-red-100 dark:bg-red-950/40 dark:text-rose-400'
+                  : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700'
             }`}
           >
               {c.label}
