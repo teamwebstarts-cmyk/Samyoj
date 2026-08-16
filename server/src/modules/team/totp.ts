@@ -51,10 +51,13 @@ function generateTotp(secret: Buffer, counter: number, digits = 6): string {
   return String(code % 10 ** digits).padStart(digits, '0');
 }
 
-export function generateTwoFactorSecret(email: string): { secret: string; otpauthUrl: string } {
+export function generateTwoFactorSecret(
+  email: string,
+  issuerName = 'WhatsApp Platform'
+): { secret: string; otpauthUrl: string } {
   const raw = crypto.randomBytes(20);
   const secret = base32Encode(raw);
-  const issuer = encodeURIComponent('WhatsApp Platform');
+  const issuer = encodeURIComponent(issuerName);
   const account = encodeURIComponent(email);
   const otpauthUrl = `otpauth://totp/${issuer}:${account}?secret=${secret}&issuer=${issuer}&digits=6&period=30`;
   return { secret, otpauthUrl };
@@ -64,7 +67,13 @@ export function verifyTotp(secret: string, token: string, window = 1): boolean {
   const key = base32Decode(secret);
   const counter = Math.floor(Date.now() / 30000);
   for (let i = -window; i <= window; i++) {
-    if (generateTotp(key, counter + i) === token) return true;
+    const expected = generateTotp(key, counter + i);
+    if (
+      expected.length === token.length &&
+      crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(token))
+    ) {
+      return true;
+    }
   }
   return false;
 }
