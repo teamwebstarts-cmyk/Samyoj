@@ -25,7 +25,9 @@ export function getFlowReferenceData(scopeKey: string): Promise<FlowReferenceDat
     ])
       .then(([botsRes, agentsRes, flowsRes, templatesRes]) => {
         cache = {
-          bots: botsRes.data.data.bots || botsRes.data.data || [],
+          bots: (botsRes.data.data.bots || botsRes.data.data || []).filter(
+            (bot: AiBot) => (bot.channel ?? 'CHAT') === 'CHAT'
+          ),
           agents: agentsRes.data.data.agents || [],
           flows: flowsRes.data.data.flows || [],
           templates: templatesRes.data.data.templates || [],
