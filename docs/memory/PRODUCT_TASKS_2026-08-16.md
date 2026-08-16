@@ -1,8 +1,8 @@
 # Product tasks — researched 2026-08-16 (set 1)
 
-**Implementation note (2026-08-16, later the same day):** these tickets **shipped in code** — [SAMYOJ-47](https://teamwebstarts.atlassian.net/browse/SAMYOJ-47), [48](https://teamwebstarts.atlassian.net/browse/SAMYOJ-48), [50](https://teamwebstarts.atlassian.net/browse/SAMYOJ-50), [51](https://teamwebstarts.atlassian.net/browse/SAMYOJ-51), [53](https://teamwebstarts.atlassian.net/browse/SAMYOJ-53), [54](https://teamwebstarts.atlassian.net/browse/SAMYOJ-54), [55](https://teamwebstarts.atlassian.net/browse/SAMYOJ-55), [58](https://teamwebstarts.atlassian.net/browse/SAMYOJ-58). **Same evening:** [SAMYOJ-46](https://teamwebstarts.atlassian.net/browse/SAMYOJ-46) apply/unapply bot all chats, [SAMYOJ-49](https://teamwebstarts.atlassian.net/browse/SAMYOJ-49) tab-scoped `sessionStorage` JWTs (Pick A) + cross-org number after disconnect. User is testing locally (`bash start.sh`). **Not customer production.**
+**Implementation note (2026-08-16, later the same day):** these tickets **shipped in code** — [SAMYOJ-47](https://teamwebstarts.atlassian.net/browse/SAMYOJ-47), [48](https://teamwebstarts.atlassian.net/browse/SAMYOJ-48), [50](https://teamwebstarts.atlassian.net/browse/SAMYOJ-50), [51](https://teamwebstarts.atlassian.net/browse/SAMYOJ-51), [53](https://teamwebstarts.atlassian.net/browse/SAMYOJ-53), [54](https://teamwebstarts.atlassian.net/browse/SAMYOJ-54), [55](https://teamwebstarts.atlassian.net/browse/SAMYOJ-55), [58](https://teamwebstarts.atlassian.net/browse/SAMYOJ-58). **Same evening:** [SAMYOJ-46](https://teamwebstarts.atlassian.net/browse/SAMYOJ-46) apply/unapply bot all chats, [SAMYOJ-49](https://teamwebstarts.atlassian.net/browse/SAMYOJ-49) tab-scoped `sessionStorage` JWTs (Pick A) + cross-org number after disconnect. **Night pass:** [SAMYOJ-52](https://teamwebstarts.atlassian.net/browse/SAMYOJ-52) Chat vs Calling AI bots, [SAMYOJ-59](https://teamwebstarts.atlassian.net/browse/SAMYOJ-59) strip AI from Calls Customize, [SAMYOJ-56](https://teamwebstarts.atlassian.net/browse/SAMYOJ-56) Reports AI usage. User is testing locally (`bash start.sh`). **Not customer production.**
 
-**Still not built — do not start this pass:** [SAMYOJ-52](https://teamwebstarts.atlassian.net/browse/SAMYOJ-52), [56](https://teamwebstarts.atlassian.net/browse/SAMYOJ-56), [59](https://teamwebstarts.atlassian.net/browse/SAMYOJ-59) (Relates 52). Deferred: [57](https://teamwebstarts.atlassian.net/browse/SAMYOJ-57). Spec sections below are the original research; they were not rewritten.
+**Do not start this pass:** [SAMYOJ-57](https://teamwebstarts.atlassian.net/browse/SAMYOJ-57) **research done** 2026-08-16 — spec [`docs/product/PLATFORM_ADMIN_2026-08-16.md`](../product/PLATFORM_ADMIN_2026-08-16.md); **do not implement** until that ticket is picked.
 
 User-dictated work. Originally research-only. Set 1 = §1–6. Set 2 = §7–8 (AI Bot). Set 3 = §9–12 (Calls UX, post-call summary, AI Reports, future admin). Set 4 = §13–14 (Inbox new-contact fields, strip AI from Calling settings). More items still coming. Full session note: [SESSION_2026-08-16.md](./SESSION_2026-08-16.md). Durable copy for later Confluence: [docs/product/CALLS_AI_USAGE_ADMIN_2026-08-16.md](../product/CALLS_AI_USAGE_ADMIN_2026-08-16.md) (set 3) and [docs/product/INBOX_CONTACT_AND_CALLING_AI_2026-08-16.md](../product/INBOX_CONTACT_AND_CALLING_AI_2026-08-16.md) (set 4).
 
@@ -347,9 +347,7 @@ Ready-made bot templates (`AiBotProfessionalBrainPicker` / `professionalBrains`)
 | §7 Inbox disable Auto · default | [SAMYOJ-53](https://teamwebstarts.atlassian.net/browse/SAMYOJ-53) (Relates 46, 52) |
 | §8 AI Bot redesign (chat vs calling, generate prompt, train, strip console, calling on/off) | [SAMYOJ-52](https://teamwebstarts.atlassian.net/browse/SAMYOJ-52) |
 
-**Shipped 2026-08-16:** §7 [SAMYOJ-53](https://teamwebstarts.atlassian.net/browse/SAMYOJ-53). **Still not built:** §8 [SAMYOJ-52](https://teamwebstarts.atlassian.net/browse/SAMYOJ-52).
-
-Do not start 52 until after local test. Wait for the next dictated set.
+**Shipped 2026-08-16:** §7 [SAMYOJ-53](https://teamwebstarts.atlassian.net/browse/SAMYOJ-53). **Night pass:** §8 [SAMYOJ-52](https://teamwebstarts.atlassian.net/browse/SAMYOJ-52) Chat vs Calling, generate personality, simple Train, strip console, `aiAutoAnswer` on the calling bot. Test-deploy only.
 
 ---
 
@@ -427,21 +425,13 @@ Long-form copy for later (Confluence not connected): [docs/product/CALLS_AI_USAG
 
 ---
 
-## 12. Future: platform admin dashboard (deferred)
+## 12. Platform admin dashboard
 
-**Problem:** Operators need a Samyoj-wide admin view of how **each customer/user** uses the product (logins, features, APIs, AI), user-friendly — not the org Dashboard.
+**Problem:** Operators need a Samyoj-wide admin view of how **each customer org** uses the product (funnel, features, AI, billing, Meta errors) — not the org Dashboard.
 
-**Today:** no platform admin app. `AuditLog` / `TeamAuditLog` are org-scoped and incomplete.
+**Canonical spec (2026-08-16):** [`docs/product/PLATFORM_ADMIN_2026-08-16.md`](../product/PLATFORM_ADMIN_2026-08-16.md). Research complete. **Do not implement** until SAMYOJ-57 is picked.
 
-**Required when built (not now)**
-
-- Last login / inactive orgs and users.
-- Feature usage (Inbox, Calls, Campaigns, AI, Automations, …) per org/user.
-- Grouped API/activity (product areas, not every route).
-- Roll-up of §11 AI units per customer.
-- **No** message bodies, no Meta tokens, no customer PII in the analytics tables.
-
-Deferred until asked, same class as SAMYOJ-12 / 26 / 35. Spec must not be lost.
+**Today:** no platform admin app. `User.role = ADMIN` is the org founder, not Samyoj staff. `GET /api/ops/recent-errors` is org-gated but **unscoped** (cross-tenant) — do not reuse.
 
 ---
 
@@ -451,8 +441,8 @@ Deferred until asked, same class as SAMYOJ-12 / 26 / 35. Spec must not be lost.
 |------|------|
 | §9 Calls recents UX | [SAMYOJ-54](https://teamwebstarts.atlassian.net/browse/SAMYOJ-54) — **shipped 2026-08-16** |
 | §10 Post-call summary Inbox + Calls | [SAMYOJ-55](https://teamwebstarts.atlassian.net/browse/SAMYOJ-55) — **shipped 2026-08-16** |
-| §11 Reports AI usage | [SAMYOJ-56](https://teamwebstarts.atlassian.net/browse/SAMYOJ-56) — **not built** |
-| §12 Platform admin dashboard | [SAMYOJ-57](https://teamwebstarts.atlassian.net/browse/SAMYOJ-57) (deferred) |
+| §11 Reports AI usage | [SAMYOJ-56](https://teamwebstarts.atlassian.net/browse/SAMYOJ-56) — **shipped 2026-08-16** (units, not Meta fees) |
+| §12 Platform admin dashboard | [SAMYOJ-57](https://teamwebstarts.atlassian.net/browse/SAMYOJ-57) — research done; not built |
 
 ---
 
@@ -522,4 +512,10 @@ Deferred until asked, same class as SAMYOJ-12 / 26 / 35. Spec must not be lost.
 | Spec | Jira |
 |------|------|
 | §13 Inbox New chat contact fields | [SAMYOJ-58](https://teamwebstarts.atlassian.net/browse/SAMYOJ-58) — **shipped 2026-08-16** |
-| §14 Strip AI calling from Customize | [SAMYOJ-59](https://teamwebstarts.atlassian.net/browse/SAMYOJ-59) (Relates [SAMYOJ-52](https://teamwebstarts.atlassian.net/browse/SAMYOJ-52)) — **not built**; land with/after 52 |
+| §14 Strip AI calling from Customize | [SAMYOJ-59](https://teamwebstarts.atlassian.net/browse/SAMYOJ-59) (Relates [SAMYOJ-52](https://teamwebstarts.atlassian.net/browse/SAMYOJ-52)) — **shipped 2026-08-16** with 52 |
+
+---
+
+## Implementation note — SAMYOJ-52 / 59 / 56 (2026-08-16 night)
+
+Landed together as one AI track. Additive Prisma migration `20260816220000_ai_bot_channel_and_usage` (startup-safe; clones existing default chat bot into a CALL bot with copied Train so calling does not break). Reused `AiBot`, `KnowledgeBaseItem`, Azure embeddings, `buildConversationMessages`, Sarvam chat + `sarvam-105b-conversations` + Saaras/Bulbul, `decideCallRoute`. Hardcoded temperature **0.2**. `ensureDefaultBot` no longer creates. Customize save sends telephony fields only. Reports `GET /settings/ai/usage` surfaces; **no Meta Cloud API fees**. Test-deploy only.
