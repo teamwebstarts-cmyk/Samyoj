@@ -1,8 +1,89 @@
-/** Custom auth marketing icons — clean SF-style vectors for AuthShowcase */
+/** Custom auth marketing icons — Lucide-weight stroke vectors for AuthShowcase */
 
 type IconProps = {
   className?: string;
 };
+
+const STROKE = 1.75;
+
+/** Lucide MessageCircle path — even stroke, round caps */
+const CHAT_BUBBLE =
+  'M7.9 20A9 9 0 1 0 4 16.1L2 22Z';
+
+/** Rounded chat bubble + W — Automate Smartly (WhatsApp-ish) */
+export function IconWhatsAppW({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} aria-hidden fill="none">
+      <path
+        d={CHAT_BUBBLE}
+        stroke="currentColor"
+        strokeWidth={STROKE}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M8.5 8.85 10.15 14.35 12 9.55 13.85 14.35 15.5 8.85"
+        stroke="currentColor"
+        strokeWidth={STROKE}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** Simple chat bubble — Manage in One Place */
+export function IconMessageBubble({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} aria-hidden fill="none">
+      <path
+        d={CHAT_BUBBLE}
+        stroke="currentColor"
+        strokeWidth={STROKE}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** Three-person group — Work Better Together */
+export function IconTeam({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} aria-hidden fill="none">
+      <circle cx="6" cy="8.15" r="2.15" stroke="currentColor" strokeWidth={STROKE} />
+      <path
+        d="M2.55 17.85c.22-2.2 1.55-3.4 3.45-3.4"
+        stroke="currentColor"
+        strokeWidth={STROKE}
+        strokeLinecap="round"
+      />
+      <circle cx="18" cy="8.15" r="2.15" stroke="currentColor" strokeWidth={STROKE} />
+      <path
+        d="M21.45 17.85c-.22-2.2-1.55-3.4-3.45-3.4"
+        stroke="currentColor"
+        strokeWidth={STROKE}
+        strokeLinecap="round"
+      />
+      <circle cx="12" cy="7.45" r="2.55" stroke="currentColor" strokeWidth={STROKE} />
+      <path
+        d="M7.2 18.4c.35-2.7 2.05-4.15 4.8-4.15s4.45 1.45 4.8 4.15"
+        stroke="currentColor"
+        strokeWidth={STROKE}
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+/** Four-point sparkle at the end of the green headline */
+export function IconSparkle({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 16 16" className={className} aria-hidden fill="currentColor">
+      <path d="M8 .5c.28 2.35 1.05 4.05 2.55 5.25C12 6.95 13.7 7.6 15.4 7.9c-2.35.28-4.05 1.05-5.25 2.55C8.95 11.95 8.3 13.65 8 15.4c-.28-2.35-1.05-4.05-2.55-5.25C4.05 8.95 2.35 8.3.6 8c2.35-.28 4.05-1.05 5.25-2.55C7.05 4.05 7.7 2.35 8 .5z" />
+    </svg>
+  );
+}
 
 /** Rounded chat bubble + soft smile */
 export function IconChatSmile({ className }: IconProps) {
@@ -37,35 +118,6 @@ export function IconBarChart({ className }: IconProps) {
   );
 }
 
-/** Clean 3-person team mark */
-export function IconTeam({ className }: IconProps) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} aria-hidden fill="none">
-      <circle cx="7.1" cy="8" r="2.15" stroke="currentColor" strokeWidth="1.65" />
-      <path
-        d="M3.4 16.9c.25-2.35 1.7-3.55 3.7-3.55s3.45 1.2 3.7 3.55"
-        stroke="currentColor"
-        strokeWidth="1.65"
-        strokeLinecap="round"
-      />
-      <circle cx="16.9" cy="8" r="2.15" stroke="currentColor" strokeWidth="1.65" />
-      <path
-        d="M13.2 16.9c.25-2.35 1.7-3.55 3.7-3.55s3.45 1.2 3.7 3.55"
-        stroke="currentColor"
-        strokeWidth="1.65"
-        strokeLinecap="round"
-      />
-      <circle cx="12" cy="8.85" r="2.55" stroke="currentColor" strokeWidth="1.85" />
-      <path
-        d="M7.2 18.15c.35-2.85 2.05-4.25 4.8-4.25s4.45 1.4 4.8 4.25"
-        stroke="currentColor"
-        strokeWidth="1.85"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
 /** Smooth trend-up with arrow head */
 export function IconTrendUp({ className }: IconProps) {
   return (
@@ -96,15 +148,6 @@ export function IconBolt({ className }: IconProps) {
         fill="currentColor"
         d="M13.55 2.85c.28 0 .5.25.45.52l-1.35 6.98h4.55c.42 0 .66.48.4.82l-7.55 9.7c-.3.39-.9.1-.8-.38l1.45-7.12H6.45c-.42 0-.66-.48-.4-.82l6.75-9.45c.1-.14.25-.22.4-.25h.35z"
       />
-    </svg>
-  );
-}
-
-/** Four-point sparkle */
-export function IconSparkle({ className }: IconProps) {
-  return (
-    <svg viewBox="0 0 16 16" className={className} aria-hidden fill="currentColor">
-      <path d="M8 .5c.28 2.35 1.05 4.05 2.55 5.25C12 6.95 13.7 7.6 15.4 7.9c-2.35.28-4.05 1.05-5.25 2.55C8.95 11.95 8.3 13.65 8 15.4c-.28-2.35-1.05-4.05-2.55-5.25C4.05 8.95 2.35 8.3.6 8c2.35-.28 4.05-1.05 5.25-2.55C7.05 4.05 7.7 2.35 8 .5z" />
     </svg>
   );
 }
