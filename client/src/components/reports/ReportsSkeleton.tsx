@@ -16,6 +16,7 @@ export default function ReportsSkeleton() {
         ))}
       </div>
       <div className="h-[280px] rounded-2xl bg-theme-subtle" />
+      <div className="h-[280px] rounded-2xl bg-theme-subtle" />
       <div className="h-[240px] rounded-2xl bg-theme-subtle" />
     </div>
   );
