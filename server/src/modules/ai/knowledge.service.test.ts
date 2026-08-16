@@ -5,6 +5,7 @@ import {
   formatKnowledgeContext,
   isConversationRecallQuestion,
   tokenSearch,
+  validateTrainText,
   voiceKnowledgeQueries,
 } from './knowledge.service';
 
@@ -166,5 +167,16 @@ describe('voiceKnowledgeQueries', () => {
         { role: 'assistant', content: 'We open at 9.' },
       ])
     ).toEqual(['haan woh hi', 'shop timing kya hai']);
+  });
+});
+
+describe('validateTrainText', () => {
+  it('allows a short Q&A', () => {
+    expect(validateTrainText('Hours', 'We open 9 to 6.')).toBeNull();
+  });
+
+  it('rejects empty junk', () => {
+    expect(validateTrainText('H', 'ok')).toMatch(/title/i);
+    expect(validateTrainText('Hours', 'no')).toMatch(/bit more/i);
   });
 });

@@ -2,8 +2,71 @@ import prisma from '../../config/database';
 import { createEmbedding, cosineSimilarity } from './embeddings.service';
 import { redactText } from '../../utils/pii-redaction';
 import { createModuleLogger } from '../../utils/logger';
+import { AppError } from '../../utils/response';
+import {
+  TRAIN_MAX_CONTENT,
+  TRAIN_MAX_ITEMS,
+  TRAIN_MAX_TITLE,
+  TRAIN_MIN_CONTENT,
+  TRAIN_MIN_TITLE,
+} from './ai-constants';
 
 const log = createModuleLogger('knowledge');
+
+function normalizeTrainTitle(title: string): string {
+  return title.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+export function validateTrainText(title: string, content: string): string | null {
+  const trimmedTitle = title.trim();
+  const trimmedContent = content.trim();
+  if (trimmedTitle.length < TRAIN_MIN_TITLE) {
+    return 'Give this answer a short title so you can find it later.';
+  }
+  if (trimmedTitle.length > TRAIN_MAX_TITLE) {
+    return 'That title is too long.';
+  }
+  if (trimmedContent.length < TRAIN_MIN_CONTENT) {
+    return 'Write a bit more in the answer — a short sentence is enough.';
+  }
+  if (trimmedContent.length > TRAIN_MAX_CONTENT) {
+    return 'That answer is too long. Keep it to the facts people actually ask.';
+  }
+  return null;
+}
+
+export async function assertCanAddKnowledge(input: {
+  botId: string;
+  title: string;
+  content: string;
+  exceptItemId?: string;
+}): Promise<void> {
+  const textError = validateTrainText(input.title, input.content);
+  if (textError) throw new AppError(400, textError);
+
+  const count = await prisma.knowledgeBaseItem.count({
+    where: {
+      botId: input.botId,
+      ...(input.exceptItemId ? { id: { not: input.exceptItemId } } : {}),
+    },
+  });
+  if (!input.exceptItemId && count >= TRAIN_MAX_ITEMS) {
+    throw new AppError(400, 'This bot already has enough training. Remove something unused first.');
+  }
+
+  const existing = await prisma.knowledgeBaseItem.findMany({
+    where: { botId: input.botId },
+    select: { id: true, title: true },
+  });
+  const duplicate = existing.find(
+    (item) =>
+      item.id !== input.exceptItemId &&
+      normalizeTrainTitle(item.title) === normalizeTrainTitle(input.title)
+  );
+  if (duplicate) {
+    throw new AppError(400, 'You already trained an answer with that title.');
+  }
+}
 
 export interface KnowledgeMatch {
   id: string;
@@ -106,7 +169,8 @@ export async function searchKnowledgeBase(
   botId: string,
   query: string,
   limit = 5,
-  organizationId?: string
+  organizationId?: string,
+  whatsappNumberId?: string
 ): Promise<KnowledgeMatch[]> {
   const items = await prisma.knowledgeBaseItem.findMany({
     where: { botId },
@@ -123,7 +187,10 @@ export async function searchKnowledgeBase(
 
   if (withEmbeddings.length > 0 && organizationId) {
     try {
-      const queryEmbedding = await createEmbedding(organizationId, searchQuery, { botId });
+      const queryEmbedding = await createEmbedding(organizationId, searchQuery, {
+        botId,
+        whatsappNumberId,
+      });
       if (queryEmbedding.length > 0) {
         const scored = withEmbeddings
           .map((item) => ({
@@ -158,10 +225,17 @@ export async function resolveVoiceKnowledge(
   botId: string,
   currentUtterance: string,
   organizationId: string,
-  liveVoiceTurns?: Array<{ role: 'user' | 'assistant'; content: string }>
+  liveVoiceTurns?: Array<{ role: 'user' | 'assistant'; content: string }>,
+  whatsappNumberId?: string
 ): Promise<KnowledgeMatch[]> {
   for (const query of voiceKnowledgeQueries(currentUtterance, liveVoiceTurns)) {
-    const matches = await searchKnowledgeBase(botId, query, 5, organizationId);
+    const matches = await searchKnowledgeBase(
+      botId,
+      query,
+      5,
+      organizationId,
+      whatsappNumberId
+    );
     if (matches.length > 0) return matches;
   }
   return [];
@@ -193,7 +267,8 @@ export async function upsertKnowledgeEmbedding(
   itemId: string,
   title: string,
   content: string,
-  botId?: string
+  botId?: string,
+  whatsappNumberId?: string
 ): Promise<void> {
   const text = `${title}\n${content}`.trim().slice(0, 8000);
   if (!text) return;
@@ -203,7 +278,7 @@ export async function upsertKnowledgeEmbedding(
   let lastError: unknown;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      const embedding = await createEmbedding(organizationId, text, { botId });
+      const embedding = await createEmbedding(organizationId, text, { botId, whatsappNumberId });
       await prisma.knowledgeBaseItem.update({
         where: { id: itemId },
         data: { embedding },
