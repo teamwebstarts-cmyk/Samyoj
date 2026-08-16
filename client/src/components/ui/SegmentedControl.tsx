@@ -7,6 +7,8 @@ interface SegmentedControlProps<T extends string> {
   ariaLabel?: string;
   embedded?: boolean;
   bare?: boolean;
+  compact?: boolean;
+  fit?: boolean;
 }
 
 export default function SegmentedControl<T extends string>({
@@ -16,10 +18,12 @@ export default function SegmentedControl<T extends string>({
   ariaLabel = 'Section tabs',
   embedded = false,
   bare = false,
+  compact = false,
+  fit = false,
 }: SegmentedControlProps<T>) {
   const inner = (
     <div
-      className="flex w-full rounded-xl bg-neutral-100 p-1 dark:bg-neutral-900"
+      className={`flex rounded-xl bg-neutral-100 p-1 dark:bg-neutral-900 ${fit ? 'w-auto' : 'w-full'}`}
       role="tablist"
       aria-label={ariaLabel}
     >
@@ -34,7 +38,11 @@ export default function SegmentedControl<T extends string>({
             role="tab"
             aria-selected={isActive}
             onClick={() => onChange(option.value)}
-            className={`flex min-h-[42px] flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-[13px] font-semibold transition sm:gap-2 sm:px-3 ${
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg font-semibold transition sm:gap-2 ${
+              compact
+                ? 'min-h-[36px] px-2 py-1.5 text-[12px]'
+                : 'min-h-[42px] px-2 py-2 text-[13px] sm:px-3'
+            } ${
               isActive
                 ? 'bg-white text-theme-fg shadow-sm ring-1 ring-black/[0.04] dark:bg-neutral-800 dark:ring-white/10'
                 : 'text-theme-muted hover:text-theme-fg'

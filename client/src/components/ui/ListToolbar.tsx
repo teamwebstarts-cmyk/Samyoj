@@ -11,6 +11,8 @@ interface ListToolbarProps {
   embedded?: boolean;
   /** Put filters on a second row below search + actions */
   stackFilters?: boolean;
+  /** Search + filters + actions on one row from `md` up; stack below `md`. */
+  inlineDesktop?: boolean;
   /** Desktop: search (half) on the left; filters + actions grouped on the right */
   filtersLeading?: boolean;
   /** Tighter padding, gaps, and filter grid on small screens */
@@ -26,6 +28,7 @@ export default function ListToolbar({
   className = '',
   embedded = false,
   stackFilters = false,
+  inlineDesktop = false,
   filtersLeading = false,
   compactMobile = false,
 }: ListToolbarProps) {
@@ -37,19 +40,44 @@ export default function ListToolbar({
 
   let content: ReactNode;
 
-  if (filtersLeading) {
+  if (inlineDesktop) {
     content = (
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-3 lg:gap-4">
+      <div className="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center md:justify-between md:gap-3 xl:flex-nowrap">
+        <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center md:gap-3 lg:flex-nowrap">
+          <SearchInput
+            value={search}
+            onChange={onSearchChange}
+            placeholder={searchPlaceholder}
+            className="w-full min-w-0 md:max-w-xs md:flex-1"
+            compact={compactMobile}
+          />
+          {filters ? (
+            <div className="flex min-w-0 flex-wrap items-center gap-2 lg:flex-nowrap">{filters}</div>
+          ) : null}
+        </div>
+        {actions ? (
+          <div className="flex shrink-0 items-center gap-2 max-md:w-full md:justify-end">{actions}</div>
+        ) : null}
+      </div>
+    );
+  } else if (filtersLeading) {
+    content = (
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between lg:gap-4">
         <SearchInput
           value={search}
           onChange={onSearchChange}
           placeholder={searchPlaceholder}
-          className="w-full md:w-1/2 md:max-w-md md:flex-none"
+          className="w-full lg:max-w-sm lg:flex-none"
+          compact={compactMobile}
         />
         {(filters || actions) && (
-          <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end md:w-auto md:shrink-0">
-            {filters}
-            {actions}
+          <div className="flex min-w-0 w-full flex-wrap items-center gap-2 lg:flex-1 lg:justify-end">
+            {filters && (
+              <div className="flex min-w-0 flex-wrap items-center gap-2">{filters}</div>
+            )}
+            {actions && (
+              <div className="flex shrink-0 flex-wrap items-center gap-2 max-sm:w-full">{actions}</div>
+            )}
           </div>
         )}
       </div>
