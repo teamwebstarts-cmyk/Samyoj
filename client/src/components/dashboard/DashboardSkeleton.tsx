@@ -14,7 +14,7 @@ export default function DashboardSkeleton() {
       {/* Quick actions (+ optional getting started) */}
       <div className="card-grid grid grid-cols-1 lg:grid-cols-5">
         <div className="h-[140px] rounded-2xl bg-theme-subtle lg:col-span-3" />
-        <div className="h-[160px] rounded-2xl bg-theme-subtle lg:col-span-2" />
+        <div className="h-[140px] rounded-2xl bg-theme-subtle lg:col-span-2" />
       </div>
     </div>
   );
