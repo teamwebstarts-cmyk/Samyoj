@@ -651,6 +651,12 @@ router.post(
       metadata: { email: invite.email },
     });
 
+    const { emitProductEvent } = await import('../platform/events');
+    emitProductEvent({
+      organizationId: invite.organizationId,
+      name: 'INVITE_ACCEPT',
+    });
+
     const payload = {
       userId: result.user.id,
       email: result.user.email,

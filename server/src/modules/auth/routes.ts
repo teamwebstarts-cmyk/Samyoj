@@ -23,6 +23,7 @@ import {
   authForgotLimiter,
   consumeAccountThrottle,
 } from './rate-limit';
+import { emitProductEvent } from '../platform/events';
 
 const router = Router();
 
@@ -109,6 +110,10 @@ router.post(
       },
       req
     );
+    emitProductEvent({
+      organizationId: result.org.id,
+      name: 'REGISTER',
+    });
 
     sendSuccess(
       res,
@@ -157,7 +162,15 @@ router.post(
     });
 
     // Constant-ish failure path
-    if (!user || !(await bcrypt.compare(data.password, user.passwordHash))) {
+    const passwordValid = user ? await bcrypt.compare(data.password, user.passwordHash) : false;
+    if (!user || !passwordValid) {
+      const failedOrgId = user?.organizations[0]?.organizationId;
+      if (failedOrgId) {
+        emitProductEvent({
+          organizationId: failedOrgId,
+          name: 'LOGIN_FAIL',
+        });
+      }
       throw new AppError(401, 'Invalid email or password');
     }
 
@@ -201,6 +214,12 @@ router.post(
       },
       req
     );
+    if (orgMembership?.organizationId) {
+      emitProductEvent({
+        organizationId: orgMembership.organizationId,
+        name: 'LOGIN_OK',
+      });
+    }
 
     sendSuccess(res, {
       user: {
