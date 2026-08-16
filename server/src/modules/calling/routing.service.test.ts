@@ -1,53 +1,133 @@
 import { describe, expect, it } from 'vitest';
-import { pickCallBotId } from './routing.service';
+import {
+  pickCallBotId,
+  shouldAiAnswerAfterAgentTimeout,
+  shouldRouteCallToAi,
+} from './routing.service';
+
+describe('shouldRouteCallToAi', () => {
+  it('is fail-closed when the user turned AI calling off', () => {
+    expect(shouldRouteCallToAi({ aiAutoAnswer: false, answeringBotEnabled: true })).toBe(false);
+  });
+
+  it('is fail-closed when no calling bot is set to answer all calls', () => {
+    expect(shouldRouteCallToAi({ aiAutoAnswer: true, answeringBotEnabled: false })).toBe(false);
+  });
+
+  it('allows AI only when calling is on and an answering bot is ready', () => {
+    expect(shouldRouteCallToAi({ aiAutoAnswer: true, answeringBotEnabled: true })).toBe(true);
+  });
+
+  it('never sends a person-only contact to AI even if org All-calls is on', () => {
+    expect(
+      shouldRouteCallToAi({
+        aiAutoAnswer: true,
+        answeringBotEnabled: true,
+        contactCallingAiEnabled: false,
+      })
+    ).toBe(false);
+  });
+
+  it('sends a contact flagged for AI when global calling and an answering bot are on', () => {
+    expect(
+      shouldRouteCallToAi({
+        aiAutoAnswer: true,
+        answeringBotEnabled: true,
+        contactCallingAiEnabled: true,
+      })
+    ).toBe(true);
+  });
+
+  it('never sends AI when the global calling switch is off, even if this person is flagged always-AI', () => {
+    expect(
+      shouldRouteCallToAi({
+        aiAutoAnswer: false,
+        answeringBotEnabled: true,
+        contactCallingAiEnabled: true,
+      })
+    ).toBe(false);
+  });
+
+  it('does not fight All-calls off: no answering bot means no AI even for an always-AI contact', () => {
+    expect(
+      shouldRouteCallToAi({
+        aiAutoAnswer: true,
+        answeringBotEnabled: false,
+        contactCallingAiEnabled: true,
+      })
+    ).toBe(false);
+  });
+});
+
+describe('shouldAiAnswerAfterAgentTimeout', () => {
+  it('does not take a person-only caller with AI after humans miss', () => {
+    expect(
+      shouldAiAnswerAfterAgentTimeout({
+        aiAutoAnswer: true,
+        hasBot: true,
+        contactCallingAiEnabled: false,
+      })
+    ).toBe(false);
+  });
+
+  it('may fall back to AI when this person allows it and calling is on', () => {
+    expect(
+      shouldAiAnswerAfterAgentTimeout({
+        aiAutoAnswer: true,
+        hasBot: true,
+        contactCallingAiEnabled: true,
+      })
+    ).toBe(true);
+  });
+});
 
 describe('pickCallBotId', () => {
   const empty = { id: 'empty', enabled: true, isDefault: true };
   const trained = { id: 'trained', enabled: true, isDefault: false };
-  const chatBot = { id: 'chat', enabled: true, isDefault: false };
+  const calling = { id: 'calling', enabled: true, isDefault: false };
 
-  it('uses the brain assigned for WhatsApp calls', () => {
+  it('uses the calling bot assigned to answer calls', () => {
     expect(
       pickCallBotId({
-        assignedCallBotId: 'chat',
-        bots: [empty, trained, chatBot],
+        assignedCallBotId: 'calling',
+        bots: [empty, trained, calling],
       })
-    ).toBe('chat');
+    ).toBe('calling');
   });
 
-  it('uses the default support bot when the user has not assigned a call brain', () => {
+  it('does not fall back to another bot when All-calls is off', () => {
     expect(
       pickCallBotId({
         assignedCallBotId: null,
-        bots: [empty, trained, chatBot],
+        bots: [empty, trained, calling],
       })
-    ).toBe('empty');
+    ).toBeNull();
   });
 
-  it('does not pick a trained non-default bot over the org default', () => {
+  it('does not pick a random enabled bot when the assigned one is missing', () => {
     expect(
       pickCallBotId({
-        assignedCallBotId: null,
-        bots: [trained, empty, chatBot],
+        assignedCallBotId: 'gone',
+        bots: [trained, calling],
       })
-    ).toBe('empty');
+    ).toBeNull();
   });
 
-  it('falls back to the first enabled bot when nobody is marked default', () => {
+  it('ignores a disabled assigned bot instead of spawning a fallback', () => {
     expect(
       pickCallBotId({
-        assignedCallBotId: null,
-        bots: [trained, chatBot],
+        assignedCallBotId: 'calling',
+        bots: [empty, trained, { ...calling, enabled: false }],
       })
-    ).toBe('trained');
+    ).toBeNull();
   });
 
-  it('ignores a disabled assigned bot and uses the default support bot', () => {
+  it('returns null when no calling bots are enabled', () => {
     expect(
       pickCallBotId({
-        assignedCallBotId: 'chat',
-        bots: [empty, trained, { ...chatBot, enabled: false }],
+        assignedCallBotId: 'calling',
+        bots: [{ ...calling, enabled: false }],
       })
-    ).toBe('empty');
+    ).toBeNull();
   });
 });

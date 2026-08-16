@@ -128,3 +128,24 @@ export function resolveEffectiveVoiceConfig(settings: CallingSettings) {
     transferMode: settings.transferMode,
   };
 }
+
+export function resolveCallVoiceConfig(
+  settings: CallingSettings,
+  bot?: {
+    voiceGreeting?: string | null;
+    voiceSpeaker?: string | null;
+    voiceLanguage?: string | null;
+  } | null
+) {
+  const base = resolveEffectiveVoiceConfig(settings);
+  const language = bot?.voiceLanguage?.trim() || base.ttsLanguage;
+  const speaker = bot?.voiceSpeaker?.trim() || base.ttsVoice;
+  return {
+    ...base,
+    aiGreeting: bot?.voiceGreeting?.trim() || base.aiGreeting,
+    ttsVoice: speaker,
+    ttsLanguage: language,
+    sarvamSttLanguage: language,
+    sarvamTtsSpeaker: speaker,
+  };
+}

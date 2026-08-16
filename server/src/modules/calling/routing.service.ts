@@ -1,4 +1,5 @@
 import prisma from '../../config/database';
+import type { AiBot } from '@prisma/client';
 import { isWithinBusinessHours } from '../settings/business-hours';
 import { getOrgBusinessHours } from '../settings/business-hours';
 import { getEligibleAgents } from '../team/assignment';
@@ -11,21 +12,62 @@ export type CallRouteDecision =
   | { mode: 'ring_agents'; agentIds: string[]; reason: string }
   | { mode: 'missed'; reason: string; afterHoursMessage?: string };
 
-export async function decideCallRoute(organizationId: string): Promise<CallRouteDecision> {
+export function shouldRouteCallToAi(input: {
+  aiAutoAnswer: boolean;
+  answeringBotEnabled: boolean;
+  /** Per-contact override. False = this person wants a human. Default / true = eligible for org AI routing. */
+  contactCallingAiEnabled?: boolean | null;
+}): boolean {
+  if (input.contactCallingAiEnabled === false) return false;
+  return input.aiAutoAnswer && input.answeringBotEnabled;
+}
+
+/** Ring-timeout fallback must not pick up a “person only” caller with AI. */
+export function shouldAiAnswerAfterAgentTimeout(input: {
+  aiAutoAnswer: boolean;
+  hasBot: boolean;
+  contactCallingAiEnabled?: boolean | null;
+}): boolean {
+  if (input.contactCallingAiEnabled === false) return false;
+  return input.aiAutoAnswer && input.hasBot;
+}
+
+async function answeringCallBotEnabled(
+  organizationId: string,
+  defaultBotId: string | null
+): Promise<boolean> {
+  if (!defaultBotId) return false;
+  const bot = await prisma.aiBot.findFirst({
+    where: { id: defaultBotId, organizationId, channel: 'CALL', enabled: true },
+    select: { id: true },
+  });
+  return Boolean(bot);
+}
+
+export async function decideCallRoute(
+  organizationId: string,
+  contact?: { callingAiEnabled?: boolean | null }
+): Promise<CallRouteDecision> {
   const [settings, businessHours, activeCount] = await Promise.all([
     getOrgCallingSettings(organizationId),
     getOrgBusinessHours(organizationId),
     getOrgActiveCallCount(organizationId),
   ]);
+  const answeringOn = await answeringCallBotEnabled(organizationId, settings.defaultBotId);
 
   if (activeCount >= settings.maxConcurrentCalls) {
     return { mode: 'missed', reason: 'max_concurrent_calls' };
   }
 
   const withinHours = isWithinBusinessHours(businessHours);
+  const aiAllowed = shouldRouteCallToAi({
+    aiAutoAnswer: settings.aiAutoAnswer,
+    answeringBotEnabled: answeringOn,
+    contactCallingAiEnabled: contact?.callingAiEnabled,
+  });
 
   if (!withinHours) {
-    if (settings.afterHoursMode === 'ai' && settings.aiAutoAnswer) {
+    if (settings.afterHoursMode === 'ai' && aiAllowed) {
       return { mode: 'ai', reason: 'after_hours_ai' };
     }
     if (settings.afterHoursMode === 'message') {
@@ -38,10 +80,7 @@ export async function decideCallRoute(organizationId: string): Promise<CallRoute
     return { mode: 'missed', reason: 'after_hours' };
   }
 
-  if (settings.routingMode === 'ai_only') {
-    if (!settings.aiAutoAnswer) {
-      return { mode: 'missed', reason: 'ai_disabled' };
-    }
+  if (settings.routingMode === 'ai_only' && aiAllowed) {
     return { mode: 'ai', reason: 'ai_only' };
   }
 
@@ -56,14 +95,13 @@ export async function decideCallRoute(organizationId: string): Promise<CallRoute
         reason: 'agents_first',
       };
     }
-    if (settings.aiAutoAnswer) {
+    if (aiAllowed) {
       return { mode: 'ai', reason: 'no_agents_fallback_ai' };
     }
     return { mode: 'missed', reason: 'no_agents_available' };
   }
 
-  // ai_then_agents: try AI first (default current behavior)
-  if (settings.aiAutoAnswer) {
+  if (aiAllowed) {
     return { mode: 'ai', reason: 'ai_then_agents' };
   }
 
@@ -86,24 +124,21 @@ export function pickCallBotId(input: {
   if (enabled.length === 0) return null;
   const ids = new Set(enabled.map((bot) => bot.id));
 
+  // All-calls off (no assigned answering bot) must not fall back to another brain.
   if (input.assignedCallBotId && ids.has(input.assignedCallBotId)) {
     return input.assignedCallBotId;
   }
 
-  const orgDefault = enabled.find((bot) => bot.isDefault);
-  if (orgDefault) return orgDefault.id;
-
-  return enabled[0].id;
+  return null;
 }
 
 export async function resolveCallBot(
   organizationId: string,
   settings: CallingSettings,
   _conversationId: string
-) {
-
+): Promise<AiBot | null> {
   const bots = await prisma.aiBot.findMany({
-    where: { organizationId, enabled: true },
+    where: { organizationId, enabled: true, channel: 'CALL' },
     orderBy: { createdAt: 'asc' },
   });
 
@@ -116,9 +151,5 @@ export async function resolveCallBot(
     })),
   });
 
-  const picked = pickedId ? bots.find((bot) => bot.id === pickedId) : null;
-  if (picked) return picked;
-
-  const { ensureDefaultBot } = await import('../ai/bot.service');
-  return ensureDefaultBot(organizationId);
+  return pickedId ? bots.find((bot) => bot.id === pickedId) ?? null : null;
 }
