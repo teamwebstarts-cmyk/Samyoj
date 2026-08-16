@@ -232,6 +232,11 @@ export default function ContactDetailPanel({
                   {current.conversation?.status && (
                     <ContactConversationBadge status={current.conversation.status} />
                   )}
+                  {current.callingAiEnabled === false && (
+                    <span className="inline-flex items-center rounded-full bg-neutral-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-neutral-600 ring-1 ring-inset ring-neutral-200/70 dark:bg-slate-800/80 dark:text-slate-300 dark:ring-slate-700/50">
+                      Calls · person only
+                    </span>
+                  )}
                   {detail?.lead && (
                     <StatusBadge
                       status={detail.lead.stage}

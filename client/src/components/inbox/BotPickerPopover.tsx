@@ -51,7 +51,10 @@ export default function BotPickerPopover({
 
   useFocusTrap({ ref: containerRef, active: true, onEscape: onClose });
 
-  const enabledBots = useMemo(() => bots.filter((b) => b.enabled), [bots]);
+  const enabledBots = useMemo(
+    () => bots.filter((b) => b.enabled && (b.channel ?? 'CHAT') === 'CHAT'),
+    [bots]
+  );
   const defaultBot = useMemo(
     () => enabledBots.find((b) => b.isDefault) ?? enabledBots[0] ?? null,
     [enabledBots]
