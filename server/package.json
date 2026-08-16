@@ -9,6 +9,8 @@
     "dev:doppler": "doppler run -- tsx watch src/index.ts",
     "dev:worker": "node -e \"console.error('Workers are embedded in the API. Do not start a second consumer.'); process.exit(1)\"",
     "setup-webhook": "tsx scripts/setup-webhook.ts",
+    "platform:bootstrap-operator": "tsx scripts/bootstrap-platform-operator.ts",
+    "platform:backfill-telemetry": "tsx scripts/backfill-platform-telemetry.ts",
     "build": "tsc",
     "start": "node dist/index.js",
     "start:worker": "node -e \"console.error('Workers are embedded in the API. Do not start a second consumer.'); process.exit(1)\"",
