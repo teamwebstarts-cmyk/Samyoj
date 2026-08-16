@@ -12,6 +12,7 @@ import {
   restoreAuthBackupIfNeeded,
   setAuthTokens,
   adoptLegacyLocalStorageTokens,
+  discardClonedSession,
 } from '../utils/authStorage';
 
 interface AuthContextType {
@@ -89,10 +90,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    restoreAuthBackupIfNeeded();
-    adoptLegacyLocalStorageTokens();
-
     const boot = async () => {
+      restoreAuthBackupIfNeeded();
+      adoptLegacyLocalStorageTokens();
+      await discardClonedSession();
+
       const token = getAccessToken();
       const refreshToken = getRefreshToken();
       if (!token && !refreshToken) {
@@ -177,26 +179,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!event.persisted) return;
       restoreAuthBackupIfNeeded();
       adoptLegacyLocalStorageTokens();
-      if (!user && (getAccessToken() || getRefreshToken())) {
-        void authApi
-          .me()
-          .then(({ data }) => {
-            const org = data.data.organizations?.[0];
-            applySession(
-              setUser,
-              setOrganization,
-              setAvailabilityState,
-              setTwoFactorEnabled,
-              data.data,
-              org
-                ? { id: org.id, companyName: org.companyName, role: org.role }
-                : null,
-              data.data.availability,
-              data.data.twoFactorEnabled
-            );
-          })
-          .catch(() => {});
-      }
+      void discardClonedSession().then(() => {
+        if (!user && (getAccessToken() || getRefreshToken())) {
+          void authApi
+            .me()
+            .then(({ data }) => {
+              const org = data.data.organizations?.[0];
+              applySession(
+                setUser,
+                setOrganization,
+                setAvailabilityState,
+                setTwoFactorEnabled,
+                data.data,
+                org
+                  ? { id: org.id, companyName: org.companyName, role: org.role }
+                  : null,
+                data.data.availability,
+                data.data.twoFactorEnabled
+              );
+            })
+            .catch(() => {});
+        }
+      });
     };
     window.addEventListener('pageshow', onPageShow);
     return () => window.removeEventListener('pageshow', onPageShow);
