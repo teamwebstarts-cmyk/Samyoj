@@ -18,9 +18,7 @@ import { humanizeParamValue, previewParams } from '../../../utils/templateForm';
 import { messagingConsent } from '../../../utils/plainLanguage';
 import type { MessageTemplate } from '../../../types';
 import type { CampaignWizardForm } from './campaignWizardModel';
-import type { CampaignQuotaData } from './CampaignWizardSummaryRail';
 import type { AudiencePreviewMetrics } from '../CampaignAudiencePreview';
-import CampaignWizardSummaryRail from './CampaignWizardSummaryRail';
 import CampaignSchedulePicker from './CampaignSchedulePicker';
 import CampaignRepeatFields from '../CampaignRepeatFields';
 
@@ -32,8 +30,6 @@ interface CampaignReviewStepProps {
   includedCount: number | null;
   audienceMetrics?: AudiencePreviewMetrics | null;
   excludedCount: number;
-  estimatedCost?: number | null;
-  quota: CampaignQuotaData | null;
   minScheduleDateTime: string;
   onEditMessage: () => void;
   onEditAudience: () => void;
@@ -47,8 +43,6 @@ export default function CampaignReviewStep({
   includedCount,
   audienceMetrics,
   excludedCount,
-  estimatedCost,
-  quota,
   minScheduleDateTime,
   onEditMessage,
   onEditAudience,
@@ -99,7 +93,7 @@ export default function CampaignReviewStep({
       aria-labelledby="campaign-wizard-step-2"
       className="space-y-3"
     >
-      <div className="campaign-review-layout grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_270px]">
+      <div className="campaign-review-layout">
         <main className="campaign-review-main min-w-0">
           <div className="campaign-review-heading flex items-start justify-between gap-3">
             <div>
@@ -340,17 +334,6 @@ export default function CampaignReviewStep({
             </div>
           </div>
         </main>
-
-        <CampaignWizardSummaryRail
-          form={form}
-          selectedTemplate={selectedTemplate}
-          channelLabel={channelLabel}
-          includedCount={includedCount}
-          audienceMetrics={audienceMetrics}
-          estimatedCost={estimatedCost}
-          quota={quota}
-          variant="review"
-        />
       </div>
     </div>
   );
