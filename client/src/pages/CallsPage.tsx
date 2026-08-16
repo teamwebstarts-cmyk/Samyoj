@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Settings, Trash2 } from 'lucide-react';
-import { callingApi } from '../services/api';
+import { useNavigate, useParams } from 'react-router-dom';
+import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
+import { callingApi, contactApi } from '../services/api';
 import { useSocket } from '../hooks/useSocket';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 import CallDetailView from '../components/calls/CallDetailView';
 import CallFiltersBar from '../components/calls/CallFiltersBar';
 import CallListItem from '../components/calls/CallListItem';
 import { CallsListEmpty, CallsSelectEmpty } from '../components/calls/CallPlaceholder';
-import CallingSettingsStage from '../components/calls/CallingSettingsStage';
 import {
   formatPhoneDisplay,
   isActiveCallStatus,
@@ -46,7 +45,7 @@ interface CallRecord {
   transcript?: unknown;
   metadata?: { notes?: string; summary?: string } | null;
   createdAt: string;
-  contact?: { id?: string; name?: string | null; phone: string };
+  contact?: { id?: string; name?: string | null; phone: string; callingAiEnabled?: boolean };
   aiBot?: { name: string } | null;
   assignedAgent?: { id: string; name: string } | null;
   conversation?: { id: string } | null;
@@ -77,10 +76,7 @@ type CallsNumberCache = {
   chip: string;
   selectedCallId: string | null;
   notes: string;
-  railPanel: string | null;
 };
-
-type RailPanel = 'settings' | null;
 
 /** Map UI chip → API list params. */
 function chipToParams(chip: string): { status?: string; handler?: string; direction?: string } {
@@ -127,17 +123,10 @@ export default function CallsPage() {
   const [notes, setNotes] = useState('');
   const [notesDirty, setNotesDirty] = useState(false);
   const notesDirtyRef = useRef(false);
-  const [railPanel, setRailPanel] = useState<RailPanel>(null);
+  const [callingAiSaving, setCallingAiSaving] = useState(false);
   const [callMenu, setCallMenu] = useState<{ x: number; y: number; callId: string } | null>(null);
   const [deleteCallTarget, setDeleteCallTarget] = useState<CallRecord | null>(null);
   const [deletingCall, setDeletingCall] = useState(false);
-  const [searchParams] = useSearchParams();
-
-  useEffect(() => {
-    if (searchParams.get('panel') === 'settings') {
-      setRailPanel('settings');
-    }
-  }, [searchParams]);
   const [analytics, setAnalytics] = useState<{
     today: number;
     missed: number;
@@ -155,7 +144,6 @@ export default function CallsPage() {
     chip: '',
     selectedCallId: null,
     notes: '',
-    railPanel: null,
   });
 
   callsSnapshotRef.current = {
@@ -166,7 +154,6 @@ export default function CallsPage() {
     chip,
     selectedCallId,
     notes,
-    railPanel,
   };
   notesDirtyRef.current = notesDirty;
 
@@ -304,7 +291,6 @@ export default function CallsPage() {
       setNotesDirty(false);
       setCallMenu(null);
       setDeleteCallTarget(null);
-      setRailPanel(null);
       navigate('/calls');
       setListLoading(true);
       void loadRef.current();
@@ -319,7 +305,6 @@ export default function CallsPage() {
     setPage(1);
     setSearch('');
     setChip('');
-    setRailPanel(null);
     setCallMenu(null);
     setDeleteCallTarget(null);
     navigate('/calls');
@@ -418,7 +403,6 @@ export default function CallsPage() {
 
   const handleSelectCall = useCallback(
     (call: CallRecord) => {
-      setRailPanel(null);
       setSelectedCallId(call.id);
       setNotes('');
       setNotesDirty(false);
@@ -587,9 +571,34 @@ export default function CallsPage() {
     }
   }
 
-  const toggleRail = (panel: RailPanel) => {
-    setRailPanel((prev) => (prev === panel ? null : panel));
-  };
+  async function handleCallingAiChange(enabled: boolean) {
+    const contactId = selectedCall?.contact?.id;
+    if (!contactId || !selectedCall) return;
+    const previous = selectedCall.contact?.callingAiEnabled !== false;
+    setCallingAiSaving(true);
+    setCalls((prev) =>
+      prev.map((call) =>
+        call.contact?.id === contactId
+          ? { ...call, contact: { ...call.contact, callingAiEnabled: enabled } }
+          : call
+      )
+    );
+    try {
+      await contactApi.update(contactId, { callingAiEnabled: enabled });
+      toastSuccess(enabled ? 'AI will answer this person.' : 'This person will reach a human.');
+    } catch {
+      setCalls((prev) =>
+        prev.map((call) =>
+          call.contact?.id === contactId
+            ? { ...call, contact: { ...call.contact, callingAiEnabled: previous } }
+            : call
+        )
+      );
+      toastError('Could not update calling AI for this person.');
+    } finally {
+      setCallingAiSaving(false);
+    }
+  }
 
   const selectedTranscript = normalizeTranscript(selectedCall?.transcript);
 
@@ -604,7 +613,7 @@ export default function CallsPage() {
         {/* List pane */}
         <div
           className={`relative flex h-full min-h-0 w-full flex-col border-r border-neutral-200 dark:border-neutral-800 md:w-[300px] lg:w-[340px] ${
-            railPanel === 'settings' ? 'hidden' : selectedCall ? 'hidden md:flex' : 'flex'
+            selectedCall ? 'hidden md:flex' : 'flex'
           }`}
         >
           <CallFiltersBar
@@ -669,17 +678,13 @@ export default function CallsPage() {
           </div>
         </div>
 
-        {/* Stage pane — hidden on mobile when list is showing.
-            When the Settings rail is open, this becomes the calling
-            customization (replacing the chat), so it must stay visible. */}
+        {/* Stage pane — hidden on mobile when list is showing. */}
         <div
           className={`flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden ${
-            selectedCall || railPanel === 'settings' ? 'flex' : 'hidden md:flex'
+            selectedCall ? 'flex' : 'hidden md:flex'
           }`}
         >
-          {railPanel === 'settings' ? (
-            <CallingSettingsStage onClose={() => setRailPanel(null)} />
-          ) : selectedCall ? (
+          {selectedCall ? (
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white dark:bg-neutral-950">
               <CallDetailView
                 name={selectedCall.contact?.name}
@@ -687,11 +692,14 @@ export default function CallsPage() {
                 status={selectedCall.status}
                 createdAt={selectedCall.createdAt}
                 durationSeconds={selectedCall.durationSeconds}
-                direction={selectedCall.direction}
                 handler={selectedCall.handler}
                 botName={selectedCall.aiBot?.name}
                 agentName={selectedCall.assignedAgent?.name}
                 conversationId={selectedCall.conversation?.id}
+                contactId={selectedCall.contact?.id}
+                callingAiEnabled={selectedCall.contact?.callingAiEnabled !== false}
+                onCallingAiChange={(enabled) => void handleCallingAiChange(enabled)}
+                callingAiSaving={callingAiSaving}
                 transcript={selectedTranscript}
                 summary={selectedCall.metadata?.summary || null}
                 notes={notes}
@@ -710,6 +718,7 @@ export default function CallsPage() {
                 onCallBack={!isActiveCallStatus(selectedCall.status) ? () => void handleCallBack() : undefined}
                 callingBack={callingBack}
                 ending={ending}
+                direction={selectedCall.direction}
               />
             </div>
           ) : (
@@ -727,15 +736,6 @@ export default function CallsPage() {
           )}
         </div>
 
-        {/* Customize rail — desktop only */}
-        <div className={`w-[72px] shrink-0 flex-col border-l border-neutral-200 bg-neutral-50/70 dark:border-neutral-800 dark:bg-neutral-900/50 ${railPanel === 'settings' ? 'hidden' : 'hidden md:flex'}`}>
-          <RailIconButton
-            icon={Settings}
-            label="Settings"
-            active={railPanel === 'settings'}
-            onClick={() => toggleRail('settings')}
-          />
-        </div>
         </div>
       </div>
 
@@ -777,33 +777,6 @@ export default function CallsPage() {
         loading={deletingCall}
       />
     </PageShell>
-  );
-}
-
-interface RailIconButtonProps {
-  icon: React.ComponentType<{ className?: string; strokeWidth?: string | number }>;
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}
-
-function RailIconButton({ icon: Icon, label, active, onClick }: RailIconButtonProps) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      className={`flex w-full flex-col items-center gap-1 border-b border-neutral-200 px-1 py-3.5 transition-colors dark:border-neutral-800 ${
-        active
-          ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
-          : 'text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 dark:hover:bg-neutral-800 dark:hover:text-neutral-300'
-      }`}
-    >
-      <Icon className="h-5 w-5" strokeWidth={1.85} />
-      <span className={`text-[10px] font-bold leading-none ${active ? 'text-emerald-700 dark:text-emerald-400' : 'text-neutral-500'}`}>
-        {label}
-      </span>
-    </button>
   );
 }
 

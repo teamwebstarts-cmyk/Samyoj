@@ -470,8 +470,6 @@ export default function CampaignWizardPage() {
         includedCount={audiencePreviewCount}
         audienceMetrics={audienceMetrics}
         excludedCount={excludedSelectedContacts}
-        estimatedCost={estimatedCost}
-        quota={quota}
         minScheduleDateTime={getCampaignScheduleMinimum()}
         onEditMessage={() => navigateToStep(0)}
         onEditAudience={() => navigateToStep(1)}
