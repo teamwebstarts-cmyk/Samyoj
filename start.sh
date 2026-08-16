@@ -70,7 +70,7 @@ restart_api() {
 }
 
 [[ -f server/.env ]] || fail "server/.env is missing. Run bash setup.sh first."
-[[ -d server/node_modules && -d client/node_modules ]] ||
+[[ -d server/node_modules && -d client/node_modules && -d admin/node_modules ]] ||
   fail "Dependencies are missing. Run bash setup.sh first."
 ENCRYPTION_KEY="$(grep -m1 '^ENCRYPTION_KEY=' server/.env | cut -d= -f2- || true)"
 [[ "$ENCRYPTION_KEY" =~ ^[0-9a-fA-F]{64}$ ]] ||
@@ -81,6 +81,9 @@ harden_local_permissions() {
   chmod 600 server/.env
   if [[ -f client/.env ]]; then
     chmod 600 client/.env
+  fi
+  if [[ -f admin/.env ]]; then
+    chmod 600 admin/.env
   fi
   if [[ -d "$LOG_DIR" ]]; then
     find "$LOG_DIR" -type f -exec chmod 640 {} + 2>/dev/null || true
@@ -190,13 +193,26 @@ for attempt in {1..30}; do
 done
 curl -fsS http://localhost:3000 >/dev/null 2>&1 ||
   fail "Client did not become reachable. See .run/logs/client.log"
+ok "Client is reachable"
+
+info "Starting Admin..."
+start_process admin "npm --prefix admin run dev -- --host 0.0.0.0"
+for attempt in {1..30}; do
+  curl -fsS http://localhost:3001 >/dev/null 2>&1 && break
+  is_running admin || fail "Admin failed. See .run/logs/admin.log"
+  sleep 1
+done
+curl -fsS http://localhost:3001 >/dev/null 2>&1 ||
+  fail "Admin did not become reachable. See .run/logs/admin.log"
+ok "Admin is reachable"
 
 harden_local_permissions
 
 echo ""
 ok "All services started (inbound webhook required and verified)."
-echo "  Open: http://localhost:3000"
-echo "  API:  http://localhost:8000"
+echo "  Open:  http://localhost:3000"
+echo "  Admin: http://localhost:3001"
+echo "  API:   http://localhost:8000"
 echo "  Webhook: $WEBHOOK_URL"
 echo "  Webhook registration: $(cat "$RUN_DIR/webhook-status" 2>/dev/null || echo pending)"
 echo "  Logs: .run/logs/"

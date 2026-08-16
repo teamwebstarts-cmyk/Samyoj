@@ -40,14 +40,14 @@ docker info >/dev/null 2>&1 || fail "Docker is installed but not running."
 ok "Node $(node --version), npm $(npm --version), and Docker are ready"
 
 info "Preparing environment files..."
-for dir in server client; do
+for dir in server client admin; do
   if [[ ! -f "$dir/.env" ]]; then
     [[ -f "$dir/.env.example" ]] || fail "$dir/.env.example is missing."
     cp "$dir/.env.example" "$dir/.env"
     ok "Created $dir/.env"
   fi
 done
-chmod 600 server/.env client/.env
+chmod 600 server/.env client/.env admin/.env
 if [[ -d .run/logs ]]; then
   find .run/logs -type f -exec chmod 640 {} + 2>/dev/null || true
 fi
@@ -101,7 +101,7 @@ if [[ "$NGROK_CONFIGURED" != true ]]; then
   set_env_value NGROK_AUTHTOKEN "$NGROK_AUTH_TOKEN"
 fi
 ok "ngrok authentication is configured"
-chmod 600 server/.env client/.env
+chmod 600 server/.env client/.env admin/.env
 
 for key in META_APP_ID META_APP_SECRET META_VERIFY_TOKEN ENCRYPTION_KEY; do
   value="$(env_value "$key")"
@@ -128,6 +128,7 @@ info "Installing application dependencies..."
 npm ci
 npm --prefix server ci
 npm --prefix client ci
+npm --prefix admin ci
 ok "Dependencies installed"
 
 info "Generating Prisma client..."
