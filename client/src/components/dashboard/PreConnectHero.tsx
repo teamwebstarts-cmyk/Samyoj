@@ -1,14 +1,12 @@
-import { Headphones, Lightbulb, Play, ShieldCheck } from 'lucide-react';
+import { Play } from 'lucide-react';
 import AppButton from '../ui/AppButton';
 import WhatsAppGlyph from './icons/WhatsAppGlyph';
 import { useAuth } from '../../contexts/AuthContext';
-import PreConnectQuickActions from './PreConnectQuickActions';
 
 interface PreConnectHeroProps {
   connecting: boolean;
   onConnect: () => void;
   onWatchVideo: () => void;
-  onExploreFeatures: () => void;
 }
 
 function firstName(name: string | undefined | null): string {
@@ -16,35 +14,10 @@ function firstName(name: string | undefined | null): string {
   return name.trim().split(/\s+/)[0] || '';
 }
 
-const TRUST = [
-  {
-    id: 'easy',
-    title: 'Easy to Use',
-    desc: 'Beginner friendly',
-    icon: Lightbulb,
-    well: 'bg-emerald-100 text-emerald-700',
-  },
-  {
-    id: 'secure',
-    title: 'Secure & Reliable',
-    desc: 'Enterprise grade security',
-    icon: ShieldCheck,
-    well: 'bg-sky-100 text-sky-700',
-  },
-  {
-    id: 'support',
-    title: '24/7 Support',
-    desc: "We're always here",
-    icon: Headphones,
-    well: 'bg-violet-100 text-violet-700',
-  },
-] as const;
-
 export default function PreConnectHero({
   connecting,
   onConnect,
   onWatchVideo,
-  onExploreFeatures,
 }: PreConnectHeroProps) {
   const { user } = useAuth();
   const name = firstName(user?.name);
@@ -58,7 +31,6 @@ export default function PreConnectHero({
           'linear-gradient(115deg, #f0fdf6 0%, #ffffff 38%, #faf5ff 72%, #fff1f2 100%)',
       }}
     >
-      {/* Soft field glows */}
       <span
         className="pointer-events-none absolute -left-20 top-6 h-64 w-64 rounded-full bg-emerald-200/30 blur-3xl"
         aria-hidden
@@ -71,17 +43,9 @@ export default function PreConnectHero({
         className="pointer-events-none absolute right-[8%] top-[-30px] h-56 w-56 rounded-full bg-fuchsia-200/25 blur-3xl"
         aria-hidden
       />
-      <span
-        className="pointer-events-none absolute right-[42%] top-12 h-1.5 w-1.5 rounded-full bg-emerald-300/80"
-        aria-hidden
-      />
-      <span
-        className="pointer-events-none absolute right-[48%] top-28 h-1 w-1 rounded-full bg-violet-300/70"
-        aria-hidden
-      />
 
-      <div className="relative grid grid-cols-1 gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(260px,1.05fr)_minmax(260px,300px)] lg:items-center lg:gap-1 xl:gap-1.5">
-        <div className="flex min-w-0 flex-col justify-center py-2 sm:py-2.5 lg:py-3">
+      <div className="relative grid grid-cols-1 items-center gap-5 lg:grid-cols-[minmax(0,1.05fr)_minmax(280px,1fr)] lg:gap-8">
+        <div className="flex min-w-0 flex-col justify-center py-1 sm:py-2">
           <p className="text-[14px] font-semibold text-neutral-600 sm:text-[15px]">
             Welcome to Samyoj{name ? `, ${name}` : ''}! <span aria-hidden>👋</span>
           </p>
@@ -117,44 +81,21 @@ export default function PreConnectHero({
               Watch Setup Video
             </button>
           </div>
-
-          <ul className="mt-8 grid grid-cols-1 gap-4 min-[420px]:grid-cols-3 sm:mt-9 sm:gap-5 lg:mt-10">
-            {TRUST.map((t) => {
-              const Icon = t.icon;
-              return (
-                <li key={t.id} className="flex items-start gap-3">
-                  <span
-                    className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${t.well}`}
-                  >
-                    <Icon className="h-[18px] w-[18px]" strokeWidth={2.1} />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block text-[13px] font-bold text-neutral-900 sm:text-[13.5px]">
-                      {t.title}
-                    </span>
-                    <span className="mt-0.5 block text-[12px] font-medium leading-snug text-neutral-500 sm:text-[12.5px]">
-                      {t.desc}
-                    </span>
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
         </div>
 
-        <div className="grid grid-cols-1 gap-1.5 min-[720px]:grid-cols-2 lg:contents">
-          {/* Hero image — taller + soft merge into card bg */}
-          <div className="relative flex items-center justify-center self-stretch py-1 lg:py-0">
-            <span
-              className="pointer-events-none absolute left-1/2 top-1/2 h-[88%] w-[78%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-100/55 blur-2xl"
-              aria-hidden
-            />
-            <span
-              className="pointer-events-none absolute left-1/2 top-[48%] h-[70%] w-[62%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/40 blur-xl"
-              aria-hidden
-            />
+        <div className="relative flex items-center justify-center self-stretch py-1 lg:py-0">
+          <span
+            className="pointer-events-none absolute left-1/2 top-1/2 h-[88%] w-[78%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-100/55 blur-2xl"
+            aria-hidden
+          />
+          <button
+            type="button"
+            onClick={onWatchVideo}
+            aria-label="Watch Setup Video"
+            className="group relative w-full max-w-[520px] rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-[#25D366]/60 focus-visible:ring-offset-2 lg:max-w-none"
+          >
             <div
-              className="relative w-full max-w-[520px] lg:max-w-none"
+              className="relative w-full"
               style={{
                 WebkitMaskImage:
                   'radial-gradient(ellipse 72% 78% at 50% 48%, #000 52%, rgba(0,0,0,0.85) 68%, transparent 92%)',
@@ -164,8 +105,8 @@ export default function PreConnectHero({
             >
               <img
                 src="/dashboard/preconnect-hero-photo.png"
-                alt="Professional using Samyoj on a laptop"
-                className="mx-auto h-auto w-full max-h-[300px] select-none object-contain object-center sm:max-h-[360px] lg:max-h-[420px] xl:max-h-[460px]"
+                alt=""
+                className="mx-auto h-auto w-full max-h-[300px] select-none object-contain object-center sm:max-h-[360px] lg:max-h-[400px] xl:max-h-[440px]"
                 draggable={false}
                 onError={(e) => {
                   const el = e.currentTarget;
@@ -175,22 +116,12 @@ export default function PreConnectHero({
                 }}
               />
             </div>
-          </div>
-
-          {/* Quick Actions — soft pink glow behind; align top */}
-          <div className="relative min-w-0 self-start pt-0 lg:pt-0">
-            <span
-              className="pointer-events-none absolute -inset-2 rounded-[1.75rem] bg-gradient-to-br from-rose-200/40 via-fuchsia-100/30 to-orange-100/25 blur-xl"
-              aria-hidden
-            />
-            <span
-              className="pointer-events-none absolute -right-2 top-1/2 h-32 w-32 -translate-y-1/2 rounded-full bg-rose-200/30 blur-2xl"
-              aria-hidden
-            />
-            <div className="relative">
-              <PreConnectQuickActions onExploreFeatures={onExploreFeatures} />
-            </div>
-          </div>
+            <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <span className="flex h-14 w-14 items-center justify-center rounded-full bg-[#25D366] text-white shadow-[0_12px_36px_rgba(37,211,102,0.45)] ring-[6px] ring-white/80 transition motion-safe:group-hover:scale-105 sm:h-16 sm:w-16">
+                <Play className="ml-0.5 h-6 w-6 sm:h-7 sm:w-7" fill="currentColor" strokeWidth={0} />
+              </span>
+            </span>
+          </button>
         </div>
       </div>
     </section>
