@@ -136,14 +136,14 @@ export default function ChatHeader({
 
   const botDisplayName = useMemo(() => {
     if (conversation.activeBot?.name) return conversation.activeBot.name;
-    const enabled = bots.filter((b) => b.enabled);
+    const enabled = bots.filter((b) => b.enabled && (b.channel ?? 'CHAT') === 'CHAT');
     const defaultBot = enabled.find((b) => b.isDefault) ?? enabled[0];
     return defaultBot?.name || 'AI Bot';
   }, [conversation.activeBot?.name, bots]);
 
   const botTipDetail = useMemo(() => {
     if (conversation.activeBot?.name) return conversation.activeBot.name;
-    const enabled = bots.filter((b) => b.enabled);
+    const enabled = bots.filter((b) => b.enabled && (b.channel ?? 'CHAT') === 'CHAT');
     const defaultBot = enabled.find((b) => b.isDefault) ?? enabled[0];
     return defaultBot?.name || 'Choose chatbot';
   }, [conversation.activeBot?.name, bots]);

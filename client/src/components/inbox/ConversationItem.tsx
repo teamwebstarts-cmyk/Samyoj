@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Check, Clock, GitBranch, LifeBuoy, Star } from 'lucide-react';
+import { Bot, Check, Clock, GitBranch, LifeBuoy, PhoneOff, Star } from 'lucide-react';
 import ContactAvatar from './ContactAvatar';
 import { useGlassTipProps } from './ComposerGlassTip';
 import { softStatusPillStyle } from './details/DetailsSectionCard';
@@ -197,6 +197,28 @@ export default function ConversationItem({
                 />
               </span>
             )}
+            {conversation.botActive ? (
+              <span
+                className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400"
+                aria-label="AI bot on"
+                {...tipFor(
+                  conversation.activeBot?.name
+                    ? `AI bot on · ${conversation.activeBot.name}`
+                    : 'AI bot on'
+                )}
+              >
+                <Bot className="h-2.5 w-2.5" strokeWidth={2.5} aria-hidden />
+              </span>
+            ) : null}
+            {conversation.contact.callingAiEnabled === false ? (
+              <span
+                className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
+                aria-label="Calls: person only"
+                {...tipFor('Calls: person only')}
+              >
+                <PhoneOff className="h-2.5 w-2.5" strokeWidth={2.5} aria-hidden />
+              </span>
+            ) : null}
           </div>
           {lastMessageAt && (
             <span
