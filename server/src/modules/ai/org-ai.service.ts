@@ -2,7 +2,16 @@ import prisma from '../../config/database';
 import { config } from '../../config';
 import { decrypt, encrypt } from '../../utils/crypto';
 import { AppError } from '../../utils/response';
+import { createModuleLogger } from '../../utils/logger';
 import type { OrgAiSettings, ResolvedAiConfig, TokenUsage, BrainProvider } from './types';
+import {
+  AI_USAGE_ACTIONS,
+  AI_USAGE_LABELS,
+  canonicalAiUsageAction,
+  type RecordableAiAction,
+} from './ai-usage-actions';
+
+const log = createModuleLogger('org-ai');
 
 export function getDefaultEmbeddingDeployment(): string {
   // Azure embeddings still needed — Sarvam has no vector API
@@ -131,6 +140,14 @@ export async function isAiConfiguredForOrg(organizationId: string): Promise<bool
   return Boolean(await resolveAiConfig(organizationId));
 }
 
+export function isChatAiEnabled(settings: OrgAiSettings): boolean {
+  return settings.chatEnabled !== false;
+}
+
+export function isCallingAiEnabled(settings: OrgAiSettings): boolean {
+  return settings.callingEnabled !== false;
+}
+
 export async function checkOrgTokenQuota(organizationId: string): Promise<void> {
   const settings = await getOrgAiSettings(organizationId);
   const limit = settings.monthlyTokenLimit;
@@ -158,46 +175,121 @@ export async function recordAiUsage(data: {
   organizationId: string;
   botId?: string;
   conversationId?: string;
-  action: 'chat' | 'embedding';
+  whatsappNumberId?: string;
+  action: RecordableAiAction | string;
   usage: TokenUsage;
 }): Promise<void> {
-  await prisma.aiUsageLog.create({
-    data: {
+  try {
+    await prisma.aiUsageLog.create({
+      data: {
+        organizationId: data.organizationId,
+        botId: data.botId,
+        conversationId: data.conversationId,
+        whatsappNumberId: data.whatsappNumberId,
+        action: data.action,
+        promptTokens: data.usage.promptTokens,
+        completionTokens: data.usage.completionTokens,
+        totalTokens: data.usage.totalTokens,
+      },
+    });
+    const { emitAiUsageProductEvent } = await import('../platform/events');
+    emitAiUsageProductEvent(data.organizationId, canonicalAiUsageAction(data.action));
+  } catch (err) {
+    log.warn('Failed to record AI usage', {
       organizationId: data.organizationId,
-      botId: data.botId,
-      conversationId: data.conversationId,
       action: data.action,
-      promptTokens: data.usage.promptTokens,
-      completionTokens: data.usage.completionTokens,
-      totalTokens: data.usage.totalTokens,
-    },
-  });
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
 
-export async function getOrgUsageSummary(organizationId: string, days = 30) {
+export type AiUsageSurfaceRow = {
+  action: string;
+  label: string;
+  requests: number;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+};
+
+export async function getOrgUsageSummary(
+  organizationId: string,
+  days = 30,
+  whatsappNumberId?: string
+) {
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
   const startOfMonth = new Date();
   startOfMonth.setDate(1);
   startOfMonth.setHours(0, 0, 0, 0);
 
-  const [periodUsage, monthUsage, settings] = await Promise.all([
+  const scoped = {
+    organizationId,
+    ...(whatsappNumberId ? { whatsappNumberId } : {}),
+  };
+
+  const [periodUsage, monthUsage, settings, grouped] = await Promise.all([
     prisma.aiUsageLog.aggregate({
-      where: { organizationId, createdAt: { gte: since } },
+      where: { ...scoped, createdAt: { gte: since } },
       _sum: { totalTokens: true, promptTokens: true, completionTokens: true },
       _count: true,
     }),
     prisma.aiUsageLog.aggregate({
-      where: { organizationId, createdAt: { gte: startOfMonth } },
-      _sum: { totalTokens: true },
+      where: { ...scoped, createdAt: { gte: startOfMonth } },
+      _sum: { totalTokens: true, promptTokens: true, completionTokens: true },
+      _count: true,
     }),
     getOrgAiSettings(organizationId),
+    prisma.aiUsageLog.groupBy({
+      by: ['action'],
+      where: { ...scoped, createdAt: { gte: since } },
+      _sum: { totalTokens: true, promptTokens: true, completionTokens: true },
+      _count: true,
+    }),
   ]);
 
-  const byAction = await prisma.aiUsageLog.groupBy({
-    by: ['action'],
-    where: { organizationId, createdAt: { gte: since } },
-    _sum: { totalTokens: true },
+  const merged = new Map<
+    string,
+    { requests: number; promptTokens: number; completionTokens: number; totalTokens: number }
+  >();
+  for (const row of grouped) {
+    const key = canonicalAiUsageAction(row.action);
+    const current = merged.get(key) || {
+      requests: 0,
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+    };
+    current.requests += row._count;
+    current.promptTokens += row._sum.promptTokens || 0;
+    current.completionTokens += row._sum.completionTokens || 0;
+    current.totalTokens += row._sum.totalTokens || 0;
+    merged.set(key, current);
+  }
+
+  const surfaces: AiUsageSurfaceRow[] = AI_USAGE_ACTIONS.map((action) => {
+    const row = merged.get(action) || {
+      requests: 0,
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+    };
+    return {
+      action,
+      label: AI_USAGE_LABELS[action],
+      ...row,
+    };
   });
+  for (const [action, row] of merged) {
+    if (AI_USAGE_ACTIONS.includes(action as (typeof AI_USAGE_ACTIONS)[number])) continue;
+    surfaces.push({
+      action,
+      label: action,
+      ...row,
+    });
+  }
+
+  const monthTokens = monthUsage._sum.totalTokens || 0;
+  const monthlyTokenLimit = settings.monthlyTokenLimit || null;
 
   return {
     periodDays: days,
@@ -205,8 +297,28 @@ export async function getOrgUsageSummary(organizationId: string, days = 30) {
     totalTokens: periodUsage._sum.totalTokens || 0,
     promptTokens: periodUsage._sum.promptTokens || 0,
     completionTokens: periodUsage._sum.completionTokens || 0,
-    monthTokens: monthUsage._sum.totalTokens || 0,
-    monthlyTokenLimit: settings.monthlyTokenLimit || null,
-    byAction: Object.fromEntries(byAction.map((r) => [r.action, r._sum.totalTokens || 0])),
+    monthTokens,
+    monthPromptTokens: monthUsage._sum.promptTokens || 0,
+    monthCompletionTokens: monthUsage._sum.completionTokens || 0,
+    monthRequests: monthUsage._count,
+    monthlyTokenLimit,
+    monthRemaining:
+      monthlyTokenLimit && monthlyTokenLimit > 0
+        ? Math.max(0, monthlyTokenLimit - monthTokens)
+        : null,
+    byAction: Object.fromEntries(
+      surfaces.map((row) => [
+        row.action,
+        {
+          requests: row.requests,
+          promptTokens: row.promptTokens,
+          completionTokens: row.completionTokens,
+          totalTokens: row.totalTokens,
+        },
+      ])
+    ),
+    surfaces,
+    unitNote:
+      'Figures are usage units (tokens for language models, characters for listening/speaking). They are not rupees and do not include WhatsApp message fees.',
   };
 }

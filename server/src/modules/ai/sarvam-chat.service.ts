@@ -2,6 +2,7 @@ import { config } from '../../config';
 import { AppError } from '../../utils/response';
 import { createModuleLogger } from '../../utils/logger';
 import { recordAiUsage } from './org-ai.service';
+import { estimateUsageUnits } from './ai-usage-actions';
 import type { TokenUsage } from './types';
 
 const log = createModuleLogger('sarvam-chat');
@@ -35,6 +36,9 @@ export interface ChatCompletionOptions {
   organizationId?: string;
   botId?: string;
   conversationId?: string;
+  whatsappNumberId?: string;
+  /** Named Reports surface. Defaults to chat_bot. */
+  usageAction?: import('./ai-usage-actions').RecordableAiAction;
   /** Sarvam function-calling tools. */
   tools?: ChatCompletionTool[];
   toolChoice?: 'auto' | 'none';
@@ -93,7 +97,7 @@ export async function* streamSarvamChatCompletion(
     const payload: Record<string, unknown> = {
       model,
       messages: options.messages,
-      temperature: options.temperature ?? 0.5,
+      temperature: options.temperature ?? 0.2,
       max_tokens: options.maxTokens ?? 500,
       stream: true,
       frequency_penalty: 0.1,
@@ -183,7 +187,7 @@ export async function createSarvamChatCompletion(
     const payload: Record<string, unknown> = {
       model,
       messages: options.messages,
-      temperature: options.temperature ?? 0.5,
+      temperature: options.temperature ?? 0.2,
       max_tokens: options.maxTokens ?? 1024,
       frequency_penalty: 0.1,
     };
@@ -247,21 +251,27 @@ export async function createSarvamChatCompletion(
       });
     }
 
-    const usage: TokenUsage | undefined = body.usage
-      ? {
-          promptTokens: body.usage.prompt_tokens || 0,
-          completionTokens: body.usage.completion_tokens || 0,
-          totalTokens: body.usage.total_tokens || 0,
-        }
-      : undefined;
+    const usage: TokenUsage =
+      body.usage && (body.usage.total_tokens || body.usage.prompt_tokens || body.usage.completion_tokens)
+        ? {
+            promptTokens: body.usage.prompt_tokens || 0,
+            completionTokens: body.usage.completion_tokens || 0,
+            totalTokens:
+              body.usage.total_tokens ||
+              (body.usage.prompt_tokens || 0) + (body.usage.completion_tokens || 0),
+          }
+        : estimateUsageUnits(
+            options.messages.map((m) => String(m.content || '')).join('\n'),
+            content
+          );
 
-    // Record usage for token quotas
-    if (usage && options.organizationId) {
+    if (options.organizationId) {
       await recordAiUsage({
         organizationId: options.organizationId,
         botId: options.botId,
         conversationId: options.conversationId,
-        action: 'chat',
+        whatsappNumberId: options.whatsappNumberId,
+        action: options.usageAction || 'chat_bot',
         usage,
       });
     }
