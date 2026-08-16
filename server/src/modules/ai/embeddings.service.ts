@@ -26,7 +26,7 @@ export function cosineSimilarity(a: number[], b: number[]): number {
 export async function createEmbedding(
   organizationId: string,
   text: string,
-  options?: { botId?: string; conversationId?: string }
+  options?: { botId?: string; conversationId?: string; whatsappNumberId?: string }
 ): Promise<number[]> {
   const cfg = await resolveAiConfig(organizationId);
   if (!cfg) throw new AppError(503, 'AI is not configured');
@@ -66,6 +66,7 @@ export async function createEmbedding(
     organizationId,
     botId: options?.botId,
     conversationId: options?.conversationId,
+    whatsappNumberId: options?.whatsappNumberId,
     action: 'embedding',
     usage: { promptTokens: totalTokens, completionTokens: 0, totalTokens },
   });

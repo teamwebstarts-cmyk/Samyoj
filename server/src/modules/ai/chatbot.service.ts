@@ -12,13 +12,22 @@ import {
   type KnowledgeMatch,
 } from './knowledge.service';
 import { checkRateLimit } from './rate-limit.service';
-import { isAiConfiguredForOrg } from './org-ai.service';
+import { isAiConfiguredForOrg, recordAiUsage, getOrgAiSettings, isChatAiEnabled, isCallingAiEnabled } from './org-ai.service';
 import {
   getHandoffKeywords,
   resolveBotForConversation,
   ensureDefaultBot,
   setConversationBot,
 } from './bot.service';
+import { config } from '../../config';
+import {
+  SAFE_CHAT_MAX_TOKENS,
+  SAFE_CHAT_TEMPERATURE,
+  SAFE_RATE_LIMIT_PER_MIN,
+  SAFE_VOICE_MAX_TOKENS,
+  SAFE_VOICE_TEMPERATURE,
+} from './ai-constants';
+import { estimateUsageUnits } from './ai-usage-actions';
 import { getOrgBusinessHours, isWithinBusinessHours } from '../settings/business-hours';
 import { assignAgentOnHandoff } from './handoff.service';
 import {
@@ -75,6 +84,10 @@ export interface GenerateBotReplyInput {
   tools?: import('./chat-completion.service').ChatCompletionTool[];
   /** Live phone-call turns (not stored as WhatsApp messages). */
   liveVoiceTurns?: Array<{ role: 'user' | 'assistant'; content: string }>;
+  /** Unsaved Try-it personality — does not write the bot row. */
+  instructionsOverride?: string;
+  /** Number-scoped usage when there is no real conversation (Try-it). */
+  whatsappNumberId?: string;
 }
 
 export interface GenerateBotReplyResult {
@@ -94,7 +107,23 @@ export interface GenerateBotReplyResult {
 
 function detectHandoff(message: string, bot: AiBot): boolean {
   const lower = message.toLowerCase();
-  return getHandoffKeywords(bot.handoffKeywords).some((kw) => lower.includes(kw.toLowerCase()));
+  return getHandoffKeywords(bot.handoffKeywords, bot.offerHandoff).some((kw) =>
+    lower.includes(kw.toLowerCase())
+  );
+}
+
+function describeTestToolAction(tools: Array<{ name: string }>): string {
+  const names = tools.map((t) => t.name);
+  if (names.includes('end_call')) {
+    return 'On a live call this bot would say goodbye and hang up.';
+  }
+  if (names.includes('request_human')) {
+    return 'On a live call this bot would offer the team.';
+  }
+  if (names.includes('schedule_callback')) {
+    return 'On a live call this bot would offer a callback.';
+  }
+  return 'On a live call this bot would take that next step.';
 }
 
 function previousAssistantsFromMessages(
@@ -220,7 +249,7 @@ async function buildConversationMessages(
     });
   }
 
-  if (channel === 'voice' && liveVoiceTurns?.length) {
+  if (liveVoiceTurns?.length && (channel === 'voice' || testMode)) {
     for (const turn of liveVoiceTurns) {
       const content = String(turn.content || '').trim();
       if (!content) continue;
@@ -268,7 +297,14 @@ export async function generateBotReply(
     return { reply: null, handoff: false, skipped: true, skipReason: 'ai_not_configured' };
   }
 
+  const orgAi = await getOrgAiSettings(input.organizationId);
   const isVoice = input.channel === 'voice';
+  if (!isVoice && !isChatAiEnabled(orgAi)) {
+    return { reply: null, handoff: false, skipped: true, skipReason: 'chat_ai_disabled' };
+  }
+  if (isVoice && !isCallingAiEnabled(orgAi)) {
+    return { reply: null, handoff: false, skipped: true, skipReason: 'calling_ai_disabled' };
+  }
 
   if (!input.testMode && !isVoice) {
     if (!conversation!.botActive) {
@@ -286,6 +322,7 @@ export async function generateBotReply(
         id: input.botId,
         organizationId: input.organizationId,
         ...(input.testMode ? {} : { enabled: true }),
+        channel: isVoice ? 'CALL' : 'CHAT',
       },
     });
   } else if (conversation) {
@@ -296,12 +333,16 @@ export async function generateBotReply(
     );
   }
 
-  if (!bot) {
+  if (!bot && !isVoice) {
     bot = await ensureDefaultBot(input.organizationId);
   }
 
   if (!bot) {
     return { reply: null, handoff: false, skipped: true, skipReason: 'no_matching_bot' };
+  }
+
+  if (input.instructionsOverride?.trim()) {
+    bot = { ...bot, instructions: input.instructionsOverride.trim() };
   }
 
   // Chat-only gate: live calls already answered via calling routing — do not
@@ -320,11 +361,11 @@ export async function generateBotReply(
     }
   }
 
-  if (!input.testMode && conversation && conversation.activeBotId !== bot.id) {
+  if (!input.testMode && !isVoice && conversation && conversation.activeBotId !== bot.id) {
     await setConversationBot(conversation.id, bot.id);
   }
 
-  const rateLimit = bot.rateLimitPerMin || 30;
+  const rateLimit = bot.rateLimitPerMin || SAFE_RATE_LIMIT_PER_MIN;
   const rate = await checkRateLimit(`ai-bot:${input.organizationId}:${bot.id}`, rateLimit);
   if (!rate.allowed) {
     return {
@@ -351,14 +392,23 @@ export async function generateBotReply(
     };
   }
 
+  const numberId = conversation?.whatsappNumberId || input.whatsappNumberId;
+
   const knowledgeMatches = isVoice
     ? await resolveVoiceKnowledge(
         bot.id,
         sanitizedMessage,
         input.organizationId,
-        input.liveVoiceTurns
+        input.liveVoiceTurns,
+        numberId
       )
-    : await searchKnowledgeBase(bot.id, sanitizedMessage, 5, input.organizationId);
+    : await searchKnowledgeBase(
+        bot.id,
+        sanitizedMessage,
+        5,
+        input.organizationId,
+        numberId
+      );
 
   const brainTopics =
     isVoice &&
@@ -407,20 +457,23 @@ export async function generateBotReply(
 
     const completion = await createChatCompletion({
       messages,
-      temperature: bot.temperature ?? 0.7,
-      // Voice uses sarvam-105b-conversations — colloquial, not long reasoning.
-      maxTokens: isVoice ? 220 : (bot.maxTokens ?? 500),
-      model: isVoice ? 'sarvam-105b-conversations' : undefined,
+      temperature: isVoice ? SAFE_VOICE_TEMPERATURE : SAFE_CHAT_TEMPERATURE,
+      maxTokens: isVoice ? SAFE_VOICE_MAX_TOKENS : SAFE_CHAT_MAX_TOKENS,
+      model: isVoice
+        ? config.sarvam.voiceChatModel || 'sarvam-105b-conversations'
+        : config.sarvam.chatModel || 'sarvam-105b',
       organizationId: input.organizationId,
       botId: bot.id,
-      conversationId: input.conversationId,
-      tools: input.tools,
+      conversationId: input.testMode ? undefined : input.conversationId,
+      whatsappNumberId: numberId,
+      usageAction: isVoice ? 'calling_llm' : 'chat_bot',
+      tools: input.testMode ? undefined : input.tools,
     });
 
     // Function calling: brain asked for a tool — return it so callers can act.
     if (completion.toolCalls?.length) {
       return {
-        reply: null,
+        reply: input.testMode ? describeTestToolAction(completion.toolCalls) : null,
         handoff: false,
         botId: bot.id,
         botName: bot.name,
@@ -433,7 +486,7 @@ export async function generateBotReply(
     const extracted = extractInlineToolCalls(completion.content || '');
     if (extracted.tools.length && !extracted.cleanText.trim()) {
       return {
-        reply: null,
+        reply: input.testMode ? describeTestToolAction(extracted.tools) : null,
         handoff: false,
         botId: bot.id,
         botName: bot.name,
@@ -552,10 +605,14 @@ export async function* streamVoiceBotReply(
 
   let bot: AiBot | null = input.botId
     ? await prisma.aiBot.findFirst({
-        where: { id: input.botId, organizationId: input.organizationId, enabled: true },
+        where: {
+          id: input.botId,
+          organizationId: input.organizationId,
+          enabled: true,
+          channel: 'CALL',
+        },
       })
-    : await resolveBotForConversation(input.organizationId, conversation, sanitizedMessage);
-  if (!bot) bot = await ensureDefaultBot(input.organizationId);
+    : null;
   if (!bot) {
     yield { type: 'direct', result: { reply: null, handoff: false, skipped: true, skipReason: 'no_matching_bot' } };
     return;
@@ -579,14 +636,18 @@ export async function* streamVoiceBotReply(
     bot.id,
     sanitizedMessage,
     input.organizationId,
-    input.liveVoiceTurns
+    input.liveVoiceTurns,
+    conversation.whatsappNumberId || undefined
   );
   const brainTopics =
     knowledgeMatches.length === 0 && !isConversationRecallQuestion(sanitizedMessage)
       ? await listBrainTopics(bot.id)
       : [];
 
-  const rate = await checkRateLimit(`ai-bot:${input.organizationId}:${bot.id}`, bot.rateLimitPerMin || 30);
+  const rate = await checkRateLimit(
+    `ai-bot:${input.organizationId}:${bot.id}`,
+    bot.rateLimitPerMin || SAFE_RATE_LIMIT_PER_MIN
+  );
   if (!rate.allowed) {
     yield {
       type: 'direct',
@@ -600,10 +661,6 @@ export async function* streamVoiceBotReply(
       },
     };
     return;
-  }
-
-  if (conversation.activeBotId !== bot.id) {
-    await setConversationBot(conversation.id, bot.id);
   }
 
   const messages = await buildConversationMessages(
@@ -624,12 +681,14 @@ export async function* streamVoiceBotReply(
   try {
     for await (const chunk of streamChatCompletion({
       messages,
-      temperature: bot.temperature ?? 0.7,
-      maxTokens: 220,
-      model: 'sarvam-105b-conversations',
+      temperature: SAFE_VOICE_TEMPERATURE,
+      maxTokens: SAFE_VOICE_MAX_TOKENS,
+      model: config.sarvam.voiceChatModel || 'sarvam-105b-conversations',
       organizationId: input.organizationId,
       botId: bot.id,
       conversationId: input.conversationId,
+      whatsappNumberId: conversation.whatsappNumberId || undefined,
+      usageAction: 'calling_llm',
     })) {
       if (chunk.content) {
         full += chunk.content;
@@ -693,6 +752,14 @@ export async function* streamVoiceBotReply(
     chars: spoken.length,
     uncertain,
     inlineTools: structuredTools.length,
+  });
+  void recordAiUsage({
+    organizationId: input.organizationId,
+    botId: bot.id,
+    conversationId: input.conversationId,
+    whatsappNumberId: conversation.whatsappNumberId || undefined,
+    action: 'calling_llm',
+    usage: estimateUsageUnits(sanitizedMessage, spoken),
   });
   yield {
     type: 'done',
@@ -819,9 +886,11 @@ async function generateHandoffSummary(
         },
         { role: 'user', content: transcript },
       ],
-      temperature: 0.3,
+      temperature: SAFE_CHAT_TEMPERATURE,
       maxTokens: 200,
       organizationId,
+      conversationId,
+      usageAction: 'chat_bot',
     });
 
     const summary = completion.content?.trim();
