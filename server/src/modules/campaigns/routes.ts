@@ -35,6 +35,7 @@ import {
 } from './types';
 import { resolveActiveWhatsappNumber } from '../whatsapp/active-number';
 import { isAbsoluteInstant } from './safety';
+import { emitProductEvent } from '../platform/events';
 
 const router = Router();
 const adminGuard = [authenticateJwtOrApiKey, requireOrg, resolveActiveWhatsappNumber, loadOrgRole, requireOrgRole('OWNER', 'ADMIN')];
@@ -263,6 +264,10 @@ router.post(
     });
 
     await logCampaignAudit(orgId, userId, 'campaign.create', { campaignId: campaign.id, name: campaign.name });
+    emitProductEvent({
+      organizationId: orgId,
+      name: 'CAMPAIGN_DRAFT',
+    });
     sendSuccess(res, campaign, 201);
   })
 );

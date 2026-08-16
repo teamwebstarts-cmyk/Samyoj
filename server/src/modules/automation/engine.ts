@@ -12,6 +12,7 @@ import { hasRecentStaticReply } from './frequency';
 import { keywordMatches } from '../flows/trigger-match';
 import { getOrgBusinessHours, isWithinBusinessHours } from '../settings/business-hours';
 import { createModuleLogger } from '../../utils/logger';
+import { emitProductEvent } from '../platform/events';
 
 const log = createModuleLogger('automation-engine');
 const AI_BOT_DEBOUNCE_MS = 1500;
@@ -197,6 +198,10 @@ export async function sendAutomationReply(
       output: { messageId: autoMsg.id, automationName: options?.automationName },
       durationMs: Date.now() - start,
     });
+    emitProductEvent({
+      organizationId: payload.organizationId,
+      name: 'AUTOMATION_RAN',
+    });
   } catch (err) {
     const skippedCsw = isCswClosedError(err);
     await logAutomationRun({
@@ -208,6 +213,12 @@ export async function sendAutomationReply(
       error: err instanceof Error ? err.message : String(err),
       durationMs: Date.now() - start,
     });
+    if (!skippedCsw) {
+      emitProductEvent({
+        organizationId: payload.organizationId,
+        name: 'AUTOMATION_ERROR',
+      });
+    }
     if (!skippedCsw) throw err;
   }
 }
