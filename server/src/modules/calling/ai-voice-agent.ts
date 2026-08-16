@@ -5,6 +5,9 @@ import { emitToOrg } from '../../realtime';
 import { computeSlaDueAt } from '../sla/service';
 import { emitTicketEvent } from '../tickets/events';
 import { createChatCompletion } from '../ai/chat-completion.service';
+import { recordAiUsage, getOrgAiSettings, isCallingAiEnabled } from '../ai/org-ai.service';
+import { charUsage } from '../ai/ai-usage-actions';
+import { SAFE_CHAT_TEMPERATURE } from '../ai/ai-constants';
 import { performHandoff, streamVoiceBotReply } from '../ai/chatbot.service';
 import { shouldEndVoiceCallOnHandoff, validateOutboundReply } from '../ai/guardrails';
 import { MetaCallingService } from './meta-calling.service';
@@ -54,7 +57,22 @@ export class AiVoiceCallSession {
     this.ctx = ctx;
   }
 
+  private recordVoiceUnits(action: 'stt' | 'tts', inputChars: number, outputChars: number): void {
+    void recordAiUsage({
+      organizationId: this.ctx.organizationId,
+      botId: this.ctx.aiBotId ?? undefined,
+      conversationId: this.ctx.conversationId,
+      whatsappNumberId: this.ctx.whatsappNumberId,
+      action,
+      usage: charUsage(inputChars, outputChars),
+    });
+  }
+
   async start(sdpOffer: string): Promise<void> {
+    const aiSettings = await getOrgAiSettings(this.ctx.organizationId);
+    if (!isCallingAiEnabled(aiSettings)) {
+      throw new Error('Calling AI is disabled for this organization');
+    }
     if (!isSarvamSttConfigured() || !isSarvamTtsConfigured()) {
       throw new Error('Sarvam voice is not configured. Set SARVAM_API_KEY in server/.env.');
     }
@@ -80,6 +98,7 @@ export class AiVoiceCallSession {
         if (languageDetected && languageDetected !== 'unknown' && languageDetected !== 'auto') {
           this.ctx.ttsLanguage = languageDetected;
         }
+        void this.recordVoiceUnits('stt', text.length, 0);
         if (this.ended || this.wrappingUp) return;
         // Never barge-in while TTS is playing (or during the echo tail) — that caused
         // speakerphone echo to be treated as the caller talking over the bot.
@@ -537,6 +556,7 @@ export class AiVoiceCallSession {
         const ttsStart = Date.now();
         const audio = await pending;
         this.ttsLatenciesMs.push(Date.now() - ttsStart);
+        void this.recordVoiceUnits('tts', 0, chunks[i].length);
         if (this.ended || this.abortSpeak || !this.bridge) {
           this.bridge?.stopPlayback();
           break;
@@ -767,6 +787,8 @@ export class AiVoiceCallSession {
         organizationId: this.ctx.organizationId,
         conversationId: this.ctx.conversationId,
         botId: this.ctx.aiBotId ?? undefined,
+        whatsappNumberId: this.ctx.whatsappNumberId,
+        usageAction: 'call_summary',
         messages: [
           {
             role: 'system',
@@ -776,7 +798,7 @@ export class AiVoiceCallSession {
           { role: 'user', content: transcriptText },
         ],
         maxTokens: 150,
-        temperature: 0.3,
+        temperature: SAFE_CHAT_TEMPERATURE,
       });
 
       return completion.content?.trim() || null;

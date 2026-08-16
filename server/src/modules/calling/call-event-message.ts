@@ -86,6 +86,7 @@ export async function publishCallEventMessage(callId: string): Promise<void> {
     const direction = call.direction === 'BUSINESS_INITIATED' ? 'OUTBOUND' : 'INBOUND';
     const metadata = {
       isCallEvent: true,
+      agentOnly: true,
       callId: call.id,
       callStatus: call.status,
       callDirection: call.direction,
@@ -177,7 +178,7 @@ export async function publishCallSummaryMessage(input: {
     return;
   }
 
-  const metadata = { isCallSummary: true, callId: input.callId };
+  const metadata = { isCallSummary: true, agentOnly: true, callId: input.callId };
   const createdAt = input.createdAt;
 
   try {
