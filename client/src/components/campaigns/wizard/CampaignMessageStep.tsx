@@ -1,20 +1,24 @@
 import type { Dispatch, SetStateAction } from 'react';
-import { CheckCircle2, ExternalLink, Globe2, Info, Link2, MessageCircle, Sparkles } from 'lucide-react';
+import { CheckCircle2, ExternalLink, Globe2, Info, Link2, MessageCircle } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import AppInput from '../../ui/AppInput';
 import AppSelect from '../../ui/AppSelect';
 import { WhatsAppTemplatePreview } from '../../inbox/WhatsAppPreview';
 import TemplateButtonExtras from '../../templates/TemplateButtonExtras';
+import TemplateParamField from '../../templates/TemplateParamField';
 import {
   fetchTemplateVariableMeta,
+  paramsIncludeMappedContact,
+  persistTemplateVariableMeta,
   previewParams,
-  sourceFromParamValue,
-  sourceLabel,
   templateDynamicUrlButtons,
   templateNeedsCoupon,
   tokenForMeta,
+  upsertVariableMetaFromParam,
+  valueForCampaignParamSource,
   variableDescription,
+  type CampaignParamSource,
   type TemplateVariableMeta,
 } from '../../../utils/templateForm';
 import {
@@ -155,6 +159,21 @@ export default function CampaignMessageStep({
       couponCode: previous.templateName === template.name ? previous.couponCode : '',
       buttonUrlSuffixes: previous.templateName === template.name ? previous.buttonUrlSuffixes : [],
     }));
+  };
+
+  const persistParamMapping = (
+    scope: 'body' | 'header',
+    index: number,
+    source: CampaignParamSource,
+    description: string,
+  ) => {
+    if (!selectedTemplate) return;
+    const stored = valueForCampaignParamSource(source, '');
+    setTemplateMeta((current) => {
+      const next = upsertVariableMetaFromParam(current, scope, index, stored, description);
+      void persistTemplateVariableMeta(selectedTemplate.name, next, selectedTemplate.language);
+      return next;
+    });
   };
 
   const updateBodyParam = (index: number, value: string) => {
@@ -317,68 +336,39 @@ export default function CampaignMessageStep({
                   </div>
                 ) : (
                   <>
-                    {form.bodyParams.map((value, index) => {
-                      const mapped = bodyMetaByIndex.get(index);
-                      const source = mapped?.suggestedSource || sourceFromParamValue(value);
-                      if (source && source !== 'custom') {
-                        return (
-                          <div key={`body-param-${index}`}>
-                            <p className="mb-1 text-[11px] font-bold text-slate-600 dark:text-slate-300">
-                              {index + 1}. {getVariableLabel(selectedTemplate, index, templateMeta)}
-                            </p>
-                            <div className="flex h-9 items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 dark:border-emerald-800 dark:bg-emerald-950/30">
-                              <Sparkles className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                              <p className="text-[11px] font-bold text-emerald-800 dark:text-emerald-200">
-                                Auto-filled from contact ({sourceLabel(source, mapped?.customKey)})
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      }
-                      return (
-                        <AppInput
-                          key={`body-param-${index}`}
-                          id={`body-param-${index}`}
-                          label={`${index + 1}. ${getVariableLabel(selectedTemplate, index, templateMeta)} *`}
-                          hint={`${value.length} characters`}
-                          placeholder={index === 0 ? 'Name or other value' : 'Enter a value'}
-                          value={value}
-                          onChange={(event) => updateBodyParam(index, event.target.value)}
-                          labelClassName="text-[11px] font-bold text-slate-600 dark:text-slate-300"
-                          className="!h-9 rounded-lg text-[12px]"
-                        />
-                      );
-                    })}
+                    {form.bodyParams.map((value, index) => (
+                      <TemplateParamField
+                        key={`body-param-${index}`}
+                        id={`body-param-${index}`}
+                        compact
+                        required
+                        label={`${index + 1}. ${getVariableLabel(selectedTemplate, index, templateMeta)}`}
+                        placeholder={index === 0 ? 'Name or other value' : 'Enter a value'}
+                        value={value}
+                        onChange={(next) => updateBodyParam(index, next)}
+                        onSourceChange={(source) =>
+                          persistParamMapping(
+                            'body',
+                            index,
+                            source,
+                            getVariableLabel(selectedTemplate, index, templateMeta),
+                          )
+                        }
+                      />
+                    ))}
 
                     {form.headerParams.map((value, index) => {
-                      const mapped = headerMetaByIndex.get(index);
-                      const source = mapped?.suggestedSource || sourceFromParamValue(value);
                       const headerLabel = variableDescription(templateMeta, 'header', index, 'Header detail');
-                      if (source && source !== 'custom') {
-                        return (
-                          <div key={`header-param-${index}`}>
-                            <p className="mb-1 text-[11px] font-bold text-slate-600 dark:text-slate-300">
-                              {index + 1}. {headerLabel}
-                            </p>
-                            <div className="flex h-9 items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 dark:border-emerald-800 dark:bg-emerald-950/30">
-                              <Sparkles className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                              <p className="text-[11px] font-bold text-emerald-800 dark:text-emerald-200">
-                                Auto-filled from contact ({sourceLabel(source, mapped?.customKey)})
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      }
                       return (
-                        <AppInput
+                        <TemplateParamField
                           key={`header-param-${index}`}
                           id={`header-param-${index}`}
-                          label={`${index + 1}. ${headerLabel} *`}
-                          hint={`${value.length} characters`}
+                          compact
+                          required
+                          label={`${index + 1}. ${headerLabel}`}
                           value={value}
-                          onChange={(event) => updateHeaderParam(index, event.target.value)}
-                          labelClassName="text-[11px] font-bold text-slate-600 dark:text-slate-300"
-                          className="!h-9 rounded-lg text-[12px]"
+                          onChange={(next) => updateHeaderParam(index, next)}
+                          onSourceChange={(source) => persistParamMapping('header', index, source, headerLabel)}
                         />
                       );
                     })}
@@ -475,11 +465,18 @@ export default function CampaignMessageStep({
               </div>
             )}
             {filledPreview ? (
-              <WhatsAppTemplatePreview
-                {...filledPreview}
-                variant="compact"
-                className="campaign-message-preview-surface min-h-[260px] overflow-hidden rounded-xl"
-              />
+              <>
+                <WhatsAppTemplatePreview
+                  {...filledPreview}
+                  variant="compact"
+                  className="campaign-message-preview-surface min-h-[260px] overflow-hidden rounded-xl"
+                />
+                {paramsIncludeMappedContact([...form.bodyParams, ...form.headerParams]) && (
+                  <p className="text-[10px] font-medium leading-relaxed text-slate-500 dark:text-slate-400">
+                    Name is a sample. Each person gets their own.
+                  </p>
+                )}
+              </>
             ) : templatesLoading ? (
               <div
                 className="campaign-message-preview-loading space-y-3 rounded-xl border border-slate-100 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-900/40"

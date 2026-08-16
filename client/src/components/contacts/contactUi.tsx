@@ -3,10 +3,12 @@ import type { Contact, ContactSource } from '../../types';
 import { formatContactPhone, formatContactRelativeTime, getContactSourceMeta } from '../../utils/contactUtils';
 import { messagingConsent, conversationStatusLabel } from '../../utils/plainLanguage';
 
-export function ContactOptInBadge({ optedIn }: { optedIn?: boolean }) {
+export function ContactOptInBadge({ optedIn, compact }: { optedIn?: boolean; compact?: boolean }) {
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ring-1 ring-inset ${
+      className={`inline-flex items-center gap-1 rounded-full font-bold uppercase tracking-wide ring-1 ring-inset ${
+        compact ? 'px-1.5 py-0.5 text-[8px]' : 'px-2.5 py-1 text-[10px]'
+      } ${
         optedIn
           ? 'bg-emerald-50 text-emerald-700 ring-emerald-200/70 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-800/50'
           : 'bg-neutral-100 text-neutral-500 ring-neutral-200/70 dark:bg-slate-800/80 dark:text-slate-400 dark:ring-slate-700/50'

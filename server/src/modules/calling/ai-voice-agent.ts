@@ -15,6 +15,7 @@ import { publishCallEventMessage } from './call-event-message';
 import type { ActiveCallContext, TranscriptEntry } from './types';
 import type { ToolCallResult } from '../ai/sarvam-chat.service';
 import { extractInlineToolCalls } from '../ai/voice-tool-parse';
+import { liveVoiceTurnsFromTranscript } from '../ai/voice-context';
 import { isVoiceBackchannel, wantsCallbackOnCall, wantsEndCall, wantsHumanOnCall } from './voice-intent';
 import {
   isLikelyTtsEcho,
@@ -211,6 +212,7 @@ export class AiVoiceCallSession {
         inboundMessage: trimmed,
         channel: 'voice',
         botId: this.ctx.aiBotId ?? undefined,
+        liveVoiceTurns: liveVoiceTurnsFromTranscript(this.transcript, trimmed),
       })) {
         if (this.abortSpeak || this.ended) break;
 
@@ -346,6 +348,15 @@ export class AiVoiceCallSession {
 
     switch (tool.name) {
       case 'request_human': {
+        const lastUser =
+          [...this.transcript].reverse().find((t) => t.role === 'user')?.text || '';
+        if (!wantsHumanOnCall(lastUser)) {
+          log.info('Ignoring request_human — caller did not ask for a person', {
+            callId: this.ctx.callId,
+            lastUser,
+          });
+          return;
+        }
         const reason = (tool.arguments.reason as string) || 'Customer requested human';
         await this.speak(
           "I'll have someone from the team message you on WhatsApp. Thanks for calling.",

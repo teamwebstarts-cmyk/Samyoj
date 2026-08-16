@@ -118,4 +118,18 @@ describe('campaignWizardModel', () => {
       { phone: '919123456789', name: 'Asha', variables: { body: ['ORD-1042'] } },
     ]);
   });
+
+  it('keeps {{name}} contact tokens in template params', () => {
+    const form = {
+      ...createEmptyCampaignWizardForm(),
+      name: 'Visit reminder',
+      templateName: template.name,
+      bodyParams: ['{{name}}', '20% off'],
+    };
+
+    expect(validateCampaignWizardStage(0, form, template)).toBeNull();
+    expect(buildCampaignPayload(form).templateParams).toMatchObject({
+      body: ['{{name}}', '20% off'],
+    });
+  });
 });

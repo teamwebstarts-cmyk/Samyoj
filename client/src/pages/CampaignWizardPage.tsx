@@ -98,8 +98,7 @@ export default function CampaignWizardPage() {
   const finalActionBlocked =
     audiencePreviewCount === null ||
     audiencePreviewCount === 0 ||
-    invalidAudienceCount > 0 ||
-    excludedSelectedContacts > 0;
+    invalidAudienceCount > 0;
   const selectedNumber =
     whatsappNumbers.find((number) => number.id === form.whatsappNumberId) ||
     (whatsappNumbers.length === 1 ? whatsappNumbers[0] : undefined);
@@ -386,8 +385,14 @@ export default function CampaignWizardPage() {
       setStageError('Preview audience to continue. Final send and schedule require a successful audience preview.');
       return;
     }
-    if (finalActionBlocked) {
-      setStageError('Review the audience preview and fix any invalid or excluded recipients before continuing.');
+    if (audiencePreviewCount === 0) {
+      setStageError(
+        'Nobody in this audience has agreed to campaign messages. Open Contacts and turn on Allow campaign messages.',
+      );
+      return;
+    }
+    if (invalidAudienceCount > 0) {
+      setStageError('Fix invalid phone numbers before continuing.');
       return;
     }
     const error = validateCampaignWizardStage(2, form, selectedTemplate) || validateCampaignWizardStage(0, form, selectedTemplate);

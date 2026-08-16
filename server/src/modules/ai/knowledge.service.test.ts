@@ -3,7 +3,9 @@ import {
   EMBEDDING_MATCH_THRESHOLD,
   expandKnowledgeQuery,
   formatKnowledgeContext,
+  isConversationRecallQuestion,
   tokenSearch,
+  voiceKnowledgeQueries,
 } from './knowledge.service';
 
 describe('tokenSearch', () => {
@@ -93,6 +95,12 @@ describe('expandKnowledgeQuery', () => {
     expect(expandKnowledgeQuery('shop timing kya hai')).toMatch(/hours/i);
   });
 
+  it('does not inject order FAQs into a generic help question', () => {
+    const expanded = expandKnowledgeQuery('mujhe help chahiye automation mein');
+    expect(expanded).toMatch(/automation/i);
+    expect(expanded).not.toMatch(/\border\b/);
+  });
+
   it('lets tokenSearch rank hours FAQs from a timing query', () => {
     const items = [
       { id: '1', title: 'Business hours', content: 'We are open 9 AM to 6 PM', sourceType: 'FAQ' },
@@ -124,5 +132,39 @@ describe('EMBEDDING_MATCH_THRESHOLD', () => {
   it('is a sane similarity cutoff', () => {
     expect(EMBEDDING_MATCH_THRESHOLD).toBeGreaterThan(0);
     expect(EMBEDDING_MATCH_THRESHOLD).toBeLessThanOrEqual(1);
+  });
+});
+
+describe('isConversationRecallQuestion', () => {
+  it('detects name and recap questions', () => {
+    expect(isConversationRecallQuestion('Mera naam yaad hai?')).toBe(true);
+    expect(isConversationRecallQuestion('Do you know me?')).toBe(true);
+    expect(isConversationRecallQuestion('तुमने पीछे कुछ बोला था')).toBe(true);
+    expect(isConversationRecallQuestion('What did you just say')).toBe(true);
+  });
+
+  it('does not treat a real FAQ question as recall', () => {
+    expect(isConversationRecallQuestion('order status kya hai')).toBe(false);
+    expect(isConversationRecallQuestion('automation mein help chahiye')).toBe(false);
+  });
+});
+
+describe('voiceKnowledgeQueries', () => {
+  it('returns nothing for a recall / about-me turn so FAQs are not dumped', () => {
+    expect(
+      voiceKnowledgeQueries('Mera naam yaad hai?', [
+        { role: 'assistant', content: 'Hi Nirbhay.' },
+        { role: 'user', content: 'Store pickup kaise kare?' },
+      ])
+    ).toEqual([]);
+  });
+
+  it('retries the previous caller turn when the current STT is a short follow-up', () => {
+    expect(
+      voiceKnowledgeQueries('haan woh hi', [
+        { role: 'user', content: 'shop timing kya hai' },
+        { role: 'assistant', content: 'We open at 9.' },
+      ])
+    ).toEqual(['haan woh hi', 'shop timing kya hai']);
   });
 });

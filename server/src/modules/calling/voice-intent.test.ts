@@ -21,6 +21,8 @@ describe('wantsHumanOnCall', () => {
     expect(wantsHumanOnCall('tell me about your support hours')).toBe(false);
     expect(wantsHumanOnCall('support के बारे में बताओ')).toBe(false);
     expect(wantsHumanOnCall('मुझे टीम से बात करनी है')).toBe(false);
+    expect(wantsHumanOnCall('नहीं मुझे अभी तुमसे बात करनी है।')).toBe(false);
+    expect(wantsHumanOnCall('मुझे automation में help चाहिए थी')).toBe(false);
   });
 });
 

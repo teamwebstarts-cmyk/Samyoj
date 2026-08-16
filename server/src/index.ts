@@ -120,6 +120,8 @@ app.use(
         upgradeInsecureRequests: useHttps ? [] : null,
         // Vite index.html includes a small inline theme bootstrap script.
         scriptSrc: ["'self'", "'unsafe-inline'"],
+        // AI bot voice preview plays `data:audio/...;base64` in the browser.
+        mediaSrc: ["'self'", 'data:', 'blob:'],
       },
     },
   })

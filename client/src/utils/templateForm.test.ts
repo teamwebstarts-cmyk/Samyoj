@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyPurposePreset,
+  campaignParamSelectValue,
   emptyTemplateForm,
   TEMPLATE_PURPOSE_PRESETS,
+  upsertVariableMetaFromParam,
+  valueForCampaignParamSource,
 } from './templateForm';
 
 describe('applyPurposePreset', () => {
@@ -49,5 +52,29 @@ describe('applyPurposePreset', () => {
     expect(next.footer.toLowerCase()).toContain('stop');
     expect(next.buttons[0]).toMatchObject({ type: 'COPY_CODE', example: 'SAVE20' });
     expect(next.bodyExamples[1]).toBe('SAVE20');
+  });
+});
+
+describe('campaign param mapping', () => {
+  it('stores {{name}} for each person’s name instead of typed text', () => {
+    expect(valueForCampaignParamSource('contact.name', 'anand')).toBe('{{name}}');
+    expect(campaignParamSelectValue('{{name}}')).toBe('contact.name');
+    expect(valueForCampaignParamSource('contact.phone', '')).toBe('{{phone}}');
+    expect(valueForCampaignParamSource('contact.email', '')).toBe('{{email}}');
+  });
+
+  it('clears a contact token when switching to the same text for everyone', () => {
+    expect(valueForCampaignParamSource('custom', '{{name}}')).toBe('');
+    expect(valueForCampaignParamSource('custom', '29 Aug')).toBe('29 Aug');
+  });
+
+  it('does not invent {{contact.name}} as a stored token', () => {
+    expect(valueForCampaignParamSource('contact.name', '')).not.toContain('contact.name');
+    const next = upsertVariableMetaFromParam([], 'body', 0, '{{name}}', 'Customer name');
+    expect(next[0]).toMatchObject({
+      scope: 'body',
+      index: 1,
+      suggestedSource: 'contact.name',
+    });
   });
 });

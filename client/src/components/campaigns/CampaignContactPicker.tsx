@@ -6,6 +6,9 @@ import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import type { Contact } from '../../types';
 import Pagination from '../ui/Pagination';
 import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
+import { ContactOptInBadge } from '../contacts/contactUi';
+import { contactGetsCampaignMessages } from '../../utils/contactConsent';
+import { messagingConsent } from '../../utils/plainLanguage';
 
 interface CampaignContactPickerProps {
   variant?: 'default' | 'wizard';
@@ -45,6 +48,7 @@ export default function CampaignContactPicker({
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [showSelected, setShowSelected] = useState(false);
+  const [eligibleOnly, setEligibleOnly] = useState(false);
   const debouncedSearch = useDebouncedValue(search);
   const activeNumberIdRef = useRef<string | null>(null);
   activeNumberIdRef.current = activeNumber?.id ?? null;
@@ -57,6 +61,7 @@ export default function CampaignContactPicker({
     setLoading(true);
     const params: Record<string, string> = { page: String(page), limit: '10' };
     if (debouncedSearch) params.search = debouncedSearch;
+    if (eligibleOnly) params.optedIn = 'true';
 
     contactApi
       .list(params)
@@ -87,7 +92,7 @@ export default function CampaignContactPicker({
           setLoading(false);
         }
       });
-  }, [activeNumber, debouncedSearch, page, resolved]);
+  }, [activeNumber, debouncedSearch, eligibleOnly, page, resolved]);
 
   useEffect(() => {
     load();
@@ -95,7 +100,7 @@ export default function CampaignContactPicker({
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch]);
+  }, [debouncedSearch, eligibleOnly]);
 
   const visibleContacts = useMemo(
     () => (showSelected ? contacts.filter((contact) => selectedIds.includes(contact.id)) : contacts),
@@ -117,6 +122,9 @@ export default function CampaignContactPicker({
 
   return (
     <div className={`campaign-contact-picker ${compact ? 'space-y-2.5' : 'space-y-3'}`}>
+      <p className={`${compact ? 'text-[10px]' : 'text-[11px]'} font-medium leading-relaxed text-theme-secondary`}>
+        {messagingConsent.contactPickerNotice}
+      </p>
       <SearchInput
         value={search}
         onChange={setSearch}
@@ -124,7 +132,7 @@ export default function CampaignContactPicker({
         compact={compact}
       />
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             aria-pressed={showSelected}
@@ -132,6 +140,18 @@ export default function CampaignContactPicker({
             className={`${compact ? 'min-h-8 px-2 text-[9px]' : 'min-h-11 px-2.5 text-[11px]'} rounded-lg border border-theme-border py-1.5 font-bold text-theme-secondary transition hover:bg-theme-subtle focus:outline-none focus:ring-2 focus:ring-indigo-500/40`}
           >
             {showSelected ? 'Show all contacts' : 'Show selected'}
+          </button>
+          <button
+            type="button"
+            aria-pressed={eligibleOnly}
+            onClick={() => setEligibleOnly((value) => !value)}
+            className={`${compact ? 'min-h-8 px-2 text-[9px]' : 'min-h-11 px-2.5 text-[11px]'} rounded-lg border py-1.5 font-bold transition focus:outline-none focus:ring-2 focus:ring-indigo-500/40 ${
+              eligibleOnly
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300'
+                : 'border-theme-border text-theme-secondary hover:bg-theme-subtle'
+            }`}
+          >
+            Only people who get messages
           </button>
           <button
             type="button"
@@ -161,12 +181,17 @@ export default function CampaignContactPicker({
           <p className="px-4 py-8 text-center text-[12px] font-medium text-amber-700 dark:text-amber-300" role="alert">{error}</p>
         ) : visibleContacts.length === 0 ? (
           <p className="px-4 py-8 text-center text-[12px] font-medium text-theme-muted">
-            {showSelected ? 'No selected contacts on this page' : 'No contacts found. Try a different search.'}
+            {showSelected
+              ? 'No selected contacts on this page'
+              : eligibleOnly
+                ? 'No people who get campaign messages match this search.'
+                : 'No contacts found. Try a different search.'}
           </p>
         ) : (
           <ul className={`${compact ? 'max-h-44' : 'max-h-56'} divide-y divide-theme-border overflow-auto`}>
             {visibleContacts.map((contact) => {
               const checked = selectedIds.includes(contact.id);
+              const getsMessages = contactGetsCampaignMessages(contact);
               return (
                 <li key={contact.id}>
                   <button
@@ -198,6 +223,7 @@ export default function CampaignContactPicker({
                         +{contact.phone}
                       </p>
                     </div>
+                    <ContactOptInBadge optedIn={getsMessages} compact={compact} />
                     {contact.tags?.length > 0 && (
                       <span className={`hidden shrink-0 rounded-full bg-violet-50 px-2 py-0.5 ${compact ? 'text-[8px]' : 'text-[10px]'} font-bold text-violet-700 ring-1 ring-violet-100 sm:inline dark:bg-violet-950/40 dark:text-violet-300`}>
                         {contact.tags[0]}

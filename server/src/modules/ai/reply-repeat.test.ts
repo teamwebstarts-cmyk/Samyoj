@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   HONEST_NO_DETAILS,
   STILL_NO_DETAILS,
+  STAY_ON_CALL,
   isBusinessInfoQuestion,
   isRepeatedAssistantTurn,
   isWhoAreYouQuestion,
@@ -139,9 +140,19 @@ describe('resolveRepeatedReply', () => {
     expect(resolveRepeatedReply(IDENTITY_EN_VARIANT, [IDENTITY_EN])).toBe(HONEST_NO_DETAILS);
   });
 
-  it('uses the second fallback after an honest no-details turn', () => {
+  it('uses stay-with-customer after a repeated WhatsApp/team deferral', () => {
     expect(resolveRepeatedReply(IDENTITY_EN, [HONEST_NO_DETAILS])).toBe(STILL_NO_DETAILS);
-    expect(resolveRepeatedReply(HONEST_NO_DETAILS, [HONEST_NO_DETAILS])).toBe(STILL_NO_DETAILS);
+    expect(resolveRepeatedReply(HONEST_NO_DETAILS, [HONEST_NO_DETAILS])).toBe(STAY_ON_CALL);
+  });
+
+  it('replaces a repeated WhatsApp/team deferral from the live Nirbhay call', () => {
+    const first =
+      'क्षमा करें, मेरे पास अभी और जानकारी नहीं है। मैं टीम से कह दूँगा कि वो आपको WhatsApp पर सारी details भेज दें।';
+    const second =
+      "I'm sorry, I don't have that in my knowledge yet. Let me send you the details on WhatsApp.";
+    expect(resolveRepeatedReply(second, [first], 'तुम्हारे पास memories रहती है।')).toBe(
+      STAY_ON_CALL
+    );
   });
 
   it('still treats a repeat after a different intervening turn as a loop', () => {

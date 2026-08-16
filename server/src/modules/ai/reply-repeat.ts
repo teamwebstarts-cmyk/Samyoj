@@ -25,6 +25,12 @@ export const HONEST_NO_DETAILS =
 export const STILL_NO_DETAILS =
   "I still don't have more company details than that. Our team can message you on WhatsApp with the information.";
 
+export const STAY_ON_CALL =
+  "I already shared what I have from training. Ask me a specific follow-up — I will not keep sending you to the team.";
+
+const TEAM_DEFER_RE =
+  /on whatsapp|whatsapp पर|team से कह|team से आपको|connect कर|details भेज|बाकी details|don't have that in my knowledge|don't have those business details|don't have more company details|team will message|मैं टीम से|connect कर दूँ|connect करूँ|send you the details on whatsapp|भेजवा सकता/i;
+
 export interface ChatTurn {
   role: string;
   content: string;
@@ -101,6 +107,10 @@ export function isWhoAreYouQuestion(text: string): boolean {
   return WHO_ARE_YOU_RE.test(raw);
 }
 
+export function isTeamDeferral(text: string): boolean {
+  return TEAM_DEFER_RE.test(spokenOnly(text));
+}
+
 function extractToolMarkup(reply: string): string {
   const tags = String(reply || '').match(TOOL_BLOCK_RE) || [];
   return tags.join('\n').trim();
@@ -175,6 +185,11 @@ export function resolveRepeatedReply(
   const repeatingHonestLine =
     isRepeatedAssistantTurn(spoken, HONEST_NO_DETAILS) ||
     isRepeatedAssistantTurn(spoken, STILL_NO_DETAILS);
+
+  const teamAgain = isTeamDeferral(reply) && previous.some((p) => isTeamDeferral(p));
+  if (teamAgain && !whoAsk) {
+    return withPreservedTools(STAY_ON_CALL, reply);
+  }
 
   if (!identityAgain && !identityAfterHonest && !identityOnBusinessAsk && !(repeatingHonestLine && lastWasHonest)) {
     return reply;

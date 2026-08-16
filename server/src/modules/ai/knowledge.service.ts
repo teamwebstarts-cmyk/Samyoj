@@ -39,8 +39,38 @@ export function expandKnowledgeQuery(query: string): string {
   if (/(order|booking|track|status|डिलीवरी|delivery)/i.test(query)) {
     extra.push('order', 'delivery', 'track');
   }
+  if (/(help|madad|मदद|assist|kya kar|kaise madad|service)/i.test(query)) {
+    extra.push('help', 'support', 'service');
+  }
+  if (/(automation|chatbot|workflow)/i.test(query)) {
+    extra.push('automation', 'chatbot', 'workflow', 'whatsapp');
+  }
   if (extra.length === 0) return query;
   return `${query} ${extra.join(' ')}`;
+}
+
+/** Caller is asking about this chat/call or themselves, not a Train FAQ. */
+export function isConversationRecallQuestion(text: string): boolean {
+  return /(yaad hai|yaad|memory|do you remember|remember (me|this)|pehle kya|पीछे|पिछले|what did you (just )?say|kya bola|about me|mera naam|my name|mujhe jante|jante ho mujhe|do you know me|जानते हो|क्या बोला)/i.test(
+    String(text || '')
+  );
+}
+
+/** Search queries for a live call: current STT, then the previous caller turn if this one is a recap miss. */
+export function voiceKnowledgeQueries(
+  currentUtterance: string,
+  liveVoiceTurns?: Array<{ role: 'user' | 'assistant'; content: string }>
+): string[] {
+  const current = String(currentUtterance || '').trim();
+  if (!current || isConversationRecallQuestion(current)) return [];
+  const queries = [current];
+  const lastUser = [...(liveVoiceTurns || [])]
+    .reverse()
+    .find((t) => t.role === 'user' && t.content.trim() && t.content.trim() !== current);
+  if (lastUser && !isConversationRecallQuestion(lastUser.content)) {
+    queries.push(lastUser.content.trim());
+  }
+  return queries;
 }
 
 export function tokenSearch(
@@ -122,6 +152,30 @@ export async function searchKnowledgeBase(
   }
 
   return tokenSearch(items, searchQuery, limit);
+}
+
+export async function resolveVoiceKnowledge(
+  botId: string,
+  currentUtterance: string,
+  organizationId: string,
+  liveVoiceTurns?: Array<{ role: 'user' | 'assistant'; content: string }>
+): Promise<KnowledgeMatch[]> {
+  for (const query of voiceKnowledgeQueries(currentUtterance, liveVoiceTurns)) {
+    const matches = await searchKnowledgeBase(botId, query, 5, organizationId);
+    if (matches.length > 0) return matches;
+  }
+  return [];
+}
+
+/** Titles only — never dump full FAQ bodies on a miss (that hallucinates store answers). */
+export async function listBrainTopics(botId: string, limit = 8): Promise<string[]> {
+  const items = await prisma.knowledgeBaseItem.findMany({
+    where: { botId },
+    orderBy: { updatedAt: 'desc' },
+    take: Math.max(1, limit),
+    select: { title: true },
+  });
+  return items.map((item) => item.title.trim()).filter(Boolean);
 }
 
 export function formatKnowledgeContext(matches: KnowledgeMatch[]): string {

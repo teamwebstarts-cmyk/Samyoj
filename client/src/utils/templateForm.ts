@@ -185,6 +185,65 @@ export function sourceLabel(source?: string, customKey?: string): string {
   return '';
 }
 
+/** Campaign / test-send dropdown: map a variable to a contact field or static text. */
+export type CampaignParamSource = 'contact.name' | 'contact.phone' | 'contact.email' | 'custom';
+
+export const CAMPAIGN_PARAM_SOURCE_OPTIONS: Array<{ value: CampaignParamSource; label: string }> = [
+  { value: 'contact.name', label: "Each person's name" },
+  { value: 'contact.phone', label: "Each person's phone" },
+  { value: 'contact.email', label: "Each person's email" },
+  { value: 'custom', label: 'Same text for everyone' },
+];
+
+export function campaignParamSelectValue(value: string): CampaignParamSource {
+  const source = sourceFromParamValue(value);
+  if (source === 'contact.name' || source === 'contact.phone' || source === 'contact.email') {
+    return source;
+  }
+  return 'custom';
+}
+
+export function campaignParamMappedHint(source: CampaignParamSource): string | null {
+  if (source === 'contact.name') return 'Each recipient sees their own name.';
+  if (source === 'contact.phone') return 'Each recipient sees their own phone number.';
+  if (source === 'contact.email') return 'Each recipient sees their own email.';
+  return null;
+}
+
+export function paramsIncludeMappedContact(params: string[]): boolean {
+  return params.some((value) => campaignParamSelectValue(value) !== 'custom');
+}
+
+/** Store {{name}} / {{phone}} / {{email}}, or clear a token when switching to static text. */
+export function valueForCampaignParamSource(source: CampaignParamSource, previousValue: string): string {
+  if (source === 'custom') {
+    return campaignParamSelectValue(previousValue) === 'custom' ? previousValue : '';
+  }
+  return CONTACT_SOURCE_TOKEN[source];
+}
+
+export function upsertVariableMetaFromParam(
+  meta: TemplateVariableMeta[],
+  scope: 'body' | 'header',
+  index0: number,
+  value: string,
+  description: string,
+): TemplateVariableMeta[] {
+  const index = index0 + 1;
+  const suggestedSource = campaignParamSelectValue(value);
+  const next = meta.filter((item) => !(item.scope === scope && item.index === index));
+  next.push({
+    scope,
+    index,
+    description,
+    suggestedSource,
+  });
+  return next.sort((a, b) => {
+    if (a.scope !== b.scope) return a.scope === 'header' ? -1 : 1;
+    return a.index - b.index;
+  });
+}
+
 /** Sample values so previews show realistic text instead of a raw {{name}} token. */
 export const TOKEN_PREVIEW_SAMPLE: Record<string, string> = {
   '{{name}}': 'Rahul',

@@ -11,9 +11,11 @@ import {
   Users,
 } from 'lucide-react';
 import AppButton from '../../ui/AppButton';
+import { Link } from 'react-router-dom';
 import { WhatsAppTemplatePreview } from '../../inbox/WhatsAppPreview';
 import { getFilledTemplatePreview } from '../campaignPreviewUtils';
 import { humanizeParamValue, previewParams } from '../../../utils/templateForm';
+import { messagingConsent } from '../../../utils/plainLanguage';
 import type { MessageTemplate } from '../../../types';
 import type { CampaignWizardForm } from './campaignWizardModel';
 import type { CampaignQuotaData } from './CampaignWizardSummaryRail';
@@ -259,8 +261,17 @@ export default function CampaignReviewStep({
                   </div>
                 </div>
                 {excludedCount > 0 && (
-                  <p className="mt-2 text-[9px] font-semibold text-amber-700 dark:text-amber-300">
-                    {excludedCount.toLocaleString()} selected contacts are not eligible to receive this campaign.
+                  <p className="mt-2 text-[9px] font-semibold leading-relaxed text-amber-700 dark:text-amber-300">
+                    {excludedCount.toLocaleString()} selected{' '}
+                    {excludedCount === 1 ? 'contact has' : 'contacts have'} not agreed to campaign
+                    messages. Inbox chat is not enough.{' '}
+                    <Link to="/contacts" className="font-extrabold underline underline-offset-2">
+                      Open Contacts
+                    </Link>{' '}
+                    and turn on {messagingConsent.allowCampaignMessages}.
+                    {includedCount != null && includedCount > 0
+                      ? ' The others will still be sent.'
+                      : ''}
                   </p>
                 )}
               </section>

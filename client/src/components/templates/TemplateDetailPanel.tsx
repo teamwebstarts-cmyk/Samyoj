@@ -12,8 +12,10 @@ import { templateApi } from '../../services/api';
 import { getTemplateRejectedReason, getQualityLabel, countTemplateVars, getTemplateBodyText, getTemplateHeaderText } from '../../utils/templateUtils';
 import { getTemplateRejectionGuide, getTemplateStatusHelp } from '../../utils/templateRejectionGuide';
 import TemplateButtonExtras from './TemplateButtonExtras';
+import TemplateParamField from './TemplateParamField';
 import {
   fetchTemplateVariableMeta,
+  paramsIncludeMappedContact,
   previewParams,
   templateDynamicUrlButtons,
   templateNeedsCoupon,
@@ -184,6 +186,11 @@ export default function TemplateDetailPanel({
           headerFormat={parts.headerFormat}
           headerMediaUrl={headerMediaUrl || undefined}
         />
+        {paramsIncludeMappedContact([...bodyParams, ...headerParams]) && (
+          <p className="mt-2 text-[11px] font-medium text-theme-secondary">
+            Name is a sample. Each person gets their own.
+          </p>
+        )}
       </ModalPreviewCard>
 
       {template.status === 'APPROVED' && (
@@ -198,30 +205,34 @@ export default function TemplateDetailPanel({
             </p>
 
             {bodyParams.map((_, i) => (
-              <AppInput
-                key={`test-body-${i}`}
-                className="mt-3"
-                label={`Body {{${i + 1}}}`}
-                value={bodyParams[i]}
-                onChange={(e) => {
-                  const next = [...bodyParams];
-                  next[i] = e.target.value;
-                  setBodyParams(next);
-                }}
-              />
+              <div key={`test-body-${i}`} className="mt-3">
+                <TemplateParamField
+                  id={`test-body-${i}`}
+                  compact
+                  label={`Body {{${i + 1}}}`}
+                  value={bodyParams[i]}
+                  onChange={(next) => {
+                    const nextParams = [...bodyParams];
+                    nextParams[i] = next;
+                    setBodyParams(nextParams);
+                  }}
+                />
+              </div>
             ))}
             {headerParams.map((_, i) => (
-              <AppInput
-                key={`test-header-${i}`}
-                className="mt-3"
-                label={`Header {{${i + 1}}}`}
-                value={headerParams[i]}
-                onChange={(e) => {
-                  const next = [...headerParams];
-                  next[i] = e.target.value;
-                  setHeaderParams(next);
-                }}
-              />
+              <div key={`test-header-${i}`} className="mt-3">
+                <TemplateParamField
+                  id={`test-header-${i}`}
+                  compact
+                  label={`Header {{${i + 1}}}`}
+                  value={headerParams[i]}
+                  onChange={(next) => {
+                    const nextParams = [...headerParams];
+                    nextParams[i] = next;
+                    setHeaderParams(nextParams);
+                  }}
+                />
+              </div>
             ))}
             {needsMedia && (
               <AppInput

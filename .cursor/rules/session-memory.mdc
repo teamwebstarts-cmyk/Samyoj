@@ -19,3 +19,5 @@ Before re-researching AI calls, Train/FAQ, automations leftovers, WhatsApp conne
 **Speech:** Sarvam STT/TTS + `sarvam-105b-conversations` on calls. Azure embeddings only. One AiBot for chat and voice.
 
 **Public webhook health** returns counters + `webhookConfigured` only — no `webhookUrl`, no `lastError`, no Facebook trace. Use `META_WEBHOOK_URL` in `server/.env`. Settings App ID/Secret stay out of the UI.
+
+**Jira:** traced leftovers live in project **SAMYOJ** (epic [SAMYOJ-8](https://teamwebstarts.atlassian.net/browse/SAMYOJ-8)). New problems → search then file a Task (see `.cursor/rules/jira-task-backlog.mdc`). Do not start a ticket unless the user asks.

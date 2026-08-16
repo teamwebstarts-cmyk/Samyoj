@@ -1,0 +1,27 @@
+---
+description: File every new Samyoj problem as a Jira task in project SAMYOJ; do not lose leftovers in chat
+alwaysApply: true
+---
+
+# Jira backlog (SAMYOJ)
+
+Working backlog is Jira project **SAMYOJ** on `https://teamwebstarts.atlassian.net` (cloudId `9abd6254-89a9-4a32-8f45-d9ce6641f6f3`). Epic: [SAMYOJ-8](https://teamwebstarts.atlassian.net/browse/SAMYOJ-8). Code + `docs/memory/` stay source of truth.
+
+## When we find a problem
+
+1. Search JQL first: `project = SAMYOJ AND text ~ "short phrase" ORDER BY created DESC`.
+2. Duplicate → comment on the existing issue. New leftover → `createJiraIssue` type **Task**, parent **SAMYOJ-8**, summary that states the user-visible bug.
+3. Tell the user the key + URL. Do **not** start coding unless they ask to work it.
+
+## Do not file
+
+Items listed as **already built / do not redo** in `docs/memory/STATUS_AND_FUTURE.md` (App ID in Settings, Cloudflare fallback, dual workers, number isolation, Train↔calls, etc.).
+
+## Do not implement just because it is in Jira
+
+Phase C automations, billing code, live WebRTC transfer, HttpOnly cookie rewrite — **file the task**, wait for an explicit ask to build.
+
+```text
+❌ BAD: found JWT in localStorage → silently rewrite AUTH
+✅ GOOD: search Jira → comment or create SAMYOJ-n → wait
+```

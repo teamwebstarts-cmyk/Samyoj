@@ -1,6 +1,8 @@
 # Status, leftovers, do not redo
 
-Last updated: **2026-08-15**.
+Last updated: **2026-08-16**.
+
+Working Jira backlog: project **SAMYOJ**, epic [SAMYOJ-8](https://teamwebstarts.atlassian.net/browse/SAMYOJ-8). New problems → file a Task (`.cursor/rules/jira-task-backlog.mdc`). Do not start a ticket unless asked.
 
 ## Ready or not
 

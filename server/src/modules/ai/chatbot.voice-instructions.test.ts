@@ -51,6 +51,9 @@ describe('VOICE_SAFETY_RULES', () => {
     expect(VOICE_SAFETY_RULES).toMatch(/end_call/);
     expect(VOICE_SAFETY_RULES).toMatch(/continuous thought/i);
     expect(VOICE_SAFETY_RULES).toMatch(/previous spoken turn/i);
+    expect(VOICE_SAFETY_RULES).toMatch(/remember this phone call/i);
+    expect(VOICE_SAFETY_RULES).toMatch(/trained AI brain/i);
+    expect(VOICE_SAFETY_RULES).toMatch(/only if they clearly asked/i);
   });
 });
 
