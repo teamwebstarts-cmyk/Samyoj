@@ -73,6 +73,35 @@ export function isActiveCallStatus(status: string): boolean {
   return ['CONNECTED', 'CONNECTING', 'RINGING'].includes(status);
 }
 
+/** Phone Recents kind: incoming blue, outgoing green, missed red. */
+export type CallRecentsKind = 'live' | 'missed' | 'incoming' | 'outgoing' | 'failed';
+
+export function callRecentsKind(direction?: string, status?: string): CallRecentsKind {
+  const value = status || '';
+  if (isActiveCallStatus(value)) return 'live';
+  if (value === 'FAILED') return 'failed';
+  if (value === 'MISSED' || value === 'REJECTED') return 'missed';
+  return direction === 'BUSINESS_INITIATED' ? 'outgoing' : 'incoming';
+}
+
+export function callRecentsLabel(kind: CallRecentsKind): string {
+  if (kind === 'live') return 'Live';
+  if (kind === 'missed') return 'Missed';
+  if (kind === 'failed') return 'Failed';
+  if (kind === 'outgoing') return 'Outgoing';
+  return 'Incoming';
+}
+
+/** iOS / WhatsApp Calls palette. */
+export const CALL_RECENTS_COLOR: Record<CallRecentsKind, string> = {
+  live: 'text-emerald-600 dark:text-emerald-400',
+  incoming: 'text-[#007AFF] dark:text-sky-400',
+  outgoing: 'text-[#34C759] dark:text-emerald-400',
+  missed: 'text-[#FF3B30] dark:text-rose-400',
+  failed: 'text-amber-500 dark:text-amber-400',
+};
+
+
 export function normalizeTranscript(
   transcript: unknown
 ): Array<{ role: string; text: string; at: string }> {

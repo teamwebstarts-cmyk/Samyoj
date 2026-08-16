@@ -94,8 +94,9 @@ export default function CallsPageSkeleton() {
               <div className="inbox-skeleton-shimmer h-4 w-36 rounded-lg" />
               <div className="inbox-skeleton-shimmer h-3 w-28 rounded-lg" />
             </div>
+            <div className="inbox-skeleton-shimmer hidden h-7 w-[5.5rem] rounded-full sm:block" />
             <div className="inbox-skeleton-shimmer hidden h-9 w-24 rounded-xl sm:block" />
-            <div className="inbox-skeleton-shimmer h-9 w-9 rounded-xl" />
+            <div className="inbox-skeleton-shimmer h-9 w-9 rounded-xl sm:w-24" />
           </div>
           <div className="flex shrink-0 flex-wrap gap-3 border-b border-neutral-200 px-4 py-2.5 dark:border-neutral-800">
             <div className="inbox-skeleton-shimmer h-3 w-24 rounded-lg" />
@@ -139,25 +140,6 @@ export default function CallsPageSkeleton() {
               <div className="inbox-skeleton-shimmer h-8 w-24 rounded-xl" />
             </div>
           </div>
-        </div>
-
-        {/* Rail */}
-        <div className="hidden w-[72px] shrink-0 flex-col border-l border-neutral-200 bg-neutral-50/70 dark:border-neutral-800 dark:bg-neutral-900/50 md:flex">
-          {Array.from({ length: 2 }).map((_, i) => (
-            <div
-              key={i}
-              className="flex flex-col items-center gap-1.5 border-b border-neutral-200 px-1 py-3.5 dark:border-neutral-800"
-            >
-              <div
-                className="inbox-skeleton-shimmer h-5 w-5 rounded-md"
-                style={{ animationDelay: `${i * 80}ms` }}
-              />
-              <div
-                className="inbox-skeleton-shimmer h-2 w-10 rounded"
-                style={{ animationDelay: `${i * 80 + 40}ms` }}
-              />
-            </div>
-          ))}
         </div>
       </div>
     </div>
