@@ -674,11 +674,6 @@ export const supportApi = {
   status: () => api.get('/support/status'),
   chat: (messages: Array<{ role: 'user' | 'assistant'; content: string }>) =>
     api.post('/support/chat', { messages }),
-  listTickets: () => api.get('/support/tickets'),
-  createTicket: (data: { subject: string; body: string; source?: 'manual' | 'chat'; transcript?: string }) =>
-    api.post('/support/tickets', data),
-  escalate: (messages: Array<{ role: 'user' | 'assistant'; content: string }>) =>
-    api.post('/support/tickets/escalate', { messages }),
 };
 
 export const commerceApi = {

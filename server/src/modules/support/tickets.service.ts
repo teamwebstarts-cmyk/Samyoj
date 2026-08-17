@@ -1,3 +1,7 @@
+/**
+ * Help Center ticket persistence. The Support board no longer exposes tickets
+ * (assistant-only). Table + service remain so we do not drop the migration.
+ */
 import { z } from 'zod';
 import prisma from '../../config/database';
 import { AppError } from '../../utils/response';
@@ -25,6 +29,16 @@ const ticketSelect = {
   createdAt: true,
   updatedAt: true,
 } as const;
+
+/** Cheap readiness check — false if the table is missing or Postgres is down. */
+export async function areSupportTicketsAvailable(): Promise<boolean> {
+  try {
+    await prisma.supportTicket.findFirst({ select: { id: true } });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export async function listSupportTickets(organizationId: string, createdById: string) {
   return prisma.supportTicket.findMany({

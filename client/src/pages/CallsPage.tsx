@@ -867,16 +867,6 @@ export default function CallsPage() {
               />
               <CallDetailsPanel
                 callId={selectedCall.id}
-                name={selectedCall.contact?.name}
-                phone={selectedCall.contact?.phone || selectedCall.fromPhone}
-                contactId={selectedCall.contact?.id}
-                status={selectedCall.status}
-                createdAt={selectedCall.createdAt}
-                durationSeconds={selectedCall.durationSeconds}
-                direction={selectedCall.direction}
-                handler={selectedCall.handler}
-                botName={selectedCall.aiBot?.name}
-                agentName={selectedCall.assignedAgent?.name}
                 notes={notes}
                 onNotesChange={(value) => {
                   setNotes(value);

@@ -1,5 +1,3 @@
-export type SupportTab = 'assistant' | 'tickets';
-
 export type SupportChatRole = 'user' | 'assistant';
 
 export interface SupportChatMessage {
@@ -8,22 +6,9 @@ export interface SupportChatMessage {
   content: string;
 }
 
-export type SupportTicketStatus = 'OPEN' | 'PENDING' | 'RESOLVED' | 'CLOSED';
-
-export interface SupportTicket {
-  id: string;
-  subject: string;
-  body: string;
-  status: SupportTicketStatus;
-  source: string;
-  transcript: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
+/** Placeholder so session restore has a stable first row; the empty state does not render it as a bubble. */
 export const SUPPORT_WELCOME: SupportChatMessage = {
   id: 'welcome',
   role: 'assistant',
-  content:
-    'Ask me how to use Samyoj — Connect WhatsApp, Inbox, campaigns, templates, AI bots, and calls. For billing, login, or data issues, open a ticket.',
+  content: 'Ask me how to use Samyoj — Connect WhatsApp, Inbox, campaigns, templates, AI bots, and calls.',
 };

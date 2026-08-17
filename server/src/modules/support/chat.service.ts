@@ -18,6 +18,56 @@ export const supportChatBodySchema = z.object({
   messages: z.array(historyItemSchema).min(1).max(SUPPORT_HISTORY_MAX),
 });
 
+const SENSITIVE_AI_ERROR = /SARVAM|AZURE|API_KEY|\.env|api-subscription-key|webhook URL/i;
+
+export type SupportChatTurn = { role: 'user' | 'assistant'; content: string };
+
+/** Keep the last N valid turns so long chats do not 400 on the schema max. */
+export function clipSupportHistory(messages: SupportChatTurn[]): SupportChatTurn[] {
+  return messages
+    .filter(
+      (m) =>
+        (m?.role === 'user' || m?.role === 'assistant') &&
+        typeof m.content === 'string' &&
+        m.content.trim().length > 0
+    )
+    .slice(-SUPPORT_HISTORY_MAX)
+    .map((m) => ({ role: m.role, content: m.content.trim().slice(0, SUPPORT_MESSAGE_MAX) }));
+}
+
+export function parseSupportChatBody(raw: unknown) {
+  const messages = Array.isArray((raw as { messages?: unknown })?.messages)
+    ? clipSupportHistory((raw as { messages: SupportChatTurn[] }).messages)
+    : [];
+  return supportChatBodySchema.parse({ messages });
+}
+
+/** Last one or two user turns — follow-ups like "and then?" still retrieve Connect/Inbox facts. */
+export function supportRetrievalQuery(messages: SupportChatTurn[]): string {
+  return messages
+    .filter((m) => m.role === 'user')
+    .map((m) => m.content.trim())
+    .filter(Boolean)
+    .slice(-2)
+    .join('\n');
+}
+
+export function userSafeSupportAiError(err: unknown): AppError {
+  if (err instanceof AppError) {
+    if (err.statusCode === 400) return err;
+    const sensitive = SENSITIVE_AI_ERROR.test(err.message);
+    if (!sensitive && (err.statusCode === 429 || err.statusCode < 500)) return err;
+    const status = err.statusCode === 429 ? 429 : err.statusCode === 504 ? 504 : 502;
+    return new AppError(
+      status,
+      err.statusCode === 429
+        ? 'The assistant is busy right now. Try again in a moment.'
+        : 'The assistant could not reply. Try again.'
+    );
+  }
+  return new AppError(502, 'The assistant could not reply. Try again.');
+}
+
 export function clipTranscript(text: string, max = SUPPORT_TRANSCRIPT_MAX): string {
   const trimmed = text.trim();
   if (trimmed.length <= max) return trimmed;
@@ -40,18 +90,18 @@ export function buildSupportSystemPrompt(knowledge: string): string {
 You answer how to use Samyoj: Connect WhatsApp, Inbox, campaigns, templates, AI bots (chat vs calling), calls, numbers, contacts, automations, settings, team, reports, and the current billing page.
 
 Rules:
-- Use only the product facts in the knowledge block below, plus the user's question. If a fact is missing, say you are not sure and suggest a Support ticket — do not invent UI, prices, or features.
+- Use only the product facts in the knowledge block below, plus the user's question. If a fact is missing, say you are not sure — do not invent UI, prices, or features, and do not tell the user to open a Help Center ticket (this board has no tickets).
 - Do not quote TARGET / launch catalogs, 14-day trials, or monthly/quarterly/yearly SKUs as if they were live. Current billing is the Billing page one-shot Razorpay plans (Starter free, Growth ₹3999, Business ₹11999, about 30 days). Meta message fees are a separate Meta bill.
 - Never reveal or ask for secrets: passwords, OTPs, App Secret, API keys, environment files, webhook URLs, tokens.
-- This assistant is product help only. For billing charges, login lockouts, missing data, or account access, tell the user to open a ticket from the Tickets tab or Escalate to ticket. Do not try to reset passwords here.
-- Do not confuse Inbox customer tickets (left nav Tickets — WhatsApp chats that need a reply) with Help Center tickets (this board).
+- This assistant is product how-to only. For billing charges, login lockouts, or account access, point them to Account → Billing or Team. Do not try to reset passwords here.
+- Left-nav Tickets are WhatsApp customer chats that still need a reply (Inbox work). They are not this Help Center.
 - Do not tell users to paste Meta App ID/Secret into Settings. Connect WhatsApp is OAuth: click Connect, Facebook login, pick the number.
 - Do not promise live call transfer, production-ready go-live, or Phase C automations.
 - Keep answers short and practical (about 2–8 sentences). Use numbered steps when the user asked how to do something.
 - Match the user's language when they write in Hindi or Hinglish.
 
 Knowledge:
-${knowledge || '(no extra topic matched — stay high-level and offer a ticket if needed)'}`;
+${knowledge || '(no extra topic matched — stay high-level; do not invent features)'}`;
 }
 
 export function lastUserQuestion(
@@ -67,30 +117,34 @@ export async function answerSupportQuestion(input: {
   organizationId: string;
   messages: Array<{ role: 'user' | 'assistant'; content: string }>;
 }): Promise<string> {
-  const parsed = supportChatBodySchema.parse({ messages: input.messages });
+  const parsed = parseSupportChatBody({ messages: input.messages });
   const question = lastUserQuestion(parsed.messages);
   if (!question.trim()) {
     throw new AppError(400, 'Ask a question about using Samyoj.');
   }
 
-  const knowledge = formatSupportKnowledge(selectSupportKnowledge(question));
-  const history: ChatMessage[] = parsed.messages.slice(-SUPPORT_HISTORY_MAX).map((m) => ({
+  const knowledge = formatSupportKnowledge(selectSupportKnowledge(supportRetrievalQuery(parsed.messages)));
+  const history: ChatMessage[] = parsed.messages.map((m) => ({
     role: m.role,
     content: m.content.trim(),
   }));
 
-  const completion = await createChatCompletion({
-    organizationId: input.organizationId,
-    usageAction: 'support_help',
-    model: config.sarvam.chatModel || 'sarvam-105b',
-    temperature: SAFE_CHAT_TEMPERATURE,
-    maxTokens: 700,
-    messages: [{ role: 'system', content: buildSupportSystemPrompt(knowledge) }, ...history],
-  });
+  try {
+    const completion = await createChatCompletion({
+      organizationId: input.organizationId,
+      usageAction: 'support_help',
+      model: config.sarvam.chatModel || 'sarvam-105b',
+      temperature: SAFE_CHAT_TEMPERATURE,
+      maxTokens: 700,
+      messages: [{ role: 'system', content: buildSupportSystemPrompt(knowledge) }, ...history],
+    });
 
-  const text = completion.content?.trim();
-  if (!text) {
-    throw new AppError(502, 'The assistant could not reply. Try again, or open a ticket.');
+    const text = completion.content?.trim();
+    if (!text) {
+      throw new AppError(502, 'The assistant could not reply. Try again.');
+    }
+    return text;
+  } catch (err) {
+    throw userSafeSupportAiError(err);
   }
-  return text;
 }

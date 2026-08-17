@@ -24,6 +24,20 @@ describe('toApiChatMessages', () => {
       { role: 'assistant', content: 'Click Connect WhatsApp in Settings.' },
     ]);
   });
+
+  it('keeps only the last 16 turns', () => {
+    const long: SupportChatMessage[] = [
+      { id: 'welcome', role: 'assistant', content: 'Welcome' },
+      ...Array.from({ length: 20 }, (_, i) => ({
+        id: String(i),
+        role: (i % 2 === 0 ? 'user' : 'assistant') as SupportChatMessage['role'],
+        content: `turn ${i}`,
+      })),
+    ];
+    const payload = toApiChatMessages(long);
+    expect(payload).toHaveLength(16);
+    expect(payload[0]?.content).toBe('turn 4');
+  });
 });
 
 describe('nameInitials', () => {

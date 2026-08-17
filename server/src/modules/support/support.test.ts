@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { AppError } from '../../utils/response';
 import { AI_USAGE_ACTIONS } from '../ai/ai-usage-actions';
 import {
   formatSupportKnowledge,
@@ -9,7 +10,15 @@ import {
   tokenizeSupportQuery,
 } from './knowledge';
 import { SUPPORT_KNOWLEDGE_TOPICS } from './product-knowledge';
-import { buildSupportSystemPrompt, clipTranscript, formatChatTranscript } from './chat.service';
+import {
+  buildSupportSystemPrompt,
+  clipSupportHistory,
+  clipTranscript,
+  formatChatTranscript,
+  parseSupportChatBody,
+  supportRetrievalQuery,
+  userSafeSupportAiError,
+} from './chat.service';
 import { supportTicketCreateSchema } from './tickets.service';
 
 describe('support knowledge retrieval', () => {
@@ -24,12 +33,22 @@ describe('support knowledge retrieval', () => {
     expect(topics.some((t) => t.id === 'ai-bots')).toBe(true);
   });
 
+  it('matches inbound reply questions to the inbound topic', () => {
+    const topics = selectSupportKnowledge(
+      "How do inbound replies work? I can send messages but customer replies don't appear in Inbox."
+    );
+    expect(topics[0]?.id).toBe('inbound');
+  });
+
+  it('matches Inbox template questions to templates', () => {
+    const topics = selectSupportKnowledge('How do I send a template from Inbox?');
+    expect(topics.some((t) => t.id === 'templates')).toBe(true);
+  });
+
   it('does not dump the whole corpus on a nonsense query', () => {
     const topics = selectSupportKnowledge('Nike T-shirt discount code xyzzy');
     expect(topics.length).toBeLessThanOrEqual(2);
-    expect(topics.every((t) => t.id === 'privacy' || tokenizeSupportQuery('nike').length >= 0)).toBe(
-      true
-    );
+    expect(topics.every((t) => t.id === 'privacy')).toBe(true);
   });
 
   it('scores keyword hits above incidental words', () => {
@@ -45,7 +64,8 @@ describe('support system prompt', () => {
     const knowledge = formatSupportKnowledge(selectSupportKnowledge('How do I connect WhatsApp?'));
     const prompt = buildSupportSystemPrompt(knowledge);
     expect(prompt).toMatch(/Connect WhatsApp/i);
-    expect(prompt).toMatch(/ticket/i);
+    expect(prompt).toMatch(/left-nav Tickets/i);
+    expect(prompt).not.toMatch(/Escalate to ticket/i);
     expect(prompt).not.toMatch(/META_APP_SECRET|SARVAM_API_KEY/);
     expect(knowledge).not.toMatch(/14-day trial/i);
     expect(knowledge).not.toMatch(/META_APP_SECRET|webhook URL|ngrok/i);
@@ -59,13 +79,46 @@ describe('support system prompt', () => {
   });
 });
 
+describe('support chat history', () => {
+  it('clips long chats before schema max', () => {
+    const many = Array.from({ length: 20 }, (_, i) => ({
+      role: (i % 2 === 0 ? 'user' : 'assistant') as 'user' | 'assistant',
+      content: `turn ${i}`,
+    }));
+    const clipped = clipSupportHistory(many);
+    expect(clipped).toHaveLength(16);
+    expect(clipped[0]?.content).toBe('turn 4');
+    expect(parseSupportChatBody({ messages: many }).messages).toHaveLength(16);
+  });
+
+  it('retrieves from the previous user turn on a vague follow-up', () => {
+    const query = supportRetrievalQuery([
+      { role: 'user', content: 'How do I connect WhatsApp?' },
+      { role: 'assistant', content: 'Click Connect WhatsApp in Settings.' },
+      { role: 'user', content: 'and then?' },
+    ]);
+    expect(query).toContain('connect WhatsApp');
+    expect(selectSupportKnowledge(query)[0]?.id).toBe('connect');
+  });
+
+  it('does not leak provider secrets in user-facing AI errors', () => {
+    const wrapped = userSafeSupportAiError(
+      new AppError(503, 'No AI brain configured. Set SARVAM_API_KEY in server/.env.')
+    );
+    expect(wrapped.statusCode).toBe(502);
+    expect(wrapped.message).not.toMatch(/SARVAM|API_KEY|\.env/);
+    expect(wrapped.message).toMatch(/Try again/);
+    expect(wrapped.message).not.toMatch(/ticket/i);
+  });
+});
+
 describe('transcript helpers', () => {
   it('clips long transcripts', () => {
     expect(clipTranscript('hello', 4)).toBe('hel…');
     expect(clipTranscript('hello', 50)).toBe('hello');
   });
 
-  it('formats a chat transcript for escalate', () => {
+  it('formats a chat transcript', () => {
     const text = formatChatTranscript([
       { role: 'user', content: 'How do I connect WhatsApp?' },
       { role: 'assistant', content: 'Click Connect WhatsApp in Settings.' },
@@ -100,11 +153,11 @@ describe('AI usage', () => {
 describe('support routes', () => {
   const routes = readFileSync(join(__dirname, 'routes.ts'), 'utf8');
 
-  it('exposes tenant-authenticated chat and ticket endpoints', () => {
+  it('exposes tenant-authenticated chat and does not expose Help Center tickets', () => {
     expect(routes).toContain("'/status'");
     expect(routes).toContain("'/chat'");
-    expect(routes).toContain("'/tickets'");
-    expect(routes).toContain("'/tickets/escalate'");
+    expect(routes).not.toContain("'/tickets'");
+    expect(routes).not.toContain("'/tickets/escalate'");
     expect(routes).toContain('authenticate, requireOrg');
   });
 });

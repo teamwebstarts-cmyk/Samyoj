@@ -27,6 +27,9 @@ export const SUPPORT_KNOWLEDGE_TOPICS: SupportKnowledgeTopic[] = [
       'link number',
       'disconnect',
       'reconnect',
+      'jodo',
+      'connect karo',
+      'number link',
     ],
     content: `Connect WhatsApp from Settings (or the Dashboard Connect button). Click Connect WhatsApp, sign in with Facebook, then pick the business number. You do not enter a Meta App ID or App Secret — those are platform credentials, not something customers fill in.
 
@@ -51,7 +54,8 @@ After this org disconnects, another org may connect that Meta number and gets a 
       'label',
       'note',
       'receive',
-      'inbound',
+      'jawab',
+      'reply nahi',
     ],
     content: `Inbox is where you reply to customers on the active WhatsApp number.
 
@@ -59,7 +63,30 @@ Start a chat from Inbox → New chat. Phone is required; name, email, tags, note
 
 You can assign an agent, add labels, and leave private internal notes. Apply or pause an AI bot on a single chat from the conversation (personal pick). That personal pick is not overwritten when someone applies a bot to all chats from AI Bots.
 
-If you can send messages but customer replies never appear, that is a connection issue — create a Support ticket instead of sharing passwords, OTPs, or app secrets.`,
+If the 24-hour reply window is open, type a normal message. If it is closed, the composer asks you to send an approved template — tap Template, pick an approved one, fill variables, send.
+
+If you can send messages but customer replies never appear, that is an inbound connection issue (see Inbound replies) — not an Inbox UI bug. Do not share passwords, OTPs, or app secrets.`,
+  },
+  {
+    id: 'inbound',
+    title: 'Inbound replies',
+    keywords: [
+      'inbound',
+      'tunnel',
+      'webhook',
+      'receive',
+      'replies',
+      'not arriving',
+      'reply nahi',
+      'phone reply',
+      'total received',
+      'outgoing works',
+    ],
+    content: `Sending from Inbox to a phone does not need a public URL. Customer replies (phone → Inbox) do: Meta must reach Samyoj over HTTPS.
+
+On a local or test workspace, start the app with the usual start script so the inbound tunnel is running, then send a *new* reply from the phone to the connected business number. An old thread is not a reliable test.
+
+If you can send but replies never appear, it is a connection issue — not something to fix by redesigning Inbox. Do not paste webhook URLs, App Secret, or environment values here.`,
   },
   {
     id: 'numbers',
@@ -72,7 +99,18 @@ Connect more than one number if you need separate lines. Never mix data across n
   {
     id: 'campaigns',
     title: 'Campaigns',
-    keywords: ['campaign', 'broadcast', 'audience', 'bulk', 'send now', 'repeat', 'opt in', 'consent', 'opt out'],
+    keywords: [
+      'campaign',
+      'broadcast',
+      'audience',
+      'bulk',
+      'send now',
+      'repeat',
+      'opt in',
+      'consent',
+      'opt out',
+      'bhejo',
+    ],
     content: `Campaigns send an approved WhatsApp template to many contacts on the current number.
 
 Wizard: Message → Audience → Review & Send. You can also schedule or repeat a campaign.
@@ -84,10 +122,12 @@ Use Contacts (or New chat) to collect consent. Do not import a list and blast it
   {
     id: 'templates',
     title: 'Templates',
-    keywords: ['template', 'hsm', 'utility', 'marketing', 'library', 'submit', 'approved', 'rejected', 'variable'],
-    content: `Templates are Meta-approved messages used for campaigns and some outbound chats outside the 24-hour service window.
+    keywords: ['template', 'hsm', 'utility', 'marketing', 'library', 'submit', 'approved', 'rejected', 'variable', 'inbox template', '24h', 'service window'],
+    content: `Templates are Meta-approved messages used for campaigns and for Inbox when the 24-hour customer-service window is closed.
 
-Create a template, review it, then submit to Meta. Statuses: Draft, Pending, Approved, Rejected. Only approved templates can be used for campaigns.
+Create a template, review it, then submit to Meta. Statuses: Draft, Pending, Approved, Rejected. Only approved templates can be used for campaigns and for Inbox sends outside the window.
+
+From Inbox: if the window is open, type a normal reply. If it is closed, tap Template, pick an approved template, fill variables, and send.
 
 The Template library lists Meta's pre-approved templates you can add. Do not invent extra marketing templates that are not in Meta's library or the Create starters.
 
@@ -166,9 +206,9 @@ Custom fields can feed template variables such as {{order_id}}.`,
     id: 'tickets-inbox',
     title: 'Inbox tickets',
     keywords: ['inbox ticket', 'sla', 'customer ticket', 'needs reply'],
-    content: `The Tickets page in the left nav tracks WhatsApp customer conversations that still need a reply (open Inbox work). Those are not the same as Help Center tickets.
+    content: `The Tickets page in the left nav tracks WhatsApp customer conversations that still need a reply (open Inbox work). Those are customer tickets, not this Help Center.
 
-Help Center → Tickets (this Support board) is for you, the Samyoj user: billing, login, and data issues. Use Inbox tickets for customer chats; use Support tickets for platform help.`,
+This Help Center is an assistant only — it answers how to use Samyoj. It does not create platform tickets.`,
   },
   {
     id: 'settings',
@@ -189,12 +229,24 @@ Agents work the Inbox; they do not manage billing. Two-factor can be required fr
   {
     id: 'billing',
     title: 'Billing',
-    keywords: ['billing', 'plan', 'razorpay', 'payment', 'invoice', 'subscription', 'price', 'upgrade', 'gst'],
+    keywords: [
+      'billing',
+      'plan',
+      'razorpay',
+      'payment',
+      'invoice',
+      'subscription',
+      'price',
+      'upgrade',
+      'gst',
+      'fees',
+      'charges',
+    ],
     content: `Billing is under Account → Billing (owners/admins). Current checkout is a one-shot Razorpay payment for Growth (₹3,999) or Business (₹11,999), plus a free Starter plan. Activation is about 30 days — this is not a full auto-renewing subscription, GST invoice, or dunning product yet.
 
 The Samyoj plan price is software only. WhatsApp / Meta Cloud API message fees are billed by Meta on the WABA and are a separate bill. Do not mix them.
 
-Do not quote other catalogs, trials, or monthly/quarterly/yearly SKUs as if they were live. For payment failures, login lockouts, or data questions, create a Support ticket — do not paste card numbers, OTPs, or passwords here.`,
+Do not quote other catalogs, trials, or monthly/quarterly/yearly SKUs as if they were live. For payment failures or plan questions, use Account → Billing. Do not paste card numbers, OTPs, or passwords here.`,
   },
   {
     id: 'reports',
@@ -205,9 +257,9 @@ Do not quote other catalogs, trials, or monthly/quarterly/yearly SKUs as if they
   {
     id: 'privacy',
     title: 'Privacy and safety',
-    keywords: ['password', 'otp', 'secret', 'app secret', 'token', 'login', 'data', 'privacy'],
+    keywords: ['password', 'otp', 'secret', 'app secret', 'token', 'login', 'data', 'privacy', 'help'],
     content: `This assistant is for how to use Samyoj. Never share passwords, OTPs, API keys, App Secret, or card numbers here.
 
-For billing, login, or data issues, create a Support ticket from the Tickets tab (or Escalate to ticket from this chat). Samyoj staff should never ask you for your WhatsApp OTP.`,
+Samyoj staff should never ask you for your WhatsApp OTP. This Help Center cannot reset passwords or refund charges — use Account → Billing or Team for those.`,
   },
 ];

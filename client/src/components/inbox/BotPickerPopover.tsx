@@ -26,12 +26,6 @@ const PANEL_WIDTH = 280;
 const GLASS_PANEL =
   'overflow-hidden rounded-xl border border-theme-border bg-white/90 shadow-lg backdrop-blur-md focus:outline-none dark:bg-neutral-900/90';
 
-function truncateHint(text?: string | null, max = 72): string | null {
-  const t = text?.trim();
-  if (!t) return null;
-  return t.length > max ? `${t.slice(0, max - 1)}…` : t;
-}
-
 /** Header popover: toggle AI replies and choose which bot handles this chat. */
 export default function BotPickerPopover({
   bots,
@@ -144,9 +138,7 @@ export default function BotPickerPopover({
           <div className="min-w-0">
             <p className="text-[12px] font-semibold text-theme-fg">Automations</p>
             <p className="text-[10px] text-theme-muted">
-              {botIsLive
-                ? 'Journeys, auto-replies, and AI are on for this chat'
-                : 'Paused — journeys, auto-replies, and AI will not send'}
+              {botIsLive ? 'On for this chat' : 'Paused'}
             </p>
           </div>
           <button
@@ -182,11 +174,6 @@ export default function BotPickerPopover({
           <>
             {enabledBots.map((bot) => {
               const selected = selectedBotId === bot.id;
-              const hint =
-                truncateHint(bot.instructions) ||
-                (bot._count?.knowledgeItems != null
-                  ? `${bot._count.knowledgeItems} FAQ`
-                  : null);
               return (
                 <button
                   key={bot.id}
@@ -195,35 +182,28 @@ export default function BotPickerPopover({
                   aria-selected={selected}
                   disabled={busy}
                   onClick={() => pick(bot.id)}
-                  className={`flex w-full items-start gap-2 px-3 py-2 text-left transition hover:bg-theme-subtle disabled:opacity-50 ${FOCUS_RING_CLASS} ${
+                  className={`flex w-full items-center gap-2 px-3 py-2 text-left transition hover:bg-theme-subtle disabled:opacity-50 ${FOCUS_RING_CLASS} ${
                     selected ? 'bg-whatsapp-500/8' : ''
                   }`}
                 >
                   <Bot
-                    className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${
+                    className={`h-3.5 w-3.5 shrink-0 ${
                       selected ? 'text-whatsapp-600' : 'text-theme-muted'
                     }`}
                     strokeWidth={2.1}
                   />
-                  <span className="min-w-0 flex-1">
-                    <span className="flex min-w-0 items-center gap-1.5">
-                      <span className="truncate text-[13px] font-semibold tracking-tight text-theme-fg">
-                        {bot.name}
-                      </span>
-                      {bot.isDefault ? (
-                        <span className="shrink-0 rounded bg-theme-subtle px-1 py-px text-[9px] font-bold uppercase tracking-wide text-theme-muted">
-                          Default
-                        </span>
-                      ) : null}
+                  <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                    <span className="truncate text-[13px] font-semibold tracking-tight text-theme-fg">
+                      {bot.name}
                     </span>
-                    {hint ? (
-                      <span className="mt-0.5 block line-clamp-2 text-[11px] leading-snug text-theme-muted">
-                        {hint}
+                    {bot.isDefault ? (
+                      <span className="shrink-0 rounded bg-theme-subtle px-1 py-px text-[9px] font-bold uppercase tracking-wide text-theme-muted">
+                        Default
                       </span>
                     ) : null}
                   </span>
                   {selected && (
-                    <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-whatsapp-600" />
+                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-whatsapp-600" />
                   )}
                 </button>
               );
