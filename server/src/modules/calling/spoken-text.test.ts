@@ -4,6 +4,9 @@ import {
   isLikelyTtsEcho,
   isShortValidUtterance,
   prepareSpokenText,
+  stripSpokenFillers,
+  extractEarlySpeakableChunk,
+  remainderAfterEarlySpoken,
   shouldAllowBargeInDuringTts,
   shouldMuteCallStt,
   shouldProcessCallerUtterance,
@@ -19,6 +22,38 @@ import {
 describe('prepareSpokenText', () => {
   it('strips markdown and urls so Bulbul does not read stars', () => {
     expect(prepareSpokenText('**Sure** — see https://example.com/help')).toBe('Sure — see');
+  });
+
+  it('strips leading umm/hmm filler the LLM sometimes adds', () => {
+    expect(prepareSpokenText('Umm, haan main help kar sakta hoon.')).toBe(
+      'haan main help kar sakta hoon.'
+    );
+    expect(stripSpokenFillers('hmm — theek hai')).toBe('theek hai');
+  });
+});
+
+describe('extractEarlySpeakableChunk', () => {
+  it('returns the first full sentence once enough chars arrive', () => {
+    const result = extractEarlySpeakableChunk(
+      'Haan bilkul, main abhi check karta hoon. Aur kuch chahiye?',
+      20
+    );
+    expect(result?.chunk).toBe('Haan bilkul, main abhi check karta hoon.');
+  });
+
+  it('waits when a tool_call tag is still open', () => {
+    expect(extractEarlySpeakableChunk('Theek hai. <tool_call>request_human', 12)).toBeNull();
+  });
+});
+
+describe('remainderAfterEarlySpoken', () => {
+  it('returns only the tail after an early prefix', () => {
+    expect(
+      remainderAfterEarlySpoken(
+        'Pehla sentence. Doosra sentence.',
+        'Pehla sentence.'
+      )
+    ).toBe('Doosra sentence.');
   });
 });
 

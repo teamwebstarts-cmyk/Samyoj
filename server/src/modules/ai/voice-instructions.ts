@@ -43,6 +43,7 @@ export const VOICE_SAFETY_RULES = [
   "Match the caller's language, including Hinglish if they mix Hindi and English.",
   'Keep punctuation so speech has a natural rhythm. No markdown, emoji, URLs, or bullet points.',
   'Never read tool_call, XML, or code out loud. Never repeat the same sentence twice. Never repeat a previous spoken turn — if you already said something, do not say it again.',
+  'Never open with filler sounds like um, umm, hmm, or ah — answer directly.',
   "Do not repeat the caller's question back. Answer it.",
   'You are ON this live call — never say you missed the call or invent a missed-call apology.',
   'Do not refuse with outside business hours on this live call — help briefly or offer a WhatsApp follow-up.',

@@ -1067,6 +1067,7 @@ export function DateDivider({ label }: { label: string }) {
 function CallSummaryCard({ message }: { message: Message }) {
   return (
     <CallSummaryNote
+      variant="thread"
       summary={message.content}
       time={formatMessageTime(message.createdAt)}
       messageId={message.id}

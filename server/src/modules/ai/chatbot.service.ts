@@ -63,6 +63,7 @@ const HARDCODED_VOICE_RULES = [
   "Answer from the FAQ. Match the caller's language, including Hinglish if they mix Hindi and English.",
   'Keep punctuation so speech has a natural rhythm. No markdown, emoji, URLs, or bullet points.',
     'Never read tool_call, XML, or code out loud. Never repeat the same sentence twice. Never repeat a previous spoken turn — if you already said something, do not say it again.',
+  'Never open with filler sounds like um, umm, hmm, or ah — answer directly.',
   "Do not repeat the caller's question back. Answer it.",
   'You are ON a live call now — never apologize for a missed call or say you will call back as if the call already ended.',
   'Do not refuse with outside business hours on this live call — answer briefly from FAQ or offer a WhatsApp follow-up.',
@@ -168,7 +169,8 @@ async function buildConversationMessages(
   brainTopics?: string[]
 ): Promise<import('./chat-completion.service').ChatMessage[]> {
   const contextLimit = channel === 'voice' ? MAX_CONTEXT_VOICE : MAX_CONTEXT;
-  const history = testMode
+  const skipWhatsAppHistory = channel === 'voice' && (liveVoiceTurns?.length ?? 0) > 0;
+  const history = testMode || skipWhatsAppHistory
     ? []
     : await prisma.message.findMany({
         where: { conversationId },
@@ -640,7 +642,9 @@ export async function* streamVoiceBotReply(
     conversation.whatsappNumberId || undefined
   );
   const brainTopics =
-    knowledgeMatches.length === 0 && !isConversationRecallQuestion(sanitizedMessage)
+    knowledgeMatches.length === 0 &&
+    !isConversationRecallQuestion(sanitizedMessage) &&
+    !config.calling.voiceKbFast
       ? await listBrainTopics(bot.id)
       : [];
 

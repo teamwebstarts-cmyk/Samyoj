@@ -4,12 +4,22 @@
 export const TTS_MAX_CHARS = 450;
 
 export function prepareSpokenText(text: string): string {
+  return stripSpokenFillers(
+    text
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/https?:\/\/\S+/gi, '')
+      .replace(/[*_`#]+/g, '')
+      .replace(/&/g, ' and ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  );
+}
+
+/** Strip leading LLM filler — "umm" adds perceived dead air on Bulbul. */
+export function stripSpokenFillers(text: string): string {
   return text
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/https?:\/\/\S+/gi, '')
-    .replace(/[*_`#]+/g, '')
-    .replace(/&/g, ' and ')
-    .replace(/\s+/g, ' ')
+    .replace(/^(?:um+m?|uh+h?|hmm+|ah+h?|oh+h?)\s*[,—–-]?\s*/gi, '')
+    .replace(/^(?:um+m?|uh+h?|hmm+|ah+h?|oh+h?)\s+/gi, '')
     .trim();
 }
 
@@ -127,6 +137,52 @@ export function shouldProcessCallerUtterance(
   if (trimmed.length < 2) return false;
   if (isShortValidUtterance(trimmed)) return true;
   return trimmed.length >= minChars;
+}
+
+/**
+ * First speakable prefix while the LLM is still streaming.
+ * Returns null until we have a full sentence (or comma pause) without an open tool_call tag.
+ */
+export function extractEarlySpeakableChunk(
+  accumulated: string,
+  minChars = 20
+): { chunk: string; consumedLength: number } | null {
+  if (!accumulated.trim() || /<tool_call[\s>]/i.test(accumulated)) return null;
+
+  const withoutOpenTag = accumulated.replace(/<tool_call[\s\S]*$/i, '').trim();
+  if (!withoutOpenTag || withoutOpenTag.length < Math.min(minChars, 12)) return null;
+
+  const sentence = withoutOpenTag.match(/^([\s\S]{8,}?[.!?।॥])(?:\s+|$)/u);
+  if (sentence && sentence[1].length >= minChars) {
+    const chunk = prepareSpokenText(sentence[1]);
+    if (chunk.length >= 8) {
+      return { chunk, consumedLength: sentence[0].length };
+    }
+  }
+
+  if (withoutOpenTag.length >= minChars + 10) {
+    const pause = withoutOpenTag.match(/^([\s\S]{16,}?[,—–-])(?:\s+|$)/u);
+    if (pause) {
+      const chunk = prepareSpokenText(pause[1]);
+      if (chunk.length >= minChars) {
+        return { chunk, consumedLength: pause[0].length };
+      }
+    }
+  }
+
+  return null;
+}
+
+/** Text left to speak after an early prefix was already queued. */
+export function remainderAfterEarlySpoken(fullText: string, earlyChunk: string): string {
+  const full = prepareSpokenText(fullText);
+  const early = prepareSpokenText(earlyChunk);
+  if (!full) return '';
+  if (!early) return full;
+  if (full.startsWith(early)) return full.slice(early.length).trim();
+  const idx = full.indexOf(early);
+  if (idx >= 0) return full.slice(idx + early.length).trim();
+  return full;
 }
 
 export function isLikelyTtsEcho(heard: string, spoken: string): boolean {

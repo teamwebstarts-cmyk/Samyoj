@@ -204,6 +204,47 @@ export function isAgentOnlyChatMessage(message?: Pick<Message, 'metadata'>): boo
   return Boolean(message?.metadata?.isCallSummary);
 }
 
+/**
+ * Place each call-summary card immediately after its matching call-event pill
+ * so agents see summary at the natural end of the call in the thread.
+ */
+export function alignCallSummariesInThread(messages: Message[]): Message[] {
+  if (!messages.some((m) => m.metadata?.isCallSummary)) return messages;
+
+  const summariesByCallId = new Map<string, Message>();
+  const withoutSummaries: Message[] = [];
+
+  for (const message of messages) {
+    const callId = message.metadata?.callId;
+    if (message.metadata?.isCallSummary && callId) {
+      summariesByCallId.set(callId, message);
+    } else {
+      withoutSummaries.push(message);
+    }
+  }
+
+  if (summariesByCallId.size === 0) return messages;
+
+  const ordered: Message[] = [];
+  for (const message of withoutSummaries) {
+    ordered.push(message);
+    const callId = message.metadata?.callId;
+    if (message.metadata?.isCallEvent && callId) {
+      const summary = summariesByCallId.get(callId);
+      if (summary) {
+        ordered.push(summary);
+        summariesByCallId.delete(callId);
+      }
+    }
+  }
+
+  for (const summary of summariesByCallId.values()) {
+    ordered.push(summary);
+  }
+
+  return ordered;
+}
+
 export function getMessagePreview(message?: Pick<Message, 'type' | 'content' | 'metadata'>) {
   if (!message) return 'No messages yet';
   if (isAgentOnlyChatMessage(message)) return 'Call summary';

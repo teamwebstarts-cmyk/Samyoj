@@ -179,7 +179,16 @@ export async function publishCallSummaryMessage(input: {
   }
 
   const metadata = { isCallSummary: true, agentOnly: true, callId: input.callId };
-  const createdAt = input.createdAt;
+
+  let createdAt = input.createdAt;
+  if (!createdAt) {
+    const call = await prisma.call.findUnique({
+      where: { id: input.callId },
+      select: { endedAt: true, createdAt: true },
+    });
+    const base = call?.endedAt || call?.createdAt || new Date();
+    createdAt = new Date(base.getTime() + 1);
+  }
 
   try {
     const message = await prisma.message.upsert({
@@ -192,12 +201,13 @@ export async function publishCallSummaryMessage(input: {
       content: summary,
       status: 'READ',
       metadata,
-      ...(createdAt ? { createdAt } : {}),
+      createdAt,
     },
     update: {
       content: summary,
       metadata,
       status: 'READ',
+      createdAt,
     },
   });
 
@@ -286,7 +296,7 @@ export async function backfillCallSummaryMessages(input: {
             organizationId: input.organizationId,
             conversationId: input.conversationId,
             summary,
-            createdAt: call.endedAt || call.createdAt,
+            createdAt: new Date((call.endedAt || call.createdAt).getTime() + 1),
             emit: false,
           })
         )

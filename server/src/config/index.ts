@@ -96,6 +96,16 @@ export const config = {
     aiGreeting:
       process.env.CALLING_AI_GREETING ||
       'Hi, thanks for calling. How can I help?',
+    /** Mute mic→STT for this long after TTS ends (speakerphone echo). Aggressive: 350. */
+    voiceEchoTailMs: parseInt(process.env.SARVAM_VOICE_ECHO_TAIL_MS || '550', 10),
+    /** Start TTS on first LLM sentence instead of waiting for the full reply. */
+    voiceStreamTts: process.env.SARVAM_VOICE_STREAM_TTS !== 'false',
+    /** Token-only Train search on calls — skips Azure embedding round-trip (~200–600ms). */
+    voiceKbFast: process.env.SARVAM_VOICE_KB_FAST !== 'false',
+    /** Min chars before early TTS fires at a sentence boundary. Aggressive: 16. */
+    voiceEarlyTtsMinChars: parseInt(process.env.SARVAM_VOICE_EARLY_TTS_MIN_CHARS || '20', 10),
+    /** Log per-turn stage timings (stt→llm→tts) at info level. */
+    voiceTimingLog: process.env.CALLING_VOICE_TIMING_LOG === 'true',
   },
   email: {
     from: process.env.EMAIL_FROM || 'noreply@whatsapp-platform.local',

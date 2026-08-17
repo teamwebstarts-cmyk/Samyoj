@@ -21,6 +21,7 @@ import {
   formatHandoffReason,
   getAutomationDividerLabel,
   groupMessagesByDate,
+  alignCallSummariesInThread,
 } from './inboxUtils';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { useReducedMotion } from '../../hooks/inboxA11y';
@@ -178,7 +179,10 @@ export default function ChatThread({
 }: ChatThreadProps) {
   const navigate = useNavigate();
   const tipFor = useGlassTipProps();
-  const messageGroups = useMemo(() => groupMessagesByDate(messages), [messages]);
+  const messageGroups = useMemo(
+    () => groupMessagesByDate(alignCallSummariesInThread(messages)),
+    [messages]
+  );
   const windowOpen = serviceWindow?.open === true;
   const [interactiveMode, setInteractiveMode] = useState<InteractiveComposerMode>('reply');
 

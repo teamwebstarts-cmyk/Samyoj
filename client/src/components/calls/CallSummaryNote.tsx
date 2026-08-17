@@ -4,20 +4,39 @@ interface CallSummaryNoteProps {
   summary: string;
   time?: string | null;
   messageId?: string;
+  /** `thread` = Inbox timeline row; `panel` = centered card (Calls detail). */
+  variant?: 'thread' | 'panel';
 }
 
 /**
  * Agent-only post-call note. Flat paper card, even border, no drop shadow.
  * Never styled as inbound WhatsApp.
  */
-export default function CallSummaryNote({ summary, time, messageId }: CallSummaryNoteProps) {
+export default function CallSummaryNote({
+  summary,
+  time,
+  messageId,
+  variant = 'panel',
+}: CallSummaryNoteProps) {
+  const inThread = variant === 'thread';
+
   return (
     <div
-      className="flex items-center justify-center px-3 py-2.5"
+      className={
+        inThread
+          ? 'py-1.5'
+          : 'flex items-center justify-center px-3 py-2.5'
+      }
       role="status"
       data-message-id={messageId}
     >
-      <div className="w-full max-w-[min(100%,22rem)] overflow-hidden rounded-md border border-neutral-200/80 bg-white dark:border-neutral-700 dark:bg-neutral-900">
+      <div
+        className={
+          inThread
+            ? 'w-full overflow-hidden rounded-md border border-neutral-200/80 bg-white dark:border-neutral-700 dark:bg-neutral-900'
+            : 'w-full max-w-[min(100%,22rem)] overflow-hidden rounded-md border border-neutral-200/80 bg-white dark:border-neutral-700 dark:bg-neutral-900'
+        }
+      >
         <div className="min-w-0 px-3.5 py-2.5">
           <p className="inline-flex flex-wrap items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
             <Lock className="h-3 w-3 shrink-0 text-emerald-600 dark:text-emerald-400" strokeWidth={2.25} />

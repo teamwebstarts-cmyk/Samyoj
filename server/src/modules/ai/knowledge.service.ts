@@ -3,6 +3,7 @@ import { createEmbedding, cosineSimilarity } from './embeddings.service';
 import { redactText } from '../../utils/pii-redaction';
 import { createModuleLogger } from '../../utils/logger';
 import { AppError } from '../../utils/response';
+import { config } from '../../config';
 import {
   TRAIN_MAX_CONTENT,
   TRAIN_MAX_ITEMS,
@@ -268,6 +269,24 @@ async function searchVoiceKnowledgeQueries(
   return [];
 }
 
+async function searchVoiceKnowledgeQueriesTokenOnly(
+  botId: string,
+  queries: string[]
+): Promise<KnowledgeMatch[]> {
+  if (queries.length === 0) return [];
+  const items = await prisma.knowledgeBaseItem.findMany({
+    where: { botId },
+    orderBy: { updatedAt: 'desc' },
+    select: { id: true, title: true, content: true, sourceType: true },
+  });
+  if (items.length === 0) return [];
+  for (const query of queries) {
+    const matches = tokenSearch(items, expandKnowledgeQuery(query), 5);
+    if (matches.length > 0) return matches;
+  }
+  return [];
+}
+
 export async function resolveVoiceKnowledge(
   botId: string,
   currentUtterance: string,
@@ -276,15 +295,14 @@ export async function resolveVoiceKnowledge(
   whatsappNumberId?: string
 ): Promise<KnowledgeMatch[]> {
   const queries = voiceKnowledgeQueries(currentUtterance, liveVoiceTurns);
-  const primary = await searchVoiceKnowledgeQueries(
-    botId,
-    queries,
-    organizationId,
-    whatsappNumberId
-  );
+  if (queries.length === 0) return [];
+
+  const tokenOnly = config.calling.voiceKbFast;
+  const primary = tokenOnly
+    ? await searchVoiceKnowledgeQueriesTokenOnly(botId, queries)
+    : await searchVoiceKnowledgeQueries(botId, queries, organizationId, whatsappNumberId);
   if (primary.length > 0) return primary;
 
-  // Calling bot may have no Train rows while Chat Support bot does — bridge once.
   const callTrainCount = await prisma.knowledgeBaseItem.count({ where: { botId } });
   if (callTrainCount > 0) return [];
 
@@ -295,12 +313,9 @@ export async function resolveVoiceKnowledge(
   });
   if (!chatBot || chatBot.id === botId) return [];
 
-  return searchVoiceKnowledgeQueries(
-    chatBot.id,
-    queries,
-    organizationId,
-    whatsappNumberId
-  );
+  return tokenOnly
+    ? searchVoiceKnowledgeQueriesTokenOnly(chatBot.id, queries)
+    : searchVoiceKnowledgeQueries(chatBot.id, queries, organizationId, whatsappNumberId);
 }
 
 /** Titles only — never dump full FAQ bodies on a miss (that hallucinates store answers). */

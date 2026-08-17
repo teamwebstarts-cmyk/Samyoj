@@ -21,6 +21,7 @@ import type { ToolCallResult } from '../ai/sarvam-chat.service';
 import { extractInlineToolCalls } from '../ai/voice-tool-parse';
 import { liveVoiceTurnsFromTranscript } from '../ai/voice-context';
 import { isVoiceBackchannel, wantsCallbackOnCall, wantsEndCall, wantsHumanOnCall } from './voice-intent';
+import { config } from '../../config';
 import {
   isLikelyTtsEcho,
   joinSpokenTurns,
@@ -31,11 +32,21 @@ import {
   shouldQueueVoiceInterrupt,
   shouldTriggerBargeInFromRms,
   splitForTts,
+  extractEarlySpeakableChunk,
+  remainderAfterEarlySpoken,
   BARGE_IN_RMS_THRESHOLD,
-  TTS_ECHO_REJECT_MS,
 } from './spoken-text';
 
 const log = createModuleLogger('ai-voice-agent');
+
+interface VoiceTurnTiming {
+  sttFinalAt?: number;
+  processingStartAt?: number;
+  llmFirstTokenAt?: number;
+  ttsFirstStartAt?: number;
+  llmDoneAt?: number;
+  ttsDoneAt?: number;
+}
 
 /** Spoken when LLM/STT hiccups — not a dead-end error. */
 const VOICE_RETRY_PROMPT =
@@ -60,6 +71,9 @@ export class AiVoiceCallSession {
   private wrappingUp = false;
   private maxDurationTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly ctx: ActiveCallContext;
+  private speakChain: Promise<void> = Promise.resolve();
+  private readonly echoTailMs = config.calling.voiceEchoTailMs;
+  private readonly echoRejectMs = config.calling.voiceEchoTailMs + 900;
   // Latency tracking
   private sttLatenciesMs: number[] = [];
   private ttsLatenciesMs: number[] = [];
@@ -138,12 +152,12 @@ export class AiVoiceCallSession {
           if (this.processing) {
             this.queueInterrupt(text);
           } else {
-            void this.handleUserSpeech(text);
+            void this.handleUserSpeech(text, Date.now());
           }
           return;
         }
 
-        if (shouldMuteCallStt(this.speaking, this.speakingEndedAt, Date.now())) {
+        if (shouldMuteCallStt(this.speaking, this.speakingEndedAt, Date.now(), this.echoTailMs)) {
           log.debug('Dropped STT final during echo tail', {
             callId: this.ctx.callId,
             text: trimmed.slice(0, 120),
@@ -154,7 +168,7 @@ export class AiVoiceCallSession {
           this.queueInterrupt(text);
           return;
         }
-        void this.handleUserSpeech(text);
+        void this.handleUserSpeech(text, Date.now());
       },
       onSpeechStart: () => {
         this.lastSpeechTimestamp = Date.now();
@@ -204,7 +218,7 @@ export class AiVoiceCallSession {
         this.bargeInLoudFrameStreak = 0;
       }
 
-      if (shouldMuteCallStt(this.speaking, this.speakingEndedAt, Date.now())) return;
+      if (shouldMuteCallStt(this.speaking, this.speakingEndedAt, Date.now(), this.echoTailMs)) return;
       this.transcriber.sendPcm(samples, sampleRate);
     });
 
@@ -254,7 +268,34 @@ export class AiVoiceCallSession {
     this.bargeInLoudFrameStreak = 0;
   }
 
-  private async handleUserSpeech(text: string): Promise<void> {
+  private logTurnTiming(timing: VoiceTurnTiming): void {
+    if (!config.calling.voiceTimingLog) return;
+    const ms = (from?: number, to?: number) =>
+      from != null && to != null ? to - from : undefined;
+    log.info('Voice turn timing', {
+      callId: this.ctx.callId,
+      preLlmMs: ms(timing.processingStartAt, timing.llmFirstTokenAt),
+      llmStreamMs: ms(timing.llmFirstTokenAt, timing.llmDoneAt),
+      llmToFirstTtsMs: ms(timing.llmFirstTokenAt, timing.ttsFirstStartAt),
+      totalToFirstTtsMs: ms(timing.sttFinalAt, timing.ttsFirstStartAt),
+      totalTurnMs: ms(timing.sttFinalAt, timing.ttsDoneAt),
+    });
+  }
+
+  private enqueueSpeak(
+    text: string,
+    role: TranscriptEntry['role'],
+    opts?: { recordTranscript?: boolean; wait?: boolean; onStart?: () => void }
+  ): Promise<void> {
+    const job = this.speakChain.then(async () => {
+      opts?.onStart?.();
+      await this.speak(text, role, { recordTranscript: opts?.recordTranscript });
+    });
+    this.speakChain = job.catch(() => undefined);
+    return opts?.wait === false ? Promise.resolve() : job;
+  }
+
+  private async handleUserSpeech(text: string, sttFinalAt?: number): Promise<void> {
     if (this.ended || this.wrappingUp || this.processing || this.speaking) return;
     const trimmed = text.trim();
     if (!shouldProcessCallerUtterance(trimmed)) {
@@ -268,7 +309,7 @@ export class AiVoiceCallSession {
 
     if (
       this.speakingEndedAt > 0 &&
-      Date.now() - this.speakingEndedAt < TTS_ECHO_REJECT_MS &&
+      Date.now() - this.speakingEndedAt < this.echoRejectMs &&
       isLikelyTtsEcho(trimmed, this.lastSpokenText)
     ) {
       log.debug('Ignoring TTS echo on call', { callId: this.ctx.callId, text: trimmed });
@@ -277,9 +318,14 @@ export class AiVoiceCallSession {
 
     log.info('Processing caller speech', { callId: this.ctx.callId, text: trimmed });
 
+    const timing: VoiceTurnTiming = {
+      sttFinalAt: sttFinalAt ?? Date.now(),
+      processingStartAt: Date.now(),
+    };
+
     this.processing = true;
     this.abortSpeak = false;
-    await this.appendTranscript('user', trimmed);
+    void this.appendTranscript('user', trimmed);
 
     try {
       if (wantsHumanOnCall(trimmed)) {
@@ -309,7 +355,10 @@ export class AiVoiceCallSession {
 
       let rawAccum = '';
       let spokenText = '';
+      let earlySpoken = '';
       let directHandled = false;
+      const streamTts = config.calling.voiceStreamTts;
+      const earlyMinChars = config.calling.voiceEarlyTtsMinChars;
 
       for await (const event of streamVoiceBotReply({
         organizationId: this.ctx.organizationId,
@@ -334,7 +383,7 @@ export class AiVoiceCallSession {
               });
               break;
             }
-            await this.speak(
+            await this.enqueueSpeak(
               result.skipReason === 'ai_not_configured'
                 ? 'Sorry, our AI assistant is not configured yet. Please message us on WhatsApp.'
                 : VOICE_RETRY_PROMPT,
@@ -346,7 +395,11 @@ export class AiVoiceCallSession {
             const cleaned = extractInlineToolCalls(result.reply);
             if (cleaned.cleanText && !this.abortSpeak) {
               spokenText = cleaned.cleanText;
-              await this.speak(cleaned.cleanText, 'assistant');
+              await this.enqueueSpeak(cleaned.cleanText, 'assistant', {
+                onStart: () => {
+                  if (!timing.ttsFirstStartAt) timing.ttsFirstStartAt = Date.now();
+                },
+              });
             }
             if (this.abortSpeak || this.ended) break;
             for (const tool of cleaned.tools) {
@@ -370,10 +423,27 @@ export class AiVoiceCallSession {
         }
 
         if (event.type === 'delta' && event.content) {
+          if (!timing.llmFirstTokenAt) timing.llmFirstTokenAt = Date.now();
           rawAccum += event.content;
+
+          if (streamTts && !earlySpoken && !this.abortSpeak && !this.ended) {
+            const early = extractEarlySpeakableChunk(rawAccum, earlyMinChars);
+            if (early) {
+              earlySpoken = early.chunk;
+              spokenText = earlySpoken;
+              void this.enqueueSpeak(early.chunk, 'assistant', {
+                recordTranscript: false,
+                wait: false,
+                onStart: () => {
+                  if (!timing.ttsFirstStartAt) timing.ttsFirstStartAt = Date.now();
+                },
+              });
+            }
+          }
         }
 
         if (event.type === 'done') {
+          timing.llmDoneAt = Date.now();
           if (this.abortSpeak || this.ended) break;
           const doneSpoken = (event.content ?? '').trim();
           const parsed = extractInlineToolCalls((doneSpoken || rawAccum || '').trim());
@@ -388,18 +458,40 @@ export class AiVoiceCallSession {
 
           if (parsed.cleanText) {
             if (!validateOutboundReply(parsed.cleanText).safe) {
-              await this.speak(
+              await this.enqueueSpeak(
                 "I'll have our team follow up with you on WhatsApp shortly.",
                 'assistant'
               );
               await this.performHandoffAndTransfer('BLOCKED_CONTENT', 'BLOCKED_CONTENT');
               return;
             }
-            spokenText = parsed.cleanText;
-            await this.speak(parsed.cleanText, 'assistant');
+
+            if (earlySpoken) {
+              const remainder = remainderAfterEarlySpoken(parsed.cleanText, earlySpoken);
+              spokenText = parsed.cleanText;
+              if (remainder && !this.abortSpeak) {
+                await this.enqueueSpeak(remainder, 'assistant', {
+                  recordTranscript: false,
+                  onStart: () => {
+                    if (!timing.ttsFirstStartAt) timing.ttsFirstStartAt = Date.now();
+                  },
+                });
+              } else if (!timing.ttsFirstStartAt) {
+                timing.ttsFirstStartAt = Date.now();
+              }
+              void this.appendTranscript('assistant', parsed.cleanText);
+            } else {
+              spokenText = parsed.cleanText;
+              await this.enqueueSpeak(parsed.cleanText, 'assistant', {
+                onStart: () => {
+                  if (!timing.ttsFirstStartAt) timing.ttsFirstStartAt = Date.now();
+                },
+              });
+            }
             log.info('Speaking AI reply on call', {
               callId: this.ctx.callId,
               chars: parsed.cleanText.length,
+              streamedEarly: Boolean(earlySpoken),
             });
           } else if (tools.length === 0) {
             if (wantsHumanOnCall(trimmed)) {
@@ -410,7 +502,7 @@ export class AiVoiceCallSession {
               });
               return;
             }
-            await this.speak(VOICE_RETRY_PROMPT, 'assistant');
+            await this.enqueueSpeak(VOICE_RETRY_PROMPT, 'assistant');
           }
 
           if (this.abortSpeak || this.ended) break;
@@ -430,6 +522,10 @@ export class AiVoiceCallSession {
         }
       }
 
+      await this.speakChain;
+      timing.ttsDoneAt = Date.now();
+      this.logTurnTiming(timing);
+
       if (!directHandled && !spokenText && !this.ended && !this.abortSpeak) {
         if (wantsHumanOnCall(trimmed)) {
           await this.handleToolCall({
@@ -438,7 +534,7 @@ export class AiVoiceCallSession {
             arguments: { reason: 'Customer asked for team — no spoken reply' },
           });
         } else {
-          await this.speak(VOICE_RETRY_PROMPT, 'assistant');
+          await this.enqueueSpeak(VOICE_RETRY_PROMPT, 'assistant');
         }
       }
     } catch (err) {
@@ -461,7 +557,7 @@ export class AiVoiceCallSession {
       this.queuedSpeech = null;
       this.abortSpeak = false;
       if (next && !this.ended) {
-        void this.handleUserSpeech(next);
+        void this.handleUserSpeech(next, Date.now());
       }
     }
   }
@@ -773,11 +869,13 @@ export class AiVoiceCallSession {
       this.maxDurationTimer = null;
     }
 
-    // Post-call summary: store AI summary in metadata
+    // Post-call summary: generate once; publish in Inbox after the call-event pill.
+    let postCallSummary: string | null = null;
     if (this.transcript.length > 0) {
       try {
         const summary = await this.generateSummary();
         if (summary) {
+          postCallSummary = summary;
           const call = await prisma.call.findUnique({ where: { id: this.ctx.callId } });
           const metadata = ((call?.metadata as Record<string, unknown>) || {});
           await prisma.call.update({
@@ -785,9 +883,9 @@ export class AiVoiceCallSession {
             data: { metadata: { ...metadata, summary } },
           });
 
-          // Agent-only: internal note (never show as an inbound customer chat bubble).
+          // Agent-only internal note (never a WhatsApp bubble).
           if (this.ctx.conversationId) {
-            await this.persistCallSummaryNote(summary, reason);
+            await this.persistCallSummaryInternalNote(summary, reason);
           }
         }
       } catch (err) {
@@ -878,6 +976,30 @@ export class AiVoiceCallSession {
 
     void publishCallEventMessage(this.ctx.callId);
 
+    if (postCallSummary && this.ctx.conversationId) {
+      try {
+        const ended = await prisma.call.findUnique({
+          where: { id: this.ctx.callId },
+          select: { endedAt: true },
+        });
+        const summaryAt = ended?.endedAt
+          ? new Date(ended.endedAt.getTime() + 1)
+          : new Date();
+        await publishCallSummaryMessage({
+          callId: this.ctx.callId,
+          organizationId: this.ctx.organizationId,
+          conversationId: this.ctx.conversationId,
+          summary: postCallSummary,
+          createdAt: summaryAt,
+        });
+      } catch (err) {
+        log.warn('Failed to publish call summary in Inbox', {
+          callId: this.ctx.callId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
     log.info('AI voice call session ended', { callId: this.ctx.callId, reason });
   }
 
@@ -916,22 +1038,8 @@ export class AiVoiceCallSession {
     }
   }
 
-  private async persistCallSummaryNote(summary: string, reason: string): Promise<void> {
+  private async persistCallSummaryInternalNote(summary: string, reason: string): Promise<void> {
     if (!this.ctx.conversationId) return;
-
-    try {
-      await publishCallSummaryMessage({
-        callId: this.ctx.callId,
-        organizationId: this.ctx.organizationId,
-        conversationId: this.ctx.conversationId,
-        summary,
-      });
-    } catch (err) {
-      log.warn('Failed to publish call summary in Inbox', {
-        callId: this.ctx.callId,
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
 
     const noteAuthor = await prisma.organizationUser.findFirst({
       where: {
