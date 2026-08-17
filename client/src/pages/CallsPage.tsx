@@ -51,22 +51,6 @@ interface CallRecord {
   conversation?: { id: string } | null;
 }
 
-interface CallingStatus {
-  configured: boolean;
-  aiAutoAnswer: boolean;
-  activeCalls: number;
-  whatsappConnected: boolean;
-  phoneNumber?: string | null;
-  sarvamStt?: boolean;
-  sarvamTts?: boolean;
-  brainProvider?: 'sarvam' | 'azure' | null;
-  callingEnabled?: boolean;
-  enableHints?: string[];
-  voiceReady?: boolean;
-  callingSettings?: { calling?: { status?: string } } | null;
-  orgCallingSettings?: Record<string, unknown>;
-}
-
 const CALLS_CACHE_KEY = 'calls';
 type CallsNumberCache = {
   calls: CallRecord[];
@@ -108,7 +92,6 @@ export default function CallsPage() {
   const navigate = useNavigate();
 
   const [calls, setCalls] = useState<CallRecord[]>([]);
-  const [status, setStatus] = useState<CallingStatus | null>(null);
   const [listLoading, setListLoading] = useState(false);
   const [ending, setEnding] = useState(false);
   const [callingBack, setCallingBack] = useState(false);
@@ -193,11 +176,8 @@ export default function CallsPage() {
 
   const load = useCallback(async () => {
     if (!resolved || !activeNumber) return;
-    const requestNumberId = activeNumber.id;
     try {
-      const [statusRes] = await Promise.all([callingApi.status(), loadCalls()]);
-      if (requestNumberId !== activeNumberIdRef.current) return;
-      setStatus(statusRes.data.data);
+      await Promise.all([callingApi.status(), loadCalls()]);
     } catch {
       toastError('Could not load calls. Please refresh the page.');
     } finally {
