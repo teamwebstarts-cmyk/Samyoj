@@ -30,6 +30,7 @@ import { resolveCs24hWindowOpensAt } from './service-window';
 import { nextUnreadCount } from './unread';
 import { buildSignedMediaPath, verifyMediaSignature, MEDIA_URL_TTL_SECONDS } from './media-url';
 import { inboxStartCreateData, inboxStartMergeUpdate } from '../contacts/merge';
+import { deleteConversationKeepingHistory } from './delete-conversation';
 
 const router = Router();
 
@@ -984,7 +985,7 @@ router.delete(
 /**
  * Delete an entire conversation: purges stored media, then removes the
  * conversation row. Messages / notes / labels cascade at the DB level;
- * tickets, calls and analytics rows keep their history via SET NULL.
+ * tickets, calls and orders keep their history (conversationId unlinked).
  */
 router.delete(
   '/:id',
@@ -1003,8 +1004,7 @@ router.delete(
       select: { id: true, metadata: true },
     });
     await purgeStoredMedia(rows);
-
-    await prisma.conversation.delete({ where: { id } });
+    await deleteConversationKeepingHistory(id, orgId);
 
     emitToOrg(orgId, 'conversation:deleted', { conversationId: id });
     sendSuccess(res, { deleted: true, conversationId: id });
@@ -1956,7 +1956,7 @@ router.post(
               select: { id: true, metadata: true },
             });
             await purgeStoredMedia(msgs);
-            await prisma.conversation.delete({ where: { id: conversationId } });
+            await deleteConversationKeepingHistory(conversationId, orgId);
             emitToOrg(orgId, 'conversation:deleted', { conversationId });
             break;
           }

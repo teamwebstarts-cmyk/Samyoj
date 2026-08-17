@@ -617,30 +617,6 @@ export default function AiBotPage() {
     <>
       <PageShell>
         <div className="space-y-4 sm:space-y-5">
-          {channelFilter === 'CALL' && (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-theme-border bg-theme-surface px-4 py-3">
-              <div>
-                <p className="text-[13px] font-bold text-theme-fg">AI calling</p>
-                <p className="text-[12px] font-medium text-theme-secondary">
-                  Master switch. Off means no AI picks up — a person rings, or the call is missed.
-                </p>
-              </div>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={callingAiEnabled}
-                onClick={() => void toggleCallingAi(!callingAiEnabled)}
-                className={`inline-flex h-9 items-center rounded-xl border px-3 text-[12px] font-bold ${
-                  callingAiEnabled
-                    ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                    : 'border-theme-border bg-theme-subtle text-theme-secondary'
-                }`}
-              >
-                {callingAiEnabled ? 'On' : 'Off'}
-              </button>
-            </div>
-          )}
-
           <div className="dashboard-card dashboard-card-soft overflow-hidden p-0">
             <ListToolbar
               embedded
@@ -1009,7 +985,7 @@ export default function AiBotPage() {
                     void toggleCallingAi(value);
                   }}
                   title="AI calling"
-                  description="Master switch. Same as the switch on this page."
+                  description="Off means no AI picks up — a person rings, or the call is missed."
                 />
               )}
               {formChannel === 'CALL' && (

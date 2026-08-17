@@ -1208,6 +1208,14 @@ router.delete(
         where: { organizationId: orgId, assignedAgentId: userId },
         data: { assignedAgentId: null },
       });
+      await tx.ticket.updateMany({
+        where: { organizationId: orgId, assignedAgentId: userId },
+        data: { assignedAgentId: reassignToId ?? null },
+      });
+      await tx.lead.updateMany({
+        where: { organizationId: orgId, assignedAgentId: userId },
+        data: { assignedAgentId: reassignToId ?? null },
+      });
       await tx.organizationUser.delete({ where: { id: membership.id } });
       await revokeRefreshSessionsForUser(userId, tx);
     });

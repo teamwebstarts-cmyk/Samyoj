@@ -8,6 +8,7 @@ import {
   MessageSquare,
   Mic,
   MicOff,
+  PanelRight,
   Pause,
   PhoneForwarded,
   PhoneIncoming,
@@ -55,12 +56,8 @@ interface CallDetailViewProps {
   callingAiSaving?: boolean;
   transcript?: TranscriptEntry[] | null;
   summary?: string | null;
-  notes?: string;
-  onNotesChange?: (value: string) => void;
-  onSaveNotes?: () => void;
-  savingNotes?: boolean;
-  notesDirty?: boolean;
   onBack?: () => void;
+  onOpenDetails?: () => void;
   onEndCall?: () => void;
   onCallBack?: () => void;
   callingBack?: boolean;
@@ -102,12 +99,8 @@ export default function CallDetailView({
   callingAiSaving,
   transcript,
   summary,
-  notes = '',
-  onNotesChange,
-  onSaveNotes,
-  savingNotes,
-  notesDirty,
   onBack,
+  onOpenDetails,
   onEndCall,
   onCallBack,
   callingBack,
@@ -215,6 +208,16 @@ export default function CallDetailView({
         </div>
 
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+          {onOpenDetails && (
+            <button
+              type="button"
+              onClick={onOpenDetails}
+              aria-label="Call details"
+              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-neutral-200 text-neutral-700 md:hidden dark:border-neutral-700 ${FOCUS_RING_CLASS}`}
+            >
+              <PanelRight className="h-[18px] w-[18px]" strokeWidth={2.25} />
+            </button>
+          )}
           {!active && onCallBack && (
             <AppButton
               variant="secondary"
@@ -449,29 +452,6 @@ export default function CallDetailView({
         </div>
       )}
 
-      {onNotesChange && onSaveNotes && (
-        <div className="shrink-0 border-t border-neutral-200 bg-white px-3 py-3 sm:px-4 dark:border-neutral-800 dark:bg-neutral-950">
-          <div className="mb-1.5 flex items-center justify-between gap-2">
-            <p className="text-[13px] font-bold text-theme-fg">Notes</p>
-            {notesDirty && (
-              <span className="text-[10px] font-bold uppercase tracking-wide text-amber-600">Unsaved</span>
-            )}
-          </div>
-          <textarea
-            id="call-notes"
-            value={notes}
-            onChange={(e) => onNotesChange(e.target.value)}
-            rows={2}
-            placeholder="Add notes about this call..."
-            className="w-full resize-none rounded-xl border border-neutral-200 bg-neutral-50/80 px-3 py-2 text-[13px] font-medium text-theme-fg outline-none placeholder:text-neutral-400 focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100 dark:border-neutral-700 dark:bg-neutral-900"
-          />
-          <div className="mt-2 flex justify-end">
-            <AppButton size="sm" loading={savingNotes} disabled={!notesDirty && !savingNotes} onClick={onSaveNotes}>
-              Save note
-            </AppButton>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

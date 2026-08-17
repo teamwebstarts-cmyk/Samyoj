@@ -5,6 +5,10 @@ import { callingApi, contactApi } from '../services/api';
 import { useSocket } from '../hooks/useSocket';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 import CallDetailView from '../components/calls/CallDetailView';
+import CallDetailsPanel, {
+  CALL_DETAILS_PANEL_WIDTH,
+  type CallDetailsSection,
+} from '../components/calls/CallDetailsPanel';
 import CallFiltersBar from '../components/calls/CallFiltersBar';
 import CallListItem from '../components/calls/CallListItem';
 import { CallsListEmpty, CallsSelectEmpty } from '../components/calls/CallPlaceholder';
@@ -32,6 +36,7 @@ import { type PageSize } from '../components/inbox/useConversationList';
 import { FOCUS_RING_CLASS } from '../hooks/inboxA11y';
 import { readNumberCache, writeNumberCache } from '../utils/whatsappNumberCache';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
+import { InboxGlassTipProvider } from '../components/inbox/ComposerGlassTip';
 
 interface CallRecord {
   id: string;
@@ -111,6 +116,11 @@ export default function CallsPage() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [deleteCallTarget, setDeleteCallTarget] = useState<CallRecord | null>(null);
   const [deletingCall, setDeletingCall] = useState(false);
+  const [detailsOverlay, setDetailsOverlay] = useState<{ open: boolean; section?: CallDetailsSection }>({
+    open: false,
+  });
+  const [detailsPanelOpen, setDetailsPanelOpen] = useState(false);
+  const [detailsFocusSection, setDetailsFocusSection] = useState<CallDetailsSection | undefined>();
   const loadRef = useRef<() => Promise<void>>(async () => {});
   const callsSnapshotRef = useRef<CallsNumberCache>({
     calls: [],
@@ -333,6 +343,63 @@ export default function CallsPage() {
     [calls, selectedCallId]
   );
 
+  const toggleDetails = useCallback((section?: CallDetailsSection) => {
+    if (!selectedCallId) return;
+    const mobile = window.matchMedia('(max-width: 767px)').matches;
+    if (mobile) {
+      setDetailsOverlay((prev) => {
+        const nextOpen = !prev.open;
+        setDetailsPanelOpen(nextOpen);
+        if (nextOpen && section) setDetailsFocusSection(section);
+        if (!nextOpen) setDetailsFocusSection(undefined);
+        return {
+          open: nextOpen,
+          section: section ?? prev.section,
+        };
+      });
+      return;
+    }
+    setDetailsOverlay({ open: false });
+    setDetailsPanelOpen((prev) => {
+      const next = !prev;
+      if (next && section) setDetailsFocusSection(section);
+      if (!next) setDetailsFocusSection(undefined);
+      return next;
+    });
+  }, [selectedCallId]);
+
+  useEffect(() => {
+    setDetailsOverlay({ open: false });
+    setDetailsPanelOpen(false);
+    setDetailsFocusSection(undefined);
+  }, [selectedCallId]);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+    const sync = () => {
+      if (mq.matches) {
+        setDetailsPanelOpen((wasOpen) => {
+          if (wasOpen) {
+            setDetailsOverlay((prev) =>
+              prev.open ? prev : { open: true, section: prev.section }
+            );
+          }
+          return wasOpen;
+        });
+        return;
+      }
+      setDetailsOverlay((prev) => {
+        if (!prev.open) return prev;
+        setDetailsPanelOpen(true);
+        if (prev.section) setDetailsFocusSection(prev.section);
+        return { open: false, section: prev.section };
+      });
+    };
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
+
   useEffect(() => {
     if (routeCallId) return;
     if (calls.length === 0) {
@@ -510,9 +577,7 @@ export default function CallsPage() {
       await callingApi.updateNotes(selectedCall.id, notes);
       setNotesDirty(false);
       toastSuccess('Notes saved.');
-      setNotes('');
-      // Refresh the call record (status/transcript) without re-filling the notes box.
-      await loadCallDetail(selectedCall.id);
+      await loadCallDetail(selectedCall.id, { syncNotes: true });
     } catch {
       toastError('Could not save notes.');
     } finally {
@@ -553,6 +618,7 @@ export default function CallsPage() {
   const listFiltered = Boolean(search.trim() || chip);
 
   return (
+    <InboxGlassTipProvider>
     <PageShell inbox>
       <div className="flex h-full min-h-0 flex-1 overflow-hidden">
         <div className="inbox-shell relative flex h-full min-h-0 w-full flex-1 flex-row overflow-hidden md:rounded-2xl">
@@ -634,7 +700,7 @@ export default function CallsPage() {
           }`}
         >
           {selectedCall ? (
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white dark:bg-neutral-950">
+            <div className="flex min-h-0 flex-1 overflow-hidden bg-white dark:bg-neutral-950">
               <CallDetailView
                 name={selectedCall.contact?.name}
                 phone={selectedCall.contact?.phone || selectedCall.fromPhone}
@@ -651,6 +717,29 @@ export default function CallsPage() {
                 callingAiSaving={callingAiSaving}
                 transcript={selectedTranscript}
                 summary={selectedCall.metadata?.summary || null}
+                onBack={() => {
+                  setSelectedCallId(null);
+                  navigate('/calls');
+                }}
+                onOpenDetails={() => toggleDetails('notes')}
+                onEndCall={isActiveCallStatus(selectedCall.status) ? () => void handleTerminate() : undefined}
+                onCallBack={!isActiveCallStatus(selectedCall.status) ? () => void handleCallBack() : undefined}
+                callingBack={callingBack}
+                ending={ending}
+                direction={selectedCall.direction}
+              />
+              <CallDetailsPanel
+                callId={selectedCall.id}
+                name={selectedCall.contact?.name}
+                phone={selectedCall.contact?.phone || selectedCall.fromPhone}
+                contactId={selectedCall.contact?.id}
+                status={selectedCall.status}
+                createdAt={selectedCall.createdAt}
+                durationSeconds={selectedCall.durationSeconds}
+                direction={selectedCall.direction}
+                handler={selectedCall.handler}
+                botName={selectedCall.aiBot?.name}
+                agentName={selectedCall.assignedAgent?.name}
                 notes={notes}
                 onNotesChange={(value) => {
                   setNotes(value);
@@ -659,15 +748,13 @@ export default function CallsPage() {
                 onSaveNotes={() => void handleSaveNotes()}
                 savingNotes={savingNotes}
                 notesDirty={notesDirty}
-                onBack={() => {
-                  setSelectedCallId(null);
-                  navigate('/calls');
-                }}
-                onEndCall={isActiveCallStatus(selectedCall.status) ? () => void handleTerminate() : undefined}
-                onCallBack={!isActiveCallStatus(selectedCall.status) ? () => void handleCallBack() : undefined}
-                callingBack={callingBack}
-                ending={ending}
-                direction={selectedCall.direction}
+                panelOpen={detailsPanelOpen}
+                onPanelOpenChange={setDetailsPanelOpen}
+                focusSection={detailsFocusSection}
+                overlayOpen={detailsOverlay.open}
+                overlaySection={detailsOverlay.section}
+                onOverlayClose={() => setDetailsOverlay({ open: false })}
+                panelWidth={CALL_DETAILS_PANEL_WIDTH}
               />
             </div>
           ) : (
@@ -719,6 +806,7 @@ export default function CallsPage() {
         loading={deletingCall}
       />
     </PageShell>
+    </InboxGlassTipProvider>
   );
 }
 

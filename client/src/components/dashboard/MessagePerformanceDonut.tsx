@@ -4,10 +4,6 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, Info, LineChart } from 'lucide-react';
 import IconWell from './icons/IconWell';
 import { MessagePerformanceEmptyIllustrationSvg } from './icons/CardIllustrations';
-import {
-  PeriodPicker,
-  type MetricsPeriod,
-} from './LiveMetricsHero';
 
 interface MessagePerformanceDonutProps {
   messagesSent: number;
@@ -16,10 +12,6 @@ interface MessagePerformanceDonutProps {
   messagesRead: number;
   messagesFailed: number;
   messagesPending: number;
-  /** Fallback label when periodDays is not provided */
-  periodLabel?: string;
-  period?: MetricsPeriod;
-  onPeriodChange?: (period: MetricsPeriod) => void;
 }
 
 type SegmentKey = 'delivered' | 'read' | 'failed' | 'pending';
@@ -56,63 +48,54 @@ const SEGMENT_META: Record<SegmentKey, { label: string; color: string; meaning: 
   },
 };
 
+function formatPct(pct: number) {
+  return `${Math.round(pct)}%`;
+}
+
 function PerformanceHoverTip({
   active,
-  sent,
   chartRect,
 }: {
   active: Segment;
-  sent: number;
   chartRect: DOMRect;
 }) {
   if (typeof document === 'undefined') return null;
 
-  const pad = 12;
-  const tipW = 208;
+  const pad = 8;
+  const tipW = 132;
   const spaceRight = window.innerWidth - chartRect.right - pad;
-  const placeLeft = spaceRight < tipW + 8;
+  const placeLeft = spaceRight < tipW + 6;
   const left = placeLeft
-    ? Math.max(pad, chartRect.left - tipW - 10)
-    : Math.min(chartRect.right + 10, window.innerWidth - tipW - pad);
+    ? Math.max(pad, chartRect.left - tipW - 6)
+    : Math.min(chartRect.right + 6, window.innerWidth - tipW - pad);
   const top = Math.min(
-    Math.max(chartRect.top + chartRect.height / 2, pad + 40),
+    Math.max(chartRect.top + chartRect.height / 2, pad + 24),
     window.innerHeight - pad,
   );
 
   return createPortal(
     <div
       role="tooltip"
-      className="pointer-events-none fixed z-[260] w-[208px] -translate-y-1/2 rounded-xl border border-neutral-200/80 bg-white/95 p-2.5 shadow-[0_8px_28px_rgba(15,23,42,0.14)] backdrop-blur-md dark:border-white/10 dark:bg-zinc-900/95"
+      className="pointer-events-none fixed z-[260] w-[132px] -translate-y-1/2 rounded-lg border border-neutral-200/80 bg-white px-2 py-1.5 shadow-[0_4px_14px_rgba(15,23,42,0.12)] dark:border-white/10 dark:bg-zinc-900"
       style={{ left, top }}
     >
-      <div className="flex items-center justify-between gap-2">
-        <span className="flex min-w-0 items-center gap-1.5">
-          <span
-            className="h-2.5 w-2.5 shrink-0 rounded-full"
-            style={{ backgroundColor: active.color }}
-            aria-hidden
-          />
-          <span className="truncate text-[13px] font-extrabold text-neutral-900 dark:text-white">
-            {active.label}
-          </span>
-        </span>
-        <span className="text-[13px] font-extrabold tabular-nums text-neutral-900 dark:text-white">
-          {active.count.toLocaleString()}
+      <div className="flex items-center gap-1.5">
+        <span
+          className="h-2 w-2 shrink-0 rounded-full"
+          style={{ backgroundColor: active.color }}
+          aria-hidden
+        />
+        <span className="min-w-0 truncate text-[11px] font-bold text-neutral-900 dark:text-white">
+          {active.label}
         </span>
       </div>
-      <p className="mt-1 text-[11px] font-medium leading-snug text-neutral-500 dark:text-neutral-400">
-        {active.meaning} {active.count.toLocaleString()} of {sent.toLocaleString()} sent (
-        {Math.round(active.pct)}%).
+      <p className="mt-0.5 pl-3.5 text-[11px] font-semibold tabular-nums leading-none text-neutral-600 dark:text-neutral-300">
+        <span className="font-extrabold text-neutral-900 dark:text-white">
+          {active.count.toLocaleString()}
+        </span>
+        <span className="mx-0.5 text-neutral-400">·</span>
+        <span style={{ color: active.color }}>{formatPct(active.pct)}</span>
       </p>
-      <span className="mt-2 block h-1.5 overflow-hidden rounded-full bg-neutral-100 dark:bg-white/10">
-        <span
-          className="block h-full rounded-full"
-          style={{
-            width: `${Math.max(8, active.pct)}%`,
-            backgroundColor: active.color,
-          }}
-        />
-      </span>
     </div>,
     document.body,
   );
@@ -125,9 +108,6 @@ export default function MessagePerformanceDonut({
   messagesRead,
   messagesFailed,
   messagesPending,
-  periodLabel = 'Last 7 days',
-  period,
-  onPeriodChange,
 }: MessagePerformanceDonutProps) {
   const chartRef = useRef<HTMLDivElement>(null);
   const isEmpty = messagesSent <= 0;
@@ -173,6 +153,9 @@ export default function MessagePerformanceDonut({
     .filter((a): a is NonNullable<typeof a> => a !== null);
 
   const hovered = segments.find((s) => s.key === hoveredKey) ?? null;
+  const defaultCenter =
+    [...segments].sort((a, b) => b.count - a.count)[0] ?? segments[0];
+  const center = hovered ?? defaultCenter;
   const chartRect = chartRef.current?.getBoundingClientRect() ?? null;
 
   const showTip = (key: SegmentKey) => {
@@ -183,44 +166,28 @@ export default function MessagePerformanceDonut({
     setHoveredKey(null);
   };
 
-  const periodControl =
-    period ? (
-      <PeriodPicker
-        period={period}
-        onPeriodChange={onPeriodChange}
-        align="right"
-      />
-    ) : (
-      <span className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200/80 bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-neutral-600 shadow-xs">
-        {periodLabel}
-      </span>
-    );
-
   return (
     <section className="dashboard-card flex h-full flex-col rounded-2xl border border-neutral-100/90 bg-white p-[var(--card-pad)] shadow-xs sm:rounded-3xl">
       {hovered && chartRect ? (
-        <PerformanceHoverTip active={hovered} sent={messagesSent} chartRect={chartRect} />
+        <PerformanceHoverTip active={hovered} chartRect={chartRect} />
       ) : null}
-      <div className="flex shrink-0 items-start justify-between gap-2 sm:items-center sm:gap-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <IconWell accent="emerald" size="sm" round={false}>
-            <LineChart className="h-3.5 w-3.5 stroke-[2.2]" />
-          </IconWell>
-          <div className="flex min-w-0 items-center gap-1.5">
-            <h2 className="truncate text-[14px] font-bold tracking-tight text-neutral-900 sm:text-[15px]">
-              Message performance
-            </h2>
-            {!isEmpty && (
-              <span
-                className="hidden text-neutral-400 sm:inline"
-                title="Each color is the latest status: Delivered (unread), Read, Failed, Pending."
-              >
-                <Info className="h-3.5 w-3.5 shrink-0 stroke-[1.8]" aria-hidden />
-              </span>
-            )}
-          </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <IconWell accent="emerald" size="sm" round={false}>
+          <LineChart className="h-3.5 w-3.5 stroke-[2.2]" />
+        </IconWell>
+        <div className="flex min-w-0 items-center gap-1.5">
+          <h2 className="truncate text-[14px] font-bold tracking-tight text-neutral-900 sm:text-[15px]">
+            Message performance
+          </h2>
+          {!isEmpty && (
+            <span
+              className="hidden text-neutral-400 sm:inline"
+              title="Each color is the latest status: Delivered (unread), Read, Failed, Pending."
+            >
+              <Info className="h-3.5 w-3.5 shrink-0 stroke-[1.8]" aria-hidden />
+            </span>
+          )}
         </div>
-        <div className="shrink-0">{periodControl}</div>
       </div>
 
       {isEmpty ? (
@@ -245,7 +212,7 @@ export default function MessagePerformanceDonut({
               className="h-full w-full -rotate-90 transform"
               role="img"
               aria-label={segments
-                .map((s) => `${s.label} ${s.count.toLocaleString()}`)
+                .map((s) => `${s.label} ${s.count.toLocaleString()} (${formatPct(s.pct)})`)
                 .join(', ')}
             >
               <circle
@@ -276,12 +243,15 @@ export default function MessagePerformanceDonut({
               ))}
               <circle cx="90" cy="90" r={R - stroke / 2 - 2} fill="#ffffff" />
             </svg>
-            <div className="pointer-events-none absolute inset-0 z-[1] flex flex-col items-center justify-center px-6 text-center">
-              <span className="text-[1.45rem] font-extrabold leading-none tracking-tight tabular-nums text-neutral-900 sm:text-[1.6rem]">
-                {messagesSent.toLocaleString()}
+            <div className="pointer-events-none absolute inset-0 z-[1] flex flex-col items-center justify-center px-5 text-center">
+              <span
+                className="text-[1.35rem] font-extrabold leading-none tracking-tight tabular-nums sm:text-[1.5rem]"
+                style={{ color: center.color }}
+              >
+                {formatPct(center.pct)}
               </span>
               <span className="mt-1 text-[10px] font-medium leading-none text-neutral-500">
-                Total sent
+                {center.label}
               </span>
             </div>
           </div>

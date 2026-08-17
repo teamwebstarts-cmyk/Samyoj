@@ -2,7 +2,6 @@ import { ArrowDownRight, ArrowUpRight } from 'lucide-react';
 import MetricsPeriodPicker from './MetricsPeriodPicker';
 import { metricsPeriodCompareLabel, type MetricsPeriod } from '../../utils/metricsPeriod';
 
-export { PeriodPicker } from './MetricsPeriodPicker';
 export {
   METRICS_PRESET_OPTIONS as LIVE_METRICS_PERIOD_OPTIONS,
   type MetricsPresetDays as LiveMetricsPeriodDays,

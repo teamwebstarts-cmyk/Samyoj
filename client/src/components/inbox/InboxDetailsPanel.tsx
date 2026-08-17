@@ -170,7 +170,6 @@ export default function InboxDetailsPanel({
   const [noteText, setNoteText] = useState('');
   const [showNoteComposer, setShowNoteComposer] = useState(false);
   const [savingNote, setSavingNote] = useState(false);
-  const [confirmDeleteNoteId, setConfirmDeleteNoteId] = useState<string | null>(null);
   const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null);
   const [allLabels, setAllLabels] = useState<InboxLabel[]>([]);
   const [newLabelName, setNewLabelName] = useState('');
@@ -219,7 +218,6 @@ export default function InboxDetailsPanel({
     setNewTag('');
     setShowNoteComposer(false);
     setNoteText('');
-    setConfirmDeleteNoteId(null);
     setDetailsTab('overview');
   }, [conversationId]); // eslint-disable-line react-hooks/exhaustive-deps -- reset only on conversation change
 
@@ -331,7 +329,6 @@ export default function InboxDetailsPanel({
       toastError('Could not delete note');
     } finally {
       setDeletingNoteId(null);
-      setConfirmDeleteNoteId(null);
     }
   };
 
@@ -580,36 +577,18 @@ export default function InboxDetailsPanel({
                       >
                         <div className="flex items-start gap-2">
                           <CollapsibleNoteText content={note.content} />
-                          {canDelete &&
-                            (confirmDeleteNoteId === note.id ? (
-                              <span className="flex shrink-0 items-center gap-1">
-                                <button
-                                  type="button"
-                                  disabled={deletingNoteId === note.id}
-                                  onClick={() => void handleDeleteNote(note.id)}
-                                  className="rounded-md bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white transition hover:bg-red-700 disabled:opacity-50"
-                                >
-                                  {deletingNoteId === note.id ? '…' : 'Delete'}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setConfirmDeleteNoteId(null)}
-                                  className="rounded-md px-1 py-0.5 text-[10px] font-bold text-theme-muted transition hover:text-theme-fg"
-                                >
-                                  Cancel
-                                </button>
-                              </span>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => setConfirmDeleteNoteId(note.id)}
-                                aria-label="Delete note"
-                                {...tipFor('Delete note')}
-                                className="shrink-0 rounded-md p-1 text-slate-400 transition hover:bg-white/70 hover:text-red-600 dark:hover:bg-neutral-800"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            ))}
+                          {canDelete && (
+                            <button
+                              type="button"
+                              disabled={deletingNoteId === note.id}
+                              onClick={() => void handleDeleteNote(note.id)}
+                              aria-label="Delete note"
+                              {...tipFor('Delete note')}
+                              className="shrink-0 rounded-md p-1 text-slate-400 transition hover:bg-white/70 hover:text-red-600 disabled:opacity-50 dark:hover:bg-neutral-800"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
                         </div>
                         <p className="mt-1.5 text-[10.5px] font-medium text-theme-muted">
                           {formatNoteMeta(note)}

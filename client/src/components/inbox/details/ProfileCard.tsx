@@ -31,26 +31,6 @@ function formatRelative(iso?: string | null): string | null {
   return new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
-function slaMeta(conversation: Conversation): { label: string; className: string; title: string } | null {
-  if (conversation.slaBreached) {
-    return {
-      label: 'SLA breached',
-      className: 'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300',
-      title: 'First-response SLA breached',
-    };
-  }
-  const dueAt = conversation.slaDueAt ? new Date(conversation.slaDueAt).getTime() : null;
-  if (dueAt && dueAt > Date.now() && dueAt - Date.now() <= 60 * 60 * 1000) {
-    const mins = Math.max(1, Math.round((dueAt - Date.now()) / 60_000));
-    return {
-      label: `SLA ${mins}m`,
-      className: 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300',
-      title: 'First response due within the hour',
-    };
-  }
-  return null;
-}
-
 export default function ProfileCard({
   contact,
   conversation,
@@ -60,7 +40,6 @@ export default function ProfileCard({
   const tipFor = useGlassTipProps();
   const optedIn = contact.optedIn !== false;
   const status = STATUS_LABEL[conversation.status] || conversation.status;
-  const sla = slaMeta(conversation);
   const lastActive = formatRelative(conversation.lastMessageAt || contact.lastActiveAt);
   const [copied, setCopied] = useState(false);
 
@@ -118,14 +97,6 @@ export default function ProfileCard({
           {optedIn ? <ShieldCheck className="h-3 w-3" /> : <ShieldAlert className="h-3 w-3" />}
           {optedIn ? 'Opted in' : 'Opted out'}
         </span>
-        {sla && (
-          <span
-            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${sla.className}`}
-            {...tipFor(sla.title)}
-          >
-            {sla.label}
-          </span>
-        )}
         {lastActive && (
           <span className="inline-flex items-center rounded-full bg-theme-subtle/80 px-2 py-0.5 text-[10px] font-semibold text-theme-muted">
             Active {lastActive}

@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Bot, Check, Clock, GitBranch, LifeBuoy, PhoneOff, Star } from 'lucide-react';
+import { Bot, Check, GitBranch, LifeBuoy, PhoneOff, Star } from 'lucide-react';
 import ContactAvatar from './ContactAvatar';
 import { useGlassTipProps } from './ComposerGlassTip';
 import { softStatusPillStyle } from './details/DetailsSectionCard';
@@ -27,31 +27,6 @@ const STATUS_LABEL: Record<string, string> = {
   CLOSED: 'Closed',
   SNOOZED: 'Snoozed',
 };
-
-function slaBadge(conversation: Conversation, tipFor: ReturnType<typeof useGlassTipProps>) {
-  if (conversation.slaBreached) {
-    return (
-      <span
-        className="inline-flex items-center gap-0.5 rounded-md bg-red-100/90 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-red-700 dark:bg-red-950/50 dark:text-red-300"
-        {...tipFor('First-response SLA breached')}
-      >
-        SLA
-      </span>
-    );
-  }
-  const dueAt = conversation.slaDueAt ? new Date(conversation.slaDueAt).getTime() : null;
-  if (dueAt && dueAt > Date.now() && dueAt - Date.now() <= 60 * 60 * 1000) {
-    return (
-      <span
-        className="inline-flex items-center gap-0.5 rounded-md bg-amber-100/90 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-700 dark:bg-amber-950/50 dark:text-amber-300"
-        {...tipFor('First response due within the hour')}
-      >
-        <Clock className="h-2.5 w-2.5 shrink-0" />
-      </span>
-    );
-  }
-  return null;
-}
 
 export default function ConversationItem({
   conversation,
@@ -268,7 +243,6 @@ export default function ConversationItem({
                 <span className="truncate text-[11px] font-medium text-theme-muted">{agentLabel}</span>
               </>
             )}
-            {slaBadge(conversation, tipFor)}
             {hasTicket && (
               <span
                 className="inline-flex items-center gap-0.5 rounded-md bg-emerald-100/90 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"

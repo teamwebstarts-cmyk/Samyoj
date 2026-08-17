@@ -4,6 +4,7 @@ import { AlertTriangle, MoreHorizontal, Plus, RefreshCw, User, X } from 'lucide-
 import SearchInput from '../ui/SearchInput';
 import { useGlassTipProps } from './ComposerGlassTip';
 import { FOCUS_RING_CLASS } from '../../hooks/inboxA11y';
+import { useHorizontalWheelScroll } from '../../hooks/useHorizontalWheelScroll';
 import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
 import type { InboundHealth } from '../../hooks/useWebhookHealth';
 import type { InboxSelectOption } from './InboxSelect';
@@ -123,6 +124,7 @@ export default function InboxListHeader({
   const [agentsMenuPos, setAgentsMenuPos] = useState<{ top: number; right: number } | null>(null);
   const agentsMenuBtnRef = useRef<HTMLButtonElement>(null);
   const agentsMenuRef = useRef<HTMLDivElement>(null);
+  const chipRowRef = useHorizontalWheelScroll();
   const { hasConnectedNumber, loading: numberLoading } = useWhatsAppNumber();
 
   const isConnected = hasConnectedNumber && !numberLoading;
@@ -376,6 +378,7 @@ export default function InboxListHeader({
         </div>
 
         <div
+          ref={chipRowRef}
           role="tablist"
           aria-label="Filter conversations"
           aria-live="polite"

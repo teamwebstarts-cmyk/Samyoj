@@ -275,8 +275,6 @@ export default function DashboardPage() {
                 messagesRead={stats.messagesRead ?? 0}
                 messagesFailed={stats.messagesFailed ?? stats.failedMessages}
                 messagesPending={stats.messagesPending ?? 0}
-                period={metricsPeriod}
-                onPeriodChange={setMetricsPeriod}
               />
               <UpcomingCampaignsCard
                 campaigns={campaigns}

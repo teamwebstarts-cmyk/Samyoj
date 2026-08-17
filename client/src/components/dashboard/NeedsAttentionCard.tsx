@@ -37,7 +37,7 @@ function MetricRow({
     <Link
       to={to}
       title={subtitle}
-      className="flex flex-col gap-1.5 rounded-xl border border-neutral-100/90 bg-white px-2.5 py-2 transition hover:border-neutral-200 hover:bg-neutral-50/80 sm:flex-row sm:items-center sm:justify-between sm:gap-2 sm:px-3 sm:py-2.5"
+      className="flex flex-col items-start gap-1.5 rounded-xl border border-neutral-100/90 bg-white px-2.5 py-2 text-left transition hover:border-neutral-200 hover:bg-neutral-50/80 sm:flex-row sm:items-center sm:justify-between sm:gap-2 sm:px-3 sm:py-2.5"
     >
       <div className="flex min-w-0 items-center gap-2">
         <span
@@ -59,7 +59,7 @@ function MetricRow({
         </div>
       </div>
       <span
-        className={`inline-flex h-7 min-w-7 shrink-0 items-center justify-center self-end rounded-full px-2 text-[12px] font-extrabold tabular-nums ring-1 sm:self-auto ${
+        className={`inline-flex h-7 min-w-7 shrink-0 items-center justify-center self-start rounded-full px-2 text-[12px] font-extrabold tabular-nums ring-1 sm:self-auto ${
           urgent
             ? 'bg-rose-50 text-rose-600 ring-rose-100/80'
             : 'bg-neutral-50 text-neutral-500 ring-neutral-100'
@@ -140,7 +140,7 @@ export default function NeedsAttentionCard({
             <p className="text-[11px] font-medium text-neutral-500">Checking connection status…</p>
           </div>
         </div>
-        <div className="flex flex-1 flex-col justify-center gap-2">
+        <div className="flex flex-1 flex-col items-stretch justify-start gap-2">
           <div className="h-14 animate-pulse rounded-xl bg-neutral-50" />
           <div className="h-14 animate-pulse rounded-xl bg-neutral-50" />
         </div>
@@ -216,7 +216,7 @@ export default function NeedsAttentionCard({
           </span>
         </div>
 
-        <div className="flex flex-1 flex-col justify-center gap-2">
+        <div className="flex flex-1 flex-col items-stretch justify-start gap-2">
           {disconnected && (
             <AlertRow
               title="WhatsApp not connected"
