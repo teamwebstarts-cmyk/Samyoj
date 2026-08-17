@@ -266,6 +266,7 @@ model User {
   oauthAccounts           OAuthAccount[]
   assignedLeads           Lead[]                   @relation("AssignedLeads")
   assignedTickets         Ticket[]                 @relation("AssignedTickets")
+  supportTickets          SupportTicket[]          @relation("SupportTickets")
 
   @@map("users")
 }
@@ -361,6 +362,7 @@ model Organization {
   featureFlags                   OrgFeatureFlag[]
   leads                          Lead[]
   tickets                        Ticket[]
+  supportTickets                 SupportTicket[]
   providerWebhookEvents          ProviderWebhookEvent[]
   unmatchedProviderStatuses      UnmatchedProviderStatus[]
   whatsappNumberIsolationReports WhatsappNumberIsolationReport[]
@@ -908,6 +910,13 @@ enum TicketPriority {
   URGENT
 }
 
+enum SupportTicketStatus {
+  OPEN
+  PENDING
+  RESOLVED
+  CLOSED
+}
+
 model Ticket {
   id               String         @id @default(uuid())
   organizationId   String         @map("organization_id")
@@ -932,6 +941,28 @@ model Ticket {
   @@index([organizationId, status])
   @@index([organizationId, whatsappNumberId, status])
   @@map("tickets")
+}
+
+/// In-app Help Center tickets for the logged-in org user (billing/login/data).
+/// Separate from WhatsApp Inbox `Ticket` rows, which track customer chats.
+model SupportTicket {
+  id             String              @id @default(uuid())
+  organizationId String              @map("organization_id")
+  createdById    String              @map("created_by_id")
+  subject        String
+  body           String
+  status         SupportTicketStatus @default(OPEN)
+  source         String              @default("manual")
+  transcript     String?
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation("SupportTickets", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdById, createdAt])
+  @@index([organizationId, status])
+  @@map("support_tickets")
 }
 
 model OAuthAccount {

@@ -176,6 +176,16 @@ export default function RegisterPage() {
             Create account
           </AuthButton>
         </div>
+
+        <p className="pt-1 text-center text-[13px] font-medium text-slate-500">
+          Already have an account?{' '}
+          <Link
+            to="/login"
+            className="font-bold text-[#0A8954] transition hover:text-[#087A4A]"
+          >
+            Sign in
+          </Link>
+        </p>
       </form>
 
       <AuthDivider label="or" />

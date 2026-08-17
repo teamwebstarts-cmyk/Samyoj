@@ -33,6 +33,7 @@ import { emitToOrg, emitToUser } from '../../realtime';
 import { resolveActiveWhatsappNumber, resolveActiveWhatsappNumberId } from '../whatsapp/active-number';
 import { recordAiUsage } from '../ai/org-ai.service';
 import { charUsage } from '../ai/ai-usage-actions';
+import { deleteCallLogs } from './delete-call-logs';
 
 const router = Router();
 
@@ -79,6 +80,11 @@ const callingSettingsSchema = z.object({
 
 const notesSchema = z.object({
   notes: z.string().max(5000),
+});
+
+const bulkSchema = z.object({
+  callIds: z.array(z.string().uuid()).min(1).max(50),
+  action: z.enum(['delete']),
 });
 
 const acceptSchema = z.object({
@@ -845,6 +851,26 @@ router.patch(
   })
 );
 
+/** Delete selected call history rows for this org + connected number. */
+router.post(
+  '/bulk',
+  ...memberGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const data = bulkSchema.parse(req.body);
+    const { deletedIds } = await deleteCallLogs({
+      organizationId: orgId,
+      whatsappNumberId: req.activeWhatsappNumberId,
+      callIds: data.callIds,
+    });
+
+    for (const callId of deletedIds) {
+      emitToOrg(orgId, 'call:deleted', { callId });
+    }
+    sendSuccess(res, { deleted: deletedIds.length, callIds: deletedIds });
+  })
+);
+
 /** Delete a single call record from the org's call history. */
 router.delete(
   '/:id',
@@ -853,16 +879,16 @@ router.delete(
     const orgId = req.user!.organizationId!;
     const id = String(req.params.id);
 
-    const call = await prisma.call.findFirst({
-      where: { id, organizationId: orgId, whatsappNumberId: req.activeWhatsappNumberId },
-      select: { id: true },
+    const { deletedIds } = await deleteCallLogs({
+      organizationId: orgId,
+      whatsappNumberId: req.activeWhatsappNumberId,
+      callIds: [id],
+      missingAs: 'not_found',
     });
-    if (!call) throw new AppError(404, 'Call not found');
 
-    await prisma.call.delete({ where: { id } });
-
-    emitToOrg(orgId, 'call:deleted', { callId: id });
-    sendSuccess(res, { deleted: true, callId: id });
+    const callId = deletedIds[0] ?? id;
+    emitToOrg(orgId, 'call:deleted', { callId });
+    sendSuccess(res, { deleted: true, callId });
   })
 );
 

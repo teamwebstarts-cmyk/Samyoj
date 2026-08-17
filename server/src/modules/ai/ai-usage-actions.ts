@@ -11,6 +11,7 @@ export const AI_USAGE_ACTIONS = [
   'generate_personality',
   'generate_training',
   'call_summary',
+  'support_help',
 ] as const;
 
 export type AiUsageAction = (typeof AI_USAGE_ACTIONS)[number];
@@ -27,6 +28,7 @@ export const AI_USAGE_LABELS: Record<AiUsageAction, string> = {
   generate_personality: 'Write personality',
   generate_training: 'Write training answers',
   call_summary: 'Call summary',
+  support_help: 'Help Center',
 };
 
 export function canonicalAiUsageAction(action: string): AiUsageAction | string {

@@ -413,6 +413,11 @@ export const callingApi = {
   terminate: (id: string) => api.post(`/calling/${id}/terminate`),
   remove: (id: string) =>
     api.delete<{ data: { deleted: boolean; callId: string } }>(`/calling/${id}`),
+  bulkRemove: (callIds: string[]) =>
+    api.post<{ data: { deleted: number; callIds: string[] } }>('/calling/bulk', {
+      callIds,
+      action: 'delete',
+    }),
 };
 
 export const aiBotApi = {
@@ -663,6 +668,17 @@ export const ticketApi = {
   update: (id: string, data: Record<string, unknown>) => api.patch(`/tickets/${id}`, data),
   fromConversation: (conversationId: string, data?: Record<string, unknown>) =>
     api.post(`/tickets/from-conversation/${conversationId}`, data || {}),
+};
+
+export const supportApi = {
+  status: () => api.get('/support/status'),
+  chat: (messages: Array<{ role: 'user' | 'assistant'; content: string }>) =>
+    api.post('/support/chat', { messages }),
+  listTickets: () => api.get('/support/tickets'),
+  createTicket: (data: { subject: string; body: string; source?: 'manual' | 'chat'; transcript?: string }) =>
+    api.post('/support/tickets', data),
+  escalate: (messages: Array<{ role: 'user' | 'assistant'; content: string }>) =>
+    api.post('/support/tickets/escalate', { messages }),
 };
 
 export const commerceApi = {

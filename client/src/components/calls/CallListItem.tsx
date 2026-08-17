@@ -1,5 +1,6 @@
-import { Loader2, PhoneIncoming, PhoneMissed, PhoneOff, PhoneOutgoing } from 'lucide-react';
+import { Check, Loader2, PhoneIncoming, PhoneMissed, PhoneOff, PhoneOutgoing } from 'lucide-react';
 import ContactAvatar from '../inbox/ContactAvatar';
+import { FOCUS_RING_CLASS } from '../../hooks/inboxA11y';
 import {
   CALL_RECENTS_COLOR,
   callListTitle,
@@ -27,6 +28,9 @@ interface CallListItemProps {
   onContextMenu?: (event: React.MouseEvent) => void;
   onCallBack?: () => void;
   callingBack?: boolean;
+  selectable?: boolean;
+  checked?: boolean;
+  onToggleSelect?: () => void;
 }
 
 function RecentsGlyph({ kind, direction }: { kind: CallRecentsKind; direction?: string }) {
@@ -66,6 +70,9 @@ export default function CallListItem({
   onContextMenu,
   onCallBack,
   callingBack,
+  selectable = false,
+  checked = false,
+  onToggleSelect,
 }: CallListItemProps) {
   const kind = callRecentsKind(direction, status);
   const active = isActiveCallStatus(status);
@@ -83,16 +90,46 @@ export default function CallListItem({
       type="button"
       onClick={onSelect}
       onContextMenu={onContextMenu}
-      className={`group relative flex w-full items-center gap-3 px-3 py-3 text-left transition-colors sm:px-4 ${
-        selected
-          ? 'bg-neutral-100/90 ring-1 ring-inset ring-neutral-200/80 dark:bg-neutral-900/50 dark:ring-neutral-800'
-          : active
-            ? 'bg-emerald-50/50 hover:bg-emerald-50/80 dark:bg-emerald-950/15'
-            : 'bg-white hover:bg-neutral-50 dark:bg-neutral-950 dark:hover:bg-neutral-900/50'
+      aria-current={selected ? 'true' : undefined}
+      className={`group relative flex w-full items-center gap-3 px-3 py-3 text-left transition-colors sm:px-4 ${FOCUS_RING_CLASS} ${
+        checked
+          ? 'bg-whatsapp-500/10 dark:bg-whatsapp-400/12'
+          : selected
+            ? 'bg-neutral-100/90 ring-1 ring-inset ring-neutral-200/80 dark:bg-neutral-900/50 dark:ring-neutral-800'
+            : active
+              ? 'bg-emerald-50/50 hover:bg-emerald-50/80 dark:bg-emerald-950/15'
+              : 'bg-white hover:bg-neutral-50 dark:bg-neutral-950 dark:hover:bg-neutral-900/50'
       }`}
     >
-      {selected && (
+      {selected && !checked && (
         <span className="absolute bottom-0 left-0 top-0 w-[3px] bg-emerald-500" />
+      )}
+
+      {selectable && (
+        <span
+          role="checkbox"
+          aria-checked={checked}
+          aria-label="Select call"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              e.stopPropagation();
+              onToggleSelect?.();
+            }
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleSelect?.();
+          }}
+          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition ${FOCUS_RING_CLASS} ${
+            checked
+              ? 'border-whatsapp-500 bg-gradient-to-br from-whatsapp-400 to-whatsapp-600 text-white shadow-[0_1px_3px_rgba(37,211,102,0.35)]'
+              : 'border-neutral-200 bg-white dark:border-neutral-500/45 dark:bg-neutral-900/50'
+          }`}
+        >
+          {checked && <Check className="h-3 w-3" strokeWidth={3} />}
+        </span>
       )}
 
       <ContactAvatar name={name || undefined} phone={phone} size="sm" active={active} />
@@ -122,7 +159,7 @@ export default function CallListItem({
               {duration ? <span className="text-neutral-400"> · {duration}</span> : null}
             </span>
           </span>
-          {onCallBack && !active ? (
+          {onCallBack && !active && !selectable ? (
             <span
               aria-label={callingBack ? 'Calling…' : 'Call back'}
               onClick={(e) => {

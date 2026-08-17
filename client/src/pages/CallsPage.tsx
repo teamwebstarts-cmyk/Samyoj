@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { callingApi, contactApi } from '../services/api';
 import { useSocket } from '../hooks/useSocket';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
@@ -11,6 +11,8 @@ import CallDetailsPanel, {
 } from '../components/calls/CallDetailsPanel';
 import CallFiltersBar from '../components/calls/CallFiltersBar';
 import CallListItem from '../components/calls/CallListItem';
+import CallsBulkBar from '../components/calls/CallsBulkBar';
+import CallContextMenu from '../components/calls/CallContextMenu';
 import { CallsListEmpty, CallsSelectEmpty } from '../components/calls/CallPlaceholder';
 import {
   formatPhoneDisplay,
@@ -18,7 +20,6 @@ import {
   normalizeTranscript,
   transcriptPreview,
 } from '../components/calls/callUtils';
-import ContextMenu from '../components/ui/ContextMenu';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { toastError, toastSuccess } from '../utils/toast';
 import {
@@ -116,6 +117,10 @@ export default function CallsPage() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [deleteCallTarget, setDeleteCallTarget] = useState<CallRecord | null>(null);
   const [deletingCall, setDeletingCall] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [detailsOverlay, setDetailsOverlay] = useState<{ open: boolean; section?: CallDetailsSection }>({
     open: false,
   });
@@ -250,6 +255,9 @@ export default function CallsPage() {
       setNotesDirty(false);
       setCallMenu(null);
       setDeleteCallTarget(null);
+      setSelectionMode(false);
+      setSelectedIds(new Set());
+      setBulkDeleteOpen(false);
       navigate('/calls');
       setListLoading(true);
       void loadRef.current();
@@ -266,6 +274,9 @@ export default function CallsPage() {
     setChip('');
     setCallMenu(null);
     setDeleteCallTarget(null);
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+    setBulkDeleteOpen(false);
     navigate('/calls');
     void loadRef.current();
   });
@@ -324,9 +335,21 @@ export default function CallsPage() {
     if (event === 'call:deleted') {
       const payload = data as { callId: string };
       if (!payload.callId) return;
-      setCalls((prev) => prev.filter((c) => c.id !== payload.callId));
-      setTotalCalls((prev) => Math.max(0, prev - 1));
+      let removed = false;
+      setCalls((prev) => {
+        if (!prev.some((c) => c.id === payload.callId)) return prev;
+        removed = true;
+        return prev.filter((c) => c.id !== payload.callId);
+      });
+      if (removed) setTotalCalls((prev) => Math.max(0, prev - 1));
       setSelectedCallId((prev) => (prev === payload.callId ? null : prev));
+      setSelectedIds((prev) => {
+        if (!prev.has(payload.callId)) return prev;
+        const next = new Set(prev);
+        next.delete(payload.callId);
+        if (next.size === 0) setSelectionMode(false);
+        return next;
+      });
     }
     if (event === 'call:outbound_connected') {
       const payload = data as { callId: string; sdpAnswer?: string };
@@ -428,6 +451,64 @@ export default function CallsPage() {
     [loadCallDetail, navigate]
   );
 
+  const toggleSelect = useCallback((callId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(callId)) next.delete(callId);
+      else next.add(callId);
+      setSelectionMode(next.size > 0);
+      return next;
+    });
+  }, []);
+
+  const selectCall = useCallback((callId: string) => {
+    setSelectionMode(true);
+    setSelectedIds((prev) => {
+      if (prev.has(callId)) return prev;
+      const next = new Set(prev);
+      next.add(callId);
+      return next;
+    });
+  }, []);
+
+  const deselectCall = useCallback((callId: string) => {
+    setSelectedIds((prev) => {
+      if (!prev.has(callId)) return prev;
+      const next = new Set(prev);
+      next.delete(callId);
+      if (next.size === 0) setSelectionMode(false);
+      return next;
+    });
+  }, []);
+
+  const clearSelection = useCallback(() => {
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+  }, []);
+
+  const selectAllVisible = useCallback(() => {
+    setSelectionMode(true);
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const call of calls) next.add(call.id);
+      return next;
+    });
+  }, [calls]);
+
+  const toggleSelectAllVisible = useCallback(() => {
+    const allVisibleSelected = calls.length > 0 && calls.every((call) => selectedIds.has(call.id));
+    if (allVisibleSelected) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        for (const call of calls) next.delete(call.id);
+        if (next.size === 0) setSelectionMode(false);
+        return next;
+      });
+      return;
+    }
+    selectAllVisible();
+  }, [calls, selectAllVisible, selectedIds]);
+
   const openCallContextMenu = useCallback((event: React.MouseEvent, call: CallRecord) => {
     event.preventDefault();
     event.stopPropagation();
@@ -442,6 +523,7 @@ export default function CallsPage() {
       setCalls((prev) => prev.filter((c) => c.id !== deleteCallTarget.id));
       setTotalCalls((prev) => Math.max(0, prev - 1));
       setSelectedCallId((prev) => (prev === deleteCallTarget.id ? null : prev));
+      deselectCall(deleteCallTarget.id);
       if (routeCallId === deleteCallTarget.id) navigate('/calls');
       setDeleteCallTarget(null);
       toastSuccess('Call deleted.');
@@ -450,7 +532,34 @@ export default function CallsPage() {
     } finally {
       setDeletingCall(false);
     }
-  }, [deleteCallTarget, navigate, routeCallId]);
+  }, [deleteCallTarget, deselectCall, navigate, routeCallId]);
+
+  const handleBulkDelete = useCallback(async () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0 || bulkBusy) return;
+    if (ids.length > 50) {
+      toastError('Select up to 50 calls at a time.');
+      return;
+    }
+    setBulkBusy(true);
+    try {
+      const { data } = await callingApi.bulkRemove(ids);
+      const deleted = new Set(data.data.callIds);
+      setCalls((prev) => prev.filter((c) => !deleted.has(c.id)));
+      setSelectedCallId((prev) => (prev && deleted.has(prev) ? null : prev));
+      if (routeCallId && deleted.has(routeCallId)) navigate('/calls');
+      clearSelection();
+      setBulkDeleteOpen(false);
+      toastSuccess(
+        deleted.size === 1 ? 'Call deleted.' : `${deleted.size} calls deleted.`
+      );
+      void loadCalls();
+    } catch {
+      toastError('Could not delete the selected calls.');
+    } finally {
+      setBulkBusy(false);
+    }
+  }, [bulkBusy, clearSelection, loadCalls, navigate, routeCallId, selectedIds]);
 
   const contextMenuCall = useMemo(
     () => (callMenu ? calls.find((c) => c.id === callMenu.callId) ?? null : null),
@@ -616,6 +725,24 @@ export default function CallsPage() {
 
   const selectedTranscript = normalizeTranscript(selectedCall?.transcript);
   const listFiltered = Boolean(search.trim() || chip);
+  const allVisibleSelected = calls.length > 0 && calls.every((call) => selectedIds.has(call.id));
+  const selectionBar =
+    selectionMode && selectedIds.size > 0 ? (
+      <CallsBulkBar
+        count={selectedIds.size}
+        allVisibleSelected={allVisibleSelected}
+        busy={bulkBusy}
+        onSelectAll={toggleSelectAllVisible}
+        onDelete={() => {
+          if (selectedIds.size > 50) {
+            toastError('Select up to 50 calls at a time.');
+            return;
+          }
+          setBulkDeleteOpen(true);
+        }}
+        onClear={clearSelection}
+      />
+    ) : null;
 
   return (
     <InboxGlassTipProvider>
@@ -643,6 +770,7 @@ export default function CallsPage() {
           />
 
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            {selectionBar}
             {listLoading ? (
               <CallsListSkeleton />
             ) : calls.length === 0 ? (
@@ -670,10 +798,19 @@ export default function CallsPage() {
                           botName={call.aiBot?.name}
                           agentName={call.assignedAgent?.name}
                           selected={selectedCallId === call.id}
-                          onSelect={() => handleSelectCall(call)}
+                          onSelect={() =>
+                            selectionMode ? toggleSelect(call.id) : handleSelectCall(call)
+                          }
                           onContextMenu={(e) => openCallContextMenu(e, call)}
-                          onCallBack={!isActiveCallStatus(call.status) ? () => void handleCallListItemCallBack(call) : undefined}
+                          onCallBack={
+                            !selectionMode && !isActiveCallStatus(call.status)
+                              ? () => void handleCallListItemCallBack(call)
+                              : undefined
+                          }
                           callingBack={callingBackId === call.id}
+                          selectable={selectionMode}
+                          checked={selectedIds.has(call.id)}
+                          onToggleSelect={() => toggleSelect(call.id)}
                         />
                       );
                     })}
@@ -700,7 +837,7 @@ export default function CallsPage() {
           }`}
         >
           {selectedCall ? (
-            <div className="flex min-h-0 flex-1 overflow-hidden bg-white dark:bg-neutral-950">
+            <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden bg-white dark:bg-neutral-950">
               <CallDetailView
                 name={selectedCall.contact?.name}
                 phone={selectedCall.contact?.phone || selectedCall.fromPhone}
@@ -768,24 +905,27 @@ export default function CallsPage() {
         </div>
       </div>
 
-      <ContextMenu
+      <CallContextMenu
         open={Boolean(callMenu && contextMenuCall)}
         x={callMenu?.x ?? 0}
         y={callMenu?.y ?? 0}
+        call={contextMenuCall}
+        selectionMode={selectionMode}
+        isCallSelected={Boolean(contextMenuCall && selectedIds.has(contextMenuCall.id))}
+        allVisibleSelected={allVisibleSelected}
         onClose={() => setCallMenu(null)}
-        items={[
-          {
-            id: 'delete-call',
-            label: 'Delete call',
-            description: 'Remove this call from history',
-            icon: Trash2,
-            danger: true,
-            onClick: () => {
-              if (contextMenuCall) setDeleteCallTarget(contextMenuCall);
-              setCallMenu(null);
-            },
-          },
-        ]}
+        onSelectThis={() => {
+          if (contextMenuCall) selectCall(contextMenuCall.id);
+        }}
+        onDeselectThis={() => {
+          if (contextMenuCall) deselectCall(contextMenuCall.id);
+        }}
+        onSelectAll={toggleSelectAllVisible}
+        onClearSelection={clearSelection}
+        onDelete={() => {
+          if (contextMenuCall) setDeleteCallTarget(contextMenuCall);
+          setCallMenu(null);
+        }}
       />
 
       <ConfirmDialog
@@ -804,6 +944,20 @@ export default function CallsPage() {
         confirmLabel="Delete call"
         variant="danger"
         loading={deletingCall}
+      />
+
+      <ConfirmDialog
+        open={bulkDeleteOpen}
+        onClose={() => {
+          if (!bulkBusy) setBulkDeleteOpen(false);
+        }}
+        onConfirm={() => void handleBulkDelete()}
+        title={`Delete ${selectedIds.size} call${selectedIds.size === 1 ? '' : 's'}?`}
+        description="The selected calls will be permanently removed from your call history."
+        details={['Transcripts, duration, and notes for these calls are deleted.']}
+        confirmLabel={selectedIds.size === 1 ? 'Delete call' : 'Delete calls'}
+        variant="danger"
+        loading={bulkBusy}
       />
     </PageShell>
     </InboxGlassTipProvider>

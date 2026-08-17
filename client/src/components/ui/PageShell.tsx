@@ -24,5 +24,5 @@ export default function PageShell({ children, fullBleed = false, inbox = false, 
   return <div className={`page-shell ${className}`}>{children}</div>;
 }
 
-/** Shared horizontal gutters — keep topbar aligned with page content (`--page-gutter-x`). */
+/** Inner-page horizontal gutters (`--page-gutter-x` / Appearance “Page side space”). Not for the global topbar. */
 export const PAGE_GUTTER_X = 'page-gutter-x';

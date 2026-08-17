@@ -30,7 +30,7 @@ export default function CallSummaryNote({
       role="status"
       data-message-id={messageId}
     >
-      <div className="w-full max-w-[min(50%,11rem)] overflow-hidden rounded-md border border-neutral-200/80 bg-white dark:border-neutral-700 dark:bg-neutral-900">
+      <div className="w-1/2 overflow-hidden rounded-md border border-neutral-200/80 bg-white dark:border-neutral-700 dark:bg-neutral-900">
         <div className="min-w-0 px-3.5 py-2.5">
           <p className="inline-flex flex-wrap items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
             <Lock className="h-3 w-3 shrink-0 text-emerald-600 dark:text-emerald-400" strokeWidth={2.25} />

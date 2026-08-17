@@ -43,6 +43,10 @@ import {
   BARGE_IN_RMS_THRESHOLD,
 } from './spoken-text';
 import { isBusinessInfoQuestion, HONEST_NO_DETAILS } from '../ai/reply-repeat';
+import {
+  formatCallbackInternalNote,
+  formatCallSummaryInternalNote,
+} from './internal-note-copy';
 
 const log = createModuleLogger('ai-voice-agent');
 
@@ -714,15 +718,11 @@ export class AiVoiceCallSession {
               data: {
                 conversationId: this.ctx.conversationId,
                 userId: noteAuthor.userId,
-                content: [
-                  'Callback requested via AI voice agent.',
-                  `When: ${when}`,
-                  reason ? `Reason: ${reason}` : null,
-                  `Ticket: ${ticket.id}`,
-                  `Call: ${this.ctx.callId}`,
-                ]
-                  .filter(Boolean)
-                  .join('\n'),
+                content: formatCallbackInternalNote({
+                  when,
+                  reason,
+                  ticketId: ticket.id,
+                }),
               },
             });
           }
@@ -1196,7 +1196,7 @@ export class AiVoiceCallSession {
       data: {
         conversationId: this.ctx.conversationId,
         userId: noteAuthor.userId,
-        content: `📞 Call summary (${reason}):\n${summary}\n\nCall ID: ${this.ctx.callId}`,
+        content: formatCallSummaryInternalNote(summary, reason),
       },
     });
   }

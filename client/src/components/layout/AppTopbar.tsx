@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import {
   ChevronDown,
   ChevronRight,
-  CircleHelp,
+  Headphones,
   LogOut,
   Menu,
   Search,
@@ -17,7 +17,7 @@ import type { OrgRole } from '../../types';
 import GlobalSearch, { useGlobalSearchShortcut } from './GlobalSearch';
 import NotificationCenter from './NotificationCenter';
 import NumberSwitcher, { NumberSwitcherMobile } from './NumberSwitcher';
-import { PAGE_GUTTER_X } from '../ui/PageShell';
+import SupportBoard from '../support/SupportBoard';
 
 const USER_MENU_WIDTH = 220;
 const USER_MENU_GAP = 12;
@@ -70,6 +70,7 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
   const initials = nameInitials(userName);
   const roleText = roleLabel(orgRole);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [supportOpen, setSupportOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [userMenuPos, setUserMenuPos] = useState<{ top: number; right: number } | null>(null);
   const userTriggerRef = useRef<HTMLButtonElement>(null);
@@ -185,7 +186,7 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
     <>
       <header className="topbar-glass sticky top-0 z-40 shrink-0">
         <div
-          className={`flex min-h-[var(--density-topbar-min-h)] items-center gap-3 py-3 lg:min-h-[var(--density-topbar-min-h-lg)] lg:gap-5 lg:py-3.5 ${PAGE_GUTTER_X}`}
+          className="topbar-gutter-x flex min-h-[var(--density-topbar-min-h)] items-center gap-3 py-3 lg:min-h-[var(--density-topbar-min-h-lg)] lg:gap-5 lg:py-3.5"
         >
           {onMenuOpen && (
             <button
@@ -249,13 +250,23 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
             <NumberSwitcherMobile />
             <NumberSwitcher />
 
-            <Link
-              to="/settings?tab=setup"
+            <button
+              type="button"
+              onClick={() => setSupportOpen(true)}
               className="hidden shrink-0 whitespace-nowrap items-center gap-1.5 text-[13px] font-semibold text-neutral-600 transition hover:text-neutral-900 sm:inline-flex dark:text-neutral-300 dark:hover:text-theme-fg"
             >
-              <CircleHelp className="h-4 w-4 text-neutral-400" strokeWidth={2} />
-              Help Center
-            </Link>
+              <Headphones className="h-4 w-4 text-neutral-400" strokeWidth={2} />
+              Support
+            </button>
+            <button
+              type="button"
+              onClick={() => setSupportOpen(true)}
+              className="topbar-icon-btn sm:hidden"
+              aria-label="Support"
+              title="Support"
+            >
+              <Headphones className="h-[17px] w-[17px]" strokeWidth={2} />
+            </button>
 
             {/* Search — design pill; opens command palette */}
             <button
@@ -325,6 +336,7 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
       </header>
       {userMenu}
       <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
+      <SupportBoard open={supportOpen} onClose={() => setSupportOpen(false)} />
     </>
   );
 }

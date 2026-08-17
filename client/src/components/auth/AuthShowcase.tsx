@@ -2,7 +2,7 @@ import type { ComponentType } from 'react';
 import { Lightbulb } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import AuthBrand from './AuthBrand';
-import { IconMessageBubble, IconSparkle, IconTeam, IconWhatsAppW } from './AuthIcons';
+import { IconCampaignChart, IconSparkle, IconTeam, IconWhatsAppW } from './AuthIcons';
 
 export const AUTH_LOGIN_HERO_SRC = '/brand/auth-login-hero.png';
 
@@ -15,7 +15,7 @@ const FEATURES: { icon: AuthIcon; title: string; description: string }[] = [
     description: 'Save time with intelligent automation.',
   },
   {
-    icon: IconMessageBubble,
+    icon: IconCampaignChart,
     title: 'Manage in One Place',
     description: 'All your conversations, contacts and campaigns in one dashboard.',
   },

@@ -12,6 +12,7 @@ import {
 } from '../ai/bot-assignment.service';
 import { redactText } from '../../utils/pii-redaction';
 import {
+  botDeleteBlockReason,
   clearDefaultFlag,
   DEFAULT_INSTRUCTIONS,
   ensureSystemSupportBots,
@@ -481,9 +482,14 @@ router.delete(
 
     const existing = await prisma.aiBot.findFirst({ where: { id, organizationId: orgId } });
     if (!existing) throw new AppError(404, 'Bot not found');
-    if (existing.isSystem) {
-      throw new AppError(403, 'The Support bot cannot be deleted.');
-    }
+    const remainingInChannel = await prisma.aiBot.count({
+      where: { organizationId: orgId, channel: existing.channel },
+    });
+    const blocked = botDeleteBlockReason({
+      isSystem: existing.isSystem,
+      remainingInChannel,
+    });
+    if (blocked) throw new AppError(403, blocked);
 
     await logBotAudit({
       botId: id,

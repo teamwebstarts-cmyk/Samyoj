@@ -84,7 +84,7 @@ function AlertRow({
     <Link
       to={to}
       title={subtitle}
-      className="flex items-center gap-2 rounded-xl border border-amber-100/80 bg-white px-2.5 py-2 transition hover:border-amber-200 hover:bg-amber-50/50 sm:px-3 sm:py-2.5"
+      className="flex items-center gap-2 rounded-xl border border-amber-100/80 bg-white px-2.5 py-2 text-left transition hover:border-amber-200 hover:bg-amber-50/50 sm:px-3 sm:py-2.5"
     >
       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
         <WifiOff className="h-3.5 w-3.5 stroke-[2.2]" />

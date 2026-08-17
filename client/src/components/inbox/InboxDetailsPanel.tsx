@@ -32,6 +32,7 @@ import type {
   InternalNote,
 } from '../../types';
 import { toastError } from '../../utils/toast';
+import { stripCallIdsFromNote } from './noteDisplay';
 
 type PanelSection = 'labels' | 'notes' | 'tags';
 
@@ -557,18 +558,22 @@ export default function InboxDetailsPanel({
                 </form>
               )}
 
-              {notes.length === 0 && !showNoteComposer && !noteText.trim() && (
-                <div className="rounded-xl border border-dashed border-theme-border/80 bg-slate-50/70 px-3 py-3 text-center dark:bg-neutral-950/40">
-                  <p className="text-[12px] font-semibold text-theme-fg">No notes yet</p>
-                  <p className="mt-0.5 text-[11px] text-theme-muted">
-                    Leave context for the next agent on this chat.
-                  </p>
-                </div>
-              )}
+              {notes.filter((n) => stripCallIdsFromNote(n.content)).length === 0 &&
+                !showNoteComposer &&
+                !noteText.trim() && (
+                  <div className="rounded-xl border border-dashed border-theme-border/80 bg-slate-50/70 px-3 py-3 text-center dark:bg-neutral-950/40">
+                    <p className="text-[12px] font-semibold text-theme-fg">No notes yet</p>
+                    <p className="mt-0.5 text-[11px] text-theme-muted">
+                      Leave context for the next agent on this chat.
+                    </p>
+                  </div>
+                )}
 
-              {notes.length > 0 && (
+              {notes.some((n) => stripCallIdsFromNote(n.content)) && (
                 <div className="space-y-2">
                   {notes.map((note) => {
+                    const body = stripCallIdsFromNote(note.content);
+                    if (!body) return null;
                     const canDelete = note.user?.id === currentUserId || canManageTeam;
                     return (
                       <div
@@ -576,7 +581,7 @@ export default function InboxDetailsPanel({
                         className="rounded-xl border border-slate-200/80 bg-slate-100/70 p-3 dark:border-neutral-700/60 dark:bg-neutral-900/55"
                       >
                         <div className="flex items-start gap-2">
-                          <CollapsibleNoteText content={note.content} />
+                          <CollapsibleNoteText content={body} />
                           {canDelete && (
                             <button
                               type="button"

@@ -57,6 +57,18 @@ export async function listBots(organizationId: string, channel?: AiBotChannel) {
   });
 }
 
+/** Why this bot must stay — Support/system, or the last remaining bot on that channel. */
+export function botDeleteBlockReason(input: {
+  isSystem: boolean;
+  remainingInChannel: number;
+}): string | null {
+  if (input.isSystem) return 'The Support bot cannot be deleted.';
+  if (input.remainingInChannel <= 1) {
+    return 'Keep at least one bot for this channel.';
+  }
+  return null;
+}
+
 /** Baseline Support bot per channel — created on first list, never deleted. */
 export async function ensureSystemSupportBots(organizationId: string): Promise<void> {
   const llm = hardcodedBotLlmDefaults();

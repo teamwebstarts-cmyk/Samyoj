@@ -42,8 +42,8 @@ export default function ListToolbar({
 
   if (inlineDesktop) {
     content = (
-      <div className="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center md:justify-between md:gap-3 xl:flex-nowrap">
-        <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center md:gap-3 lg:flex-nowrap">
+      <div className="flex flex-col gap-2 md:flex-row md:flex-nowrap md:items-center md:justify-between md:gap-3">
+        <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:flex-nowrap sm:items-center md:gap-3">
           <SearchInput
             value={search}
             onChange={onSearchChange}
@@ -52,7 +52,9 @@ export default function ListToolbar({
             compact={compactMobile}
           />
           {filters ? (
-            <div className="flex min-w-0 flex-wrap items-center gap-2 lg:flex-nowrap">{filters}</div>
+            <div className="flex min-w-0 items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:overflow-visible">
+              {filters}
+            </div>
           ) : null}
         </div>
         {actions ? (

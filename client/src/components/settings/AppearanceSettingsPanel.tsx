@@ -69,7 +69,7 @@ export default function AppearanceSettingsPanel() {
         <div className="border-t border-theme-border pt-6">
           <p className="text-[13px] font-bold text-theme-fg">Page side space</p>
           <p className="mt-1 text-[12px] font-medium text-theme-secondary">
-            Left and right inset around the middle cards. Slide toward Much wider for large empty edges. Independent of card spacing.
+            Left and right inset around the middle cards. Slide toward Much wider for large empty edges. Does not change the top bar. Independent of card spacing.
           </p>
           <div className="mt-3">
             <PageGutterSlider />

@@ -129,6 +129,8 @@
     --density-page-py-lg: 1.25rem;
     --density-stack-gap: 1rem;
     --density-nav-item-h: 2.5rem;
+    /* Topbar left/right inset — independent of Appearance “Page side space”. */
+    --topbar-gutter-x: 2.5rem;
 
     /* Card layouts — Appearance slider overrides these on html; new screens must use the vars. */
     --card-gap: 1rem;
@@ -164,6 +166,7 @@
     --density-page-py-lg: 1rem;
     --density-stack-gap: 0.75rem;
     --density-nav-item-h: 2.25rem;
+    --topbar-gutter-x: 2rem;
     --card-gap: 0.75rem;
     --card-pad: 0.75rem;
     --page-gutter-x: 2rem;
@@ -724,6 +727,26 @@
     border-bottom-color: var(--color-border);
     background: color-mix(in srgb, var(--color-surface) 92%, transparent);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+  }
+
+  /* Fixed chrome inset — do not use --page-gutter-x (Page side space). */
+  .topbar-gutter-x {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  @media (min-width: 640px) {
+    .topbar-gutter-x {
+      padding-left: 1rem;
+      padding-right: 1rem;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .topbar-gutter-x {
+      padding-left: var(--topbar-gutter-x);
+      padding-right: var(--topbar-gutter-x);
+    }
   }
 
   .topbar-search {

@@ -612,6 +612,11 @@ export default function AiBotPage() {
   const callingBots = bots.filter((b) => !isChatBot(b));
   const listBotsForFilter = channelFilter === 'CHAT' ? chatBots : callingBots;
   const hasFilters = Boolean(search || statusFilter);
+  const canDeleteBot = (bot: AiBot) => {
+    if (bot.isSystem) return false;
+    const peers = isChatBot(bot) ? chatBots : callingBots;
+    return peers.length > 1;
+  };
 
   return (
     <>
@@ -628,7 +633,7 @@ export default function AiBotPage() {
                 channelFilter === 'CHAT' ? 'Search chat bots...' : 'Search calling bots...'
               }
               filters={
-                <div className="flex min-w-0 flex-wrap items-center gap-2 lg:flex-nowrap">
+                <div className="flex min-w-0 flex-nowrap items-center gap-2">
                   <SegmentedControl
                     bare
                     compact
@@ -696,7 +701,7 @@ export default function AiBotPage() {
                     answersCalls={bot.id === answeringCallBotId}
                     onEdit={() => openEdit(bot)}
                     onToggle={() => toggleEnabled(bot)}
-                    onDelete={bot.isSystem ? undefined : () => handleDelete(bot.id)}
+                    onDelete={canDeleteBot(bot) ? () => handleDelete(bot.id) : undefined}
                     onToggleAllChats={
                       isChatBot(bot)
                         ? () =>
@@ -750,11 +755,6 @@ export default function AiBotPage() {
                                       Default
                                     </span>
                                   )}
-                                  {!isChatBot(bot) && bot.id === answeringCallBotId && (
-                                    <span className={`${botChip.base} ${botChip.default}`}>
-                                      Answers calls
-                                    </span>
-                                  )}
                                 </div>
                               </div>
                             </button>
@@ -796,7 +796,7 @@ export default function AiBotPage() {
                               )}
                               <RowActions
                                 onEdit={() => openEdit(bot)}
-                                onDelete={bot.isSystem ? undefined : () => handleDelete(bot.id)}
+                                onDelete={canDeleteBot(bot) ? () => handleDelete(bot.id) : undefined}
                               />
                             </div>
                           </td>
@@ -808,18 +808,6 @@ export default function AiBotPage() {
               />
             )}
           </div>
-
-          {channelFilter === 'CALL' && (
-            <div className="flex items-start gap-2.5 rounded-xl border border-sky-200/50 bg-sky-50/40 px-3.5 py-2.5 dark:border-sky-500/20 dark:bg-sky-950/20">
-              <PhoneCall className="mt-0.5 h-4 w-4 shrink-0 text-sky-600" strokeWidth={2} />
-              <p className="text-[12px] leading-relaxed text-theme-secondary">
-                <span className="font-bold text-theme-fg">All calls</span>
-                {' — '}
-                On means this bot answers. Off sends the call to a person who is free. If nobody
-                picks up, it is missed — AI does not take it.
-              </p>
-            </div>
-          )}
         </div>
       </PageShell>
 
@@ -840,7 +828,7 @@ export default function AiBotPage() {
             onCancel={closeSlide}
             submitLabel={editing ? 'Save' : 'Create'}
             loading={saving}
-            onDelete={editing && !editing.isSystem ? () => handleDelete(editing.id) : undefined}
+            onDelete={editing && canDeleteBot(editing) ? () => handleDelete(editing.id) : undefined}
             deleteLabel="Delete bot"
           />
         }

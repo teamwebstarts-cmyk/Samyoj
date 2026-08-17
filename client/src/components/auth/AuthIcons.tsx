@@ -6,23 +6,19 @@ type IconProps = {
 
 const STROKE = 1.75;
 
-/** Lucide MessageCircle path — even stroke, round caps */
-const CHAT_BUBBLE =
-  'M7.9 20A9 9 0 1 0 4 16.1L2 22Z';
-
-/** Rounded chat bubble + W — Automate Smartly (WhatsApp-ish) */
+/** WhatsApp-style bubble + handset — Automate Smartly */
 export function IconWhatsAppW({ className }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" className={className} aria-hidden fill="none">
       <path
-        d={CHAT_BUBBLE}
+        d="M12.05 3.2c-4.88 0-8.85 3.97-8.85 8.85 0 1.55.4 3.02 1.12 4.3L3.2 20.8l4.55-1.18a8.8 8.8 0 0 0 4.3 1.12c4.88 0 8.85-3.97 8.85-8.85S16.93 3.2 12.05 3.2Z"
         stroke="currentColor"
         strokeWidth={STROKE}
         strokeLinecap="round"
         strokeLinejoin="round"
       />
       <path
-        d="M8.5 8.85 10.15 14.35 12 9.55 13.85 14.35 15.5 8.85"
+        d="M9.05 8.7c.12-.42.48-.7.92-.72h.06c.3 0 .55.18.65.45l.32.95c.08.25-.02.5-.26.62l-.72.34c.5 1.05 1.32 1.88 2.42 2.42l.34-.72c.12-.24.37-.34.62-.26l.95.32c.27.1.45.35.45.65v.06c0 .44-.3.8-.72.92-1.55.4-3.72-.48-5.02-1.78-1.3-1.3-2.18-3.47-1.78-5.02Z"
         stroke="currentColor"
         strokeWidth={STROKE}
         strokeLinecap="round"
@@ -32,16 +28,33 @@ export function IconWhatsAppW({ className }: IconProps) {
   );
 }
 
-/** Simple chat bubble — Manage in One Place */
-export function IconMessageBubble({ className }: IconProps) {
+/** Ascending campaign bars — Manage in One Place */
+export function IconCampaignChart({ className }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" className={className} aria-hidden fill="none">
       <path
-        d={CHAT_BUBBLE}
+        d="M4 19.25h16"
         stroke="currentColor"
         strokeWidth={STROKE}
         strokeLinecap="round"
-        strokeLinejoin="round"
+      />
+      <path
+        d="M7 19.25V12.4"
+        stroke="currentColor"
+        strokeWidth={2.35}
+        strokeLinecap="round"
+      />
+      <path
+        d="M12 19.25V8.1"
+        stroke="currentColor"
+        strokeWidth={2.35}
+        strokeLinecap="round"
+      />
+      <path
+        d="M17 19.25V4.85"
+        stroke="currentColor"
+        strokeWidth={2.35}
+        strokeLinecap="round"
       />
     </svg>
   );

@@ -121,9 +121,6 @@ export default function AiBotCard({
                   Default
                 </span>
               )}
-              {answersCalls && !isChat && (
-                <span className={`${botChip.base} shrink-0 ${botChip.default}`}>Answers calls</span>
-              )}
               <span className="ml-auto shrink-0 pl-1">
                 <AiBotStatusCell enabled={bot.enabled} />
               </span>

@@ -19,12 +19,12 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import CallSummaryNote from './CallSummaryNote';
+import CallingAiPicker from './CallingAiPicker';
 import ContactAvatar from '../inbox/ContactAvatar';
 import AppButton from '../ui/AppButton';
 import { getAgentPeerConnection } from '../../utils/agentCallRTC';
 import { FOCUS_RING_CLASS } from '../../hooks/inboxA11y';
 import {
-  callStatusLabel,
   callStatusTone,
   formatBubbleTime,
   formatCallTime,
@@ -150,17 +150,8 @@ export default function CallDetailView({
         Date.now() - new Date(lastEntry.at).getTime() < 8000
     );
 
-  const statusPillClass =
-    tone === 'live'
-      ? 'bg-emerald-50 text-emerald-700 ring-emerald-200/80'
-      : tone === 'missed'
-        ? 'bg-rose-50 text-rose-700 ring-rose-200/80'
-        : tone === 'completed'
-          ? 'bg-sky-50 text-sky-700 ring-sky-200/80'
-          : 'bg-neutral-100 text-neutral-600 ring-neutral-200';
-
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <div className="flex shrink-0 items-center gap-2.5 border-b border-neutral-200 bg-white px-3 py-3 sm:gap-3 sm:px-4 dark:border-neutral-800 dark:bg-neutral-950">
         {onBack && (
           <button
@@ -176,35 +167,8 @@ export default function CallDetailView({
         <ContactAvatar name={name || undefined} phone={phone} size="lg" active={active} />
 
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="truncate text-[15px] font-bold tracking-tight text-theme-fg">{displayName}</p>
-            <span
-              className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${statusPillClass}`}
-            >
-              {active && (
-                <span className="relative flex h-1.5 w-1.5">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                </span>
-              )}
-              {callStatusLabel(status)}
-              {active && (
-                <span className="font-semibold tabular-nums normal-case tracking-normal">
-                  · {formatDuration(liveElapsed)}
-                </span>
-              )}
-            </span>
-          </div>
-          <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-1.5">
-            <p className="truncate text-[12px] font-medium text-theme-muted">{formatPhoneDisplay(phone)}</p>
-            {contactId && onCallingAiChange ? (
-              <CallingAiChip
-                enabled={callingAiEnabled !== false}
-                saving={callingAiSaving}
-                onToggle={() => onCallingAiChange(callingAiEnabled === false)}
-              />
-            ) : null}
-          </div>
+          <p className="truncate text-[15px] font-bold tracking-tight text-theme-fg">{displayName}</p>
+          <p className="mt-0.5 truncate text-[12px] font-medium text-theme-muted">{formatPhoneDisplay(phone)}</p>
         </div>
 
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
@@ -218,6 +182,14 @@ export default function CallDetailView({
               <PanelRight className="h-[18px] w-[18px]" strokeWidth={2.25} />
             </button>
           )}
+          {contactId && onCallingAiChange ? (
+            <CallingAiPicker
+              enabled={callingAiEnabled !== false}
+              saving={callingAiSaving}
+              botName={botName}
+              onChange={onCallingAiChange}
+            />
+          ) : null}
           {!active && onCallBack && (
             <AppButton
               variant="secondary"
@@ -453,50 +425,6 @@ export default function CallDetailView({
       )}
 
     </div>
-  );
-}
-
-function CallingAiChip({
-  enabled,
-  saving,
-  onToggle,
-}: {
-  enabled: boolean;
-  saving?: boolean;
-  onToggle: () => void;
-}) {
-  const short = enabled ? 'AI answers' : 'Person only';
-  const hint = enabled
-    ? 'AI answers this person on their next call. Turn off to send them to a human.'
-    : 'Person only — humans pick up. Missed if nobody is free.';
-
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      disabled={saving}
-      aria-pressed={enabled}
-      aria-label={enabled ? 'AI answers this person' : 'Person only'}
-      title={hint}
-      className={`inline-flex h-7 max-w-[9.5rem] shrink-0 items-center gap-1 rounded-full border px-2 text-[11px] font-semibold tracking-tight transition disabled:cursor-not-allowed disabled:opacity-45 ${FOCUS_RING_CLASS} ${
-        enabled
-          ? 'border-emerald-300/80 bg-emerald-50 text-emerald-800 hover:bg-emerald-100/80 dark:border-emerald-700/50 dark:bg-emerald-950/40 dark:text-emerald-200'
-          : 'border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300'
-      }`}
-    >
-      <span
-        className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-          enabled ? 'bg-emerald-500' : 'bg-neutral-300 dark:bg-neutral-600'
-        }`}
-        aria-hidden
-      />
-      {enabled ? (
-        <Bot className="h-3 w-3 shrink-0" strokeWidth={2.25} aria-hidden />
-      ) : (
-        <User className="h-3 w-3 shrink-0" strokeWidth={2.25} aria-hidden />
-      )}
-      <span className="min-w-0 truncate">{short}</span>
-    </button>
   );
 }
 
