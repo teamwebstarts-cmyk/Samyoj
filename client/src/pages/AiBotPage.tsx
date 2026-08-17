@@ -14,7 +14,6 @@ import {
   Volume2,
 } from 'lucide-react';
 import AiBotCard, { AllChatsSwitch } from '../components/ai-bot/AiBotCard';
-import AiBotHero from '../components/ai-bot/AiBotHero';
 import AiBotListEmpty from '../components/ai-bot/AiBotListEmpty';
 import AiBotPickupPanel from '../components/ai-bot/AiBotPickupPanel';
 import AiBotStatusFilter from '../components/ai-bot/AiBotStatusFilter';
@@ -450,10 +449,14 @@ export default function AiBotPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this bot?')) return;
-    await aiBotApi.delete(id);
-    closeSlide();
-    load();
-    toastSuccess('Bot deleted');
+    try {
+      await aiBotApi.delete(id);
+      closeSlide();
+      load();
+      toastSuccess('Bot deleted');
+    } catch (err: unknown) {
+      toastError(getErrorMessage(err, 'Could not delete this bot'));
+    }
   };
 
   const saveFaq = async () => {
@@ -608,24 +611,12 @@ export default function AiBotPage() {
   const chatBots = bots.filter(isChatBot);
   const callingBots = bots.filter((b) => !isChatBot(b));
   const listBotsForFilter = channelFilter === 'CHAT' ? chatBots : callingBots;
-  const activeCount = listBotsForFilter.filter((b) => b.enabled).length;
-  const knowledgeTotal = listBotsForFilter.reduce(
-    (sum, b) => sum + (b._count?.knowledgeItems ?? 0),
-    0
-  );
   const hasFilters = Boolean(search || statusFilter);
 
   return (
     <>
       <PageShell>
         <div className="space-y-4 sm:space-y-5">
-          <AiBotHero
-            activeCount={activeCount}
-            knowledgeTotal={knowledgeTotal}
-            totalBots={listBotsForFilter.length}
-            channel={channelFilter}
-          />
-
           {channelFilter === 'CALL' && (
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-theme-border bg-theme-surface px-4 py-3">
               <div>
@@ -729,7 +720,7 @@ export default function AiBotPage() {
                     answersCalls={bot.id === answeringCallBotId}
                     onEdit={() => openEdit(bot)}
                     onToggle={() => toggleEnabled(bot)}
-                    onDelete={() => handleDelete(bot.id)}
+                    onDelete={bot.isSystem ? undefined : () => handleDelete(bot.id)}
                     onToggleAllChats={
                       isChatBot(bot)
                         ? () =>
@@ -772,7 +763,12 @@ export default function AiBotPage() {
                               <div className="min-w-0">
                                 <div className="flex flex-wrap items-center gap-1.5">
                                   <p className="truncate font-semibold text-theme-fg">{bot.name}</p>
-                                  {isChatBot(bot) && bot.isDefault && (
+                                  {bot.isSystem && (
+                                    <span className={`${botChip.base} ${botChip.support}`}>
+                                      Support
+                                    </span>
+                                  )}
+                                  {isChatBot(bot) && bot.isDefault && !bot.isSystem && (
                                     <span className={`${botChip.base} ${botChip.default}`}>
                                       <Star className="h-2.5 w-2.5" />
                                       Default
@@ -824,7 +820,7 @@ export default function AiBotPage() {
                               )}
                               <RowActions
                                 onEdit={() => openEdit(bot)}
-                                onDelete={() => handleDelete(bot.id)}
+                                onDelete={bot.isSystem ? undefined : () => handleDelete(bot.id)}
                               />
                             </div>
                           </td>

@@ -125,16 +125,9 @@ export default function CallsPage() {
   const notesDirtyRef = useRef(false);
   const [callingAiSaving, setCallingAiSaving] = useState(false);
   const [callMenu, setCallMenu] = useState<{ x: number; y: number; callId: string } | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [deleteCallTarget, setDeleteCallTarget] = useState<CallRecord | null>(null);
   const [deletingCall, setDeletingCall] = useState(false);
-  const [analytics, setAnalytics] = useState<{
-    today: number;
-    missed: number;
-    total: number;
-    aiAnswered: number;
-    agentAnswered: number;
-    avgDurationSec: number;
-  } | null>(null);
   const loadRef = useRef<() => Promise<void>>(async () => {});
   const callsSnapshotRef = useRef<CallsNumberCache>({
     calls: [],
@@ -202,33 +195,9 @@ export default function CallsPage() {
     if (!resolved || !activeNumber) return;
     const requestNumberId = activeNumber.id;
     try {
-      const [statusRes, analyticsRes] = await Promise.all([
-        callingApi.status(),
-        callingApi.analytics(7).catch(() => null),
-        loadCalls(),
-      ]);
+      const [statusRes] = await Promise.all([callingApi.status(), loadCalls()]);
       if (requestNumberId !== activeNumberIdRef.current) return;
       setStatus(statusRes.data.data);
-      const analyticsData = analyticsRes?.data?.data as
-        | {
-            today?: number;
-            missed?: number;
-            total?: number;
-            aiAnswered?: number;
-            agentAnswered?: number;
-            avgDurationSec?: number;
-          }
-        | undefined;
-      if (analyticsData) {
-        setAnalytics({
-          today: analyticsData.today ?? 0,
-          missed: analyticsData.missed ?? 0,
-          total: analyticsData.total ?? 0,
-          aiAnswered: analyticsData.aiAnswered ?? 0,
-          agentAnswered: analyticsData.agentAnswered ?? 0,
-          avgDurationSec: analyticsData.avgDurationSec ?? 0,
-        });
-      }
     } catch {
       toastError('Could not load calls. Please refresh the page.');
     } finally {
@@ -601,10 +570,7 @@ export default function CallsPage() {
   }
 
   const selectedTranscript = normalizeTranscript(selectedCall?.transcript);
-
-  const liveCount = status?.activeCalls ?? 0;
-  const callsToday = analytics?.today ?? 0;
-  const missedCount = analytics?.missed ?? 0;
+  const listFiltered = Boolean(search.trim() || chip);
 
   return (
     <PageShell inbox>
@@ -618,6 +584,7 @@ export default function CallsPage() {
         >
           <CallFiltersBar
             search={search}
+            searchInputRef={searchInputRef}
             onSearchChange={(v) => {
               setSearch(v);
               setPage(1);
@@ -633,7 +600,9 @@ export default function CallsPage() {
             {listLoading ? (
               <CallsListSkeleton />
             ) : calls.length === 0 ? (
-              <CallsListEmpty />
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+                <CallsListEmpty filtered={listFiltered} />
+              </div>
             ) : (
               <>
                 <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
@@ -724,14 +693,7 @@ export default function CallsPage() {
           ) : (
             <CallsSelectEmpty
               liveConnected={socketState.status === 'connected'}
-              liveCount={liveCount}
-              callsToday={callsToday}
-              missedCount={missedCount}
-              totalCount={analytics?.total ?? 0}
-              aiAnswered={analytics?.aiAnswered ?? 0}
-              agentAnswered={analytics?.agentAnswered ?? 0}
-              avgDurationSec={analytics?.avgDurationSec ?? 0}
-              rangeDays={7}
+              onFocusSearch={() => searchInputRef.current?.focus()}
             />
           )}
         </div>

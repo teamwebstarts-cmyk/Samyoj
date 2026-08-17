@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyPurposePreset,
+  buildInboxParamSourceOptions,
   campaignParamSelectValue,
   emptyTemplateForm,
+  inboxParamSelectValue,
   TEMPLATE_PURPOSE_PRESETS,
   upsertVariableMetaFromParam,
   valueForCampaignParamSource,
+  valueForInboxParamSource,
 } from './templateForm';
 
 describe('applyPurposePreset', () => {
@@ -76,5 +79,32 @@ describe('campaign param mapping', () => {
       index: 1,
       suggestedSource: 'contact.name',
     });
+  });
+});
+
+describe('inbox param mapping', () => {
+  it('builds contact-aware dropdown options with live previews', () => {
+    const options = buildInboxParamSourceOptions({
+      name: 'Anand Kumar',
+      phone: '+91 98765 43210',
+      email: 'anand@example.com',
+      customAttributes: { order_id: 'ORD-42' },
+    });
+    expect(options[0].label).toContain('Anand Kumar');
+    expect(options.find((o) => o.value === 'contact.custom.order_id')?.label).toContain('ORD-42');
+    expect(options[options.length - 1]).toMatchObject({ value: 'custom', label: 'Custom value…' });
+  });
+
+  it('stores contact tokens when picking mapped fields', () => {
+    expect(valueForInboxParamSource('contact.name', 'hello')).toBe('{{name}}');
+    expect(inboxParamSelectValue('{{name}}')).toBe('contact.name');
+    expect(valueForInboxParamSource('contact.custom.order_id', '')).toBe('{{order_id}}');
+    expect(inboxParamSelectValue('{{order_id}}')).toBe('contact.custom.order_id');
+  });
+
+  it('keeps typed text when Custom value is selected', () => {
+    expect(valueForInboxParamSource('custom', '{{name}}')).toBe('');
+    expect(valueForInboxParamSource('custom', '29 Aug')).toBe('29 Aug');
+    expect(inboxParamSelectValue('29 Aug')).toBe('custom');
   });
 });

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Send, Sparkles } from 'lucide-react';
+import { Send } from 'lucide-react';
 import AppButton from '../ui/AppButton';
 import AppInput from '../ui/AppInput';
 import TemplatePicker from './TemplatePicker';
+import TemplateParamField from '../templates/TemplateParamField';
 import { ComposerPreviewPane, WhatsAppTemplatePreview, getTemplateParts } from './WhatsAppPreview';
 import {
   getFilledTemplatePreview,
@@ -16,8 +17,6 @@ import { countTemplateVars, getTemplateBodyText, getTemplateHeaderText } from '.
 import {
   fetchTemplateVariableMeta,
   previewParams,
-  sourceFromParamValue,
-  sourceLabel,
   templateDynamicUrlButtons,
   templateNeedsCoupon,
   tokenForMeta,
@@ -48,35 +47,6 @@ let approvedTemplatesCache: MessageTemplate[] | null = null;
 
 export function invalidateApprovedTemplatesCache() {
   approvedTemplatesCache = null;
-}
-
-function autoFillCaption(
-  source: string,
-  contact?: {
-    name?: string | null;
-    phone?: string | null;
-    email?: string | null;
-    customAttributes?: Record<string, string>;
-  },
-  customKey?: string,
-) {
-  if (source === 'contact.name') {
-    const name = contact?.name?.trim();
-    return name ? `Auto: ${name}` : 'Auto: customer name · sent as “Valued customer” if empty';
-  }
-  if (source === 'contact.phone') {
-    const phone = contact?.phone?.trim();
-    return phone ? `Auto: ${phone}` : `Auto: ${sourceLabel(source)}`;
-  }
-  if (source === 'contact.email') {
-    const email = contact?.email?.trim();
-    return email ? `Auto: ${email}` : 'Auto: email · sent as “your registered email” if empty';
-  }
-  if (source === 'contact.custom') {
-    const live = customKey ? contact?.customAttributes?.[customKey]?.trim() : '';
-    return live ? `Auto: ${live}` : `Auto: ${sourceLabel(source, customKey)}`;
-  }
-  return `Auto: ${sourceLabel(source, customKey)}`;
 }
 
 export default function TemplateComposer({
@@ -339,42 +309,25 @@ export default function TemplateComposer({
               <div className="space-y-2.5">
                 {(headerParams.length > 0 || (selected && templateNeedsHeaderMedia(selected))) && (
                   <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                    {headerParams.map((value, i) => {
-                      const source = sourceFromParamValue(value);
-                      const mapped = variableMeta.find((m) => m.scope === 'header' && m.index === i + 1);
-                      if (source) {
-                        return (
-                          <div key={`inbox-header-${selected?.name ?? 't'}-${i}`}>
-                            <p className="mb-1 text-[11px] font-semibold text-theme-secondary">
-                              Header {variableDescription(variableMeta, 'header', i, `{{${i + 1}}}`)}
-                            </p>
-                            <div className="flex h-9 items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 dark:border-emerald-800 dark:bg-emerald-950/30">
-                              <Sparkles className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                              <p className="text-[11px] font-bold text-emerald-800 dark:text-emerald-200">
-                                {autoFillCaption(source, contactPreview, mapped?.customKey)}
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      }
-                      return (
-                        <AppInput
-                          key={`inbox-header-${selected?.name ?? 't'}-${i}`}
-                          label={`Header ${variableDescription(variableMeta, 'header', i, `{{${i + 1}}}`)}`}
-                          value={headerParams[i]}
-                          className="!h-9 text-[13px]"
-                          labelClassName="text-[11px] font-semibold text-theme-secondary"
-                          onChange={(e) => {
-                            const v = e.target.value;
-                            setHeaderParams((prev) => {
-                              const next = [...prev];
-                              next[i] = v;
-                              return next;
-                            });
-                          }}
-                        />
-                      );
-                    })}
+                    {headerParams.map((value, i) => (
+                      <TemplateParamField
+                        key={`inbox-header-${selected?.name ?? 't'}-${i}`}
+                        id={`inbox-header-${i}`}
+                        compact
+                        label={`Header ${variableDescription(variableMeta, 'header', i, `{{${i + 1}}}`)}`}
+                        placeholder="Type a value"
+                        value={value}
+                        contact={contactPreview}
+                        labelClassName="text-[11px] font-semibold text-theme-secondary"
+                        onChange={(next) => {
+                          setHeaderParams((prev) => {
+                            const nextParams = [...prev];
+                            nextParams[i] = next;
+                            return nextParams;
+                          });
+                        }}
+                      />
+                    ))}
                     {selected && templateNeedsHeaderMedia(selected) && (
                       <AppInput
                         className={`!h-9 text-[13px] ${headerParams.length % 2 === 1 ? '' : 'sm:col-span-2'}`}
@@ -390,42 +343,25 @@ export default function TemplateComposer({
 
                 {bodyParams.length > 0 && (
                   <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                    {bodyParams.map((value, i) => {
-                      const source = sourceFromParamValue(value);
-                      const mapped = variableMeta.find((m) => m.scope === 'body' && m.index === i + 1);
-                      if (source) {
-                        return (
-                          <div key={`inbox-body-${selected?.name ?? 't'}-${i}`}>
-                            <p className="mb-1 text-[11px] font-semibold text-theme-secondary">
-                              Body {variableDescription(variableMeta, 'body', i, `{{${i + 1}}}`)}
-                            </p>
-                            <div className="flex h-9 items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 dark:border-emerald-800 dark:bg-emerald-950/30">
-                              <Sparkles className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                              <p className="text-[11px] font-bold text-emerald-800 dark:text-emerald-200">
-                                {autoFillCaption(source, contactPreview, mapped?.customKey)}
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      }
-                      return (
-                        <AppInput
-                          key={`inbox-body-${selected?.name ?? 't'}-${i}`}
-                          label={`Body ${variableDescription(variableMeta, 'body', i, `{{${i + 1}}}`)}`}
-                          value={bodyParams[i]}
-                          className="!h-9 text-[13px]"
-                          labelClassName="text-[11px] font-semibold text-theme-secondary"
-                          onChange={(e) => {
-                            const v = e.target.value;
-                            setBodyParams((prev) => {
-                              const next = [...prev];
-                              next[i] = v;
-                              return next;
-                            });
-                          }}
-                        />
-                      );
-                    })}
+                    {bodyParams.map((value, i) => (
+                      <TemplateParamField
+                        key={`inbox-body-${selected?.name ?? 't'}-${i}`}
+                        id={`inbox-body-${i}`}
+                        compact
+                        label={`Body ${variableDescription(variableMeta, 'body', i, `{{${i + 1}}}`)}`}
+                        placeholder="Type a value"
+                        value={value}
+                        contact={contactPreview}
+                        labelClassName="text-[11px] font-semibold text-theme-secondary"
+                        onChange={(next) => {
+                          setBodyParams((prev) => {
+                            const nextParams = [...prev];
+                            nextParams[i] = next;
+                            return nextParams;
+                          });
+                        }}
+                      />
+                    ))}
                   </div>
                 )}
 

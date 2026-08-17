@@ -222,6 +222,107 @@ export function valueForCampaignParamSource(source: CampaignParamSource, previou
   return CONTACT_SOURCE_TOKEN[source];
 }
 
+/** Contact snapshot for inbox template variable pickers. */
+export interface ContactParamPreview {
+  name?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  customAttributes?: Record<string, string>;
+}
+
+function inboxOptionLabel(label: string, value?: string | null): string {
+  const live = value?.trim();
+  if (live) {
+    const preview = live.length > 36 ? `${live.slice(0, 35)}…` : live;
+    return `${label} · ${preview}`;
+  }
+  return `${label} · empty`;
+}
+
+function humanizeCustomKey(key: string): string {
+  return key.replace(/[_-]+/g, ' ').replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+/** Inbox composer: contact fields + custom attributes + free text. */
+export function buildInboxParamSourceOptions(
+  contact?: ContactParamPreview,
+): Array<{ value: string; label: string }> {
+  const options: Array<{ value: string; label: string }> = [
+    { value: 'contact.name', label: inboxOptionLabel('Customer name', contact?.name) },
+    { value: 'contact.phone', label: inboxOptionLabel('Phone number', contact?.phone) },
+    { value: 'contact.email', label: inboxOptionLabel('Email', contact?.email) },
+  ];
+
+  const attrs = contact?.customAttributes;
+  if (attrs) {
+    for (const [key, raw] of Object.entries(attrs)) {
+      const normalized = normalizeCustomKey(key);
+      if (!normalized) continue;
+      options.push({
+        value: `contact.custom.${normalized}`,
+        label: inboxOptionLabel(humanizeCustomKey(normalized), raw),
+      });
+    }
+  }
+
+  options.push({ value: 'custom', label: 'Custom value…' });
+  return options;
+}
+
+export function inboxParamSelectValue(value: string): string {
+  const source = sourceFromParamValue(value);
+  if (source === 'contact.name' || source === 'contact.phone' || source === 'contact.email') {
+    return source;
+  }
+  if (source === 'contact.custom') {
+    const key = customKeyFromParamValue(value);
+    return key ? `contact.custom.${key}` : 'custom';
+  }
+  return 'custom';
+}
+
+export function inboxParamMappedHint(source: string, contact?: ContactParamPreview): string | null {
+  if (source === 'custom') return null;
+  if (source === 'contact.name') {
+    const name = contact?.name?.trim();
+    return name
+      ? `Uses ${name} from this contact.`
+      : 'Uses customer name · sent as “Valued customer” if empty.';
+  }
+  if (source === 'contact.phone') {
+    const phone = contact?.phone?.trim();
+    return phone ? `Uses ${phone} from this contact.` : 'Uses phone number from this contact.';
+  }
+  if (source === 'contact.email') {
+    const email = contact?.email?.trim();
+    return email
+      ? `Uses ${email} from this contact.`
+      : 'Uses email · sent as “your registered email” if empty.';
+  }
+  if (source.startsWith('contact.custom.')) {
+    const key = source.slice('contact.custom.'.length);
+    const live = key ? contact?.customAttributes?.[key]?.trim() : '';
+    const label = humanizeCustomKey(key);
+    return live ? `Uses ${live} (${label}).` : `Uses ${label} from this contact · “-” if empty.`;
+  }
+  return null;
+}
+
+/** Store {{name}}/{{phone}}/{{email}}/{{customKey}} or keep typed text for Custom value. */
+export function valueForInboxParamSource(source: string, previousValue: string): string {
+  if (source === 'custom') {
+    return inboxParamSelectValue(previousValue) === 'custom' ? previousValue : '';
+  }
+  if (source.startsWith('contact.custom.')) {
+    const key = source.slice('contact.custom.'.length);
+    return tokenForSource('contact.custom', key);
+  }
+  if (source === 'contact.name' || source === 'contact.phone' || source === 'contact.email') {
+    return CONTACT_SOURCE_TOKEN[source];
+  }
+  return previousValue;
+}
+
 export function upsertVariableMetaFromParam(
   meta: TemplateVariableMeta[],
   scope: 'body' | 'header',

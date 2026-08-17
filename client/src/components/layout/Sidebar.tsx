@@ -169,9 +169,10 @@ function SectionTitle({ label, collapsed }: { label: string; collapsed: boolean 
     <p
       className={[
         'relative mb-1.5 flex h-4 shrink-0 items-center overflow-hidden whitespace-nowrap',
-        'text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500',
-        collapsed ? 'px-2.5 tracking-[0.08em]' : 'px-2.5 tracking-[0.14em]',
+        'text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500 px-2.5',
+        collapsed ? 'invisible tracking-[0.08em]' : 'tracking-[0.14em]',
       ].join(' ')}
+      aria-hidden={collapsed}
     >
       <span
         className={[
@@ -219,31 +220,59 @@ export default function Sidebar({
       <div
         className={[
           'relative z-[2] flex shrink-0 items-center border-b border-emerald-100/60',
-          collapsed ? 'h-14 gap-0.5 pl-1.5 pr-1' : 'h-14 pl-3 pr-2.5',
+          collapsed ? 'h-14 justify-center px-1.5' : 'h-14 pl-3 pr-2.5',
         ].join(' ')}
       >
-        <PlatformBrand collapsed={collapsed} size={collapsed ? 'sm' : 'md'} />
+        {collapsed ? (
+          <div className="group/logo relative flex w-full items-center justify-center">
+            <PlatformBrand collapsed size="sm" />
 
-        {showClose && onClose && (
-          <button
-            type="button"
-            onClick={onClose}
-            className="sidebar-collapse-btn ml-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
-            aria-label="Close menu"
-          >
-            <X className="h-4 w-4" strokeWidth={1.8} />
-          </button>
-        )}
-
-        {collapsible && onToggleCollapse && (
-          <div className={collapsed ? 'shrink-0' : 'ml-auto shrink-0'}>
-            <CollapseButton
-              collapsed={collapsed}
-              onToggle={onToggleCollapse}
-              onShowTip={onShowTip}
-              onHideTip={onHideTip}
-            />
+            {collapsible && onToggleCollapse && (
+              <div
+                className={[
+                  'absolute inset-0 flex items-center justify-center',
+                  'rounded-xl bg-white/85 opacity-0 shadow-sm backdrop-blur-[2px]',
+                  'pointer-events-none transition-all duration-200 ease-out',
+                  'group-hover/logo:pointer-events-auto group-hover/logo:opacity-100',
+                  'group-focus-within/logo:pointer-events-auto group-focus-within/logo:opacity-100',
+                  'dark:bg-neutral-900/90',
+                ].join(' ')}
+              >
+                <CollapseButton
+                  collapsed={collapsed}
+                  onToggle={onToggleCollapse}
+                  onShowTip={onShowTip}
+                  onHideTip={onHideTip}
+                />
+              </div>
+            )}
           </div>
+        ) : (
+          <>
+            <PlatformBrand collapsed={false} size="md" />
+
+            {showClose && onClose && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="sidebar-collapse-btn ml-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
+                aria-label="Close menu"
+              >
+                <X className="h-4 w-4" strokeWidth={1.8} />
+              </button>
+            )}
+
+            {collapsible && onToggleCollapse && (
+              <div className="ml-auto shrink-0">
+                <CollapseButton
+                  collapsed={collapsed}
+                  onToggle={onToggleCollapse}
+                  onShowTip={onShowTip}
+                  onHideTip={onHideTip}
+                />
+              </div>
+            )}
+          </>
         )}
       </div>
 

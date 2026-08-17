@@ -471,6 +471,7 @@ export interface AiBot {
   name: string;
   enabled: boolean;
   isDefault: boolean;
+  isSystem?: boolean;
   channel?: 'CHAT' | 'CALL';
   instructions: string;
   handoffMessage: string;

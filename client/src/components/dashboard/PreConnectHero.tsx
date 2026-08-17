@@ -25,7 +25,7 @@ export default function PreConnectHero({
   return (
     <section
       aria-label="Welcome"
-      className="relative overflow-hidden rounded-2xl border border-neutral-100/90 p-[var(--card-pad)] shadow-[0_12px_40px_rgba(15,23,42,0.06)] sm:rounded-[1.25rem]"
+      className="relative overflow-hidden rounded-2xl border border-neutral-100/90 px-6 py-5 shadow-[0_12px_40px_rgba(15,23,42,0.06)] sm:rounded-[1.25rem] sm:px-8 sm:py-6 lg:px-10 lg:py-7"
       style={{
         background:
           'linear-gradient(115deg, #f0fdf6 0%, #ffffff 38%, #faf5ff 72%, #fff1f2 100%)',

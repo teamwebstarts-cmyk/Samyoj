@@ -478,6 +478,9 @@ router.delete(
 
     const existing = await prisma.aiBot.findFirst({ where: { id, organizationId: orgId } });
     if (!existing) throw new AppError(404, 'Bot not found');
+    if (existing.isSystem) {
+      throw new AppError(403, 'The Support bot cannot be deleted.');
+    }
 
     await logBotAudit({
       botId: id,
@@ -491,7 +494,7 @@ router.delete(
     if (existing.channel === 'CHAT' && existing.isDefault) {
       const next = await prisma.aiBot.findFirst({
         where: { organizationId: orgId, channel: 'CHAT' },
-        orderBy: { createdAt: 'asc' },
+        orderBy: [{ isSystem: 'desc' }, { createdAt: 'asc' }],
       });
       if (next) {
         await prisma.aiBot.update({ where: { id: next.id }, data: { isDefault: true } });

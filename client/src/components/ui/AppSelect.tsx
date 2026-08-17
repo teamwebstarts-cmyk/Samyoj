@@ -26,6 +26,7 @@ interface AppSelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, '
   isSearchable?: boolean;
   size?: SelectSize;
   ariaLabel?: string;
+  labelClassName?: string;
   onChange?: (event: ChangeEvent<HTMLSelectElement>) => void;
   value?: string;
 }
@@ -57,6 +58,7 @@ export default function AppSelect({
   isSearchable,
   size = 'default',
   ariaLabel,
+  labelClassName,
   value = '',
   onChange,
   disabled,
@@ -89,7 +91,10 @@ export default function AppSelect({
       {(label || hint) && (
         <div className="flex items-center justify-between gap-2">
           {label && (
-            <label htmlFor={selectId} className="text-[13px] font-semibold text-theme-secondary">
+            <label
+              htmlFor={selectId}
+              className={labelClassName || 'text-[13px] font-semibold text-theme-secondary'}
+            >
               {label}
               {required && <span className="text-red-500"> *</span>}
             </label>

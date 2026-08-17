@@ -78,6 +78,7 @@ export const botChip = {
   keyword: 'border-indigo-200/70 bg-indigo-50 text-indigo-800 dark:border-indigo-500/30 dark:bg-indigo-900/30 dark:text-indigo-300',
   knowledge: 'border-sky-200/80 bg-sky-50 text-sky-800 dark:border-sky-500/30 dark:bg-sky-900/30 dark:text-sky-300',
   live: 'border-emerald-200/80 bg-emerald-50 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-900/40 dark:text-emerald-300',
+  support: 'border-violet-200/80 bg-violet-50 text-violet-800 dark:border-violet-500/30 dark:bg-violet-900/30 dark:text-violet-300',
   paused: 'border-theme-border bg-theme-subtle text-theme-muted',
   allMessages: 'border-neutral-200/80 bg-neutral-50 text-neutral-600 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300',
 } as const;

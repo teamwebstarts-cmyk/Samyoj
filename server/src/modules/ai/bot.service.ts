@@ -1,6 +1,13 @@
 import prisma from '../../config/database';
 import type { AiBot, AiBotChannel, Conversation } from '@prisma/client';
+import { getOrgCallingSettings, saveOrgCallingSettings } from '../calling/settings.service';
+import { DEFAULT_CALLING_SETTINGS } from '../calling/calling-settings.types';
 import { SAFE_CHAT_TEMPERATURE, SAFE_CHAT_MAX_TOKENS, SAFE_RATE_LIMIT_PER_MIN } from './ai-constants';
+
+export const SYSTEM_SUPPORT_BOT_NAME = 'Support';
+
+const LEGACY_SYSTEM_CHAT_NAMES = ['Support Bot', SYSTEM_SUPPORT_BOT_NAME] as const;
+const LEGACY_SYSTEM_CALL_NAMES = ['Calling support', SYSTEM_SUPPORT_BOT_NAME] as const;
 
 export const DEFAULT_INSTRUCTIONS = `You are a professional, friendly, and empathetic customer support agent. You handle any kind of business — retail, service, tech, education, or anything else.
 
@@ -42,11 +49,123 @@ export function pickDefaultSupportBot<T extends { enabled: boolean; isDefault: b
 }
 
 export async function listBots(organizationId: string, channel?: AiBotChannel) {
+  await ensureSystemSupportBots(organizationId);
   return prisma.aiBot.findMany({
     where: { organizationId, ...(channel ? { channel } : {}) },
-    orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+    orderBy: [{ isSystem: 'desc' }, { isDefault: 'desc' }, { createdAt: 'asc' }],
     include: { _count: { select: { knowledgeItems: true } } },
   });
+}
+
+/** Baseline Support bot per channel — created on first list, never deleted. */
+export async function ensureSystemSupportBots(organizationId: string): Promise<void> {
+  const llm = hardcodedBotLlmDefaults();
+  const handoffMessage = 'Let me connect you with our team. Someone will reply shortly.';
+
+  const chatSupport = await findOrCreateSystemBot({
+    organizationId,
+    channel: 'CHAT',
+    legacyNames: LEGACY_SYSTEM_CHAT_NAMES,
+    create: async () => {
+      const chatCount = await prisma.aiBot.count({
+        where: { organizationId, channel: 'CHAT' },
+      });
+      const hasDefault = await prisma.aiBot.count({
+        where: { organizationId, channel: 'CHAT', isDefault: true },
+      });
+      return prisma.aiBot.create({
+        data: {
+          organizationId,
+          name: SYSTEM_SUPPORT_BOT_NAME,
+          channel: 'CHAT',
+          enabled: true,
+          isDefault: chatCount === 0 || hasDefault === 0,
+          isSystem: true,
+          instructions: DEFAULT_INSTRUCTIONS,
+          handoffMessage,
+          offerHandoff: true,
+          temperature: llm.temperature,
+          maxTokens: llm.maxTokens,
+          rateLimitPerMin: llm.rateLimitPerMin,
+        },
+      });
+    },
+  });
+
+  void chatSupport;
+
+  const callSupport = await findOrCreateSystemBot({
+    organizationId,
+    channel: 'CALL',
+    legacyNames: LEGACY_SYSTEM_CALL_NAMES,
+    create: async () => {
+      const callingSettings = await getOrgCallingSettings(organizationId);
+      return prisma.aiBot.create({
+        data: {
+          organizationId,
+          name: SYSTEM_SUPPORT_BOT_NAME,
+          channel: 'CALL',
+          enabled: true,
+          isDefault: false,
+          isSystem: true,
+          instructions: DEFAULT_INSTRUCTIONS,
+          handoffMessage,
+          offerHandoff: true,
+          temperature: llm.temperature,
+          maxTokens: llm.maxTokens,
+          rateLimitPerMin: llm.rateLimitPerMin,
+          voiceGreeting:
+            callingSettings.aiGreeting || DEFAULT_CALLING_SETTINGS.aiGreeting,
+          voiceSpeaker: callingSettings.sarvamTtsSpeaker || 'shubh',
+          voiceLanguage: callingSettings.sarvamSttLanguage || 'hi-IN',
+        },
+      });
+    },
+  });
+
+  const callingSettings = await getOrgCallingSettings(organizationId);
+  if (!callingSettings.defaultBotId) {
+    await saveOrgCallingSettings(organizationId, { defaultBotId: callSupport.id });
+  }
+}
+
+async function findOrCreateSystemBot({
+  organizationId,
+  channel,
+  legacyNames,
+  create,
+}: {
+  organizationId: string;
+  channel: AiBotChannel;
+  legacyNames: readonly string[];
+  create: () => Promise<AiBot>;
+}): Promise<AiBot> {
+  const existing = await prisma.aiBot.findFirst({
+    where: {
+      organizationId,
+      channel,
+      OR: [{ isSystem: true }, { name: { in: [...legacyNames] } }],
+    },
+    orderBy: [{ isSystem: 'desc' }, { createdAt: 'asc' }],
+  });
+
+  if (existing) {
+    if (!existing.isSystem || existing.name !== SYSTEM_SUPPORT_BOT_NAME) {
+      return prisma.aiBot.update({
+        where: { id: existing.id },
+        data: {
+          isSystem: true,
+          ...(existing.name !== SYSTEM_SUPPORT_BOT_NAME &&
+          legacyNames.includes(existing.name as (typeof legacyNames)[number])
+            ? { name: SYSTEM_SUPPORT_BOT_NAME }
+            : {}),
+        },
+      });
+    }
+    return existing;
+  }
+
+  return create();
 }
 
 export async function getBot(organizationId: string, botId: string) {

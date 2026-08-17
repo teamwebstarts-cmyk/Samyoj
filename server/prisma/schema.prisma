@@ -1122,6 +1122,7 @@ model AiBot {
   name              String
   enabled           Boolean      @default(true)
   isDefault         Boolean      @default(false) @map("is_default")
+  isSystem          Boolean      @default(false) @map("is_system")
   channel           AiBotChannel @default(CHAT)
   instructions      String       @default("")
   handoffMessage    String       @default("Let me connect you with our team. Someone will reply shortly.") @map("handoff_message")

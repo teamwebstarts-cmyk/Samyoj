@@ -15,7 +15,7 @@ interface AiBotCardProps {
   answersCalls?: boolean;
   onEdit: () => void;
   onToggle: () => void;
-  onDelete: () => void;
+  onDelete?: () => void;
   onToggleAllChats?: () => void;
   onToggleAllCalls?: () => void;
 }
@@ -112,7 +112,10 @@ export default function AiBotCard({
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
               <h3 className="min-w-0 truncate text-[13px] font-bold text-theme-fg">{bot.name}</h3>
-              {bot.isDefault && isChat && (
+              {bot.isSystem && (
+                <span className={`${botChip.base} shrink-0 ${botChip.support}`}>Support</span>
+              )}
+              {bot.isDefault && isChat && !bot.isSystem && (
                 <span className={`${botChip.base} shrink-0 ${botChip.default}`}>
                   <Star className="h-2.5 w-2.5" />
                   Default
@@ -131,8 +134,12 @@ export default function AiBotCard({
                 {isChat
                   ? bot.isDefault
                     ? 'Replies in chats without a personal pick'
-                    : 'Chat bot'
-                  : answersCalls
+                    : bot.isSystem
+                      ? 'Built-in support for this number'
+                      : 'Chat bot'
+                  : bot.isSystem
+                    ? 'Built-in support for phone calls'
+                    : answersCalls
                     ? 'Answers the phone'
                     : 'Calling bot'}
               </span>
@@ -178,14 +185,16 @@ export default function AiBotCard({
           >
             <Pencil className="h-3.5 w-3.5" />
           </button>
-          <button
-            type="button"
-            onClick={onDelete}
-            aria-label="Delete bot"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200/80 bg-rose-50/80 text-rose-600 transition hover:bg-rose-100 dark:border-rose-500/30 dark:bg-rose-950/30 dark:text-rose-400"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
+          {onDelete && (
+            <button
+              type="button"
+              onClick={onDelete}
+              aria-label="Delete bot"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200/80 bg-rose-50/80 text-rose-600 transition hover:bg-rose-100 dark:border-rose-500/30 dark:bg-rose-950/30 dark:text-rose-400"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
       </div>
     </article>
