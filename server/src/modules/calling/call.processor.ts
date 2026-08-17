@@ -727,10 +727,32 @@ export async function processCallWebhookPayload(payload: Record<string, unknown>
         log.info('Processing call webhook', { event, metaCallId: call.id, orgId });
 
         if (event === 'connect') {
-          const locked = await tryAcquireCallConnectLock(call.id);
+          let locked = await tryAcquireCallConnectLock(call.id);
           if (!locked) {
-            log.info('Skipping duplicate call connect (lock held)', { metaCallId: call.id });
-            continue;
+            const existingSession = getCallSession(call.id);
+            const existingCall = await prisma.call.findUnique({
+              where: { metaCallId: call.id },
+              select: { status: true },
+            });
+            const alreadyHandling =
+              existingSession ||
+              existingCall?.status === 'CONNECTED' ||
+              existingCall?.status === 'RINGING';
+            if (alreadyHandling) {
+              log.info('Skipping duplicate call connect (lock held)', { metaCallId: call.id });
+              continue;
+            }
+            log.warn('Connect lock held with no active session — recovering stale lock', {
+              metaCallId: call.id,
+            });
+            await releaseCallConnectLock(call.id);
+            locked = await tryAcquireCallConnectLock(call.id);
+            if (!locked) {
+              log.info('Skipping duplicate call connect after stale lock recovery', {
+                metaCallId: call.id,
+              });
+              continue;
+            }
           }
           try {
             await handleCallConnect(
@@ -747,6 +769,11 @@ export async function processCallWebhookPayload(payload: Record<string, unknown>
               metaCallId: call.id,
               error: err instanceof Error ? err.message : String(err),
             });
+            try {
+              await MetaCallingService.reject(phoneNumberId!, accessToken, call.id);
+            } catch {
+              // Meta may already have terminated the call.
+            }
           }
         } else if (event === 'terminate') {
           await handleCallTerminate(orgId, whatsappNumber.id, call);

@@ -269,7 +269,16 @@ export class AiVoiceCallSession {
       this.ctx.consentMessage,
       this.ctx.greeting || 'Hi, thanks for calling. How can I help?'
     );
-    if (opening) await this.speak(opening, 'system');
+    if (opening) {
+      try {
+        await this.speak(opening, 'system');
+      } catch (err) {
+        log.warn('Opening greeting TTS failed — call stays connected', {
+          callId: this.ctx.callId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
     this.armMaxDurationTimer();
     log.info('AI voice call session started', { callId: this.ctx.callId });
   }
