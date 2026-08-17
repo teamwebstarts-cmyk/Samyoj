@@ -135,19 +135,25 @@ describe('handleInboundAutomations', () => {
     expect(automationQueueAdd).not.toHaveBeenCalled();
   });
 
-  it('skips static auto-replies when the contact opted out', async () => {
+  it('still queues the AI bot when the contact opted out of marketing', async () => {
     flowHandled.mockResolvedValue(false);
+    conversationMock
+      .mockResolvedValueOnce({ botActive: true } as never)
+      .mockResolvedValueOnce({
+        botActive: true,
+        botHandoffAt: null,
+        assignedAgentId: null,
+        status: 'OPEN',
+      } as never);
     contactMock.mockResolvedValue({ optedIn: false } as never);
 
     await handleInboundAutomations(payload);
 
-    expect(automationMock).not.toHaveBeenCalled();
-    expect(automationQueueAdd).not.toHaveBeenCalled();
-    expect(logRun).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: 'opted_out',
-        status: 'skipped',
-      })
+    expect(automationMock).toHaveBeenCalled();
+    expect(automationQueueAdd).toHaveBeenCalledWith(
+      'ai-chatbot',
+      expect.objectContaining({ conversationId: 'conv-1' }),
+      expect.objectContaining({ jobId: 'ai-bot-conv-1' })
     );
   });
 

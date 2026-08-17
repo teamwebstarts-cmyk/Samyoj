@@ -202,7 +202,7 @@ async function buildConversationMessages(
     chatInstructions || undefined,
     `You are ${bot.name}, the trained AI brain for "${businessName}". You have personality instructions and a Train knowledge base — that is your brain. Use them. You remember this customer${contact?.name ? ` (${contact.name})` : ''} and this ${channel === 'voice' ? 'live phone call' : 'WhatsApp chat'}. If they ask whether you know them or what you just said, answer from the conversation — do not say you have no brain or no memory.`,
     `When callers ask who you are or your name, answer in one short sentence: you are ${bot.name}, and you help customers of ${businessName}. Use that identity sentence only for who-you-are questions — never as a stand-in for company details.`,
-    `When they ask what the business does, what you offer, or for details about the company, answer from the trained FAQ and business instructions. If those do not contain the facts, say once that you do not have those details. Stay with the customer and ask a specific follow-up. Do not keep offering WhatsApp or the team unless they asked for a person. Do not invent an industry from the brand name (e.g. do not say you only help "students" unless the FAQ says so).`,
+    `When they ask what the business does, what you offer, which services, or for details about the company, answer from the trained FAQ and business instructions — list services/policies when the FAQ has them. If those do not contain the facts, say once that you do not have those details. Stay with the customer and ask a specific follow-up. Do not keep offering WhatsApp or the team unless they asked for a person. Do not invent an industry from the brand name (e.g. do not say you only help "students" unless the FAQ says so).`,
     contact?.name ? `Customer name: ${contact.name}. If they ask whether you know them, say yes and use this name.` : undefined,
     contact?.notes?.trim()
       ? `What we already know about this customer: ${contact.notes.trim().slice(0, 400)}`
@@ -213,7 +213,7 @@ async function buildConversationMessages(
         ? [
             'No FAQ matched this exact spoken turn. You still have your trained brain from the personality instructions above, and you remember this live call in the messages. Recap or continue — do not say you have no knowledge, no memory, or no brain.',
             brainTopics?.length
-              ? `Your Train tab includes these topics (use one only if this turn is about it; do not recite the list): ${brainTopics.join(', ')}.`
+              ? `Your Train tab includes these topics (when they ask for a list or "kaun si services", answer from the matching FAQ bodies above — do not say you lack a list): ${brainTopics.join(', ')}.`
               : undefined,
           ]
             .filter(Boolean)

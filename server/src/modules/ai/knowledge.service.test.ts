@@ -102,6 +102,11 @@ describe('expandKnowledgeQuery', () => {
     expect(expanded).not.toMatch(/\border\b/);
   });
 
+  it('adds business and services aliases for company questions', () => {
+    expect(expandKnowledgeQuery('kaun si services hai')).toMatch(/services/i);
+    expect(expandKnowledgeQuery('tell me about your business')).toMatch(/business/i);
+  });
+
   it('lets tokenSearch rank hours FAQs from a timing query', () => {
     const items = [
       { id: '1', title: 'Business hours', content: 'We are open 9 AM to 6 PM', sourceType: 'FAQ' },
@@ -167,6 +172,20 @@ describe('voiceKnowledgeQueries', () => {
         { role: 'assistant', content: 'We open at 9.' },
       ])
     ).toEqual(['haan woh hi', 'shop timing kya hai']);
+  });
+
+  it('combines prior business question with a services follow-up', () => {
+    expect(
+      voiceKnowledgeQueries('kaun si services hai', [
+        { role: 'user', content: 'business ke bare mein batao' },
+        { role: 'assistant', content: 'We offer WhatsApp automation.' },
+      ])
+    ).toEqual([
+      'business ke bare mein batao kaun si services hai',
+      'kaun si services hai',
+      'business ke bare mein batao',
+      'We offer WhatsApp automation. kaun si services hai',
+    ]);
   });
 });
 

@@ -37,6 +37,13 @@ import {
 
 const log = createModuleLogger('ai-voice-agent');
 
+/** Spoken when LLM/STT hiccups — not a dead-end error. */
+const VOICE_RETRY_PROMPT =
+  'Ek second — main phir se sun raha hoon. Apna sawaal dobara boliye, ya team se baat chahiye ho to bol dijiye.';
+
+const VOICE_TEAM_HANDOFF_SPOKEN =
+  'Theek hai — main team ko bata deta hoon. Woh aapko WhatsApp par message karenge. Dhanyavaad.';
+
 export class AiVoiceCallSession {
   private bridge: WhatsAppWebRtcBridge | null = null;
   private transcriber: SarvamStreamTranscriber | null = null;
@@ -319,10 +326,18 @@ export class AiVoiceCallSession {
           const result = event.result;
           if (this.abortSpeak || this.ended) break;
           if (result.skipped && !result.reply) {
+            if (wantsHumanOnCall(trimmed)) {
+              await this.handleToolCall({
+                id: 'kw',
+                name: 'request_human',
+                arguments: { reason: 'Customer asked for team during AI skip' },
+              });
+              break;
+            }
             await this.speak(
               result.skipReason === 'ai_not_configured'
                 ? 'Sorry, our AI assistant is not configured yet. Please message us on WhatsApp.'
-                : 'Sorry, I am having trouble right now. Please try again in a moment.',
+                : VOICE_RETRY_PROMPT,
               'assistant'
             );
             break;
@@ -387,10 +402,15 @@ export class AiVoiceCallSession {
               chars: parsed.cleanText.length,
             });
           } else if (tools.length === 0) {
-            await this.speak(
-              'Sorry, I am having trouble right now. Please try again in a moment.',
-              'assistant'
-            );
+            if (wantsHumanOnCall(trimmed)) {
+              await this.handleToolCall({
+                id: 'kw',
+                name: 'request_human',
+                arguments: { reason: 'Customer asked for team — empty model reply' },
+              });
+              return;
+            }
+            await this.speak(VOICE_RETRY_PROMPT, 'assistant');
           }
 
           if (this.abortSpeak || this.ended) break;
@@ -411,7 +431,15 @@ export class AiVoiceCallSession {
       }
 
       if (!directHandled && !spokenText && !this.ended && !this.abortSpeak) {
-        await this.speak('Sorry, I am having trouble right now. Please try again in a moment.', 'assistant');
+        if (wantsHumanOnCall(trimmed)) {
+          await this.handleToolCall({
+            id: 'kw',
+            name: 'request_human',
+            arguments: { reason: 'Customer asked for team — no spoken reply' },
+          });
+        } else {
+          await this.speak(VOICE_RETRY_PROMPT, 'assistant');
+        }
       }
     } catch (err) {
       log.error('Voice reply failed', {
@@ -456,10 +484,7 @@ export class AiVoiceCallSession {
           return;
         }
         const reason = (tool.arguments.reason as string) || 'Customer requested human';
-        await this.speak(
-          "I'll have someone from the team message you on WhatsApp. Thanks for calling.",
-          'assistant'
-        );
+        await this.speak(VOICE_TEAM_HANDOFF_SPOKEN, 'assistant');
         await this.performHandoffAndTransfer('TOOL_REQUEST_HUMAN', reason);
         break;
       }

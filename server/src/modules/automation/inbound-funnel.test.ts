@@ -26,10 +26,9 @@ describe('decideInboundFunnel', () => {
     expect(decideInboundFunnel({ botActive: true, flowHandled: true })).toEqual({ type: 'flow_done' });
   });
 
-  it('skips static auto-replies when the contact opted out', () => {
+  it('continues to support replies even when the contact opted out of marketing', () => {
     expect(decideInboundFunnel({ botActive: true, flowHandled: false, optedIn: false })).toEqual({
-      type: 'skip',
-      reason: 'opted_out',
+      type: 'continue_static',
     });
   });
 

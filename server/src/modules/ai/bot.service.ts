@@ -62,7 +62,7 @@ export async function ensureSystemSupportBots(organizationId: string): Promise<v
   const llm = hardcodedBotLlmDefaults();
   const handoffMessage = 'Let me connect you with our team. Someone will reply shortly.';
 
-  const chatSupport = await findOrCreateSystemBot({
+  await findOrCreateSystemBot({
     organizationId,
     channel: 'CHAT',
     legacyNames: LEGACY_SYSTEM_CHAT_NAMES,
@@ -91,8 +91,6 @@ export async function ensureSystemSupportBots(organizationId: string): Promise<v
       });
     },
   });
-
-  void chatSupport;
 
   const callSupport = await findOrCreateSystemBot({
     organizationId,

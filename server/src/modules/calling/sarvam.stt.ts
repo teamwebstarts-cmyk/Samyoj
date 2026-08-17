@@ -83,7 +83,7 @@ export class SarvamStreamTranscriber {
     url.searchParams.set('encoding', 'linear16');
     url.searchParams.set('sample_rate', String(sampleRate === 8000 ? 8000 : 16000));
     url.searchParams.set('endpointing', 'vad');
-    // Telephony VAD: longer silence so Hindi-English callers can pause mid-thought.
+    // Shorter silence = faster turn-taking on phone calls (Hinglish pauses still ok).
     url.searchParams.set('threshold', '0.5');
     url.searchParams.set('silence_duration_ms', String(silenceDurationMs));
     url.searchParams.set('min_speech_duration_ms', String(minSpeechDurationMs));

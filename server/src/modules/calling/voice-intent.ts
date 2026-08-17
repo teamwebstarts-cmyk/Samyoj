@@ -5,6 +5,10 @@ import { normalizeVoiceText } from './spoken-text';
 export function wantsHumanOnCall(text: string): boolean {
   const t = text.trim();
   if (!t) return false;
+  // Roman Hinglish team handoff — must not match "tumse/tum se baat" (stay on AI line).
+  if (/(tum\s*se|tumse)\s+baat/i.test(t) && !/team\s*se\s+baat/i.test(t)) {
+    return false;
+  }
   return (
     /\b((talk|speak|connect)(\s+me)?\s+(to|with)\s+(a |an |the )?(human|agent|person|someone|manager|representative|team|support))\b/i.test(
       t
@@ -12,7 +16,9 @@ export function wantsHumanOnCall(text: string): boolean {
     /\b(real (human|person|agent|support)|human please|agent please|customer care|customer service|customer support|support team|live agent)\b/i.test(
       t
     ) ||
-    /(किसी से बात|इंसान से बात|एजेंट से बात|मानव से बात|सपोर्ट टीम|सपोर्ट से बात|बात करवा)/.test(t)
+    /(किसी से बात|इंसान से बात|एजेंट से बात|मानव से बात|सपोर्ट टीम|सपोर्ट से बात|बात करवा)/.test(t) ||
+    /\b(team\s*(ko|se)|team\s+se\s+baat|mujhe\s+team|real\s+support\s+team)\b/i.test(t) ||
+    /(team ko bata|team se baat karni|team se connect|human team se)/i.test(t)
   );
 }
 

@@ -4,6 +4,8 @@
  * are kept.
  */
 
+import { wantsHumanOnCall } from '../calling/voice-intent';
+
 const TOOL_BLOCK_RE = /<tool_call>\s*[\s\S]*?<\/tool_call>/gi;
 
 const IDENTITY_LOOP_RE =
@@ -26,7 +28,7 @@ export const STILL_NO_DETAILS =
   "I still don't have more company details than that. Our team can message you on WhatsApp with the information.";
 
 export const STAY_ON_CALL =
-  "I already shared what I have from training. Ask me a specific follow-up — I will not keep sending you to the team.";
+  "Maine jo training se jaankaari thi woh share kar di. Koi specific cheez poochiye — main yahin hoon.";
 
 const TEAM_DEFER_RE =
   /on whatsapp|whatsapp पर|team से कह|team से आपको|connect कर|details भेज|बाकी details|don't have that in my knowledge|don't have those business details|don't have more company details|team will message|मैं टीम से|connect कर दूँ|connect करूँ|send you the details on whatsapp|भेजवा सकता/i;
@@ -162,6 +164,9 @@ export function resolveRepeatedReply(
   ).map((p) => String(p || '').trim()).filter(Boolean);
 
   const lastUser = String(lastUserQuestion || '').trim();
+  if (wantsHumanOnCall(lastUser)) {
+    return reply;
+  }
   const whoAsk = isWhoAreYouQuestion(lastUser);
   const businessAsk = isBusinessInfoQuestion(lastUser);
   const remainder = stripIdentityPreamble(spoken);

@@ -14,6 +14,7 @@ import { redactText } from '../../utils/pii-redaction';
 import {
   clearDefaultFlag,
   DEFAULT_INSTRUCTIONS,
+  ensureSystemSupportBots,
   getBot,
   hardcodedBotLlmDefaults,
   listBots,
@@ -82,6 +83,8 @@ router.get(
   ...readGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
+
+    await ensureSystemSupportBots(orgId);
 
     const [bots, whatsappCount, azureOk, knowledgeItems] = await Promise.all([
       prisma.aiBot.findMany({ where: { organizationId: orgId } }),

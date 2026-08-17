@@ -225,6 +225,7 @@ export interface MessageMetadata {
   isButtonReply?: boolean;
   templateName?: string;
   templateLanguage?: string;
+  templateParams?: TemplateParams;
   source?: 'flow' | 'automation';
   triggerType?: string;
   flowId?: string;

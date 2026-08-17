@@ -52,10 +52,10 @@ export function splitForTts(text: string): string[] {
 }
 
 /** Mute mic→STT while TTS plays and for this tail so speakerphone echo is not transcribed. */
-export const STT_ECHO_TAIL_MS = 800;
+export const STT_ECHO_TAIL_MS = 550;
 
 /** Reject transcripts that look like the bot's own line for this long after TTS ends. */
-export const TTS_ECHO_REJECT_MS = STT_ECHO_TAIL_MS + 1200;
+export const TTS_ECHO_REJECT_MS = STT_ECHO_TAIL_MS + 900;
 
 /** Ignore STT fragments shorter than this unless they are a clear yes/no style answer. */
 export const MIN_CALL_UTTERANCE_CHARS = 6;

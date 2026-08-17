@@ -12,6 +12,8 @@ describe('wantsHumanOnCall', () => {
     expect(
       wantsHumanOnCall('तुम तो एक AI हो मुझे like real support team से बात करनी है')
     ).toBe(true);
+    expect(wantsHumanOnCall('team ko bata do mujhe team se baat karni hai')).toBe(true);
+    expect(wantsHumanOnCall('mujhe team se baat karni hai please')).toBe(true);
   });
 
   it('does not steal ordinary sentences that mention a person or support', () => {

@@ -238,6 +238,16 @@ function BubbleTail({ outbound }: { outbound: boolean }) {
   );
 }
 
+function formatTemplateLabel(templateName?: string | null) {
+  const trimmed = templateName?.trim();
+  if (!trimmed) return 'Template';
+  return trimmed
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 function MediaUnavailable({ label }: { label: string }) {
   return (
     <div className="flex items-center justify-center bg-black/[0.04] px-3 py-6 text-[12px] wa-timestamp dark:bg-white/[0.06]">
@@ -389,6 +399,10 @@ export default function MessageBubble({
   const buttons = message.metadata?.buttons;
   const isButtonReply = message.metadata?.isButtonReply;
   const isAutomation = isOutbound && Boolean(getAutomationDividerLabel(message.metadata));
+  const templateLabel =
+    type === 'TEMPLATE' && message.metadata?.templateName
+      ? formatTemplateLabel(message.metadata.templateName)
+      : null;
   const tickStatus = mapStatus(message.status);
   const isFailed = isOutbound && tickStatus === 'failed';
   const time = grouping.last ? formatMessageTime(message.createdAt) : undefined;
@@ -996,6 +1010,11 @@ export default function MessageBubble({
         >
           {grouping.last && <BubbleTail outbound={isOutbound} />}
             {senderHeader}
+            {templateLabel ? (
+              <p className="mb-1 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-chat-timestamp">
+                Template · {templateLabel}
+              </p>
+            ) : null}
             {quoteStrip}
             <CollapsibleMessageText endMeta={metaRow()}>
               {highlightText(message.content, highlightQuery)}

@@ -71,13 +71,13 @@ export const config = {
     sttModel: process.env.SARVAM_STT_MODEL || 'saaras:v3-realtime',
     sttMode: (process.env.SARVAM_STT_MODE || 'codemix') as 'codemix' | 'transcribe',
     sttLanguage: process.env.SARVAM_STT_LANGUAGE || 'auto',
-    /** Realtime STT stream profile — balanced trades a little latency for accuracy on phone calls. */
-    sttStreamType: (process.env.SARVAM_STT_STREAM_TYPE || 'balanced') as
+    /** Realtime STT stream profile — fast endpointing for live calls (override with balanced if noisy). */
+    sttStreamType: (process.env.SARVAM_STT_STREAM_TYPE || 'fast') as
       | 'fast'
       | 'balanced'
       | 'simulated',
-    sttSilenceDurationMs: parseInt(process.env.SARVAM_STT_SILENCE_MS || '1000', 10),
-    sttMinSpeechDurationMs: parseInt(process.env.SARVAM_STT_MIN_SPEECH_MS || '350', 10),
+    sttSilenceDurationMs: parseInt(process.env.SARVAM_STT_SILENCE_MS || '650', 10),
+    sttMinSpeechDurationMs: parseInt(process.env.SARVAM_STT_MIN_SPEECH_MS || '280', 10),
     ttsModel: process.env.SARVAM_TTS_MODEL || 'bulbul:v3',
     ttsSpeaker: process.env.SARVAM_TTS_SPEAKER || 'shubh',
     sampleRate: parseInt(process.env.SARVAM_SAMPLE_RATE || '16000', 10),

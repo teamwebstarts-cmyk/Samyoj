@@ -15,6 +15,7 @@ import { getCachedMessageTemplate } from '../templates/cache';
 import { resolveActiveWhatsappNumber, conversationFilter, scopedConversationWhere, scopedConversationParent, ticketsForNumberFilter } from '../whatsapp/active-number';
 import { deliverOutboundMessage, type DeliverMessageType } from '../messages/send.service';
 import { mergeTemplateParams } from '../campaigns/template-params';
+import { applyTemplateParamsToPreview } from '../campaigns/template-params';
 import { assertApprovedCampaignTemplate } from '../campaigns/template-validation';
 import { validateInteractive, type InteractiveMessageOptions } from '../messages/interactive';
 import { getMessageMediaBuffer, type MessageMediaMetadata } from '../media/download.service';
@@ -822,20 +823,34 @@ router.get(
           orgId,
           req.activeWhatsappNumberId
         );
-        const displayByName = new Map<string, string>();
+        const templateByName = new Map<string, Awaited<ReturnType<typeof getCachedMessageTemplate>>>();
         await Promise.all(
           [...templateNames].map(async (name) => {
             const tpl = await getCachedMessageTemplate(orgId, wabaId, accessToken, name);
-            displayByName.set(name, getTemplateDisplayText(tpl, name));
+            templateByName.set(name, tpl);
           })
         );
         messages = messages.map((msg) => {
           if (msg.type !== 'TEMPLATE') return msg;
-          const meta = msg.metadata as { templateName?: string } | null;
+          const meta = msg.metadata as {
+            templateName?: string;
+            templateParams?: InboxTemplateParams;
+          } | null;
           const name =
             meta?.templateName ||
             (msg.content.startsWith('Template: ') ? msg.content.slice('Template: '.length).trim() : '');
-          const display = name ? displayByName.get(name) : undefined;
+          const template = name ? templateByName.get(name) : undefined;
+          const display = name ? getTemplateDisplayText(template, name) : undefined;
+          const rendered = name
+            ? applyTemplateParamsToPreview(
+                template,
+                meta?.templateParams,
+                name
+              )
+            : '';
+          if (rendered && rendered !== msg.content && !/\{\{\d+\}\}/.test(rendered)) {
+            return { ...msg, content: rendered };
+          }
           return display && display !== msg.content ? { ...msg, content: display } : msg;
         });
       } catch {
@@ -1495,11 +1510,15 @@ router.post(
       if (template?.status !== 'APPROVED') {
         throw new AppError(400, 'Only approved templates can be sent');
       }
-      messageContent = getTemplateDisplayText(template, data.templateName);
       resolvedTemplateParams = resolveInboxTemplateParams(
         data.templateParams,
         conversation.contact,
         template
+      );
+      messageContent = applyTemplateParamsToPreview(
+        template,
+        resolvedTemplateParams,
+        data.templateName
       );
       try {
         assertApprovedCampaignTemplate(template, {

@@ -105,6 +105,16 @@ export function expandKnowledgeQuery(query: string): string {
   if (/(help|madad|मदद|assist|kya kar|kaise madad|service)/i.test(query)) {
     extra.push('help', 'support', 'service');
   }
+  if (
+    /(business|company|services?|polic(y|ies)|offer|kya karte|kaun si|what do you|about (your|the) (business|company)|detail)/i.test(
+      query
+    )
+  ) {
+    extra.push('services', 'business', 'policy', 'offer', 'help', 'company');
+  }
+  if (/(kaun si|kya kya|list|enumerate|tell me more|aur batao)/i.test(query)) {
+    extra.push('services', 'offer', 'policy', 'help');
+  }
   if (/(automation|chatbot|workflow)/i.test(query)) {
     extra.push('automation', 'chatbot', 'workflow', 'whatsapp');
   }
@@ -119,6 +129,13 @@ export function isConversationRecallQuestion(text: string): boolean {
   );
 }
 
+/** Short follow-up on a prior business / services question — STT often misses FAQ on these alone. */
+export function isVoiceFollowUpQuestion(text: string): boolean {
+  return /(kaun si|kya kya|which ones?|tell me more|aur batao|list|services hai|policies|detail|woh kya|uske bare)/i.test(
+    String(text || '')
+  );
+}
+
 /** Search queries for a live call: current STT, then the previous caller turn if this one is a recap miss. */
 export function voiceKnowledgeQueries(
   currentUtterance: string,
@@ -126,14 +143,25 @@ export function voiceKnowledgeQueries(
 ): string[] {
   const current = String(currentUtterance || '').trim();
   if (!current || isConversationRecallQuestion(current)) return [];
-  const queries = [current];
+  const queries: string[] = [];
   const lastUser = [...(liveVoiceTurns || [])]
     .reverse()
     .find((t) => t.role === 'user' && t.content.trim() && t.content.trim() !== current);
+  const lastAssistant = [...(liveVoiceTurns || [])]
+    .reverse()
+    .find((t) => t.role === 'assistant' && t.content.trim());
+
+  if (lastUser && isVoiceFollowUpQuestion(current) && !isConversationRecallQuestion(lastUser.content)) {
+    queries.push(`${lastUser.content.trim()} ${current}`);
+  }
+  queries.push(current);
   if (lastUser && !isConversationRecallQuestion(lastUser.content)) {
     queries.push(lastUser.content.trim());
   }
-  return queries;
+  if (lastAssistant && isVoiceFollowUpQuestion(current)) {
+    queries.push(`${lastAssistant.content.trim().slice(0, 160)} ${current}`);
+  }
+  return [...new Set(queries)];
 }
 
 export function tokenSearch(
@@ -221,14 +249,13 @@ export async function searchKnowledgeBase(
   return tokenSearch(items, searchQuery, limit);
 }
 
-export async function resolveVoiceKnowledge(
+async function searchVoiceKnowledgeQueries(
   botId: string,
-  currentUtterance: string,
+  queries: string[],
   organizationId: string,
-  liveVoiceTurns?: Array<{ role: 'user' | 'assistant'; content: string }>,
   whatsappNumberId?: string
 ): Promise<KnowledgeMatch[]> {
-  for (const query of voiceKnowledgeQueries(currentUtterance, liveVoiceTurns)) {
+  for (const query of queries) {
     const matches = await searchKnowledgeBase(
       botId,
       query,
@@ -239,6 +266,41 @@ export async function resolveVoiceKnowledge(
     if (matches.length > 0) return matches;
   }
   return [];
+}
+
+export async function resolveVoiceKnowledge(
+  botId: string,
+  currentUtterance: string,
+  organizationId: string,
+  liveVoiceTurns?: Array<{ role: 'user' | 'assistant'; content: string }>,
+  whatsappNumberId?: string
+): Promise<KnowledgeMatch[]> {
+  const queries = voiceKnowledgeQueries(currentUtterance, liveVoiceTurns);
+  const primary = await searchVoiceKnowledgeQueries(
+    botId,
+    queries,
+    organizationId,
+    whatsappNumberId
+  );
+  if (primary.length > 0) return primary;
+
+  // Calling bot may have no Train rows while Chat Support bot does — bridge once.
+  const callTrainCount = await prisma.knowledgeBaseItem.count({ where: { botId } });
+  if (callTrainCount > 0) return [];
+
+  const chatBot = await prisma.aiBot.findFirst({
+    where: { organizationId, channel: 'CHAT', enabled: true },
+    orderBy: [{ isSystem: 'desc' }, { isDefault: 'desc' }, { createdAt: 'asc' }],
+    select: { id: true },
+  });
+  if (!chatBot || chatBot.id === botId) return [];
+
+  return searchVoiceKnowledgeQueries(
+    chatBot.id,
+    queries,
+    organizationId,
+    whatsappNumberId
+  );
 }
 
 /** Titles only — never dump full FAQ bodies on a miss (that hallucinates store answers). */

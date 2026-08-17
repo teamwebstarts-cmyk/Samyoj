@@ -4,7 +4,7 @@ import { isBotPaused } from '../flows/live';
 export const INBOUND_LOCK_REQUEUE_MAX = 8;
 
 export type InboundFunnelDecision =
-  | { type: 'skip'; reason: 'paused' | 'opted_out' | 'lock_giveup' }
+  | { type: 'skip'; reason: 'paused' | 'lock_giveup' }
   | { type: 'requeue' }
   | { type: 'flow_done' }
   | { type: 'continue_static' };
@@ -26,6 +26,5 @@ export function decideInboundFunnel(input: {
     return { type: 'requeue' };
   }
   if (input.flowHandled) return { type: 'flow_done' };
-  if (input.optedIn === false) return { type: 'skip', reason: 'opted_out' };
   return { type: 'continue_static' };
 }

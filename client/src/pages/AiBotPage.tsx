@@ -844,18 +844,6 @@ export default function AiBotPage() {
               </p>
             </div>
           )}
-          {channelFilter === 'CHAT' && (
-            <div className="flex items-start gap-2.5 rounded-xl border border-sky-200/50 bg-sky-50/40 px-3.5 py-2.5 dark:border-sky-500/20 dark:bg-sky-950/20">
-              <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-sky-600" strokeWidth={2} />
-              <p className="text-[12px] leading-relaxed text-theme-secondary">
-                <span className="font-bold text-theme-fg">This number’s chats</span>
-                {' — '}
-                Use <span className="font-semibold text-theme-fg">All chats</span> to apply or
-                remove a chat bot everywhere on this WhatsApp number. Inbox picks stay. Pause only
-                turns the bot off.
-              </p>
-            </div>
-          )}
         </div>
       </PageShell>
 
@@ -876,7 +864,7 @@ export default function AiBotPage() {
             onCancel={closeSlide}
             submitLabel={editing ? 'Save' : 'Create'}
             loading={saving}
-            onDelete={editing ? () => handleDelete(editing.id) : undefined}
+            onDelete={editing && !editing.isSystem ? () => handleDelete(editing.id) : undefined}
             deleteLabel="Delete bot"
           />
         }

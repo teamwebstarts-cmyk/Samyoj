@@ -172,7 +172,13 @@ describe('resolveRepeatedReply', () => {
     expect(resolveRepeatedReply(reply, [IDENTITY_EN])).toBe(`${HONEST_NO_DETAILS}\n${TOOL}`);
   });
 
-  it('leaves a tool-call-only reply unchanged', () => {
-    expect(resolveRepeatedReply(TOOL, [IDENTITY_EN])).toBe(TOOL);
+  it('does not replace with stay-on-call when the caller asked for the team', () => {
+    const first =
+      'क्षमा करें, मेरे पास अभी और जानकारी नहीं है। मैं टीम से कह दूँगा कि वो आपको WhatsApp पर सारी details भेज दें।';
+    const second =
+      "I'm sorry, I don't have that in my knowledge yet. Let me send you the details on WhatsApp.";
+    expect(
+      resolveRepeatedReply(second, [first], 'team ko bata do mujhe team se baat karni hai')
+    ).toBe(second);
   });
 });
