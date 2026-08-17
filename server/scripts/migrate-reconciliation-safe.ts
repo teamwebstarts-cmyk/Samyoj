@@ -7,7 +7,7 @@ import {
   historicalDestructiveMigration,
 } from './migration-reconciliation-constants';
 
-const pendingMigrationsMarker = 'Following migration have not yet been applied';
+const pendingMigrationsMarker = /Following migrations? have not yet been applied/;
 
 (async () => {
   const backupFile = process.env.MIGRATION_BACKUP_FILE;
@@ -61,7 +61,7 @@ const pendingMigrationsMarker = 'Following migration have not yet been applied';
   const appliedNames = new Set(applied.map((row) => row.migration_name));
   const status = spawnSync('npx', ['prisma', 'migrate', 'status'], { encoding: 'utf8' });
   const statusOutput = `${status.stdout || ''}\n${status.stderr || ''}`;
-  if (status.status !== 0 && !statusOutput.includes(pendingMigrationsMarker)) {
+  if (status.status !== 0 && !pendingMigrationsMarker.test(statusOutput)) {
     throw new Error(statusOutput.trim() || 'Unable to determine migration status');
   }
   const pendingNames = migrations.filter(

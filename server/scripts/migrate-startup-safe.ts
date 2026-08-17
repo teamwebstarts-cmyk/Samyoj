@@ -7,7 +7,7 @@ import {
 } from './migration-reconciliation-constants';
 
 const destructivePattern = /\b(DELETE\s+FROM|TRUNCATE\b|DROP\s+TABLE)\b/i;
-const pendingMigrationsMarker = 'Following migration have not yet been applied';
+const pendingMigrationsMarker = /Following migrations? have not yet been applied/;
 
 function pendingMigrationNames(output: string): string[] {
   const names: string[] = [];
@@ -26,7 +26,7 @@ function migrationSql(name: string): string {
 const status = spawnSync('npx', ['prisma', 'migrate', 'status'], { encoding: 'utf8' });
 const output = `${status.stdout || ''}\n${status.stderr || ''}`;
 
-if (status.status !== 0 && !output.includes(pendingMigrationsMarker)) {
+if (status.status !== 0 && !pendingMigrationsMarker.test(output)) {
   throw new Error(output.trim() || 'Unable to determine migration status');
 }
 
