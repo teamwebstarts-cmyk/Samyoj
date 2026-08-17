@@ -240,6 +240,7 @@ enum PlatformOutreachStatus {
   QUEUED
   SENT
   FAILED
+  LOGGED
 }
 
 model User {

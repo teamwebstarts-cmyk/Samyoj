@@ -19,6 +19,46 @@ import { writePlatformAudit } from './audit';
 
 const PAGE_SIZE = 25;
 
+export const PLATFORM_AI_COVERAGE_NOTE =
+  'AI usage is the current ledger. STT/TTS coverage is still incomplete (SAMYOJ-56). Figures are usage units, not rupees, and do not include Meta message fees.';
+
+export function monthlyTokenLimitFromSettings(settings: unknown): number | null {
+  if (!settings || typeof settings !== 'object') return null;
+  const ai = (settings as { ai?: { monthlyTokenLimit?: unknown } }).ai;
+  const limit = ai?.monthlyTokenLimit;
+  return typeof limit === 'number' && Number.isFinite(limit) && limit > 0 ? Math.trunc(limit) : null;
+}
+
+export function summarizePlatformAiUsage(
+  rows: Array<{
+    organizationId: string;
+    companyName: string;
+    aiTokensMonth: number;
+    monthlyTokenLimit: number | null;
+  }>
+) {
+  const tokensMonth = rows.reduce((sum, row) => sum + (row.aiTokensMonth || 0), 0);
+  const capped = rows.filter((row) => row.monthlyTokenLimit != null);
+  const tokenLimitSum = capped.reduce((sum, row) => sum + (row.monthlyTokenLimit || 0), 0);
+  const topOrgs = [...rows]
+    .filter((row) => (row.aiTokensMonth || 0) > 0)
+    .sort((a, b) => b.aiTokensMonth - a.aiTokensMonth)
+    .slice(0, 8)
+    .map((row) => ({
+      organizationId: row.organizationId,
+      companyName: row.companyName,
+      aiTokensMonth: row.aiTokensMonth,
+      monthlyTokenLimit: row.monthlyTokenLimit,
+    }));
+  return {
+    tokensMonth,
+    tokenLimitSum: capped.length ? tokenLimitSum : null,
+    cappedOrgCount: capped.length,
+    uncappedOrgCount: rows.length - capped.length,
+    topOrgs,
+  };
+}
+
 function publicAiControls(settings: Awaited<ReturnType<typeof getOrgAiSettings>>) {
   return {
     chatEnabled: settings.chatEnabled !== false,
@@ -66,7 +106,7 @@ export async function getPlatformOverview(now = new Date()) {
     await backfillOrgHealthSnapshots(now);
   }
 
-  const [funnelRows, attention, errorGroups, tokenSum, orgCount] = await Promise.all([
+  const [funnelRows, attention, errorGroups, snapshotAi, orgCount] = await Promise.all([
     prisma.orgHealthSnapshot.groupBy({
       by: ['stage'],
       where: { capturedAt: today },
@@ -94,12 +134,25 @@ export async function getPlatformOverview(now = new Date()) {
       orderBy: { _sum: { count: 'desc' } },
       take: 12,
     }),
-    prisma.orgHealthSnapshot.aggregate({
+    prisma.orgHealthSnapshot.findMany({
       where: { capturedAt: today },
-      _sum: { aiTokensMonth: true },
+      select: {
+        organizationId: true,
+        aiTokensMonth: true,
+        organization: { select: { companyName: true, settings: true } },
+      },
     }),
     prisma.organization.count(),
   ]);
+
+  const ai = summarizePlatformAiUsage(
+    snapshotAi.map((row) => ({
+      organizationId: row.organizationId,
+      companyName: row.organization.companyName,
+      aiTokensMonth: row.aiTokensMonth,
+      monthlyTokenLimit: monthlyTokenLimitFromSettings(row.organization.settings),
+    }))
+  );
 
   const funnel = ACTIVATION_STAGES.map((stage) => ({
     stage,
@@ -125,9 +178,14 @@ export async function getPlatformOverview(now = new Date()) {
       code: row.code,
       count: row._sum.count || 0,
     })),
-    aiTokensMonth: tokenSum._sum.aiTokensMonth || 0,
-    coverageNote:
-      'AI usage is the current ledger. STT/TTS coverage is still incomplete (SAMYOJ-56). Figures are usage units, not rupees, and do not include Meta message fees.',
+    aiTokensMonth: ai.tokensMonth,
+    aiCap: {
+      tokenLimitSum: ai.tokenLimitSum,
+      cappedOrgCount: ai.cappedOrgCount,
+      uncappedOrgCount: ai.uncappedOrgCount,
+    },
+    topAiOrgs: ai.topOrgs,
+    coverageNote: PLATFORM_AI_COVERAGE_NOTE,
   };
 }
 
@@ -248,7 +306,7 @@ export async function getPlatformOrg(organizationId: string, now = new Date()) {
   if (!metrics) throw new AppError(404, 'Organization not found');
 
   const owner = org.users.find((row) => row.role === 'OWNER');
-  const [ai, flags, payments, events, snapshots] = await Promise.all([
+  const [ai, flags, payments, events, snapshots, messageCounts] = await Promise.all([
     getOrgUsageSummary(organizationId, 30),
     getOrgFeatureFlags(organizationId),
     prisma.paymentOrder.findMany({
@@ -276,7 +334,27 @@ export async function getPlatformOrg(organizationId: string, now = new Date()) {
       take: 30,
       select: { capturedAt: true, stage: true },
     }),
+    Promise.all(
+      org.whatsappNumbers.map(async (number) => {
+        const [inboundCount, outboundCount] = await Promise.all([
+          prisma.message.count({
+            where: {
+              direction: 'INBOUND',
+              conversation: { organizationId, whatsappNumberId: number.id },
+            },
+          }),
+          prisma.message.count({
+            where: {
+              direction: 'OUTBOUND',
+              conversation: { organizationId, whatsappNumberId: number.id },
+            },
+          }),
+        ]);
+        return { id: number.id, inboundCount, outboundCount };
+      })
+    ),
   ]);
+  const countsByNumber = new Map(messageCounts.map((row) => [row.id, row]));
 
   return {
     id: org.id,
@@ -308,13 +386,18 @@ export async function getPlatformOrg(organizationId: string, now = new Date()) {
       name: row.name,
       count: row._sum.count || 0,
     })),
-    whatsapp: org.whatsappNumbers.map((number) => ({
-      id: number.id,
-      maskedPhone: maskBusinessPhone(number.phoneNumber),
-      isActive: number.isActive,
-      qualityRating: number.qualityRating,
-      createdAt: number.createdAt,
-    })),
+    whatsapp: org.whatsappNumbers.map((number) => {
+      const counts = countsByNumber.get(number.id);
+      return {
+        id: number.id,
+        maskedPhone: maskBusinessPhone(number.phoneNumber),
+        isActive: number.isActive,
+        qualityRating: number.qualityRating,
+        inboundCount: counts?.inboundCount ?? 0,
+        outboundCount: counts?.outboundCount ?? 0,
+        createdAt: number.createdAt,
+      };
+    }),
     billing: {
       plan: org.plan,
       planExpiresAt: org.planExpiresAt,
@@ -326,6 +409,7 @@ export async function getPlatformOrg(organizationId: string, now = new Date()) {
     ai: {
       ...publicAiControls(await getOrgAiSettings(organizationId)),
       usage: ai,
+      coverageNote: PLATFORM_AI_COVERAGE_NOTE,
     },
     flagsCatalog: flags,
   };

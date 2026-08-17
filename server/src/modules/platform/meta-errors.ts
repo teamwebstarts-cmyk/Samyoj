@@ -125,6 +125,39 @@ export function emitMetaErrorStat(
   });
 }
 
+/** Graph delivery-status webhook errors. Never persist wa_id, phones, or payloads. */
+export function extractWebhookStatusMetaError(
+  statusValue: string,
+  status: Record<string, unknown>
+): { code: number; sampleTitle?: string } | null {
+  if (statusValue !== 'FAILED') return null;
+  const errors = status.errors;
+  if (!Array.isArray(errors) || errors.length === 0) return null;
+  const first = errors[0];
+  if (!first || typeof first !== 'object') return null;
+  const rec = first as Record<string, unknown>;
+  const code = Number(rec.code);
+  if (!Number.isFinite(code)) return null;
+  const sampleTitle = typeof rec.title === 'string' ? rec.title : undefined;
+  return { code, sampleTitle };
+}
+
+export function recordWebhookStatusMetaError(input: {
+  organizationId: string;
+  whatsappNumberId?: string | null;
+  statusValue: string;
+  status: Record<string, unknown>;
+}): void {
+  const parsed = extractWebhookStatusMetaError(input.statusValue, input.status);
+  if (!parsed) return;
+  emitMetaErrorStat({
+    organizationId: input.organizationId,
+    whatsappNumberId: input.whatsappNumberId,
+    code: parsed.code,
+    sampleTitle: parsed.sampleTitle,
+  });
+}
+
 export function safeRecordMetaSendFailure(input: {
   organizationId?: string | null;
   whatsappNumberId?: string | null;

@@ -31,6 +31,7 @@ export interface PlatformRequestSession {
 const PRE_MFA_PLATFORM_AUTH_ROUTES = new Set([
   'POST /auth/login',
   'POST /auth/mfa/enroll',
+  'POST /auth/mfa/reset-enrollment',
   'GET /auth/csrf',
   'POST /auth/logout',
 ]);

@@ -154,6 +154,7 @@ export async function patchPlatformOperator(input: {
 export async function listPlatformSessions(input: {
   actorId: string;
   actorRole: PlatformRole;
+  currentSessionId: string;
 }) {
   const sessions = await prisma.platformSession.findMany({
     where: {
@@ -182,7 +183,7 @@ export async function listPlatformSessions(input: {
     expiresAt: session.expiresAt,
     lastSeenAt: session.lastSeenAt,
     createdAt: session.createdAt,
-    current: session.operatorId === input.actorId,
+    current: session.id === input.currentSessionId,
   }));
 }
 

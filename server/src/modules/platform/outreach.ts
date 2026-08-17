@@ -1,5 +1,6 @@
+import type { PlatformOutreachStatus } from '@prisma/client';
 import prisma from '../../config/database';
-import { sendEmail } from '../../services/email.service';
+import { isSmtpConfigured, sendEmail } from '../../services/email.service';
 import { AppError } from '../../utils/response';
 import { writePlatformAudit } from './audit';
 import { collectOrgHealthMetrics } from './snapshots';
@@ -14,6 +15,11 @@ export const OUTREACH_TEMPLATE_IDS = [
 ] as const;
 
 export type OutreachTemplateId = (typeof OUTREACH_TEMPLATE_IDS)[number];
+
+export const OUTREACH_AGING_BUCKETS = ['recent', 'd7', 'd14', 'd30'] as const;
+export type OutreachAgingBucket = (typeof OUTREACH_AGING_BUCKETS)[number];
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 const TEMPLATE_COPY: Record<
   OutreachTemplateId,
@@ -55,6 +61,25 @@ export function isOutreachTemplateId(value: string): value is OutreachTemplateId
   return (OUTREACH_TEMPLATE_IDS as readonly string[]).includes(value);
 }
 
+export function outreachAgeDays(stuckSince: Date, now: Date): number {
+  return Math.max(0, Math.floor((now.getTime() - stuckSince.getTime()) / DAY_MS));
+}
+
+export function outreachAgingBucket(stuckSince: Date, now: Date): OutreachAgingBucket {
+  const days = outreachAgeDays(stuckSince, now);
+  if (days >= 30) return 'd30';
+  if (days >= 14) return 'd14';
+  if (days >= 7) return 'd7';
+  return 'recent';
+}
+
+export function emptyAgedOutreachQueue(): Record<
+  OutreachAgingBucket,
+  Array<{ id: string; companyName: string; stage: string; ageDays: number }>
+> {
+  return { recent: [], d7: [], d14: [], d30: [] };
+}
+
 export async function resolveOrgOwnerEmail(organizationId: string): Promise<{
   email: string;
   companyName: string;
@@ -71,12 +96,26 @@ export async function resolveOrgOwnerEmail(organizationId: string): Promise<{
   return { email, companyName: owner.organization.companyName };
 }
 
+function outreachStatusFromSend(input: {
+  smtpConfigured: boolean;
+  delivered: boolean;
+}): Extract<PlatformOutreachStatus, 'SENT' | 'FAILED' | 'LOGGED'> {
+  if (input.delivered) return 'SENT';
+  if (!input.smtpConfigured) return 'LOGGED';
+  return 'FAILED';
+}
+
 export async function sendOrgOutreach(input: {
   organizationId: string;
   operatorId: string;
   templateId: string;
   reason: string;
-}): Promise<{ id: string; status: 'SENT' | 'FAILED'; templateId: OutreachTemplateId }> {
+}): Promise<{
+  id: string;
+  status: Extract<PlatformOutreachStatus, 'SENT' | 'FAILED' | 'LOGGED'>;
+  templateId: OutreachTemplateId;
+  smtpConfigured: boolean;
+}> {
   if (!isOutreachTemplateId(input.templateId)) {
     throw new AppError(400, 'Unknown outreach template');
   }
@@ -87,6 +126,7 @@ export async function sendOrgOutreach(input: {
   }
 
   const template = TEMPLATE_COPY[input.templateId];
+  const smtpConfigured = isSmtpConfigured();
   const log = await prisma.outreachLog.create({
     data: {
       organizationId: input.organizationId,
@@ -97,14 +137,17 @@ export async function sendOrgOutreach(input: {
     },
   });
 
-  let status: 'SENT' | 'FAILED' = 'SENT';
+  let status: Extract<PlatformOutreachStatus, 'SENT' | 'FAILED' | 'LOGGED'> = 'FAILED';
   let errorCode: string | null = null;
   try {
-    await sendEmail({
+    const delivered = await sendEmail({
       to: owner.email,
       subject: template.subject,
       text: template.body(owner.companyName),
     });
+    status = outreachStatusFromSend({ smtpConfigured, delivered });
+    if (status === 'LOGGED') errorCode = 'SMTP_NOT_CONFIGURED';
+    if (status === 'FAILED') errorCode = 'SMTP_UNAVAILABLE';
   } catch (error) {
     status = 'FAILED';
     errorCode = error instanceof Error ? error.message.slice(0, 80) : 'SEND_FAILED';
@@ -129,40 +172,51 @@ export async function sendOrgOutreach(input: {
     afterState: { templateId: input.templateId, status },
   });
 
-  return { id: log.id, status, templateId: input.templateId };
+  return { id: log.id, status, templateId: input.templateId, smtpConfigured };
 }
 
 export async function listOutreachQueues(now = new Date()) {
   const orgs = await prisma.organization.findMany({
     select: { id: true, companyName: true, createdAt: true },
   });
-  const queues: Record<string, Array<{ id: string; companyName: string; stage: string }>> = {
-    connect_whatsapp: [],
-    add_contacts: [],
-    first_send: [],
-    inbound_stuck: [],
-    trial_ending: [],
-    quality_risk: [],
+  const queues: Record<
+    string,
+    ReturnType<typeof emptyAgedOutreachQueue>
+  > = {
+    connect_whatsapp: emptyAgedOutreachQueue(),
+    add_contacts: emptyAgedOutreachQueue(),
+    first_send: emptyAgedOutreachQueue(),
+    inbound_stuck: emptyAgedOutreachQueue(),
+    trial_ending: emptyAgedOutreachQueue(),
+    quality_risk: emptyAgedOutreachQueue(),
   };
 
   for (const org of orgs) {
     const metrics = await collectOrgHealthMetrics(org.id, now);
     if (!metrics) continue;
-    const row = { id: org.id, companyName: org.companyName, stage: metrics.stage };
+    const stuckSince = metrics.lastLoginAt ?? org.createdAt;
+    const row = {
+      id: org.id,
+      companyName: org.companyName,
+      stage: metrics.stage,
+      ageDays: outreachAgeDays(stuckSince, now),
+    };
+    const bucket = outreachAgingBucket(stuckSince, now);
     if (metrics.stage === 'NOT_CONNECTED' || metrics.stage === 'REGISTERED') {
-      queues.connect_whatsapp.push(row);
+      queues.connect_whatsapp[bucket].push(row);
     } else if (metrics.stage === 'CONNECTED_EMPTY') {
-      queues.add_contacts.push(row);
+      queues.add_contacts[bucket].push(row);
     } else if (metrics.stage === 'CONTACTS_READY') {
-      queues.first_send.push(row);
+      queues.first_send[bucket].push(row);
     } else if (metrics.stage === 'OUTBOUND_ONLY' || metrics.webhookStale) {
-      queues.inbound_stuck.push(row);
+      queues.inbound_stuck[bucket].push(row);
     }
-    if (metrics.billingRisk) queues.trial_ending.push(row);
-    if (metrics.qualityRisk) queues.quality_risk.push(row);
+    if (metrics.billingRisk) queues.trial_ending[bucket].push(row);
+    if (metrics.qualityRisk) queues.quality_risk[bucket].push(row);
   }
 
   return {
+    smtpConfigured: isSmtpConfigured(),
     templates: OUTREACH_TEMPLATE_IDS,
     queues,
   };

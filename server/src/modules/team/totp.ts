@@ -51,16 +51,37 @@ function generateTotp(secret: Buffer, counter: number, digits = 6): string {
   return String(code % 10 ** digits).padStart(digits, '0');
 }
 
+export function otpauthUrlForSecret(
+  email: string,
+  secret: string,
+  issuerName = 'WhatsApp Platform'
+): string {
+  const issuer = encodeURIComponent(issuerName);
+  const account = encodeURIComponent(email);
+  return `otpauth://totp/${issuer}:${account}?secret=${secret}&issuer=${issuer}&digits=6&period=30`;
+}
+
 export function generateTwoFactorSecret(
   email: string,
   issuerName = 'WhatsApp Platform'
 ): { secret: string; otpauthUrl: string } {
   const raw = crypto.randomBytes(20);
   const secret = base32Encode(raw);
-  const issuer = encodeURIComponent(issuerName);
-  const account = encodeURIComponent(email);
-  const otpauthUrl = `otpauth://totp/${issuer}:${account}?secret=${secret}&issuer=${issuer}&digits=6&period=30`;
-  return { secret, otpauthUrl };
+  return {
+    secret,
+    otpauthUrl: otpauthUrlForSecret(email, secret, issuerName),
+  };
+}
+
+export function enrollmentFromSecret(
+  email: string,
+  secret: string,
+  issuerName = 'WhatsApp Platform'
+): { secret: string; otpauthUrl: string } {
+  return {
+    secret,
+    otpauthUrl: otpauthUrlForSecret(email, secret, issuerName),
+  };
 }
 
 export function verifyTotp(secret: string, token: string, window = 1): boolean {

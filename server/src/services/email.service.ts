@@ -18,7 +18,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<boolean> {
       subject: options.subject,
       preview: options.text.slice(0, 200),
     });
-    return true;
+    return false;
   }
 
   let nodemailer: { createTransport: (opts: Record<string, unknown>) => { sendMail: (opts: Record<string, unknown>) => Promise<unknown> } };
@@ -30,7 +30,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<boolean> {
       to: options.to,
       subject: options.subject,
     });
-    return true;
+    return false;
   }
 
   const transport = nodemailer.createTransport({

@@ -2,13 +2,15 @@ import { Router, type Request, type Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import prisma from '../../config/database';
-import { decrypt, encrypt } from '../../utils/crypto';
+import { isSmtpConfigured } from '../../services/email.service';
+import { decrypt } from '../../utils/crypto';
 import { AppError, asyncHandler, sendSuccess } from '../../utils/response';
 import {
   consumePlatformAccountThrottle,
   platformAuthLoginLimiter,
 } from '../auth/rate-limit';
-import { generateTwoFactorSecret, verifyTotp } from '../team/totp';
+import { verifyTotp } from '../team/totp';
+import { loadOrCreatePendingTotpEnrollment } from './mfa-enrollment';
 import {
   loadPlatformSession,
   requirePlatformRouteAccess,
@@ -129,13 +131,11 @@ router.post(
     }
 
     if (!operator.mfaEnabledAt) {
-      const enrollment = generateTwoFactorSecret(
-        operator.email,
-        'Samyoj Platform Admin'
-      );
-      await prisma.platformOperator.update({
-        where: { id: operator.id },
-        data: { totpSecretEncrypted: encrypt(enrollment.secret) },
+      const enrollment = await loadOrCreatePendingTotpEnrollment({
+        operatorId: operator.id,
+        email: operator.email,
+        totpSecretEncrypted: operator.totpSecretEncrypted,
+        mfaEnabledAt: operator.mfaEnabledAt,
       });
 
       const session = await createPlatformSession(operator.id, false);
@@ -254,6 +254,35 @@ router.post(
         mfaEnabled: true,
       },
       csrfToken,
+    });
+  })
+);
+
+router.post(
+  '/auth/mfa/reset-enrollment',
+  asyncHandler(async (req: Request, res: Response) => {
+    const operator = await prisma.platformOperator.findUnique({
+      where: { id: req.platformOperator!.id },
+      select: {
+        id: true,
+        email: true,
+        totpSecretEncrypted: true,
+        mfaEnabledAt: true,
+      },
+    });
+    if (!operator) throw new AppError(401, 'Platform operator not found');
+
+    const enrollment = await loadOrCreatePendingTotpEnrollment({
+      operatorId: operator.id,
+      email: operator.email,
+      totpSecretEncrypted: operator.totpSecretEncrypted,
+      mfaEnabledAt: operator.mfaEnabledAt,
+      rotate: true,
+    });
+
+    sendSuccess(res, {
+      state: 'MFA_ENROLLMENT_REQUIRED',
+      enrollment,
     });
   })
 );
@@ -458,7 +487,7 @@ router.get(
         createdAt: true,
       },
     });
-    sendSuccess(res, { rows });
+    sendSuccess(res, { smtpConfigured: isSmtpConfigured(), rows });
   })
 );
 
@@ -549,6 +578,7 @@ router.get(
         sessions: await listPlatformSessions({
           actorId: req.platformOperator!.id,
           actorRole: req.platformOperator!.role,
+          currentSessionId: req.platformSession!.id,
         }),
       }
     );

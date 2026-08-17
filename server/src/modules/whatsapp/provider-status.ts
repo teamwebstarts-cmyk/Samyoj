@@ -161,6 +161,14 @@ export async function handleOutboundStatusWebhook(input: {
   statusTimestamp?: Date;
   status: Record<string, unknown>;
 }): Promise<void> {
+  const { recordWebhookStatusMetaError } = await import('../platform/meta-errors');
+  recordWebhookStatusMetaError({
+    organizationId: input.organizationId,
+    whatsappNumberId: input.whatsappNumberId,
+    statusValue: input.statusValue,
+    status: input.status,
+  });
+
   const { syncCampaignRecipientFromWebhook } = await import('../campaigns/service');
   await syncCampaignRecipientFromWebhook(input.metaMessageId, input.statusValue, {
     organizationId: input.organizationId,
