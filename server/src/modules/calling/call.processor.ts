@@ -40,6 +40,14 @@ export function callMatchesWebhookNumber(
   return Boolean(storedWhatsappNumberId) && storedWhatsappNumberId === webhookWhatsappNumberId;
 }
 
+export function isCallConnectAlreadyHandling(params: {
+  hasSession: boolean;
+  status: string | null | undefined;
+}): boolean {
+  if (params.hasSession) return true;
+  return ['CONNECTING', 'CONNECTED', 'RINGING'].includes((params.status || '').toUpperCase());
+}
+
 async function ensureContactAndConversation(
   orgId: string,
   whatsappNumberId: string,
@@ -734,10 +742,10 @@ export async function processCallWebhookPayload(payload: Record<string, unknown>
               where: { metaCallId: call.id },
               select: { status: true },
             });
-            const alreadyHandling =
-              existingSession ||
-              existingCall?.status === 'CONNECTED' ||
-              existingCall?.status === 'RINGING';
+            const alreadyHandling = isCallConnectAlreadyHandling({
+              hasSession: Boolean(existingSession),
+              status: existingCall?.status,
+            });
             if (alreadyHandling) {
               log.info('Skipping duplicate call connect (lock held)', { metaCallId: call.id });
               continue;
