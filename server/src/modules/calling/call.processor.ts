@@ -735,32 +735,12 @@ export async function processCallWebhookPayload(payload: Record<string, unknown>
         log.info('Processing call webhook', { event, metaCallId: call.id, orgId });
 
         if (event === 'connect') {
-          let locked = await tryAcquireCallConnectLock(call.id);
+          const locked = await tryAcquireCallConnectLock(call.id);
           if (!locked) {
-            const existingSession = getCallSession(call.id);
-            const existingCall = await prisma.call.findUnique({
-              where: { metaCallId: call.id },
-              select: { status: true },
-            });
-            const alreadyHandling = isCallConnectAlreadyHandling({
-              hasSession: Boolean(existingSession),
-              status: existingCall?.status,
-            });
-            if (alreadyHandling) {
-              log.info('Skipping duplicate call connect (lock held)', { metaCallId: call.id });
-              continue;
-            }
-            log.warn('Connect lock held with no active session — recovering stale lock', {
-              metaCallId: call.id,
-            });
-            await releaseCallConnectLock(call.id);
-            locked = await tryAcquireCallConnectLock(call.id);
-            if (!locked) {
-              log.info('Skipping duplicate call connect after stale lock recovery', {
-                metaCallId: call.id,
-              });
-              continue;
-            }
+            // Meta often delivers duplicate connect webhooks a few ms apart. The lock
+            // means the first handler is still setting up DB/session — never steal it.
+            log.info('Skipping duplicate call connect (lock held)', { metaCallId: call.id });
+            continue;
           }
           try {
             await handleCallConnect(
@@ -772,7 +752,6 @@ export async function processCallWebhookPayload(payload: Record<string, unknown>
               call
             );
           } catch (err) {
-            await releaseCallConnectLock(call.id);
             log.error('Call connect handler failed', {
               metaCallId: call.id,
               error: err instanceof Error ? err.message : String(err),
@@ -782,6 +761,8 @@ export async function processCallWebhookPayload(payload: Record<string, unknown>
             } catch {
               // Meta may already have terminated the call.
             }
+          } finally {
+            await releaseCallConnectLock(call.id);
           }
         } else if (event === 'terminate') {
           await handleCallTerminate(orgId, whatsappNumber.id, call);

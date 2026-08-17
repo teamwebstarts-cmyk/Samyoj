@@ -23,6 +23,10 @@ describe('call webhook number isolation', () => {
     expect(isCallConnectAlreadyHandling({ hasSession: false, status: 'TERMINATED' })).toBe(false);
   });
 
+  it('treats an in-memory session as already being handled', () => {
+    expect(isCallConnectAlreadyHandling({ hasSession: true, status: undefined })).toBe(true);
+  });
+
   it('keeps BIC cooldown keys separate for each WhatsApp number', () => {
     expect(buildBicUnansweredKey('org-1', 'number-1', '+91 99999 00001'))
       .not.toBe(buildBicUnansweredKey('org-1', 'number-2', '+91 99999 00001'));
