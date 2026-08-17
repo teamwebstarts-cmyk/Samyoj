@@ -14,6 +14,38 @@ export function isSarvamTtsConfigured(): boolean {
   return Boolean(config.sarvam.apiKey);
 }
 
+/** Sarvam Bulbul expects BCP-47 locales (e.g. hi-IN). STT may return bare "hi" / "en". */
+const SARVAM_LOCALE_ALIASES: Record<string, string> = {
+  hi: 'hi-IN',
+  hindi: 'hi-IN',
+  en: 'en-IN',
+  english: 'en-IN',
+  bn: 'bn-IN',
+  ta: 'ta-IN',
+  te: 'te-IN',
+  mr: 'mr-IN',
+  gu: 'gu-IN',
+  kn: 'kn-IN',
+  ml: 'ml-IN',
+  pa: 'pa-IN',
+};
+
+export function normalizeSarvamLanguageCode(lang?: string | null): string {
+  const configDefault = config.sarvam.sttLanguage;
+  const fallback =
+    configDefault && configDefault !== 'unknown' && configDefault !== 'auto'
+      ? configDefault
+      : 'hi-IN';
+
+  if (!lang) return fallback;
+  const trimmed = lang.trim();
+  if (!trimmed || trimmed === 'unknown' || trimmed === 'auto') return fallback;
+  if (/^[a-z]{2}-[A-Z]{2}$/.test(trimmed)) return trimmed;
+  const lower = trimmed.toLowerCase();
+  const base = lower.split('-')[0] ?? lower;
+  return SARVAM_LOCALE_ALIASES[base] || SARVAM_LOCALE_ALIASES[lower] || fallback;
+}
+
 /**
  * Synthesize speech via Sarvam Bulbul REST TTS — returns raw PCM for the call bridge.
  * Faster than WebSocket (no ffmpeg needed, no streaming overhead for short replies).
@@ -30,10 +62,7 @@ export async function synthesizeSpeechSarvam(
   if (!trimmed) throw new Error('Empty text for TTS');
 
   const speaker = options?.speaker || config.sarvam.ttsSpeaker || 'shubh';
-  const language =
-    !options?.language || options.language === 'unknown' || options.language === 'auto'
-      ? 'hi-IN'
-      : options.language;
+  const language = normalizeSarvamLanguageCode(options?.language);
   const model = config.sarvam.ttsModel || 'bulbul:v3';
 
   const res = await fetch(SARVAM_TTS_REST, {
@@ -109,10 +138,7 @@ export async function previewSpeechSarvam(
   if (!apiKey) throw new Error('Sarvam API key not configured');
 
   const speaker = options?.speaker || config.sarvam.ttsSpeaker || 'shubh';
-  const language =
-    !options?.language || options.language === 'unknown' || options.language === 'auto'
-      ? config.sarvam.sttLanguage || 'hi-IN'
-      : options.language;
+  const language = normalizeSarvamLanguageCode(options?.language);
   const model = config.sarvam.ttsModel || 'bulbul:v3';
 
   const res = await fetch(SARVAM_TTS_REST, {

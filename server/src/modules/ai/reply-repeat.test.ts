@@ -15,6 +15,8 @@ const IDENTITY_EN = 'I help customers of Student. How can I assist you today?';
 const IDENTITY_EN_VARIANT = 'I help customers of Student. How may I assist you today?';
 const IDENTITY_HI =
   'मैं Student के customers की मदद करने के लिए यहाँ हूँ. मैं समझता हूँ कि आप कुछ पूछना चाह रहे हैं.';
+const IDENTITY_HI_VARIANT =
+  'मैं Student के customers की help करती हूँ.';
 const OTHER_TURN = 'Thank you for calling. Our team will message you on WhatsApp.';
 const TOOL = '<tool_call>request_human</tool_call>';
 
@@ -59,6 +61,12 @@ describe('isBusinessInfoQuestion', () => {
     ).toBe(true);
     expect(isBusinessInfoQuestion('can you give me some detail about your business?')).toBe(true);
     expect(isBusinessInfoQuestion('So which type of help you do?')).toBe(true);
+  });
+
+  it('matches Hinglish help and customer-service info questions', () => {
+    expect(isBusinessInfoQuestion('tum kya help kar sakte ho meri?')).toBe(true);
+    expect(isBusinessInfoQuestion('customer services ke bare mein janna chahta hoon')).toBe(true);
+    expect(isBusinessInfoQuestion('services ke baare mein batao')).toBe(true);
   });
 
   it('does not treat who-are-you as a business-details question', () => {
@@ -122,6 +130,12 @@ describe('resolveRepeatedReply', () => {
     ).toBe(HONEST_NO_DETAILS);
     expect(
       resolveRepeatedReply(IDENTITY_EN, [], 'can you give me some detail about your business?')
+    ).toBe(HONEST_NO_DETAILS);
+    expect(
+      resolveRepeatedReply(IDENTITY_HI, [], 'tum kya help kar sakte ho meri?')
+    ).toBe(HONEST_NO_DETAILS);
+    expect(
+      resolveRepeatedReply(IDENTITY_HI_VARIANT, [], 'customer services ke bare mein janna chahta hoon')
     ).toBe(HONEST_NO_DETAILS);
   });
 

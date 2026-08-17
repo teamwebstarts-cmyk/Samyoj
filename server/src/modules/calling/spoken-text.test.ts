@@ -7,6 +7,7 @@ import {
   stripSpokenFillers,
   extractEarlySpeakableChunk,
   remainderAfterEarlySpoken,
+  isCompleteSpeakableChunk,
   shouldAllowBargeInDuringTts,
   shouldMuteCallStt,
   shouldProcessCallerUtterance,
@@ -43,6 +44,21 @@ describe('extractEarlySpeakableChunk', () => {
 
   it('waits when a tool_call tag is still open', () => {
     expect(extractEarlySpeakableChunk('Theek hai. <tool_call>request_human', 12)).toBeNull();
+  });
+
+  it('starts early on ellipsis clause boundaries common in LLM Hindi', () => {
+    const result = extractEarlySpeakableChunk(
+      'हमारे business के बारे में जो details हैं... aur kuch bhi',
+      20
+    );
+    expect(result?.chunk).toBe('हमारे business के बारे में जो details हैं...');
+  });
+
+  it('does not speak comma-pause or dangling fragments', () => {
+    expect(extractEarlySpeakableChunk('ये details है, aur kuch bhi', 12)).toBeNull();
+    expect(isCompleteSpeakableChunk('ये details है और')).toBe(false);
+    expect(isCompleteSpeakableChunk('क्या समझ गए')).toBe(false);
+    expect(isCompleteSpeakableChunk('Haan bilkul, main abhi check karta hoon.')).toBe(true);
   });
 });
 

@@ -12,7 +12,12 @@ import { performHandoff, streamVoiceBotReply } from '../ai/chatbot.service';
 import { shouldEndVoiceCallOnHandoff, validateOutboundReply } from '../ai/guardrails';
 import { MetaCallingService } from './meta-calling.service';
 import { SarvamStreamTranscriber, isSarvamSttConfigured } from './sarvam.stt';
-import { synthesizeSpeechSarvam, isSarvamTtsConfigured } from './sarvam.tts';
+import {
+  synthesizeSpeechSarvam,
+  isSarvamTtsConfigured,
+  normalizeSarvamLanguageCode,
+  type SynthesizedAudio,
+} from './sarvam.tts';
 import { WhatsAppWebRtcBridge } from './webrtc-bridge';
 import { pcmRms } from './audio-utils';
 import { publishCallEventMessage, publishCallSummaryMessage } from './call-event-message';
@@ -34,8 +39,10 @@ import {
   splitForTts,
   extractEarlySpeakableChunk,
   remainderAfterEarlySpoken,
+  isCompleteSpeakableChunk,
   BARGE_IN_RMS_THRESHOLD,
 } from './spoken-text';
+import { isBusinessInfoQuestion, HONEST_NO_DETAILS } from '../ai/reply-repeat';
 
 const log = createModuleLogger('ai-voice-agent');
 
@@ -51,6 +58,10 @@ interface VoiceTurnTiming {
 /** Spoken when LLM/STT hiccups — not a dead-end error. */
 const VOICE_RETRY_PROMPT =
   'Ek second — main phir se sun raha hoon. Apna sawaal dobara boliye, ya team se baat chahiye ho to bol dijiye.';
+
+function voiceEmptyReplyFallback(callerText: string): string {
+  return isBusinessInfoQuestion(callerText) ? HONEST_NO_DETAILS : VOICE_RETRY_PROMPT;
+}
 
 const VOICE_TEAM_HANDOFF_SPOKEN =
   'Theek hai — main team ko bata deta hoon. Woh aapko WhatsApp par message karenge. Dhanyavaad.';
@@ -81,9 +92,15 @@ export class AiVoiceCallSession {
   // Call recording buffer
   private recordingBuffer: Buffer[] = [];
   private recordingSampleRate = 48000;
+  /** Locale at call start — used when mid-call STT language breaks Bulbul. */
+  private readonly defaultTtsLanguage: string;
+  /** True once playPcm delivers audio for the current caller turn. */
+  private audioDeliveredThisTurn = false;
 
   constructor(ctx: ActiveCallContext) {
     this.ctx = ctx;
+    this.defaultTtsLanguage = normalizeSarvamLanguageCode(ctx.ttsLanguage);
+    this.ctx.ttsLanguage = this.defaultTtsLanguage;
   }
 
   private recordVoiceUnits(action: 'stt' | 'tts', inputChars: number, outputChars: number): void {
@@ -125,7 +142,7 @@ export class AiVoiceCallSession {
         }
         // Auto-detect and switch TTS language based on detected STT language
         if (languageDetected && languageDetected !== 'unknown' && languageDetected !== 'auto') {
-          this.ctx.ttsLanguage = languageDetected;
+          this.ctx.ttsLanguage = normalizeSarvamLanguageCode(languageDetected);
         }
         void this.recordVoiceUnits('stt', text.length, 0);
         if (this.ended || this.wrappingUp) return;
@@ -291,7 +308,21 @@ export class AiVoiceCallSession {
       opts?.onStart?.();
       await this.speak(text, role, { recordTranscript: opts?.recordTranscript });
     });
-    this.speakChain = job.catch(() => undefined);
+    this.speakChain = job.catch((err) => {
+      const message = err instanceof Error ? err.message : String(err);
+      log.error('Voice speak chain failed', {
+        callId: this.ctx.callId,
+        error: message,
+        preview: text.slice(0, 80),
+      });
+      if (config.calling.voiceTimingLog) {
+        log.info('Voice TTS chain failure', {
+          callId: this.ctx.callId,
+          language: this.ctx.ttsLanguage,
+          error: message,
+        });
+      }
+    });
     return opts?.wait === false ? Promise.resolve() : job;
   }
 
@@ -325,6 +356,7 @@ export class AiVoiceCallSession {
 
     this.processing = true;
     this.abortSpeak = false;
+    this.audioDeliveredThisTurn = false;
     void this.appendTranscript('user', trimmed);
 
     try {
@@ -386,7 +418,7 @@ export class AiVoiceCallSession {
             await this.enqueueSpeak(
               result.skipReason === 'ai_not_configured'
                 ? 'Sorry, our AI assistant is not configured yet. Please message us on WhatsApp.'
-                : VOICE_RETRY_PROMPT,
+                : voiceEmptyReplyFallback(trimmed),
               'assistant'
             );
             break;
@@ -396,6 +428,7 @@ export class AiVoiceCallSession {
             if (cleaned.cleanText && !this.abortSpeak) {
               spokenText = cleaned.cleanText;
               await this.enqueueSpeak(cleaned.cleanText, 'assistant', {
+                recordTranscript: false,
                 onStart: () => {
                   if (!timing.ttsFirstStartAt) timing.ttsFirstStartAt = Date.now();
                 },
@@ -428,7 +461,7 @@ export class AiVoiceCallSession {
 
           if (streamTts && !earlySpoken && !this.abortSpeak && !this.ended) {
             const early = extractEarlySpeakableChunk(rawAccum, earlyMinChars);
-            if (early) {
+            if (early && isCompleteSpeakableChunk(early.chunk)) {
               earlySpoken = early.chunk;
               spokenText = earlySpoken;
               void this.enqueueSpeak(early.chunk, 'assistant', {
@@ -467,22 +500,33 @@ export class AiVoiceCallSession {
             }
 
             if (earlySpoken) {
-              const remainder = remainderAfterEarlySpoken(parsed.cleanText, earlySpoken);
-              spokenText = parsed.cleanText;
-              if (remainder && !this.abortSpeak) {
-                await this.enqueueSpeak(remainder, 'assistant', {
+              if (!isCompleteSpeakableChunk(earlySpoken)) {
+                earlySpoken = '';
+                spokenText = parsed.cleanText;
+                await this.enqueueSpeak(parsed.cleanText, 'assistant', {
                   recordTranscript: false,
                   onStart: () => {
                     if (!timing.ttsFirstStartAt) timing.ttsFirstStartAt = Date.now();
                   },
                 });
-              } else if (!timing.ttsFirstStartAt) {
-                timing.ttsFirstStartAt = Date.now();
+              } else {
+                const remainder = remainderAfterEarlySpoken(parsed.cleanText, earlySpoken);
+                spokenText = parsed.cleanText;
+                if (remainder && isCompleteSpeakableChunk(remainder) && !this.abortSpeak) {
+                  await this.enqueueSpeak(remainder, 'assistant', {
+                    recordTranscript: false,
+                    onStart: () => {
+                      if (!timing.ttsFirstStartAt) timing.ttsFirstStartAt = Date.now();
+                    },
+                  });
+                } else if (!timing.ttsFirstStartAt) {
+                  timing.ttsFirstStartAt = Date.now();
+                }
               }
-              void this.appendTranscript('assistant', parsed.cleanText);
             } else {
               spokenText = parsed.cleanText;
               await this.enqueueSpeak(parsed.cleanText, 'assistant', {
+                recordTranscript: false,
                 onStart: () => {
                   if (!timing.ttsFirstStartAt) timing.ttsFirstStartAt = Date.now();
                 },
@@ -502,7 +546,7 @@ export class AiVoiceCallSession {
               });
               return;
             }
-            await this.enqueueSpeak(VOICE_RETRY_PROMPT, 'assistant');
+            await this.enqueueSpeak(voiceEmptyReplyFallback(trimmed), 'assistant');
           }
 
           if (this.abortSpeak || this.ended) break;
@@ -524,6 +568,32 @@ export class AiVoiceCallSession {
 
       await this.speakChain;
       timing.ttsDoneAt = Date.now();
+
+      if (
+        spokenText &&
+        !this.audioDeliveredThisTurn &&
+        !this.abortSpeak &&
+        !this.ended
+      ) {
+        log.warn('Voice TTS produced no audio — replaying full reply', {
+          callId: this.ctx.callId,
+          chars: spokenText.length,
+          language: this.ctx.ttsLanguage,
+        });
+        try {
+          await this.speak(spokenText, 'assistant', { recordTranscript: false });
+        } catch (err) {
+          log.error('Voice TTS full-reply fallback failed', {
+            callId: this.ctx.callId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+
+      if (spokenText && !this.abortSpeak && !this.ended) {
+        await this.recordAssistantTranscriptOnce(spokenText);
+      }
+
       this.logTurnTiming(timing);
 
       if (!directHandled && !spokenText && !this.ended && !this.abortSpeak) {
@@ -534,7 +604,7 @@ export class AiVoiceCallSession {
             arguments: { reason: 'Customer asked for team — no spoken reply' },
           });
         } else {
-          await this.enqueueSpeak(VOICE_RETRY_PROMPT, 'assistant');
+          await this.enqueueSpeak(voiceEmptyReplyFallback(trimmed), 'assistant');
         }
       }
     } catch (err) {
@@ -724,6 +794,43 @@ export class AiVoiceCallSession {
     await this.end('handoff');
   }
 
+  private async synthesizeWithFallback(
+    text: string,
+    opts: { speaker?: string; language?: string }
+  ): Promise<SynthesizedAudio> {
+    const primaryLang = normalizeSarvamLanguageCode(opts.language);
+    try {
+      return await synthesizeSpeechSarvam(text, { ...opts, language: primaryLang });
+    } catch (firstErr) {
+      const fallbackLang = this.defaultTtsLanguage;
+      if (primaryLang === fallbackLang) throw firstErr;
+      const message = firstErr instanceof Error ? firstErr.message : String(firstErr);
+      log.warn('TTS failed — retrying with call default language', {
+        callId: this.ctx.callId,
+        attempted: primaryLang,
+        fallback: fallbackLang,
+        error: message,
+      });
+      if (config.calling.voiceTimingLog) {
+        log.info('Voice TTS language fallback', {
+          callId: this.ctx.callId,
+          attempted: primaryLang,
+          fallback: fallbackLang,
+          error: message,
+        });
+      }
+      return synthesizeSpeechSarvam(text, { ...opts, language: fallbackLang });
+    }
+  }
+
+  private async recordAssistantTranscriptOnce(text: string): Promise<void> {
+    const spoken = prepareSpokenText(text);
+    if (!spoken) return;
+    const last = this.transcript[this.transcript.length - 1];
+    if (last?.role === 'assistant' && last.text === spoken) return;
+    await this.appendTranscript('assistant', spoken);
+  }
+
   private async speak(
     text: string,
     role: TranscriptEntry['role'],
@@ -735,19 +842,15 @@ export class AiVoiceCallSession {
     this.speaking = true;
     this.speakingStartedAt = Date.now();
     this.lastSpokenText = spoken;
+    const shouldRecord = opts?.recordTranscript !== false;
+    let transcriptRecorded = false;
     try {
-      if (opts?.recordTranscript !== false) {
-        await this.appendTranscript(role, spoken);
-      }
-
       const chunks = splitForTts(spoken);
       const ttsOpts = {
         speaker: this.ctx.ttsVoice,
         language: this.ctx.ttsLanguage,
       };
-      let pending = chunks[0]
-        ? synthesizeSpeechSarvam(chunks[0], ttsOpts)
-        : null;
+      let pending = chunks[0] ? this.synthesizeWithFallback(chunks[0], ttsOpts) : null;
 
       for (let i = 0; i < chunks.length; i++) {
         if (this.ended || this.abortSpeak || !this.bridge || !pending) {
@@ -764,10 +867,39 @@ export class AiVoiceCallSession {
         }
         pending =
           i + 1 < chunks.length
-            ? synthesizeSpeechSarvam(chunks[i + 1], ttsOpts)
+            ? this.synthesizeWithFallback(chunks[i + 1], ttsOpts)
             : null;
+        if (!transcriptRecorded && shouldRecord) {
+          await this.appendTranscript(role, spoken);
+          transcriptRecorded = true;
+        }
         await this.bridge.playPcm(audio.samples, audio.sampleRate);
+        this.audioDeliveredThisTurn = true;
       }
+
+      if (shouldRecord && !transcriptRecorded) {
+        await this.appendTranscript(role, spoken);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      log.error('Voice TTS speak failed', {
+        callId: this.ctx.callId,
+        error: message,
+        language: this.ctx.ttsLanguage,
+        preview: spoken.slice(0, 120),
+      });
+      if (config.calling.voiceTimingLog) {
+        log.info('Voice TTS speak failure', {
+          callId: this.ctx.callId,
+          language: this.ctx.ttsLanguage,
+          chars: spoken.length,
+          error: message,
+        });
+      }
+      if (shouldRecord && !transcriptRecorded) {
+        await this.appendTranscript(role, spoken);
+      }
+      throw err;
     } finally {
       this.speaking = false;
       this.speakingStartedAt = 0;

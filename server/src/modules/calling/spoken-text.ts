@@ -139,9 +139,24 @@ export function shouldProcessCallerUtterance(
   return trimmed.length >= minChars;
 }
 
+/** Reject partial LLM clauses that sound broken when spoken alone on a call. */
+const DANGLING_END_RE =
+  /\b(aur|और|and|or|ki|के|ka|कि|but|so|then|phir|ya|ye|yeh|hi|only|just|details?|detail)$/iu;
+
+export function isCompleteSpeakableChunk(text: string): boolean {
+  const prepared = prepareSpokenText(text);
+  if (!prepared || prepared.length < 12) return false;
+  const words = prepared.split(/\s+/).filter(Boolean);
+  if (words.length < 3) return false;
+  if (DANGLING_END_RE.test(prepared)) return false;
+  if (/[.!?？।॥]$/.test(prepared)) return true;
+  if (/\.{2,}$/.test(prepared) && words.length >= 5) return true;
+  return false;
+}
+
 /**
  * First speakable prefix while the LLM is still streaming.
- * Returns null until we have a full sentence (or comma pause) without an open tool_call tag.
+ * Returns null until we have a full sentence without an open tool_call tag.
  */
 export function extractEarlySpeakableChunk(
   accumulated: string,
@@ -155,18 +170,17 @@ export function extractEarlySpeakableChunk(
   const sentence = withoutOpenTag.match(/^([\s\S]{8,}?[.!?।॥])(?:\s+|$)/u);
   if (sentence && sentence[1].length >= minChars) {
     const chunk = prepareSpokenText(sentence[1]);
-    if (chunk.length >= 8) {
+    if (isCompleteSpeakableChunk(chunk)) {
       return { chunk, consumedLength: sentence[0].length };
     }
   }
 
-  if (withoutOpenTag.length >= minChars + 10) {
-    const pause = withoutOpenTag.match(/^([\s\S]{16,}?[,—–-])(?:\s+|$)/u);
-    if (pause) {
-      const chunk = prepareSpokenText(pause[1]);
-      if (chunk.length >= minChars) {
-        return { chunk, consumedLength: pause[0].length };
-      }
+  // LLM replies sometimes end clauses with "..." before the stream finishes.
+  const ellipsis = withoutOpenTag.match(/^([\s\S]{12,}?\.{2,})(?:\s+|$)/u);
+  if (ellipsis && ellipsis[1].length >= minChars) {
+    const chunk = prepareSpokenText(ellipsis[1]);
+    if (isCompleteSpeakableChunk(chunk)) {
+      return { chunk, consumedLength: ellipsis[0].length };
     }
   }
 

@@ -103,8 +103,11 @@ export function expandKnowledgeQuery(query: string): string {
   if (/(order|booking|track|status|डिलीवरी|delivery)/i.test(query)) {
     extra.push('order', 'delivery', 'track');
   }
-  if (/(help|madad|मदद|assist|kya kar|kaise madad|service)/i.test(query)) {
+  if (/(help|madad|मदद|assist|kya kar|kaise madad|kar sakte|service)/i.test(query)) {
     extra.push('help', 'support', 'service');
+  }
+  if (/(customer services?|services? ke bare|services? ke baare|support ke bare)/i.test(query)) {
+    extra.push('customer service', 'services', 'support', 'help');
   }
   if (
     /(business|company|services?|polic(y|ies)|offer|kya karte|kaun si|what do you|about (your|the) (business|company)|detail)/i.test(
@@ -302,9 +305,6 @@ export async function resolveVoiceKnowledge(
     ? await searchVoiceKnowledgeQueriesTokenOnly(botId, queries)
     : await searchVoiceKnowledgeQueries(botId, queries, organizationId, whatsappNumberId);
   if (primary.length > 0) return primary;
-
-  const callTrainCount = await prisma.knowledgeBaseItem.count({ where: { botId } });
-  if (callTrainCount > 0) return [];
 
   const chatBot = await prisma.aiBot.findFirst({
     where: { organizationId, channel: 'CHAT', enabled: true },

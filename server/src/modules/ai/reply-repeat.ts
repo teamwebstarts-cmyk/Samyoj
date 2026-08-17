@@ -9,7 +9,7 @@ import { wantsHumanOnCall } from '../calling/voice-intent';
 const TOOL_BLOCK_RE = /<tool_call>\s*[\s\S]*?<\/tool_call>/gi;
 
 const IDENTITY_LOOP_RE =
-  /\bi help customers of\b|customers\s*की\s*मदद/i;
+  /\bi help customers of\b|customers\s*की\s*(?:मदद|help)|help kar(?:ne|ti|ta)\b|मदद kar(?:ne|ti|ta)\b/i;
 
 const ASSIST_FILLER_RE =
   /\bhow (?:can|may) i (?:assist|help) you(?: today)?[.!?।]*|मैं समझता हूँ कि आप कुछ पूछना चाह रहे हैं[.!?।]*/gi;
@@ -20,6 +20,10 @@ const WHO_ARE_YOU_RE =
 /** Caller is asking what the company does — not “who are you”. */
 const BUSINESS_INFO_RE =
   /\b(what (do you|does (your|the) (company|business)|you all) do|about (your|the) (business|company)|details? about (your|the) (business|company)|know about (your|the) (business|company)|which type of help|what (kind|type) of (help|service)|tell me about (your|the) (business|company)|kya (karte|karate)|business (ke|ka) (bare|baare)|details about your business)\b/i;
+
+/** Hinglish / Hindi — what help or services the business offers (not identity). */
+const BUSINESS_INFO_HI_RE =
+  /(kya help|help kar sakte|madad kar sakte|kaise madad|kaun si services?|services? (ke|ka) (bare|baare|baat)|customer services? (ke|ka) (bare|baare)|support (ke|ka) (bare|baare)|janna chahta|jan(?:na|ni) chahti|bat(?:a|ai)o (?:mujhe )?(?:ki )?(?:aap |tum )?(?:kya|kaun)|company (ke|ka) (bare|baare))/i;
 
 export const HONEST_NO_DETAILS =
   "I don't have those business details in my knowledge yet. Our team can send them to you on WhatsApp.";
@@ -100,7 +104,7 @@ export function lastUserContent(messages: ChatTurn[]): string {
 export function isBusinessInfoQuestion(text: string): boolean {
   const raw = String(text || '').trim();
   if (!raw) return false;
-  return BUSINESS_INFO_RE.test(raw);
+  return BUSINESS_INFO_RE.test(raw) || BUSINESS_INFO_HI_RE.test(raw);
 }
 
 export function isWhoAreYouQuestion(text: string): boolean {
@@ -136,7 +140,8 @@ function isIdentityLoop(text: string): boolean {
 export function stripIdentityPreamble(spoken: string): string {
   return String(spoken || '')
     .replace(/[^.!?।]*\bi help customers of\b[^.!?।]*[.!?।]?/gi, ' ')
-    .replace(/[^.!?।]*customers\s*की\s*मदद[^.!?।]*[.!?।]?/gi, ' ')
+    .replace(/[^.!?।]*customers\s*की\s*(?:मदद|help)[^.!?।]*[.!?।]?/gi, ' ')
+    .replace(/[^.!?।]*(?:help|मदद)\s*kar(?:ne|ti|ta)[^.!?।]*[.!?।]?/gi, ' ')
     .replace(ASSIST_FILLER_RE, ' ')
     .replace(/^[\s?!.।,;:]+/, '')
     .replace(/\s+/g, ' ')

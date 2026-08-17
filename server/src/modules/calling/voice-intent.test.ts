@@ -16,6 +16,12 @@ describe('wantsHumanOnCall', () => {
     expect(wantsHumanOnCall('mujhe team se baat karni hai please')).toBe(true);
   });
 
+  it('does not steal info questions about customer services', () => {
+    expect(wantsHumanOnCall('customer services ke bare mein janna chahta hoon')).toBe(false);
+    expect(wantsHumanOnCall('tell me about your customer support')).toBe(false);
+    expect(wantsHumanOnCall('services ke baare mein batao')).toBe(false);
+  });
+
   it('does not steal ordinary sentences that mention a person or support', () => {
     expect(wantsHumanOnCall('I am the person who placed the order')).toBe(false);
     expect(wantsHumanOnCall('The manager already called me yesterday')).toBe(false);

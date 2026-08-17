@@ -2,9 +2,22 @@
 
 import { normalizeVoiceText } from './spoken-text';
 
+/** Caller wants a live human — not general info about support/services. */
 export function wantsHumanOnCall(text: string): boolean {
   const t = text.trim();
   if (!t) return false;
+  // Info questions about support/services — stay on the AI line.
+  if (
+    /(customer services?|customer support|customer care|support services?)\s*(ke|ka)\s*(bare|baare|baat)/i.test(
+      t
+    ) ||
+    /(tell me|know|learn|janna|jan(?:na|ni)|bat(?:a|ai)o)\s+(about\s+)?(your\s+)?(customer\s+)?(services?|support)/i.test(
+      t
+    ) ||
+    /(services?|support)\s*(ke|ka)\s*(bare|baare|baat)/i.test(t)
+  ) {
+    return false;
+  }
   // Roman Hinglish team handoff — must not match "tumse/tum se baat" (stay on AI line).
   if (/(tum\s*se|tumse)\s+baat/i.test(t) && !/team\s*se\s+baat/i.test(t)) {
     return false;

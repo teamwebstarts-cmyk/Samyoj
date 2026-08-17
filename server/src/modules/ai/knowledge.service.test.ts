@@ -102,6 +102,11 @@ describe('expandKnowledgeQuery', () => {
     expect(expanded).not.toMatch(/\border\b/);
   });
 
+  it('adds customer service aliases for spoken service questions', () => {
+    expect(expandKnowledgeQuery('customer services ke bare mein batao')).toMatch(/customer service/i);
+    expect(expandKnowledgeQuery('tum kya help kar sakte ho')).toMatch(/help/i);
+  });
+
   it('adds business and services aliases for company questions', () => {
     expect(expandKnowledgeQuery('kaun si services hai')).toMatch(/services/i);
     expect(expandKnowledgeQuery('tell me about your business')).toMatch(/business/i);
