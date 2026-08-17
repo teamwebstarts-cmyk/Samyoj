@@ -1,6 +1,6 @@
+import { ShieldOff } from 'lucide-react';
 import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
-import { Shell } from './components/Shell';
-import { Notice } from './components/ui/index';
+import { EmptyState, PageLoading } from './components/ui/index';
 import { OperatorProvider, useOperator } from './context/OperatorContext';
 import { canAccessPath } from './lib/routes';
 import { AccountDetailPage } from './pages/AccountDetailPage';
@@ -11,10 +11,11 @@ import { LoginPage } from './pages/LoginPage';
 import { OperatorsPage } from './pages/OperatorsPage';
 import { OutreachPage } from './pages/OutreachPage';
 import { OverviewPage } from './pages/OverviewPage';
+import { Shell } from './components/Shell';
 
 function Protected() {
   const { operator, ready } = useOperator();
-  if (!ready) return <div className="p-8 text-sm text-ink/60">Loading…</div>;
+  if (!ready) return <PageLoading label="Checking session…" />;
   if (!operator) return <Navigate to="/login" replace />;
   return <Shell />;
 }
@@ -24,7 +25,13 @@ function RoleGate() {
   const location = useLocation();
   if (!operator) return null;
   if (!canAccessPath(operator.role, location.pathname)) {
-    return <Notice>You do not have access to this screen.</Notice>;
+    return (
+      <EmptyState
+        icon={ShieldOff}
+        title="You do not have access to this screen"
+        description="ANALYST is read-only. Outreach is SUPPORT and above. Operators and sessions are SUPER_ADMIN only."
+      />
+    );
   }
   return <Outlet />;
 }

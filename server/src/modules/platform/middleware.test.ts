@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import express from 'express';
 import { once } from 'node:events';
 import type { AddressInfo } from 'node:net';
@@ -54,6 +54,11 @@ function invoke(
 describe('platform authentication isolation and MFA', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.unstubAllEnvs();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it('does not accept a customer Bearer JWT as platform authentication', async () => {
@@ -68,6 +73,7 @@ describe('platform authentication isolation and MFA', () => {
   });
 
   it('rejects a valid platform session until TOTP is enrolled and verified', async () => {
+    vi.stubEnv('PLATFORM_MFA_REQUIRED', 'true');
     findSession.mockResolvedValueOnce({
       id: 'session-1',
       operatorId: 'operator-1',
@@ -94,6 +100,32 @@ describe('platform authentication isolation and MFA', () => {
 
     expect(error).toBeInstanceOf(AppError);
     expect((error as AppError).code).toBe('PLATFORM_MFA_REQUIRED');
+  });
+
+  it('accepts a password-only session when platform MFA is not required', async () => {
+    vi.stubEnv('PLATFORM_MFA_REQUIRED', 'false');
+    findSession.mockResolvedValueOnce({
+      id: 'session-1',
+      operatorId: 'operator-1',
+      csrfTokenHash: hashPlatformToken('csrf-token'),
+      mfaVerifiedAt: null,
+      expiresAt: new Date(Date.now() + 60_000),
+      revokedAt: null,
+      lastSeenAt: new Date(),
+      operator: {
+        id: 'operator-1',
+        email: 'ops@example.com',
+        role: 'SUPER_ADMIN',
+        mfaEnabledAt: null,
+        disabledAt: null,
+      },
+    } as never);
+
+    const req = request({
+      cookie: `${PLATFORM_SESSION_COOKIE}=opaque-session`,
+    });
+    await expect(invoke(authenticatePlatform, req)).resolves.toBeUndefined();
+    expect(req.platformOperator?.email).toBe('ops@example.com');
   });
 
   it('accepts only an active MFA-verified hashed session', async () => {
@@ -127,6 +159,7 @@ describe('platform authentication isolation and MFA', () => {
   });
 
   it('blocks pre-MFA sessions before protected RBAC and handlers', async () => {
+    vi.stubEnv('PLATFORM_MFA_REQUIRED', 'true');
     findSession.mockResolvedValueOnce({
       id: 'session-1',
       operatorId: 'operator-1',

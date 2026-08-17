@@ -11,9 +11,11 @@ vi.mock('../../config/database', () => ({
 import prisma from '../../config/database';
 import {
   emitMetaErrorStat,
+  extractWebhookStatusMetaError,
   metaErrorCategory,
   officialMetaErrorTitle,
   recordMetaErrorStat,
+  recordWebhookStatusMetaError,
   redactMetaErrorTitle,
 } from './meta-errors';
 
@@ -71,5 +73,34 @@ describe('Meta error aggregation', () => {
       )
     ).not.toThrow();
     await vi.waitFor(() => expect(failingUpsert).toHaveBeenCalledTimes(1));
+  });
+
+  it('clusters Graph delivery-status failures without phones or payloads', async () => {
+    expect(
+      extractWebhookStatusMetaError('DELIVERED', {
+        errors: [{ code: 131026, title: 'Message undeliverable for wa_id 9198' }],
+        recipient_id: '919876543210',
+      })
+    ).toBeNull();
+
+    const parsed = extractWebhookStatusMetaError('FAILED', {
+      errors: [{ code: 131026, title: 'Message undeliverable for wa_id 9198' }],
+      recipient_id: '919876543210',
+    });
+    expect(parsed?.code).toBe(131026);
+
+    recordWebhookStatusMetaError({
+      organizationId: 'org-1',
+      whatsappNumberId: 'num-1',
+      statusValue: 'FAILED',
+      status: {
+        errors: [{ code: 131048, title: 'Spam rate for +919876543210' }],
+        recipient_id: '919876543210',
+      },
+    });
+    await vi.waitFor(() => expect(upsert).toHaveBeenCalled());
+    expect(JSON.stringify(upsert.mock.calls[0][0])).not.toMatch(/919876543210|wa_id|\+/);
+    expect(upsert.mock.calls[0][0].create.sampleTitle).toBe('Spam rate / quality limit');
+    expect(upsert.mock.calls[0][0].create).not.toHaveProperty('payload');
   });
 });

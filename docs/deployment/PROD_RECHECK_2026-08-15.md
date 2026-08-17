@@ -59,7 +59,7 @@ Durable health counters live in Redis so a restart no longer shows `totalReceive
 - Sentry: existing `server/src/config/sentry.ts`. `SENTRY_DSN` is **unset** — no DSN invented.
 - Durable ops log: `/home/samyoj/Samyoj/.run/logs/ops-errors.log` (error-level JSON).
 - `provider_webhook_events` receipt row on every Meta POST (`receipt:<requestId>`).
-- Admin `GET /api/ops/recent-errors` (OWNER/ADMIN, no secrets).
+- Tenant `GET /api/ops/recent-errors` is **removed** (404). Platform operators use `GET /api/platform/errors`.
 - Runbook: `docs/ops/SERVER_HEALTH.md`.
 
 ## Remaining risks

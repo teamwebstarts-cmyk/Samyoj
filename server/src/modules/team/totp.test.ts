@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { generateTwoFactorSecret, verifyTotp } from './totp';
+import { generateTwoFactorSecret, enrollmentFromSecret, verifyTotp } from './totp';
 
 afterEach(() => {
   vi.useRealTimers();
@@ -28,5 +28,16 @@ describe('TOTP', () => {
 
     expect(platform.otpauthUrl).toContain('Samyoj%20Platform%20Admin');
     expect(customer.otpauthUrl).toContain('WhatsApp%20Platform');
+  });
+
+  it('rebuilds the same otpauth URL from an existing secret', () => {
+    const created = generateTwoFactorSecret('ops@example.com', 'Samyoj Platform Admin');
+    const reused = enrollmentFromSecret(
+      'ops@example.com',
+      created.secret,
+      'Samyoj Platform Admin'
+    );
+    expect(reused.secret).toBe(created.secret);
+    expect(reused.otpauthUrl).toBe(created.otpauthUrl);
   });
 });

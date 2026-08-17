@@ -19,6 +19,7 @@ describe('platform route isolation regression', () => {
     expect(indexSource).toContain("app.use('/api/platform', platformRoutes)");
     expect(routesSource).toContain('requirePlatformRouteAccess');
     expect(middlewareSource).toContain('authenticatePlatform');
+    expect(middlewareSource).toContain('isPlatformMfaRequired');
     expect(routesSource).toContain('requireSessionBoundPlatformMutation');
     expect(routesSource).not.toContain("from '../../middleware/auth'");
     expect(middlewareSource).not.toContain('verifyAccessToken');
@@ -35,6 +36,7 @@ describe('platform route isolation regression', () => {
     for (const authExemption of [
       'POST /auth/login',
       'POST /auth/mfa/enroll',
+      'POST /auth/mfa/reset-enrollment',
       'GET /auth/csrf',
       'POST /auth/logout',
     ]) {

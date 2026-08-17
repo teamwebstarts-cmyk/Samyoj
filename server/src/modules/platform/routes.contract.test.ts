@@ -14,6 +14,7 @@ const routes = readFileSync(join(__dirname, 'routes.ts'), 'utf8');
 const PLATFORM_ROUTES = [
   'POST /auth/login',
   'POST /auth/mfa/enroll',
+  'POST /auth/mfa/reset-enrollment',
   'GET /auth/csrf',
   'GET /auth/me',
   'POST /auth/logout',
@@ -55,6 +56,14 @@ describe('platform API contract for the admin app', () => {
     expect(routes).toContain("csrfToken: session.csrfToken");
     expect(routes).toContain('sendSuccess(res, { csrfToken: rotated.csrfToken })');
     expect(routes).toContain('csrfToken,');
+  });
+
+  it('keeps TOTP enroll/verify paths and gates them with PLATFORM_MFA_REQUIRED', () => {
+    expect(routes).toContain('isPlatformMfaRequired');
+    expect(routes).toContain('resolvePlatformPasswordLogin');
+    expect(routes).toContain("'/auth/mfa/enroll'");
+    expect(routes).toContain("state: 'MFA_REQUIRED'");
+    expect(routes).toContain("state: 'MFA_ENROLLMENT_REQUIRED'");
   });
 
   it('documents the cookie and CSRF header names the UI must use', () => {

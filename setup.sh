@@ -56,6 +56,10 @@ if ! grep -q '^PLATFORM_ADMIN_URL=' server/.env; then
   set_env_value PLATFORM_ADMIN_URL "http://localhost:3001"
   ok "Set PLATFORM_ADMIN_URL=http://localhost:3001"
 fi
+if ! grep -q '^PLATFORM_MFA_REQUIRED=' server/.env; then
+  set_env_value PLATFORM_MFA_REQUIRED "false"
+  ok "Set PLATFORM_MFA_REQUIRED=false"
+fi
 
 for key in JWT_SECRET JWT_REFRESH_SECRET ENCRYPTION_KEY META_VERIFY_TOKEN; do
   value="$(env_value "$key")"

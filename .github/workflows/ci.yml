@@ -87,6 +87,9 @@ jobs:
       - name: Install admin deps
         working-directory: admin
         run: npm ci
+      - name: Test
+        working-directory: admin
+        run: npm test
       - name: Build
         working-directory: admin
         run: npm run build

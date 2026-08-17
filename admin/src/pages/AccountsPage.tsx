@@ -4,7 +4,7 @@ import { Search } from 'lucide-react';
 import { platformRequest } from '../api';
 import { LifecycleRail } from '../components/LifecycleRail';
 import { EmptyState, FlagPills, Input, Notice, ResponsiveDataView, StatusBadge } from '../components/ui';
-import { formatCount, formatWhen } from '../lib/format';
+import { formatAiCapPercent, formatCount, formatWhen } from '../lib/format';
 import { toStackedAccountRecord, type AccountListRow } from '../lib/records';
 import { ACTIVATION_STAGES, type ActivationStage } from '../lib/stages';
 
@@ -85,6 +85,10 @@ export function AccountsPage() {
             <div className="mt-3">
               <LifecycleRail current={row.stage} compact />
             </div>
+            <div className="mt-3 flex items-center justify-between gap-2 text-xs text-ink/55">
+              <span>{row.numbersConnected} numbers</span>
+              <span className="font-mono">{formatAiCapPercent(row.aiTokensMonth, row.monthlyTokenLimit)}</span>
+            </div>
             <div className="mt-3 flex items-center justify-between gap-2">
               <StatusBadge status={row.plan} />
               <FlagPills flags={row.flags} />
@@ -100,7 +104,8 @@ export function AccountsPage() {
                   <th className="px-4 py-3">Stage</th>
                   <th className="px-4 py-3">Plan</th>
                   <th className="px-4 py-3">Quality</th>
-                  <th className="px-4 py-3">AI</th>
+                  <th className="px-4 py-3">AI % of cap</th>
+                  <th className="px-4 py-3">Numbers</th>
                   <th className="px-4 py-3">Last login</th>
                   <th className="px-4 py-3">Flags</th>
                 </tr>
@@ -121,7 +126,10 @@ export function AccountsPage() {
                     <td className="px-4 py-3">
                       {row.qualityRating ? <StatusBadge status={row.qualityRating} /> : '—'}
                     </td>
-                    <td className="px-4 py-3 font-mono">{formatCount(row.aiTokensMonth)}</td>
+                    <td className="px-4 py-3 font-mono text-xs">
+                      {formatAiCapPercent(row.aiTokensMonth, row.monthlyTokenLimit)}
+                    </td>
+                    <td className="px-4 py-3 font-mono">{formatCount(row.numbersConnected)}</td>
                     <td className="px-4 py-3 text-xs">{formatWhen(row.lastLoginAt)}</td>
                     <td className="px-4 py-3">
                       <FlagPills flags={row.flags} />

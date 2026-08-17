@@ -37,7 +37,7 @@ Every **major** item you actually dictated in this session is in Jira under [SAM
 | Calls Recents: no Help; Incoming/Outgoing; name + glyphs; hide number when named | [SAMYOJ-54](https://teamwebstarts.atlassian.net/browse/SAMYOJ-54) | |
 | After AI call: summary on Calls **and** Inbox (system card, not fake inbound) | [SAMYOJ-55](https://teamwebstarts.atlassian.net/browse/SAMYOJ-55) | |
 | Reports: own AI usage section, every AI surface, units not Meta fees | [SAMYOJ-56](https://teamwebstarts.atlassian.net/browse/SAMYOJ-56) | |
-| Future platform admin (logins, features, APIs, AI) | [SAMYOJ-57](https://teamwebstarts.atlassian.net/browse/SAMYOJ-57) | Spec: `docs/product/PLATFORM_ADMIN_2026-08-16.md`. Not built. |
+| Future platform admin (logins, features, APIs, AI) | [SAMYOJ-57](https://teamwebstarts.atlassian.net/browse/SAMYOJ-57) | First release in code 2026-08-17 (`admin/` `:3001`). Remaining: 35 TARGET, 56 STT/TTS ledger, impersonation, WhatsApp outreach. SMTP honesty: no SENT without a real send. |
 | Inbox New chat = same optional Contacts fields; same Contact row | [SAMYOJ-58](https://teamwebstarts.atlassian.net/browse/SAMYOJ-58) | Recheck: not on AI Bot form |
 | Remove AI calling from Calls Customize | [SAMYOJ-59](https://teamwebstarts.atlassian.net/browse/SAMYOJ-59) | Relates 52; land with/after 52 |
 

@@ -12,12 +12,13 @@ This is **not** the customer Dashboard (`/`). It is a **Samyoj operator** produc
 
 | Shipped (test-deploy) | Still remaining |
 |-----------------------|-----------------|
-| Additive migration `20260817003000_platform_schema_auth` (apply with `npm run db:migrate-startup-safe`, never raw `prisma migrate deploy` on a path that would hit `20260808120000`) | [SAMYOJ-35](https://teamwebstarts.atlassian.net/browse/SAMYOJ-35) TARGET Razorpay Subscriptions / GST / dunning. Admin shows **current** plan, expiry, `PaymentOrder`, extend/comp only. |
-| `/api/platform/*`: cookie session, CSRF, mandatory TOTP, RBAC (`SUPER_ADMIN` / `SUPPORT` / `ANALYST`). Org JWT cannot call these routes. | [SAMYOJ-56](https://teamwebstarts.atlassian.net/browse/SAMYOJ-56) STT/TTS coverage is still under-logged. Admin rolls up `AiUsageLog` honestly — do not claim listening/speaking units are complete. |
-| Tenant `GET /api/ops/recent-errors` **removed** (404). Meta errors live under platform only. | Impersonation / “view as org” — **not built**, not this release. |
+| Additive migration `20260817003000_platform_schema_auth` (apply with `npm run db:migrate-startup-safe`, never raw `prisma migrate deploy` on a path that would hit `20260808120000`). Outreach `LOGGED` status is `20260817120000`. | [SAMYOJ-35](https://teamwebstarts.atlassian.net/browse/SAMYOJ-35) TARGET Razorpay Subscriptions / GST / dunning. Admin shows **current** plan, expiry, `PaymentOrder`, extend/comp only. |
+| `/api/platform/*`: cookie session, CSRF, TOTP when `PLATFORM_MFA_REQUIRED` is true (production default; skippable in development), RBAC (`SUPER_ADMIN` / `SUPPORT` / `ANALYST`). Org JWT cannot call these routes. Pending TOTP secret is reused until enroll or explicit reset. | [SAMYOJ-56](https://teamwebstarts.atlassian.net/browse/SAMYOJ-56) STT/TTS coverage is still under-logged. Admin rolls up `AiUsageLog` honestly — do not claim listening/speaking units are complete. |
+| Tenant `GET /api/ops/recent-errors` **removed** (404). Meta errors live under platform only, including Graph delivery-status failures. | Impersonation / “view as org” — **not built**, not this release. |
 | `admin/` Vite app on `:3001` (`PLATFORM_ADMIN_URL`). `bash start.sh` launches it. | WhatsApp outreach to the business number — **not built**. Email templates only. |
-| Overview, accounts, AI caps/flags, current billing, Meta error aggregates, operators, sessions, audit, email outreach APIs + UI | Email outreach **needs `SMTP_HOST`**. Unset SMTP logs the letter and the helper still returns success — operators can see SENT without a real mailbox. |
-| CLI `cd server && npm run platform:bootstrap-operator` (password via `PLATFORM_OPERATOR_PASSWORD` only; `--password` is rejected). First operator is `SUPER_ADMIN`. Locked after any operator exists. | Privacy-policy sentence for account telemetry — docs only until counsel ships copy. |
+| Overview, accounts (AI % of cap + numbers), AI caps/flags (ANALYST read-only), current billing, Meta error aggregates, operators/sessions (`current` = this session), audit, email outreach with 7/14/30-day aging | Send kill switch — **not built**. |
+| CLI `cd server && npm run platform:bootstrap-operator` (password via `PLATFORM_OPERATOR_PASSWORD` only; `--password` is rejected). First operator is `SUPER_ADMIN`. Locked after any operator exists. | Real mailbox still needs `SMTP_HOST`. Unset SMTP stores **LOGGED**, never SENT. |
+| SMTP honesty, session `current` = this session id, ANALYST read-only flags, webhook delivery-status MetaErrorStat, AI coverageNote on the account AI tab | Privacy-policy sentence for account telemetry — docs only until counsel ships copy. |
 
 **Do not expand this ticket into** impersonation, WhatsApp outreach, or TARGET subscriptions.
 
@@ -33,7 +34,7 @@ PLATFORM_OPERATOR_PASSWORD='ChooseAStrongPass1' npm run platform:bootstrap-opera
 
 Password rules: 8+ characters, upper + lower + number, not a common password. Do not pass `--password` on the command line.
 
-3. Open `http://localhost:3001`. Sign in with that email/password. First login requires TOTP enrollment, then a 6-digit code on later logins.
+3. Open `http://localhost:3001`. Sign in with that email/password. Local/dev defaults `PLATFORM_MFA_REQUIRED=false`, so password login is enough (no authenticator). Production (or the flag set true) still requires TOTP enrollment on first login, then a 6-digit code later.
 4. Optional: `cd server && npm run platform:backfill-telemetry` to snapshot existing orgs.
 
 ---
@@ -78,7 +79,7 @@ Pays SaaS + Meta         Sees who paid / who stalled
 
 **UI rule:** customer chrome (sidebar Inbox/Campaigns) never appears on admin. Admin chrome never appears for orgs. Different origin preferred so a stolen org JWT cannot call `/api/platform/*`.
 
-**Auth rule:** platform operators are **not** `OrganizationUser` rows. Login is email + password; Google SSO was not in this release. MFA (TOTP) is mandatory. Session is an HttpOnly `SameSite=Strict` cookie while the customer app stays on SAMYOJ-49 `sessionStorage`.
+**Auth rule:** platform operators are **not** `OrganizationUser` rows. Login is email + password; Google SSO was not in this release. MFA (TOTP) is required when `PLATFORM_MFA_REQUIRED` is true (production default; off by default in `NODE_ENV=development`). Session is an HttpOnly `SameSite=Strict` cookie while the customer app stays on SAMYOJ-49 `sessionStorage`.
 
 ---
 
@@ -341,10 +342,10 @@ Customer production still **no** until SAMYOJ-3. Admin is on the same test-deplo
 - No message bodies / customer phones in admin DB or UI. **Done** as a contract (tests + redaction).  
 - AI cap editable per org; usage visible. **Done** (SAMYOJ-56 STT/TTS still incomplete).  
 - Meta error codes clustered. **Done**.  
-- Outreach to **owner email**. **Done** as templates; SMTP still required for a real mailbox.  
+- Outreach to **owner email**. **Done** as templates; unset SMTP stores LOGGED (never SENT). A real mailbox still needs `SMTP_HOST`.  
 - `/api/ops/recent-errors` no longer leaks other tenants. **Done** (route removed).  
 - Privacy policy sentence exists. **Not shipped** (counsel copy).  
-- Do **not** mark SAMYOJ-57 customer-production Done. Test-deploy first release is in code; 35 / 56 honesty / impersonation / SMTP remain.
+- Do **not** mark SAMYOJ-57 customer-production Done. Test-deploy first release is in code; 35 / 56 ledger / impersonation / WhatsApp outreach remain. SMTP honesty (no fake SENT) is in code.
 
 ---
 

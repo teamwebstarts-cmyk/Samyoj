@@ -80,6 +80,10 @@ if ! grep -q '^PLATFORM_ADMIN_URL=' server/.env; then
   printf '\nPLATFORM_ADMIN_URL=http://localhost:3001\n' >> server/.env
   ok "Set PLATFORM_ADMIN_URL=http://localhost:3001"
 fi
+if ! grep -q '^PLATFORM_MFA_REQUIRED=' server/.env; then
+  printf '\nPLATFORM_MFA_REQUIRED=false\n' >> server/.env
+  ok "Set PLATFORM_MFA_REQUIRED=false"
+fi
 
 harden_local_permissions() {
   chmod 600 server/.env

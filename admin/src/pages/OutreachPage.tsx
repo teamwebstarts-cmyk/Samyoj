@@ -3,13 +3,24 @@ import { useNavigate } from 'react-router-dom';
 import { Mail } from 'lucide-react';
 import { ApiError, platformRequest } from '../api';
 import { Button, Drawer, EmptyState, Input, Notice, Select } from '../components/ui';
-import { outreachTemplateLabel, OUTREACH_TEMPLATES } from '../lib/templates';
+import {
+  outreachTemplateLabel,
+  OUTREACH_AGING_BUCKETS,
+  OUTREACH_TEMPLATES,
+  type OutreachAgingBucketId,
+} from '../lib/templates';
 
-type QueueRow = { id: string; companyName: string; stage: string };
+type QueueRow = { id: string; companyName: string; stage: string; ageDays?: number };
+type AgedQueue = Record<OutreachAgingBucketId, QueueRow[]>;
 type Outreach = {
+  smtpConfigured?: boolean;
   templates: string[];
-  queues: Record<string, QueueRow[]>;
+  queues: Record<string, AgedQueue>;
 };
+
+function queueHasRows(queue: AgedQueue): boolean {
+  return OUTREACH_AGING_BUCKETS.some((bucket) => (queue[bucket.id] || []).length > 0);
+}
 
 export function OutreachPage() {
   const navigate = useNavigate();
@@ -40,38 +51,69 @@ export function OutreachPage() {
           Email the business owner only. Templates are server-owned. No WhatsApp outreach.
         </p>
       </div>
-      {queueEntries.every(([, rows]) => rows.length === 0) && (
+      {data.smtpConfigured === false && (
+        <Notice tone="warning">
+          Mail is not configured (`SMTP_HOST` is unset). Letters are logged as LOGGED, not SENT.
+          Nothing leaves this server until SMTP is set.
+        </Notice>
+      )}
+      {queueEntries.every(([, queue]) => !queueHasRows(queue)) && (
         <EmptyState icon={Mail} title="Queues are empty" description="No orgs currently match an outreach playbook." />
       )}
-      {queueEntries.map(([template, rows]) => (
+      {queueEntries.map(([template, queue]) => (
         <section key={template} className="rounded-2xl border border-dust bg-white p-4">
           <h2 className="font-semibold">{outreachTemplateLabel(template)}</h2>
-          <div className="mt-3 space-y-2">
-            {rows.length === 0 && <p className="text-sm text-ink/45">Empty</p>}
-            {rows.map((row) => (
-              <div key={row.id} className="flex flex-col gap-2 rounded-lg border border-dust px-3 py-2 md:flex-row md:items-center md:justify-between">
-                <button type="button" className="text-left" onClick={() => navigate(`/accounts/${row.id}?tab=outreach`)}>
-                  <p className="font-medium">{row.companyName}</p>
-                  <p className="font-mono text-xs text-ink/45">{row.stage}</p>
-                </button>
-                <div className="flex gap-2">
-                  <Button variant="secondary" size="sm" onClick={() => navigate(`/accounts/${row.id}?tab=outreach`)}>
-                    Open
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={() => {
-                      setTarget(row);
-                      setTemplateId(template);
-                      setReason('');
-                      setSaveError('');
-                    }}
-                  >
-                    Email
-                  </Button>
+          <div className="mt-3 space-y-4">
+            {!queueHasRows(queue) && <p className="text-sm text-ink/45">Empty</p>}
+            {OUTREACH_AGING_BUCKETS.map((bucket) => {
+              const rows = queue[bucket.id] || [];
+              if (rows.length === 0) return null;
+              return (
+                <div key={bucket.id}>
+                  <p className="text-xs uppercase tracking-wide text-ink/45">{bucket.label}</p>
+                  <div className="mt-2 space-y-2">
+                    {rows.map((row) => (
+                      <div
+                        key={row.id}
+                        className="flex flex-col gap-2 rounded-lg border border-dust px-3 py-2 md:flex-row md:items-center md:justify-between"
+                      >
+                        <button
+                          type="button"
+                          className="text-left"
+                          onClick={() => navigate(`/accounts/${row.id}?tab=outreach`)}
+                        >
+                          <p className="font-medium">{row.companyName}</p>
+                          <p className="font-mono text-xs text-ink/45">
+                            {row.stage}
+                            {row.ageDays != null ? ` · ${row.ageDays}d` : ''}
+                          </p>
+                        </button>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => navigate(`/accounts/${row.id}?tab=outreach`)}
+                          >
+                            Open
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              setTarget(row);
+                              setTemplateId(template);
+                              setReason('');
+                              setSaveError('');
+                            }}
+                          >
+                            Email
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
       ))}
@@ -98,6 +140,9 @@ export function OutreachPage() {
               .finally(() => setSaving(false));
           }}
         >
+          {data.smtpConfigured === false && (
+            <Notice tone="warning">This will be stored as LOGGED. Mail is not configured.</Notice>
+          )}
           <Select label="Template" value={templateId} onChange={(event) => setTemplateId(event.target.value)}>
             {OUTREACH_TEMPLATES.map((template) => (
               <option key={template.id} value={template.id}>

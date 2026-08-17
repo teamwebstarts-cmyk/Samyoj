@@ -12,6 +12,10 @@ import {
 import { verifyTotp } from '../team/totp';
 import { loadOrCreatePendingTotpEnrollment } from './mfa-enrollment';
 import {
+  isPlatformMfaRequired,
+  resolvePlatformPasswordLogin,
+} from './mfa-policy';
+import {
   loadPlatformSession,
   requirePlatformRouteAccess,
   requireSessionBoundPlatformMutation,
@@ -130,7 +134,36 @@ router.post(
       throw new AppError(401, 'Invalid platform credentials');
     }
 
-    if (!operator.mfaEnabledAt) {
+    const mfaRequired = isPlatformMfaRequired();
+    const totpValid =
+      mfaRequired && data.totpCode && operator.totpSecretEncrypted
+        ? verifyTotp(decrypt(operator.totpSecretEncrypted), data.totpCode)
+        : false;
+    const outcome = resolvePlatformPasswordLogin({
+      mfaRequired,
+      mfaEnabledAt: operator.mfaEnabledAt,
+      totpSecretEncrypted: operator.totpSecretEncrypted,
+      totpCode: data.totpCode,
+      totpValid,
+    });
+
+    if (outcome.status === 'AUTHENTICATED') {
+      const session = await createPlatformSession(operator.id, true);
+      setPlatformSessionCookies(
+        res,
+        session.sessionToken,
+        session.csrfToken,
+        session.expiresAt
+      );
+      sendSuccess(res, {
+        state: 'AUTHENTICATED',
+        operator: publicOperator(operator),
+        csrfToken: session.csrfToken,
+      });
+      return;
+    }
+
+    if (outcome.status === 'MFA_ENROLLMENT_REQUIRED') {
       const enrollment = await loadOrCreatePendingTotpEnrollment({
         operatorId: operator.id,
         email: operator.email,
@@ -155,35 +188,18 @@ router.post(
       return;
     }
 
-    if (!operator.totpSecretEncrypted) {
+    if (outcome.status === 'INVALID_CONFIG') {
       clearPlatformSessionCookies(res);
       throw new AppError(403, 'Platform MFA configuration is invalid');
     }
 
-    if (!data.totpCode) {
-      clearPlatformSessionCookies(res);
-      sendSuccess(res, { state: 'MFA_REQUIRED' });
-      return;
-    }
-
-    if (!verifyTotp(decrypt(operator.totpSecretEncrypted), data.totpCode)) {
+    if (outcome.status === 'INVALID_MFA') {
       clearPlatformSessionCookies(res);
       throw new AppError(401, 'Invalid platform credentials or MFA code');
     }
 
-    const session = await createPlatformSession(operator.id, true);
-    setPlatformSessionCookies(
-      res,
-      session.sessionToken,
-      session.csrfToken,
-      session.expiresAt
-    );
-
-    sendSuccess(res, {
-      state: 'AUTHENTICATED',
-      operator: publicOperator(operator),
-      csrfToken: session.csrfToken,
-    });
+    clearPlatformSessionCookies(res);
+    sendSuccess(res, { state: 'MFA_REQUIRED' });
   })
 );
 

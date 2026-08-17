@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { platformRequest } from '../api';
 import { LifecycleRail } from '../components/LifecycleRail';
 import { EmptyState, FlagPills, Notice } from '../components/ui';
-import { formatCount } from '../lib/format';
+import { formatAiCapPercent, formatCount } from '../lib/format';
 import type { ActivationStage } from '../lib/stages';
 import type { HealthFlags } from '../types';
 import { Inbox } from 'lucide-react';
@@ -20,6 +20,17 @@ type Overview = {
   }>;
   metaErrors: Array<{ code: number; count: number }>;
   aiTokensMonth: number;
+  aiCap?: {
+    tokenLimitSum: number | null;
+    cappedOrgCount: number;
+    uncappedOrgCount: number;
+  };
+  topAiOrgs?: Array<{
+    organizationId: string;
+    companyName: string;
+    aiTokensMonth: number;
+    monthlyTokenLimit: number | null;
+  }>;
   coverageNote: string;
 };
 
@@ -55,8 +66,19 @@ export function OverviewPage() {
       </div>
       <div className="grid gap-4 md:grid-cols-3">
         <div className="rounded-2xl border border-dust bg-white p-4">
-          <p className="text-xs uppercase tracking-wide text-ink/45">AI tokens this month</p>
-          <p className="mt-2 font-mono text-2xl">{formatCount(data.aiTokensMonth)}</p>
+          <p className="text-xs uppercase tracking-wide text-ink/45">Platform AI this month</p>
+          <p className="mt-2 font-mono text-2xl">
+            {data.aiCap?.tokenLimitSum != null
+              ? `${formatCount(data.aiTokensMonth)} / ${formatCount(data.aiCap.tokenLimitSum)}`
+              : formatCount(data.aiTokensMonth)}
+          </p>
+          <p className="mt-2 text-xs text-ink/50">
+            {data.aiCap?.tokenLimitSum != null
+              ? `${data.aiCap.cappedOrgCount} orgs with a cap${
+                  data.aiCap.uncappedOrgCount ? ` · ${data.aiCap.uncappedOrgCount} uncapped` : ''
+                }`
+              : 'No org token caps are set.'}
+          </p>
           <p className="mt-2 text-xs text-ink/50">{data.coverageNote}</p>
         </div>
         <div className="rounded-2xl border border-dust bg-white p-4 md:col-span-2">
@@ -77,6 +99,26 @@ export function OverviewPage() {
           </div>
         </div>
       </div>
+      {(data.topAiOrgs || []).length > 0 && (
+        <section>
+          <h2 className="text-lg font-semibold">Top AI usage</h2>
+          <div className="mt-3 divide-y divide-dust overflow-hidden rounded-2xl border border-dust bg-white">
+            {data.topAiOrgs!.map((row) => (
+              <button
+                key={row.organizationId}
+                type="button"
+                className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+                onClick={() => navigate(`/accounts/${row.organizationId}?tab=ai`)}
+              >
+                <span className="font-medium">{row.companyName}</span>
+                <span className="font-mono text-xs text-ink/55">
+                  {formatAiCapPercent(row.aiTokensMonth, row.monthlyTokenLimit)}
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
       <section>
         <h2 className="text-lg font-semibold">Needs a human</h2>
         {data.needsAttention.length === 0 ? (

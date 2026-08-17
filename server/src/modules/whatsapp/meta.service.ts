@@ -1012,7 +1012,10 @@ export class MetaWhatsAppService {
       });
     }
 
-    const decision = shouldReplaceAppWebhookCallback(currentUrl, callbackUrl);
+    const decision = shouldReplaceAppWebhookCallback(currentUrl, callbackUrl, {
+      allowTunnelOverride:
+        config.nodeEnv !== 'production' && Boolean(config.meta.allowTunnelWebhook),
+    });
     if (!decision.replace) {
       throw new Error(decision.reason);
     }

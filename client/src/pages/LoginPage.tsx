@@ -217,6 +217,18 @@ export default function LoginPage() {
             </span>
           </AuthButton>
         </div>
+
+        {!requires2FA && (
+          <p className="pt-1 text-center text-[13px] font-medium text-slate-500">
+            Don&apos;t have an account?{' '}
+            <Link
+              to="/register"
+              className="font-bold text-[#0A8954] transition hover:text-[#087A4A]"
+            >
+              Sign up
+            </Link>
+          </p>
+        )}
       </form>
 
       {!requires2FA && (

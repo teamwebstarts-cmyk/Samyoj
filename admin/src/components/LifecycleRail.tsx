@@ -1,5 +1,7 @@
 import {
   STAGE_LABELS,
+  STAGE_SHORT,
+  STAGE_HINTS,
   ACTIVATION_STAGES,
   isCompletedStage,
   stageIndex,
@@ -12,12 +14,14 @@ export function LifecycleRail({
   onSelect,
   compact = false,
   decorative = false,
+  showHints = false,
 }: {
   current?: ActivationStage | null;
   counts?: Partial<Record<ActivationStage, number>>;
   onSelect?: (stage: ActivationStage) => void;
   compact?: boolean;
   decorative?: boolean;
+  showHints?: boolean;
 }) {
   const progress =
     current && stageIndex(current) >= 0 ? stageIndex(current) / (ACTIVATION_STAGES.length - 1) : 0;
@@ -25,6 +29,8 @@ export function LifecycleRail({
   return (
     <ol
       className="lifecycle-rail"
+      data-compact={compact || undefined}
+      data-hints={showHints && !compact ? 'true' : undefined}
       aria-label={decorative ? undefined : 'Activation lifecycle'}
       aria-hidden={decorative || undefined}
     >
@@ -32,6 +38,7 @@ export function LifecycleRail({
       {ACTIVATION_STAGES.map((stage) => {
         const currentMatch = current === stage;
         const complete = current ? isCompletedStage(current, stage) : false;
+        const label = compact ? STAGE_SHORT[stage] : STAGE_LABELS[stage];
         return (
           <li key={stage}>
             <button
@@ -40,18 +47,15 @@ export function LifecycleRail({
               data-current={currentMatch}
               data-complete={complete}
               aria-current={currentMatch ? 'step' : undefined}
+              aria-pressed={onSelect ? currentMatch : undefined}
+              title={STAGE_HINTS[stage]}
               tabIndex={decorative ? -1 : 0}
               onClick={() => onSelect?.(stage)}
             >
               <span className="lifecycle-dot" />
-              <span
-                className={`text-center font-semibold tracking-wide ${compact ? 'text-[10px]' : 'text-[11px]'}`}
-              >
-                {STAGE_LABELS[stage]}
-              </span>
-              {counts && (
-                <span className="font-mono text-xs text-ink/70">{counts[stage] ?? 0}</span>
-              )}
+              <span className="lifecycle-label">{label}</span>
+              {counts && <span className="lifecycle-count">{counts[stage] ?? 0}</span>}
+              {showHints && !compact && <span className="lifecycle-hint">{STAGE_HINTS[stage]}</span>}
             </button>
           </li>
         );

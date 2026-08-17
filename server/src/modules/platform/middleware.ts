@@ -9,6 +9,7 @@ import {
   PLATFORM_CSRF_COOKIE,
   PLATFORM_CSRF_HEADER,
 } from './security';
+import { isPlatformMfaRequired } from './mfa-policy';
 import { platformSessionToken } from './session';
 
 export interface PlatformRequestOperator {
@@ -127,8 +128,8 @@ export async function authenticatePlatform(
   try {
     await resolvePlatformSession(req);
     if (
-      !req.platformOperator?.mfaEnabledAt ||
-      !req.platformSession?.mfaVerifiedAt
+      isPlatformMfaRequired() &&
+      (!req.platformOperator?.mfaEnabledAt || !req.platformSession?.mfaVerifiedAt)
     ) {
       throw new AppError(403, 'Platform MFA verification required', 'PLATFORM_MFA_REQUIRED');
     }

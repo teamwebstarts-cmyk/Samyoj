@@ -35,6 +35,8 @@ type Detail = {
     maskedPhone: string | null;
     isActive: boolean;
     qualityRating: string | null;
+    inboundCount?: number;
+    outboundCount?: number;
   }>;
   billing: {
     plan: string;
@@ -47,6 +49,7 @@ type Detail = {
     chatEnabled: boolean;
     callingEnabled: boolean;
     monthlyTokenLimit: number | null;
+    coverageNote?: string;
     usage: {
       monthTokens: number;
       surfaces: Array<{ action: string; label: string; totalTokens: number }>;
@@ -88,6 +91,7 @@ export function AccountDetailPage() {
     recent: Array<{ code: number; count: number; sampleTitle: string | null; title?: string }>;
   } | null>(null);
   const [outreach, setOutreach] = useState<{
+    smtpConfigured?: boolean;
     rows: Array<{ id: string; templateId: string; status: string; createdAt: string }>;
   } | null>(null);
 
@@ -113,9 +117,10 @@ export function AccountDetailPage() {
 
   useEffect(() => {
     if (!id || tab !== 'Outreach') return;
-    void platformRequest<{ rows: Array<{ id: string; templateId: string; status: string; createdAt: string }> }>(
-      `/orgs/${id}/outreach`
-    ).then(setOutreach);
+    void platformRequest<{
+      smtpConfigured?: boolean;
+      rows: Array<{ id: string; templateId: string; status: string; createdAt: string }>;
+    }>(`/orgs/${id}/outreach`).then(setOutreach);
   }, [id, tab]);
 
   function openTab(next: (typeof TABS)[number]) {
@@ -185,6 +190,20 @@ export function AccountDetailPage() {
               </ol>
             </div>
           )}
+          <div className="rounded-2xl border border-dust bg-white p-4">
+            <p className="text-xs uppercase tracking-wide text-ink/45">Feature flags</p>
+            <div className="mt-3 space-y-2 text-sm">
+              {detail.flagsCatalog.length === 0 && (
+                <p className="text-ink/50">No feature flags on this account.</p>
+              )}
+              {detail.flagsCatalog.map((flag) => (
+                <div key={flag.flag} className="flex items-center justify-between">
+                  <span>{flag.flag}</span>
+                  <StatusBadge status={flag.enabled ? 'ACTIVE' : 'DISABLED'} />
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
@@ -222,6 +241,9 @@ export function AccountDetailPage() {
                 <StatusBadge status={number.isActive ? 'ACTIVE' : 'DISABLED'} />
                 {number.qualityRating ? <StatusBadge status={number.qualityRating} /> : <span>unrated</span>}
               </div>
+              <p className="mt-2 font-mono text-xs text-ink/55">
+                inbound {formatCount(number.inboundCount ?? 0)} · outbound {formatCount(number.outboundCount ?? 0)}
+              </p>
             </div>
           ))}
         </div>
@@ -237,7 +259,7 @@ export function AccountDetailPage() {
             Month tokens {formatCount(detail.ai.usage.monthTokens)} /{' '}
             {detail.ai.monthlyTokenLimit ?? 'no cap'}
           </p>
-          <p className="text-xs text-ink/50">{detail.ai.usage.unitNote}</p>
+          <p className="text-xs text-ink/50">{detail.ai.coverageNote || detail.ai.usage.unitNote}</p>
           <div className="space-y-1 text-sm">
             {detail.ai.usage.surfaces.map((row) => (
               <div key={row.action} className="flex justify-between">
@@ -295,6 +317,11 @@ export function AccountDetailPage() {
 
       {tab === 'Outreach' && (
         <div className="space-y-3">
+          {outreach?.smtpConfigured === false && (
+            <Notice tone="warning">
+              Mail is not configured. Outreach is stored as LOGGED, not SENT.
+            </Notice>
+          )}
           {canOutreach && <Button onClick={() => setDrawer('outreach')}>Email owner</Button>}
           {(outreach?.rows || []).length === 0 && (
             <p className="text-sm text-ink/50">No outreach logged yet.</p>
@@ -478,6 +505,7 @@ export function AccountDetailPage() {
               .then(() => {
                 closeDrawer();
                 void platformRequest<{
+                  smtpConfigured?: boolean;
                   rows: Array<{ id: string; templateId: string; status: string; createdAt: string }>;
                 }>(`/orgs/${detail.id}/outreach`).then(setOutreach);
               })
@@ -485,6 +513,9 @@ export function AccountDetailPage() {
               .finally(() => setSaving(false));
           }}
         >
+          {outreach?.smtpConfigured === false && (
+            <Notice tone="warning">This will be stored as LOGGED. Mail is not configured.</Notice>
+          )}
           <Select
             label="Template"
             value={templateId}

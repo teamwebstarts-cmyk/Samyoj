@@ -372,3 +372,7 @@ Legend:
 | ESLint / Prettier | MISSING | No config files |
 | Client-side tests | PARTIAL | 10 vitest files (inbox/flow-live/flow-waiting); no E2E |
 | End-to-end tests | MISSING | No E2E framework |
+
+---
+
+Footer 2026-08-17: Platform admin (SAMYOJ-57) is a separate `admin/` app on `:3001`, not a customer Dashboard tab. This matrix is not source of truth — see `docs/memory/STATUS_AND_FUTURE.md`.

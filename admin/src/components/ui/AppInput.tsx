@@ -1,5 +1,8 @@
 import { useId, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from 'react';
 
+const fieldClass =
+  'h-11 w-full rounded-xl border bg-white px-3 text-sm text-ink shadow-input placeholder:text-ink/35 focus:border-sage focus:ring-2 focus:ring-sage/20';
+
 export function Input({
   label,
   hint,
@@ -19,13 +22,11 @@ export function Input({
       {label && <span className="font-medium text-ink/80">{label}</span>}
       <input
         id={inputId}
-        className={`h-11 w-full rounded-lg border bg-white px-3 text-sm text-ink placeholder:text-ink/35 ${
-          error ? 'border-red-300' : 'border-dust'
-        } ${className}`}
+        className={`${fieldClass} ${error ? 'border-rose-300' : 'border-dust'} ${className}`}
         {...props}
       />
       {hint && !error && <span className="text-xs text-ink/50">{hint}</span>}
-      {error && <span className="text-xs text-red-700">{error}</span>}
+      {error && <span className="text-xs text-rose-700">{error}</span>}
     </label>
   );
 }
@@ -48,14 +49,12 @@ export function Select({
       {label && <span className="font-medium text-ink/80">{label}</span>}
       <select
         id={selectId}
-        className={`h-11 w-full rounded-lg border bg-white px-3 text-sm text-ink ${
-          error ? 'border-red-300' : 'border-dust'
-        } ${className}`}
+        className={`${fieldClass} ${error ? 'border-rose-300' : 'border-dust'} ${className}`}
         {...props}
       >
         {children}
       </select>
-      {error && <span className="text-xs text-red-700">{error}</span>}
+      {error && <span className="text-xs text-rose-700">{error}</span>}
     </label>
   );
 }

@@ -7,6 +7,7 @@ import {
   shouldApplyProviderStatus,
   unmatchedStatusEventAt,
 } from './provider-status';
+import { recordWebhookStatusMetaError } from '../platform/meta-errors';
 
 vi.mock('../../config/database', () => ({
   default: {
@@ -23,6 +24,10 @@ vi.mock('../../realtime', () => ({
 
 vi.mock('../campaigns/service', () => ({
   syncCampaignRecipientFromWebhook: vi.fn(),
+}));
+
+vi.mock('../platform/meta-errors', () => ({
+  recordWebhookStatusMetaError: vi.fn(),
 }));
 
 const unmatchedMock = vi.mocked(prisma.unmatchedProviderStatus);
@@ -138,5 +143,36 @@ describe('handleOutboundStatusWebhook', () => {
       }),
     });
     expect(messageMock.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('hooks Graph delivery-status failures into MetaErrorStat clustering', async () => {
+    messageMock.findFirst.mockResolvedValue({
+      id: 'msg-1',
+      status: 'SENT',
+      metadata: {},
+      conversationId: 'conv-1',
+    } as never);
+    messageMock.updateMany.mockResolvedValue({ count: 1 } as never);
+
+    const status = {
+      errors: [{ code: 131047, title: 'Re-engagement required' }],
+      recipient_id: '919876543210',
+    };
+    await handleOutboundStatusWebhook({
+      organizationId: 'org-1',
+      whatsappNumberId: 'wa-1',
+      phoneNumberId: 'phone-1',
+      metaMessageId: 'wamid.fail',
+      statusValue: 'FAILED',
+      statusTimestamp: new Date('2026-08-14T12:00:03.000Z'),
+      status,
+    });
+
+    expect(recordWebhookStatusMetaError).toHaveBeenCalledWith({
+      organizationId: 'org-1',
+      whatsappNumberId: 'wa-1',
+      statusValue: 'FAILED',
+      status,
+    });
   });
 });

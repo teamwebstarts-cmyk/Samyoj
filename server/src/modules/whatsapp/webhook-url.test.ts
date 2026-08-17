@@ -31,6 +31,16 @@ describe('webhook URL guards', () => {
     expect(decision.reason).toMatch(/production webhook/i);
   });
 
+  it('allows replacing production with ngrok when explicitly opted in', () => {
+    const decision = shouldReplaceAppWebhookCallback(
+      'https://app.samyoj.com/api/whatsapp/webhook',
+      'https://collision-modified-spur.ngrok-free.dev/api/whatsapp/webhook',
+      { allowTunnelOverride: true }
+    );
+    expect(decision.replace).toBe(true);
+    expect(decision.reason).toMatch(/override/i);
+  });
+
   it('allows replacing ngrok with production and refreshing the same URL', () => {
     expect(
       shouldReplaceAppWebhookCallback(

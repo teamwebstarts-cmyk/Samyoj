@@ -18,3 +18,12 @@ export function formatPaise(paise: number): string {
 export function formatCount(value: number | null | undefined): string {
   return (value ?? 0).toLocaleString();
 }
+
+export function formatAiCapPercent(
+  tokens: number | null | undefined,
+  limit: number | null | undefined
+): string {
+  const used = tokens ?? 0;
+  if (limit == null || limit <= 0) return `${formatCount(used)} · no cap`;
+  return `${Math.round((used / limit) * 100)}% of cap`;
+}

@@ -39,7 +39,7 @@ Webhook URL in production `.env` must stay `https://app.samyoj.com/api/whatsapp/
 - **Sentry:** `server/src/config/sentry.ts`. If `SENTRY_DSN` is unset, Sentry stays off — do not invent a DSN.
 - **Durable ops log:** `/home/samyoj/Samyoj/.run/logs/ops-errors.log` (JSON, error-level Winston). Rotate at 5 MB × 3 files.
 - **DB receipts:** `provider_webhook_events` — one `RECEIVED` row per Meta POST (`receipt:<requestId>`).
-- **Admin API:** `GET /api/ops/recent-errors` (OWNER/ADMIN JWT). Returns recent log lines, webhook receipts, failed/missed calls. No tokens or phone numbers.
+- **Admin API:** Tenant `GET /api/ops/recent-errors` was **removed** (404). Meta error aggregates live on platform admin `GET /api/platform/errors` (operators only). Org JWTs cannot call `/api/platform/*`.
 
 ```bash
 sudo -u samyoj tail -n 50 /home/samyoj/Samyoj/.run/logs/ops-errors.log

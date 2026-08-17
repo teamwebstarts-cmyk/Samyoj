@@ -25,6 +25,7 @@ export type StackedAccountRecord = {
   plan: string;
   quality: string | null;
   aiTokensMonth: number;
+  monthlyTokenLimit: number | null;
   numbersConnected: number;
   maskedNumbers: string[];
   flags: HealthFlags;
@@ -40,6 +41,7 @@ export function toStackedAccountRecord(row: AccountListRow): StackedAccountRecor
     plan: row.plan,
     quality: row.qualityRating,
     aiTokensMonth: row.aiTokensMonth,
+    monthlyTokenLimit: row.monthlyTokenLimit,
     numbersConnected: row.numbersConnected,
     maskedNumbers: (row.numbers ?? []).map((number) => maskBusinessPhone(number.maskedPhone) ?? '••••'),
     flags: row.flags,

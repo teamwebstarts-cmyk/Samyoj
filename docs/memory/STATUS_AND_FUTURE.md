@@ -2,7 +2,7 @@
 
 Last updated: **2026-08-17** (SAMYOJ-57 platform admin first release verified).
 
-**2026-08-17 platform admin ([SAMYOJ-57](https://teamwebstarts.atlassian.net/browse/SAMYOJ-57) first release, test-deploy):** `admin/` on `:3001`, `/api/platform/*` cookie+CSRF+TOTP+RBAC, additive migration `20260817003000_platform_schema_auth` applied via `db:migrate-startup-safe`. Tenant `/api/ops` is gone. **Not** customer production. Remaining on 57: [SAMYOJ-35](https://teamwebstarts.atlassian.net/browse/SAMYOJ-35) TARGET billing, [SAMYOJ-56](https://teamwebstarts.atlassian.net/browse/SAMYOJ-56) STT/TTS honesty, no impersonation, email outreach needs SMTP. Do not rebuild.
+**2026-08-17 platform admin ([SAMYOJ-57](https://teamwebstarts.atlassian.net/browse/SAMYOJ-57) first release, test-deploy):** `admin/` on `:3001`, `/api/platform/*` cookie+CSRF+TOTP+RBAC, additive migration `20260817003000_platform_schema_auth` applied via `db:migrate-startup-safe`. Tenant `/api/ops` is gone. **Not** customer production. Remaining on 57: [SAMYOJ-35](https://teamwebstarts.atlassian.net/browse/SAMYOJ-35) TARGET billing, [SAMYOJ-56](https://teamwebstarts.atlassian.net/browse/SAMYOJ-56) STT/TTS ledger, impersonation, WhatsApp outreach. SMTP honesty: unset SMTP stores LOGGED, never SENT. Do not rebuild.
 
 **2026-08-17 login chrome ([SAMYOJ-68](https://teamwebstarts.atlassian.net/browse/SAMYOJ-68) Done):** split `/login` + register vs product mockup; hero `/brand/auth-login-hero.png`. Auth APIs unchanged. Not customer production.
 
@@ -18,7 +18,7 @@ Working Jira backlog (trimmed, major only): epic [SAMYOJ-8](https://teamwebstart
 
 **Landed 2026-08-17 (same, not customer production):** [SAMYOJ-68](https://teamwebstarts.atlassian.net/browse/SAMYOJ-68) login/register split; [SAMYOJ-69](https://teamwebstarts.atlassian.net/browse/SAMYOJ-69) per-contact calling AI; **[SAMYOJ-57](https://teamwebstarts.atlassian.net/browse/SAMYOJ-57) platform admin first release** (`admin/` `:3001` + `/api/platform/*`). Follow-up polish stayed on 51 / 52 / 53 / 55 / 56 / 59 (no extra tickets).
 
-**Still open (real leftovers):** [SAMYOJ-2](https://teamwebstarts.atlassian.net/browse/SAMYOJ-2) inbound, [SAMYOJ-3](https://teamwebstarts.atlassian.net/browse/SAMYOJ-3) cookies/tenancy, [SAMYOJ-5](https://teamwebstarts.atlassian.net/browse/SAMYOJ-5) automations send-when-shouldn’t, [SAMYOJ-6](https://teamwebstarts.atlassian.net/browse/SAMYOJ-6) restore drill, [SAMYOJ-11](https://teamwebstarts.atlassian.net/browse/SAMYOJ-11) Graph template clone. **Deferred until asked:** [SAMYOJ-12](https://teamwebstarts.atlassian.net/browse/SAMYOJ-12) live transfer, [SAMYOJ-26](https://teamwebstarts.atlassian.net/browse/SAMYOJ-26) Phase C, [SAMYOJ-35](https://teamwebstarts.atlassian.net/browse/SAMYOJ-35) billing TARGET. **SAMYOJ-57 remaining (do not rebuild A–D):** TARGET subscriptions, STT/TTS ledger honesty, impersonation, real SMTP send.
+**Still open (real leftovers):** [SAMYOJ-2](https://teamwebstarts.atlassian.net/browse/SAMYOJ-2) inbound, [SAMYOJ-3](https://teamwebstarts.atlassian.net/browse/SAMYOJ-3) cookies/tenancy, [SAMYOJ-5](https://teamwebstarts.atlassian.net/browse/SAMYOJ-5) automations send-when-shouldn’t, [SAMYOJ-6](https://teamwebstarts.atlassian.net/browse/SAMYOJ-6) restore drill, [SAMYOJ-11](https://teamwebstarts.atlassian.net/browse/SAMYOJ-11) Graph template clone. **Deferred until asked:** [SAMYOJ-12](https://teamwebstarts.atlassian.net/browse/SAMYOJ-12) live transfer, [SAMYOJ-26](https://teamwebstarts.atlassian.net/browse/SAMYOJ-26) Phase C, [SAMYOJ-35](https://teamwebstarts.atlassian.net/browse/SAMYOJ-35) billing TARGET. **SAMYOJ-57 remaining (do not rebuild A–D):** TARGET subscriptions, STT/TTS ledger honesty, impersonation, WhatsApp outreach. SMTP honesty (no fake SENT) is in code; a real mailbox still needs `SMTP_HOST`.
 
 ## Ready or not
 
@@ -55,7 +55,7 @@ Full map: `docs/memory/RESEARCH_MAP.md`. Short version:
 
 | Leftover | Why not / next |
 |----------|----------------|
-| SAMYOJ-57 remaining (not a rebuild) | First release is in code. Open: TARGET billing (35), STT/TTS honesty (56), impersonation, SMTP for outreach. Additive SQL `20260817003000` **is applied** via `db:migrate-startup-safe`. SAMYOJ-52/56 SQL `20260816220000`, bot business details `20260816231500`, and contact calling AI `20260817001000` are the other additive 16–17 Aug migrations. |
+| SAMYOJ-57 remaining (not a rebuild) | First release is in code. Open: TARGET billing (35), STT/TTS ledger (56), impersonation, WhatsApp outreach. SMTP honesty: LOGGED when `SMTP_HOST` unset, never SENT. Additive SQL `20260817003000` **is applied** via `db:migrate-startup-safe`; outreach `LOGGED` status is `20260817120000`. SAMYOJ-52/56 SQL `20260816220000`, bot business details `20260816231500`, and contact calling AI `20260817001000` are the other additive 16–17 Aug migrations. |
 | Preconnect hero video | Play uses `VITE_PRECONNECT_VIDEO_URL`, which is **unset**. Env leftover — not a Jira. |
 | Inbound Inbox replies | Infra, not Inbox UI. `bash start.sh` + live ngrok; `META_WEBHOOK_URL` must match; send a **new** phone reply. Symptom: send works, `totalReceived: 0`. |
 | Live Graph proof of library clone | Clone `account_creation_confirmation` with real `https://yourstore.com/verify` (not localhost). If Graph rejects suffix sample, next smallest change is full reconstructed URL as `url_suffix_example` — **don’t guess now**. |
@@ -85,7 +85,7 @@ Full map: `docs/memory/RESEARCH_MAP.md`. Short version:
 - Re-research “is Train connected to calls?” — yes, `pickCallBotId` + `searchKnowledgeBase`. Chat vs calling bots are split (`AiBot.channel`, SAMYOJ-52). Do not rebuild the engines.
 - Re-do 2026-08-16 shipped product tickets: 47 card spacing, 48 skeletons, 50 campaign repeat, 51 dashboard chrome, 53 Inbox Auto·default, 54 Calls recents, 55 post-call summary, 58 Inbox New chat fields, 46 apply/unapply bot all chats, 49 tab-scoped sessionStorage + cross-org number after disconnect, 52 Chat vs Calling AI bots, 59 strip Customize AI, 56 Reports AI usage.
 - Re-do 2026-08-17: 68 login chrome, 69 per-contact calling AI, **57 platform admin first release**, 52/59 When they call telephony, Inbox chips, summary flat border, preconnect trim.
-- Re-research or rebuild platform admin (cookie session, `admin/` app, `/api/ops` leak). Remaining 57 work is 35/56/impersonation/SMTP only.
+- Re-research or rebuild platform admin (cookie session, `admin/` app, `/api/ops` leak). Remaining 57 work is 35/56/impersonation/WhatsApp outreach. Do not redo SMTP SENT-without-send.
 - Re-split TTS on every `।` / `.` for “lower latency” — that was the रुक-रुक gap.
 - Re-enable STT during TTS playback — echo loop.
 - Re-dump latest FAQs when search misses — hallucination.

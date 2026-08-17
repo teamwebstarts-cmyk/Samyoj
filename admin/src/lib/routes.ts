@@ -4,12 +4,12 @@ import type { PlatformRole } from '../types';
 export const PUBLIC_PATHS = ['/login'] as const;
 
 export const NAV_ITEMS = [
-  { to: '/', label: 'Overview', permission: 'platform.read' as const },
-  { to: '/accounts', label: 'Accounts', permission: 'organization.read' as const },
-  { to: '/errors', label: 'Errors', permission: 'errors.read' as const },
-  { to: '/outreach', label: 'Outreach', permission: 'outreach.send' as const },
-  { to: '/operators', label: 'Operators', permission: 'operators.manage' as const },
-  { to: '/audit', label: 'Audit', permission: 'audit.read' as const },
+  { to: '/', label: 'Overview', permission: 'platform.read' as const, group: 'work' as const },
+  { to: '/accounts', label: 'Accounts', permission: 'organization.read' as const, group: 'work' as const },
+  { to: '/errors', label: 'Errors', permission: 'errors.read' as const, group: 'work' as const },
+  { to: '/outreach', label: 'Outreach', permission: 'outreach.send' as const, group: 'work' as const },
+  { to: '/operators', label: 'Operators', permission: 'operators.manage' as const, group: 'staff' as const },
+  { to: '/audit', label: 'Audit', permission: 'audit.read' as const, group: 'staff' as const },
 ] as const;
 
 export function isPublicPath(pathname: string): boolean {
@@ -33,4 +33,11 @@ export function canAccessPath(role: PlatformRole, pathname: string): boolean {
 
 export function visibleNav(role: PlatformRole) {
   return NAV_ITEMS.filter((item) => can(role, item.permission));
+}
+
+export function visibleNavGroups(role: PlatformRole) {
+  const items = visibleNav(role);
+  const work = items.filter((item) => item.group === 'work');
+  const staff = items.filter((item) => item.group === 'staff');
+  return { work, staff };
 }

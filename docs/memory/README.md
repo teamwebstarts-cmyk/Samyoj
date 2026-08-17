@@ -10,7 +10,7 @@ This is **session memory**, not a second feature matrix. Short, path-backed, hon
 | [SESSION_2026-08-17.md](./SESSION_2026-08-17.md) | AI Bot UX + per-contact calling AI (SAMYOJ-69) + **SAMYOJ-57** platform admin first release. Test-deploy only. |
 | [PRODUCT_TASKS_2026-08-16.md](./PRODUCT_TASKS_2026-08-16.md) | Spec: current code vs wanted behavior (sets 1–4) |
 | [../product/CALLS_AI_USAGE_ADMIN_2026-08-16.md](../product/CALLS_AI_USAGE_ADMIN_2026-08-16.md) | Durable set-3 product doc (Calls recents, summary, AI Reports). Copy to Confluence when wiki is connected. |
-| [../product/PLATFORM_ADMIN_2026-08-16.md](../product/PLATFORM_ADMIN_2026-08-16.md) | **SAMYOJ-57** platform operator console — first release in code 2026-08-17 (`admin/` `:3001`). Remaining: 35 / 56 honesty / impersonation / SMTP. |
+| [../product/PLATFORM_ADMIN_2026-08-16.md](../product/PLATFORM_ADMIN_2026-08-16.md) | **SAMYOJ-57** platform operator console — first release in code 2026-08-17 (`admin/` `:3001`). Remaining: 35 / 56 ledger / impersonation / WhatsApp outreach. SMTP honesty is in code. |
 | [../product/INBOX_CONTACT_AND_CALLING_AI_2026-08-16.md](../product/INBOX_CONTACT_AND_CALLING_AI_2026-08-16.md) | Durable set-4 product doc (Inbox New chat = Contacts fields; strip AI from Calling settings). |
 | [SESSION_2026-08-15.md](./SESSION_2026-08-15.md) | Number isolation, workers embedded, campaign wizard UX, templates/Connect leftovers; **test-deploy vs production** |
 | [SESSION_2026-08-14.md](./SESSION_2026-08-14.md) | Calls/Train/automations Phase B + earlier WhatsApp lock-down |

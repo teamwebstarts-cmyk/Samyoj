@@ -6,16 +6,17 @@ const routes = readFileSync(join(__dirname, 'routes.ts'), 'utf8');
 
 describe('platform write APIs', () => {
   it('requires a reason on AI, flag, billing, outreach, and operator writes', () => {
-    for (const path of [
-      "'/orgs/:id/ai'",
-      "'/orgs/:id/flags'",
-      "'/orgs/:id/billing'",
-      "'/orgs/:id/outreach'",
-      "'/operators'",
-    ]) {
-      const index = routes.indexOf(path);
-      expect(index).toBeGreaterThan(0);
-      expect(routes.slice(index, index + 800)).toContain('reason: reasonSchema');
+    for (const [method, path] of [
+      ['patch', '/orgs/:id/ai'],
+      ['patch', '/orgs/:id/flags'],
+      ['patch', '/orgs/:id/billing'],
+      ['post', '/orgs/:id/outreach'],
+      ['post', '/operators'],
+    ] as const) {
+      const matcher = new RegExp(
+        `router\\.${method}\\(\\s*'${path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}'[\\s\\S]{0,500}reason: reasonSchema`
+      );
+      expect(routes, `${method} ${path}`).toMatch(matcher);
     }
   });
 

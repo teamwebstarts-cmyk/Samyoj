@@ -46,6 +46,12 @@ export const config = {
     apiVersion: process.env.META_API_VERSION || 'v21.0',
     redirectUri: process.env.META_REDIRECT_URI || 'http://localhost:3000/settings/whatsapp/callback',
     webhookUrl: process.env.META_WEBHOOK_URL || '',
+    /**
+     * Local-only. Lets setup-webhook / Connect replace a durable production
+     * callback (app.samyoj.com) with this machine's ngrok URL.
+     * Never set on the VPS. Ignored when NODE_ENV=production.
+     */
+    allowTunnelWebhook: /^(1|true|yes)$/i.test(process.env.META_ALLOW_TUNNEL_WEBHOOK || ''),
   },
   encryptionKey: process.env.ENCRYPTION_KEY || '',
   /** AI brain configuration — Sarvam is the default brain provider. */

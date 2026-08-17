@@ -48,23 +48,29 @@ export function isDurablePublicWebhookUrl(url: string | null | undefined): boole
 }
 
 /**
- * Local `setup-webhook` must not steal a live production callback (ngrok).
+ * Local `setup-webhook` must not steal a live production callback (ngrok)
+ * unless the operator explicitly opted in (`META_ALLOW_TUNNEL_WEBHOOK`).
  * Re-registering the same durable URL is allowed so fields can be refreshed.
  */
 export function shouldReplaceAppWebhookCallback(
   currentUrl: string | null | undefined,
-  nextUrl: string
+  nextUrl: string,
+  options?: { allowTunnelOverride?: boolean }
 ): { replace: boolean; reason: string } {
   if (!nextUrl) {
     return { replace: false, reason: 'next webhook URL is empty' };
   }
   if (isEphemeralWebhookUrl(nextUrl) && isDurablePublicWebhookUrl(currentUrl)) {
+    if (options?.allowTunnelOverride) {
+      return { replace: true, reason: 'explicit tunnel override' };
+    }
     return {
       replace: false,
       reason:
         'Refusing to replace a live production webhook URL with an ngrok/localhost tunnel. ' +
         'That stops inbound messages and calls on the connected WhatsApp number. ' +
-        'Use a dedicated test WABA for local tunnels.',
+        'Set META_ALLOW_TUNNEL_WEBHOOK=true for local testing (and stop the VPS), ' +
+        'or use a dedicated test WABA.',
     };
   }
   return { replace: true, reason: 'ok' };

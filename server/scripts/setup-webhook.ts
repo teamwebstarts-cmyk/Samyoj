@@ -42,7 +42,10 @@ async function main() {
     orderBy: { createdAt: 'desc' },
   });
   if (numbers.length === 0) {
-    throw new Error('No active WhatsApp number — connect WhatsApp in Settings first');
+    logger.warn(
+      'App webhook is registered on this tunnel. Connect WhatsApp in Settings, then send a new phone reply.'
+    );
+    return;
   }
 
   let subscribedCount = 0;

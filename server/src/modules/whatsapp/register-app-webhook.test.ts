@@ -6,6 +6,7 @@ const originalMeta = {
   appId: config.meta.appId,
   appSecret: config.meta.appSecret,
   verifyToken: config.meta.verifyToken,
+  allowTunnelWebhook: config.meta.allowTunnelWebhook,
   nodeEnv: config.nodeEnv,
 };
 
@@ -14,6 +15,7 @@ describe('registerAppWebhook', () => {
     config.meta.appId = '111111111111';
     config.meta.appSecret = 'app-secret';
     config.meta.verifyToken = 'verify-token';
+    config.meta.allowTunnelWebhook = false;
     config.nodeEnv = 'development';
   });
 
@@ -21,6 +23,7 @@ describe('registerAppWebhook', () => {
     config.meta.appId = originalMeta.appId;
     config.meta.appSecret = originalMeta.appSecret;
     config.meta.verifyToken = originalMeta.verifyToken;
+    config.meta.allowTunnelWebhook = originalMeta.allowTunnelWebhook;
     config.nodeEnv = originalMeta.nodeEnv;
     vi.unstubAllGlobals();
   });
@@ -53,6 +56,41 @@ describe('registerAppWebhook', () => {
       return init?.method === 'POST';
     });
     expect(postCalls).toHaveLength(0);
+  });
+
+  it('overwrites a live production callback with ngrok when opted in', async () => {
+    config.meta.allowTunnelWebhook = true;
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: [
+            {
+              object: 'whatsapp_business_account',
+              active: true,
+              callback_url: 'https://app.samyoj.com/api/whatsapp/webhook',
+              fields: [{ name: 'messages' }],
+            },
+          ],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ success: true }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await MetaWhatsAppService.registerAppWebhook(
+      'https://collision-modified-spur.ngrok-free.dev/api/whatsapp/webhook'
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [, init] = fetchMock.mock.calls[1] as [string, { method?: string; body?: string }];
+    expect(init.method).toBe('POST');
+    expect(String(init.body)).toContain(
+      encodeURIComponent('https://collision-modified-spur.ngrok-free.dev/api/whatsapp/webhook')
+    );
   });
 
   it('registers the production callback when replacing ngrok', async () => {
