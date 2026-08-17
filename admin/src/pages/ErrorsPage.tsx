@@ -2,7 +2,15 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TriangleAlert } from 'lucide-react';
 import { platformRequest } from '../api';
-import { EmptyState, Notice } from '../components/ui';
+import {
+  EmptyState,
+  FilterPills,
+  Notice,
+  PageHeader,
+  PageLoading,
+  SectionCard,
+  clickableRowProps,
+} from '../components/ui';
 import { formatCount, formatWhen } from '../lib/format';
 
 type Errors = {
@@ -34,60 +42,104 @@ export function ErrorsPage() {
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load'));
   }, [days]);
 
-  if (error) return <Notice tone="error">{error}</Notice>;
-  if (!data) return <p className="text-sm text-ink/55">Loading errors…</p>;
+  if (error) {
+    return (
+      <Notice tone="error">
+        Could not load Meta errors. {error} Refresh, or try the other window.
+      </Notice>
+    );
+  }
+  if (!data) return <PageLoading label="Loading errors…" />;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Meta errors</h1>
-          <p className="mt-1 text-sm text-ink/55">Official codes only. No wa_id, wamid, or send payloads.</p>
-        </div>
-        <select
-          className="h-11 rounded-lg border border-dust bg-white px-3 text-sm"
-          value={days}
-          onChange={(event) => setDays(Number(event.target.value))}
-        >
-          <option value={7}>7 days</option>
-          <option value={30}>30 days</option>
-        </select>
-      </div>
+    <div className="space-y-4">
+      <PageHeader
+        title="Meta errors"
+        purpose="Official codes only. No wa_id, wamid, or send payloads. Open an org to see its cluster."
+        action={
+          <FilterPills
+            label="Window"
+            value={days}
+            onChange={setDays}
+            options={[
+              { value: 7, label: '7 days' },
+              { value: 30, label: '30 days' },
+            ]}
+          />
+        }
+      />
       {data.codes.length === 0 ? (
         <EmptyState
           icon={TriangleAlert}
           title="No clustered codes"
           description="Failed sends aggregate here after Meta returns an error code."
+          steps={['Wait for a failed send', 'Open the org file from Accounts if you already know who is stuck']}
         />
       ) : (
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {data.codes.map((row) => (
-            <div key={row.code} className="rounded-xl border border-dust bg-white p-4">
-              <p className="font-mono text-lg">{row.code}</p>
-              <p className="text-sm">{row.title}</p>
-              <p className="mt-2 font-mono text-xs">{formatCount(row.count)}</p>
+            <div key={row.code} className="dashboard-card p-[var(--card-pad)]">
+              <p className="font-mono text-base">{row.code}</p>
+              <p className="mt-0.5 text-[13px] leading-snug">{row.title}</p>
+              <p className="mt-1.5 font-mono text-[11px] text-ink/50">{formatCount(row.count)} this window</p>
             </div>
           ))}
         </div>
       )}
-      <div className="overflow-hidden rounded-2xl border border-dust bg-white">
-        {data.recent.map((row, index) => (
-          <button
-            type="button"
-            key={`${row.organizationId}-${row.code}-${index}`}
-            className="block w-full border-b border-dust px-4 py-3 text-left last:border-0 hover:bg-sage-faint/40"
-            onClick={() => navigate(`/accounts/${row.organizationId}?tab=errors`)}
-          >
-            <p className="font-semibold">{row.companyName}</p>
-            <p className="font-mono text-sm">
-              {row.code} · {row.title} × {row.count}
-            </p>
-            <p className="text-xs text-ink/50">
-              {row.sampleTitle} · {formatWhen(row.lastAt)}
-            </p>
-          </button>
-        ))}
-      </div>
+      <SectionCard title="Recent org hits" purpose="Open an account’s Errors tab.">
+        {data.recent.length === 0 ? (
+          <p className="p-[var(--card-pad)] text-[13px] text-ink/50">No org-level hits in this window.</p>
+        ) : (
+          <>
+            <div className="divide-y divide-dust md:hidden">
+              {data.recent.map((row, index) => (
+                <button
+                  type="button"
+                  key={`${row.organizationId}-${row.code}-${index}`}
+                  className="block w-full px-3 py-2.5 text-left hover:bg-sage-faint/60"
+                  onClick={() => navigate(`/accounts/${row.organizationId}?tab=errors`)}
+                >
+                  <p className="font-semibold">{row.companyName}</p>
+                  <p className="font-mono text-sm">
+                    {row.code} · {row.title} × {formatCount(row.count)}
+                  </p>
+                  <p className="text-xs text-ink/50">
+                    {row.sampleTitle} · {formatWhen(row.lastAt)}
+                  </p>
+                </button>
+              ))}
+            </div>
+            <div className="hidden overflow-x-auto md:block">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Company</th>
+                    <th>Code</th>
+                    <th>Count</th>
+                    <th>Last</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.recent.map((row, index) => (
+                    <tr
+                      key={`${row.organizationId}-${row.code}-${index}`}
+                      {...clickableRowProps(() => navigate(`/accounts/${row.organizationId}?tab=errors`))}
+                    >
+                      <td>
+                        <p className="font-semibold">{row.companyName}</p>
+                        <p className="text-xs text-ink/50">{row.sampleTitle || row.title}</p>
+                      </td>
+                      <td className="font-mono">{row.code}</td>
+                      <td className="font-mono">{formatCount(row.count)}</td>
+                      <td className="text-xs">{formatWhen(row.lastAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </SectionCard>
     </div>
   );
 }

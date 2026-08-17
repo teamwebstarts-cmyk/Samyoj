@@ -3,10 +3,23 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Search } from 'lucide-react';
 import { platformRequest } from '../api';
 import { LifecycleRail } from '../components/LifecycleRail';
-import { EmptyState, FlagPills, Input, Notice, ResponsiveDataView, StatusBadge } from '../components/ui';
+import {
+  Button,
+  EmptyState,
+  FlagPills,
+  Input,
+  Notice,
+  PageHeader,
+  PageLoading,
+  ResponsiveDataView,
+  SectionCard,
+  StageBadge,
+  StatusBadge,
+  clickableRowProps,
+} from '../components/ui';
 import { formatAiCapPercent, formatCount, formatWhen } from '../lib/format';
 import { toStackedAccountRecord, type AccountListRow } from '../lib/records';
-import { ACTIVATION_STAGES, type ActivationStage } from '../lib/stages';
+import { ACTIVATION_STAGES, STAGE_LABELS, type ActivationStage } from '../lib/stages';
 
 export function AccountsPage() {
   const navigate = useNavigate();
@@ -14,7 +27,7 @@ export function AccountsPage() {
   const [q, setQ] = useState(params.get('q') || '');
   const stage = (params.get('stage') || '') as ActivationStage | '';
   const page = Math.max(1, Number(params.get('page') || 1));
-  const [rows, setRows] = useState<AccountListRow[]>([]);
+  const [rows, setRows] = useState<AccountListRow[] | null>(null);
   const [total, setTotal] = useState(0);
   const [error, setError] = useState('');
 
@@ -37,21 +50,34 @@ export function AccountsPage() {
 
   function setStage(next?: ActivationStage) {
     const copy = new URLSearchParams(params);
-    if (next) copy.set('stage', next);
+    if (next && next !== stage) copy.set('stage', next);
     else copy.delete('stage');
     copy.delete('page');
     setParams(copy);
   }
 
-  const records = rows.map(toStackedAccountRecord);
+  const records = (rows ?? []).map(toStackedAccountRecord);
   const pageCount = Math.max(1, Math.ceil(total / 25));
+  const purpose = stage
+    ? `${STAGE_LABELS[stage]} · ${formatCount(total)} matching`
+    : 'Search company or owner email. Filter the rail to a stage.';
 
   return (
-    <div className="space-y-5">
-      <h1 className="text-2xl font-semibold tracking-tight">Accounts</h1>
-      <div className="rounded-2xl border border-dust bg-white p-4">
+    <div className="space-y-4">
+      <PageHeader
+        title="Accounts"
+        purpose={purpose}
+        action={
+          stage ? (
+            <Button variant="secondary" onClick={() => setStage()}>
+              Clear stage
+            </Button>
+          ) : undefined
+        }
+      />
+      <SectionCard padded>
         <LifecycleRail current={stage || undefined} onSelect={setStage} compact />
-      </div>
+      </SectionCard>
       <Input
         label="Search company or owner email"
         value={q}
@@ -64,83 +90,95 @@ export function AccountsPage() {
           setParams(copy);
         }}
       />
-      {error && <Notice tone="error">{error}</Notice>}
-      <ResponsiveDataView
-        items={records}
-        emptyState={
-          <EmptyState
-            icon={Search}
-            title="No accounts in this filter"
-            description="Clear the stage rail or search to see more organizations."
-          />
-        }
-        renderCard={(row) => (
-          <button
-            type="button"
-            className="w-full rounded-2xl border border-dust bg-white p-4 text-left"
-            onClick={() => navigate(`/accounts/${row.id}`)}
-          >
-            <p className="font-semibold">{row.title}</p>
-            <p className="text-xs text-ink/50">{row.subtitle}</p>
-            <div className="mt-3">
-              <LifecycleRail current={row.stage} compact />
-            </div>
-            <div className="mt-3 flex items-center justify-between gap-2 text-xs text-ink/55">
-              <span>{row.numbersConnected} numbers</span>
-              <span className="font-mono">{formatAiCapPercent(row.aiTokensMonth, row.monthlyTokenLimit)}</span>
-            </div>
-            <div className="mt-3 flex items-center justify-between gap-2">
-              <StatusBadge status={row.plan} />
-              <FlagPills flags={row.flags} />
-            </div>
-          </button>
-        )}
-        renderTable={() => (
-          <div className="overflow-x-auto rounded-2xl border border-dust bg-white">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-paper text-xs uppercase tracking-wide text-ink/50">
-                <tr>
-                  <th className="px-4 py-3">Company</th>
-                  <th className="px-4 py-3">Stage</th>
-                  <th className="px-4 py-3">Plan</th>
-                  <th className="px-4 py-3">Quality</th>
-                  <th className="px-4 py-3">AI % of cap</th>
-                  <th className="px-4 py-3">Numbers</th>
-                  <th className="px-4 py-3">Last login</th>
-                  <th className="px-4 py-3">Flags</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr
-                    key={row.id}
-                    className="cursor-pointer border-t border-dust hover:bg-sage-faint/50"
-                    onClick={() => navigate(`/accounts/${row.id}`)}
-                  >
-                    <td className="px-4 py-3">
-                      <div className="font-semibold">{row.companyName}</div>
-                      <div className="text-xs text-ink/50">{row.ownerEmail}</div>
-                    </td>
-                    <td className="px-4 py-3 font-mono text-xs">{row.stage}</td>
-                    <td className="px-4 py-3">{row.plan}</td>
-                    <td className="px-4 py-3">
-                      {row.qualityRating ? <StatusBadge status={row.qualityRating} /> : '—'}
-                    </td>
-                    <td className="px-4 py-3 font-mono text-xs">
-                      {formatAiCapPercent(row.aiTokensMonth, row.monthlyTokenLimit)}
-                    </td>
-                    <td className="px-4 py-3 font-mono">{formatCount(row.numbersConnected)}</td>
-                    <td className="px-4 py-3 text-xs">{formatWhen(row.lastLoginAt)}</td>
-                    <td className="px-4 py-3">
-                      <FlagPills flags={row.flags} />
-                    </td>
+      {error && (
+        <Notice tone="error">
+          Could not load accounts. {error} Clear filters or refresh.
+        </Notice>
+      )}
+      {rows === null && !error ? (
+        <PageLoading label="Loading accounts…" />
+      ) : (
+        <ResponsiveDataView
+          items={records}
+          emptyState={
+            <EmptyState
+              icon={Search}
+              title="No accounts in this filter"
+              description="Clear the stage rail or search to see more organizations."
+              steps={['Click the selected station again to clear it', 'Search company or owner email']}
+            />
+          }
+          renderCard={(row) => (
+            <button
+              type="button"
+              className="dashboard-card w-full p-[var(--card-pad)] text-left"
+              onClick={() => navigate(`/accounts/${row.id}`)}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="font-semibold">{row.title}</p>
+                  <p className="text-xs text-ink/50">{row.subtitle}</p>
+                </div>
+                <StageBadge stage={row.stage} />
+              </div>
+              <div className="mt-2">
+                <LifecycleRail current={row.stage} compact decorative />
+              </div>
+              <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-ink/55">
+                <span>{row.numbersConnected} numbers</span>
+                <span className="font-mono">{formatAiCapPercent(row.aiTokensMonth, row.monthlyTokenLimit)}</span>
+              </div>
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <StatusBadge status={row.plan} />
+                <FlagPills flags={row.flags} />
+              </div>
+            </button>
+          )}
+          renderTable={() => (
+            <div className="dashboard-card overflow-hidden">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Company</th>
+                    <th>Stage</th>
+                    <th>Plan</th>
+                    <th>Quality</th>
+                    <th>AI % of cap</th>
+                    <th>Numbers</th>
+                    <th>Last login</th>
+                    <th>Flags</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      />
+                </thead>
+                <tbody>
+                  {(rows ?? []).map((row) => (
+                    <tr key={row.id} {...clickableRowProps(() => navigate(`/accounts/${row.id}`))}>
+                      <td>
+                        <div className="font-semibold">{row.companyName}</div>
+                        <div className="text-xs text-ink/50">{row.ownerEmail}</div>
+                      </td>
+                      <td>
+                        <StageBadge stage={row.stage} />
+                      </td>
+                      <td>
+                        <StatusBadge status={row.plan} />
+                      </td>
+                      <td>{row.qualityRating ? <StatusBadge status={row.qualityRating} /> : '—'}</td>
+                      <td className="font-mono text-xs">
+                        {formatAiCapPercent(row.aiTokensMonth, row.monthlyTokenLimit)}
+                      </td>
+                      <td className="font-mono">{formatCount(row.numbersConnected)}</td>
+                      <td className="text-xs">{formatWhen(row.lastLoginAt)}</td>
+                      <td>
+                        <FlagPills flags={row.flags} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        />
+      )}
       {pageCount > 1 && (
         <div className="flex items-center justify-between text-sm">
           <button

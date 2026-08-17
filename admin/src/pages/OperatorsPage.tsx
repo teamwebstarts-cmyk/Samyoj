@@ -1,7 +1,18 @@
 import { useEffect, useState } from 'react';
 import { Users } from 'lucide-react';
 import { ApiError, platformRequest } from '../api';
-import { Button, Drawer, EmptyState, Input, Notice, Select, StatusBadge } from '../components/ui/index';
+import {
+  Button,
+  Drawer,
+  EmptyState,
+  Input,
+  Notice,
+  PageHeader,
+  PageLoading,
+  SectionCard,
+  Select,
+  StatusBadge,
+} from '../components/ui/index';
 import { formatWhen } from '../lib/format';
 import type { PlatformRole } from '../types';
 
@@ -22,7 +33,7 @@ type SessionRow = {
 };
 
 export function OperatorsPage() {
-  const [operators, setOperators] = useState<OperatorRow[]>([]);
+  const [operators, setOperators] = useState<OperatorRow[] | null>(null);
   const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [error, setError] = useState('');
   const [open, setOpen] = useState(false);
@@ -55,87 +66,173 @@ export function OperatorsPage() {
     setSaveError('');
   }
 
-  if (error) return <Notice tone="error">{error}</Notice>;
+  if (error) {
+    return (
+      <Notice tone="error">
+        Could not load operators. {error} SUPER_ADMIN is required for this screen.
+      </Notice>
+    );
+  }
+  if (!operators) return <PageLoading label="Loading operators…" />;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">Operators</h1>
-        <Button
-          onClick={() => {
-            setOpen(true);
-            setReason('');
-            setSaveError('');
-          }}
-        >
-          Add operator
-        </Button>
-      </div>
-      <div className="rounded-2xl border border-dust bg-white">
-        {operators.length === 0 && (
-          <EmptyState icon={Users} title="No operators" description="Create the first platform operator." />
-        )}
-        {operators.map((row) => (
-          <div
-            key={row.id}
-            className="flex flex-col gap-2 border-b border-dust px-4 py-3 last:border-0 md:flex-row md:items-center md:justify-between"
+    <div className="space-y-4">
+      <PageHeader
+        title="Operators"
+        purpose="Platform staff only. ANALYST is read-only. SUPPORT can write orgs. SUPER_ADMIN manages this list and sessions."
+        action={
+          <Button
+            onClick={() => {
+              setOpen(true);
+              setReason('');
+              setSaveError('');
+            }}
           >
-            <div>
-              <p className="font-semibold">{row.email}</p>
-              <p className="text-xs text-ink/50">
-                {row.role} · MFA {row.mfaEnabled ? 'on' : 'pending'} · {row.disabled ? 'disabled' : 'active'}
-              </p>
-            </div>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => {
-                setEditing(row);
-                setReason('');
-                setSaveError('');
-              }}
-            >
-              Change
-            </Button>
+            Add operator
+          </Button>
+        }
+      />
+      <SectionCard title="Staff" purpose="Disable a row instead of deleting history.">
+        {operators.length === 0 ? (
+          <div className="p-[var(--card-pad)]">
+            <EmptyState
+              icon={Users}
+              title="No operators"
+              description="Create the first platform operator. Bootstrap CLI is locked after one exists."
+              action={
+                <Button
+                  onClick={() => {
+                    setOpen(true);
+                    setReason('');
+                    setSaveError('');
+                  }}
+                >
+                  Add operator
+                </Button>
+              }
+            />
           </div>
-        ))}
-      </div>
-      <section>
-        <h2 className="text-lg font-semibold">Sessions</h2>
-        <div className="mt-3 rounded-2xl border border-dust bg-white">
-          {sessions.length === 0 && <p className="p-4 text-sm text-ink/50">No active sessions.</p>}
-          {sessions.map((session) => (
-            <div
-              key={session.id}
-              className="flex flex-col gap-2 border-b border-dust px-4 py-3 last:border-0 md:flex-row md:items-center md:justify-between"
-            >
-              <div>
-                <p className="text-sm">{session.operatorEmail}</p>
-                <p className="text-xs text-ink/50">Last seen {formatWhen(session.lastSeenAt)}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                {session.current && <StatusBadge status="ACTIVE" label="this device" />}
-                {!session.current && (
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="data-table hidden md:table">
+              <thead>
+                <tr>
+                  <th>Email</th>
+                  <th>Role</th>
+                  <th>MFA</th>
+                  <th>Status</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {operators.map((row) => (
+                  <tr key={row.id}>
+                    <td className="font-semibold">{row.email}</td>
+                    <td>
+                      <StatusBadge status={row.role} />
+                    </td>
+                    <td>{row.mfaEnabled ? 'on' : 'pending'}</td>
+                    <td>
+                      <StatusBadge status={row.disabled ? 'DISABLED' : 'ACTIVE'} />
+                    </td>
+                    <td className="text-right">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => {
+                          setEditing(row);
+                          setReason('');
+                          setSaveError('');
+                        }}
+                      >
+                        Change
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="space-y-2 p-[var(--card-pad)] md:hidden">
+              {operators.map((row) => (
+                <div key={row.id} className="dashboard-card p-[var(--card-pad)]">
+                  <p className="font-semibold">{row.email}</p>
+                  <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-ink/50">
+                    <StatusBadge status={row.role} />
+                    MFA {row.mfaEnabled ? 'on' : 'pending'}
+                    <StatusBadge status={row.disabled ? 'DISABLED' : 'ACTIVE'} />
+                  </p>
                   <Button
-                    variant="danger"
+                    className="mt-3"
+                    variant="secondary"
                     size="sm"
                     onClick={() => {
-                      setRevoking(session);
+                      setEditing(row);
                       setReason('');
                       setSaveError('');
                     }}
                   >
-                    Revoke
+                    Change
                   </Button>
-                )}
-              </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      </section>
+          </div>
+        )}
+      </SectionCard>
+      <SectionCard title="Sessions" purpose="current is this browser session. Revoke others.">
+        {sessions.length === 0 ? (
+          <p className="p-[var(--card-pad)] text-[13px] text-ink/50">No active sessions.</p>
+        ) : (
+          <div>
+            {sessions.map((session) => (
+              <div
+                key={session.id}
+                className="flex flex-col gap-1.5 border-b border-dust px-3 py-2.5 last:border-0 md:flex-row md:items-center md:justify-between"
+              >
+                <div>
+                  <p className="text-sm">{session.operatorEmail}</p>
+                  <p className="text-xs text-ink/50">Last seen {formatWhen(session.lastSeenAt)}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {session.current && <StatusBadge status="ACTIVE" label="this device" />}
+                  {!session.current && (
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={() => {
+                        setRevoking(session);
+                        setReason('');
+                        setSaveError('');
+                      }}
+                    >
+                      Revoke
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </SectionCard>
 
-      <Drawer open={open} title="Add operator" onClose={closeDrawers}>
+      <Drawer
+        open={open}
+        title="Add operator"
+        subtitle="Password never appears in the audit log."
+        onClose={closeDrawers}
+        footer={
+          <>
+            <Button variant="ghost" onClick={closeDrawers}>
+              Cancel
+            </Button>
+            <Button type="submit" form="add-operator-form" loading={saving}>
+              Create
+            </Button>
+          </>
+        }
+      >
         <form
+          id="add-operator-form"
           className="space-y-3"
           onSubmit={(event) => {
             event.preventDefault();
@@ -181,14 +278,27 @@ export function OperatorsPage() {
             minLength={8}
           />
           {saveError && <Notice tone="error">{saveError}</Notice>}
-          <Button type="submit" loading={saving}>
-            Create
-          </Button>
         </form>
       </Drawer>
 
-      <Drawer open={Boolean(editing)} title="Change operator" subtitle={editing?.email} onClose={closeDrawers}>
+      <Drawer
+        open={Boolean(editing)}
+        title="Change operator"
+        subtitle={editing?.email}
+        onClose={closeDrawers}
+        footer={
+          <>
+            <Button variant="ghost" onClick={closeDrawers}>
+              Cancel
+            </Button>
+            <Button type="submit" form="edit-operator-form" loading={saving}>
+              Save changes
+            </Button>
+          </>
+        }
+      >
         <form
+          id="edit-operator-form"
           className="space-y-3"
           onSubmit={(event) => {
             event.preventDefault();
@@ -226,14 +336,27 @@ export function OperatorsPage() {
             minLength={8}
           />
           {saveError && <Notice tone="error">{saveError}</Notice>}
-          <Button type="submit" loading={saving}>
-            Save
-          </Button>
         </form>
       </Drawer>
 
-      <Drawer open={Boolean(revoking)} title="Revoke session" onClose={closeDrawers}>
+      <Drawer
+        open={Boolean(revoking)}
+        title="Revoke session"
+        subtitle={revoking?.operatorEmail}
+        onClose={closeDrawers}
+        footer={
+          <>
+            <Button variant="ghost" onClick={closeDrawers}>
+              Cancel
+            </Button>
+            <Button type="submit" form="revoke-session-form" variant="danger" loading={saving}>
+              Revoke
+            </Button>
+          </>
+        }
+      >
         <form
+          id="revoke-session-form"
           className="space-y-3"
           onSubmit={(event) => {
             event.preventDefault();
@@ -252,7 +375,7 @@ export function OperatorsPage() {
               .finally(() => setSaving(false));
           }}
         >
-          <p className="text-sm text-ink/60">{revoking?.operatorEmail}</p>
+          <p className="text-sm text-ink/60">This signs that device out. Your current session stays.</p>
           <Input
             label="Reason"
             value={reason}
@@ -261,9 +384,6 @@ export function OperatorsPage() {
             minLength={8}
           />
           {saveError && <Notice tone="error">{saveError}</Notice>}
-          <Button type="submit" variant="danger" loading={saving}>
-            Revoke
-          </Button>
         </form>
       </Drawer>
     </div>

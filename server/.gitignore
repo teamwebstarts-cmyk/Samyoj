@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.env
+.env.local
+.env.*.local
+uploads/
+key.json
+secrets/
+*.tsbuildinfo

@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { ApiError, platformRequest } from '../api';
-import { BrandMark } from '../components/BrandMark';
 import { LifecycleRail } from '../components/LifecycleRail';
+import { PlatformBrand } from '../components/PlatformBrand';
 import { Button, Input, Notice } from '../components/ui';
 import { useOperator } from '../context/OperatorContext';
 import { phaseAfterPasswordLogin } from '../lib/login';
@@ -83,32 +83,29 @@ export function LoginPage() {
         : 'Separate from customer Samyoj. Org founder ADMIN is not platform staff.';
 
   return (
-    <div className="min-h-screen md:grid md:grid-cols-[minmax(18rem,24rem)_1fr]">
-      <aside className="hidden bg-graphite px-8 py-10 text-white md:flex md:flex-col">
-        <div className="flex items-center gap-2.5">
-          <BrandMark inverted size="sm" />
-          <div>
-            <p className="text-sm font-semibold">Samyoj</p>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40">Platform</p>
-          </div>
-        </div>
-        <h1 className="mt-10 text-3xl font-semibold tracking-tight">Where orgs stall</h1>
-        <p className="mt-3 text-sm text-white/60">
+    <div className="min-h-screen md:grid md:grid-cols-[minmax(16rem,20rem)_1fr]">
+      <aside className="hidden bg-graphite px-6 py-8 text-white md:flex md:flex-col">
+        <PlatformBrand size="sm" />
+        <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/38">
+          Platform console
+        </p>
+        <h1 className="mt-8 text-2xl font-semibold tracking-tight leading-tight">Where orgs stall</h1>
+        <p className="mt-2 text-[13px] leading-snug text-white/58">
           Activation is a rail: registered, connect WhatsApp, first contact, first send, then live inbox.
         </p>
-        <div className="mt-10 rounded-2xl border border-white/10 bg-white/5 p-4 text-white">
-          <LifecycleRail decorative compact />
+        <div className="mt-8 rounded-xl border border-white/10 bg-white/5 p-3">
+          <LifecycleRail decorative compact inverted />
         </div>
       </aside>
-      <div className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center px-6 py-12">
-        <div className="mb-6 flex items-center gap-2.5 md:hidden">
-          <BrandMark size="sm" />
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink/45">Samyoj platform</p>
+      <div className="mx-auto flex min-h-screen w-full max-w-sm flex-col justify-center px-5 py-10 md:max-w-md md:px-8">
+        <div className="mb-5 flex items-center gap-2 md:hidden">
+          <PlatformBrand size="sm" collapsed />
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/45">Samyoj platform</p>
         </div>
-        <h1 className="text-3xl font-semibold tracking-tight">{heading}</h1>
-        <p className="mt-2 text-sm text-ink/60">{purpose}</p>
+        <h1 className="text-2xl font-semibold tracking-tight">{heading}</h1>
+        <p className="mt-1.5 text-[13px] text-ink/60">{purpose}</p>
         <form
-          className="mt-8 space-y-4 rounded-2xl border border-dust bg-white p-5 shadow-sm"
+          className="dashboard-card mt-6 space-y-3 p-[var(--card-pad)]"
           onSubmit={(event) => {
             event.preventDefault();
             void (phase === 'enroll' ? enroll() : submitPassword());
@@ -135,12 +132,12 @@ export function LoginPage() {
             </>
           )}
           {phase === 'enroll' && (
-            <div className="space-y-3 text-sm">
-              <div className="rounded-xl bg-sage-faint px-3 py-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-sage">Authenticator secret</p>
-                <p className="mt-1 break-all font-mono text-xs">{secret}</p>
+            <div className="space-y-2.5 text-[13px]">
+              <div className="rounded-lg bg-sage-faint px-2.5 py-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-sage">Authenticator secret</p>
+                <p className="mt-0.5 break-all font-mono text-[11px]">{secret}</p>
               </div>
-              <p className="break-all font-mono text-[11px] text-ink/45">{otpauthUrl}</p>
+              <p className="break-all font-mono text-[10px] text-ink/45">{otpauthUrl}</p>
               <Input
                 label="Authenticator code"
                 inputMode="numeric"
@@ -151,7 +148,7 @@ export function LoginPage() {
               />
               <button
                 type="button"
-                className="text-xs text-ink/55 underline"
+                className="text-[11px] text-ink/55 underline"
                 disabled={loading}
                 onClick={() => {
                   setLoading(true);

@@ -379,7 +379,7 @@ export default function InboxListHeader({
           role="tablist"
           aria-label="Filter conversations"
           aria-live="polite"
-          className="-mx-1 mt-1 flex min-w-0 flex-nowrap items-center gap-1 overflow-x-auto overscroll-x-contain px-1 touch-pan-x [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+          className="-mx-1 mt-2.5 flex min-w-0 flex-nowrap items-center gap-1 overflow-x-auto overscroll-x-contain px-1 touch-pan-x [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
         >
           {FILTER_CHIPS.map((item) => {
             const active = chip === item.chip;

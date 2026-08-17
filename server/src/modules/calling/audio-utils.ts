@@ -11,6 +11,17 @@ export function pcmBytesToInt16(data: Buffer | Uint8Array): Int16Array {
   return samples;
 }
 
+/** RMS energy for PCM Int16 — used to detect caller barge-in while the bot speaks. */
+export function pcmRms(samples: Int16Array): number {
+  if (samples.length === 0) return 0;
+  let sumSquares = 0;
+  for (let i = 0; i < samples.length; i++) {
+    const sample = samples[i] ?? 0;
+    sumSquares += sample * sample;
+  }
+  return Math.sqrt(sumSquares / samples.length);
+}
+
 /** Simple linear resampler for PCM Int16 buffers. */
 export function resamplePcm(
   input: Int16Array,

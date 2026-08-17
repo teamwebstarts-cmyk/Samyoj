@@ -69,8 +69,11 @@ export class SarvamStreamTranscriber {
     const mode = this.connectOptions.mode || config.sarvam.sttMode || 'codemix';
     const sampleRate = this.connectOptions.sampleRate || config.sarvam.sampleRate || 16000;
     this.sampleRate = sampleRate === 8000 ? 8000 : 16000;
-    const streamType = this.connectOptions.streamType || 'fast';
+    const streamType =
+      this.connectOptions.streamType || config.sarvam.sttStreamType || 'balanced';
     const prompt = this.connectOptions.prompt?.trim();
+    const silenceDurationMs = config.sarvam.sttSilenceDurationMs || 1000;
+    const minSpeechDurationMs = config.sarvam.sttMinSpeechDurationMs || 350;
 
     const url = new URL(SARVAM_STT_REALTIME);
     url.searchParams.set('model', 'saaras:v3-realtime');
@@ -80,10 +83,10 @@ export class SarvamStreamTranscriber {
     url.searchParams.set('encoding', 'linear16');
     url.searchParams.set('sample_rate', String(sampleRate === 8000 ? 8000 : 16000));
     url.searchParams.set('endpointing', 'vad');
-    // Telephony VAD: ~600ms silence to take the turn without cutting mid-thought.
+    // Telephony VAD: longer silence so Hindi-English callers can pause mid-thought.
     url.searchParams.set('threshold', '0.5');
-    url.searchParams.set('silence_duration_ms', '600');
-    url.searchParams.set('min_speech_duration_ms', '250');
+    url.searchParams.set('silence_duration_ms', String(silenceDurationMs));
+    url.searchParams.set('min_speech_duration_ms', String(minSpeechDurationMs));
     if (prompt) url.searchParams.set('prompt', prompt.slice(0, 500));
 
     this.ws = new WebSocket(url.toString(), {
@@ -102,7 +105,14 @@ export class SarvamStreamTranscriber {
 
       this.ws.onopen = () => {
         clearTimeout(failTimer);
-        log.info('Sarvam STT realtime connected', { language, mode, streamType, sampleRate });
+        log.info('Sarvam STT realtime connected', {
+          language,
+          mode,
+          streamType,
+          sampleRate,
+          silenceDurationMs,
+          minSpeechDurationMs,
+        });
         this.pingInterval = setInterval(() => {
           if (this.ws?.readyState === WebSocket.OPEN) {
             this.ws.send(JSON.stringify({ event: 'ping' }));

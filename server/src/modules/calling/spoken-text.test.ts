@@ -2,11 +2,18 @@ import { describe, expect, it } from 'vitest';
 import {
   joinSpokenTurns,
   isLikelyTtsEcho,
+  isShortValidUtterance,
   prepareSpokenText,
+  shouldAllowBargeInDuringTts,
   shouldMuteCallStt,
+  shouldProcessCallerUtterance,
   shouldQueueVoiceInterrupt,
+  shouldTriggerBargeInFromRms,
   splitForTts,
+  BARGE_IN_FRAMES_REQUIRED,
+  BARGE_IN_RMS_THRESHOLD,
   STT_ECHO_TAIL_MS,
+  TTS_BARGE_IN_MIN_MS,
 } from './spoken-text';
 
 describe('prepareSpokenText', () => {
@@ -57,8 +64,8 @@ describe('isLikelyTtsEcho', () => {
 });
 
 describe('shouldMuteCallStt', () => {
-  it('mutes while TTS is playing and for the echo tail after', () => {
-    expect(shouldMuteCallStt(true, 0, 10_000)).toBe(true);
+  it('keeps STT live during TTS and mutes only the echo tail after playback', () => {
+    expect(shouldMuteCallStt(true, 0, 10_000)).toBe(false);
     expect(shouldMuteCallStt(false, 10_000, 10_000 + STT_ECHO_TAIL_MS - 1)).toBe(true);
     expect(shouldMuteCallStt(false, 10_000, 10_000 + STT_ECHO_TAIL_MS)).toBe(false);
     expect(shouldMuteCallStt(false, 0, 10_000)).toBe(false);
@@ -66,10 +73,56 @@ describe('shouldMuteCallStt', () => {
 });
 
 describe('shouldQueueVoiceInterrupt', () => {
-  it('allows interrupt only while waiting on LLM/TTS, not while speaking', () => {
+  it('queues while the bot is generating or playing a reply', () => {
     expect(shouldQueueVoiceInterrupt(true, false)).toBe(true);
-    expect(shouldQueueVoiceInterrupt(true, true)).toBe(false);
+    expect(shouldQueueVoiceInterrupt(true, true)).toBe(true);
     expect(shouldQueueVoiceInterrupt(false, true)).toBe(false);
     expect(shouldQueueVoiceInterrupt(false, false)).toBe(false);
+  });
+});
+
+describe('shouldAllowBargeInDuringTts', () => {
+  it('blocks early echo then allows barge-in after the guard window', () => {
+    const start = 10_000;
+    expect(shouldAllowBargeInDuringTts(true, start, start + TTS_BARGE_IN_MIN_MS - 1)).toBe(
+      false
+    );
+    expect(shouldAllowBargeInDuringTts(true, start, start + TTS_BARGE_IN_MIN_MS)).toBe(true);
+    expect(shouldAllowBargeInDuringTts(false, start, start + TTS_BARGE_IN_MIN_MS + 100)).toBe(
+      false
+    );
+  });
+});
+
+describe('shouldTriggerBargeInFromRms', () => {
+  it('requires sustained loud inbound audio after the guard window', () => {
+    const start = 10_000;
+    const now = start + TTS_BARGE_IN_MIN_MS;
+    expect(
+      shouldTriggerBargeInFromRms(true, start, BARGE_IN_RMS_THRESHOLD, BARGE_IN_FRAMES_REQUIRED - 1, now)
+    ).toBe(false);
+    expect(
+      shouldTriggerBargeInFromRms(true, start, BARGE_IN_RMS_THRESHOLD, BARGE_IN_FRAMES_REQUIRED, now)
+    ).toBe(true);
+    expect(
+      shouldTriggerBargeInFromRms(true, start, BARGE_IN_RMS_THRESHOLD - 1, BARGE_IN_FRAMES_REQUIRED, now)
+    ).toBe(false);
+  });
+});
+
+describe('shouldProcessCallerUtterance', () => {
+  it('drops tiny fragments but keeps short yes/no answers', () => {
+    expect(shouldProcessCallerUtterance('Do me')).toBe(false);
+    expect(shouldProcessCallerUtterance('account questions')).toBe(true);
+    expect(shouldProcessCallerUtterance('no')).toBe(true);
+    expect(shouldProcessCallerUtterance('nahi')).toBe(true);
+  });
+});
+
+describe('isShortValidUtterance', () => {
+  it('recognizes common short answers', () => {
+    expect(isShortValidUtterance('No')).toBe(true);
+    expect(isShortValidUtterance('haan')).toBe(true);
+    expect(isShortValidUtterance('maybe')).toBe(false);
   });
 });

@@ -4,16 +4,15 @@ type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
 type Size = 'sm' | 'md';
 
 const variants: Record<Variant, string> = {
-  primary:
-    'bg-sage text-white shadow-sm hover:bg-sage-muted focus-visible:shadow-[0_0_0_4px_rgba(8,127,91,0.22)]',
+  primary: 'btn-primary border-0',
   secondary: 'border border-dust bg-white text-ink hover:border-sage/30 hover:bg-sage-faint',
   ghost: 'text-ink/70 hover:bg-sage-faint hover:text-ink',
   danger: 'border border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100',
 };
 
 const sizes: Record<Size, string> = {
-  sm: 'h-9 min-h-9 rounded-xl px-3 text-xs',
-  md: 'h-11 min-h-11 rounded-xl px-4 text-sm',
+  sm: 'h-8 min-h-8 rounded-lg px-2.5 text-[11px]',
+  md: 'h-9 min-h-9 rounded-lg px-3.5 text-[13px]',
 };
 
 export function Button({
@@ -32,12 +31,12 @@ export function Button({
   return (
     <button
       type="button"
-      className={`inline-flex items-center justify-center gap-2 font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${variants[variant]} ${sizes[size]} ${className}`}
+      className={`inline-flex items-center justify-center gap-1.5 font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${variants[variant]} ${sizes[size]} ${className}`}
       disabled={props.disabled || loading}
       {...props}
     >
       {loading && (
-        <span className="h-4 w-4 animate-spin rounded-full border-2 border-current/25 border-t-current" />
+        <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current/25 border-t-current" />
       )}
       {children}
     </button>

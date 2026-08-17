@@ -43,22 +43,22 @@ export function Drawer({
         aria-modal="true"
         aria-labelledby="drawer-title"
         tabIndex={-1}
-        className="relative z-10 flex h-[92vh] w-full flex-col rounded-t-2xl bg-white shadow-panel outline-none md:h-full md:max-w-md md:rounded-l-2xl md:rounded-r-none"
+        className="relative z-10 flex h-[92vh] w-full flex-col rounded-t-xl bg-white shadow-panel outline-none md:h-full md:max-w-sm md:rounded-l-xl md:rounded-r-none"
       >
-        <div className="flex items-start justify-between gap-3 border-b border-dust px-5 py-4">
+        <div className="flex items-start justify-between gap-2 border-b border-dust px-4 py-3">
           <div>
-            <h2 id="drawer-title" className="text-lg font-semibold tracking-tight">
+            <h2 id="drawer-title" className="text-base font-semibold tracking-tight">
               {title}
             </h2>
-            {subtitle && <p className="mt-1 text-sm text-ink/55">{subtitle}</p>}
+            {subtitle && <p className="mt-0.5 text-[13px] text-ink/55">{subtitle}</p>}
           </div>
           <Button variant="ghost" size="sm" onClick={onClose}>
             Close
           </Button>
         </div>
-        <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
+        <div className="flex-1 overflow-y-auto px-4 py-3">{children}</div>
         {footer && (
-          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-dust px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-dust px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             {footer}
           </div>
         )}

@@ -15,6 +15,7 @@ export function LifecycleRail({
   compact = false,
   decorative = false,
   showHints = false,
+  inverted = false,
 }: {
   current?: ActivationStage | null;
   counts?: Partial<Record<ActivationStage, number>>;
@@ -22,6 +23,7 @@ export function LifecycleRail({
   compact?: boolean;
   decorative?: boolean;
   showHints?: boolean;
+  inverted?: boolean;
 }) {
   const progress =
     current && stageIndex(current) >= 0 ? stageIndex(current) / (ACTIVATION_STAGES.length - 1) : 0;
@@ -31,6 +33,7 @@ export function LifecycleRail({
       className="lifecycle-rail"
       data-compact={compact || undefined}
       data-hints={showHints && !compact ? 'true' : undefined}
+      data-inverted={inverted || undefined}
       aria-label={decorative ? undefined : 'Activation lifecycle'}
       aria-hidden={decorative || undefined}
     >

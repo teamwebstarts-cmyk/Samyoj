@@ -14,6 +14,7 @@ import { MetaCallingService } from './meta-calling.service';
 import { SarvamStreamTranscriber, isSarvamSttConfigured } from './sarvam.stt';
 import { synthesizeSpeechSarvam, isSarvamTtsConfigured } from './sarvam.tts';
 import { WhatsAppWebRtcBridge } from './webrtc-bridge';
+import { pcmRms } from './audio-utils';
 import { publishCallEventMessage, publishCallSummaryMessage } from './call-event-message';
 import type { ActiveCallContext, TranscriptEntry } from './types';
 import type { ToolCallResult } from '../ai/sarvam-chat.service';
@@ -24,9 +25,14 @@ import {
   isLikelyTtsEcho,
   joinSpokenTurns,
   prepareSpokenText,
+  shouldAllowBargeInDuringTts,
   shouldMuteCallStt,
+  shouldProcessCallerUtterance,
   shouldQueueVoiceInterrupt,
+  shouldTriggerBargeInFromRms,
   splitForTts,
+  BARGE_IN_RMS_THRESHOLD,
+  TTS_ECHO_REJECT_MS,
 } from './spoken-text';
 
 const log = createModuleLogger('ai-voice-agent');
@@ -41,7 +47,9 @@ export class AiVoiceCallSession {
   private abortSpeak = false;
   private queuedSpeech: string | null = null;
   private lastSpokenText = '';
+  private speakingStartedAt = 0;
   private speakingEndedAt = 0;
+  private bargeInLoudFrameStreak = 0;
   private wrappingUp = false;
   private maxDurationTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly ctx: ActiveCallContext;
@@ -100,9 +108,41 @@ export class AiVoiceCallSession {
         }
         void this.recordVoiceUnits('stt', text.length, 0);
         if (this.ended || this.wrappingUp) return;
-        // Never barge-in while TTS is playing (or during the echo tail) — that caused
-        // speakerphone echo to be treated as the caller talking over the bot.
-        if (shouldMuteCallStt(this.speaking, this.speakingEndedAt, Date.now())) return;
+
+        const trimmed = text.trim();
+
+        if (this.speaking) {
+          if (!shouldAllowBargeInDuringTts(this.speaking, this.speakingStartedAt, Date.now())) {
+            log.debug('Ignored STT final during early TTS', {
+              callId: this.ctx.callId,
+              text: trimmed.slice(0, 80),
+            });
+            return;
+          }
+          if (!shouldProcessCallerUtterance(trimmed) || isVoiceBackchannel(trimmed)) return;
+          if (isLikelyTtsEcho(trimmed, this.lastSpokenText)) {
+            log.debug('Ignored likely TTS echo during playback', {
+              callId: this.ctx.callId,
+              text: trimmed,
+            });
+            return;
+          }
+          this.stopBotSpeechForBargeIn('stt_final');
+          if (this.processing) {
+            this.queueInterrupt(text);
+          } else {
+            void this.handleUserSpeech(text);
+          }
+          return;
+        }
+
+        if (shouldMuteCallStt(this.speaking, this.speakingEndedAt, Date.now())) {
+          log.debug('Dropped STT final during echo tail', {
+            callId: this.ctx.callId,
+            text: trimmed.slice(0, 120),
+          });
+          return;
+        }
         if (shouldQueueVoiceInterrupt(this.processing, this.speaking)) {
           this.queueInterrupt(text);
           return;
@@ -110,8 +150,10 @@ export class AiVoiceCallSession {
         void this.handleUserSpeech(text);
       },
       onSpeechStart: () => {
-        // Do not clear `speaking` here — that re-opened STT onto TTS echo ("perfect perfect").
         this.lastSpeechTimestamp = Date.now();
+        if (shouldAllowBargeInDuringTts(this.speaking, this.speakingStartedAt, Date.now())) {
+          this.stopBotSpeechForBargeIn('vad');
+        }
       },
       onError: (err) => {
         log.error('Sarvam transcriber error during call', { callId: this.ctx.callId, error: err.message });
@@ -132,6 +174,29 @@ export class AiVoiceCallSession {
         this.recordingBuffer.push(buf);
         this.recordingSampleRate = sampleRate;
       }
+
+      if (this.speaking) {
+        const rms = pcmRms(samples);
+        if (rms >= BARGE_IN_RMS_THRESHOLD) {
+          this.bargeInLoudFrameStreak += 1;
+        } else {
+          this.bargeInLoudFrameStreak = 0;
+        }
+        if (
+          shouldTriggerBargeInFromRms(
+            this.speaking,
+            this.speakingStartedAt,
+            rms,
+            this.bargeInLoudFrameStreak,
+            Date.now()
+          )
+        ) {
+          this.stopBotSpeechForBargeIn('rms');
+        }
+      } else {
+        this.bargeInLoudFrameStreak = 0;
+      }
+
       if (shouldMuteCallStt(this.speaking, this.speakingEndedAt, Date.now())) return;
       this.transcriber.sendPcm(samples, sampleRate);
     });
@@ -171,10 +236,24 @@ export class AiVoiceCallSession {
     log.info('AI voice call session started', { callId: this.ctx.callId });
   }
 
+  private stopBotSpeechForBargeIn(reason: 'stt_final' | 'vad' | 'rms'): void {
+    if (!this.speaking) return;
+    log.info('Caller barge-in during TTS', { callId: this.ctx.callId, reason });
+    this.abortSpeak = true;
+    this.bridge?.stopPlayback();
+    this.speaking = false;
+    this.speakingStartedAt = 0;
+    this.speakingEndedAt = Date.now();
+    this.bargeInLoudFrameStreak = 0;
+  }
+
   private async handleUserSpeech(text: string): Promise<void> {
     if (this.ended || this.wrappingUp || this.processing || this.speaking) return;
     const trimmed = text.trim();
-    if (trimmed.length < 2) return;
+    if (!shouldProcessCallerUtterance(trimmed)) {
+      log.debug('Ignoring short STT fragment on call', { callId: this.ctx.callId, text: trimmed });
+      return;
+    }
     if (isVoiceBackchannel(trimmed)) {
       log.debug('Ignoring backchannel on call', { callId: this.ctx.callId, text: trimmed });
       return;
@@ -182,7 +261,7 @@ export class AiVoiceCallSession {
 
     if (
       this.speakingEndedAt > 0 &&
-      Date.now() - this.speakingEndedAt < 1200 &&
+      Date.now() - this.speakingEndedAt < TTS_ECHO_REJECT_MS &&
       isLikelyTtsEcho(trimmed, this.lastSpokenText)
     ) {
       log.debug('Ignoring TTS echo on call', { callId: this.ctx.callId, text: trimmed });
@@ -533,6 +612,7 @@ export class AiVoiceCallSession {
     const spoken = prepareSpokenText(text);
     if (!spoken) return;
     this.speaking = true;
+    this.speakingStartedAt = Date.now();
     this.lastSpokenText = spoken;
     try {
       if (opts?.recordTranscript !== false) {
@@ -569,19 +649,22 @@ export class AiVoiceCallSession {
       }
     } finally {
       this.speaking = false;
+      this.speakingStartedAt = 0;
       this.speakingEndedAt = Date.now();
     }
   }
 
   private queueInterrupt(text: string): void {
     if (this.wrappingUp || this.ended) return;
-    // Gap interrupt only: user talks while we wait on LLM / next TTS clip.
-    if (!shouldQueueVoiceInterrupt(this.processing, this.speaking)) return;
+    if (!this.processing && !this.speaking) return;
     const trimmed = text.trim();
-    if (trimmed.length < 8 || isVoiceBackchannel(trimmed)) return;
+    if (!shouldProcessCallerUtterance(trimmed, 8) || isVoiceBackchannel(trimmed)) return;
     if (isLikelyTtsEcho(trimmed, this.lastSpokenText)) {
       log.debug('Ignoring TTS echo on call', { callId: this.ctx.callId, text: trimmed });
       return;
+    }
+    if (this.speaking) {
+      this.stopBotSpeechForBargeIn('stt_final');
     }
     this.queuedSpeech = trimmed;
     this.abortSpeak = true;
@@ -590,6 +673,7 @@ export class AiVoiceCallSession {
       callId: this.ctx.callId,
       text: trimmed,
       speaking: this.speaking,
+      processing: this.processing,
     });
   }
 

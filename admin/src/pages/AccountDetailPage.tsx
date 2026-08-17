@@ -1,20 +1,25 @@
 import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
+import { Bot, Mail, Phone, TriangleAlert } from 'lucide-react';
 import { ApiError, platformRequest } from '../api';
 import { LifecycleRail } from '../components/LifecycleRail';
 import {
   Button,
   Drawer,
+  EmptyState,
   FlagPills,
   Input,
   Notice,
+  PageHeader,
+  PageLoading,
+  SectionCard,
   Select,
   StatusBadge,
 } from '../components/ui';
 import { useOperator } from '../context/OperatorContext';
 import { formatCount, formatPaise, formatWhen } from '../lib/format';
 import { displayMaskedPhone } from '../lib/masking';
-import type { ActivationStage } from '../lib/stages';
+import { STAGE_HINTS, STAGE_LABELS, type ActivationStage } from '../lib/stages';
 import { OUTREACH_TEMPLATES, outreachTemplateLabel } from '../lib/templates';
 import type { HealthFlags } from '../types';
 
@@ -135,30 +140,45 @@ export function AccountDetailPage() {
     setReason('');
   }
 
-  if (loadError) return <Notice tone="error">{loadError}</Notice>;
-  if (!detail) return <p className="text-sm text-ink/55">Loading account…</p>;
+  if (loadError) {
+    return (
+      <Notice tone="error">
+        Could not load this account. {loadError} Go back to Accounts and open it again.
+      </Notice>
+    );
+  }
+  if (!detail) return <PageLoading label="Loading account…" />;
 
   const maxProduct = Math.max(1, ...detail.product.map((row) => row.count));
+  const primaryAction =
+    canOutreach && (tab === 'Overview' || tab === 'Outreach') ? (
+      <Button onClick={() => setDrawer('outreach')}>Email owner</Button>
+    ) : tab === 'AI' && canWrite ? (
+      <Button onClick={() => setDrawer('ai')}>Edit AI controls</Button>
+    ) : tab === 'Billing' && canWrite ? (
+      <Button onClick={() => setDrawer('billing')}>Extend or mark complimentary</Button>
+    ) : undefined;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">{detail.companyName}</h1>
-        <p className="text-sm text-ink/60">
-          {detail.ownerEmail} · {detail.seatCount} seats · last login {formatWhen(detail.lastLoginAt)}
-        </p>
-      </div>
-      <div className="rounded-2xl border border-dust bg-white p-4">
+    <div className="space-y-4">
+      <PageHeader
+        title={detail.companyName}
+        purpose={`${detail.ownerEmail || 'No owner email'} · ${detail.seatCount} seats · last login ${formatWhen(detail.lastLoginAt)}`}
+        meta={<FlagPills flags={detail.flags} />}
+        action={primaryAction}
+      />
+      <SectionCard purpose={STAGE_HINTS[detail.stage]} padded>
         <LifecycleRail current={detail.stage} />
-      </div>
-      <FlagPills flags={detail.flags} />
-      <div className="flex gap-2 overflow-x-auto">
+      </SectionCard>
+      <div className="flex gap-1.5 overflow-x-auto" role="tablist" aria-label="Account sections">
         {TABS.map((item) => (
           <button
             key={item}
             type="button"
-            className={`rounded-full px-3 py-1 text-sm ${
-              tab === item ? 'bg-graphite text-white' : 'border border-dust bg-white'
+            role="tab"
+            aria-selected={tab === item}
+            className={`whitespace-nowrap rounded-full px-2.5 py-1 text-[12px] font-semibold ${
+              tab === item ? 'bg-sage-faint text-sage' : 'border border-dust bg-white text-ink/65 hover:bg-sage-faint/50'
             }`}
             onClick={() => openTab(item)}
           >
@@ -167,32 +187,50 @@ export function AccountDetailPage() {
         ))}
       </div>
 
+      {!canWrite && (tab === 'AI' || tab === 'Billing') && (
+        <Notice>View only. ANALYST cannot change AI caps, flags, or billing.</Notice>
+      )}
+      {!canOutreach && tab === 'Outreach' && <Notice>View only. ANALYST cannot send outreach.</Notice>}
+
       {tab === 'Overview' && (
-        <div className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-3">
-            {Object.entries(detail.counts).map(([key, value]) => (
-              <div key={key} className="rounded-xl border border-dust bg-white p-4">
-                <p className="text-xs uppercase text-ink/45">{COUNT_LABELS[key] || key}</p>
-                <p className="mt-1 font-mono text-xl">{formatCount(value)}</p>
-              </div>
-            ))}
-          </div>
+        <div className="space-y-3">
+          <SectionCard title="Usage counts" purpose="Org-level totals. No message bodies or customer phones.">
+            <dl className="grid gap-px bg-dust sm:grid-cols-2 lg:grid-cols-4">
+              {Object.entries(detail.counts).map(([key, value]) => (
+                <div key={key} className="bg-white px-3 py-2">
+                  <dt className="text-[10px] font-semibold uppercase tracking-wide text-ink/45">
+                    {COUNT_LABELS[key] || key}
+                  </dt>
+                  <dd className="mt-0.5 font-mono text-base">{formatCount(value)}</dd>
+                </div>
+              ))}
+            </dl>
+          </SectionCard>
           {detail.timeline.length > 0 && (
-            <div className="rounded-2xl border border-dust bg-white p-4">
-              <p className="text-xs uppercase tracking-wide text-ink/45">Stage snapshots</p>
-              <ol className="mt-3 space-y-2 text-sm">
+            <SectionCard title="Stage snapshots" padded>
+              <ol className="space-y-2 text-sm">
                 {detail.timeline.map((row) => (
                   <li key={row.capturedAt} className="flex justify-between gap-3">
-                    <span className="font-mono text-xs">{row.stage}</span>
+                    <span className="font-medium">{STAGE_LABELS[row.stage]}</span>
                     <span className="text-ink/50">{formatWhen(row.capturedAt)}</span>
                   </li>
                 ))}
               </ol>
-            </div>
+            </SectionCard>
           )}
-          <div className="rounded-2xl border border-dust bg-white p-4">
-            <p className="text-xs uppercase tracking-wide text-ink/45">Feature flags</p>
-            <div className="mt-3 space-y-2 text-sm">
+          <SectionCard
+            title="Feature flags"
+            purpose="These flags are visible to every operator. SUPPORT can change them from the AI tab."
+            action={
+              canWrite ? (
+                <Button variant="secondary" size="sm" onClick={() => setDrawer('flags')}>
+                  Edit flags
+                </Button>
+              ) : undefined
+            }
+            padded
+          >
+            <div className="space-y-2 text-sm">
               {detail.flagsCatalog.length === 0 && (
                 <p className="text-ink/50">No feature flags on this account.</p>
               )}
@@ -203,134 +241,180 @@ export function AccountDetailPage() {
                 </div>
               ))}
             </div>
-          </div>
+          </SectionCard>
         </div>
       )}
 
       {tab === 'Product' && (
-        <div className="rounded-2xl border border-dust bg-white">
-          {detail.product.length === 0 && <p className="p-4 text-sm text-ink/50">No product events yet.</p>}
-          {detail.product.map((row) => (
-            <div key={`${row.area}-${row.name}`} className="border-b border-dust px-4 py-3 last:border-0">
-              <div className="flex justify-between text-sm">
-                <span>
-                  {row.area} / {row.name}
-                </span>
-                <span className="font-mono">{row.count}</span>
-              </div>
-              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-paper">
-                <div
-                  className="h-full rounded-full bg-sage"
-                  style={{ width: `${Math.round((row.count / maxProduct) * 100)}%` }}
-                />
-              </div>
+        <SectionCard title="Feature adoption" purpose="Coarse product events. Never used stays at zero until it fires.">
+          {detail.product.length === 0 ? (
+            <div className="p-[var(--card-pad)]">
+              <EmptyState
+                icon={Bot}
+                title="No product events yet"
+                description="This org has not emitted Inbox, Campaigns, Calls, AI, Automations, or Templates events."
+              />
             </div>
-          ))}
-        </div>
+          ) : (
+            <div>
+              {detail.product.map((row) => (
+                <div key={`${row.area}-${row.name}`} className="border-b border-dust px-3 py-2.5 last:border-0">
+                  <div className="flex justify-between text-[13px]">
+                    <span>
+                      {row.area} / {row.name}
+                    </span>
+                    <span className="font-mono">{row.count}</span>
+                  </div>
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-paper">
+                    <div
+                      className="h-full rounded-full bg-sage"
+                      style={{ width: `${Math.round((row.count / maxProduct) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </SectionCard>
       )}
 
       {tab === 'WhatsApp' && (
         <div className="space-y-3">
-          {detail.whatsapp.length === 0 && (
-            <p className="text-sm text-ink/50">No WhatsApp numbers on this account.</p>
-          )}
-          {detail.whatsapp.map((number) => (
-            <div key={number.id} className="rounded-xl border border-dust bg-white p-4">
-              <p className="font-mono">{displayMaskedPhone(number.maskedPhone)}</p>
-              <div className="mt-2 flex items-center gap-2 text-xs text-ink/50">
-                <StatusBadge status={number.isActive ? 'ACTIVE' : 'DISABLED'} />
-                {number.qualityRating ? <StatusBadge status={number.qualityRating} /> : <span>unrated</span>}
+          {detail.whatsapp.length === 0 ? (
+            <EmptyState
+              icon={Phone}
+              title="No WhatsApp numbers"
+              description="This org has not connected a number. Middle digits stay masked when they do."
+              steps={['Email the owner with Connect WhatsApp', 'After connect, quality and inbound/outbound counts appear here']}
+              action={
+                canOutreach ? (
+                  <Button onClick={() => setDrawer('outreach')}>Email owner</Button>
+                ) : undefined
+              }
+            />
+          ) : (
+            detail.whatsapp.map((number) => (
+              <div key={number.id} className="dashboard-card p-[var(--card-pad)]">
+                <p className="font-mono text-[13px]">{displayMaskedPhone(number.maskedPhone)}</p>
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] text-ink/50">
+                  <StatusBadge status={number.isActive ? 'ACTIVE' : 'DISABLED'} />
+                  {number.qualityRating ? <StatusBadge status={number.qualityRating} /> : <span>unrated</span>}
+                </div>
+                <p className="mt-1.5 font-mono text-[11px] text-ink/55">
+                  inbound {formatCount(number.inboundCount ?? 0)} · outbound {formatCount(number.outboundCount ?? 0)}
+                </p>
               </div>
-              <p className="mt-2 font-mono text-xs text-ink/55">
-                inbound {formatCount(number.inboundCount ?? 0)} · outbound {formatCount(number.outboundCount ?? 0)}
-              </p>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       )}
 
       {tab === 'AI' && (
-        <div className="space-y-3 rounded-2xl border border-dust bg-white p-4">
-          <p>
-            Chat AI {detail.ai.chatEnabled ? 'on' : 'off'} · Calling AI{' '}
-            {detail.ai.callingEnabled ? 'on' : 'off'}
-          </p>
-          <p className="font-mono">
-            Month tokens {formatCount(detail.ai.usage.monthTokens)} /{' '}
-            {detail.ai.monthlyTokenLimit ?? 'no cap'}
-          </p>
-          <p className="text-xs text-ink/50">{detail.ai.coverageNote || detail.ai.usage.unitNote}</p>
-          <div className="space-y-1 text-sm">
-            {detail.ai.usage.surfaces.map((row) => (
-              <div key={row.action} className="flex justify-between">
-                <span>{row.label}</span>
-                <span className="font-mono">{formatCount(row.totalTokens)}</span>
-              </div>
-            ))}
-          </div>
-          {canWrite && (
-            <div className="flex flex-wrap gap-2">
-              <Button onClick={() => setDrawer('ai')}>Edit AI controls</Button>
-              <Button variant="secondary" onClick={() => setDrawer('flags')}>
+        <SectionCard
+          title="AI usage"
+          purpose="Token counts from AiUsageLog. STT/TTS coverage is incomplete."
+          action={
+            canWrite ? (
+              <Button variant="secondary" size="sm" onClick={() => setDrawer('flags')}>
                 Feature flags
               </Button>
+            ) : undefined
+          }
+          padded
+        >
+          <div className="space-y-3">
+            <p className="text-sm">
+              Chat AI {detail.ai.chatEnabled ? 'on' : 'off'} · Calling AI {detail.ai.callingEnabled ? 'on' : 'off'}
+            </p>
+            <p className="font-mono text-sm">
+              Month tokens {formatCount(detail.ai.usage.monthTokens)} / {detail.ai.monthlyTokenLimit ?? 'no cap'}
+            </p>
+            <p className="text-xs text-ink/50">{detail.ai.coverageNote || detail.ai.usage.unitNote}</p>
+            <div className="space-y-1 text-sm">
+              {detail.ai.usage.surfaces.map((row) => (
+                <div key={row.action} className="flex justify-between">
+                  <span>{row.label}</span>
+                  <span className="font-mono">{formatCount(row.totalTokens)}</span>
+                </div>
+              ))}
             </div>
-          )}
-        </div>
+          </div>
+        </SectionCard>
       )}
 
       {tab === 'Billing' && (
-        <div className="space-y-3 rounded-2xl border border-dust bg-white p-4">
-          <p>
-            {detail.billing.plan} · {detail.billing.subscriptionStatus}
-          </p>
-          <p className="text-sm">Expires {formatWhen(detail.billing.planExpiresAt)}</p>
-          <p className="text-xs text-ink/50">{detail.billing.ledgerNote}</p>
-          {canWrite && (
-            <Button onClick={() => setDrawer('billing')}>Extend or mark complimentary</Button>
-          )}
-          <div className="space-y-1 text-sm">
-            {detail.billing.payments.map((payment) => (
-              <p key={payment.id} className="font-mono">
-                {payment.status} {payment.planId} {formatPaise(payment.amountPaise)}
-              </p>
-            ))}
+        <SectionCard
+          title="Current billing"
+          purpose="Samyoj SaaS plan only. Meta Cloud API is a second ledger."
+          padded
+        >
+          <div className="space-y-3">
+            <p className="text-sm">
+              {detail.billing.plan} · {detail.billing.subscriptionStatus}
+            </p>
+            <p className="text-sm">Expires {formatWhen(detail.billing.planExpiresAt)}</p>
+            <p className="text-xs text-ink/50">{detail.billing.ledgerNote}</p>
+            {detail.billing.payments.length === 0 ? (
+              <p className="text-sm text-ink/50">No PaymentOrder rows yet.</p>
+            ) : (
+              <div className="space-y-1 text-sm">
+                {detail.billing.payments.map((payment) => (
+                  <p key={payment.id} className="font-mono text-xs">
+                    {payment.status} {payment.planId} {formatPaise(payment.amountPaise)} · {formatWhen(payment.createdAt)}
+                  </p>
+                ))}
+              </div>
+            )}
           </div>
-        </div>
+        </SectionCard>
       )}
 
       {tab === 'Errors' && (
-        <div className="rounded-2xl border border-dust bg-white">
-          {(errors?.recent || []).length === 0 && (
-            <p className="p-4 text-sm text-ink/50">No Meta error aggregates for this org.</p>
-          )}
-          {(errors?.recent || []).map((row, index) => (
-            <div key={`${row.code}-${index}`} className="border-b border-dust px-4 py-3 last:border-0">
-              <p className="font-mono">
-                {row.code} × {row.count}
-              </p>
-              <p className="text-xs text-ink/50">{row.sampleTitle || row.title}</p>
+        <SectionCard title="Meta codes for this org" purpose="Redacted titles. No wa_id or send payloads.">
+          {(errors?.recent || []).length === 0 ? (
+            <div className="p-[var(--card-pad)]">
+              <EmptyState
+                icon={TriangleAlert}
+                title="No Meta error aggregates"
+                description="Failed sends for this org cluster here after Meta returns a code."
+              />
             </div>
-          ))}
-        </div>
+          ) : (
+            (errors?.recent || []).map((row, index) => (
+              <div key={`${row.code}-${index}`} className="border-b border-dust px-4 py-3 last:border-0">
+                <p className="font-mono">
+                  {row.code} × {row.count}
+                </p>
+                <p className="text-xs text-ink/50">{row.sampleTitle || row.title}</p>
+              </div>
+            ))
+          )}
+        </SectionCard>
       )}
 
       {tab === 'Outreach' && (
         <div className="space-y-3">
           {outreach?.smtpConfigured === false && (
-            <Notice tone="warning">
-              Mail is not configured. Outreach is stored as LOGGED, not SENT.
-            </Notice>
+            <Notice tone="warning">Mail is not configured. Outreach is stored as LOGGED, not SENT.</Notice>
           )}
-          {canOutreach && <Button onClick={() => setDrawer('outreach')}>Email owner</Button>}
-          {(outreach?.rows || []).length === 0 && (
-            <p className="text-sm text-ink/50">No outreach logged yet.</p>
+          {(outreach?.rows || []).length === 0 ? (
+            <EmptyState
+              icon={Mail}
+              title="No outreach logged yet"
+              description="Email the organization OWNER only. Templates are server-owned. No WhatsApp outreach."
+              action={
+                canOutreach ? (
+                  <Button onClick={() => setDrawer('outreach')}>Email owner</Button>
+                ) : undefined
+              }
+            />
+          ) : (
+            (outreach?.rows || []).map((row) => (
+              <div key={row.id} className="rounded-xl border border-dust bg-white p-3 text-sm">
+                {outreachTemplateLabel(row.templateId)} · <StatusBadge status={row.status} /> · {formatWhen(row.createdAt)}
+              </div>
+            ))
           )}
-          {(outreach?.rows || []).map((row) => (
-            <div key={row.id} className="rounded-xl border border-dust bg-white p-3 text-sm">
-              {outreachTemplateLabel(row.templateId)} · {row.status} · {formatWhen(row.createdAt)}
-            </div>
-          ))}
         </div>
       )}
 
@@ -339,15 +423,25 @@ export function AccountDetailPage() {
         title="AI controls"
         subtitle="Does not show prompts or provider keys."
         onClose={closeDrawer}
+        footer={
+          <>
+            <Button variant="ghost" onClick={closeDrawer}>
+              Cancel
+            </Button>
+            <Button type="submit" form="ai-form" loading={saving}>
+              Save changes
+            </Button>
+          </>
+        }
       >
         <form
+          id="ai-form"
           className="space-y-3"
           onSubmit={(event) => {
             event.preventDefault();
             const form = event.currentTarget;
             const chatEnabled = (form.elements.namedItem('chatEnabled') as HTMLInputElement).checked;
-            const callingEnabled = (form.elements.namedItem('callingEnabled') as HTMLInputElement)
-              .checked;
+            const callingEnabled = (form.elements.namedItem('callingEnabled') as HTMLInputElement).checked;
             setSaving(true);
             setSaveError('');
             const body: Record<string, unknown> = { reason, chatEnabled, callingEnabled };
@@ -368,8 +462,7 @@ export function AccountDetailPage() {
             <input name="chatEnabled" type="checkbox" defaultChecked={detail.ai.chatEnabled} /> Chat AI
           </label>
           <label className="flex items-center gap-2 text-sm">
-            <input name="callingEnabled" type="checkbox" defaultChecked={detail.ai.callingEnabled} />{' '}
-            Calling AI
+            <input name="callingEnabled" type="checkbox" defaultChecked={detail.ai.callingEnabled} /> Calling AI
           </label>
           <Input
             label="Monthly token limit"
@@ -386,13 +479,19 @@ export function AccountDetailPage() {
             hint="At least 8 characters. Stored in the audit log."
           />
           {saveError && <Notice tone="error">{saveError}</Notice>}
-          <Button type="submit" loading={saving}>
-            Save
-          </Button>
         </form>
       </Drawer>
 
-      <Drawer open={drawer === 'flags'} title="Feature flags" onClose={closeDrawer}>
+      <Drawer
+        open={drawer === 'flags'}
+        title="Feature flags"
+        onClose={closeDrawer}
+        footer={
+          <Button variant="ghost" onClick={closeDrawer}>
+            Close
+          </Button>
+        }
+      >
         <div className="space-y-3">
           <Input
             label="Reason"
@@ -438,8 +537,19 @@ export function AccountDetailPage() {
         title="Billing adjustment"
         subtitle="Changes expiry and status only. Does not create a Razorpay payment."
         onClose={closeDrawer}
+        footer={
+          <>
+            <Button variant="ghost" onClick={closeDrawer}>
+              Cancel
+            </Button>
+            <Button type="submit" form="billing-form" loading={saving}>
+              Save changes
+            </Button>
+          </>
+        }
       >
         <form
+          id="billing-form"
           className="space-y-3"
           onSubmit={(event) => {
             event.preventDefault();
@@ -480,9 +590,6 @@ export function AccountDetailPage() {
             minLength={8}
           />
           {saveError && <Notice tone="error">{saveError}</Notice>}
-          <Button type="submit" loading={saving}>
-            Save
-          </Button>
         </form>
       </Drawer>
 
@@ -491,8 +598,19 @@ export function AccountDetailPage() {
         title="Email the owner"
         subtitle="Recipient is the organization OWNER. Templates are server-owned."
         onClose={closeDrawer}
+        footer={
+          <>
+            <Button variant="ghost" onClick={closeDrawer}>
+              Cancel
+            </Button>
+            <Button type="submit" form="outreach-form" loading={saving}>
+              Send email
+            </Button>
+          </>
+        }
       >
         <form
+          id="outreach-form"
           className="space-y-3"
           onSubmit={(event) => {
             event.preventDefault();
@@ -516,11 +634,7 @@ export function AccountDetailPage() {
           {outreach?.smtpConfigured === false && (
             <Notice tone="warning">This will be stored as LOGGED. Mail is not configured.</Notice>
           )}
-          <Select
-            label="Template"
-            value={templateId}
-            onChange={(event) => setTemplateId(event.target.value)}
-          >
+          <Select label="Template" value={templateId} onChange={(event) => setTemplateId(event.target.value)}>
             {OUTREACH_TEMPLATES.map((template) => (
               <option key={template.id} value={template.id}>
                 {template.label}
@@ -535,9 +649,6 @@ export function AccountDetailPage() {
             minLength={8}
           />
           {saveError && <Notice tone="error">{saveError}</Notice>}
-          <Button type="submit" loading={saving}>
-            Send email
-          </Button>
         </form>
       </Drawer>
     </div>

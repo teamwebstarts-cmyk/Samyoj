@@ -52,7 +52,22 @@ export function splitForTts(text: string): string[] {
 }
 
 /** Mute mic→STT while TTS plays and for this tail so speakerphone echo is not transcribed. */
-export const STT_ECHO_TAIL_MS = 400;
+export const STT_ECHO_TAIL_MS = 800;
+
+/** Reject transcripts that look like the bot's own line for this long after TTS ends. */
+export const TTS_ECHO_REJECT_MS = STT_ECHO_TAIL_MS + 1200;
+
+/** Ignore STT fragments shorter than this unless they are a clear yes/no style answer. */
+export const MIN_CALL_UTTERANCE_CHARS = 6;
+
+/** Do not barge-in on VAD during the first stretch of TTS (early speakerphone echo). */
+export const TTS_BARGE_IN_MIN_MS = 700;
+
+/** Inbound PCM RMS must stay above this for barge-in while TTS is playing. */
+export const BARGE_IN_RMS_THRESHOLD = 1800;
+
+/** Consecutive loud frames required before stopping TTS (~60ms @ 10ms frames). */
+export const BARGE_IN_FRAMES_REQUIRED = 6;
 
 export function shouldMuteCallStt(
   speaking: boolean,
@@ -60,14 +75,58 @@ export function shouldMuteCallStt(
   now: number,
   echoTailMs = STT_ECHO_TAIL_MS
 ): boolean {
-  if (speaking) return true;
+  // Keep STT live during TTS so the caller can barge in; only mute the echo tail after playback.
+  if (speaking) return false;
   if (speakingEndedAt <= 0) return false;
   return now - speakingEndedAt < echoTailMs;
 }
 
-/** Barge-in only while waiting on LLM/TTS — never while the bot is playing audio. */
-export function shouldQueueVoiceInterrupt(processing: boolean, speaking: boolean): boolean {
-  return processing && !speaking;
+/** Queue a newer caller turn while the bot is still replying (LLM or TTS). */
+export function shouldQueueVoiceInterrupt(processing: boolean, _speaking: boolean): boolean {
+  return processing;
+}
+
+export function shouldAllowBargeInDuringTts(
+  speaking: boolean,
+  speakingStartedAt: number,
+  now: number,
+  minMs = TTS_BARGE_IN_MIN_MS
+): boolean {
+  if (!speaking || speakingStartedAt <= 0) return false;
+  return now - speakingStartedAt >= minMs;
+}
+
+export function shouldTriggerBargeInFromRms(
+  speaking: boolean,
+  speakingStartedAt: number,
+  rms: number,
+  loudFrameStreak: number,
+  now: number,
+  opts?: {
+    minMs?: number;
+    rmsThreshold?: number;
+    framesRequired?: number;
+  }
+): boolean {
+  if (!shouldAllowBargeInDuringTts(speaking, speakingStartedAt, now, opts?.minMs)) return false;
+  const threshold = opts?.rmsThreshold ?? BARGE_IN_RMS_THRESHOLD;
+  const framesRequired = opts?.framesRequired ?? BARGE_IN_FRAMES_REQUIRED;
+  return rms >= threshold && loudFrameStreak >= framesRequired;
+}
+
+export function isShortValidUtterance(text: string): boolean {
+  const t = normalizeVoiceText(text);
+  return /^(no|nahi|na|yes|haan|han|cancel|stop)$/.test(t);
+}
+
+export function shouldProcessCallerUtterance(
+  text: string,
+  minChars = MIN_CALL_UTTERANCE_CHARS
+): boolean {
+  const trimmed = text.trim();
+  if (trimmed.length < 2) return false;
+  if (isShortValidUtterance(trimmed)) return true;
+  return trimmed.length >= minChars;
 }
 
 export function isLikelyTtsEcho(heard: string, spoken: string): boolean {

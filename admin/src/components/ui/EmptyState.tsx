@@ -15,23 +15,26 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-dashed border-dust bg-white px-6 py-10 text-center" role="status">
-      <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-sage-faint text-sage">
-        <Icon className="h-5 w-5" strokeWidth={2} />
+    <div
+      className="dashboard-card border-dashed px-5 py-7 text-center"
+      role="status"
+    >
+      <div className="mx-auto flex h-9 w-9 items-center justify-center rounded-lg bg-sage-faint text-sage">
+        <Icon className="h-4 w-4" strokeWidth={2} />
       </div>
-      <h3 className="mt-4 text-base font-semibold tracking-tight">{title}</h3>
-      {description && <p className="mx-auto mt-1 max-w-md text-sm text-ink/55">{description}</p>}
+      <h3 className="mt-3 text-[15px] font-semibold tracking-tight">{title}</h3>
+      {description && <p className="mx-auto mt-1 max-w-sm text-[13px] text-ink/55">{description}</p>}
       {steps && steps.length > 0 && (
-        <ol className="mx-auto mt-4 max-w-sm space-y-1 text-left text-sm text-ink/65">
+        <ol className="mx-auto mt-3 max-w-xs space-y-0.5 text-left text-[13px] text-ink/65">
           {steps.map((step, index) => (
             <li key={step} className="flex gap-2">
-              <span className="font-mono text-xs text-sage">{index + 1}.</span>
+              <span className="font-mono text-[10px] text-sage">{index + 1}.</span>
               <span>{step}</span>
             </li>
           ))}
         </ol>
       )}
-      {action && <div className="mt-4">{action}</div>}
+      {action && <div className="mt-3">{action}</div>}
     </div>
   );
 }
@@ -49,5 +52,5 @@ export function Notice({
       : tone === 'warning'
         ? 'border-amber-200 bg-amber-50 text-amber-950'
         : 'border-dust bg-white text-ink/70';
-  return <div className={`rounded-xl border px-4 py-3 text-sm ${cls}`}>{children}</div>;
+  return <div className={`rounded-lg border px-3 py-2.5 text-[13px] leading-snug ${cls}`}>{children}</div>;
 }

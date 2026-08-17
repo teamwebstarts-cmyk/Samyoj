@@ -1,9 +1,11 @@
+import type { Ref } from 'react';
 import { Filter, Search } from 'lucide-react';
 import { FOCUS_RING_CLASS } from '../../hooks/inboxA11y';
 
 interface CallFiltersBarProps {
   search: string;
   onSearchChange: (value: string) => void;
+  searchInputRef?: Ref<HTMLInputElement>;
   /** Combined chip filter: '' | 'live' | 'missed' | 'in' | 'out' | 'ai' | 'human' */
   chip: string;
   onChipChange: (value: string) => void;
@@ -22,6 +24,7 @@ const CHIPS: Array<{ value: string; label: string }> = [
 export default function CallFiltersBar({
   search,
   onSearchChange,
+  searchInputRef,
   chip,
   onChipChange,
 }: CallFiltersBarProps) {
@@ -34,6 +37,8 @@ export default function CallFiltersBar({
             strokeWidth={2}
           />
           <input
+            ref={searchInputRef}
+            id="calls-recents-search"
             type="search"
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
