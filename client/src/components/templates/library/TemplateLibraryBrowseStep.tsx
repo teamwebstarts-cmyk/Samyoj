@@ -78,6 +78,7 @@ const QUICK_PICK_ICONS: Record<string, LucideIcon> = {
   delivery: MapPin,
   payment: CreditCard,
   feedback: MessageSquare,
+  account: UserRound,
   otp: ShieldCheck,
 };
 
@@ -106,6 +107,11 @@ const QUICK_PICK_TONES: Record<string, { wrap: string; icon: string; active: str
     wrap: 'border-violet-200 bg-violet-50 text-violet-800 dark:border-violet-800/60 dark:bg-violet-950/40 dark:text-violet-200',
     icon: 'text-violet-600 dark:text-violet-400',
     active: 'ring-2 ring-violet-400/70 border-violet-400',
+  },
+  account: {
+    wrap: 'border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-800/60 dark:bg-sky-950/40 dark:text-sky-200',
+    icon: 'text-sky-600 dark:text-sky-400',
+    active: 'ring-2 ring-sky-400/70 border-sky-400',
   },
   otp: {
     wrap: 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-200',

@@ -125,6 +125,26 @@ export const createTemplateSchema = z
     }
   });
 
+const libraryButtonInputUrlSchema = z.object({
+  base_url: z.string().min(1).max(2000),
+  url_suffix_example: z.string().min(1).max(2000).optional(),
+});
+
+const libraryButtonInputSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('URL'),
+    url: libraryButtonInputUrlSchema,
+  }),
+  z.object({
+    type: z.literal('PHONE_NUMBER'),
+    phone_number: z.string().min(8).max(20),
+  }),
+  z.object({
+    type: z.literal('OTP'),
+    otp_type: z.enum(['COPY_CODE', 'ONE_TAP']).default('COPY_CODE'),
+  }),
+]);
+
 export const createFromLibrarySchema = z.object({
   name: z
     .string()
@@ -133,7 +153,7 @@ export const createFromLibrarySchema = z.object({
     .regex(/^[a-z0-9_]+$/, 'Name must be lowercase letters, numbers, and underscores only'),
   language: z.string().min(2).default('en_US'),
   libraryTemplateName: z.string().min(1),
-  libraryTemplateButtonInputs: z.array(z.record(z.unknown())).optional(),
+  libraryTemplateButtonInputs: z.array(libraryButtonInputSchema).max(10).optional(),
   category: z.enum(['UTILITY', 'AUTHENTICATION']).optional(),
 });
 

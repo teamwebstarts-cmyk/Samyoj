@@ -758,7 +758,15 @@ export class MetaWhatsAppService {
       body: JSON.stringify(body),
     });
 
-    const data = (await res.json()) as { id?: string; status?: string; category?: string } & GraphError;
+    let data: { id?: string; status?: string; category?: string } & GraphError;
+    try {
+      data = (await res.json()) as typeof data;
+    } catch {
+      if (!res.ok) {
+        throw new Error(`Meta API returned ${res.status} with non-JSON body`);
+      }
+      throw new Error('Meta API returned an unreadable response');
+    }
     if (!res.ok) {
       throw new Error(data.error?.message || 'Failed to create template from library');
     }

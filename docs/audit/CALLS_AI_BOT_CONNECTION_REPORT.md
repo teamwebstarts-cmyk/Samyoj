@@ -1,7 +1,8 @@
 # Chat AI Bot ↔ Voice Calling AI — Connection Research Report
 
-> **Type:** Code-verified research / POC audit (not aspirational product vision)  
-> **Date:** 2026-08-05  
+> **⚠️ STALE — Date 2026-08-05.** This report mentions Deepgram/Google as voice providers; current runtime is **Sarvam** (STT + Bulbul TTS). Live transfer is a stub (`message_only`). Billing is demo-grade.
+> Current status: `docs/memory/STATUS_AND_FUTURE.md`.
+> Full audit: `audit/FULL_REVIEW_2026-08-18.md`.  
 > **Scope:** Why Samyoj connects WhatsApp **message** AI (smart auto-replies) to WhatsApp **voice** AI (Cloud Calling “servant”), what is already built, how the shared brain works, UI redirects, and recent Calls UI work.  
 > **Evidence rule:** Claims below are tied to current repo paths. Prefer this over older ship-doc lines that lag the code.
 

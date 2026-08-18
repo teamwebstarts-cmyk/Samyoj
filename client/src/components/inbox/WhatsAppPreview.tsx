@@ -420,7 +420,7 @@ export function WhatsAppTemplatePreview({
   );
 }
 
-export type InteractivePreviewMode = 'reply' | 'cta_url' | 'cta_call' | 'list' | 'copy_code';
+export type InteractivePreviewMode = 'reply' | 'cta_url' | 'cta_call' | 'list' | 'copy_code' | 'call_permission';
 
 export interface WhatsAppInteractivePreviewProps {
   mode: InteractivePreviewMode;
@@ -441,6 +441,8 @@ export interface WhatsAppInteractivePreviewProps {
   time?: string;
   status?: MessageStatus;
   showSurface?: boolean;
+  /** Status of a call_permission_request: pending | granted | denied. */
+  callPermissionStatus?: string;
 }
 
 function InteractiveActionButton({
@@ -484,7 +486,7 @@ function InteractiveActionButton({
   );
 }
 
-/** Session interactive message card (reply buttons, CTA, list menu). */
+/** Session interactive message card (reply buttons, CTA, list menu, call permission). */
 export function WhatsAppInteractiveCard({
   mode,
   header,
@@ -499,6 +501,7 @@ export function WhatsAppInteractiveCard({
   compact = false,
   time = '12:30',
   status = 'delivered',
+  callPermissionStatus,
 }: Omit<WhatsAppInteractivePreviewProps, 'className' | 'showSurface'>) {
   const isOutbound = direction === 'outbound';
   const shellClass = isOutbound ? 'wa-bubble-sent' : 'wa-bubble-received';
@@ -541,6 +544,58 @@ export function WhatsAppInteractiveCard({
               {time}
             </span>
             {isOutbound && <StatusIcon status={status} compact={compact} />}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (mode === 'call_permission') {
+    const permStatus = callPermissionStatus || 'pending';
+    const isGranted = permStatus === 'granted';
+    const isDenied = permStatus === 'denied';
+    const statusLabel = isGranted ? 'Granted' : isDenied ? 'Denied' : 'Pending';
+    const statusColor = isGranted
+      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+      : isDenied
+        ? 'bg-rose-50 text-rose-700 border-rose-200'
+        : 'bg-amber-50 text-amber-700 border-amber-200';
+
+    return (
+      <div className={`flex ${isOutbound ? 'justify-end' : 'justify-start'}`}>
+        <div
+          className={`overflow-hidden rounded-lg shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] wa-msg-font ${
+            compact ? 'w-full max-w-[280px]' : 'w-full max-w-[min(100%,340px)]'
+          } ${shellClass} ${isOutbound ? 'rounded-br-[2px]' : 'rounded-bl-[2px]'}`}
+        >
+          <div className={compact ? 'px-2.5 pt-2.5 pb-1' : 'px-3.5 pt-3 pb-1.5'}>
+            <div className="mb-1.5 flex items-center gap-2">
+              <Phone className={`h-4 w-4 shrink-0 ${isGranted ? 'text-emerald-600' : isDenied ? 'text-rose-500' : 'text-amber-600'}`} strokeWidth={2} />
+              <p className={`font-semibold leading-snug ${compact ? 'text-[13px]' : 'text-[15px]'}`}>
+                Call permission requested
+              </p>
+            </div>
+            <p
+              className={`whitespace-pre-wrap break-words ${
+                compact ? 'text-[12.5px] leading-[1.45]' : 'wa-msg-body'
+              }`}
+            >
+              {body}
+            </p>
+            <div className="mt-2 flex items-center gap-1.5">
+              <span
+                className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${statusColor}`}
+              >
+                {isGranted ? <Check className="mr-1 h-3 w-3" strokeWidth={2.5} /> : null}
+                {statusLabel}
+              </span>
+            </div>
+            <div className="flex justify-end gap-1 pt-0.5">
+              <span className={`tabular-nums wa-timestamp ${compact ? 'text-[9px]' : 'text-[11px]'}`}>
+                {time}
+              </span>
+              {isOutbound && <StatusIcon status={status} compact={compact} />}
+            </div>
           </div>
         </div>
       </div>
@@ -667,6 +722,7 @@ export function WhatsAppInteractivePreview({
   time,
   status,
   showSurface = true,
+  callPermissionStatus,
 }: WhatsAppInteractivePreviewProps) {
   const card = (
     <WhatsAppInteractiveCard
@@ -683,6 +739,7 @@ export function WhatsAppInteractivePreview({
       compact={compact}
       time={time}
       status={status}
+      callPermissionStatus={callPermissionStatus}
     />
   );
 

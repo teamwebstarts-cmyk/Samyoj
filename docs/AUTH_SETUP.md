@@ -6,7 +6,7 @@ Complete guide for email/password + Google Sign-In + forgot password + sessions.
 
 | Feature | Status |
 |---------|--------|
-| Register (name, company, email, password) | Hardened — strong password policy, org created, email verification issued |
+| Register (name, company, email, password) | Hardened — strong password policy, org created, email verification disabled (set immediately) |
 | Login | Rate-limited, 2FA optional, email verification gate |
 | Continue with Google | CSRF `state`, org auto-created, **tokens not in URL** (one-time code exchange) |
 | Forgot / reset password | UUID token, revokes all sessions on reset |
@@ -71,9 +71,10 @@ SMTP_SECURE=false
 
 Still intentional tradeoffs until a larger cookie-session migration:
 
-- Access + refresh tokens remain in `localStorage` (XSS risk). Prefer HttpOnly cookies in a follow-up.  
+- Access + refresh tokens remain in `sessionStorage` per tab (XSS can still read them). HttpOnly cookies deferred to SAMYOJ-3.  
 - Microsoft OAuth routes removed from the active OAuth module (Google only).  
 - 2FA secrets encryption / backup codes remain a follow-up under Team settings.
+- Meta OAuth token-exchange uses `GET /oauth/access_token?client_secret=...` (Meta's API design). POST would be a contract change with Meta's Graph API — cannot be changed unilaterally. The `client_secret` is only sent server-to-server (never exposed to the browser).
 
 ## API endpoints
 

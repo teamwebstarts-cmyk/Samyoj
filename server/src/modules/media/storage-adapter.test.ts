@@ -1,0 +1,79 @@
+import { describe, expect, it, vi, beforeEach } from 'vitest';
+
+vi.mock('../../config', () => ({
+  config: {
+    serverUrl: 'http://localhost:8000',
+    storage: {
+      driver: 'local',
+      s3PublicUrl: '',
+    },
+  },
+}));
+
+import { buildRelativePath, getPublicMediaUrl } from './storage-adapter';
+import { config } from '../../config';
+
+describe('buildRelativePath', () => {
+  it('builds orgId/messageId.ext from mime', () => {
+    expect(buildRelativePath('org-1', 'msg-2', 'image/jpeg')).toBe('org-1/msg-2.jpg');
+  });
+
+  it('uses filename extension when provided', () => {
+    expect(buildRelativePath('org-1', 'msg-2', 'image/jpeg', 'photo.png')).toBe(
+      'org-1/msg-2.png'
+    );
+  });
+
+  it('falls back to .bin when no mime or extension', () => {
+    expect(buildRelativePath('org-1', 'msg-2')).toBe('org-1/msg-2.bin');
+  });
+
+  it('handles known mime types', () => {
+    expect(buildRelativePath('o', 'm', 'image/png')).toBe('o/m.png');
+    expect(buildRelativePath('o', 'm', 'image/webp')).toBe('o/m.webp');
+    expect(buildRelativePath('o', 'm', 'image/gif')).toBe('o/m.gif');
+    expect(buildRelativePath('o', 'm', 'video/mp4')).toBe('o/m.mp4');
+    expect(buildRelativePath('o', 'm', 'audio/ogg')).toBe('o/m.ogg');
+    expect(buildRelativePath('o', 'm', 'audio/mpeg')).toBe('o/m.mp3');
+    expect(buildRelativePath('o', 'm', 'application/pdf')).toBe('o/m.pdf');
+  });
+
+  it('handles unknown mime type gracefully', () => {
+    expect(buildRelativePath('o', 'm', 'application/zip')).toBe('o/m.bin');
+  });
+
+  it('normalizes extension case from filename', () => {
+    expect(buildRelativePath('o', 'm', undefined, 'file.JPG')).toBe('o/m.jpg');
+  });
+});
+
+describe('getPublicMediaUrl', () => {
+  it('returns local URL when driver is local', () => {
+    const url = getPublicMediaUrl('org-1/msg-2.jpg');
+    expect(url).toBe('http://localhost:8000/api/media/public/org-1/msg-2.jpg');
+  });
+
+  it('returns S3 URL when driver is s3 and s3PublicUrl is set', () => {
+    // Override config for this test
+    (config.storage as any).driver = 's3';
+    (config.storage as any).s3PublicUrl = 'https://cdn.example.com';
+
+    const url = getPublicMediaUrl('org-1/msg-2.jpg');
+    expect(url).toBe('https://cdn.example.com/org-1/msg-2.jpg');
+
+    // Reset
+    (config.storage as any).driver = 'local';
+    (config.storage as any).s3PublicUrl = '';
+  });
+
+  it('strips trailing slash from s3PublicUrl', () => {
+    (config.storage as any).driver = 's3';
+    (config.storage as any).s3PublicUrl = 'https://cdn.example.com/';
+
+    const url = getPublicMediaUrl('org-1/msg-2.jpg');
+    expect(url).toBe('https://cdn.example.com/org-1/msg-2.jpg');
+
+    (config.storage as any).driver = 'local';
+    (config.storage as any).s3PublicUrl = '';
+  });
+});

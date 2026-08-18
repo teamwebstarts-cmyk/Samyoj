@@ -254,6 +254,8 @@ export interface MessageMetadata {
   callDirection?: string;
   durationSeconds?: number;
   callTone?: 'missed' | 'completed' | 'failed';
+  /** Status of a call_permission_request: pending | granted | denied. */
+  callPermissionStatus?: string;
 }
 
 export interface SendMediaPayload {
@@ -283,7 +285,7 @@ export interface SendMessagePayload {
   templateParams?: TemplateParams;
   media?: SendMediaPayload;
   interactive?: {
-    mode: 'reply' | 'cta_url' | 'cta_call' | 'list';
+    mode: 'reply' | 'cta_url' | 'cta_call' | 'list' | 'call_permission';
     header?: string;
     body: string;
     footer?: string;

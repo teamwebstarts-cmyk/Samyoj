@@ -13,7 +13,7 @@ import { isPlatformAdminHost } from './config/admin-host';
 import { initSentry } from './config/sentry';
 import { errorHandler, logError, setupGlobalErrorHandlers } from './errors';
 import logger, { requestLogger } from './utils/logger';
-import { socketAuthMiddleware } from './middleware/socket-auth';
+import { socketAuthMiddleware, startMembershipGuard } from './middleware/socket-auth';
 import prisma from './config/database';
 import Redis from 'ioredis';
 
@@ -96,6 +96,9 @@ io.on('connection', (socket) => {
   }
 
   registerPresenceHandlers(io, socket);
+
+  // Periodically re-verify org membership; disconnect if user was removed.
+  startMembershipGuard(socket);
 
   socket.on('error', (err) => {
     logError(err, {

@@ -18,6 +18,7 @@ export interface ParsedInboundMessage {
     }>;
     text?: string;
   };
+  callPermissionStatus?: string;
   location?: { latitude: number; longitude: number; name?: string; address?: string };
   contacts?: Array<{ name: string; phone: string; email?: string }>;
   metadata?: MessageMediaMetadata & {
@@ -138,6 +139,8 @@ function parseInboundContent(msg: Record<string, unknown>): ParsedInboundMessage
           button_reply?: { id?: string; title?: string };
           list_reply?: { id?: string; title?: string };
           nfm_reply?: { response_json?: string; body?: string; name?: string };
+          body?: { text?: string };
+          call_permission_response?: { status?: string };
         }
       | undefined;
 
@@ -161,6 +164,21 @@ function parseInboundContent(msg: Record<string, unknown>): ParsedInboundMessage
           ...(flowToken ? { flow_token: flowToken } : {}),
           nfm_name: interactive.nfm_reply.name,
         },
+      };
+    }
+
+    if (interactive?.type === 'call_permission_request') {
+      return {
+        content: interactive.body?.text || 'Call permission requested',
+        callPermissionStatus: 'pending',
+      };
+    }
+
+    if (interactive?.type === 'call_permission_response' && interactive.call_permission_response) {
+      const status = interactive.call_permission_response.status || 'unknown';
+      return {
+        content: status === 'granted' ? 'Call permission granted' : 'Call permission denied',
+        callPermissionStatus: status,
       };
     }
 

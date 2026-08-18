@@ -16,7 +16,8 @@ interface InteractiveMessageCardProps {
   metadata?: MessageMetadata | null;
 }
 
-function resolveInteractiveMode(metadata?: MessageMetadata | null): 'reply' | 'cta_url' | 'cta_call' | 'list' {
+function resolveInteractiveMode(metadata?: MessageMetadata | null): 'reply' | 'cta_url' | 'cta_call' | 'list' | 'call_permission' {
+  if (metadata?.interactive?.mode === 'call_permission') return 'call_permission';
   if (metadata?.ctaType === 'url') return 'cta_url';
   if (metadata?.ctaType === 'call') return 'cta_call';
   if (metadata?.listMenu) return 'list';
@@ -87,6 +88,7 @@ export default function InteractiveMessageCard({
       direction={direction}
       time={time}
       status={status}
+      callPermissionStatus={metadata?.callPermissionStatus}
     />
   );
 }

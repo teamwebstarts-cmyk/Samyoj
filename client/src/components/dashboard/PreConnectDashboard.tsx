@@ -17,7 +17,7 @@ export default function PreConnectDashboard() {
 
   return (
     <div className="dashboard-stack pb-4 sm:pb-2">
-      <PreConnectHero connecting={connecting} onConnect={connect} onWatchVideo={openVideo} />
+      <PreConnectHero connecting={connecting} onConnect={connect} onWatchVideo={INTRO_VIDEO_URL ? openVideo : undefined} />
       <PreConnectSteps connecting={connecting} onConnect={connect} />
 
       <PreConnectVideoModal

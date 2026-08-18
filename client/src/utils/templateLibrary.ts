@@ -114,6 +114,13 @@ export const LIBRARY_QUICK_PICKS: Array<{
     usecase: 'FEEDBACK_SURVEY',
   },
   {
+    id: 'account',
+    label: 'Account',
+    hint: 'Signup & welcome',
+    topic: 'ACCOUNT_UPDATE',
+    usecase: 'ACCOUNT_CREATION_CONFIRMATION',
+  },
+  {
     id: 'otp',
     label: 'OTP / login',
     hint: 'Verification codes',

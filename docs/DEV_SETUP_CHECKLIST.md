@@ -95,6 +95,46 @@ cd server && npm run dev:doppler      # run API with Doppler secrets
 
 ---
 
+## Backup & restore
+
+### Create a backup
+
+```bash
+cd server && npm run db:backup
+# → .run/backups/whatsapp-platform-<timestamp>.dump
+# Uses pg_dump --format=custom (falls back to docker compose exec postgres)
+```
+
+### Restore from a backup
+
+```bash
+cd server && npm run db:restore -- <path-to-backup.dump>
+# Interactive: asks you to type "RESTORE" to confirm
+# Non-interactive (scripts/CI): add --yes flag
+```
+
+**What it does:**
+1. Validates the file is a real pg_dump custom-format archive (`pg_restore --list`)
+2. Shows archive date + table count
+3. Asks for confirmation (type `RESTORE`), or skips with `--yes`
+4. Runs `pg_restore --clean --if-exists --no-owner --no-privileges`
+5. Drops and recreates all objects in the target DB
+
+**After restore:**
+```bash
+cd server && npx prisma migrate status   # should say "up to date"
+npm run dev                              # restart API
+# Spot-check a contact/conversation in Inbox
+```
+
+**Important:**
+- Restore replaces ALL data in the target database. The old data is gone.
+- Works with or without host `pg_restore`/`pg_dump` installed (falls back to docker).
+- Backups go to `.run/backups/` (gitignored).
+- Tested roundtrip 2026-08-18: backup → insert marker → restore → marker gone, 25 migrations intact.
+
+---
+
 ## Symptom → fix
 
 | Symptom | Fix |

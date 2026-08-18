@@ -27,6 +27,7 @@ import {
 import { getCallAnalytics } from './analytics';
 import { acceptCallWithAgentAnswer, declineCallAsAgent } from './agent-call.service';
 import { publishCallEventMessage } from './call-event-message';
+import { publishCallPermissionMessage } from './call-permission-message';
 import { clearRingTimeout } from './call.processor';
 import { logTeamAudit } from '../team/audit';
 import { emitToOrg, emitToUser } from '../../realtime';
@@ -610,6 +611,29 @@ router.post(
             accessToken,
             contact.phone
           );
+          // Persist as a visible thread entry so the agent sees the request in Inbox.
+          const permConversation = data.conversationId
+            ? await prisma.conversation.findFirst({
+                where: { id: data.conversationId, organizationId: orgId, whatsappNumberId: req.activeWhatsappNumberId },
+                select: { id: true },
+              })
+            : await prisma.conversation.findFirst({
+                where: {
+                  organizationId: orgId,
+                  contactId: contact.id,
+                  whatsappNumberId: req.activeWhatsappNumberId,
+                },
+                orderBy: { lastMessageAt: 'desc' },
+                select: { id: true },
+              });
+          if (permConversation) {
+            await publishCallPermissionMessage({
+              conversationId: permConversation.id,
+              organizationId: orgId,
+              contactId: contact.id,
+              contactPhone: contact.phone,
+            });
+          }
         } catch {
           // Non-blocking — Meta may reject if limit reached; the error below still explains.
         }

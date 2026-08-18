@@ -1,5 +1,6 @@
 import {
   BookOpen,
+  Clock,
   Pause,
   Pencil,
   Play,
@@ -13,11 +14,36 @@ import { botChip, getAiBotAvatar } from './aiBotVisuals';
 interface AiBotCardProps {
   bot: AiBot;
   answersCalls?: boolean;
+  successRate?: number | null;
+  lastActivityAt?: string | null;
   onEdit: () => void;
   onToggle: () => void;
   onDelete?: () => void;
   onToggleAllChats?: () => void;
   onToggleAllCalls?: () => void;
+}
+
+function relativeTime(dateStr: string): string {
+  const now = Date.now();
+  const then = new Date(dateStr).getTime();
+  const diff = now - then;
+  if (diff < 60_000) return 'just now';
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
+  if (diff < 172_800_000) return 'Yesterday';
+  return `${Math.floor(diff / 86_400_000)}d ago`;
+}
+
+function knowledgeTone(count: number): { text: string; dot: string } {
+  if (count <= 0) return { text: 'text-red-600 dark:text-red-400', dot: 'bg-red-500' };
+  if (count <= 2) return { text: 'text-amber-700 dark:text-amber-400', dot: 'bg-amber-500' };
+  return { text: 'text-emerald-700 dark:text-emerald-400', dot: 'bg-emerald-500' };
+}
+
+function successRateBadge(rate: number): { text: string; bg: string } {
+  if (rate >= 80) return { text: 'text-emerald-700 dark:text-emerald-300', bg: 'bg-emerald-50 dark:bg-emerald-950/40' };
+  if (rate >= 50) return { text: 'text-amber-700 dark:text-amber-300', bg: 'bg-amber-50 dark:bg-amber-950/40' };
+  return { text: 'text-red-700 dark:text-red-300', bg: 'bg-red-50 dark:bg-red-950/40' };
 }
 
 export function AllChatsSwitch({
@@ -79,6 +105,8 @@ export function AllChatsSwitch({
 export default function AiBotCard({
   bot,
   answersCalls = false,
+  successRate = null,
+  lastActivityAt = null,
   onEdit,
   onToggle,
   onDelete,
@@ -89,6 +117,8 @@ export default function AiBotCard({
   const isChat = (bot.channel ?? 'CHAT') === 'CHAT';
   const avatar = getAiBotAvatar(bot.id, bot.enabled);
   const AvatarIcon = avatar.Icon;
+  const kTone = knowledgeTone(faqCount);
+  const hasAnalytics = successRate !== null && successRate !== undefined;
 
   return (
     <article className="bg-white transition-colors active:bg-neutral-50 dark:bg-neutral-950 dark:active:bg-neutral-900/60">
@@ -126,7 +156,7 @@ export default function AiBotCard({
               </span>
             </div>
 
-            <div className="mt-1 flex min-w-0 items-center gap-1.5 overflow-hidden">
+            <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 overflow-hidden">
               <span className="truncate text-[11px] font-medium text-theme-muted">
                 {isChat
                   ? bot.isDefault
@@ -141,10 +171,26 @@ export default function AiBotCard({
                     : 'Calling bot'}
               </span>
 
-              <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-[11px] font-semibold tabular-nums text-theme-secondary">
-                <BookOpen className="h-3 w-3 text-sky-600 dark:text-sky-400" />
-                {faqCount}
+              <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-[11px] font-semibold tabular-nums">
+                <span className={`h-1.5 w-1.5 rounded-full ${kTone.dot}`} />
+                <BookOpen className={`h-3 w-3 ${kTone.text}`} />
+                <span className={kTone.text}>{faqCount}</span>
               </span>
+
+              {lastActivityAt && (
+                <span className="inline-flex shrink-0 items-center gap-0.5 text-[10px] font-medium text-theme-muted">
+                  <Clock className="h-2.5 w-2.5" />
+                  {relativeTime(lastActivityAt)}
+                </span>
+              )}
+
+              {hasAnalytics && (
+                <span
+                  className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-bold tabular-nums ${successRateBadge(successRate!).text} ${successRateBadge(successRate!).bg}`}
+                >
+                  {successRate}% ok
+                </span>
+              )}
             </div>
           </div>
         </button>

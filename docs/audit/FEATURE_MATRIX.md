@@ -1,6 +1,9 @@
 # Feature Matrix — What's Built
 
-> Last updated: 2026-08-14
+> **⚠️ STALE — Last updated 2026-08-14.** This doc overstates readiness.
+> Current status: `docs/memory/STATUS_AND_FUTURE.md`.
+> Full audit: `audit/FULL_REVIEW_2026-08-18.md`.
+> Key gaps: billing is demo-grade (not subscriptions), voice live transfer is a stub, runtime TTS/STT is Sarvam (not Google/Deepgram).
 
 Legend:
 - **DONE** — Fully implemented (backend + frontend + DB)
@@ -190,28 +193,38 @@ Legend:
 | AI voice agent | DONE | `ai-voice-agent.ts` | — | Auto-answer with AI |
 | Agent call routing | DONE | `routing.service.ts` | Ring modal | |
 | Accept/decline call | DONE | `/api/calling/:id/accept` | `CallRingModal` | |
-| Live transcript | DONE | Deepgram STT | `CallDetailView` | Real-time via Socket.IO |
+| Live transcript | DONE | Sarvam STT (primary) | `CallDetailView` | Real-time via Socket.IO |
 | Outbound callback | DONE | `/api/calling/callback` | Call detail | |
 | Call analytics | DONE | `/api/calling/analytics` | `CallAnalyticsPanel` | |
 | WebRTC bridge | DONE | `webrtc-bridge.ts` | Signaling | |
-| Google TTS | DONE | `google-tts.service.ts` | — | AI voice response |
+| Sarvam TTS (Bulbul) | DONE | `sarvam.tts.ts` | — | Primary TTS engine for AI voice |
 | Call notes | DONE | `PATCH /api/calling/:id` | Call detail | |
+| Live transfer | STUB | `handleLiveTransfer()` | Settings | Forced `message_only`; WebRTC media handoff not built (SAMYOJ-12) |
 | Settings (enable/disable) | DONE | `/api/calling/settings` | `CallingSettingsPanel` | |
+| Deepgram STT (legacy) | DEPRECATED | Deepgram SDK | — | Superseded by Sarvam STT |
+| Google TTS (legacy) | DEPRECATED | Google Cloud TTS | — | Superseded by Sarvam TTS |
 
 ---
 
 ## 11. BILLING & SUBSCRIPTION
 
+> **Demo-grade — not production-ready.** One-shot Razorpay Order only; no recurring subscriptions, trials, GST invoices, or dunning. Target spec: `docs/billing/`.
+
 | Feature | Status | Backend | Frontend | Notes |
 |---------|--------|---------|----------|-------|
-| Plans (starter/growth/business/enterprise) | DONE | `plans.ts` | `BillingPage` | |
-| Razorpay checkout | DONE | `/api/billing/create-order` | `BillingPlanCard` | |
-| Payment verification | DONE | `/api/billing/verify` | Callback | |
-| Razorpay webhook | DONE | `/api/billing/webhook` | — | Auto-activate plan |
-| Usage tracking | DONE | `/api/billing/usage` | `BillingUsageWidget` | |
-| Payment history | DONE | `PaymentOrder` model | Billing page | |
-| Payment links | DONE | `/api/billing/payment-links` | `ChatComposer` | Send via chat |
-| Campaign cost estimation | DONE | `/api/billing/estimate` | Pre-send | |
+| Plans (starter/growth/business/enterprise) | DONE (demo) | `plans.ts` | `BillingPage` | Old pricing; not the TARGET catalog |
+| Razorpay checkout | DONE (demo) | `/api/billing/create-order` | `BillingPlanCard` | One-shot Order, not Subscriptions |
+| Payment verification | DONE (demo) | `/api/billing/verify` | Callback | |
+| Razorpay webhook | DONE (demo) | `/api/billing/webhook` | — | Auto-activate plan |
+| Usage tracking | DONE (demo) | `/api/billing/usage` | `BillingUsageWidget` | |
+| Payment history | DONE (demo) | `PaymentOrder` model | Billing page | |
+| Payment links | DONE (demo) | `/api/billing/payment-links` | `ChatComposer` | Send via chat |
+| Campaign cost estimation | DONE (demo) | `/api/billing/estimate` | Pre-send | |
+| Recurring subscriptions | PLANNED | — | — | Razorpay Subscriptions (SAMYOJ-35) |
+| Trial management (14-day) | PLANNED | — | — | TARGET spec only |
+| GST invoicing | PLANNED | — | — | TARGET spec only |
+| Dunning / grace period | PLANNED | — | — | TARGET spec only |
+| Per-plan rate limits | PLANNED | — | — | TARGET spec only |
 
 ---
 
@@ -347,8 +360,8 @@ Legend:
 | Campaigns | 17 | All DONE |
 | Contacts & Leads | 9 | All DONE |
 | Templates | 9 | All DONE |
-| Voice Calling | 11 | All DONE |
-| Billing | 8 | All DONE |
+| Voice Calling | 14 | Core works (Sarvam STT/TTS); live transfer is a stub; Deepgram/Google TTS deprecated |
+| Billing | 13 | Demo — not production-ready; one-shot Razorpay only (SAMYOJ-35) |
 | Team Management | 10 | All DONE |
 | Analytics | 6 | All DONE |
 | Settings | 6 | All DONE |
@@ -358,7 +371,7 @@ Legend:
 | Content Studio | 9 | All DONE |
 | WA Forms | 4 | All DONE |
 | Tickets | 4 | All DONE |
-| **TOTAL** | **184** | **Not all DONE — see category rows** |
+| **TOTAL** | **192** | **Not all DONE — see category rows** |
 
 ### Not Yet Built (from docs/roadmap)
 
@@ -375,4 +388,4 @@ Legend:
 
 ---
 
-Footer 2026-08-17: Platform admin (SAMYOJ-57) is a separate `admin/` app on `:3001`, not a customer Dashboard tab. This matrix is not source of truth — see `docs/memory/STATUS_AND_FUTURE.md`.
+Footer 2026-08-18: Platform admin (SAMYOJ-57) is a separate `admin/` app on `:3001`, not a customer Dashboard tab. This matrix is **stale and overstates readiness** — see `docs/memory/STATUS_AND_FUTURE.md` and `audit/FULL_REVIEW_2026-08-18.md`. Billing is demo-grade (not subscriptions). Voice live transfer is a stub. Runtime STT/TTS is Sarvam, not Google/Deepgram.

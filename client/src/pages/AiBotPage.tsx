@@ -19,6 +19,12 @@ import AiBotPickupPanel from '../components/ai-bot/AiBotPickupPanel';
 import AiBotStatusFilter from '../components/ai-bot/AiBotStatusFilter';
 import { AiBotKnowledgeCell, AiBotStatusCell } from '../components/ai-bot/AiBotListCells';
 import { botChip, getAiBotAvatar } from '../components/ai-bot/aiBotVisuals';
+import AiBotDashboardSummary, {
+  aggregateBotAnalytics,
+  type AggregateAnalytics,
+} from '../components/ai-bot/AiBotDashboardSummary';
+import AiBotInsights from '../components/ai-bot/AiBotInsights';
+import AiBotAggregateAnalytics from '../components/ai-bot/AiBotAggregateAnalytics';
 import AppButton from '../components/ui/AppButton';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import AppInput from '../components/ui/AppInput';
@@ -44,7 +50,7 @@ import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 import { getErrorMessage } from '../utils/errors';
 import { toastError, toastSuccess } from '../utils/toast';
-import type { AiBot, BotTestResult, KnowledgeBaseItem } from '../types';
+import type { AiBot, BotAnalytics, BotTestResult, KnowledgeBaseItem } from '../types';
 
 type Channel = 'CHAT' | 'CALL';
 type SlideTab = 'setup' | 'train' | 'try' | 'pickup';
@@ -174,6 +180,12 @@ export default function AiBotPage() {
   const activeNumberIdRef = useRef<string | null>(null);
   activeNumberIdRef.current = activeNumber?.id ?? null;
   const requestGenerationRef = useRef(0);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [aggregateAnalytics, setAggregateAnalytics] = useState<AggregateAnalytics | null>(null);
+  const [perBotAnalytics, setPerBotAnalytics] = useState<
+    Array<{ botName: string; botId: string; analytics: BotAnalytics | null }>
+  >([]);
+  const analyticsGenerationRef = useRef(0);
 
   const load = useCallback(async () => {
     if (!resolved || !activeNumber) return;
@@ -212,6 +224,38 @@ export default function AiBotPage() {
     load();
   }, [load]);
 
+  // Load per-bot analytics after bots load
+  useEffect(() => {
+    if (bots.length === 0) {
+      setAggregateAnalytics(null);
+      setPerBotAnalytics([]);
+      return;
+    }
+    const generation = ++analyticsGenerationRef.current;
+    setAnalyticsLoading(true);
+    const channelBots = bots.filter((b) => isChatBot(b) === (channelFilter === 'CHAT'));
+    let failedCount = 0;
+    Promise.all(
+      channelBots.map((bot) =>
+        aiBotApi
+          .analytics(bot.id)
+          .then((res: { data: { data: BotAnalytics } }) => ({ botId: bot.id, botName: bot.name, analytics: res.data.data as BotAnalytics }))
+          .catch(() => { failedCount += 1; return { botId: bot.id, botName: bot.name, analytics: null }; })
+      )
+    )
+      .then((results) => {
+        if (generation !== analyticsGenerationRef.current) return;
+        setPerBotAnalytics(results);
+        setAggregateAnalytics(aggregateBotAnalytics(results));
+        if (failedCount > 0 && failedCount === channelBots.length) {
+          toastError('Could not load bot analytics. Try refreshing.');
+        }
+      })
+      .finally(() => {
+        if (generation === analyticsGenerationRef.current) setAnalyticsLoading(false);
+      });
+  }, [bots, channelFilter]);
+
   useEffect(() => {
     return () => {
       previewAudioRef.current?.pause();
@@ -224,10 +268,13 @@ export default function AiBotPage() {
   useOnActiveNumberChange(({ isInitial }) => {
     if (isInitial) return;
     requestGenerationRef.current += 1;
+    analyticsGenerationRef.current += 1;
     setBots([]);
     setLoading(true);
     setEditing(null);
     setSlideOpen(false);
+    setAggregateAnalytics(null);
+    setPerBotAnalytics([]);
   });
 
   const filteredBots = useMemo(() => {
@@ -618,10 +665,39 @@ export default function AiBotPage() {
     return peers.length > 1;
   };
 
+  const botAnalyticsMap = useMemo(() => {
+    const map = new Map<string, { successRate: number | null; lastActivityAt: string | null }>();
+    for (const entry of perBotAnalytics) {
+      const a = entry.analytics;
+      if (a && a.totalReplies > 0) {
+        map.set(entry.botId, {
+          successRate: Math.round((a.successfulReplies / a.totalReplies) * 100),
+          lastActivityAt: a.recentRuns[0]?.createdAt ?? null,
+        });
+      } else {
+        map.set(entry.botId, { successRate: null, lastActivityAt: null });
+      }
+    }
+    return map;
+  }, [perBotAnalytics]);
+
+  const totalKnowledgeItems = useMemo(
+    () => bots.reduce((sum, b) => sum + (b._count?.knowledgeItems ?? 0), 0),
+    [bots]
+  );
+
   return (
     <>
       <PageShell>
         <div className="space-y-4 sm:space-y-5">
+          <AiBotDashboardSummary loading={analyticsLoading} analytics={aggregateAnalytics} />
+
+          <AiBotInsights
+            analytics={aggregateAnalytics}
+            loading={analyticsLoading}
+            totalKnowledgeItems={totalKnowledgeItems}
+          />
+
           <div className="dashboard-card dashboard-card-soft overflow-hidden p-0">
             <ListToolbar
               embedded
@@ -666,16 +742,41 @@ export default function AiBotPage() {
                 tableHeaders={['Bot', 'Status', 'Trained', 'Updated', 'Actions']}
               />
             ) : listBotsForFilter.length === 0 ? (
-              <AiBotListEmpty
-                mode={hasFilters ? 'filter' : 'new'}
-                hasSearch={Boolean(search.trim())}
-                channel={channelFilter}
-                onCreate={() => openCreate(channelFilter)}
-                onClearFilters={() => {
-                  setSearch('');
-                  setStatusFilter('');
-                }}
-              />
+              <>
+                <AiBotListEmpty
+                  mode={hasFilters ? 'filter' : 'new'}
+                  hasSearch={Boolean(search.trim())}
+                  channel={channelFilter}
+                  onCreate={() => openCreate(channelFilter)}
+                  onClearFilters={() => {
+                    setSearch('');
+                    setStatusFilter('');
+                  }}
+                />
+                {!hasFilters && !aggregateAnalytics && (
+                  <div className="border-t border-theme-border px-4 py-5 sm:px-5">
+                    <p className="mb-3 text-[13px] font-extrabold text-theme-fg">
+                      What can an AI bot do?
+                    </p>
+                    <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+                      {[
+                        { title: 'Auto-reply 24/7', desc: 'Answer common questions even when the team is offline.' },
+                        { title: 'Handoff to your team', desc: 'When the bot is unsure, it hands the chat to a person.' },
+                        { title: 'Voice + Chat', desc: 'One brain for WhatsApp messages and phone calls.' },
+                        { title: 'Per-chat control', desc: 'Pick a bot for specific chats, or use a default.' },
+                      ].map((item) => (
+                        <div
+                          key={item.title}
+                          className="rounded-xl border border-theme-border bg-theme-surface p-3"
+                        >
+                          <p className="text-[12px] font-bold text-theme-fg">{item.title}</p>
+                          <p className="mt-0.5 text-[11px] leading-relaxed text-theme-muted">{item.desc}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
             ) : filteredBots.length === 0 ? (
               <div className="px-4 py-8 sm:px-6 sm:py-10">
                 <AiBotListEmpty
@@ -699,6 +800,8 @@ export default function AiBotPage() {
                     key={bot.id}
                     bot={bot}
                     answersCalls={bot.id === answeringCallBotId}
+                    successRate={botAnalyticsMap.get(bot.id)?.successRate ?? null}
+                    lastActivityAt={botAnalyticsMap.get(bot.id)?.lastActivityAt ?? null}
                     onEdit={() => openEdit(bot)}
                     onToggle={() => toggleEnabled(bot)}
                     onDelete={canDeleteBot(bot) ? () => handleDelete(bot.id) : undefined}
@@ -763,7 +866,23 @@ export default function AiBotPage() {
                             <AiBotKnowledgeCell count={bot._count?.knowledgeItems ?? 0} />
                           </td>
                           <td>
-                            <AiBotStatusCell enabled={bot.enabled} />
+                            <div className="flex items-center gap-2">
+                              <AiBotStatusCell enabled={bot.enabled} />
+                              {botAnalyticsMap.get(bot.id)?.successRate !== null &&
+                                botAnalyticsMap.get(bot.id)?.successRate !== undefined && (
+                                  <span
+                                    className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold tabular-nums ${
+                                      (botAnalyticsMap.get(bot.id)?.successRate ?? 0) >= 80
+                                        ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+                                        : (botAnalyticsMap.get(bot.id)?.successRate ?? 0) >= 50
+                                          ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
+                                          : 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300'
+                                    }`}
+                                  >
+                                    {botAnalyticsMap.get(bot.id)?.successRate}% ok
+                                  </span>
+                                )}
+                            </div>
                           </td>
                           <td>
                             <div className="flex items-center justify-end gap-1.5">
@@ -808,6 +927,12 @@ export default function AiBotPage() {
               />
             )}
           </div>
+
+          <AiBotAggregateAnalytics
+            analytics={aggregateAnalytics}
+            perBotAnalytics={perBotAnalytics}
+            loading={analyticsLoading}
+          />
         </div>
       </PageShell>
 

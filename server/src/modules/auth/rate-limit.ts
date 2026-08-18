@@ -2,9 +2,10 @@ import rateLimit, { type Store } from 'express-rate-limit';
 import getRedis from '../../config/redis';
 import logger from '../../utils/logger';
 
-function redisAuthStore(prefix: string): Store {
+export function redisAuthStore(prefix: string, fallbackCapacity = 5_000): Store {
   let windowMs = 15 * 60 * 1000;
   const keyPrefix = `auth-rl:${prefix}:`;
+  const fallback = new BoundedMemoryCounter(fallbackCapacity);
 
   return {
     init(options) {
@@ -19,26 +20,32 @@ function redisAuthStore(prefix: string): Store {
         const ttl = await redis.pttl(redisKey);
         return { totalHits: hits, resetTime: new Date(Date.now() + Math.max(ttl, 0)) };
       } catch (err) {
-        logger.warn('Auth rate-limit Redis unavailable — failing open for this hit', {
+        const entry = fallback.increment(key, windowMs);
+        logger.warn('Auth rate-limit Redis unavailable — using bounded fallback', {
           source: 'auth',
           prefix,
+          fallbackCapacity,
+          fallbackExhausted: entry === null,
           error: err instanceof Error ? err.message : String(err),
         });
-        return { totalHits: 1, resetTime: new Date(Date.now() + windowMs) };
+        return {
+          totalHits: entry?.count ?? Number.MAX_SAFE_INTEGER,
+          resetTime: new Date(entry?.resetAt ?? Date.now() + windowMs),
+        };
       }
     },
     async decrement(key) {
       try {
         await getRedis().decr(`${keyPrefix}${key}`);
       } catch {
-        /* fail open */
+        fallback.decrement(key);
       }
     },
     async resetKey(key) {
       try {
         await getRedis().del(`${keyPrefix}${key}`);
       } catch {
-        /* fail open */
+        fallback.reset(key);
       }
     },
   };
@@ -49,7 +56,7 @@ interface MemoryCounterEntry {
   resetAt: number;
 }
 
-class BoundedMemoryCounter {
+export class BoundedMemoryCounter {
   private readonly entries = new Map<string, MemoryCounterEntry>();
 
   constructor(private readonly capacity: number) {}
@@ -163,7 +170,7 @@ export function createPlatformRedisAuthStore(
 const sharedLimiterOptions = {
   standardHeaders: true as const,
   legacyHeaders: false,
-  passOnStoreError: true,
+  passOnStoreError: false,
 };
 
 /** Login / password reset attempts */
@@ -216,9 +223,11 @@ export const authOAuthLimiter = rateLimit({
   message: { success: false, error: 'Too many OAuth attempts. Try again later.' },
 });
 
+const sharedAccountThrottleFallback = new BoundedMemoryCounter(5_000);
+
 /**
- * Per-email/account throttle on Redis (same pattern as AI bot rate-limit.service).
- * Fail-open if Redis is down — IP limiter still applies.
+ * Per-email/account throttle on Redis with bounded in-memory fallback.
+ * Fails closed — capacity exhaustion is treated as over-limit.
  */
 export async function consumeAccountThrottle(
   accountKey: string,
@@ -232,11 +241,13 @@ export async function consumeAccountThrottle(
     if (count === 1) await redis.expire(redisKey, windowSeconds);
     return count <= max;
   } catch (err) {
-    logger.warn('Auth account throttle Redis unavailable — failing open', {
+    const entry = sharedAccountThrottleFallback.increment(accountKey, windowSeconds * 1000);
+    logger.warn('Auth account throttle Redis unavailable — using bounded fallback', {
       source: 'auth',
+      fallbackExhausted: entry === null,
       error: err instanceof Error ? err.message : String(err),
     });
-    return true;
+    return entry !== null && entry.count <= max;
   }
 }
 

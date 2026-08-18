@@ -6,7 +6,7 @@ import { useAuth } from '../../contexts/AuthContext';
 interface PreConnectHeroProps {
   connecting: boolean;
   onConnect: () => void;
-  onWatchVideo: () => void;
+  onWatchVideo?: () => void;
 }
 
 function firstName(name: string | undefined | null): string {
@@ -70,16 +70,18 @@ export default function PreConnectHero({
               Connect WhatsApp
             </AppButton>
 
-            <button
-              type="button"
-              onClick={onWatchVideo}
-              className="inline-flex h-11 min-h-[44px] w-full items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 text-[13.5px] font-semibold text-neutral-700 shadow-sm transition hover:border-neutral-300 hover:bg-neutral-50 sm:w-auto sm:text-[14px]"
-            >
-              <span className="flex h-6 w-6 items-center justify-center rounded-full border border-neutral-200 text-neutral-600">
-                <Play className="ml-0.5 h-2.5 w-2.5" fill="currentColor" strokeWidth={0} />
-              </span>
-              Watch Setup Video
-            </button>
+            {onWatchVideo && (
+              <button
+                type="button"
+                onClick={onWatchVideo}
+                className="inline-flex h-11 min-h-[44px] w-full items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 text-[13.5px] font-semibold text-neutral-700 shadow-sm transition hover:border-neutral-300 hover:bg-neutral-50 sm:w-auto sm:text-[14px]"
+              >
+                <span className="flex h-6 w-6 items-center justify-center rounded-full border border-neutral-200 text-neutral-600">
+                  <Play className="ml-0.5 h-2.5 w-2.5" fill="currentColor" strokeWidth={0} />
+                </span>
+                Watch Setup Video
+              </button>
+            )}
           </div>
         </div>
 
@@ -88,40 +90,67 @@ export default function PreConnectHero({
             className="pointer-events-none absolute left-1/2 top-1/2 h-[88%] w-[78%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-100/55 blur-2xl"
             aria-hidden
           />
-          <button
-            type="button"
-            onClick={onWatchVideo}
-            aria-label="Watch Setup Video"
-            className="group relative w-full max-w-[520px] rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-[#25D366]/60 focus-visible:ring-offset-2 lg:max-w-none"
-          >
-            <div
-              className="relative w-full"
-              style={{
-                WebkitMaskImage:
-                  'radial-gradient(ellipse 72% 78% at 50% 48%, #000 52%, rgba(0,0,0,0.85) 68%, transparent 92%)',
-                maskImage:
-                  'radial-gradient(ellipse 72% 78% at 50% 48%, #000 52%, rgba(0,0,0,0.85) 68%, transparent 92%)',
-              }}
+          {onWatchVideo ? (
+            <button
+              type="button"
+              onClick={onWatchVideo}
+              aria-label="Watch Setup Video"
+              className="group relative w-full max-w-[520px] rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-[#25D366]/60 focus-visible:ring-offset-2 lg:max-w-none"
             >
-              <img
-                src="/dashboard/preconnect-hero-photo.png"
-                alt=""
-                className="mx-auto h-auto w-full max-h-[300px] select-none object-contain object-center sm:max-h-[360px] lg:max-h-[400px] xl:max-h-[440px]"
-                draggable={false}
-                onError={(e) => {
-                  const el = e.currentTarget;
-                  if (el.getAttribute('data-fallback') === '1') return;
-                  el.setAttribute('data-fallback', '1');
-                  el.src = '/dashboard/preconnect-hero.svg';
+              <div
+                className="relative w-full"
+                style={{
+                  WebkitMaskImage:
+                    'radial-gradient(ellipse 72% 78% at 50% 48%, #000 52%, rgba(0,0,0,0.85) 68%, transparent 92%)',
+                  maskImage:
+                    'radial-gradient(ellipse 72% 78% at 50% 48%, #000 52%, rgba(0,0,0,0.85) 68%, transparent 92%)',
                 }}
-              />
-            </div>
-            <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
-              <span className="flex h-14 w-14 items-center justify-center rounded-full bg-[#25D366] text-white shadow-[0_12px_36px_rgba(37,211,102,0.45)] ring-[6px] ring-white/80 transition motion-safe:group-hover:scale-105 sm:h-16 sm:w-16">
-                <Play className="ml-0.5 h-6 w-6 sm:h-7 sm:w-7" fill="currentColor" strokeWidth={0} />
+              >
+                <img
+                  src="/dashboard/preconnect-hero-photo.png"
+                  alt=""
+                  className="mx-auto h-auto w-full max-h-[300px] select-none object-contain object-center sm:max-h-[360px] lg:max-h-[400px] xl:max-h-[440px]"
+                  draggable={false}
+                  onError={(e) => {
+                    const el = e.currentTarget;
+                    if (el.getAttribute('data-fallback') === '1') return;
+                    el.setAttribute('data-fallback', '1');
+                    el.src = '/dashboard/preconnect-hero.svg';
+                  }}
+                />
+              </div>
+              <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <span className="flex h-14 w-14 items-center justify-center rounded-full bg-[#25D366] text-white shadow-[0_12px_36px_rgba(37,211,102,0.45)] ring-[6px] ring-white/80 transition motion-safe:group-hover:scale-105 sm:h-16 sm:w-16">
+                  <Play className="ml-0.5 h-6 w-6 sm:h-7 sm:w-7" fill="currentColor" strokeWidth={0} />
+                </span>
               </span>
-            </span>
-          </button>
+            </button>
+          ) : (
+            <div className="relative w-full max-w-[520px] lg:max-w-none">
+              <div
+                className="relative w-full"
+                style={{
+                  WebkitMaskImage:
+                    'radial-gradient(ellipse 72% 78% at 50% 48%, #000 52%, rgba(0,0,0,0.85) 68%, transparent 92%)',
+                  maskImage:
+                    'radial-gradient(ellipse 72% 78% at 50% 48%, #000 52%, rgba(0,0,0,0.85) 68%, transparent 92%)',
+                }}
+              >
+                <img
+                  src="/dashboard/preconnect-hero-photo.png"
+                  alt=""
+                  className="mx-auto h-auto w-full max-h-[300px] select-none object-contain object-center sm:max-h-[360px] lg:max-h-[400px] xl:max-h-[440px]"
+                  draggable={false}
+                  onError={(e) => {
+                    const el = e.currentTarget;
+                    if (el.getAttribute('data-fallback') === '1') return;
+                    el.setAttribute('data-fallback', '1');
+                    el.src = '/dashboard/preconnect-hero.svg';
+                  }}
+                />
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </section>

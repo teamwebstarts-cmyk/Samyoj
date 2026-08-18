@@ -36,10 +36,7 @@ import {
 } from './test-preview';
 import {
   createBotVersion,
-  listBotAuditLogs,
-  listBotVersions,
   logBotAudit,
-  restoreBotVersion,
 } from '../ai/versioning.service';
 
 const router = Router();
@@ -338,48 +335,6 @@ router.get(
 
     const analytics = await getBotAnalytics(botId, orgId, days);
     sendSuccess(res, analytics);
-  })
-);
-
-router.get(
-  '/:id/versions',
-  ...readGuard,
-  asyncHandler(async (req: Request, res: Response) => {
-    const orgId = req.user!.organizationId!;
-    const botId = paramId(req);
-    const bot = await prisma.aiBot.findFirst({ where: { id: botId, organizationId: orgId } });
-    if (!bot) throw new AppError(404, 'Bot not found');
-    const versions = await listBotVersions(botId);
-    sendSuccess(res, { versions });
-  })
-);
-
-router.get(
-  '/:id/audit',
-  ...readGuard,
-  asyncHandler(async (req: Request, res: Response) => {
-    const orgId = req.user!.organizationId!;
-    const botId = paramId(req);
-    const bot = await prisma.aiBot.findFirst({ where: { id: botId, organizationId: orgId } });
-    if (!bot) throw new AppError(404, 'Bot not found');
-    const logs = await listBotAuditLogs(botId);
-    sendSuccess(res, { logs });
-  })
-);
-
-router.post(
-  '/:id/restore/:version',
-  ...adminGuard,
-  asyncHandler(async (req: Request, res: Response) => {
-    const orgId = req.user!.organizationId!;
-    const botId = paramId(req);
-    const version = parseInt(String(req.params.version), 10);
-
-    const bot = await prisma.aiBot.findFirst({ where: { id: botId, organizationId: orgId } });
-    if (!bot) throw new AppError(404, 'Bot not found');
-
-    const restored = await restoreBotVersion(botId, orgId, version, req.user!.userId);
-    sendSuccess(res, restored);
   })
 );
 

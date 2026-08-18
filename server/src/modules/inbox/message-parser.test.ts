@@ -54,3 +54,63 @@ describe('describeUnsupportedType', () => {
     expect(describeUnsupportedType('poll_update').title).toBe('Poll update');
   });
 });
+
+describe('parseInboundMessage — call_permission', () => {
+  it('parses call_permission_request interactive type', () => {
+    const parsed = parseInboundMessage({
+      from: '16505551234',
+      id: 'wamid.perm',
+      timestamp: '1750090702',
+      type: 'interactive',
+      interactive: {
+        type: 'call_permission_request',
+        action: { name: 'call_permission_request' },
+        body: { text: 'We would like to call you on WhatsApp to help with your request.' },
+      },
+    });
+
+    expect(parsed.content).toBe(
+      'We would like to call you on WhatsApp to help with your request.'
+    );
+    expect(parsed.callPermissionStatus).toBe('pending');
+  });
+
+  it('falls back to default content when body text is missing', () => {
+    const parsed = parseInboundMessage({
+      type: 'interactive',
+      interactive: {
+        type: 'call_permission_request',
+        action: { name: 'call_permission_request' },
+      },
+    });
+
+    expect(parsed.content).toBe('Call permission requested');
+    expect(parsed.callPermissionStatus).toBe('pending');
+  });
+
+  it('parses call_permission_response with granted status', () => {
+    const parsed = parseInboundMessage({
+      type: 'interactive',
+      interactive: {
+        type: 'call_permission_response',
+        call_permission_response: { status: 'granted' },
+      },
+    });
+
+    expect(parsed.content).toBe('Call permission granted');
+    expect(parsed.callPermissionStatus).toBe('granted');
+  });
+
+  it('parses call_permission_response with denied status', () => {
+    const parsed = parseInboundMessage({
+      type: 'interactive',
+      interactive: {
+        type: 'call_permission_response',
+        call_permission_response: { status: 'denied' },
+      },
+    });
+
+    expect(parsed.content).toBe('Call permission denied');
+    expect(parsed.callPermissionStatus).toBe('denied');
+  });
+});

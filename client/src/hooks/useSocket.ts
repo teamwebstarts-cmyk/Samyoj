@@ -3,7 +3,7 @@ import { io, Socket } from 'socket.io-client';
 import { logError } from '../utils/errors';
 import { socketBaseUrl } from '../services/utils';
 import { ensureFreshAccessToken } from '../services/api';
-import { getAccessToken, getRefreshToken } from '../utils/authStorage';
+import { clearAuthTokens, getAccessToken, getRefreshToken } from '../utils/authStorage';
 import { getActiveWhatsappNumberId } from '../services/api';
 
 export type SocketConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
@@ -212,6 +212,22 @@ export function useSocket(onEvent?: (event: string, data: unknown) => void) {
     for (const event of events) {
       socket.on(event, (data) => onMessage(event, data));
     }
+
+    // Handle server-initiated session revocation (admin removed user from org).
+    // The server emits this just before disconnecting the socket.
+    socket.on('session:revoked', () => {
+      disposed = true;
+      socket.io.opts.reconnection = false;
+      clearAuthTokens();
+      // Dynamic import to avoid circular dependency and keep toast as a side-effect.
+      void import('../utils/toast').then(({ toastWarning }) => {
+        toastWarning('Your session was revoked by an administrator. Please log in again.');
+      });
+      // Small delay so the toast renders before navigating away.
+      setTimeout(() => {
+        window.location.href = '/login';
+      }, 300);
+    });
 
     return () => {
       disposed = true;

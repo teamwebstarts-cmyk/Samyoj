@@ -65,6 +65,7 @@ export function WhatsAppNumberProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [resolved, setResolved] = useState(false);
   const requestGeneration = useRef(0);
+  const consecutiveFailures = useRef(0);
   const numbersRef = useRef<WhatsappNumberOption[]>([]);
   numbersRef.current = numbers;
 
@@ -89,6 +90,8 @@ export function WhatsAppNumberProvider({ children }: { children: ReactNode }) {
       const list = parseNumbers(data.data);
       setNumbers(list);
 
+      consecutiveFailures.current = 0;
+
       setActiveId((prev) => {
         const stored = localStorage.getItem(storageKey(orgId));
         const previousPhoneNumberId =
@@ -109,6 +112,16 @@ export function WhatsAppNumberProvider({ children }: { children: ReactNode }) {
       });
     } catch {
       if (generation !== requestGeneration.current) return;
+      consecutiveFailures.current += 1;
+
+      if (consecutiveFailures.current >= 3) {
+        setActiveId(null);
+        setActiveWhatsappNumberId(null);
+        setActiveWhatsappNumberResolved(false);
+        setResolved(true);
+        return;
+      }
+
       // A transient list failure must not make pages fall back to an arbitrary
       // server-side number or discard the last known workspace.
       setActiveId((prev) => {
