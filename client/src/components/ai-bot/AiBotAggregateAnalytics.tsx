@@ -131,15 +131,7 @@ export default function AiBotAggregateAnalytics({
   if (loading && !analytics) return null;
 
   if (!analytics || analytics.totalReplies === 0) {
-    return (
-      <div className="rounded-xl border border-dashed border-theme-border bg-theme-subtle/40 px-4 py-6 text-center">
-        <BarChart3 className="mx-auto h-5 w-5 text-theme-muted" />
-        <p className="mt-2 text-[13px] font-semibold text-theme-fg">No bot activity yet</p>
-        <p className="mt-1 text-[12px] text-theme-muted">
-          Turn on a bot and send a test message to see analytics here.
-        </p>
-      </div>
-    );
+    return null;
   }
 
   const stats = [

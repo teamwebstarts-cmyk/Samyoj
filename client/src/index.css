@@ -1355,6 +1355,28 @@
     margin-top: auto;
   }
 
+  /* Phone: main is overflow-locked for list routes. Scroll the whole page
+     (hero + toolbar + empty/list) so content is not clipped above the bottom nav. */
+  @media (max-width: 767px) {
+    .list-page-stack {
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .list-shell-body {
+      overflow: visible;
+      flex: 0 0 auto;
+      min-height: auto;
+    }
+
+    .list-shell-scroll {
+      overflow: visible;
+      flex: 0 0 auto;
+      min-height: auto;
+    }
+  }
+
   .campaign-wizard-page {
     @apply mx-auto flex h-full min-h-0 w-full max-w-[1440px] flex-1 flex-col page-gutter-x;
     padding-top: var(--density-page-py);
@@ -2206,6 +2228,29 @@
     @apply mx-auto flex h-full min-h-0 w-full max-w-[1440px] flex-1 flex-col overflow-hidden page-gutter-x py-3 sm:py-4 lg:py-5;
   }
 
+  @media (max-width: 767px) {
+    .page-shell-inbox {
+      max-width: none;
+      padding: 0;
+    }
+
+    .page-shell-inbox .inbox-shell {
+      border: none;
+      border-radius: 0;
+      box-shadow: none;
+    }
+
+    html.mobile-thread-open .topbar-glass,
+    html.mobile-thread-open nav[aria-label='Primary navigation'],
+    html.mobile-thread-open .mobile-chrome-hide {
+      display: none !important;
+    }
+
+    html.mobile-thread-open .app-main-scroll {
+      padding-bottom: 0 !important;
+    }
+  }
+
   .inbox-shell {
     --inbox-font-sans: var(--app-font-family);
     font-family: var(--app-font-family);
@@ -2230,6 +2275,14 @@
   .campaigns-list-shell,
   .dark .campaigns-list-shell {
     box-shadow: none;
+  }
+
+  @media (max-width: 767px) {
+    .inbox-shell.list-shell-body {
+      overflow: visible;
+      flex: 0 0 auto;
+      min-height: auto;
+    }
   }
 
   /* Campaign status More menu + AppSelect menus — thin hover scrollbar */

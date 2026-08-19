@@ -26,6 +26,7 @@ import {
   formatContactPhone,
   formatContactRelativeTime,
 } from '../../utils/contactUtils';
+import { beginOutboundDialing } from '../../utils/outboundLiveCallStore';
 import type { Contact, ContactDetail } from '../../types';
 import { contactGetsCampaignMessages } from '../../utils/contactConsent';
 import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
@@ -155,6 +156,23 @@ export default function ContactDetailPanel({
     navigate(`/inbox?conversation=${conversationId}`);
   };
 
+  const startNewChat = () => {
+    onClose();
+    const phone = encodeURIComponent(current.phone);
+    const name = encodeURIComponent(current.name || '');
+    navigate(`/inbox?new=true&phone=${phone}&name=${name}`);
+  };
+
+  const handleCall = () => {
+    if (!current?.phone) return;
+    beginOutboundDialing({
+      phone: current.phone,
+      contactName: current.name || undefined,
+      conversationId: primaryConversationId,
+    });
+    onClose();
+  };
+
   const openCampaign = () => {
     onClose();
     navigate(`/campaigns?contacts=${current.id}`);
@@ -199,7 +217,16 @@ export default function ContactDetailPanel({
           <AppButton variant="secondary" size="sm" onClick={onClose} className="flex-1 sm:flex-none">
             Close
           </AppButton>
-          {primaryConversationId && (
+          <AppButton
+            variant="secondary"
+            size="sm"
+            icon={<Phone size={14} />}
+            onClick={handleCall}
+            className="flex-1 sm:flex-none"
+          >
+            Call
+          </AppButton>
+          {primaryConversationId ? (
             <AppButton
               size="sm"
               icon={<MessageSquare size={14} />}
@@ -207,6 +234,15 @@ export default function ContactDetailPanel({
               className="flex-1 sm:flex-none"
             >
               Open chat
+            </AppButton>
+          ) : (
+            <AppButton
+              size="sm"
+              icon={<MessageSquare size={14} />}
+              onClick={startNewChat}
+              className="flex-1 sm:flex-none"
+            >
+              Start chat
             </AppButton>
           )}
         </div>
@@ -263,7 +299,10 @@ export default function ContactDetailPanel({
           </div>
 
           <ModalPanel title="Quick actions" accent="sky">
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <AppButton size="sm" variant="secondary" icon={<Phone size={14} />} onClick={handleCall}>
+                Call
+              </AppButton>
               <AppButton size="sm" variant="secondary" icon={<Send size={14} />} onClick={openCampaign}>
                 Campaign
               </AppButton>
@@ -285,6 +324,7 @@ export default function ContactDetailPanel({
                 icon={<Shield size={14} />}
                 onClick={handleToggleOptIn}
                 loading={togglingOptIn}
+                className="col-span-2 sm:col-span-4"
               >
                 {getsCampaignMessages ? messagingConsent.stopMessages : messagingConsent.allowMessages}
               </AppButton>

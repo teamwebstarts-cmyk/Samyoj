@@ -114,7 +114,11 @@ export default function Layout() {
             />
           )}
 
-          {!hideTopbar && <QualityRatingBanner />}
+          {!hideTopbar && (
+            <div className="mobile-chrome-hide">
+              <QualityRatingBanner />
+            </div>
+          )}
 
           <main
             className={`app-main-scroll platform-gradient-subtle flex-1 min-h-0 ${

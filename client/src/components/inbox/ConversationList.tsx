@@ -141,7 +141,7 @@ export default function ConversationList({
   const paginationFooter =
     total > 0 ? (
       <div
-        className="shrink-0 border-t border-neutral-100 px-2.5 py-2 dark:border-neutral-800/80"
+        className="hidden shrink-0 border-t border-neutral-100 px-2.5 py-2 md:block dark:border-neutral-800/80"
         data-testid="inbox-pagination"
       >
         <div className="flex min-w-0 flex-nowrap items-center justify-between gap-2 max-[260px]:flex-wrap">

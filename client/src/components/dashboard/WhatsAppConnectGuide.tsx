@@ -362,7 +362,9 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
     const incomingUnknown = webhookCheckFailed || (webhookSubscribed === null && !incomingOff);
     const needsAction = incomingOff || quality === 'YELLOW' || quality === 'RED';
 
-    const cardClass = incomingOff || incomingUnknown
+    const cardClass = incomingOff
+      ? 'border-rose-200/90 bg-gradient-to-r from-rose-50/70 via-white to-white'
+      : incomingUnknown
       ? 'border-amber-200/90 bg-gradient-to-r from-amber-50/80 via-white to-white'
       : quality === 'RED'
         ? 'border-rose-100/90 bg-gradient-to-r from-rose-50/50 via-white to-white'
@@ -389,26 +391,26 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
         className="relative z-10"
       >
         <div
-          className={`dashboard-card flex flex-col gap-[var(--card-gap)] rounded-2xl p-[var(--card-pad)] sm:flex-row sm:items-center sm:justify-between ${cardClass}`}
+          className={`dashboard-card flex flex-col gap-2 rounded-2xl p-3 sm:flex-row sm:items-center sm:justify-between sm:gap-[var(--card-gap)] sm:p-[var(--card-pad)] ${cardClass}`}
         >
-          <div className="flex min-w-0 items-start gap-3 sm:items-center">
+          <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
             <div className="relative shrink-0">
-              <IconWell accent="whatsapp" size="lg">
-                <WhatsAppGlyph className="h-5 w-5 sm:h-[22px] sm:w-[22px]" />
+              <IconWell accent="whatsapp" size="md">
+                <WhatsAppGlyph className="h-4 w-4 sm:h-[22px] sm:w-[22px]" />
               </IconWell>
               {incomingOn && !needsAction && (
                 <span
-                  className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full border-2 border-white bg-emerald-500 text-white"
+                  className="absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full border-2 border-white bg-emerald-500 text-white sm:h-4 sm:w-4"
                   aria-hidden
                 >
-                  <CheckCircle2 className="h-2.5 w-2.5" strokeWidth={3} />
+                  <CheckCircle2 className="h-2 w-2 sm:h-2.5 sm:w-2.5" strokeWidth={3} />
                 </span>
               )}
             </div>
 
             <div className="min-w-0 flex-1">
               <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">
-                <h2 className="max-w-[11rem] truncate text-[13.5px] font-extrabold tracking-tight text-neutral-900 sm:max-w-[14rem] sm:text-[15px] md:max-w-[12rem] lg:max-w-none">
+                <h2 className="max-w-[11rem] truncate text-[13px] font-extrabold tracking-tight text-neutral-900 sm:max-w-[14rem] sm:text-[15px] md:max-w-[12rem] lg:max-w-none">
                   {phone}
                 </h2>
                 {incomingOn && (
@@ -418,8 +420,11 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
                   </span>
                 )}
                 {incomingOff && (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-900">
-                    <Inbox className="h-3 w-3" strokeWidth={2.4} />
+                  <span className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-rose-700">
+                    <span className="relative flex h-1.5 w-1.5" aria-hidden>
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-400 opacity-70" />
+                      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-rose-600" />
+                    </span>
                     Inbox offline
                   </span>
                 )}
@@ -444,7 +449,7 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
                 )}
               </div>
 
-              <p className="mt-0.5 line-clamp-2 text-[11.5px] font-medium leading-snug text-neutral-500 sm:text-[12.5px]">
+              <p className="mt-0.5 hidden text-[12.5px] font-medium leading-snug text-neutral-500 sm:block">
                 {statusLine}
                 {incomingOff && (
                   <>
@@ -481,28 +486,25 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
             </div>
           </div>
 
-          <div className="relative z-20 flex w-full shrink-0 flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap sm:justify-end">
+          <div className="relative z-20 flex w-full shrink-0 items-center gap-1.5 sm:w-auto sm:flex-nowrap sm:justify-end sm:gap-2">
             {(incomingOff || incomingUnknown) && (
               <AppButton
                 type="button"
-                className="min-h-9 flex-1 sm:flex-none sm:min-h-10"
-                icon={<Inbox className="h-4 w-4" />}
+                size="sm"
+                className="!h-8 !min-h-8 flex-1 px-2.5 text-[11px] sm:flex-none sm:!h-10 sm:!min-h-10 sm:px-4 sm:text-[13px]"
+                icon={<Inbox className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
                 onClick={() => void handleEnableIncoming()}
                 loading={enablingIncoming}
                 disabled={enablingIncoming || disconnecting}
               >
-                Enable incoming
+                <span className="sm:hidden">Enable</span>
+                <span className="hidden sm:inline">Enable incoming</span>
               </AppButton>
             )}
 
             <Link
               to="/settings?tab=whatsapp"
-              className={[
-                'inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl border bg-white px-3.5 text-[12.5px] font-semibold transition sm:h-10 sm:flex-none sm:px-4 sm:text-[13px]',
-                incomingOff
-                  ? 'border-neutral-200 text-neutral-700 hover:bg-neutral-50'
-                  : 'border-neutral-200 text-neutral-700 hover:bg-neutral-50',
-              ].join(' ')}
+              className="inline-flex h-8 min-h-8 flex-1 items-center justify-center gap-1 rounded-lg border border-neutral-200 bg-white px-2.5 text-[11px] font-semibold text-neutral-700 transition hover:bg-neutral-50 sm:h-10 sm:min-h-10 sm:flex-none sm:rounded-xl sm:px-4 sm:text-[13px]"
             >
               <Settings2 className="hidden h-3.5 w-3.5 sm:block" />
               Manage
@@ -512,10 +514,11 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
               type="button"
               onClick={() => void handleDisconnect()}
               disabled={disconnecting}
-              className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-white px-3.5 text-[12.5px] font-semibold text-rose-700 transition hover:bg-rose-50 disabled:opacity-50 sm:h-10 sm:flex-none sm:px-4 sm:text-[13px]"
+              aria-label={disconnecting ? 'Disconnecting' : 'Disconnect'}
+              className="inline-flex h-8 min-h-8 items-center justify-center gap-1 rounded-lg border border-rose-200 bg-white px-2 text-[11px] font-semibold text-rose-700 transition hover:bg-rose-50 disabled:opacity-50 sm:h-10 sm:min-h-10 sm:flex-none sm:rounded-xl sm:px-4 sm:text-[13px]"
             >
               <LogOut className="h-3.5 w-3.5" />
-              {disconnecting ? 'Disconnecting…' : 'Disconnect'}
+              <span className="hidden sm:inline">{disconnecting ? 'Disconnecting…' : 'Disconnect'}</span>
             </button>
           </div>
         </div>

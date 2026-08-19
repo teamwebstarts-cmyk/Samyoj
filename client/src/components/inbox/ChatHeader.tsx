@@ -4,6 +4,7 @@ import {
   Bot,
   ChevronDown,
   Loader2,
+  PanelRight,
   Phone,
   Search,
   Star,
@@ -40,6 +41,7 @@ interface ChatHeaderProps {
   onSetActiveBot?: (botId: string | null) => void;
   onToggleFavorite: () => void;
   onToggleSearch: () => void;
+  onOpenDetails?: () => void;
 }
 
 function HeaderIconButton({
@@ -122,6 +124,7 @@ export default function ChatHeader({
   onSetActiveBot,
   onToggleFavorite,
   onToggleSearch,
+  onOpenDetails,
 }: ChatHeaderProps) {
   const tipFor = useGlassTipProps();
   const [botMenuOpen, setBotMenuOpen] = useState(false);
@@ -167,7 +170,7 @@ export default function ChatHeader({
     <div className="inbox-chat-header relative z-30 flex shrink-0 items-center gap-1.5 border-b border-neutral-100/80 px-2 py-2.5 sm:gap-2 sm:px-3 sm:py-3 md:gap-3 md:px-4 md:py-3.5 dark:border-neutral-800/80">
       <button
         type="button"
-        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border border-theme-border bg-theme-surface text-theme-secondary transition hover:bg-theme-subtle md:hidden ${FOCUS_RING_CLASS}`}
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-theme-fg md:hidden ${FOCUS_RING_CLASS}`}
         onClick={onBack}
         aria-label="Back to conversations"
         {...tipFor('Back', 'right')}
@@ -215,6 +218,16 @@ export default function ChatHeader({
       </div>
 
       <div className="flex shrink-0 items-center gap-0.5 sm:gap-1 md:gap-1.5">
+        {onOpenDetails && (
+          <button
+            type="button"
+            onClick={onOpenDetails}
+            aria-label="Chat details"
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-neutral-600 md:hidden dark:text-neutral-300 ${FOCUS_RING_CLASS}`}
+          >
+            <PanelRight className="h-[18px] w-[18px]" strokeWidth={2.1} />
+          </button>
+        )}
         {serviceWindow === undefined ? (
           <span className="inbox-skeleton-shimmer hidden h-8 w-[6.5rem] rounded-[10px] md:h-9 md:w-[7.5rem] sm:block" />
         ) : (

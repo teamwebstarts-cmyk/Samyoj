@@ -7,6 +7,7 @@ import { toApiChatMessages } from './transcript';
 import { supportChatErrorMessage } from './errors';
 import { followUpPromptsFor } from './prompts';
 import SupportWelcome from './SupportWelcome';
+import SupportAnswer from './SupportAnswer';
 
 interface SupportAssistantTabProps {
   messages: SupportChatMessage[];
@@ -142,8 +143,8 @@ export default function SupportAssistantTab({
                   <p className="mb-1 pl-0.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-theme-muted">
                     Support AI
                   </p>
-                  <div className="rounded-2xl rounded-bl-md border border-theme-border bg-theme-surface px-3.5 py-2.5 text-[13.5px] font-medium leading-relaxed text-theme-fg shadow-sm">
-                    <p className="whitespace-pre-wrap">{msg.content}</p>
+                  <div className="rounded-2xl rounded-bl-md border border-theme-border bg-theme-surface px-3.5 py-2.5 text-theme-fg shadow-sm">
+                    <SupportAnswer content={msg.content} />
                   </div>
                 </div>
               </div>

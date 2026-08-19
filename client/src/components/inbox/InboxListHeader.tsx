@@ -179,27 +179,25 @@ export default function InboxListHeader({
   };
 
   return (
-    <div className="shrink-0 border-b border-neutral-100 px-3 pb-2 pt-3 dark:border-neutral-800/80">
+    <div className="shrink-0 border-b border-neutral-100 px-3 pb-2 pt-2 dark:border-neutral-800/80 md:pt-3">
       {inboundHealth?.state === 'unhealthy' && (
         <div
           role="alert"
           data-testid="inbound-health-banner"
-          className="mb-3 flex items-start gap-2.5 rounded-xl border border-red-300/80 bg-red-50/95 px-3 py-2.5 text-red-900 shadow-[0_2px_8px_rgba(220,38,38,0.08)] dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-100"
+          className="mb-2 flex items-center gap-2 rounded-lg border border-red-300/80 bg-red-50/95 px-2.5 py-1.5 text-red-900 md:mb-3 md:items-start md:gap-2.5 md:rounded-xl md:px-3 md:py-2.5 dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-100"
         >
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-400" />
-          <div className="min-w-0 flex-1 text-[12px] leading-snug">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-red-600 md:mt-0.5 md:h-4 md:w-4 dark:text-red-400" />
+          <div className="min-w-0 flex-1 text-[11.5px] leading-snug md:text-[12px]">
             <p className="font-bold">
-              {isConnected
-                ? 'Inbound messages are not arriving.'
-                : 'WhatsApp is not connected.'}
+              {isConnected ? 'Inbound not arriving' : 'WhatsApp is not connected'}
             </p>
-            <p className="mt-0.5 text-red-800/85 dark:text-red-200/85">
+            <p className="mt-0.5 hidden text-red-800/85 md:block dark:text-red-200/85">
               {isConnected
                 ? inboundHealth?.reason
                 : 'Connect a WhatsApp number to start receiving messages.'}
             </p>
             {isConnected && (
-              <p className="mt-1 text-[11px] font-medium text-red-700/85 dark:text-red-300/80">
+              <p className="mt-1 hidden text-[11px] font-medium text-red-700/85 md:block dark:text-red-300/80">
                 Outbound still works on localhost; the public tunnel or Meta webhook subscription is
                 the usual cause.
               </p>
@@ -208,14 +206,14 @@ export default function InboxListHeader({
           <button
             type="button"
             onClick={onRetryHealth}
-            className={`shrink-0 rounded-md border border-red-300/80 px-2 py-1 text-[10.5px] font-bold uppercase tracking-wide text-red-700 transition hover:bg-red-100 dark:border-red-500/40 dark:text-red-200 dark:hover:bg-red-900/40 ${FOCUS_RING_CLASS}`}
+            className={`shrink-0 rounded-md border border-red-300/80 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-red-700 transition hover:bg-red-100 md:text-[10.5px] dark:border-red-500/40 dark:text-red-200 dark:hover:bg-red-900/40 ${FOCUS_RING_CLASS}`}
           >
             Retry
           </button>
         </div>
       )}
 
-      <div className="flex items-start justify-between gap-2">
+      <div className={`${selectionMode ? 'flex' : 'hidden'} items-start justify-between gap-2 md:flex`}>
         <div className="min-w-0 flex-1 overflow-hidden">
           <div className="flex items-center gap-2">
             <h2 className="text-[18px] font-bold tracking-tight text-theme-fg">Inbox</h2>
@@ -262,7 +260,7 @@ export default function InboxListHeader({
             type="button"
             onClick={onNewChat}
             data-testid="inbox-new-chat"
-            className={`inline-flex h-9 items-center gap-1.5 rounded-lg bg-gradient-to-br from-whatsapp-500 to-whatsapp-600 px-3 text-[12.5px] font-bold text-white shadow-[0_2px_8px_rgba(37,211,102,0.35)] transition hover:brightness-105 active:scale-[0.98] ${FOCUS_RING_CLASS}`}
+            className={`hidden h-9 items-center gap-1.5 rounded-lg bg-gradient-to-br from-whatsapp-500 to-whatsapp-600 px-3 text-[12.5px] font-bold text-white shadow-[0_2px_8px_rgba(37,211,102,0.35)] transition hover:brightness-105 active:scale-[0.98] md:inline-flex ${FOCUS_RING_CLASS}`}
           >
             <Plus className="h-3.5 w-3.5" strokeWidth={2.75} />
             New chat
@@ -270,7 +268,7 @@ export default function InboxListHeader({
         </div>
       </div>
 
-      <div className="mt-2 border-t border-neutral-100 pt-2 dark:border-neutral-800/80">
+      <div className="mt-0 border-0 pt-0 md:mt-2 md:border-t md:border-neutral-100 md:pt-2 dark:md:border-neutral-800/80">
         <div className="flex items-center gap-2">
           <SearchInput
             ref={searchInputRef}
@@ -281,7 +279,7 @@ export default function InboxListHeader({
           />
 
           {selectableAgents.length > 0 && (
-            <div className="flex shrink-0 items-center">
+            <div className="hidden shrink-0 items-center md:flex">
               <div className="flex items-center -space-x-2">
                 {visibleAgents.map((agent) => (
                   <AgentAvatarButton

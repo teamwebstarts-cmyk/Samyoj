@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
+  ArrowRight,
   Copy,
   GitBranch,
   Hash,
@@ -225,31 +226,118 @@ export default function FlowsTab({
           />
         ) : flows.length === 0 ? (
           <div className="space-y-5 p-4 sm:p-6">
-            <EmptyState
-              icon={Workflow}
-              variant={hasFilters ? 'filter' : 'default'}
-              title={hasFilters ? 'No flows match your filters' : 'No conversation flows yet'}
-              description={
-                hasFilters
-                  ? 'Try a different search word or filter.'
-                  : 'Build a step-by-step chat guide — like a menu that walks customers through options.'
-              }
-              steps={hasFilters ? undefined : ['Pick a ready-made template (easiest)', 'Or build from scratch', 'Save to publish, then turn it on']}
-              action={
-                !hasFilters ? (
-                  <div className="grid w-full max-w-md grid-cols-1 gap-2 sm:grid-cols-2">
-                    <AppButton
-                      fullWidth
-                      icon={<Sparkles size={16} />}
-                      onClick={() => onTemplatesOpenChange(true)}
-                    >
-                      Start from template
-                    </AppButton>
-                    <BuildFromScratchButton fullWidth onClick={() => navigate('/automations/flows/new')} />
+            {hasFilters ? (
+              <EmptyState
+                icon={Workflow}
+                variant="filter"
+                title="No flows match your filters"
+                description="Try a different search word or filter."
+              />
+            ) : (
+              <div className="relative overflow-hidden rounded-2xl border border-violet-100 bg-gradient-to-br from-white via-violet-50/35 to-fuchsia-50/45 px-4 py-5 shadow-sm dark:border-violet-900/50 dark:from-slate-950 dark:via-violet-950/15 dark:to-fuchsia-950/15 sm:px-6 sm:py-6">
+                <div
+                  className="pointer-events-none absolute -right-16 -top-20 h-48 w-48 rounded-full bg-violet-300/20 blur-3xl dark:bg-violet-500/10"
+                  aria-hidden="true"
+                />
+                <div
+                  className="pointer-events-none absolute -bottom-24 left-1/3 h-48 w-48 rounded-full bg-fuchsia-300/15 blur-3xl dark:bg-fuchsia-500/10"
+                  aria-hidden="true"
+                />
+
+                <div className="relative grid items-center gap-6 lg:grid-cols-[210px_minmax(0,1fr)]">
+                  <div className="hidden rounded-2xl border border-violet-100 bg-white/75 p-4 shadow-sm dark:border-violet-900/50 dark:bg-slate-950/60 lg:block">
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-[0_8px_20px_rgba(139,92,246,0.25)]">
+                        <Workflow className="h-5 w-5" strokeWidth={2.1} />
+                      </span>
+                      <div>
+                        <p className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-violet-700 dark:text-violet-300">
+                          Flows
+                        </p>
+                        <p className="mt-0.5 text-[11px] font-bold text-slate-700 dark:text-slate-200">
+                          Smart chat journeys
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-4 space-y-2">
+                      <div className="flex items-center gap-2 rounded-lg bg-violet-50 px-2.5 py-2 text-[10px] font-bold text-violet-700 dark:bg-violet-950/30 dark:text-violet-300">
+                        <Sparkles className="h-3.5 w-3.5" />
+                        Ready-made templates
+                      </div>
+                      <div className="flex items-center gap-2 rounded-lg bg-indigo-50 px-2.5 py-2 text-[10px] font-bold text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-300">
+                        <GitBranch className="h-3.5 w-3.5" />
+                        Multi-step trees
+                      </div>
+                    </div>
                   </div>
-                ) : undefined
-              }
-            />
+
+                  <div className="min-w-0">
+                    <h3 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
+                      Build your first conversation flow
+                    </h3>
+                    <p className="mt-1.5 max-w-xl text-[11px] font-medium leading-relaxed text-slate-500 dark:text-slate-400 sm:text-[12px]">
+                      Build a step-by-step chat guide — like a menu that walks customers through options.
+                    </p>
+
+                    <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                      {[
+                        {
+                          icon: Sparkles,
+                          label: 'Pick a template (easiest)',
+                          tone: 'bg-violet-50 text-violet-600 dark:bg-violet-950/35 dark:text-violet-300',
+                        },
+                        {
+                          icon: GitBranch,
+                          label: 'Or build from scratch',
+                          tone: 'bg-sky-50 text-sky-600 dark:bg-sky-950/35 dark:text-sky-300',
+                        },
+                        {
+                          icon: PlayCircle,
+                          label: 'Save, publish & turn on',
+                          tone: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/35 dark:text-emerald-300',
+                        },
+                      ].map(({ icon: StepIcon, label, tone }, index) => (
+                        <div
+                          key={label}
+                          className="group flex min-h-[62px] items-center gap-2.5 rounded-xl border border-slate-200/70 bg-white/80 px-3 py-2.5 shadow-[0_4px_14px_rgba(15,23,42,0.04)] transition hover:-translate-y-0.5 hover:border-violet-200 hover:shadow-[0_8px_20px_rgba(139,92,246,0.10)] dark:border-slate-800/80 dark:bg-slate-950/55 dark:hover:border-violet-800"
+                        >
+                          <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${tone}`}>
+                            <StepIcon className="h-4 w-4" strokeWidth={2.1} />
+                          </span>
+                          <span className="min-w-0">
+                            <span className="flex items-center gap-1.5">
+                              <span className="text-[9px] font-extrabold tabular-nums text-violet-600 dark:text-violet-300">
+                                0{index + 1}
+                              </span>
+                              <span className="truncate text-[10.5px] font-bold text-slate-700 dark:text-slate-200">
+                                {label}
+                              </span>
+                            </span>
+                          </span>
+                          {index < 2 && (
+                            <ArrowRight className="ml-auto hidden h-3.5 w-3.5 shrink-0 text-slate-300 transition-transform group-hover:translate-x-0.5 group-hover:text-violet-500 sm:block" />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap items-center gap-2.5">
+                      <AppButton
+                        className="!min-h-9"
+                        size="sm"
+                        icon={<Sparkles className="h-3.5 w-3.5" />}
+                        onClick={() => onTemplatesOpenChange(true)}
+                      >
+                        Start from template
+                      </AppButton>
+                      <BuildFromScratchButton
+                        onClick={onNewFlow ?? (() => navigate('/automations/flows/new'))}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {!hasFilters && templates.length > 0 && (
               <SectionCard title="Ready-made templates" subtitle="Tap a template to customize messages">

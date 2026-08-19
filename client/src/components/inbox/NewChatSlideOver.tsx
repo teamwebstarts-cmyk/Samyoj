@@ -16,11 +16,23 @@ interface NewChatSlideOverProps {
   open: boolean;
   onClose: () => void;
   onStart: (payload: ContactStartPayload) => Promise<void>;
+  initialPhone?: string;
+  initialName?: string;
 }
 
-export default function NewChatSlideOver({ open, onClose, onStart }: NewChatSlideOverProps) {
+export default function NewChatSlideOver({
+  open,
+  onClose,
+  onStart,
+  initialPhone = '',
+  initialName = '',
+}: NewChatSlideOverProps) {
   const phoneId = useId();
-  const [form, setForm] = useState<ContactFormValues>(emptyContactForm);
+  const [form, setForm] = useState<ContactFormValues>(() => ({
+    ...emptyContactForm,
+    phone: initialPhone,
+    name: initialName,
+  }));
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -31,9 +43,14 @@ export default function NewChatSlideOver({ open, onClose, onStart }: NewChatSlid
 
   useEffect(() => {
     if (!open) return;
-    reset();
+    setForm({
+      ...emptyContactForm,
+      phone: initialPhone || '',
+      name: initialName || '',
+    });
+    setPhoneError(null);
     setSaving(false);
-  }, [open]);
+  }, [open, initialPhone, initialName]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

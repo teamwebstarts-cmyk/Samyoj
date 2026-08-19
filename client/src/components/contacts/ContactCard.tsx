@@ -81,7 +81,7 @@ export default function ContactCard({
             onMessage();
           }}
         >
-          Chat
+          {contact.conversation?.id ? 'Chat' : 'Message'}
         </AppButton>
         <AppButton
           size="sm"

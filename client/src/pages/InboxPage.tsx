@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import MediaViewer from '../components/inbox/MediaViewer';
 import ChatContextMenu from '../components/inbox/ChatContextMenu';
 import ChatPlaceholder from '../components/inbox/ChatPlaceholder';
@@ -33,6 +34,7 @@ import { useInboxKeyboardShortcuts } from '../hooks/useInboxKeyboardShortcuts';
 import { useInboxUnreadTotal } from '../hooks/useInboxUnreadTotal';
 import { useWebhookHealth } from '../hooks/useWebhookHealth';
 import { usePaneWidths } from '../hooks/usePaneWidths';
+import { useMobileThreadChrome } from '../hooks/useMobileThreadChrome';
 import { useAuth } from '../contexts/AuthContext';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import PaneHandle from '../components/inbox/PaneHandle';
@@ -106,6 +108,7 @@ export default function InboxPage() {
     loadEarlierMessages,
     markConversationRead,
   } = useConversationThread({ setConversations, refreshUnread });
+  useMobileThreadChrome(Boolean(selected));
 
   const [agents, setAgents] = useState<TeamAgent[]>([]);
   const [aiBots, setAiBots] = useState<AiBot[]>([]);
@@ -113,7 +116,31 @@ export default function InboxPage() {
   const [cannedReplies, setCannedReplies] = useState<CannedReply[]>([]);
   const [templateMode, setTemplateMode] = useState(false);
   const [interactiveOpen, setInteractiveOpen] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
   const [newChatOpen, setNewChatOpen] = useState(false);
+  const [newChatPhone, setNewChatPhone] = useState('');
+  const [newChatName, setNewChatName] = useState('');
+
+  useEffect(() => {
+    const isNew = searchParams.get('new');
+    const phone = searchParams.get('phone');
+    const name = searchParams.get('name');
+    if (isNew || phone) {
+      if (phone) setNewChatPhone(phone);
+      if (name) setNewChatName(name);
+      setNewChatOpen(true);
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete('new');
+          next.delete('phone');
+          next.delete('name');
+          return next;
+        },
+        { replace: true }
+      );
+    }
+  }, [searchParams, setSearchParams]);
   const [exportTarget, setExportTarget] = useState<Conversation | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; conversationId: string } | null>(null);
   const [detailsOverlay, setDetailsOverlay] = useState<{ open: boolean; section?: PanelSection }>({ open: false });
@@ -730,6 +757,16 @@ export default function InboxPage() {
               onContextMenu={openChatContextMenu}
               onNewChat={() => setNewChatOpen(true)}
             />
+            <button
+              type="button"
+              onClick={() => setNewChatOpen(true)}
+              aria-label="New chat"
+              className="absolute bottom-[calc(4.15rem+env(safe-area-inset-bottom,0px))] right-3 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-whatsapp-500 text-white shadow-[0_6px_18px_rgba(37,211,102,0.45)] md:hidden"
+            >
+              <svg viewBox="0 0 24 24" className="h-7 w-7" fill="currentColor" aria-hidden>
+                <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-3 9h-4v4h-2v-4H7V9h4V5h2v4h4v2z" />
+              </svg>
+            </button>
           </div>
 
           {/* R4: vertical drag handle between left rail and thread (md+). */}
@@ -782,6 +819,7 @@ export default function InboxPage() {
                   messagesEndRef={messagesEndRef}
                   composerInputRef={composerInputRef}
                   onBack={() => setSelected(null)}
+                  onOpenDetails={() => toggleDetails()}
                   onCallBack={() => void handleCallBack()}
                   onToggleBot={() => void handleToggleBot()}
                   onSetActiveBot={(botId) => void handleSetActiveBot(botId)}
@@ -884,7 +922,17 @@ export default function InboxPage() {
         </div>
       </div>
 
-      <NewChatSlideOver open={newChatOpen} onClose={() => setNewChatOpen(false)} onStart={handleStartChat} />
+      <NewChatSlideOver
+        open={newChatOpen}
+        onClose={() => {
+          setNewChatOpen(false);
+          setNewChatPhone('');
+          setNewChatName('');
+        }}
+        onStart={handleStartChat}
+        initialPhone={newChatPhone}
+        initialName={newChatName}
+      />
 
       <MediaViewer
         item={mediaViewer}

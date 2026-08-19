@@ -73,6 +73,7 @@ interface ChatThreadProps {
   messagesEndRef: RefObject<HTMLDivElement>;
   composerInputRef?: RefObject<HTMLTextAreaElement>;
   onBack: () => void;
+  onOpenDetails?: () => void;
   onCallBack: () => void;
   onToggleBot: () => void;
   onSetActiveBot?: (botId: string | null) => void;
@@ -144,6 +145,7 @@ export default function ChatThread({
   messagesEndRef,
   composerInputRef,
   onBack,
+  onOpenDetails,
   onCallBack,
   onAssign,
   onToggleBot,
@@ -585,6 +587,7 @@ export default function ChatThread({
         currentUserId={currentUserId}
         viewers={viewers}
         onBack={onBack}
+        onOpenDetails={onOpenDetails}
         onCallBack={onCallBack}
         onAssign={onAssign}
         onToggleBot={onToggleBot}

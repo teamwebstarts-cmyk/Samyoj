@@ -18,7 +18,7 @@ export default function AiBotStatusFilter({ value, onChange }: AiBotStatusFilter
     <div
       role="tablist"
       aria-label="Filter bots by status"
-      className="inline-flex min-h-10 max-w-full flex-wrap items-stretch rounded-xl border border-neutral-200/90 bg-neutral-50/95 dark:border-neutral-700 dark:bg-neutral-900/80 sm:h-10 sm:w-auto sm:flex-nowrap"
+      className="inline-flex h-9 w-full flex-nowrap items-stretch overflow-hidden rounded-xl border border-neutral-200/90 bg-neutral-50/95 dark:border-neutral-700 dark:bg-neutral-900/80 sm:h-10 sm:w-auto"
     >
       {OPTIONS.map((option, index) => {
         const isActive = value === option.value;
@@ -29,7 +29,7 @@ export default function AiBotStatusFilter({ value, onChange }: AiBotStatusFilter
             role="tab"
             aria-selected={isActive}
             onClick={() => onChange(option.value)}
-            className={`relative flex min-w-[4.25rem] flex-1 items-center justify-center px-3 text-[12px] font-bold transition sm:flex-none sm:px-3.5 ${
+            className={`relative flex min-w-0 flex-1 items-center justify-center px-1.5 text-[11px] font-bold transition sm:min-w-[4.25rem] sm:flex-none sm:px-3.5 sm:text-[12px] ${
               isActive
                 ? 'm-0.5 rounded-[0.65rem] bg-white text-neutral-900 shadow-xs ring-1 ring-black/[0.04] dark:bg-neutral-800 dark:text-white dark:ring-white/10'
                 : 'text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100'

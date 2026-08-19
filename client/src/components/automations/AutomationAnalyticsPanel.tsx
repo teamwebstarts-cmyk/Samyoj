@@ -1,12 +1,8 @@
 import {
   Activity,
   BarChart3,
-  CheckCircle2,
-  MinusCircle,
   TrendingUp,
-  XCircle,
 } from 'lucide-react';
-import StatCard from '../dashboard/StatCard';
 import EmptyState from '../ui/EmptyState';
 import LoadingState from '../ui/LoadingState';
 import ProgressBar from '../ui/ProgressBar';
@@ -91,38 +87,6 @@ export default function AutomationAnalyticsPanel({ analytics, loading }: Automat
 
   return (
     <div className="space-y-5 sm:space-y-6">
-      <div className="card-grid-auto">
-        <StatCard
-          label="Times run"
-          value={analytics.total}
-          icon={BarChart3}
-          accent="violet"
-          delay={0}
-        />
-        <StatCard
-          label="Sent OK"
-          value={analytics.success}
-          icon={CheckCircle2}
-          accent="emerald"
-          hint={analytics.total > 0 ? `${successRate}% success` : undefined}
-          delay={60}
-        />
-        <StatCard
-          label="Didn't send"
-          value={analytics.failed}
-          icon={XCircle}
-          accent="rose"
-          delay={120}
-        />
-        <StatCard
-          label="Skipped"
-          value={analytics.skipped}
-          icon={MinusCircle}
-          accent="amber"
-          delay={180}
-        />
-      </div>
-
       {analytics.total > 0 && (
         <div className="dashboard-card overflow-hidden p-0">
           <div className="border-b border-theme-border/60 bg-gradient-to-r from-violet-500/[0.06] via-emerald-500/[0.04] to-transparent px-4 py-3.5 sm:px-5">

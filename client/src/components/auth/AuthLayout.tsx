@@ -44,13 +44,13 @@ export default function AuthLayout({
         <AuthShowcase />
       </aside>
 
-      <section className="auth-form-panel relative z-30 flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden bg-white lg:w-[40%]">
+      <section className="auth-form-panel relative z-30 flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden lg:w-[40%] lg:bg-white">
         <div className="auth-form-scroll flex min-h-0 flex-1 flex-col items-center overflow-y-auto overscroll-contain">
-          <div className="auth-mobile-logo mb-6 flex w-full max-w-[400px] shrink-0 lg:hidden">
+          <div className="auth-mobile-logo mb-4 flex w-full shrink-0 lg:hidden">
             <AuthBrand compact />
           </div>
 
-          <div className="auth-form-stack my-auto w-full max-w-[400px] py-2">
+          <div className="auth-form-stack w-full">
             <header className={compact ? 'mb-5' : 'mb-7'}>
               <h1 className="auth-form-title font-extrabold leading-[1.15] tracking-[-0.035em] text-[#12182A]">
                 {title}

@@ -52,7 +52,7 @@ export default function ListToolbar({
             compact={compactMobile}
           />
           {filters ? (
-            <div className="flex min-w-0 items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:overflow-visible">
+            <div className="flex w-full min-w-0 items-stretch md:w-auto md:items-center md:overflow-visible">
               {filters}
             </div>
           ) : null}

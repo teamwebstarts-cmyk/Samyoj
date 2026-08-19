@@ -30,9 +30,9 @@ export default function CallSummaryNote({
       role="status"
       data-message-id={messageId}
     >
-      <div className="w-1/2 overflow-hidden rounded-md border border-neutral-200/80 bg-white dark:border-neutral-700 dark:bg-neutral-900">
-        <div className="min-w-0 px-3.5 py-2.5">
-          <p className="inline-flex flex-wrap items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+      <div className="w-[min(92%,22rem)] overflow-hidden rounded-md border border-neutral-200/80 bg-white dark:border-neutral-700 dark:bg-neutral-900 sm:w-1/2">
+        <div className="min-w-0 px-3 py-2 sm:px-3.5 sm:py-2.5">
+          <p className="inline-flex flex-wrap items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-neutral-500 sm:text-[10.5px] dark:text-neutral-400">
             <Lock className="h-3 w-3 shrink-0 text-emerald-600 dark:text-emerald-400" strokeWidth={2.25} />
             Team only
             <span className="font-semibold normal-case tracking-normal text-neutral-400">· Call summary</span>
@@ -40,7 +40,7 @@ export default function CallSummaryNote({
               <span className="font-medium normal-case tracking-normal text-neutral-400">· {time}</span>
             ) : null}
           </p>
-          <p className="mt-1 text-[13px] font-medium leading-snug text-neutral-800 dark:text-neutral-100">
+          <p className="mt-1 text-[12.5px] font-medium leading-snug text-neutral-800 sm:text-[13px] dark:text-neutral-100">
             {summary}
           </p>
           <p className="mt-1.5 text-[11px] font-medium text-neutral-400">

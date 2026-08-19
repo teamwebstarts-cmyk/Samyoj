@@ -10,6 +10,7 @@ import CallDetailView from '../components/calls/CallDetailView';
 import CallDetailsPanel from '../components/calls/CallDetailsPanel';
 import type { CallDetailsSection } from '../components/calls/CallDetailsPanel';
 import { useSinglePaneWidth } from '../hooks/useSinglePaneWidth';
+import { useMobileThreadChrome } from '../hooks/useMobileThreadChrome';
 import CallFiltersBar from '../components/calls/CallFiltersBar';
 import CallListItem from '../components/calls/CallListItem';
 import CallsBulkBar from '../components/calls/CallsBulkBar';
@@ -358,6 +359,7 @@ export default function CallsPage() {
     () => (selectedCallId ? calls.find((c) => c.id === selectedCallId) ?? null : null),
     [calls, selectedCallId]
   );
+  useMobileThreadChrome(Boolean(selectedCall));
 
   const toggleDetails = useCallback((section?: CallDetailsSection) => {
     if (!selectedCallId) return;
@@ -989,7 +991,7 @@ function CallsPaginationFooter({
   const pageButtons = buildCallsPageButtons(safePage, pageCount);
 
   return (
-    <div className="shrink-0 border-t border-neutral-100 px-2.5 py-2 dark:border-neutral-800/80">
+    <div className="hidden shrink-0 border-t border-neutral-100 px-2.5 py-2 md:block dark:border-neutral-800/80">
       <div className="flex min-w-0 flex-nowrap items-center justify-between gap-2 max-[260px]:flex-wrap">
         <p
           className="min-w-0 flex-1 truncate text-[11px] font-medium tabular-nums text-theme-muted"

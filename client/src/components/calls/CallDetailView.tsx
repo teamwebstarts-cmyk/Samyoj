@@ -150,77 +150,121 @@ export default function CallDetailView({
         Date.now() - new Date(lastEntry.at).getTime() < 8000
     );
 
+  const mobileMeta = [
+    inbound ? 'Incoming' : 'Outgoing',
+    formatDuration(active ? liveElapsed : durationSeconds),
+    handlerTag || handlerLabel,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      <div className="flex shrink-0 items-center gap-2.5 border-b border-neutral-200 bg-white px-3 py-3 sm:gap-3 sm:px-4 dark:border-neutral-800 dark:bg-neutral-950">
+      <div className="flex shrink-0 items-center gap-1.5 border-b border-neutral-200 bg-white px-1.5 py-1.5 sm:gap-3 sm:px-4 sm:py-3 dark:border-neutral-800 dark:bg-neutral-950">
         {onBack && (
           <button
             type="button"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-neutral-200 text-neutral-700 md:hidden dark:border-neutral-700"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-neutral-800 md:hidden dark:text-neutral-100"
             onClick={onBack}
             aria-label="Back to calls"
           >
-            <ArrowLeft size={18} strokeWidth={2.25} />
+            <ArrowLeft size={20} strokeWidth={2.25} />
           </button>
         )}
 
-        <ContactAvatar name={name || undefined} phone={phone} size="lg" active={active} />
+        <ContactAvatar name={name || undefined} phone={phone} size="sm" active={active} />
 
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[15px] font-bold tracking-tight text-theme-fg">{displayName}</p>
-          <p className="mt-0.5 truncate text-[12px] font-medium text-theme-muted">{formatPhoneDisplay(phone)}</p>
+          <p className="truncate text-[15px] font-semibold tracking-tight text-theme-fg sm:text-[15px] sm:font-bold">
+            {displayName}
+          </p>
+          <p className="truncate text-[11px] font-medium text-theme-muted sm:hidden">{mobileMeta}</p>
+          <p className="mt-0.5 hidden truncate text-[12px] font-medium text-theme-muted sm:block">
+            {formatPhoneDisplay(phone)}
+          </p>
         </div>
 
-        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+        <div className="flex shrink-0 items-center gap-0.5 sm:gap-2">
           {onOpenDetails && (
             <button
               type="button"
               onClick={onOpenDetails}
               aria-label="Call details"
-              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-neutral-200 text-neutral-700 md:hidden dark:border-neutral-700 ${FOCUS_RING_CLASS}`}
+              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-neutral-600 md:hidden dark:text-neutral-300 ${FOCUS_RING_CLASS}`}
             >
-              <PanelRight className="h-[18px] w-[18px]" strokeWidth={2.25} />
+              <PanelRight className="h-[18px] w-[18px]" strokeWidth={2.1} />
             </button>
           )}
           {contactId && onCallingAiChange ? (
-            <CallingAiPicker
-              enabled={callingAiEnabled !== false}
-              saving={callingAiSaving}
-              botName={botName}
-              onChange={onCallingAiChange}
-            />
+            <span className="hidden sm:inline-flex">
+              <CallingAiPicker
+                enabled={callingAiEnabled !== false}
+                saving={callingAiSaving}
+                botName={botName}
+                onChange={onCallingAiChange}
+              />
+            </span>
           ) : null}
           {!active && onCallBack && (
-            <AppButton
-              variant="secondary"
-              size="sm"
-              loading={callingBack}
-              onClick={onCallBack}
-              title="Call this contact back"
-              className={
-                callingBack
-                  ? 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-700/50 dark:bg-emerald-950/40 dark:text-emerald-200'
-                  : ''
-              }
-            >
-              {!callingBack && <PhoneOutgoing className="h-3.5 w-3.5" />}
-              <span className="hidden sm:inline">{callingBack ? 'Calling…' : 'Call back'}</span>
-              <span className="sm:hidden">{callingBack ? '…' : 'Call'}</span>
-            </AppButton>
+            <>
+              <button
+                type="button"
+                onClick={onCallBack}
+                disabled={callingBack}
+                title="Call this contact back"
+                aria-label={callingBack ? 'Calling' : 'Call'}
+                className={`flex h-9 w-9 items-center justify-center rounded-full text-emerald-700 sm:hidden ${FOCUS_RING_CLASS}`}
+              >
+                <PhoneOutgoing className="h-[18px] w-[18px]" strokeWidth={2.1} />
+              </button>
+              <AppButton
+                variant="secondary"
+                size="sm"
+                loading={callingBack}
+                onClick={onCallBack}
+                title="Call this contact back"
+                className={`hidden sm:inline-flex ${
+                  callingBack
+                    ? 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-700/50 dark:bg-emerald-950/40 dark:text-emerald-200'
+                    : ''
+                }`}
+              >
+                {!callingBack && <PhoneOutgoing className="h-3.5 w-3.5" />}
+                {callingBack ? 'Calling…' : 'Call back'}
+              </AppButton>
+            </>
           )}
 
           {conversationId ? (
-            <Link to={`/inbox?conversation=${conversationId}`}>
-              <AppButton variant="primary" size="sm">
-                <MessageSquare className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Open chat</span>
-              </AppButton>
+            <Link to={`/inbox?conversation=${conversationId}`} aria-label="Open chat">
+              <span className={`flex h-9 w-9 items-center justify-center rounded-full text-whatsapp-600 sm:hidden ${FOCUS_RING_CLASS}`}>
+                <MessageSquare className="h-[18px] w-[18px]" strokeWidth={2.1} />
+              </span>
+              <span className="hidden sm:inline-flex">
+                <AppButton variant="primary" size="sm">
+                  <MessageSquare className="h-3.5 w-3.5" />
+                  Open chat
+                </AppButton>
+              </span>
             </Link>
           ) : (
-            <AppButton variant="secondary" size="sm" disabled title="No linked chat yet">
-              <MessageSquare className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Open chat</span>
-            </AppButton>
+            <>
+              <button
+                type="button"
+                disabled
+                title="No linked chat yet"
+                aria-label="Open chat"
+                className="flex h-9 w-9 items-center justify-center rounded-full text-neutral-300 sm:hidden"
+              >
+                <MessageSquare className="h-[18px] w-[18px]" strokeWidth={2.1} />
+              </button>
+              <span className="hidden sm:inline-flex">
+                <AppButton variant="secondary" size="sm" disabled title="No linked chat yet">
+                  <MessageSquare className="h-3.5 w-3.5" />
+                  Open chat
+                </AppButton>
+              </span>
+            </>
           )}
 
           {active && onEndCall && (
@@ -238,7 +282,7 @@ export default function CallDetailView({
         </div>
       </div>
 
-      <div className="grid shrink-0 grid-cols-2 gap-x-4 gap-y-2 border-b border-neutral-200 bg-white px-3 py-2.5 text-[12px] font-medium text-neutral-500 sm:flex sm:flex-wrap sm:items-center sm:px-4 dark:border-neutral-800 dark:bg-neutral-950">
+      <div className="hidden shrink-0 border-b border-neutral-200 bg-white px-4 py-2.5 text-[12px] font-medium text-neutral-500 sm:flex sm:flex-wrap sm:items-center dark:border-neutral-800 dark:bg-neutral-950">
         <span className="inline-flex items-center gap-1.5">
           {inbound ? (
             <PhoneIncoming className="h-3.5 w-3.5 text-neutral-700 dark:text-neutral-300" strokeWidth={2.25} />

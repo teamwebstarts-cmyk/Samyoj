@@ -72,6 +72,7 @@ describe('support system prompt', () => {
     expect(prompt).toMatch(/Connect WhatsApp/i);
     expect(prompt).toMatch(/left-nav Tickets/i);
     expect(prompt).not.toMatch(/Escalate to ticket/i);
+    expect(prompt).toMatch(/Do not use markdown/i);
     expect(prompt).not.toMatch(/META_APP_SECRET|SARVAM_API_KEY/);
     expect(knowledge).not.toMatch(/14-day trial/i);
     expect(knowledge).not.toMatch(/META_APP_SECRET|webhook URL|ngrok/i);

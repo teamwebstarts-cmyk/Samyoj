@@ -159,11 +159,9 @@ export default function ContactTable({
 
                   <td className="px-5">
                     <div className="flex items-center justify-end gap-1.5">
-                      {hasConversation && (
-                        <TableTextButton icon={MessageSquare} onClick={() => onMessage(contact)}>
-                          Chat
-                        </TableTextButton>
-                      )}
+                      <TableTextButton icon={MessageSquare} onClick={() => onMessage(contact)}>
+                        {hasConversation ? 'Chat' : 'Message'}
+                      </TableTextButton>
                       <TableIconButton
                         onClick={() => onView(contact)}
                         icon={User}

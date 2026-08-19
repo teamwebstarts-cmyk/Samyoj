@@ -1,8 +1,17 @@
-import { User } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import {
+  Code2,
+  Plus,
+  Tag,
+  Trash2,
+  User,
+  X,
+} from 'lucide-react';
 import AppInput from '../ui/AppInput';
 import AppTextarea from '../ui/AppTextarea';
 import { messagingConsent } from '../../utils/plainLanguage';
 import { PHONE_HINT, PHONE_PLACEHOLDER } from '../../utils/phone';
+import { normalizeCustomKey } from '../../utils/customAttributes';
 import type { ContactFormValues } from './contactForm';
 
 interface ContactFieldsFormProps {
@@ -14,9 +23,20 @@ interface ContactFieldsFormProps {
   phoneHint?: string;
   phoneId?: string;
   phoneDisabled?: boolean;
+  availableTags?: string[];
 }
 
-/** Shared optional person fields for Contacts Add and Inbox New chat. */
+const COMMON_TAG_SUGGESTIONS = ['VIP', 'Lead', 'Customer', 'Support', 'High Value', 'Hot Lead'];
+
+const COMMON_VARIABLE_PRESETS = [
+  { key: 'order_id', label: 'Order ID' },
+  { key: 'company', label: 'Company' },
+  { key: 'city', label: 'City' },
+  { key: 'plan', label: 'Plan' },
+  { key: 'amount', label: 'Amount' },
+];
+
+/** Shared rich form for Contacts Add/Edit and Inbox New chat. */
 export default function ContactFieldsForm({
   form,
   onChange,
@@ -25,15 +45,115 @@ export default function ContactFieldsForm({
   phoneHint,
   phoneId = 'contact-phone',
   phoneDisabled = false,
+  availableTags = [],
 }: ContactFieldsFormProps) {
+  const [tagInput, setTagInput] = useState('');
+
   const set = (patch: Partial<ContactFormValues>) => onChange({ ...form, ...patch });
 
+  // Tags parsing & management
+  const tagList = useMemo(
+    () =>
+      form.tags
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean),
+    [form.tags]
+  );
+
+  const addTag = (tagToAdd: string) => {
+    const trimmed = tagToAdd.trim();
+    if (!trimmed) return;
+    const exists = tagList.some((t) => t.toLowerCase() === trimmed.toLowerCase());
+    if (exists) {
+      setTagInput('');
+      return;
+    }
+    const next = [...tagList, trimmed];
+    set({ tags: next.join(', ') });
+    setTagInput('');
+  };
+
+  const removeTag = (tagToRemove: string) => {
+    const next = tagList.filter((t) => t.toLowerCase() !== tagToRemove.toLowerCase());
+    set({ tags: next.join(', ') });
+  };
+
+  const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      addTag(tagInput);
+    }
+  };
+
+  const allTagSuggestions = useMemo(() => {
+    const combined = Array.from(new Set([...availableTags, ...COMMON_TAG_SUGGESTIONS]));
+    return combined.filter(
+      (sug) => !tagList.some((t) => t.toLowerCase() === sug.toLowerCase())
+    );
+  }, [availableTags, tagList]);
+
+  // Custom attributes key-value rows parsing & management
+  const customFieldRows = useMemo(() => {
+    if (!form.customAttributes) return [];
+    return form.customAttributes
+      .split(/\r?\n/)
+      .map((line) => {
+        const trimmed = line.trim();
+        if (!trimmed) return null;
+        const eq = trimmed.indexOf('=');
+        if (eq <= 0) return { key: trimmed, value: '' };
+        return {
+          key: trimmed.slice(0, eq).trim(),
+          value: trimmed.slice(eq + 1).trim(),
+        };
+      })
+      .filter((row): row is { key: string; value: string } => Boolean(row));
+  }, [form.customAttributes]);
+
+  const updateCustomRows = (rows: Array<{ key: string; value: string }>) => {
+    const text = rows
+      .filter((r) => r.key.trim() || r.value.trim())
+      .map((r) => `${r.key.trim()}=${r.value.trim()}`)
+      .join('\n');
+    set({ customAttributes: text });
+  };
+
+  const handleCustomFieldChange = (index: number, field: 'key' | 'value', value: string) => {
+    const next = [...customFieldRows];
+    if (!next[index]) next[index] = { key: '', value: '' };
+    if (field === 'key') {
+      const normalized = normalizeCustomKey(value) || value.trim().toLowerCase().replace(/[^a-z0-9_]+/g, '_');
+      next[index].key = normalized;
+    } else {
+      next[index].value = value;
+    }
+    updateCustomRows(next);
+  };
+
+  const addCustomField = (initialKey = '', initialValue = '') => {
+    const next = [...customFieldRows, { key: initialKey, value: initialValue }];
+    updateCustomRows(next);
+  };
+
+  const removeCustomField = (index: number) => {
+    const next = customFieldRows.filter((_, i) => i !== index);
+    updateCustomRows(next);
+  };
+
+  const availableVariablePresets = useMemo(() => {
+    return COMMON_VARIABLE_PRESETS.filter(
+      (preset) => !customFieldRows.some((r) => r.key.toLowerCase() === preset.key.toLowerCase())
+    );
+  }, [customFieldRows]);
+
   return (
-    <>
+    <div className="space-y-4">
+      {/* 1. Phone Input */}
       {phoneMode === 'plain' && (
         <AppInput
           id={phoneId}
-          label="Phone"
+          label="Phone number"
           placeholder={PHONE_PLACEHOLDER}
           value={form.phone}
           onChange={(e) => set({ phone: e.target.value })}
@@ -84,61 +204,210 @@ export default function ContactFieldsForm({
         </div>
       )}
 
-      <AppInput
-        id="contact-name"
-        label="Name"
-        placeholder="Customer name"
-        value={form.name}
-        onChange={(e) => set({ name: e.target.value })}
-        autoComplete="name"
-        icon={<User className="h-4 w-4" />}
-      />
-      <AppInput
-        id="contact-email"
-        label="Email"
-        placeholder="customer@example.com"
-        type="email"
-        value={form.email}
-        onChange={(e) => set({ email: e.target.value })}
-      />
-      <AppInput
-        id="contact-tags"
-        label="Tags"
-        hint="Comma separated"
-        placeholder="vip, lead"
-        value={form.tags}
-        onChange={(e) => set({ tags: e.target.value })}
-      />
+      {/* 2. Name & Email */}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <AppInput
+          id="contact-name"
+          label="Name"
+          placeholder="Customer name"
+          value={form.name}
+          onChange={(e) => set({ name: e.target.value })}
+          autoComplete="name"
+          icon={<User className="h-4 w-4" />}
+        />
+        <AppInput
+          id="contact-email"
+          label="Email"
+          placeholder="customer@example.com"
+          type="email"
+          value={form.email}
+          onChange={(e) => set({ email: e.target.value })}
+        />
+      </div>
+
+      {/* 3. Tags & Segmentation (Interactive Chips + 1-Click Suggestions) */}
+      <div className="rounded-xl border border-theme-border/70 bg-theme-subtle/30 p-3.5 space-y-2.5">
+        <div className="flex items-center justify-between">
+          <label htmlFor="contact-tag-input" className="flex items-center gap-1.5 text-label text-theme-secondary">
+            <Tag className="h-3.5 w-3.5 text-violet-500" />
+            <span>Tags & Groups</span>
+          </label>
+          <span className="text-[11px] font-medium text-theme-muted">
+            {tagList.length} {tagList.length === 1 ? 'tag' : 'tags'}
+          </span>
+        </div>
+
+        {/* Selected Tags as Chips */}
+        {tagList.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {tagList.map((tag) => (
+              <span
+                key={tag}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50/90 px-2.5 py-1 text-[11px] font-semibold text-violet-700 dark:border-violet-800/60 dark:bg-violet-950/40 dark:text-violet-300"
+              >
+                <span>{tag}</span>
+                <button
+                  type="button"
+                  onClick={() => removeTag(tag)}
+                  className="rounded-full p-0.5 text-violet-500 hover:bg-violet-200/60 hover:text-violet-800 dark:hover:bg-violet-900/60 dark:hover:text-violet-200"
+                  aria-label={`Remove tag ${tag}`}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Tag Input Field */}
+        <div className="flex items-center gap-2">
+          <input
+            id="contact-tag-input"
+            type="text"
+            value={tagInput}
+            onChange={(e) => setTagInput(e.target.value)}
+            onKeyDown={handleTagKeyDown}
+            placeholder="Type tag and press Enter..."
+            className="h-9 flex-1 rounded-lg border border-theme-border bg-theme-surface px-3 text-[12px] text-theme-fg shadow-input transition placeholder:text-theme-muted focus:border-slate-400 focus:outline-none focus:shadow-input-focus dark:focus:border-slate-500"
+          />
+          <button
+            type="button"
+            onClick={() => addTag(tagInput)}
+            disabled={!tagInput.trim()}
+            className="inline-flex h-9 items-center gap-1 rounded-lg border border-theme-border bg-white px-3 text-[12px] font-semibold text-theme-fg shadow-sm transition hover:bg-theme-subtle disabled:opacity-40 dark:bg-neutral-800"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add
+          </button>
+        </div>
+
+        {/* 1-Click Tag Suggestion Pills */}
+        {allTagSuggestions.length > 0 && (
+          <div className="space-y-1 pt-1">
+            <p className="text-[10.5px] font-medium text-theme-muted">Quick suggestions:</p>
+            <div className="flex flex-wrap gap-1.5">
+              {allTagSuggestions.slice(0, 6).map((sug) => (
+                <button
+                  key={sug}
+                  type="button"
+                  onClick={() => addTag(sug)}
+                  className="inline-flex items-center gap-1 rounded-md border border-dashed border-neutral-300 bg-white/80 px-2 py-0.5 text-[11px] font-medium text-neutral-600 transition hover:border-violet-300 hover:bg-violet-50/60 hover:text-violet-700 dark:border-neutral-700 dark:bg-neutral-900/60 dark:text-neutral-300 dark:hover:border-violet-700 dark:hover:text-violet-300"
+                >
+                  <Plus className="h-2.5 w-2.5" />
+                  {sug}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 4. Notes */}
       <AppTextarea
         id="contact-notes"
-        label="Notes"
-        placeholder="Internal notes about this contact..."
+        label="Internal notes"
+        placeholder="Add context, preferences, or customer history..."
         value={form.notes}
         onChange={(e) => set({ notes: e.target.value })}
-        rows={3}
+        rows={2}
       />
-      <AppTextarea
-        id="contact-custom-attributes"
-        label="Custom fields"
-        hint="Used in templates as {{order_id}}. One per line: key=value"
-        placeholder={'order_id=ORD-1042\ncity=Mumbai'}
-        value={form.customAttributes}
-        onChange={(e) => set({ customAttributes: e.target.value })}
-        rows={3}
-        className="font-mono text-[13px]"
-      />
-      <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-theme-border bg-theme-subtle/40 px-4 py-3.5">
+
+      {/* 5. Custom Template Variables (Structured Builder + 1-Click Presets) */}
+      <div className="rounded-xl border border-theme-border/70 bg-theme-subtle/30 p-3.5 space-y-3">
+        <div className="flex items-center justify-between">
+          <label className="flex items-center gap-1.5 text-label text-theme-secondary">
+            <Code2 className="h-3.5 w-3.5 text-sky-500" />
+            <span>Custom Template Variables</span>
+          </label>
+          <span className="text-[11px] font-medium text-theme-muted">
+            Used as <code className="font-mono text-sky-600 dark:text-sky-400">{'{{variable}}'}</code>
+          </span>
+        </div>
+
+        {/* Field Rows */}
+        {customFieldRows.length > 0 ? (
+          <div className="space-y-2">
+            {customFieldRows.map((row, idx) => (
+              <div key={idx} className="flex items-center gap-2">
+                <div className="flex-1">
+                  <input
+                    type="text"
+                    value={row.key}
+                    onChange={(e) => handleCustomFieldChange(idx, 'key', e.target.value)}
+                    placeholder="field_name (e.g. order_id)"
+                    className="h-9 w-full rounded-lg border border-theme-border bg-theme-surface px-2.5 font-mono text-[12px] text-theme-fg shadow-input placeholder:font-sans placeholder:text-theme-muted focus:border-slate-400 focus:outline-none dark:focus:border-slate-500"
+                  />
+                </div>
+                <span className="text-neutral-400 font-bold text-xs">=</span>
+                <div className="flex-1">
+                  <input
+                    type="text"
+                    value={row.value}
+                    onChange={(e) => handleCustomFieldChange(idx, 'value', e.target.value)}
+                    placeholder="Value (e.g. ORD-1042)"
+                    className="h-9 w-full rounded-lg border border-theme-border bg-theme-surface px-2.5 text-[12px] text-theme-fg shadow-input placeholder:text-theme-muted focus:border-slate-400 focus:outline-none dark:focus:border-slate-500"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeCustomField(idx)}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-theme-border bg-white text-neutral-400 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 dark:bg-neutral-800 dark:hover:bg-red-950/40"
+                  aria-label="Remove field"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-[11.5px] font-medium text-neutral-500 dark:text-neutral-400">
+            No custom variables added yet. Add variables to auto-fill customer data in broadcast templates.
+          </p>
+        )}
+
+        {/* Add Row & Quick Presets */}
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          <button
+            type="button"
+            onClick={() => addCustomField()}
+            className="inline-flex items-center gap-1 rounded-lg border border-theme-border bg-white px-2.5 py-1.5 text-[11px] font-semibold text-theme-fg shadow-sm transition hover:bg-theme-subtle dark:bg-neutral-800"
+          >
+            <Plus className="h-3 w-3" />
+            Add custom field
+          </button>
+
+          {availableVariablePresets.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1">
+              <span className="text-[10px] font-medium text-theme-muted mr-0.5">Presets:</span>
+              {availableVariablePresets.map((preset) => (
+                <button
+                  key={preset.key}
+                  type="button"
+                  onClick={() => addCustomField(preset.key, '')}
+                  className="inline-flex items-center gap-0.5 rounded-md border border-dashed border-sky-300 bg-sky-50/70 px-2 py-0.5 text-[10.5px] font-medium text-sky-700 transition hover:bg-sky-100 dark:border-sky-800/60 dark:bg-sky-950/40 dark:text-sky-300"
+                >
+                  <Plus className="h-2.5 w-2.5" />
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 6. Messaging Consent Toggle */}
+      <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-theme-border bg-theme-subtle/40 px-4 py-3 transition hover:bg-theme-subtle/60">
         <input
           type="checkbox"
           checked={form.optedIn}
           onChange={(e) => set({ optedIn: e.target.checked })}
           className="h-4 w-4 rounded border-theme-border text-emerald-600 focus:ring-emerald-500/30"
         />
-        <div>
+        <div className="min-w-0">
           <p className="text-[13px] font-semibold text-theme-fg">{messagingConsent.allowCampaignMessages}</p>
           <p className="text-[11px] font-medium text-theme-muted">{messagingConsent.allowCampaignHint}</p>
         </div>
       </label>
-    </>
+    </div>
   );
 }

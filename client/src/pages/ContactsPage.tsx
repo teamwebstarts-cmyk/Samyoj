@@ -1,6 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Download, Plus, Settings2, Target, Upload, UserCheck, Users } from 'lucide-react';
+import {
+  Activity,
+  ArrowRight,
+  CheckCircle2,
+  Clock,
+  Download,
+  MessageSquare,
+  Plus,
+  Settings2,
+  Tag,
+  Target,
+  Trophy,
+  Upload,
+  UserCheck,
+  Users,
+} from 'lucide-react';
 import ContactBulkBar from '../components/contacts/ContactBulkBar';
 import ContactBulkTagModal from '../components/contacts/ContactBulkTagModal';
 import ContactDetailPanel from '../components/contacts/ContactDetailPanel';
@@ -19,7 +34,7 @@ import ConfirmDialog from '../components/ui/ConfirmDialog';
 import EmptyState from '../components/ui/EmptyState';
 import ListToolbar from '../components/ui/ListToolbar';
 import ListLayoutSkeleton from '../components/ui/ListLayoutSkeleton';
-import PageHero from '../components/ui/PageHero';
+import ContactHero, { type ContactHeroStat } from '../components/contacts/ContactHero';
 import PageShell from '../components/ui/PageShell';
 import ResponsiveDataView from '../components/ui/ResponsiveDataView';
 import Pagination from '../components/ui/Pagination';
@@ -485,6 +500,10 @@ export default function ContactsPage() {
   const openMessage = (contact: Contact) => {
     if (contact.conversation?.id) {
       navigate(`/inbox?conversation=${contact.conversation.id}`);
+    } else {
+      const phone = encodeURIComponent(contact.phone);
+      const name = encodeURIComponent(contact.name || '');
+      navigate(`/inbox?new=true&phone=${phone}&name=${name}`);
     }
   };
 
@@ -502,54 +521,34 @@ export default function ContactsPage() {
   const allSelected = contacts.length > 0 && selectedIds.length === contacts.length;
   const partialSelected = selectedIds.length > 0 && !allSelected;
 
+  const heroStats: ContactHeroStat[] =
+    viewTab === 'pipeline'
+      ? [
+          { label: 'Total leads', value: pipelineStats.total, hint: 'All prospects', tone: 'total', icon: Target },
+          { label: 'Active', value: pipelineStats.active, hint: 'In progress', tone: 'pipeline', icon: Clock },
+          { label: 'Won', value: pipelineStats.won, hint: 'Closed deals', tone: 'won', icon: Trophy },
+        ]
+      : [
+          { label: 'Total contacts', value: summary.total, hint: 'All contacts in list', tone: 'total', icon: Users },
+          { label: messagingConsent.statsLabel, value: summary.optedIn, hint: 'Campaign eligible', tone: 'optedIn', icon: CheckCircle2 },
+          { label: 'Active (7d)', value: summary.active7d, hint: 'Messaged recently', tone: 'active', icon: Activity },
+          { label: 'Tagged', value: summary.tagged, hint: 'Grouped & segmented', tone: 'tagged', icon: Tag },
+        ];
+
   return (
     <PageShell list={viewTab === 'all'} className={selectedIds.length > 0 ? 'pb-28' : undefined}>
       <div className={viewTab === 'all' ? 'list-page-stack' : 'space-y-[var(--density-stack-gap)]'}>
         <div className={`space-y-[var(--density-stack-gap)] ${viewTab === 'all' ? 'shrink-0' : ''}`}>
-        <PageHero
-          badge="Audience"
-          badgeIcon={Users}
+        <ContactHero
+          badge={viewTab === 'pipeline' ? 'Pipeline' : 'Audience'}
+          badgeIcon={viewTab === 'pipeline' ? Target : Users}
           title={viewTab === 'pipeline' ? 'Sales pipeline' : 'Your contacts'}
           description={
             viewTab === 'pipeline'
               ? 'Track prospects from first contact through to won or lost.'
               : 'Manage customers, tags, and groups for campaigns.'
           }
-          accent="sky"
-          stats={
-            viewTab === 'pipeline'
-              ? [
-                  { label: 'Total', value: pipelineStats.total },
-                  {
-                    label: 'Active',
-                    value: pipelineStats.active,
-                    tone: 'text-sky-700 dark:text-sky-300',
-                  },
-                  {
-                    label: 'Won',
-                    value: pipelineStats.won,
-                    tone: 'text-emerald-700 dark:text-emerald-300',
-                  },
-                ]
-              : [
-                  { label: 'Total', value: summary.total },
-                  {
-                    label: messagingConsent.statsLabel,
-                    value: summary.optedIn,
-                    tone: 'text-emerald-700 dark:text-emerald-300',
-                  },
-                  {
-                    label: 'Active (7d)',
-                    value: summary.active7d,
-                    tone: 'text-sky-700 dark:text-sky-300',
-                  },
-                  {
-                    label: 'Tagged',
-                    value: summary.tagged,
-                    tone: 'text-violet-700 dark:text-violet-300',
-                  },
-                ]
-          }
+          stats={heroStats}
         />
 
         <SegmentedControl
@@ -629,37 +628,129 @@ export default function ContactsPage() {
               />
             ) : contacts.length === 0 ? (
               <div className="p-4 sm:p-6">
-                <EmptyState
-                  icon={Users}
-                  variant={hasActiveFilters ? 'filter' : 'default'}
-                  title={hasActiveFilters ? 'No contacts match your filters' : 'No contacts yet'}
-                  description={
-                    hasActiveFilters
-                      ? 'Try a different search word or clear your filters.'
-                      : 'Add people one by one or import a list from a spreadsheet (CSV file).'
-                  }
-                  steps={
-                    hasActiveFilters
-                      ? undefined
-                      : ['Tap Add contact for one person', 'Or tap Import for a list', 'Then message them from Inbox']
-                  }
-                  action={
-                    !hasActiveFilters ? (
-                      <div className="flex flex-wrap justify-center gap-2">
-                        <AppButton icon={<Plus size={16} />} onClick={openCreate}>
-                          Add contact
-                        </AppButton>
-                        <AppButton variant="secondary" icon={<Upload size={16} />} onClick={() => setImportOpen(true)}>
-                          Import CSV
-                        </AppButton>
-                      </div>
-                    ) : (
+                {hasActiveFilters ? (
+                  <EmptyState
+                    icon={Users}
+                    variant="filter"
+                    title="No contacts match your filters"
+                    description="Try a different search word or clear your filters."
+                    action={
                       <AppButton variant="secondary" onClick={clearFilters}>
                         Clear filters
                       </AppButton>
-                    )
-                  }
-                />
+                    }
+                  />
+                ) : (
+                  <div className="relative overflow-hidden rounded-2xl border border-sky-100 bg-gradient-to-br from-white via-sky-50/35 to-indigo-50/45 px-4 py-5 shadow-sm dark:border-sky-900/50 dark:from-slate-950 dark:via-sky-950/15 dark:to-indigo-950/15 sm:px-6 sm:py-6">
+                    <div
+                      className="pointer-events-none absolute -right-16 -top-20 h-48 w-48 rounded-full bg-sky-300/20 blur-3xl dark:bg-sky-500/10"
+                      aria-hidden="true"
+                    />
+                    <div
+                      className="pointer-events-none absolute -bottom-24 left-1/3 h-48 w-48 rounded-full bg-indigo-300/15 blur-3xl dark:bg-indigo-500/10"
+                      aria-hidden="true"
+                    />
+
+                    <div className="relative grid items-center gap-6 lg:grid-cols-[210px_minmax(0,1fr)]">
+                      <div className="hidden rounded-2xl border border-sky-100 bg-white/75 p-4 shadow-sm dark:border-sky-900/50 dark:bg-slate-950/60 lg:block">
+                        <div className="flex items-center gap-2">
+                          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-indigo-600 text-white shadow-[0_8px_20px_rgba(2,132,199,0.25)]">
+                            <Users className="h-5 w-5" strokeWidth={2.1} />
+                          </span>
+                          <div>
+                            <p className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-sky-700 dark:text-sky-300">
+                              Audience
+                            </p>
+                            <p className="mt-0.5 text-[11px] font-bold text-slate-700 dark:text-slate-200">
+                              Ready to connect
+                            </p>
+                          </div>
+                        </div>
+                        <div className="mt-4 space-y-2">
+                          <div className="flex items-center gap-2 rounded-lg bg-sky-50 px-2.5 py-2 text-[10px] font-bold text-sky-700 dark:bg-sky-950/30 dark:text-sky-300">
+                            <Upload className="h-3.5 w-3.5" />
+                            Spreadsheet import
+                          </div>
+                          <div className="flex items-center gap-2 rounded-lg bg-violet-50 px-2.5 py-2 text-[10px] font-bold text-violet-700 dark:bg-violet-950/30 dark:text-violet-300">
+                            <Tag className="h-3.5 w-3.5" />
+                            Segmented tags
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="min-w-0">
+                        <h3 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
+                          Add your first contact
+                        </h3>
+                        <p className="mt-1.5 max-w-xl text-[11px] font-medium leading-relaxed text-slate-500 dark:text-slate-400 sm:text-[12px]">
+                          Add customers individually or import an entire spreadsheet to start messaging and running campaigns.
+                        </p>
+
+                        <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                          {[
+                            {
+                              icon: Plus,
+                              label: 'Add or import list',
+                              tone: 'bg-sky-50 text-sky-600 dark:bg-sky-950/35 dark:text-sky-300',
+                            },
+                            {
+                              icon: Tag,
+                              label: 'Organize with tags',
+                              tone: 'bg-violet-50 text-violet-600 dark:bg-violet-950/35 dark:text-violet-300',
+                            },
+                            {
+                              icon: MessageSquare,
+                              label: 'Message from Inbox',
+                              tone: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/35 dark:text-emerald-300',
+                            },
+                          ].map(({ icon: StepIcon, label, tone }, index) => (
+                            <div
+                              key={label}
+                              className="group flex min-h-[62px] items-center gap-2.5 rounded-xl border border-slate-200/70 bg-white/80 px-3 py-2.5 shadow-[0_4px_14px_rgba(15,23,42,0.04)] transition hover:-translate-y-0.5 hover:border-sky-200 hover:shadow-[0_8px_20px_rgba(2,132,199,0.10)] dark:border-slate-800/80 dark:bg-slate-950/55 dark:hover:border-sky-800"
+                            >
+                              <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${tone}`}>
+                                <StepIcon className="h-4 w-4" strokeWidth={2.1} />
+                              </span>
+                              <span className="min-w-0">
+                                <span className="flex items-center gap-1.5">
+                                  <span className="text-[9px] font-extrabold tabular-nums text-sky-600 dark:text-sky-300">
+                                    0{index + 1}
+                                  </span>
+                                  <span className="truncate text-[10.5px] font-bold text-slate-700 dark:text-slate-200">
+                                    {label}
+                                  </span>
+                                </span>
+                              </span>
+                              {index < 2 && (
+                                <ArrowRight className="ml-auto hidden h-3.5 w-3.5 shrink-0 text-slate-300 transition-transform group-hover:translate-x-0.5 group-hover:text-sky-500 sm:block" />
+                              )}
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="mt-4 flex flex-wrap items-center gap-2.5">
+                          <AppButton
+                            className="!min-h-9"
+                            size="sm"
+                            icon={<Plus className="h-3.5 w-3.5" />}
+                            onClick={openCreate}
+                          >
+                            Add contact
+                          </AppButton>
+                          <AppButton
+                            variant="secondary"
+                            className="!min-h-9"
+                            size="sm"
+                            icon={<Upload className="h-3.5 w-3.5" />}
+                            onClick={() => setImportOpen(true)}
+                          >
+                            Import CSV
+                          </AppButton>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <>
@@ -807,6 +898,7 @@ export default function ContactsPage() {
             phoneMode="plain"
             phoneDisabled={!!editing}
             phoneHint={editing ? 'Phone cannot be changed' : PHONE_HINT}
+            availableTags={tagNames}
           />
         </form>
       </SlideOver>
@@ -818,7 +910,7 @@ export default function ContactsPage() {
         title="Delete contact?"
         description={
           deleteTarget
-            ? `${deleteTarget.name || deleteTarget.phone} will be permanently removed along with their conversation history.`
+            ? `${deleteTarget.name || deleteTarget.phone} will be removed. Note: If this contact has recorded chat, call, or order history, the record is preserved in audit logs for compliance.`
             : undefined
         }
         confirmLabel="Delete contact"

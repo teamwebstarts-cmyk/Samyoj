@@ -70,32 +70,32 @@ function RangeCalendar({
 
   return (
     <div className="min-w-0">
-      <div className="mb-3 flex items-center justify-between gap-2">
+      <div className="mb-1.5 flex items-center justify-between gap-2 sm:mb-3">
         <button
           type="button"
           aria-label="Previous month"
           onClick={() => onViewMonthChange(addDays(new Date(viewMonth.getFullYear(), viewMonth.getMonth(), 1), -1))}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-neutral-200 text-neutral-600 transition hover:bg-neutral-50"
+          className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-neutral-200 text-neutral-600 transition hover:bg-neutral-50 sm:h-8 sm:w-8"
         >
-          <ChevronLeft className="h-4 w-4" />
+          <ChevronLeft className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
         </button>
-        <p className="text-[13px] font-bold text-neutral-900">{monthLabel(viewMonth)}</p>
+        <p className="text-[12px] font-bold text-neutral-900 sm:text-[13px]">{monthLabel(viewMonth)}</p>
         <button
           type="button"
           aria-label="Next month"
           disabled={!canGoNext}
           onClick={() => onViewMonthChange(addDays(new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 1), 0))}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-neutral-200 text-neutral-600 transition hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
+          className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-neutral-200 text-neutral-600 transition hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40 sm:h-8 sm:w-8"
         >
-          <ChevronRight className="h-4 w-4" />
+          <ChevronRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
         </button>
       </div>
 
-      <div className="grid grid-cols-7 gap-1">
+      <div className="grid grid-cols-7 gap-0.5 sm:gap-1">
         {WEEKDAYS.map((day) => (
           <div
             key={day}
-            className="py-1 text-center text-[10px] font-extrabold uppercase tracking-[0.08em] text-neutral-400"
+            className="py-0.5 text-center text-[9px] font-extrabold uppercase tracking-[0.08em] text-neutral-400 sm:py-1 sm:text-[10px]"
           >
             {day}
           </div>
@@ -116,7 +116,7 @@ function RangeCalendar({
               disabled={isFuture}
               onClick={() => onSelectDay(iso)}
               className={[
-                'relative h-9 rounded-lg text-[12px] font-semibold transition',
+                'relative h-7 rounded-md text-[11px] font-semibold transition sm:h-9 sm:rounded-lg sm:text-[12px]',
                 !inMonth ? 'text-neutral-300' : 'text-neutral-800',
                 isFuture ? 'cursor-not-allowed opacity-35' : 'hover:bg-emerald-50',
                 inRange && !isStart && !isEnd ? 'bg-emerald-50/80 text-emerald-900' : '',
@@ -160,7 +160,10 @@ export default function MetricsPeriodPicker({
     const trigger = triggerRef.current;
     if (!trigger) return;
     const rect = trigger.getBoundingClientRect();
-    const width = Math.min(MENU_MAX_WIDTH, window.innerWidth - 24);
+    const compact = window.innerWidth < 640;
+    const width = compact
+      ? Math.min(252, window.innerWidth - 16)
+      : Math.min(MENU_MAX_WIDTH, window.innerWidth - 24);
     let left = align === 'right' ? rect.right - width : rect.left;
     left = Math.max(12, Math.min(left, window.innerWidth - width - 12));
     setMenuPos({
@@ -288,13 +291,14 @@ export default function MetricsPeriodPicker({
               role="dialog"
               aria-label="Choose metrics period"
               style={{ top: menuPos.top, left: menuPos.left, width: menuPos.width }}
-              className="fixed z-[250] overflow-hidden rounded-2xl border border-neutral-200/90 bg-white shadow-[0_16px_40px_rgba(15,23,42,0.14)]"
+              className="fixed z-[250] max-h-[min(72dvh,30rem)] overflow-y-auto overflow-x-hidden rounded-2xl border border-neutral-200/90 bg-white shadow-[0_16px_40px_rgba(15,23,42,0.14)] sm:max-h-none sm:overflow-hidden"
             >
               <div className="grid sm:grid-cols-[11.5rem_minmax(0,1fr)]">
-                <div className="border-b border-neutral-100 bg-neutral-50/70 p-2 sm:border-b-0 sm:border-r">
-                  <p className="px-2 pb-1 pt-1 text-[10px] font-extrabold uppercase tracking-[0.08em] text-neutral-500">
+                <div className="border-b border-neutral-100 bg-neutral-50/70 p-1.5 sm:border-b-0 sm:border-r sm:p-2">
+                  <p className="px-1.5 pb-1 pt-0.5 text-[9px] font-extrabold uppercase tracking-[0.08em] text-neutral-500 sm:px-2 sm:pt-1 sm:text-[10px]">
                     Quick ranges
                   </p>
+                  <div className="flex flex-wrap gap-1 sm:block">
                   {METRICS_PRESET_OPTIONS.map((option) => {
                     const candidate: MetricsPeriod = { kind: 'preset', days: option.days };
                     const active = metricsPeriodsEqual(period, candidate);
@@ -303,7 +307,7 @@ export default function MetricsPeriodPicker({
                         key={option.days}
                         type="button"
                         onClick={() => selectPreset(candidate)}
-                        className={`mt-0.5 flex w-full items-center rounded-xl px-3 py-2 text-left text-[12px] font-semibold transition ${
+                        className={`flex items-center rounded-lg px-2 py-1 text-left text-[11px] font-semibold transition sm:mt-0.5 sm:w-full sm:rounded-xl sm:px-3 sm:py-2 sm:text-[12px] ${
                           active
                             ? 'bg-emerald-100 text-emerald-800'
                             : 'text-neutral-700 hover:bg-white'
@@ -316,7 +320,7 @@ export default function MetricsPeriodPicker({
                   <button
                     type="button"
                     onClick={() => selectPreset({ kind: 'overall' })}
-                    className={`mt-0.5 flex w-full items-center rounded-xl px-3 py-2 text-left text-[12px] font-semibold transition ${
+                    className={`flex items-center rounded-lg px-2 py-1 text-left text-[11px] font-semibold transition sm:mt-0.5 sm:w-full sm:rounded-xl sm:px-3 sm:py-2 sm:text-[12px] ${
                       period.kind === 'overall'
                         ? 'bg-emerald-100 text-emerald-800'
                         : 'text-neutral-700 hover:bg-white'
@@ -324,13 +328,14 @@ export default function MetricsPeriodPicker({
                   >
                     All time
                   </button>
+                  </div>
                 </div>
 
-                <div className="p-3 sm:p-3.5">
-                  <p className="text-[10px] font-extrabold uppercase tracking-[0.08em] text-neutral-500">
+                <div className="p-2 sm:p-3.5">
+                  <p className="text-[9px] font-extrabold uppercase tracking-[0.08em] text-neutral-500 sm:text-[10px]">
                     Custom range
                   </p>
-                  <div className="mt-2">
+                  <div className="mt-1.5 sm:mt-2">
                     <RangeCalendar
                       draftFrom={draftFrom}
                       draftTo={draftTo}
@@ -339,11 +344,11 @@ export default function MetricsPeriodPicker({
                       onViewMonthChange={setViewMonth}
                     />
                   </div>
-                  <p className="mt-3 text-[11px] font-medium text-neutral-500">{customDraftLabel}</p>
+                  <p className="mt-2 text-[10px] font-medium text-neutral-500 sm:mt-3 sm:text-[11px]">{customDraftLabel}</p>
                   <AppButton
                     type="button"
                     size="sm"
-                    className="mt-3 w-full"
+                    className="mt-2 w-full !h-8 !min-h-8 sm:mt-3 sm:!h-9 sm:!min-h-[44px]"
                     disabled={!draftFrom || !draftTo}
                     onClick={applyCustomRange}
                   >

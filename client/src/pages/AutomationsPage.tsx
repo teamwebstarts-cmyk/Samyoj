@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
 import {
-  BarChart3,
+  ArrowRight,
   Bot,
   Clock,
   GitBranch,
@@ -14,9 +14,9 @@ import {
   Sparkles,
   Trash2,
   UserPlus,
+  Workflow,
   Zap,
 } from 'lucide-react';
-import AutomationAnalyticsPanel from '../components/automations/AutomationAnalyticsPanel';
 import AutomationCard from '../components/automations/AutomationCard';
 import AutomationConflictsBanner from '../components/automations/AutomationConflictsBanner';
 import AutomationTipCard, { AiBotLink } from '../components/automations/AutomationTipCard';
@@ -33,7 +33,7 @@ import DataTable from '../components/ui/DataTable';
 import EmptyState from '../components/ui/EmptyState';
 import ListToolbar from '../components/ui/ListToolbar';
 import ListLayoutSkeleton from '../components/ui/ListLayoutSkeleton';
-import PageHero from '../components/ui/PageHero';
+import AutomationHero, { type AutomationHeroStat } from '../components/automations/AutomationHero';
 import PageShell from '../components/ui/PageShell';
 import ResponsiveDataView from '../components/ui/ResponsiveDataView';
 import SectionCard from '../components/ui/SectionCard';
@@ -48,7 +48,7 @@ import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { automationApi } from '../services/api';
 import { WhatsAppMessagePreview } from '../components/inbox/WhatsAppPreview';
 import InteractiveMessageCard from '../components/inbox/InteractiveMessageCard';
-import type { Automation, AutomationAnalytics, AutomationConflict } from '../types';
+import type { Automation, AutomationConflict } from '../types';
 
 const triggerMeta: Record<
   string,
@@ -175,7 +175,7 @@ function getTriggerMeta(triggerType: string) {
   );
 }
 
-type AutomationTab = 'flows' | 'quick' | 'analytics';
+type AutomationTab = 'flows' | 'quick';
 
 const heroCopy: Record<AutomationTab, { title: string; description: string }> = {
   flows: {
@@ -185,10 +185,6 @@ const heroCopy: Record<AutomationTab, { title: string; description: string }> = 
   quick: {
     title: 'Auto-replies',
     description: 'Send one automatic message for keywords, welcomes, away times, and more.',
-  },
-  analytics: {
-    title: 'Automation stats',
-    description: 'See how often your auto-replies and conversation flows run.',
   },
 };
 
@@ -213,8 +209,6 @@ export default function AutomationsPage() {
   const [flowSummary, setFlowSummary] = useState<FlowSummary>({ total: 0, active: 0, paused: 0 });
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [conflicts, setConflicts] = useState<AutomationConflict[]>([]);
-  const [analytics, setAnalytics] = useState<AutomationAnalytics | null>(null);
-  const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const activeNumberIdRef = useRef<string | null>(null);
   activeNumberIdRef.current = activeNumber?.id ?? null;
 
@@ -275,19 +269,6 @@ export default function AutomationsPage() {
       })
       .catch(() => {});
   }, [activeNumber, activeTab, flowSummary.active, flowSummary.paused, resolved, summary.active, summary.paused]);
-
-  useEffect(() => {
-    if (activeTab !== 'analytics' || !resolved || !activeNumber) return;
-    const requestNumberId = activeNumber.id;
-    setAnalyticsLoading(true);
-    automationApi
-      .analytics(30)
-      .then(({ data }) => {
-        if (requestNumberId === activeNumberIdRef.current) setAnalytics(data.data);
-      })
-      .catch((err) => toastError(getErrorMessage(err, 'Failed to load analytics')))
-      .finally(() => setAnalyticsLoading(false));
-  }, [activeNumber, activeTab, resolved]);
 
   const openCreate = (triggerType = 'KEYWORD') => {
     setEditing(null);
@@ -448,34 +429,27 @@ export default function AutomationsPage() {
     }));
   };
 
-  const heroStats =
+  const heroStats: AutomationHeroStat[] =
     activeTab === 'flows'
       ? [
-          { label: 'Total flows', value: flowSummary.total },
-          { label: 'Live', value: flowSummary.active, tone: 'text-emerald-700 dark:text-emerald-300' },
-          { label: 'Off', value: flowSummary.paused, tone: 'text-amber-700 dark:text-amber-300' },
+          { label: 'Total flows', value: flowSummary.total, hint: 'All chat trees', tone: 'total', icon: Workflow },
+          { label: 'Live', value: flowSummary.active, hint: 'Running for customers', tone: 'live', icon: PlayCircle },
+          { label: 'Off', value: flowSummary.paused, hint: 'Draft or paused', tone: 'paused', icon: PauseCircle },
         ]
-      : activeTab === 'analytics'
-        ? [
-            { label: 'Times used', value: analytics?.total ?? 0 },
-            { label: 'Sent OK', value: analytics?.success ?? 0, tone: 'text-emerald-700 dark:text-emerald-300' },
-            { label: "Didn't send", value: analytics?.failed ?? 0, tone: 'text-amber-700 dark:text-amber-300' },
-          ]
-        : [
-            { label: 'Quick replies', value: summary.total },
-            { label: 'On', value: summary.active, tone: 'text-emerald-700 dark:text-emerald-300' },
-            { label: 'Off', value: summary.paused, tone: 'text-amber-700 dark:text-amber-300' },
-          ];
+      : [
+          { label: 'Quick replies', value: summary.total, hint: 'Rules set up', tone: 'total', icon: MessageSquareQuote },
+          { label: 'On', value: summary.active, hint: 'Active now', tone: 'live', icon: PlayCircle },
+          { label: 'Off', value: summary.paused, hint: 'Turned off', tone: 'paused', icon: PauseCircle },
+        ];
 
   return (
     <PageShell>
       <div className="space-y-4 sm:space-y-5">
-        <PageHero
+        <AutomationHero
           badge="Automations"
           badgeIcon={Zap}
           title={heroCopy[activeTab].title}
           description={heroCopy[activeTab].description}
-          accent="violet"
           stats={heroStats}
         />
 
@@ -486,7 +460,6 @@ export default function AutomationsPage() {
           options={[
             { value: 'flows', label: 'Conversation flows', shortLabel: 'Flows', icon: GitBranch },
             { value: 'quick', label: 'Auto-replies', shortLabel: 'Replies', icon: MessageSquareQuote },
-            { value: 'analytics', label: 'Performance', shortLabel: 'Stats', icon: BarChart3 },
           ]}
           ariaLabel="Automation sections"
         />
@@ -514,9 +487,7 @@ export default function AutomationsPage() {
           </AutomationTipCard>
         )}
 
-        {activeTab === 'analytics' ? (
-          <AutomationAnalyticsPanel analytics={analytics} loading={analyticsLoading} />
-        ) : activeTab === 'flows' ? (
+        {activeTab === 'flows' ? (
           <FlowsTab
             templatesOpen={templatesOpen}
             onTemplatesOpenChange={setTemplatesOpen}
@@ -568,28 +539,115 @@ export default function AutomationsPage() {
               />
             ) : automations.length === 0 ? (
               <div className="space-y-6 p-4 sm:p-6">
-                <EmptyState
-                  icon={Zap}
-                  variant={hasFilters ? 'filter' : 'default'}
-                  title={hasFilters ? 'No auto-replies match your filters' : 'No auto-replies yet'}
-                  description={
-                    hasFilters
-                      ? 'Try a different search word or filter.'
-                      : 'Auto-replies send instant messages when customers text you — like a welcome message or away reply.'
-                  }
-                  steps={
-                    hasFilters
-                      ? undefined
-                      : ['Pick a ready-made template below', 'Edit the message to fit your business', 'Turn it on — done!']
-                  }
-                  action={
-                    !hasFilters ? (
-                      <AppButton icon={<Plus size={16} />} onClick={() => openCreate()}>
-                        Create auto-reply
-                      </AppButton>
-                    ) : undefined
-                  }
-                />
+                {hasFilters ? (
+                  <EmptyState
+                    icon={Zap}
+                    variant="filter"
+                    title="No auto-replies match your filters"
+                    description="Try a different search word or filter."
+                  />
+                ) : (
+                  <div className="relative overflow-hidden rounded-2xl border border-violet-100 bg-gradient-to-br from-white via-violet-50/35 to-emerald-50/45 px-4 py-5 shadow-sm dark:border-violet-900/50 dark:from-slate-950 dark:via-violet-950/15 dark:to-emerald-950/15 sm:px-6 sm:py-6">
+                    <div
+                      className="pointer-events-none absolute -right-16 -top-20 h-48 w-48 rounded-full bg-violet-300/20 blur-3xl dark:bg-violet-500/10"
+                      aria-hidden="true"
+                    />
+                    <div
+                      className="pointer-events-none absolute -bottom-24 left-1/3 h-48 w-48 rounded-full bg-emerald-300/15 blur-3xl dark:bg-emerald-500/10"
+                      aria-hidden="true"
+                    />
+
+                    <div className="relative grid items-center gap-6 lg:grid-cols-[210px_minmax(0,1fr)]">
+                      <div className="hidden rounded-2xl border border-violet-100 bg-white/75 p-4 shadow-sm dark:border-violet-900/50 dark:bg-slate-950/60 lg:block">
+                        <div className="flex items-center gap-2">
+                          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-purple-700 text-white shadow-[0_8px_20px_rgba(139,92,246,0.25)]">
+                            <Zap className="h-5 w-5" strokeWidth={2.1} />
+                          </span>
+                          <div>
+                            <p className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-violet-700 dark:text-violet-300">
+                              Quick Replies
+                            </p>
+                            <p className="mt-0.5 text-[11px] font-bold text-slate-700 dark:text-slate-200">
+                              Instant responses
+                            </p>
+                          </div>
+                        </div>
+                        <div className="mt-4 space-y-2">
+                          <div className="flex items-center gap-2 rounded-lg bg-emerald-50 px-2.5 py-2 text-[10px] font-bold text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300">
+                            <Sparkles className="h-3.5 w-3.5" />
+                            Welcome & Keywords
+                          </div>
+                          <div className="flex items-center gap-2 rounded-lg bg-amber-50 px-2.5 py-2 text-[10px] font-bold text-amber-700 dark:bg-amber-950/30 dark:text-amber-300">
+                            <Clock className="h-3.5 w-3.5" />
+                            Away & Off-hours
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="min-w-0">
+                        <h3 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
+                          Set up your first auto-reply
+                        </h3>
+                        <p className="mt-1.5 max-w-xl text-[11px] font-medium leading-relaxed text-slate-500 dark:text-slate-400 sm:text-[12px]">
+                          Auto-replies send instant messages when customers text you — like a welcome message or away reply.
+                        </p>
+
+                        <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                          {[
+                            {
+                              icon: Sparkles,
+                              label: 'Pick a template below',
+                              tone: 'bg-violet-50 text-violet-600 dark:bg-violet-950/35 dark:text-violet-300',
+                            },
+                            {
+                              icon: MessageSquareQuote,
+                              label: 'Edit the message',
+                              tone: 'bg-sky-50 text-sky-600 dark:bg-sky-950/35 dark:text-sky-300',
+                            },
+                            {
+                              icon: PlayCircle,
+                              label: 'Turn it on — done!',
+                              tone: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/35 dark:text-emerald-300',
+                            },
+                          ].map(({ icon: StepIcon, label, tone }, index) => (
+                            <div
+                              key={label}
+                              className="group flex min-h-[62px] items-center gap-2.5 rounded-xl border border-slate-200/70 bg-white/80 px-3 py-2.5 shadow-[0_4px_14px_rgba(15,23,42,0.04)] transition hover:-translate-y-0.5 hover:border-violet-200 hover:shadow-[0_8px_20px_rgba(139,92,246,0.10)] dark:border-slate-800/80 dark:bg-slate-950/55 dark:hover:border-violet-800"
+                            >
+                              <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${tone}`}>
+                                <StepIcon className="h-4 w-4" strokeWidth={2.1} />
+                              </span>
+                              <span className="min-w-0">
+                                <span className="flex items-center gap-1.5">
+                                  <span className="text-[9px] font-extrabold tabular-nums text-violet-600 dark:text-violet-300">
+                                    0{index + 1}
+                                  </span>
+                                  <span className="truncate text-[10.5px] font-bold text-slate-700 dark:text-slate-200">
+                                    {label}
+                                  </span>
+                                </span>
+                              </span>
+                              {index < 2 && (
+                                <ArrowRight className="ml-auto hidden h-3.5 w-3.5 shrink-0 text-slate-300 transition-transform group-hover:translate-x-0.5 group-hover:text-violet-500 sm:block" />
+                              )}
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="mt-4">
+                          <AppButton
+                            className="!min-h-9"
+                            size="sm"
+                            icon={<Plus className="h-3.5 w-3.5" />}
+                            onClick={() => openCreate()}
+                          >
+                            Create auto-reply
+                          </AppButton>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {!hasFilters && (
                   <SectionCard title="Popular setups" subtitle="Tap a template to start with a sample message">

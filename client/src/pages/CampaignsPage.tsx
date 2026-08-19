@@ -946,7 +946,7 @@ export default function CampaignsPage() {
               tableHeaders={['Campaign', 'Status', 'Audience', 'Progress', 'Created', 'Actions']}
             />
           ) : campaigns.length === 0 ? (
-            <div className="p-4 sm:p-6">
+            <div className="list-shell-scroll p-4 sm:p-6">
               {hasFilters ? (
                 <EmptyState
                   icon={Send}

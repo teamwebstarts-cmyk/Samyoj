@@ -23,7 +23,7 @@ export default function SegmentedControl<T extends string>({
 }: SegmentedControlProps<T>) {
   const inner = (
     <div
-      className={`flex rounded-xl bg-neutral-100 p-1 dark:bg-neutral-900 ${fit ? 'w-auto' : 'w-full'}`}
+      className={`flex rounded-xl bg-neutral-100 p-1 dark:bg-neutral-900 ${fit ? 'w-full md:w-auto' : 'w-full'}`}
       role="tablist"
       aria-label={ariaLabel}
     >

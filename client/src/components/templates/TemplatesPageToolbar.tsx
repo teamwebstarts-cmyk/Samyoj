@@ -35,7 +35,10 @@ interface TemplatesPageToolbarProps {
 
 /** Fixed width on sm+ — never w-full in a horizontal flex row (causes 544px overlap). */
 const filterSelectClass =
-  'w-full shrink-0 sm:w-[10.25rem] sm:max-w-[10.25rem] [&_.app-select__control]:!w-full [&_.app-select__single-value]:!max-w-none';
+  'w-full min-w-0 shrink-0 sm:w-[10.25rem] sm:max-w-[10.25rem] [&_.app-select__control]:!w-full [&_.app-select__single-value]:!max-w-none';
+
+const mobileIconBtn =
+  'shrink-0 max-sm:!h-9 max-sm:!min-h-9 max-sm:!px-2.5';
 
 /**
  * Toolbar: [search][status][category][language] ——— [group][refresh][library][new]
@@ -57,8 +60,8 @@ export default function TemplatesPageToolbar({
   onCreate,
 }: TemplatesPageToolbarProps) {
   return (
-    <div className="border-b border-theme-border px-3 py-3 sm:px-4 sm:py-3.5 lg:px-5">
-      <div className="flex min-w-0 flex-col gap-3 xl:flex-row xl:items-center xl:justify-between xl:gap-4">
+    <div className="border-b border-theme-border px-2.5 py-2 sm:px-4 sm:py-3.5 lg:px-5">
+      <div className="flex min-w-0 flex-col gap-2 sm:gap-3 xl:flex-row xl:items-center xl:justify-between xl:gap-4">
         {/* Search + filters */}
         <div className="flex min-w-0 flex-col gap-2 sm:gap-2.5 md:flex-row md:flex-wrap md:items-center lg:flex-nowrap lg:gap-2">
           <SearchInput
@@ -69,12 +72,13 @@ export default function TemplatesPageToolbar({
             compact
           />
 
-          <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-2 md:flex md:flex-none md:flex-row md:items-center md:gap-2">
+          <div className="grid min-w-0 grid-cols-3 gap-1.5 sm:gap-2 md:flex md:flex-none md:flex-row md:items-center md:gap-2">
             <AppSelect
               className={filterSelectClass}
               size="compact"
               value={statusFilter}
-              placeholder="All statuses"
+              placeholder="Status"
+              ariaLabel="Filter by status"
               isSearchable={false}
               options={statusFilterOptions}
               onChange={(e) => onStatusFilterChange(e.target.value)}
@@ -83,7 +87,8 @@ export default function TemplatesPageToolbar({
               className={`${filterSelectClass} sm:w-[11.5rem] sm:max-w-[11.5rem]`}
               size="compact"
               value={categoryFilter}
-              placeholder="All categories"
+              placeholder="Category"
+              ariaLabel="Filter by category"
               isSearchable={false}
               options={[{ value: ALL_CATEGORIES, label: 'All categories' }, ...CATEGORY_OPTIONS]}
               onChange={(e) => onCategoryFilterChange(e.target.value)}
@@ -92,7 +97,8 @@ export default function TemplatesPageToolbar({
               className={`${filterSelectClass} sm:w-[11rem] sm:max-w-[11rem]`}
               size="compact"
               value={languageFilter}
-              placeholder="All languages"
+              placeholder="Language"
+              ariaLabel="Filter by language"
               isSearchable
               options={[{ value: ALL_LANGUAGES, label: 'All languages' }, ...LANGUAGE_OPTIONS]}
               onChange={(e) => onLanguageFilterChange(e.target.value)}
@@ -100,36 +106,44 @@ export default function TemplatesPageToolbar({
           </div>
         </div>
 
-        {/* Actions — never shrink below content */}
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
+        {/* Actions — icon-only secondary on phone; labels from sm */}
+        <div className="flex shrink-0 items-center gap-1.5 sm:flex-wrap sm:gap-2">
           <AppButton
-            className="shrink-0"
+            className={mobileIconBtn}
             variant={groupView ? 'primary' : 'secondary'}
             size="sm"
             icon={<Layers size={14} />}
             onClick={onToggleGroupView}
+            aria-label="Group templates"
           >
-            Group
+            <span className="hidden sm:inline">Group</span>
           </AppButton>
           <AppButton
-            className="shrink-0"
+            className={mobileIconBtn}
             variant="secondary"
             size="sm"
             icon={<RefreshCw size={15} />}
             onClick={onRefresh}
+            aria-label="Refresh templates"
           >
-            Refresh
+            <span className="hidden sm:inline">Refresh</span>
           </AppButton>
           <AppButton
-            className="shrink-0"
+            className={mobileIconBtn}
             variant="secondary"
             size="sm"
             icon={<BookOpen size={16} />}
             onClick={onOpenLibrary}
+            aria-label="Open template library"
           >
-            Library
+            <span className="hidden sm:inline">Library</span>
           </AppButton>
-          <AppButton className="shrink-0" size="sm" icon={<Plus size={16} />} onClick={onCreate}>
+          <AppButton
+            className="shrink-0 max-sm:ml-auto max-sm:!h-9 max-sm:!min-h-9"
+            size="sm"
+            icon={<Plus size={16} />}
+            onClick={onCreate}
+          >
             New template
           </AppButton>
         </div>

@@ -379,7 +379,7 @@ export default function TemplatesPage() {
 
   return (
     <PageShell>
-      <div className="min-w-0 space-y-3 sm:space-y-4 lg:space-y-5">
+      <div className="min-w-0 space-y-2 sm:space-y-4 lg:space-y-5">
         <PageHero
           variant="clean"
           badge="Templates"

@@ -709,18 +709,20 @@ export default function AiBotPage() {
                 channelFilter === 'CHAT' ? 'Search chat bots...' : 'Search calling bots...'
               }
             filters={
-                <div className="flex min-w-0 flex-nowrap items-center gap-2">
-                  <SegmentedControl
-                    bare
-                    compact
-                    fit
-                    value={channelFilter}
-                    onChange={(value) => setChannelFilter(value as Channel)}
-                    options={[
-                      { value: 'CHAT', label: 'Chat', icon: MessageSquare },
-                      { value: 'CALL', label: 'Calling', icon: PhoneCall },
-                    ]}
-                  />
+                <div className="flex w-full min-w-0 flex-col gap-2 md:w-auto md:flex-row md:flex-nowrap md:items-center">
+                  <div className="w-full min-w-0 md:w-auto">
+                    <SegmentedControl
+                      bare
+                      compact
+                      fit
+                      value={channelFilter}
+                      onChange={(value) => setChannelFilter(value as Channel)}
+                      options={[
+                        { value: 'CHAT', label: 'Chat', icon: MessageSquare },
+                        { value: 'CALL', label: 'Calling', icon: PhoneCall },
+                      ]}
+                    />
+                  </div>
                   <AiBotStatusFilter value={statusFilter} onChange={setStatusFilter} />
                 </div>
             }

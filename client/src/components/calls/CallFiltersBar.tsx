@@ -32,7 +32,7 @@ export default function CallFiltersBar({
   const chipRowRef = useHorizontalWheelScroll();
 
   return (
-    <div className="shrink-0 border-b border-neutral-200/80 bg-white px-3 pb-3 pt-3 dark:border-neutral-800 dark:bg-neutral-950 sm:px-4">
+    <div className="shrink-0 border-b border-neutral-200/80 bg-white px-3 pb-2 pt-2 dark:border-neutral-800 dark:bg-neutral-950 sm:px-4 md:pb-3 md:pt-3">
       <div className="relative min-w-0">
         <Search
           className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400"

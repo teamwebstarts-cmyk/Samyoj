@@ -36,7 +36,7 @@ export default function PageHero({
     <div
       className={
         isClean
-          ? 'rounded-xl border border-slate-200/90 bg-[#f7faf9] p-4 shadow-[0_1px_3px_rgba(15,23,42,0.06)] sm:rounded-2xl sm:p-5 md:p-6 dark:border-slate-700/60 dark:bg-slate-900/50 dark:shadow-[0_1px_3px_rgba(0,0,0,0.25)]'
+          ? 'rounded-xl border border-slate-200/90 bg-[#f7faf9] p-3 shadow-[0_1px_3px_rgba(15,23,42,0.06)] sm:rounded-2xl sm:p-5 md:p-6 dark:border-slate-700/60 dark:bg-slate-900/50 dark:shadow-[0_1px_3px_rgba(0,0,0,0.25)]'
           : 'dashboard-hero relative overflow-hidden rounded-xl p-4 sm:rounded-2xl sm:p-5 md:p-6'
       }
     >
@@ -54,7 +54,7 @@ export default function PageHero({
       )}
 
       <div
-        className={`flex flex-col gap-4 sm:gap-5 lg:flex-row lg:justify-between ${
+        className={`flex flex-col gap-2.5 sm:gap-5 lg:flex-row lg:justify-between ${
           isClean ? 'lg:items-center' : 'relative lg:items-end'
         }`}
       >
@@ -62,7 +62,7 @@ export default function PageHero({
           <span
             className={
               isClean
-                ? 'inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300'
+                ? 'inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700 max-sm:hidden dark:bg-emerald-950/60 dark:text-emerald-300'
                 : `inline-flex items-center gap-1.5 rounded-full border bg-theme-surface/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider shadow-sm backdrop-blur-sm ${theme.badge} dark:bg-theme-surface-elevated/90`
             }
           >
@@ -72,7 +72,7 @@ export default function PageHero({
           <h2
             className={
               isClean
-                ? 'mt-2.5 text-xl font-bold tracking-tight text-slate-900 sm:mt-3 sm:text-2xl dark:text-slate-50'
+                ? 'mt-0 text-[15px] font-bold tracking-tight text-slate-900 sm:mt-3 sm:text-2xl dark:text-slate-50'
                 : 'mt-2.5 text-lg font-extrabold tracking-tight text-theme-fg sm:mt-3 sm:text-2xl'
             }
           >
@@ -81,7 +81,7 @@ export default function PageHero({
           <p
             className={
               isClean
-                ? 'mt-1.5 text-[13px] leading-relaxed text-slate-500 sm:mt-2 sm:text-sm dark:text-slate-400'
+                ? 'mt-1.5 hidden text-[13px] leading-relaxed text-slate-500 sm:mt-2 sm:block sm:text-sm dark:text-slate-400'
                 : 'mt-1.5 text-[13px] font-medium leading-relaxed text-theme-secondary sm:mt-2 sm:text-[14px]'
             }
           >
@@ -97,7 +97,7 @@ export default function PageHero({
                     stats.length === 3
                       ? 'grid-cols-3'
                       : stats.length >= 4
-                        ? 'grid-cols-2 sm:grid-cols-4'
+                        ? 'grid-cols-4'
                         : 'grid-cols-2'
                   }`
                 : `grid gap-2 sm:gap-3 ${stats.length >= 4 ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'}`
@@ -108,14 +108,14 @@ export default function PageHero({
                 key={item.label}
                 className={
                   isClean
-                    ? 'min-w-0 rounded-lg border border-slate-200/80 bg-white px-3 py-2.5 text-center sm:min-w-[4.75rem] sm:px-4 sm:py-3 dark:border-slate-700/70 dark:bg-slate-800/80'
+                    ? 'min-w-0 rounded-lg border border-slate-200/80 bg-white px-1.5 py-1.5 text-center sm:min-w-[4.75rem] sm:px-4 sm:py-3 dark:border-slate-700/70 dark:bg-slate-800/80'
                     : 'min-w-0 rounded-xl border border-theme-border bg-theme-surface/75 px-2.5 py-2.5 text-center shadow-sm backdrop-blur-sm sm:rounded-2xl sm:px-4 sm:py-3'
                 }
               >
                 <p
                   className={`tabular-nums ${
                     isClean
-                      ? `text-xl font-bold sm:text-2xl ${item.tone ?? 'text-slate-900 dark:text-slate-50'}`
+                      ? `text-[15px] font-bold sm:text-2xl ${item.tone ?? 'text-slate-900 dark:text-slate-50'}`
                       : `text-lg font-extrabold sm:text-2xl ${item.tone ?? 'text-theme-fg'}`
                   }`}
                 >
