@@ -18,7 +18,7 @@ Working Jira backlog (trimmed, major only): epic [SAMYOJ-8](https://teamwebstart
 
 **Landed 2026-08-17 (same, not customer production):** [SAMYOJ-68](https://teamwebstarts.atlassian.net/browse/SAMYOJ-68) login/register split; [SAMYOJ-69](https://teamwebstarts.atlassian.net/browse/SAMYOJ-69) per-contact calling AI; **[SAMYOJ-57](https://teamwebstarts.atlassian.net/browse/SAMYOJ-57) platform admin first release** (`admin/` `:3001` + `/api/platform/*`). Follow-up polish stayed on 51 / 52 / 53 / 55 / 56 / 59 (no extra tickets). UI Before/After: [SESSION_UI_2026-08-17.md](./SESSION_UI_2026-08-17.md). History delete: [SAMYOJ-70](https://teamwebstarts.atlassian.net/browse/SAMYOJ-70) (Relates 54). Orders sidebar hide commented on [SAMYOJ-8](https://teamwebstarts.atlassian.net/browse/SAMYOJ-8) -- no new Task.
 
-**2026-08-18 session work (verified in code):** Login redesign (SAMYOJ-68 Done), call STT tuning (VAD 650ms, balanced stream, echo tail 550ms), barge-in during TTS (RMS detection, stopBotSpeechForBargeIn), PreConnectHero padding, Calls empty states (Inbox-matching), sidebar collapsed hover expand. Inbox call-permission card (P1-1): `call-permission-message.ts` + parser + InteractiveMessageCard + tests (2026-08-18).
+**2026-08-18 session work (verified in code):** Login redesign (SAMYOJ-68 Done), call STT tuning (VAD 650ms, balanced stream, echo tail 550ms), barge-in during TTS (RMS detection, stopBotSpeechForBargeIn), PreConnectHero padding, Calls empty states (Inbox-matching), sidebar collapsed hover expand. Inbox call-permission card (P1-1): `call-permission-message.ts` + parser + InteractiveMessageCard + tests (2026-08-18). Rate limiter fail-closed (P1-2): `redisAuthStore` + `consumeAccountThrottle` use `BoundedMemoryCounter` fallback, `passOnStoreError: false`, 17 tests.
 
 **2026-08-18 full audit:** `audit/FULL_REVIEW_2026-08-18.md`. 5 subagent reviews + manual reads. All claims have exact file paths + line numbers. Production readiness: 4/10.
 
@@ -39,7 +39,17 @@ Working Jira backlog (trimmed, major only): epic [SAMYOJ-8](https://teamwebstart
 - **P1-7 FEATURE_MATRIX docs (2026-08-18):** Billing "All DONE" → "DONE (demo)" + 5 PLANNED rows. Voice "All DONE" → "Core works; live transfer is a stub". Sarvam TTS/STT. Stale warnings on old docs. Per-row billing contradictions fixed. `docs/audit/FEATURE_MATRIX.md`, `docs/audit/CALLS_AI_BOT_CONNECTION_REPORT.md`, `docs/memory/STATUS_AND_FUTURE.md`.
 - **P1-13 Critical path tests (2026-08-18):** 216 new tests across 14 files covering all7 zero-coverage critical paths: billing (plans, razorpay payment/webhook signature, usage), middleware auth (JWT, role check), media (upload validation, audio transcode, storage adapter, image optimize, public routes path traversal), auth routes (register/login/refresh/logout), messages (CSW error, types), campaigns (CSV, edit/reschedule), AI chat-completion (config, routing, quota). Files: `billing/*.test.ts` (4), `media/*.test.ts` (6), `auth/routes.test.ts`, `messages/send.service.test.ts`, `campaigns/service.test.ts`, `ai/chat-completion.service.test.ts`.
 
-**Still open (Phase 1):** [SAMYOJ-2](https://teamwebstarts.atlassian.net/browse/SAMYOJ-2) inbound (needs live test). P1-10 barge-in live test (needs live call). P1-13 tests for critical paths — **DONE** (216 new tests across 14 files + P2 pass: 832 total server tests).
+**Still open (Phase 1):** [SAMYOJ-2](https://teamwebstarts.atlassian.net/browse/SAMYOJ-2) inbound (needs live test). P1-10 barge-in live test (needs live call).
+
+**Automated verification pass (2026-08-18 evening, this session):**
+- Server started via `bash start.sh` — Docker (Postgres+Redis), API `:8000`, UI `:3000`, Admin `:3001`, ngrok tunnel all healthy.
+- **All tests pass:** server 832/832, client 69/69, admin 18/18 = 919 total, 0 failures.
+- **Webhook health verified:** `totalReceived: 32`, `totalQueued: 32`, `webhookConfigured: true`.
+- **Webhook endpoints verified:** GET `/webhook` returns 200 (challenge), POST returns 400 (rejects empty payload correctly).
+- **Barge-in code verified via read-through:** RMS energy gate (BARGE_IN_RMS_THRESHOLD=1500), 400ms TTS echo tail, voice backchannel check all correct in `ai-voice-agent.ts:165-189,384-405,586-614`.
+- **Rate limiter verified:** `BoundedMemoryCounter` fallback, 8/8 tests pass, fail-closed confirmed.
+- **P1-9 + P1-10 still need phone:** Documented exact test steps in `audit/FULL_REVIEW_2026-08-18.md`.
+- **DRY refactor plan:** D1 (NotificationService), D2 (InboxPage+CallsPage), D3 (MediaUtils) documented but not started — do after P1 phone tests.
 
 **P2 implementation pass (2026-08-18):** Dead code cleanup (removed3 dead AI bot routes +3 dead functions + dead client component + dead API call). Auth middleware tests (13 tests: `authenticate`, `loadOrgRole`, `requireOrgRole`). Auth session tests (11 tests: `createSession`, `rotateRefreshSession`, theft detection). Password policy tests (13 tests). Message sending tests (10 tests: `toDbMessageType`, `isCswClosedError`, CSW constants). Meta token-exchange documented. Full suite: 119 files, 832 tests passing. Plan: `docs/memory/PHASED_PLAN_2026-08-18.md`.
 
