@@ -37,6 +37,7 @@ interface FlowSettingsPanelProps {
   contactTag: string;
   segmentTags: string;
   campaignId: string;
+  withinHours: number;
   startNodeId: string;
   priority: number;
   nodes: FlowNode[];
@@ -53,6 +54,7 @@ interface FlowSettingsPanelProps {
   onContactTagChange: (value: string) => void;
   onSegmentTagsChange: (value: string) => void;
   onCampaignIdChange: (value: string) => void;
+  onWithinHoursChange: (value: number) => void;
   onStartNodeIdChange: (value: string) => void;
   onPriorityChange: (value: number) => void;
   onPublish: () => void;
@@ -136,6 +138,7 @@ export default function FlowSettingsPanel({
   contactTag,
   segmentTags,
   campaignId,
+  withinHours,
   startNodeId,
   priority,
   nodes,
@@ -152,6 +155,7 @@ export default function FlowSettingsPanel({
   onContactTagChange,
   onSegmentTagsChange,
   onCampaignIdChange,
+  onWithinHoursChange,
   onStartNodeIdChange,
   onPriorityChange,
   onPublish,
@@ -370,17 +374,36 @@ export default function FlowSettingsPanel({
       )}
 
       {triggerType === 'CAMPAIGN_REPLY' && (
-        <AppSelect
-          label="Campaign (optional)"
-          value={campaignId}
-          options={campaignOptions}
-          placeholder="Any campaign reply"
-          onChange={(e) => {
-            onCampaignIdChange(e.target.value);
-            markDirty();
-          }}
-          hint="Leave as any campaign, or pick one so only that blast's replies start this flow"
-        />
+        <div className="space-y-3">
+          <AppSelect
+            label="Campaign (optional)"
+            value={campaignId}
+            options={campaignOptions}
+            placeholder="Any campaign reply"
+            onChange={(e) => {
+              onCampaignIdChange(e.target.value);
+              markDirty();
+            }}
+            hint="Leave as any campaign, or pick one so only that blast's replies start this flow"
+          />
+          <AppSelect
+            label="Reply window"
+            value={String(withinHours)}
+            options={[
+              { value: '24', label: '24 hours after sending' },
+              { value: '48', label: '48 hours after sending' },
+              { value: '72', label: '72 hours after sending' },
+              { value: '168', label: '7 days after sending (default)' },
+              { value: '336', label: '14 days after sending' },
+            ]}
+            isSearchable={false}
+            onChange={(e) => {
+              onWithinHoursChange(Number(e.target.value));
+              markDirty();
+            }}
+            hint="Only match replies that come within this time after the campaign was sent"
+          />
+        </div>
       )}
 
       {triggerType === 'CALL_COMPLETED' && (

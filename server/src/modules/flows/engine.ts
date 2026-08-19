@@ -413,7 +413,17 @@ async function executeNode(
   try {
     switch (node.type) {
       case 'message': {
-        if (node.text) await sendFlowMessage(payload, node.text, state.variables, contactName);
+        if (node.text) {
+          await sendFlowMessage(payload, node.text, state.variables, contactName);
+        } else {
+          log.warn('Flow message node has no text — skipping send', {
+            flowId,
+            nodeId: node.id,
+            conversationId: payload.conversationId,
+          });
+          await logNode(flowId, payload, node, 'skipped', undefined, 'node.text is empty', Date.now() - start);
+          return { done: false, nextNodeId: node.next || null, waitingFor: null };
+        }
         await logNode(flowId, payload, node, 'success', undefined, undefined, Date.now() - start);
         return { done: false, nextNodeId: node.next || null, waitingFor: null };
       }
@@ -931,8 +941,23 @@ async function runFromNode(
     iterations++;
     const node = findNode(nodes, currentId);
     if (!node) {
+      log.warn('Flow node not found — likely deleted after publish. Clearing state.', {
+        flowId,
+        missingNodeId: currentId,
+        conversationId: payload.conversationId,
+      });
       await incrementFlowStat(flowId, 'dropoffs', currentId);
-      break;
+      await logAutomationRun({
+        organizationId: payload.organizationId,
+        conversationId: payload.conversationId,
+        flowId,
+        triggerType: 'FLOW',
+        action: `node:missing`,
+        status: 'failed',
+        error: `Node '${currentId}' no longer exists in published flow.`,
+      });
+      await saveFlowState(payload.conversationId, null);
+      return true;
     }
 
     state.currentNodeId = currentId;

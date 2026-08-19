@@ -81,9 +81,12 @@ export default function FlowBuilderPage() {
     if (triggerType === 'KEYWORD') return { keyword, exactMatch, regex: regexMatch };
     if (triggerType === 'CONTACT_TAG') return { tag: contactTag };
     if (triggerType === 'SEGMENT') return { tags: segmentTags.split(',').map((t) => t.trim()).filter(Boolean) };
-    if (triggerType === 'CAMPAIGN_REPLY') return { ...(campaignId.trim() ? { campaignId: campaignId.trim() } : {}) };
+    if (triggerType === 'CAMPAIGN_REPLY') return {
+      ...(campaignId.trim() ? { campaignId: campaignId.trim() } : {}),
+      withinHours,
+    };
     return {};
-  }, [triggerType, keyword, exactMatch, regexMatch, contactTag, segmentTags, campaignId]);
+  }, [triggerType, keyword, exactMatch, regexMatch, contactTag, segmentTags, campaignId, withinHours]);
 
   const selectedIndex = selectedNodeId ? nodes.findIndex((n) => n.id === selectedNodeId) : -1;
   const selectedNode = selectedIndex >= 0 ? nodes[selectedIndex] : null;
@@ -116,6 +119,7 @@ export default function FlowBuilderPage() {
         setContactTag((flow.triggerConfig?.tag as string) || '');
         setSegmentTags(((flow.triggerConfig?.tags as string[]) || []).join(', '));
         setCampaignId((flow.triggerConfig?.campaignId as string) || '');
+        setWithinHours(typeof flow.triggerConfig?.withinHours === 'number' ? flow.triggerConfig.withinHours : 168);
         setStartNodeId(flow.startNodeId || '');
         setFlowStatus(flow.status || 'PUBLISHED');
         setPriority(flow.priority ?? 50);
@@ -209,6 +213,7 @@ export default function FlowBuilderPage() {
     setContactTag('');
     setSegmentTags('');
     setCampaignId('');
+    setWithinHours(168);
     setStartNodeId('');
     setFlowStatus('DRAFT');
     setPriority(50);
@@ -389,6 +394,7 @@ export default function FlowBuilderPage() {
       contactTag={contactTag}
       segmentTags={segmentTags}
       campaignId={campaignId}
+      withinHours={withinHours}
       startNodeId={startNodeId}
       priority={priority}
       nodes={nodes}
@@ -405,6 +411,7 @@ export default function FlowBuilderPage() {
       onContactTagChange={setContactTag}
       onSegmentTagsChange={setSegmentTags}
       onCampaignIdChange={setCampaignId}
+      onWithinHoursChange={setWithinHours}
       onStartNodeIdChange={setStartNodeId}
       onPriorityChange={setPriority}
       onPublish={handlePublish}

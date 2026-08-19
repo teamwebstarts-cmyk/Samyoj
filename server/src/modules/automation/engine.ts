@@ -413,6 +413,15 @@ export async function handleInboundAutomations(payload: InboundAutomationPayload
       conversationId: payload.conversationId,
       attempts: payload.lockRetry ?? 0,
     });
+    await logAutomationRun({
+      organizationId: payload.organizationId,
+      conversationId: payload.conversationId,
+      triggerType: 'FLOW',
+      action: 'lock_giveup',
+      status: 'failed',
+      error: `Conversation lock busy after ${payload.lockRetry ?? 0} retries — message dropped.`,
+    });
+    emitProductEvent({ organizationId: payload.organizationId, name: 'AUTOMATION_ERROR' });
     return;
   }
 
