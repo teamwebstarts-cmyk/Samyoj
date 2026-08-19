@@ -1001,7 +1001,7 @@ export default function SettingsPage() {
                   />
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="card-grid-auto">
                   <AppInput
                     id="daily-send-limit"
                     label="Daily send limit"

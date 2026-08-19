@@ -110,7 +110,7 @@ export default function PreConnectSteps({ connecting, onConnect }: PreConnectSte
           Get started in 4 easy steps
         </h3>
 
-        <div className="card-grid grid grid-cols-1 min-[640px]:grid-cols-2 lg:grid-cols-4">
+        <div className="card-grid card-grid-auto">
           {STEPS.map((step, index) => {
             const t = TONE[step.tone];
             const ctaClass = `mt-3 inline-flex w-auto max-w-full items-center justify-center gap-1 self-start rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition sm:text-[11.5px] ${t.btn} disabled:opacity-60`;

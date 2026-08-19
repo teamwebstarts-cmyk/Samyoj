@@ -188,7 +188,7 @@ export default function ReportsPage() {
         />
 
         <div className="inbox-shell overflow-hidden p-3 sm:p-4">
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="card-grid-auto">
             {quickLinks.map(({ to, icon: Icon, label }) => (
               <Link
                 key={to}
@@ -218,7 +218,7 @@ export default function ReportsPage() {
           />
         ) : data ? (
           <div className="space-y-5 pb-6 sm:space-y-6 sm:pb-8">
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="card-grid-auto">
               <StatCard
                 label="Messages sent"
                 value={data.messaging.sent}
@@ -253,7 +253,7 @@ export default function ReportsPage() {
               />
             </div>
 
-            <div className="grid gap-5 lg:grid-cols-5 lg:gap-6">
+            <div className="grid gap-5 md:grid-cols-3 lg:grid-cols-5 lg:gap-6">
               <div className="dashboard-card p-5 sm:p-6 lg:col-span-2 animate-fade-up-delay">
                 <div className="flex items-start justify-between gap-3">
                   <div>

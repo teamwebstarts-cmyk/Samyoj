@@ -40,8 +40,14 @@ export function getStoredCardSpacing(): CardSpacingStep | null {
 export function applyCardSpacing(step: CardSpacingStep) {
   const root = document.documentElement;
   root.dataset.cardSpacing = String(step);
-  root.style.setProperty('--card-gap', GAP[step]);
-  root.style.setProperty('--card-pad', PAD[step]);
+  if (step === defaultCardSpacingForDensity((root.dataset.density ?? 'comfortable') as DisplayDensity)) {
+    // Remove inline overrides so fluid CSS clamp() takes effect
+    root.style.removeProperty('--card-gap');
+    root.style.removeProperty('--card-pad');
+  } else {
+    root.style.setProperty('--card-gap', GAP[step]);
+    root.style.setProperty('--card-pad', PAD[step]);
+  }
 }
 
 export function saveCardSpacing(step: CardSpacingStep) {

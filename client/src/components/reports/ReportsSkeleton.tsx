@@ -6,7 +6,7 @@ export default function ReportsSkeleton() {
           <div key={i} className="h-[118px] rounded-2xl bg-theme-subtle" />
         ))}
       </div>
-      <div className="grid gap-5 lg:grid-cols-5">
+      <div className="grid gap-5 md:grid-cols-3 lg:grid-cols-5">
         <div className="h-[240px] rounded-2xl bg-theme-subtle lg:col-span-2" />
         <div className="h-[240px] rounded-2xl bg-theme-subtle lg:col-span-3" />
       </div>

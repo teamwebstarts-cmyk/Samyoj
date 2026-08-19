@@ -354,7 +354,7 @@ export default function AiBotPage() {
       if (data.data.businessWebsite !== undefined) setBusinessWebsite(data.data.businessWebsite || '');
       if (data.data.businessNotes !== undefined) setBusinessNotes(data.data.businessNotes || '');
     } catch {
-      setFaqs([]);
+        setFaqs([]);
     }
   };
 
@@ -416,7 +416,7 @@ export default function AiBotPage() {
         toastSuccess('Saved');
         closeSlide();
         load();
-      } else {
+       } else {
         const { data } = await aiBotApi.create(buildPayload());
         const created = data.data as AiBot;
         toastSuccess('Bot created — add a few answers next');
@@ -497,10 +497,10 @@ export default function AiBotPage() {
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this bot?')) return;
     try {
-      await aiBotApi.delete(id);
-      closeSlide();
-      load();
-      toastSuccess('Bot deleted');
+    await aiBotApi.delete(id);
+    closeSlide();
+    load();
+    toastSuccess('Bot deleted');
     } catch (err: unknown) {
       toastError(getErrorMessage(err, 'Could not delete this bot'));
     }
@@ -688,8 +688,8 @@ export default function AiBotPage() {
 
   return (
     <>
-      <PageShell>
-        <div className="space-y-4 sm:space-y-5">
+    <PageShell>
+      <div className="space-y-4 sm:space-y-5">
           <AiBotDashboardSummary loading={analyticsLoading} analytics={aggregateAnalytics} />
 
           <AiBotInsights
@@ -698,17 +698,17 @@ export default function AiBotPage() {
             totalKnowledgeItems={totalKnowledgeItems}
           />
 
-          <div className="dashboard-card dashboard-card-soft overflow-hidden p-0">
-            <ListToolbar
-              embedded
+        <div className="dashboard-card dashboard-card-soft overflow-hidden p-0">
+          <ListToolbar
+            embedded
               compactMobile
               inlineDesktop
-              search={search}
-              onSearchChange={setSearch}
+            search={search}
+            onSearchChange={setSearch}
               searchPlaceholder={
                 channelFilter === 'CHAT' ? 'Search chat bots...' : 'Search calling bots...'
               }
-              filters={
+            filters={
                 <div className="flex min-w-0 flex-nowrap items-center gap-2">
                   <SegmentedControl
                     bare
@@ -723,8 +723,8 @@ export default function AiBotPage() {
                   />
                   <AiBotStatusFilter value={statusFilter} onChange={setStatusFilter} />
                 </div>
-              }
-              actions={
+            }
+            actions={
                 <AppButton
                   size="sm"
                   className="max-md:w-full"
@@ -732,33 +732,33 @@ export default function AiBotPage() {
                   onClick={() => openCreate(channelFilter)}
                 >
                   {channelFilter === 'CHAT' ? 'New chat bot' : 'New calling bot'}
-                </AppButton>
-              }
-            />
+              </AppButton>
+            }
+          />
 
-            {loading && bots.length === 0 ? (
-              <ListLayoutSkeleton
-                label="Loading bots"
+          {loading && bots.length === 0 ? (
+            <ListLayoutSkeleton
+              label="Loading bots"
                 tableHeaders={['Bot', 'Status', 'Trained', 'Updated', 'Actions']}
-              />
+            />
             ) : listBotsForFilter.length === 0 ? (
               <>
-                <AiBotListEmpty
-                  mode={hasFilters ? 'filter' : 'new'}
-                  hasSearch={Boolean(search.trim())}
+              <AiBotListEmpty
+                mode={hasFilters ? 'filter' : 'new'}
+                hasSearch={Boolean(search.trim())}
                   channel={channelFilter}
                   onCreate={() => openCreate(channelFilter)}
-                  onClearFilters={() => {
-                    setSearch('');
-                    setStatusFilter('');
-                  }}
-                />
+                onClearFilters={() => {
+                  setSearch('');
+                  setStatusFilter('');
+                }}
+              />
                 {!hasFilters && !aggregateAnalytics && (
                   <div className="border-t border-theme-border px-4 py-5 sm:px-5">
                     <p className="mb-3 text-[13px] font-extrabold text-theme-fg">
                       What can an AI bot do?
                     </p>
-                    <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="card-grid-auto">
                       {[
                         { title: 'Auto-reply 24/7', desc: 'Answer common questions even when the team is offline.' },
                         { title: 'Handoff to your team', desc: 'When the bot is unsure, it hands the chat to a person.' },
@@ -771,39 +771,39 @@ export default function AiBotPage() {
                         >
                           <p className="text-[12px] font-bold text-theme-fg">{item.title}</p>
                           <p className="mt-0.5 text-[11px] leading-relaxed text-theme-muted">{item.desc}</p>
-                        </div>
+            </div>
                       ))}
                     </div>
                   </div>
                 )}
               </>
-            ) : filteredBots.length === 0 ? (
-              <div className="px-4 py-8 sm:px-6 sm:py-10">
-                <AiBotListEmpty
-                  mode="filter"
-                  hasSearch={Boolean(search.trim())}
+          ) : filteredBots.length === 0 ? (
+            <div className="px-4 py-8 sm:px-6 sm:py-10">
+              <AiBotListEmpty
+                mode="filter"
+                hasSearch={Boolean(search.trim())}
                   channel={channelFilter}
                   onCreate={() => openCreate(channelFilter)}
-                  onClearFilters={() => {
-                    setSearch('');
-                    setStatusFilter('');
-                  }}
-                />
-              </div>
-            ) : (
-              <ResponsiveDataView
-                items={filteredBots}
-                tableFrom="xl"
-                cardClassName="divide-y divide-neutral-200 dark:divide-neutral-800 xl:hidden"
-                renderCard={(bot) => (
-                  <AiBotCard
-                    key={bot.id}
-                    bot={bot}
+                onClearFilters={() => {
+                  setSearch('');
+                  setStatusFilter('');
+                }}
+              />
+            </div>
+          ) : (
+            <ResponsiveDataView
+              items={filteredBots}
+              tableFrom="xl"
+              cardClassName="divide-y divide-neutral-200 dark:divide-neutral-800 xl:hidden"
+              renderCard={(bot) => (
+                <AiBotCard
+                  key={bot.id}
+                  bot={bot}
                     answersCalls={bot.id === answeringCallBotId}
                     successRate={botAnalyticsMap.get(bot.id)?.successRate ?? null}
                     lastActivityAt={botAnalyticsMap.get(bot.id)?.lastActivityAt ?? null}
-                    onEdit={() => openEdit(bot)}
-                    onToggle={() => toggleEnabled(bot)}
+                  onEdit={() => openEdit(bot)}
+                  onToggle={() => toggleEnabled(bot)}
                     onDelete={canDeleteBot(bot) ? () => handleDelete(bot.id) : undefined}
                     onToggleAllChats={
                       isChatBot(bot)
@@ -816,35 +816,35 @@ export default function AiBotPage() {
                         ? undefined
                         : () => void toggleAllCalls(bot, bot.id !== answeringCallBotId)
                     }
-                  />
-                )}
-                renderTable={() => (
-                  <DataTable
-                    embedded
+                />
+              )}
+              renderTable={() => (
+                <DataTable
+                  embedded
                     headers={
                       channelFilter === 'CHAT'
                         ? ['Bot', 'Knowledge', 'Status', 'Actions']
                         : ['Bot', 'Knowledge', 'Status', 'Actions']
                     }
-                  >
-                    {filteredBots.map((bot, index) => {
-                      const avatar = getAiBotAvatar(bot.id, bot.enabled);
-                      const AvatarIcon = avatar.Icon;
-                      return (
-                        <tr key={bot.id} className="group">
-                          <TableSerialCell rowIndex={index} />
-                          <td>
-                            <button
-                              type="button"
-                              onClick={() => openEdit(bot)}
+                >
+                  {filteredBots.map((bot, index) => {
+                    const avatar = getAiBotAvatar(bot.id, bot.enabled);
+                    const AvatarIcon = avatar.Icon;
+                    return (
+                    <tr key={bot.id} className="group">
+                      <TableSerialCell rowIndex={index} />
+                      <td>
+                        <button
+                          type="button"
+                          onClick={() => openEdit(bot)}
                               className="flex w-full items-center gap-3 rounded-xl py-1 text-left"
-                            >
-                              <div
-                                className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${avatar.className}`}
-                              >
-                                <AvatarIcon className="h-4 w-4" strokeWidth={2.25} />
-                              </div>
-                              <div className="min-w-0">
+                        >
+                          <div
+                            className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${avatar.className}`}
+                          >
+                            <AvatarIcon className="h-4 w-4" strokeWidth={2.25} />
+                          </div>
+                          <div className="min-w-0">
                                 <div className="flex flex-wrap items-center gap-1.5">
                                   <p className="truncate font-semibold text-theme-fg">{bot.name}</p>
                                   {bot.isSystem && (
@@ -853,21 +853,21 @@ export default function AiBotPage() {
                                     </span>
                                   )}
                                   {isChatBot(bot) && bot.isDefault && !bot.isSystem && (
-                                    <span className={`${botChip.base} ${botChip.default}`}>
-                                      <Star className="h-2.5 w-2.5" />
-                                      Default
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            </button>
-                          </td>
-                          <td>
-                            <AiBotKnowledgeCell count={bot._count?.knowledgeItems ?? 0} />
-                          </td>
-                          <td>
+                                <span className={`${botChip.base} ${botChip.default}`}>
+                                  <Star className="h-2.5 w-2.5" />
+                                  Default
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </button>
+                      </td>
+                      <td>
+                        <AiBotKnowledgeCell count={bot._count?.knowledgeItems ?? 0} />
+                      </td>
+                      <td>
                             <div className="flex items-center gap-2">
-                              <AiBotStatusCell enabled={bot.enabled} />
+                        <AiBotStatusCell enabled={bot.enabled} />
                               {botAnalyticsMap.get(bot.id)?.successRate !== null &&
                                 botAnalyticsMap.get(bot.id)?.successRate !== undefined && (
                                   <span
@@ -883,16 +883,16 @@ export default function AiBotPage() {
                                   </span>
                                 )}
                             </div>
-                          </td>
-                          <td>
-                            <div className="flex items-center justify-end gap-1.5">
-                              <TableTextButton
-                                onClick={() => toggleEnabled(bot)}
-                                icon={bot.enabled ? PauseCircle : PlayCircle}
-                                variant={bot.enabled ? 'primary' : 'neutral'}
-                              >
-                                {bot.enabled ? 'Pause' : 'Activate'}
-                              </TableTextButton>
+                      </td>
+                      <td>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <TableTextButton
+                            onClick={() => toggleEnabled(bot)}
+                            icon={bot.enabled ? PauseCircle : PlayCircle}
+                            variant={bot.enabled ? 'primary' : 'neutral'}
+                          >
+                            {bot.enabled ? 'Pause' : 'Activate'}
+                          </TableTextButton>
                               {isChatBot(bot) && (
                                 <AllChatsSwitch
                                   applied={Boolean(bot.appliedToAll)}
@@ -917,16 +917,16 @@ export default function AiBotPage() {
                                 onEdit={() => openEdit(bot)}
                                 onDelete={canDeleteBot(bot) ? () => handleDelete(bot.id) : undefined}
                               />
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </DataTable>
-                )}
-              />
-            )}
-          </div>
+                        </div>
+                      </td>
+                    </tr>
+                    );
+                  })}
+                </DataTable>
+              )}
+            />
+        )}
+        </div>
 
           <AiBotAggregateAnalytics
             analytics={aggregateAnalytics}
@@ -993,13 +993,13 @@ export default function AiBotPage() {
           onSubmit={handleSubmit}
           className={slideTab === 'setup' ? 'space-y-5' : 'hidden'}
         >
-            <AppInput
+                <AppInput
               label="Name"
               placeholder={formChannel === 'CALL' ? 'e.g. Calling support' : 'e.g. Support'}
               value={name}
               onChange={(e) => setName(e.target.value)}
-              required
-            />
+                  required
+                />
             <div className="rounded-2xl border border-theme-border bg-theme-subtle/60 p-3.5">
               <p className="text-[13px] font-bold text-theme-fg">About the business</p>
               <p className="mt-0.5 text-[11px] font-medium text-theme-muted">
@@ -1022,8 +1022,8 @@ export default function AiBotPage() {
                   rows={2}
                   value={businessNotes}
                   onChange={(e) => setBusinessNotes(e.target.value)}
-                />
-              </div>
+                  />
+                </div>
             </div>
             <AppTextarea
               label="What should this bot do?"
@@ -1039,7 +1039,7 @@ export default function AiBotPage() {
             />
             <div className="flex flex-wrap gap-2">
               <AppButton
-                type="button"
+                        type="button"
                 variant="secondary"
                 loading={generating}
                 icon={<Sparkles size={14} />}
@@ -1047,7 +1047,7 @@ export default function AiBotPage() {
               >
                 Write personality
               </AppButton>
-            </div>
+                </div>
             <AppTextarea
               label="Personality"
               hint="You can edit this after it is written for you."
@@ -1091,9 +1091,9 @@ export default function AiBotPage() {
                 />
               )}
               {formChannel === 'CALL' && (
-                <ToggleRow
+            <ToggleRow
                   checked={callingAiEnabled}
-                  onChange={(value) => {
+              onChange={(value) => {
                     setCallingAiEnabled(value);
                     void toggleCallingAi(value);
                   }}
@@ -1109,7 +1109,7 @@ export default function AiBotPage() {
                   description="On for all calls. Off rings a person, then misses if nobody is free."
                 />
               )}
-            </div>
+          </div>
             {formChannel === 'CALL' && (
               <>
                 <AppTextarea
@@ -1159,7 +1159,7 @@ export default function AiBotPage() {
                             <Volume2 className="h-3.5 w-3.5" strokeWidth={2.25} />
                             {previewing ? 'Playing…' : 'Preview'}
                           </button>
-                        </div>
+              </div>
                       );
                     })}
                   </div>
@@ -1203,7 +1203,7 @@ export default function AiBotPage() {
                     key={draft.key}
                     className="rounded-xl border border-dashed border-emerald-200 bg-emerald-50/40 px-3 py-3 dark:border-emerald-800 dark:bg-emerald-950/20"
                   >
-                    <AppInput
+              <AppInput
                       label="Question"
                       value={draft.title}
                       onChange={(e) =>
@@ -1234,16 +1234,16 @@ export default function AiBotPage() {
                         onClick={() => void addFaqDraft(draft)}
                       >
                         Add
-                      </button>
-                      <button
-                        type="button"
+                    </button>
+                    <button
+                      type="button"
                         className="text-[12px] font-bold text-theme-muted"
                         onClick={() =>
                           setFaqDrafts((prev) => prev.filter((item) => item.key !== draft.key))
                         }
                       >
                         Dismiss
-                      </button>
+                    </button>
                     </div>
                   </div>
                 ))}
@@ -1251,21 +1251,21 @@ export default function AiBotPage() {
             )}
             <p className="text-[12px] font-bold text-theme-secondary">Or add one yourself</p>
             <div className="grid gap-3 sm:grid-cols-2">
-              <AppInput
+                <AppInput
                 label="Question / title"
-                value={faqForm.title}
-                onChange={(e) => setFaqForm({ ...faqForm, title: e.target.value })}
-              />
-              <AppTextarea
+                  value={faqForm.title}
+                  onChange={(e) => setFaqForm({ ...faqForm, title: e.target.value })}
+                />
+                <AppTextarea
                 label="Answer"
-                rows={3}
-                value={faqForm.content}
-                onChange={(e) => setFaqForm({ ...faqForm, content: e.target.value })}
-              />
+                  rows={3}
+                  value={faqForm.content}
+                  onChange={(e) => setFaqForm({ ...faqForm, content: e.target.value })}
+                />
             </div>
             <AppButton type="button" loading={saving} onClick={() => void saveFaq()}>
               {editingFaqId ? 'Update answer' : 'Add answer'}
-            </AppButton>
+                  </AppButton>
             <ul className="space-y-2">
               {faqs.length === 0 && (
                 <li className="rounded-xl border border-dashed border-theme-border px-3 py-4 text-[13px] text-theme-muted">
@@ -1281,7 +1281,7 @@ export default function AiBotPage() {
                     <div className="min-w-0">
                       <p className="text-[13px] font-bold text-theme-fg">{faq.title}</p>
                       <p className="mt-1 text-[12px] text-theme-secondary">{faq.content}</p>
-                    </div>
+                </div>
                     <span
                       className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${
                         faq.hasEmbedding
@@ -1291,7 +1291,7 @@ export default function AiBotPage() {
                     >
                       {faq.hasEmbedding ? 'Ready' : 'Learning'}
                     </span>
-                  </div>
+                </div>
                   <div className="mt-2 flex gap-2">
                     <button
                       type="button"
@@ -1305,20 +1305,20 @@ export default function AiBotPage() {
                     </button>
                     {!faq.hasEmbedding && (
                       <button
-                        type="button"
+                      type="button"
                         className="text-[12px] font-bold text-amber-800"
                         onClick={() => void retryFaqReady(faq)}
                       >
                         Retry Ready
                       </button>
                     )}
-                    <button
-                      type="button"
+                        <button
+                          type="button"
                       className="text-[12px] font-bold text-rose-600"
                       onClick={() => void deleteFaq(faq.id)}
                     >
                       Remove
-                    </button>
+                        </button>
                   </div>
                 </li>
               ))}
@@ -1329,20 +1329,20 @@ export default function AiBotPage() {
         {editing && slideTab === 'try' && (
           <div className="space-y-4">
             {formChannel === 'CALL' && (
-              <div className="space-y-2">
+                <div className="space-y-2">
                 <p className="text-[13px] text-theme-secondary">
                   Hear the greeting, then send a customer line to preview this calling bot. Unsaved
                   personality is used.
                 </p>
-                <AppButton
-                  type="button"
+                      <AppButton
+                        type="button"
                   variant="secondary"
                   loading={voicePreviewLoading}
                   onClick={() => void handleVoicePreview()}
                 >
                   Play greeting
-                </AppButton>
-              </div>
+                      </AppButton>
+                    </div>
             )}
             {formChannel === 'CHAT' && (
               <p className="text-[13px] text-theme-secondary">
@@ -1366,16 +1366,16 @@ export default function AiBotPage() {
                 ))}
               </ul>
             )}
-            <AppTextarea
+                <AppTextarea
               label={formChannel === 'CALL' ? 'Try a caller line' : 'Try a customer message'}
               rows={3}
-              value={testMessage}
-              onChange={(e) => setTestMessage(e.target.value)}
-            />
+                  value={testMessage}
+                  onChange={(e) => setTestMessage(e.target.value)}
+                />
             <div className="flex flex-wrap gap-2">
               <AppButton type="button" loading={testLoading} onClick={() => void runTest()}>
-                Send test
-              </AppButton>
+                  Send test
+                </AppButton>
               {testTurns.length > 0 && (
                 <AppButton
                   type="button"
@@ -1388,24 +1388,24 @@ export default function AiBotPage() {
                   Clear
                 </AppButton>
               )}
-            </div>
+                  </div>
             {testResult?.skipped && !testResult.reply && (
               <p className="text-[12px] font-medium text-amber-800">
                 {explainBotTestSkip(testResult.skipReason)}
               </p>
             )}
-          </div>
+                 </div>
         )}
 
         {formChannel === 'CALL' && slideTab === 'pickup' && <AiBotPickupPanel />}
       </SlideOver>
 
-      <ConfirmDialog
-        open={Boolean(bulkAction)}
-        title={
+    <ConfirmDialog
+      open={Boolean(bulkAction)}
+      title={
           bulkAction?.type === 'apply' ? 'Apply to all chats?' : 'Remove from all chats?'
-        }
-        description={
+      }
+      description={
           bulkAction?.type === 'apply'
             ? `${bulkAction.bot.name} will be used on this number’s chats that do not already have a personal Inbox pick.`
             : `${bulkAction?.bot.name} will be removed only where it was applied to all chats. Inbox picks stay.`
@@ -1414,7 +1414,7 @@ export default function AiBotPage() {
         loading={bulkLoading}
         onConfirm={() => void confirmBulkBotAction()}
         onClose={() => setBulkAction(null)}
-      />
+    />
     </>
   );
 }

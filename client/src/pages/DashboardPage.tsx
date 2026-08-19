@@ -285,7 +285,7 @@ export default function DashboardPage() {
             </div>
 
             <div
-              className={`card-grid mt-[var(--card-gap)] grid grid-cols-1 ${showChecklist || onboardingError ? 'lg:grid-cols-5 lg:items-stretch' : ''
+              className={`card-grid mt-[var(--card-gap)] grid grid-cols-1 md:grid-cols-3 ${showChecklist || onboardingError ? 'lg:grid-cols-5 lg:items-stretch' : ''
                 }`}
             >
               <div className={`min-w-0 ${showChecklist || onboardingError ? 'lg:col-span-3 lg:h-full' : ''}`}>

@@ -81,7 +81,7 @@ export default function ListLayoutSkeleton({
         ))}
       </div>
       <div className="hidden px-4 pt-4 sm:px-5 lg:block">
-        <DataTable embedded headers={tableHeaders} minTableWidth="min-w-[720px]" tableClassName="text-sm">
+        <DataTable embedded headers={tableHeaders} minTableWidth="min-w-[640px]" tableClassName="text-sm">
           {Array.from({ length: rows }).map((_, index) => (
             <EntityTableRowSkeleton
               key={index}

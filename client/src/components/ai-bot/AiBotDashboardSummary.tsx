@@ -86,7 +86,7 @@ function successRateColor(rate: number): string {
 export default function AiBotDashboardSummary({ loading, analytics }: SummaryCardProps) {
   if (loading) {
     return (
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+      <div className="card-grid-auto">
         <SkeletonCard />
         <SkeletonCard />
         <SkeletonCard />
@@ -134,7 +134,7 @@ export default function AiBotDashboardSummary({ loading, analytics }: SummaryCar
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+    <div className="card-grid-auto">
       {cards.map((card) => {
         const Icon = card.icon;
         return (

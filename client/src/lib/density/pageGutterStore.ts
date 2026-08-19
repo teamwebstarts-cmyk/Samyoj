@@ -47,7 +47,12 @@ export function getStoredPageGutter(): PageGutterStep | null {
 export function applyPageGutter(step: PageGutterStep) {
   const root = document.documentElement;
   root.dataset.pageGutter = String(step);
-  root.style.setProperty('--page-gutter-x', PAGE_GUTTER[step]);
+  if (step === defaultPageGutterForDensity((root.dataset.density ?? 'comfortable') as DisplayDensity)) {
+    // Remove inline override so fluid CSS clamp() takes effect
+    root.style.removeProperty('--page-gutter-x');
+  } else {
+    root.style.setProperty('--page-gutter-x', PAGE_GUTTER[step]);
+  }
 }
 
 export function savePageGutter(step: PageGutterStep) {

@@ -246,7 +246,7 @@ export default function TeamRolesTab({ canManage }: TeamRolesTabProps) {
       </div>
 
       <div className="overflow-x-auto">
-        <table className="min-w-[920px] w-full border-collapse text-sm">
+        <table className="w-full min-w-[840px] border-collapse text-sm">
           <thead>
             <tr className="border-b border-theme-border bg-theme-subtle/60">
               <th
@@ -259,7 +259,7 @@ export default function TeamRolesTab({ canManage }: TeamRolesTabProps) {
               </th>
               <th
                 scope="col"
-                className="sticky left-14 z-20 min-w-[260px] bg-theme-subtle/95 px-5 py-4 text-left backdrop-blur-sm"
+                className="sticky left-14 z-20 min-w-[220px] bg-theme-subtle/95 px-5 py-4 text-left backdrop-blur-sm"
               >
                 <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-theme-muted">
                   Capability
@@ -271,7 +271,7 @@ export default function TeamRolesTab({ canManage }: TeamRolesTabProps) {
                   <th
                     key={role}
                     scope="col"
-                    className={`min-w-[132px] border-l border-theme-border/60 px-3 py-4 text-center ${accent.column}`}
+                    className={`min-w-[120px] border-l border-theme-border/60 px-3 py-4 text-center ${accent.column}`}
                   >
                     <div className="flex flex-col items-center gap-1.5">
                       <span className="text-[12px] font-extrabold text-theme-fg">{roleLabels[role]}</span>

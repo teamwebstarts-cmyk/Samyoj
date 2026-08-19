@@ -15,7 +15,15 @@
       (function () {
         var key = 'wa-theme';
         var stored = localStorage.getItem(key);
-        var dark = stored === 'dark';
+        var path = location.pathname;
+        var authLight =
+          path === '/login' ||
+          path.indexOf('/register') === 0 ||
+          path.indexOf('/forgot-password') === 0 ||
+          path.indexOf('/reset-password') === 0 ||
+          path.indexOf('/verify-email') === 0 ||
+          path.indexOf('/invite') === 0;
+        var dark = !authLight && stored === 'dark';
         document.documentElement.classList.toggle('dark', dark);
         document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
 

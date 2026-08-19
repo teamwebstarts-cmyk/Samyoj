@@ -1,0 +1,232 @@
+/**
+ * Auth split layout — fluid to viewport.
+ * Left pane: copy on top of a full-bleed hero photo (contain, never hard-cropped).
+ */
+.auth-page {
+  color-scheme: light;
+  background-color: #f4f7f5;
+  --auth-green: #0a8954;
+  --auth-ink: #12182a;
+  --auth-mint: #f4f7f5;
+  --auth-pad: clamp(2.25rem, 3.6vh, 3.25rem);
+  --auth-pad-x: var(--auth-pad);
+  --auth-pad-y: var(--auth-pad);
+  --auth-gap: clamp(1.15rem, 2.8vh, 2.75rem);
+  --auth-headline: clamp(1.65rem, 4.4vh + 0.55vw, 3.05rem);
+  --auth-sub: clamp(0.8125rem, 1.35vh + 0.2vw, 1rem);
+  --auth-icon: clamp(2.25rem, 4.4vh, 3rem);
+  --auth-brand-mark: clamp(2.85rem, 5.2vh, 3.85rem);
+  --auth-brand-name: clamp(1.35rem, 2.5vh, 1.85rem);
+  --auth-form-title: clamp(1.4rem, 2.2vh + 0.25vw, 1.95rem);
+}
+
+.auth-showcase {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+  background: var(--auth-mint);
+}
+
+/* Full-pane photo layer — contain so the person + desk stay whole */
+.auth-showcase-hero {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.auth-showcase-hero img {
+  position: absolute;
+  right: -14%;
+  bottom: 0;
+  height: min(96%, 92vh);
+  width: auto;
+  max-width: none;
+  object-fit: contain;
+  object-position: bottom right;
+}
+
+.auth-showcase-hero-photo {
+  /* Bottom fade into the mint floor — left/top wash is the overlay */
+  -webkit-mask-image: linear-gradient(to top, transparent 0%, black 12%, black 100%);
+  mask-image: linear-gradient(to top, transparent 0%, black 12%, black 100%);
+}
+
+.auth-showcase-hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, var(--auth-mint) 0%, rgb(244 247 245 / 0.55) 22%, transparent 36%),
+    linear-gradient(180deg, var(--auth-mint) 0%, transparent 12%),
+    linear-gradient(0deg, rgb(244 247 245 / 0.35) 0%, transparent 12%);
+  pointer-events: none;
+}
+
+.auth-showcase-content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  padding: var(--auth-pad);
+  gap: var(--auth-gap);
+}
+
+.auth-showcase-brand {
+  z-index: 2;
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.auth-showcase-brand img {
+  height: var(--auth-brand-mark) !important;
+  width: var(--auth-brand-mark) !important;
+}
+
+.auth-showcase-brand .auth-brand-name {
+  font-size: var(--auth-brand-name);
+}
+
+.auth-showcase-brand .auth-brand-tag {
+  font-size: clamp(0.6rem, 1.25vh, 0.75rem);
+  margin-top: clamp(0.25rem, 0.5vh, 0.4rem);
+}
+
+.auth-showcase-copy {
+  z-index: 2;
+  flex-shrink: 0;
+  min-width: 0;
+  max-width: min(100%, 32rem);
+}
+
+.auth-showcase-copy h2 {
+  font-size: var(--auth-headline);
+  line-height: 1.12;
+  letter-spacing: -0.045em;
+}
+
+.auth-showcase-copy p {
+  margin-top: clamp(0.45rem, 1.1vh, 1rem);
+  max-width: 26.5rem;
+  font-size: var(--auth-sub);
+  line-height: 1.55;
+}
+
+.auth-showcase-features {
+  z-index: 2;
+  display: flex;
+  min-height: 0;
+  width: 100%;
+  max-width: 17.75rem;
+  flex: 1 1 auto;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: clamp(1.35rem, 2.8vh, 2rem);
+  overflow: hidden;
+}
+
+.auth-feature-icon {
+  display: flex;
+  height: var(--auth-icon);
+  width: var(--auth-icon);
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: #e8f5ee;
+  color: var(--auth-green);
+}
+
+.auth-feature-icon svg {
+  height: 50%;
+  width: 50%;
+}
+
+.auth-feature-title {
+  font-size: clamp(0.88rem, 1.55vh + 0.15vw, 1.1rem);
+  line-height: 1.2;
+}
+
+.auth-feature-desc {
+  margin-top: 0.2rem;
+  max-width: 15.5rem;
+  font-size: clamp(0.7rem, 1.15vh + 0.1vw, 0.84375rem);
+  line-height: 1.35;
+}
+
+.auth-showcase-cta {
+  z-index: 3;
+  flex-shrink: 0;
+  min-width: 0;
+  max-width: min(100%, 24.5rem);
+  margin-top: auto;
+  padding-top: clamp(0.15rem, 0.6vh, 0.5rem);
+}
+
+.auth-showcase-cta .auth-cta-card {
+  gap: clamp(0.65rem, 1.2vh, 0.9rem);
+  padding: clamp(0.65rem, 1.35vh, 0.9rem) clamp(0.85rem, 1.4vw, 1rem);
+}
+
+.auth-showcase-cta .auth-cta-card > span {
+  height: var(--auth-icon) !important;
+  width: var(--auth-icon) !important;
+}
+
+.auth-form-stack header {
+  margin-bottom: clamp(0.85rem, 2.1vh, 1.75rem);
+}
+
+.auth-form-stack > p:last-child {
+  margin-top: clamp(1.15rem, 2.6vh, 2rem);
+}
+
+.auth-form-scroll {
+  padding-inline: clamp(1.25rem, 3.2vw, 3.5rem);
+  padding-block: clamp(0.85rem, 2.8vh, 1.75rem);
+}
+
+.auth-form-title {
+  font-size: var(--auth-form-title);
+}
+
+@media (max-height: 760px) {
+  .auth-showcase-hero img {
+    right: -16%;
+    height: min(92%, 88vh);
+  }
+
+  .auth-feature-desc {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+}
+
+@media (max-height: 680px) {
+  .auth-showcase-hero img {
+    right: -18%;
+    height: min(88%, 84vh);
+  }
+
+  .auth-showcase-features {
+    gap: 1rem;
+  }
+
+  .auth-feature-desc {
+    display: none;
+  }
+}
+
+@media (min-width: 1440px) {
+  .auth-showcase-hero img {
+    right: -12%;
+    height: min(98%, 94vh);
+  }
+}

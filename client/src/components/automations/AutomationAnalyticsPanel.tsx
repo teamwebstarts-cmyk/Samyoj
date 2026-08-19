@@ -91,7 +91,7 @@ export default function AutomationAnalyticsPanel({ analytics, loading }: Automat
 
   return (
     <div className="space-y-5 sm:space-y-6">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="card-grid-auto">
         <StatCard
           label="Times run"
           value={analytics.total}

@@ -6,11 +6,13 @@ import {
   DetailsSectionHeader,
 } from '../inbox/details/DetailsSectionCard';
 import { useGlassTipProps } from '../inbox/ComposerGlassTip';
+import PaneHandle from '../inbox/PaneHandle';
+import type { PaneHandleController } from '../../hooks/useSinglePaneWidth';
 
 export type CallDetailsSection = 'notes';
 
 /** Matches Inbox docked details width (`usePaneWidths` default right rail). */
-export const CALL_DETAILS_PANEL_WIDTH = 340;
+const DEFAULT_CALL_DETAILS_PANEL_WIDTH = 340;
 
 interface CallDetailsPanelProps {
   callId: string;
@@ -25,6 +27,7 @@ interface CallDetailsPanelProps {
   overlayOpen?: boolean;
   overlaySection?: CallDetailsSection;
   onOverlayClose?: () => void;
+  paneController?: PaneHandleController;
   panelWidth?: number;
 }
 
@@ -41,7 +44,8 @@ export default function CallDetailsPanel({
   overlayOpen = false,
   overlaySection,
   onOverlayClose,
-  panelWidth = CALL_DETAILS_PANEL_WIDTH,
+  paneController,
+  panelWidth = DEFAULT_CALL_DETAILS_PANEL_WIDTH,
 }: CallDetailsPanelProps) {
   const tipFor = useGlassTipProps();
   const noteInputRef = useRef<HTMLTextAreaElement>(null);
@@ -194,12 +198,24 @@ export default function CallDetailsPanel({
   }
 
   return (
-    <aside
-      className={`hidden min-w-0 shrink-0 overflow-hidden border-l md:flex ${panelShellClass}`}
-      style={{ width: panelWidth }}
-      aria-label="Call notes"
-    >
-      {panelBody}
-    </aside>
+    <>
+      {paneController && (
+        <div className="hidden md:flex">
+          <PaneHandle
+            side="right"
+            width={paneController.width}
+            ariaLabel="Resize call notes panel"
+            onResize={paneController.onResize}
+          />
+        </div>
+      )}
+      <aside
+        className={`hidden min-w-0 shrink-0 overflow-hidden border-l md:flex ${panelShellClass}`}
+        style={{ width: panelWidth }}
+        aria-label="Call notes"
+      >
+        {panelBody}
+      </aside>
+    </>
   );
 }

@@ -176,12 +176,12 @@ export default function MessagePerformanceDonut({
           <LineChart className="h-3.5 w-3.5 stroke-[2.2]" />
         </IconWell>
         <div className="flex min-w-0 items-center gap-1.5">
-          <h2 className="truncate text-[14px] font-bold tracking-tight text-neutral-900 sm:text-[15px]">
+          <h2 className="truncate text-[14px] font-bold tracking-tight text-neutral-900 @[360px]:text-[15px]">
             Message performance
           </h2>
           {!isEmpty && (
             <span
-              className="hidden text-neutral-400 sm:inline"
+              className="hidden text-neutral-400 @[360px]:inline"
               title="Each color is the latest status: Delivered (unread), Read, Failed, Pending."
             >
               <Info className="h-3.5 w-3.5 shrink-0 stroke-[1.8]" aria-hidden />
@@ -192,8 +192,8 @@ export default function MessagePerformanceDonut({
 
       {isEmpty ? (
         <div className="mt-2.5 flex min-h-0 flex-1 flex-col items-center justify-center px-2 text-center">
-          <MessagePerformanceEmptyIllustrationSvg className="h-16 w-16 sm:h-[4.5rem] sm:w-[4.5rem]" />
-          <h3 className="mt-2 text-[13px] font-bold tracking-tight text-neutral-900 sm:text-[13.5px]">
+          <MessagePerformanceEmptyIllustrationSvg className="h-16 w-16 @[360px]:h-[4.5rem] @[360px]:w-[4.5rem]" />
+          <h3 className="mt-2 text-[13px] font-bold tracking-tight text-neutral-900 @[360px]:text-[13.5px]">
             No data yet
           </h3>
           <p className="mt-0.5 max-w-[200px] text-[11.5px] font-medium leading-snug text-neutral-500">
@@ -204,7 +204,7 @@ export default function MessagePerformanceDonut({
         <div className="mt-3 flex min-h-0 flex-1 flex-col items-center justify-center">
           <div
             ref={chartRef}
-            className="relative mx-auto aspect-square w-[min(100%,11rem)] shrink-0 sm:w-[min(100%,12rem)]"
+            className="relative mx-auto aspect-square w-[min(100%,10rem)] shrink-0 @[320px]:w-[min(100%,11rem)] @[420px]:w-[min(100%,12rem)]"
             onMouseLeave={hideTip}
           >
             <svg
@@ -245,7 +245,7 @@ export default function MessagePerformanceDonut({
             </svg>
             <div className="pointer-events-none absolute inset-0 z-[1] flex flex-col items-center justify-center px-5 text-center">
               <span
-                className="text-[1.35rem] font-extrabold leading-none tracking-tight tabular-nums sm:text-[1.5rem]"
+                className="text-[1.35rem] font-extrabold leading-none tracking-tight tabular-nums @[360px]:text-[1.5rem]"
                 style={{ color: center.color }}
               >
                 {formatPct(center.pct)}

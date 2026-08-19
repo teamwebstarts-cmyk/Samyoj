@@ -38,11 +38,25 @@ function resolveTheme(mode: ThemeMode): ResolvedTheme {
   return mode === 'system' ? getSystemTheme() : mode;
 }
 
+function isPublicAuthPath(): boolean {
+  if (typeof window === 'undefined') return false;
+  const path = window.location.pathname;
+  return (
+    path === '/login' ||
+    path.startsWith('/register') ||
+    path.startsWith('/forgot-password') ||
+    path.startsWith('/reset-password') ||
+    path.startsWith('/verify-email') ||
+    path.startsWith('/invite')
+  );
+}
+
 function applyTheme(resolved: ResolvedTheme, animate = true) {
   const root = document.documentElement;
+  const next = isPublicAuthPath() ? 'light' : resolved;
   if (animate) root.classList.add('theme-transition');
-  root.classList.toggle('dark', resolved === 'dark');
-  root.style.colorScheme = resolved;
+  root.classList.toggle('dark', next === 'dark');
+  root.style.colorScheme = next;
   if (animate) {
     window.setTimeout(() => root.classList.remove('theme-transition'), 350);
   }

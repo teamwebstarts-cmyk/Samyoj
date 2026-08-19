@@ -486,7 +486,7 @@ export default function FlowBuilderPage() {
     <PageShell fullBleed className="!max-w-none !px-0">
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-gradient-to-br from-slate-50 via-[#f6f8f7] to-emerald-50/20 pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-0">
         <header className="sticky top-0 z-30 border-b border-slate-200/50 bg-white/95 backdrop-blur-xl">
-          <div className="mx-auto flex max-w-[1600px] items-center gap-2 px-3 py-2.5 sm:gap-3 sm:px-6 sm:py-3">
+          <div className="mx-auto flex max-w-[1440px] items-center gap-2 px-3 py-2.5 sm:gap-3 sm:px-6 sm:py-3">
             <button
               type="button"
               onClick={() => navigate('/automations')}
@@ -549,7 +549,7 @@ export default function FlowBuilderPage() {
           onGoToStep={goToWarningStep}
         />
 
-        <div className="mx-auto w-full max-w-[1600px] flex-1 lg:hidden">
+        <div className="mx-auto w-full max-w-[1440px] flex-1 lg:hidden">
           {mobileTab === 'flow' && (
             <div className="p-4">
               <FlowCanvas {...canvasProps} />
@@ -598,7 +598,7 @@ export default function FlowBuilderPage() {
           {mobileTab === 'settings' && <div className="p-4"><div className="rounded-2xl border border-neutral-200/60 bg-white p-5 shadow-sm">{settingsForm}</div></div>}
         </div>
 
-        <div className="mx-auto hidden min-h-0 w-full max-w-[1720px] flex-1 gap-4 overflow-hidden px-4 py-4 lg:grid lg:grid-cols-[minmax(220px,260px)_minmax(0,1fr)_minmax(400px,30vw)] lg:items-stretch xl:gap-5 xl:px-5 xl:py-5">
+        <div className="mx-auto hidden min-h-0 w-full max-w-[1560px] flex-1 gap-4 overflow-hidden px-4 py-4 lg:grid lg:grid-cols-[minmax(220px,248px)_minmax(0,1fr)_minmax(320px,28vw)] lg:items-stretch xl:gap-5 xl:px-5 xl:py-5 xl:grid-cols-[minmax(220px,260px)_minmax(0,1fr)_minmax(340px,26vw)]">
           <aside className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-200/50 bg-white/80 shadow-[0_4px_24px_rgba(15,23,42,0.04)] backdrop-blur-sm">
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
               <FlowStepPalette onAdd={addNode} />

@@ -116,21 +116,21 @@ export default function UpcomingCampaignsCard({
   return (
     <section className="dashboard-card flex h-full flex-col rounded-2xl border border-neutral-100/90 bg-white p-[var(--card-pad)] shadow-xs sm:rounded-3xl">
       {/* Card Header: Icon + Title + Info + View All Link */}
-      <div className="flex shrink-0 items-start justify-between gap-2 sm:items-center sm:gap-3">
-        <div className="flex min-w-0 items-center gap-2 sm:gap-2.5">
+      <div className="flex shrink-0 flex-col items-start gap-2 @[340px]:flex-row @[340px]:items-center @[340px]:justify-between @[340px]:gap-3">
+        <div className="flex min-w-0 items-center gap-2 @[340px]:gap-2.5">
           <IconWell accent="emerald" size="sm">
             <Megaphone className="h-4 w-4 stroke-[2.2]" />
           </IconWell>
           <div className="flex min-w-0 items-center gap-3">
-            <h2 className="truncate text-[14px] font-bold tracking-tight text-neutral-900 sm:text-[15px] md:text-[16px]">
+            <h2 className="truncate text-[14px] font-bold tracking-tight text-neutral-900 @[340px]:text-[15px] @[520px]:text-[16px]">
               Upcoming campaigns
             </h2>
-            <Info className="hidden h-4 w-4 shrink-0 stroke-[1.8] text-neutral-400 sm:block" />
+            <Info className="hidden h-4 w-4 shrink-0 stroke-[1.8] text-neutral-400 @[340px]:block" />
           </div>
         </div>
         <Link
           to="/campaigns"
-          className="inline-flex shrink-0 items-center gap-1 text-[12px] font-bold text-emerald-600 transition-colors hover:text-emerald-700 hover:underline sm:text-[12.5px]"
+          className="inline-flex shrink-0 items-center gap-1 text-[12px] font-bold text-emerald-600 transition-colors hover:text-emerald-700 hover:underline @[340px]:text-[12.5px]"
         >
           View all
           <ArrowRight className="h-3.5 w-3.5" />
@@ -186,7 +186,7 @@ export default function UpcomingCampaignsCard({
           </Link>
         </div>
       ) : (
-        <ul className="mt-2.5 flex min-h-0 flex-1 flex-col justify-start gap-2 sm:gap-2.5">
+        <ul className="mt-2.5 flex min-h-0 flex-1 flex-col justify-start gap-2 @[340px]:gap-2.5">
           {campaigns.slice(0, 3).map((c, idx) => {
             const visual = getCampaignVisual(c, idx);
             const Icon = visual.icon;
@@ -198,19 +198,19 @@ export default function UpcomingCampaignsCard({
               <li key={c.id}>
                 <Link
                   to="/campaigns"
-                  className="group flex min-h-[4.5rem] items-center justify-between gap-3 rounded-xl border border-neutral-100/90 bg-white px-3 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-neutral-200/90 hover:bg-neutral-50/50 sm:min-h-[4.75rem] sm:gap-3 sm:px-3.5 sm:py-3.5"
+                  className="group flex min-h-[4.5rem] flex-col items-start gap-2.5 rounded-xl border border-neutral-100/90 bg-white px-3 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-neutral-200/90 hover:bg-neutral-50/50 @[360px]:min-h-[4.75rem] @[360px]:flex-row @[360px]:items-center @[360px]:justify-between @[360px]:gap-3 @[360px]:px-3.5 @[360px]:py-3.5"
                 >
-                  <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
+                  <div className="flex min-w-0 items-center gap-2.5 @[360px]:gap-3">
                     <IconWell accent={visual.accent} size="md" className="shrink-0">
                       <Icon className="h-4 w-4 stroke-[2]" />
                     </IconWell>
                     <div className="min-w-0">
                       <div className="flex min-w-0 items-center gap-2">
-                        <span className="truncate text-[13px] font-bold leading-snug text-neutral-900 transition-colors group-hover:text-emerald-700 sm:text-[13.5px]">
+                        <span className="truncate text-[13px] font-bold leading-snug text-neutral-900 transition-colors group-hover:text-emerald-700 @[360px]:text-[13.5px]">
                           {c.name}
                         </span>
                         <span
-                          className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10.5px] font-semibold sm:px-2 sm:text-[11px] ${isScheduled
+                          className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10.5px] font-semibold @[360px]:px-2 @[360px]:text-[11px] ${isScheduled
                             ? 'bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-300'
                             : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400'
                             }`}
@@ -218,13 +218,13 @@ export default function UpcomingCampaignsCard({
                           {isScheduled ? 'Scheduled' : 'Draft'}
                         </span>
                       </div>
-                      <p className="mt-0.5 truncate text-[11px] font-medium leading-snug text-neutral-500 sm:text-[11.5px]">
+                      <p className="mt-0.5 truncate text-[11px] font-medium leading-snug text-neutral-500 @[360px]:text-[11.5px]">
                         {visual.categoryLabel} · {recipientCount} recipients
                       </p>
                     </div>
                   </div>
 
-                  <div className="flex shrink-0 items-center gap-1.5 text-[11.5px] font-medium text-neutral-500 sm:text-[12px]">
+                  <div className="flex shrink-0 items-center gap-1.5 text-[11.5px] font-medium text-neutral-500 @[360px]:text-[12px]">
                     <span className="tabular-nums">{formattedDate}</span>
                     {isScheduled ? (
                       <Calendar className="h-3.5 w-3.5 stroke-[1.8] text-neutral-400" />

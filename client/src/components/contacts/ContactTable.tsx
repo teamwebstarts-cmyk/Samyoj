@@ -54,7 +54,7 @@ export default function ContactTable({
   return (
     <div className="data-table contact-table dashboard-card overflow-hidden p-0">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[820px] text-sm">
+        <table className="w-full min-w-[760px] text-sm">
           <thead>
             <tr className="border-b border-theme-border bg-theme-subtle/80">
               <th className="w-12 px-4 py-3.5">
@@ -73,7 +73,7 @@ export default function ContactTable({
                 <th
                   key={header}
                   className={`px-5 py-3.5 text-[11px] font-bold uppercase tracking-[0.08em] text-theme-muted ${
-                    header === 'Actions' ? 'min-w-[180px] text-right' : 'text-left'
+                    header === 'Actions' ? 'min-w-[160px] text-right' : 'text-left'
                   }`}
                 >
                   {header}
@@ -101,7 +101,7 @@ export default function ContactTable({
                     />
                   </td>
 
-                  <td className="min-w-[240px] px-5">
+                  <td className="min-w-[220px] px-5">
                     <button
                       type="button"
                       onClick={() => onView(contact)}

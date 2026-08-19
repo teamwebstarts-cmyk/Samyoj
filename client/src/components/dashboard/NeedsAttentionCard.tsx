@@ -37,7 +37,7 @@ function MetricRow({
     <Link
       to={to}
       title={subtitle}
-      className="flex flex-col items-start gap-1.5 rounded-xl border border-neutral-100/90 bg-white px-2.5 py-2 text-left transition hover:border-neutral-200 hover:bg-neutral-50/80 sm:flex-row sm:items-center sm:justify-between sm:gap-2 sm:px-3 sm:py-2.5"
+      className="flex flex-col items-start gap-1.5 rounded-xl border border-neutral-100/90 bg-white px-2.5 py-2 text-left transition hover:border-neutral-200 hover:bg-neutral-50/80 @[320px]:flex-row @[320px]:items-center @[320px]:justify-between @[320px]:gap-2 @[320px]:px-3 @[320px]:py-2.5"
     >
       <div className="flex min-w-0 items-center gap-2">
         <span
@@ -50,16 +50,16 @@ function MetricRow({
           {icon}
         </span>
         <div className="min-w-0">
-          <p className="text-[12.5px] font-bold leading-snug text-neutral-900 sm:text-[13px]">
+          <p className="text-[12.5px] font-bold leading-snug text-neutral-900 @[320px]:text-[13px]">
             {title}
           </p>
-          <p className="mt-0.5 truncate text-[10.5px] font-medium leading-snug text-neutral-500 sm:text-[11px]">
+          <p className="mt-0.5 truncate text-[10.5px] font-medium leading-snug text-neutral-500 @[320px]:text-[11px]">
             {subtitle}
           </p>
         </div>
       </div>
       <span
-        className={`inline-flex h-7 min-w-7 shrink-0 items-center justify-center self-start rounded-full px-2 text-[12px] font-extrabold tabular-nums ring-1 sm:self-auto ${
+        className={`inline-flex h-7 min-w-7 shrink-0 items-center justify-center self-start rounded-full px-2 text-[12px] font-extrabold tabular-nums ring-1 @[320px]:self-auto ${
           urgent
             ? 'bg-rose-50 text-rose-600 ring-rose-100/80'
             : 'bg-neutral-50 text-neutral-500 ring-neutral-100'
@@ -84,16 +84,16 @@ function AlertRow({
     <Link
       to={to}
       title={subtitle}
-      className="flex items-center gap-2 rounded-xl border border-amber-100/80 bg-white px-2.5 py-2 text-left transition hover:border-amber-200 hover:bg-amber-50/50 sm:px-3 sm:py-2.5"
+      className="flex items-center gap-2 rounded-xl border border-amber-100/80 bg-white px-2.5 py-2 text-left transition hover:border-amber-200 hover:bg-amber-50/50 @[320px]:px-3 @[320px]:py-2.5"
     >
       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
         <WifiOff className="h-3.5 w-3.5 stroke-[2.2]" />
       </span>
       <div className="min-w-0">
-        <p className="text-[12.5px] font-bold leading-snug text-neutral-900 sm:text-[13px]">
+        <p className="text-[12.5px] font-bold leading-snug text-neutral-900 @[320px]:text-[13px]">
           {title}
         </p>
-        <p className="mt-0.5 truncate text-[10.5px] font-medium leading-snug text-neutral-500 sm:text-[11px]">
+        <p className="mt-0.5 truncate text-[10.5px] font-medium leading-snug text-neutral-500 @[320px]:text-[11px]">
           {subtitle}
         </p>
       </div>

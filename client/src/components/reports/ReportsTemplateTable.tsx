@@ -37,7 +37,7 @@ export default function ReportsTemplateTable({
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[640px] text-left text-[13px]">
+        <table className="w-full min-w-[560px] text-left text-[13px]">
           <thead>
             <tr className="border-b border-theme-border text-[10px] font-bold uppercase tracking-[0.08em] text-theme-muted">
               <th className="px-5 py-3">Template</th>

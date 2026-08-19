@@ -46,7 +46,7 @@ export default function DataTable({
   headers,
   children,
   className = '',
-  minTableWidth = 'min-w-[640px]',
+  minTableWidth = 'min-w-[560px]',
   tableClassName = '',
   page,
   pageSize,
@@ -85,7 +85,7 @@ export default function DataTable({
                     scope="col"
                     className={`px-5 py-3.5 text-[11px] font-bold uppercase tracking-[0.08em] text-theme-muted ${
                       isActions
-                        ? 'min-w-[10.5rem] text-right'
+                        ? 'min-w-[9rem] text-right'
                         : isSerial
                           ? 'w-14 px-3 text-center'
                           : 'text-left'

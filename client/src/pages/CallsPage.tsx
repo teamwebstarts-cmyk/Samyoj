@@ -5,10 +5,9 @@ import { callingApi, contactApi } from '../services/api';
 import { useSocket } from '../hooks/useSocket';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 import CallDetailView from '../components/calls/CallDetailView';
-import CallDetailsPanel, {
-  CALL_DETAILS_PANEL_WIDTH,
-  type CallDetailsSection,
-} from '../components/calls/CallDetailsPanel';
+import CallDetailsPanel from '../components/calls/CallDetailsPanel';
+import type { CallDetailsSection } from '../components/calls/CallDetailsPanel';
+import { useSinglePaneWidth } from '../hooks/useSinglePaneWidth';
 import CallFiltersBar from '../components/calls/CallFiltersBar';
 import CallListItem from '../components/calls/CallListItem';
 import CallsBulkBar from '../components/calls/CallsBulkBar';
@@ -117,6 +116,7 @@ export default function CallsPage() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [deleteCallTarget, setDeleteCallTarget] = useState<CallRecord | null>(null);
   const [deletingCall, setDeletingCall] = useState(false);
+  const detailsPane = useSinglePaneWidth({ storageKey: 'calls:panel-widths:v1', defaultWidth: 340, minWidth: 280, maxWidth: 520 });
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
@@ -881,7 +881,8 @@ export default function CallsPage() {
                 overlayOpen={detailsOverlay.open}
                 overlaySection={detailsOverlay.section}
                 onOverlayClose={() => setDetailsOverlay({ open: false })}
-                panelWidth={CALL_DETAILS_PANEL_WIDTH}
+                paneController={detailsPane.controller}
+                panelWidth={detailsPane.width}
               />
             </div>
           ) : (

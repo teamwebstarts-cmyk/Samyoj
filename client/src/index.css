@@ -132,11 +132,11 @@
     /* Topbar left/right inset — independent of Appearance “Page side space”. */
     --topbar-gutter-x: 2.5rem;
 
-    /* Card layouts — Appearance slider overrides these on html; new screens must use the vars. */
-    --card-gap: 1rem;
-    --card-pad: 0.875rem;
+    /* Card layouts — fluid defaults scale 1280px→1920px. Appearance slider overrides on html. */
+    --card-gap: clamp(1rem, 0.938rem + 0.078vw, 1.25rem);
+    --card-pad: clamp(0.875rem, 0.816rem + 0.059vw, 1.125rem);
     /* Page left/right inset — Appearance “Page side space” overrides on html. */
-    --page-gutter-x: 2.5rem;
+    --page-gutter-x: clamp(1.5rem, 1.422rem + 0.078vw, 2.5rem);
 
     /* Appearance — Text size + font. html font-size is the only type scale. */
     --app-font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
@@ -167,9 +167,9 @@
     --density-stack-gap: 0.75rem;
     --density-nav-item-h: 2.25rem;
     --topbar-gutter-x: 2rem;
-    --card-gap: 0.75rem;
-    --card-pad: 0.75rem;
-    --page-gutter-x: 2rem;
+    --card-gap: clamp(0.75rem, 0.688rem + 0.078vw, 1rem);
+    --card-pad: clamp(0.75rem, 0.688rem + 0.078vw, 1rem);
+    --page-gutter-x: clamp(1.25rem, 1.172rem + 0.078vw, 2rem);
   }
 
   .dark {
@@ -751,7 +751,7 @@
 
   .topbar-search {
     height: 2.75rem;
-    width: min(100%, 360px);
+    width: min(100%, clamp(320px, calc(218px + 1.05vw), 500px));
     border-radius: 0.875rem;
     border: 1px solid #e5e7eb;
     background: #fff;
@@ -762,18 +762,6 @@
       border-color 0.2s ease,
       box-shadow 0.2s ease,
       background-color 0.2s ease;
-  }
-
-  @media (min-width: 1100px) {
-    .topbar-search {
-      width: min(100%, 400px);
-    }
-  }
-
-  @media (min-width: 1280px) {
-    .topbar-search {
-      width: min(100%, 440px);
-    }
   }
 
   .topbar-search:hover {
@@ -987,6 +975,7 @@
     border: 1px solid var(--color-border);
     background: var(--gradient-card);
     box-shadow: var(--shadow-panel);
+    container-type: inline-size;
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
   }
@@ -1000,6 +989,14 @@
 
   .card-grid {
     gap: var(--card-gap);
+  }
+
+  /* Auto-fit grid for equal-card layouts — cards flow naturally based on available space.
+     Use ONLY for equal-card grids. Do NOT use for grids with spanning cards. */
+  .card-grid-auto {
+    display: grid;
+    gap: var(--card-gap);
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   }
 
   /* Tiny soft elevation — use on list shells that sit stacked on a page */
@@ -1238,11 +1235,13 @@
   }
 
   .text-display {
-    @apply text-2xl font-extrabold tracking-tight text-theme-fg;
+    @apply font-extrabold tracking-tight text-theme-fg;
+    font-size: clamp(1.5rem, 1.422rem + 0.078vw, 1.75rem);
   }
 
   .text-title {
-    @apply text-xl font-extrabold tracking-tight text-theme-fg;
+    @apply font-extrabold tracking-tight text-theme-fg;
+    font-size: clamp(1.25rem, 1.172rem + 0.078vw, 1.5rem);
   }
 
   .text-body {
@@ -1297,7 +1296,7 @@
   }
 
   .page-shell {
-    @apply mx-auto w-full max-w-[1600px] page-gutter-x;
+    @apply mx-auto w-full max-w-[1440px] page-gutter-x;
     padding-top: var(--density-page-py);
     padding-bottom: var(--density-page-py);
   }
@@ -1310,7 +1309,7 @@
   }
 
   .page-shell-list {
-    @apply mx-auto flex h-full min-h-0 w-full max-w-[1600px] flex-1 flex-col overflow-hidden page-gutter-x;
+    @apply mx-auto flex h-full min-h-0 w-full max-w-[1440px] flex-1 flex-col overflow-hidden page-gutter-x;
     padding-top: var(--density-page-py);
     padding-bottom: var(--density-page-py);
   }
@@ -1357,7 +1356,7 @@
   }
 
   .campaign-wizard-page {
-    @apply mx-auto flex h-full min-h-0 w-full max-w-[1600px] flex-1 flex-col page-gutter-x;
+    @apply mx-auto flex h-full min-h-0 w-full max-w-[1440px] flex-1 flex-col page-gutter-x;
     padding-top: var(--density-page-py);
   }
 
@@ -1871,7 +1870,7 @@
   }
 
   .template-wizard-page {
-    @apply mx-auto flex h-full min-h-0 w-full max-w-[1600px] flex-1 flex-col page-gutter-x;
+    @apply mx-auto flex h-full min-h-0 w-full max-w-[1440px] flex-1 flex-col page-gutter-x;
     padding-top: var(--density-page-py);
     padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
   }
@@ -2198,13 +2197,13 @@
   }
 
   .page-shell-bleed {
-    @apply mx-auto flex h-full min-h-[calc(100dvh-60px)] w-full max-w-[1600px] flex-col page-gutter-x py-3 sm:py-4 lg:py-5;
+    @apply mx-auto flex h-full min-h-[calc(100dvh-60px)] w-full max-w-[1440px] flex-col page-gutter-x py-3 sm:py-4 lg:py-5;
   }
 
   /* Fills Layout main (flex-1 + overflow-hidden on /inbox). Do NOT use
      100dvh-60px — topbar is ~72–76px, so that calc overflows and scrolls main. */
   .page-shell-inbox {
-    @apply mx-auto flex h-full min-h-0 w-full max-w-[1600px] flex-1 flex-col overflow-hidden page-gutter-x py-3 sm:py-4 lg:py-5;
+    @apply mx-auto flex h-full min-h-0 w-full max-w-[1440px] flex-1 flex-col overflow-hidden page-gutter-x py-3 sm:py-4 lg:py-5;
   }
 
   .inbox-shell {

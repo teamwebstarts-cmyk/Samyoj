@@ -131,7 +131,7 @@ export default function TemplateWizardReviewStep({
               Body variables ({bodyVars.length})
             </p>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[640px] text-left text-[12px]">
+              <table className="w-full min-w-[560px] text-left text-[12px]">
                 <thead>
                   <tr className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
                     <th className="pb-2 pr-3">Variable</th>
