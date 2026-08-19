@@ -7,6 +7,7 @@ const ACTIVE_PREFIX = 'call:active:';
 const PENDING_PREFIX = 'call:pending:';
 const PENDING_BY_CALL_PREFIX = 'call:pending-by-id:';
 const CONNECT_LOCK_PREFIX = 'call:connect-lock:';
+const HANGUP_PREFIX = 'call:hangup:';
 const ORG_ACTIVE_PREFIX = 'call:org:';
 const ACTIVE_TTL_SEC = 7200;
 /** Default pending TTL. Outbound BIC may ring for >60s before answer — keep signaling alive. */
@@ -174,6 +175,28 @@ export async function releaseCallConnectLock(metaCallId: string): Promise<void> 
     await getRedis().del(`${CONNECT_LOCK_PREFIX}${metaCallId}`);
   } catch {
     // ignore
+  }
+}
+
+/** Remember that Meta (or the agent) already hung up — late connect/accept must not revive the call. */
+export async function markCallHungUp(metaCallId: string, ttlSec = 180): Promise<void> {
+  if (!metaCallId) return;
+  try {
+    await getRedis().set(`${HANGUP_PREFIX}${metaCallId}`, '1', 'EX', ttlSec);
+  } catch (err) {
+    log.warn('Failed to mark call hung up in Redis', {
+      metaCallId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+export async function isCallHungUp(metaCallId: string): Promise<boolean> {
+  if (!metaCallId) return false;
+  try {
+    return (await getRedis().get(`${HANGUP_PREFIX}${metaCallId}`)) === '1';
+  } catch {
+    return false;
   }
 }
 

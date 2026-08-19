@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { callMatchesWebhookNumber, isCallConnectAlreadyHandling } from './call.processor';
+import {
+  callMatchesWebhookNumber,
+  isCallConnectAlreadyHandling,
+  isTerminalCallStatus,
+  isUsableMetaCallId,
+  sortCallWebhookEvents,
+} from './call.processor';
 import { buildBicUnansweredKey } from './session-store';
 
 describe('call webhook number isolation', () => {
@@ -25,6 +31,26 @@ describe('call webhook number isolation', () => {
 
   it('treats an in-memory session as already being handled', () => {
     expect(isCallConnectAlreadyHandling({ hasSession: true, status: undefined })).toBe(true);
+  });
+
+  it('treats ended statuses as terminal so connect cannot revive them', () => {
+    expect(isTerminalCallStatus('TERMINATED')).toBe(true);
+    expect(isTerminalCallStatus('MISSED')).toBe(true);
+    expect(isTerminalCallStatus('CONNECTING')).toBe(false);
+  });
+
+  it('rejects placeholder Meta call ids used before Graph returns a wacid', () => {
+    expect(isUsableMetaCallId('pending-abc')).toBe(false);
+    expect(isUsableMetaCallId('wacid.IhggABC')).toBe(true);
+  });
+
+  it('processes terminate before connect in the same webhook payload', () => {
+    const sorted = sortCallWebhookEvents([
+      { event: 'connect' },
+      { event: 'terminate' },
+      { event: 'dtmf' },
+    ]);
+    expect(sorted.map((e) => e.event)).toEqual(['terminate', 'dtmf', 'connect']);
   });
 
   it('keeps BIC cooldown keys separate for each WhatsApp number', () => {

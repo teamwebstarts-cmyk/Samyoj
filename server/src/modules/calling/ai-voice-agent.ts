@@ -1,5 +1,5 @@
 import prisma from '../../config/database';
-import { unregisterActiveCall } from './session-store';
+import { unregisterActiveCall, isCallHungUp } from './session-store';
 import { createModuleLogger } from '../../utils/logger';
 import { emitToOrg } from '../../realtime';
 import { computeSlaDueAt } from '../sla/service';
@@ -118,6 +118,23 @@ export class AiVoiceCallSession {
     });
   }
 
+  isEnded(): boolean {
+    return this.ended;
+  }
+
+  private async abortIfRemoteHangup(stage: string): Promise<boolean> {
+    if (this.ended) return true;
+    if (await isCallHungUp(this.ctx.metaCallId)) {
+      log.info('Stopping AI setup — caller already hung up', {
+        callId: this.ctx.callId,
+        stage,
+      });
+      this.dispose();
+      return true;
+    }
+    return false;
+  }
+
   async start(sdpOffer: string): Promise<void> {
     const aiSettings = await getOrgAiSettings(this.ctx.organizationId);
     if (!isCallingAiEnabled(aiSettings)) {
@@ -206,6 +223,7 @@ export class AiVoiceCallSession {
       mode: this.ctx.sttMode || undefined,
       prompt: this.ctx.sttPrompt || undefined,
     });
+    if (await this.abortIfRemoteHangup('after_stt')) return;
 
     this.bridge.setAudioHandler((samples, sampleRate) => {
       if (this.ended || !this.transcriber) return;
@@ -244,6 +262,7 @@ export class AiVoiceCallSession {
     });
 
     const sdpAnswer = await this.bridge.createAnswerFromOffer(sdpOffer);
+    if (await this.abortIfRemoteHangup('before_pre_accept')) return;
 
     await MetaCallingService.preAccept(
       this.ctx.phoneNumberId,
@@ -251,6 +270,7 @@ export class AiVoiceCallSession {
       this.ctx.metaCallId,
       sdpAnswer
     );
+    if (await this.abortIfRemoteHangup('after_pre_accept')) return;
 
     await MetaCallingService.accept(
       this.ctx.phoneNumberId,
@@ -258,9 +278,13 @@ export class AiVoiceCallSession {
       this.ctx.metaCallId,
       sdpAnswer
     );
+    if (await this.abortIfRemoteHangup('after_accept')) return;
 
-    await prisma.call.update({
-      where: { id: this.ctx.callId },
+    const revived = await prisma.call.updateMany({
+      where: {
+        id: this.ctx.callId,
+        status: { in: ['CONNECTING', 'RINGING'] },
+      },
       data: {
         status: 'CONNECTED',
         answeredAt: new Date(),
@@ -268,12 +292,20 @@ export class AiVoiceCallSession {
         handler: 'AI',
       },
     });
+    if (revived.count === 0) {
+      log.info('Not marking AI connected — call is no longer ringing', {
+        callId: this.ctx.callId,
+      });
+      this.dispose();
+      return;
+    }
 
     const opening = joinSpokenTurns(
       this.ctx.consentMessage,
       this.ctx.greeting || 'Hi, thanks for calling. How can I help?'
     );
     if (opening) {
+      if (await this.abortIfRemoteHangup('before_greeting')) return;
       try {
         await this.speak(opening, 'system');
       } catch (err) {
@@ -283,6 +315,7 @@ export class AiVoiceCallSession {
         });
       }
     }
+    if (this.ended) return;
     this.armMaxDurationTimer();
     log.info('AI voice call session started', { callId: this.ctx.callId });
   }

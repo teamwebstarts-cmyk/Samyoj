@@ -25,6 +25,8 @@ import {
   storePendingCallWithTtl,
   tryAcquireCallConnectLock,
   releaseCallConnectLock,
+  markCallHungUp,
+  isCallHungUp,
   unregisterActiveCall,
 } from './session-store';
 import type { CallWebhookEntry } from './types';
@@ -38,6 +40,39 @@ export function callMatchesWebhookNumber(
   webhookWhatsappNumberId: string
 ): boolean {
   return Boolean(storedWhatsappNumberId) && storedWhatsappNumberId === webhookWhatsappNumberId;
+}
+
+export const TERMINAL_CALL_STATUSES = [
+  'TERMINATED',
+  'COMPLETED',
+  'FAILED',
+  'MISSED',
+  'REJECTED',
+] as const;
+
+export function isTerminalCallStatus(status: string | null | undefined): boolean {
+  return TERMINAL_CALL_STATUSES.includes(
+    (status || '').toUpperCase() as (typeof TERMINAL_CALL_STATUSES)[number]
+  );
+}
+
+const WEBHOOK_EVENT_ORDER: Record<string, number> = {
+  terminate: 0,
+  dtmf: 1,
+  connect: 2,
+};
+
+/** Hang-up must run before connect in the same payload so AI does not answer a dead call. */
+export function sortCallWebhookEvents<T extends { event?: string }>(events: T[]): T[] {
+  return [...events].sort(
+    (a, b) =>
+      (WEBHOOK_EVENT_ORDER[(a.event || '').toLowerCase()] ?? 9) -
+      (WEBHOOK_EVENT_ORDER[(b.event || '').toLowerCase()] ?? 9)
+  );
+}
+
+export function isUsableMetaCallId(metaCallId: string | null | undefined): boolean {
+  return Boolean(metaCallId) && !metaCallId!.startsWith('pending-');
 }
 
 export function isCallConnectAlreadyHandling(params: {
@@ -186,8 +221,34 @@ async function startAiSession(params: {
   registerCallSession(params.callRecord.metaCallId, session);
   await registerActiveCall(params.callRecord.metaCallId, params.orgId);
 
+  if (
+    (await isCallHungUp(params.callRecord.metaCallId)) ||
+    isTerminalCallStatus(
+      (await prisma.call.findUnique({
+        where: { id: params.callRecord.id },
+        select: { status: true },
+      }))?.status
+    )
+  ) {
+    log.info('Skipping AI session — call already hung up', {
+      metaCallId: params.callRecord.metaCallId,
+    });
+    removeCallSession(params.callRecord.metaCallId);
+    await unregisterActiveCall(params.callRecord.metaCallId, params.orgId);
+    session.dispose();
+    return;
+  }
+
   try {
     await session.start(params.sdpOffer);
+    if (session.isEnded() || (await isCallHungUp(params.callRecord.metaCallId))) {
+      log.info('AI session aborted after remote hang-up', {
+        metaCallId: params.callRecord.metaCallId,
+      });
+      removeCallSession(params.callRecord.metaCallId);
+      await unregisterActiveCall(params.callRecord.metaCallId, params.orgId);
+      return;
+    }
     emitToOrg(params.orgId, 'call:updated', {
       callId: params.callRecord.id,
       status: 'CONNECTED',
@@ -201,20 +262,26 @@ async function startAiSession(params: {
     removeCallSession(params.callRecord.metaCallId);
     await unregisterActiveCall(params.callRecord.metaCallId, params.orgId);
     session.dispose();
-    await prisma.call.update({
+    const current = await prisma.call.findUnique({
       where: { id: params.callRecord.id },
-      data: { status: 'FAILED', endedAt: new Date() },
+      select: { status: true },
     });
-    emitToOrg(params.orgId, 'call:updated', {
-      callId: params.callRecord.id,
-      status: 'FAILED',
-    });
-    void publishCallEventMessage(params.callRecord.id);
-    const { emitProductEvent } = await import('../platform/events');
-    emitProductEvent({
-      organizationId: params.orgId,
-      name: 'CALL_FAILED',
-    });
+    if (!isTerminalCallStatus(current?.status)) {
+      await prisma.call.update({
+        where: { id: params.callRecord.id },
+        data: { status: 'FAILED', endedAt: new Date() },
+      });
+      emitToOrg(params.orgId, 'call:updated', {
+        callId: params.callRecord.id,
+        status: 'FAILED',
+      });
+      void publishCallEventMessage(params.callRecord.id);
+      const { emitProductEvent } = await import('../platform/events');
+      emitProductEvent({
+        organizationId: params.orgId,
+        name: 'CALL_FAILED',
+      });
+    }
     try {
       await MetaCallingService.reject(
         params.phoneNumberId,
@@ -391,6 +458,16 @@ async function handleCallConnect(
     return;
   }
   if (
+    (await isCallHungUp(metaCallId)) ||
+    isTerminalCallStatus(existingCall?.status)
+  ) {
+    log.info('Ignoring call connect — already hung up', {
+      metaCallId,
+      status: existingCall?.status,
+    });
+    return;
+  }
+  if (
     existingCall &&
     existingCall.direction === 'BUSINESS_INITIATED' &&
     existingCall.handler === 'AGENT'
@@ -474,6 +551,19 @@ async function handleCallConnect(
 
   const settings = await getOrgCallingSettings(orgId);
   const bot = await resolveCallBot(orgId, settings, conversation.id);
+
+  if (await isCallHungUp(metaCallId)) {
+    log.info('Skipping inbound AI answer — caller hung up during setup', { metaCallId });
+    return;
+  }
+  const latest = await prisma.call.findUnique({ where: { metaCallId }, select: { status: true } });
+  if (isTerminalCallStatus(latest?.status)) {
+    log.info('Skipping inbound AI answer — call already ended', {
+      metaCallId,
+      status: latest?.status,
+    });
+    return;
+  }
 
   const callRecord = await prisma.call.upsert({
     where: { metaCallId },
@@ -572,6 +662,11 @@ async function handleCallConnect(
 
   const voice = resolveCallVoiceConfig(settings, bot);
 
+  if (await isCallHungUp(metaCallId)) {
+    log.info('Skipping AI start — caller hung up after routing', { metaCallId });
+    return;
+  }
+
   await startAiSession({
     orgId,
     callRecord,
@@ -605,10 +700,16 @@ async function handleCallTerminate(
   call: CallWebhookEntry
 ): Promise<void> {
   const metaCallId = call.id;
+  await markCallHungUp(metaCallId);
   const existing = await prisma.call.findFirst({
     where: { metaCallId, organizationId: orgId, whatsappNumberId },
   });
-  if (!existing) return;
+  if (!existing) {
+    log.info('Terminate for unknown call — recorded hang-up so late connect is ignored', {
+      metaCallId,
+    });
+    return;
+  }
 
   clearRingTimeout(metaCallId);
   await removePendingCall(metaCallId);
@@ -730,7 +831,7 @@ export async function processCallWebhookPayload(payload: Record<string, unknown>
       const orgId = whatsappNumber.organizationId;
       const accessToken = MetaWhatsAppService.decryptToken(whatsappNumber.accessToken);
 
-      for (const call of (value.calls as CallWebhookEntry[]) || []) {
+      for (const call of sortCallWebhookEvents((value.calls as CallWebhookEntry[]) || [])) {
         const event = call.event?.toLowerCase();
         log.info('Processing call webhook', { event, metaCallId: call.id, orgId });
 

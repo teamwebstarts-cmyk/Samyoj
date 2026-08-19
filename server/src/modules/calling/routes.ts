@@ -23,12 +23,13 @@ import {
   getPendingCallByCallId,
   recordBicUnansweredIfNeeded,
   storePendingCallWithTtl,
+  markCallHungUp,
 } from './session-store';
 import { getCallAnalytics } from './analytics';
 import { acceptCallWithAgentAnswer, declineCallAsAgent } from './agent-call.service';
 import { publishCallEventMessage } from './call-event-message';
 import { publishCallPermissionMessage } from './call-permission-message';
-import { clearRingTimeout } from './call.processor';
+import { clearRingTimeout, isTerminalCallStatus, isUsableMetaCallId } from './call.processor';
 import { logTeamAudit } from '../team/audit';
 import { emitToOrg, emitToUser } from '../../realtime';
 import { resolveActiveWhatsappNumber, resolveActiveWhatsappNumberId } from '../whatsapp/active-number';
@@ -725,6 +726,11 @@ router.post(
         organizationId: orgId,
         name: 'CALL_FAILED',
       });
+      await prisma.call.update({
+        where: { id: call.id },
+        data: { status: 'FAILED', endedAt: new Date() },
+      });
+      emitToOrg(orgId, 'call:updated', { callId: call.id, status: 'FAILED' });
       throw error;
     }
 
@@ -992,22 +998,34 @@ router.post(
       include: { whatsappNumber: true },
     });
     if (!call) throw new AppError(404, 'Call not found');
-    if (!call.whatsappNumber) {
-      throw new AppError(400, 'WhatsApp number is no longer connected for this call');
+    if (isTerminalCallStatus(call.status)) {
+      sendSuccess(res, { terminated: true, alreadyEnded: true });
+      return;
     }
 
-    const accessToken = MetaWhatsAppService.decryptToken(call.whatsappNumber.accessToken);
+    await markCallHungUp(call.metaCallId);
     clearRingTimeout(call.metaCallId);
     await endCallSession(call.metaCallId, 'agent_terminate');
 
-    try {
-      await MetaCallingService.terminate(
-        call.whatsappNumber.phoneNumberId,
-        accessToken,
-        call.metaCallId
-      );
-    } catch {
-      // may already be terminated
+    if (call.whatsappNumber && isUsableMetaCallId(call.metaCallId)) {
+      const accessToken = MetaWhatsAppService.decryptToken(call.whatsappNumber.accessToken);
+      try {
+        if (!call.answeredAt && (call.status === 'RINGING' || call.status === 'CONNECTING')) {
+          await MetaCallingService.reject(
+            call.whatsappNumber.phoneNumberId,
+            accessToken,
+            call.metaCallId
+          );
+        } else {
+          await MetaCallingService.terminate(
+            call.whatsappNumber.phoneNumberId,
+            accessToken,
+            call.metaCallId
+          );
+        }
+      } catch {
+        // Meta may already have hung up, or the call never left ringing.
+      }
     }
 
     const endedAt = new Date();
