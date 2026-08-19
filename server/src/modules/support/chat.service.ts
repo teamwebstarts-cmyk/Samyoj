@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { AppError } from '../../utils/response';
 import { config } from '../../config';
+import { createModuleLogger } from '../../utils/logger';
 import { createChatCompletion, type ChatMessage } from '../ai/chat-completion.service';
 import { SAFE_CHAT_TEMPERATURE } from '../ai/ai-constants';
 import { formatSupportKnowledge, selectSupportKnowledge } from './knowledge';
@@ -8,6 +9,10 @@ import { formatSupportKnowledge, selectSupportKnowledge } from './knowledge';
 export const SUPPORT_HISTORY_MAX = 16;
 export const SUPPORT_MESSAGE_MAX = 2000;
 export const SUPPORT_TRANSCRIPT_MAX = 8000;
+/** Keep Help Center under nginx/browser hang time when Sarvam is slow. */
+export const SUPPORT_LLM_TIMEOUT_MS = 18_000;
+
+const log = createModuleLogger('support-chat');
 
 const historyItemSchema = z.object({
   role: z.enum(['user', 'assistant']),
@@ -113,6 +118,23 @@ export function lastUserQuestion(
   return '';
 }
 
+/** Product facts only — used when the LLM times out so Help Center does not sit on typing dots. */
+export function fallbackSupportReply(knowledge: string, question: string): string {
+  const cleaned = knowledge
+    .replace(/^###\s+/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  if (cleaned.length > 40) {
+    const snippet = cleaned.length > 900 ? `${cleaned.slice(0, 900).trimEnd()}…` : cleaned;
+    return snippet;
+  }
+  const q = question.trim();
+  if (q) {
+    return `I could not finish a full answer just now. Try asking again in a moment, or look in Settings / the top-bar number switcher for WhatsApp number setup.`;
+  }
+  return 'I could not finish a full answer just now. Try again in a moment.';
+}
+
 export async function answerSupportQuestion(input: {
   organizationId: string;
   messages: Array<{ role: 'user' | 'assistant'; content: string }>;
@@ -135,7 +157,8 @@ export async function answerSupportQuestion(input: {
       usageAction: 'support_help',
       model: config.sarvam.chatModel || 'sarvam-105b',
       temperature: SAFE_CHAT_TEMPERATURE,
-      maxTokens: 700,
+      maxTokens: 500,
+      timeoutMs: SUPPORT_LLM_TIMEOUT_MS,
       messages: [{ role: 'system', content: buildSupportSystemPrompt(knowledge) }, ...history],
     });
 
@@ -145,6 +168,11 @@ export async function answerSupportQuestion(input: {
     }
     return text;
   } catch (err) {
-    throw userSafeSupportAiError(err);
+    const fallback = fallbackSupportReply(knowledge, question);
+    log.warn('Support LLM failed — using knowledge fallback', {
+      organizationId: input.organizationId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return fallback;
   }
 }

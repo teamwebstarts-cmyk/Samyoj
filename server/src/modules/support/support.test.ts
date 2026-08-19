@@ -14,6 +14,7 @@ import {
   buildSupportSystemPrompt,
   clipSupportHistory,
   clipTranscript,
+  fallbackSupportReply,
   formatChatTranscript,
   parseSupportChatBody,
   supportRetrievalQuery,
@@ -26,6 +27,11 @@ describe('support knowledge retrieval', () => {
     const topics = selectSupportKnowledge('How do I connect WhatsApp?');
     expect(topics[0]?.id).toBe('connect');
     expect(topics.some((t) => t.id === 'privacy')).toBe(true);
+  });
+
+  it('matches multiple WhatsApp numbers to the numbers topic', () => {
+    const topics = selectSupportKnowledge('How do multiple WhatsApp numbers work?');
+    expect(topics[0]?.id).toBe('numbers');
   });
 
   it('matches chat vs calling bot questions', () => {
@@ -109,6 +115,15 @@ describe('support chat history', () => {
     expect(wrapped.message).not.toMatch(/SARVAM|API_KEY|\.env/);
     expect(wrapped.message).toMatch(/Try again/);
     expect(wrapped.message).not.toMatch(/ticket/i);
+  });
+
+  it('returns knowledge text when the LLM is unavailable', () => {
+    const knowledge = formatSupportKnowledge(
+      selectSupportKnowledge('How do multiple WhatsApp numbers work?')
+    );
+    const reply = fallbackSupportReply(knowledge, 'How do multiple WhatsApp numbers work?');
+    expect(reply.toLowerCase()).toMatch(/number/);
+    expect(reply.length).toBeGreaterThan(40);
   });
 });
 

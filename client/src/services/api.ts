@@ -675,7 +675,7 @@ export const ticketApi = {
 export const supportApi = {
   status: () => api.get('/support/status'),
   chat: (messages: Array<{ role: 'user' | 'assistant'; content: string }>) =>
-    api.post('/support/chat', { messages }),
+    api.post('/support/chat', { messages }, { timeout: 25000 }),
 };
 
 export const commerceApi = {

@@ -11,6 +11,7 @@
 import { getActiveWhatsappNumberId } from '../services/api';
 import { getAccessToken } from './authStorage';
 import { isCurrentNumberRequest } from './whatsappWorkspace';
+import { canApplyRemoteAnswer } from './webrtcSignaling';
 
 const WINDOW_KEY = '__agentCallRtc';
 
@@ -33,6 +34,8 @@ function getStored(): AgentCallRtc | undefined {
 function setStored(val: AgentCallRtc | undefined) {
   (window as unknown as Record<string, AgentCallRtc | undefined>)[WINDOW_KEY] = val;
 }
+
+let applyAnswerChain: Promise<void> = Promise.resolve();
 
 /** Fetch the SDP answer directly (avoids axios interceptor logging 404s on every poll). */
 async function fetchSdpAnswer(callId: string): Promise<string | null> {
@@ -247,13 +250,21 @@ export async function createAgentAnswer(sdpOffer: string): Promise<string> {
 
 /** Apply the SDP answer returned by Meta (via polling or socket). */
 export async function applyAgentOfferAnswer(callId: string, sdpAnswer: string): Promise<void> {
+  const run = applyAnswerChain.then(() => applyAgentOfferAnswerNow(callId, sdpAnswer));
+  applyAnswerChain = run.then(
+    () => undefined,
+    () => undefined
+  );
+  return run;
+}
+
+async function applyAgentOfferAnswerNow(callId: string, sdpAnswer: string): Promise<void> {
   const stored = getStored();
   if (!stored) {
     console.warn('[webrtc] No peer connection to apply SDP answer');
     return;
   }
 
-  // Race: answer can arrive before setActiveCallId — still apply if this PC is waiting.
   const idOk = !stored.callId || stored.callId === callId;
   if (!idOk) {
     console.warn('[webrtc] SDP answer callId mismatch', { expected: stored.callId, got: callId });
@@ -261,29 +272,29 @@ export async function applyAgentOfferAnswer(callId: string, sdpAnswer: string): 
   }
   if (!stored.callId) stored.callId = callId;
 
-  if (stored.connected && stored.pc.signalingState === 'stable') {
+  if (!canApplyRemoteAnswer(stored.pc.signalingState, stored.connected)) {
+    if (stored.pc.signalingState === 'stable') stored.connected = true;
     return;
   }
 
-  const state = stored.pc.signalingState;
-  if (state === 'have-local-offer' || state === 'have-remote-pranswer') {
-    try {
-      await stored.pc.setRemoteDescription({ type: 'answer', sdp: sdpAnswer });
-      ensureLocalAudioSending(stored.pc);
+  try {
+    await stored.pc.setRemoteDescription({ type: 'answer', sdp: sdpAnswer });
+    ensureLocalAudioSending(stored.pc);
+    stored.connected = true;
+    console.log('[webrtc] SDP answer applied — local mic should be sending', {
+      ice: stored.pc.iceConnectionState,
+      senders: stored.pc.getSenders().map((s) => ({
+        kind: s.track?.kind,
+        enabled: s.track?.enabled,
+        muted: s.track?.muted,
+      })),
+    });
+  } catch (e) {
+    if (stored.pc.signalingState === 'stable') {
       stored.connected = true;
-      console.log('[webrtc] SDP answer applied — local mic should be sending', {
-        ice: stored.pc.iceConnectionState,
-        senders: stored.pc.getSenders().map((s) => ({
-          kind: s.track?.kind,
-          enabled: s.track?.enabled,
-          muted: s.track?.muted,
-        })),
-      });
-    } catch (e) {
-      console.error('[webrtc] setRemoteDescription failed:', e);
+      return;
     }
-  } else {
-    console.warn('[webrtc] Unexpected signaling state for answer', state);
+    console.error('[webrtc] setRemoteDescription failed:', e);
   }
 }
 
