@@ -409,6 +409,7 @@ export const callingApi = {
     api.post('/calling/callback', data),
   permission: (contactId: string) => api.get(`/calling/permission/${contactId}`),
   requestPermission: (contactId: string) => api.post('/calling/permission/request', { contactId }),
+  addNote: (id: string, content: string) => api.post(`/calling/${id}/notes`, { content }),
   updateNotes: (id: string, notes: string) => api.patch(`/calling/${id}`, { notes }),
   terminate: (id: string) => api.post(`/calling/${id}/terminate`),
   remove: (id: string) =>

@@ -35,6 +35,11 @@ import { resolveActiveWhatsappNumber, resolveActiveWhatsappNumberId } from '../w
 import { recordAiUsage } from '../ai/org-ai.service';
 import { charUsage } from '../ai/ai-usage-actions';
 import { deleteCallLogs } from './delete-call-logs';
+import {
+  addInternalNoteToCall,
+  loadCallInternalNotes,
+  migrateLegacyCallNotes,
+} from './call-conversation-notes';
 
 const router = Router();
 
@@ -80,7 +85,11 @@ const callingSettingsSchema = z.object({
 });
 
 const notesSchema = z.object({
-  notes: z.string().max(5000),
+  notes: z.string().min(1).max(5000),
+});
+
+const addNoteSchema = z.object({
+  content: z.string().min(1).max(5000),
 });
 
 const bulkSchema = z.object({
@@ -844,7 +853,67 @@ router.get(
       },
     });
     if (!call) throw new AppError(404, 'Call not found');
-    sendSuccess(res, call);
+
+    let conversationId = call.conversationId;
+    if (!conversationId && call.contactId && call.whatsappNumberId) {
+      const linked = await prisma.conversation.findFirst({
+        where: {
+          organizationId: orgId,
+          contactId: call.contactId,
+          whatsappNumberId: call.whatsappNumberId,
+        },
+        select: { id: true },
+        orderBy: { lastMessageAt: 'desc' },
+      });
+      if (linked) {
+        conversationId = linked.id;
+        await prisma.call.update({
+          where: { id: call.id },
+          data: { conversationId: linked.id },
+        });
+      }
+    }
+
+    if (conversationId) {
+      await migrateLegacyCallNotes({
+        callId: call.id,
+        conversationId,
+        userId: req.user!.userId,
+        metadata: call.metadata,
+      });
+    }
+
+    const internalNotes = await loadCallInternalNotes(conversationId);
+    sendSuccess(res, {
+      ...call,
+      conversationId,
+      conversation: conversationId
+        ? { id: conversationId, status: call.conversation?.status }
+        : call.conversation,
+      internalNotes,
+    });
+  })
+);
+
+router.post(
+  '/:id/notes',
+  ...memberGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const id = String(req.params.id);
+    const { content } = addNoteSchema.parse(req.body);
+
+    const call = await prisma.call.findFirst({
+      where: { id, organizationId: orgId, whatsappNumberId: req.activeWhatsappNumberId },
+    });
+    if (!call) throw new AppError(404, 'Call not found');
+
+    const { note, conversationId } = await addInternalNoteToCall({
+      call,
+      userId: req.user!.userId,
+      content,
+    });
+    sendSuccess(res, { ...note, conversationId }, 201);
   })
 );
 
@@ -861,17 +930,13 @@ router.patch(
     });
     if (!call) throw new AppError(404, 'Call not found');
 
-    const metadata = ((call.metadata as Record<string, unknown>) || {});
-    const updated = await prisma.call.update({
-      where: { id },
-      data: { metadata: { ...metadata, notes } },
-      include: {
-        contact: { select: { id: true, name: true, phone: true, callingAiEnabled: true } },
-        assignedAgent: { select: { id: true, name: true } },
-      },
+    const { note, conversationId } = await addInternalNoteToCall({
+      call,
+      userId: req.user!.userId,
+      content: notes,
     });
 
-    sendSuccess(res, updated);
+    sendSuccess(res, { ...note, conversationId });
   })
 );
 

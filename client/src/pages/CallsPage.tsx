@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { callingApi, contactApi } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
+import type { InternalNote } from '../types';
 import { useSocket } from '../hooks/useSocket';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 import CallDetailView from '../components/calls/CallDetailView';
@@ -54,6 +56,7 @@ interface CallRecord {
   aiBot?: { name: string } | null;
   assignedAgent?: { id: string; name: string } | null;
   conversation?: { id: string } | null;
+  internalNotes?: InternalNote[];
 }
 
 const CALLS_CACHE_KEY = 'calls';
@@ -64,7 +67,6 @@ type CallsNumberCache = {
   search: string;
   chip: string;
   selectedCallId: string | null;
-  notes: string;
 };
 
 /** Map UI chip → API list params. */
@@ -88,10 +90,15 @@ function chipToParams(chip: string): { status?: string; handler?: string; direct
 }
 
 function parseCall(raw: CallRecord): CallRecord {
-  return { ...raw, transcript: normalizeTranscript(raw.transcript) };
+  return {
+    ...raw,
+    transcript: normalizeTranscript(raw.transcript),
+    internalNotes: raw.internalNotes ?? [],
+  };
 }
 
 export default function CallsPage() {
+  const { user } = useAuth();
   const { activeNumber, resolved } = useWhatsAppNumber();
   const { callId: routeCallId } = useParams();
   const navigate = useNavigate();
@@ -101,16 +108,13 @@ export default function CallsPage() {
   const [ending, setEnding] = useState(false);
   const [callingBack, setCallingBack] = useState(false);
   const [callingBackId, setCallingBackId] = useState<string | null>(null);
-  const [savingNotes, setSavingNotes] = useState(false);
   const [selectedCallId, setSelectedCallId] = useState<string | null>(routeCallId ?? null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<PageSize>(10);
   const [totalCalls, setTotalCalls] = useState(0);
   const [search, setSearch] = useState('');
   const [chip, setChip] = useState('');
-  const [notes, setNotes] = useState('');
-  const [notesDirty, setNotesDirty] = useState(false);
-  const notesDirtyRef = useRef(false);
+  const [internalNotes, setInternalNotes] = useState<InternalNote[]>([]);
   const [callingAiSaving, setCallingAiSaving] = useState(false);
   const [callMenu, setCallMenu] = useState<{ x: number; y: number; callId: string } | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -134,7 +138,6 @@ export default function CallsPage() {
     search: '',
     chip: '',
     selectedCallId: null,
-    notes: '',
   });
 
   callsSnapshotRef.current = {
@@ -144,9 +147,7 @@ export default function CallsPage() {
     search,
     chip,
     selectedCallId,
-    notes,
   };
-  notesDirtyRef.current = notesDirty;
 
   const pageRef = useRef(page);
   const searchRef = useRef(search);
@@ -209,7 +210,7 @@ export default function CallsPage() {
   }, [page, pageSize, search, chip, loadCalls]);
 
   const loadCallDetail = useCallback(
-    async (callId: string, opts?: { syncNotes?: boolean }) => {
+    async (callId: string) => {
       if (!resolved || !activeNumber) return null;
       const requestNumberId = activeNumber.id;
       try {
@@ -220,12 +221,7 @@ export default function CallsPage() {
           const exists = prev.some((c) => c.id === callId);
           return exists ? prev.map((c) => (c.id === callId ? parsed : c)) : [parsed, ...prev];
         });
-        // Only overwrite the notes box when explicitly asked (save/select/deep-link).
-        // The 3s live poll must never clobber unsaved edits.
-        if (opts?.syncNotes === true) {
-          setNotes((parsed.metadata as { notes?: string })?.notes || '');
-          setNotesDirty(false);
-        }
+        setInternalNotes(parsed.internalNotes ?? []);
         return parsed;
       } catch {
         return null;
@@ -251,8 +247,7 @@ export default function CallsPage() {
       setSearch(cached.search);
       setChip(cached.chip ?? '');
       setSelectedCallId(null);
-      setNotes('');
-      setNotesDirty(false);
+      setInternalNotes([]);
       setCallMenu(null);
       setDeleteCallTarget(null);
       setSelectionMode(false);
@@ -267,8 +262,7 @@ export default function CallsPage() {
     setSelectedCallId(null);
     setCalls([]);
     setTotalCalls(0);
-    setNotes('');
-    setNotesDirty(false);
+    setInternalNotes([]);
     setPage(1);
     setSearch('');
     setChip('');
@@ -288,9 +282,8 @@ export default function CallsPage() {
   useEffect(() => {
     if (routeCallId) {
       setSelectedCallId(routeCallId);
-      setNotes('');
-      setNotesDirty(false);
-      void loadCallDetail(routeCallId, { syncNotes: true });
+      setInternalNotes([]);
+      void loadCallDetail(routeCallId);
     }
   }, [routeCallId, loadCallDetail]);
 
@@ -443,10 +436,9 @@ export default function CallsPage() {
   const handleSelectCall = useCallback(
     (call: CallRecord) => {
       setSelectedCallId(call.id);
-      setNotes('');
-      setNotesDirty(false);
+      setInternalNotes([]);
       navigate(`/calls/${call.id}`);
-      void loadCallDetail(call.id, { syncNotes: true });
+      void loadCallDetail(call.id);
     },
     [loadCallDetail, navigate]
   );
@@ -679,21 +671,6 @@ export default function CallsPage() {
     }
   }
 
-  async function handleSaveNotes() {
-    if (!selectedCall) return;
-    setSavingNotes(true);
-    try {
-      await callingApi.updateNotes(selectedCall.id, notes);
-      setNotesDirty(false);
-      toastSuccess('Notes saved.');
-      await loadCallDetail(selectedCall.id, { syncNotes: true });
-    } catch {
-      toastError('Could not save notes.');
-    } finally {
-      setSavingNotes(false);
-    }
-  }
-
   async function handleCallingAiChange(enabled: boolean) {
     const contactId = selectedCall?.contact?.id;
     if (!contactId || !selectedCall) return;
@@ -867,14 +844,18 @@ export default function CallsPage() {
               />
               <CallDetailsPanel
                 callId={selectedCall.id}
-                notes={notes}
-                onNotesChange={(value) => {
-                  setNotes(value);
-                  setNotesDirty(true);
+                notes={internalNotes}
+                currentUserId={user?.id}
+                onNotesChange={setInternalNotes}
+                onConversationLinked={(conversationId) => {
+                  setCalls((prev) =>
+                    prev.map((call) =>
+                      call.id === selectedCall.id
+                        ? { ...call, conversation: { id: conversationId } }
+                        : call
+                    )
+                  );
                 }}
-                onSaveNotes={() => void handleSaveNotes()}
-                savingNotes={savingNotes}
-                notesDirty={notesDirty}
                 panelOpen={detailsPanelOpen}
                 onPanelOpenChange={setDetailsPanelOpen}
                 focusSection={detailsFocusSection}

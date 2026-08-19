@@ -1,13 +1,13 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { StickyNote, X } from 'lucide-react';
-import AppTextarea from '../ui/AppTextarea';
-import {
-  DetailsSectionCard,
-  DetailsSectionHeader,
-} from '../inbox/details/DetailsSectionCard';
+import ConversationNotesSection, {
+  hasVisibleConversationNotes,
+} from '../inbox/ConversationNotesSection';
 import { useGlassTipProps } from '../inbox/ComposerGlassTip';
 import PaneHandle from '../inbox/PaneHandle';
 import type { PaneHandleController } from '../../hooks/useSinglePaneWidth';
+import type { InternalNote } from '../../types';
+import { callingApi } from '../../services/api';
 
 export type CallDetailsSection = 'notes';
 
@@ -16,11 +16,10 @@ const DEFAULT_CALL_DETAILS_PANEL_WIDTH = 340;
 
 interface CallDetailsPanelProps {
   callId: string;
-  notes: string;
-  onNotesChange: (value: string) => void;
-  onSaveNotes: () => void;
-  savingNotes?: boolean;
-  notesDirty?: boolean;
+  notes: InternalNote[];
+  onNotesChange: (notes: InternalNote[]) => void;
+  currentUserId?: string;
+  onConversationLinked?: (conversationId: string) => void;
   panelOpen: boolean;
   onPanelOpenChange: (open: boolean) => void;
   focusSection?: CallDetailsSection;
@@ -35,9 +34,8 @@ export default function CallDetailsPanel({
   callId,
   notes,
   onNotesChange,
-  onSaveNotes,
-  savingNotes,
-  notesDirty,
+  currentUserId,
+  onConversationLinked,
   panelOpen,
   onPanelOpenChange,
   focusSection,
@@ -48,17 +46,14 @@ export default function CallDetailsPanel({
   panelWidth = DEFAULT_CALL_DETAILS_PANEL_WIDTH,
 }: CallDetailsPanelProps) {
   const tipFor = useGlassTipProps();
-  const noteInputRef = useRef<HTMLTextAreaElement>(null);
-  const hasNotes = Boolean(notes.trim());
+  const hasNotes = hasVisibleConversationNotes(notes);
   const iconStroke = 1.9;
 
   useEffect(() => {
     onPanelOpenChange(false);
   }, [callId]); // eslint-disable-line react-hooks/exhaustive-deps -- reset only on call change
 
-  const focusNotes = () => {
-    requestAnimationFrame(() => noteInputRef.current?.focus());
-  };
+  const focusNotes = () => undefined;
 
   useEffect(() => {
     if (!overlayOpen) return;
@@ -79,6 +74,13 @@ export default function CallDetailsPanel({
   const closePanel = () => {
     onPanelOpenChange(false);
     onOverlayClose?.();
+  };
+
+  const handleAddNote = async (content: string): Promise<InternalNote> => {
+    const { data } = await callingApi.addNote(callId, content);
+    const created = data.data as InternalNote & { conversationId?: string };
+    if (created.conversationId) onConversationLinked?.(created.conversationId);
+    return created;
   };
 
   const panelShellClass =
@@ -106,47 +108,13 @@ export default function CallDetailsPanel({
 
       <div className="inbox-composer-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain">
         <div className="space-y-2.5 px-3 py-3">
-          <DetailsSectionCard data-section="notes">
-            <DetailsSectionHeader
-              icon={<StickyNote className="h-3.5 w-3.5" strokeWidth={2.25} />}
-              title="Notes"
-              action={
-                notesDirty ? (
-                  <span className="text-[10px] font-bold uppercase tracking-wide text-amber-600">
-                    Unsaved
-                  </span>
-                ) : undefined
-              }
-            />
-            <p className="mb-2 text-[11px] leading-snug text-theme-muted">
-              Only your team can see this — it is not sent to the customer.
-            </p>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (notesDirty && !savingNotes) onSaveNotes();
-              }}
-              className="space-y-2"
-            >
-              <AppTextarea
-                ref={noteInputRef}
-                id="call-notes"
-                value={notes}
-                onChange={(e) => onNotesChange(e.target.value)}
-                placeholder="Add notes about this call…"
-                rows={6}
-              />
-              <div className="flex items-center justify-end">
-                <button
-                  type="submit"
-                  disabled={savingNotes || !notesDirty}
-                  className="rounded-lg bg-whatsapp-600 px-3 py-1.5 text-[12px] font-bold text-white transition hover:bg-whatsapp-700 disabled:opacity-50"
-                >
-                  {savingNotes ? 'Saving…' : 'Save note'}
-                </button>
-              </div>
-            </form>
-          </DetailsSectionCard>
+          <ConversationNotesSection
+            key={callId}
+            notes={notes}
+            onNotesChange={onNotesChange}
+            currentUserId={currentUserId}
+            onAddNote={handleAddNote}
+          />
         </div>
       </div>
     </>
@@ -185,12 +153,8 @@ export default function CallDetailsPanel({
           {...tipFor('Notes', 'left')}
         >
           <StickyNote className="h-4 w-4" strokeWidth={iconStroke} />
-          {(hasNotes || notesDirty) && (
-            <span
-              className={`absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full ${
-                notesDirty ? 'bg-amber-500' : 'bg-amber-600'
-              }`}
-            />
+          {hasNotes && (
+            <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-amber-600" />
           )}
         </button>
       </aside>

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Download,
   Hash,
@@ -6,11 +6,9 @@ import {
   StickyNote,
   Tag,
   Ticket,
-  Trash2,
   X,
 } from 'lucide-react';
 import AppInput from '../ui/AppInput';
-import AppTextarea from '../ui/AppTextarea';
 import {
   DetailsSectionCard,
   DetailsSectionHeader,
@@ -21,8 +19,8 @@ import {
   softLabelPillStyle,
 } from './details/DetailsSectionCard';
 import { useGlassTipProps } from './ComposerGlassTip';
-import { inboxApi, labelsApi, contactApi } from '../../services/api';
-import { useAuth } from '../../contexts/AuthContext';
+import { labelsApi, contactApi } from '../../services/api';
+import ConversationNotesSection from './ConversationNotesSection';
 import { useTheme } from '../../contexts/ThemeContext';
 import type {
   Contact,
@@ -32,7 +30,6 @@ import type {
   InternalNote,
 } from '../../types';
 import { toastError } from '../../utils/toast';
-import { stripCallIdsFromNote } from './noteDisplay';
 
 type PanelSection = 'labels' | 'notes' | 'tags';
 
@@ -74,74 +71,6 @@ interface InboxDetailsPanelProps {
   panelWidth?: number;
 }
 
-function formatNoteMeta(note: InternalNote): string {
-  const who = note.user?.name || 'Agent';
-  const when = new Date(note.createdAt).toLocaleString([], {
-    hour: 'numeric',
-    minute: '2-digit',
-    month: 'short',
-    day: 'numeric',
-  });
-  return `${who} · ${when}`;
-}
-
-/** ~7 lines at 12.5px / leading-relaxed — WhatsApp-style collapse band for notes. */
-const NOTE_COLLAPSE_MAX_PX = 140;
-
-/** Plain note body with Read more / Read less when tall. Per-note expand state. */
-function CollapsibleNoteText({ content }: { content: string }) {
-  const [expanded, setExpanded] = useState(false);
-  /** null = not measured yet — keep max-height so tall notes don't flash full height */
-  const [overflows, setOverflows] = useState<boolean | null>(null);
-  const textRef = useRef<HTMLParagraphElement>(null);
-
-  useLayoutEffect(() => {
-    const el = textRef.current;
-    if (!el) return;
-
-    const measure = () => {
-      setOverflows(el.scrollHeight > NOTE_COLLAPSE_MAX_PX + 2);
-    };
-
-    measure();
-    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
-    ro?.observe(el);
-    return () => ro?.disconnect();
-  }, [content]);
-
-  const showToggle = overflows === true;
-  const constrain = !expanded && overflows !== false;
-
-  return (
-    <div className="min-w-0 flex-1">
-      <div className={`relative min-w-0 ${constrain ? 'max-h-[140px] overflow-hidden' : ''}`}>
-        <p
-          ref={textRef}
-          className="whitespace-pre-wrap break-words text-[12.5px] leading-relaxed text-theme-fg"
-        >
-          {content}
-        </p>
-        {constrain && showToggle ? (
-          <div
-            className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-b from-transparent to-slate-100 dark:to-neutral-900"
-            aria-hidden
-          />
-        ) : null}
-      </div>
-      {showToggle ? (
-        <button
-          type="button"
-          className="mt-0.5 text-[12px] font-semibold text-whatsapp-700 transition hover:underline dark:text-whatsapp-400"
-          aria-expanded={expanded}
-          onClick={() => setExpanded((v) => !v)}
-        >
-          {expanded ? 'Read less' : 'Read more'}
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
 export default function InboxDetailsPanel({
   conversation,
   notes,
@@ -165,13 +94,8 @@ export default function InboxDetailsPanel({
   const conversationId = conversation.id;
   const contact = conversation.contact;
   const labels = conversation.labels ?? [];
-  const { canManageTeam } = useAuth();
 
   const [detailsTab, setDetailsTab] = useState<DetailsTab>('overview');
-  const [noteText, setNoteText] = useState('');
-  const [showNoteComposer, setShowNoteComposer] = useState(false);
-  const [savingNote, setSavingNote] = useState(false);
-  const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null);
   const [allLabels, setAllLabels] = useState<InboxLabel[]>([]);
   const [newLabelName, setNewLabelName] = useState('');
   const [creatingLabel, setCreatingLabel] = useState(false);
@@ -183,7 +107,6 @@ export default function InboxDetailsPanel({
   const [orgTags, setOrgTags] = useState<string[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const tabListRef = useRef<HTMLDivElement>(null);
-  const noteInputRef = useRef<HTMLTextAreaElement>(null);
   const labelsSectionRef = useRef<HTMLDivElement>(null);
 
   const closeLabelsPicker = () => {
@@ -217,8 +140,6 @@ export default function InboxDetailsPanel({
     setShowNewLabel(false);
     setShowTagInput(false);
     setNewTag('');
-    setShowNoteComposer(false);
-    setNoteText('');
     setDetailsTab('overview');
   }, [conversationId]); // eslint-disable-line react-hooks/exhaustive-deps -- reset only on conversation change
 
@@ -298,39 +219,6 @@ export default function InboxDetailsPanel({
   const closePanel = () => {
     onPanelOpenChange(false);
     onOverlayClose?.();
-  };
-
-  const openNoteComposer = () => {
-    setShowNoteComposer(true);
-    requestAnimationFrame(() => noteInputRef.current?.focus());
-  };
-
-  const handleAddNote = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!noteText.trim()) return;
-    setSavingNote(true);
-    try {
-      const { data } = await inboxApi.addNote(conversationId, noteText.trim());
-      onNotesChange([data.data, ...notes]);
-      setNoteText('');
-      setShowNoteComposer(false);
-    } catch {
-      toastError('Failed to add note');
-    } finally {
-      setSavingNote(false);
-    }
-  };
-
-  const handleDeleteNote = async (noteId: string) => {
-    setDeletingNoteId(noteId);
-    try {
-      await inboxApi.deleteNote(noteId);
-      onNotesChange(notes.filter((n) => n.id !== noteId));
-    } catch {
-      toastError('Could not delete note');
-    } finally {
-      setDeletingNoteId(null);
-    }
   };
 
   const handleAddLabel = async (labelId: string) => {
@@ -514,96 +402,13 @@ export default function InboxDetailsPanel({
       <div ref={scrollRef} className="inbox-composer-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain">
         {detailsTab === 'notes' ? (
           <div className="space-y-2.5 px-3 py-3">
-            <DetailsSectionCard data-section="notes">
-              <DetailsSectionHeader
-                icon={<StickyNote className="h-3.5 w-3.5" strokeWidth={2.25} />}
-                title="Notes"
-                action={
-                  <button type="button" onClick={openNoteComposer} className={detailsAddLinkClassName()}>
-                    + Add note
-                  </button>
-                }
-              />
-
-              {(showNoteComposer || noteText.trim()) && (
-                <form onSubmit={(e) => void handleAddNote(e)} className="mb-2.5 space-y-2">
-                  <AppTextarea
-                    ref={noteInputRef}
-                    value={noteText}
-                    onChange={(e) => setNoteText(e.target.value)}
-                    placeholder="Add a note — only your team can see it"
-                    rows={2}
-                  />
-                  <div className="flex items-center gap-2">
-                    {noteText.trim() && (
-                      <button
-                        type="submit"
-                        disabled={savingNote}
-                        className="rounded-lg bg-whatsapp-600 px-3 py-1.5 text-[12px] font-bold text-white transition hover:bg-whatsapp-700 disabled:opacity-50"
-                      >
-                        {savingNote ? 'Saving…' : 'Save note'}
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowNoteComposer(false);
-                        setNoteText('');
-                      }}
-                      className="text-[12px] font-semibold text-theme-muted transition hover:text-theme-fg"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </form>
-              )}
-
-              {notes.filter((n) => stripCallIdsFromNote(n.content)).length === 0 &&
-                !showNoteComposer &&
-                !noteText.trim() && (
-                  <div className="rounded-xl border border-dashed border-theme-border/80 bg-slate-50/70 px-3 py-3 text-center dark:bg-neutral-950/40">
-                    <p className="text-[12px] font-semibold text-theme-fg">No notes yet</p>
-                    <p className="mt-0.5 text-[11px] text-theme-muted">
-                      Leave context for the next agent on this chat.
-                    </p>
-                  </div>
-                )}
-
-              {notes.some((n) => stripCallIdsFromNote(n.content)) && (
-                <div className="space-y-2">
-                  {notes.map((note) => {
-                    const body = stripCallIdsFromNote(note.content);
-                    if (!body) return null;
-                    const canDelete = note.user?.id === currentUserId || canManageTeam;
-                    return (
-                      <div
-                        key={note.id}
-                        className="rounded-xl border border-slate-200/80 bg-slate-100/70 p-3 dark:border-neutral-700/60 dark:bg-neutral-900/55"
-                      >
-                        <div className="flex items-start gap-2">
-                          <CollapsibleNoteText content={body} />
-                          {canDelete && (
-                            <button
-                              type="button"
-                              disabled={deletingNoteId === note.id}
-                              onClick={() => void handleDeleteNote(note.id)}
-                              aria-label="Delete note"
-                              {...tipFor('Delete note')}
-                              className="shrink-0 rounded-md p-1 text-slate-400 transition hover:bg-white/70 hover:text-red-600 disabled:opacity-50 dark:hover:bg-neutral-800"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          )}
-                        </div>
-                        <p className="mt-1.5 text-[10.5px] font-medium text-theme-muted">
-                          {formatNoteMeta(note)}
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </DetailsSectionCard>
+            <ConversationNotesSection
+              key={conversationId}
+              conversationId={conversationId}
+              notes={notes}
+              onNotesChange={onNotesChange}
+              currentUserId={currentUserId}
+            />
           </div>
         ) : (
           <div className="space-y-2.5 px-3 py-3">
