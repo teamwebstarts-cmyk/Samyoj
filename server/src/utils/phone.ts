@@ -17,6 +17,19 @@ export function normalizePhone(input: string): string {
   return normalizePhoneIdentity(input);
 }
 
+/**
+ * WhatsApp `wa_id` vs a number the customer typed in a flow.
+ * Last-10 match covers "9009785315" vs "919009785315" without treating a typo as the same person.
+ */
+export function isSamePhoneIdentity(a: string, b: string): boolean {
+  const left = normalizePhoneIdentity(a);
+  const right = normalizePhoneIdentity(b);
+  if (!left || !right) return false;
+  if (left === right) return true;
+  if (left.length >= 10 && right.length >= 10 && left.slice(-10) === right.slice(-10)) return true;
+  return false;
+}
+
 export function validatePhone(input: string): PhoneValidationResult {
   const phone = normalizePhone(input);
 

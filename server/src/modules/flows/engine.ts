@@ -9,7 +9,7 @@ import { createModuleLogger } from '../../utils/logger';
 import { withConversationLock } from './lock';
 import { incrementFlowStat } from './analytics';
 import { detectMessageLanguage } from './language';
-import { normalizePhoneIdentity } from '../../utils/phone';
+import { isSamePhoneIdentity, normalizePhoneIdentity } from '../../utils/phone';
 import { linkFlowNodes } from './link-nodes';
 import { matchInteractiveTextIntent, resolveInteractiveBranch, syncButtonNode } from './branch-resolve';
 import type { InteractiveMessageOptions } from '../messages/interactive';
@@ -260,10 +260,29 @@ async function updateContactField(contactId: string, field: string, value: strin
     return;
   }
   if (field === 'phone') {
-    const clean = normalizePhoneIdentity(value);
+    const collected = normalizePhoneIdentity(value);
+    if (!collected) return;
+    const contact = await prisma.contact.findUnique({ where: { id: contactId } });
+    if (!contact) return;
+    const attrs =
+      contact.customAttributes &&
+      typeof contact.customAttributes === 'object' &&
+      !Array.isArray(contact.customAttributes)
+        ? { ...(contact.customAttributes as Record<string, unknown>) }
+        : {};
+    attrs.collectedPhone = collected;
+    // Keep WhatsApp wa_id as the unique Inbox key. Overwriting it (e.g. customer typed
+    // 90097853115 in a flow while Meta from is 919009785315) creates a second chat.
+    if (!isSamePhoneIdentity(contact.normalizedPhone, collected)) {
+      log.info('Stored flow phone without changing WhatsApp identity', {
+        contactId,
+        whatsappIdentity: contact.normalizedPhone,
+        collectedPhone: collected,
+      });
+    }
     await prisma.contact.update({
       where: { id: contactId },
-      data: { phone: clean, normalizedPhone: clean },
+      data: { customAttributes: attrs as Prisma.InputJsonValue },
     });
     return;
   }

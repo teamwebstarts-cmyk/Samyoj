@@ -8,6 +8,7 @@ import { emitToOrg } from '../realtime';
 import { logError } from '../errors';
 import { createModuleLogger } from '../utils/logger';
 import { parseMetaTimestamp } from '../modules/campaigns/safety';
+import { normalizePhoneIdentity } from '../utils/phone';
 import { handleOutboundStatusWebhook } from '../modules/whatsapp/provider-status';
 import {
   inboundConversationRepairWhere,
@@ -98,7 +99,7 @@ export async function processWebhookPayload(
         const startMsgTime = Date.now();
         const metaMessageId = msg.id as string;
         const messageType = msg.type as string;
-        const contactPhone = msg.from as string;
+        const contactPhone = normalizePhoneIdentity(String(msg.from || ''));
         if (!metaMessageId || !contactPhone) continue;
         const inboundTimestamp = parseMetaTimestamp(msg.timestamp);
         if (!inboundTimestamp) {
@@ -109,7 +110,9 @@ export async function processWebhookPayload(
           continue;
         }
         const contacts = (value.contacts as Array<{ wa_id?: string; profile?: { name?: string } }>) || [];
-        const contactEntry = contacts.find((c) => c.wa_id === contactPhone);
+        const contactEntry = contacts.find(
+          (c) => c.wa_id && normalizePhoneIdentity(c.wa_id) === contactPhone
+        );
         const contactName = contactEntry?.profile?.name;
 
         log.info('Processing inbound message', {
