@@ -129,7 +129,32 @@ export function normalizeError(err: unknown): NormalizedError {
     };
   }
 
+  if (err instanceof URIError) {
+    return {
+      message: 'Invalid URL',
+      code: 'URIError',
+      statusCode: 400,
+      stack: err.stack,
+      isOperational: true,
+      original: err,
+    };
+  }
+
   if (err instanceof Error) {
+    const aborted =
+      err.message === 'Request aborted' ||
+      err.message === 'request aborted' ||
+      (err as NodeJS.ErrnoException).code === 'ECONNABORTED';
+    if (aborted) {
+      return {
+        message: 'Request aborted',
+        code: 'REQUEST_ABORTED',
+        statusCode: 499,
+        stack: err.stack,
+        isOperational: true,
+        original: err,
+      };
+    }
     return {
       message: err.message || 'Unknown error',
       code: err.name !== 'Error' ? err.name : undefined,
