@@ -5,7 +5,6 @@ import {
   Calendar,
   Clock,
   Gift,
-  Info,
   Megaphone,
   Plus,
   Send,
@@ -115,22 +114,19 @@ export default function UpcomingCampaignsCard({
 }: UpcomingCampaignsCardProps) {
   return (
     <section className="dashboard-card flex h-full flex-col rounded-2xl border border-neutral-100/90 bg-white p-[var(--card-pad)] shadow-xs sm:rounded-3xl">
-      {/* Card Header: Icon + Title + Info + View All Link */}
-      <div className="flex shrink-0 flex-col items-start gap-2 @[340px]:flex-row @[340px]:items-center @[340px]:justify-between @[340px]:gap-3">
-        <div className="flex min-w-0 items-center gap-2 @[340px]:gap-2.5">
+      {/* Title + View all stay on one row (container queries never fired — no @container on this card). */}
+      <div className="flex shrink-0 items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2.5">
           <IconWell accent="emerald" size="sm">
             <Megaphone className="h-4 w-4 stroke-[2.2]" />
           </IconWell>
-          <div className="flex min-w-0 items-center gap-3">
-            <h2 className="truncate text-[14px] font-bold tracking-tight text-neutral-900 @[340px]:text-[15px] @[520px]:text-[16px]">
-              Upcoming campaigns
-            </h2>
-            <Info className="hidden h-4 w-4 shrink-0 stroke-[1.8] text-neutral-400 @[340px]:block" />
-          </div>
+          <h2 className="truncate text-[14px] font-bold tracking-tight text-neutral-900 sm:text-[15px]">
+            Upcoming campaigns
+          </h2>
         </div>
         <Link
           to="/campaigns"
-          className="inline-flex shrink-0 items-center gap-1 text-[12px] font-bold text-emerald-600 transition-colors hover:text-emerald-700 hover:underline @[340px]:text-[12.5px]"
+          className="inline-flex shrink-0 items-center gap-1 text-[12px] font-bold text-emerald-600 transition-colors hover:text-emerald-700 hover:underline"
         >
           View all
           <ArrowRight className="h-3.5 w-3.5" />
