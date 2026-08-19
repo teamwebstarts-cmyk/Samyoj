@@ -65,6 +65,7 @@ export default function FlowBuilderPage() {
   const [contactTag, setContactTag] = useState('');
   const [segmentTags, setSegmentTags] = useState('');
   const [campaignId, setCampaignId] = useState('');
+  const [withinHours, setWithinHours] = useState(168);
   const [startNodeId, setStartNodeId] = useState('');
   const [flowStatus, setFlowStatus] = useState<FlowStatus>(isNew ? 'DRAFT' : 'PUBLISHED');
   const [priority, setPriority] = useState(50);

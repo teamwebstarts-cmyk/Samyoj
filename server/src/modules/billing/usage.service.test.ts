@@ -168,9 +168,11 @@ describe('getOrgUsage', () => {
     await getOrgUsage('org-42');
 
     expect(chargeFindMany).toHaveBeenCalledTimes(1);
-    const chargeArgs = chargeFindMany.mock.calls[0][0];
-    expect(chargeArgs.where.organizationId).toBe('org-42');
-    expect(chargeArgs.where.periodStart.gte).toBeInstanceOf(Date);
+    const chargeArgs = chargeFindMany.mock.calls[0]?.[0] as {
+      where?: { organizationId?: string; periodStart?: { gte?: Date } };
+    };
+    expect(chargeArgs?.where?.organizationId).toBe('org-42');
+    expect(chargeArgs?.where?.periodStart?.gte).toBeInstanceOf(Date);
 
     expect(numberFindMany).toHaveBeenCalledWith({
       where: { organizationId: 'org-42', isActive: true },
