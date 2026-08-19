@@ -29,8 +29,10 @@ start_process() {
     ok "$name is already running (PID $(cat "$RUN_DIR/$name.pid"))"
     return
   fi
-  nohup bash -c "cd \"$ROOT_DIR\" && exec $command" >"$LOG_DIR/$name.log" 2>&1 &
-  echo "$!" > "$RUN_DIR/$name.pid"
+  nohup setsid bash -c "cd \"$ROOT_DIR\" && exec $command" >"$LOG_DIR/$name.log" 2>&1 &
+  local pid=$!
+  echo "$pid" > "$RUN_DIR/$name.pid"
+  disown "$pid" 2>/dev/null || true
 }
 
 stop_tree() {

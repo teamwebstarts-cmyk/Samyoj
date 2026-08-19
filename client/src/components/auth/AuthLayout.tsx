@@ -1,7 +1,8 @@
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { Lock } from 'lucide-react';
 import AuthBrand from './AuthBrand';
-import AuthShowcase, { AuthCtaCard } from './AuthShowcase';
+import AuthShowcase, { AUTH_LOGIN_HERO_SRC, AuthCtaCard } from './AuthShowcase';
+import './auth-page.css';
 
 interface AuthLayoutProps {
   title: string;
@@ -18,25 +19,40 @@ export default function AuthLayout({
   children,
   compact = false,
 }: AuthLayoutProps) {
+  useEffect(() => {
+    const root = document.documentElement;
+    const wasDark = root.classList.contains('dark');
+    const prevScheme = root.style.colorScheme;
+    root.classList.remove('dark');
+    root.style.colorScheme = 'light';
+    return () => {
+      root.classList.toggle('dark', wasDark);
+      root.style.colorScheme = prevScheme;
+    };
+  }, []);
+
   return (
-    <div className="relative flex h-[100dvh] w-full flex-col overflow-hidden bg-[#F4F7F5] lg:flex-row">
-      <aside className="relative z-10 hidden h-full min-h-0 min-w-0 w-[57%] shrink-0 overflow-hidden lg:block xl:w-[58%]">
+    <div
+      className="auth-page relative flex h-[100dvh] w-[100vw] max-w-[100vw] flex-col overflow-hidden bg-[#F4F7F5] lg:flex-row"
+      style={{ colorScheme: 'light' }}
+    >
+      <div className="auth-mobile-hero lg:hidden" aria-hidden>
+        <img src={AUTH_LOGIN_HERO_SRC} alt="" width={1536} height={1024} decoding="async" />
+      </div>
+
+      <aside className="relative z-10 hidden h-full min-h-0 min-w-0 w-[60%] shrink-0 overflow-hidden lg:block">
         <AuthShowcase />
       </aside>
 
-      <section className="relative z-30 flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden bg-white lg:w-[43%] xl:w-[42%]">
-        <div className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto overscroll-contain px-6 py-6 sm:px-10 lg:px-11 xl:px-14">
-          <div className="mb-6 flex w-full max-w-[400px] shrink-0 lg:hidden">
+      <section className="auth-form-panel relative z-30 flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden bg-white lg:w-[40%]">
+        <div className="auth-form-scroll flex min-h-0 flex-1 flex-col items-center overflow-y-auto overscroll-contain">
+          <div className="auth-mobile-logo mb-6 flex w-full max-w-[400px] shrink-0 lg:hidden">
             <AuthBrand compact />
           </div>
 
-          <div className="my-auto w-full max-w-[400px] py-2">
+          <div className="auth-form-stack my-auto w-full max-w-[400px] py-2">
             <header className={compact ? 'mb-5' : 'mb-7'}>
-              <h1
-                className={`font-extrabold leading-[1.15] tracking-[-0.035em] text-[#12182A] ${
-                  compact ? 'text-[1.55rem] sm:text-[1.7rem]' : 'text-[1.75rem] sm:text-[1.95rem]'
-                }`}
-              >
+              <h1 className="auth-form-title font-extrabold leading-[1.15] tracking-[-0.035em] text-[#12182A]">
                 {title}
               </h1>
               <p
@@ -50,7 +66,7 @@ export default function AuthLayout({
 
             {children}
 
-            <div className="mt-6 lg:hidden">
+            <div className="mt-4 lg:hidden">
               <AuthCtaCard />
             </div>
 

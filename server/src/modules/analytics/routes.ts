@@ -128,10 +128,16 @@ router.get(
           status: true,
           conversationId: true,
         },
+        take: 50000,
       }),
       prisma.contact.findMany({
-        where: { organizationId: orgId, ...contactsForNumberFilter(numberId) },
+        where: {
+          organizationId: orgId,
+          ...contactsForNumberFilter(numberId),
+          ...(currentUntil ? { createdAt: { lte: currentUntil } } : {}),
+        },
         select: { createdAt: true },
+        take: 50000,
       }),
     ]);
 

@@ -121,7 +121,13 @@ export function useInboxSender({
       const lockComposer = options?.lockComposer !== false;
       if (lockComposer) setSending(true);
       try {
-        const { data } = await inboxApi.send(selected.id, payload);
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Network request timed out. Please retry.')), 20000)
+        );
+        const { data } = await Promise.race([
+          inboxApi.send(selected.id, payload),
+          timeoutPromise,
+        ]);
         const sent = data.data as Message;
         if (optimisticId) {
           setMessages((prev) => {
@@ -368,7 +374,13 @@ export function useInboxSender({
   const handleRetryMessage = async (message: Message) => {
     if (retryingId) return;
     if (message.id.startsWith('optimistic-')) {
-      noticeSendError(selected?.id, 'Original send failed — try composing again');
+      if (message.content && !message.content.startsWith('[')) {
+        setDraft(message.content);
+        setMessages((prev) => prev.filter((m) => m.id !== message.id));
+        noticeSendError(selected?.id, 'Message restored to composer. Click Send to retry.');
+      } else {
+        noticeSendError(selected?.id, 'Original send failed — please re-attach or compose again');
+      }
       return;
     }
     setRetryingId(message.id);

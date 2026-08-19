@@ -214,12 +214,19 @@ router.post(
       throw new AppError(400, 'Invalid webhook signature');
     }
 
-    const event = JSON.parse(rawBody) as {
+    let event: {
       event: string;
       payload?: {
         payment?: { entity?: { order_id?: string; id?: string; notes?: Record<string, string> } };
       };
     };
+    try {
+      event = (typeof req.body === 'object' && req.body !== null && 'event' in req.body)
+        ? (req.body as typeof event)
+        : (JSON.parse(rawBody) as typeof event);
+    } catch {
+      throw new AppError(400, 'Invalid webhook payload JSON');
+    }
 
     if (event.event === 'payment.captured') {
       const payment = event.payload?.payment?.entity;

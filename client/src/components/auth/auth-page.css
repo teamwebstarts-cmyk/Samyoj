@@ -8,13 +8,13 @@
   --auth-green: #0a8954;
   --auth-ink: #12182a;
   --auth-mint: #f4f7f5;
-  --auth-pad: clamp(2.25rem, 3.6vh, 3.25rem);
+  --auth-pad: clamp(2.85rem, 4.6vh, 4.15rem);
   --auth-pad-x: var(--auth-pad);
   --auth-pad-y: var(--auth-pad);
-  --auth-gap: clamp(1.15rem, 2.8vh, 2.75rem);
-  --auth-headline: clamp(1.65rem, 4.4vh + 0.55vw, 3.05rem);
-  --auth-sub: clamp(0.8125rem, 1.35vh + 0.2vw, 1rem);
-  --auth-icon: clamp(2.25rem, 4.4vh, 3rem);
+  --auth-gap: clamp(1.75rem, 3.8vh, 3.35rem);
+  --auth-headline: clamp(1.85rem, 4.8vh + 0.6vw, 3.35rem);
+  --auth-sub: clamp(0.9rem, 1.5vh + 0.22vw, 1.125rem);
+  --auth-icon: clamp(2.5rem, 4.8vh, 3.25rem);
   --auth-brand-mark: clamp(2.85rem, 5.2vh, 3.85rem);
   --auth-brand-name: clamp(1.35rem, 2.5vh, 1.85rem);
   --auth-form-title: clamp(1.4rem, 2.2vh + 0.25vw, 1.95rem);
@@ -29,7 +29,7 @@
   background: var(--auth-mint);
 }
 
-/* Full-pane photo layer — contain so the person + desk stay whole */
+/* Photo sits bottom-right of the left pane; copy stays on the left. */
 .auth-showcase-hero {
   position: absolute;
   inset: 0;
@@ -38,32 +38,17 @@
   overflow: hidden;
 }
 
-.auth-showcase-hero img {
-  position: absolute;
-  right: -14%;
-  bottom: 0;
-  height: min(96%, 92vh);
-  width: auto;
-  max-width: none;
-  object-fit: contain;
-  object-position: bottom right;
-}
-
+.auth-showcase-hero img,
 .auth-showcase-hero-photo {
-  /* Bottom fade into the mint floor — left/top wash is the overlay */
-  -webkit-mask-image: linear-gradient(to top, transparent 0%, black 12%, black 100%);
-  mask-image: linear-gradient(to top, transparent 0%, black 12%, black 100%);
-}
-
-.auth-showcase-hero::after {
-  content: '';
   position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(90deg, var(--auth-mint) 0%, rgb(244 247 245 / 0.55) 22%, transparent 36%),
-    linear-gradient(180deg, var(--auth-mint) 0%, transparent 12%),
-    linear-gradient(0deg, rgb(244 247 245 / 0.35) 0%, transparent 12%);
-  pointer-events: none;
+  right: -12%;
+  bottom: 0;
+  left: auto;
+  width: auto;
+  height: 64%;
+  max-width: 92%;
+  object-fit: contain;
+  object-position: left bottom;
 }
 
 .auth-showcase-content {
@@ -83,18 +68,11 @@
   min-width: 0;
 }
 
-.auth-showcase-brand img {
-  height: var(--auth-brand-mark) !important;
-  width: var(--auth-brand-mark) !important;
-}
-
-.auth-showcase-brand .auth-brand-name {
-  font-size: var(--auth-brand-name);
-}
-
-.auth-showcase-brand .auth-brand-tag {
-  font-size: clamp(0.6rem, 1.25vh, 0.75rem);
-  margin-top: clamp(0.25rem, 0.5vh, 0.4rem);
+.auth-showcase-brand .auth-brand-logo {
+  height: clamp(3.35rem, 6.2vh, 3.75rem);
+  width: auto;
+  max-width: 18.25rem;
+  mix-blend-mode: screen;
 }
 
 .auth-showcase-copy {
@@ -111,8 +89,8 @@
 }
 
 .auth-showcase-copy p {
-  margin-top: clamp(0.45rem, 1.1vh, 1rem);
-  max-width: 26.5rem;
+  margin-top: clamp(0.85rem, 1.8vh, 1.35rem);
+  max-width: 28rem;
   font-size: var(--auth-sub);
   line-height: 1.55;
 }
@@ -122,11 +100,11 @@
   display: flex;
   min-height: 0;
   width: 100%;
-  max-width: 17.75rem;
+  max-width: 20.5rem;
   flex: 1 1 auto;
   flex-direction: column;
   justify-content: flex-start;
-  gap: clamp(1.35rem, 2.8vh, 2rem);
+  gap: clamp(1.85rem, 3.8vh, 2.75rem);
   overflow: hidden;
 }
 
@@ -148,15 +126,15 @@
 }
 
 .auth-feature-title {
-  font-size: clamp(0.88rem, 1.55vh + 0.15vw, 1.1rem);
-  line-height: 1.2;
+  font-size: clamp(0.98rem, 1.7vh + 0.18vw, 1.2rem);
+  line-height: 1.25;
 }
 
 .auth-feature-desc {
-  margin-top: 0.2rem;
-  max-width: 15.5rem;
-  font-size: clamp(0.7rem, 1.15vh + 0.1vw, 0.84375rem);
-  line-height: 1.35;
+  margin-top: 0.4rem;
+  max-width: 18rem;
+  font-size: clamp(0.78rem, 1.3vh + 0.12vw, 0.95rem);
+  line-height: 1.4;
 }
 
 .auth-showcase-cta {
@@ -196,11 +174,6 @@
 }
 
 @media (max-height: 760px) {
-  .auth-showcase-hero img {
-    right: -16%;
-    height: min(92%, 88vh);
-  }
-
   .auth-feature-desc {
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -210,11 +183,6 @@
 }
 
 @media (max-height: 680px) {
-  .auth-showcase-hero img {
-    right: -18%;
-    height: min(88%, 84vh);
-  }
-
   .auth-showcase-features {
     gap: 1rem;
   }
@@ -224,9 +192,80 @@
   }
 }
 
-@media (min-width: 1440px) {
-  .auth-showcase-hero img {
-    right: -12%;
-    height: min(98%, 94vh);
+/* Mobile / tablet: keep desktop split unchanged; card over a blurred hero. */
+@media (max-width: 1023px) {
+  .auth-page {
+    overflow: auto;
+    background: #dfe8e3;
+  }
+
+  .auth-mobile-hero {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+  }
+
+  .auth-mobile-hero img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: 72% 40%;
+    filter: blur(28px) saturate(1.08);
+    transform: scale(1.18);
+  }
+
+  .auth-mobile-hero::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgb(244 247 245 / 0.48);
+  }
+
+  .auth-form-panel {
+    background: transparent;
+  }
+
+  .auth-form-scroll {
+    padding: 1.15rem 1rem 1.35rem;
+    justify-content: center;
+  }
+
+  .auth-mobile-logo {
+    margin-bottom: 0.85rem;
+    justify-content: center;
+  }
+
+  .auth-mobile-logo .auth-brand-logo {
+    height: 2.65rem;
+    max-width: 13.5rem;
+    mix-blend-mode: screen;
+  }
+
+  .auth-form-stack {
+    max-width: min(100%, 21.5rem);
+    margin-block: 0.5rem;
+    border-radius: 1.35rem;
+    background: rgb(255 255 255 / 0.94);
+    padding: 1.15rem 1.1rem 1rem;
+    box-shadow: 0 18px 48px rgb(15 23 42 / 0.14);
+    backdrop-filter: blur(10px);
+  }
+
+  .auth-form-stack header {
+    margin-bottom: 0.85rem;
+  }
+
+  .auth-form-title {
+    font-size: 1.35rem;
+  }
+
+  .auth-form-stack .auth-cta-card {
+    gap: 0.55rem;
+    padding: 0.7rem 0.8rem;
+  }
+
+  .auth-form-stack > p:last-child {
+    margin-top: 0.85rem;
   }
 }

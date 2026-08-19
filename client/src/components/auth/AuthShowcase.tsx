@@ -2,15 +2,15 @@ import type { ComponentType } from 'react';
 import { Lightbulb } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import AuthBrand from './AuthBrand';
-import { IconCampaignChart, IconSparkle, IconTeam, IconWhatsAppW } from './AuthIcons';
+import { IconBolt, IconCampaignChart, IconSparkle, IconTeam } from './AuthIcons';
 
-export const AUTH_LOGIN_HERO_SRC = '/brand/auth-login-hero.png';
+export const AUTH_LOGIN_HERO_SRC = '/brand/loiginn.png';
 
 type AuthIcon = ComponentType<{ className?: string }>;
 
 const FEATURES: { icon: AuthIcon; title: string; description: string }[] = [
   {
-    icon: IconWhatsAppW,
+    icon: IconBolt,
     title: 'Automate Smartly',
     description: 'Save time with intelligent automation.',
   },
@@ -34,7 +34,7 @@ export function AuthCtaCard() {
 
   if (isRegister) {
     return (
-      <div className="flex max-w-[min(100%,380px)] items-center gap-3.5 rounded-[18px] bg-white px-4 py-3.5 shadow-[0_8px_28px_rgba(15,23,42,0.07)]">
+      <div className="auth-cta-card flex max-w-[min(100%,380px)] items-center gap-3.5 rounded-[18px] bg-white px-4 py-3.5 shadow-[0_8px_28px_rgba(15,23,42,0.07)]">
         <span className={ICON_WELL}>
           <Lightbulb className="h-[22px] w-[22px]" strokeWidth={1.75} />
         </span>
@@ -55,7 +55,7 @@ export function AuthCtaCard() {
   }
 
   return (
-    <div className="flex max-w-[min(100%,380px)] items-center gap-3.5 rounded-[18px] bg-white px-4 py-3.5 shadow-[0_8px_28px_rgba(15,23,42,0.07)]">
+    <div className="auth-cta-card flex max-w-[min(100%,380px)] items-center gap-3.5 rounded-[18px] bg-white px-4 py-3.5 shadow-[0_8px_28px_rgba(15,23,42,0.07)]">
       <span className={ICON_WELL}>
         <Lightbulb className="h-[22px] w-[22px]" strokeWidth={1.75} />
       </span>
@@ -75,39 +75,27 @@ export function AuthCtaCard() {
   );
 }
 
-const HERO_BOTTOM_MASK = 'linear-gradient(to top, transparent 0%, black 12%, black 100%)';
-
 export default function AuthShowcase() {
   return (
-    <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden font-sans antialiased">
-      <div
-        className="pointer-events-none absolute bottom-[11%] right-[-12%] z-[1] h-auto w-[min(108%,860px)] max-h-[min(86%,860px)] select-none"
-        aria-hidden
-      >
+    <div className="auth-showcase font-sans antialiased">
+      <div className="auth-showcase-hero" aria-hidden>
         <img
           src={AUTH_LOGIN_HERO_SRC}
           alt=""
-          className="absolute inset-x-0 bottom-0 h-auto w-full object-contain object-bottom object-right opacity-25 blur-[6px]"
+          className="auth-showcase-hero-photo"
+          width={1536}
+          height={1024}
+          decoding="async"
         />
-        <img
-          src={AUTH_LOGIN_HERO_SRC}
-          alt=""
-          className="relative h-auto w-full object-contain object-bottom object-right"
-          style={{
-            WebkitMaskImage: HERO_BOTTOM_MASK,
-            maskImage: HERO_BOTTOM_MASK,
-          }}
-        />
-        <div className="absolute inset-x-0 bottom-0 h-[12%] bg-gradient-to-t from-[#F4F7F5]/70 to-transparent" />
       </div>
 
-      <div className="relative z-10 flex min-h-0 flex-1 flex-col px-10 pb-10 pt-12 xl:px-14 xl:pb-12 xl:pt-14">
-        <div className="shrink-0">
+      <div className="auth-showcase-content">
+        <div className="auth-showcase-brand">
           <AuthBrand />
         </div>
 
-        <div className="mt-10 max-w-[min(100%,34.5rem)] xl:mt-12">
-          <h2 className="text-[clamp(2.05rem,3vw,3.1rem)] font-extrabold leading-[1.12] tracking-[-0.045em] text-[#12182A]">
+        <div className="auth-showcase-copy">
+          <h2 className="font-extrabold tracking-[-0.045em] text-[#12182A]">
             Simplify Conversations.
             <br />
             <span className="whitespace-nowrap text-[#0A8954]">
@@ -115,22 +103,22 @@ export default function AuthShowcase() {
               <IconSparkle className="mb-[0.14em] ml-2 inline-block h-[0.36em] w-[0.36em] align-baseline text-[#0A8954]" />
             </span>
           </h2>
-          <p className="mt-4 max-w-[26.5rem] text-[clamp(14.5px,1.15vw,16px)] font-medium leading-[1.55] tracking-[-0.012em] text-slate-500">
+          <p className="font-medium tracking-[-0.012em] text-slate-500">
             A simple platform to automate WhatsApp, manage chats and grow your business.
           </p>
         </div>
 
-        <ul className="mt-10 w-full max-w-[min(100%,18.5rem)] space-y-6 xl:mt-12 xl:space-y-7">
+        <ul className="auth-showcase-features">
           {FEATURES.map(({ icon: Icon, title, description }) => (
-            <li key={title} className="flex items-start gap-3.5">
-              <span className={`mt-0.5 ${ICON_WELL}`}>
-                <Icon className="h-6 w-6" />
+            <li key={title} className="flex min-h-0 items-start gap-3">
+              <span className="auth-feature-icon mt-0.5">
+                <Icon />
               </span>
               <div className="min-w-0 pt-0.5">
-                <p className="text-[17.5px] font-black leading-tight tracking-[-0.024em] text-[#0B1220]">
+                <p className="auth-feature-title font-black tracking-[-0.024em] text-[#0B1220]">
                   {title}
                 </p>
-                <p className="mt-1 max-w-[15.5rem] text-[13.5px] font-semibold leading-snug tracking-[-0.01em] text-slate-600">
+                <p className="auth-feature-desc font-semibold tracking-[-0.01em] text-slate-600">
                   {description}
                 </p>
               </div>
@@ -138,7 +126,7 @@ export default function AuthShowcase() {
           ))}
         </ul>
 
-        <div className="relative z-20 mt-auto max-w-[min(100%,400px)] pt-10">
+        <div className="auth-showcase-cta">
           <AuthCtaCard />
         </div>
       </div>

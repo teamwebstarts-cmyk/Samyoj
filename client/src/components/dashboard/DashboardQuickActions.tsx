@@ -179,7 +179,7 @@ export default function DashboardQuickActions() {
         </h2>
       </div>
 
-      <div className="mt-2 grid flex-1 auto-rows-fr grid-cols-1 gap-2 @[260px]:grid-cols-2 @[520px]:grid-cols-3 sm:gap-2.5">
+      <div className="mt-2 grid flex-1 auto-rows-fr grid-cols-1 gap-2 md:grid-cols-3 sm:gap-2.5">
         {PRIMARY_ACTIONS.map((item) => (
           <ActionTile
             key={item.to}

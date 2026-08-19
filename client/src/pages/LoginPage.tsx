@@ -19,7 +19,6 @@ export default function LoginPage() {
   const [totpCode, setTotpCode] = useState('');
   const [requires2FA, setRequires2FA] = useState(false);
   const [needsVerify, setNeedsVerify] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState(false);
   const { login, refreshSession } = useAuth();
@@ -150,16 +149,7 @@ export default function LoginPage() {
                 required
               />
 
-              <div className="flex items-center justify-between gap-3 pt-0.5">
-                <label className="flex cursor-pointer items-center gap-2.5">
-                  <input
-                    type="checkbox"
-                    checked={rememberMe}
-                    onChange={(e) => setRememberMe(e.target.checked)}
-                    className="h-[17px] w-[17px] rounded-[5px] border-slate-300 text-[#0A8954] focus:ring-[#0A8954]/25"
-                  />
-                  <span className="text-[13px] font-medium text-slate-600">Remember me</span>
-                </label>
+              <div className="pt-0.5">
                 <Link
                   to="/forgot-password"
                   className="text-[13px] font-semibold text-[#0A8954] transition hover:text-[#087A4A]"
