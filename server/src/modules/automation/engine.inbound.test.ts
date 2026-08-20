@@ -56,7 +56,7 @@ import { logAutomationRun } from '../ai/chatbot.service';
 import { hasEnabledBots } from '../ai/bot.service';
 import { handleInboundFlow } from '../flows/engine';
 import { FLOW_LOCK_BUSY } from '../flows/inbound-wait';
-import { handleInboundAutomations } from './engine';
+import { handleInboundAutomations, isUnremovableQueueState, queueAiBotProcessing } from './engine';
 
 const conversationMock = vi.mocked(prisma.conversation.findFirst);
 const contactMock = vi.mocked(prisma.contact.findFirst);
@@ -194,6 +194,44 @@ describe('handleInboundAutomations', () => {
       'ai-chatbot',
       expect.objectContaining({ conversationId: 'conv-1' }),
       expect.objectContaining({ jobId: 'ai-bot-conv-1' })
+    );
+  });
+});
+
+describe('queueAiBotProcessing debounce', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    conversationMock.mockResolvedValue({
+      botActive: true,
+      assignedAgentId: null,
+      status: 'OPEN',
+    } as never);
+    botsEnabled.mockResolvedValue(true);
+    automationQueueAdd.mockResolvedValue({} as never);
+  });
+  it('treats an active BullMQ job as unremovable', () => {
+    expect(isUnremovableQueueState('active')).toBe(true);
+    expect(isUnremovableQueueState('delayed')).toBe(false);
+  });
+
+  it('queues a follow-up instead of throwing when the debounce job is locked', async () => {
+    conversationMock.mockResolvedValue({
+      botActive: true,
+      assignedAgentId: null,
+      status: 'OPEN',
+    } as never);
+    botsEnabled.mockResolvedValue(true);
+    vi.mocked(automationQueue.getJob).mockResolvedValue({
+      getState: vi.fn().mockResolvedValue('active'),
+      remove: vi.fn(),
+    } as never);
+
+    await queueAiBotProcessing(payload);
+
+    expect(automationQueueAdd).toHaveBeenCalledWith(
+      'ai-chatbot',
+      expect.objectContaining({ messageId: 'msg-1' }),
+      expect.objectContaining({ jobId: 'ai-bot-conv-1-msg-1' })
     );
   });
 });

@@ -17,6 +17,11 @@ import { emitProductEvent } from '../platform/events';
 const log = createModuleLogger('automation-engine');
 const AI_BOT_DEBOUNCE_MS = 1500;
 
+/** BullMQ refuses Job.remove() while the worker holds the lock. */
+export function isUnremovableQueueState(state: string): boolean {
+  return state === 'active' || state === 'waiting-children';
+}
+
 export interface AutomationContext {
   message?: string;
   isNewConversation?: boolean;
@@ -247,18 +252,58 @@ export async function queueAiBotProcessing(payload: InboundAutomationPayload): P
   }
 
   const jobId = `ai-bot-${payload.conversationId}`;
+  const jobOpts = {
+    delay: AI_BOT_DEBOUNCE_MS,
+    attempts: 3,
+    backoff: { type: 'exponential' as const, delay: 2000 },
+    removeOnComplete: 200,
+    removeOnFail: 500,
+  };
+
   const existing = await automationQueue.getJob(jobId);
   if (existing) {
-    await existing.remove();
+    let state = 'unknown';
+    try {
+      state = await existing.getState();
+    } catch {
+      /* job may already be gone */
+    }
+
+    if (isUnremovableQueueState(state)) {
+      await automationQueue.add('ai-chatbot', payload, {
+        ...jobOpts,
+        jobId: `${jobId}-${payload.messageId}`,
+        delay: Math.max(AI_BOT_DEBOUNCE_MS, 2500),
+      });
+      log.info('AI chatbot already running — queued follow-up', {
+        conversationId: payload.conversationId,
+        messageId: payload.messageId,
+      });
+      return;
+    }
+
+    try {
+      await existing.remove();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      log.warn('Could not replace AI chatbot debounce job', {
+        conversationId: payload.conversationId,
+        error: message,
+      });
+      await automationQueue.add('ai-chatbot', payload, {
+        ...jobOpts,
+        jobId: `${jobId}-${payload.messageId}`,
+      });
+      log.info('Queued AI chatbot follow-up after locked debounce', {
+        conversationId: payload.conversationId,
+      });
+      return;
+    }
   }
 
   await automationQueue.add('ai-chatbot', payload, {
     jobId,
-    delay: AI_BOT_DEBOUNCE_MS,
-    attempts: 3,
-    backoff: { type: 'exponential', delay: 2000 },
-    removeOnComplete: 200,
-    removeOnFail: 500,
+    ...jobOpts,
   });
 
   log.info('Queued AI chatbot job (debounced)', { conversationId: payload.conversationId });
