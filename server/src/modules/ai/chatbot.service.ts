@@ -1,4 +1,4 @@
-import { loadBusinessContext, formatBusinessExtrasBlock } from './business-context';
+import { loadBusinessContext, formatBusinessExtrasBlock, businessExtrasFromPreview, type PreviewBusinessContext } from './business-context';
 import prisma from '../../config/database';
 import { Prisma } from '@prisma/client';
 import type { AiBot, Contact } from '@prisma/client';
@@ -11,7 +11,6 @@ import {
   listBrainTopics,
   isConversationRecallQuestion,
   matchPreviewKnowledge,
-  mergeKnowledgeMatches,
   type KnowledgeMatch,
 } from './knowledge.service';
 import { checkRateLimit } from './rate-limit.service';
@@ -93,6 +92,8 @@ export interface GenerateBotReplyInput {
   instructionsOverride?: string;
   /** Unsaved Train rows (FAQ drafts + form) for Try-it before save. */
   previewKnowledge?: Array<{ title: string; content: string }>;
+  /** About-tab business fields only — skips org profile / brand kit in testMode. */
+  previewBusiness?: PreviewBusinessContext;
   /** Number-scoped usage when there is no real conversation (Try-it). */
   whatsappNumberId?: string;
   /** Try-it before create — skip DB bot lookup. */
@@ -174,7 +175,8 @@ async function buildConversationMessages(
   testMode = false,
   organizationId?: string,
   liveVoiceTurns?: Array<{ role: 'user' | 'assistant'; content: string }>,
-  brainTopics?: string[]
+  brainTopics?: string[],
+  previewBusiness?: PreviewBusinessContext
 ): Promise<import('./chat-completion.service').ChatMessage[]> {
   const contextLimit = channel === 'voice' ? MAX_CONTEXT_VOICE : MAX_CONTEXT;
   const skipWhatsAppHistory = channel === 'voice' && (liveVoiceTurns?.length ?? 0) > 0;
@@ -188,7 +190,11 @@ async function buildConversationMessages(
 
   let businessName = 'our business';
   let businessContextBlock = '';
-  if (organizationId) {
+  if (testMode && previewBusiness) {
+    const extras = businessExtrasFromPreview(previewBusiness);
+    if (extras.companyName) businessName = extras.companyName;
+    businessContextBlock = formatBusinessExtrasBlock(extras);
+  } else if (organizationId) {
     const extras = await loadBusinessContext(organizationId, {
       website: bot.businessWebsite,
       notes: bot.businessNotes,
@@ -219,7 +225,7 @@ async function buildConversationMessages(
       : undefined,
     `When they ask what help you can provide, what the business does, what you offer, which services, customer-service details, or for details about the company, answer from the trained FAQ and business instructions — list services/policies when the FAQ has them. Do not reply with only the identity line. If those do not contain the facts, say once that you do not have those details. Stay with the customer and ask a specific follow-up. Do not keep offering WhatsApp or the team unless they asked for a person. Do not invent an industry from the brand name (e.g. do not say you only help "students" unless the FAQ says so).`,
     contact?.name ? `Customer name: ${contact.name}. If they ask whether you know them, say yes and use this name.` : undefined,
-    contact?.notes?.trim()
+    testMode ? undefined : contact?.notes?.trim()
       ? `What we already know about this customer: ${contact.notes.trim().slice(0, 400)}`
       : undefined,
     knowledgeBlock
@@ -333,12 +339,21 @@ export async function generateBotReply(
   let bot: AiBot | null = null;
   if (input.previewBot && input.testMode) {
     bot = input.previewBot;
-  } else if (input.botId) {
+  } else if (input.botId && !input.testMode) {
     bot = await prisma.aiBot.findFirst({
       where: {
         id: input.botId,
         organizationId: input.organizationId,
-        ...(input.testMode ? {} : { enabled: true }),
+        enabled: true,
+        channel: isVoice ? 'CALL' : 'CHAT',
+      },
+    });
+  } else if (input.botId && input.testMode) {
+    // Legacy test path — prefer previewBot from callers.
+    bot = await prisma.aiBot.findFirst({
+      where: {
+        id: input.botId,
+        organizationId: input.organizationId,
         channel: isVoice ? 'CALL' : 'CHAT',
       },
     });
@@ -383,7 +398,11 @@ export async function generateBotReply(
   }
 
   const rateLimit = bot.rateLimitPerMin || SAFE_RATE_LIMIT_PER_MIN;
-  const rate = await checkRateLimit(`ai-bot:${input.organizationId}:${bot.id}`, rateLimit);
+  const rateKey =
+    input.testMode && bot.id === 'preview'
+      ? `ai-bot:${input.organizationId}:preview`
+      : `ai-bot:${input.organizationId}:${bot.id}`;
+  const rate = await checkRateLimit(rateKey, rateLimit);
   if (!rate.allowed) {
     return {
       reply: FALLBACK_MESSAGE,
@@ -411,35 +430,36 @@ export async function generateBotReply(
 
   const numberId = conversation?.whatsappNumberId || input.whatsappNumberId;
 
-  const knowledgeMatches = isVoice
-    ? await resolveVoiceKnowledge(
-        bot.id,
-        sanitizedMessage,
-        input.organizationId,
-        input.liveVoiceTurns,
-        numberId
-      )
-    : await searchKnowledgeBase(
-        bot.id,
-        sanitizedMessage,
-        5,
-        input.organizationId,
-        numberId
-      );
+  const draftPreview = input.testMode && input.previewKnowledge !== undefined;
 
-  const mergedKnowledgeMatches =
-    input.testMode && input.previewKnowledge?.length
-      ? mergeKnowledgeMatches(
-          matchPreviewKnowledge(input.previewKnowledge, sanitizedMessage, 5),
-          knowledgeMatches,
-          5
+  const knowledgeMatches = draftPreview
+    ? matchPreviewKnowledge(input.previewKnowledge ?? [], sanitizedMessage, 5)
+    : isVoice
+      ? await resolveVoiceKnowledge(
+          bot.id,
+          sanitizedMessage,
+          input.organizationId,
+          input.liveVoiceTurns,
+          numberId
         )
-      : knowledgeMatches;
+      : await searchKnowledgeBase(
+          bot.id,
+          sanitizedMessage,
+          5,
+          input.organizationId,
+          numberId
+        );
 
-  const brainTopics =
-    isVoice &&
-    mergedKnowledgeMatches.length === 0 &&
-    !isConversationRecallQuestion(sanitizedMessage)
+  const mergedKnowledgeMatches = knowledgeMatches;
+
+  const brainTopics = draftPreview
+    ? (input.previewKnowledge ?? [])
+        .map((item) => item.title.trim())
+        .filter(Boolean)
+        .slice(0, 8)
+    : isVoice &&
+        mergedKnowledgeMatches.length === 0 &&
+        !isConversationRecallQuestion(sanitizedMessage)
       ? await listBrainTopics(bot.id)
       : [];
 
@@ -478,7 +498,8 @@ export async function generateBotReply(
       input.testMode,
       input.organizationId,
       input.liveVoiceTurns,
-      brainTopics
+      brainTopics,
+      input.previewBusiness
     );
 
     const completion = await createChatCompletion({

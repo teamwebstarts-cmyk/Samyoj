@@ -1,7 +1,23 @@
 import type { AiBot } from '@prisma/client';
+import { z } from 'zod';
 import { DEFAULT_INSTRUCTIONS, hardcodedBotLlmDefaults } from '../ai/bot.service';
 
 export type AiBotTestTurn = { role: 'user' | 'assistant'; content: string };
+
+export const previewKnowledgeSchema = z
+  .array(
+    z.object({
+      title: z.string().min(1).max(200),
+      content: z.string().min(1).max(2000),
+    })
+  )
+  .max(12);
+
+export const previewBusinessSchema = z.object({
+  businessName: z.string().max(120).optional(),
+  businessWebsite: z.string().max(300).nullable().optional(),
+  businessNotes: z.string().max(2000).nullable().optional(),
+});
 
 /** Chat Try-it uses the chat model; calling Try-it must use the voice brain. */
 export function resolveAiBotTestChannel(
@@ -37,6 +53,8 @@ export function buildPreviewAiBot(
     instructions?: string;
     offerHandoff?: boolean;
     businessHoursOnly?: boolean;
+    businessWebsite?: string | null;
+    businessNotes?: string | null;
   }
 ): AiBot {
   const llm = hardcodedBotLlmDefaults();
@@ -60,8 +78,8 @@ export function buildPreviewAiBot(
     voiceGreeting: null,
     voiceSpeaker: null,
     voiceLanguage: null,
-    businessWebsite: null,
-    businessNotes: null,
+    businessWebsite: opts.businessWebsite?.trim() || null,
+    businessNotes: opts.businessNotes?.trim() || null,
     createdAt: new Date(),
     updatedAt: new Date(),
   };

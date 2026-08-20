@@ -33,6 +33,8 @@ import { DEFAULT_CALLING_SETTINGS } from '../calling/calling-settings.types';
 import {
   buildPreviewAiBot,
   publicKnowledgeHasEmbedding,
+  previewBusinessSchema,
+  previewKnowledgeSchema,
   resolveAiBotTestChannel,
   sanitizeAiBotTestHistory,
 } from './test-preview';
@@ -331,15 +333,8 @@ router.post(
           )
           .max(12)
           .optional(),
-        previewKnowledge: z
-          .array(
-            z.object({
-              title: z.string().min(1).max(200),
-              content: z.string().min(1).max(2000),
-            })
-          )
-          .max(12)
-          .optional(),
+        previewKnowledge: previewKnowledgeSchema.optional(),
+        previewBusiness: previewBusinessSchema.optional(),
       })
       .parse(req.body);
 
@@ -351,7 +346,11 @@ router.post(
       numberId = undefined;
     }
 
-    const previewBot = buildPreviewAiBot(orgId, body.channel, body);
+    const previewBot = buildPreviewAiBot(orgId, body.channel, {
+      ...body,
+      businessWebsite: body.previewBusiness?.businessWebsite,
+      businessNotes: body.previewBusiness?.businessNotes,
+    });
     const result = await generateBotReply({
       organizationId: orgId,
       conversationId: 'preview-test',
@@ -359,7 +358,8 @@ router.post(
       testMode: true,
       channel: resolveAiBotTestChannel(body.channel),
       instructionsOverride: body.instructions?.trim() || undefined,
-      previewKnowledge: body.previewKnowledge,
+      previewKnowledge: body.previewKnowledge ?? [],
+      previewBusiness: body.previewBusiness,
       liveVoiceTurns: sanitizeAiBotTestHistory(body.history),
       whatsappNumberId: numberId,
       previewBot,
@@ -879,7 +879,7 @@ router.post(
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const botId = paramId(req);
-    const { message, instructions, history, previewKnowledge } = z
+    const { message, instructions, history, previewKnowledge, previewBusiness } = z
       .object({
         message: z.string().min(1).max(2000),
         instructions: z.string().max(8000).optional(),
@@ -892,15 +892,8 @@ router.post(
           )
           .max(12)
           .optional(),
-        previewKnowledge: z
-          .array(
-            z.object({
-              title: z.string().min(1).max(200),
-              content: z.string().min(1).max(2000),
-            })
-          )
-          .max(12)
-          .optional(),
+        previewKnowledge: previewKnowledgeSchema.optional(),
+        previewBusiness: previewBusinessSchema.optional(),
       })
       .parse(req.body);
 
@@ -915,17 +908,28 @@ router.post(
       numberId = undefined;
     }
 
+    const channel = bot.channel === 'CALL' ? 'CALL' : 'CHAT';
+    const previewBot = buildPreviewAiBot(orgId, channel, {
+      name: bot.name,
+      instructions: instructions?.trim() || bot.instructions,
+      offerHandoff: bot.offerHandoff,
+      businessHoursOnly: bot.businessHoursOnly,
+      businessWebsite: previewBusiness?.businessWebsite ?? bot.businessWebsite,
+      businessNotes: previewBusiness?.businessNotes ?? bot.businessNotes,
+    });
+
     const result = await generateBotReply({
       organizationId: orgId,
       conversationId: `test-${botId}`,
       inboundMessage: message,
-      botId,
       testMode: true,
       channel: resolveAiBotTestChannel(bot.channel),
       instructionsOverride: instructions?.trim() || undefined,
-      previewKnowledge: previewKnowledge,
+      previewKnowledge: previewKnowledge ?? [],
+      previewBusiness,
       liveVoiceTurns: sanitizeAiBotTestHistory(history),
       whatsappNumberId: numberId,
+      previewBot,
     });
 
     sendSuccess(res, result);

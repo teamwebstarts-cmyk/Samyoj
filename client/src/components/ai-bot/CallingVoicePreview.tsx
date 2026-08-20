@@ -14,13 +14,17 @@ type PreviewPhase = 'idle' | 'connecting' | 'listening' | 'thinking' | 'speaking
 type TranscriptLine = { role: 'user' | 'assistant' | 'partial'; text: string };
 
 export interface CallingVoicePreviewProps {
-  botId?: string;
   name: string;
   instructions: string;
   voiceGreeting?: string;
   voiceSpeaker?: string;
   voiceLanguage?: string;
   previewKnowledge?: Array<{ title: string; content: string }>;
+  previewBusiness: {
+    businessName?: string;
+    businessWebsite?: string | null;
+    businessNotes?: string | null;
+  };
   disabled?: boolean;
 }
 
@@ -51,14 +55,19 @@ function int16ToBase64(samples: Int16Array): string {
   return btoa(binary);
 }
 
+function previewLanguageCode(lang?: string): string | undefined {
+  if (!lang || lang === 'unknown' || lang === 'auto') return 'hi-IN';
+  return lang;
+}
+
 export default function CallingVoicePreview({
-  botId,
   name,
   instructions,
   voiceGreeting,
   voiceSpeaker,
   voiceLanguage,
-  previewKnowledge,
+  previewKnowledge = [],
+  previewBusiness,
   disabled = false,
 }: CallingVoicePreviewProps) {
   const [phase, setPhase] = useState<PreviewPhase>('idle');
@@ -223,13 +232,13 @@ export default function CallingVoicePreview({
       });
 
       socket.emit('calling-preview:start', {
-        botId,
         name: name.trim(),
         instructions: instructions.trim(),
         voiceGreeting: voiceGreeting?.trim() || null,
         voiceSpeaker: voiceSpeaker || null,
-        voiceLanguage: voiceLanguage || null,
+        voiceLanguage: previewLanguageCode(voiceLanguage) || null,
         previewKnowledge,
+        previewBusiness,
         whatsappNumberId: getActiveWhatsappNumberId() || undefined,
       });
     } catch {
@@ -261,7 +270,7 @@ export default function CallingVoicePreview({
         <div className="min-w-0">
           <p className="text-[13px] font-bold text-theme-fg">Talk live</p>
           <p className="mt-0.5 text-[11px] font-medium text-theme-muted">
-            Real voice test — same Sarvam STT, brain, and voice as live WhatsApp calls.
+            Real voice test — uses only this About + Train setup (not saved bot or workspace profile).
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">

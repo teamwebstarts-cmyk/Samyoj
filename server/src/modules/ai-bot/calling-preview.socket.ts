@@ -2,25 +2,18 @@ import type { Server, Socket } from 'socket.io';
 import { z } from 'zod';
 import { createModuleLogger } from '../../utils/logger';
 import { CallingPreviewSession } from './calling-preview.session';
+import { previewBusinessSchema, previewKnowledgeSchema } from './test-preview';
 
 const log = createModuleLogger('calling-preview-socket');
 
 const startSchema = z.object({
-  botId: z.string().uuid().optional(),
   name: z.string().min(1).max(80),
   instructions: z.string().min(8).max(8000),
   voiceGreeting: z.string().max(500).nullable().optional(),
   voiceSpeaker: z.string().max(40).nullable().optional(),
   voiceLanguage: z.string().max(20).nullable().optional(),
-  previewKnowledge: z
-    .array(
-      z.object({
-        title: z.string().min(1).max(200),
-        content: z.string().min(1).max(2000),
-      })
-    )
-    .max(12)
-    .optional(),
+  previewKnowledge: previewKnowledgeSchema.default([]),
+  previewBusiness: previewBusinessSchema.default({}),
   whatsappNumberId: z.string().uuid().optional(),
 });
 
@@ -55,13 +48,13 @@ export function registerCallingPreviewHandlers(_io: Server, socket: Socket): voi
       const session = new CallingPreviewSession(
         {
           organizationId: orgId,
-          botId: body.botId,
           name: body.name,
           instructions: body.instructions,
           voiceGreeting: body.voiceGreeting,
           voiceSpeaker: body.voiceSpeaker,
           voiceLanguage: body.voiceLanguage,
           previewKnowledge: body.previewKnowledge,
+          previewBusiness: body.previewBusiness,
           whatsappNumberId: body.whatsappNumberId,
         },
         {

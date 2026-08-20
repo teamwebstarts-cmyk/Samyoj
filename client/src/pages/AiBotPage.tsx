@@ -695,6 +695,12 @@ export default function AiBotPage() {
     });
   };
 
+  const buildPreviewBusiness = () => ({
+    businessName: businessName.trim() || undefined,
+    businessWebsite: businessWebsite.trim() || null,
+    businessNotes: composeBusinessNotesForSave(businessName, businessNotes) || null,
+  });
+
   const collectPreviewKnowledge = (): Array<{ title: string; content: string }> => {
     const items: Array<{ title: string; content: string }> = [];
     const push = (title: string, content: string) => {
@@ -729,12 +735,14 @@ export default function AiBotPage() {
     setTestResult(null);
     try {
       const previewKnowledge = collectPreviewKnowledge();
+      const previewBusiness = buildPreviewBusiness();
       const { data } = editing
         ? await aiBotApi.test(editing.id, {
             message,
             instructions: testInstructions,
             history: testTurns,
             previewKnowledge,
+            previewBusiness,
           })
         : await aiBotApi.previewTest({
             message,
@@ -745,6 +753,7 @@ export default function AiBotPage() {
             businessHoursOnly: formChannel === 'CHAT' ? businessHoursOnly : undefined,
             history: testTurns,
             previewKnowledge,
+            previewBusiness,
           });
       const result = data.data as BotTestResult;
       setTestResult(result);
@@ -773,10 +782,12 @@ export default function AiBotPage() {
     setVoicePreviewLoading(true);
     setPreviewingSpeaker(speaker);
     try {
+      const previewText = (voiceGreeting || DEFAULT_GREETING).trim();
+      const previewLang = voiceLanguage === 'unknown' ? 'hi-IN' : voiceLanguage;
       const { data } = await callingApi.previewVoice({
-        text: voiceGreeting || DEFAULT_GREETING,
+        text: previewText,
         speaker,
-        language: voiceLanguage,
+        language: previewLang,
       });
       const payload = data.data as { audioBase64: string; contentType: string };
       const audio = playBase64Audio(
@@ -1543,13 +1554,13 @@ export default function AiBotPage() {
             <div className="space-y-4">
               {formChannel === 'CALL' ? (
                 <CallingVoicePreview
-                  botId={editing?.id}
                   name={name}
                   instructions={buildTestInstructions()}
                   voiceGreeting={voiceGreeting}
                   voiceSpeaker={voiceSpeaker}
                   voiceLanguage={voiceLanguage}
                   previewKnowledge={collectPreviewKnowledge()}
+                  previewBusiness={buildPreviewBusiness()}
                   disabled={testLoading}
                 />
               ) : null}
@@ -1558,7 +1569,7 @@ export default function AiBotPage() {
                 <p className="text-[13px] font-bold text-theme-fg">Live preview</p>
                 <p className="mt-0.5 text-[11px] font-medium text-theme-muted">
                   {formChannel === 'CALL'
-                    ? 'Talk live with your mic, or type below to test replies as text.'
+                    ? 'Talk live or type below — preview uses only About + Train in this editor.'
                     : 'Uses your About and Train tabs now — saving is automatic.'}
                 </p>
               </div>

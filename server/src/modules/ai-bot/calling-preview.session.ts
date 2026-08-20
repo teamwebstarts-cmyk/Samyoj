@@ -5,6 +5,7 @@ import { isAiConfiguredForOrg } from '../ai/org-ai.service';
 import { isSarvamSttConfigured, SarvamStreamTranscriber } from '../calling/sarvam.stt';
 import { isSarvamTtsConfigured, previewSpeechSarvam } from '../calling/sarvam.tts';
 import { createModuleLogger } from '../../utils/logger';
+import type { PreviewBusinessContext } from '../ai/business-context';
 import {
   buildPreviewAiBot,
   sanitizeAiBotTestHistory,
@@ -17,13 +18,13 @@ export type CallingPreviewPhase = 'listening' | 'thinking' | 'speaking';
 
 export interface CallingPreviewStartConfig {
   organizationId: string;
-  botId?: string;
   name: string;
   instructions: string;
   voiceGreeting?: string | null;
   voiceSpeaker?: string | null;
   voiceLanguage?: string | null;
-  previewKnowledge?: Array<{ title: string; content: string }>;
+  previewKnowledge: Array<{ title: string; content: string }>;
+  previewBusiness: PreviewBusinessContext;
   whatsappNumberId?: string;
 }
 
@@ -42,13 +43,21 @@ export class CallingPreviewSession {
   private readonly history: AiBotTestTurn[] = [];
   private processing = false;
   private closed = false;
-  private bot: AiBot | null = null;
+  private readonly bot: AiBot;
   private readonly timeout: ReturnType<typeof setTimeout>;
 
   constructor(
     private readonly config: CallingPreviewStartConfig,
     private readonly events: CallingPreviewEvents
   ) {
+    this.bot = buildPreviewAiBot(config.organizationId, 'CALL', {
+      name: config.name,
+      instructions: config.instructions,
+      offerHandoff: true,
+      businessHoursOnly: false,
+      businessWebsite: config.previewBusiness.businessWebsite,
+      businessNotes: config.previewBusiness.businessNotes,
+    });
     this.timeout = setTimeout(() => {
       this.events.onError('Live preview timed out. Start again to keep testing.');
       void this.close();
@@ -67,7 +76,6 @@ export class CallingPreviewSession {
 
   async start(): Promise<void> {
     await CallingPreviewSession.assertReady(this.config.organizationId);
-    this.bot = await this.resolveBot();
     this.transcriber = new SarvamStreamTranscriber({
       onPartial: (text) => {
         if (!this.closed && !this.processing) this.events.onPartial(text);
@@ -91,7 +99,14 @@ export class CallingPreviewSession {
 
     const greeting = this.config.voiceGreeting?.trim();
     if (greeting) {
-      await this.speakAssistant(greeting, { addToHistory: false });
+      try {
+        await this.speakAssistant(greeting, { addToHistory: false });
+      } catch (err) {
+        log.warn('Calling preview greeting TTS failed', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+        // Still allow live talk even if greeting playback fails.
+      }
     }
 
     this.events.onState('listening');
@@ -115,30 +130,9 @@ export class CallingPreviewSession {
     this.transcriber = null;
   }
 
-  private async resolveBot(): Promise<AiBot> {
-    if (this.config.botId) {
-      const bot = await prisma.aiBot.findFirst({
-        where: {
-          id: this.config.botId,
-          organizationId: this.config.organizationId,
-          channel: 'CALL',
-        },
-      });
-      if (!bot) throw new Error('Calling bot not found.');
-      return { ...bot, instructions: this.config.instructions.trim() || bot.instructions };
-    }
-
-    return buildPreviewAiBot(this.config.organizationId, 'CALL', {
-      name: this.config.name,
-      instructions: this.config.instructions,
-      offerHandoff: true,
-      businessHoursOnly: false,
-    });
-  }
-
   private async handleCallerText(raw: string): Promise<void> {
     const text = raw.trim();
-    if (!text || this.processing || this.closed || !this.bot) return;
+    if (!text || this.processing || this.closed) return;
 
     this.processing = true;
     this.events.onUserFinal(text);
@@ -147,16 +141,16 @@ export class CallingPreviewSession {
     try {
       const result = await generateBotReply({
         organizationId: this.config.organizationId,
-        conversationId: `calling-preview-${this.config.botId || 'draft'}`,
+        conversationId: 'calling-preview-draft',
         inboundMessage: text,
         testMode: true,
         channel: 'voice',
         instructionsOverride: this.config.instructions.trim() || undefined,
         previewKnowledge: this.config.previewKnowledge,
+        previewBusiness: this.config.previewBusiness,
         liveVoiceTurns: sanitizeAiBotTestHistory(this.history),
         whatsappNumberId: this.config.whatsappNumberId,
-        previewBot: this.config.botId ? undefined : this.bot,
-        botId: this.config.botId,
+        previewBot: this.bot,
       });
 
       const reply =

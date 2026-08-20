@@ -460,6 +460,11 @@ export const aiBotApi = {
     businessHoursOnly?: boolean;
     history?: Array<{ role: 'user' | 'assistant'; content: string }>;
     previewKnowledge?: Array<{ title: string; content: string }>;
+    previewBusiness?: {
+      businessName?: string;
+      businessWebsite?: string | null;
+      businessNotes?: string | null;
+    };
   }) => api.post('/ai-bot/preview/test', data),
   previewGenerateTraining: (data: {
     intent: string;
@@ -485,6 +490,11 @@ export const aiBotApi = {
       instructions?: string;
       history?: Array<{ role: 'user' | 'assistant'; content: string }>;
       previewKnowledge?: Array<{ title: string; content: string }>;
+      previewBusiness?: {
+        businessName?: string;
+        businessWebsite?: string | null;
+        businessNotes?: string | null;
+      };
     }
   ) => api.post(`/ai-bot/${botId}/test`, data),
   applyToAllChats: (botId: string) => api.post(`/ai-bot/${botId}/apply-all`),

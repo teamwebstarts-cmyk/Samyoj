@@ -135,39 +135,50 @@ export async function previewSpeechSarvam(
   options?: { speaker?: string; language?: string }
 ): Promise<{ audioBase64: string; contentType: string; speaker: string; language: string }> {
   const apiKey = config.sarvam.apiKey;
-  if (!apiKey) throw new Error('Sarvam API key not configured');
+  if (!apiKey) throw new Error('Sarvam voice is not configured on this server yet.');
 
-  const speaker = options?.speaker || config.sarvam.ttsSpeaker || 'shubh';
+  const trimmed = text.trim().slice(0, 500);
+  if (!trimmed) throw new Error('Add greeting text before previewing voice.');
+
+  const speaker = (options?.speaker || config.sarvam.ttsSpeaker || 'shubh').trim().toLowerCase();
   const language = normalizeSarvamLanguageCode(options?.language);
   const model = config.sarvam.ttsModel || 'bulbul:v3';
 
   const res = await fetch(SARVAM_TTS_REST, {
     method: 'POST',
+    signal: AbortSignal.timeout(30_000),
     headers: {
       'api-subscription-key': apiKey,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      text: text.slice(0, 500),
+      text: trimmed,
       language_code: language,
       model,
       speaker,
     }),
   });
 
-  const data = (await res.json()) as {
+  let data: {
     audios?: string[];
     request_id?: string;
     error?: { message?: string };
   };
+  try {
+    data = (await res.json()) as typeof data;
+  } catch {
+    throw new Error(
+      res.ok ? 'Sarvam voice preview returned invalid audio.' : `Sarvam voice preview failed (${res.status})`
+    );
+  }
 
   if (!res.ok) {
-    log.warn('Sarvam TTS preview failed', { status: res.status, error: data.error });
-    throw new Error(data.error?.message || `Sarvam TTS preview failed (${res.status})`);
+    log.warn('Sarvam TTS preview failed', { status: res.status, error: data.error, speaker, language });
+    throw new Error(data.error?.message || `Sarvam voice preview failed (${res.status})`);
   }
 
   const audioBase64 = (data.audios || []).join('');
-  if (!audioBase64) throw new Error('Sarvam TTS preview returned empty audio');
+  if (!audioBase64) throw new Error('Sarvam voice preview returned empty audio');
 
   return {
     audioBase64,

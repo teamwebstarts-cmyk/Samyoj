@@ -348,7 +348,7 @@ router.post(
     }
     const body = z
       .object({
-        text: z.string().min(1).max(500),
+        text: z.string().transform((s) => s.trim()).pipe(z.string().min(1).max(500)),
         speaker: z.string().max(40).optional(),
         language: z.string().max(20).optional(),
       })
@@ -360,8 +360,8 @@ router.post(
         req.user!.organizationId!,
         req.headers['x-whatsapp-number-id']
       );
-    } catch (err) {
-      if (err instanceof AppError && err.statusCode === 409) throw err;
+    } catch {
+      // Preview does not require an active number — usage is org-scoped only.
       numberId = undefined;
     }
 

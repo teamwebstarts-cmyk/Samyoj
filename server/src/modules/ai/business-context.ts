@@ -11,6 +11,29 @@ export type BusinessExtras = {
   industry?: string;
 };
 
+/** Try-it / live preview — only fields from the slide-over About tab. */
+export type PreviewBusinessContext = {
+  businessName?: string;
+  businessWebsite?: string | null;
+  businessNotes?: string | null;
+};
+
+export function businessExtrasFromPreview(preview: PreviewBusinessContext): BusinessExtras {
+  const fromField = preview.businessName?.trim() || '';
+  const notesRaw = preview.businessNotes?.trim() || '';
+  const match = notesRaw.match(/^Business:\s*(.+?)(?:\n|$)/);
+  const companyName = fromField || match?.[1]?.trim() || '';
+  const notes = match ? notesRaw.slice(match[0].length).trim() : notesRaw;
+
+  return {
+    companyName,
+    website: preview.businessWebsite?.trim() || '',
+    notes,
+    audience: '',
+    valueProps: [],
+  };
+}
+
 export function formatBusinessExtrasBlock(extras: BusinessExtras): string {
   const lines: string[] = [];
   if (extras.companyName) lines.push(`Business name: ${extras.companyName}`);
