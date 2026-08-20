@@ -1,7 +1,7 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 
 type AppButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
-type AppButtonSize = 'sm' | 'md' | 'lg' | 'xl';
+type AppButtonSize = 'sm' | 'md' | 'lg' | 'xl' | 'header';
 
 interface AppButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: AppButtonVariant;
@@ -21,6 +21,7 @@ const variants: Record<AppButtonVariant, string> = {
 };
 
 const sizes: Record<AppButtonSize, string> = {
+  header: 'h-8 min-h-8 gap-1.5 rounded-[10px] px-2.5 text-xs md:h-9 md:min-h-9',
   sm: 'h-9 min-h-[44px] gap-1.5 rounded-xl px-3 text-xs',
   md: 'h-10 min-h-[44px] gap-2 rounded-xl px-4 text-[13px]',
   lg: 'h-11 min-h-[44px] gap-2 rounded-xl px-5 text-sm',

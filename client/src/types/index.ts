@@ -858,6 +858,36 @@ export interface BusinessHours {
   timezone?: string;
 }
 
+export interface OrgBusinessProfile {
+  description?: string;
+  industry?: string;
+  website?: string;
+  email?: string;
+  address?: string;
+  aiNotes?: string;
+  profileCompleteAt?: string;
+}
+
+export interface BusinessIndustryOption {
+  value: string;
+  label: string;
+}
+
+export interface OrgProfilePayload {
+  companyName: string;
+  profile: OrgBusinessProfile;
+  audience: string | null;
+  valueProps: string[];
+  defaultLocale: string;
+  timezone: string;
+  completeness: {
+    requiredFilled: number;
+    requiredTotal: number;
+    percent: number;
+    isComplete: boolean;
+  };
+}
+
 export interface Campaign {
   id: string;
   name: string;

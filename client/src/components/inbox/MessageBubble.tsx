@@ -18,7 +18,7 @@ import {
   SmilePlus,
   Trash2,
 } from 'lucide-react';
-import { formatMessageTime, getAutomationDividerLabel, messageHasMedia } from './inboxUtils';
+import { formatMessageTime, fillTemplateMessageContent, getAutomationDividerLabel, messageHasMedia } from './inboxUtils';
 import { computeFixedPopoverPosition, type PopoverCoords } from './inboxPopoverPosition';
 import {
   AuthenticatedAudio,
@@ -388,6 +388,10 @@ export default function MessageBubble({
   const enterClass =
     animateEnter && !reducedMotion ? 'inbox-bubble-enter motion-reduce:animate-none' : '';
   const type = message.type?.toUpperCase();
+  const templateBody =
+    type === 'TEMPLATE'
+      ? fillTemplateMessageContent(message.content, message.metadata?.templateParams)
+      : message.content;
   const isSticker = Boolean(message.metadata?.isSticker);
   const isCallEvent = Boolean(message.metadata?.isCallEvent) || message.content === '[call]';
   const isCallSummary = Boolean(message.metadata?.isCallSummary);
@@ -500,7 +504,7 @@ export default function MessageBubble({
 
   const copyText = async () => {
     try {
-      await navigator.clipboard.writeText(message.content || '');
+      await navigator.clipboard.writeText(templateBody || '');
     } catch {
       /* ignore */
     }
@@ -1017,7 +1021,7 @@ export default function MessageBubble({
             ) : null}
             {quoteStrip}
             <CollapsibleMessageText endMeta={metaRow()}>
-              {highlightText(message.content, highlightQuery)}
+              {highlightText(templateBody, highlightQuery)}
             </CollapsibleMessageText>
           </div>
           {reactionChips}

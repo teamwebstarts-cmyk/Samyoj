@@ -12,7 +12,7 @@ import AppButton from '../components/ui/AppButton';
 import TemplateTable, { type TemplateTableRow } from '../components/templates/TemplateTable';
 import TemplateCard from '../components/templates/TemplateCard';
 import EmptyState from '../components/ui/EmptyState';
-import PageHero from '../components/ui/PageHero';
+import TemplateHero from '../components/templates/TemplateHero';
 import TemplatesListSkeleton from '../components/templates/TemplatesListSkeleton';
 import PageShell from '../components/ui/PageShell';
 import ResponsiveDataView from '../components/ui/ResponsiveDataView';
@@ -380,17 +380,12 @@ export default function TemplatesPage() {
   return (
     <PageShell>
       <div className="min-w-0 space-y-2 sm:space-y-4 lg:space-y-5">
-        <PageHero
-          variant="clean"
-          badge="Templates"
-          badgeIcon={FileText}
-          title="Message templates"
-          description="Create and manage approved templates for campaigns and outreach."
+        <TemplateHero
           stats={[
-            { label: 'Total', value: showListSkeleton ? '—' : stats.total },
-            { label: 'Approved', value: showListSkeleton ? '—' : stats.approved, tone: 'text-emerald-600' },
-            { label: 'Pending', value: showListSkeleton ? '—' : stats.pending, tone: 'text-amber-600' },
-            { label: 'Rejected', value: showListSkeleton ? '—' : stats.rejected, tone: 'text-red-600' },
+            { label: 'Total', value: showListSkeleton ? '—' : stats.total, hint: 'All templates', tone: 'total' },
+            { label: 'Approved', value: showListSkeleton ? '—' : stats.approved, hint: 'Meta verified', tone: 'approved' },
+            { label: 'Pending', value: showListSkeleton ? '—' : stats.pending, hint: 'In review', tone: 'pending' },
+            { label: 'Rejected', value: showListSkeleton ? '—' : stats.rejected, hint: 'Needs edit', tone: 'rejected' },
           ]}
         />
 

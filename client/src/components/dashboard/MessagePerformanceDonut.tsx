@@ -171,23 +171,32 @@ export default function MessagePerformanceDonut({
       {hovered && chartRect ? (
         <PerformanceHoverTip active={hovered} chartRect={chartRect} />
       ) : null}
-      <div className="flex shrink-0 items-center gap-2">
-        <IconWell accent="emerald" size="sm" round={false}>
-          <LineChart className="h-3.5 w-3.5 stroke-[2.2]" />
-        </IconWell>
-        <div className="flex min-w-0 items-center gap-1.5">
-          <h2 className="truncate text-[14px] font-bold tracking-tight text-neutral-900 @[360px]:text-[15px]">
-            Message performance
-          </h2>
-          {!isEmpty && (
-            <span
-              className="hidden text-neutral-400 @[360px]:inline"
-              title="Each color is the latest status: Delivered (unread), Read, Failed, Pending."
-            >
-              <Info className="h-3.5 w-3.5 shrink-0 stroke-[1.8]" aria-hidden />
-            </span>
-          )}
+      <div className="flex shrink-0 items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <IconWell accent="emerald" size="sm" round={false}>
+            <LineChart className="h-3.5 w-3.5 stroke-[2.2]" />
+          </IconWell>
+          <div className="flex min-w-0 items-center gap-1.5">
+            <h2 className="truncate text-[14px] font-bold tracking-tight text-neutral-900 @[360px]:text-[15px]">
+              Message performance
+            </h2>
+            {!isEmpty && (
+              <span
+                className="hidden text-neutral-400 @[360px]:inline"
+                title="Each color is the latest status: Delivered (unread), Read, Failed, Pending."
+              >
+                <Info className="h-3.5 w-3.5 shrink-0 stroke-[1.8]" aria-hidden />
+              </span>
+            )}
+          </div>
         </div>
+        <Link
+          to="/reports"
+          className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-[12px] font-bold text-emerald-600 transition-colors hover:text-emerald-700 hover:underline"
+        >
+          View full report
+          <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
       </div>
 
       {isEmpty ? (
@@ -257,16 +266,6 @@ export default function MessagePerformanceDonut({
           </div>
         </div>
       )}
-
-      <div className="mt-auto pt-2.5">
-        <Link
-          to="/reports"
-          className="inline-flex items-center gap-1 text-[12px] font-bold text-emerald-600 transition-colors hover:text-emerald-700 hover:underline"
-        >
-          View full report
-          <ArrowRight className="h-3.5 w-3.5" />
-        </Link>
-      </div>
     </section>
   );
 }

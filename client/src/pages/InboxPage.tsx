@@ -911,12 +911,7 @@ export default function InboxPage() {
                 />
               </div>
             ) : (
-              <ChatPlaceholder
-                onNewChat={() => setNewChatOpen(true)}
-                onFocusSearch={() => searchInputRef.current?.focus()}
-                onOpenShortcuts={() => setShortcutsOpen(true)}
-                liveConnected={socketState.status === 'connected'}
-              />
+              <ChatPlaceholder />
             )}
           </div>
         </div>

@@ -7,15 +7,13 @@ import logger from '../../utils/logger';
 import { phoneFieldSchema } from '../../utils/phone';
 import {
   MetaWhatsAppService,
-  getTemplateDisplayText,
   isWithin24HourWindow,
 } from '../whatsapp/meta.service';
 import { getOrgWhatsappContext } from '../whatsapp/context';
 import { getCachedMessageTemplate } from '../templates/cache';
 import { resolveActiveWhatsappNumber, conversationFilter, scopedConversationWhere, scopedConversationParent, ticketsForNumberFilter } from '../whatsapp/active-number';
 import { deliverOutboundMessage, type DeliverMessageType } from '../messages/send.service';
-import { mergeTemplateParams } from '../campaigns/template-params';
-import { applyTemplateParamsToPreview } from '../campaigns/template-params';
+import { mergeTemplateParams, applyTemplateParamsToPreview, pickHydratedTemplateContent } from '../campaigns/template-params';
 import { assertApprovedCampaignTemplate } from '../campaigns/template-validation';
 import { validateInteractive, type InteractiveMessageOptions } from '../messages/interactive';
 import { getMessageMediaBuffer, type MessageMediaMetadata } from '../media/download.service';
@@ -841,18 +839,11 @@ router.get(
             meta?.templateName ||
             (msg.content.startsWith('Template: ') ? msg.content.slice('Template: '.length).trim() : '');
           const template = name ? templateByName.get(name) : undefined;
-          const display = name ? getTemplateDisplayText(template, name) : undefined;
           const rendered = name
-            ? applyTemplateParamsToPreview(
-                template,
-                meta?.templateParams,
-                name
-              )
+            ? applyTemplateParamsToPreview(template, meta?.templateParams, name)
             : '';
-          if (rendered && rendered !== msg.content && !/\{\{\d+\}\}/.test(rendered)) {
-            return { ...msg, content: rendered };
-          }
-          return display && display !== msg.content ? { ...msg, content: display } : msg;
+          const content = pickHydratedTemplateContent(msg.content, rendered);
+          return content !== msg.content ? { ...msg, content } : msg;
         });
       } catch {
         /* keep stored content if Meta lookup fails */

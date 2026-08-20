@@ -57,6 +57,25 @@ export async function listBots(organizationId: string, channel?: AiBotChannel) {
   });
 }
 
+export async function findBotNameConflict(
+  organizationId: string,
+  name: string,
+  channel: AiBotChannel,
+  excludeBotId?: string
+) {
+  const trimmed = name.trim();
+  if (!trimmed) return null;
+  return prisma.aiBot.findFirst({
+    where: {
+      organizationId,
+      channel,
+      ...(excludeBotId ? { id: { not: excludeBotId } } : {}),
+      name: { equals: trimmed, mode: 'insensitive' },
+    },
+    select: { id: true, name: true },
+  });
+}
+
 /** Why this bot must stay — Support/system, or the last remaining bot on that channel. */
 export function botDeleteBlockReason(input: {
   isSystem: boolean;

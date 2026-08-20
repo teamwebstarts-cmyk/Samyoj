@@ -223,7 +223,7 @@ export default function ChatHeader({
             type="button"
             onClick={onOpenDetails}
             aria-label="Chat details"
-            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-neutral-600 md:hidden dark:text-neutral-300 ${FOCUS_RING_CLASS}`}
+            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-neutral-600 md:hidden dark:text-neutral-300 ${FOCUS_RING_CLASS}`}
           >
             <PanelRight className="h-[18px] w-[18px]" strokeWidth={2.1} />
           </button>

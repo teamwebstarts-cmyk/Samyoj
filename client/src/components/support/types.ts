@@ -10,5 +10,5 @@ export interface SupportChatMessage {
 export const SUPPORT_WELCOME: SupportChatMessage = {
   id: 'welcome',
   role: 'assistant',
-  content: 'Ask me how to use Samyoj — Connect WhatsApp, Inbox, campaigns, templates, AI bots, and calls.',
+  content: 'Ask how to use Samyoj — WhatsApp, Inbox, campaigns, templates, and AI bots.',
 };

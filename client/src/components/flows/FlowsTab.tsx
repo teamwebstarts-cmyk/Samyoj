@@ -18,15 +18,12 @@ import EmptyState from '../ui/EmptyState';
 import ListToolbar from '../ui/ListToolbar';
 import ListLayoutSkeleton from '../ui/ListLayoutSkeleton';
 import ResponsiveDataView from '../ui/ResponsiveDataView';
-import SectionCard from '../ui/SectionCard';
 import Pagination from '../ui/Pagination';
 import RowActions from '../ui/RowActions';
 import { TableIconButton, TableTextButton } from '../ui/TableActions';
 import FlowCard from './FlowCard';
-import FlowTemplateCard from './FlowTemplateCard';
 import BuildFromScratchButton from './BuildFromScratchButton';
 import FlowTemplatesSlideOver from './FlowTemplatesSlideOver';
-import WhatsAppFormsPromo from './WhatsAppFormsPromo';
 import { DEFAULT_PAGE_SIZE } from '../../constants/pagination';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { useOnActiveNumberChange } from '../../hooks/useOnActiveNumberChange';
@@ -338,30 +335,6 @@ export default function FlowsTab({
                 </div>
               </div>
             )}
-
-            {!hasFilters && templates.length > 0 && (
-              <SectionCard title="Ready-made templates" subtitle="Tap a template to customize messages">
-                <div className="grid auto-rows-fr gap-3 sm:grid-cols-2">
-                  {templates.slice(0, 4).map((template) => (
-                    <FlowTemplateCard
-                      key={template.id}
-                      template={template}
-                      loading={creating === template.id}
-                      onSelect={() => createFromTemplate(template.id)}
-                    />
-                  ))}
-                </div>
-                {templates.length > 4 && (
-                  <AppButton
-                    variant="ghost"
-                    className="mt-3 w-full sm:w-auto"
-                    onClick={() => onTemplatesOpenChange(true)}
-                  >
-                    View all {templates.length} templates
-                  </AppButton>
-                )}
-              </SectionCard>
-            )}
           </div>
         ) : (
           <>
@@ -486,8 +459,6 @@ export default function FlowsTab({
           </>
         )}
       </div>
-
-      <WhatsAppFormsPromo />
 
       <FlowTemplatesSlideOver
         open={templatesOpen}

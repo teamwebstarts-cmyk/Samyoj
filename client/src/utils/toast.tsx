@@ -9,19 +9,19 @@ function isDark() {
 function baseStyle(): CSSProperties {
   const dark = isDark();
   return {
-    borderRadius: '12px',
-    padding: '12px 14px',
-    fontSize: '13px',
-    fontWeight: 500,
-    lineHeight: 1.45,
-    boxShadow: dark ? '0 12px 32px rgba(0, 0, 0, 0.45)' : '0 12px 32px rgba(15, 23, 42, 0.12)',
-    maxWidth: '420px',
-    whiteSpace: 'pre-line',
+    borderRadius: '10px',
+    padding: '7px 12px',
+    fontSize: '12.5px',
+    fontWeight: 600,
+    lineHeight: 1.35,
+    boxShadow: dark ? '0 8px 24px rgba(0, 0, 0, 0.4)' : '0 8px 22px rgba(15, 23, 42, 0.1)',
+    maxWidth: 'min(360px, calc(100vw - 32px))',
+    whiteSpace: 'nowrap',
   };
 }
 
 const sharedOptions: ToastOptions = {
-  duration: 4000,
+  duration: 2800,
 };
 
 function getToastPosition(): ToastOptions['position'] {
@@ -38,16 +38,18 @@ function toastContainerStyle(): CSSProperties {
   };
 }
 
-export function toastSuccess(message: string) {
+export function toastSuccess(message: string, options?: Partial<ToastOptions>) {
   const dark = isDark();
   return toast.success(message, {
     ...sharedOptions,
     position: getToastPosition(),
+    ...options,
     style: {
       ...baseStyle(),
       background: dark ? 'rgba(6, 78, 59, 0.95)' : 'rgba(236, 253, 245, 0.98)',
       color: dark ? '#a7f3d0' : '#065f46',
       border: dark ? '1px solid rgba(16, 185, 129, 0.35)' : '1px solid rgba(167, 243, 208, 0.9)',
+      ...options?.style,
     },
     iconTheme: {
       primary: '#059669',
@@ -61,7 +63,7 @@ export function toastError(message: string, options?: Partial<ToastOptions>) {
   return toast.error(message, {
     ...sharedOptions,
     position: getToastPosition(),
-    duration: 5000,
+    duration: 4500,
     ...options,
     style: {
       ...baseStyle(),
@@ -163,7 +165,7 @@ export function toastValidationErrors(errors: string[]) {
     errors.length === 1
       ? errors[0]
       : `Please fix the following:\n${errors.map((e) => `• ${e}`).join('\n')}`;
-  return toastError(message, { duration: 6000 });
+  return toastError(message, { duration: 6000, style: { whiteSpace: 'pre-line', maxWidth: '420px' } });
 }
 
 export type InboxToastIcon = 'bot' | 'star';
@@ -228,7 +230,7 @@ export function AppToaster() {
   return (
     <Toaster
       position="top-center"
-      gutter={10}
+      gutter={6}
       containerStyle={toastContainerStyle()}
       toastOptions={{
         ...sharedOptions,

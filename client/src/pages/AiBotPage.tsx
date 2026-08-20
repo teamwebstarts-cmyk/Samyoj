@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   BookOpen,
   Bot,
   BotMessageSquare,
+  Building2,
   FlaskConical,
   MessageSquare,
   PauseCircle,
@@ -15,16 +17,19 @@ import {
 } from 'lucide-react';
 import AiBotCard, { AllChatsSwitch } from '../components/ai-bot/AiBotCard';
 import AiBotListEmpty from '../components/ai-bot/AiBotListEmpty';
-import AiBotPickupPanel from '../components/ai-bot/AiBotPickupPanel';
+import AiBotPickupPanel, {
+  type AiBotPickupPanelHandle,
+} from '../components/ai-bot/AiBotPickupPanel';
 import AiBotStatusFilter from '../components/ai-bot/AiBotStatusFilter';
 import { AiBotKnowledgeCell, AiBotStatusCell } from '../components/ai-bot/AiBotListCells';
 import { botChip, getAiBotAvatar } from '../components/ai-bot/aiBotVisuals';
-import AiBotDashboardSummary, {
+import {
   aggregateBotAnalytics,
   type AggregateAnalytics,
 } from '../components/ai-bot/AiBotDashboardSummary';
 import AiBotInsights from '../components/ai-bot/AiBotInsights';
 import AiBotAggregateAnalytics from '../components/ai-bot/AiBotAggregateAnalytics';
+import AiBotHero, { type AiBotHeroStat } from '../components/ai-bot/AiBotHero';
 import AppButton from '../components/ui/AppButton';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import AppInput from '../components/ui/AppInput';
@@ -44,19 +49,47 @@ import {
   DEFAULT_GREETING,
   SARVAM_LANGUAGES,
 } from '../components/calls/CallingSettingsForm';
-import { aiBotApi, callingApi } from '../services/api';
+import { aiBotApi, callingApi, settingsApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 import { getErrorMessage } from '../utils/errors';
 import { toastError, toastSuccess } from '../utils/toast';
-import type { AiBot, BotAnalytics, BotTestResult, KnowledgeBaseItem } from '../types';
+import type { AiBot, BotAnalytics, BotTestResult, KnowledgeBaseItem, OrgProfilePayload } from '../types';
 
 type Channel = 'CHAT' | 'CALL';
 type SlideTab = 'setup' | 'train' | 'try' | 'pickup';
 type FaqDraft = { key: string; title: string; content: string };
 
 const emptyFaq = { title: '', content: '' };
+
+function normalizeBotName(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function isBotNameTaken(
+  name: string,
+  channel: Channel,
+  bots: AiBot[],
+  excludeId?: string
+): boolean {
+  const norm = normalizeBotName(name);
+  if (!norm) return false;
+  return bots.some(
+    (bot) =>
+      bot.id !== excludeId &&
+      (bot.channel ?? 'CHAT') === channel &&
+      normalizeBotName(bot.name) === norm
+  );
+}
+
+function suggestBotName(channel: Channel, bots: AiBot[]): string {
+  const base = channel === 'CALL' ? 'Calling support' : 'Support';
+  if (!isBotNameTaken(base, channel, bots)) return base;
+  let suffix = 2;
+  while (isBotNameTaken(`${base} ${suffix}`, channel, bots)) suffix += 1;
+  return `${base} ${suffix}`;
+}
 
 function isChatBot(bot: Pick<AiBot, 'channel'>): boolean {
   return (bot.channel ?? 'CHAT') === 'CHAT';
@@ -68,8 +101,12 @@ function explainBotTestSkip(reason?: string | null): string {
   switch (reason) {
     case 'ai_not_configured':
       return 'AI is not set up on this server yet.';
+    case 'chat_ai_disabled':
+      return 'Chat AI is off in Settings → AI.';
+    case 'calling_ai_disabled':
+      return 'Calling AI is off for this workspace.';
     case 'no_matching_bot':
-      return 'Could not test this bot. Save it first, then try again.';
+      return 'Could not load this bot. Add a name in About and try again.';
     case 'empty_message':
       return 'Type a customer message first.';
     case 'rate_limited':
@@ -98,47 +135,75 @@ function playBase64Audio(
   return audio;
 }
 
-function ToggleRow({
-  checked,
-  onChange,
-  title,
-  description,
-}: {
-  checked: boolean;
-  onChange: (value: boolean) => void;
-  title: string;
-  description: string;
-}) {
-  return (
-    <label
-      className={`flex cursor-pointer items-start gap-2.5 rounded-xl border p-3 transition ${
-        checked
-          ? 'border-whatsapp-500/30 bg-whatsapp-500/[0.04]'
-          : 'border-theme-border/70 bg-theme-surface hover:border-theme-border-strong'
-      }`}
-    >
-      <div className="min-w-0 flex-1">
-        <p className="text-[13px] font-bold text-theme-fg">{title}</p>
-        <p className="mt-0.5 text-[11px] leading-relaxed text-theme-secondary">{description}</p>
-      </div>
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        className="mt-1 h-4 w-4 shrink-0 rounded border-theme-border text-whatsapp-600 focus:ring-whatsapp-500/25"
-      />
-    </label>
-  );
+function buildWorkspaceProfileNotes(payload: OrgProfilePayload): string {
+  const parts: string[] = [];
+  if (payload.profile?.aiNotes?.trim()) parts.push(payload.profile.aiNotes.trim());
+  if (payload.audience?.trim()) parts.push(`Audience: ${payload.audience.trim()}`);
+  const offers = (payload.valueProps || []).filter((line) => line.trim());
+  if (offers.length) parts.push(`Offers: ${offers.join('; ')}`);
+  if (!parts.length && payload.profile?.description?.trim()) {
+    parts.push(payload.profile.description.trim());
+  }
+  return parts.join('\n');
+}
+
+function composeBusinessNotesForSave(businessName: string, notes: string): string {
+  const cleanName = businessName.trim();
+  const cleanNotes = notes.trim();
+  if (cleanName && cleanNotes) return `Business: ${cleanName}\n${cleanNotes}`;
+  if (cleanName) return `Business: ${cleanName}`;
+  return cleanNotes;
+}
+
+function splitBusinessNotes(stored: string): { businessName: string; notes: string } {
+  const trimmed = (stored || '').trim();
+  const match = trimmed.match(/^Business:\s*(.+?)(?:\n|$)/);
+  if (!match) return { businessName: '', notes: trimmed };
+  return {
+    businessName: match[1].trim(),
+    notes: trimmed.slice(match[0].length).trim(),
+  };
+}
+
+function buildPersonalityIntent(input: {
+  businessName: string;
+  businessWebsite: string;
+  businessNotes: string;
+  personalityTweak: string;
+  channel: Channel;
+  botName: string;
+}): string {
+  const parts: string[] = [];
+  if (input.businessName.trim()) parts.push(`${input.businessName.trim()} support.`);
+  if (input.businessWebsite.trim()) parts.push(`Website: ${input.businessWebsite.trim()}.`);
+  if (input.businessNotes.trim()) parts.push(input.businessNotes.trim());
+  if (input.personalityTweak.trim()) parts.push(input.personalityTweak.trim());
+  if (parts.length === 0 && input.botName.trim()) {
+    parts.push(`${input.botName.trim()} helps customers on this number.`);
+  }
+  const channelTail =
+    input.channel === 'CALL'
+      ? 'Answer phone calls warmly, clearly, and in the customer language.'
+      : 'Reply on WhatsApp — helpful, warm, and accurate.';
+  return `${parts.join(' ')} ${channelTail}`.trim();
 }
 
 export default function AiBotPage() {
   const { organization } = useAuth();
   const { activeNumber, resolved } = useWhatsAppNumber();
   const [bots, setBots] = useState<AiBot[]>([]);
-  const [callingAiEnabled, setCallingAiEnabled] = useState(true);
   const [answeringCallBotId, setAnsweringCallBotId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [channelFilter, setChannelFilter] = useState<Channel>('CHAT');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab')?.toUpperCase();
+  const [channelFilter, setChannelFilter] = useState<Channel>(() =>
+    tabParam === 'CALL' ? 'CALL' : 'CHAT'
+  );
+
+  const handleTabChange = (next: Channel) => {
+    setChannelFilter(next);
+    setSearchParams({ tab: next.toLowerCase() }, { replace: true });
+  };
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [slideOpen, setSlideOpen] = useState(false);
@@ -146,7 +211,6 @@ export default function AiBotPage() {
   const [editing, setEditing] = useState<AiBot | null>(null);
   const [formChannel, setFormChannel] = useState<Channel>('CHAT');
   const [name, setName] = useState('');
-  const [intent, setIntent] = useState('');
   const [instructions, setInstructions] = useState('');
   const [enabled, setEnabled] = useState(true);
   const [isDefault, setIsDefault] = useState(false);
@@ -157,15 +221,20 @@ export default function AiBotPage() {
   const [voiceLanguage, setVoiceLanguage] = useState('hi-IN');
   const [answersCalls, setAnswersCalls] = useState(false);
   const [businessWebsite, setBusinessWebsite] = useState('');
+  const [businessName, setBusinessName] = useState('');
   const [businessNotes, setBusinessNotes] = useState('');
+  const [personalityTweak, setPersonalityTweak] = useState('');
   const [faqs, setFaqs] = useState<KnowledgeBaseItem[]>([]);
   const [faqForm, setFaqForm] = useState(emptyFaq);
   const [editingFaqId, setEditingFaqId] = useState<string | null>(null);
   const [trainIntent, setTrainIntent] = useState('');
   const [faqDrafts, setFaqDrafts] = useState<FaqDraft[]>([]);
   const [saving, setSaving] = useState(false);
+  const pickupRef = useRef<AiBotPickupPanelHandle>(null);
+  const [pickupFooter, setPickupFooter] = useState({ dirty: false, saving: false });
   const [generating, setGenerating] = useState(false);
   const [generatingFaqs, setGeneratingFaqs] = useState(false);
+  const workspaceProfileRef = useRef({ website: '', notes: '', companyName: '' });
   const [previewingSpeaker, setPreviewingSpeaker] = useState<string | null>(null);
   const [testMessage, setTestMessage] = useState('');
   const [testTurns, setTestTurns] = useState<TestTurn[]>([]);
@@ -200,7 +269,6 @@ export default function AiBotPage() {
       )
         return;
       setBots(data.data.bots || []);
-      setCallingAiEnabled(Boolean(data.data.callingAiEnabled ?? true));
       setAnsweringCallBotId(data.data.answeringCallBotId ?? null);
     } catch (err) {
       if (
@@ -223,6 +291,20 @@ export default function AiBotPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    settingsApi
+      .getProfile()
+      .then(({ data }) => {
+        const payload = data.data.profile as OrgProfilePayload;
+        workspaceProfileRef.current = {
+          website: payload.profile?.website?.trim() || '',
+          notes: buildWorkspaceProfileNotes(payload),
+          companyName: payload.companyName?.trim() || '',
+        };
+      })
+      .catch(() => {});
+  }, []);
 
   // Load per-bot analytics after bots load
   useEffect(() => {
@@ -291,11 +373,18 @@ export default function AiBotPage() {
     });
   }, [bots, search, statusFilter, channelFilter, answeringCallBotId]);
 
+  const nameConflict = useMemo(() => {
+    if (!name.trim()) return undefined;
+    if (isBotNameTaken(name, formChannel, bots, editing?.id)) {
+      return 'Another bot already has this name.';
+    }
+    return undefined;
+  }, [name, formChannel, bots, editing?.id]);
+
   const resetForm = (channel: Channel) => {
     setFormChannel(channel);
     setSlideTab('setup');
-    setName(channel === 'CALL' ? 'Calling support' : 'Support');
-    setIntent('');
+    setName(suggestBotName(channel, bots));
     setInstructions('');
     setEnabled(true);
     setIsDefault(channel === 'CHAT' && bots.filter(isChatBot).length === 0);
@@ -305,9 +394,10 @@ export default function AiBotPage() {
     setVoiceSpeaker('shubh');
     setVoiceLanguage('hi-IN');
     setAnswersCalls(channel === 'CALL');
-    const siblingSite = bots.find((bot) => bot.businessWebsite?.trim())?.businessWebsite || '';
-    setBusinessWebsite(siblingSite);
+    setBusinessName('');
+    setBusinessWebsite('');
     setBusinessNotes('');
+    setPersonalityTweak('');
     setFaqs([]);
     setFaqForm(emptyFaq);
     setEditingFaqId(null);
@@ -329,7 +419,6 @@ export default function AiBotPage() {
     setFormChannel(isChatBot(bot) ? 'CHAT' : 'CALL');
     setSlideTab('setup');
     setName(bot.name);
-    setIntent('');
     setInstructions(bot.instructions || '');
     setEnabled(bot.enabled);
     setIsDefault(bot.isDefault);
@@ -339,8 +428,11 @@ export default function AiBotPage() {
     setVoiceSpeaker(bot.voiceSpeaker || 'shubh');
     setVoiceLanguage(bot.voiceLanguage || 'hi-IN');
     setAnswersCalls(Boolean(bot.answersCalls) || bot.id === answeringCallBotId);
+    const split = splitBusinessNotes(bot.businessNotes || '');
+    setBusinessName(split.businessName);
     setBusinessWebsite(bot.businessWebsite || '');
-    setBusinessNotes(bot.businessNotes || '');
+    setBusinessNotes(split.notes);
+    setPersonalityTweak('');
     setTrainIntent('');
     setFaqDrafts([]);
     setTestMessage('');
@@ -352,7 +444,11 @@ export default function AiBotPage() {
       setFaqs(data.data.knowledgeItems || []);
       if (data.data.answersCalls !== undefined) setAnswersCalls(Boolean(data.data.answersCalls));
       if (data.data.businessWebsite !== undefined) setBusinessWebsite(data.data.businessWebsite || '');
-      if (data.data.businessNotes !== undefined) setBusinessNotes(data.data.businessNotes || '');
+      if (data.data.businessNotes !== undefined) {
+        const split = splitBusinessNotes(data.data.businessNotes || '');
+        setBusinessName(split.businessName);
+        setBusinessNotes(split.notes);
+      }
     } catch {
         setFaqs([]);
     }
@@ -363,27 +459,19 @@ export default function AiBotPage() {
     setEditing(null);
   };
 
-  const handleGenerate = async () => {
-    if (intent.trim().length < 8) {
-      toastError('Write a short note about what this bot should do.');
+  const applyWorkspaceProfile = () => {
+    const workspace = workspaceProfileRef.current;
+    const nextName = workspace.companyName || organization?.companyName || '';
+    const nextWebsite = workspace.website;
+    const nextNotes = workspace.notes;
+    if (!nextName && !nextWebsite && !nextNotes) {
+      toastError('Business profile is empty. Add details in Settings first.');
       return;
     }
-    setGenerating(true);
-    try {
-      const { data } = await aiBotApi.generatePersonality({
-        intent: intent.trim(),
-        channel: formChannel,
-        botId: editing?.id,
-        businessWebsite: businessWebsite.trim() || undefined,
-        businessNotes: businessNotes.trim() || undefined,
-      });
-      setInstructions(data.data.instructions || '');
-      toastSuccess('Personality drafted — you can edit it.');
-    } catch (err: unknown) {
-      toastError(getErrorMessage(err, 'Could not write personality'));
-    } finally {
-      setGenerating(false);
-    }
+    setBusinessName(nextName);
+    setBusinessWebsite(nextWebsite);
+    setBusinessNotes(nextNotes);
+    toastSuccess('Filled from business profile.');
   };
 
   const buildPayload = () => ({
@@ -398,15 +486,56 @@ export default function AiBotPage() {
     voiceSpeaker: formChannel === 'CALL' ? voiceSpeaker : null,
     voiceLanguage: formChannel === 'CALL' ? voiceLanguage : null,
     answersCalls: formChannel === 'CALL' ? answersCalls : undefined,
-    callingAiEnabled: formChannel === 'CALL' ? callingAiEnabled : undefined,
     businessWebsite: businessWebsite.trim() || null,
-    businessNotes: businessNotes.trim() || null,
+    businessNotes: composeBusinessNotesForSave(businessName, businessNotes) || null,
   });
+
+  const handleSlideTabChange = (value: SlideTab) => {
+    if (value === slideTab) return;
+    setSlideTab(value);
+  };
+
+  const handleGenerate = async () => {
+    const generatedIntent = buildPersonalityIntent({
+      businessName,
+      businessWebsite,
+      businessNotes,
+      personalityTweak,
+      channel: formChannel,
+      botName: name,
+    });
+    if (generatedIntent.length < 8) {
+      toastError('Add business name, website, or notes first.');
+      return;
+    }
+    setGenerating(true);
+    try {
+      const { data } = await aiBotApi.generatePersonality({
+        intent: generatedIntent,
+        channel: formChannel,
+        botId: editing?.id,
+        businessWebsite: businessWebsite.trim() || undefined,
+        businessNotes: composeBusinessNotesForSave(businessName, businessNotes) || undefined,
+      });
+      setInstructions(data.data.instructions || '');
+      toastSuccess('Personality ready — edit it if you like.');
+    } catch (err: unknown) {
+      toastError(getErrorMessage(err, 'Could not write personality'));
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
       toastError('Give this bot a name.');
+      setSlideTab('setup');
+      return;
+    }
+    if (nameConflict) {
+      toastError(nameConflict);
+      setSlideTab('setup');
       return;
     }
     setSaving(true);
@@ -414,15 +543,17 @@ export default function AiBotPage() {
       if (editing) {
         await aiBotApi.update(editing.id, buildPayload());
         toastSuccess('Saved');
-        closeSlide();
         load();
-       } else {
+        if (slideTab === 'setup') closeSlide();
+      } else {
         const { data } = await aiBotApi.create(buildPayload());
         const created = data.data as AiBot;
-        toastSuccess('Bot created — add a few answers next');
-        setEditing(created);
-        setSlideTab('train');
+        for (const faq of faqs) {
+          await aiBotApi.addFaq(created.id, { title: faq.title, content: faq.content });
+        }
+        toastSuccess('Bot created');
         load();
+        closeSlide();
       }
     } catch (err: unknown) {
       toastError(getErrorMessage(err, 'Could not save bot'));
@@ -435,33 +566,6 @@ export default function AiBotPage() {
     await aiBotApi.update(bot.id, { enabled: !bot.enabled });
     toastSuccess(bot.enabled ? 'Bot paused' : 'Bot is on');
     load();
-  };
-
-  const toggleCallingAi = async (next: boolean) => {
-    try {
-      await aiBotApi.setCallingAi(next);
-      setCallingAiEnabled(next);
-      toastSuccess(next ? 'AI calling is on' : 'AI calling is off');
-    } catch {
-      toastError('Could not update AI calling');
-    }
-  };
-
-  const toggleAllCalls = async (bot: AiBot, next: boolean) => {
-    try {
-      await aiBotApi.update(bot.id, {
-        answersCalls: next,
-        ...(next ? { callingAiEnabled: true, enabled: true } : {}),
-      });
-      toastSuccess(
-        next
-          ? `${bot.name} will answer all calls.`
-          : `${bot.name} will not answer. Calls go to a person, or miss if nobody is free.`
-      );
-      load();
-    } catch (err: unknown) {
-      toastError(getErrorMessage(err, 'Could not update who answers calls'));
-    }
   };
 
   const confirmBulkBotAction = async () => {
@@ -507,7 +611,32 @@ export default function AiBotPage() {
   };
 
   const saveFaq = async () => {
-    if (!editing || !faqForm.title.trim() || !faqForm.content.trim()) return;
+    if (!faqForm.title.trim() || !faqForm.content.trim()) return;
+    if (!editing) {
+      if (editingFaqId) {
+        setFaqs((prev) =>
+          prev.map((faq) =>
+            faq.id === editingFaqId
+              ? { ...faq, title: faqForm.title.trim(), content: faqForm.content.trim() }
+              : faq
+          )
+        );
+        toastSuccess('Answer updated');
+      } else {
+        setFaqs((prev) => [
+          ...prev,
+          {
+            id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+            title: faqForm.title.trim(),
+            content: faqForm.content.trim(),
+          },
+        ]);
+        toastSuccess('Answer added');
+      }
+      setFaqForm(emptyFaq);
+      setEditingFaqId(null);
+      return;
+    }
     setSaving(true);
     try {
       if (editingFaqId) {
@@ -530,7 +659,11 @@ export default function AiBotPage() {
   };
 
   const deleteFaq = async (faqId: string) => {
-    if (!editing || !confirm('Remove this answer?')) return;
+    if (!confirm('Remove this answer?')) return;
+    if (!editing) {
+      setFaqs((prev) => prev.filter((f) => f.id !== faqId));
+      return;
+    }
     await aiBotApi.deleteFaq(editing.id, faqId);
     setFaqs((prev) => prev.filter((f) => f.id !== faqId));
   };
@@ -549,17 +682,69 @@ export default function AiBotPage() {
     }
   };
 
+  const buildTestInstructions = (): string => {
+    if (instructions.trim()) return instructions.trim();
+    return buildPersonalityIntent({
+      businessName,
+      businessWebsite,
+      businessNotes,
+      personalityTweak,
+      channel: formChannel,
+      botName: name,
+    });
+  };
+
+  const collectPreviewKnowledge = (): Array<{ title: string; content: string }> => {
+    const items: Array<{ title: string; content: string }> = [];
+    const push = (title: string, content: string) => {
+      const t = title.trim();
+      const c = content.trim();
+      if (t && c) items.push({ title: t, content: c });
+    };
+    for (const faq of faqs) push(faq.title, faq.content);
+    for (const draft of faqDrafts) push(draft.title, draft.content);
+    push(faqForm.title, faqForm.content);
+    return items;
+  };
+
   const runTest = async () => {
-    if (!editing || !testMessage.trim()) return;
     const message = testMessage.trim();
+    if (!message) {
+      toastError('Type a message first.');
+      return;
+    }
+    if (!name.trim()) {
+      toastError('Add a bot name in About first.');
+      setSlideTab('setup');
+      return;
+    }
+    const testInstructions = buildTestInstructions();
+    if (testInstructions.length < 8) {
+      toastError('Add business details in About, or write a personality.');
+      setSlideTab('setup');
+      return;
+    }
     setTestLoading(true);
     setTestResult(null);
     try {
-      const { data } = await aiBotApi.test(editing.id, {
-        message,
-        instructions: instructions.trim() || undefined,
-        history: testTurns,
-      });
+      const previewKnowledge = collectPreviewKnowledge();
+      const { data } = editing
+        ? await aiBotApi.test(editing.id, {
+            message,
+            instructions: testInstructions,
+            history: testTurns,
+            previewKnowledge,
+          })
+        : await aiBotApi.previewTest({
+            message,
+            channel: formChannel,
+            name: name.trim(),
+            instructions: testInstructions,
+            offerHandoff: formChannel === 'CHAT' ? offerHandoff : undefined,
+            businessHoursOnly: formChannel === 'CHAT' ? businessHoursOnly : undefined,
+            history: testTurns,
+            previewKnowledge,
+          });
       const result = data.data as BotTestResult;
       setTestResult(result);
       const reply = result.reply?.trim() || explainBotTestSkip(result.skipReason);
@@ -609,19 +794,32 @@ export default function AiBotPage() {
   };
 
   const handleGenerateFaqs = async () => {
-    if (!editing) return;
-    const note = (trainIntent.trim() || intent.trim());
+    const note = buildPersonalityIntent({
+      businessName,
+      businessWebsite,
+      businessNotes,
+      personalityTweak: trainIntent.trim() || personalityTweak,
+      channel: formChannel,
+      botName: name,
+    });
     if (note.length < 8) {
-      toastError('Write a short note about the business.');
+      toastError('Add business info in About first.');
       return;
     }
     setGeneratingFaqs(true);
     try {
-      const { data } = await aiBotApi.generateTraining(editing.id, {
+      const trainingPayload = {
         intent: note,
         businessWebsite: businessWebsite.trim() || undefined,
-        businessNotes: businessNotes.trim() || undefined,
-      });
+        businessNotes: composeBusinessNotesForSave(businessName, businessNotes) || undefined,
+      };
+      const { data } = editing
+        ? await aiBotApi.generateTraining(editing.id, trainingPayload)
+        : await aiBotApi.previewGenerateTraining({
+            ...trainingPayload,
+            channel: formChannel,
+            existingTitles: faqs.map((faq) => faq.title),
+          });
       const items = (data.data.items || []) as Array<{ title: string; content: string }>;
       setFaqDrafts(
         items.map((item, index) => ({
@@ -639,7 +837,19 @@ export default function AiBotPage() {
   };
 
   const addFaqDraft = async (draft: FaqDraft) => {
-    if (!editing) return;
+    if (!editing) {
+      setFaqs((prev) => [
+        ...prev,
+        {
+          id: `local-${Date.now()}-${draft.key}`,
+          title: draft.title,
+          content: draft.content,
+        },
+      ]);
+      setFaqDrafts((prev) => prev.filter((item) => item.key !== draft.key));
+      toastSuccess('Answer added');
+      return;
+    }
     setSaving(true);
     try {
       await aiBotApi.addFaq(editing.id, { title: draft.title, content: draft.content });
@@ -686,47 +896,76 @@ export default function AiBotPage() {
     [bots]
   );
 
+  const heroStats: AiBotHeroStat[] = useMemo(() => {
+    const channelBots = channelFilter === 'CALL' ? callingBots : chatBots;
+    return [
+      {
+        label: 'Total',
+        value: channelBots.length,
+        hint: 'All bots',
+        tone: 'total',
+        icon: Bot,
+      },
+      {
+        label: 'Live',
+        value: channelBots.filter((b) => b.enabled).length,
+        hint: 'Active now',
+        tone: 'live',
+        icon: PlayCircle,
+      },
+      {
+        label: 'Replies',
+        value: aggregateAnalytics?.totalReplies ?? 0,
+        hint: 'Handled',
+        tone: 'replies',
+        icon: MessageSquare,
+      },
+    ];
+  }, [channelFilter, callingBots, chatBots, aggregateAnalytics]);
+
   return (
     <>
-    <PageShell>
-      <div className="space-y-4 sm:space-y-5">
-          <AiBotDashboardSummary loading={analyticsLoading} analytics={aggregateAnalytics} />
-
-          <AiBotInsights
-            analytics={aggregateAnalytics}
-            loading={analyticsLoading}
-            totalKnowledgeItems={totalKnowledgeItems}
+      <PageShell>
+        <div className="space-y-[var(--density-stack-gap)]">
+          <AiBotHero
+            badge="AI Agents"
+            badgeIcon={Sparkles}
+            title="AI Agents"
+            description="Smart assistants for WhatsApp chat and phone calls — answer customers 24/7 and hand off to your team when needed."
+            stats={heroStats}
           />
 
-        <div className="dashboard-card dashboard-card-soft overflow-hidden p-0">
-          <ListToolbar
+          <SegmentedControl
             embedded
+            value={channelFilter}
+            onChange={(value) => handleTabChange(value as Channel)}
+            options={[
+              { value: 'CHAT', label: 'AI Chat Bot', shortLabel: 'Chat', icon: MessageSquare },
+              { value: 'CALL', label: 'AI Calling', shortLabel: 'Calling', icon: PhoneCall },
+            ]}
+            ariaLabel="AI Bot channels"
+          />
+
+          {aggregateAnalytics && aggregateAnalytics.totalReplies > 0 && channelFilter === 'CHAT' && (
+            <AiBotInsights
+              analytics={aggregateAnalytics}
+              loading={analyticsLoading}
+              totalKnowledgeItems={totalKnowledgeItems}
+            />
+          )}
+
+          <div className="inbox-shell overflow-hidden">
+            <ListToolbar
+              embedded
               compactMobile
               inlineDesktop
-            search={search}
-            onSearchChange={setSearch}
+              search={search}
+              onSearchChange={setSearch}
               searchPlaceholder={
                 channelFilter === 'CHAT' ? 'Search chat bots...' : 'Search calling bots...'
               }
-            filters={
-                <div className="flex w-full min-w-0 flex-col gap-2 md:w-auto md:flex-row md:flex-nowrap md:items-center">
-                  <div className="w-full min-w-0 md:w-auto">
-                    <SegmentedControl
-                      bare
-                      compact
-                      fit
-                      value={channelFilter}
-                      onChange={(value) => setChannelFilter(value as Channel)}
-                      options={[
-                        { value: 'CHAT', label: 'Chat', icon: MessageSquare },
-                        { value: 'CALL', label: 'Calling', icon: PhoneCall },
-                      ]}
-                    />
-                  </div>
-                  <AiBotStatusFilter value={statusFilter} onChange={setStatusFilter} />
-                </div>
-            }
-            actions={
+              filters={<AiBotStatusFilter value={statusFilter} onChange={setStatusFilter} />}
+              actions={
                 <AppButton
                   size="sm"
                   className="max-md:w-full"
@@ -734,9 +973,9 @@ export default function AiBotPage() {
                   onClick={() => openCreate(channelFilter)}
                 >
                   {channelFilter === 'CHAT' ? 'New chat bot' : 'New calling bot'}
-              </AppButton>
-            }
-          />
+                </AppButton>
+              }
+            />
 
           {loading && bots.length === 0 ? (
             <ListLayoutSkeleton
@@ -744,55 +983,32 @@ export default function AiBotPage() {
                 tableHeaders={['Bot', 'Status', 'Trained', 'Updated', 'Actions']}
             />
             ) : listBotsForFilter.length === 0 ? (
-              <>
-              <AiBotListEmpty
-                mode={hasFilters ? 'filter' : 'new'}
-                hasSearch={Boolean(search.trim())}
+              <div className="p-4 sm:p-6">
+                <AiBotListEmpty
+                  mode={hasFilters ? 'filter' : 'new'}
+                  hasSearch={Boolean(search.trim())}
                   channel={channelFilter}
                   onCreate={() => openCreate(channelFilter)}
-                onClearFilters={() => {
-                  setSearch('');
-                  setStatusFilter('');
-                }}
-              />
-                {!hasFilters && !aggregateAnalytics && (
-                  <div className="border-t border-theme-border px-4 py-5 sm:px-5">
-                    <p className="mb-3 text-[13px] font-extrabold text-theme-fg">
-                      What can an AI bot do?
-                    </p>
-                    <div className="card-grid-auto">
-                      {[
-                        { title: 'Auto-reply 24/7', desc: 'Answer common questions even when the team is offline.' },
-                        { title: 'Handoff to your team', desc: 'When the bot is unsure, it hands the chat to a person.' },
-                        { title: 'Voice + Chat', desc: 'One brain for WhatsApp messages and phone calls.' },
-                        { title: 'Per-chat control', desc: 'Pick a bot for specific chats, or use a default.' },
-                      ].map((item) => (
-                        <div
-                          key={item.title}
-                          className="rounded-xl border border-theme-border bg-theme-surface p-3"
-                        >
-                          <p className="text-[12px] font-bold text-theme-fg">{item.title}</p>
-                          <p className="mt-0.5 text-[11px] leading-relaxed text-theme-muted">{item.desc}</p>
-            </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </>
-          ) : filteredBots.length === 0 ? (
-            <div className="px-4 py-8 sm:px-6 sm:py-10">
-              <AiBotListEmpty
-                mode="filter"
-                hasSearch={Boolean(search.trim())}
+                  onClearFilters={() => {
+                    setSearch('');
+                    setStatusFilter('');
+                  }}
+                />
+              </div>
+            ) : filteredBots.length === 0 ? (
+              <div className="p-4 sm:p-6">
+                <AiBotListEmpty
+                  mode="filter"
+                  hasSearch={Boolean(search.trim())}
                   channel={channelFilter}
                   onCreate={() => openCreate(channelFilter)}
-                onClearFilters={() => {
-                  setSearch('');
-                  setStatusFilter('');
-                }}
-              />
-            </div>
-          ) : (
+                  onClearFilters={() => {
+                    setSearch('');
+                    setStatusFilter('');
+                  }}
+                />
+              </div>
+            ) : (
             <ResponsiveDataView
               items={filteredBots}
               tableFrom="xl"
@@ -812,11 +1028,6 @@ export default function AiBotPage() {
                         ? () =>
                             setBulkAction({ type: bot.appliedToAll ? 'remove' : 'apply', bot })
                         : undefined
-                    }
-                    onToggleAllCalls={
-                      isChatBot(bot)
-                        ? undefined
-                        : () => void toggleAllCalls(bot, bot.id !== answeringCallBotId)
                     }
                 />
               )}
@@ -906,15 +1117,6 @@ export default function AiBotPage() {
                                   }
                                 />
                               )}
-                              {!isChatBot(bot) && (
-                                <AllChatsSwitch
-                                  noun="calls"
-                                  applied={bot.id === answeringCallBotId}
-                                  onClick={() =>
-                                    void toggleAllCalls(bot, bot.id !== answeringCallBotId)
-                                  }
-                                />
-                              )}
                               <RowActions
                                 onEdit={() => openEdit(bot)}
                                 onDelete={canDeleteBot(bot) ? () => handleDelete(bot.id) : undefined}
@@ -944,8 +1146,8 @@ export default function AiBotPage() {
         title={editing ? name || 'Edit bot' : formChannel === 'CALL' ? 'New calling bot' : 'New chat bot'}
         subtitle={
           formChannel === 'CALL'
-            ? 'This bot answers the phone. Chat bots stay separate.'
-            : 'This bot replies in WhatsApp chat. Calling bots stay separate.'
+            ? 'Phone bot — separate from chat bots.'
+            : 'WhatsApp chat bot — separate from calling bots.'
         }
         size="2xl"
         icon={formChannel === 'CALL' ? PhoneCall : BotMessageSquare}
@@ -953,42 +1155,52 @@ export default function AiBotPage() {
         footer={
           <SlideOverFooter
             onCancel={closeSlide}
-            submitLabel={editing ? 'Save' : 'Create'}
-            loading={saving}
+            hideSubmit={slideTab === 'pickup'}
+            submitLabel={
+              editing
+                ? slideTab === 'setup'
+                  ? 'Save'
+                  : 'Save changes'
+                : 'Create'
+            }
+            loading={slideTab === 'pickup' ? pickupFooter.saving : saving}
+            submitDisabled={slideTab === 'pickup' ? !pickupFooter.dirty : false}
+            primaryAction={
+              slideTab === 'pickup'
+                ? {
+                    label: 'Save',
+                    onClick: () => void pickupRef.current?.save(),
+                  }
+                : undefined
+            }
+            primaryDisabled={slideTab === 'pickup' && !pickupFooter.dirty}
             onDelete={editing && canDeleteBot(editing) ? () => handleDelete(editing.id) : undefined}
             deleteLabel="Delete bot"
           />
         }
       >
-        {(editing || formChannel === 'CALL') && (
-          <div className="mb-5">
-            <SegmentedControl
-              embedded
-              compact
-              value={slideTab}
-              onChange={(value) => setSlideTab(value as SlideTab)}
-              options={
-                formChannel === 'CALL'
-                  ? editing
-                    ? [
-                        { value: 'setup', label: 'Setup', icon: Bot },
-                        { value: 'train', label: 'Train', icon: BookOpen },
-                        { value: 'try', label: 'Try it', icon: FlaskConical },
-                        { value: 'pickup', label: 'When they call', shortLabel: 'Calls', icon: PhoneCall },
-                      ]
-                    : [
-                        { value: 'setup', label: 'Setup', icon: Bot },
-                        { value: 'pickup', label: 'When they call', shortLabel: 'Calls', icon: PhoneCall },
-                      ]
-                  : [
-                      { value: 'setup', label: 'Setup', icon: Bot },
-                      { value: 'train', label: 'Train', icon: BookOpen },
-                      { value: 'try', label: 'Try it', icon: FlaskConical },
-                    ]
-              }
-            />
-          </div>
-        )}
+        <div className="mb-5">
+          <SegmentedControl
+            embedded
+            compact
+            value={slideTab}
+            onChange={(value) => void handleSlideTabChange(value as SlideTab)}
+            options={
+              formChannel === 'CALL'
+                ? [
+                    { value: 'setup', label: 'About', icon: Bot },
+                    { value: 'train', label: 'Train', icon: BookOpen },
+                    { value: 'try', label: 'Try it', icon: FlaskConical },
+                    { value: 'pickup', label: 'Calls', icon: PhoneCall },
+                  ]
+                : [
+                    { value: 'setup', label: 'About', icon: Bot },
+                    { value: 'train', label: 'Train', icon: BookOpen },
+                    { value: 'try', label: 'Try it', icon: FlaskConical },
+                  ]
+            }
+          />
+        </div>
 
         <form
           id="slideover-form"
@@ -997,409 +1209,429 @@ export default function AiBotPage() {
         >
                 <AppInput
               label="Name"
-              placeholder={formChannel === 'CALL' ? 'e.g. Calling support' : 'e.g. Support'}
+              placeholder={formChannel === 'CALL' ? 'e.g. Sales calls' : 'e.g. Shop support'}
               value={name}
               onChange={(e) => setName(e.target.value)}
+              error={nameConflict}
                   required
                 />
             <div className="rounded-2xl border border-theme-border bg-theme-subtle/60 p-3.5">
-              <p className="text-[13px] font-bold text-theme-fg">About the business</p>
-              <p className="mt-0.5 text-[11px] font-medium text-theme-muted">
-                Used when we write personality and answers.
-                {organization?.companyName
-                  ? ` Workspace: ${organization.companyName}.`
-                  : ''}
-              </p>
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-[13px] font-bold text-theme-fg">Business</p>
+                  <p className="mt-0.5 text-[11px] font-medium text-theme-muted">
+                    For this bot only. Fill in or use your profile.
+                  </p>
+                </div>
+                <AppButton
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  icon={<Building2 size={14} />}
+                  onClick={applyWorkspaceProfile}
+                >
+                  Use profile
+                </AppButton>
+              </div>
+              <div className="mt-3 space-y-3">
                 <AppInput
-                  label="Website / domain"
+                  label="Business name"
+                  placeholder="Your shop or clinic"
+                  value={businessName}
+                  onChange={(e) => setBusinessName(e.target.value)}
+                />
+                <AppInput
+                  label="Website"
                   placeholder="yourshop.com"
                   value={businessWebsite}
                   onChange={(e) => setBusinessWebsite(e.target.value)}
                 />
                 <AppTextarea
-                  label="Extra notes"
-                  hint="Optional"
-                  placeholder="Hours, area, who you serve."
-                  rows={2}
+                  label="What customers should know"
+                  placeholder="Hours, area, services, how to book."
+                  rows={3}
                   value={businessNotes}
                   onChange={(e) => setBusinessNotes(e.target.value)}
-                  />
-                </div>
-            </div>
-            <AppTextarea
-              label="What should this bot do?"
-              hint="A few words in your own language is enough."
-              placeholder={
-                formChannel === 'CALL'
-                  ? 'Answer clinic calls warmly in Hindi, never promise a price.'
-                  : 'Help with hours, prices, and bookings. Be warm. Never invent a discount.'
-              }
-              rows={3}
-              value={intent}
-              onChange={(e) => setIntent(e.target.value)}
-            />
-            <div className="flex flex-wrap gap-2">
-              <AppButton
-                        type="button"
-                variant="secondary"
-                loading={generating}
-                icon={<Sparkles size={14} />}
-                onClick={() => void handleGenerate()}
-              >
-                Write personality
-              </AppButton>
-                </div>
-            <AppTextarea
-              label="Personality"
-              hint="You can edit this after it is written for you."
-              rows={8}
-              value={instructions}
-              onChange={(e) => setInstructions(e.target.value)}
-            />
-            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-              <ToggleRow
-                checked={enabled}
-                onChange={setEnabled}
-                title={formChannel === 'CALL' ? 'This calling bot is on' : 'This chat bot is on'}
-                description={
-                  formChannel === 'CALL'
-                    ? 'Pause to stop this brain answering the phone.'
-                    : 'Pause to stop automatic chat replies from this bot.'
-                }
-              />
-              {formChannel === 'CHAT' && (
-                <ToggleRow
-                  checked={isDefault}
-                  onChange={setIsDefault}
-                  title="Default chat bot"
-                  description="Replies in chats where you have not picked another bot."
                 />
-              )}
-              {formChannel === 'CHAT' && (
-                <ToggleRow
-                  checked={businessHoursOnly}
-                  onChange={setBusinessHoursOnly}
-                  title="Only during business hours"
-                  description="Stay quiet outside the hours in Settings."
-                />
-              )}
-              {formChannel === 'CHAT' && (
-                <ToggleRow
-                  checked={offerHandoff}
-                  onChange={setOfferHandoff}
-                  title="Offer a person when asked"
-                  description="If someone asks for a person, the team is notified."
-                />
-              )}
-              {formChannel === 'CALL' && (
-            <ToggleRow
-                  checked={callingAiEnabled}
-              onChange={(value) => {
-                    setCallingAiEnabled(value);
-                    void toggleCallingAi(value);
-                  }}
-                  title="AI calling"
-                  description="Off means no AI picks up — a person rings, or the call is missed."
-                />
-              )}
-              {formChannel === 'CALL' && (
-                <ToggleRow
-                  checked={answersCalls}
-                  onChange={setAnswersCalls}
-                  title="This bot answers calls"
-                  description="On for all calls. Off rings a person, then misses if nobody is free."
-                />
-              )}
-          </div>
-            {formChannel === 'CALL' && (
-              <>
-                <AppTextarea
-                  label="Greeting"
-                  rows={3}
-                  value={voiceGreeting}
-                  onChange={(e) => setVoiceGreeting(e.target.value)}
-                />
-                <AppSelect
-                  label="Language"
-                  value={voiceLanguage}
-                  onChange={(e) => setVoiceLanguage(e.target.value)}
-                  options={SARVAM_LANGUAGES}
-                />
-                <div>
-                  <p className="mb-2 text-[12px] font-bold text-theme-secondary">Speaker</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {CALLING_BOT_SPEAKERS.map((sp) => {
-                      const selected = voiceSpeaker === sp.value;
-                      const previewing = previewingSpeaker === sp.value;
-                      return (
-                        <div
-                          key={sp.value}
-                          className={`rounded-xl border px-3 py-2.5 ${
-                            selected
-                              ? 'border-emerald-400 bg-emerald-50/80 dark:border-emerald-600 dark:bg-emerald-950/40'
-                              : 'border-theme-border bg-theme-surface'
-                          }`}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => setVoiceSpeaker(sp.value)}
-                            className="w-full text-left"
-                          >
-                            <p className="text-[13px] font-bold text-theme-fg">{sp.label}</p>
-                            <p className="text-[11px] text-theme-muted">{sp.hint}</p>
-                          </button>
-                          <button
-                            type="button"
-                            className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-sky-700"
-                            disabled={voicePreviewLoading}
-                            onClick={() => {
-                              setVoiceSpeaker(sp.value);
-                              void handleVoicePreview(sp.value);
-                            }}
-                          >
-                            <Volume2 className="h-3.5 w-3.5" strokeWidth={2.25} />
-                            {previewing ? 'Playing…' : 'Preview'}
-                          </button>
               </div>
-                      );
-                    })}
-                  </div>
+            </div>
+
+            {!instructions.trim() ? (
+              <div className="rounded-2xl border border-violet-200/80 bg-gradient-to-br from-violet-50/70 via-white to-sky-50/40 p-4 dark:border-violet-900/50 dark:from-violet-950/25 dark:via-theme-surface dark:to-sky-950/15 sm:p-5">
+                <div className="flex items-center gap-2 text-violet-700 dark:text-violet-300">
+                  <Sparkles className="h-5 w-5 shrink-0" strokeWidth={2.25} />
+                  <p className="text-[14px] font-bold">Create personality</p>
                 </div>
-              </>
+                <p className="mt-1.5 text-[12px] leading-relaxed text-theme-secondary">
+                  We write how this bot should talk, using the business info above.
+                </p>
+                <AppButton
+                  type="button"
+                  className="mt-3"
+                  loading={generating}
+                  icon={<Sparkles size={14} />}
+                  onClick={() => void handleGenerate()}
+                >
+                  Create personality
+                </AppButton>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <AppTextarea
+                  label="Personality"
+                  rows={8}
+                  value={instructions}
+                  onChange={(e) => setInstructions(e.target.value)}
+                />
+                <AppInput
+                  label="Your touch (optional)"
+                  placeholder="e.g. Reply in Hindi, never quote prices"
+                  value={personalityTweak}
+                  onChange={(e) => setPersonalityTweak(e.target.value)}
+                />
+                <AppButton
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  loading={generating}
+                  icon={<Sparkles size={14} />}
+                  onClick={() => void handleGenerate()}
+                >
+                  Rewrite personality
+                </AppButton>
+              </div>
             )}
           </form>
 
-        {editing && slideTab === 'train' && (
-          <div className="space-y-4">
-            <p className="text-[13px] font-medium text-theme-secondary">
-              A few words about the business is enough. We draft questions you can edit, then add.
-              Ready means this answer can be used.
-            </p>
-            <AppTextarea
-              label="What should we train?"
-              hint="A few words in your own language is enough."
-              placeholder={
-                formChannel === 'CALL'
-                  ? 'Clinic hours, parking, and how to book a visit.'
-                  : 'Hours, prices, parking, and how to book.'
-              }
-              rows={3}
-              value={trainIntent}
-              onChange={(e) => setTrainIntent(e.target.value)}
-            />
-            <AppButton
-              type="button"
-              variant="secondary"
-              loading={generatingFaqs}
-              icon={<Sparkles size={14} />}
-              onClick={() => void handleGenerateFaqs()}
-            >
-              Write answers
-            </AppButton>
-            {faqDrafts.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-[12px] font-bold text-theme-fg">Review these, then add</p>
-                {faqDrafts.map((draft) => (
-                  <div
-                    key={draft.key}
-                    className="rounded-xl border border-dashed border-emerald-200 bg-emerald-50/40 px-3 py-3 dark:border-emerald-800 dark:bg-emerald-950/20"
-                  >
-              <AppInput
-                      label="Question"
-                      value={draft.title}
-                      onChange={(e) =>
-                        setFaqDrafts((prev) =>
-                          prev.map((item) =>
-                            item.key === draft.key ? { ...item, title: e.target.value } : item
-                          )
-                        )
-                      }
-                    />
+        {slideTab === 'train' && (
+            <div className="space-y-4">
+              {formChannel === 'CALL' && (
+                <div className="rounded-2xl border border-theme-border bg-theme-subtle/60 p-3.5">
+                  <p className="text-[13px] font-bold text-theme-fg">Phone voice</p>
+                  <p className="mt-0.5 text-[11px] font-medium text-theme-muted">
+                    What callers hear when the bot picks up.
+                  </p>
+                  <div className="mt-3 space-y-3">
                     <AppTextarea
-                      className="mt-2"
-                      label="Answer"
-                      rows={2}
-                      value={draft.content}
-                      onChange={(e) =>
-                        setFaqDrafts((prev) =>
-                          prev.map((item) =>
-                            item.key === draft.key ? { ...item, content: e.target.value } : item
-                          )
-                        )
-                      }
+                      label="Greeting"
+                      placeholder="Namaste! How can I help you today?"
+                      rows={3}
+                      value={voiceGreeting}
+                      onChange={(e) => setVoiceGreeting(e.target.value)}
                     />
-                    <div className="mt-2 flex gap-2">
+                    <AppSelect
+                      label="Language"
+                      value={voiceLanguage}
+                      onChange={(e) => setVoiceLanguage(e.target.value)}
+                      options={SARVAM_LANGUAGES}
+                    />
+                    <div>
+                      <p className="mb-2 text-[12px] font-bold text-theme-secondary">Speaker</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {CALLING_BOT_SPEAKERS.map((sp) => {
+                          const selected = voiceSpeaker === sp.value;
+                          const previewing = previewingSpeaker === sp.value;
+                          return (
+                            <div
+                              key={sp.value}
+                              className={`rounded-xl border px-3 py-2.5 ${
+                                selected
+                                  ? 'border-emerald-400 bg-emerald-50/80 dark:border-emerald-600 dark:bg-emerald-950/40'
+                                  : 'border-theme-border bg-theme-surface'
+                              }`}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => setVoiceSpeaker(sp.value)}
+                                className="w-full text-left"
+                              >
+                                <p className="text-[13px] font-bold text-theme-fg">{sp.label}</p>
+                                <p className="text-[11px] text-theme-muted">{sp.hint}</p>
+                              </button>
+                              <button
+                                type="button"
+                                className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-sky-700"
+                                disabled={voicePreviewLoading}
+                                onClick={() => {
+                                  setVoiceSpeaker(sp.value);
+                                  void handleVoicePreview(sp.value);
+                                }}
+                              >
+                                <Volume2 className="h-3.5 w-3.5" strokeWidth={2.25} />
+                                {previewing ? 'Playing…' : 'Preview'}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="rounded-2xl border border-theme-border bg-theme-subtle/60 p-3.5">
+                <p className="text-[13px] font-bold text-theme-fg">Write answers for me</p>
+                <div className="mt-3 space-y-3">
+                  <AppTextarea
+                    label="Topic"
+                    placeholder={
+                      formChannel === 'CALL'
+                        ? 'Hours, booking, parking'
+                        : 'Prices, hours, delivery'
+                    }
+                    rows={2}
+                    value={trainIntent}
+                    onChange={(e) => setTrainIntent(e.target.value)}
+                  />
+                  <AppButton
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    loading={generatingFaqs}
+                    icon={<Sparkles size={14} />}
+                    onClick={() => void handleGenerateFaqs()}
+                  >
+                    Write answers
+                  </AppButton>
+                </div>
+              </div>
+
+              {faqDrafts.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-[12px] font-bold text-theme-fg">Review & add</p>
+                  {faqDrafts.map((draft) => (
+                    <div
+                      key={draft.key}
+                      className="rounded-2xl border border-emerald-200/80 bg-emerald-50/40 p-3 dark:border-emerald-800/60 dark:bg-emerald-950/20"
+                    >
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <AppTextarea
+                          label="Question"
+                          rows={3}
+                          value={draft.title}
+                          onChange={(e) =>
+                            setFaqDrafts((prev) =>
+                              prev.map((item) =>
+                                item.key === draft.key ? { ...item, title: e.target.value } : item
+                              )
+                            )
+                          }
+                        />
+                        <AppTextarea
+                          label="Answer"
+                          rows={3}
+                          value={draft.content}
+                          onChange={(e) =>
+                            setFaqDrafts((prev) =>
+                              prev.map((item) =>
+                                item.key === draft.key ? { ...item, content: e.target.value } : item
+                              )
+                            )
+                          }
+                        />
+                      </div>
+                      <div className="mt-2 flex gap-3">
+                        <button
+                          type="button"
+                          className="text-[12px] font-bold text-sky-700"
+                          onClick={() => void addFaqDraft(draft)}
+                        >
+                          Add
+                        </button>
+                        <button
+                          type="button"
+                          className="text-[12px] font-bold text-theme-muted"
+                          onClick={() =>
+                            setFaqDrafts((prev) => prev.filter((item) => item.key !== draft.key))
+                          }
+                        >
+                          Skip
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="rounded-2xl border border-theme-border bg-theme-subtle/60 p-3.5">
+                <p className="text-[13px] font-bold text-theme-fg">Add one yourself</p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <AppTextarea
+                    label="Question"
+                    placeholder="What do customers ask?"
+                    rows={3}
+                    value={faqForm.title}
+                    onChange={(e) => setFaqForm({ ...faqForm, title: e.target.value })}
+                  />
+                  <AppTextarea
+                    label="Answer"
+                    placeholder="What should the bot say?"
+                    rows={3}
+                    value={faqForm.content}
+                    onChange={(e) => setFaqForm({ ...faqForm, content: e.target.value })}
+                  />
+                </div>
+                <div className="mt-3">
+                  <AppButton type="button" size="sm" loading={saving} onClick={() => void saveFaq()}>
+                    {editingFaqId ? 'Save' : 'Add'}
+                  </AppButton>
+                </div>
+              </div>
+
+              <ul className="space-y-2">
+                {faqs.length === 0 && (
+                  <li className="rounded-xl border border-dashed border-theme-border px-3 py-3 text-center text-[12px] font-medium text-theme-muted">
+                    No answers yet
+                  </li>
+                )}
+                {faqs.map((faq) => (
+                  <li
+                    key={faq.id}
+                    className="rounded-xl border border-theme-border bg-theme-surface px-3 py-3"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-bold text-theme-fg">{faq.title}</p>
+                        <p className="mt-1 text-[12px] leading-relaxed text-theme-secondary">{faq.content}</p>
+                      </div>
+                      <span
+                        className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
+                          faq.hasEmbedding
+                            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+                            : 'bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300'
+                        }`}
+                      >
+                        {faq.hasEmbedding ? 'Ready' : 'Wait'}
+                      </span>
+                    </div>
+                    <div className="mt-2 flex gap-3">
                       <button
                         type="button"
                         className="text-[12px] font-bold text-sky-700"
-                        onClick={() => void addFaqDraft(draft)}
+                        onClick={() => {
+                          setEditingFaqId(faq.id);
+                          setFaqForm({ title: faq.title, content: faq.content });
+                        }}
                       >
-                        Add
-                    </button>
-                    <button
-                      type="button"
-                        className="text-[12px] font-bold text-theme-muted"
-                        onClick={() =>
-                          setFaqDrafts((prev) => prev.filter((item) => item.key !== draft.key))
-                        }
-                      >
-                        Dismiss
-                    </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            <p className="text-[12px] font-bold text-theme-secondary">Or add one yourself</p>
-            <div className="grid gap-3 sm:grid-cols-2">
-                <AppInput
-                label="Question / title"
-                  value={faqForm.title}
-                  onChange={(e) => setFaqForm({ ...faqForm, title: e.target.value })}
-                />
-                <AppTextarea
-                label="Answer"
-                  rows={3}
-                  value={faqForm.content}
-                  onChange={(e) => setFaqForm({ ...faqForm, content: e.target.value })}
-                />
-            </div>
-            <AppButton type="button" loading={saving} onClick={() => void saveFaq()}>
-              {editingFaqId ? 'Update answer' : 'Add answer'}
-                  </AppButton>
-            <ul className="space-y-2">
-              {faqs.length === 0 && (
-                <li className="rounded-xl border border-dashed border-theme-border px-3 py-4 text-[13px] text-theme-muted">
-                  Nothing trained yet. A couple of real answers is plenty.
-                </li>
-              )}
-              {faqs.map((faq) => (
-                <li
-                  key={faq.id}
-                  className="rounded-xl border border-theme-border bg-theme-surface px-3 py-3"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="text-[13px] font-bold text-theme-fg">{faq.title}</p>
-                      <p className="mt-1 text-[12px] text-theme-secondary">{faq.content}</p>
-                </div>
-                    <span
-                      className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                        faq.hasEmbedding
-                          ? 'bg-emerald-50 text-emerald-700'
-                          : 'bg-amber-50 text-amber-800'
-                      }`}
-                    >
-                      {faq.hasEmbedding ? 'Ready' : 'Learning'}
-                    </span>
-                </div>
-                  <div className="mt-2 flex gap-2">
-                    <button
-                      type="button"
-                      className="text-[12px] font-bold text-sky-700"
-                      onClick={() => {
-                        setEditingFaqId(faq.id);
-                        setFaqForm({ title: faq.title, content: faq.content });
-                      }}
-                    >
-                      Edit
-                    </button>
-                    {!faq.hasEmbedding && (
-                      <button
-                      type="button"
-                        className="text-[12px] font-bold text-amber-800"
-                        onClick={() => void retryFaqReady(faq)}
-                      >
-                        Retry Ready
+                        Edit
                       </button>
-                    )}
+                      {!faq.hasEmbedding && (
                         <button
                           type="button"
-                      className="text-[12px] font-bold text-rose-600"
-                      onClick={() => void deleteFaq(faq.id)}
-                    >
-                      Remove
+                          className="text-[12px] font-bold text-amber-800 dark:text-amber-300"
+                          onClick={() => void retryFaqReady(faq)}
+                        >
+                          Retry
                         </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
+                      )}
+                      <button
+                        type="button"
+                        className="text-[12px] font-bold text-rose-600"
+                        onClick={() => void deleteFaq(faq.id)}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
         )}
 
-        {editing && slideTab === 'try' && (
-          <div className="space-y-4">
-            {formChannel === 'CALL' && (
-                <div className="space-y-2">
-                <p className="text-[13px] text-theme-secondary">
-                  Hear the greeting, then send a customer line to preview this calling bot. Unsaved
-                  personality is used.
+        {slideTab === 'try' && (
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-theme-border bg-theme-subtle/60 px-3.5 py-3">
+                <p className="text-[13px] font-bold text-theme-fg">Live preview</p>
+                <p className="mt-0.5 text-[11px] font-medium text-theme-muted">
+                  Uses your About and Train tabs now — saving is automatic.
                 </p>
-                      <AppButton
-                        type="button"
+              </div>
+
+              {formChannel === 'CALL' && (
+                <AppButton
+                  type="button"
                   variant="secondary"
+                  size="sm"
                   loading={voicePreviewLoading}
                   onClick={() => void handleVoicePreview()}
                 >
                   Play greeting
-                      </AppButton>
-                    </div>
-            )}
-            {formChannel === 'CHAT' && (
-              <p className="text-[13px] text-theme-secondary">
-                Send a customer message to preview this chat bot. Unsaved personality is used.
-              </p>
-            )}
-            {testTurns.length > 0 && (
-              <ul className="max-h-64 space-y-2 overflow-y-auto rounded-xl border border-theme-border bg-theme-subtle p-3">
-                {testTurns.map((turn, index) => (
-                  <li
-                    key={`${turn.role}-${index}`}
-                    className={`text-[13px] leading-relaxed ${
-                      turn.role === 'user' ? 'text-theme-fg' : 'text-theme-secondary'
-                    }`}
-                  >
-                    <span className="font-bold text-theme-fg">
-                      {turn.role === 'user' ? 'Customer' : 'Bot'}
-                    </span>
-                    <span className="mt-0.5 block">{turn.content}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-                <AppTextarea
-              label={formChannel === 'CALL' ? 'Try a caller line' : 'Try a customer message'}
-              rows={3}
-                  value={testMessage}
-                  onChange={(e) => setTestMessage(e.target.value)}
-                />
-            <div className="flex flex-wrap gap-2">
-              <AppButton type="button" loading={testLoading} onClick={() => void runTest()}>
-                  Send test
-                </AppButton>
-              {testTurns.length > 0 && (
-                <AppButton
-                  type="button"
-                  variant="secondary"
-                  onClick={() => {
-                    setTestTurns([]);
-                    setTestResult(null);
-                  }}
-                >
-                  Clear
                 </AppButton>
               )}
-                  </div>
-            {testResult?.skipped && !testResult.reply && (
-              <p className="text-[12px] font-medium text-amber-800">
-                {explainBotTestSkip(testResult.skipReason)}
-              </p>
-            )}
-                 </div>
+
+              {testTurns.length > 0 && (
+                <ul className="max-h-72 space-y-3 overflow-y-auto rounded-xl border border-theme-border bg-theme-subtle/50 p-3">
+                  {testTurns.map((turn, index) =>
+                    turn.role === 'user' ? (
+                      <li key={`${turn.role}-${index}`} className="flex justify-end">
+                        <div className="max-w-[88%] rounded-2xl rounded-br-md bg-whatsapp-600 px-3 py-2 text-[13px] font-medium leading-relaxed text-white">
+                          {turn.content}
+                        </div>
+                      </li>
+                    ) : (
+                      <li key={`${turn.role}-${index}`} className="flex items-start gap-2">
+                        <span
+                          className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300"
+                          aria-hidden
+                        >
+                          <Bot className="h-3.5 w-3.5" strokeWidth={2.2} />
+                        </span>
+                        <div className="max-w-[88%] rounded-2xl rounded-bl-md border border-theme-border bg-theme-surface px-3 py-2 text-[13px] leading-relaxed text-theme-secondary">
+                          {turn.content}
+                        </div>
+                      </li>
+                    )
+                  )}
+                </ul>
+              )}
+
+              <AppTextarea
+                label={formChannel === 'CALL' ? 'Caller says' : 'Customer says'}
+                placeholder={
+                  formChannel === 'CALL'
+                    ? 'What are your hours?'
+                    : 'What are your prices?'
+                }
+                rows={3}
+                value={testMessage}
+                onChange={(e) => setTestMessage(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    void runTest();
+                  }
+                }}
+              />
+              <div className="flex flex-wrap gap-2">
+                <AppButton type="button" size="sm" loading={testLoading} onClick={() => void runTest()}>
+                  Send
+                </AppButton>
+                {testTurns.length > 0 && (
+                  <AppButton
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      setTestTurns([]);
+                      setTestResult(null);
+                      setTestMessage('');
+                    }}
+                  >
+                    Clear
+                  </AppButton>
+                )}
+              </div>
+              {testResult?.skipped && !testResult.reply && (
+                <p className="text-[12px] font-medium text-amber-800 dark:text-amber-300">
+                  {explainBotTestSkip(testResult.skipReason)}
+                </p>
+              )}
+            </div>
         )}
 
-        {formChannel === 'CALL' && slideTab === 'pickup' && <AiBotPickupPanel />}
+        {formChannel === 'CALL' && slideTab === 'pickup' && (
+          <AiBotPickupPanel ref={pickupRef} onStateChange={setPickupFooter} />
+        )}
       </SlideOver>
 
     <ConfirmDialog

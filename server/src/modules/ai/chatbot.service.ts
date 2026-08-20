@@ -1,3 +1,4 @@
+import { loadBusinessContext, formatBusinessExtrasBlock } from './business-context';
 import prisma from '../../config/database';
 import { Prisma } from '@prisma/client';
 import type { AiBot, Contact } from '@prisma/client';
@@ -9,6 +10,8 @@ import {
   resolveVoiceKnowledge,
   listBrainTopics,
   isConversationRecallQuestion,
+  matchPreviewKnowledge,
+  mergeKnowledgeMatches,
   type KnowledgeMatch,
 } from './knowledge.service';
 import { checkRateLimit } from './rate-limit.service';
@@ -88,8 +91,12 @@ export interface GenerateBotReplyInput {
   liveVoiceTurns?: Array<{ role: 'user' | 'assistant'; content: string }>;
   /** Unsaved Try-it personality — does not write the bot row. */
   instructionsOverride?: string;
+  /** Unsaved Train rows (FAQ drafts + form) for Try-it before save. */
+  previewKnowledge?: Array<{ title: string; content: string }>;
   /** Number-scoped usage when there is no real conversation (Try-it). */
   whatsappNumberId?: string;
+  /** Try-it before create — skip DB bot lookup. */
+  previewBot?: AiBot;
 }
 
 export interface GenerateBotReplyResult {
@@ -180,12 +187,14 @@ async function buildConversationMessages(
       });
 
   let businessName = 'our business';
+  let businessContextBlock = '';
   if (organizationId) {
-    const org = await prisma.organization.findUnique({
-      where: { id: organizationId },
-      select: { companyName: true },
+    const extras = await loadBusinessContext(organizationId, {
+      website: bot.businessWebsite,
+      notes: bot.businessNotes,
     });
-    if (org?.companyName?.trim()) businessName = org.companyName.trim();
+    if (extras.companyName) businessName = extras.companyName;
+    businessContextBlock = formatBusinessExtrasBlock(extras);
   }
 
   const knowledgeBlock = formatKnowledgeContext(knowledge);
@@ -205,6 +214,9 @@ async function buildConversationMessages(
     chatInstructions || undefined,
     `You are ${bot.name}, the trained AI brain for "${businessName}". You have personality instructions and a Train knowledge base — that is your brain. Use them. You remember this customer${contact?.name ? ` (${contact.name})` : ''} and this ${channel === 'voice' ? 'live phone call' : 'WhatsApp chat'}. If they ask whether you know them or what you just said, answer from the conversation — do not say you have no brain or no memory.`,
     `When callers ask who you are or your name, answer in one short sentence: you are ${bot.name}, and you help customers of ${businessName}. Use that identity sentence only for who-you-are questions — never as a stand-in for company details.`,
+    businessContextBlock
+      ? `Workspace business profile (use for company, services, and policy questions — do not invent facts beyond this):\n${businessContextBlock}`
+      : undefined,
     `When they ask what help you can provide, what the business does, what you offer, which services, customer-service details, or for details about the company, answer from the trained FAQ and business instructions — list services/policies when the FAQ has them. Do not reply with only the identity line. If those do not contain the facts, say once that you do not have those details. Stay with the customer and ask a specific follow-up. Do not keep offering WhatsApp or the team unless they asked for a person. Do not invent an industry from the brand name (e.g. do not say you only help "students" unless the FAQ says so).`,
     contact?.name ? `Customer name: ${contact.name}. If they ask whether you know them, say yes and use this name.` : undefined,
     contact?.notes?.trim()
@@ -319,7 +331,9 @@ export async function generateBotReply(
   }
 
   let bot: AiBot | null = null;
-  if (input.botId) {
+  if (input.previewBot && input.testMode) {
+    bot = input.previewBot;
+  } else if (input.botId) {
     bot = await prisma.aiBot.findFirst({
       where: {
         id: input.botId,
@@ -413,9 +427,18 @@ export async function generateBotReply(
         numberId
       );
 
+  const mergedKnowledgeMatches =
+    input.testMode && input.previewKnowledge?.length
+      ? mergeKnowledgeMatches(
+          matchPreviewKnowledge(input.previewKnowledge, sanitizedMessage, 5),
+          knowledgeMatches,
+          5
+        )
+      : knowledgeMatches;
+
   const brainTopics =
     isVoice &&
-    knowledgeMatches.length === 0 &&
+    mergedKnowledgeMatches.length === 0 &&
     !isConversationRecallQuestion(sanitizedMessage)
       ? await listBrainTopics(bot.id)
       : [];
@@ -423,7 +446,7 @@ export async function generateBotReply(
   // When KB search returns nothing, still let the model reply from instructions.
   // Hard handoff on zero matches caused instant "connect you with our team" loops
   // when embeddings were missing and keyword search failed.
-  if (knowledgeMatches.length === 0 && !input.testMode) {
+  if (mergedKnowledgeMatches.length === 0 && !input.testMode) {
     log.debug('No KB match — continuing with instructions only', {
       conversationId: input.conversationId,
       botId: bot.id,
@@ -440,7 +463,7 @@ export async function generateBotReply(
       handoffReason: 'USER_REQUEST',
       botId: bot.id,
       botName: bot.name,
-      ...(input.testMode ? { knowledgeMatches } : {}),
+      ...(input.testMode ? { knowledgeMatches: mergedKnowledgeMatches } : {}),
     };
   }
 
@@ -450,7 +473,7 @@ export async function generateBotReply(
       bot,
       conversation?.contact,
       sanitizedMessage,
-      knowledgeMatches,
+      mergedKnowledgeMatches,
       input.channel || 'text',
       input.testMode,
       input.organizationId,
@@ -482,7 +505,7 @@ export async function generateBotReply(
         botName: bot.name,
         totalTokens: completion.usage?.totalTokens,
         toolCalls: completion.toolCalls,
-        ...(input.testMode ? { knowledgeMatches } : {}),
+        ...(input.testMode ? { knowledgeMatches: mergedKnowledgeMatches } : {}),
       };
     }
 
@@ -499,7 +522,7 @@ export async function generateBotReply(
           name: t.name,
           arguments: t.arguments,
         })),
-        ...(input.testMode ? { knowledgeMatches } : {}),
+        ...(input.testMode ? { knowledgeMatches: mergedKnowledgeMatches } : {}),
       };
     }
 
@@ -514,7 +537,7 @@ export async function generateBotReply(
         botId: bot.id,
         botName: bot.name,
         totalTokens: completion.usage?.totalTokens,
-        ...(input.testMode ? { knowledgeMatches } : {}),
+        ...(input.testMode ? { knowledgeMatches: mergedKnowledgeMatches } : {}),
       };
     }
 
@@ -537,7 +560,7 @@ export async function generateBotReply(
         botId: bot.id,
         botName: bot.name,
         totalTokens: completion.usage?.totalTokens,
-        ...(input.testMode ? { knowledgeMatches } : {}),
+        ...(input.testMode ? { knowledgeMatches: mergedKnowledgeMatches } : {}),
       };
     }
 
@@ -554,7 +577,7 @@ export async function generateBotReply(
       botId: bot.id,
       botName: bot.name,
       totalTokens: completion.usage?.totalTokens,
-      ...(input.testMode ? { knowledgeMatches } : {}),
+      ...(input.testMode ? { knowledgeMatches: mergedKnowledgeMatches } : {}),
     };
   } catch (err) {
     log.error('Bot reply failed', {

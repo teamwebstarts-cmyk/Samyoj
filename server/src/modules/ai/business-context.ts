@@ -1,4 +1,5 @@
 import prisma from '../../config/database';
+import { parseOrgProfile, BUSINESS_INDUSTRIES } from '../settings/org-profile';
 
 export type BusinessExtras = {
   companyName: string;
@@ -6,16 +7,24 @@ export type BusinessExtras = {
   notes: string;
   audience: string;
   valueProps: string[];
+  description?: string;
+  industry?: string;
 };
 
 export function formatBusinessExtrasBlock(extras: BusinessExtras): string {
   const lines: string[] = [];
   if (extras.companyName) lines.push(`Business name: ${extras.companyName}`);
+  if (extras.industry) {
+    const label =
+      BUSINESS_INDUSTRIES.find((row) => row.value === extras.industry)?.label || extras.industry;
+    lines.push(`Industry: ${label}`);
+  }
+  if (extras.description) lines.push(`What we do: ${extras.description}`);
   if (extras.website) lines.push(`Website: ${extras.website}`);
-  if (extras.notes) lines.push(`Extra details:\n${extras.notes}`);
-  if (extras.audience) lines.push(`Who they serve: ${extras.audience}`);
+  if (extras.notes) lines.push(`Policies & boundaries:\n${extras.notes}`);
+  if (extras.audience) lines.push(`Who we serve: ${extras.audience}`);
   const offers = extras.valueProps.filter((item) => item.trim());
-  if (offers.length > 0) lines.push(`What they offer: ${offers.join('; ')}`);
+  if (offers.length > 0) lines.push(`What we offer: ${offers.join('; ')}`);
   return lines.join('\n');
 }
 
@@ -26,7 +35,7 @@ export async function loadBusinessContext(
   const [org, kit] = await Promise.all([
     prisma.organization.findUnique({
       where: { id: organizationId },
-      select: { companyName: true },
+      select: { companyName: true, settings: true },
     }),
     prisma.brandKit.findUnique({
       where: { organizationId },
@@ -34,11 +43,24 @@ export async function loadBusinessContext(
     }),
   ]);
 
+  const settings = (org?.settings as Record<string, unknown>) || {};
+  const profile = parseOrgProfile(settings);
+
+  const botWebsite = overrides?.website?.trim() || '';
+  const botNotes = overrides?.notes?.trim() || '';
+  const orgWebsite = profile.website?.trim() || '';
+  const orgNotes = profile.aiNotes?.trim() || '';
+
+  const notesParts = [botNotes, orgNotes].filter(Boolean);
+  const description = profile.description?.trim() || '';
+
   return {
     companyName: kit?.companyName?.trim() || org?.companyName?.trim() || '',
-    website: overrides?.website?.trim() || '',
-    notes: overrides?.notes?.trim() || '',
+    website: botWebsite || orgWebsite,
+    notes: notesParts.join('\n\n') || description,
     audience: kit?.audience?.trim() || '',
     valueProps: Array.isArray(kit?.valueProps) ? kit.valueProps : [],
+    description: description || undefined,
+    industry: profile.industry || undefined,
   };
 }

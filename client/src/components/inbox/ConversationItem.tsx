@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Bot, Check, GitBranch, LifeBuoy, PhoneOff, Star } from 'lucide-react';
+import { Bot, Check, GitBranch, PhoneOff, Star, Ticket } from 'lucide-react';
 import ContactAvatar from './ContactAvatar';
 import { useGlassTipProps } from './ComposerGlassTip';
 import { softStatusPillStyle } from './details/DetailsSectionCard';
@@ -245,10 +245,10 @@ export default function ConversationItem({
             )}
             {hasTicket && (
               <span
-                className="inline-flex items-center gap-0.5 rounded-md bg-emerald-100/90 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
+                className="inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-md bg-emerald-100/90 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
                 {...tipFor('Has open ticket')}
               >
-                <LifeBuoy className="h-2.5 w-2.5 shrink-0" />
+                <Ticket className="h-3 w-3" strokeWidth={1.9} />
               </span>
             )}
             {activeFlow && (

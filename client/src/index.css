@@ -3727,3 +3727,66 @@
     animation: none;
   }
 }
+
+@keyframes supportThinkingSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes supportThinkingPulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+}
+
+@keyframes supportThinkingShimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+.support-thinking-ring {
+  border: 2px solid transparent;
+  border-top-color: rgb(14 165 233);
+  border-right-color: rgb(56 189 248 / 0.35);
+  animation: supportThinkingSpin 0.9s linear infinite;
+}
+
+.support-thinking-orb {
+  animation: supportThinkingPulse 1.6s ease-in-out infinite;
+}
+
+.support-thinking-bar {
+  background: linear-gradient(
+    90deg,
+    rgb(186 230 253 / 0.45) 0%,
+    rgb(14 165 233 / 0.55) 45%,
+    rgb(186 230 253 / 0.45) 100%
+  );
+  background-size: 200% 100%;
+  animation: supportThinkingShimmer 1.15s ease-in-out infinite;
+}
+
+.support-thinking-bar--late {
+  animation-delay: 0.22s;
+}
+
+.dark .support-thinking-bar {
+  background: linear-gradient(
+    90deg,
+    rgb(12 74 110 / 0.45) 0%,
+    rgb(56 189 248 / 0.5) 45%,
+    rgb(12 74 110 / 0.45) 100%
+  );
+  background-size: 200% 100%;
+}

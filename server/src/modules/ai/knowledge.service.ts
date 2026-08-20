@@ -329,6 +329,47 @@ export async function listBrainTopics(botId: string, limit = 8): Promise<string[
   return items.map((item) => item.title.trim()).filter(Boolean);
 }
 
+export function mergeKnowledgeMatches(
+  primary: KnowledgeMatch[],
+  secondary: KnowledgeMatch[],
+  limit: number
+): KnowledgeMatch[] {
+  const seen = new Set<string>();
+  const out: KnowledgeMatch[] = [];
+  for (const match of [...primary, ...secondary]) {
+    const key = match.title.trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(match);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+/** Try-it preview: token match first, else include draft FAQ rows so Setup/Train still work. */
+export function matchPreviewKnowledge(
+  items: Array<{ title: string; content: string }>,
+  query: string,
+  limit = 5
+): KnowledgeMatch[] {
+  if (items.length === 0) return [];
+  const mapped = items.map((item, index) => ({
+    id: `preview-${index}`,
+    title: item.title,
+    content: item.content,
+    sourceType: 'FAQ',
+  }));
+  const matches = tokenSearch(mapped, expandKnowledgeQuery(query), limit);
+  if (matches.length > 0) return matches;
+  return mapped.slice(0, limit).map((item) => ({
+    id: item.id,
+    title: item.title,
+    content: item.content,
+    score: 0.5,
+    sourceType: item.sourceType,
+  }));
+}
+
 export function formatKnowledgeContext(matches: KnowledgeMatch[]): string {
   if (matches.length === 0) return '';
   return matches

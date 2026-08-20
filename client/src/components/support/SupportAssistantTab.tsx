@@ -20,6 +20,13 @@ function newId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function lastAssistantText(messages: SupportChatMessage[]): string {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    if (messages[i].role === 'assistant') return messages[i].content;
+  }
+  return '';
+}
+
 function lastUserText(messages: SupportChatMessage[]): string {
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     if (messages[i].role === 'user') return messages[i].content;
@@ -42,13 +49,40 @@ export default function SupportAssistantTab({
   const welcomeOnly = !messages.some((m) => m.role === 'user');
   const visibleMessages = messages.filter((m) => m.id !== 'welcome');
   const followUps =
-    !welcomeOnly && !sending && !sendError ? followUpPromptsFor(lastUserText(messages)) : [];
+    !welcomeOnly && !sending && !sendError
+      ? followUpPromptsFor(
+          lastUserText(messages),
+          lastAssistantText(messages),
+          4,
+          messages.filter((m) => m.role === 'user').map((m) => m.content)
+        )
+      : [];
+
+  const followUpButtons =
+    followUps.length > 0 ? (
+      <div className="rounded-xl border border-sky-100/80 bg-sky-50/50 px-3 py-2.5 dark:border-sky-900/40 dark:bg-sky-950/20">
+        <p className="mb-1.5 text-[11px] font-bold text-sky-800 dark:text-sky-200">Suggested for you</p>
+        <div className="flex flex-col gap-1.5">
+          {followUps.map((prompt) => (
+            <button
+              key={prompt.id}
+              type="button"
+              disabled={composerLocked}
+              onClick={() => void sendText(prompt.question)}
+              className={`rounded-lg border border-theme-border/80 bg-theme-surface px-3 py-2 text-left text-[12px] font-semibold leading-snug text-theme-secondary transition hover:border-sky-300 hover:bg-white hover:text-theme-fg disabled:cursor-not-allowed disabled:opacity-45 dark:hover:border-sky-600/40 dark:hover:bg-theme-surface ${FOCUS_RING_CLASS}`}
+            >
+              {prompt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    ) : null;
 
   useEffect(() => {
     const el = listRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
-  }, [messages, sending, sendError, welcomeOnly]);
+  }, [messages, sending, sendError, welcomeOnly, followUps.length]);
 
   useEffect(() => {
     if (assistantOnline === false || welcomeOnly) return;
@@ -108,7 +142,7 @@ export default function SupportAssistantTab({
     <div className="flex min-h-0 flex-1 flex-col">
       <div
         ref={listRef}
-        className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain bg-theme-subtle px-4 py-4"
+        className="inbox-chat-bg min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-3 py-3 sm:px-4"
       >
         {welcomeOnly ? (
           <SupportWelcome disabled={composerLocked} onAsk={(q) => void sendText(q)} />
@@ -134,7 +168,7 @@ export default function SupportAssistantTab({
             ) : (
               <div key={msg.id} className="flex items-start gap-2">
                 <span
-                  className="mt-5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-whatsapp-700 ring-1 ring-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900/60"
+                  className="mt-5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-sky-700 ring-1 ring-sky-200/80 dark:bg-sky-950/40 dark:text-sky-300 dark:ring-sky-900/60"
                   aria-hidden
                 >
                   <Bot className="h-4 w-4" strokeWidth={2.1} />
@@ -153,25 +187,39 @@ export default function SupportAssistantTab({
         )}
         {sending && (
           <div className="flex items-start gap-2">
-            <span className="mt-5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-whatsapp-700 ring-1 ring-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300">
+            <span className="mt-5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-sky-700 ring-1 ring-sky-200/80 dark:bg-sky-950/40 dark:text-sky-300">
               <Bot className="h-4 w-4" strokeWidth={2.1} />
             </span>
-            <div>
-              <p className="mb-1 text-[10px] font-extrabold uppercase tracking-[0.12em] text-theme-muted">
+            <div className="min-w-0 max-w-[85%] flex-1">
+              <p className="mb-1 pl-0.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-theme-muted">
                 Support AI
               </p>
               <div
-                className="inline-flex items-center gap-1 rounded-2xl rounded-bl-md border border-theme-border bg-theme-surface px-3.5 py-3"
+                className="support-thinking-bubble flex min-h-[3.25rem] w-full items-center gap-3 rounded-2xl rounded-bl-md border border-sky-200/80 bg-theme-surface px-4 py-3.5 shadow-sm dark:border-sky-900/50"
                 aria-live="polite"
-                aria-label="Assistant is typing"
+                aria-label="Assistant is thinking"
               >
-                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-theme-muted [animation-delay:-0.32s]" />
-                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-theme-muted [animation-delay:-0.16s]" />
-                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-theme-muted" />
+                <span className="support-thinking-orb relative flex h-9 w-9 shrink-0 items-center justify-center">
+                  <span className="support-thinking-ring absolute inset-0 rounded-full" aria-hidden />
+                  <span className="relative z-[1] flex h-8 w-8 items-center justify-center rounded-full bg-sky-100 text-sky-700 dark:bg-sky-950/70 dark:text-sky-300">
+                    <Bot className="h-4 w-4" strokeWidth={2.2} />
+                  </span>
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[12.5px] font-bold text-sky-800 dark:text-sky-200">
+                    Thinking…
+                  </span>
+                  <span className="support-thinking-bars mt-1.5 flex flex-col gap-1.5" aria-hidden>
+                    <span className="support-thinking-bar h-1.5 w-[88%] rounded-full" />
+                    <span className="support-thinking-bar support-thinking-bar--late h-1.5 w-[62%] rounded-full" />
+                  </span>
+                </span>
               </div>
             </div>
           </div>
         )}
+
+        {!welcomeOnly && !sending && followUpButtons}
       </div>
 
       <div className="shrink-0 border-t border-theme-border bg-theme-surface px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
@@ -200,27 +248,6 @@ export default function SupportAssistantTab({
           </div>
         )}
 
-        {followUps.length > 0 && (
-          <div className="mb-2.5">
-            <p className="mb-1.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-theme-muted">
-              Related
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {followUps.map((prompt) => (
-                <button
-                  key={prompt.id}
-                  type="button"
-                  disabled={composerLocked}
-                  onClick={() => void sendText(prompt.question)}
-                  className={`inline-flex max-w-full items-center rounded-full border border-theme-border bg-theme-subtle px-2.5 py-1 text-[11.5px] font-bold text-theme-secondary transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-theme-fg disabled:cursor-not-allowed disabled:opacity-45 dark:hover:border-emerald-500/35 dark:hover:bg-emerald-950/40 ${FOCUS_RING_CLASS}`}
-                >
-                  {prompt.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
         <div className="relative">
           <textarea
             ref={inputRef}
@@ -233,27 +260,18 @@ export default function SupportAssistantTab({
               assistantOnline === false ? 'Assistant is unavailable' : 'Type your question...'
             }
             disabled={composerLocked}
-            className="w-full resize-none rounded-2xl border border-theme-border bg-theme-subtle/50 py-3 pl-3.5 pr-12 text-[13.5px] font-medium text-theme-fg shadow-input placeholder:text-theme-muted focus:border-emerald-400 focus:outline-none focus:shadow-[0_0_0_4px_rgba(8,127,91,0.14)] disabled:opacity-60"
+            className="w-full resize-none rounded-2xl border border-theme-border bg-theme-subtle/50 py-3 pl-3.5 pr-12 text-[13.5px] font-medium text-theme-fg shadow-input placeholder:text-theme-muted focus:border-sky-400 focus:outline-none focus:shadow-[0_0_0_4px_rgba(14,165,233,0.14)] disabled:opacity-60"
             aria-label="Type your question"
           />
           <button
             type="button"
             onClick={() => void send()}
             disabled={!draft.trim() || composerLocked}
-            className={`absolute bottom-2.5 right-2.5 flex h-9 w-9 items-center justify-center rounded-full bg-whatsapp-600 text-white shadow-[0_2px_8px_rgba(18,140,126,0.35)] transition hover:bg-whatsapp-700 disabled:cursor-not-allowed disabled:bg-neutral-300 disabled:shadow-none ${FOCUS_RING_CLASS}`}
+            className={`absolute bottom-2.5 right-2.5 flex h-9 w-9 items-center justify-center rounded-full bg-sky-600 text-white shadow-[0_2px_8px_rgba(14,165,233,0.35)] transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-neutral-300 disabled:shadow-none ${FOCUS_RING_CLASS}`}
             aria-label="Send"
           >
             <Send className="h-4 w-4" strokeWidth={2.2} />
           </button>
-        </div>
-        <div className="mt-2 flex items-center justify-between text-[10.5px] font-semibold text-theme-muted">
-          <span>
-            <kbd className="rounded-md border border-theme-border bg-theme-subtle px-1.5 py-0.5 font-bold">
-              Enter
-            </kbd>{' '}
-            to send
-          </span>
-          <span>Don&apos;t share passwords or OTPs</span>
         </div>
       </div>
     </div>

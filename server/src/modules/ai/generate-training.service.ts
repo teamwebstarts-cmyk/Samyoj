@@ -123,7 +123,7 @@ export async function generateTrainingFaqs(input: {
   organizationId: string;
   intent: string;
   channel: TrainingChannel;
-  botId: string;
+  botId?: string;
   existingTitles: string[];
   existingCount: number;
   whatsappNumberId?: string;

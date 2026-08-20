@@ -20,7 +20,6 @@ interface AiBotCardProps {
   onToggle: () => void;
   onDelete?: () => void;
   onToggleAllChats?: () => void;
-  onToggleAllCalls?: () => void;
 }
 
 function relativeTime(dateStr: string): string {
@@ -49,28 +48,16 @@ function successRateBadge(rate: number): { text: string; bg: string } {
 export function AllChatsSwitch({
   applied,
   onClick,
-  noun = 'chats',
 }: {
   applied: boolean;
   onClick: () => void;
-  noun?: 'chats' | 'calls';
 }) {
-  const onLabel = noun === 'calls' ? 'All calls' : 'All chats';
-  const aria = noun === 'calls'
-    ? applied
-      ? 'Stop this bot answering all calls'
-      : 'Let this bot answer all calls'
-    : applied
-      ? 'Remove this bot from all chats'
-      : 'Apply this bot to all chats';
-  const title =
-    noun === 'calls'
-      ? applied
-        ? 'On — this bot answers all calls. Off sends the call to a person, or misses if nobody is free.'
-        : 'Off — turn on so this bot answers all calls'
-      : applied
-        ? 'On for all chats — turn off to remove'
-        : 'Off — turn on to apply to all chats';
+  const aria = applied
+    ? 'Remove this bot as default'
+    : 'Set this bot as default';
+  const title = applied
+    ? 'On as default — turn off to remove'
+    : 'Off — turn on to set as default';
   return (
     <button
       type="button"
@@ -85,7 +72,7 @@ export function AllChatsSwitch({
           : 'border-theme-border bg-theme-surface text-theme-secondary hover:bg-theme-subtle hover:text-theme-fg'
       }`}
     >
-      <span className="hidden lg:inline">{onLabel}</span>
+      <span className="hidden sm:inline">Default</span>
       <span
         className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition ${
           applied ? 'bg-sky-500' : 'bg-neutral-300 dark:bg-neutral-600'
@@ -111,7 +98,6 @@ export default function AiBotCard({
   onToggle,
   onDelete,
   onToggleAllChats,
-  onToggleAllCalls,
 }: AiBotCardProps) {
   const faqCount = bot._count?.knowledgeItems ?? 0;
   const isChat = (bot.channel ?? 'CHAT') === 'CHAT';
@@ -212,13 +198,6 @@ export default function AiBotCard({
           </button>
           {isChat && onToggleAllChats && (
             <AllChatsSwitch applied={Boolean(bot.appliedToAll)} onClick={onToggleAllChats} />
-          )}
-          {!isChat && onToggleAllCalls && (
-            <AllChatsSwitch
-              noun="calls"
-              applied={Boolean(answersCalls)}
-              onClick={onToggleAllCalls}
-            />
           )}
           <button
             type="button"

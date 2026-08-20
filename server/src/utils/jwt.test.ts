@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
-import { signAccessToken, verifyAccessToken, verifyRefreshToken } from './jwt';
+import { signAccessToken, signRefreshToken, verifyAccessToken, verifyRefreshToken } from './jwt';
 
 describe('JWT algorithm pinning', () => {
   it('accepts HS256 access tokens', () => {
@@ -21,5 +21,14 @@ describe('JWT algorithm pinning', () => {
       algorithm: 'HS384',
     });
     expect(() => verifyRefreshToken(token)).toThrow();
+  });
+
+  it('issues a unique refresh token even when signed in the same second', () => {
+    const payload = { userId: 'u1', email: 'a@b.c', organizationId: 'o1' };
+    const a = signRefreshToken(payload);
+    const b = signRefreshToken(payload);
+    expect(a).not.toBe(b);
+    expect(verifyRefreshToken(a)).toMatchObject({ userId: 'u1' });
+    expect(verifyRefreshToken(b)).toMatchObject({ userId: 'u1' });
   });
 });

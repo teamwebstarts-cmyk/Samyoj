@@ -16,6 +16,7 @@ import {
   clearDefaultFlag,
   DEFAULT_INSTRUCTIONS,
   ensureSystemSupportBots,
+  findBotNameConflict,
   getBot,
   hardcodedBotLlmDefaults,
   listBots,
@@ -30,6 +31,7 @@ import { generateTrainingFaqs } from '../ai/generate-training.service';
 import { getOrgCallingSettings, saveOrgCallingSettings } from '../calling/settings.service';
 import { DEFAULT_CALLING_SETTINGS } from '../calling/calling-settings.types';
 import {
+  buildPreviewAiBot,
   publicKnowledgeHasEmbedding,
   resolveAiBotTestChannel,
   sanitizeAiBotTestHistory,
@@ -189,6 +191,10 @@ router.post(
     const channel = data.channel === 'CALL' ? 'CALL' : 'CHAT';
     const llm = hardcodedBotLlmDefaults();
 
+    if (await findBotNameConflict(orgId, data.name, channel)) {
+      throw new AppError(409, 'Another bot already uses this name. Pick a different name.');
+    }
+
     if (channel === 'CHAT' && data.isDefault) {
       await clearDefaultFlag(orgId);
     }
@@ -303,6 +309,106 @@ router.post(
   })
 );
 
+router.post(
+  '/preview/test',
+  ...readGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const body = z
+      .object({
+        message: z.string().min(1).max(2000),
+        channel: z.enum(['CHAT', 'CALL']).default('CHAT'),
+        name: z.string().min(1).max(80),
+        instructions: z.string().max(8000).optional(),
+        offerHandoff: z.boolean().optional(),
+        businessHoursOnly: z.boolean().optional(),
+        history: z
+          .array(
+            z.object({
+              role: z.enum(['user', 'assistant']),
+              content: z.string().min(1).max(2000),
+            })
+          )
+          .max(12)
+          .optional(),
+        previewKnowledge: z
+          .array(
+            z.object({
+              title: z.string().min(1).max(200),
+              content: z.string().min(1).max(2000),
+            })
+          )
+          .max(12)
+          .optional(),
+      })
+      .parse(req.body);
+
+    let numberId: string | undefined;
+    try {
+      numberId = await resolveActiveWhatsappNumberId(orgId, req.headers['x-whatsapp-number-id']);
+    } catch (err) {
+      if (err instanceof AppError && err.statusCode === 409) throw err;
+      numberId = undefined;
+    }
+
+    const previewBot = buildPreviewAiBot(orgId, body.channel, body);
+    const result = await generateBotReply({
+      organizationId: orgId,
+      conversationId: 'preview-test',
+      inboundMessage: body.message,
+      testMode: true,
+      channel: resolveAiBotTestChannel(body.channel),
+      instructionsOverride: body.instructions?.trim() || undefined,
+      previewKnowledge: body.previewKnowledge,
+      liveVoiceTurns: sanitizeAiBotTestHistory(body.history),
+      whatsappNumberId: numberId,
+      previewBot,
+    });
+
+    sendSuccess(res, result);
+  })
+);
+
+router.post(
+  '/preview/generate-training',
+  ...adminGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const { intent, channel, businessWebsite, businessNotes, existingTitles } = z
+      .object({
+        intent: z.string().min(8).max(800),
+        channel: z.enum(['CHAT', 'CALL']).default('CHAT'),
+        businessWebsite: z.string().max(300).optional().nullable(),
+        businessNotes: z.string().max(2000).optional().nullable(),
+        existingTitles: z.array(z.string().max(200)).max(50).optional(),
+      })
+      .parse(req.body);
+
+    let numberId: string | undefined;
+    try {
+      numberId = await resolveActiveWhatsappNumberId(orgId, req.headers['x-whatsapp-number-id']);
+    } catch (err) {
+      if (err instanceof AppError && (err.statusCode === 409 || err.statusCode === 400)) {
+        throw err;
+      }
+      throw err;
+    }
+
+    const titles = existingTitles ?? [];
+    const items = await generateTrainingFaqs({
+      organizationId: orgId,
+      intent,
+      channel: channel === 'CALL' ? 'CALL' : 'CHAT',
+      existingTitles: titles,
+      existingCount: titles.length,
+      whatsappNumberId: numberId,
+      businessWebsite,
+      businessNotes,
+    });
+    sendSuccess(res, { items });
+  })
+);
+
 router.patch(
   '/calling-ai',
   ...adminGuard,
@@ -363,6 +469,10 @@ router.patch(
 
     const existing = await prisma.aiBot.findFirst({ where: { id, organizationId: orgId } });
     if (!existing) throw new AppError(404, 'Bot not found');
+
+    if (data.name && (await findBotNameConflict(orgId, data.name, existing.channel, id))) {
+      throw new AppError(409, 'Another bot already uses this name. Pick a different name.');
+    }
 
     if (existing.channel === 'CHAT' && data.isDefault) {
       await clearDefaultFlag(orgId, id);
@@ -769,7 +879,7 @@ router.post(
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const botId = paramId(req);
-    const { message, instructions, history } = z
+    const { message, instructions, history, previewKnowledge } = z
       .object({
         message: z.string().min(1).max(2000),
         instructions: z.string().max(8000).optional(),
@@ -777,6 +887,15 @@ router.post(
           .array(
             z.object({
               role: z.enum(['user', 'assistant']),
+              content: z.string().min(1).max(2000),
+            })
+          )
+          .max(12)
+          .optional(),
+        previewKnowledge: z
+          .array(
+            z.object({
+              title: z.string().min(1).max(200),
               content: z.string().min(1).max(2000),
             })
           )
@@ -804,6 +923,7 @@ router.post(
       testMode: true,
       channel: resolveAiBotTestChannel(bot.channel),
       instructionsOverride: instructions?.trim() || undefined,
+      previewKnowledge: previewKnowledge,
       liveVoiceTurns: sanitizeAiBotTestHistory(history),
       whatsappNumberId: numberId,
     });

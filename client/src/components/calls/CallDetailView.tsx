@@ -20,6 +20,7 @@ import {
 import { Link } from 'react-router-dom';
 import CallSummaryNote from './CallSummaryNote';
 import CallingAiPicker from './CallingAiPicker';
+import type { AiBot } from '../../types';
 import ContactAvatar from '../inbox/ContactAvatar';
 import AppButton from '../ui/AppButton';
 import { getAgentPeerConnection } from '../../utils/agentCallRTC';
@@ -54,6 +55,11 @@ interface CallDetailViewProps {
   callingAiEnabled?: boolean;
   onCallingAiChange?: (enabled: boolean) => void;
   callingAiSaving?: boolean;
+  answeringCallBotId?: string | null;
+  callBots?: AiBot[];
+  botsLoading?: boolean;
+  botAssigning?: boolean;
+  onSelectCallBot?: (botId: string) => void;
   transcript?: TranscriptEntry[] | null;
   summary?: string | null;
   onBack?: () => void;
@@ -97,6 +103,11 @@ export default function CallDetailView({
   callingAiEnabled = true,
   onCallingAiChange,
   callingAiSaving,
+  answeringCallBotId = null,
+  callBots = [],
+  botsLoading = false,
+  botAssigning = false,
+  onSelectCallBot,
   transcript,
   summary,
   onBack,
@@ -202,6 +213,11 @@ export default function CallDetailView({
                 saving={callingAiSaving}
                 botName={botName}
                 onChange={onCallingAiChange}
+                answeringCallBotId={answeringCallBotId}
+                callBots={callBots}
+                botsLoading={botsLoading}
+                botAssigning={botAssigning}
+                onSelectBot={onSelectCallBot}
               />
             </span>
           ) : null}
@@ -219,7 +235,7 @@ export default function CallDetailView({
               </button>
               <AppButton
                 variant="secondary"
-                size="sm"
+                size="header"
                 loading={callingBack}
                 onClick={onCallBack}
                 title="Call this contact back"
@@ -241,7 +257,7 @@ export default function CallDetailView({
                 <MessageSquare className="h-[18px] w-[18px]" strokeWidth={2.1} />
               </span>
               <span className="hidden sm:inline-flex">
-                <AppButton variant="primary" size="sm">
+                <AppButton variant="primary" size="header">
                   <MessageSquare className="h-3.5 w-3.5" />
                   Open chat
                 </AppButton>
@@ -259,7 +275,7 @@ export default function CallDetailView({
                 <MessageSquare className="h-[18px] w-[18px]" strokeWidth={2.1} />
               </button>
               <span className="hidden sm:inline-flex">
-                <AppButton variant="secondary" size="sm" disabled title="No linked chat yet">
+                <AppButton variant="secondary" size="header" disabled title="No linked chat yet">
                   <MessageSquare className="h-3.5 w-3.5" />
                   Open chat
                 </AppButton>
@@ -270,7 +286,7 @@ export default function CallDetailView({
           {active && onEndCall && (
             <AppButton
               variant="danger"
-              size="sm"
+              size="header"
               loading={ending}
               onClick={onEndCall}
               className="hidden sm:inline-flex"

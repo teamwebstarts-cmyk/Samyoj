@@ -389,6 +389,20 @@ export const settingsApi = {
     batchDelayMs?: number;
     mapFirstBodyVariableToName?: boolean;
   }) => api.patch('/settings/campaigns', data),
+  getProfile: () => api.get('/settings/profile'),
+  updateProfile: (data: {
+    companyName?: string;
+    description?: string;
+    industry?: string;
+    website?: string;
+    email?: string;
+    address?: string;
+    aiNotes?: string;
+    audience?: string | null;
+    valueProps?: string[];
+    defaultLocale?: string;
+    timezone?: string;
+  }) => api.patch('/settings/profile', data),
 };
 
 export const callingApi = {
@@ -437,6 +451,23 @@ export const aiBotApi = {
     businessWebsite?: string;
     businessNotes?: string;
   }) => api.post('/ai-bot/generate-personality', data),
+  previewTest: (data: {
+    message: string;
+    channel: 'CHAT' | 'CALL';
+    name: string;
+    instructions?: string;
+    offerHandoff?: boolean;
+    businessHoursOnly?: boolean;
+    history?: Array<{ role: 'user' | 'assistant'; content: string }>;
+    previewKnowledge?: Array<{ title: string; content: string }>;
+  }) => api.post('/ai-bot/preview/test', data),
+  previewGenerateTraining: (data: {
+    intent: string;
+    channel: 'CHAT' | 'CALL';
+    businessWebsite?: string;
+    businessNotes?: string;
+    existingTitles?: string[];
+  }) => api.post('/ai-bot/preview/generate-training', data),
   generateTraining: (
     botId: string,
     data: { intent: string; businessWebsite?: string; businessNotes?: string }
@@ -453,6 +484,7 @@ export const aiBotApi = {
       message: string;
       instructions?: string;
       history?: Array<{ role: 'user' | 'assistant'; content: string }>;
+      previewKnowledge?: Array<{ title: string; content: string }>;
     }
   ) => api.post(`/ai-bot/${botId}/test`, data),
   applyToAllChats: (botId: string) => api.post(`/ai-bot/${botId}/apply-all`),

@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { callingApi, contactApi } from '../services/api';
+import CallingAiToggleBanner from '../components/calls/CallingAiToggleBanner';
+import { callingApi, contactApi, aiBotApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import type { InternalNote } from '../types';
 import { useSocket } from '../hooks/useSocket';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
+import { useCallingBots } from '../hooks/useCallingBots';
 import CallDetailView from '../components/calls/CallDetailView';
 import CallDetailsPanel from '../components/calls/CallDetailsPanel';
 import type { CallDetailsSection } from '../components/calls/CallDetailsPanel';
@@ -99,8 +101,15 @@ function parseCall(raw: CallRecord): CallRecord {
 }
 
 export default function CallsPage() {
-  const { user } = useAuth();
+  const { user, canManageTeam } = useAuth();
   const { activeNumber, resolved } = useWhatsAppNumber();
+  const {
+    callBots,
+    answeringCallBotId,
+    loading: callBotsLoading,
+    assigning: callBotAssigning,
+    selectCallBot,
+  } = useCallingBots();
   const { callId: routeCallId } = useParams();
   const navigate = useNavigate();
 
@@ -117,6 +126,8 @@ export default function CallsPage() {
   const [chip, setChip] = useState('');
   const [internalNotes, setInternalNotes] = useState<InternalNote[]>([]);
   const [callingAiSaving, setCallingAiSaving] = useState(false);
+  const [orgCallingAiEnabled, setOrgCallingAiEnabled] = useState<boolean | null>(null);
+  const [orgCallingAiSaving, setOrgCallingAiSaving] = useState(false);
   const [callMenu, setCallMenu] = useState<{ x: number; y: number; callId: string } | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [deleteCallTarget, setDeleteCallTarget] = useState<CallRecord | null>(null);
@@ -194,7 +205,16 @@ export default function CallsPage() {
   const load = useCallback(async () => {
     if (!resolved || !activeNumber) return;
     try {
-      await Promise.all([callingApi.status(), loadCalls()]);
+      await Promise.all([
+        callingApi.status(),
+        loadCalls(),
+        aiBotApi
+          .list('CALL')
+          .then(({ data }) => {
+            setOrgCallingAiEnabled(Boolean(data.data?.callingAiEnabled ?? true));
+          })
+          .catch(() => setOrgCallingAiEnabled(null)),
+      ]);
     } catch {
       toastError('Could not load calls. Please refresh the page.');
     } finally {
@@ -300,7 +320,7 @@ export default function CallsPage() {
     cleanupAgentCall();
   }, []);
 
-  const { state: socketState } = useSocket((event, data) => {
+  useSocket((event, data) => {
     if (event === 'call:incoming') {
       const payload = data as { fromPhone: string; contactName?: string };
       toastSuccess(`Incoming call from ${payload.contactName || payload.fromPhone}`);
@@ -673,9 +693,25 @@ export default function CallsPage() {
     }
   }
 
+  async function handleOrgCallingAiChange(enabled: boolean) {
+    if (orgCallingAiSaving) return;
+    const previous = orgCallingAiEnabled;
+    setOrgCallingAiEnabled(enabled);
+    setOrgCallingAiSaving(true);
+    try {
+      await aiBotApi.setCallingAi(enabled);
+      toastSuccess(enabled ? 'AI calling on' : 'AI calling off', { id: 'org-calling-ai' });
+    } catch {
+      setOrgCallingAiEnabled(previous);
+      toastError('Could not update AI calling.', { id: 'org-calling-ai' });
+    } finally {
+      setOrgCallingAiSaving(false);
+    }
+  }
+
   async function handleCallingAiChange(enabled: boolean) {
     const contactId = selectedCall?.contact?.id;
-    if (!contactId || !selectedCall) return;
+    if (!contactId || !selectedCall || callingAiSaving) return;
     const previous = selectedCall.contact?.callingAiEnabled !== false;
     setCallingAiSaving(true);
     setCalls((prev) =>
@@ -687,7 +723,9 @@ export default function CallsPage() {
     );
     try {
       await contactApi.update(contactId, { callingAiEnabled: enabled });
-      toastSuccess(enabled ? 'AI will answer this person.' : 'This person will reach a human.');
+      toastSuccess(enabled ? 'AI answers this person' : 'Human pickup for this person', {
+        id: 'contact-calling-ai',
+      });
     } catch {
       setCalls((prev) =>
         prev.map((call) =>
@@ -726,7 +764,23 @@ export default function CallsPage() {
   return (
     <InboxGlassTipProvider>
     <PageShell inbox>
-      <div className="flex h-full min-h-0 flex-1 overflow-hidden">
+      <div className="flex h-full min-h-0 flex-1 flex-col gap-2 overflow-hidden sm:gap-[var(--density-stack-gap)]">
+        {orgCallingAiEnabled !== null ? (
+          <div className="shrink-0 max-md:px-3 max-md:pt-3">
+            <CallingAiToggleBanner
+              enabled={orgCallingAiEnabled}
+              saving={orgCallingAiSaving}
+              canToggle={canManageTeam}
+              onChange={(next) => void handleOrgCallingAiChange(next)}
+              answeringCallBotId={answeringCallBotId}
+              callBots={callBots}
+              botsLoading={callBotsLoading}
+              botAssigning={callBotAssigning}
+              onSelectBot={(botId) => void selectCallBot(botId)}
+            />
+          </div>
+        ) : null}
+      <div className="flex min-h-0 flex-1 overflow-hidden">
         <div className="inbox-shell relative flex h-full min-h-0 w-full flex-1 flex-row overflow-hidden md:rounded-2xl">
         {/* List pane */}
         <div
@@ -831,6 +885,11 @@ export default function CallsPage() {
                 callingAiEnabled={selectedCall.contact?.callingAiEnabled !== false}
                 onCallingAiChange={(enabled) => void handleCallingAiChange(enabled)}
                 callingAiSaving={callingAiSaving}
+                answeringCallBotId={answeringCallBotId}
+                callBots={callBots}
+                botsLoading={callBotsLoading}
+                botAssigning={callBotAssigning}
+                onSelectCallBot={(botId) => void selectCallBot(botId)}
                 transcript={selectedTranscript}
                 summary={selectedCall.metadata?.summary || null}
                 onBack={() => {
@@ -869,14 +928,12 @@ export default function CallsPage() {
               />
             </div>
           ) : (
-            <CallsSelectEmpty
-              liveConnected={socketState.status === 'connected'}
-              onFocusSearch={() => searchInputRef.current?.focus()}
-            />
+            <CallsSelectEmpty />
           )}
         </div>
 
         </div>
+      </div>
       </div>
 
       <CallContextMenu

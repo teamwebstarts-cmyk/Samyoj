@@ -14,8 +14,23 @@ import { DEFAULT_CAMPAIGN_SETTINGS, type CampaignSettings } from '../campaigns/t
 import { getOrgCallingSettings } from '../calling/settings.service';
 import { getOrgFeatureFlags, setFeatureFlag } from './feature-flags';
 import { resolveActiveWhatsappNumberId } from '../whatsapp/active-number';
+import { BUSINESS_INDUSTRIES, getOrgProfile, saveOrgProfile } from './org-profile';
 
 const router = Router();
+
+const profilePatchSchema = z.object({
+  companyName: z.string().min(2).max(120).optional(),
+  description: z.string().max(512).optional(),
+  industry: z.string().max(64).optional(),
+  website: z.string().max(256).optional(),
+  email: z.string().email().max(128).optional().or(z.literal('')),
+  address: z.string().max(256).optional(),
+  aiNotes: z.string().max(2000).optional(),
+  audience: z.string().max(500).optional().nullable(),
+  valueProps: z.array(z.string().max(200)).max(8).optional(),
+  defaultLocale: z.string().max(16).optional(),
+  timezone: z.string().max(64).optional(),
+});
 
 const campaignSettingsSchema = z.object({
   dailySendLimit: z.number().int().min(1).max(100000).optional(),
@@ -200,6 +215,26 @@ router.patch(
       metadata
     );
     sendSuccess(res, { flag: flag.flag, enabled: flag.enabled, metadata: flag.metadata });
+  })
+);
+
+router.get(
+  '/profile',
+  authenticate,
+  requireOrg,
+  asyncHandler(async (req: Request, res: Response) => {
+    const profile = await getOrgProfile(req.user!.organizationId!);
+    sendSuccess(res, { profile, industries: BUSINESS_INDUSTRIES });
+  })
+);
+
+router.patch(
+  '/profile',
+  ...adminGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const data = profilePatchSchema.parse(req.body);
+    const profile = await saveOrgProfile(req.user!.organizationId!, data);
+    sendSuccess(res, { profile, industries: BUSINESS_INDUSTRIES });
   })
 );
 

@@ -6,31 +6,29 @@ import {
 } from './prompts';
 
 describe('support suggested prompts', () => {
-  it('keeps the empty state to 6–10 starters', () => {
-    expect(SUPPORT_STARTER_PROMPTS.length).toBeGreaterThanOrEqual(6);
-    expect(SUPPORT_STARTER_PROMPTS.length).toBeLessThanOrEqual(10);
+  it('keeps the welcome screen to a short list', () => {
+    expect(SUPPORT_STARTER_PROMPTS.length).toBeGreaterThanOrEqual(2);
+    expect(SUPPORT_STARTER_PROMPTS.length).toBeLessThanOrEqual(3);
   });
 
-  it('covers the core product how-tos', () => {
-    const blob = SUPPORT_STARTER_PROMPTS.map((p) => `${p.label} ${p.question}`).join(' ').toLowerCase();
-    expect(blob).toMatch(/connect whatsapp/);
-    expect(blob).toMatch(/template/);
-    expect(blob).toMatch(/all chats/);
-    expect(blob).toMatch(/calling bot/);
-    expect(blob).toMatch(/inbound|replies/);
-    expect(blob).toMatch(/campaign/);
-    expect(blob).toMatch(/train/);
-    expect(blob).toMatch(/opt-in|opt in/);
+  it('covers connect and inbound on the welcome screen', () => {
+    const ids = SUPPORT_STARTER_PROMPTS.map((p) => p.id);
+    expect(ids).toContain('connect');
+    expect(ids).toContain('inbound');
   });
 
-  it('returns related follow-ups after a connect question', () => {
-    const follow = followUpPromptsFor('How do I connect WhatsApp?');
-    expect(follow).toHaveLength(3);
+  it('returns personalized follow-ups after a connect question', () => {
+    const follow = followUpPromptsFor(
+      'How do I connect my WhatsApp business number in Samyoj?',
+      '1. Open Settings. 2. Click Connect WhatsApp.'
+    );
+    expect(follow.length).toBeGreaterThanOrEqual(2);
+    expect(follow.length).toBeLessThanOrEqual(4);
     expect(follow.some((p) => p.id === 'connect')).toBe(false);
     expect(follow.some((p) => p.topicId === 'inbound' || p.id === 'inbound')).toBe(true);
   });
 
-  it('matches a starter question exactly', () => {
-    expect(matchPrompt('How do I start a campaign?')?.id).toBe('campaign');
+  it('matches a follow-up question exactly', () => {
+    expect(matchPrompt('How do I create and send a WhatsApp campaign?')?.id).toBe('campaign');
   });
 });

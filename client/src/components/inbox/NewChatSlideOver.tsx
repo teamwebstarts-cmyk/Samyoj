@@ -92,7 +92,7 @@ export default function NewChatSlideOver({
       open={open}
       onClose={onClose}
       title="New chat"
-      subtitle="Start a conversation with a customer"
+      subtitle="Enter a phone number to start chatting"
       icon={MessageCircle}
       accent="emerald"
       footer={
@@ -101,6 +101,7 @@ export default function NewChatSlideOver({
     >
       <form id="slideover-form" onSubmit={handleSubmit} className="new-chat-form space-y-5">
         <ContactFieldsForm
+          key={open ? 'new-chat-open' : 'new-chat-closed'}
           form={form}
           onChange={(next) => {
             setForm(next);
@@ -109,6 +110,7 @@ export default function NewChatSlideOver({
           phoneMode="inbox"
           phoneId={phoneId}
           phoneError={phoneError}
+          layout="compact"
         />
       </form>
     </SlideOver>

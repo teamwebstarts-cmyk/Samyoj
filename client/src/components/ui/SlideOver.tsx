@@ -162,6 +162,7 @@ interface SlideOverFooterProps {
   submitDisabled?: boolean;
   submitVariant?: 'primary' | 'secondary';
   primaryDisabled?: boolean;
+  hideSubmit?: boolean;
   onDelete?: () => void;
   deleteLabel?: string;
   primaryAction?: {
@@ -177,6 +178,7 @@ export function SlideOverFooter({
   submitDisabled,
   submitVariant = 'primary',
   primaryDisabled,
+  hideSubmit,
   onDelete,
   deleteLabel = 'Delete',
   primaryAction,
@@ -208,17 +210,19 @@ export function SlideOverFooter({
         >
           Cancel
         </button>
-        <button
-          type="submit"
-          form="slideover-form"
-          disabled={loading || submitDisabled}
-          className={`${submitClass} ${FOCUS_RING_CLASS}`}
-        >
-          {loading && !primaryAction && (
-            <span className="h-4 w-4 animate-spin rounded-full border-2 border-current/25 border-t-current" />
-          )}
-          {submitLabel}
-        </button>
+        {!hideSubmit && (
+          <button
+            type="submit"
+            form="slideover-form"
+            disabled={loading || submitDisabled}
+            className={`${submitClass} ${FOCUS_RING_CLASS}`}
+          >
+            {loading && !primaryAction && (
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-current/25 border-t-current" />
+            )}
+            {submitLabel}
+          </button>
+        )}
         {primaryAction && (
           <button
             type="button"

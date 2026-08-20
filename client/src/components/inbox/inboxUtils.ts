@@ -245,6 +245,24 @@ export function alignCallSummariesInThread(messages: Message[]): Message[] {
   return ordered;
 }
 
+/** Replace {{1}} / {{2}} with the values that were actually sent. */
+export function fillTemplateMessageContent(
+  content: string,
+  params?: { body?: string[]; header?: string[] } | null
+): string {
+  if (!content || !/\{\{\d+\}\}/.test(content)) return content;
+  const body = params?.body ?? [];
+  const header = params?.header ?? [];
+  return content.replace(/\{\{(\d+)\}\}/g, (match, raw: string) => {
+    const i = Number(raw) - 1;
+    const fromBody = body[i]?.trim();
+    if (fromBody) return fromBody;
+    const fromHeader = header[i]?.trim();
+    if (fromHeader) return fromHeader;
+    return match;
+  });
+}
+
 export function getMessagePreview(message?: Pick<Message, 'type' | 'content' | 'metadata'>) {
   if (!message) return 'No messages yet';
   if (isAgentOnlyChatMessage(message)) return 'Call summary';
@@ -273,7 +291,7 @@ export function getMessagePreview(message?: Pick<Message, 'type' | 'content' | '
     case 'DOCUMENT':
       return meta?.filename || message.content || 'Document';
     case 'TEMPLATE':
-      return message.content || 'Template message';
+      return fillTemplateMessageContent(message.content, meta?.templateParams) || 'Template message';
     case 'LOCATION':
       return meta?.location?.name || message.content || 'Location';
     case 'CONTACTS':

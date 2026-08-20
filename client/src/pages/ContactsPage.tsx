@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Activity,
@@ -40,14 +40,14 @@ import ResponsiveDataView from '../components/ui/ResponsiveDataView';
 import Pagination from '../components/ui/Pagination';
 import SegmentedControl from '../components/ui/SegmentedControl';
 import SlideOver, { SlideOverFooter } from '../components/ui/SlideOver';
-import { ModalCallout } from '../components/ui/modalUi';
 import { DEFAULT_PAGE_SIZE } from '../constants/pagination';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { contactApi } from '../services/api';
 import { downloadBlob } from '../utils/contactUtils';
-import { PHONE_HINT, validatePhone } from '../utils/phone';
+import { validatePhone } from '../utils/phone';
+import { formatPhoneDisplay } from '../utils/formatPhone';
 import { toastError, toastSuccess } from '../utils/toast';
 import { readNumberCache, writeNumberCache } from '../utils/whatsappNumberCache';
 import { messagingConsent } from '../utils/plainLanguage';
@@ -70,6 +70,7 @@ type ContactsNumberCache = {
 };
 
 export default function ContactsPage() {
+  const phoneId = useId();
   const { activeNumber, resolved } = useWhatsAppNumber();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -100,6 +101,7 @@ export default function ContactsPage() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [editing, setEditing] = useState<Contact | null>(null);
   const [form, setForm] = useState<ContactFormValues>(emptyForm);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkTags, setBulkTags] = useState('');
@@ -283,11 +285,13 @@ export default function ContactsPage() {
   const openCreate = () => {
     setEditing(null);
     setForm(emptyForm);
+    setPhoneError(null);
     setSlideOpen(true);
   };
 
   const openEdit = (contact: Contact) => {
     setEditing(contact);
+    setPhoneError(null);
     setForm({
       phone: contact.phone,
       name: contact.name || '',
@@ -309,6 +313,7 @@ export default function ContactsPage() {
     setSlideOpen(false);
     setEditing(null);
     setForm(emptyForm);
+    setPhoneError(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -320,6 +325,7 @@ export default function ContactsPage() {
     if (!editing) {
       const phoneResult = validatePhone(form.phone);
       if (!phoneResult.ok) {
+        setPhoneError(phoneResult.error);
         toastError(phoneResult.error);
         return;
       }
@@ -869,7 +875,11 @@ export default function ContactsPage() {
         open={slideOpen}
         onClose={closeSlide}
         title={editing ? 'Edit contact' : 'Add contact'}
-        subtitle={editing ? 'Update contact details' : 'Save a new customer contact'}
+        subtitle={
+          editing
+            ? `Phone ${formatPhoneDisplay(editing.phone)} — update details below`
+            : 'Enter a phone number to save a contact'
+        }
         icon={UserCheck}
         accent="sky"
         footer={
@@ -882,23 +892,23 @@ export default function ContactsPage() {
           />
         }
       >
-        <form id="slideover-form" onSubmit={handleSubmit} className="space-y-4">
-          {!editing && (
-            <ModalCallout
-              icon={UserCheck}
-              accent="sky"
-              title="New customer record"
-              description="Use international format with country code for WhatsApp delivery."
-            />
-          )}
-
+        <form
+          id="slideover-form"
+          onSubmit={handleSubmit}
+          className="new-chat-form space-y-5"
+        >
           <ContactFieldsForm
+            key={slideOpen ? (editing?.id ?? 'add-contact') : 'contact-closed'}
             form={form}
-            onChange={setForm}
-            phoneMode="plain"
-            phoneDisabled={!!editing}
-            phoneHint={editing ? 'Phone cannot be changed' : PHONE_HINT}
+            onChange={(next) => {
+              setForm(next);
+              if (phoneError) setPhoneError(null);
+            }}
+            phoneMode={editing ? 'hidden' : 'inbox'}
+            phoneId={phoneId}
+            phoneError={phoneError}
             availableTags={tagNames}
+            layout="compact"
           />
         </form>
       </SlideOver>

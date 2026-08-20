@@ -68,7 +68,7 @@ const TONE_PULSE: Record<WindowTone, string> = {
 };
 
 const BADGE_BASE =
-  'relative hidden h-9 max-w-[14rem] shrink-0 items-center gap-2 overflow-hidden rounded-[10px] border px-3 sm:inline-flex';
+  'relative hidden h-8 max-w-[14rem] shrink-0 items-center gap-2 overflow-hidden rounded-[10px] border px-3 sm:inline-flex md:h-9';
 
 export default function ServiceWindowBanner({ serviceWindow, compact }: ServiceWindowBannerProps) {
   useCountdownTick(true);

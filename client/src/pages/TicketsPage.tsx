@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { LifeBuoy, RefreshCw, Settings2 } from 'lucide-react';
+import { RefreshCw, Settings2 } from 'lucide-react';
 import TicketDetailPanel from '../components/tickets/TicketDetailPanel';
 import TicketEmptyWorkspace from '../components/tickets/TicketEmptyWorkspace';
 import TicketList from '../components/tickets/TicketList';
@@ -15,7 +15,7 @@ import AppButton from '../components/ui/AppButton';
 import EmptyState from '../components/ui/EmptyState';
 import ListToolbar from '../components/ui/ListToolbar';
 import { SplitListSkeleton } from '../components/ui/ListLayoutSkeleton';
-import PageHero from '../components/ui/PageHero';
+import TicketHero from '../components/tickets/TicketHero';
 import PageShell from '../components/ui/PageShell';
 import { FOCUS_RING_CLASS } from '../hooks/inboxA11y';
 import { ticketApi } from '../services/api';
@@ -167,7 +167,6 @@ export default function TicketsPage() {
   );
 
   const hasActiveFilters = Boolean(search || status);
-  const showStats = tickets.length > 0;
   const showOverdueBanner = stats.overdue > 0 && status !== 'overdue';
 
   if (numbersLoading || !resolved) {
@@ -203,33 +202,13 @@ export default function TicketsPage() {
   return (
     <PageShell>
       <div className="space-y-4 sm:space-y-5">
-        <PageHero
-          variant="clean"
-          badge="Tickets"
-          badgeIcon={LifeBuoy}
-          title="Tickets"
-          description="Follow up on WhatsApp chats that need a reply, then resolve them from here."
-          stats={
-            showStats
-              ? [
-                  {
-                    label: 'Open',
-                    value: stats.open,
-                    tone: 'text-amber-600',
-                  },
-                  {
-                    label: 'Overdue',
-                    value: stats.overdue,
-                    tone: 'text-rose-700 dark:text-rose-300',
-                  },
-                  {
-                    label: 'Waiting',
-                    value: stats.waiting,
-                    tone: 'text-sky-700 dark:text-sky-300',
-                  },
-                ]
-              : undefined
-          }
+        <TicketHero
+          stats={[
+            { label: 'Total', value: tickets.length, hint: 'All tickets', tone: 'total' },
+            { label: 'Open', value: stats.open, hint: 'Needs action', tone: 'open' },
+            { label: 'Overdue', value: stats.overdue, hint: 'Past SLA', tone: 'overdue' },
+            { label: 'Waiting', value: stats.waiting, hint: 'Pending reply', tone: 'waiting' },
+          ]}
         />
 
         {showOverdueBanner && (

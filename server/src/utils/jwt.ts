@@ -1,3 +1,4 @@
+import { randomBytes } from 'crypto';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
 
@@ -21,6 +22,7 @@ export function signRefreshToken(payload: JwtPayload): string {
   return jwt.sign(payload, config.jwt.refreshSecret, {
     algorithm: 'HS256',
     expiresIn: config.jwt.refreshExpiresIn as jwt.SignOptions['expiresIn'],
+    jwtid: randomBytes(16).toString('hex'),
   });
 }
 

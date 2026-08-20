@@ -30,7 +30,7 @@ const STEPS: StepDef[] = [
     cta: 'Set Up Profile',
     tone: 'purple',
     kind: 'link',
-    to: '/settings?tab=general',
+    to: '/settings?tab=profile',
   },
   {
     n: 3,

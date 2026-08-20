@@ -16,6 +16,7 @@ import {
   Settings2,
   ShieldCheck,
   Smartphone,
+  Store,
   Webhook,
 } from 'lucide-react';
 import SettingsInsightCards from '../components/settings/SettingsInsightCards';
@@ -36,8 +37,10 @@ import PageHero from '../components/ui/PageHero';
 import PageShell from '../components/ui/PageShell';
 // import ThemeToggle from '../components/ui/ThemeToggle';
 import AppearanceSettingsPanel from '../components/settings/AppearanceSettingsPanel';
+import BusinessProfilePanel from '../components/settings/BusinessProfilePanel';
 import TeamSecurityPanel from '../components/team/TeamSecurityPanel';
 import { skipOnboardingSetup } from '../components/OnboardingGate';
+import { useAuth } from '../contexts/AuthContext';
 // import { useTheme } from '../contexts/ThemeContext';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { aiBotApi, onboardingApi, settingsApi, teamApi, whatsappApi } from '../services/api';
@@ -50,7 +53,7 @@ import { useWaOAuthPopupListener } from '../hooks/useWaOAuthPopupListener';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-type SettingsTab = 'general' | 'whatsapp' | 'automation' | 'ai' | 'campaigns' | 'inbox' | 'integrations' | 'setup';
+type SettingsTab = 'general' | 'profile' | 'whatsapp' | 'automation' | 'ai' | 'campaigns' | 'inbox' | 'integrations' | 'setup';
 
 interface WhatsappNumber {
   id: string;
@@ -79,6 +82,7 @@ function formatHour(hour: number) {
 
 export default function SettingsPage() {
   const { refreshNumbers } = useWhatsAppNumber();
+  const { canManageTeam } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabFromUrl = searchParams.get('tab') as SettingsTab | null;
   const [activeTab, setActiveTabState] = useState<SettingsTab>(tabFromUrl || 'general');
@@ -126,7 +130,7 @@ export default function SettingsPage() {
   });
   const [disconnectTarget, setDisconnectTarget] = useState<{ id: string; phone: string } | null>(null);
   const [readinessChecks, setReadinessChecks] = useState<ReadinessCheck[]>([]);
-  const [readinessMeta, setReadinessMeta] = useState({ completedCount: 0, totalChecks: 5, progress: 0, isReady: false });
+  const [readinessMeta, setReadinessMeta] = useState({ completedCount: 0, totalChecks: 6, progress: 0, isReady: false });
 
   const loadConnectUrl = async () => {
     try {
@@ -211,6 +215,13 @@ export default function SettingsPage() {
 
   const tabs = useMemo(
     () => [
+      {
+        id: 'profile' as const,
+        label: 'Business profile',
+        description: 'Name, industry & AI context',
+        icon: Store,
+        group: 'AI & Brand',
+      },
       {
         id: 'general' as const,
         label: 'Appearance',
@@ -541,6 +552,10 @@ export default function SettingsPage() {
           />
 
           <div className="min-w-0 space-y-5">
+            {activeTab === 'profile' && (
+              <BusinessProfilePanel canEdit={canManageTeam} onSaved={load} />
+            )}
+
             {activeTab === 'general' && (
               <div className="space-y-5">
                 <AppearanceSettingsPanel />

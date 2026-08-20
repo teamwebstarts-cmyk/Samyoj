@@ -245,3 +245,16 @@ export function applyTemplateParamsToPreview(
 
   return lines.join('\n\n') || (fallbackName ? `Template: ${fallbackName}` : '');
 }
+
+const NUMBERED_PLACEHOLDER = /\{\{\d+\}\}/;
+
+/** Prefer filled preview; never overwrite stored filled text with raw {{1}} body. */
+export function pickHydratedTemplateContent(stored: string, rendered: string): string {
+  const filled = (value: string) =>
+    Boolean(value) &&
+    !NUMBERED_PLACEHOLDER.test(value) &&
+    !value.startsWith('Template: ');
+  if (filled(rendered)) return rendered;
+  if (filled(stored)) return stored;
+  return stored || rendered;
+}

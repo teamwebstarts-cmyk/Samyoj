@@ -1,4 +1,5 @@
 import prisma from '../../config/database';
+import { getOrgProfile } from '../settings/org-profile';
 
 export interface ReadinessCheck {
   id: string;
@@ -14,6 +15,7 @@ export async function getOrgReadiness(organizationId: string) {
     contactCount,
     teamCount,
     org,
+    profilePayload,
   ] = await Promise.all([
     prisma.whatsappNumber.count({ where: { organizationId, isActive: true } }),
     prisma.campaign.count({
@@ -26,8 +28,9 @@ export async function getOrgReadiness(organizationId: string) {
     prisma.organizationUser.count({ where: { organizationId } }),
     prisma.organization.findUnique({
       where: { id: organizationId },
-      select: { settings: true },
+      select: { settings: true, companyName: true },
     }),
+    getOrgProfile(organizationId),
   ]);
 
   const settings = (org?.settings as Record<string, unknown>) || {};
@@ -44,12 +47,20 @@ export async function getOrgReadiness(organizationId: string) {
     Boolean((alerts.templateCount as number) > 0) ||
     whatsappCount > 0;
 
+  const profileComplete = profilePayload.completeness.isComplete;
+
   const checks: ReadinessCheck[] = [
     {
       id: 'whatsapp',
       label: 'WhatsApp connected',
       completed: whatsappCount > 0,
       href: '/settings?tab=whatsapp',
+    },
+    {
+      id: 'profile',
+      label: 'Business profile complete',
+      completed: profileComplete,
+      href: '/settings?tab=profile',
     },
     {
       id: 'template',
