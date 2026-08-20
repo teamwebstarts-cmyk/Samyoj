@@ -374,17 +374,27 @@ export interface ConversationStats {
   avgFirstResponseMinutes: number | null;
 }
 
+export type PlanTier = 'launch' | 'starter' | 'growth' | 'pro' | 'enterprise';
+export type BillingCadence = 'trial' | 'monthly' | 'quarterly' | 'yearly' | 'custom';
+export type SubscriptionStatus = 'trial' | 'trial_expired' | 'active' | 'past_due' | 'grace' | 'locked' | 'cancelled' | 'expired';
+
 export interface BillingPlan {
-  id: string;
+  id: string;           // e.g. 'growth' (tier ID for display)
   name: string;
-  pricePaise: number;
-  priceLabel: string;
+  pricePaise: number;   // monthly base paise (excl GST)
+  priceLabel: string;   // e.g. '₹2,499/mo'
   seats: number;
+  waNumbers: number | string;
+  contacts: number | string;
+  publishedWorkflows: number | string;
+  aiIncluded: 'off' | 'included' | 'advanced' | 'dedicated';
+  callingIncluded: boolean;
   features: string[];
+  isMostPopular?: boolean;
 }
 
 export interface BillingInfo {
-  plan: string;
+  plan: string;             // current org plan tier string
   currentPlan: BillingPlan;
   plans: BillingPlan[];
   seatsUsed: number;
@@ -393,7 +403,10 @@ export interface BillingInfo {
   razorpayConfigured: boolean;
   razorpayKeyId: string | null;
   planExpiresAt?: string | null;
-  subscriptionStatus?: string;
+  trialEndsAt?: string | null;
+  subscriptionStatus?: SubscriptionStatus | string;
+  cadence?: BillingCadence;
+  currentPeriodEnd?: string | null;
   recentPayments?: Array<{ planId: string; amountPaise: number; paidAt: string | null }>;
 }
 

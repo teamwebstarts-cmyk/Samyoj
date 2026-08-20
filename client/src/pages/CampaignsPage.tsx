@@ -57,7 +57,6 @@ import { DEFAULT_PAGE_SIZE } from '../constants/pagination';
 import { useAuth } from '../contexts/AuthContext';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
-import { useIsBelowLg } from '../hooks/useBreakpoint';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 import { useSocket } from '../hooks/useSocket';
 import { campaignApi, contactApi, templateApi, whatsappApi } from '../services/api';
@@ -225,7 +224,6 @@ function buildPayload(form: typeof emptyForm, options?: { clearSchedule?: boolea
 export default function CampaignsPage() {
   const { canManageTeam } = useAuth();
   const { activeNumber, resolved } = useWhatsAppNumber();
-  const isBelowLg = useIsBelowLg();
   const navigate = useNavigate();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
@@ -903,8 +901,8 @@ export default function CampaignsPage() {
               <>
                 <CampaignStatusFilter value={statusFilter} onChange={setStatusFilter} />
                 <AppSelect
-                  className="w-full min-w-0 sm:w-[148px]"
-                  size={isBelowLg ? 'compact' : 'default'}
+                  className="w-full min-w-0 shrink-0 sm:w-[10.25rem] sm:max-w-[10.25rem] [&_.app-select__control]:!w-full [&_.app-select__single-value]:!max-w-none"
+                  size="compact"
                   value={period}
                   placeholder="All time"
                   isSearchable={false}

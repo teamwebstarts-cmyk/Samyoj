@@ -164,6 +164,21 @@ router.patch(
       respectShiftSchedule: z.boolean().optional(),
     });
     const data = schema.parse(req.body);
+
+    if (data.seatLimit !== undefined) {
+      const org = await prisma.organization.findUnique({
+        where: { id: orgId },
+        select: { plan: true },
+      });
+      const maxAllowed = getSeatLimit(org?.plan ?? 'starter');
+      if (org?.plan !== 'enterprise' && data.seatLimit > maxAllowed) {
+        throw new AppError(
+          400,
+          `Cannot increase seat limit beyond plan maximum (${maxAllowed} seats). Upgrade plan to add more seats.`
+        );
+      }
+    }
+
     const updated = await saveTeamSettings(orgId, data);
 
     await logTeamAudit({

@@ -19,7 +19,6 @@ import {
 import ContactBulkBar from '../components/contacts/ContactBulkBar';
 import ContactBulkTagModal from '../components/contacts/ContactBulkTagModal';
 import ContactDetailPanel from '../components/contacts/ContactDetailPanel';
-import ContactFiltersBar, { type ContactQuickFilter } from '../components/contacts/ContactFiltersBar';
 import ContactPipelineTab from '../components/contacts/ContactPipelineTab';
 import ContactTable from '../components/contacts/ContactTable';
 import ContactCard from '../components/contacts/ContactCard';
@@ -46,7 +45,7 @@ import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { contactApi } from '../services/api';
 import { downloadBlob } from '../utils/contactUtils';
-import { validatePhone } from '../utils/phone';
+import { validateIndiaLocalPhone } from '../utils/phone';
 import { formatPhoneDisplay } from '../utils/formatPhone';
 import { toastError, toastSuccess } from '../utils/toast';
 import { readNumberCache, writeNumberCache } from '../utils/whatsappNumberCache';
@@ -64,9 +63,6 @@ type ContactsNumberCache = {
   summary: ContactSummary;
   page: number;
   search: string;
-  quickFilter: ContactQuickFilter;
-  tagFilter: string;
-  sourceFilter: string;
 };
 
 export default function ContactsPage() {
@@ -81,9 +77,6 @@ export default function ContactsPage() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [quickFilter, setQuickFilter] = useState<ContactQuickFilter>('all');
-  const [tagFilter, setTagFilter] = useState('');
-  const [sourceFilter, setSourceFilter] = useState('');
   const [availableTags, setAvailableTags] = useState<ContactTag[]>([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -128,9 +121,6 @@ export default function ContactsPage() {
     summary: { total: 0, named: 0, optedIn: 0, active7d: 0, tagged: 0 },
     page: 1,
     search: '',
-    quickFilter: 'all',
-    tagFilter: '',
-    sourceFilter: '',
   });
 
   contactsSnapshotRef.current = {
@@ -139,9 +129,6 @@ export default function ContactsPage() {
     summary,
     page,
     search,
-    quickFilter,
-    tagFilter,
-    sourceFilter,
   };
   const tagNames = useMemo(() => availableTags.map((t) => t.name), [availableTags]);
 
@@ -167,16 +154,9 @@ export default function ContactsPage() {
       limit: String(DEFAULT_PAGE_SIZE),
     };
     if (debouncedSearch) params.search = debouncedSearch;
-    if (tagFilter) params.tag = tagFilter;
-    if (sourceFilter) params.source = sourceFilter;
-
-    if (quickFilter === 'opted_in') params.optedIn = 'true';
-    if (quickFilter === 'active') params.active = '7d';
-    if (quickFilter === 'untagged' && !tagFilter) params.tag = '__none__';
-    if (quickFilter === 'unnamed') params.named = 'false';
 
     return params;
-  }, [debouncedSearch, tagFilter, sourceFilter, quickFilter, page]);
+  }, [debouncedSearch, page]);
 
   const load = useCallback(() => {
     if (!resolved || !activeNumber) return;
@@ -243,9 +223,6 @@ export default function ContactsPage() {
       setSummary(cached.summary);
       setPage(cached.page);
       setSearch(cached.search);
-      setQuickFilter(cached.quickFilter);
-      setTagFilter(cached.tagFilter);
-      setSourceFilter(cached.sourceFilter);
       setDetailContact(null);
       setDetailOpen(false);
       setSelectedIds([]);
@@ -278,7 +255,7 @@ export default function ContactsPage() {
   useEffect(() => {
     setPage(1);
     setSelectedIds([]);
-  }, [debouncedSearch, tagFilter, sourceFilter, quickFilter]);
+  }, [debouncedSearch]);
 
   useEffect(load, [load]);
 
@@ -323,7 +300,7 @@ export default function ContactsPage() {
 
     let phone: string | undefined;
     if (!editing) {
-      const phoneResult = validatePhone(form.phone);
+      const phoneResult = validateIndiaLocalPhone(form.phone);
       if (!phoneResult.ok) {
         setPhoneError(phoneResult.error);
         toastError(phoneResult.error);
@@ -515,14 +492,9 @@ export default function ContactsPage() {
 
   const clearFilters = () => {
     setSearch('');
-    setQuickFilter('all');
-    setTagFilter('');
-    setSourceFilter('');
   };
 
-  const hasActiveFilters = Boolean(
-    search || quickFilter !== 'all' || tagFilter || sourceFilter
-  );
+  const hasActiveFilters = Boolean(search);
 
   const allSelected = contacts.length > 0 && selectedIds.length === contacts.length;
   const partialSelected = selectedIds.length > 0 && !allSelected;
@@ -530,15 +502,15 @@ export default function ContactsPage() {
   const heroStats: ContactHeroStat[] =
     viewTab === 'pipeline'
       ? [
-          { label: 'Total leads', value: pipelineStats.total, hint: 'All prospects', tone: 'total', icon: Target },
-          { label: 'Active', value: pipelineStats.active, hint: 'In progress', tone: 'pipeline', icon: Clock },
-          { label: 'Won', value: pipelineStats.won, hint: 'Closed deals', tone: 'won', icon: Trophy },
+          { label: 'Leads', value: pipelineStats.total, tone: 'total', icon: Target },
+          { label: 'Active', value: pipelineStats.active, tone: 'pipeline', icon: Clock },
+          { label: 'Won', value: pipelineStats.won, tone: 'won', icon: Trophy },
         ]
       : [
-          { label: 'Total contacts', value: summary.total, hint: 'All contacts in list', tone: 'total', icon: Users },
-          { label: messagingConsent.statsLabel, value: summary.optedIn, hint: 'Campaign eligible', tone: 'optedIn', icon: CheckCircle2 },
-          { label: 'Active (7d)', value: summary.active7d, hint: 'Messaged recently', tone: 'active', icon: Activity },
-          { label: 'Tagged', value: summary.tagged, hint: 'Grouped & segmented', tone: 'tagged', icon: Tag },
+          { label: 'Contacts', value: summary.total, tone: 'total', icon: Users },
+          { label: messagingConsent.statsLabel, value: summary.optedIn, tone: 'optedIn', icon: CheckCircle2 },
+          { label: 'Active (7d)', value: summary.active7d, tone: 'active', icon: Activity },
+          { label: 'Tagged', value: summary.tagged, tone: 'tagged', icon: Tag },
         ];
 
   return (
@@ -563,7 +535,7 @@ export default function ContactsPage() {
           onChange={setViewTab}
           options={[
             { value: 'all', label: 'All contacts', shortLabel: 'All', icon: Users },
-            { value: 'pipeline', label: 'Pipeline', shortLabel: 'Pipeline', icon: Target },
+            { value: 'pipeline', label: 'Leads', shortLabel: 'Leads', icon: Target },
           ]}
           ariaLabel="Contact views"
         />
@@ -611,20 +583,6 @@ export default function ContactsPage() {
                   </AppButton>
                 </div>
               }
-            />
-
-            <ContactFiltersBar
-              quickFilter={quickFilter}
-              onQuickFilterChange={setQuickFilter}
-              tagFilter={tagFilter}
-              onTagFilterChange={setTagFilter}
-              sourceFilter={sourceFilter}
-              onSourceFilterChange={setSourceFilter}
-              tagNames={tagNames}
-              total={summary.total}
-              filteredTotal={total}
-              hasActiveFilters={hasActiveFilters}
-              onClearFilters={clearFilters}
             />
 
             {loading && contacts.length === 0 ? (

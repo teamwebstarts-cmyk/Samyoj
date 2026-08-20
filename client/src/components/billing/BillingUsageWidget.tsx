@@ -1,5 +1,6 @@
 import { IndianRupee, MessageSquare, Shield } from 'lucide-react';
 import SectionCard from '../ui/SectionCard';
+import AppAlert from '../ui/AppAlert';
 import type { BillingUsage } from '../../types';
 
 interface BillingUsageWidgetProps {
@@ -11,18 +12,34 @@ function formatInr(amount: number) {
   return `₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-export default function BillingUsageWidget({ usage, dailyBudgetInr }: BillingUsageWidgetProps) {
+export default function BillingUsageWidget({ usage }: BillingUsageWidgetProps) {
   const categories = Object.entries(usage.byCategory);
 
   return (
     <SectionCard
-      title={`WhatsApp usage — ${usage.period}`}
-      subtitle="Conversation charges and quality ratings from Meta"
+      title={`WhatsApp usage estimate — ${usage.period}`}
+      subtitle="Estimate only — not your Meta invoice. Open WhatsApp Manager for your actual bill."
+      headerAction={
+        <a
+          href="https://business.facebook.com/billing_hub"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs font-bold text-sky-600 hover:underline dark:text-sky-400"
+        >
+          View Meta invoice →
+        </a>
+      }
     >
+      <div className="mb-5">
+        <AppAlert variant="info">
+          These figures use Samyoj estimates based on delivered templates. Meta bills per delivered message at official INR rates directly to your payment card.
+        </AppAlert>
+      </div>
+
       <div className="grid gap-3 sm:grid-cols-3">
         <UsageStat
           icon={MessageSquare}
-          label="Conversations"
+          label="Messages sent"
           value={usage.totalConversations.toLocaleString('en-IN')}
         />
         <UsageStat
@@ -63,25 +80,6 @@ export default function BillingUsageWidget({ usage, dailyBudgetInr }: BillingUsa
           </div>
         </div>
       </div>
-
-      {dailyBudgetInr != null && dailyBudgetInr > 0 && (
-        <div className="mt-5 rounded-xl border border-theme-border/70 bg-theme-subtle/20 p-4">
-          <div className="mb-2 flex items-center justify-between text-[13px]">
-            <span className="font-semibold text-theme-fg">Daily Meta budget cap</span>
-            <span className="tabular-nums text-theme-secondary">
-              {formatInr(usage.totalCostInr)} / {formatInr(dailyBudgetInr)}
-            </span>
-          </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-theme-subtle">
-            <div
-              className={`h-full rounded-full ${
-                usage.totalCostInr / dailyBudgetInr > 0.9 ? 'bg-rose-500' : 'bg-whatsapp-500'
-              }`}
-              style={{ width: `${Math.min(100, (usage.totalCostInr / dailyBudgetInr) * 100)}%` }}
-            />
-          </div>
-        </div>
-      )}
 
       {categories.length > 0 && (
         <div className="mt-5 space-y-2 border-t border-theme-border/60 pt-4">

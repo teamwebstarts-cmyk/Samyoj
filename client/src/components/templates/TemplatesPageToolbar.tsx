@@ -1,12 +1,11 @@
 import SearchInput from '../ui/SearchInput';
 import AppButton from '../ui/AppButton';
 import AppSelect from '../ui/AppSelect';
-import { BookOpen, Layers, Plus, RefreshCw } from 'lucide-react';
-import { CATEGORY_OPTIONS, LANGUAGE_OPTIONS } from '../../utils/templateUtils';
+import { BookOpen, Plus } from 'lucide-react';
+import { CATEGORY_OPTIONS } from '../../utils/templateUtils';
 
 const ALL_STATUSES = '__all__';
 const ALL_CATEGORIES = '__all__';
-const ALL_LANGUAGES = '__all__';
 
 const statusFilterOptions = [
   { value: ALL_STATUSES, label: 'All statuses' },
@@ -24,11 +23,6 @@ interface TemplatesPageToolbarProps {
   onStatusFilterChange: (value: string) => void;
   categoryFilter: string;
   onCategoryFilterChange: (value: string) => void;
-  languageFilter: string;
-  onLanguageFilterChange: (value: string) => void;
-  groupView: boolean;
-  onToggleGroupView: () => void;
-  onRefresh: () => void;
   onOpenLibrary: () => void;
   onCreate: () => void;
 }
@@ -41,7 +35,7 @@ const mobileIconBtn =
   'shrink-0 max-sm:!h-9 max-sm:!min-h-9 max-sm:!px-2.5';
 
 /**
- * Toolbar: [search][status][category][language] ——— [group][refresh][library][new]
+ * Toolbar: [search][status][category] ——— [library][new]
  * Mobile: search row → filter row → actions row.
  */
 export default function TemplatesPageToolbar({
@@ -51,11 +45,6 @@ export default function TemplatesPageToolbar({
   onStatusFilterChange,
   categoryFilter,
   onCategoryFilterChange,
-  languageFilter,
-  onLanguageFilterChange,
-  groupView,
-  onToggleGroupView,
-  onRefresh,
   onOpenLibrary,
   onCreate,
 }: TemplatesPageToolbarProps) {
@@ -72,7 +61,7 @@ export default function TemplatesPageToolbar({
             compact
           />
 
-          <div className="grid min-w-0 grid-cols-3 gap-1.5 sm:gap-2 md:flex md:flex-none md:flex-row md:items-center md:gap-2">
+          <div className="grid min-w-0 grid-cols-2 gap-1.5 sm:gap-2 md:flex md:flex-none md:flex-row md:items-center md:gap-2">
             <AppSelect
               className={filterSelectClass}
               size="compact"
@@ -93,41 +82,11 @@ export default function TemplatesPageToolbar({
               options={[{ value: ALL_CATEGORIES, label: 'All categories' }, ...CATEGORY_OPTIONS]}
               onChange={(e) => onCategoryFilterChange(e.target.value)}
             />
-            <AppSelect
-              className={`${filterSelectClass} sm:w-[11rem] sm:max-w-[11rem]`}
-              size="compact"
-              value={languageFilter}
-              placeholder="Language"
-              ariaLabel="Filter by language"
-              isSearchable
-              options={[{ value: ALL_LANGUAGES, label: 'All languages' }, ...LANGUAGE_OPTIONS]}
-              onChange={(e) => onLanguageFilterChange(e.target.value)}
-            />
           </div>
         </div>
 
         {/* Actions — icon-only secondary on phone; labels from sm */}
         <div className="flex shrink-0 items-center gap-1.5 sm:flex-wrap sm:gap-2">
-          <AppButton
-            className={mobileIconBtn}
-            variant={groupView ? 'primary' : 'secondary'}
-            size="sm"
-            icon={<Layers size={14} />}
-            onClick={onToggleGroupView}
-            aria-label="Group templates"
-          >
-            <span className="hidden sm:inline">Group</span>
-          </AppButton>
-          <AppButton
-            className={mobileIconBtn}
-            variant="secondary"
-            size="sm"
-            icon={<RefreshCw size={15} />}
-            onClick={onRefresh}
-            aria-label="Refresh templates"
-          >
-            <span className="hidden sm:inline">Refresh</span>
-          </AppButton>
           <AppButton
             className={mobileIconBtn}
             variant="secondary"
@@ -152,4 +111,4 @@ export default function TemplatesPageToolbar({
   );
 }
 
-export { ALL_STATUSES, ALL_CATEGORIES, ALL_LANGUAGES };
+export { ALL_STATUSES, ALL_CATEGORIES };

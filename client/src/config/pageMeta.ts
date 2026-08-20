@@ -126,6 +126,13 @@ export function isTemplateWizardRoute(pathname: string): boolean {
   );
 }
 
+export function getTemplateWizardTopbarLabel(pathname: string): string {
+  if (pathname === '/templates/new') return 'New template';
+  if (pathname === '/templates/library') return 'Library';
+  if (/^\/templates\/[^/]+\/resubmit$/.test(pathname)) return 'Edit template';
+  return 'Template';
+}
+
 /** Campaigns and contacts list fill the viewport — table scrolls inside the shell card. */
 export function isListShellRoute(pathname: string, search = ''): boolean {
   if (pathname === '/campaigns') return true;

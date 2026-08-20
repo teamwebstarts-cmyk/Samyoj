@@ -108,12 +108,22 @@ export function buildRolePermissionsMatrix(
 }
 
 export function getSeatLimit(plan: string, settings?: TeamSettings): number {
-  if (settings?.seatLimit) return settings.seatLimit;
   const planLimits: Record<string, number> = {
-    starter: 5,
-    growth: 15,
-    business: 50,
-    enterprise: 200,
+    launch: 1,
+    starter: 3,
+    growth: 10,
+    pro: 25,
+    business: 25, // legacy mapped to Pro
+    enterprise: 999,
   };
-  return planLimits[plan] ?? 10;
+  const planMax = planLimits[plan] ?? 3;
+  if (plan === 'enterprise') {
+    return settings?.seatLimit && settings.seatLimit > 0 ? settings.seatLimit : 999;
+  }
+  // Clamp settings.seatLimit so it cannot exceed the plan maximum
+  if (settings?.seatLimit && settings.seatLimit > 0) {
+    return Math.min(settings.seatLimit, planMax);
+  }
+  return planMax;
 }
+

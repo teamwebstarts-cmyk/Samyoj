@@ -13,7 +13,7 @@ export type ContactHeroTone = 'total' | 'optedIn' | 'active' | 'tagged' | 'pipel
 export interface ContactHeroStat {
   label: string;
   value: number | string;
-  hint: string;
+  hint?: string;
   tone: ContactHeroTone;
   icon?: LucideIcon;
 }
@@ -73,36 +73,45 @@ export default function ContactHero({
   description,
   stats,
 }: ContactHeroProps) {
+  const statsGridClass =
+    stats.length === 3
+      ? 'grid-cols-3 sm:grid-cols-3'
+      : stats.length >= 4
+        ? 'grid-cols-2 md:grid-cols-4'
+        : 'grid-cols-2';
+
   return (
     <section
       aria-label="Contacts overview"
-      className="relative overflow-hidden rounded-2xl border border-sky-200/70 bg-[linear-gradient(100deg,#f0f9ff_0%,#f5fbff_42%,#ffffff_100%)] p-4 shadow-[0_1px_3px_rgba(15,23,42,0.04)] dark:border-sky-900/60 dark:bg-[linear-gradient(100deg,#0b1329_0%,#0f172a_45%,#070d1e_100%)] sm:p-5"
+      className="relative overflow-hidden rounded-xl border border-sky-200/70 bg-[linear-gradient(100deg,#f0f9ff_0%,#f5fbff_42%,#ffffff_100%)] p-2.5 shadow-[0_8px_24px_rgba(2,132,199,0.05)] dark:border-sky-900/60 dark:bg-[linear-gradient(100deg,#0b1329_0%,#0f172a_45%,#070d1e_100%)] sm:rounded-[22px] sm:p-5 md:p-6"
     >
       <div
-        className="pointer-events-none absolute -left-12 -top-14 h-44 w-44 rounded-full bg-sky-200/35 blur-3xl dark:bg-sky-500/10"
+        className="pointer-events-none absolute -left-20 -top-24 h-56 w-56 rounded-full bg-sky-200/30 blur-3xl dark:bg-sky-500/10 max-sm:hidden"
         aria-hidden="true"
       />
       <div
-        className="pointer-events-none absolute -right-10 -bottom-10 h-36 w-36 rounded-full bg-indigo-200/25 blur-2xl dark:bg-indigo-500/10"
+        className="pointer-events-none absolute -right-12 -bottom-14 h-48 w-48 rounded-full bg-indigo-200/20 blur-3xl dark:bg-indigo-500/10 max-sm:hidden"
         aria-hidden="true"
       />
 
-      <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="relative flex flex-col gap-2.5 sm:gap-5 xl:flex-row xl:items-center xl:justify-between xl:gap-8">
         <div className="min-w-0 max-w-xl">
-          <div className="inline-flex items-center gap-1.5 rounded-full border border-sky-200/80 bg-sky-50/80 px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-widest text-sky-800 dark:border-sky-800/60 dark:bg-sky-950/50 dark:text-sky-200">
-            <BadgeIcon className="h-3 w-3 shrink-0" aria-hidden="true" />
-            <span>{badge}</span>
-          </div>
+          <span className="inline-flex items-center gap-1 rounded-full border border-sky-200/80 bg-sky-50/80 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.1em] text-sky-800 dark:border-sky-800/60 dark:bg-sky-950/50 dark:text-sky-200 sm:gap-1.5 sm:px-2.5 sm:py-1 sm:text-[10px] sm:tracking-[0.12em]">
+            <BadgeIcon className="h-2.5 w-2.5 shrink-0 sm:h-3 sm:w-3" aria-hidden="true" />
+            {badge}
+          </span>
 
-          <h1 className="mt-1.5 text-[1.25rem] font-black tracking-tight text-neutral-900 dark:text-white sm:text-[1.45rem]">
+          <h1 className="mt-1.5 text-[1.05rem] font-extrabold leading-snug tracking-tight text-neutral-900 dark:text-white sm:mt-3 sm:text-[1.5rem] md:text-[1.65rem] xl:whitespace-nowrap">
             {title}
           </h1>
-          <p className="mt-1 text-[12px] font-medium leading-relaxed text-neutral-600 dark:text-neutral-400 sm:text-[13px]">
+          <p className="mt-0.5 hidden max-w-md text-[12px] font-medium leading-relaxed text-neutral-600 dark:text-neutral-400 sm:mt-1.5 sm:block sm:text-[13px]">
             {description}
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-2.5 lg:justify-end">
+        <div
+          className={`grid w-full gap-1.5 sm:gap-2.5 xl:w-auto xl:min-w-0 xl:max-w-none xl:shrink-0 ${statsGridClass}`}
+        >
           {stats.map((s) => {
             const config = toneStyles[s.tone] || toneStyles.total;
             const IconComponent = s.icon || config.icon;
@@ -118,16 +127,13 @@ export default function ContactHero({
                   <IconComponent className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={2.2} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[10px] font-semibold text-neutral-800 dark:text-neutral-200 sm:text-[12px]">
+                  <p className="truncate text-[9px] font-semibold leading-tight text-neutral-800 dark:text-neutral-200 sm:text-[12px]">
                     {s.label}
                   </p>
                   <p
-                    className={`text-[1.1rem] font-extrabold leading-tight tracking-tight tabular-nums sm:text-[1.35rem] ${config.valueClass}`}
+                    className={`mt-0.5 text-[1rem] font-extrabold leading-none tracking-tight tabular-nums sm:text-[1.35rem] ${config.valueClass}`}
                   >
                     {typeof s.value === 'number' ? s.value.toLocaleString() : s.value}
-                  </p>
-                  <p className="hidden truncate text-[10px] font-medium text-neutral-500 dark:text-neutral-400 sm:block sm:text-[11px]">
-                    {s.hint}
                   </p>
                 </div>
               </div>

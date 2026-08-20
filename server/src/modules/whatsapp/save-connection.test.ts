@@ -10,9 +10,22 @@ vi.mock('../../config/database', () => ({
   default: {
     whatsappNumber: {
       findFirst: vi.fn(),
+      count: vi.fn().mockResolvedValue(0),
       create: vi.fn(),
       update: vi.fn(),
     },
+    organization: {
+      findUnique: vi.fn().mockResolvedValue({
+        id: 'org-b',
+        plan: 'growth',
+        subscriptionStatus: 'active',
+        planExpiresAt: null,
+      }),
+    },
+    organizationUser: { count: vi.fn().mockResolvedValue(1) },
+    teamInvite: { count: vi.fn().mockResolvedValue(0) },
+    contact: { count: vi.fn().mockResolvedValue(0) },
+    automation: { count: vi.fn().mockResolvedValue(0) },
     $transaction: vi.fn(),
   },
 }));

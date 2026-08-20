@@ -46,6 +46,7 @@ import { getTemplateRejectedReason } from '../utils/templateUtils';
 import { getTemplateRejectionGuide, getTemplateStatusHelp } from '../utils/templateRejectionGuide';
 import { toastError, toastSuccess, toastWarning } from '../utils/toast';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
+import { useTopbarExtras } from '../contexts/TopbarContext';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 
 type LocationState = {
@@ -213,6 +214,16 @@ export default function TemplateWizardPage() {
     if (activeStep === 1) return 'Add sample values for variables and review before submission.';
     return 'Your template will be sent to WhatsApp for approval.';
   }, [activeStep]);
+
+  const { setExtras, clearExtras } = useTopbarExtras();
+
+  useEffect(() => {
+    setExtras({
+      badge: activeStep < 2 ? 'Draft' : null,
+      subtitle: stepSubtitle,
+    });
+    return () => clearExtras();
+  }, [activeStep, stepSubtitle, setExtras, clearExtras]);
 
   const rejectionGuide = getTemplateRejectionGuide(rejectionReason);
   const resubmitStatusHelp =
@@ -414,21 +425,6 @@ export default function TemplateWizardPage() {
 
   return (
     <div className="template-wizard-page">
-      <div className="template-wizard-breadcrumb mb-3 flex flex-wrap items-center gap-2 text-[12px]">
-        <Link to="/templates" className="font-medium text-slate-500 hover:text-slate-700">
-          Templates
-        </Link>
-        <span className="text-slate-300">/</span>
-        <span className="font-semibold text-slate-800 dark:text-slate-200">
-          {mode === 'resubmit' ? 'Edit template' : 'New template'}
-        </span>
-        {activeStep < 2 && (
-          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
-            Draft
-          </span>
-        )}
-      </div>
-
       <div className="template-wizard-header mb-4 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex items-start gap-3">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300">

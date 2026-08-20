@@ -10,6 +10,7 @@ import {
 import Select from 'react-select';
 import { useTheme } from '../../contexts/ThemeContext';
 import { createSelectStyles, type SelectOption, type SelectSize } from '../../utils/selectStyles';
+import FieldInfoTip from './FieldInfoTip';
 
 export interface AppSelectOption {
   value: string;
@@ -20,6 +21,7 @@ export interface AppSelectOption {
 interface AppSelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 'onChange' | 'value' | 'size'> {
   label?: string;
   hint?: string;
+  labelInfo?: string;
   error?: string;
   options?: AppSelectOption[];
   placeholder?: string;
@@ -49,6 +51,7 @@ function optionsFromChildren(children: ReactNode): AppSelectOption[] {
 export default function AppSelect({
   label,
   hint,
+  labelInfo,
   error,
   className = '',
   id,
@@ -87,16 +90,19 @@ export default function AppSelect({
   };
 
   return (
-    <div className={`relative ${label || hint || error ? 'space-y-1.5' : ''} ${className}`}>
-      {(label || hint) && (
+    <div className={`relative ${label || hint || labelInfo || error ? 'space-y-1.5' : ''} ${className}`}>
+      {(label || hint || labelInfo) && (
         <div className="flex items-center justify-between gap-2">
           {label && (
             <label
               htmlFor={selectId}
-              className={labelClassName || 'text-[13px] font-semibold text-theme-secondary'}
+              className={`inline-flex items-center gap-1.5 ${labelClassName || 'text-[13px] font-semibold text-theme-secondary'}`}
             >
-              {label}
-              {required && <span className="text-red-500"> *</span>}
+              <span>
+                {label}
+                {required && <span className="text-red-500"> *</span>}
+              </span>
+              {labelInfo ? <FieldInfoTip text={labelInfo} /> : null}
             </label>
           )}
           {hint && <span className="text-[11px] font-medium text-theme-muted">{hint}</span>}

@@ -1,87 +1,106 @@
-import { describe, expect, it } from 'vitest';
-import { BILLING_PLANS, getPlan, BillingPlanDef } from './plans';
+import { describe, it, expect } from 'vitest';
+import {
+  BILLING_SKUS,
+  getSku,
+  getSkusByTier,
+  PLAN_TIERS,
+  getPlanTier,
+  legacyPlanToTier,
+  BILLING_PLANS,
+  getPlan,
+} from './plans';
 
-const REQUIRED_FIELDS: (keyof BillingPlanDef)[] = ['id', 'name', 'pricePaise', 'priceLabel', 'seats', 'features'];
+describe('plans.ts', () => {
+  describe('SKUs', () => {
+    it('should have the expected SKUs', () => {
+      const ids = BILLING_SKUS.map((s) => s.id);
+      expect(ids).toEqual([
+        'launch_trial',
+        'starter_monthly',
+        'starter_quarterly',
+        'starter_yearly',
+        'growth_monthly',
+        'growth_quarterly',
+        'growth_yearly',
+        'pro_monthly',
+        'pro_quarterly',
+        'pro_yearly',
+      ]);
+    });
 
-describe('BILLING_PLANS', () => {
-  it('contains the expected plan IDs', () => {
-    const ids = BILLING_PLANS.map((p) => p.id);
-    expect(ids).toEqual(['starter', 'growth', 'business', 'enterprise']);
+    it('should have the correct pricePaise values', () => {
+      const prices = BILLING_SKUS.map((s) => s.pricePaise);
+      expect(prices).toEqual([
+        0,
+        99900,
+        285000,
+        960000,
+        249900,
+        712500,
+        2400000,
+        499900,
+        1425000,
+        4800000,
+      ]);
+    });
+
+    it('should calculate inclGstPaise correctly (18%)', () => {
+      BILLING_SKUS.forEach((sku) => {
+        expect(sku.inclGstPaise).toBe(Math.round(sku.pricePaise * 1.18));
+      });
+    });
+
+    it('should allow UPI Autopay correctly based on cap', () => {
+      expect(getSku('growth_yearly')?.upiAutopayAllowed).toBe(false);
+      expect(getSku('pro_quarterly')?.upiAutopayAllowed).toBe(false);
+      expect(getSku('pro_yearly')?.upiAutopayAllowed).toBe(false);
+
+      expect(getSku('starter_monthly')?.upiAutopayAllowed).toBe(true);
+      expect(getSku('growth_monthly')?.upiAutopayAllowed).toBe(true);
+      expect(getSku('pro_monthly')?.upiAutopayAllowed).toBe(true);
+    });
   });
 
-  it('every plan has all required fields', () => {
-    for (const plan of BILLING_PLANS) {
-      for (const field of REQUIRED_FIELDS) {
-        expect(plan).toHaveProperty(field);
-      }
-    }
+  describe('Functions', () => {
+    it('getSku returns correct SKU', () => {
+      const sku = getSku('growth_monthly');
+      expect(sku).toBeDefined();
+      expect(sku?.id).toBe('growth_monthly');
+    });
+
+    it('getSkusByTier returns correct SKUs', () => {
+      const skus = getSkusByTier('growth');
+      expect(skus).toHaveLength(3);
+      expect(skus.every((s) => s.planTier === 'growth')).toBe(true);
+    });
+
+    it('legacyPlanToTier maps correctly', () => {
+      expect(legacyPlanToTier('starter')).toBe('starter');
+      expect(legacyPlanToTier('growth')).toBe('growth');
+      expect(legacyPlanToTier('business')).toBe('pro');
+      expect(legacyPlanToTier('enterprise')).toBe('enterprise');
+      expect(legacyPlanToTier('random')).toBe('launch');
+    });
+
+    it('PLAN_TIERS has correct entitlements', () => {
+      expect(PLAN_TIERS.launch.waNumbers).toBe(1);
+      expect(PLAN_TIERS.starter.seats).toBe(3);
+      expect(PLAN_TIERS.growth.contacts).toBe(25000);
+      expect(PLAN_TIERS.pro.waNumbers).toBe(5);
+    });
+
+    it('getPlanTier returns correct tier', () => {
+      const tier = getPlanTier('starter');
+      expect(tier.tier).toBe('starter');
+      expect(tier.seats).toBe(3);
+    });
   });
 
-  it('features is a non-empty array for every plan', () => {
-    for (const plan of BILLING_PLANS) {
-      expect(Array.isArray(plan.features)).toBe(true);
-      expect(plan.features.length).toBeGreaterThan(0);
-    }
-  });
-
-  it('every plan has a non-empty string id and name', () => {
-    for (const plan of BILLING_PLANS) {
-      expect(typeof plan.id).toBe('string');
-      expect(plan.id.length).toBeGreaterThan(0);
-      expect(typeof plan.name).toBe('string');
-      expect(plan.name.length).toBeGreaterThan(0);
-    }
-  });
-
-  it('starter is free (pricePaise = 0)', () => {
-    const starter = BILLING_PLANS.find((p) => p.id === 'starter')!;
-    expect(starter.pricePaise).toBe(0);
-    expect(starter.priceLabel).toBe('Free');
-  });
-
-  it('enterprise is custom-priced (pricePaise = 0, priceLabel = Custom)', () => {
-    const enterprise = BILLING_PLANS.find((p) => p.id === 'enterprise')!;
-    expect(enterprise.pricePaise).toBe(0);
-    expect(enterprise.priceLabel).toBe('Custom');
-  });
-
-  it('growth and business have positive pricePaise', () => {
-    const growth = BILLING_PLANS.find((p) => p.id === 'growth')!;
-    const business = BILLING_PLANS.find((p) => p.id === 'business')!;
-    expect(growth.pricePaise).toBeGreaterThan(0);
-    expect(business.pricePaise).toBeGreaterThan(0);
-  });
-
-  it('seats increase from starter → growth → business → enterprise', () => {
-    const seats = BILLING_PLANS.map((p) => p.seats);
-    for (let i = 1; i < seats.length; i++) {
-      expect(seats[i]).toBeGreaterThan(seats[i - 1]);
-    }
-  });
-});
-
-describe('getPlan', () => {
-  it('returns the plan for a valid ID', () => {
-    const plan = getPlan('growth');
-    expect(plan).toBeDefined();
-    expect(plan!.id).toBe('growth');
-    expect(plan!.name).toBe('Growth');
-  });
-
-  it('returns undefined for an invalid ID', () => {
-    expect(getPlan('nonexistent')).toBeUndefined();
-    expect(getPlan('')).toBeUndefined();
-  });
-
-  it('returns undefined for case-sensitive mismatch', () => {
-    expect(getPlan('Growth')).toBeUndefined();
-    expect(getPlan('STARTER')).toBeUndefined();
-  });
-
-  it('returns each plan by its ID', () => {
-    for (const expected of BILLING_PLANS) {
-      const result = getPlan(expected.id);
-      expect(result).toBe(expected);
-    }
+  describe('Legacy plans (backward compat)', () => {
+    it('getPlan returns correct legacy plan', () => {
+      expect(getPlan('starter')?.id).toBe('starter');
+      expect(getPlan('growth')?.id).toBe('growth');
+      expect(getPlan('pro')?.id).toBe('pro');
+    });
   });
 });

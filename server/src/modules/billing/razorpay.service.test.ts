@@ -89,6 +89,11 @@ describe('verifyPaymentSignature', () => {
   it('returns false for empty signature', () => {
     expect(verifyPaymentSignature('order_ABC', 'pay_XYZ', '')).toBe(false);
   });
+
+  it('returns false for wrong-length signature (timing safe buffer check)', () => {
+    const wrongLength = 'abcd';
+    expect(verifyPaymentSignature('order_ABC', 'pay_XYZ', wrongLength)).toBe(false);
+  });
 });
 
 describe('verifyWebhookSignature', () => {
@@ -109,6 +114,10 @@ describe('verifyWebhookSignature', () => {
     const expected = crypto.createHmac('sha256', 'whsec_456').update(raw).digest('hex');
 
     expect(verifyWebhookSignature(raw, expected)).toBe(false);
+  });
+
+  it('returns false for empty signature', () => {
+    expect(verifyWebhookSignature('body', '')).toBe(false);
   });
 });
 

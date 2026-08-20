@@ -10,7 +10,7 @@ import {
 import { parseCustomAttributeLines } from '../../utils/customAttributes';
 import { toastError } from '../../utils/toast';
 import SlideOver, { SlideOverFooter } from '../ui/SlideOver';
-import { validatePhone } from '../../utils/phone';
+import { validateIndiaLocalPhone, toIndiaLocalDisplay } from '../../utils/phone';
 
 interface NewChatSlideOverProps {
   open: boolean;
@@ -30,7 +30,7 @@ export default function NewChatSlideOver({
   const phoneId = useId();
   const [form, setForm] = useState<ContactFormValues>(() => ({
     ...emptyContactForm,
-    phone: initialPhone,
+    phone: toIndiaLocalDisplay(initialPhone),
     name: initialName,
   }));
   const [phoneError, setPhoneError] = useState<string | null>(null);
@@ -45,7 +45,7 @@ export default function NewChatSlideOver({
     if (!open) return;
     setForm({
       ...emptyContactForm,
-      phone: initialPhone || '',
+      phone: toIndiaLocalDisplay(initialPhone || ''),
       name: initialName || '',
     });
     setPhoneError(null);
@@ -54,7 +54,7 @@ export default function NewChatSlideOver({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const result = validatePhone(form.phone);
+    const result = validateIndiaLocalPhone(form.phone);
     if (!result.ok) {
       setPhoneError(result.error);
       toastError(result.error);

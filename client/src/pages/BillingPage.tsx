@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   CreditCard,
   LayoutGrid,
@@ -9,12 +9,14 @@ import {
 import AppAlert from '../components/ui/AppAlert';
 import AppButton from '../components/ui/AppButton';
 import BillingCurrentPlanHero from '../components/billing/BillingCurrentPlanHero';
+import BillingHero from '../components/billing/BillingHero';
 import BillingPlanCard from '../components/billing/BillingPlanCard';
+import BillingFeatureMatrix from '../components/billing/BillingFeatureMatrix';
+import MetaCostExplainerCard from '../components/billing/MetaCostExplainerCard';
 import BillingSkeleton from '../components/billing/BillingSkeleton';
 import BillingUsageWidget from '../components/billing/BillingUsageWidget';
 import EmptyState from '../components/ui/EmptyState';
 import PageHeader from '../components/ui/PageHeader';
-import PageHero from '../components/ui/PageHero';
 import PageShell from '../components/ui/PageShell';
 import SectionCard from '../components/ui/SectionCard';
 import SegmentedControl from '../components/ui/SegmentedControl';
@@ -25,27 +27,13 @@ import { openRazorpayCheckout } from '../utils/razorpay';
 import { toastError, toastSuccess } from '../utils/toast';
 
 type BillingTab = 'overview' | 'plans' | 'history';
+type CadenceTab = 'monthly' | 'quarterly' | 'yearly';
 
 const tabMeta = {
   overview: { label: 'Overview', shortLabel: 'Overview', icon: LayoutGrid },
   plans: { label: 'Plans', shortLabel: 'Plans', icon: CreditCard },
   history: { label: 'History', shortLabel: 'History', icon: Receipt },
 } as const;
-
-const heroCopy: Record<BillingTab, { title: string; description: string }> = {
-  overview: {
-    title: 'Billing overview',
-    description: 'Your current plan, seat usage, and WhatsApp conversation costs.',
-  },
-  plans: {
-    title: 'Choose a plan',
-    description: 'Scale seats and features as your team grows. Pay securely with Razorpay.',
-  },
-  history: {
-    title: 'Payment history',
-    description: 'Recent successful plan payments and transactions.',
-  },
-};
 
 function formatAmount(paise: number) {
   return `₹${(paise / 100).toLocaleString('en-IN')}`;
@@ -62,6 +50,7 @@ function formatPaidAt(value: string | null) {
 export default function BillingPage() {
   const { user } = useAuth();
   const [tab, setTab] = useState<BillingTab>('overview');
+  const [cadence, setCadence] = useState<CadenceTab>('monthly');
   const [info, setInfo] = useState<BillingInfo | null>(null);
   const [usage, setUsage] = useState<BillingUsage | null>(null);
   const [dailyBudgetInr, setDailyBudgetInr] = useState<number | undefined>();
@@ -126,7 +115,6 @@ export default function BillingPage() {
           try {
             await billingApi.verifyPayment({
               ...response,
-              planId: plan.id as 'growth' | 'business',
             });
             toastSuccess('Payment successful! Plan upgraded.');
             load();
@@ -160,29 +148,6 @@ export default function BillingPage() {
     }
   };
 
-  const heroStats = useMemo(() => {
-    if (!info) return [];
-    return [
-      {
-        label: 'Seats',
-        value: `${info.seatsUsed}/${info.seatLimit}`,
-        tone: 'text-emerald-700 dark:text-emerald-300',
-      },
-      {
-        label: 'Usage est.',
-        value: usage ? `₹${usage.totalCostInr.toLocaleString('en-IN')}` : '—',
-        tone: 'text-sky-700 dark:text-sky-300',
-      },
-      {
-        label: 'Payments',
-        value: info.recentPayments?.length ?? 0,
-        tone: 'text-violet-700 dark:text-violet-300',
-      },
-    ];
-  }, [info, usage]);
-
-  const copy = heroCopy[tab];
-
   return (
     <PageShell>
       <PageHeader
@@ -194,16 +159,7 @@ export default function BillingPage() {
       />
 
       <div className="space-y-5 animate-fade-up-delay sm:space-y-6">
-        <PageHero
-          badge="Billing"
-          badgeIcon={CreditCard}
-          title={copy.title}
-          description={copy.description}
-          accent="emerald"
-          stats={loading || !info ? [] : heroStats}
-        />
-
-        {loading ? (
+        {loading || !info ? (
           <BillingSkeleton />
         ) : loadFailed ? (
           <EmptyState
@@ -217,8 +173,10 @@ export default function BillingPage() {
               </AppButton>
             }
           />
-        ) : info ? (
+        ) : (
           <>
+            <BillingHero info={info} usage={usage} />
+
             <SegmentedControl
               value={tab}
               onChange={(v) => setTab(v as BillingTab)}
@@ -243,36 +201,63 @@ export default function BillingPage() {
             )}
 
             {tab === 'overview' && (
-              <div className="space-y-5">
-                <BillingCurrentPlanHero info={info} />
+              <div className="space-y-6">
+                <BillingCurrentPlanHero info={info} onUnlockGrowth={() => setTab('plans')} />
                 {usage && <BillingUsageWidget usage={usage} dailyBudgetInr={dailyBudgetInr} />}
+                <MetaCostExplainerCard />
               </div>
             )}
 
             {tab === 'plans' && (
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                {info.plans.map((plan, index) => (
-                  <div key={plan.id} style={{ animationDelay: `${index * 60}ms` }}>
-                    <BillingPlanCard
-                      plan={plan}
-                      isCurrent={plan.id === info.plan}
-                      canManage={info.canManageBilling}
-                      razorpayConfigured={info.razorpayConfigured}
-                      loading={upgrading === plan.id}
-                      onSelect={() => handleUpgrade(plan)}
-                    />
-                  </div>
-                ))}
+              <div className="space-y-8">
+                <div className="flex flex-col items-center gap-3">
+                  <span className="text-xs font-bold uppercase tracking-wider text-theme-muted">
+                    Choose billing frequency
+                  </span>
+                  <SegmentedControl
+                    value={cadence}
+                    onChange={(v) => setCadence(v as CadenceTab)}
+                    options={[
+                      { value: 'monthly', label: 'Monthly' },
+                      { value: 'quarterly', label: 'Quarterly · Save 5%' },
+                      { value: 'yearly', label: 'Yearly · Save 20%' },
+                    ]}
+                    ariaLabel="Billing cadence"
+                  />
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                  {info.plans.map((plan, index) => (
+                    <div key={plan.id} style={{ animationDelay: `${index * 60}ms` }}>
+                      <BillingPlanCard
+                        plan={plan}
+                        isCurrent={plan.id === info.plan}
+                        canManage={info.canManageBilling}
+                        razorpayConfigured={info.razorpayConfigured}
+                        loading={upgrading === plan.id}
+                        onSelect={() => handleUpgrade(plan)}
+                        cadence={cadence}
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                <BillingFeatureMatrix currentPlan={info.plan} />
+
+                <MetaCostExplainerCard />
               </div>
             )}
 
             {tab === 'history' && (
-              <SectionCard title="Recent payments" subtitle="Successful plan transactions">
+              <SectionCard
+                title="Billing history & invoices"
+                subtitle="Official GST receipts and payment transactions"
+              >
                 {!info.recentPayments || info.recentPayments.length === 0 ? (
                   <EmptyState
                     icon={Receipt}
                     title="No payments yet"
-                    description="Your payment history will show up here after you upgrade to a paid plan."
+                    description="Your payment history and downloadable GST invoices will show up here after you upgrade to a paid plan."
                     compact
                     action={
                       <AppButton variant="secondary" onClick={() => setTab('plans')}>
@@ -285,29 +270,40 @@ export default function BillingPage() {
                     {info.recentPayments.map((payment, i) => {
                       const planName =
                         info.plans.find((p) => p.id === payment.planId)?.name ?? payment.planId;
+                      const basePaise = Math.round(payment.amountPaise / 1.18);
+                      const gstPaise = payment.amountPaise - basePaise;
                       return (
                         <div
                           key={`${payment.planId}-${payment.paidAt ?? i}`}
                           className="dashboard-card flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between"
                         >
                           <div className="flex items-start gap-3">
-                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600">
-                              <Receipt className="h-4 w-4" />
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400">
+                              <Receipt className="h-5 w-5" />
                             </div>
                             <div>
-                              <p className="font-semibold text-theme-fg">{planName} plan</p>
+                              <div className="flex items-center gap-2">
+                                <p className="font-bold text-theme-fg">{planName} Plan</p>
+                                <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
+                                  GST Paid
+                                </span>
+                              </div>
                               <p className="text-[12px] text-theme-muted">
-                                {formatPaidAt(payment.paidAt)}
+                                {formatPaidAt(payment.paidAt)} · SAC 998315
                               </p>
                             </div>
                           </div>
-                          <div className="flex items-center gap-3 sm:pl-0">
-                            <span className="text-lg font-extrabold tabular-nums text-emerald-700 dark:text-emerald-300">
-                              {formatAmount(payment.amountPaise)}
-                            </span>
-                            <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-700 dark:text-emerald-300">
-                              Paid
-                            </span>
+
+                          <div className="flex flex-col items-start gap-1 sm:items-end">
+                            <div className="flex items-baseline gap-1.5">
+                              <span className="text-lg font-extrabold tabular-nums text-emerald-700 dark:text-emerald-300">
+                                {formatAmount(payment.amountPaise)}
+                              </span>
+                              <span className="text-[11px] font-medium text-theme-muted">incl. 18% GST</span>
+                            </div>
+                            <p className="text-[11px] text-theme-muted">
+                              Base: {formatAmount(basePaise)} · GST: {formatAmount(gstPaise)}
+                            </p>
                           </div>
                         </div>
                       );
@@ -317,7 +313,7 @@ export default function BillingPage() {
               </SectionCard>
             )}
           </>
-        ) : null}
+        )}
       </div>
     </PageShell>
   );

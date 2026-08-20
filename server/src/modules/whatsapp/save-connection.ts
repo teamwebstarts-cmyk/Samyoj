@@ -3,6 +3,7 @@ import prisma from '../../config/database';
 import { AppError } from '../../utils/response';
 import { normalizePhoneIdentity } from '../../utils/phone';
 import { analyticsConversationFilter } from './active-number';
+import { checkQuota } from '../billing/entitlements.service';
 
 export type WhatsappWorkspaceConnection = {
   phoneNumber: string;
@@ -73,6 +74,17 @@ export async function saveWhatsappNumberWorkspace(
     );
   }
   const existing = existingByPhone || existingByProvider;
+
+  if (!existing) {
+    const quotaCheck = await checkQuota(orgId, 'waNumbers', 1);
+    if (!quotaCheck.allowed) {
+      throw new AppError(
+        402,
+        quotaCheck.reason ||
+          `WhatsApp number slot limit reached (${quotaCheck.used}/${quotaCheck.limit}). Upgrade your plan to connect more numbers.`
+      );
+    }
+  }
 
   const data = {
     phoneNumber: connection.phoneNumber,

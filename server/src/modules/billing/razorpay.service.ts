@@ -45,29 +45,64 @@ export async function createRazorpayOrder(params: {
   return res.json() as Promise<{ id: string; amount: number; currency: string }>;
 }
 
+/**
+ * Phase 0 fix: use timing-safe comparison to prevent timing attacks.
+ */
 export function verifyPaymentSignature(
   orderId: string,
   paymentId: string,
   signature: string
 ): boolean {
+  if (!signature) return false;
   const body = `${orderId}|${paymentId}`;
   const expected = crypto
     .createHmac('sha256', config.razorpay.keySecret)
     .update(body)
     .digest('hex');
-  return expected === signature;
+  try {
+    return crypto.timingSafeEqual(
+      Buffer.from(expected, 'hex'),
+      Buffer.from(signature, 'hex')
+    );
+  } catch {
+    // Buffer.from throws if signature is not valid hex — treat as invalid
+    return false;
+  }
 }
 
+/**
+ * Phase 0 fix: timing-safe webhook signature verification.
+ * Returns false (never throws) if secret is not configured — logs CRITICAL.
+ */
 export function verifyWebhookSignature(rawBody: string, signature: string): boolean {
-  if (!config.razorpay.webhookSecret) return false;
+  if (!config.razorpay.webhookSecret) {
+    logger.error(
+      'CRITICAL: RAZORPAY_WEBHOOK_SECRET is not set. All webhook events will be rejected. ' +
+      'Set this env var before going live.'
+    );
+    return false;
+  }
+  if (!signature) return false;
   const expected = crypto
     .createHmac('sha256', config.razorpay.webhookSecret)
     .update(rawBody)
     .digest('hex');
-  return expected === signature;
+  try {
+    return crypto.timingSafeEqual(
+      Buffer.from(expected, 'hex'),
+      Buffer.from(signature, 'hex')
+    );
+  } catch {
+    return false;
+  }
 }
 
-export async function activatePlan(organizationId: string, planId: string) {
+/**
+ * Phase 0 fix: planTier must come from the server-side PaymentOrder row,
+ * never from the client. Caller is responsible for passing PaymentOrder.planId.
+ */
+export async function activatePlan(organizationId: string, planTier: string) {
+  // Phase 0: still using +30d license model. Phase 2 replaces with real subscriptions.
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + 30);
 
@@ -75,7 +110,7 @@ export async function activatePlan(organizationId: string, planId: string) {
   return prisma.organization.update({
     where: { id: organizationId },
     data: {
-      plan: planId,
+      plan: planTier,
       planExpiresAt: expiresAt,
       subscriptionStatus: 'active',
     },

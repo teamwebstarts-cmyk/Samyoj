@@ -54,8 +54,9 @@ import { aiBotApi, callingApi, settingsApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
-import { getErrorMessage } from '../utils/errors';
+import { getErrorMessage, normalizeError } from '../utils/errors';
 import { toastError, toastSuccess } from '../utils/toast';
+import { explainAiSkipReason, httpStatusToAiSkipReason } from '../utils/aiSkipReasons';
 import type { AiBot, BotAnalytics, BotTestResult, KnowledgeBaseItem, OrgProfilePayload } from '../types';
 
 type Channel = 'CHAT' | 'CALL';
@@ -99,24 +100,7 @@ function isChatBot(bot: Pick<AiBot, 'channel'>): boolean {
 type TestTurn = { role: 'user' | 'assistant'; content: string };
 
 function explainBotTestSkip(reason?: string | null): string {
-  switch (reason) {
-    case 'ai_not_configured':
-      return 'AI is not set up on this server yet.';
-    case 'chat_ai_disabled':
-      return 'Chat AI is off in Settings → AI.';
-    case 'calling_ai_disabled':
-      return 'Calling AI is off for this workspace.';
-    case 'no_matching_bot':
-      return 'Could not load this bot. Add a name in About and try again.';
-    case 'empty_message':
-      return 'Type a customer message first.';
-    case 'rate_limited':
-      return 'Too many tests just now. Wait a few seconds.';
-    case 'outside_business_hours':
-      return 'This bot is set to stay quiet outside business hours.';
-    default:
-      return reason || 'No reply yet.';
-  }
+  return explainAiSkipReason(reason);
 }
 
 function playBase64Audio(
@@ -760,18 +744,25 @@ export default function AiBotPage() {
       const reply = result.reply?.trim() || explainBotTestSkip(result.skipReason);
       setTestTurns((prev) => [...prev, { role: 'user', content: message }, { role: 'assistant', content: reply }]);
       setTestMessage('');
+      if (result.skipped) {
+        toastError(explainBotTestSkip(result.skipReason));
+      }
     } catch (err: unknown) {
-      const skipReason = getErrorMessage(err, 'Test failed');
+      const n = normalizeError(err);
+      const skipReason =
+        httpStatusToAiSkipReason(n.status, n.message) || getErrorMessage(err, 'Test failed');
       setTestResult({
         reply: null,
         handoff: false,
         skipped: true,
         skipReason,
       });
+      const shown = explainBotTestSkip(skipReason);
+      toastError(shown);
       setTestTurns((prev) => [
         ...prev,
         { role: 'user', content: message },
-        { role: 'assistant', content: skipReason },
+        { role: 'assistant', content: shown },
       ]);
     } finally {
       setTestLoading(false);
@@ -940,8 +931,6 @@ export default function AiBotPage() {
       <PageShell>
         <div className="space-y-[var(--density-stack-gap)]">
           <AiBotHero
-            badge="AI Agents"
-            badgeIcon={Sparkles}
             title="AI Agents"
             description="Smart assistants for WhatsApp chat and phone calls — answer customers 24/7 and hand off to your team when needed."
             stats={heroStats}

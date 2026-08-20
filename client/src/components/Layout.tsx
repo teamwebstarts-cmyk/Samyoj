@@ -18,6 +18,9 @@ import MobileBottomNav from './layout/MobileBottomNav';
 import MobileMoreSheet from './layout/MobileMoreSheet';
 import CallNotificationProvider from './calls/CallNotificationProvider';
 import QualityRatingBanner from './billing/QualityRatingBanner';
+import SubscriptionDunningBanner from './billing/SubscriptionDunningBanner';
+import UnlockGrowthModal from './billing/UnlockGrowthModal';
+import { TopbarProvider } from '../contexts/TopbarContext';
 
 export default function Layout() {
   const { user, organization, logout } = useAuth();
@@ -25,6 +28,11 @@ export default function Layout() {
   const { pathname, search } = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [paywallModalOpen, setPaywallModalOpen] = useState(false);
+  const [paywallDetail, setPaywallDetail] = useState<{
+    message?: string;
+    upgradeCta?: 'growth' | 'pro';
+  } | null>(null);
   const { collapsed, toggle } = useSidebarCollapsed();
   const breakpoint = useBreakpoint();
   const { total: inboxUnread, refresh: refreshInboxUnread } = useInboxUnreadTotal();
@@ -45,6 +53,20 @@ export default function Layout() {
     logout();
     navigate('/login');
   };
+
+  useEffect(() => {
+    const handlePaywall = (e: Event) => {
+      const customEvent = e as CustomEvent<{
+        message?: string;
+        upgradeCta?: 'growth' | 'pro';
+      }>;
+      setPaywallDetail(customEvent.detail || null);
+      setPaywallModalOpen(true);
+    };
+
+    window.addEventListener('billing:paywall', handlePaywall);
+    return () => window.removeEventListener('billing:paywall', handlePaywall);
+  }, []);
 
   useEffect(() => {
     document.body.style.overflow = mobileOpen ? 'hidden' : '';
@@ -69,6 +91,7 @@ export default function Layout() {
 
   return (
     <CallNotificationProvider>
+      <TopbarProvider>
       <div className="flex h-[100dvh] overflow-hidden platform-gradient">
         <aside
           className={`sidebar-glass hidden shrink-0 overflow-hidden transition-[width] duration-[250ms] ease-[cubic-bezier(0.22,1,0.36,1)] md:block ${
@@ -116,6 +139,7 @@ export default function Layout() {
 
           {!hideTopbar && (
             <div className="mobile-chrome-hide">
+              <SubscriptionDunningBanner />
               <QualityRatingBanner />
             </div>
           )}
@@ -136,6 +160,18 @@ export default function Layout() {
           <MobileMoreSheet open={moreOpen} onClose={() => setMoreOpen(false)} />
         </div>
       </div>
+
+      <UnlockGrowthModal
+        isOpen={paywallModalOpen}
+        onClose={() => setPaywallModalOpen(false)}
+        onUpgrade={() => {
+          setPaywallModalOpen(false);
+          navigate('/billing');
+        }}
+        description={paywallDetail?.message}
+        targetTier={paywallDetail?.upgradeCta || 'growth'}
+      />
+      </TopbarProvider>
     </CallNotificationProvider>
   );
 }

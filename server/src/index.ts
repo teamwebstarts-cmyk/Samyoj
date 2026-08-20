@@ -54,6 +54,7 @@ import { registerPresenceHandlers, startPresenceSweeper } from './modules/inbox/
 import { registerCallingPreviewHandlers } from './modules/ai-bot/calling-preview.socket';
 import { initTelemetry } from './config/telemetry';
 import { attachOpsErrorFileTransport } from './modules/ops/error-log';
+import { refreshBillingConfig } from './modules/billing/config';
 
 const app = express();
 const httpServer = createServer(app);
@@ -368,6 +369,7 @@ async function start() {
   await initSentry();
   setupGlobalErrorHandlers();
   setRealtimeIO(io);
+  await refreshBillingConfig();
 
   await listen();
 

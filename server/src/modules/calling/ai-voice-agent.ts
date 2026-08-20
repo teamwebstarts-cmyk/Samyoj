@@ -9,6 +9,12 @@ import { recordAiUsage, getOrgAiSettings, isCallingAiEnabled } from '../ai/org-a
 import { charUsage } from '../ai/ai-usage-actions';
 import { SAFE_CHAT_TEMPERATURE } from '../ai/ai-constants';
 import { performHandoff, streamVoiceBotReply } from '../ai/chatbot.service';
+import {
+  FALLBACK_CHAT_MESSAGE,
+  VOICE_KEEP_ON_LINE,
+  isOperatorVisibleAiSkip,
+  operatorMessageForSkip,
+} from '../ai/voice-fallback';
 import { shouldEndVoiceCallOnHandoff, validateOutboundReply } from '../ai/guardrails';
 import { MetaCallingService } from './meta-calling.service';
 import { SarvamStreamTranscriber, isSarvamSttConfigured } from './sarvam.stt';
@@ -59,16 +65,25 @@ interface VoiceTurnTiming {
   ttsDoneAt?: number;
 }
 
-/** Spoken when LLM/STT hiccups — not a dead-end error. */
-const VOICE_RETRY_PROMPT =
-  'Ek second — main phir se sun raha hoon. Apna sawaal dobara boliye, ya team se baat chahiye ho to bol dijiye.';
-
 function voiceEmptyReplyFallback(callerText: string): string {
-  return isBusinessInfoQuestion(callerText) ? HONEST_NO_DETAILS : VOICE_RETRY_PROMPT;
+  return isBusinessInfoQuestion(callerText) ? HONEST_NO_DETAILS : VOICE_KEEP_ON_LINE;
+}
+
+function spokenForLiveCall(text: string): string {
+  return text.trim() === FALLBACK_CHAT_MESSAGE ? VOICE_KEEP_ON_LINE : text;
 }
 
 const VOICE_TEAM_HANDOFF_SPOKEN =
   'Theek hai — main team ko bata deta hoon. Woh aapko WhatsApp par message karenge. Dhanyavaad.';
+
+function notifyOperatorCallAiSkip(organizationId: string, callId: string, skipReason?: string) {
+  if (!isOperatorVisibleAiSkip(skipReason)) return;
+  emitToOrg(organizationId, 'call:ai_error', {
+    callId,
+    skipReason,
+    operatorMessage: operatorMessageForSkip(skipReason),
+  });
+}
 
 export class AiVoiceCallSession {
   private bridge: WhatsAppWebRtcBridge | null = null;
@@ -451,6 +466,7 @@ export class AiVoiceCallSession {
         if (event.type === 'direct' && event.result) {
           directHandled = true;
           const result = event.result;
+          notifyOperatorCallAiSkip(this.ctx.organizationId, this.ctx.callId, result.skipReason);
           if (this.abortSpeak || this.ended) break;
           if (result.skipped && !result.reply) {
             if (wantsHumanOnCall(trimmed)) {
@@ -472,8 +488,9 @@ export class AiVoiceCallSession {
           if (result.reply) {
             const cleaned = extractInlineToolCalls(result.reply);
             if (cleaned.cleanText && !this.abortSpeak) {
-              spokenText = cleaned.cleanText;
-              await this.enqueueSpeak(cleaned.cleanText, 'assistant', {
+              const toSpeak = spokenForLiveCall(cleaned.cleanText);
+              spokenText = toSpeak;
+              await this.enqueueSpeak(toSpeak, 'assistant', {
                 recordTranscript: false,
                 onStart: () => {
                   if (!timing.ttsFirstStartAt) timing.ttsFirstStartAt = Date.now();

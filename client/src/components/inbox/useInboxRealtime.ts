@@ -5,6 +5,7 @@ import { useSocket, type SocketState } from '../../hooks/useSocket';
 import { logError } from '../../utils/errors';
 import type { Conversation, Message, ServiceWindowInfo } from '../../types';
 import { emitChatNotice } from './chatNoticeBus';
+import { explainAiSkipReason } from '../../utils/aiSkipReasons';
 import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
 
 function softCatch(action: string, conversationId?: string) {
@@ -63,6 +64,8 @@ export function useInboxRealtime({
         activeBot?: { id: string; name: string } | null;
         reason?: string;
         summary?: string | null;
+        skipReason?: string;
+        operatorMessage?: string;
         whatsappNumberId?: string;
         numberId?: string;
       };
@@ -240,6 +243,17 @@ export function useInboxRealtime({
             });
           }
         }
+      }
+
+      if (event === 'conversation:ai_error' && payload.conversationId) {
+        const text = payload.operatorMessage || explainAiSkipReason(payload.skipReason);
+        emitChatNotice(payload.conversationId, {
+          kind: 'ai-error',
+          message: text,
+          icon: 'alert',
+          tone: 'orange',
+        });
+        return;
       }
 
       if (event === 'ticket:new' || event === 'ticket:updated') {

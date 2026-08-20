@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react';
-import { AlertCircle, BookOpen, CalendarClock, FileText, Image, Loader2, Package, Plus, Smile, Tag, Upload } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { AlertCircle, FileText, Image, Info, Loader2, Plus, Smile, Upload } from 'lucide-react';
 import AppInput from '../../ui/AppInput';
 import AppSelect from '../../ui/AppSelect';
 import AppTextarea from '../../ui/AppTextarea';
+import FieldInfoTip from '../../ui/FieldInfoTip';
 import TemplateButtonEditor from '../TemplateButtonEditor';
+import TemplateGuidanceDisclosure from '../TemplateGuidanceDisclosure';
 import { templateApi } from '../../../services/api';
 import {
   CATEGORY_OPTIONS,
@@ -14,19 +15,11 @@ import {
 } from '../../../utils/templateUtils';
 import { messagingConsent } from '../../../utils/plainLanguage';
 import {
-  applyPurposePreset,
   syncFormExamples,
-  TEMPLATE_PURPOSE_PRESETS,
   type TemplateFormState,
   type TemplateVariableMeta,
 } from '../../../utils/templateForm';
 import { toastError } from '../../../utils/toast';
-
-const PURPOSE_ICONS = {
-  order_update: Package,
-  appointment_reminder: CalendarClock,
-  offer_code: Tag,
-} as const;
 
 /** No-code insert chips: place {{n}} at cursor and pre-map the source in one click. */
 const INSERT_VARIABLE_CHIPS: Array<{
@@ -156,84 +149,23 @@ export default function TemplateWizardCreateStep({
 
   return (
     <div className="space-y-4">
-      {mode === 'create' && (
-        <div className="template-wizard-card p-4">
-          <p className="text-[13px] font-bold text-slate-900 dark:text-white">
-            Start from a purpose
-          </p>
-          <p className="mt-0.5 text-[11px] text-slate-500">
-            Pick a starter — we pre-fill the message and map variables to contacts.
-          </p>
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {TEMPLATE_PURPOSE_PRESETS.map((preset) => {
-              const Icon = PURPOSE_ICONS[preset.id as keyof typeof PURPOSE_ICONS] ?? FileText;
-              const selected = form.body === preset.body && form.category === preset.category;
-              return (
-                <button
-                  key={preset.id}
-                  type="button"
-                  aria-pressed={selected}
-                  onClick={() => onChange(applyPurposePreset(form, preset))}
-                  className={`rounded-xl border px-3 py-2.5 text-left transition ${
-                    selected
-                      ? 'border-violet-400 bg-violet-50 ring-2 ring-violet-200 dark:border-violet-600 dark:bg-violet-950/40 dark:ring-violet-800'
-                      : 'border-slate-200 bg-white hover:border-violet-300 hover:bg-violet-50/50 dark:border-slate-700 dark:bg-slate-900/40 dark:hover:border-violet-700'
-                  }`}
-                >
-                  <p className="flex items-center gap-1.5 text-[12px] font-bold text-slate-900 dark:text-white">
-                    <Icon className="h-3.5 w-3.5 shrink-0 text-violet-600 dark:text-violet-300" />
-                    <span className="truncate">{preset.label}</span>
-                  </p>
-                  <p className="mt-0.5 line-clamp-1 text-[10px] leading-snug text-slate-500">
-                    {preset.hint}
-                  </p>
-                </button>
-              );
-            })}
-            <Link
-              to="/templates/library"
-              className="rounded-xl border border-violet-200 bg-violet-50/70 px-3 py-2.5 text-left transition hover:border-violet-300 hover:bg-violet-50 dark:border-violet-800 dark:bg-violet-950/30 dark:hover:border-violet-700"
-            >
-              <p className="flex items-center gap-1.5 text-[12px] font-bold text-violet-800 dark:text-violet-200">
-                <BookOpen className="h-3.5 w-3.5 shrink-0" />
-                <span className="truncate">Meta library</span>
-              </p>
-              <p className="mt-0.5 line-clamp-1 text-[10px] leading-snug text-violet-700/80 dark:text-violet-300/80">
-                Pre-approved OTP and utility templates
-              </p>
-            </Link>
-          </div>
-        </div>
-      )}
-
-      <div className="flex items-start gap-3 rounded-xl border border-rose-200/80 bg-rose-50/70 px-4 py-3 dark:border-rose-900/40 dark:bg-rose-950/25">
-        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />
-        <div>
-          <p className="text-[13px] font-bold text-rose-900 dark:text-rose-200">
-            WhatsApp must approve this first
-          </p>
-          <p className="mt-0.5 text-[12px] leading-relaxed text-rose-800/90 dark:text-rose-300/90">
-            Only approved templates can be used in campaigns. Add example names and numbers for every
-            personal field so WhatsApp can review a realistic message.
-          </p>
-        </div>
-      </div>
+      <TemplateGuidanceDisclosure
+        title="WhatsApp must approve this first"
+        icon={AlertCircle}
+        tone="rose"
+      >
+        Only approved templates can be used in campaigns. Add example names and numbers for every
+        personal field so WhatsApp can review a realistic message.
+      </TemplateGuidanceDisclosure>
 
       {form.category === 'MARKETING' && (
-        <div className="rounded-xl border border-sky-200/70 bg-sky-50/60 px-4 py-3 text-[12px] text-sky-900 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-200">
-          <p className="font-semibold">Marketing template guidelines</p>
-          <p className="mt-1">{messagingConsent.templateStopHint} Avoid misleading claims.</p>
-        </div>
-      )}
-
-      {form.category === 'UTILITY' && (
-        <div className="rounded-xl border border-sky-200/70 bg-sky-50/60 px-4 py-3 text-[12px] text-sky-900 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-200">
-          <p className="font-semibold">Utility template guidelines</p>
-          <p className="mt-1">
-            Use for order updates, appointments, and account alerts. Avoid sales language — WhatsApp may
-            treat it as a promo and reject it.
-          </p>
-        </div>
+        <TemplateGuidanceDisclosure
+          title="Marketing template guidelines"
+          icon={Info}
+          tone="sky"
+        >
+          {messagingConsent.templateStopHint} Avoid misleading claims.
+        </TemplateGuidanceDisclosure>
       )}
 
       <div className="template-wizard-card p-4 sm:p-5">
@@ -241,8 +173,8 @@ export default function TemplateWizardCreateStep({
           <AppInput
             id="template-name"
             label="Template name"
+            labelInfo="Use lowercase letters, numbers, and underscores only."
             placeholder="order_update"
-            hint="Use lowercase letters, numbers and underscores only."
             value={form.name}
             onChange={(e) =>
               setForm({ name: e.target.value.toLowerCase().replace(/\s/g, '_') })
@@ -266,7 +198,6 @@ export default function TemplateWizardCreateStep({
           <AppSelect
             id="template-category"
             label="Category"
-            hint="Choose the category that best fits your template."
             value={form.category}
             options={CATEGORY_OPTIONS}
             isSearchable={false}
@@ -278,7 +209,6 @@ export default function TemplateWizardCreateStep({
           <AppSelect
             id="template-header-format"
             label="Header type"
-            hint="Select the type of header for your template."
             value={form.headerFormat}
             options={HEADER_FORMAT_OPTIONS}
             isSearchable={false}
@@ -299,7 +229,6 @@ export default function TemplateWizardCreateStep({
             <AppInput
               id="template-header"
               label="Header text"
-              hint="Optional · max 60 characters"
               placeholder="Order update"
               value={form.header}
               onChange={(e) => setForm({ header: e.target.value })}
@@ -310,12 +239,12 @@ export default function TemplateWizardCreateStep({
 
         {['IMAGE', 'VIDEO', 'DOCUMENT'].includes(form.headerFormat) && (
           <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50/80 p-4 dark:border-slate-700 dark:bg-slate-900/40">
-            <p className="text-[13px] font-semibold text-slate-900 dark:text-white">
-              Sample {form.headerFormat.toLowerCase()} for approval
-            </p>
-            <p className="mt-1 text-[11px] text-slate-500">
-              Upload a sample file. WhatsApp uses this during template approval.
-            </p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-[13px] font-semibold text-slate-900 dark:text-white">
+                Sample {form.headerFormat.toLowerCase()} for approval
+              </p>
+              <FieldInfoTip text="Upload a sample file. WhatsApp uses it during template review." />
+            </div>
             <input
               ref={fileRef}
               type="file"
@@ -355,8 +284,14 @@ export default function TemplateWizardCreateStep({
 
         <div className="mt-4">
           <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
-            <label htmlFor="template-body" className="text-[13px] font-semibold text-theme-secondary">
-              Body text <span className="text-red-500">*</span>
+            <label
+              htmlFor="template-body"
+              className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-theme-secondary"
+            >
+              <span>
+                Body text <span className="text-red-500">*</span>
+              </span>
+              <FieldInfoTip text="Use the chips below to insert variables. They can map to contact fields." />
             </label>
             <div className="flex items-center gap-2">
               <button
@@ -372,9 +307,6 @@ export default function TemplateWizardCreateStep({
               </span>
             </div>
           </div>
-          <p className="mb-2 text-[11px] text-slate-500">
-            Tap to insert a personalized field — no brackets to type. Each is connected to your contacts.
-          </p>
           <div className="mb-2 flex flex-wrap gap-1.5">
             {INSERT_VARIABLE_CHIPS.map((chip) => (
               <button
@@ -410,7 +342,6 @@ export default function TemplateWizardCreateStep({
           <AppInput
             id="template-footer"
             label="Footer"
-            hint="Optional · recommended for marketing"
             placeholder="Reply STOP to unsubscribe"
             value={form.footer}
             onChange={(e) => setForm({ footer: e.target.value })}

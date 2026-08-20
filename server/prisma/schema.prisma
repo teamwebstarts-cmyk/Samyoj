@@ -1772,3 +1772,11 @@ model OrgFeatureFlag {
   @@index([organizationId])
   @@map("org_feature_flags")
 }
+
+model PlatformSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("platform_settings")
+}

@@ -37,6 +37,7 @@ import {
   rotatePlatformCsrf,
 } from './session';
 import { getPlatformOrg, getPlatformOverview, listPlatformOrgs, patchPlatformOrgAi, patchPlatformOrgBilling, patchPlatformOrgFlags } from './orgs';
+import { getPlatformSettings, patchPlatformSettings } from './settings';
 import { listPlatformAudit, listPlatformErrors } from './errors';
 import { listOutreachQueues, sendOrgOutreach } from './outreach';
 import {
@@ -637,4 +638,8 @@ router.get(
   })
 );
 
+router.get('/settings', getPlatformSettings);
+router.put('/settings', patchPlatformSettings);
+
 export default router;
+

@@ -79,8 +79,14 @@ router.post(
           },
         });
 
+        const trialExpiry = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
         const org = await tx.organization.create({
-          data: { companyName: data.companyName.trim() },
+          data: {
+            companyName: data.companyName.trim(),
+            plan: 'launch',
+            subscriptionStatus: 'trial',
+            planExpiresAt: trialExpiry,
+          },
         });
 
         await tx.organizationUser.create({

@@ -19,10 +19,8 @@ import ResponsiveDataView from '../components/ui/ResponsiveDataView';
 import Pagination from '../components/ui/Pagination';
 import SlideOver from '../components/ui/SlideOver';
 import TemplateDetailPanel from '../components/templates/TemplateDetailPanel';
-import TemplatePendingBanner from '../components/templates/TemplatePendingBanner';
 import TemplatesPageToolbar, {
   ALL_CATEGORIES,
-  ALL_LANGUAGES,
   ALL_STATUSES,
 } from '../components/templates/TemplatesPageToolbar';
 import { invalidateApprovedTemplatesCache } from '../components/inbox/TemplateComposer';
@@ -34,9 +32,6 @@ import { settingsApi, templateApi } from '../services/api';
 import {
   duplicateTemplateForm,
 } from '../utils/templateForm';
-import {
-  groupTemplatesByName,
-} from '../utils/templateUtils';
 import type { MessageTemplate } from '../types';
 import { toastError, toastSuccess } from '../utils/toast';
 import { invalidateFlowReferenceData } from '../components/flows/flowReferenceData';
@@ -44,6 +39,7 @@ import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 
 const PENDING_POLL_MS = 30_000;
+const EMPTY_GROUP_SET = new Set<string>();
 
 interface TemplateRejectionAlert {
   templateName?: string;
@@ -64,9 +60,6 @@ export default function TemplatesPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState(ALL_STATUSES);
   const [categoryFilter, setCategoryFilter] = useState(ALL_CATEGORIES);
-  const [languageFilter, setLanguageFilter] = useState(ALL_LANGUAGES);
-  const [groupView, setGroupView] = useState(false);
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
   const [rejectionAlerts, setRejectionAlerts] = useState<TemplateRejectionAlert[]>([]);
   const activeNumberIdRef = useRef<string | null>(null);
@@ -188,7 +181,7 @@ export default function TemplatesPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, statusFilter, categoryFilter, languageFilter, groupView]);
+  }, [debouncedSearch, statusFilter, categoryFilter]);
 
   useEffect(() => {
     const viewName = searchParams.get('view');
@@ -280,7 +273,6 @@ export default function TemplatesPage() {
     const query = debouncedSearch.toLowerCase();
     return templates.filter((template) => {
       if (categoryFilter !== ALL_CATEGORIES && template.category !== categoryFilter) return false;
-      if (languageFilter !== ALL_LANGUAGES && template.language !== languageFilter) return false;
       if (!query) return true;
       const body = getTemplateParts(template).body;
       return (
@@ -289,36 +281,12 @@ export default function TemplatesPage() {
         (template.category || '').toLowerCase().includes(query)
       );
     });
-  }, [templates, debouncedSearch, categoryFilter, languageFilter]);
+  }, [templates, debouncedSearch, categoryFilter]);
 
-  const tableRows = useMemo((): TemplateTableRow[] => {
-    if (!groupView) {
-      return filteredTemplates.map((t) => ({ type: 'single', template: t }));
-    }
-
-    const groups = groupTemplatesByName(filteredTemplates);
-    const rows: TemplateTableRow[] = [];
-
-    for (const group of groups) {
-      if (group.variants.length === 1) {
-        rows.push({ type: 'single', template: group.primary });
-        continue;
-      }
-
-      rows.push({
-        type: 'group',
-        name: group.name,
-        variants: group.variants,
-        primary: group.primary,
-      });
-
-      if (expandedGroups.has(group.name)) {
-        group.variants.forEach((v) => rows.push({ type: 'variant', template: v }));
-      }
-    }
-
-    return rows;
-  }, [filteredTemplates, groupView, expandedGroups]);
+  const tableRows = useMemo(
+    (): TemplateTableRow[] => filteredTemplates.map((t) => ({ type: 'single', template: t })),
+    [filteredTemplates],
+  );
 
   const paginatedRows = useMemo(() => {
     const start = (page - 1) * DEFAULT_PAGE_SIZE;
@@ -333,19 +301,9 @@ export default function TemplatesPage() {
   const hasFilters =
     Boolean(debouncedSearch) ||
     statusFilter !== ALL_STATUSES ||
-    categoryFilter !== ALL_CATEGORIES ||
-    languageFilter !== ALL_LANGUAGES;
+    categoryFilter !== ALL_CATEGORIES;
 
   const showListSkeleton = loading && templates.length === 0 && !loadError;
-
-  const toggleGroup = (name: string) => {
-    setExpandedGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(name)) next.delete(name);
-      else next.add(name);
-      return next;
-    });
-  };
 
   if (numbersLoading && !hasConnectedNumber) {
     return (
@@ -397,11 +355,6 @@ export default function TemplatesPage() {
             onStatusFilterChange={setStatusFilter}
             categoryFilter={categoryFilter}
             onCategoryFilterChange={setCategoryFilter}
-            languageFilter={languageFilter}
-            onLanguageFilterChange={setLanguageFilter}
-            groupView={groupView}
-            onToggleGroupView={() => setGroupView((v) => !v)}
-            onRefresh={load}
             onOpenLibrary={openLibrary}
             onCreate={openCreate}
           />
@@ -410,8 +363,6 @@ export default function TemplatesPage() {
             <TemplatesListSkeleton />
           ) : (
             <>
-          <TemplatePendingBanner pending={stats.pending} />
-
           {loadError && templates.length > 0 && (
             <div className="border-b border-theme-border px-4 py-2.5 sm:px-5">
               <AppAlert variant="error">
@@ -513,8 +464,8 @@ export default function TemplatesPage() {
                     page={page}
                     pageSize={DEFAULT_PAGE_SIZE}
                     total={tableRows.length}
-                    expandedGroups={expandedGroups}
-                    onToggleGroup={toggleGroup}
+                    expandedGroups={EMPTY_GROUP_SET}
+                    onToggleGroup={() => {}}
                     onPageChange={setPage}
                     onView={openView}
                     onDuplicate={openDuplicate}

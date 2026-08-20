@@ -50,6 +50,7 @@ import { getErrorMessage } from '../utils/errors';
 import { toastError, toastSuccess, toastWarning } from '../utils/toast';
 import { mapTemplateApiError } from '../components/templates/wizard/templateWizardModel';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
+import { useTopbarExtras } from '../contexts/TopbarContext';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 
 function itemKey(item: LibraryListItem) {
@@ -488,6 +489,13 @@ export default function TemplateLibraryPage() {
           ? 'You can send this from Campaigns and Inbox now'
           : 'WhatsApp is reviewing this template';
 
+  const { setExtras, clearExtras } = useTopbarExtras();
+
+  useEffect(() => {
+    setExtras({ subtitle: stepSubtitle });
+    return () => clearExtras();
+  }, [stepSubtitle, setExtras, clearExtras]);
+
   const nameError =
     createName.trim() && existingNames.has(createName.trim())
       ? 'This name is already on your account.'
@@ -495,14 +503,6 @@ export default function TemplateLibraryPage() {
 
   return (
     <div className="template-wizard-page">
-      <div className="template-wizard-breadcrumb mb-3 flex flex-wrap items-center gap-2 text-[12px]">
-        <Link to="/templates" className="font-medium text-slate-500 hover:text-slate-700">
-          Templates
-        </Link>
-        <span className="text-slate-300">/</span>
-        <span className="font-semibold text-slate-800 dark:text-slate-200">Library</span>
-      </div>
-
       <div className="template-wizard-header mb-4 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex items-start gap-3">
           <span

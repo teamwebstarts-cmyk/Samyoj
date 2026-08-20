@@ -221,9 +221,6 @@ export default function CampaignMessageStep({
                 </span>
               )}
             </div>
-            <p className="mt-0.5 text-[10px] font-medium text-slate-500 dark:text-slate-400">
-              Fill in the details for your campaign
-            </p>
           </div>
 
           <div className="min-h-0 flex flex-1 flex-col space-y-3 overflow-y-auto p-3.5 sm:p-4">
@@ -287,14 +284,6 @@ export default function CampaignMessageStep({
                       {selectedTemplate.language} · Approved template
                     </p>
                   </div>
-                </div>
-                <div className="space-y-0.5">
-                  <p className="text-[11px] font-bold text-slate-600 dark:text-slate-300">
-                    Fill in the details for your campaign
-                  </p>
-                  <p className="text-[9px] font-medium text-slate-400">
-                    All variables marked <span className="font-bold text-red-500">*</span> are required
-                  </p>
                 </div>
 
                 {(selectedTemplate.category || '').toUpperCase() === 'UTILITY' && (
@@ -407,12 +396,6 @@ export default function CampaignMessageStep({
                       }
                     />
 
-                    <div className="flex items-start gap-2 rounded-lg border border-sky-100 bg-sky-50/70 px-2.5 py-2 dark:border-sky-900/50 dark:bg-sky-950/20">
-                      <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-sky-600 dark:text-sky-300" />
-                      <p className="text-[10px] font-medium leading-relaxed text-sky-800 dark:text-sky-200">
-                        Make sure every variable is filled correctly. Customers will see the final message shown in the preview.
-                      </p>
-                    </div>
                   </>
                 )}
               </>
@@ -426,9 +409,6 @@ export default function CampaignMessageStep({
               <h2 className="text-[13px] font-extrabold tracking-tight text-slate-900 dark:text-white">
                 Message preview
               </h2>
-              <p className="mt-0.5 text-[10px] font-medium text-slate-500 dark:text-slate-400">
-                Preview the message your audience will receive
-              </p>
             </div>
             <span className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-300">
               <MessageCircle className="h-3.5 w-3.5" strokeWidth={2.25} />

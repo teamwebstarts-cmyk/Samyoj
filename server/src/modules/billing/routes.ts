@@ -5,7 +5,7 @@ import { authenticate, requireOrg } from '../../middleware/auth';
 import { loadPermissions, requirePermission } from '../../middleware/permissions';
 import { AppError, sendSuccess, asyncHandler } from '../../utils/response';
 import { getSeatLimit, type TeamSettings } from '../team/types';
-import { BILLING_PLANS, getPlan } from './plans';
+import { BILLING_PLANS, getPlan, getSku, BILLING_SKUS } from './plans';
 import {
   activatePlan,
   createRazorpayOrder,
@@ -99,11 +99,12 @@ router.post(
   loadPermissions,
   requirePermission('manageSettings'),
   asyncHandler(async (req: Request, res: Response) => {
-    const { planId } = z.object({ planId: z.enum(['growth', 'business']) }).parse(req.body);
+    const { planId } = z.object({ planId: z.enum(['starter', 'growth', 'pro']) }).parse(req.body);
     const orgId = req.user!.organizationId!;
 
-    const plan = getPlan(planId);
-    if (!plan || plan.pricePaise <= 0) {
+    const skuId = `${planId}_monthly`;
+    const sku = getSku(skuId);
+    if (!sku || sku.pricePaise <= 0) {
       throw new AppError(400, 'Invalid plan for payment');
     }
 
@@ -112,9 +113,9 @@ router.post(
 
     const receipt = `plan_${planId}_${orgId.slice(0, 8)}_${Date.now()}`;
     const order = await createRazorpayOrder({
-      amountPaise: plan.pricePaise,
+      amountPaise: sku.pricePaise,
       receipt,
-      notes: { organizationId: orgId, planId, companyName: org.companyName },
+      notes: { organizationId: orgId, planId, skuId, companyName: org.companyName },
     });
 
     await prisma.paymentOrder.create({
@@ -122,7 +123,7 @@ router.post(
         organizationId: orgId,
         razorpayOrderId: order.id,
         planId,
-        amountPaise: plan.pricePaise,
+        amountPaise: sku.pricePaise,
         currency: order.currency,
         status: 'CREATED',
       },
@@ -139,7 +140,7 @@ router.post(
       amount: order.amount,
       currency: order.currency,
       keyId: config.razorpay.keyId,
-      planName: plan.name,
+      planName: sku.name,
     });
   })
 );
@@ -156,7 +157,6 @@ router.post(
         razorpay_order_id: z.string(),
         razorpay_payment_id: z.string(),
         razorpay_signature: z.string(),
-        planId: z.enum(['growth', 'business']),
       })
       .parse(req.body);
 
@@ -177,6 +177,15 @@ router.post(
     });
     if (!paymentOrder) throw new AppError(404, 'Payment order not found');
 
+    const org = await prisma.organization.findUnique({ where: { id: orgId } });
+    if (!org) throw new AppError(404, 'Organization not found');
+
+    if (paymentOrder.status === 'CAPTURED') {
+      return sendSuccess(res, { plan: org.plan, message: 'Already activated.' });
+    }
+
+    const planId = paymentOrder.planId;
+
     await prisma.paymentOrder.update({
       where: { id: paymentOrder.id },
       data: {
@@ -186,19 +195,17 @@ router.post(
       },
     });
 
-    const org = await activatePlan(orgId, data.planId);
+    const updatedOrg = await activatePlan(orgId, planId);
 
-    if (paymentOrder.status !== 'CAPTURED') {
-      const { emitProductEvent } = await import('../platform/events');
-      emitProductEvent({
-        organizationId: orgId,
-        name: 'PAYMENT_OK',
-      });
-    }
+    const { emitProductEvent } = await import('../platform/events');
+    emitProductEvent({
+      organizationId: orgId,
+      name: 'PAYMENT_OK',
+    });
 
     sendSuccess(res, {
-      plan: org.plan,
-      planExpiresAt: org.planExpiresAt,
+      plan: updatedOrg.plan,
+      planExpiresAt: updatedOrg.planExpiresAt,
       message: 'Payment successful. Plan upgraded.',
     });
   })
@@ -232,14 +239,14 @@ router.post(
       const payment = event.payload?.payment?.entity;
       const orderId = payment?.order_id;
       const paymentId = payment?.id;
-      const planId = payment?.notes?.planId;
-      const organizationId = payment?.notes?.organizationId;
 
-      if (orderId && organizationId && planId) {
-        const existing = await prisma.paymentOrder.findUnique({
+      if (orderId) {
+        const existing = await prisma.paymentOrder.findFirst({
           where: { razorpayOrderId: orderId },
         });
         if (existing && existing.status !== 'CAPTURED') {
+          const organizationId = existing.organizationId;
+          const planId = existing.planId;
           await prisma.paymentOrder.update({
             where: { id: existing.id },
             data: { status: 'CAPTURED', paymentId, paidAt: new Date() },
@@ -258,7 +265,7 @@ router.post(
     if (event.event === 'payment.failed') {
       const orderId = event.payload?.payment?.entity?.order_id;
       if (orderId) {
-        const failedOrder = await prisma.paymentOrder.findUnique({
+        const failedOrder = await prisma.paymentOrder.findFirst({
           where: { razorpayOrderId: orderId },
           select: { id: true, organizationId: true, status: true },
         });
@@ -288,7 +295,7 @@ router.patch(
   requirePermission('manageSettings'),
   asyncHandler(async (req: Request, res: Response) => {
     const { plan } = z
-      .object({ plan: z.enum(['starter', 'growth', 'business', 'enterprise']) })
+      .object({ plan: z.enum(['launch', 'starter', 'growth', 'pro', 'enterprise']) })
       .parse(req.body);
     const orgId = req.user!.organizationId!;
 

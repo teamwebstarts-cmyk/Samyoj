@@ -179,8 +179,14 @@ router.get(
           },
         });
 
+        const trialExpiry = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
         const org = await tx.organization.create({
-          data: { companyName },
+          data: {
+            companyName,
+            plan: 'launch',
+            subscriptionStatus: 'trial',
+            planExpiresAt: trialExpiry,
+          },
         });
 
         await tx.organizationUser.create({
@@ -234,8 +240,14 @@ router.get(
     // Ensure org always exists for Google users
     let finalOrgId = organizationId;
     if (!finalOrgId) {
+      const trialExpiry = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
       const org = await prisma.organization.create({
-        data: { companyName: `${user.name}'s Workspace` },
+        data: {
+          companyName: `${user.name}'s Workspace`,
+          plan: 'launch',
+          subscriptionStatus: 'trial',
+          planExpiresAt: trialExpiry,
+        },
       });
       await prisma.organizationUser.create({
         data: { organizationId: org.id, userId: user.id, role: 'OWNER' },

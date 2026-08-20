@@ -14,6 +14,7 @@ export type ChatNoticePayload = {
     | 'favorite-off'
     | 'media-limit'
     | 'send-error'
+    | 'ai-error'
     | 'handoff'
     | 'calling';
   message: string;

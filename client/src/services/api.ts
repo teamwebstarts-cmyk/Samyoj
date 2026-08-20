@@ -127,6 +127,19 @@ api.interceptors.response.use(
       }
     }
 
+    if (error.response?.status === 402) {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('billing:paywall', {
+            detail: error.response?.data?.error || {
+              code: 'PLAN_LIMIT',
+              message: 'Plan limit reached. Upgrade to continue.',
+            },
+          })
+        );
+      }
+    }
+
     logError(error, {
       source: 'api',
       action: 'API request failed',
@@ -658,10 +671,9 @@ export const billingApi = {
     razorpay_order_id: string;
     razorpay_payment_id: string;
     razorpay_signature: string;
-    planId: 'growth' | 'business';
   }) => api.post('/billing/verify', data),
   estimateCost: (recipientCount: number, category?: string) =>
-    api.get('/billing/estimate', { params: { recipientCount, category } }),
+    api.post('/billing/estimate', { recipientCount, category }),
   createPaymentLink: (data: {
     amountPaise: number;
     description: string;

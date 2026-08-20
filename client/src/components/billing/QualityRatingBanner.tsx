@@ -60,10 +60,19 @@ export default function QualityRatingBanner() {
         <p className={`mt-0.5 text-[12px] font-medium ${styles.body}`}>
           {ratings.map((r) => `${r.phoneNumber} (${r.qualityRating})`).join(' · ')}.
           {hasRed
-            ? ' Message throughput may be limited. Review your messaging practices immediately.'
-            : ' Monitor your template quality and response rates to avoid downgrade.'}
+            ? ' Message throughput is restricted by Meta. Review template hygiene and opt-in consent in WhatsApp Manager.'
+            : ' Monitor template quality and response feedback in WhatsApp Manager to avoid deliverability restrictions.'}
           {' '}
-          <Link to="/billing" className="font-bold underline underline-offset-2">
+          <a
+            href="https://business.facebook.com/wa/manage/phone-numbers/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-bold underline underline-offset-2 hover:opacity-80"
+          >
+            Open WhatsApp Manager
+          </a>
+          {' · '}
+          <Link to="/billing" className="font-semibold underline underline-offset-2 opacity-80 hover:opacity-100">
             View usage
           </Link>
         </p>

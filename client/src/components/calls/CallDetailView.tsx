@@ -298,7 +298,7 @@ export default function CallDetailView({
         </div>
       </div>
 
-      <div className="hidden shrink-0 border-b border-neutral-200 bg-white px-4 py-2.5 text-[12px] font-medium text-neutral-500 sm:flex sm:flex-wrap sm:items-center dark:border-neutral-800 dark:bg-neutral-950">
+      <div className="hidden shrink-0 border-b border-neutral-200 bg-white px-4 py-3 text-[12px] font-medium text-neutral-500 sm:flex sm:flex-wrap sm:items-center sm:gap-x-5 sm:gap-y-1.5 dark:border-neutral-800 dark:bg-neutral-950">
         <span className="inline-flex items-center gap-1.5">
           {inbound ? (
             <PhoneIncoming className="h-3.5 w-3.5 text-neutral-700 dark:text-neutral-300" strokeWidth={2.25} />

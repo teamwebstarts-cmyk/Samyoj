@@ -14,6 +14,13 @@ import {
   type KnowledgeMatch,
 } from './knowledge.service';
 import { checkRateLimit } from './rate-limit.service';
+import {
+  CHAT_RETRY_BUSY,
+  VOICE_KEEP_ON_LINE,
+  aiBrainRateLimitKey,
+  classifyAiBrainError,
+  spokenAfterBrainFailure,
+} from './voice-fallback';
 import { isAiConfiguredForOrg, recordAiUsage, getOrgAiSettings, isChatAiEnabled, isCallingAiEnabled } from './org-ai.service';
 import {
   getHandoffKeywords,
@@ -51,8 +58,6 @@ import { wantsHumanOnCall } from '../calling/voice-intent';
 
 const log = createModuleLogger('chatbot');
 
-const FALLBACK_MESSAGE =
-  "Sorry, I couldn't help with that. Our team will assist you shortly.";
 const AFTER_HOURS_MESSAGE =
   "Thanks for your message. We're currently outside business hours and will get back to you soon.";
 const MAX_CONTEXT = 12;
@@ -62,7 +67,8 @@ const MAX_CONTEXT_VOICE = 8;
 const HARDCODED_VOICE_RULES = [
   'You are on a live phone call. Talk like a helpful person on the phone, not a chatbot or IVR.',
   'Reply in one or two spoken sentences as one continuous thought. Do not pause between fragments. Do not list brands or options unless they asked.',
-  "Answer from the FAQ. Match the caller's language, including Hinglish if they mix Hindi and English.",
+  "Match the caller's language, including Hinglish if they mix Hindi and English. Greetings and small talk: greet back, use their name if you have it, and ask how you can help. Do not send them to the team for hello.",
+  'Use Train FAQ for facts (prices, hours, policies). If FAQ is empty, still stay on the line — do not invent facts, and do not say the team will assist shortly unless they asked for a person.',
   'Keep punctuation so speech has a natural rhythm. No markdown, emoji, URLs, or bullet points.',
     'Never read tool_call, XML, or code out loud. Never repeat the same sentence twice. Never repeat a previous spoken turn — if you already said something, do not say it again.',
   'Never open with filler sounds like um, umm, hmm, or ah — answer directly.',
@@ -232,10 +238,10 @@ async function buildConversationMessages(
       ? `Trained knowledge from the Train tab. Answer the caller from this first. Do not invent facts that are not here:\n${knowledgeBlock}`
       : channel === 'voice'
         ? [
-            'No FAQ matched this exact spoken turn. You still have your trained brain from the personality instructions above, and you remember this live call in the messages. Recap or continue — do not say you have no knowledge, no memory, or no brain.',
+            'No FAQ matched this spoken turn. Stay on the call. Greet, use the caller name if you have it, and ask what they need. You remember this live call. Do not say you have no knowledge or that the team will assist shortly unless they asked for a person.',
             brainTopics?.length
               ? `Your Train tab includes these topics (when they ask for a list or "kaun si services", use the FAQ content you were trained on for these titles — do not say you lack a list): ${brainTopics.join(', ')}.`
-              : undefined,
+              : 'Train FAQ is empty — do not invent prices, hours, or policies. Still talk like support: listen, clarify, and help with the next step.',
           ]
             .filter(Boolean)
             .join(' ')
@@ -398,14 +404,14 @@ export async function generateBotReply(
   }
 
   const rateLimit = bot.rateLimitPerMin || SAFE_RATE_LIMIT_PER_MIN;
-  const rateKey =
-    input.testMode && bot.id === 'preview'
-      ? `ai-bot:${input.organizationId}:preview`
-      : `ai-bot:${input.organizationId}:${bot.id}`;
+  const rateKey = aiBrainRateLimitKey(input.organizationId, bot.id, {
+    voice: isVoice,
+    testMode: input.testMode,
+  });
   const rate = await checkRateLimit(rateKey, rateLimit);
   if (!rate.allowed) {
     return {
-      reply: FALLBACK_MESSAGE,
+      reply: isVoice ? VOICE_KEEP_ON_LINE : CHAT_RETRY_BUSY,
       handoff: false,
       skipped: true,
       skipReason: 'rate_limited',
@@ -608,9 +614,7 @@ export async function generateBotReply(
     });
 
     return {
-      reply: FALLBACK_MESSAGE,
-      handoff: true,
-      handoffReason: 'ERROR',
+      ...spokenAfterBrainFailure(isVoice ? 'voice' : 'text', classifyAiBrainError(err)),
       botId: bot.id,
       botName: bot.name,
     };
@@ -692,14 +696,14 @@ export async function* streamVoiceBotReply(
       : [];
 
   const rate = await checkRateLimit(
-    `ai-bot:${input.organizationId}:${bot.id}`,
+    aiBrainRateLimitKey(input.organizationId, bot.id, { voice: true }),
     bot.rateLimitPerMin || SAFE_RATE_LIMIT_PER_MIN
   );
   if (!rate.allowed) {
     yield {
       type: 'direct',
       result: {
-        reply: FALLBACK_MESSAGE,
+        reply: VOICE_KEEP_ON_LINE,
         handoff: false,
         skipped: true,
         skipReason: 'rate_limited',

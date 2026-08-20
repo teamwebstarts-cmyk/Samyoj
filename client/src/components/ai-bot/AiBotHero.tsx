@@ -68,45 +68,56 @@ const toneStyles: Record<
 };
 
 export default function AiBotHero({
-  badge = 'AI Agents',
+  badge,
   badgeIcon: BadgeIcon = Sparkles,
   title,
   description,
   stats,
 }: AiBotHeroProps) {
+  const statsGridClass =
+    stats.length === 3
+      ? 'grid-cols-3 sm:grid-cols-3'
+      : stats.length >= 4
+        ? 'grid-cols-2 md:grid-cols-4'
+        : 'grid-cols-2';
+
   return (
     <section
       aria-label="AI Agents overview"
-      className="relative overflow-hidden rounded-2xl border border-violet-200/70 bg-[linear-gradient(100deg,#faf8ff_0%,#f5f3ff_42%,#ffffff_100%)] p-4 shadow-[0_1px_3px_rgba(15,23,42,0.04)] dark:border-violet-900/50 dark:bg-[linear-gradient(100deg,#120e24_0%,#18132e_45%,#0d0a1a_100%)] sm:p-5"
+      className="relative overflow-hidden rounded-xl border border-violet-200/70 bg-[linear-gradient(100deg,#faf8ff_0%,#f5f3ff_42%,#ffffff_100%)] p-2.5 shadow-[0_8px_24px_rgba(139,92,246,0.05)] dark:border-violet-900/50 dark:bg-[linear-gradient(100deg,#120e24_0%,#18132e_45%,#0d0a1a_100%)] sm:rounded-[22px] sm:p-5 md:p-6"
     >
       <div
-        className="pointer-events-none absolute -left-12 -top-14 h-44 w-44 rounded-full bg-violet-300/30 blur-3xl dark:bg-violet-500/15"
+        className="pointer-events-none absolute -left-20 -top-24 h-56 w-56 rounded-full bg-violet-300/30 blur-3xl dark:bg-violet-500/15 max-sm:hidden"
         aria-hidden="true"
       />
       <div
-        className="pointer-events-none absolute -right-10 -bottom-10 h-36 w-36 rounded-full bg-sky-200/25 blur-2xl dark:bg-sky-500/10"
+        className="pointer-events-none absolute -right-12 -bottom-14 h-48 w-48 rounded-full bg-sky-200/25 blur-3xl dark:bg-sky-500/10 max-sm:hidden"
         aria-hidden="true"
       />
 
-      <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="relative flex flex-col gap-2.5 sm:gap-5 xl:flex-row xl:items-center xl:justify-between xl:gap-8">
         <div className="min-w-0 max-w-xl">
-          <div className="inline-flex items-center gap-1.5 rounded-full border border-violet-200/80 bg-violet-50/80 px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-widest text-violet-800 dark:border-violet-800/60 dark:bg-violet-950/50 dark:text-violet-200">
-            <BadgeIcon className="h-3 w-3 shrink-0" aria-hidden="true" />
-            <span>{badge}</span>
-          </div>
+          {badge ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-violet-200/80 bg-violet-50/80 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.1em] text-violet-800 dark:border-violet-800/60 dark:bg-violet-950/50 dark:text-violet-200 sm:gap-1.5 sm:px-2.5 sm:py-1 sm:text-[10px] sm:tracking-[0.12em]">
+              <BadgeIcon className="h-2.5 w-2.5 shrink-0 sm:h-3 sm:w-3" aria-hidden="true" />
+              {badge}
+            </span>
+          ) : null}
 
-          <h1 className="mt-1.5 text-[1.25rem] font-black tracking-tight text-neutral-900 dark:text-white sm:text-[1.45rem]">
+          <h1
+            className={`text-[1.05rem] font-extrabold leading-snug tracking-tight text-neutral-900 dark:text-white sm:text-[1.5rem] md:text-[1.65rem] xl:whitespace-nowrap ${
+              badge ? 'mt-1.5 sm:mt-3' : ''
+            }`}
+          >
             {title}
           </h1>
-          <p className="mt-1 text-[12px] font-medium leading-relaxed text-neutral-600 dark:text-neutral-400 sm:text-[13px]">
+          <p className="mt-0.5 hidden max-w-md text-[12px] font-medium leading-relaxed text-neutral-600 dark:text-neutral-400 sm:mt-1.5 sm:block sm:text-[13px]">
             {description}
           </p>
         </div>
 
         <div
-          className={`grid w-full auto-rows-fr gap-2 sm:flex sm:flex-wrap sm:items-stretch sm:gap-2.5 lg:w-auto lg:justify-end ${
-            stats.length <= 2 ? 'grid-cols-2' : stats.length === 3 ? 'grid-cols-3' : 'grid-cols-2'
-          }`}
+          className={`grid w-full gap-1.5 sm:gap-2.5 xl:w-auto xl:min-w-0 xl:max-w-none xl:shrink-0 ${statsGridClass}`}
         >
           {stats.map((s) => {
             const config = toneStyles[s.tone] || toneStyles.total;
@@ -114,7 +125,7 @@ export default function AiBotHero({
             return (
               <div
                 key={s.label}
-                className="flex h-full min-h-[72px] min-w-0 items-center gap-1.5 rounded-lg border border-neutral-200/80 bg-white px-2 py-1.5 shadow-[0_1px_2px_rgba(15,23,42,0.03)] dark:border-slate-700/70 dark:bg-slate-900/70 sm:min-h-[88px] sm:gap-2.5 sm:rounded-2xl sm:px-3 sm:py-3 xl:w-[150px] 2xl:w-[160px]"
+                className="flex min-w-0 items-center gap-1.5 rounded-lg border border-neutral-200/80 bg-white px-2 py-1.5 shadow-[0_1px_2px_rgba(15,23,42,0.03)] dark:border-slate-700/70 dark:bg-slate-900/70 sm:gap-2.5 sm:rounded-2xl sm:px-3 sm:py-3 xl:w-[150px] 2xl:w-[160px]"
               >
                 <div
                   className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full sm:h-9 sm:w-9 ${config.chip}`}
@@ -122,16 +133,16 @@ export default function AiBotHero({
                 >
                   <IconComponent className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={2.2} />
                 </div>
-                <div className="flex min-w-0 flex-1 flex-col justify-center">
-                  <p className="truncate text-[10px] font-semibold text-neutral-800 dark:text-neutral-200 sm:text-[12px]">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[9px] font-semibold leading-tight text-neutral-800 dark:text-neutral-200 sm:text-[12px]">
                     {s.label}
                   </p>
                   <p
-                    className={`truncate text-[1.1rem] font-extrabold leading-tight tracking-tight tabular-nums sm:text-[1.35rem] ${config.valueClass}`}
+                    className={`mt-0.5 text-[1rem] font-extrabold leading-none tracking-tight tabular-nums sm:text-[1.35rem] ${config.valueClass}`}
                   >
                     {typeof s.value === 'number' ? s.value.toLocaleString() : s.value}
                   </p>
-                  <p className="hidden line-clamp-1 text-[10px] font-medium text-neutral-500 dark:text-neutral-400 sm:block sm:text-[11px]">
+                  <p className="mt-1 hidden truncate text-[11px] font-medium leading-snug text-neutral-500 dark:text-neutral-400 sm:block">
                     {s.hint}
                   </p>
                 </div>

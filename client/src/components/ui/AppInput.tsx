@@ -1,12 +1,14 @@
 import { forwardRef, useState, type InputHTMLAttributes, type ReactNode } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { FOCUS_RING_CLASS } from '../../hooks/inboxA11y';
+import FieldInfoTip from './FieldInfoTip';
 
 type AppInputSize = 'md' | 'lg' | 'xl';
 
 interface AppInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'size'> {
   label?: string;
   hint?: string;
+  labelInfo?: string;
   error?: string;
   icon?: ReactNode;
   inputSize?: AppInputSize;
@@ -23,6 +25,7 @@ const AppInput = forwardRef<HTMLInputElement, AppInputProps>(function AppInput(
   {
     label,
     hint,
+    labelInfo,
     error,
     icon,
     inputSize = 'md',
@@ -40,14 +43,15 @@ const AppInput = forwardRef<HTMLInputElement, AppInputProps>(function AppInput(
 
   return (
     <div className="space-y-1.5">
-      {(label || hint) && (
+      {(label || hint || labelInfo) && (
         <div className="flex items-center justify-between gap-2">
           {label && (
             <label
               htmlFor={id}
-              className={labelClassName || 'text-label text-theme-secondary'}
+              className={`inline-flex items-center gap-1.5 ${labelClassName || 'text-label text-theme-secondary'}`}
             >
-              {label}
+              <span>{label}</span>
+              {labelInfo ? <FieldInfoTip text={labelInfo} /> : null}
             </label>
           )}
           {hint && <span className="text-caption text-theme-muted">{hint}</span>}

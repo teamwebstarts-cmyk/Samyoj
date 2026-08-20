@@ -11,7 +11,13 @@ import {
 import AppInput from '../ui/AppInput';
 import AppTextarea from '../ui/AppTextarea';
 import { messagingConsent } from '../../utils/plainLanguage';
-import { PHONE_HINT, PHONE_PLACEHOLDER } from '../../utils/phone';
+import {
+  INDIA_COUNTRY_CODE,
+  INDIA_LOCAL_PHONE_PLACEHOLDER,
+  PHONE_HINT,
+  PHONE_PLACEHOLDER,
+  sanitizeIndiaLocalPhoneInput,
+} from '../../utils/phone';
 import { normalizeCustomKey } from '../../utils/customAttributes';
 import type { ContactFormValues } from './contactForm';
 
@@ -173,23 +179,24 @@ export default function ContactFieldsForm({
         </label>
         <div className="relative">
           <span
-            className="pointer-events-none absolute inset-y-0 left-0 z-[1] flex w-11 items-center justify-center border-r border-theme-border/80 text-[15px] font-semibold leading-none text-whatsapp-600 dark:text-whatsapp-400"
+            className="pointer-events-none absolute inset-y-0 left-0 z-[1] flex w-[3.25rem] items-center justify-center border-r border-theme-border/80 text-[14px] font-semibold leading-none text-whatsapp-600 dark:text-whatsapp-400"
             aria-hidden
           >
-            +
+            +{INDIA_COUNTRY_CODE}
           </span>
           <input
             id={phoneId}
             type="tel"
-            inputMode="tel"
-            autoComplete="tel"
+            inputMode="numeric"
+            autoComplete="tel-national"
             required
+            maxLength={10}
             value={form.phone}
-            onChange={(e) => set({ phone: e.target.value.replace(/\D/g, '') })}
-            placeholder={PHONE_PLACEHOLDER}
+            onChange={(e) => set({ phone: sanitizeIndiaLocalPhoneInput(e.target.value) })}
+            placeholder={INDIA_LOCAL_PHONE_PLACEHOLDER}
             aria-invalid={phoneError ? true : undefined}
             aria-describedby={phoneError ? `${phoneId}-error` : undefined}
-            className={`h-11 w-full rounded-xl border bg-theme-surface pl-[3.25rem] pr-3.5 text-body tabular-nums text-theme-fg shadow-input transition placeholder:text-theme-muted focus:border-slate-400 focus:outline-none focus:shadow-input-focus disabled:opacity-60 dark:focus:border-slate-500 ${
+            className={`h-11 w-full rounded-xl border bg-theme-surface pl-[4.25rem] pr-3.5 text-body tabular-nums text-theme-fg shadow-input transition placeholder:text-theme-muted focus:border-slate-400 focus:outline-none focus:shadow-input-focus disabled:opacity-60 dark:focus:border-slate-500 ${
               phoneError
                 ? 'border-red-300 focus:border-red-500 focus:shadow-[0_0_0_4px_rgba(239,68,68,0.12)] dark:border-red-500/40'
                 : 'border-theme-border'
@@ -200,11 +207,9 @@ export default function ContactFieldsForm({
           <p id={`${phoneId}-error`} className="text-caption font-medium text-red-600 dark:text-red-400">
             {phoneError}
           </p>
-        ) : (
-          <p className="text-caption text-theme-muted">
-            {phoneHint ?? (isCompact ? 'Country code first, no + sign' : PHONE_HINT)}
-          </p>
-        )}
+        ) : phoneHint ? (
+          <p className="text-caption text-theme-muted">{phoneHint}</p>
+        ) : null}
       </div>
     ) : null;
 

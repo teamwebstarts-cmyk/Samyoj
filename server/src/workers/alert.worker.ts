@@ -30,21 +30,49 @@ export function startAlertWorker() {
         }
       }
 
+      const now = new Date();
+
+      // Transition expired trials
+      await prisma.organization.updateMany({
+        where: {
+          subscriptionStatus: 'trial',
+          planExpiresAt: { lte: now },
+        },
+        data: {
+          subscriptionStatus: 'trial_expired',
+        },
+      });
+
+      // Transition expired paid plans
+      await prisma.organization.updateMany({
+        where: {
+          subscriptionStatus: 'active',
+          planExpiresAt: { lte: now },
+          plan: { notIn: ['starter', 'launch'] },
+        },
+        data: {
+          subscriptionStatus: 'expired',
+        },
+      });
+
+      // Notify orgs expiring within 3 days
       const expiring = await prisma.organization.findMany({
         where: {
           planExpiresAt: {
             lte: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
-            gte: new Date(),
+            gte: now,
           },
+          subscriptionStatus: { in: ['trial', 'active'] },
           plan: { not: 'starter' },
         },
-        select: { id: true, plan: true, planExpiresAt: true },
+        select: { id: true, plan: true, planExpiresAt: true, subscriptionStatus: true },
       });
 
       for (const org of expiring) {
         emitToOrg(org.id, 'billing:expiring', {
           plan: org.plan,
           planExpiresAt: org.planExpiresAt,
+          subscriptionStatus: org.subscriptionStatus,
         });
       }
 

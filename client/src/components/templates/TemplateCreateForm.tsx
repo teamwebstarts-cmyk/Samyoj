@@ -1,13 +1,14 @@
 import { useRef, useState } from 'react';
-import { AlertTriangle, FileText, Image, Loader2, Upload } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Image, Info, Loader2, Upload } from 'lucide-react';
 import AppAlert from '../ui/AppAlert';
 import AppInput from '../ui/AppInput';
 import { messagingConsent } from '../../utils/plainLanguage';
 import AppSelect from '../ui/AppSelect';
 import AppTextarea from '../ui/AppTextarea';
-import { ModalCallout, ModalPanel, ModalPreviewCard } from '../ui/modalUi';
+import { ModalPanel, ModalPreviewCard } from '../ui/modalUi';
 import { WhatsAppTemplatePreview } from '../inbox/WhatsAppPreview';
 import TemplateButtonEditor from './TemplateButtonEditor';
+import TemplateGuidanceDisclosure from './TemplateGuidanceDisclosure';
 import { templateApi } from '../../services/api';
 import {
   buildCreatePayload,
@@ -113,31 +114,22 @@ export default function TemplateCreateForm({
 
   return (
     <div className="space-y-5">
-      <ModalCallout
-        icon={FileText}
-        accent="rose"
-        title={mode === 'resubmit' ? 'Edit & resubmit for approval' : 'WhatsApp must approve this first'}
-        description="Only approved templates can be used in campaigns. Add sample values for every placeholder to improve approval chances."
-      />
+      <TemplateGuidanceDisclosure
+        title={
+          mode === 'resubmit' ? 'Edit & resubmit for approval' : 'WhatsApp must approve this first'
+        }
+        icon={AlertCircle}
+        tone="rose"
+      >
+        Only approved templates can be used in campaigns. Add sample values for every placeholder to
+        improve approval chances.
+      </TemplateGuidanceDisclosure>
 
       {form.category === 'MARKETING' && (
-        <AppAlert variant="info">
-          <p className="font-semibold">Marketing template guidelines</p>
-          <p className="mt-1 text-[12px]">
-            {messagingConsent.templateStopHint} Avoid misleading claims. WhatsApp may take 24–48 hours
-            to review.
-          </p>
-        </AppAlert>
-      )}
-
-      {form.category === 'UTILITY' && (
-        <AppAlert variant="info">
-          <p className="font-semibold">Utility template guidelines</p>
-          <p className="mt-1 text-[12px]">
-            Use for transactional updates (orders, appointments, account alerts). Avoid promotional
-            language — Meta may recategorize or reject miscategorized templates.
-          </p>
-        </AppAlert>
+        <TemplateGuidanceDisclosure title="Marketing template guidelines" icon={Info} tone="sky">
+          {messagingConsent.templateStopHint} Avoid misleading claims. WhatsApp may take 24–48 hours
+          to review.
+        </TemplateGuidanceDisclosure>
       )}
 
       {form.category === 'AUTHENTICATION' && (

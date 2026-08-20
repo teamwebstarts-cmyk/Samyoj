@@ -18,6 +18,7 @@ import { asCustomAttributes } from '../../utils/custom-attributes';
 import { Prisma } from '@prisma/client';
 import { contactConsentData, contactCreateConsentFields } from './consent';
 import { emitProductEvent } from '../platform/events';
+import { checkQuota } from '../billing/entitlements.service';
 
 const router = Router();
 
@@ -50,6 +51,28 @@ router.post(
     const data = contactSchema.parse(req.body);
     const whatsappNumberId = req.activeWhatsappNumberId;
     if (!whatsappNumberId) throw new AppError(400, 'Connect a WhatsApp number before creating contacts');
+
+    const orgId = req.user!.organizationId!;
+    const existing = await prisma.contact.findUnique({
+      where: {
+        organizationId_whatsappNumberId_normalizedPhone: {
+          organizationId: orgId,
+          whatsappNumberId,
+          normalizedPhone: data.phone,
+        },
+      },
+    });
+
+    if (!existing) {
+      const quotaCheck = await checkQuota(orgId, 'contacts', 1);
+      if (!quotaCheck.allowed) {
+        throw new AppError(
+          402,
+          quotaCheck.reason ||
+            `Contact limit reached (${quotaCheck.used}/${quotaCheck.limit}). Upgrade your plan to add more contacts.`
+        );
+      }
+    }
 
     const customAttributes = asCustomAttributes(data.customAttributes) as Prisma.InputJsonValue;
     const contact = await prisma.contact.upsert({
@@ -111,6 +134,16 @@ router.post(
     const orgId = req.user!.organizationId!;
     const whatsappNumberId = req.activeWhatsappNumberId;
     if (!whatsappNumberId) throw new AppError(400, 'Connect a WhatsApp number before importing contacts');
+
+    const quotaCheck = await checkQuota(orgId, 'contacts', contacts.length);
+    if (!quotaCheck.allowed) {
+      throw new AppError(
+        402,
+        quotaCheck.reason ||
+          `Importing ${contacts.length} contacts exceeds your plan limit (${quotaCheck.used}/${quotaCheck.limit}). Upgrade your plan to import more contacts.`
+      );
+    }
+
     let imported = 0;
 
     for (let i = 0; i < contacts.length; i++) {

@@ -221,7 +221,8 @@ export default function ChatThread({
 
   const pushEphemeral = useCallback((payload: ChatNoticePayload) => {
     const id = `e-${payload.kind}-${Date.now()}`;
-    const isAlert = payload.kind === 'media-limit' || payload.kind === 'send-error';
+    const isAlert =
+      payload.kind === 'media-limit' || payload.kind === 'send-error' || payload.kind === 'ai-error';
     const item: ChatNoticeItem = {
       id,
       kind: payload.kind,

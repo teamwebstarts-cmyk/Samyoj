@@ -10,8 +10,14 @@ import {
   Settings2,
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
-import { getPageMeta, isCampaignWizardRoute } from '../../config/pageMeta';
+import {
+  getPageMeta,
+  getTemplateWizardTopbarLabel,
+  isCampaignWizardRoute,
+  isTemplateWizardRoute,
+} from '../../config/pageMeta';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTopbarExtras } from '../../contexts/TopbarContext';
 import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
 import type { OrgRole } from '../../types';
 import GlobalSearch, { useGlobalSearchShortcut } from './GlobalSearch';
@@ -59,9 +65,12 @@ function useIsApplePlatform() {
 export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout }: AppTopbarProps) {
   const { pathname, search } = useLocation();
   const { orgRole } = useAuth();
+  const { extras: topbarExtras } = useTopbarExtras();
   const { hasConnectedNumber, loading: numbersLoading } = useWhatsAppNumber();
   const { title, description } = getPageMeta(pathname);
   const isCampaignWizard = isCampaignWizardRoute(pathname);
+  const isTemplateWizard = isTemplateWizardRoute(pathname);
+  const templateWizardLabel = getTemplateWizardTopbarLabel(pathname);
   const wizardLabel = pathname === '/campaigns/new' ? 'New campaign' : 'Edit campaign';
   const wizardStatus =
     pathname === '/campaigns/new'
@@ -132,8 +141,15 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
   const subtitle = (
     isDashboard && showNotConnected
       ? "Let's get you started with WhatsApp Business"
-      : description || ''
+      : isTemplateWizard
+        ? topbarExtras.subtitle || ''
+        : description || ''
   ).replace(/\.$/, '');
+
+  const titleLinkClass =
+    'truncate text-[15px] font-bold leading-none tracking-tight text-neutral-500 transition hover:text-neutral-800 sm:text-[18px] md:text-[20px] dark:text-neutral-400 dark:hover:text-neutral-100';
+  const titleCurrentClass =
+    'truncate text-[15px] font-bold leading-none tracking-tight text-neutral-900 sm:text-[18px] md:text-[20px] dark:text-theme-fg';
 
   const userMenu =
     userMenuOpen && userMenuPos
@@ -214,6 +230,44 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
                   </span>
                 )}
               </div>
+            ) : isTemplateWizard ? (
+              <>
+                <div className="flex min-w-0 items-center gap-1.5 sm:flex-wrap sm:gap-2">
+                  <Link to="/templates" className={titleLinkClass}>
+                    Templates
+                  </Link>
+                  <ChevronRight
+                    className="h-3.5 w-3.5 shrink-0 text-neutral-300 sm:h-4 sm:w-4 dark:text-slate-600"
+                    aria-hidden
+                  />
+                  <h1 className={titleCurrentClass}>{templateWizardLabel}</h1>
+                  {topbarExtras.badge ? (
+                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
+                      {topbarExtras.badge}
+                    </span>
+                  ) : null}
+                  {showLive ? (
+                    <span
+                      className="hidden h-5 items-center rounded-full bg-emerald-50 px-2 text-[10px] font-bold uppercase tracking-[0.06em] text-emerald-700 ring-1 ring-emerald-100/90 sm:inline-flex dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20 motion-reduce:animate-none"
+                      title="WhatsApp connected — live updates available"
+                    >
+                      Live
+                    </span>
+                  ) : showNotConnected ? (
+                    <span
+                      className="hidden h-5 items-center rounded-full bg-[#FFF1E8] px-2.5 text-[11px] font-bold text-[#E67E22] ring-1 ring-[#FFD8BF]/90 sm:inline-flex dark:bg-orange-500/15 dark:text-orange-300 dark:ring-orange-500/25"
+                      title="WhatsApp is not connected"
+                    >
+                      Not connected
+                    </span>
+                  ) : null}
+                </div>
+                {subtitle ? (
+                  <p className="mt-1 hidden truncate text-[12px] font-semibold leading-snug text-neutral-700 sm:block sm:text-[13px] dark:text-neutral-300">
+                    {subtitle}
+                  </p>
+                ) : null}
+              </>
             ) : (
               <>
                 <div className="flex min-w-0 items-center gap-1.5 sm:flex-wrap sm:gap-2">

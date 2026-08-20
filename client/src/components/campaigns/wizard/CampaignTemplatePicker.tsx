@@ -87,9 +87,6 @@ export default function CampaignTemplatePicker({
         <h2 className="text-[13px] font-extrabold tracking-tight text-slate-900 dark:text-white">
           Choose an approved template
         </h2>
-        <p className="mt-0.5 text-[10px] font-medium text-slate-500 dark:text-slate-400">
-          Select a template to use in your campaign
-        </p>
       </div>
 
       <div className="space-y-2 border-b border-slate-100 px-3.5 py-3 dark:border-slate-800 sm:px-4">
@@ -249,15 +246,6 @@ export default function CampaignTemplatePicker({
             );
           })
         )}
-      </div>
-      <div className="flex shrink-0 items-center gap-1.5 border-t border-slate-100 px-3.5 py-2.5 text-[9px] font-medium text-slate-500 dark:border-slate-800 dark:text-slate-400">
-        <span>Can&apos;t find the template you need?</span>
-        <Link
-          to="/content-studio"
-          className="font-extrabold text-emerald-700 transition hover:text-emerald-800 hover:underline dark:text-emerald-300"
-        >
-          Go to Content Studio <span aria-hidden="true">→</span>
-        </Link>
       </div>
     </section>
   );

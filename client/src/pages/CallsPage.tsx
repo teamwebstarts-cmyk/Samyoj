@@ -26,6 +26,7 @@ import {
 } from '../components/calls/callUtils';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { toastError, toastSuccess } from '../utils/toast';
+import { explainAiSkipReason } from '../utils/aiSkipReasons';
 import {
   createAgentOffer,
   pollSdpAnswer,
@@ -345,6 +346,10 @@ export default function CallsPage() {
     if (event === 'call:transcript') {
       const payload = data as { callId: string; transcript: unknown };
       if (payload.callId) applyTranscriptUpdate(payload.callId, payload.transcript);
+    }
+    if (event === 'call:ai_error') {
+      const payload = data as { callId?: string; skipReason?: string; operatorMessage?: string };
+      toastError(payload.operatorMessage || explainAiSkipReason(payload.skipReason), { duration: 8000 });
     }
     if (event === 'call:deleted') {
       const payload = data as { callId: string };

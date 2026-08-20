@@ -1,6 +1,8 @@
 import prisma from '../../config/database';
 import { automationQueue, flowQueue } from '../../config/queues';
 import { generateBotReply, logAutomationRun, performHandoff } from '../ai/chatbot.service';
+import { isOperatorVisibleAiSkip, operatorMessageForSkip } from '../ai/voice-fallback';
+import { emitToOrg } from '../../realtime';
 import { hasEnabledBots } from '../ai/bot.service';
 import { withAiBotConversationLock } from '../ai/lock';
 import { deliverOutboundMessage, isCswClosedError } from '../messages/send.service';
@@ -350,6 +352,13 @@ export async function processAiChatbotJob(payload: InboundAutomationPayload): Pr
       input: { reason: result.skipReason, botId: result.botId },
       durationMs: Date.now() - processingStart,
     });
+    if (isOperatorVisibleAiSkip(result.skipReason)) {
+      emitToOrg(payload.organizationId, 'conversation:ai_error', {
+        conversationId: payload.conversationId,
+        skipReason: result.skipReason,
+        operatorMessage: operatorMessageForSkip(result.skipReason),
+      });
+    }
     // Still deliver polite replies that accompany a skip (e.g. outside business hours, rate limit).
     if (result.reply) {
       await sendAutomationReply(payload, result.reply, 'AI_CHATBOT');

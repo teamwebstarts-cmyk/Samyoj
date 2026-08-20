@@ -8,7 +8,11 @@ export function supportChatErrorMessage(err: unknown): string {
   const n = normalizeError(err);
   if (n.status === 401) return 'Sign in again to use Support.';
   if (n.isNetworkError) return 'Could not reach Support. Check your connection, then try again.';
+  if (n.status === 429 && /monthly|token/i.test(n.message)) {
+    return 'Monthly AI token limit reached for this workspace.';
+  }
   if (n.status === 429) return 'The assistant is busy. Try again in a moment.';
+  if (n.status === 504) return 'The assistant took too long. Try again.';
   if (n.status === 400) return n.message || 'Ask a question about using Samyoj.';
   if ((n.status && n.status >= 500) || isSensitive(n.message)) {
     return 'The assistant could not reply. Try again.';

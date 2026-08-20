@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { processAutomations, isBusinessHours } from './engine';
 import { getAutomationAnalytics } from './analytics';
 import { detectAutomationConflicts, previewAutomationConflicts } from './conflicts';
+import { checkQuota } from '../billing/entitlements.service';
 
 const router = Router();
 const memberGuard = [authenticate, requireOrg] as const;
@@ -117,10 +118,22 @@ router.post(
   ...adminGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const data = automationSchema.parse(req.body);
+    const orgId = req.user!.organizationId!;
+
+    if (data.enabled) {
+      const quotaCheck = await checkQuota(orgId, 'publishedWorkflows', 1);
+      if (!quotaCheck.allowed) {
+        throw new AppError(
+          402,
+          quotaCheck.reason ||
+            `Active workflow limit reached (${quotaCheck.used}/${quotaCheck.limit}). Upgrade to Growth for unlimited workflows.`
+        );
+      }
+    }
 
     const automation = await prisma.automation.create({
       data: {
-        organizationId: req.user!.organizationId!,
+        organizationId: orgId,
         name: data.name,
         triggerType: data.triggerType,
         config: data.config as Prisma.InputJsonValue,
@@ -139,12 +152,24 @@ router.patch(
   ...adminGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const id = paramId(req);
+    const orgId = req.user!.organizationId!;
     const existing = await prisma.automation.findFirst({
-      where: { id, organizationId: req.user!.organizationId! },
+      where: { id, organizationId: orgId },
     });
     if (!existing) throw new AppError(404, 'Automation not found');
 
     const data = updateAutomationSchema.parse(req.body);
+
+    if (data.enabled === true && !existing.enabled) {
+      const quotaCheck = await checkQuota(orgId, 'publishedWorkflows', 1);
+      if (!quotaCheck.allowed) {
+        throw new AppError(
+          402,
+          quotaCheck.reason ||
+            `Active workflow limit reached (${quotaCheck.used}/${quotaCheck.limit}). Upgrade to Growth for unlimited workflows.`
+        );
+      }
+    }
 
     const automation = await prisma.automation.update({
       where: { id },
