@@ -1,5 +1,6 @@
 import {
   Building2,
+  CreditCard,
   LayoutDashboard,
   LogOut,
   Mail,
@@ -16,6 +17,7 @@ import { StatusBadge } from './ui';
 const ICONS: Record<string, typeof LayoutDashboard> = {
   '/': LayoutDashboard,
   '/accounts': Building2,
+  '/billing': CreditCard,
   '/errors': TriangleAlert,
   '/outreach': Mail,
   '/operators': Users,

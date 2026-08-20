@@ -17,7 +17,7 @@ export type QuotaType =
 export interface QuotaCheckResult {
   allowed: boolean;
   used: number;
-  limit: number | 'unlimited';
+  limit: number | 'unlimited' | 'custom';
   upgradeCta: PlanTier;
   reason?: string;
   code?: string;

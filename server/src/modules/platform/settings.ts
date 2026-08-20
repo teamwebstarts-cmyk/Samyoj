@@ -1,25 +1,30 @@
 import { type Request, type Response } from 'express';
 import { z } from 'zod';
 import prisma from '../../config/database';
-import { asyncHandler, sendSuccess } from '../../utils/response';
-import { requirePlatformPermission } from './rbac';
+import { asyncHandler, sendSuccess, AppError } from '../../utils/response';
 import { PLAN_TIERS, BILLING_SKUS } from '../billing/plans';
+import { refreshBillingConfig } from '../billing/config';
 
 const configSchema = z.object({
   planTiers: z.record(z.string(), z.any()),
   billingSkus: z.array(z.any()),
 });
 
+function assertSuperAdmin(req: Request) {
+  if (req.platformOperator?.role !== 'SUPER_ADMIN') {
+    throw new AppError(403, 'Insufficient platform permissions');
+  }
+}
+
 export const getPlatformSettings = asyncHandler(
   async (req: Request, res: Response) => {
-    requirePlatformPermission(req.platformOperator, 'SUPER_ADMIN');
+    assertSuperAdmin(req);
 
     const setting = await prisma.platformSetting.findUnique({
       where: { key: 'BILLING_CONFIG' },
     });
 
     if (!setting) {
-      // Return defaults if none in DB
       sendSuccess(res, { planTiers: PLAN_TIERS, billingSkus: BILLING_SKUS });
       return;
     }
@@ -30,7 +35,7 @@ export const getPlatformSettings = asyncHandler(
 
 export const patchPlatformSettings = asyncHandler(
   async (req: Request, res: Response) => {
-    requirePlatformPermission(req.platformOperator, 'SUPER_ADMIN');
+    assertSuperAdmin(req);
 
     const data = configSchema.parse(req.body);
 
@@ -39,6 +44,11 @@ export const patchPlatformSettings = asyncHandler(
       update: { value: data },
       create: { key: 'BILLING_CONFIG', value: data },
     });
+
+    // Apply the updated config immediately across the running backend instances
+    // In a multi-tenant environment, you'd broadcast this via Redis PubSub,
+    // but here we just call refresh locally.
+    await refreshBillingConfig();
 
     sendSuccess(res, setting.value);
   }

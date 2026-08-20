@@ -11,6 +11,7 @@ import { LoginPage } from './pages/LoginPage';
 import { OperatorsPage } from './pages/OperatorsPage';
 import { OutreachPage } from './pages/OutreachPage';
 import { OverviewPage } from './pages/OverviewPage';
+import { BillingConfigPage } from './pages/BillingConfigPage';
 import { Shell } from './components/Shell';
 
 function Protected() {
@@ -46,6 +47,7 @@ export default function App() {
             <Route path="/" element={<OverviewPage />} />
             <Route path="/accounts" element={<AccountsPage />} />
             <Route path="/accounts/:id" element={<AccountDetailPage />} />
+            <Route path="/billing" element={<BillingConfigPage />} />
             <Route path="/errors" element={<ErrorsPage />} />
             <Route path="/outreach" element={<OutreachPage />} />
             <Route path="/operators" element={<OperatorsPage />} />
