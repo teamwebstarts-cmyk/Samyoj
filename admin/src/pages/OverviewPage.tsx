@@ -1,9 +1,17 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Inbox } from 'lucide-react';
+import {
+  Activity,
+  AlertOctagon,
+  Building2,
+  Cpu,
+  Inbox,
+  ArrowRight,
+} from 'lucide-react';
 import { platformRequest } from '../api';
 import { LifecycleRail } from '../components/LifecycleRail';
 import {
+  Button,
   EmptyState,
   FlagPills,
   Notice,
@@ -59,60 +67,148 @@ export function OverviewPage() {
       </Notice>
     );
   }
-  if (!data) return <PageLoading label="Loading overview…" />;
+  if (!data) return <PageLoading label="Loading platform dashboard…" />;
 
   const counts = Object.fromEntries(data.funnel.map((row) => [row.stage, row.count])) as Record<
     ActivationStage,
     number
   >;
 
+  const liveCount = counts['LIVE'] ?? 0;
+  const connectedCount = (counts['CONNECTED_EMPTY'] ?? 0) + (counts['CONTACTS_READY'] ?? 0) + (counts['OUTBOUND_ONLY'] ?? 0) + liveCount;
+  const totalMetaErrors = data.metaErrors.reduce((acc, row) => acc + row.count, 0);
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-6 pb-12">
       <PageHeader
-        title="Overview"
-        purpose={`${formatCount(data.orgCount)} organizations. The rail is activation — click a station to open those accounts.`}
+        title="Platform Overview"
+        purpose="Live ecosystem telemetry, onboarding funnel metrics, and account health triage."
+        eyebrow={
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200/80 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-800">
+            <Activity className="h-3 w-3 text-emerald-600" />
+            Live Ops Feed
+          </span>
+        }
       />
 
+      {/* Top 4 KPI Metric Cards */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="dashboard-card relative overflow-hidden p-4 bg-gradient-to-br from-white to-slate-50">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Total Organizations</p>
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-700">
+              <Building2 className="h-4 w-4" />
+            </div>
+          </div>
+          <p className="mt-2 text-2xl font-bold tracking-tight text-slate-900">{formatCount(data.orgCount)}</p>
+          <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
+            <span className="font-medium text-emerald-600">{formatCount(liveCount)} live</span>
+            <span>· across all tiers</span>
+          </div>
+        </div>
+
+        <div className="dashboard-card relative overflow-hidden p-4 bg-gradient-to-br from-white to-emerald-50/40">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Connected Numbers</p>
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100/80 text-emerald-800">
+              <Activity className="h-4 w-4" />
+            </div>
+          </div>
+          <p className="mt-2 text-2xl font-bold tracking-tight text-emerald-950">{formatCount(connectedCount)}</p>
+          <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
+            <span className="font-medium text-emerald-600">Active WABA</span>
+            <span>in production</span>
+          </div>
+        </div>
+
+        <div className="dashboard-card relative overflow-hidden p-4 bg-gradient-to-br from-white to-sky-50/40">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-500">AI Tokens (30d)</p>
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-100/80 text-sky-800">
+              <Cpu className="h-4 w-4" />
+            </div>
+          </div>
+          <p className="mt-2 text-2xl font-bold tracking-tight text-slate-900 font-mono">{formatCount(data.aiTokensMonth)}</p>
+          <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
+            <span>{data.aiCap?.cappedOrgCount ?? 0} orgs with custom cap</span>
+          </div>
+        </div>
+
+        <div className="dashboard-card relative overflow-hidden p-4 bg-gradient-to-br from-white to-rose-50/30">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Meta Error Incidents</p>
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-rose-100/80 text-rose-800">
+              <AlertOctagon className="h-4 w-4" />
+            </div>
+          </div>
+          <p className="mt-2 text-2xl font-bold tracking-tight text-rose-950">{formatCount(totalMetaErrors)}</p>
+          <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
+            <span className="font-medium text-rose-700">{data.metaErrors.length} unique codes</span>
+            <span>this week</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Activation Lifecycle Rail */}
       <SectionCard
-        title="Activation"
-        purpose="REGISTERED → Connect → contacts → outbound → live inbox"
+        title="Activation Lifecycle & Conversion Funnel"
+        purpose="Live tracking of organizations from initial registration to active WhatsApp live inbox."
+        action={
+          <Button variant="secondary" size="sm" onClick={() => navigate('/accounts')}>
+            View all accounts <ArrowRight className="h-3 w-3 ml-1" />
+          </Button>
+        }
         padded
       >
-        <LifecycleRail
-          counts={counts}
-          onSelect={(stage) => navigate(`/accounts?stage=${stage}`)}
-        />
+        <div className="py-2">
+          <LifecycleRail
+            counts={counts}
+            showHints
+            onSelect={(stage) => navigate(`/accounts?stage=${stage}`)}
+          />
+        </div>
       </SectionCard>
 
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(14rem,0.8fr)]">
+      {/* Grid: Needs Attention vs Right Column Analytics */}
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(18rem,0.9fr)]">
+        {/* Needs Attention Queue */}
         <SectionCard
-          title="Needs a human"
-          purpose="Stalled or at-risk orgs from today’s snapshot. Open the file, then email the owner if needed."
+          title="Needs Operator Attention"
+          purpose="Stalled setups or flagged organizations requiring triage or outreach."
         >
           {data.needsAttention.length === 0 ? (
-            <div className="p-[var(--card-pad)]">
+            <div className="p-6">
               <EmptyState
                 icon={Inbox}
-                title="Queue is clear"
-                description="No stalled or at-risk orgs in today’s snapshot. Use the rail if you still need to inspect a stage."
+                title="All queues clear"
+                description="No stalled or at-risk organizations detected in today’s health snapshot."
               />
             </div>
           ) : (
-            <ul className="divide-y divide-dust">
+            <ul className="divide-y divide-slate-200/80">
               {data.needsAttention.map((row) => (
                 <li key={row.organizationId}>
                   <button
                     type="button"
-                    className="flex w-full flex-col gap-1.5 px-3 py-2.5 text-left hover:bg-sage-faint/60 md:flex-row md:items-center md:justify-between"
+                    className="flex w-full flex-col gap-2 p-4 text-left hover:bg-emerald-50/40 transition-colors sm:flex-row sm:items-center sm:justify-between group"
                     onClick={() => navigate(`/accounts/${row.organizationId}`)}
                   >
                     <div className="min-w-0">
-                      <p className="font-semibold">{row.companyName}</p>
-                      <p className="text-xs text-ink/50">{STAGE_LABELS[row.stage]}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-bold text-slate-900 group-hover:text-emerald-800 transition-colors">{row.companyName}</p>
+                        <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                          {STAGE_LABELS[row.stage]}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Last seen {row.lastLoginAt ? new Date(row.lastLoginAt).toLocaleDateString() : 'never'}
+                      </p>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-3">
                       <FlagPills flags={row.flags} />
-                      <span className="text-xs font-semibold text-sage">Open</span>
+                      <span className="inline-flex items-center text-xs font-semibold text-emerald-700 group-hover:translate-x-0.5 transition-transform">
+                        Inspect <ArrowRight className="h-3 w-3 ml-1" />
+                      </span>
                     </div>
                   </button>
                 </li>
@@ -121,22 +217,36 @@ export function OverviewPage() {
           )}
         </SectionCard>
 
-        <div className="space-y-4">
-          <SectionCard title="Meta errors this week" purpose="Official codes only. Open the Errors queue.">
-            <div className="p-[var(--card-pad)]">
+        {/* Right Side: Meta Errors & AI Token Leaders */}
+        <div className="space-y-6">
+          {/* Meta Errors */}
+          <SectionCard
+            title="Meta Error Clusters"
+            purpose="Official Meta WhatsApp API error codes logged in the last 7 days."
+            action={
+              <button
+                type="button"
+                className="text-xs font-semibold text-emerald-700 hover:text-emerald-800"
+                onClick={() => navigate('/errors')}
+              >
+                Inspect All →
+              </button>
+            }
+          >
+            <div className="p-4">
               {data.metaErrors.length === 0 ? (
-                <p className="text-sm text-ink/50">No clustered codes yet. Failed sends aggregate here.</p>
+                <p className="text-xs text-slate-400">Zero Meta error codes recorded in this window.</p>
               ) : (
-                <div className="flex flex-wrap gap-2">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                   {data.metaErrors.map((row) => (
                     <button
                       key={row.code}
                       type="button"
-                      className="rounded-lg border border-dust px-2.5 py-1.5 text-left hover:bg-sage-faint"
+                      className="flex flex-col items-start rounded-xl border border-slate-200/90 bg-white p-2.5 text-left hover:border-emerald-500/40 hover:bg-emerald-50/30 transition-all shadow-2xs"
                       onClick={() => navigate('/errors')}
                     >
-                      <span className="font-mono text-sm">{row.code}</span>
-                      <span className="ml-2 text-xs text-ink/50">{formatCount(row.count)}</span>
+                      <span className="font-mono text-xs font-bold text-slate-900">{row.code}</span>
+                      <span className="mt-1 text-[11px] font-medium text-rose-700">{formatCount(row.count)} errors</span>
                     </button>
                   ))}
                 </div>
@@ -144,34 +254,32 @@ export function OverviewPage() {
             </div>
           </SectionCard>
 
+          {/* AI Usage Consumption Leaders */}
           <SectionCard
-            title="AI this month"
+            title="AI Consumption Leaders"
             purpose={
               data.aiCap?.tokenLimitSum != null
-                ? `${data.aiCap.cappedOrgCount} orgs with a cap${
-                    data.aiCap.uncappedOrgCount ? ` · ${data.aiCap.uncappedOrgCount} uncapped` : ''
-                  }`
-                : 'No org token caps are set.'
+                ? `${formatCount(data.aiTokensMonth)} / ${formatCount(data.aiCap.tokenLimitSum)} tokens total`
+                : `${formatCount(data.aiTokensMonth)} tokens billed`
             }
           >
-            <div className="space-y-2.5 p-[var(--card-pad)]">
-              <p className="text-sm text-ink/80">
-                {data.aiCap?.tokenLimitSum != null
-                  ? `${formatCount(data.aiTokensMonth)} / ${formatCount(data.aiCap.tokenLimitSum)} tokens`
-                  : `${formatCount(data.aiTokensMonth)} tokens · no platform cap`}
-              </p>
-              <p className="text-xs text-ink/50">{data.coverageNote}</p>
-              {(data.topAiOrgs || []).length > 0 && (
-                <ul className="divide-y divide-dust rounded-xl border border-dust">
+            <div className="p-4 space-y-3">
+              {(data.topAiOrgs || []).length === 0 ? (
+                <p className="text-xs text-slate-400">No token activity recorded yet.</p>
+              ) : (
+                <ul className="space-y-2">
                   {data.topAiOrgs!.map((row) => (
                     <li key={row.organizationId}>
                       <button
                         type="button"
-                        className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-sage-faint/60"
+                        className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200/80 bg-white p-2.5 text-left text-xs hover:border-emerald-500/40 hover:bg-emerald-50/30 transition-all shadow-2xs"
                         onClick={() => navigate(`/accounts/${row.organizationId}?tab=ai`)}
                       >
-                        <span className="truncate font-medium">{row.companyName}</span>
-                        <span className="shrink-0 font-mono text-xs text-ink/55">
+                        <div className="min-w-0">
+                          <p className="truncate font-semibold text-slate-900">{row.companyName}</p>
+                          <p className="text-[11px] font-mono text-slate-500">{formatCount(row.aiTokensMonth)} tokens</p>
+                        </div>
+                        <span className="shrink-0 rounded-md bg-slate-100 px-2 py-1 font-mono text-[11px] font-bold text-slate-700">
                           {formatAiCapPercent(row.aiTokensMonth, row.monthlyTokenLimit)}
                         </span>
                       </button>

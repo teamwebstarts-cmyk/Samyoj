@@ -716,6 +716,7 @@ export const leadApi = {
   create: (data: Record<string, unknown>) => api.post('/leads', data),
   update: (id: string, data: Record<string, unknown>) => api.patch(`/leads/${id}`, data),
   fromContact: (contactId: string) => api.post(`/leads/from-contact/${contactId}`),
+  bulkStage: (ids: string[], stage: string) => api.post('/leads/bulk', { ids, stage }),
 };
 
 export const ticketApi = {

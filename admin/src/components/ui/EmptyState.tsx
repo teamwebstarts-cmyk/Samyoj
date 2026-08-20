@@ -16,25 +16,28 @@ export function EmptyState({
 }) {
   return (
     <div
-      className="dashboard-card border-dashed px-5 py-7 text-center"
+      className="dashboard-card border-dashed border-slate-300/80 bg-slate-50/50 px-6 py-10 text-center"
       role="status"
     >
-      <div className="mx-auto flex h-9 w-9 items-center justify-center rounded-lg bg-sage-faint text-sage">
-        <Icon className="h-4 w-4" strokeWidth={2} />
+      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700 shadow-sm ring-1 ring-emerald-600/20">
+        <Icon className="h-6 w-6" strokeWidth={2} />
       </div>
-      <h3 className="mt-3 text-[15px] font-semibold tracking-tight">{title}</h3>
-      {description && <p className="mx-auto mt-1 max-w-sm text-[13px] text-ink/55">{description}</p>}
+      <h3 className="mt-4 text-base font-bold tracking-tight text-slate-900">{title}</h3>
+      {description && <p className="mx-auto mt-1.5 max-w-sm text-[13px] leading-relaxed text-slate-500">{description}</p>}
       {steps && steps.length > 0 && (
-        <ol className="mx-auto mt-3 max-w-xs space-y-0.5 text-left text-[13px] text-ink/65">
-          {steps.map((step, index) => (
-            <li key={step} className="flex gap-2">
-              <span className="font-mono text-[10px] text-sage">{index + 1}.</span>
-              <span>{step}</span>
-            </li>
-          ))}
-        </ol>
+        <div className="mx-auto mt-4 max-w-sm rounded-xl border border-slate-200/80 bg-white/80 p-3.5 shadow-2xs">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 text-left mb-2">Next steps</p>
+          <ol className="space-y-1.5 text-left text-xs text-slate-600">
+            {steps.map((step, index) => (
+              <li key={step} className="flex items-start gap-2">
+                <span className="font-mono text-[10px] font-bold text-emerald-700 mt-0.5">{index + 1}.</span>
+                <span>{step}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
       )}
-      {action && <div className="mt-3">{action}</div>}
+      {action && <div className="mt-5">{action}</div>}
     </div>
   );
 }
@@ -48,9 +51,16 @@ export function Notice({
 }) {
   const cls =
     tone === 'error'
-      ? 'border-rose-200 bg-rose-50 text-rose-800'
+      ? 'border-rose-200 bg-rose-50 text-rose-900 ring-rose-500/10'
       : tone === 'warning'
-        ? 'border-amber-200 bg-amber-50 text-amber-950'
-        : 'border-dust bg-white text-ink/70';
-  return <div className={`rounded-lg border px-3 py-2.5 text-[13px] leading-snug ${cls}`}>{children}</div>;
+        ? 'border-amber-200 bg-amber-50 text-amber-950 ring-amber-500/10'
+        : 'border-slate-200/80 bg-white text-slate-700 ring-slate-400/10 shadow-2xs';
+  return (
+    <div className={`flex items-center gap-2.5 rounded-xl border px-3.5 py-2.5 text-[13px] leading-relaxed ring-1 ${cls}`}>
+      {tone === 'error' && <span className="h-2 w-2 shrink-0 rounded-full bg-rose-500" />}
+      {tone === 'warning' && <span className="h-2 w-2 shrink-0 rounded-full bg-amber-500" />}
+      {tone === 'info' && <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />}
+      <div className="flex-1 min-w-0">{children}</div>
+    </div>
+  );
 }

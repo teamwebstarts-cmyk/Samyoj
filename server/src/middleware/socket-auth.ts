@@ -21,7 +21,19 @@ export async function socketAuthMiddleware(socket: Socket, next: (err?: Error) =
   try {
     user = verifyAccessToken(token);
   } catch (err) {
-    logError(err, { source: 'socket', path: '/connect' });
+    // An expired access token is expected (15m TTL) and self-heals via the
+    // client's token-refresh + reconnect flow. Do NOT log it as an alarming
+    // 500-level "unexpected error" — only log genuinely malformed/rejected
+    // tokens as errors.
+    const isExpired = err instanceof Error && err.name === 'TokenExpiredError';
+    if (!isExpired) {
+      logError(err, { source: 'socket', path: '/connect' });
+    } else {
+      logger.debug('Socket auth: access token expired — client will refresh', {
+        source: 'socket',
+        path: '/connect',
+      });
+    }
     return next(new Error('Invalid token'));
   }
 

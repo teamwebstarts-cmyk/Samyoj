@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Search } from 'lucide-react';
+import { Search, X, ChevronRight } from 'lucide-react';
 import { platformRequest } from '../api';
 import { LifecycleRail } from '../components/LifecycleRail';
 import {
@@ -59,78 +59,110 @@ export function AccountsPage() {
   const records = (rows ?? []).map(toStackedAccountRecord);
   const pageCount = Math.max(1, Math.ceil(total / 25));
   const purpose = stage
-    ? `${STAGE_LABELS[stage]} · ${formatCount(total)} matching`
-    : 'Search company or owner email. Filter the rail to a stage.';
+    ? `${STAGE_LABELS[stage]} · ${formatCount(total)} organizations matching`
+    : `Managing ${formatCount(total)} total organizations across all lifecycle stages.`;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6 pb-12">
       <PageHeader
-        title="Accounts"
+        title="Organizations & Accounts"
         purpose={purpose}
         action={
           stage ? (
-            <Button variant="secondary" onClick={() => setStage()}>
-              Clear stage
+            <Button variant="secondary" size="sm" onClick={() => setStage()}>
+              <X className="h-3.5 w-3.5 mr-1" /> Clear stage filter
             </Button>
           ) : undefined
         }
       />
-      <SectionCard padded>
+
+      {/* Stage Rail Selector */}
+      <SectionCard title="Lifecycle Filter" purpose="Select an activation station to isolate organizations at that step." padded>
         <LifecycleRail current={stage || undefined} onSelect={setStage} compact />
       </SectionCard>
-      <Input
-        label="Search company or owner email"
-        value={q}
-        onChange={(event) => {
-          setQ(event.target.value);
-          const copy = new URLSearchParams(params);
-          if (event.target.value) copy.set('q', event.target.value);
-          else copy.delete('q');
-          copy.delete('page');
-          setParams(copy);
-        }}
-      />
+
+      {/* Search Bar & Filters */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative flex-1 max-w-md">
+          <Input
+            icon={Search}
+            placeholder="Search by company name or owner email…"
+            value={q}
+            onChange={(event) => {
+              setQ(event.target.value);
+              const copy = new URLSearchParams(params);
+              if (event.target.value) copy.set('q', event.target.value);
+              else copy.delete('q');
+              copy.delete('page');
+              setParams(copy);
+            }}
+          />
+        </div>
+        {q && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setQ('');
+              const copy = new URLSearchParams(params);
+              copy.delete('q');
+              setParams(copy);
+            }}
+          >
+            Clear search
+          </Button>
+        )}
+      </div>
+
       {error && (
         <Notice tone="error">
-          Could not load accounts. {error} Clear filters or refresh.
+          Could not load accounts. {error} Clear filters or refresh the page.
         </Notice>
       )}
+
       {rows === null && !error ? (
-        <PageLoading label="Loading accounts…" />
+        <PageLoading label="Loading accounts directory…" />
       ) : (
         <ResponsiveDataView
           items={records}
           emptyState={
             <EmptyState
               icon={Search}
-              title="No accounts in this filter"
-              description="Clear the stage rail or search to see more organizations."
-              steps={['Click the selected station again to clear it', 'Search company or owner email']}
+              title="No organizations found"
+              description="No organizations match your current search query or lifecycle station filter."
+              steps={[
+                'Click the selected lifecycle station again to clear the filter',
+                'Verify the company name or owner email spelling',
+              ]}
             />
           }
           renderCard={(row) => (
             <button
               type="button"
-              className="dashboard-card w-full p-[var(--card-pad)] text-left"
+              className="dashboard-card w-full p-4 text-left hover:border-emerald-500/40 hover:shadow-md transition-all group"
               onClick={() => navigate(`/accounts/${row.id}`)}
             >
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <p className="font-semibold">{row.title}</p>
-                  <p className="text-xs text-ink/50">{row.subtitle}</p>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-bold text-slate-900 group-hover:text-emerald-800 transition-colors">{row.title}</p>
+                  <p className="text-xs text-slate-500">{row.subtitle}</p>
                 </div>
                 <StageBadge stage={row.stage} />
               </div>
-              <div className="mt-2">
+
+              <div className="mt-3">
                 <LifecycleRail current={row.stage} compact decorative />
               </div>
-              <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-ink/55">
-                <span>{row.numbersConnected} numbers</span>
-                <span className="font-mono">{formatAiCapPercent(row.aiTokensMonth, row.monthlyTokenLimit)}</span>
-              </div>
-              <div className="mt-2 flex items-center justify-between gap-2">
-                <StatusBadge status={row.plan} />
-                <FlagPills flags={row.flags} />
+
+              <div className="mt-3 flex items-center justify-between gap-2 border-t border-slate-100 pt-3 text-xs text-slate-600">
+                <div className="flex items-center gap-2">
+                  <StatusBadge status={row.plan} />
+                  <span>{row.numbersConnected} numbers</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <FlagPills flags={row.flags} />
+                  <ChevronRight className="h-4 w-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
+                </div>
               </div>
             </button>
           )}
@@ -143,18 +175,19 @@ export function AccountsPage() {
                     <th>Stage</th>
                     <th>Plan</th>
                     <th>Quality</th>
-                    <th>AI % of cap</th>
-                    <th>Numbers</th>
-                    <th>Last login</th>
-                    <th>Flags</th>
+                    <th>AI % of Cap</th>
+                    <th>WA Numbers</th>
+                    <th>Last Active</th>
+                    <th>Health Flags</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
                   {(rows ?? []).map((row) => (
                     <tr key={row.id} {...clickableRowProps(() => navigate(`/accounts/${row.id}`))}>
                       <td>
-                        <div className="font-semibold">{row.companyName}</div>
-                        <div className="text-xs text-ink/50">{row.ownerEmail}</div>
+                        <div className="font-bold text-slate-900">{row.companyName}</div>
+                        <div className="text-xs text-slate-500">{row.ownerEmail}</div>
                       </td>
                       <td>
                         <StageBadge stage={row.stage} />
@@ -162,14 +195,17 @@ export function AccountsPage() {
                       <td>
                         <StatusBadge status={row.plan} />
                       </td>
-                      <td>{row.qualityRating ? <StatusBadge status={row.qualityRating} /> : '—'}</td>
-                      <td className="font-mono text-xs">
+                      <td>{row.qualityRating ? <StatusBadge status={row.qualityRating} /> : <span className="text-slate-400">—</span>}</td>
+                      <td className="font-mono text-xs font-semibold text-slate-700">
                         {formatAiCapPercent(row.aiTokensMonth, row.monthlyTokenLimit)}
                       </td>
-                      <td className="font-mono">{formatCount(row.numbersConnected)}</td>
-                      <td className="text-xs">{formatWhen(row.lastLoginAt)}</td>
+                      <td className="font-mono text-xs">{formatCount(row.numbersConnected)}</td>
+                      <td className="text-xs text-slate-600">{formatWhen(row.lastLoginAt)}</td>
                       <td>
                         <FlagPills flags={row.flags} />
+                      </td>
+                      <td className="text-right">
+                        <span className="text-xs font-semibold text-emerald-700">Open →</span>
                       </td>
                     </tr>
                   ))}
@@ -179,11 +215,13 @@ export function AccountsPage() {
           )}
         />
       )}
+
+      {/* Pagination Controls */}
       {pageCount > 1 && (
-        <div className="flex items-center justify-between text-sm">
-          <button
-            type="button"
-            className="text-ink/60 disabled:opacity-40"
+        <div className="flex items-center justify-between border-t border-slate-200/80 pt-4 text-sm">
+          <Button
+            variant="secondary"
+            size="sm"
             disabled={page <= 1}
             onClick={() => {
               const copy = new URLSearchParams(params);
@@ -192,13 +230,13 @@ export function AccountsPage() {
             }}
           >
             Previous
-          </button>
-          <span className="font-mono text-xs">
-            {page} / {pageCount}
+          </Button>
+          <span className="font-mono text-xs font-semibold text-slate-600">
+            Page {page} of {pageCount}
           </span>
-          <button
-            type="button"
-            className="text-ink/60 disabled:opacity-40"
+          <Button
+            variant="secondary"
+            size="sm"
             disabled={page >= pageCount}
             onClick={() => {
               const copy = new URLSearchParams(params);
@@ -207,7 +245,7 @@ export function AccountsPage() {
             }}
           >
             Next
-          </button>
+          </Button>
         </div>
       )}
     </div>

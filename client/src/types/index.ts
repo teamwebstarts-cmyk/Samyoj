@@ -183,7 +183,13 @@ export interface ContactActivityItem {
 
 export interface ContactDetail {
   contact: Contact;
-  lead?: { id: string; stage: string; title: string } | null;
+  lead?: {
+    id: string;
+    stage: string;
+    title: string;
+    notes?: string | null;
+    assignedAgent?: { id: string; name: string } | null;
+  } | null;
   conversations: Array<{
     id: string;
     status: string;

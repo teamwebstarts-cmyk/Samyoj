@@ -7,6 +7,72 @@ import type { TokenUsage } from './types';
 
 const log = createModuleLogger('sarvam-chat');
 
+/**
+ * Sarvam is a shared multi-tenant endpoint and returns 503 `model_overloaded`
+ * under load, plus occasional 500s and 429s. These are transient — retrying
+ * with backoff recovers most calls instead of failing the user's message/call.
+ * 401/403 (auth) and other 4xx are NOT retried: retrying a bad key just wastes
+ * time and quota.
+ */
+const SARVAM_RETRYABLE_STATUS = new Set([429, 500, 502, 503]);
+const SARVAM_MAX_RETRIES = 3;
+const SARVAM_RETRY_BASE_DELAY_MS = 400;
+
+async function fetchSarvamWithRetry(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number
+): Promise<Response> {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt <= SARVAM_MAX_RETRIES; attempt += 1) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(url, { ...init, signal: controller.signal });
+
+      // Non-retryable immediately returns so the caller can throw a clean error.
+      if (response.ok || !SARVAM_RETRYABLE_STATUS.has(response.status)) {
+        return response;
+      }
+
+      // Retryable status (429/5xx): wait before the next attempt, except on the
+      // final try where we return it for the caller to surface.
+      lastError = response;
+      if (attempt < SARVAM_MAX_RETRIES) {
+        const backoff = SARVAM_RETRY_BASE_DELAY_MS * 2 ** attempt + Math.floor(Math.random() * 250);
+        log.warn('Sarvam returned a transient error — retrying', {
+          status: response.status,
+          attempt: attempt + 1,
+          maxRetries: SARVAM_MAX_RETRIES,
+        });
+        await new Promise((resolve) => setTimeout(resolve, backoff));
+        continue;
+      }
+      return response;
+    } catch (err) {
+      lastError = err;
+      const isTimeout = err instanceof Error && err.name === 'AbortError';
+      // Only retry timeouts; other network errors (DNS, conn refused) are not
+      // going to self-heal within the same call.
+      if (isTimeout && attempt < SARVAM_MAX_RETRIES) {
+        const backoff = SARVAM_RETRY_BASE_DELAY_MS * 2 ** attempt + Math.floor(Math.random() * 250);
+        log.warn('Sarvam request timed out — retrying', {
+          attempt: attempt + 1,
+          maxRetries: SARVAM_MAX_RETRIES,
+        });
+        await new Promise((resolve) => setTimeout(resolve, backoff));
+        continue;
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  throw lastError;
+}
+
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
   content: string;
@@ -89,11 +155,7 @@ export async function* streamSarvamChatCompletion(
     throw new AppError(503, 'Sarvam AI is not configured');
   }
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
-  try {
-    const isConversationsModel = model === 'sarvam-105b-conversations';
+  const isConversationsModel = model === 'sarvam-105b-conversations';
     const payload: Record<string, unknown> = {
       model,
       messages: options.messages,
@@ -110,15 +172,18 @@ export async function* streamSarvamChatCompletion(
       payload.tool_choice = options.toolChoice ?? 'auto';
     }
 
-    const response = await fetch(`${endpoint}/chat/completions`, {
-      method: 'POST',
-      signal: controller.signal,
-      headers: {
-        'Content-Type': 'application/json',
-        'api-subscription-key': apiKey,
+    const response = await fetchSarvamWithRetry(
+      `${endpoint}/chat/completions`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'api-subscription-key': apiKey,
+        },
+        body: JSON.stringify(payload),
       },
-      body: JSON.stringify(payload),
-    });
+      timeoutMs
+    );
 
     if (!response.ok) {
       const body = await response.text();
@@ -158,9 +223,6 @@ export async function* streamSarvamChatCompletion(
       }
     }
     yield { content: '', finishReason: 'stop', done: true };
-  } finally {
-    clearTimeout(timeout);
-  }
 }
 
 /**
@@ -177,9 +239,6 @@ export async function createSarvamChatCompletion(
   if (!apiKey) {
     throw new AppError(503, 'Sarvam AI is not configured');
   }
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   const start = Date.now();
   try {
@@ -201,15 +260,18 @@ export async function createSarvamChatCompletion(
       payload.tool_choice = options.toolChoice ?? 'auto';
     }
 
-    const response = await fetch(`${endpoint}/chat/completions`, {
-      method: 'POST',
-      signal: controller.signal,
-      headers: {
-        'Content-Type': 'application/json',
-        'api-subscription-key': apiKey,
+    const response = await fetchSarvamWithRetry(
+      `${endpoint}/chat/completions`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'api-subscription-key': apiKey,
+        },
+        body: JSON.stringify(payload),
       },
-      body: JSON.stringify(payload),
-    });
+      timeoutMs
+    );
 
     // Graceful handling for rate limits (429) and auth errors (401/403)
     if (response.status === 429) {
@@ -290,12 +352,10 @@ export async function createSarvamChatCompletion(
       provider: 'sarvam',
     };
   } catch (err) {
-    // AbortController timeout or network failure — surface clearly
+    // AbortController timeout (from fetchSarvamWithRetry) or network failure
     if (err instanceof Error && err.name === 'AbortError') {
       throw new AppError(504, 'Sarvam AI request timed out — please try again');
     }
     throw err;
-  } finally {
-    clearTimeout(timeout);
   }
 }

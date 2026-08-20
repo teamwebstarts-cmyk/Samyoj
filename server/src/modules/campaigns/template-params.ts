@@ -111,6 +111,17 @@ function findCopyCodeButtonIndex(template?: MessageTemplate | null): number | nu
   return index >= 0 ? index : null;
 }
 
+/**
+ * Count the {{n}} placeholders in a template component's text. Named
+ * placeholders ({{name}}) are not positional, so they don't count here —
+ * Meta only accepts text parameters for numeric {{1}}/{{2}} slots.
+ */
+function countPlaceholders(text?: string): number {
+  if (!text) return 0;
+  const numeric = Array.from(text.matchAll(/\{\{(\d+)\}\}/g), (m) => Number(m[1]));
+  return numeric.length ? Math.max(...numeric) : 0;
+}
+
 export function buildTemplateComponents(
   params: TemplateParams | null | undefined,
   template?: MessageTemplate | null
@@ -146,6 +157,14 @@ export function buildTemplateComponents(
 
   const components: unknown[] = [];
   const headerComponent = template?.components?.find((c) => c.type?.toUpperCase() === 'HEADER');
+  const bodyComponent = template?.components?.find((c) => c.type?.toUpperCase() === 'BODY');
+
+  // Only attach a parameter component if the approved template actually has a
+  // placeholder for it. Sending params to a component with no {{n}} variable is
+  // the #132012 "Parameter format does not match" error. This keeps a valid,
+  // param-less template sending cleanly even when the UI passes empty params.
+  const headerPlaceholderCount = countPlaceholders(headerComponent?.text);
+  const bodyPlaceholderCount = countPlaceholders(bodyComponent?.text);
 
   if (scrubbed.headerMediaUrl && headerComponent?.format && headerComponent.format !== 'TEXT') {
     const mediaType = headerComponent.format.toLowerCase();
@@ -153,17 +172,17 @@ export function buildTemplateComponents(
       type: 'header',
       parameters: [{ type: mediaType, [mediaType]: { link: scrubbed.headerMediaUrl } }],
     });
-  } else if (scrubbed.header?.length) {
+  } else if (scrubbed.header?.length && headerPlaceholderCount > 0) {
     components.push({
       type: 'header',
-      parameters: textParameters(scrubbed.header),
+      parameters: textParameters(scrubbed.header.slice(0, headerPlaceholderCount)),
     });
   }
 
-  if (scrubbed.body?.length) {
+  if (scrubbed.body?.length && bodyPlaceholderCount > 0) {
     components.push({
       type: 'body',
-      parameters: textParameters(scrubbed.body),
+      parameters: textParameters(scrubbed.body.slice(0, bodyPlaceholderCount)),
     });
   }
 

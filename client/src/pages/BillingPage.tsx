@@ -3,7 +3,6 @@ import {
   CreditCard,
   LayoutGrid,
   Receipt,
-  RefreshCw,
   ShieldAlert,
 } from 'lucide-react';
 import AppAlert from '../components/ui/AppAlert';
@@ -150,13 +149,7 @@ export default function BillingPage() {
 
   return (
     <PageShell>
-      <PageHeader
-        actions={
-          <AppButton variant="secondary" size="sm" icon={<RefreshCw size={15} />} onClick={load}>
-            Refresh
-          </AppButton>
-        }
-      />
+      <PageHeader />
 
       <div className="space-y-5 animate-fade-up-delay sm:space-y-6">
         {loading || !info ? (
@@ -218,11 +211,12 @@ export default function BillingPage() {
                     value={cadence}
                     onChange={(v) => setCadence(v as CadenceTab)}
                     options={[
-                      { value: 'monthly', label: 'Monthly' },
-                      { value: 'quarterly', label: 'Quarterly · Save 5%' },
-                      { value: 'yearly', label: 'Yearly · Save 20%' },
+                      { value: 'monthly', label: 'Monthly', shortLabel: '1 mo' },
+                      { value: 'quarterly', label: 'Quarterly · Save 5%', shortLabel: '3 mo' },
+                      { value: 'yearly', label: 'Yearly · Save 20%', shortLabel: '1 yr' },
                     ]}
                     ariaLabel="Billing cadence"
+                    compact
                   />
                 </div>
 

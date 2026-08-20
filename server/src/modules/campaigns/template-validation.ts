@@ -57,11 +57,17 @@ export function templateValidationErrors(
     }
     const variables = profile.numeric.length + profile.named.length;
     const values = type === 'BODY' ? input.params?.body || [] : input.params?.header || [];
-    if (expected !== actual && (variables > 0 || values.length > 0)) {
-      errors.push(`${type.toLowerCase()} component does not match approved template shape`);
-    }
-    if (values.length !== variables) {
-      errors.push(`${type.toLowerCase()} requires ${variables} variable(s), received ${values.length}`);
+    // Meta auto-fills the built-in {{name}} variable, so named-only placeholders
+    // need no matching `parameters` entry. Only enforce component-shape and
+    // count when the template actually uses numeric {{n}} placeholders.
+    const requiresParamComponent = profile.numeric.length > 0;
+    if (requiresParamComponent) {
+      if (expected !== actual && (variables > 0 || values.length > 0)) {
+        errors.push(`${type.toLowerCase()} component does not match approved template shape`);
+      }
+      if (values.length !== variables) {
+        errors.push(`${type.toLowerCase()} requires ${variables} variable(s), received ${values.length}`);
+      }
     }
     if (values.some((value) => /\{\{[^}]+\}\}/.test(value))) {
       errors.push(`${type.toLowerCase()} contains unresolved placeholders; provide recipient data before sending`);

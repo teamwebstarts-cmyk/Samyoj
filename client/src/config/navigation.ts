@@ -114,9 +114,6 @@ export const MOBILE_MORE_ITEMS: NavItem[] = [
   { to: '/settings', icon: Settings2, label: 'Settings' },
 ];
 
-/** Legacy route — redirects to contacts pipeline tab */
-export const LEADS_REDIRECT = '/contacts?tab=pipeline';
-
 export function isNavItemVisible(item: NavItem, role: OrgRole | null): boolean {
   if (item.hidden) return false;
   if (item.showForRoles && role && !item.showForRoles.includes(role)) return false;

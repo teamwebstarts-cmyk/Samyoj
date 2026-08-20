@@ -166,7 +166,8 @@ describe('mergeTemplateParams', () => {
 
 describe('buildTemplateComponents', () => {
   it('builds body parameters for template send', () => {
-    const components = buildTemplateComponents({ body: ['Hi', 'Order #1'] });
+    const template = { components: [{ type: 'BODY', text: 'Hi {{1}}, order {{2}}' }] };
+    const components = buildTemplateComponents({ body: ['Hi', 'Order #1'] }, template as never);
     expect(components).toEqual([
       {
         type: 'body',
@@ -176,6 +177,12 @@ describe('buildTemplateComponents', () => {
         ],
       },
     ]);
+  });
+
+  it('omits params when the template has no numeric placeholder (prevents #132012)', () => {
+    const template = { components: [{ type: 'BODY', text: 'Hi there, welcome!' }] };
+    const components = buildTemplateComponents({ body: ['stray'] }, template as never);
+    expect(components).toEqual([]);
   });
 
   it('emits copy-code and dynamic URL button components', () => {

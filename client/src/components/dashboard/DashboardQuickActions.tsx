@@ -106,7 +106,7 @@ function ActionTile({
 }: ActionTileProps) {
   const content = (
     <div
-      className={`group flex h-full min-h-[74px] items-center gap-2 rounded-xl border px-2.5 py-3 transition hover:shadow-xs sm:min-h-[78px] sm:gap-2.5 sm:px-3 sm:py-3.5 ${
+      className={`group flex h-full items-center gap-2 rounded-xl border px-2.5 py-3 transition hover:shadow-xs sm:gap-2.5 sm:px-3 sm:py-3.5 ${
         isDashed
           ? 'border-dashed border-neutral-300 bg-neutral-50/40 hover:border-neutral-400 hover:bg-neutral-50/80'
           : bgClass

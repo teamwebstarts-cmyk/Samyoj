@@ -87,7 +87,6 @@ export default function App() {
                       <Route path="/templates/:name/resubmit" element={<TemplateWizardPage />} />
                       <Route path="/content-studio" element={<ContentStudioPage />} />
                       <Route path="/commerce" element={<CommercePage />} />
-                      <Route path="/leads" element={<Navigate to="/contacts?tab=pipeline" replace />} />
                       <Route path="/tickets" element={<TicketsPage />} />
                       <Route path="/contacts" element={<ContactsPage />} />
                       <Route path="/team" element={<TeamPage />} />

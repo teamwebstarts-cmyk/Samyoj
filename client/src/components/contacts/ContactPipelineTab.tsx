@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { RefreshCw, Target, X } from 'lucide-react';
+import { Plus, RefreshCw, Target, X } from 'lucide-react';
 import ContactAvatar from '../inbox/ContactAvatar';
 import LeadCard, { type LeadItem } from '../leads/LeadCard';
 import LeadStageSelect from '../leads/LeadStageSelect';
+import LeadFormSlideOver from './LeadFormSlideOver';
 import {
   computeLeadStats,
   stageFilterOptions,
@@ -10,11 +11,14 @@ import {
   type LeadStageFilter,
 } from '../leads/leadUi';
 import AppButton from '../ui/AppButton';
+import AppSelect from '../ui/AppSelect';
 import DataTable from '../ui/DataTable';
 import EmptyState from '../ui/EmptyState';
 import ListToolbar from '../ui/ListToolbar';
 import ListLayoutSkeleton from '../ui/ListLayoutSkeleton';
+import { ModalPanel } from '../ui/modalUi';
 import ResponsiveDataView from '../ui/ResponsiveDataView';
+import SlideOver, { SlideOverFooter } from '../ui/SlideOver';
 import { leadApi } from '../../services/api';
 import { toastError, toastSuccess } from '../../utils/toast';
 import { useOnActiveNumberChange } from '../../hooks/useOnActiveNumberChange';
@@ -31,15 +35,25 @@ function formatDate(value: string) {
 interface ContactPipelineTabProps {
   onStatsChange?: (stats: { total: number; active: number; won: number }) => void;
   refreshToken?: number;
+  onLeadCreated?: () => void;
 }
 
-export default function ContactPipelineTab({ onStatsChange, refreshToken = 0 }: ContactPipelineTabProps) {
+export default function ContactPipelineTab({
+  onStatsChange,
+  refreshToken = 0,
+  onLeadCreated,
+}: ContactPipelineTabProps) {
   const { activeNumber, resolved } = useWhatsAppNumber();
   const [leads, setLeads] = useState<LeadItem[]>([]);
   const [stage, setStage] = useState<LeadStageFilter>('');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingLead, setEditingLead] = useState<LeadItem | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkStageOpen, setBulkStageOpen] = useState(false);
+  const [bulkStage, setBulkStage] = useState('');
   const activeNumberIdRef = useRef<string | null>(null);
   activeNumberIdRef.current = activeNumber?.id ?? null;
   const requestGenerationRef = useRef(0);
@@ -52,6 +66,8 @@ export default function ContactPipelineTab({ onStatsChange, refreshToken = 0 }: 
     leadApi
       .list({
         _t: String(Date.now()),
+        ...(search ? { search } : {}),
+        ...(stage ? { stage } : {}),
       })
       .then((res) => {
         if (
@@ -77,7 +93,7 @@ export default function ContactPipelineTab({ onStatsChange, refreshToken = 0 }: 
           setLoading(false);
         }
       });
-  }, [activeNumber, resolved]);
+  }, [activeNumber, resolved, search, stage]);
 
   useEffect(() => {
     load();
@@ -117,8 +133,48 @@ export default function ContactPipelineTab({ onStatsChange, refreshToken = 0 }: 
     );
   };
 
+  const openCreate = () => {
+    setEditingLead(null);
+    setFormOpen(true);
+  };
+
+  const openEdit = (lead: LeadItem) => {
+    setEditingLead(lead);
+    setFormOpen(true);
+  };
+
+  const closeForm = () => {
+    setFormOpen(false);
+    setEditingLead(null);
+  };
+
+  const handleFormSaved = () => {
+    closeForm();
+    load();
+    onLeadCreated?.();
+  };
+
+  const selectedLeads = useMemo(
+    () => leads.filter((lead) => selectedIds.includes(lead.id)),
+    [leads, selectedIds]
+  );
+
+  const runBulkStage = async () => {
+    if (!selectedIds.length || !bulkStage) return;
+    try {
+      const { data } = await leadApi.bulkStage(selectedIds, bulkStage);
+      toastSuccess(`${data.data.updated} lead(s) moved to ${stageLabels[bulkStage] || bulkStage}`);
+      setSelectedIds([]);
+      setBulkStageOpen(false);
+      load();
+    } catch {
+      toastError('Could not update stages');
+    }
+  };
+
   const filteredLeads = useMemo(() => {
     const q = search.trim().toLowerCase();
+    if (!q && !stage) return leads;
     return leads.filter((lead) => {
       if (stage && lead.stage !== stage) return false;
       if (!q) return true;
@@ -139,6 +195,8 @@ export default function ContactPipelineTab({ onStatsChange, refreshToken = 0 }: 
     setStage('');
   };
 
+  const canBulk = selectedIds.length > 0;
+
   return (
     <div className="inbox-shell overflow-hidden">
       <ListToolbar
@@ -147,9 +205,27 @@ export default function ContactPipelineTab({ onStatsChange, refreshToken = 0 }: 
         onSearchChange={setSearch}
         searchPlaceholder="Search lead, contact, or owner..."
         actions={
-          <AppButton variant="secondary" size="sm" icon={<RefreshCw size={15} />} onClick={load}>
-            Refresh
-          </AppButton>
+          <div className="flex flex-wrap items-center gap-2">
+            {canBulk && (
+              <AppButton
+                variant="secondary"
+                size="sm"
+                icon={<Target size={14} />}
+                onClick={() => {
+                  setBulkStage('QUALIFIED');
+                  setBulkStageOpen(true);
+                }}
+              >
+                Bulk stage
+              </AppButton>
+            )}
+            <AppButton variant="secondary" size="sm" icon={<Plus size={15} />} onClick={openCreate}>
+              New lead
+            </AppButton>
+            <AppButton variant="secondary" size="sm" icon={<RefreshCw size={15} />} onClick={load}>
+              Refresh
+            </AppButton>
+          </div>
         }
       />
 
@@ -234,10 +310,14 @@ export default function ContactPipelineTab({ onStatsChange, refreshToken = 0 }: 
               onStageChange={(item, next) => void changeStage(item, next)}
               formatDate={formatDate}
               updating={updatingId === lead.id}
+              onEdit={() => openEdit(lead)}
             />
           )}
           renderTable={() => (
-            <DataTable headers={['Lead', 'Contact', 'Stage', 'Owner', 'Updated']} serialNo={false}>
+            <DataTable
+              headers={['Lead', 'Contact', 'Stage', 'Owner', 'Updated', 'Actions']}
+              serialNo={false}
+            >
               {filteredLeads.map((lead) => {
                 const contactLabel = lead.contact?.name || lead.contact?.phone;
                 const isUpdating = updatingId === lead.id;
@@ -245,7 +325,22 @@ export default function ContactPipelineTab({ onStatsChange, refreshToken = 0 }: 
                 return (
                   <tr key={lead.id} className="group transition-colors hover:bg-theme-subtle/40">
                     <td className="min-w-[160px]">
-                      <p className="font-semibold text-theme-fg">{lead.title}</p>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.includes(lead.id)}
+                          onChange={(e) =>
+                            setSelectedIds((prev) =>
+                              e.target.checked
+                                ? [...prev, lead.id]
+                                : prev.filter((id) => id !== lead.id)
+                            )
+                          }
+                          className="h-4 w-4 rounded border-neutral-300 text-sky-600 focus:ring-sky-500/30"
+                          aria-label={`Select ${lead.title}`}
+                        />
+                        <p className="font-semibold text-theme-fg">{lead.title}</p>
+                      </div>
                       {lead.source && (
                         <p className="mt-0.5 text-[11px] capitalize text-theme-muted">{lead.source}</p>
                       )}
@@ -278,6 +373,16 @@ export default function ContactPipelineTab({ onStatsChange, refreshToken = 0 }: 
                     <td className="whitespace-nowrap text-[12px] text-theme-secondary">
                       {formatDate(lead.updatedAt)}
                     </td>
+                    <td className="px-5">
+                      <button
+                        type="button"
+                        onClick={() => openEdit(lead)}
+                        className="inline-flex items-center justify-center rounded-xl p-1.5 text-[11px] font-semibold text-theme-secondary hover:bg-theme-subtle hover:text-theme-fg"
+                        aria-label={`Edit ${lead.title}`}
+                      >
+                        Edit
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
@@ -285,6 +390,54 @@ export default function ContactPipelineTab({ onStatsChange, refreshToken = 0 }: 
           )}
         />
       )}
+
+      <LeadFormSlideOver
+        open={formOpen}
+        onClose={closeForm}
+        contactName={undefined}
+        contactPhone={undefined}
+        lead={editingLead}
+        onSaved={handleFormSaved}
+      />
+
+      <SlideOver
+        open={bulkStageOpen}
+        onClose={() => setBulkStageOpen(false)}
+        title="Move to stage"
+        subtitle={`${selectedIds.length} selected lead(s)`}
+        size="sm"
+        icon={Target}
+        accent="sky"
+        footer={
+          <SlideOverFooter
+            onCancel={() => setBulkStageOpen(false)}
+            submitLabel="Move"
+            loading={false}
+            submitDisabled={!bulkStage}
+            primaryAction={{
+              label: 'Move',
+              onClick: () => void runBulkStage(),
+            }}
+            hideSubmit
+          />
+        }
+      >
+        <div className="space-y-4">
+          <ModalPanel title="Selected leads" accent="sky">
+            <p className="text-[12px] text-theme-secondary">
+              {selectedLeads.length} lead(s) selected. Pick a new stage below.
+            </p>
+          </ModalPanel>
+          <AppSelect
+            label="New stage"
+            value={bulkStage}
+            options={stageFilterOptions.filter((o) => o.value)}
+            onChange={(e) => setBulkStage(e.target.value)}
+            isSearchable={false}
+            ariaLabel="New stage"
+          />
+        </div>
+      </SlideOver>
     </div>
   );
 }

@@ -302,7 +302,7 @@ export async function getContactDetail(
       }),
       prisma.lead.findFirst({
         where: { organizationId: orgId, contactId: contact.id, whatsappNumberId },
-        select: { id: true, stage: true, title: true },
+        select: { id: true, stage: true, title: true, notes: true, assignedAgent: { select: { id: true, name: true } } },
       }),
     ]);
 

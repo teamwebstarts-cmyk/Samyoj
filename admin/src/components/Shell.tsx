@@ -5,14 +5,14 @@ import {
   LogOut,
   Mail,
   ScrollText,
+  ShieldCheck,
   TriangleAlert,
   Users,
 } from 'lucide-react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useOperator } from '../context/OperatorContext';
 import { visibleNavGroups } from '../lib/routes';
 import { PlatformBrand } from './PlatformBrand';
-import { StatusBadge } from './ui';
 
 const ICONS: Record<string, typeof LayoutDashboard> = {
   '/': LayoutDashboard,
@@ -24,6 +24,16 @@ const ICONS: Record<string, typeof LayoutDashboard> = {
   '/audit': ScrollText,
 };
 
+const PATH_TITLES: Record<string, string> = {
+  '/': 'Overview',
+  '/accounts': 'Organizations',
+  '/billing': 'Billing Studio',
+  '/errors': 'Meta Telemetry',
+  '/outreach': 'Email Outreach',
+  '/operators': 'Staff & Access',
+  '/audit': 'Compliance Audit',
+};
+
 function NavGroup({
   label,
   items,
@@ -33,18 +43,18 @@ function NavGroup({
 }) {
   if (items.length === 0) return null;
   return (
-    <div className="flex gap-1 md:flex-col md:gap-0.5">
-      <p className="hidden px-1.5 pb-0.5 pt-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-white/35 md:block">
+    <div className="flex gap-1 md:flex-col md:gap-1">
+      <p className="hidden px-2.5 pb-1 pt-2 text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-400/60 md:block">
         {label}
       </p>
       {items.map((item) => {
         const Icon = ICONS[item.to] ?? LayoutDashboard;
         return (
-          <NavLink key={item.to} to={item.to} end={item.to === '/'} className="rail-nav-item">
+          <NavLink key={item.to} to={item.to} end={item.to === '/'} className="rail-nav-item group">
             {({ isActive }) => (
               <>
                 <span className="rail-nav-icon">
-                  <Icon className="h-3.5 w-3.5" strokeWidth={isActive ? 2.2 : 1.9} />
+                  <Icon className="h-4 w-4" strokeWidth={isActive ? 2.2 : 1.8} />
                 </span>
                 <span className="truncate">{item.label}</span>
               </>
@@ -58,72 +68,119 @@ function NavGroup({
 
 export function Shell() {
   const { operator, logout } = useOperator();
+  const location = useLocation();
   if (!operator) return null;
 
   const { work, staff } = visibleNavGroups(operator.role);
+  const currentPath = location.pathname.startsWith('/accounts/') ? '/accounts' : location.pathname;
+  const currentTitle = PATH_TITLES[currentPath] || 'Console';
 
   return (
-    <div className="min-h-screen md:grid md:grid-cols-[12.75rem_minmax(0,1fr)]">
+    <div className="min-h-screen md:grid md:grid-cols-[14.5rem_minmax(0,1fr)]">
       <a href="#main" className="skip-to-content">
         Skip to content
       </a>
-      <aside
-        className="flex items-center gap-2 border-b border-white/5 bg-graphite px-2.5 py-2.5 text-white md:sticky md:top-0 md:h-screen md:flex-col md:items-stretch md:border-b-0 md:px-2.5 md:py-4"
-      >
-        <div className="hidden min-w-0 px-0.5 md:block">
+      
+      {/* Sidebar Rail */}
+      <aside className="flex items-center gap-2 border-b border-emerald-950/40 bg-gradient-to-b from-[#0c1813] via-[#0f211b] to-[#0c1813] px-3 py-3 text-white md:sticky md:top-0 md:h-screen md:flex-col md:items-stretch md:border-b-0 md:border-r md:border-emerald-900/20 md:px-3 md:py-4 shadow-xl z-20">
+        <div className="hidden min-w-0 px-1 md:block">
           <PlatformBrand size="sm" />
-          <p className="mt-1.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-white/38">
-            Platform console
-          </p>
+          <div className="mt-2.5 flex items-center justify-between gap-1.5 rounded-lg bg-emerald-950/60 border border-emerald-800/30 px-2 py-1 text-[10px] text-emerald-300">
+            <span className="flex items-center gap-1.5 font-medium">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Samyoj Ops
+            </span>
+            <span className="font-mono text-[9px] text-emerald-400/70">v2.4</span>
+          </div>
         </div>
-        <div className="px-0.5 md:hidden">
+
+        <div className="px-1 md:hidden">
           <PlatformBrand size="sm" collapsed />
         </div>
-        <nav className="flex min-w-0 flex-1 gap-2 overflow-x-auto md:mt-5 md:flex-col md:gap-4">
+
+        <nav className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto md:mt-6 md:flex-col md:gap-3 md:overflow-y-auto">
           <NavGroup label="Work" items={work} />
-          <NavGroup label="Staff" items={staff} />
+          <NavGroup label="Staff & Security" items={staff} />
         </nav>
-        <button
-          type="button"
-          onClick={() => void logout()}
-          className="hidden items-center gap-1.5 rounded-lg px-2 py-1.5 text-left text-[11px] text-white/55 hover:bg-white/5 hover:text-white md:flex"
-        >
-          <LogOut className="h-3.5 w-3.5" />
-          Sign out
-        </button>
-      </aside>
-      <div className="flex min-w-0 flex-col">
-        <header className="border-b border-dust bg-white/90 px-4 py-2.5 backdrop-blur-sm md:px-6">
-          <div className="content-shell flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/40">
-                Operator
-              </p>
-              <p className="truncate text-sm text-ink/75">
-                {operator.email}
-                <span className="ml-2 inline-flex align-middle">
-                  <StatusBadge status={operator.role} />
-                </span>
-              </p>
+
+        {/* Operator Profile Card */}
+        <div className="hidden md:block pt-3 border-t border-emerald-900/30 mt-auto">
+          <div className="rounded-xl bg-emerald-950/40 border border-emerald-900/40 p-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="truncate text-xs font-semibold text-white/90">{operator.email}</p>
+                <div className="mt-1 flex items-center gap-1.5">
+                  <span className="inline-flex items-center rounded-full bg-emerald-500/20 px-1.5 py-0.2 text-[9px] font-bold uppercase tracking-wider text-emerald-300 border border-emerald-400/30">
+                    {operator.role}
+                  </span>
+                  {operator.mfaEnabled && (
+                    <span className="inline-flex items-center text-[9px] text-emerald-400" title="MFA Protected">
+                      <ShieldCheck className="h-3 w-3" />
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
             <button
               type="button"
               onClick={() => void logout()}
-              className="text-sm font-medium text-ink/60 hover:text-ink md:hidden"
+              className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-lg bg-white/5 py-1.5 text-center text-xs font-medium text-white/70 hover:bg-white/10 hover:text-white transition-colors"
             >
+              <LogOut className="h-3.5 w-3.5" />
               Sign out
             </button>
           </div>
+        </div>
+      </aside>
+
+      {/* Main Content Area */}
+      <div className="flex min-w-0 flex-col">
+        <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/85 backdrop-blur-md px-4 py-2.5 md:px-8">
+          <div className="content-shell flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Platform</span>
+                  <span className="text-slate-300">/</span>
+                  <span className="text-xs font-semibold text-slate-700">{currentTitle}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 shrink-0">
+              <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200/60 px-2.5 py-0.5 font-medium text-emerald-800">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  Live Platform
+                </span>
+              </div>
+              <div className="md:hidden">
+                <button
+                  type="button"
+                  onClick={() => void logout()}
+                  className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  Sign out
+                </button>
+              </div>
+            </div>
+          </div>
         </header>
-        <main id="main" className="flex-1 px-4 py-4 md:px-6 md:py-5">
+
+        <main id="main" className="flex-1 px-4 py-6 md:px-8 md:py-8">
           <div className="content-shell">
             <Outlet />
           </div>
         </main>
-        <footer className="px-4 pb-4 text-[11px] leading-relaxed text-ink/45 md:px-6">
-          <div className="content-shell">
-            Account telemetry (logins, feature use, error codes, token counts) is processed to operate and
-            support Samyoj. Customer chat, phones, and Meta tokens stay out of this console.
+
+        <footer className="border-t border-slate-200/60 bg-white/40 px-4 py-4 text-[11px] leading-relaxed text-slate-400 md:px-8">
+          <div className="content-shell flex flex-col sm:flex-row items-center justify-between gap-2">
+            <p>
+              Samyoj Platform Operator Console · Account Telemetry & Health Monitoring
+            </p>
+            <p className="text-slate-400/80">
+              Customer chat data, phone numbers & Meta tokens are strictly isolated.
+            </p>
           </div>
         </footer>
       </div>

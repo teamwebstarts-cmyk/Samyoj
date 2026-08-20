@@ -29,7 +29,7 @@ interface OnboardingStatus {
   steps: Array<{
     id: string;
     title: string;
-    description: string;
+    description?: string;
     completed: boolean;
     href?: string;
   }>;
@@ -285,14 +285,13 @@ export default function DashboardPage() {
             </div>
 
             <div
-              className={`card-grid mt-[var(--card-gap)] grid grid-cols-1 md:grid-cols-3 ${showChecklist || onboardingError ? 'lg:grid-cols-5 lg:items-stretch' : ''
-                }`}
+              className={`card-grid mt-[var(--card-gap)] grid grid-cols-1 md:grid-cols-3 ${showChecklist || onboardingError ? 'lg:grid-cols-5 lg:items-stretch md:items-stretch' : ''}`}
             >
-              <div className={`min-w-0 ${showChecklist || onboardingError ? 'lg:col-span-3 lg:h-full' : ''}`}>
+              <div className={`min-w-0 ${showChecklist || onboardingError ? 'md:col-span-2 lg:col-span-3 lg:h-full' : ''}`}>
                 <DashboardQuickActions />
               </div>
               {showChecklist && onboarding && (
-                <div className="min-w-0 lg:col-span-2 lg:h-full">
+                <div className="min-w-0 md:col-span-1 lg:col-span-2 lg:h-full">
                   <GettingStartedCard
                     steps={onboarding.steps}
                     completedCount={onboarding.completedCount}
@@ -301,7 +300,7 @@ export default function DashboardPage() {
                 </div>
               )}
               {onboardingError && !showChecklist && (
-                <div className="min-w-0 lg:col-span-2 lg:h-full">
+                <div className="min-w-0 md:col-span-1 lg:col-span-2 lg:h-full">
                   <div className="dashboard-card flex h-full flex-col justify-center rounded-2xl border-amber-100 bg-amber-50/40 p-[var(--card-pad)]">
                     <p className="text-[13px] font-bold text-neutral-900">Couldn&apos;t load checklist</p>
                     <p className="mt-0.5 text-[12px] text-neutral-600">

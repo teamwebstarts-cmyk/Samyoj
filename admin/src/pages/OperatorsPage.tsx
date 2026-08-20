@@ -1,5 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Users } from 'lucide-react';
+import {
+  KeyRound,
+  Laptop,
+  Shield,
+  ShieldCheck,
+  UserPlus,
+  Users,
+} from 'lucide-react';
 import { ApiError, platformRequest } from '../api';
 import {
   Button,
@@ -69,17 +76,23 @@ export function OperatorsPage() {
   if (error) {
     return (
       <Notice tone="error">
-        Could not load operators. {error} SUPER_ADMIN is required for this screen.
+        Could not load operator directory. {error} SUPER_ADMIN permission is required.
       </Notice>
     );
   }
-  if (!operators) return <PageLoading label="Loading operators…" />;
+  if (!operators) return <PageLoading label="Loading operator security directory…" />;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6 pb-12">
       <PageHeader
-        title="Operators"
-        purpose="Platform staff only. ANALYST is read-only. SUPPORT can write orgs. SUPER_ADMIN manages this list and sessions."
+        title="Staff & Access Control"
+        purpose="Manage platform operator identities, Role-Based Access Control (RBAC), and active login sessions."
+        eyebrow={
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-800">
+            <Shield className="h-3 w-3 text-emerald-600" />
+            Security Administration
+          </span>
+        }
         action={
           <Button
             onClick={() => {
@@ -88,50 +101,58 @@ export function OperatorsPage() {
               setSaveError('');
             }}
           >
-            Add operator
+            <UserPlus className="h-4 w-4 mr-1.5" /> Add New Operator
           </Button>
         }
       />
-      <SectionCard title="Staff" purpose="Disable a row instead of deleting history.">
+
+      {/* Operator List Card */}
+      <SectionCard
+        title="Platform Operators"
+        purpose="ANALYST is read-only. SUPPORT can modify accounts. SUPER_ADMIN controls all platform settings and staff."
+      >
         {operators.length === 0 ? (
-          <div className="p-[var(--card-pad)]">
+          <div className="p-6">
             <EmptyState
               icon={Users}
-              title="No operators"
-              description="Create the first platform operator. Bootstrap CLI is locked after one exists."
-              action={
-                <Button
-                  onClick={() => {
-                    setOpen(true);
-                    setReason('');
-                    setSaveError('');
-                  }}
-                >
-                  Add operator
-                </Button>
-              }
+              title="No operators configured"
+              description="Create the primary super admin account to secure this console."
             />
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="data-table hidden md:table">
+            <table className="data-table">
               <thead>
                 <tr>
-                  <th>Email</th>
-                  <th>Role</th>
-                  <th>MFA</th>
-                  <th>Status</th>
+                  <th>Operator Email</th>
+                  <th>Assigned Role</th>
+                  <th>MFA Status</th>
+                  <th>Access Status</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody>
                 {operators.map((row) => (
                   <tr key={row.id}>
-                    <td className="font-semibold">{row.email}</td>
+                    <td>
+                      <p className="font-bold text-slate-900">{row.email}</p>
+                    </td>
                     <td>
                       <StatusBadge status={row.role} />
                     </td>
-                    <td>{row.mfaEnabled ? 'on' : 'pending'}</td>
+                    <td>
+                      <div className="flex items-center gap-1.5 text-xs">
+                        {row.mfaEnabled ? (
+                          <span className="inline-flex items-center gap-1 font-semibold text-emerald-700">
+                            <ShieldCheck className="h-3.5 w-3.5" /> Enrolled
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-slate-400">
+                            <KeyRound className="h-3.5 w-3.5" /> Pending setup
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td>
                       <StatusBadge status={row.disabled ? 'DISABLED' : 'ACTIVE'} />
                     </td>
@@ -145,80 +166,65 @@ export function OperatorsPage() {
                           setSaveError('');
                         }}
                       >
-                        Change
+                        Edit permissions
                       </Button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            <div className="space-y-2 p-[var(--card-pad)] md:hidden">
-              {operators.map((row) => (
-                <div key={row.id} className="dashboard-card p-[var(--card-pad)]">
-                  <p className="font-semibold">{row.email}</p>
-                  <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-ink/50">
-                    <StatusBadge status={row.role} />
-                    MFA {row.mfaEnabled ? 'on' : 'pending'}
-                    <StatusBadge status={row.disabled ? 'DISABLED' : 'ACTIVE'} />
-                  </p>
+          </div>
+        )}
+      </SectionCard>
+
+      {/* Active Sessions List */}
+      <SectionCard title="Active Device Sessions" purpose="Active operator login tokens with one-click remote termination.">
+        {sessions.length === 0 ? (
+          <p className="p-6 text-center text-xs text-slate-400">No active sessions tracked.</p>
+        ) : (
+          <div className="divide-y divide-slate-200/80">
+            {sessions.map((session) => (
+              <div
+                key={session.id}
+                className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between bg-white"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
+                    <Laptop className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-bold text-slate-900">{session.operatorEmail}</p>
+                      {session.current && <StatusBadge status="ACTIVE" label="Current device" />}
+                    </div>
+                    <p className="text-[11px] text-slate-500">Last active {formatWhen(session.lastSeenAt)}</p>
+                  </div>
+                </div>
+
+                {!session.current && (
                   <Button
-                    className="mt-3"
-                    variant="secondary"
+                    variant="danger"
                     size="sm"
                     onClick={() => {
-                      setEditing(row);
+                      setRevoking(session);
                       setReason('');
                       setSaveError('');
                     }}
                   >
-                    Change
+                    Revoke session
                   </Button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </SectionCard>
-      <SectionCard title="Sessions" purpose="current is this browser session. Revoke others.">
-        {sessions.length === 0 ? (
-          <p className="p-[var(--card-pad)] text-[13px] text-ink/50">No active sessions.</p>
-        ) : (
-          <div>
-            {sessions.map((session) => (
-              <div
-                key={session.id}
-                className="flex flex-col gap-1.5 border-b border-dust px-3 py-2.5 last:border-0 md:flex-row md:items-center md:justify-between"
-              >
-                <div>
-                  <p className="text-sm">{session.operatorEmail}</p>
-                  <p className="text-xs text-ink/50">Last seen {formatWhen(session.lastSeenAt)}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  {session.current && <StatusBadge status="ACTIVE" label="this device" />}
-                  {!session.current && (
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      onClick={() => {
-                        setRevoking(session);
-                        setReason('');
-                        setSaveError('');
-                      }}
-                    >
-                      Revoke
-                    </Button>
-                  )}
-                </div>
+                )}
               </div>
             ))}
           </div>
         )}
       </SectionCard>
 
+      {/* Drawer: Add Operator */}
       <Drawer
         open={open}
-        title="Add operator"
-        subtitle="Password never appears in the audit log."
+        title="Create Platform Operator"
+        subtitle="Passwords are cryptographically hashed and never logged."
         onClose={closeDrawers}
         footer={
           <>
@@ -226,14 +232,14 @@ export function OperatorsPage() {
               Cancel
             </Button>
             <Button type="submit" form="add-operator-form" loading={saving}>
-              Create
+              Create Operator
             </Button>
           </>
         }
       >
         <form
           id="add-operator-form"
-          className="space-y-3"
+          className="space-y-4"
           onSubmit={(event) => {
             event.preventDefault();
             const form = event.currentTarget;
@@ -256,22 +262,22 @@ export function OperatorsPage() {
               .finally(() => setSaving(false));
           }}
         >
-          <Input name="email" label="Email" type="email" required />
+          <Input name="email" label="Operator Email Address" type="email" required />
           <Input
             name="password"
-            label="Password"
+            label="Initial Password"
             type="password"
             required
             minLength={8}
-            hint="At least 8 characters, with uppercase, lowercase, and a number."
+            hint="Minimum 8 characters with upper, lower, and numbers."
           />
-          <Select name="role" label="Role" defaultValue="SUPPORT">
-            <option value="SUPPORT">SUPPORT</option>
-            <option value="ANALYST">ANALYST</option>
-            <option value="SUPER_ADMIN">SUPER_ADMIN</option>
+          <Select name="role" label="Platform Security Role" defaultValue="SUPPORT">
+            <option value="SUPPORT">SUPPORT (Account writes & outreach)</option>
+            <option value="ANALYST">ANALYST (Read-only observation)</option>
+            <option value="SUPER_ADMIN">SUPER_ADMIN (Full platform permissions)</option>
           </Select>
           <Input
-            label="Reason"
+            label="Operator Justification (Audit requirement)"
             value={reason}
             onChange={(event) => setReason(event.target.value)}
             required
@@ -281,9 +287,10 @@ export function OperatorsPage() {
         </form>
       </Drawer>
 
+      {/* Drawer: Edit Operator */}
       <Drawer
         open={Boolean(editing)}
-        title="Change operator"
+        title="Modify Operator Access"
         subtitle={editing?.email}
         onClose={closeDrawers}
         footer={
@@ -292,14 +299,14 @@ export function OperatorsPage() {
               Cancel
             </Button>
             <Button type="submit" form="edit-operator-form" loading={saving}>
-              Save changes
+              Save Changes
             </Button>
           </>
         }
       >
         <form
           id="edit-operator-form"
-          className="space-y-3"
+          className="space-y-4"
           onSubmit={(event) => {
             event.preventDefault();
             if (!editing) return;
@@ -320,16 +327,24 @@ export function OperatorsPage() {
               .finally(() => setSaving(false));
           }}
         >
-          <Select name="role" label="Role" defaultValue={editing?.role}>
+          <Select name="role" label="Platform Security Role" defaultValue={editing?.role}>
             <option value="SUPPORT">SUPPORT</option>
             <option value="ANALYST">ANALYST</option>
             <option value="SUPER_ADMIN">SUPER_ADMIN</option>
           </Select>
-          <label className="flex items-center gap-2 text-sm">
-            <input name="disabled" type="checkbox" defaultChecked={editing?.disabled} /> Disabled
+
+          <label className="flex items-center gap-2.5 text-xs font-semibold text-slate-700 cursor-pointer pt-1">
+            <input
+              name="disabled"
+              type="checkbox"
+              defaultChecked={editing?.disabled}
+              className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+            />
+            Disable account login (Suspends access without deleting audit history)
           </label>
+
           <Input
-            label="Reason"
+            label="Operator Justification (Audit requirement)"
             value={reason}
             onChange={(event) => setReason(event.target.value)}
             required
@@ -339,9 +354,10 @@ export function OperatorsPage() {
         </form>
       </Drawer>
 
+      {/* Drawer: Revoke Session */}
       <Drawer
         open={Boolean(revoking)}
-        title="Revoke session"
+        title="Revoke Device Session"
         subtitle={revoking?.operatorEmail}
         onClose={closeDrawers}
         footer={
@@ -350,14 +366,14 @@ export function OperatorsPage() {
               Cancel
             </Button>
             <Button type="submit" form="revoke-session-form" variant="danger" loading={saving}>
-              Revoke
+              Revoke Session
             </Button>
           </>
         }
       >
         <form
           id="revoke-session-form"
-          className="space-y-3"
+          className="space-y-4"
           onSubmit={(event) => {
             event.preventDefault();
             if (!revoking) return;
@@ -375,9 +391,11 @@ export function OperatorsPage() {
               .finally(() => setSaving(false));
           }}
         >
-          <p className="text-sm text-ink/60">This signs that device out. Your current session stays.</p>
+          <p className="text-xs text-slate-600">
+            This will immediately invalidate the session cookie on that device and force a re-login.
+          </p>
           <Input
-            label="Reason"
+            label="Operator Justification (Audit requirement)"
             value={reason}
             onChange={(event) => setReason(event.target.value)}
             required

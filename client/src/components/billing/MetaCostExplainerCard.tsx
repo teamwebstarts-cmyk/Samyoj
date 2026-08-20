@@ -15,10 +15,10 @@ export default function MetaCostExplainerCard() {
             </span>
           </div>
           <h3 className="text-base font-extrabold tracking-tight text-neutral-900 dark:text-white sm:text-lg">
-            Understanding WhatsApp & Meta Billing (Two Ledgers)
+            WhatsApp & Meta Billing (Two Ledgers)
           </h3>
           <p className="max-w-2xl text-xs text-neutral-600 dark:text-slate-300">
-            Samyoj charges for software tools, AI, and CRM seats. Meta Cloud API charges are billed directly to your WhatsApp Business Account payment card with zero hidden markups.
+            You pay Meta directly for messages. Samyoj charges only for its software on a separate bill.
           </p>
         </div>
 
@@ -43,7 +43,7 @@ export default function MetaCostExplainerCard() {
             </span>
           </div>
           <p className="mt-1 text-[11px] text-neutral-500 dark:text-slate-400">
-            Promotions, offers, broadcasts, cart abandonment reminders. Billed on delivery.
+            Promotions & offers. Billed on delivery.
           </p>
         </div>
 
@@ -56,7 +56,7 @@ export default function MetaCostExplainerCard() {
             </span>
           </div>
           <p className="mt-1 text-[11px] text-neutral-500 dark:text-slate-400">
-            Order confirmations, shipping updates, payment reminders. Volume tiers apply.
+            Order confirmations & shipping updates. Volume tiers apply.
           </p>
         </div>
 
@@ -69,7 +69,7 @@ export default function MetaCostExplainerCard() {
             </span>
           </div>
           <p className="mt-1 text-[11px] text-neutral-500 dark:text-slate-400">
-            One-time passwords (OTP) and account security verification codes.
+            OTP & account security codes.
           </p>
         </div>
 
@@ -82,7 +82,7 @@ export default function MetaCostExplainerCard() {
             </span>
           </div>
           <p className="mt-1 text-[11px] text-neutral-500 dark:text-slate-400">
-            Inbound customer messages & replies within the 24-hr service window are free.
+            Customer replies within 24-hr service window are free.
           </p>
         </div>
       </div>
@@ -90,7 +90,7 @@ export default function MetaCostExplainerCard() {
       <div className="mt-4 flex items-center gap-2 rounded-xl bg-sky-50/60 p-3 text-[11px] text-sky-900 dark:bg-sky-950/30 dark:text-sky-200">
         <Info className="h-4 w-4 shrink-0 text-sky-600 dark:text-sky-400" />
         <span>
-          <strong>Zero Markup Promise:</strong> Rates above are official Meta Cloud API India benchmarks (exclusive of Meta statutory taxes). Samyoj passes Meta fees through transparently without intermediary surcharges.
+          <strong>Zero Markup Promise:</strong> Rates above are official Meta Cloud API benchmarks. Samyoj never adds surcharges — you pay Meta the same price directly.
         </span>
       </div>
     </div>

@@ -65,7 +65,7 @@ export default function BillingHero({ info }: BillingHeroProps) {
   let statusTone: BillingHeroTone = 'emerald';
   let statusIcon = CheckCircle2;
   let title = 'Billing & Subscriptions';
-  let description = 'Manage your plan, track seat usage, and view estimated WhatsApp charges.';
+  let description = 'Plan, seats & WhatsApp charges.';
 
   if (info.subscriptionStatus === 'trial') {
     statusText = 'Trial';

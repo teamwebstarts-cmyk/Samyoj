@@ -6,6 +6,7 @@ import { loadPermissions, requirePermission } from '../../middleware/permissions
 import { sendSuccess, asyncHandler, AppError, paramId } from '../../utils/response';
 
 import { resolveActiveWhatsappNumber, leadsForNumberFilter } from '../whatsapp/active-number';
+import { Prisma } from '@prisma/client';
 
 const router = Router();
 
@@ -28,13 +29,25 @@ router.get(
     const orgId = req.user!.organizationId!;
     const numberId = req.activeWhatsappNumberId;
     const stage = req.query.stage as string | undefined;
+    const search = (req.query.search as string | undefined)?.trim();
+
+    const where: Prisma.LeadWhereInput = {
+      organizationId: orgId,
+      ...(stage ? { stage: stage as never } : {}),
+      ...leadsForNumberFilter(numberId),
+    };
+
+    if (search) {
+      where.OR = [
+        { title: { contains: search, mode: 'insensitive' } },
+        { contact: { name: { contains: search, mode: 'insensitive' } } },
+        { contact: { phone: { contains: search, mode: 'insensitive' } } },
+        { notes: { contains: search, mode: 'insensitive' } },
+      ];
+    }
 
     const leads = await prisma.lead.findMany({
-      where: {
-        organizationId: orgId,
-        ...(stage ? { stage: stage as never } : {}),
-        ...leadsForNumberFilter(numberId),
-      },
+      where,
       include: {
         contact: { select: { id: true, phone: true, name: true } },
         assignedAgent: { select: { id: true, name: true } },
@@ -172,6 +185,37 @@ router.post(
     });
 
     sendSuccess(res, { lead, created: true }, 201);
+  })
+);
+
+router.post(
+  '/bulk',
+  authenticate,
+  requireOrg,
+  loadPermissions,
+  requirePermission('manageInbox'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const whatsappNumberId = req.activeWhatsappNumberId;
+    if (!whatsappNumberId) throw new AppError(400, 'Connect a WhatsApp number before updating leads');
+
+    const { ids, stage } = z
+      .object({
+        ids: z.array(z.string().uuid()).min(1).max(200),
+        stage: z.enum(['NEW', 'CONTACTED', 'QUALIFIED', 'PROPOSAL', 'NEGOTIATION', 'WON', 'LOST']),
+      })
+      .parse(req.body);
+
+    const result = await prisma.lead.updateMany({
+      where: {
+        id: { in: ids },
+        organizationId: orgId,
+        whatsappNumberId,
+      },
+      data: { stage: stage as never },
+    });
+
+    sendSuccess(res, { updated: result.count });
   })
 );
 

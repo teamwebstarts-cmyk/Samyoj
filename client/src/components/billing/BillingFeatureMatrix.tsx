@@ -1,18 +1,17 @@
-import { useState } from 'react';
+import { useState, Fragment } from 'react';
 import {
   Bot,
   Check,
   ChevronDown,
   ChevronUp,
+  ChevronsDownUp,
+  ChevronsUpDown,
   Headphones,
   Layers,
-  MessageSquare,
   Minus,
   PhoneCall,
-  ShieldCheck,
   Sparkles,
   Users,
-  Zap,
 } from 'lucide-react';
 import type { PlanTier } from '../../types';
 
@@ -24,14 +23,14 @@ interface MatrixRow {
 
 interface MatrixCategory {
   title: string;
-  icon: typeof MessageSquare;
+  icon: typeof Layers;
   rows: MatrixRow[];
 }
 
 const COMPARISON_CATEGORIES: MatrixCategory[] = [
   {
-    title: 'WhatsApp & Messaging',
-    icon: MessageSquare,
+    title: 'Core Quotas & Scale',
+    icon: Layers,
     rows: [
       {
         name: 'WhatsApp Numbers Connected',
@@ -41,62 +40,23 @@ const COMPARISON_CATEGORIES: MatrixCategory[] = [
           starter: '1 number',
           growth: '2 numbers',
           pro: '5 numbers',
-          enterprise: 'Unlimited (Custom)',
+          enterprise: 'Custom / Unlimited',
         },
       },
       {
-        name: 'Shared Team Inbox',
-        values: { launch: true, starter: true, growth: true, pro: true, enterprise: true },
-      },
-      {
-        name: 'Canned & Quick Replies',
-        values: { launch: 'Basic', starter: 'Unlimited', growth: 'Unlimited', pro: 'Unlimited', enterprise: 'Unlimited' },
-      },
-      {
-        name: 'Interactive Message Templates',
-        values: { launch: true, starter: true, growth: true, pro: true, enterprise: true },
-      },
-      {
-        name: 'Template Approval Sync',
-        values: { launch: true, starter: true, growth: true, pro: true, enterprise: true },
-      },
-    ],
-  },
-  {
-    title: 'Team & Scale',
-    icon: Users,
-    rows: [
-      {
-        name: 'Included Seats',
-        tooltip: 'Active team member accounts with role-based permissions',
+        name: 'Team Seats',
+        tooltip: 'Active team member accounts with role permissions',
         values: {
           launch: '1 seat',
           starter: '3 seats',
           growth: '10 seats',
           pro: '25 seats',
-          enterprise: 'Custom (Unlimited)',
+          enterprise: 'Custom / Unlimited',
         },
       },
       {
-        name: 'Role-based Access Control',
-        values: { launch: false, starter: 'Owner, Admin', growth: 'Full Custom Matrix', pro: 'Full Custom Matrix', enterprise: 'Full Custom Matrix + SSO' },
-      },
-      {
-        name: 'Shift Schedules & Round-Robin',
-        values: { launch: false, starter: true, growth: true, pro: true, enterprise: true },
-      },
-      {
-        name: 'Audit Logs & Security',
-        values: { launch: false, starter: '7 days', growth: '90 days', pro: '1 year', enterprise: 'Unlimited' },
-      },
-    ],
-  },
-  {
-    title: 'Contacts & CRM',
-    icon: Layers,
-    rows: [
-      {
         name: 'Contact Storage Quota',
+        tooltip: 'Maximum contacts stored in your workspace CRM',
         values: {
           launch: '100 contacts',
           starter: '5,000 contacts',
@@ -106,25 +66,8 @@ const COMPARISON_CATEGORIES: MatrixCategory[] = [
         },
       },
       {
-        name: 'Custom Attributes & Notes',
-        values: { launch: 'Up to 5', starter: 'Unlimited', growth: 'Unlimited', pro: 'Unlimited', enterprise: 'Unlimited' },
-      },
-      {
-        name: 'CSV Bulk Contact Import',
-        values: { launch: false, starter: true, growth: true, pro: true, enterprise: true },
-      },
-      {
-        name: 'Marketing Opt-In Consent Tracking',
-        values: { launch: true, starter: true, growth: true, pro: true, enterprise: true },
-      },
-    ],
-  },
-  {
-    title: 'Automation & Workflows',
-    icon: Zap,
-    rows: [
-      {
         name: 'Active Workflows & Flows',
+        tooltip: 'Automated chatbots and message sequences running simultaneously',
         values: {
           launch: '1 workflow',
           starter: '5 workflows',
@@ -133,18 +76,6 @@ const COMPARISON_CATEGORIES: MatrixCategory[] = [
           enterprise: 'Unlimited',
         },
       },
-      {
-        name: 'Drag-and-Drop Flow Builder',
-        values: { launch: true, starter: true, growth: true, pro: true, enterprise: true },
-      },
-      {
-        name: 'Keyword & Away Triggers',
-        values: { launch: true, starter: true, growth: true, pro: true, enterprise: true },
-      },
-      {
-        name: 'Webhooks & External Integrations',
-        values: { launch: false, starter: 'Basic', growth: 'Advanced (Zapier, Sheets)', pro: 'Full Custom Webhooks + API', enterprise: 'Custom ETL + ERP' },
-      },
     ],
   },
   {
@@ -152,37 +83,41 @@ const COMPARISON_CATEGORIES: MatrixCategory[] = [
     icon: Bot,
     rows: [
       {
-        name: 'AI Chatbot Status',
+        name: 'AI Chatbot Assistant',
+        tooltip: 'Autonomous AI replying to FAQs and customer queries 24/7',
         values: {
           launch: false,
           starter: false,
-          growth: 'Included (Copilot & Bots)',
-          pro: 'Advanced Agent',
-          enterprise: 'Dedicated Fine-Tuned AI',
+          growth: 'Included',
+          pro: 'Advanced Multi-Bot',
+          enterprise: 'Dedicated Fine-Tuned LLM',
         },
       },
       {
         name: 'Monthly AI Token Allowance',
-        tooltip: 'Tokens used for generative AI replies, embeddings, and chat suggestions',
+        tooltip: 'Tokens for AI replies, embeddings, and chat suggestions',
         values: {
           launch: '—',
           starter: '—',
-          growth: '100,000 tokens/mo',
-          pro: '500,000 tokens/mo',
-          enterprise: 'Dedicated Pool (Unlimited)',
+          growth: '100,000 / mo',
+          pro: '500,000 / mo',
+          enterprise: 'Custom Dedicated Pool',
         },
       },
       {
-        name: 'Knowledge Base PDF / Doc Embeddings',
-        values: { launch: false, starter: false, growth: 'Up to 25 documents', pro: 'Up to 100 documents', enterprise: 'Unlimited Vector DB' },
+        name: 'Knowledge Base PDF / Doc Vector Embeddings',
+        tooltip: 'Upload manuals, catalogs, and PDFs for the AI to reference',
+        values: {
+          launch: false,
+          starter: false,
+          growth: 'Up to 25 docs',
+          pro: 'Up to 100 docs',
+          enterprise: 'Unlimited Vector DB',
+        },
       },
       {
-        name: 'Sarvam Indian Multilingual Brain',
-        tooltip: 'Optimized for Hindi, Hinglish, Tamil, Telugu, Marathi, Bengali & 10+ Indian languages',
-        values: { launch: false, starter: false, growth: true, pro: true, enterprise: true },
-      },
-      {
-        name: 'Human Agent Takeover & Escalation',
+        name: 'Indian Multilingual Brain',
+        tooltip: 'Natural responses in Hindi, Hinglish, Tamil, Telugu, Marathi & 10+ Indian languages',
         values: { launch: false, starter: false, growth: true, pro: true, enterprise: true },
       },
     ],
@@ -192,49 +127,54 @@ const COMPARISON_CATEGORIES: MatrixCategory[] = [
     icon: PhoneCall,
     rows: [
       {
-        name: 'Voice Calling Interface',
-        tooltip: 'WebRTC in-browser softphone and live agent dialer',
+        name: 'Browser Softphone & Calling Dialer',
+        tooltip: 'WebRTC calling interface to make and receive calls',
         values: {
           launch: false,
           starter: false,
-          growth: 'Optional Add-on',
-          pro: 'Full Included Module',
+          growth: 'Add-on Available',
+          pro: 'Fully Included',
           enterprise: 'High-Throughput Trunking',
         },
       },
       {
-        name: 'AI Voice Calling Agent',
-        tooltip: 'Autonomous voice agent powered by Sarvam fast STT & TTS',
+        name: 'Autonomous AI Voice Agent',
+        tooltip: 'Interactive real-time voice agent powered by fast Indian STT & TTS',
         values: { launch: false, starter: false, growth: false, pro: true, enterprise: true },
       },
       {
-        name: 'Inbound Auto-Answer & Routing',
-        values: { launch: false, starter: false, growth: false, pro: true, enterprise: true },
-      },
-      {
-        name: 'Call Recording & Consent Gate',
+        name: 'Call Recording & Transcription',
         values: { launch: false, starter: false, growth: false, pro: true, enterprise: true },
       },
     ],
   },
   {
-    title: 'Meta Cloud API Ledger & Rules',
-    icon: ShieldCheck,
+    title: 'Inbox & Team Collaboration',
+    icon: Users,
     rows: [
       {
-        name: 'Meta API Invoicing Model',
+        name: 'Shared Team Inbox',
+        tooltip: 'Collaborative unified multi-agent WhatsApp inbox',
+        values: { launch: true, starter: true, growth: true, pro: true, enterprise: true },
+      },
+      {
+        name: 'Role-Based Access Control',
+        tooltip: 'Custom operator permissions, agent restrictions, and masking',
         values: {
-          launch: 'Direct to Meta WABA',
-          starter: 'Direct to Meta WABA',
-          growth: 'Direct to Meta WABA',
-          pro: 'Direct to Meta WABA',
-          enterprise: 'Direct or Solution Partner',
+          launch: false,
+          starter: 'Basic Roles',
+          growth: 'Custom Roles',
+          pro: 'Custom Roles',
+          enterprise: 'Custom + SSO (SAML/Okta)',
         },
       },
       {
-        name: 'Customer Service Window (24h)',
-        tooltip: 'Inbound user messages are 100% free; replies are free until Oct 1, 2026',
-        values: { launch: true, starter: true, growth: true, pro: true, enterprise: true },
+        name: 'Canned Replies & Quick Actions',
+        values: { launch: 'Basic', starter: 'Unlimited', growth: 'Unlimited', pro: 'Unlimited', enterprise: 'Unlimited' },
+      },
+      {
+        name: 'Audit Log Retention',
+        values: { launch: '—', starter: '7 days', growth: '90 days', pro: '1 year', enterprise: 'Unlimited retention' },
       },
     ],
   },
@@ -243,18 +183,24 @@ const COMPARISON_CATEGORIES: MatrixCategory[] = [
     icon: Headphones,
     rows: [
       {
-        name: 'Support Channel',
+        name: 'Support SLA Channel',
         values: {
           launch: 'Community & Docs',
-          starter: 'Email Support (24h SLA)',
-          growth: 'Priority Email + Chat (6h SLA)',
-          pro: 'Priority Direct WhatsApp + Phone (1h SLA)',
-          enterprise: 'Dedicated Account Manager + 15m SLA',
+          starter: 'Email Support (24h)',
+          growth: 'Priority Email & Chat (6h)',
+          pro: 'WhatsApp & Phone (1h)',
+          enterprise: 'Dedicated Manager (15m)',
         },
       },
       {
-        name: 'Onboarding & Migration Assistance',
-        values: { launch: false, starter: 'Self-serve', growth: 'Assisted Setup', pro: '1-on-1 Guided Onboarding', enterprise: 'Custom White-Glove' },
+        name: 'Onboarding & Migration Setup',
+        values: {
+          launch: false,
+          starter: 'Self-serve',
+          growth: 'Assisted Setup',
+          pro: '1-on-1 Guided Onboarding',
+          enterprise: 'White-Glove Migration',
+        },
       },
     ],
   },
@@ -273,47 +219,73 @@ export default function BillingFeatureMatrix({
 }: {
   currentPlan?: string;
 }) {
-  const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({
-    'WhatsApp & Messaging': true,
-    'Team & Scale': true,
-    'Contacts & CRM': true,
-    'Automation & Workflows': true,
-    'AI Bot & Copilot Engine': true,
-    'AI Voice Calling Module': true,
-    'Meta Cloud API Ledger & Rules': false,
-    'Support & SLAs': false,
-  });
+  // Default is CLOSED (collapsed) as requested
+  const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({});
+
+  const allOpen = COMPARISON_CATEGORIES.every((cat) => openCategories[cat.title]);
 
   const toggleCategory = (title: string) => {
     setOpenCategories((prev) => ({ ...prev, [title]: !prev[title] }));
   };
 
+  const toggleAll = () => {
+    if (allOpen) {
+      setOpenCategories({});
+    } else {
+      const all: Record<string, boolean> = {};
+      COMPARISON_CATEGORIES.forEach((c) => {
+        all[c.title] = true;
+      });
+      setOpenCategories(all);
+    }
+  };
+
   return (
-    <div className="overflow-hidden rounded-2xl border border-neutral-200/80 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-      <div className="border-b border-neutral-200/80 p-5 sm:p-6 dark:border-slate-800">
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+    <div className="overflow-hidden rounded-2xl border border-neutral-200/80 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 transition-all">
+      {/* Header bar with Expand/Collapse All toggle */}
+      <div className="border-b border-neutral-200/80 p-4 sm:p-6 dark:border-slate-800 bg-neutral-50/50 dark:bg-slate-950/30">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-sky-500/10 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400">
-                <Sparkles className="h-3.5 w-3.5" />
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-sky-500/10 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400">
+                <Sparkles className="h-4 w-4" />
               </span>
-              <h2 className="text-lg font-extrabold tracking-tight text-neutral-900 dark:text-white sm:text-xl">
+              <h2 className="text-base font-bold tracking-tight text-neutral-900 dark:text-white sm:text-lg">
                 Compare All Features & Limits
               </h2>
             </div>
             <p className="mt-1 text-xs text-neutral-500 dark:text-slate-400">
-              Clear breakdown of seats, contacts, AI engines, calling modules, and quotas across every tier.
+              Click any section below to expand and view detailed limits, quotas, and entitlements across tiers.
             </p>
           </div>
+
+          <button
+            type="button"
+            onClick={toggleAll}
+            className="inline-flex items-center gap-1.5 self-start sm:self-auto rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-xs font-semibold text-neutral-700 shadow-2xs hover:bg-neutral-50 hover:text-neutral-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 transition-colors"
+          >
+            {allOpen ? (
+              <>
+                <ChevronsDownUp className="h-3.5 w-3.5" />
+                Collapse All
+              </>
+            ) : (
+              <>
+                <ChevronsUpDown className="h-3.5 w-3.5" />
+                Expand All
+              </>
+            )}
+          </button>
         </div>
       </div>
 
+      {/* Comparison Table */}
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[760px] border-collapse text-left text-xs">
+        <table className="w-full min-w-[960px] table-fixed border-collapse text-left text-xs">
           <thead>
-            <tr className="border-b border-neutral-200/80 bg-neutral-50/75 dark:border-slate-800 dark:bg-slate-950/40">
-              <th className="w-1/3 p-4 pl-6 font-bold text-neutral-600 dark:text-slate-300">
-                Capability / Resource
+            <tr className="border-b border-neutral-200/80 bg-neutral-100/60 dark:border-slate-800 dark:bg-slate-950/60">
+              <th className="w-[25%] p-3.5 pl-6 font-bold text-neutral-600 dark:text-slate-300">
+                Feature / Quota
               </th>
               {TIERS.map((tier) => {
                 const isCurrent = currentPlan === tier.id;
@@ -321,7 +293,7 @@ export default function BillingFeatureMatrix({
                 return (
                   <th
                     key={tier.id}
-                    className={`p-4 text-center font-bold ${
+                    className={`p-3.5 text-center font-bold ${
                       isCurrent
                         ? 'bg-emerald-500/5 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300'
                         : isGrowth
@@ -330,13 +302,13 @@ export default function BillingFeatureMatrix({
                     }`}
                   >
                     <div className="flex flex-col items-center gap-0.5">
-                      <span className="text-sm font-extrabold">{tier.name}</span>
+                      <span className="text-xs font-extrabold">{tier.name}</span>
                       {tier.tag && (
                         <span
-                          className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
+                          className={`rounded-full px-2 py-0.2 text-[8px] font-bold uppercase tracking-wider ${
                             tier.tag === 'Popular'
                               ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/60 dark:text-violet-300'
-                              : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                              : 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
                           }`}
                         >
                           {tier.tag}
@@ -355,41 +327,49 @@ export default function BillingFeatureMatrix({
           </thead>
           <tbody className="divide-y divide-neutral-100 dark:divide-slate-800/60">
             {COMPARISON_CATEGORIES.map((category) => {
-              const isOpen = openCategories[category.title] ?? true;
+              const isOpen = Boolean(openCategories[category.title]);
               const Icon = category.icon;
               return (
-                <tbody key={category.title} className="divide-y divide-neutral-100 dark:divide-slate-800/60">
-                  <tr className="bg-neutral-50/50 hover:bg-neutral-100/50 dark:bg-slate-950/20 dark:hover:bg-slate-950/40 transition-colors">
-                    <td
-                      colSpan={6}
-                      className="p-3 pl-6 font-extrabold text-neutral-800 dark:text-slate-200 cursor-pointer select-none"
-                      onClick={() => toggleCategory(category.title)}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Icon className="h-4 w-4 text-sky-600 dark:text-sky-400" />
-                          <span>{category.title}</span>
-                          <span className="rounded-full bg-neutral-200/60 px-1.5 py-0.5 text-[10px] font-semibold text-neutral-600 dark:bg-slate-800 dark:text-slate-400">
-                            {category.rows.length}
+                <Fragment key={category.title}>
+                  {/* Category Header Row */}
+                  <tr className="border-t border-neutral-200/70 dark:border-slate-800">
+                    <td colSpan={6} className="p-0">
+                      <button
+                        type="button"
+                        className="w-full flex items-center justify-between p-3.5 pl-6 bg-neutral-50/60 hover:bg-neutral-100/70 dark:bg-slate-950/30 dark:hover:bg-slate-900/60 transition-colors text-left font-bold text-neutral-800 dark:text-slate-200"
+                        onClick={() => toggleCategory(category.title)}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <span className="flex h-5 w-5 items-center justify-center rounded-md bg-neutral-200/70 text-neutral-700 dark:bg-slate-800 dark:text-slate-300">
+                            <Icon className="h-3 w-3" />
+                          </span>
+                          <span className="text-xs font-bold">{category.title}</span>
+                          <span className="rounded-full bg-neutral-200/80 px-1.5 py-0.2 text-[9px] font-semibold text-neutral-600 dark:bg-slate-800 dark:text-slate-400">
+                            {category.rows.length} items
                           </span>
                         </div>
-                        {isOpen ? (
-                          <ChevronUp className="h-4 w-4 text-neutral-400" />
-                        ) : (
-                          <ChevronDown className="h-4 w-4 text-neutral-400" />
-                        )}
-                      </div>
+                        <span className="flex items-center gap-1 text-[11px] font-semibold text-neutral-400 dark:text-slate-500">
+                          {isOpen ? 'Collapse' : 'Expand'}
+                          {isOpen ? (
+                            <ChevronUp className="h-4 w-4" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4" />
+                          )}
+                        </span>
+                      </button>
                     </td>
                   </tr>
+
+                  {/* Feature Rows (Rendered only when open) */}
                   {isOpen &&
                     category.rows.map((row) => (
                       <tr
                         key={row.name}
-                        className="hover:bg-neutral-50/50 dark:hover:bg-slate-800/20 transition-colors"
+                        className="hover:bg-neutral-50/60 dark:hover:bg-slate-800/30 transition-colors border-t border-neutral-100 dark:border-slate-800/40"
                       >
-                        <td className="p-3.5 pl-8 font-medium text-neutral-700 dark:text-slate-300">
+                        <td className="p-3 pl-8 font-medium text-neutral-700 dark:text-slate-300">
                           <div className="flex flex-col">
-                            <span>{row.name}</span>
+                            <span className="text-xs font-semibold">{row.name}</span>
                             {row.tooltip && (
                               <span className="text-[10px] text-neutral-400 dark:text-slate-500">
                                 {row.tooltip}
@@ -403,7 +383,7 @@ export default function BillingFeatureMatrix({
                           return (
                             <td
                               key={tier.id}
-                              className={`p-3.5 text-center font-medium ${
+                              className={`p-3 text-center text-xs font-medium ${
                                 isCurrent
                                   ? 'bg-emerald-500/5 dark:bg-emerald-500/10 text-emerald-900 dark:text-emerald-200'
                                   : 'text-neutral-700 dark:text-slate-300'
@@ -435,7 +415,7 @@ export default function BillingFeatureMatrix({
                         })}
                       </tr>
                     ))}
-                </tbody>
+                </Fragment>
               );
             })}
           </tbody>

@@ -13,6 +13,7 @@ export interface LeadItem {
   updatedAt: string;
   contact?: { id: string; name?: string | null; phone: string } | null;
   assignedAgent?: { id: string; name: string } | null;
+  notes?: string | null;
 }
 
 const PIPELINE_STEPS = ['NEW', 'CONTACTED', 'QUALIFIED', 'PROPOSAL', 'NEGOTIATION', 'WON'];
@@ -25,6 +26,7 @@ function stageProgressIndex(stage: string) {
 interface LeadCardProps {
   lead: LeadItem;
   onStageChange: (lead: LeadItem, stage: string) => void;
+  onEdit: () => void;
   formatDate: (value: string) => string;
   updating?: boolean;
 }
@@ -75,7 +77,7 @@ export default function LeadCard({ lead, onStageChange, formatDate, updating }: 
           )}
         </div>
       </div>
-      <div className="border-t border-theme-border/60 bg-theme-subtle/20 px-3 py-2.5">
+      <div className="border-t border-theme-border/60 bg-theme-subtle/20 px-3 py-2.5 flex items-center justify-between">
         <LeadStageSelect
           value={lead.stage}
           disabled={updating}
@@ -83,6 +85,14 @@ export default function LeadCard({ lead, onStageChange, formatDate, updating }: 
             if (next !== lead.stage) onStageChange(lead, next);
           }}
         />
+        <button
+          type="button"
+          onClick={onEdit}
+          className="inline-flex items-center justify-center rounded-xl p-1.5 text-[11px] font-semibold text-theme-secondary hover:bg-theme-subtle hover:text-theme-fg"
+          aria-label={`Edit ${lead.title}`}
+        >
+          Edit
+        </button>
       </div>
     </article>
   );

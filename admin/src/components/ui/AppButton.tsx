@@ -1,18 +1,20 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 
-type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
-type Size = 'sm' | 'md';
+type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline';
+type Size = 'sm' | 'md' | 'lg';
 
 const variants: Record<Variant, string> = {
   primary: 'btn-primary border-0',
-  secondary: 'border border-dust bg-white text-ink hover:border-sage/30 hover:bg-sage-faint',
-  ghost: 'text-ink/70 hover:bg-sage-faint hover:text-ink',
-  danger: 'border border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100',
+  secondary: 'border border-slate-200 bg-white text-slate-800 shadow-sm hover:border-emerald-500/40 hover:bg-emerald-50/50 hover:text-emerald-900',
+  outline: 'border border-slate-200 bg-transparent text-slate-700 hover:bg-slate-50 hover:text-slate-900',
+  ghost: 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+  danger: 'border border-rose-200 bg-rose-50 text-rose-800 shadow-sm hover:bg-rose-100 hover:border-rose-300',
 };
 
 const sizes: Record<Size, string> = {
-  sm: 'h-8 min-h-8 rounded-lg px-2.5 text-[11px]',
-  md: 'h-9 min-h-9 rounded-lg px-3.5 text-[13px]',
+  sm: 'h-8 min-h-8 rounded-lg px-2.5 text-[11px] font-medium',
+  md: 'h-9 min-h-9 rounded-lg px-3.5 text-[13px] font-semibold',
+  lg: 'h-10 min-h-10 rounded-xl px-4 text-sm font-semibold',
 };
 
 export function Button({
@@ -31,7 +33,7 @@ export function Button({
   return (
     <button
       type="button"
-      className={`inline-flex items-center justify-center gap-1.5 font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${variants[variant]} ${sizes[size]} ${className}`}
+      className={`inline-flex items-center justify-center gap-1.5 transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100 ${variants[variant]} ${sizes[size]} ${className}`}
       disabled={props.disabled || loading}
       {...props}
     >

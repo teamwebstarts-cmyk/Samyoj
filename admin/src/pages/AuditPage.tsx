@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { ScrollText } from 'lucide-react';
+import { ScrollText, User } from 'lucide-react';
 import { platformRequest } from '../api';
-import { EmptyState, Notice, PageHeader, PageLoading, SectionCard } from '../components/ui/index';
-import { formatWhen } from '../lib/format';
+import { Button, EmptyState, Notice, PageHeader, PageLoading, SectionCard } from '../components/ui/index';
+import { formatCount, formatWhen } from '../lib/format';
 
 type Audit = {
   page?: number;
@@ -35,87 +35,102 @@ export function AuditPage() {
   if (error) {
     return (
       <Notice tone="error">
-        Could not load audit. {error} Refresh, or confirm your role can read audit.
+        Could not load platform audit trail. {error} Verify your operator role has audit read permissions.
       </Notice>
     );
   }
-  if (!data) return <PageLoading label="Loading audit…" />;
+  if (!data) return <PageLoading label="Loading immutable compliance audit log…" />;
 
   const pageSize = data.pageSize || 40;
   const total = data.total ?? data.rows.length;
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6 pb-12">
       <PageHeader
-        title="Audit"
-        purpose="Operator writes only — AI caps, flags, billing, outreach, staff. Reasons are required."
+        title="Compliance & Audit Trail"
+        purpose="Immutable record of administrative state mutations — AI token overrides, feature flags, billing adjustments, and staff actions."
+        eyebrow={
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 border border-slate-200 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-800">
+            <ScrollText className="h-3 w-3 text-slate-600" />
+            Append-Only Ledger
+          </span>
+        }
       />
+
       {data.rows.length === 0 ? (
         <EmptyState
           icon={ScrollText}
-          title="No audit entries"
-          description="Operator writes appear here. ANALYST browsing does not."
+          title="No administrative mutations logged"
+          description="Administrative mutations (AI limit changes, subscription overrides, staff updates) will automatically record here with required justifications."
         />
       ) : (
         <SectionCard>
           <div className="overflow-x-auto">
-            <table className="data-table hidden md:table">
+            <table className="data-table">
               <thead>
                 <tr>
-                  <th>Action</th>
-                  <th>Operator</th>
-                  <th>Account</th>
-                  <th>Reason</th>
-                  <th>When</th>
+                  <th>Action Trigger</th>
+                  <th>Actor (Operator)</th>
+                  <th>Target Organization</th>
+                  <th>Operator Justification</th>
+                  <th>Timestamp</th>
                 </tr>
               </thead>
               <tbody>
                 {data.rows.map((row) => (
                   <tr key={row.id}>
-                    <td className="font-semibold">{row.action}</td>
-                    <td className="text-xs">{row.operatorEmail}</td>
-                    <td className="text-xs">{row.companyName || 'platform'}</td>
-                    <td className="text-xs text-ink/60">{row.reason || '—'}</td>
-                    <td className="text-xs">{formatWhen(row.createdAt)}</td>
+                    <td>
+                      <span className="inline-flex rounded-md bg-slate-100 px-2 py-0.5 font-mono text-xs font-bold text-slate-800">
+                        {row.action}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="flex items-center gap-1.5 text-xs font-medium text-slate-800">
+                        <User className="h-3.5 w-3.5 text-slate-400" />
+                        {row.operatorEmail}
+                      </div>
+                    </td>
+                    <td>
+                      <span className="text-xs font-semibold text-slate-900">{row.companyName || 'Platform Global'}</span>
+                    </td>
+                    <td>
+                      <span className="text-xs text-slate-600">{row.reason || '—'}</span>
+                    </td>
+                    <td>
+                      <span className="text-xs font-mono text-slate-500" title={new Date(row.createdAt).toLocaleString()}>
+                        {formatWhen(row.createdAt)}
+                      </span>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            <div className="divide-y divide-dust md:hidden">
-              {data.rows.map((row) => (
-                <div key={row.id} className="px-3 py-2.5">
-                  <p className="font-semibold">{row.action}</p>
-                  <p className="mt-1 text-xs text-ink/50">
-                    {row.operatorEmail} · {row.companyName || 'platform'} · {row.reason} · {formatWhen(row.createdAt)}
-                  </p>
-                </div>
-              ))}
-            </div>
           </div>
         </SectionCard>
       )}
+
       {pageCount > 1 && (
-        <div className="flex items-center justify-between text-sm">
-          <button
-            type="button"
-            className="text-ink/60 disabled:opacity-40"
+        <div className="flex items-center justify-between border-t border-slate-200/80 pt-4 text-sm">
+          <Button
+            variant="secondary"
+            size="sm"
             disabled={page <= 1}
             onClick={() => setPage(page - 1)}
           >
             Previous
-          </button>
-          <span className="font-mono text-xs">
-            {page} / {pageCount}
+          </Button>
+          <span className="font-mono text-xs font-semibold text-slate-600">
+            Page {page} of {pageCount} ({formatCount(total)} total entries)
           </span>
-          <button
-            type="button"
-            className="text-ink/60 disabled:opacity-40"
+          <Button
+            variant="secondary"
+            size="sm"
             disabled={page >= pageCount}
             onClick={() => setPage(page + 1)}
           >
             Next
-          </button>
+          </Button>
         </div>
       )}
     </div>
