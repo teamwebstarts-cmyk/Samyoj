@@ -542,7 +542,11 @@ export default function ContactsPage() {
         </div>
 
         {viewTab === 'pipeline' ? (
-          <ContactPipelineTab refreshToken={pipelineRefresh} onStatsChange={setPipelineStats} />
+          <ContactPipelineTab
+            refreshToken={pipelineRefresh}
+            onStatsChange={setPipelineStats}
+            onLeadCreated={handleLeadCreated}
+          />
         ) : (
           <div className="inbox-shell list-shell-body overflow-hidden">
             <ListToolbar

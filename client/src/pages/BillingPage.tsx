@@ -8,6 +8,7 @@ import {
 import AppAlert from '../components/ui/AppAlert';
 import AppButton from '../components/ui/AppButton';
 import BillingCurrentPlanHero from '../components/billing/BillingCurrentPlanHero';
+import BillingCadenceToggle from '../components/billing/BillingCadenceToggle';
 import BillingHero from '../components/billing/BillingHero';
 import BillingPlanCard from '../components/billing/BillingPlanCard';
 import BillingFeatureMatrix from '../components/billing/BillingFeatureMatrix';
@@ -203,26 +204,31 @@ export default function BillingPage() {
 
             {tab === 'plans' && (
               <div className="space-y-8">
-                <div className="flex flex-col items-center gap-3">
+                <div className="flex flex-col items-center gap-2.5">
                   <span className="text-xs font-bold uppercase tracking-wider text-theme-muted">
                     Choose billing frequency
                   </span>
-                  <SegmentedControl
+                  <BillingCadenceToggle
                     value={cadence}
                     onChange={(v) => setCadence(v as CadenceTab)}
                     options={[
-                      { value: 'monthly', label: 'Monthly', shortLabel: '1 mo' },
-                      { value: 'quarterly', label: 'Quarterly · Save 5%', shortLabel: '3 mo' },
-                      { value: 'yearly', label: 'Yearly · Save 20%', shortLabel: '1 yr' },
+                      { value: 'monthly', label: 'Monthly' },
+                      { value: 'quarterly', label: 'Quarterly', savings: 'Save 5%' },
+                      { value: 'yearly', label: 'Yearly', savings: 'Save 20%' },
                     ]}
-                    ariaLabel="Billing cadence"
-                    compact
                   />
+                  <p className="mt-1 text-center text-[11px] text-theme-muted">
+                    Longer plans save you more.
+                  </p>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <div className="flex flex-wrap items-center justify-center gap-4 xl:gap-5">
                   {info.plans.map((plan, index) => (
-                    <div key={plan.id} style={{ animationDelay: `${index * 60}ms` }}>
+                    <div 
+                      key={plan.id} 
+                      className="w-full sm:w-[calc(50%-8px)] lg:w-[calc(33.333%-11px)] xl:w-[calc(20%-16px)] flex" 
+                      style={{ animationDelay: `${index * 60}ms` }}
+                    >
                       <BillingPlanCard
                         plan={plan}
                         isCurrent={plan.id === info.plan}

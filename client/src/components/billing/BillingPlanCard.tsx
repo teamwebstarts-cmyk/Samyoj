@@ -122,7 +122,7 @@ export default function BillingPlanCard({
 
   return (
     <div
-      className={`dashboard-card group relative flex flex-col overflow-hidden animate-fade-up ${
+      className={`dashboard-card group relative h-full w-full flex flex-col overflow-hidden animate-fade-up ${
         isCurrent
           ? 'ring-2 ring-emerald-500/50 shadow-[0_8px_30px_rgba(16,185,129,0.12)]'
           : plan.isMostPopular

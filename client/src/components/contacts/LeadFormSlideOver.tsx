@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Target } from 'lucide-react';
-import AppButton from '../ui/AppButton';
 import AppInput from '../ui/AppInput';
 import AppSelect from '../ui/AppSelect';
 import AppTextarea from '../ui/AppTextarea';
@@ -37,7 +36,6 @@ export default function LeadFormSlideOver({
   const isEdit = Boolean(lead);
   const [form, setForm] = useState(emptyForm);
   const [agents, setAgents] = useState<Agent[]>([]);
-  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -162,9 +160,9 @@ export default function LeadFormSlideOver({
         <AppSelect
           label="Assign to"
           placeholder="Unassigned"
-          value={agentOptions.find((o) => o.value === form.assignedAgentId) || agentOptions[0]}
+          value={form.assignedAgentId || ''}
           options={agentOptions}
-          onChange={(selected) => setForm((f) => ({ ...f, assignedAgentId: selected?.value || '' }))}
+          onChange={(e) => setForm((f) => ({ ...f, assignedAgentId: e.target.value }))}
           isSearchable
           ariaLabel="Assign to agent"
         />

@@ -400,12 +400,12 @@ export default function ContactPipelineTab({
         onSaved={handleFormSaved}
       />
 
-      <SlideOver
+  <SlideOver
         open={bulkStageOpen}
         onClose={() => setBulkStageOpen(false)}
         title="Move to stage"
         subtitle={`${selectedIds.length} selected lead(s)`}
-        size="sm"
+        size="md"
         icon={Target}
         accent="sky"
         footer={

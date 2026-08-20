@@ -31,7 +31,7 @@ interface LeadCardProps {
   updating?: boolean;
 }
 
-export default function LeadCard({ lead, onStageChange, formatDate, updating }: LeadCardProps) {
+export default function LeadCard({ lead, onStageChange, formatDate, updating, onEdit }: LeadCardProps) {
   const contactLabel = lead.contact?.name || lead.contact?.phone;
   const progressIndex = stageProgressIndex(lead.stage);
 
