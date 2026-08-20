@@ -51,6 +51,7 @@ import supportRoutes from './modules/support/routes';
 import platformRoutes from './modules/platform/routes';
 import { setRealtimeIO } from './realtime';
 import { registerPresenceHandlers, startPresenceSweeper } from './modules/inbox/presence';
+import { registerCallingPreviewHandlers } from './modules/ai-bot/calling-preview.socket';
 import { initTelemetry } from './config/telemetry';
 import { attachOpsErrorFileTransport } from './modules/ops/error-log';
 
@@ -96,6 +97,7 @@ io.on('connection', (socket) => {
   }
 
   registerPresenceHandlers(io, socket);
+  registerCallingPreviewHandlers(io, socket);
 
   // Periodically re-verify org membership; disconnect if user was removed.
   startMembershipGuard(socket);

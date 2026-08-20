@@ -317,7 +317,7 @@ export async function generateBotReply(
   if (!isVoice && !isChatAiEnabled(orgAi)) {
     return { reply: null, handoff: false, skipped: true, skipReason: 'chat_ai_disabled' };
   }
-  if (isVoice && !isCallingAiEnabled(orgAi)) {
+  if (isVoice && !input.testMode && !isCallingAiEnabled(orgAi)) {
     return { reply: null, handoff: false, skipped: true, skipReason: 'calling_ai_disabled' };
   }
 

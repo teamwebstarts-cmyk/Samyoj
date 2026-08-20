@@ -28,6 +28,7 @@ import {
   type AggregateAnalytics,
 } from '../components/ai-bot/AiBotDashboardSummary';
 import AiBotInsights from '../components/ai-bot/AiBotInsights';
+import CallingVoicePreview from '../components/ai-bot/CallingVoicePreview';
 import AiBotAggregateAnalytics from '../components/ai-bot/AiBotAggregateAnalytics';
 import AiBotHero, { type AiBotHeroStat } from '../components/ai-bot/AiBotHero';
 import AppButton from '../components/ui/AppButton';
@@ -1540,10 +1541,25 @@ export default function AiBotPage() {
 
         {slideTab === 'try' && (
             <div className="space-y-4">
+              {formChannel === 'CALL' ? (
+                <CallingVoicePreview
+                  botId={editing?.id}
+                  name={name}
+                  instructions={buildTestInstructions()}
+                  voiceGreeting={voiceGreeting}
+                  voiceSpeaker={voiceSpeaker}
+                  voiceLanguage={voiceLanguage}
+                  previewKnowledge={collectPreviewKnowledge()}
+                  disabled={testLoading}
+                />
+              ) : null}
+
               <div className="rounded-2xl border border-theme-border bg-theme-subtle/60 px-3.5 py-3">
                 <p className="text-[13px] font-bold text-theme-fg">Live preview</p>
                 <p className="mt-0.5 text-[11px] font-medium text-theme-muted">
-                  Uses your About and Train tabs now — saving is automatic.
+                  {formChannel === 'CALL'
+                    ? 'Talk live with your mic, or type below to test replies as text.'
+                    : 'Uses your About and Train tabs now — saving is automatic.'}
                 </p>
               </div>
 
