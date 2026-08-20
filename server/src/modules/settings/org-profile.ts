@@ -177,7 +177,7 @@ export async function saveOrgProfile(
     nextProfile.profileCompleteAt = new Date().toISOString();
   }
 
-  const nextSettings = {
+  const nextSettings: Record<string, unknown> = {
     ...currentSettings,
     profile: nextProfile,
   };
