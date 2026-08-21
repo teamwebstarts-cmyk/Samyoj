@@ -98,3 +98,13 @@ export function validatePhoneLines(
 
   return { ok: true, phones };
 }
+
+export function formatPhoneDisplay(phone?: string | null): string {
+  if (!phone) return '';
+  const digits = normalizePhone(phone);
+  if (digits.startsWith('91') && digits.length === 12) {
+    return `+91 ${digits.slice(2, 7)} ${digits.slice(7)}`;
+  }
+  return digits.startsWith('+') ? digits : `+${digits}`;
+}
+

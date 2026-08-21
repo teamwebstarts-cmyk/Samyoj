@@ -5,7 +5,8 @@ import { authenticate, requireOrg } from '../../middleware/auth';
 import { loadPermissions, requirePermission } from '../../middleware/permissions';
 import { AppError, sendSuccess, asyncHandler } from '../../utils/response';
 import { getSeatLimit, type TeamSettings } from '../team/types';
-import { BILLING_SKUS, PLAN_TIERS, getSku, legacyPlanToTier } from './plans';
+import { BILLING_SKUS, PLAN_TIERS, getSku, legacyPlanToTier, getPlan } from './plans';
+import { getOrgEntitlements } from './entitlements.service';
 import type { BillingSkuDef, PlanTier } from './plans';
 import {
   activatePlan,
@@ -385,7 +386,6 @@ router.get(
       plan: org.plan,
       subscriptionStatus: org.subscriptionStatus,
       planExpiresAt: org.planExpiresAt,
-      trialEndsAt: org.trialEndsAt,
       entitlements,
     });
   })

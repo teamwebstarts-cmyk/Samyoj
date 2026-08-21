@@ -108,20 +108,33 @@ export const MOBILE_MORE_ITEMS: NavItem[] = [
   { to: '/settings', icon: Settings2, label: 'Settings' },
 ];
 
-export function isNavItemVisible(item: NavItem, role: OrgRole | null): boolean {
+export function isNavItemVisible(
+  item: NavItem,
+  role: OrgRole | null,
+  hiddenModules?: string[]
+): boolean {
   if (item.hidden) return false;
+  if (hiddenModules && hiddenModules.includes(item.to) && role !== 'OWNER' && role !== 'ADMIN') {
+    return false;
+  }
   if (item.showForRoles && role && !item.showForRoles.includes(role)) return false;
   if (item.hideForRoles && role && item.hideForRoles.includes(role)) return false;
   return true;
 }
 
-export function getVisibleNavSections(role: OrgRole | null): NavSection[] {
+export function getVisibleNavSections(
+  role: OrgRole | null,
+  hiddenModules?: string[]
+): NavSection[] {
   return NAV_SECTIONS.map((section) => ({
     ...section,
-    items: section.items.filter((item) => isNavItemVisible(item, role)),
+    items: section.items.filter((item) => isNavItemVisible(item, role, hiddenModules)),
   })).filter((section) => section.items.length > 0);
 }
 
-export function getVisibleMobileMoreItems(role: OrgRole | null): NavItem[] {
-  return MOBILE_MORE_ITEMS.filter((item) => isNavItemVisible(item, role));
+export function getVisibleMobileMoreItems(
+  role: OrgRole | null,
+  hiddenModules?: string[]
+): NavItem[] {
+  return MOBILE_MORE_ITEMS.filter((item) => isNavItemVisible(item, role, hiddenModules));
 }

@@ -238,6 +238,70 @@ router.patch(
   })
 );
 
+const uiTogglesSchema = z.object({
+  hiddenModules: z.array(z.string()).optional(),
+  hiddenSettingsTabs: z.array(z.string()).optional(),
+});
+
+router.get(
+  '/ui-toggles',
+  authenticate,
+  requireOrg,
+  asyncHandler(async (req: Request, res: Response) => {
+    const org = await prisma.organization.findUnique({
+      where: { id: req.user!.organizationId! },
+      select: { settings: true },
+    });
+    const settings = (org?.settings as Record<string, unknown>) || {};
+    const uiToggles = (settings.uiToggles as Record<string, unknown>) || {
+      hiddenModules: [],
+      hiddenSettingsTabs: [],
+    };
+    sendSuccess(res, {
+      hiddenModules: Array.isArray(uiToggles.hiddenModules) ? uiToggles.hiddenModules : [],
+      hiddenSettingsTabs: Array.isArray(uiToggles.hiddenSettingsTabs)
+        ? uiToggles.hiddenSettingsTabs
+        : [],
+    });
+  })
+);
+
+router.patch(
+  '/ui-toggles',
+  ...adminGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const data = uiTogglesSchema.parse(req.body);
+    const orgId = req.user!.organizationId!;
+
+    const org = await prisma.organization.findUnique({
+      where: { id: orgId },
+      select: { settings: true },
+    });
+
+    const current = (org?.settings as Record<string, unknown>) || {};
+    const currentUiToggles = (current.uiToggles as Record<string, unknown>) || {};
+
+    const updatedToggles = {
+      hiddenModules: data.hiddenModules ?? currentUiToggles.hiddenModules ?? [],
+      hiddenSettingsTabs: data.hiddenSettingsTabs ?? currentUiToggles.hiddenSettingsTabs ?? [],
+    };
+
+    const updated = await prisma.organization.update({
+      where: { id: orgId },
+      data: {
+        settings: {
+          ...current,
+          uiToggles: updatedToggles,
+        },
+      },
+      select: { settings: true },
+    });
+
+    const settings = (updated.settings as Record<string, unknown>) || {};
+    sendSuccess(res, settings.uiToggles);
+  })
+);
+
 router.get(
   '/alerts',
   authenticate,
@@ -258,3 +322,4 @@ router.get(
 );
 
 export default router;
+

@@ -9,6 +9,7 @@ export interface Organization {
   id: string;
   companyName: string;
   role?: 'OWNER' | 'ADMIN' | 'AGENT';
+  settings?: Record<string, unknown>;
 }
 
 export type OrgRole = 'OWNER' | 'ADMIN' | 'SUPERVISOR' | 'AGENT';
@@ -423,6 +424,32 @@ export interface BillingUsage {
   byCategory: Record<string, { count: number; costInr: number }>;
   qualityRatings: Array<{ phoneNumber: string; qualityRating: string; wabaId: string }>;
   messagesWithPricing: number;
+}
+
+export interface WhatsappNumber {
+  id: string;
+  phoneNumber: string;
+  wabaId?: string;
+  qualityRating?: string;
+  name?: string;
+  verifiedName?: string;
+  status?: string;
+  createdAt?: string;
+}
+
+export interface CampaignSettings {
+  dailySendLimit: number;
+  dailyBudgetInr?: number;
+  batchSize: number;
+  batchDelayMs: number;
+  mapFirstBodyVariableToName?: boolean;
+}
+
+export interface BusinessHoursSettings {
+  startHour: number;
+  endHour: number;
+  days: number[];
+  timezone?: string;
 }
 
 export interface ApiKeyItem {

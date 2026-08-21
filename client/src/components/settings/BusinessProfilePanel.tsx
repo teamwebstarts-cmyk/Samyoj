@@ -1,41 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Building2, Bot, Clock, ExternalLink, Sparkles } from 'lucide-react';
+import { Building2, CheckCircle2, AlertCircle } from 'lucide-react';
 import SettingsPanel from './SettingsPanel';
-import AppAlert from '../ui/AppAlert';
 import AppButton from '../ui/AppButton';
 import AppInput from '../ui/AppInput';
 import AppSelect from '../ui/AppSelect';
 import AppTextarea from '../ui/AppTextarea';
-import { SARVAM_LANGUAGES } from '../calls/CallingSettingsForm';
 import { settingsApi } from '../../services/api';
 import type { BusinessIndustryOption, OrgProfilePayload } from '../../types';
 import { toastError, toastSuccess } from '../../utils/toast';
 
-const TIMEZONE_SUGGESTIONS = [
-  'Asia/Kolkata',
-  'Asia/Dubai',
-  'Asia/Singapore',
-  'Europe/London',
-  'America/New_York',
-  'UTC',
-];
-
 interface BusinessProfilePanelProps {
   canEdit: boolean;
   onSaved?: () => void;
-}
-
-function valuePropsToText(items: string[]): string {
-  return items.filter((line) => line.trim()).join('\n');
-}
-
-function textToValueProps(text: string): string[] {
-  return text
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .slice(0, 8);
 }
 
 export default function BusinessProfilePanel({ canEdit, onSaved }: BusinessProfilePanelProps) {
@@ -48,13 +24,6 @@ export default function BusinessProfilePanel({ canEdit, onSaved }: BusinessProfi
   const [website, setWebsite] = useState('');
   const [email, setEmail] = useState('');
   const [address, setAddress] = useState('');
-  const [aiNotes, setAiNotes] = useState('');
-  const [audience, setAudience] = useState('');
-  const [valuePropsText, setValuePropsText] = useState('');
-  const [defaultLocale, setDefaultLocale] = useState('en-IN');
-  const [timezone, setTimezone] = useState(
-    Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Kolkata'
-  );
   const [completeness, setCompleteness] = useState({
     requiredFilled: 0,
     requiredTotal: 4,
@@ -75,11 +44,6 @@ export default function BusinessProfilePanel({ canEdit, onSaved }: BusinessProfi
         setWebsite(payload.profile?.website || '');
         setEmail(payload.profile?.email || '');
         setAddress(payload.profile?.address || '');
-        setAiNotes(payload.profile?.aiNotes || '');
-        setAudience(payload.audience || '');
-        setValuePropsText(valuePropsToText(payload.valueProps || []));
-        setDefaultLocale(payload.defaultLocale || 'en-IN');
-        setTimezone(payload.timezone || 'Asia/Kolkata');
         setCompleteness(payload.completeness);
       })
       .catch(() => toastError('Could not load business profile'))
@@ -91,11 +55,11 @@ export default function BusinessProfilePanel({ canEdit, onSaved }: BusinessProfi
   const missingCore = useMemo(() => {
     const missing: string[] = [];
     if (!companyName.trim()) missing.push('Business name');
-    if (!description.trim()) missing.push('What you do');
-    if (!industry) missing.push('Industry');
-    if (!website.trim()) missing.push('Website');
+    if (!industry) missing.push('Industry category');
+    if (!website.trim()) missing.push('Official website');
+    if (!description.trim()) missing.push('Business description');
     return missing;
-  }, [companyName, description, industry, website]);
+  }, [companyName, industry, website, description]);
 
   const handleSave = async () => {
     if (!canEdit) return;
@@ -108,21 +72,13 @@ export default function BusinessProfilePanel({ canEdit, onSaved }: BusinessProfi
         website: website.trim(),
         email: email.trim(),
         address: address.trim(),
-        aiNotes: aiNotes.trim(),
-        audience: audience.trim() || null,
-        valueProps: textToValueProps(valuePropsText),
-        defaultLocale,
-        timezone,
       });
       const payload = data.data.profile as OrgProfilePayload;
       setCompleteness(payload.completeness);
-      toastSuccess('Business profile saved');
+      toastSuccess('Business profile saved successfully');
       onSaved?.();
-    } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
-          ?.message || 'Could not save profile';
-      toastError(msg);
+    } catch {
+      toastError('Failed to save business profile');
     } finally {
       setSaving(false);
     }
@@ -130,195 +86,138 @@ export default function BusinessProfilePanel({ canEdit, onSaved }: BusinessProfi
 
   if (loading) {
     return (
-      <SettingsPanel title="Business profile" description="Loading…" icon={Building2} accent="emerald">
-        <p className="text-[13px] text-theme-muted">Loading your workspace profile…</p>
-      </SettingsPanel>
+      <div className="space-y-4">
+        <div className="h-20 animate-pulse rounded-2xl bg-theme-subtle/60" />
+        <div className="h-64 animate-pulse rounded-2xl bg-theme-subtle/60" />
+      </div>
     );
   }
 
   return (
     <div className="space-y-5">
+      {/* Profile Incomplete / Complete Status Banner */}
+      {!completeness.isComplete ? (
+        <div className="flex flex-col gap-3 rounded-2xl border border-amber-200/80 bg-gradient-to-r from-amber-50/90 via-amber-50/40 to-theme-surface p-4 ring-1 ring-amber-100 dark:border-amber-900/40 dark:from-amber-950/30 dark:ring-amber-900/40 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-100/80 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">
+              <AlertCircle size={19} strokeWidth={2.25} />
+            </div>
+            <div>
+              <p className="text-[13px] font-bold text-amber-900 dark:text-amber-200">
+                Complete your business profile
+              </p>
+              <p className="mt-0.5 text-[12px] font-medium text-amber-800/90 dark:text-amber-300/90">
+                Please provide your {missingCore.join(', ')} so your brand identity is configured across customer conversations.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 self-end sm:self-center">
+            <span className="rounded-lg bg-amber-100/90 px-2.5 py-1 text-[11px] font-bold text-amber-800 dark:bg-amber-900/60 dark:text-amber-200">
+              {completeness.percent}% complete
+            </span>
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between rounded-2xl border border-emerald-200/80 bg-gradient-to-r from-emerald-50/80 to-theme-surface px-4 py-3 ring-1 ring-emerald-100 dark:border-emerald-900/40 dark:from-emerald-950/30 dark:ring-emerald-900/40">
+          <div className="flex items-center gap-2.5">
+            <CheckCircle2 size={18} className="text-whatsapp-600 dark:text-whatsapp-400" />
+            <span className="text-[13px] font-bold text-emerald-950 dark:text-emerald-200">
+              Business Profile 100% Complete
+            </span>
+          </div>
+          <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
+            Brand identity active
+          </span>
+        </div>
+      )}
+
       <SettingsPanel
-        title="Business profile"
-        description="One place for your business details. AI bots, replies, and campaigns use this automatically."
+        title="Business details"
+        description="Official company information and customer support credentials."
         icon={Building2}
         accent="emerald"
         footer={
           canEdit ? (
-            <AppButton loading={saving} onClick={() => void handleSave()}>
-              Save profile
-            </AppButton>
-          ) : (
-            <p className="text-[12px] text-theme-muted">Only owners and admins can edit this profile.</p>
-          )
+            <div className="flex items-center justify-between gap-4">
+              <p className="text-[12px] font-medium text-theme-muted">
+                Changes apply across messages, templates, and team workspaces.
+              </p>
+              <AppButton loading={saving} onClick={handleSave}>
+                Save profile
+              </AppButton>
+            </div>
+          ) : undefined
         }
       >
-        <div className="mb-5 overflow-hidden rounded-2xl border border-emerald-200/70 bg-gradient-to-r from-emerald-50/80 via-white to-teal-50/40 dark:border-emerald-900/40 dark:from-emerald-950/30 dark:via-theme-surface dark:to-teal-950/10">
-          <div className="h-0.5 bg-gradient-to-r from-whatsapp-500 to-emerald-500" />
-          <div className="px-4 py-3.5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-[13px] font-extrabold text-emerald-900 dark:text-emerald-200">
-                  {completeness.isComplete ? 'Profile complete' : `${completeness.percent}% complete`}
-                </p>
-                <p className="mt-0.5 text-[11px] font-medium text-emerald-800/80 dark:text-emerald-300/80">
-                  {completeness.requiredFilled} of {completeness.requiredTotal} essentials filled
-                </p>
-              </div>
-              {!completeness.isComplete && missingCore.length > 0 && (
-                <p className="text-[11px] font-semibold text-amber-800 dark:text-amber-300">
-                  Still needed: {missingCore.join(', ')}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-
         <div className="space-y-4">
-          <AppInput
-            label="Business name"
-            hint="Shown to customers and used in AI replies"
-            value={companyName}
-            onChange={(e) => setCompanyName(e.target.value)}
-            disabled={!canEdit}
-            required
-          />
-          <AppTextarea
-            label="What does your business do?"
-            hint="1–2 sentences. Used in AI answers and WhatsApp profile later."
-            rows={3}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            disabled={!canEdit}
-            placeholder="We run a dental clinic in Pune. We book appointments and answer treatment questions."
-          />
           <div className="grid gap-4 sm:grid-cols-2">
+            <AppInput
+              id="company-name"
+              label="Business / Company name"
+              required
+              placeholder="e.g. Samyoj Technologies Pvt Ltd"
+              value={companyName}
+              onChange={(e) => setCompanyName(e.target.value)}
+              disabled={!canEdit}
+            />
+
             <AppSelect
-              label="Industry"
+              id="business-industry"
+              label="Industry category"
+              required
               value={industry}
               onChange={(e) => setIndustry(e.target.value)}
               disabled={!canEdit}
               options={[
-                { value: '', label: 'Select industry' },
-                ...industries.map((row) => ({ value: row.value, label: row.label })),
+                { value: '', label: 'Select your industry' },
+                ...industries.map((ind) => ({ value: ind.value, label: ind.label })),
               ]}
             />
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
             <AppInput
-              label="Website"
-              placeholder="yourshop.com"
+              id="company-website"
+              label="Official website URL"
+              required
+              type="url"
+              placeholder="https://example.com"
               value={website}
               onChange={(e) => setWebsite(e.target.value)}
               disabled={!canEdit}
             />
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <AppSelect
-              label="Primary language"
-              value={defaultLocale}
-              onChange={(e) => setDefaultLocale(e.target.value)}
-              disabled={!canEdit}
-              options={SARVAM_LANGUAGES}
-            />
-            <AppSelect
-              label="Timezone"
-              hint="Used for business hours and quiet times"
-              value={timezone}
-              onChange={(e) => setTimezone(e.target.value)}
-              disabled={!canEdit}
-              options={TIMEZONE_SUGGESTIONS.map((tz) => ({ value: tz, label: tz }))}
-            />
-          </div>
-        </div>
-      </SettingsPanel>
 
-      <SettingsPanel
-        title="Contact on WhatsApp"
-        description="Optional — helps customers trust your number."
-        icon={ExternalLink}
-        accent="sky"
-      >
-        <div className="grid gap-4 sm:grid-cols-2">
+            <AppInput
+              id="support-email"
+              label="Customer support email"
+              type="email"
+              placeholder="support@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={!canEdit}
+            />
+          </div>
+
           <AppInput
-            label="Contact email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            disabled={!canEdit}
-            placeholder="hello@yourbusiness.com"
-          />
-          <AppInput
-            label="City or address"
+            id="company-address"
+            label="Store / Office address (optional)"
+            placeholder="e.g. 102, Silicon Hub, Outer Ring Road, Bangalore - 560103"
             value={address}
             onChange={(e) => setAddress(e.target.value)}
             disabled={!canEdit}
-            placeholder="Indiranagar, Bengaluru"
           />
-        </div>
-      </SettingsPanel>
 
-      <SettingsPanel
-        title="AI context"
-        description="Feeds your chat and calling bots automatically. Override per bot only if needed."
-        icon={Sparkles}
-        accent="violet"
-      >
-        <div className="space-y-4">
-          <AppInput
-            label="Who you serve"
-            value={audience}
-            onChange={(e) => setAudience(e.target.value)}
-            disabled={!canEdit}
-            placeholder="e.g. Families in Mumbai, SMB retailers"
-          />
           <AppTextarea
-            label="Main products or services"
-            hint="One per line — up to 8"
-            rows={4}
-            value={valuePropsText}
-            onChange={(e) => setValuePropsText(e.target.value)}
-            disabled={!canEdit}
-            placeholder="Teeth cleaning and whitening\nRoot canal treatment\nEmergency dental care"
-          />
-          <AppTextarea
-            label="Policies & boundaries"
-            hint="What the AI must never promise"
+            id="business-description"
+            label="Business description / About"
+            required
             rows={3}
-            value={aiNotes}
-            onChange={(e) => setAiNotes(e.target.value)}
+            placeholder="Briefly describe what products or services your business offers (1–2 sentences)..."
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
             disabled={!canEdit}
-            placeholder="Never quote exact prices. Always ask them to visit for a consultation."
           />
         </div>
-        <AppAlert variant="info" className="mt-4">
-          <span className="flex items-start gap-2">
-            <Bot className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>
-              New bots pre-fill from this profile. For brand colors and marketing tone, use{' '}
-              <Link to="/content-studio" className="font-bold text-sky-700 underline-offset-2 hover:underline">
-                Content Studio
-              </Link>
-              .
-            </span>
-          </span>
-        </AppAlert>
-      </SettingsPanel>
-
-      <SettingsPanel
-        title="Business hours"
-        description="Set open days and times in the Business hours tab."
-        icon={Clock}
-        accent="amber"
-      >
-        <p className="text-[13px] text-theme-secondary">
-          Timezone above applies to your hours. Edit start/end times and working days in{' '}
-          <Link
-            to="/settings?tab=automation"
-            className="font-bold text-amber-800 underline-offset-2 hover:underline dark:text-amber-300"
-          >
-            Business hours
-          </Link>
-          .
-        </p>
       </SettingsPanel>
     </div>
   );

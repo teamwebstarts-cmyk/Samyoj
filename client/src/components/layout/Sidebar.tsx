@@ -205,8 +205,11 @@ export default function Sidebar({
   showClose,
   inboxUnread = 0,
 }: SidebarProps) {
-  const { orgRole } = useAuth();
-  const navSections = getVisibleNavSections(orgRole);
+  const { orgRole, organization } = useAuth();
+  const uiToggles = (organization?.settings as Record<string, unknown>)?.uiToggles as
+    | { hiddenModules?: string[] }
+    | undefined;
+  const navSections = getVisibleNavSections(orgRole, uiToggles?.hiddenModules);
   // Tip enabled whenever collapsed (nav labels) or always for collapse button
   const { tip, onShowTip, onHideTip } = useSidebarFlyoutTip(true);
 

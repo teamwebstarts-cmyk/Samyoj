@@ -416,6 +416,9 @@ export const settingsApi = {
     defaultLocale?: string;
     timezone?: string;
   }) => api.patch('/settings/profile', data),
+  getUiToggles: () => api.get('/settings/ui-toggles'),
+  updateUiToggles: (data: { hiddenModules?: string[]; hiddenSettingsTabs?: string[] }) =>
+    api.patch('/settings/ui-toggles', data),
 };
 
 export const callingApi = {

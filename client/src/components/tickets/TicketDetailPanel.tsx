@@ -119,9 +119,9 @@ export default function TicketDetailPanel({
         </div>
       }
     >
-      <div className="space-y-4">
+      <div className="space-y-5">
         {/* Customer header */}
-        <div className="flex items-center gap-3 rounded-2xl border border-theme-border bg-theme-subtle/30 p-3.5">
+        <div className="flex items-center gap-3">
           {ticket.contact ? (
             <ContactAvatar
               name={ticket.contact.name || undefined}
@@ -129,8 +129,8 @@ export default function TicketDetailPanel({
               size="md"
             />
           ) : (
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-              <Ticket className="h-4 w-4" strokeWidth={2.25} />
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+              <Ticket className="h-5 w-5" strokeWidth={2.25} />
             </div>
           )}
           <div className="min-w-0 flex-1">
@@ -146,7 +146,7 @@ export default function TicketDetailPanel({
         </div>
 
         {/* Description / private note */}
-        <div className="rounded-2xl border border-theme-border bg-theme-subtle/30 p-4">
+        <div>
           <div className="mb-2.5 flex items-center gap-2">
             <div className="flex h-6 w-6 items-center justify-center rounded-md bg-amber-50 dark:bg-amber-950/40">
               <StickyNote className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" strokeWidth={2.25} />
@@ -155,20 +155,20 @@ export default function TicketDetailPanel({
             <span className="ml-auto text-[10px] font-medium text-theme-muted">Team only</span>
           </div>
           {descriptionNote ? (
-            <div className="rounded-xl border border-theme-border/60 bg-theme-surface p-3">
+            <div className="rounded-xl border border-theme-border bg-theme-surface p-3.5">
               <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-theme-fg">
                 {descriptionNote}
               </p>
             </div>
           ) : (
-            <div className="rounded-xl border border-dashed border-theme-border/70 bg-theme-subtle/40 px-3 py-3.5 text-center">
+            <div className="rounded-xl border border-dashed border-theme-border/70 bg-theme-subtle/40 px-3 py-4 text-center">
               <p className="text-[12px] text-theme-muted">No description yet</p>
             </div>
           )}
         </div>
 
         {/* Details */}
-        <div className="rounded-2xl border border-theme-border bg-theme-subtle/30 p-4 space-y-4">
+        <div className="space-y-4 rounded-2xl border border-theme-border bg-theme-subtle/30 p-4">
           <DetailRow icon={User} label="Assigned to">
             <AppSelect
               ariaLabel="Assign teammate"
@@ -197,7 +197,7 @@ export default function TicketDetailPanel({
         </div>
 
         {/* Priority */}
-        <div className="rounded-2xl border border-theme-border bg-theme-subtle/30 p-4">
+        <div>
           <p className="mb-2.5 text-[12px] font-bold text-theme-fg">Priority</p>
           <div
             role="group"

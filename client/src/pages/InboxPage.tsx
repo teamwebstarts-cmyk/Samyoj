@@ -40,6 +40,8 @@ import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import PaneHandle from '../components/inbox/PaneHandle';
 import KeyboardShortcutsOverlay from '../components/inbox/KeyboardShortcutsOverlay';
 import { InboxGlassTipProvider } from '../components/inbox/ComposerGlassTip';
+import ChatAiToggleBanner from '../components/inbox/ChatAiToggleBanner';
+import { useChatBots } from '../hooks/useChatBots';
 import { cannedRepliesApi, aiBotApi, inboxApi, teamApi, ticketApi } from '../services/api';
 import { setOpenConversationId } from '../utils/inboxNotifications';
 import type {
@@ -688,9 +690,21 @@ export default function InboxPage() {
     setContextMenu({ x: event.clientX, y: event.clientY, conversationId: conversation.id });
   };
 
+  const chatBots = useChatBots();
+
   return (
     <InboxGlassTipProvider>
     <PageShell inbox>
+      <ChatAiToggleBanner
+        enabled={chatBots.chatAiEnabled}
+        saving={chatBots.assigning}
+        defaultChatBotId={chatBots.defaultChatBotId}
+        chatBots={chatBots.enabledChatBots}
+        botsLoading={chatBots.loading}
+        botAssigning={chatBots.assigning}
+        onSelectBot={chatBots.selectChatBot}
+        onChange={chatBots.disableChatBot}
+      />
       <a
         href="#inbox-thread"
         className="skip-to-content focus:not-sr-only"

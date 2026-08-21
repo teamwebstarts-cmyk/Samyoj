@@ -69,7 +69,8 @@ export function useEntitlements() {
   const refresh = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await billingApi.get();
+      const res = await billingApi.get();
+      const data = res.data as BillingInfo;
       setEntitlements(deriveEntitlements(data));
       setError(null);
     } catch (e) {

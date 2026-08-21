@@ -22,11 +22,8 @@ export default function BillingCadenceToggle({
   const activeIdx = options.findIndex((o) => o.value === value);
 
   return (
-    <div className="flex w-full max-w-lg flex-col items-center gap-3">
-      <span className="text-[11px] font-bold uppercase tracking-widest text-theme-muted">
-        Billing frequency
-      </span>
-      <div className="w-full rounded-2xl border border-theme-border bg-theme-surface p-1.5 shadow-sm">
+    <div className="w-full max-w-lg">
+      <div className="rounded-2xl border border-theme-border bg-theme-surface p-1 shadow-sm">
         <div
           className="relative flex items-center justify-center"
           role="radiogroup"
@@ -52,7 +49,7 @@ export default function BillingCadenceToggle({
                 role="radio"
                 aria-checked={isActive}
                 onClick={() => onChange(option.value)}
-                className={`relative z-10 flex flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-3 py-2.5 text-center transition-colors duration-200 ${
+                className={`relative z-10 flex flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-3 py-1.5 text-center transition-colors duration-200 ${
                   isActive
                     ? 'text-theme-fg'
                     : 'text-theme-muted hover:text-theme-fg'
@@ -63,11 +60,7 @@ export default function BillingCadenceToggle({
                 </span>
                 {option.savings && (
                   <span
-                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-extrabold transition-colors duration-200 ${
-                      isActive
-                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400'
-                        : 'bg-transparent text-theme-muted'
-                    }`}
+                    className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-extrabold bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400"
                   >
                     <Percent className="h-2.5 w-2.5" strokeWidth={3} />
                     {option.savings}
