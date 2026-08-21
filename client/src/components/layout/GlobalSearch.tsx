@@ -112,7 +112,7 @@ const JUMP_LINKS: JumpLink[] = [
   {
     id: 'tickets',
     title: 'Tickets',
-    subtitle: 'Support queue and SLA',
+    subtitle: 'Support queue and response tracking',
     href: '/tickets',
     icon: LifeBuoy,
     keywords: ['ticket', 'tickets', 'support'],

@@ -1,7 +1,7 @@
 import { useEffect, type ReactNode } from 'react';
 import { Lock } from 'lucide-react';
 import AuthBrand from './AuthBrand';
-import AuthShowcase, { AUTH_LOGIN_HERO_SRC, AuthCtaCard } from './AuthShowcase';
+import AuthShowcase, { AUTH_LOGIN_HERO_SRC } from './AuthShowcase';
 import './auth-page.css';
 
 interface AuthLayoutProps {
@@ -65,10 +65,6 @@ export default function AuthLayout({
             </header>
 
             {children}
-
-            <div className="mt-4 lg:hidden">
-              <AuthCtaCard />
-            </div>
 
             <p className="mt-8 flex items-center justify-center gap-1.5 text-[12px] font-medium text-slate-400">
               <Lock className="h-3 w-3 shrink-0" strokeWidth={2} />

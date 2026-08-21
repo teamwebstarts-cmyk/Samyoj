@@ -1,17 +1,27 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Building2, Headset, Mail, Shield, Users } from 'lucide-react';
+import {
+  Building2,
+  ClipboardList,
+  Headset,
+  Mail,
+  Settings2,
+  Shield,
+  Users,
+} from 'lucide-react';
 import PageHero from '../components/ui/PageHero';
 import PageShell from '../components/ui/PageShell';
 import SegmentedControl from '../components/ui/SegmentedControl';
+import TeamAuditTab from '../components/team/TeamAuditTab';
 import TeamDepartmentsTab from '../components/team/TeamDepartmentsTab';
 import TeamInvitesTab from '../components/team/TeamInvitesTab';
 import TeamMembersTab from '../components/team/TeamMembersTab';
 import TeamRolesTab from '../components/team/TeamRolesTab';
+import TeamSettingsTab from '../components/team/TeamSettingsTab';
 import { useAuth } from '../contexts/AuthContext';
 import { teamApi } from '../services/api';
 import type { TeamDepartment, TeamSummary } from '../types';
 
-type TeamTab = 'members' | 'invites' | 'departments' | 'roles';
+type TeamTab = 'members' | 'invites' | 'departments' | 'roles' | 'settings' | 'audit';
 
 const tabMeta: Record<
   TeamTab,
@@ -21,25 +31,8 @@ const tabMeta: Record<
   invites: { label: 'Invites', shortLabel: 'Invites', icon: Mail, adminOnly: true },
   departments: { label: 'Departments', shortLabel: 'Depts', icon: Building2 },
   roles: { label: 'Roles', shortLabel: 'Roles', icon: Shield, adminOnly: true },
-};
-
-const heroCopy: Record<TeamTab, { title: string; description: string }> = {
-  members: {
-    title: 'Team members',
-    description: 'View agents, roles, and availability.',
-  },
-  invites: {
-    title: 'Pending invites',
-    description: 'Send secure email links for teammates to join your workspace.',
-  },
-  departments: {
-    title: 'Departments',
-    description: 'Group agents into teams for routing and filters.',
-  },
-  roles: {
-    title: 'Roles & responsibilities',
-    description: 'Configure permissions for each role in your workspace.',
-  },
+  settings: { label: 'Settings', shortLabel: 'Settings', icon: Settings2, adminOnly: true },
+  audit: { label: 'Audit log', shortLabel: 'Audit', icon: ClipboardList, adminOnly: true },
 };
 
 export default function TeamPage() {
@@ -87,7 +80,23 @@ export default function TeamPage() {
     icon: tabMeta[id].icon,
   }));
 
-  const copy = heroCopy[activeTab];
+  const heroStats = useMemo(
+    () => [
+      { label: 'Members', value: summary.total },
+      {
+        label: 'Online',
+        value: summary.online,
+        tone: 'text-emerald-700 dark:text-emerald-300',
+      },
+      { label: 'Departments', value: departments.length },
+      {
+        label: 'Roles',
+        value: summary.owners + summary.admins + summary.supervisors + summary.agents > 0 ? 4 : 0,
+        tone: 'text-violet-700 dark:text-violet-300',
+      },
+    ],
+    [summary, departments],
+  );
 
   return (
     <PageShell>
@@ -95,22 +104,10 @@ export default function TeamPage() {
         <PageHero
           badge="Team"
           badgeIcon={Headset}
-          title={copy.title}
-          description={copy.description}
+          title="Team management"
+          description="Invite agents, assign roles, and organize departments."
           accent="emerald"
-          stats={[
-            { label: 'Members', value: summary.total },
-            {
-              label: 'Online',
-              value: summary.online,
-              tone: 'text-emerald-700 dark:text-emerald-300',
-            },
-            {
-              label: 'Agents',
-              value: summary.agents,
-              tone: 'text-sky-700 dark:text-sky-300',
-            },
-          ]}
+          stats={heroStats}
         />
 
         <SegmentedControl
@@ -121,23 +118,27 @@ export default function TeamPage() {
           ariaLabel="Team sections"
         />
 
-        {activeTab === 'members' && (
-          <TeamMembersTab
-            canManage={canManageTeam}
-            orgRole={orgRole}
-            departments={departments}
-            onSummaryChange={setSummary}
-          />
-        )}
-        {activeTab === 'invites' && canManageTeam && (
-          <TeamInvitesTab departments={departments} canManage={canManageTeam} />
-        )}
-        {activeTab === 'departments' && (
-          <TeamDepartmentsTab canManage={canManageTeam} onChanged={loadDepartments} />
-        )}
-        {activeTab === 'roles' && canManageTeam && (
-          <TeamRolesTab canManage={canManageTeam} />
-        )}
+        <div className="space-y-4">
+          {activeTab === 'members' && (
+            <TeamMembersTab
+              canManage={canManageTeam}
+              orgRole={orgRole}
+              departments={departments}
+              onSummaryChange={setSummary}
+            />
+          )}
+          {activeTab === 'invites' && canManageTeam && (
+            <TeamInvitesTab departments={departments} canManage={canManageTeam} />
+          )}
+          {activeTab === 'departments' && (
+            <TeamDepartmentsTab canManage={canManageTeam} onChanged={loadDepartments} />
+          )}
+          {activeTab === 'roles' && canManageTeam && <TeamRolesTab canManage={canManageTeam} />}
+          {activeTab === 'settings' && canManageTeam && (
+            <TeamSettingsTab canManage={canManageTeam} />
+          )}
+          {activeTab === 'audit' && canManageTeam && <TeamAuditTab />}
+        </div>
       </div>
     </PageShell>
   );

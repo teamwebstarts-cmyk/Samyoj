@@ -3,8 +3,7 @@ import {
   AlertCircle,
   CheckCircle2,
   Clock,
-  LifeBuoy,
-  MessageSquare,
+  Ticket,
 } from 'lucide-react';
 
 export type TicketHeroTone = 'total' | 'open' | 'overdue' | 'waiting' | 'resolved';
@@ -34,8 +33,10 @@ const toneStyles: Record<
   }
 > = {
   total: {
-    chip: 'bg-sky-50 text-[#0284c7] ring-1 ring-sky-500/20 dark:bg-sky-950/40 dark:text-sky-300 dark:ring-sky-400/25',
-    icon: LifeBuoy,
+    // Use the exact same Ticket icon + emerald palette as the inbox Create-ticket rail,
+    // so the hero reads as the canonical "tickets" surface.
+    chip: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-500/20 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-400/25',
+    icon: Ticket,
     valueClass: 'text-neutral-950 dark:text-white',
   },
   open: {
@@ -50,7 +51,7 @@ const toneStyles: Record<
   },
   waiting: {
     chip: 'bg-blue-50 text-[#2563eb] ring-1 ring-blue-500/20 dark:bg-blue-950/40 dark:text-blue-300 dark:ring-blue-400/25',
-    icon: MessageSquare,
+    icon: Clock,
     valueClass: 'text-blue-700 dark:text-blue-300',
   },
   resolved: {
@@ -62,28 +63,29 @@ const toneStyles: Record<
 
 export default function TicketHero({
   badge = 'Tickets',
-  badgeIcon: BadgeIcon = LifeBuoy,
+  badgeIcon: BadgeIcon = Ticket,
   title = 'Customer Tickets',
   description = 'Follow up on WhatsApp chats that need a reply, track SLAs, and resolve issues from one place.',
   stats,
 }: TicketHeroProps) {
+  // Use the same emerald gradient as the inbox Create-ticket rail
+  const heroShellClass =
+    'relative overflow-hidden rounded-xl border border-emerald-200/70 bg-[linear-gradient(100deg,#ecfdf5_0%,#f0fdf4_42%,#ffffff_100%)] p-2.5 shadow-[0_8px_24px_rgba(16,185,129,0.05)] dark:border-emerald-900/50 dark:bg-[linear-gradient(100deg,#06281d_0%,#0a1f1a_45%,#061710_100%)] sm:rounded-[22px] sm:p-5 md:p-6';
+
   return (
-    <section
-      aria-label="Tickets overview"
-      className="relative overflow-hidden rounded-xl border border-sky-200/70 bg-[linear-gradient(100deg,#f0f9ff_0%,#f5fbff_42%,#ffffff_100%)] p-2.5 shadow-[0_8px_24px_rgba(2,132,199,0.05)] dark:border-sky-900/50 dark:bg-[linear-gradient(100deg,#0b1526_0%,#0f1d33_45%,#0b1424_100%)] sm:rounded-[22px] sm:p-5 md:p-6"
-    >
+    <section aria-label="Tickets overview" className={heroShellClass}>
       <div
-        className="pointer-events-none absolute -left-20 -top-24 h-56 w-56 rounded-full bg-sky-200/30 blur-3xl dark:bg-sky-500/10 max-sm:hidden"
+        className="pointer-events-none absolute -left-20 -top-24 h-56 w-56 rounded-full bg-emerald-200/30 blur-3xl dark:bg-emerald-500/10 max-sm:hidden"
         aria-hidden="true"
       />
       <div
-        className="pointer-events-none absolute -right-12 -bottom-14 h-48 w-48 rounded-full bg-amber-200/20 blur-3xl dark:bg-amber-500/10 max-sm:hidden"
+        className="pointer-events-none absolute -right-12 -bottom-14 h-48 w-48 rounded-full bg-teal-200/20 blur-3xl dark:bg-teal-500/10 max-sm:hidden"
         aria-hidden="true"
       />
 
       <div className="relative flex flex-col gap-2.5 sm:gap-5 xl:flex-row xl:items-center xl:justify-between xl:gap-8">
         <div className="min-w-0 max-w-xl">
-          <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.1em] text-sky-700 ring-1 ring-sky-200/70 dark:bg-sky-950/40 dark:text-sky-300 dark:ring-sky-800/50 sm:gap-1.5 sm:px-2.5 sm:py-1 sm:text-[10px] sm:tracking-[0.12em]">
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.1em] text-emerald-700 ring-1 ring-emerald-200/70 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-800/50 sm:gap-1.5 sm:px-2.5 sm:py-1 sm:text-[10px] sm:tracking-[0.12em]">
             <BadgeIcon className="h-2.5 w-2.5 sm:h-3 sm:w-3" strokeWidth={2.5} />
             {badge}
           </span>
@@ -95,7 +97,8 @@ export default function TicketHero({
           </p>
         </div>
 
-        <div className="grid w-full grid-cols-2 gap-1.5 sm:gap-2.5 md:grid-cols-4 xl:w-auto xl:min-w-0 xl:max-w-none xl:shrink-0">
+        {/* 3-card grid: Total / Open / Resolved */}
+        <div className="grid w-full grid-cols-3 gap-1.5 sm:gap-2.5 xl:w-auto xl:min-w-0 xl:max-w-none xl:shrink-0">
           {stats.map((stat) => {
             const config = toneStyles[stat.tone] || toneStyles.total;
             const Icon = stat.icon || config.icon;

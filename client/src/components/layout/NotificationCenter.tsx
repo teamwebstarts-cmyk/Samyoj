@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Bell, LifeBuoy, MessageSquare } from 'lucide-react';
 import { ticketApi } from '../../services/api';
-import { isSlaBreached, type TicketItem } from '../tickets/ticketUi';
+import { isOverdue, type TicketItem } from '../tickets/ticketUi';
 import { useSocket } from '../../hooks/useSocket';
 import { useOnActiveNumberChange } from '../../hooks/useOnActiveNumberChange';
 import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
@@ -118,7 +118,7 @@ export default function NotificationCenter({ unreadInbox = 0 }: NotificationCent
     return () => document.removeEventListener('mousedown', onClick);
   }, [open]);
 
-  const breached = tickets.filter(isSlaBreached);
+  const breached = tickets.filter(isOverdue);
   const count = breached.length + messageAlerts.length + (unreadInbox > 0 ? 1 : 0);
 
   return (

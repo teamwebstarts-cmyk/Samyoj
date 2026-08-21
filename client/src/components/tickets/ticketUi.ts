@@ -9,7 +9,15 @@ export interface TicketItem {
   updatedAt: string;
   contact?: { id: string; name?: string | null; phone: string } | null;
   conversationId?: string | null;
-  conversation?: { id: string; status: string } | null;
+  conversation?: {
+    id: string;
+    status: string;
+    internalNotes?: Array<{
+      id: string;
+      content: string;
+      createdAt: string;
+    }>;
+  } | null;
   assignedAgent?: { id: string; name: string } | null;
 }
 
@@ -18,6 +26,19 @@ export const TICKET_STATUS_CHIPS = [
   { value: 'open', label: 'Needs reply' },
   { value: 'overdue', label: 'Overdue' },
   { value: 'waiting', label: 'Waiting' },
+  { value: 'done', label: 'Done' },
+] as const;
+
+/** Dropdown options for the Tickets page status filter.
+ *  Both "Resolved" and "Done" filter to the same closed-state set
+ *  (`RESOLVED` + `CLOSED`) — wording chosen by product.
+ */
+export const TICKET_STATUS_FILTER_OPTIONS = [
+  { value: '', label: 'All' },
+  { value: 'open', label: 'Open' },
+  { value: 'overdue', label: 'Overdue' },
+  { value: 'waiting', label: 'Waiting' },
+  { value: 'done', label: 'Resolved' },
   { value: 'done', label: 'Done' },
 ] as const;
 
@@ -51,13 +72,16 @@ export function ticketPriorityLabel(priority: string) {
   return ticketPriorityLabels[priority] ?? priority.replace(/_/g, ' ').toLowerCase();
 }
 
-export function isSlaBreached(ticket: TicketItem) {
+export function isOverdue(ticket: TicketItem) {
   return Boolean(
     ticket.slaDueAt &&
       !['RESOLVED', 'CLOSED'].includes(ticket.status) &&
       new Date(ticket.slaDueAt) < new Date()
   );
 }
+
+/** Alias of isOverdue, kept for components that think in terms of SLA breach. */
+export const isSlaBreached = isOverdue;
 
 export function canResolve(status: string) {
   return !['RESOLVED', 'CLOSED'].includes(status);
@@ -74,7 +98,7 @@ export function ticketContactLabel(ticket: TicketItem) {
 export function ticketMatchesChip(ticket: TicketItem, chip: string) {
   if (!chip) return true;
   if (chip === 'open') return ticket.status === 'OPEN';
-  if (chip === 'overdue') return isSlaBreached(ticket);
+  if (chip === 'overdue') return isOverdue(ticket);
   if (chip === 'waiting') return ticket.status === 'WAITING' || ticket.status === 'PENDING';
   if (chip === 'done') return ticket.status === 'RESOLVED' || ticket.status === 'CLOSED';
   return true;

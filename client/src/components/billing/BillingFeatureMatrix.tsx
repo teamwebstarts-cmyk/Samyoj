@@ -175,11 +175,11 @@ const COMPARISON_CATEGORIES: MatrixCategory[] = [
     ],
   },
   {
-    title: 'Support & SLAs',
+    title: 'Support',
     icon: Headphones,
     rows: [
       {
-        name: 'Support SLA Channel',
+        name: 'Support Channel',
         values: {
           launch: 'Community & Docs',
           starter: 'Email Support (24h)',

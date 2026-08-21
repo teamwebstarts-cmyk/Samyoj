@@ -102,17 +102,4 @@ router.post(
   })
 );
 
-router.get(
-  '/sla',
-  authenticate,
-  requireOrg,
-  loadPermissions,
-  requirePermission('viewAnalytics'),
-  asyncHandler(async (req: Request, res: Response) => {
-    const { getSlaStats } = await import('../sla/service');
-    const stats = await getSlaStats(req.user!.organizationId!);
-    sendSuccess(res, stats);
-  })
-);
-
 export default router;

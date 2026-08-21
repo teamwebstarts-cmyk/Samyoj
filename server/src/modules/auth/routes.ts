@@ -242,6 +242,7 @@ router.post(
             role: orgMembership.role,
           }
         : null,
+      mustResetPassword: Boolean(orgMembership?.mustResetPassword),
       accessToken,
       refreshToken,
     });

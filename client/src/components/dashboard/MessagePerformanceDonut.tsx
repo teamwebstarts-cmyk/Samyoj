@@ -191,10 +191,10 @@ export default function MessagePerformanceDonut({
           </div>
         </div>
         <Link
-          to="/reports"
+          to="/billing?tab=usage"
           className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-[12px] font-bold text-emerald-600 transition-colors hover:text-emerald-700 hover:underline"
         >
-          View full report
+          View usage stats
           <ArrowRight className="h-3.5 w-3.5" />
         </Link>
       </div>

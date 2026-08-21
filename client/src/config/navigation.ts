@@ -4,7 +4,6 @@ import {
   ClipboardList,
   CreditCard,
   LayoutDashboard,
-  LineChart,
   MessageSquare,
   Package,
   Phone,
@@ -71,10 +70,6 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [{ to: '/tickets', icon: Ticket, label: 'Tickets' }],
   },
   {
-    label: 'Insights',
-    items: [{ to: '/reports', icon: LineChart, label: 'Reports' }],
-  },
-  {
     label: 'Account',
     items: [
       {
@@ -108,7 +103,6 @@ export const MOBILE_MORE_ITEMS: NavItem[] = [
   { to: '/templates', icon: ClipboardList, label: 'Templates' },
   { to: '/tickets', icon: Ticket, label: 'Tickets' },
   { to: '/commerce', icon: Package, label: 'Orders', hidden: true },
-  { to: '/reports', icon: LineChart, label: 'Reports' },
   { to: '/team', icon: UsersRound, label: 'Team', showForRoles: SUPERVISOR_PLUS },
   { to: '/billing', icon: CreditCard, label: 'Billing', showForRoles: ADMIN_ROLES },
   { to: '/settings', icon: Settings2, label: 'Settings' },

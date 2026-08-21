@@ -27,7 +27,11 @@ interface AuthContextType {
     email: string,
     password: string,
     totpCode?: string
-  ) => Promise<{ requires2FA?: boolean; requiresEmailVerification?: boolean }>;
+  ) => Promise<{
+    requires2FA?: boolean;
+    requiresEmailVerification?: boolean;
+    mustResetPassword?: boolean;
+  }>;
   register: (data: {
     name: string;
     email: string;
@@ -227,7 +231,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       false
     );
     heartbeat();
-    return {};
+    return { mustResetPassword: Boolean(data.data.mustResetPassword) };
   };
 
   const refreshSession = useCallback(async () => {

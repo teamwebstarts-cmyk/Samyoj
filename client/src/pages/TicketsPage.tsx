@@ -1,23 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { RefreshCw, Settings2 } from 'lucide-react';
+import { Settings2 } from 'lucide-react';
 import TicketDetailPanel from '../components/tickets/TicketDetailPanel';
 import TicketEmptyWorkspace from '../components/tickets/TicketEmptyWorkspace';
 import TicketList from '../components/tickets/TicketList';
 import {
-  TICKET_STATUS_CHIPS,
-  isSlaBreached,
+  TICKET_STATUS_FILTER_OPTIONS,
+  isOverdue,
   ticketMatchesChip,
   ticketUpdateToast,
   type TicketItem,
 } from '../components/tickets/ticketUi';
 import AppButton from '../components/ui/AppButton';
+import AppSelect from '../components/ui/AppSelect';
 import EmptyState from '../components/ui/EmptyState';
 import ListToolbar from '../components/ui/ListToolbar';
 import { SplitListSkeleton } from '../components/ui/ListLayoutSkeleton';
 import TicketHero from '../components/tickets/TicketHero';
 import PageShell from '../components/ui/PageShell';
-import { FOCUS_RING_CLASS } from '../hooks/inboxA11y';
 import { ticketApi } from '../services/api';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 import { useSocket } from '../hooks/useSocket';
@@ -160,14 +160,15 @@ export default function TicketsPage() {
   const stats = useMemo(
     () => ({
       open: tickets.filter((ticket) => ticket.status === 'OPEN').length,
-      overdue: tickets.filter(isSlaBreached).length,
-      waiting: tickets.filter((ticket) => ticket.status === 'WAITING' || ticket.status === 'PENDING').length,
+      resolved: tickets.filter(
+        (ticket) => ticket.status === 'RESOLVED' || ticket.status === 'CLOSED'
+      ).length,
+      overdue: tickets.filter(isOverdue).length,
     }),
     [tickets]
   );
 
   const hasActiveFilters = Boolean(search || status);
-  const showOverdueBanner = stats.overdue > 0 && status !== 'overdue';
 
   if (numbersLoading || !resolved) {
     return (
@@ -206,71 +207,29 @@ export default function TicketsPage() {
           stats={[
             { label: 'Total', value: tickets.length, hint: 'All tickets', tone: 'total' },
             { label: 'Open', value: stats.open, hint: 'Needs action', tone: 'open' },
-            { label: 'Overdue', value: stats.overdue, hint: 'Past SLA', tone: 'overdue' },
-            { label: 'Waiting', value: stats.waiting, hint: 'Pending reply', tone: 'waiting' },
+            { label: 'Resolved', value: stats.resolved, hint: 'Closed', tone: 'resolved' },
           ]}
         />
-
-        {showOverdueBanner && (
-          <div className="flex flex-col gap-3 rounded-2xl border border-rose-200/80 bg-rose-50/80 px-4 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-rose-500/20 dark:bg-rose-950/20">
-            <div>
-              <p className="text-[13px] font-bold text-rose-900 dark:text-rose-200">
-                {stats.overdue} ticket{stats.overdue === 1 ? '' : 's'} past the reply deadline
-              </p>
-              <p className="mt-0.5 text-[12px] text-rose-800/80 dark:text-rose-300/80">
-                Open the chat and reply, then mark the ticket resolved.
-              </p>
-            </div>
-            <AppButton
-              variant="secondary"
-              size="sm"
-              className="w-full shrink-0 sm:w-auto"
-              onClick={() => setStatus('overdue')}
-            >
-              View overdue
-            </AppButton>
-          </div>
-        )}
 
         <div className="inbox-shell overflow-hidden">
           <ListToolbar
             embedded
             compactMobile
-            stackFilters
+            inlineDesktop
             search={search}
             onSearchChange={setSearch}
             searchPlaceholder="Search name or phone..."
             filters={
-              <div
-                className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                role="tablist"
-                aria-label="Ticket status"
-              >
-                {TICKET_STATUS_CHIPS.map((chip) => {
-                  const active = status === chip.value;
-                  return (
-                    <button
-                      key={chip.value || 'all'}
-                      type="button"
-                      role="tab"
-                      aria-selected={active}
-                      onClick={() => setStatus(chip.value)}
-                      className={`inline-flex h-8 shrink-0 items-center rounded-lg px-2.5 text-[12px] font-semibold transition ${FOCUS_RING_CLASS} ${
-                        active
-                          ? 'bg-whatsapp-600 text-white shadow-[0_1px_3px_rgba(37,211,102,0.3)]'
-                          : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700'
-                      }`}
-                    >
-                      {chip.label}
-                    </button>
-                  );
-                })}
-              </div>
-            }
-            actions={
-              <AppButton variant="secondary" size="sm" icon={<RefreshCw size={15} />} onClick={load}>
-                Refresh
-              </AppButton>
+              <AppSelect
+                ariaLabel="Filter ticket status"
+                value={status}
+                onChange={(e) => setStatus(e.target.value)}
+                options={TICKET_STATUS_FILTER_OPTIONS.map((opt) => ({
+                  value: opt.value,
+                  label: opt.label,
+                }))}
+                placeholder="All tickets"
+              />
             }
           />
 

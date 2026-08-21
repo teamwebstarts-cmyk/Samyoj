@@ -653,20 +653,36 @@ export const templateApi = {
 export const analyticsApi = {
   overview: (params?: Record<string, string>) =>
     api.get('/analytics/overview', { params }),
-  reports: (days?: number) => api.get('/analytics/reports', { params: days ? { days: String(days) } : {} }),
+  reports: (params?: Record<string, string> | number) => {
+    const query = typeof params === 'number' ? { days: String(params) } : params;
+    return api.get('/analytics/reports', { params: query });
+  },
+  team: (params?: Record<string, string>) =>
+    api.get('/analytics/team', { params }),
+  heatmap: (params?: Record<string, string>) =>
+    api.get('/analytics/team/heatmap', { params }),
+  campaignsTemplates: (params?: Record<string, string>) =>
+    api.get('/analytics/campaigns-templates', { params }),
+  aiDeflection: (params?: Record<string, string>) =>
+    api.get('/analytics/ai-deflection', { params }),
+  metaHealth: (params?: Record<string, string>) =>
+    api.get('/analytics/meta-health', { params }),
   leaderboard: (days?: number) =>
     api.get('/analytics/leaderboard', { params: days ? { days: String(days) } : {} }),
   templates: (days?: number) =>
     api.get('/analytics/templates', { params: days ? { days: String(days) } : {} }),
   activity: (limit = 4) =>
     api.get('/analytics/activity', { params: { limit: String(limit) } }),
+  exportCsv: (params?: Record<string, string>) =>
+    api.get('/analytics/export', { params, responseType: 'blob' }),
 };
 
 export const billingApi = {
   get: () => api.get('/billing'),
   usage: () => api.get('/billing/usage'),
   updatePlan: (plan: string) => api.patch('/billing/plan', { plan }),
-  createOrder: (planId: string) => api.post('/billing/create-order', { planId }),
+  createOrder: (planId: string, cadence: 'monthly' | 'quarterly' | 'yearly' = 'monthly') =>
+    api.post('/billing/create-order', { planId, cadence }),
   verifyPayment: (data: {
     razorpay_order_id: string;
     razorpay_payment_id: string;
@@ -693,7 +709,6 @@ export const complianceApi = {
   exportData: () =>
     api.get('/compliance/export', { responseType: 'blob' }).then((res) => res.data),
   requestDeletion: () => api.post('/compliance/delete-request', { confirm: 'DELETE MY DATA' }),
-  sla: () => api.get('/compliance/sla'),
 };
 
 export const integrationsApi = {
@@ -793,6 +808,8 @@ export const teamApi = {
     disable: (code: string, password: string) =>
       api.post('/team/me/2fa/disable', { code, password }),
   },
+  changePassword: (currentPassword: string, newPassword: string) =>
+    api.post('/team/me/password', { currentPassword, newPassword }),
 };
 
 export const contentStudioApi = {

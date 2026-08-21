@@ -22,6 +22,7 @@ import type { OrgRole, RolePermissionsMatrix, TeamPermissions } from '../../type
 import { RoleBadge } from './AvailabilityBadge';
 import {
   CONFIGURABLE_ROLES,
+  ENFORCED_PERMISSION_KEYS,
   PERMISSION_GROUPS,
   PERMISSION_KEYS,
   ROLE_COLUMNS,
@@ -297,8 +298,18 @@ export default function TeamRolesTab({ canManage }: TeamRolesTabProps) {
                   >
                     <p className="text-[12px] font-extrabold uppercase tracking-[0.08em] text-theme-fg">
                       {group.label}
+                      {group.id === 'messaging' && (
+                        <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-bold normal-case tracking-normal text-neutral-600 ring-1 ring-inset ring-neutral-200/70 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700/50">
+                          <Lock className="h-3 w-3" />
+                          Follows Admin role
+                        </span>
+                      )}
                     </p>
-                    <p className="mt-0.5 text-[11px] text-theme-secondary">{group.description}</p>
+                    <p className="mt-0.5 text-[11px] text-theme-secondary">
+                      {group.id === 'messaging'
+                        ? 'These areas are managed by role (Owner/Admin) — per-role toggles are not available yet.'
+                        : group.description}
+                    </p>
                   </td>
                 </tr>
                 {group.keys.map((key, rowIndex) => {
@@ -331,7 +342,8 @@ export default function TeamRolesTab({ canManage }: TeamRolesTabProps) {
                       </td>
                       {ROLE_COLUMNS.map((role) => {
                         const checked = matrix[role][key];
-                        const locked = role === 'OWNER' || !canManage;
+                        const enforced = ENFORCED_PERMISSION_KEYS.includes(key);
+                        const locked = role === 'OWNER' || !canManage || !enforced;
 
                         return (
                           <td
@@ -341,7 +353,7 @@ export default function TeamRolesTab({ canManage }: TeamRolesTabProps) {
                             <PermissionToggle
                               checked={checked}
                               locked={locked}
-                              label={`${meta.label} for ${roleLabels[role]}`}
+                              label={`${meta.label} for ${roleLabels[role]}${enforced ? '' : ' (managed by role)'}`}
                               onToggle={() => togglePermission(role, key)}
                             />
                           </td>

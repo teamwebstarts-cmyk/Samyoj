@@ -6,7 +6,6 @@ const log = createModuleLogger('notifications');
 
 export type NotificationEvent =
   | 'assignment'
-  | 'sla_breach'
   | 'campaign_complete';
 
 interface NotificationPayload {
@@ -53,22 +52,6 @@ export async function notifyAssignment(
     userId: agentId,
     subject: 'New conversation assigned to you',
     text: `You have been assigned a conversation with ${contactName}.\n\nOpen inbox: ${process.env.CLIENT_URL || 'http://localhost:5173'}/inbox`,
-  });
-}
-
-export async function notifySlaBreach(
-  organizationId: string,
-  agentId: string | null,
-  _conversationId: string,
-  contactName: string
-) {
-  if (!agentId) return;
-  await notifyUser({
-    organizationId,
-    event: 'sla_breach',
-    userId: agentId,
-    subject: 'SLA breach — response overdue',
-    text: `SLA breached for conversation with ${contactName}. Please respond as soon as possible.\n\nOpen inbox: ${process.env.CLIENT_URL || 'http://localhost:5173'}/inbox`,
   });
 }
 

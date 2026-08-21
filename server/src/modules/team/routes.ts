@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import prisma from '../../config/database';
 import { authenticate, requireOrg, loadOrgRole, requireOrgRole } from '../../middleware/auth';
+import { passwordSchema } from '../auth/password-policy';
 import { AppError, sendSuccess, asyncHandler, paramId } from '../../utils/response';
 import { config } from '../../config';
 import { z } from 'zod';
@@ -619,24 +620,36 @@ router.post(
     const passwordHash = await bcrypt.hash(data.password, 12);
     const displayName = data.name || invite.name || invite.email.split('@')[0];
 
-    const result = await prisma.$transaction(async (tx) => {
-      let user = await tx.user.findUnique({ where: { email: invite.email } });
-
-      if (user) {
-        await tx.user.update({
-          where: { id: user.id },
-          data: { name: displayName, passwordHash },
-        });
-      } else {
-        user = await tx.user.create({
-          data: {
-            name: displayName,
-            email: invite.email,
-            passwordHash,
-            role: invite.orgRole === 'ADMIN' ? 'ADMIN' : 'AGENT',
+    // If an account already exists for this email, the invite must be accepted
+    // by signing in — never overwrite an existing password from a public link.
+    const existingUser = await prisma.user.findUnique({ where: { email: invite.email } });
+    if (existingUser) {
+      const alreadyMember = await prisma.organizationUser.findUnique({
+        where: {
+          organizationId_userId: {
+            organizationId: invite.organizationId,
+            userId: existingUser.id,
           },
-        });
+        },
+      });
+      if (alreadyMember) {
+        throw new AppError(409, 'This user is already a member of the workspace');
       }
+      throw new AppError(
+        409,
+        'An account with this email already exists. Sign in first, then open the invite link to join this workspace.'
+      );
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          name: displayName,
+          email: invite.email,
+          passwordHash,
+          role: invite.orgRole === 'ADMIN' ? 'ADMIN' : 'AGENT',
+        },
+      });
 
       const membership = await tx.organizationUser.create({
         data: {
@@ -890,6 +903,51 @@ router.post(
     });
 
     sendSuccess(res, { enabled: false });
+  })
+);
+
+// ─── Change own password ───────────────────────────────────────────────────
+
+router.post(
+  '/me/password',
+  authenticate,
+  requireOrg,
+  asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.user!.userId;
+    const { currentPassword, newPassword } = z
+      .object({ currentPassword: z.string().min(1), newPassword: passwordSchema })
+      .parse(req.body);
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new AppError(404, 'User not found');
+
+    if (!(await bcrypt.compare(currentPassword, user.passwordHash))) {
+      throw new AppError(401, 'Current password is incorrect');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+
+    await prisma.$transaction([
+      prisma.user.update({ where: { id: userId }, data: { passwordHash } }),
+      prisma.organizationUser.updateMany({
+        where: { userId },
+        data: { mustResetPassword: false },
+      }),
+      // Keep other devices out; the current session's token stays valid.
+      prisma.refreshToken.updateMany({
+        where: { userId, revokedAt: null, token: { not: req.body?.keepToken ?? undefined } },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
+
+    await logTeamAudit({
+      organizationId: req.user!.organizationId!,
+      actorId: userId,
+      action: 'PASSWORD_RESET',
+      targetUserId: userId,
+    });
+
+    sendSuccess(res, { message: 'Password updated' });
   })
 );
 
@@ -1184,6 +1242,12 @@ router.post(
     const membership = await getMembership(orgId, fromUserId);
     if (!membership) throw new AppError(404, 'Team member not found');
 
+    if (toAgentId) {
+      const target = await getMembership(orgId, toAgentId);
+      if (!target) throw new AppError(404, 'Reassign target is not a team member');
+      if (target.userId === fromUserId) throw new AppError(400, 'Pick a different agent');
+    }
+
     const count = await prisma.conversation.updateMany({
       where: { organizationId: orgId, assignedAgentId: fromUserId },
       data: { assignedAgentId: toAgentId },
@@ -1212,6 +1276,12 @@ router.delete(
 
     if (membership.userId === req.user!.userId) {
       throw new AppError(403, 'Cannot remove yourself from the team');
+    }
+
+    if (reassignToId) {
+      const target = await getMembership(orgId, reassignToId);
+      if (!target) throw new AppError(404, 'Reassign target is not a team member');
+      if (target.userId === userId) throw new AppError(400, 'Pick a different agent');
     }
 
     await prisma.$transaction(async (tx) => {

@@ -69,6 +69,7 @@ export default {
         'showcase-glow': '0 0 60px rgba(37,211,102,0.25)',
       },
       animation: {
+        'fade-in': 'fadeIn 0.3s ease-out both',
         'fade-up': 'fadeUp 0.5s ease-out both',
         'fade-up-delay': 'fadeUp 0.5s ease-out 0.1s both',
         'fade-up-delay-2': 'fadeUp 0.5s ease-out 0.2s both',
@@ -81,6 +82,10 @@ export default {
         'slide-down': 'slideDown 0.25s ease-in both',
       },
       keyframes: {
+        fadeIn: {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
+        },
         fadeUp: {
           '0%': { opacity: '0', transform: 'translateY(12px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },

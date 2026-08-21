@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import {
   ChevronDown,
   ChevronRight,
+  Circle,
   Headphones,
   LogOut,
   Menu,
@@ -64,7 +65,7 @@ function useIsApplePlatform() {
 
 export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout }: AppTopbarProps) {
   const { pathname, search } = useLocation();
-  const { orgRole } = useAuth();
+  const { orgRole, availability, setAvailability } = useAuth();
   const { extras: topbarExtras } = useTopbarExtras();
   const { hasConnectedNumber, loading: numbersLoading } = useWhatsAppNumber();
   const { title, description } = getPageMeta(pathname);
@@ -170,6 +171,43 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
               </p>
               <p className="truncate text-[11.5px] font-medium text-neutral-500">{roleText}</p>
             </div>
+            {availability && (
+              <div
+                role="group"
+                aria-label="Availability"
+                className="flex gap-1 border-b border-neutral-100 p-1.5 dark:border-theme-border"
+              >
+                {(['ONLINE', 'AWAY', 'OFFLINE'] as const).map((status) => {
+                  const active = availability === status;
+                  const dotColor =
+                    status === 'ONLINE'
+                      ? 'bg-emerald-500'
+                      : status === 'AWAY'
+                        ? 'bg-amber-400'
+                        : 'bg-neutral-400';
+                  return (
+                    <button
+                      key={status}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={active}
+                      onClick={() => {
+                        void setAvailability(status);
+                        setUserMenuOpen(false);
+                      }}
+                      className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-bold transition ${
+                        active
+                          ? 'bg-neutral-100 text-neutral-900 ring-1 ring-neutral-200 dark:bg-theme-subtle dark:text-theme-fg dark:ring-theme-border'
+                          : 'text-neutral-500 hover:bg-neutral-50 dark:text-neutral-400 dark:hover:bg-theme-subtle'
+                      }`}
+                    >
+                      <Circle className={`h-2 w-2 fill-current ${dotColor}`} />
+                      {status === 'ONLINE' ? 'Online' : status === 'AWAY' ? 'Away' : 'Offline'}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             <Link
               to="/settings"
               role="menuitem"

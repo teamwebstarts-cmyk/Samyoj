@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { LifeBuoy } from 'lucide-react';
+import { Ticket } from 'lucide-react';
 import InboxModal from './InboxModal';
 import AppButton from '../ui/AppButton';
 import AppInput from '../ui/AppInput';
@@ -20,11 +20,15 @@ interface CreateTicketModalProps {
   onSubmit: (values: TicketFormValues) => void;
 }
 
-const PRIORITIES: Array<{ value: TicketFormValues['priority']; label: string }> = [
-  { value: 'LOW', label: 'Low' },
-  { value: 'MEDIUM', label: 'Medium' },
-  { value: 'HIGH', label: 'High' },
-  { value: 'URGENT', label: 'Urgent' },
+const PRIORITIES: Array<{
+  value: TicketFormValues['priority'];
+  label: string;
+  chip: string;
+}> = [
+  { value: 'LOW', label: 'Low', chip: 'bg-slate-100 text-slate-700' },
+  { value: 'MEDIUM', label: 'Medium', chip: 'bg-sky-100 text-sky-700' },
+  { value: 'HIGH', label: 'High', chip: 'bg-amber-100 text-amber-700' },
+  { value: 'URGENT', label: 'Urgent', chip: 'bg-rose-100 text-rose-700' },
 ];
 
 export default function CreateTicketModal({
@@ -64,9 +68,10 @@ export default function CreateTicketModal({
       open={open}
       onClose={onClose}
       title="Create ticket"
-      subtitle="This chat will show on the Tickets page with a reply deadline."
-      icon={LifeBuoy}
-      iconClassName="bg-whatsapp-500/10 text-whatsapp-700 ring-1 ring-whatsapp-500/15 dark:bg-whatsapp-950/40 dark:text-whatsapp-300 dark:ring-whatsapp-500/20"
+      subtitle="Add this chat to the Tickets page so the team can follow up and hit the reply deadline."
+      icon={Ticket}
+      // Match the inbox Create-ticket rail button: emerald token + Lucide Ticket icon.
+      iconClassName="bg-emerald-50 text-emerald-700 ring-1 ring-emerald-500/20 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-500/25"
     >
       <form onSubmit={handleSubmit} className="space-y-3.5">
         <AppInput
@@ -95,7 +100,7 @@ export default function CreateTicketModal({
                   aria-pressed={selected}
                   className={`rounded-lg px-1.5 py-2 text-[12px] font-bold transition ${FOCUS_RING_CLASS} ${
                     selected
-                      ? 'bg-gradient-to-br from-whatsapp-500 to-whatsapp-600 text-white shadow-[0_2px_8px_rgba(37,211,102,0.28)]'
+                      ? 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-[0_2px_8px_rgba(16,185,129,0.28)]'
                       : 'text-theme-secondary hover:bg-theme-surface/80 hover:text-theme-fg'
                   }`}
                 >
@@ -107,19 +112,25 @@ export default function CreateTicketModal({
         </div>
 
         <AppTextarea
-          label="Private note (optional)"
+          label="Description"
           hint="Team only"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder="What still needs to happen? The customer will not see this."
-          rows={3}
+          placeholder="What still needs to happen? The customer will not see this — it appears on the ticket sidebar so the team knows what's next."
+          rows={4}
         />
 
         <div className="flex flex-col-reverse gap-2 border-t border-theme-border/60 pt-3.5 sm:flex-row sm:justify-end">
           <AppButton variant="secondary" onClick={onClose} disabled={submitting} className="w-full sm:w-auto">
             Cancel
           </AppButton>
-          <AppButton type="submit" loading={submitting} disabled={!title.trim()} className="w-full sm:w-auto">
+          <AppButton
+            type="submit"
+            loading={submitting}
+            disabled={!title.trim()}
+            icon={<Ticket className="h-4 w-4" strokeWidth={2.25} />}
+            className="w-full sm:w-auto"
+          >
             Create ticket
           </AppButton>
         </div>

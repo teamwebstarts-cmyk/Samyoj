@@ -29,6 +29,7 @@ export default function AcceptInvitePage() {
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [existingAccount, setExistingAccount] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -61,10 +62,16 @@ export default function AcceptInvitePage() {
       navigate('/');
       window.location.reload();
     } catch (err: unknown) {
-      toastError(
+      const message =
         (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
-          ?.message || 'Failed to accept invite'
-      );
+          ?.message || 'Failed to accept invite';
+      // Existing account for this email — server refuses to overwrite it.
+      if (message.includes('already exists') || message.includes('already a member')) {
+        setExistingAccount(true);
+        toastError(message);
+      } else {
+        toastError(message);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -81,16 +88,31 @@ export default function AcceptInvitePage() {
   if (!invite) {
     return (
       <AuthLayout title="Invite not found" subtitle="This link may have expired or been revoked">
-        <p className="text-center text-[13px] text-theme-secondary">
-          Ask your admin to send a new invite, or{' '}
-          <Link to="/login" className="font-semibold text-whatsapp-700 underline">
-            sign in
-          </Link>{' '}
-          if you already have an account.
-        </p>
-      </AuthLayout>
-    );
-  }
+      <p className="text-center text-[13px] text-theme-secondary">
+        Ask your admin to send a new invite, or{' '}
+        <Link to="/login" className="font-semibold text-whatsapp-700 underline">
+          sign in
+        </Link>{' '}
+        if you already have an account.
+      </p>
+
+      {existingAccount && (
+        <div className="mt-4 rounded-xl border border-amber-200/60 bg-amber-50/60 p-3 text-[12px] text-amber-800 dark:border-amber-800/40 dark:bg-amber-900/20 dark:text-amber-200">
+          <p className="font-semibold">This email already has an account.</p>
+          <p className="mt-1">
+            Sign in instead — your admin can re-invite you to this team after you sign in.
+          </p>
+          <Link
+            to="/login"
+            className="mt-2 inline-block font-semibold text-whatsapp-700 underline"
+          >
+            Go to sign in →
+          </Link>
+        </div>
+      )}
+    </AuthLayout>
+  );
+}
 
   return (
     <AuthLayout

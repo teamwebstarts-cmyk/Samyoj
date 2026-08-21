@@ -138,7 +138,7 @@ export function getTemplateRejectionGuide(reason?: string | null): TemplateRejec
   };
 }
 
-/** Meta does not publish a hard SLA. Typical Cloud API review window. */
+/** Meta does not publish a hard deadline. Typical Cloud API review window. */
 export const TEMPLATE_REVIEW_ETA = {
   short: 'Usually within 24h',
   typical: 'Usually a few minutes to 24 hours',

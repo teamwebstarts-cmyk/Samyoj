@@ -22,7 +22,6 @@ const WEBHOOK_EVENTS = [
   'message.sent',
   'conversation.assigned',
   'conversation.closed',
-  'sla.breached',
 ] as const;
 
 function hashKey(key: string) {

@@ -36,6 +36,7 @@ yarn-error.log*
 .env.local
 .env.*.local
 server/.env.updated
+docs/env-backup/*.backup
 server/key.json
 server/secrets/
 

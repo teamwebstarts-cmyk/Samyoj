@@ -34,16 +34,31 @@ export function ModalSection({
   step,
   title,
   subtitle,
+  icon,
   children,
 }: {
   step?: number | string;
   title: string;
   subtitle?: string;
+  /** Section icon. Pass a Lucide component (auto-rendered) or a pre-rendered ReactNode. */
+  icon?: LucideIcon | ReactNode;
   children: ReactNode;
 }) {
   return (
     <section className="space-y-3">
       <div className="flex items-start gap-3">
+        {icon != null && (
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-theme-subtle text-theme-muted ring-1 ring-theme-border/70">
+            {isLucideIcon(icon) ? (
+              (() => {
+                const Comp = icon as LucideIcon;
+                return <Comp className="h-3.5 w-3.5" strokeWidth={2.25} />;
+              })()
+            ) : (
+              (icon as ReactNode)
+            )}
+          </span>
+        )}
         {step !== undefined && (
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-[11px] font-black text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
             {step}
@@ -57,6 +72,15 @@ export function ModalSection({
       <div className={step !== undefined ? 'space-y-4 pl-10' : 'space-y-4'}>{children}</div>
     </section>
   );
+}
+
+/** Lucide icons are forwardRef components — `$$typeof` is the easiest runtime
+ *  hint that something is a component rather than a JSX element. */
+function isLucideIcon(value: unknown): value is LucideIcon {
+  if (typeof value === 'function') return true;
+  if (typeof value !== 'object' || value === null) return false;
+  const obj = value as { render?: unknown };
+  return typeof obj.render === 'function';
 }
 
 export function ModalPanel({

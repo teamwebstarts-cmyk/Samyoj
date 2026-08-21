@@ -246,7 +246,7 @@
   .auth-mobile-logo {
     margin-bottom: 0.65rem;
     justify-content: center;
-    max-width: min(100%, 17.5rem);
+    max-width: min(100%, 24rem);
   }
 
   .auth-mobile-logo .auth-brand-logo {
@@ -257,12 +257,12 @@
 
   .auth-form-stack {
     width: 100%;
-    max-width: min(100%, 17.5rem);
+    max-width: min(100%, 24rem);
     margin-block: 0.25rem;
     border-radius: 1.2rem;
     border: 1px solid rgb(255 255 255 / 0.72);
     background: rgb(255 255 255 / 0.93);
-    padding: 0.95rem 0.9rem 0.85rem;
+    padding: 1.05rem 1.15rem 0.95rem;
     box-shadow:
       0 14px 36px rgb(15 23 42 / 0.12),
       0 2px 8px rgb(15 23 42 / 0.06);
@@ -275,13 +275,13 @@
   }
 
   .auth-form-title {
-    font-size: 1.2rem;
+    font-size: 1.3rem;
     line-height: 1.2;
   }
 
   .auth-form-stack header p {
     margin-top: 0.35rem !important;
-    font-size: 0.78rem !important;
+    font-size: 0.82rem !important;
     line-height: 1.45;
   }
 
@@ -293,29 +293,9 @@
     margin-top: 0.7rem;
   }
 
-  .auth-form-stack .auth-cta-card {
-    gap: 0.45rem;
-    padding: 0.55rem 0.65rem;
-    border-radius: 0.85rem;
-  }
-
-  .auth-form-stack .auth-cta-card p {
-    font-size: 0.72rem !important;
-    line-height: 1.35;
-  }
-
-  .auth-form-stack .auth-cta-card a {
-    font-size: 0.72rem !important;
-  }
-
-  .auth-form-stack .auth-cta-card > span {
-    height: 2rem !important;
-    width: 2rem !important;
-  }
-
   .auth-form-stack > p:last-child {
     margin-top: 0.65rem;
-    font-size: 0.68rem;
+    font-size: 0.72rem;
   }
 
   .auth-form-stack .mt-4 {
@@ -339,7 +319,7 @@
 
   .auth-form-stack button[type='submit'],
   .auth-form-stack .auth-button {
-    min-height: 2.65rem;
-    font-size: 0.8125rem;
+    min-height: 2.7rem;
+    font-size: 0.875rem;
   }
 }

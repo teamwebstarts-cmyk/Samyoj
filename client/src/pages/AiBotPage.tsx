@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { FOCUS_RING_CLASS } from '../hooks/inboxA11y';
 import {
   BookOpen,
   Bot,
@@ -1154,30 +1155,97 @@ export default function AiBotPage() {
         icon={formChannel === 'CALL' ? PhoneCall : BotMessageSquare}
         accent="emerald"
         footer={
-          <SlideOverFooter
-            onCancel={closeSlide}
-            hideSubmit={slideTab === 'pickup'}
-            submitLabel={
-              editing
-                ? slideTab === 'setup'
-                  ? 'Save'
-                  : 'Save changes'
-                : 'Create'
-            }
-            loading={slideTab === 'pickup' ? pickupFooter.saving : saving}
-            submitDisabled={slideTab === 'pickup' ? !pickupFooter.dirty : false}
-            primaryAction={
-              slideTab === 'pickup'
-                ? {
-                    label: 'Save',
-                    onClick: () => void pickupRef.current?.save(),
-                  }
-                : undefined
-            }
-            primaryDisabled={slideTab === 'pickup' && !pickupFooter.dirty}
-            onDelete={editing && canDeleteBot(editing) ? () => handleDelete(editing.id) : undefined}
-            deleteLabel="Delete bot"
-          />
+          editing ? (
+            <SlideOverFooter
+              onCancel={closeSlide}
+              hideSubmit={slideTab === 'pickup'}
+              submitLabel={slideTab === 'setup' ? 'Save' : 'Save changes'}
+              loading={slideTab === 'pickup' ? pickupFooter.saving : saving}
+              submitDisabled={slideTab === 'pickup' ? !pickupFooter.dirty : false}
+              primaryAction={
+                slideTab === 'pickup'
+                  ? {
+                      label: 'Save',
+                      onClick: () => void pickupRef.current?.save(),
+                    }
+                  : undefined
+              }
+              primaryDisabled={slideTab === 'pickup' && !pickupFooter.dirty}
+              onDelete={canDeleteBot(editing) ? () => handleDelete(editing.id) : undefined}
+              deleteLabel="Delete bot"
+            />
+          ) : (
+            <div className="flex items-center gap-2.5">
+              {slideTab !== 'setup' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const tabs = formChannel === 'CALL'
+                      ? (['setup', 'train', 'try', 'pickup'] as SlideTab[])
+                      : (['setup', 'train', 'try'] as SlideTab[]);
+                    const idx = tabs.indexOf(slideTab);
+                    if (idx > 0) setSlideTab(tabs[idx - 1]);
+                  }}
+                  className={`inline-flex h-10 min-h-[44px] items-center justify-center rounded-xl border border-theme-border bg-theme-surface px-5 text-[13px] font-semibold text-theme-fg transition hover:bg-theme-subtle ${FOCUS_RING_CLASS}`}
+                >
+                  Back
+                </button>
+              )}
+              <div className="ml-auto flex flex-wrap items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={closeSlide}
+                  className={`inline-flex h-10 min-h-[44px] items-center justify-center rounded-xl border border-theme-border bg-theme-surface px-5 text-[13px] font-semibold text-theme-fg transition hover:bg-theme-subtle ${FOCUS_RING_CLASS}`}
+                >
+                  Cancel
+                </button>
+                {slideTab === 'setup' || slideTab === 'train' ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (slideTab === 'setup' && !name.trim()) {
+                        toastError('Give this bot a name.');
+                        return;
+                      }
+                      if (slideTab === 'setup' && nameConflict) {
+                        toastError(nameConflict);
+                        return;
+                      }
+                      const next = slideTab === 'setup' ? 'train' : 'try';
+                      setSlideTab(next as SlideTab);
+                    }}
+                    className={`btn-primary inline-flex h-10 min-h-[44px] items-center justify-center gap-2 rounded-xl px-5 text-[13px] font-semibold ${FOCUS_RING_CLASS}`}
+                  >
+                    Next
+                  </button>
+                ) : slideTab === 'pickup' ? (
+                  <button
+                    type="button"
+                    disabled={!pickupFooter.dirty || pickupFooter.saving}
+                    onClick={() => void pickupRef.current?.save()}
+                    className={`btn-primary inline-flex h-10 min-h-[44px] items-center justify-center gap-2 rounded-xl px-5 text-[13px] font-semibold disabled:opacity-50 ${FOCUS_RING_CLASS}`}
+                  >
+                    {pickupFooter.saving && (
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                    )}
+                    Save
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    form="slideover-form"
+                    disabled={saving}
+                    className={`btn-primary inline-flex h-10 min-h-[44px] items-center justify-center gap-2 rounded-xl px-5 text-[13px] font-semibold disabled:opacity-50 ${FOCUS_RING_CLASS}`}
+                  >
+                    {saving && (
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                    )}
+                    Create
+                  </button>
+                )}
+              </div>
+            </div>
+          )
         }
       >
         <div className="mb-5">
@@ -1405,10 +1473,10 @@ export default function AiBotPage() {
                       key={draft.key}
                       className="rounded-2xl border border-emerald-200/80 bg-emerald-50/40 p-3 dark:border-emerald-800/60 dark:bg-emerald-950/20"
                     >
-                      <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="grid gap-2 sm:grid-cols-2">
                         <AppTextarea
                           label="Question"
-                          rows={3}
+                          rows={2}
                           value={draft.title}
                           onChange={(e) =>
                             setFaqDrafts((prev) =>
@@ -1420,7 +1488,7 @@ export default function AiBotPage() {
                         />
                         <AppTextarea
                           label="Answer"
-                          rows={3}
+                          rows={2}
                           value={draft.content}
                           onChange={(e) =>
                             setFaqDrafts((prev) =>
@@ -1454,25 +1522,25 @@ export default function AiBotPage() {
                 </div>
               )}
 
-              <div className="rounded-2xl border border-theme-border bg-theme-subtle/60 p-3.5">
-                <p className="text-[13px] font-bold text-theme-fg">Add one yourself</p>
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl border border-theme-border bg-theme-subtle/60 p-3">
+                <p className="text-[12px] font-semibold text-theme-fg">Add one yourself</p>
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
                   <AppTextarea
                     label="Question"
                     placeholder="What do customers ask?"
-                    rows={3}
+                    rows={2}
                     value={faqForm.title}
                     onChange={(e) => setFaqForm({ ...faqForm, title: e.target.value })}
                   />
                   <AppTextarea
                     label="Answer"
                     placeholder="What should the bot say?"
-                    rows={3}
+                    rows={2}
                     value={faqForm.content}
                     onChange={(e) => setFaqForm({ ...faqForm, content: e.target.value })}
                   />
                 </div>
-                <div className="mt-3">
+                <div className="mt-2">
                   <AppButton type="button" size="sm" loading={saving} onClick={() => void saveFaq()}>
                     {editingFaqId ? 'Save' : 'Add'}
                   </AppButton>

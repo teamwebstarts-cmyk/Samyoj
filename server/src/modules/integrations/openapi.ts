@@ -61,7 +61,6 @@ const spec = {
                 'message.sent',
                 'conversation.assigned',
                 'conversation.closed',
-                'sla.breached',
               ],
             },
           },

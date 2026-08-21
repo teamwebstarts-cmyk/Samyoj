@@ -100,11 +100,13 @@ export function verifyWebhookSignature(rawBody: string, signature: string): bool
 /**
  * Phase 0 fix: planTier must come from the server-side PaymentOrder row,
  * never from the client. Caller is responsible for passing PaymentOrder.planId.
+ * periodDays comes from the purchased SKU (30/90/365); defaults to 30 for
+ * legacy callers that predate cadences.
  */
-export async function activatePlan(organizationId: string, planTier: string) {
-  // Phase 0: still using +30d license model. Phase 2 replaces with real subscriptions.
+export async function activatePlan(organizationId: string, planTier: string, periodDays?: number) {
+  const days = periodDays && periodDays > 0 ? periodDays : 30;
   const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + 30);
+  expiresAt.setDate(expiresAt.getDate() + days);
 
   const { default: prisma } = await import('../../config/database');
   return prisma.organization.update({

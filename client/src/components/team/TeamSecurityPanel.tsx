@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
+  KeyRound,
   Laptop,
   LogOut,
   Shield,
@@ -28,6 +29,10 @@ export default function TeamSecurityPanel() {
   const [disablePassword, setDisablePassword] = useState('');
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(initial2FA);
   const [busy, setBusy] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [changingPassword, setChangingPassword] = useState(false);
 
   const loadSessions = () => {
     teamApi.sessions
@@ -109,10 +114,72 @@ export default function TeamSecurityPanel() {
     }
   };
 
+  const handleChangePassword = async () => {
+    if (newPassword !== confirmNewPassword) {
+      toastError('New passwords do not match');
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      await teamApi.changePassword(currentPassword, newPassword);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmNewPassword('');
+      toastSuccess('Password updated. Other devices were signed out.');
+    } catch (err: unknown) {
+      toastError(
+        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
+          ?.message || 'Could not change password'
+      );
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
   if (loading) return <FormPageSkeleton label="Loading security settings" blocks={3} />;
 
   return (
     <div className="space-y-5">
+      <SectionCard title="Change password" subtitle="Update your sign-in password">
+        <div className="space-y-4">
+          <AppInput
+            id="pw-current"
+            label="Current password"
+            type="password"
+            autoComplete="current-password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+          />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <AppInput
+              id="pw-new"
+              label="New password"
+              type="password"
+              autoComplete="new-password"
+              hint="8+ chars, mixed case, number"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+            />
+            <AppInput
+              id="pw-confirm"
+              label="Confirm new password"
+              type="password"
+              autoComplete="new-password"
+              value={confirmNewPassword}
+              onChange={(e) => setConfirmNewPassword(e.target.value)}
+            />
+          </div>
+          <AppButton
+            icon={<KeyRound size={14} />}
+            loading={changingPassword}
+            disabled={!currentPassword || newPassword.length < 8 || newPassword !== confirmNewPassword}
+            onClick={() => void handleChangePassword()}
+          >
+            Update password
+          </AppButton>
+        </div>
+      </SectionCard>
+
       <SectionCard title="Two-factor authentication" subtitle="Add an extra layer of security to your account">
         {twoFactorStep === 'idle' && !twoFactorEnabled && (
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

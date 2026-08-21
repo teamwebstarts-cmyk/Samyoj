@@ -205,7 +205,7 @@ Custom fields can feed template variables such as {{order_id}}.`,
   {
     id: 'tickets-inbox',
     title: 'Inbox tickets',
-    keywords: ['inbox ticket', 'sla', 'customer ticket', 'needs reply'],
+    keywords: ['inbox ticket', 'customer ticket', 'needs reply'],
     content: `The Tickets page in the left nav tracks WhatsApp customer conversations that still need a reply (open Inbox work). Those are customer tickets, not this Help Center.
 
 This Help Center is an assistant only — it answers how to use Samyoj. It does not create platform tickets.`,

@@ -5,7 +5,8 @@ import { authenticate, requireOrg } from '../../middleware/auth';
 import { loadPermissions, requirePermission } from '../../middleware/permissions';
 import { AppError, sendSuccess, asyncHandler } from '../../utils/response';
 import { getSeatLimit, type TeamSettings } from '../team/types';
-import { BILLING_PLANS, getPlan, getSku, BILLING_SKUS } from './plans';
+import { BILLING_SKUS, PLAN_TIERS, getSku, legacyPlanToTier } from './plans';
+import type { BillingSkuDef, PlanTier } from './plans';
 import {
   activatePlan,
   createRazorpayOrder,
@@ -21,6 +22,35 @@ import paymentLinksRoutes from './payment-links.routes';
 const router = Router();
 
 router.use(paymentLinksRoutes);
+
+/** Client-facing plan shape built from PLAN_TIERS + monthly SKU pricing. */
+function tierToClientPlan(tier: PlanTier) {
+  const def = PLAN_TIERS[tier];
+  const monthlySku = BILLING_SKUS.find((s) => s.planTier === tier && s.cadence === 'monthly');
+  return {
+    id: def.tier,
+    name: def.name,
+    pricePaise: monthlySku?.pricePaise ?? 0,
+    priceLabel: monthlySku?.effectiveMonthlyLabel ?? 'Custom',
+    seats: def.seats === 'custom' ? 999 : def.seats,
+    waNumbers: def.waNumbers,
+    contacts: def.contacts,
+    publishedWorkflows: def.publishedWorkflows,
+    aiIncluded: def.aiIncluded,
+    callingIncluded: def.callingIncluded,
+    features: def.features,
+    isMostPopular: monthlySku?.isMostPopular,
+  };
+}
+
+/**
+ * Resolve cadence + periodDays for a captured order from its stored
+ * tier + amount. Prices are unique per tier+cadence, so the SKU is
+ * unambiguous without a schema change.
+ */
+function skuForPaymentOrder(planId: string, amountPaise: number): BillingSkuDef | undefined {
+  return BILLING_SKUS.find((s) => s.planTier === planId && s.pricePaise === amountPaise);
+}
 
 router.get(
   '/',
@@ -44,12 +74,20 @@ router.get(
 
     const teamSettings = (org.settings as { team?: TeamSettings } | null)?.team;
     const seatLimit = getSeatLimit(org.plan, teamSettings);
-    const currentPlan = getPlan(org.plan) || BILLING_PLANS[0];
+
+    // Map legacy plan strings ('business') onto the current tier catalog.
+    const planTier = legacyPlanToTier(org.plan);
+    const currentPlan = tierToClientPlan(planTier);
+
+    // Infer current cadence from the most recent captured order's amount.
+    const lastPaid = recentPayments[0];
+    const lastSku = lastPaid ? skuForPaymentOrder(lastPaid.planId, lastPaid.amountPaise) : undefined;
 
     sendSuccess(res, {
       plan: org.plan,
+      planTier,
       currentPlan,
-      plans: BILLING_PLANS,
+      plans: (Object.keys(PLAN_TIERS) as PlanTier[]).map(tierToClientPlan),
       seatsUsed: memberCount,
       seatLimit,
       canManageBilling: req.permissions?.manageSettings ?? false,
@@ -57,6 +95,9 @@ router.get(
       razorpayKeyId: isRazorpayConfigured() ? config.razorpay.keyId : null,
       planExpiresAt: org.planExpiresAt,
       subscriptionStatus: org.subscriptionStatus,
+      cadence: org.subscriptionStatus === 'trial' ? 'trial' : lastSku?.cadence ?? null,
+      trialEndsAt: org.subscriptionStatus === 'trial' ? org.planExpiresAt : null,
+      currentPeriodEnd: org.planExpiresAt,
       recentPayments: recentPayments.map((p) => ({
         planId: p.planId,
         amountPaise: p.amountPaise,
@@ -99,11 +140,15 @@ router.post(
   loadPermissions,
   requirePermission('manageSettings'),
   asyncHandler(async (req: Request, res: Response) => {
-    const { planId } = z.object({ planId: z.enum(['starter', 'growth', 'pro']) }).parse(req.body);
+    const { planId, cadence } = z
+      .object({
+        planId: z.enum(['starter', 'growth', 'pro']),
+        cadence: z.enum(['monthly', 'quarterly', 'yearly']).default('monthly'),
+      })
+      .parse(req.body);
     const orgId = req.user!.organizationId!;
 
-    const skuId = `${planId}_monthly`;
-    const sku = getSku(skuId);
+    const sku = BILLING_SKUS.find((s) => s.planTier === planId && s.cadence === cadence);
     if (!sku || sku.pricePaise <= 0) {
       throw new AppError(400, 'Invalid plan for payment');
     }
@@ -111,11 +156,11 @@ router.post(
     const org = await prisma.organization.findUnique({ where: { id: orgId } });
     if (!org) throw new AppError(404, 'Organization not found');
 
-    const receipt = `plan_${planId}_${orgId.slice(0, 8)}_${Date.now()}`;
+    const receipt = `plan_${sku.id}_${orgId.slice(0, 8)}_${Date.now()}`;
     const order = await createRazorpayOrder({
       amountPaise: sku.pricePaise,
       receipt,
-      notes: { organizationId: orgId, planId, skuId, companyName: org.companyName },
+      notes: { organizationId: orgId, planId, skuId: sku.id, companyName: org.companyName },
     });
 
     await prisma.paymentOrder.create({
@@ -141,6 +186,9 @@ router.post(
       currency: order.currency,
       keyId: config.razorpay.keyId,
       planName: sku.name,
+      skuId: sku.id,
+      cadence: sku.cadence,
+      amountLabel: sku.effectiveMonthlyLabel,
     });
   })
 );
@@ -185,6 +233,7 @@ router.post(
     }
 
     const planId = paymentOrder.planId;
+    const sku = skuForPaymentOrder(planId, paymentOrder.amountPaise);
 
     await prisma.paymentOrder.update({
       where: { id: paymentOrder.id },
@@ -195,7 +244,7 @@ router.post(
       },
     });
 
-    const updatedOrg = await activatePlan(orgId, planId);
+    const updatedOrg = await activatePlan(orgId, planId, sku?.periodDays);
 
     const { emitProductEvent } = await import('../platform/events');
     emitProductEvent({
@@ -247,11 +296,12 @@ router.post(
         if (existing && existing.status !== 'CAPTURED') {
           const organizationId = existing.organizationId;
           const planId = existing.planId;
+          const sku = skuForPaymentOrder(planId, existing.amountPaise);
           await prisma.paymentOrder.update({
             where: { id: existing.id },
             data: { status: 'CAPTURED', paymentId, paidAt: new Date() },
           });
-          await activatePlan(organizationId, planId);
+          await activatePlan(organizationId, planId, sku?.periodDays);
           logger.info('Plan activated via Razorpay webhook', {
             source: 'razorpay',
             organizationId,

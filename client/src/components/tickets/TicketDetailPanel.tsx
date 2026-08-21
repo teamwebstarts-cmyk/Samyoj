@@ -1,19 +1,25 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Clock, Inbox, LifeBuoy, User } from 'lucide-react';
+import {
+  CalendarClock,
+  MessageSquare,
+  StickyNote,
+  Tag,
+  Ticket,
+  User,
+} from 'lucide-react';
 import ContactAvatar from '../inbox/ContactAvatar';
 import AppButton from '../ui/AppButton';
 import AppSelect from '../ui/AppSelect';
+import PriorityBadge from '../ui/PriorityBadge';
 import StatusBadge from '../ui/StatusBadge';
 import SlideOver from '../ui/SlideOver';
-import { ModalSection } from '../ui/modalUi';
 import { FOCUS_RING_CLASS } from '../../hooks/inboxA11y';
 import { teamApi } from '../../services/api';
 import type { TeamAgent } from '../../types';
 import {
   TICKET_PRIORITIES,
   canResolve,
-  formatReplyBy,
   nextTicketAction,
   ticketContactLabel,
   ticketConversationId,
@@ -28,6 +34,28 @@ interface TicketDetailPanelProps {
   onClose: () => void;
   onUpdate: (id: string, data: Record<string, unknown>) => Promise<void> | void;
   updating?: boolean;
+}
+
+function DetailRow({
+  icon: Icon,
+  label,
+  children,
+}: {
+  icon: typeof User;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-theme-subtle">
+        <Icon className="h-3.5 w-3.5 text-theme-muted" strokeWidth={2.25} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-theme-muted">{label}</p>
+        <div className="mt-1">{children}</div>
+      </div>
+    </div>
+  );
 }
 
 export default function TicketDetailPanel({
@@ -51,11 +79,12 @@ export default function TicketDetailPanel({
 
   const contactLabel = ticketContactLabel(ticket);
   const conversationId = ticketConversationId(ticket);
-  const reply = formatReplyBy(ticket.slaDueAt);
   const action = nextTicketAction(ticket.status);
   const created = ticket.createdAt
     ? new Date(ticket.createdAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
     : null;
+  const descriptionNote = ticket.conversation?.internalNotes?.[0]?.content;
+
   const agentOptions = [
     { value: '', label: 'Unassigned' },
     ...agents.map((agent) => ({ value: agent.id, label: agent.name })),
@@ -70,7 +99,7 @@ export default function TicketDetailPanel({
       onClose={onClose}
       title={ticket.title}
       subtitle={contactLabel}
-      icon={LifeBuoy}
+      icon={Ticket}
       accent="emerald"
       footer={
         <div className="flex w-full flex-col gap-2 sm:flex-row">
@@ -90,8 +119,9 @@ export default function TicketDetailPanel({
         </div>
       }
     >
-      <div className="space-y-5">
-        <div className="flex items-center gap-3">
+      <div className="space-y-4">
+        {/* Customer header */}
+        <div className="flex items-center gap-3 rounded-2xl border border-theme-border bg-theme-subtle/30 p-3.5">
           {ticket.contact ? (
             <ContactAvatar
               name={ticket.contact.name || undefined}
@@ -100,7 +130,7 @@ export default function TicketDetailPanel({
             />
           ) : (
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-              <LifeBuoy className="h-4 w-4" strokeWidth={2.25} />
+              <Ticket className="h-4 w-4" strokeWidth={2.25} />
             </div>
           )}
           <div className="min-w-0 flex-1">
@@ -108,67 +138,67 @@ export default function TicketDetailPanel({
             {ticket.contact?.phone && ticket.contact?.name && (
               <p className="mt-0.5 text-[12px] text-theme-muted">{ticket.contact.phone}</p>
             )}
-            <div className="mt-1.5 flex flex-wrap gap-2">
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
               <StatusBadge status={ticket.status} label={ticketStatusLabel(ticket.status)} />
-              <StatusBadge status={ticket.priority} label={ticketPriorityLabel(ticket.priority)} />
+              <PriorityBadge priority={ticket.priority} />
             </div>
           </div>
         </div>
 
-        <dl className="space-y-3 rounded-2xl border border-theme-border bg-theme-subtle/30 p-4">
-          <div className="flex items-start gap-3">
-            <Clock className="mt-0.5 h-4 w-4 shrink-0 text-theme-muted" />
-            <div>
-              <dt className="text-caption font-bold uppercase text-theme-muted">Reply by</dt>
-              <dd
-                className={`text-[13px] font-semibold ${
-                  reply.overdue ? 'text-rose-600 dark:text-rose-400' : 'text-theme-fg'
-                }`}
-              >
-                {reply.text}
-              </dd>
-              {reply.exact && (
-                <p className="mt-0.5 text-[12px] text-theme-muted">{reply.exact}</p>
-              )}
+        {/* Description / private note */}
+        <div className="rounded-2xl border border-theme-border bg-theme-subtle/30 p-4">
+          <div className="mb-2.5 flex items-center gap-2">
+            <div className="flex h-6 w-6 items-center justify-center rounded-md bg-amber-50 dark:bg-amber-950/40">
+              <StickyNote className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" strokeWidth={2.25} />
             </div>
+            <p className="text-[12px] font-bold text-theme-fg">Description</p>
+            <span className="ml-auto text-[10px] font-medium text-theme-muted">Team only</span>
           </div>
+          {descriptionNote ? (
+            <div className="rounded-xl border border-theme-border/60 bg-theme-surface p-3">
+              <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-theme-fg">
+                {descriptionNote}
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-theme-border/70 bg-theme-subtle/40 px-3 py-3.5 text-center">
+              <p className="text-[12px] text-theme-muted">No description yet</p>
+            </div>
+          )}
+        </div>
 
-          <div className="flex items-start gap-3">
-            <User className="mt-0.5 h-4 w-4 shrink-0 text-theme-muted" />
-            <div className="min-w-0 flex-1">
-              <dt className="text-caption font-bold uppercase text-theme-muted">Assigned to</dt>
-              <dd className="mt-1.5">
-                <AppSelect
-                  ariaLabel="Assign teammate"
-                  value={ticket.assignedAgent?.id || ''}
-                  placeholder="Unassigned"
-                  isSearchable={agents.length > 6}
-                  disabled={updating}
-                  options={agentOptions}
-                  onChange={(e) =>
-                    void onUpdate(ticket.id, { assignedAgentId: e.target.value || null })
-                  }
-                />
-              </dd>
-            </div>
-          </div>
+        {/* Details */}
+        <div className="rounded-2xl border border-theme-border bg-theme-subtle/30 p-4 space-y-4">
+          <DetailRow icon={User} label="Assigned to">
+            <AppSelect
+              ariaLabel="Assign teammate"
+              value={ticket.assignedAgent?.id || ''}
+              placeholder="Unassigned"
+              isSearchable={agents.length > 6}
+              disabled={updating}
+              options={agentOptions}
+              onChange={(e) =>
+                void onUpdate(ticket.id, { assignedAgentId: e.target.value || null })
+              }
+            />
+          </DetailRow>
 
           {ticket.category && (
-            <div>
-              <dt className="text-caption font-bold uppercase text-theme-muted">Category</dt>
-              <dd className="mt-0.5 text-[13px] capitalize text-theme-fg">{ticket.category}</dd>
-            </div>
+            <DetailRow icon={Tag} label="Category">
+              <p className="text-[13px] font-semibold capitalize text-theme-fg">{ticket.category}</p>
+            </DetailRow>
           )}
 
           {created && (
-            <div>
-              <dt className="text-caption font-bold uppercase text-theme-muted">Created</dt>
-              <dd className="mt-0.5 text-[13px] text-theme-fg">{created}</dd>
-            </div>
+            <DetailRow icon={CalendarClock} label="Created">
+              <p className="text-[13px] text-theme-fg">{created}</p>
+            </DetailRow>
           )}
-        </dl>
+        </div>
 
-        <ModalSection title="Priority" subtitle="Urgent tickets should be answered first.">
+        {/* Priority */}
+        <div className="rounded-2xl border border-theme-border bg-theme-subtle/30 p-4">
+          <p className="mb-2.5 text-[12px] font-bold text-theme-fg">Priority</p>
           <div
             role="group"
             aria-label="Ticket priority"
@@ -191,43 +221,46 @@ export default function TicketDetailPanel({
                       : 'text-theme-secondary hover:bg-theme-surface/80 hover:text-theme-fg'
                   }`}
                 >
-                  {priority.label}
+                  {ticketPriorityLabel(priority.value)}
                 </button>
               );
             })}
           </div>
-        </ModalSection>
+        </div>
 
-        {canResolve(ticket.status) && ticket.status !== 'WAITING' && (
-          <AppButton
-            variant="secondary"
-            size="sm"
-            className="w-full"
-            disabled={updating}
-            onClick={() => void onUpdate(ticket.id, { status: 'WAITING' })}
-          >
-            Waiting on the customer
-          </AppButton>
-        )}
-        {(ticket.status === 'WAITING' || ticket.status === 'PENDING') && (
-          <AppButton
-            variant="secondary"
-            size="sm"
-            className="w-full"
-            disabled={updating}
-            onClick={() => void onUpdate(ticket.id, { status: 'OPEN' })}
-          >
-            Mark as needs reply
-          </AppButton>
-        )}
-
-        {conversationId && (
-          <Link to={`/inbox?conversation=${conversationId}`} onClick={onClose} className="block">
-            <AppButton variant="secondary" icon={<Inbox size={16} />} className="w-full">
-              Open linked chat
+        {/* Quick actions */}
+        <div className="space-y-2">
+          {canResolve(ticket.status) && ticket.status !== 'WAITING' && (
+            <AppButton
+              variant="secondary"
+              size="sm"
+              className="w-full"
+              disabled={updating}
+              onClick={() => void onUpdate(ticket.id, { status: 'WAITING' })}
+            >
+              Waiting on the customer
             </AppButton>
-          </Link>
-        )}
+          )}
+          {(ticket.status === 'WAITING' || ticket.status === 'PENDING') && (
+            <AppButton
+              variant="secondary"
+              size="sm"
+              className="w-full"
+              disabled={updating}
+              onClick={() => void onUpdate(ticket.id, { status: 'OPEN' })}
+            >
+              Mark as needs reply
+            </AppButton>
+          )}
+
+          {conversationId && (
+            <Link to={`/inbox?conversation=${conversationId}`} onClick={onClose} className="block">
+              <AppButton variant="secondary" icon={<MessageSquare size={16} />} className="w-full">
+                Open linked chat
+              </AppButton>
+            </Link>
+          )}
+        </div>
       </div>
     </SlideOver>
   );

@@ -409,6 +409,9 @@ async function start() {
     const { startMediaRetentionWorker } = await import('./workers/media-retention.worker');
     startMediaRetentionWorker();
 
+    const { startPresenceSweeperWorker } = await import('./workers/presence-sweeper.worker');
+    startPresenceSweeperWorker();
+
     // Clean stale Redis call state left from a previous crash/restart.
     // In-memory AI/WebRTC sessions are gone, but Redis keys would otherwise
     // inflate concurrent-call counts for up to 2 hours (their TTL).

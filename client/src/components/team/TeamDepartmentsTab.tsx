@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Building2, Plus, Trash2, Users } from 'lucide-react';
+import { Building2, Pencil, Plus, Trash2, Users } from 'lucide-react';
 import AppButton from '../ui/AppButton';
 import AppInput from '../ui/AppInput';
 import ConfirmDialog from '../ui/ConfirmDialog';
@@ -22,6 +22,7 @@ export default function TeamDepartmentsTab({ canManage, onChanged }: TeamDepartm
   const [departments, setDepartments] = useState<TeamDepartment[]>([]);
   const [loading, setLoading] = useState(true);
   const [slideOpen, setSlideOpen] = useState(false);
+  const [editingDept, setEditingDept] = useState<TeamDepartment | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<TeamDepartment | null>(null);
   const [form, setForm] = useState({ name: '', color: PRESET_COLORS[0] });
@@ -37,20 +38,41 @@ export default function TeamDepartmentsTab({ canManage, onChanged }: TeamDepartm
 
   useEffect(load, []);
 
+  const openCreate = () => {
+    setEditingDept(null);
+    setForm({ name: '', color: PRESET_COLORS[0] });
+    setSlideOpen(true);
+  };
+
+  const openEdit = (dept: TeamDepartment) => {
+    setEditingDept(dept);
+    setForm({ name: dept.name, color: dept.color || PRESET_COLORS[0] });
+    setSlideOpen(true);
+  };
+
+  const closeSlide = () => {
+    setSlideOpen(false);
+    setEditingDept(null);
+  };
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     try {
-      await teamApi.departments.create(form);
-      toastSuccess('Department created');
-      setSlideOpen(false);
-      setForm({ name: '', color: PRESET_COLORS[0] });
+      if (editingDept) {
+        await teamApi.departments.update(editingDept.id, form);
+        toastSuccess('Department updated');
+      } else {
+        await teamApi.departments.create(form);
+        toastSuccess('Department created');
+      }
+      closeSlide();
       load();
       onChanged?.();
     } catch (err: unknown) {
       toastError(
         (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
-          ?.message || 'Failed to create department'
+          ?.message || 'Failed to save department'
       );
     } finally {
       setSaving(false);
@@ -77,7 +99,7 @@ export default function TeamDepartmentsTab({ canManage, onChanged }: TeamDepartm
     <div className="inbox-shell overflow-hidden">
       {canManage && (
         <div className="flex items-center justify-end border-b border-theme-border px-4 py-3.5 sm:px-5">
-          <AppButton size="sm" icon={<Plus size={15} />} onClick={() => setSlideOpen(true)}>
+          <AppButton size="sm" icon={<Plus size={15} />} onClick={openCreate}>
             Add department
           </AppButton>
         </div>
@@ -94,7 +116,7 @@ export default function TeamDepartmentsTab({ canManage, onChanged }: TeamDepartm
             steps={['Tap Create department', 'Give it a name like "Support"', 'Assign team members to it']}
             action={
               canManage ? (
-                <AppButton icon={<Plus size={16} />} onClick={() => setSlideOpen(true)}>
+                <AppButton icon={<Plus size={16} />} onClick={openCreate}>
                   Create department
                 </AppButton>
               ) : undefined
@@ -126,14 +148,24 @@ export default function TeamDepartmentsTab({ canManage, onChanged }: TeamDepartm
                   </div>
                 </div>
                 {canManage && (
-                  <button
-                    type="button"
-                    onClick={() => setDeleteTarget(dept)}
-                    className="rounded-lg p-1.5 text-theme-muted transition hover:bg-rose-500/10 hover:text-rose-600 dark:hover:text-rose-400"
-                    aria-label={`Delete ${dept.name}`}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => openEdit(dept)}
+                      className="rounded-lg p-1.5 text-theme-muted transition hover:bg-theme-subtle hover:text-theme-fg"
+                      aria-label={`Rename ${dept.name}`}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeleteTarget(dept)}
+                      className="rounded-lg p-1.5 text-theme-muted transition hover:bg-rose-500/10 hover:text-rose-600 dark:hover:text-rose-400"
+                      aria-label={`Delete ${dept.name}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -144,15 +176,15 @@ export default function TeamDepartmentsTab({ canManage, onChanged }: TeamDepartm
       {canManage && (
         <SlideOver
           open={slideOpen}
-          onClose={() => setSlideOpen(false)}
-          title="New department"
+          onClose={closeSlide}
+          title={editingDept ? 'Edit department' : 'New department'}
           subtitle="Group agents for routing"
           icon={Building2}
           accent="violet"
           footer={
             <SlideOverFooter
-              onCancel={() => setSlideOpen(false)}
-              submitLabel="Create department"
+              onCancel={closeSlide}
+              submitLabel={editingDept ? 'Save changes' : 'Create department'}
               loading={saving}
             />
           }

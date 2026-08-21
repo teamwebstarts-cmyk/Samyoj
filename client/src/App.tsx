@@ -32,7 +32,6 @@ import CallsPage from './pages/CallsPage';
 import TemplatesPage from './pages/TemplatesPage';
 import TemplateWizardPage from './pages/TemplateWizardPage';
 import TemplateLibraryPage from './pages/TemplateLibraryPage';
-import ReportsPage from './pages/ReportsPage';
 import BillingPage from './pages/BillingPage';
 import ContentStudioPage from './pages/ContentStudioPage';
 import CommercePage from './pages/CommercePage';
@@ -90,7 +89,7 @@ export default function App() {
                       <Route path="/tickets" element={<TicketsPage />} />
                       <Route path="/contacts" element={<ContactsPage />} />
                       <Route path="/team" element={<TeamPage />} />
-                      <Route path="/reports" element={<ReportsPage />} />
+                      <Route path="/reports" element={<Navigate to="/billing?tab=usage" replace />} />
                       <Route path="/billing" element={<BillingPage />} />
                       <Route path="/settings" element={<SettingsPage />} />
                       {import.meta.env.DEV && ComponentShowcase && (

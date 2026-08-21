@@ -1,15 +1,14 @@
 import ContactAvatar from '../inbox/ContactAvatar';
 import DataTable from '../ui/DataTable';
+import PriorityBadge from '../ui/PriorityBadge';
 import ResponsiveDataView from '../ui/ResponsiveDataView';
 import StatusBadge from '../ui/StatusBadge';
 import { TableTextButton } from '../ui/TableActions';
 import TicketCard from './TicketCard';
 import {
-  formatReplyBy,
   isSlaBreached,
   nextTicketAction,
   ticketContactLabel,
-  ticketPriorityLabel,
   ticketStatusLabel,
   type TicketItem,
 } from './ticketUi';
@@ -36,11 +35,10 @@ export default function TicketList({ tickets, onOpen, onUpdateStatus, updatingId
         />
       )}
       renderTable={() => (
-        <DataTable headers={['Customer', 'Ticket', 'Reply by', 'Status', 'Actions']} serialNo={false} embedded>
+        <DataTable headers={['Customer', 'Ticket', 'Priority', 'Status', 'Actions']} serialNo={false} embedded>
           {tickets.map((ticket) => {
             const action = nextTicketAction(ticket.status);
             const customer = ticketContactLabel(ticket);
-            const reply = formatReplyBy(ticket.slaDueAt);
             const breached = isSlaBreached(ticket);
 
             return (
@@ -70,19 +68,16 @@ export default function TicketList({ tickets, onOpen, onUpdateStatus, updatingId
                 </td>
                 <td className="min-w-[160px] max-w-[280px]">
                   <p className="truncate text-[13px] font-medium text-theme-fg">{ticket.title}</p>
-                  <p className="mt-0.5 text-[11px] text-theme-muted">
-                    {ticketPriorityLabel(ticket.priority)}
-                    {ticket.assignedAgent?.name ? ` · ${ticket.assignedAgent.name}` : ''}
-                  </p>
+                  {ticket.assignedAgent?.name ? (
+                    <p className="mt-0.5 truncate text-[11px] text-theme-muted">
+                      Assigned · {ticket.assignedAgent.name}
+                    </p>
+                  ) : (
+                    <p className="mt-0.5 truncate text-[11px] text-theme-muted">Unassigned</p>
+                  )}
                 </td>
-                <td
-                  className={`whitespace-nowrap text-[12px] tabular-nums ${
-                    reply.overdue
-                      ? 'font-semibold text-rose-600 dark:text-rose-400'
-                      : 'text-theme-secondary'
-                  }`}
-                >
-                  {reply.text}
+                <td className="whitespace-nowrap">
+                  <PriorityBadge priority={ticket.priority} />
                 </td>
                 <td className="whitespace-nowrap">
                   <StatusBadge status={ticket.status} label={ticketStatusLabel(ticket.status)} />

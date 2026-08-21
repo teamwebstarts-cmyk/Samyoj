@@ -12,6 +12,7 @@ export interface OverviewPeriodWindow {
   period: {
     mode: OverviewPeriodMode;
     days?: number;
+    presetKey?: string;
     from?: string;
     to?: string;
   };
@@ -30,6 +31,14 @@ export function startOfDay(date: Date) {
 
 export function endOfDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
+}
+
+export function startOfMonth(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1, 0, 0, 0, 0);
+}
+
+export function endOfMonth(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999);
 }
 
 function parseIsoDate(value: string): Date | null {
@@ -52,7 +61,7 @@ function parseIsoDate(value: string): Date | null {
 function diffCalendarDays(from: Date, to: Date) {
   const start = startOfDay(from).getTime();
   const end = startOfDay(to).getTime();
-  return Math.floor((end - start) / (24 * 60 * 60 * 1000)) + 1;
+  return Math.max(1, Math.floor((end - start) / (24 * 60 * 60 * 1000)) + 1);
 }
 
 function addDays(date: Date, amount: number) {
@@ -72,6 +81,7 @@ export function resolveOverviewPeriod(query: Request['query']): OverviewPeriodWi
   const overall = query.overall === '1' || query.overall === 'true';
   const fromRaw = typeof query.from === 'string' ? query.from : '';
   const toRaw = typeof query.to === 'string' ? query.to : '';
+  const compareExplicit = query.compare !== undefined ? query.compare === '1' || query.compare === 'true' : true;
 
   if (fromRaw && toRaw) {
     const fromDate = parseIsoDate(fromRaw);
@@ -102,7 +112,7 @@ export function resolveOverviewPeriod(query: Request['query']): OverviewPeriodWi
       until,
       previousSince,
       previousUntil,
-      compareEnabled: true,
+      compareEnabled: compareExplicit,
       dayCount,
       period: {
         mode: 'custom',
@@ -126,8 +136,82 @@ export function resolveOverviewPeriod(query: Request['query']): OverviewPeriodWi
     };
   }
 
-  const rawDays = parseInt((query.days as string) || '7', 10);
-  const days = [7, 14, 30].includes(rawDays) ? rawDays : 7;
+  const rawParam = ((query.days || query.period || '30') as string).toLowerCase().trim();
+
+  const now = new Date();
+
+  if (rawParam === '1' || rawParam === 'today') {
+    const since = startOfDay(now);
+    const until = endOfDay(now);
+    const previousSince = startOfDay(addDays(now, -1));
+    const previousUntil = endOfDay(addDays(now, -1));
+    return {
+      since,
+      until,
+      previousSince,
+      previousUntil,
+      compareEnabled: compareExplicit,
+      dayCount: 1,
+      period: { mode: 'preset', days: 1, presetKey: 'today' },
+    };
+  }
+
+  if (rawParam === 'yesterday') {
+    const yest = addDays(now, -1);
+    const since = startOfDay(yest);
+    const until = endOfDay(yest);
+    const previousSince = startOfDay(addDays(yest, -1));
+    const previousUntil = endOfDay(addDays(yest, -1));
+    return {
+      since,
+      until,
+      previousSince,
+      previousUntil,
+      compareEnabled: compareExplicit,
+      dayCount: 1,
+      period: { mode: 'preset', days: 1, presetKey: 'yesterday' },
+    };
+  }
+
+  if (rawParam === 'mtd' || rawParam === 'this_month') {
+    const since = startOfMonth(now);
+    const until = endOfDay(now);
+    const dayCount = diffCalendarDays(since, until);
+    const prevMonthStart = startOfMonth(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+    const previousSince = prevMonthStart;
+    const previousUntil = endOfDay(addDays(prevMonthStart, dayCount - 1));
+    return {
+      since,
+      until,
+      previousSince,
+      previousUntil,
+      compareEnabled: compareExplicit,
+      dayCount,
+      period: { mode: 'preset', presetKey: 'mtd', from: toIsoDate(since), to: toIsoDate(until) },
+    };
+  }
+
+  if (rawParam === 'last_month') {
+    const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const since = startOfMonth(prevMonthDate);
+    const until = endOfMonth(prevMonthDate);
+    const dayCount = diffCalendarDays(since, until);
+    const twoMonthsAgoDate = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+    const previousSince = startOfMonth(twoMonthsAgoDate);
+    const previousUntil = endOfMonth(twoMonthsAgoDate);
+    return {
+      since,
+      until,
+      previousSince,
+      previousUntil,
+      compareEnabled: compareExplicit,
+      dayCount,
+      period: { mode: 'preset', presetKey: 'last_month', from: toIsoDate(since), to: toIsoDate(until) },
+    };
+  }
+
+  const rawNum = parseInt(rawParam, 10);
+  const days = [7, 14, 30, 90].includes(rawNum) ? rawNum : 30;
   const since = daysAgo(days);
   const until = new Date();
   const previousSince = daysAgo(days * 2);
@@ -138,9 +222,9 @@ export function resolveOverviewPeriod(query: Request['query']): OverviewPeriodWi
     until,
     previousSince,
     previousUntil,
-    compareEnabled: true,
+    compareEnabled: compareExplicit,
     dayCount: days,
-    period: { mode: 'preset', days },
+    period: { mode: 'preset', days, presetKey: `${days}d` },
   };
 }
 
@@ -148,7 +232,24 @@ export function buildDailySeriesBuckets(window: OverviewPeriodWindow) {
   const buckets: Array<{ dayStart: Date; dayEnd: Date; dateLabel: string }> = [];
   const maxBuckets = Math.min(window.dayCount, MAX_CUSTOM_DAYS);
 
-  if (window.period.mode === 'preset') {
+  if (window.dayCount === 1) {
+    // Return hourly buckets for single day view (Today / Yesterday)
+    const cursor = startOfDay(window.since);
+    for (let hour = 0; hour < 24; hour++) {
+      const hStart = new Date(cursor);
+      hStart.setHours(hour, 0, 0, 0);
+      const hEnd = new Date(cursor);
+      hEnd.setHours(hour, 59, 59, 999);
+      buckets.push({
+        dayStart: hStart,
+        dayEnd: hEnd,
+        dateLabel: `${String(hour).padStart(2, '0')}:00`,
+      });
+    }
+    return buckets;
+  }
+
+  if (window.period.mode === 'preset' && window.period.days) {
     const now = new Date();
     for (let i = window.dayCount - 1; i >= 0; i--) {
       const d = new Date(now);

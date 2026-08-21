@@ -441,12 +441,6 @@ export interface WebhookEndpoint {
   createdAt?: string;
 }
 
-export interface SlaStats {
-  breached: number;
-  pending: number;
-  avgFirstResponseMinutes: number | null;
-}
-
 export interface ReportsData {
   periodDays: number;
   messaging: {
@@ -460,16 +454,233 @@ export interface ReportsData {
   };
   conversations: { active: number; closed: number };
   contacts: { total: number };
-  campaigns: { sent: number; delivered: number; read: number; failed: number };
+  campaigns: { count?: number; sent: number; delivered: number; read: number; failed: number };
   calls: { completed: number };
   ai: { requests: number; totalTokens: number };
   agentPerformance: Array<{
     agentId: string;
     name: string;
+    email?: string;
+    role?: OrgRole;
     messagesSent: number;
     openAssigned: number;
     closedLastPeriod: number;
+    avgFirstResponseMinutes?: number | null;
+    productivityScore?: number;
     availability: AgentAvailability;
+  }>;
+}
+
+export type ReportsTabKey = 'overview' | 'team' | 'campaigns' | 'ai' | 'meta';
+
+export interface OverviewDailySeriesPoint {
+  date: string;
+  messagesSent: number;
+  inboundMessages: number;
+  delivered: number;
+  read: number;
+  deliveryRate: number;
+  readRate: number;
+  activeConversations: number;
+}
+
+export interface ReportsOverviewFullData {
+  period: {
+    mode: 'preset' | 'custom' | 'overall';
+    days?: number;
+    presetKey?: string;
+    from?: string;
+    to?: string;
+  };
+  dayCount: number;
+  messagesSent: number;
+  messagesDelivered: number;
+  messagesDeliveredOnly: number;
+  messagesRead: number;
+  messagesFailed: number;
+  messagesPending: number;
+  inboundMessages: number;
+  deliveryRate: string;
+  readRate: string;
+  cswUtilizationPct: string;
+  cswSessionsOpened: number;
+  activeConversations: number;
+  closedConversations: number;
+  totalContacts: number;
+  deltas: {
+    messagesSent: number | null;
+    inboundMessages: number | null;
+    deliveryRate: number | null;
+    readRate: number | null;
+    failedMessages: number | null;
+  };
+  dailySeries: OverviewDailySeriesPoint[];
+}
+
+export interface AgentScorecard {
+  agentId: string;
+  name: string;
+  email: string;
+  role: OrgRole;
+  department: string | null;
+  availability: AgentAvailability;
+  assignedActive: number;
+  resolvedChats: number;
+  messagesSent: number;
+  avgFirstResponseMinutes: number | null;
+  avgResolutionMinutes: number | null;
+  productivityScore: number;
+}
+
+export interface ReportsTeamData {
+  period: {
+    mode: string;
+    days?: number;
+    from?: string;
+    to?: string;
+  };
+  dayCount: number;
+  summary: {
+    totalAgents: number;
+    activeOnline: number;
+    avgFirstResponseMinutes: number | null;
+    medianFirstResponseMinutes: number | null;
+    avgResolutionMinutes: number | null;
+    firstContactResolutionRate: number;
+    activePending: number;
+  };
+  agentScorecards: AgentScorecard[];
+}
+
+export interface HeatmapCell {
+  day: number;
+  hour: number;
+  inboundCount: number;
+  avgFrtMinutes: number | null;
+}
+
+export interface ReportsHeatmapData {
+  period: {
+    mode: string;
+    days?: number;
+    from?: string;
+    to?: string;
+  };
+  heatmap: HeatmapCell[];
+}
+
+export interface UniversalTemplateMetric {
+  templateName: string;
+  category: string;
+  campaignDispatches: number;
+  inboxDispatches: number;
+  totalDispatches: number;
+  sent: number;
+  delivered: number;
+  read: number;
+  failed: number;
+  deliveryRate: number;
+  readRate: number;
+  clickThroughRate: number;
+  replyRate: number;
+  qualityScore: 'HIGH' | 'MEDIUM' | 'LOW';
+}
+
+export interface ReportsCampaignsData {
+  period: {
+    mode: string;
+    days?: number;
+    from?: string;
+    to?: string;
+  };
+  summary: {
+    totalCampaigns: number;
+    totalRecipients: number;
+    totalSent: number;
+    totalDelivered: number;
+    totalRead: number;
+    totalFailed: number;
+    overallDeliveryRate: number;
+    overallReadRate: number;
+    estimatedCtr: number;
+  };
+  universalTemplates: UniversalTemplateMetric[];
+  campaigns: Array<{
+    id: string;
+    name: string;
+    templateName: string;
+    status: string;
+    totalContacts: number;
+    sentCount: number;
+    deliveredCount: number;
+    readCount: number;
+    failedCount: number;
+    createdAt: string;
+  }>;
+}
+
+export interface ReportsAiDeflectionData {
+  period: {
+    mode: string;
+    days?: number;
+    from?: string;
+    to?: string;
+  };
+  summary: {
+    totalAiSessions: number;
+    containmentRate: number;
+    escalationRate: number;
+    resolvedByAi: number;
+    handoffsToHuman: number;
+    avgHandlingSeconds: number;
+    automationsRun: number;
+    totalRequests: number;
+    totalTokens: number;
+    estimatedCostUSD: number;
+    estimatedCostINR: number;
+  };
+  featureBreakdown: Array<{
+    label: string;
+    requests: number;
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  }>;
+  fallbackQueries: Array<{
+    query: string;
+    count: number;
+  }>;
+}
+
+export interface ReportsMetaHealthData {
+  period: {
+    mode: string;
+    days?: number;
+    from?: string;
+    to?: string;
+  };
+  quality: {
+    rating: 'GREEN' | 'YELLOW' | 'RED';
+    status: string;
+    tierLimit: number;
+    tierUsageToday: number;
+    tierUsagePct: number;
+  };
+  optOuts: {
+    count: number;
+    ratePct: number;
+  };
+  categoryBreakdown: Array<{
+    category: string;
+    label: string;
+    count: number;
+    estimatedCostINR: number;
+  }>;
+  failureCodes: Array<{
+    code: number;
+    title: string;
+    count: number;
+    suggestion: string;
   }>;
 }
 

@@ -248,7 +248,7 @@ export default function NeedsAttentionCard({
                 title="Failed messages"
                 subtitle="Messages failed to deliver"
                 count={failedMessages}
-                to="/reports"
+                to="/billing?tab=usage"
                 iconAccent="rose"
                 icon={<FailedMessagesSvg className="h-4 w-4" />}
               />

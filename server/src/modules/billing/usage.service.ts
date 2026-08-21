@@ -6,14 +6,22 @@ const log = createModuleLogger('billing-usage');
 
 const USD_TO_INR = 83;
 
-const CATEGORY_RATES_INR: Record<string, number> = {
-  MARKETING: 0.78,
-  UTILITY: 0.35,
-  AUTHENTICATION: 0.35,
+/**
+ * Single source of truth for Meta per-conversation benchmark rates (INR).
+ * The UI explainer card mirrors these values — update both together.
+ * Source: docs/billing/01-PRICING-CATALOG.md (Meta India benchmarks).
+ */
+export const META_CATEGORY_RATES_INR: Record<string, number> = {
+  MARKETING: 0.86,
+  UTILITY: 0.115,
+  AUTHENTICATION: 0.115,
   SERVICE: 0,
   USER_INITIATED: 0,
-  BUSINESS_INITIATED: 0.35,
+  BUSINESS_INITIATED: 0.115,
 };
+
+// Kept as an alias for existing imports.
+const CATEGORY_RATES_INR = META_CATEGORY_RATES_INR;
 
 export async function pollConversationAnalytics(): Promise<void> {
   const numbers = await prisma.whatsappNumber.findMany({

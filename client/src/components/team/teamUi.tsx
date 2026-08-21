@@ -62,6 +62,17 @@ export const PERMISSION_KEYS: (keyof TeamPermissions)[] = [
   'manageSettings',
 ];
 
+/**
+ * Keys with real server-side requirePermission gates today. The rest are
+ * role-gated (OWNER/ADMIN) regardless of this matrix — shown read-only in the
+ * Roles UI so admins don't toggle switches that have no effect.
+ */
+export const ENFORCED_PERMISSION_KEYS: (keyof TeamPermissions)[] = [
+  'manageInbox',
+  'viewAnalytics',
+  'manageSettings',
+];
+
 export interface PermissionGroup {
   id: string;
   label: string;

@@ -901,6 +901,7 @@ export default function InboxPage() {
                   }}
                   onConvertToTicket={() => setTicketModalOpen(true)}
                   onExport={() => setExportTarget(selected)}
+                  hasTicket={ticketConversationIds.has(selected.id)}
                   panelOpen={detailsPanelOpen}
                   onPanelOpenChange={setDetailsPanelOpen}
                   focusSection={detailsFocusSection}

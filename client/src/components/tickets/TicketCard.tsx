@@ -2,15 +2,14 @@ import { CheckCircle2, MessageSquare } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import ContactAvatar from '../inbox/ContactAvatar';
 import AppButton from '../ui/AppButton';
+import PriorityBadge from '../ui/PriorityBadge';
 import StatusBadge from '../ui/StatusBadge';
 import {
   canResolve,
-  formatReplyBy,
   isSlaBreached,
   nextTicketAction,
   ticketContactLabel,
   ticketConversationId,
-  ticketPriorityLabel,
   ticketStatusLabel,
   type TicketItem,
 } from './ticketUi';
@@ -26,7 +25,6 @@ export default function TicketCard({ ticket, onUpdateStatus, updating, onClick }
   const breached = isSlaBreached(ticket);
   const contactLabel = ticketContactLabel(ticket);
   const conversationId = ticketConversationId(ticket);
-  const reply = formatReplyBy(ticket.slaDueAt);
   const action = nextTicketAction(ticket.status);
 
   return (
@@ -50,20 +48,17 @@ export default function TicketCard({ ticket, onUpdateStatus, updating, onClick }
         <div className="min-w-0 flex-1">
           <p className="truncate text-[13px] font-bold text-theme-fg">{contactLabel}</p>
           <p className="mt-0.5 truncate text-[12px] text-theme-secondary">{ticket.title}</p>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <StatusBadge status={ticket.status} label={ticketStatusLabel(ticket.status)} />
-            {ticket.priority !== 'MEDIUM' && (
-              <StatusBadge status={ticket.priority} label={ticketPriorityLabel(ticket.priority)} />
+            <PriorityBadge priority={ticket.priority} />
+            {ticket.assignedAgent?.name ? (
+              <span className="inline-flex items-center rounded-full bg-neutral-100 px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-wide text-neutral-600 ring-1 ring-inset ring-neutral-200/70 dark:bg-neutral-800 dark:text-neutral-300 dark:ring-neutral-700/70">
+                {ticket.assignedAgent.name}
+              </span>
+            ) : (
+              <span className="text-[11px] font-medium text-theme-muted">Unassigned</span>
             )}
           </div>
-          <p
-            className={`mt-2 text-[11px] ${
-              reply.overdue ? 'font-semibold text-rose-600 dark:text-rose-400' : 'text-theme-muted'
-            }`}
-          >
-            Reply {reply.text}
-            {ticket.assignedAgent?.name ? ` · ${ticket.assignedAgent.name}` : ''}
-          </p>
         </div>
       </button>
 

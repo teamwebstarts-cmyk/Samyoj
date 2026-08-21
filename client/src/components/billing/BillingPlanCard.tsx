@@ -14,50 +14,50 @@ interface BillingPlanCardProps {
 }
 
 type PlanTheme = {
-  bar: string;
   iconBg: string;
-  glow: string;
+  accent: string;
   badge?: string;
   icon: LucideIcon;
   priceTone: string;
+  ring: string;
 };
 
 const planThemes: Record<string, PlanTheme> = {
   launch: {
-    bar: 'from-slate-400 to-slate-600',
-    iconBg: 'from-slate-50 to-slate-100 text-slate-700 dark:from-slate-900/40 dark:to-slate-800/30 dark:text-slate-300',
-    glow: 'bg-slate-400/15',
+    iconBg: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
+    accent: 'text-slate-600 dark:text-slate-400',
     icon: Beaker,
-    priceTone: 'text-slate-700 dark:text-slate-300',
+    priceTone: 'text-slate-800 dark:text-slate-200',
+    ring: 'ring-slate-200 dark:ring-slate-700',
     badge: 'Trial',
   },
   starter: {
-    bar: 'from-emerald-400 to-whatsapp-600',
-    iconBg: 'from-emerald-50 to-emerald-100 text-whatsapp-700 dark:from-emerald-900/40 dark:to-emerald-800/30 dark:text-emerald-300',
-    glow: 'bg-emerald-400/15',
+    iconBg: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400',
+    accent: 'text-emerald-600 dark:text-emerald-400',
     icon: Sparkles,
     priceTone: 'text-emerald-700 dark:text-emerald-300',
+    ring: 'ring-emerald-200 dark:ring-emerald-800/50',
   },
   growth: {
-    bar: 'from-violet-400 to-purple-600',
-    iconBg: 'from-violet-50 to-violet-100 text-violet-700 dark:from-violet-900/40 dark:to-violet-800/30 dark:text-violet-300',
-    glow: 'bg-violet-400/20',
+    iconBg: 'bg-violet-50 text-violet-600 dark:bg-violet-950/50 dark:text-violet-400',
+    accent: 'text-violet-600 dark:text-violet-400',
     icon: Zap,
     priceTone: 'text-violet-700 dark:text-violet-300',
+    ring: 'ring-violet-200 dark:ring-violet-800/50',
   },
   pro: {
-    bar: 'from-sky-400 to-blue-600',
-    iconBg: 'from-sky-50 to-sky-100 text-sky-700 dark:from-sky-900/40 dark:to-sky-800/30 dark:text-sky-300',
-    glow: 'bg-sky-400/15',
+    iconBg: 'bg-sky-50 text-sky-600 dark:bg-sky-950/50 dark:text-sky-400',
+    accent: 'text-sky-600 dark:text-sky-400',
     icon: Crown,
     priceTone: 'text-sky-700 dark:text-sky-300',
+    ring: 'ring-sky-200 dark:ring-sky-800/50',
   },
   enterprise: {
-    bar: 'from-amber-400 to-orange-500',
-    iconBg: 'from-amber-50 to-amber-100 text-amber-700 dark:from-amber-900/40 dark:to-amber-800/30 dark:text-amber-300',
-    glow: 'bg-amber-400/15',
+    iconBg: 'bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400',
+    accent: 'text-amber-600 dark:text-amber-400',
     icon: Building2,
     priceTone: 'text-amber-700 dark:text-amber-300',
+    ring: 'ring-amber-200 dark:ring-amber-800/50',
   },
 };
 
@@ -82,7 +82,7 @@ export default function BillingPlanCard({
       : isPaid
         ? 'Upgrade'
         : 'Switch plan';
-        
+
   const showBadge = theme.badge || plan.isMostPopular;
   const badgeText = plan.isMostPopular ? 'Most popular' : theme.badge;
 
@@ -106,72 +106,69 @@ export default function BillingPlanCard({
     } else if (cadence === 'yearly') {
       displayPrice = '₹2,000/mo';
       billingSummary = 'Billed ₹24,000 yearly (+ GST)';
-      isUpiCapExceeded = true; // ₹28,320 incl GST > ₹15,000 RBI UPI Autopay limit
+      isUpiCapExceeded = true;
     }
   } else if (plan.id === 'pro') {
     if (cadence === 'quarterly') {
       displayPrice = '₹4,750/mo';
       billingSummary = 'Billed ₹14,250 quarterly (+ GST)';
-      isUpiCapExceeded = true; // ₹16,815 incl GST > ₹15,000 RBI UPI Autopay limit
+      isUpiCapExceeded = true;
     } else if (cadence === 'yearly') {
       displayPrice = '₹4,000/mo';
       billingSummary = 'Billed ₹48,000 yearly (+ GST)';
-      isUpiCapExceeded = true; // ₹56,640 incl GST > ₹15,000 RBI UPI Autopay limit
+      isUpiCapExceeded = true;
     }
   }
 
   return (
     <div
-      className={`dashboard-card group relative h-full w-full flex flex-col overflow-hidden animate-fade-up ${
+      className={`group relative flex h-full w-full flex-col rounded-2xl border bg-theme-surface transition-shadow duration-200 hover:shadow-lg ${
         isCurrent
-          ? 'ring-2 ring-emerald-500/50 shadow-[0_8px_30px_rgba(16,185,129,0.12)]'
+          ? `border-emerald-300 shadow-[0_4px_20px_rgba(16,185,129,0.1)] dark:border-emerald-700/60`
           : plan.isMostPopular
-            ? 'ring-1 ring-violet-200/80 dark:ring-violet-800/40'
-            : ''
+            ? `border-violet-200 dark:border-violet-800/50`
+            : `border-theme-border ${theme.ring}`
       }`}
     >
-      <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${theme.bar}`} />
-      <div
-        className={`pointer-events-none absolute -right-8 -top-8 h-28 w-28 rounded-full blur-2xl ${theme.glow} opacity-70`}
-      />
-
+      {/* Badges */}
       {isCurrent && (
         <div className="absolute right-4 top-4 rounded-full bg-emerald-500 px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white shadow-sm">
           Active
         </div>
       )}
-
       {!isCurrent && showBadge && (
-        <div className={`absolute right-4 top-4 rounded-full px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white shadow-sm ${plan.isMostPopular ? 'bg-violet-600' : 'bg-slate-600'}`}>
+        <div className={`absolute right-4 top-4 rounded-full px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white shadow-sm ${plan.isMostPopular ? 'bg-violet-600' : 'bg-slate-500'}`}>
           {badgeText}
         </div>
       )}
 
-      <div className="relative flex flex-1 flex-col p-5 pt-6">
-        <div className="flex items-start gap-3">
-          <div
-            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${theme.iconBg}`}
-          >
+      <div className="relative flex flex-1 flex-col p-5">
+        {/* Icon + Name */}
+        <div className="flex items-center gap-3">
+          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${theme.iconBg}`}>
             <Icon className="h-5 w-5" strokeWidth={2.25} />
           </div>
-          <div className="min-w-0 pt-0.5">
-            <h3 className="text-[16px] font-extrabold tracking-tight text-theme-fg">{plan.name}</h3>
-            <p className="mt-0.5 text-[11px] font-semibold text-theme-muted">
-              {plan.waNumbers} WhatsApp numbers · {plan.seats} seats · {plan.contacts} contacts
-            </p>
+          <div className="min-w-0">
+            <h3 className="text-[15px] font-extrabold tracking-tight text-theme-fg">{plan.name}</h3>
           </div>
         </div>
 
-        <div className="mt-5">
+        {/* Summary line */}
+        <p className="mt-2 text-[11px] font-medium text-theme-muted">
+          {plan.waNumbers} WhatsApp numbers · {plan.seats} seats · {plan.contacts} contacts
+        </p>
+
+        {/* Price */}
+        <div className="mt-4">
           {!isEnterprise ? (
             <div>
               <div className="flex items-baseline gap-1">
-                <p className={`text-[2rem] font-extrabold leading-none tracking-tight ${theme.priceTone}`}>
+                <p className={`text-[1.75rem] font-extrabold leading-none tracking-tight ${theme.priceTone}`}>
                   {displayPrice}
                 </p>
-                <span className="text-xs font-semibold text-theme-muted">+ GST</span>
+                <span className="text-[11px] font-semibold text-theme-muted">+ GST</span>
               </div>
-              <p className="mt-1.5 text-[11px] font-medium text-theme-muted">{billingSummary}</p>
+              <p className="mt-1 text-[11px] font-medium text-theme-muted">{billingSummary}</p>
               {isUpiCapExceeded && (
                 <p className="mt-1 text-[10px] font-semibold text-amber-600 dark:text-amber-400">
                   Card / NetBanking required (exceeds ₹15k UPI Autopay limit)
@@ -180,18 +177,22 @@ export default function BillingPlanCard({
             </div>
           ) : (
             <div>
-              <p className={`text-[2rem] font-extrabold leading-none tracking-tight ${theme.priceTone}`}>
+              <p className={`text-[1.75rem] font-extrabold leading-none tracking-tight ${theme.priceTone}`}>
                 Custom
               </p>
-              <p className="mt-1.5 text-[11px] font-medium text-theme-muted">Tailored for large scale</p>
+              <p className="mt-1 text-[11px] font-medium text-theme-muted">Tailored for large scale</p>
             </div>
           )}
         </div>
 
-        <ul className="mt-6 flex-1 space-y-2.5">
+        {/* Divider */}
+        <div className="my-4 h-px bg-theme-border" />
+
+        {/* Features */}
+        <ul className="flex-1 space-y-2">
           {plan.features.map((feature) => (
-            <li key={feature} className="flex items-start gap-2.5 text-[12px] text-theme-secondary">
-              <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+            <li key={feature} className="flex items-start gap-2 text-[12px] text-theme-secondary">
+              <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full ${theme.iconBg}`}>
                 <Check className="h-2.5 w-2.5" strokeWidth={3} />
               </span>
               <span className="font-medium leading-snug">{feature}</span>
@@ -199,8 +200,9 @@ export default function BillingPlanCard({
           ))}
         </ul>
 
+        {/* CTA */}
         <AppButton
-          className="mt-6"
+          className="mt-5"
           variant={isCurrent ? 'secondary' : 'primary'}
           fullWidth
           disabled={isCurrent || !canManage || (isPaid && !razorpayConfigured && !isEnterprise)}

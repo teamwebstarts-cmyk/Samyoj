@@ -60,6 +60,9 @@ interface InboxDetailsPanelProps {
   onContactChange: (contact: Contact) => void;
   onConvertToTicket: () => void;
   onExport: () => void;
+  /** True when a ticket already exists for this conversation. Drives the
+   *  count badge on the Create-ticket rail icon. */
+  hasTicket?: boolean;
   /** Controlled docked panel open (≥ md). */
   panelOpen: boolean;
   onPanelOpenChange: (open: boolean) => void;
@@ -80,6 +83,7 @@ export default function InboxDetailsPanel({
   onContactChange,
   onConvertToTicket,
   onExport,
+  hasTicket = false,
   panelOpen,
   onPanelOpenChange,
   focusSection,
@@ -321,16 +325,20 @@ export default function InboxDetailsPanel({
     const btn = opts.compact
       ? 'relative flex h-8 w-8 items-center justify-center rounded-lg transition disabled:cursor-not-allowed disabled:opacity-45'
       : actionBtnClass;
+    const ticketBadge =
+      'absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold text-white bg-emerald-600';
     return (
     <>
       <button
         type="button"
-        aria-label="Create ticket"
+        aria-label={hasTicket ? 'View ticket for this chat' : 'Create ticket'}
+        title={hasTicket ? 'Ticket already exists for this chat' : 'Create ticket'}
         onClick={onConvertToTicket}
         className={`${btn} text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/40`}
-        {...tipFor('Create ticket', opts.tipSide)}
+        {...tipFor(hasTicket ? 'Ticket exists' : 'Create ticket', opts.tipSide)}
       >
         <Ticket className="h-4 w-4" strokeWidth={iconStroke} />
+        {hasTicket && <span className={ticketBadge}>1</span>}
       </button>
       <button
         type="button"

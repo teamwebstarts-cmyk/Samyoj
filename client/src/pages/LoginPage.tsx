@@ -87,6 +87,11 @@ export default function LoginPage() {
         toastError('Verify your email before signing in');
         return;
       }
+      if (result.mustResetPassword) {
+        toastError('Your account needs a new password. Set one to continue.');
+        navigate('/settings?resetPassword=1', { replace: true });
+        return;
+      }
       navigate(safeReturnTo(searchParams.get('returnTo')) || '/');
     } catch (err: unknown) {
       toastError(getErrorMessage(err, 'Login failed'));

@@ -22,6 +22,7 @@ import {
   listBots,
 } from '../ai/bot.service';
 import { generateBotReply } from '../ai/chatbot.service';
+import { checkQuota } from '../billing/entitlements.service';
 import { getBotAnalytics } from '../ai/analytics';
 import { isAiConfiguredForOrg, getOrgAiSettings, resolveAiConfig } from '../ai/org-ai.service';
 import { assertCanAddKnowledge, upsertKnowledgeEmbedding } from '../ai/knowledge.service';
@@ -192,6 +193,33 @@ router.post(
     const data = botSchema.parse(req.body);
     const channel = data.channel === 'CALL' ? 'CALL' : 'CHAT';
     const llm = hardcodedBotLlmDefaults();
+
+    // AI bots are a Growth+ feature; calling bots additionally need the
+    // calling entitlement (Pro+).
+    const aiQuota = await checkQuota(orgId, 'ai');
+    if (!aiQuota.allowed) {
+      return res.status(402).json({
+        success: false,
+        error: {
+          code: aiQuota.code,
+          message: aiQuota.reason,
+          upgradeCta: aiQuota.upgradeCta,
+        },
+      });
+    }
+    if (channel === 'CALL') {
+      const callQuota = await checkQuota(orgId, 'calling');
+      if (!callQuota.allowed) {
+        return res.status(402).json({
+          success: false,
+          error: {
+            code: callQuota.code,
+            message: callQuota.reason,
+            upgradeCta: callQuota.upgradeCta,
+          },
+        });
+      }
+    }
 
     if (await findBotNameConflict(orgId, data.name, channel)) {
       throw new AppError(409, 'Another bot already uses this name. Pick a different name.');

@@ -24,6 +24,7 @@ import {
   syncRunningCampaignStatuses,
 } from './service';
 import { getDailySendUsage } from './quota';
+import { getOrgEntitlements } from '../billing/entitlements.service';
 import {
   createCampaignSchema,
   previewAudienceSchema,
@@ -213,6 +214,20 @@ router.post(
     const orgId = req.user!.organizationId!;
     const userId = req.user!.userId;
     validateCampaignTimezone(data.timezone, data.scheduledAt);
+
+    // Campaigns send paid Meta template messages — block locked/expired orgs.
+    const entitlements = await getOrgEntitlements(orgId);
+    if (entitlements.isLocked) {
+      return res.status(402).json({
+        success: false,
+        error: {
+          code: 'SUBSCRIPTION_LOCKED',
+          message: 'Your subscription or trial has expired. Upgrade to send campaigns.',
+          upgradeCta: 'growth',
+        },
+      });
+    }
+
     const whatsappNumberId = await validateCampaignNumber(
       orgId,
       data.whatsappNumberId,
@@ -525,6 +540,18 @@ router.post(
   asyncHandler(async (req: Request, res: Response) => {
     const id = paramId(req);
     const orgId = req.user!.organizationId!;
+
+    const entitlements = await getOrgEntitlements(orgId);
+    if (entitlements.isLocked) {
+      return res.status(402).json({
+        success: false,
+        error: {
+          code: 'SUBSCRIPTION_LOCKED',
+          message: 'Your subscription or trial has expired. Upgrade to send campaigns.',
+          upgradeCta: 'growth',
+        },
+      });
+    }
 
     const campaign = await prisma.campaign.findFirst({
       where: {

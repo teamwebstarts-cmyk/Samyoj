@@ -16,7 +16,24 @@ router.use(authenticate, requireOrg, resolveActiveWhatsappNumber);
 
 const ticketInclude = {
   contact: { select: { id: true, phone: true, name: true } },
-  conversation: { select: { id: true, status: true } },
+  conversation: {
+    select: {
+      id: true,
+      status: true,
+      // The "private note" from the create-ticket modal is stored as the
+      // conversation's most recent internal note. Surface it on the ticket so
+      // the sidebar can show it back to the team.
+      internalNotes: {
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+        select: {
+          id: true,
+          content: true,
+          createdAt: true,
+        },
+      },
+    },
+  },
   assignedAgent: { select: { id: true, name: true } },
 } as const;
 

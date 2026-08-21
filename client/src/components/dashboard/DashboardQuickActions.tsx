@@ -86,9 +86,9 @@ const MORE_MENU_ITEMS = [
     accent: 'slate' as const,
   },
   {
-    to: '/reports',
-    label: 'Reports',
-    desc: 'Deep analytics',
+    to: '/billing?tab=usage',
+    label: 'Usage & Stats',
+    desc: 'Plan & delivery metrics',
     icon: LineChart,
     accent: 'slate' as const,
   },

@@ -33,6 +33,7 @@ import { clearRingTimeout, isTerminalCallStatus, isUsableMetaCallId } from './ca
 import { logTeamAudit } from '../team/audit';
 import { emitToOrg, emitToUser } from '../../realtime';
 import { resolveActiveWhatsappNumber, resolveActiveWhatsappNumberId } from '../whatsapp/active-number';
+import { checkQuota } from '../billing/entitlements.service';
 import { recordAiUsage } from '../ai/org-ai.service';
 import { charUsage } from '../ai/ai-usage-actions';
 import { deleteCallLogs } from './delete-call-logs';
@@ -392,6 +393,17 @@ router.post(
   ...adminGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
+    const quota = await checkQuota(orgId, 'calling');
+    if (!quota.allowed) {
+      return res.status(402).json({
+        success: false,
+        error: {
+          code: quota.code,
+          message: quota.reason,
+          upgradeCta: quota.upgradeCta,
+        },
+      });
+    }
     const number = await prisma.whatsappNumber.findFirst({
       where: { id: req.activeWhatsappNumberId, organizationId: orgId, isActive: true },
     });

@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import prisma from '../../config/database';
 import { config } from '../../config';
 import { authenticate, requireOrg, loadOrgRole } from '../../middleware/auth';
+import { loadPermissions, requirePermission } from '../../middleware/permissions';
 import { AppError, sendSuccess, asyncHandler, paramId } from '../../utils/response';
 import logger from '../../utils/logger';
 import { phoneFieldSchema } from '../../utils/phone';
@@ -178,7 +179,6 @@ router.get(
       page,
       limit,
       favorite,
-      sla,
       unread,
       unreplied,
       hasOpenTicket,
@@ -195,12 +195,6 @@ router.get(
     }
     if (assignedTo) where.assignedAgentId = assignedTo;
     if (favorite === 'true') where.isFavorite = true;
-    if (sla === 'breached') {
-      where.slaBreached = true;
-    } else if (sla === 'due-soon') {
-      where.slaBreached = false;
-      where.slaDueAt = { gt: new Date(), lte: new Date(Date.now() + 60 * 60 * 1000) };
-    }
     if (search) {
       where.contact = {
         OR: [
@@ -1625,6 +1619,8 @@ router.post(
 
 router.patch(
   '/:id/assign',
+  loadPermissions,
+  requirePermission('manageInbox'),
   asyncHandler(async (req: Request, res: Response) => {
     const { agentId } = req.body;
     const orgId = req.user!.organizationId!;
@@ -1861,6 +1857,8 @@ const bulkSchema = z
 
 router.post(
   '/bulk',
+  loadPermissions,
+  requirePermission('manageInbox'),
   asyncHandler(async (req: Request, res: Response) => {
     const data = bulkSchema.parse(req.body);
     const orgId = req.user!.organizationId!;

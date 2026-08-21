@@ -1,23 +1,25 @@
 export default function ReportsSkeleton() {
   return (
-    <div className="animate-pulse space-y-5 pb-6 sm:space-y-6 sm:pb-8">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="animate-pulse space-y-6 pb-8">
+      {/* 6 Top KPI skeleton cards */}
+      <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="h-28 rounded-2xl border border-theme-border/60 bg-theme-subtle/50" />
+        ))}
+      </div>
+
+      {/* Large Chart skeleton */}
+      <div className="h-72 rounded-2xl border border-theme-border/60 bg-theme-subtle/50" />
+
+      {/* Funnel / Subcard grid */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="h-[118px] rounded-2xl bg-theme-subtle" />
+          <div key={i} className="h-36 rounded-2xl border border-theme-border/60 bg-theme-subtle/50" />
         ))}
       </div>
-      <div className="grid gap-5 md:grid-cols-3 lg:grid-cols-5">
-        <div className="h-[240px] rounded-2xl bg-theme-subtle lg:col-span-2" />
-        <div className="h-[240px] rounded-2xl bg-theme-subtle lg:col-span-3" />
-      </div>
-      <div className="grid gap-4 lg:grid-cols-3">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="h-[220px] rounded-2xl bg-theme-subtle" />
-        ))}
-      </div>
-      <div className="h-[280px] rounded-2xl bg-theme-subtle" />
-      <div className="h-[280px] rounded-2xl bg-theme-subtle" />
-      <div className="h-[240px] rounded-2xl bg-theme-subtle" />
+
+      {/* Table skeleton */}
+      <div className="h-80 rounded-2xl border border-theme-border/60 bg-theme-subtle/50" />
     </div>
   );
 }
