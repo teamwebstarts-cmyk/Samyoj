@@ -142,7 +142,7 @@ export default function BillingUsageStatsTab({
             <div>
               <p className="text-[13px] font-bold">Approaching subscription plan limit</p>
               <p className="text-[12px] opacity-90">
-                You have utilized {messagePct}% of your monthly message allocation on your {currentPlan?.name || 'current'} plan.
+                Your <strong className="text-theme-fg">{currentPlan?.name || 'current'}</strong> plan usage is high. Upgrade to keep deliveries smooth.
               </p>
             </div>
           </div>

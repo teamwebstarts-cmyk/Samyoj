@@ -12,12 +12,12 @@ const USD_TO_INR = 83;
  * Source: docs/billing/01-PRICING-CATALOG.md (Meta India benchmarks).
  */
 export const META_CATEGORY_RATES_INR: Record<string, number> = {
-  MARKETING: 0.86,
-  UTILITY: 0.115,
-  AUTHENTICATION: 0.115,
+  MARKETING: 0.78,
+  UTILITY: 0.3,
+  AUTHENTICATION: 0.3,
   SERVICE: 0,
   USER_INITIATED: 0,
-  BUSINESS_INITIATED: 0.115,
+  BUSINESS_INITIATED: 0.35,
 };
 
 // Kept as an alias for existing imports.

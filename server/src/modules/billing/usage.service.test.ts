@@ -49,12 +49,12 @@ describe('estimateCampaignCost', () => {
 
   it('calculates UTILITY rate (₹0.35 per recipient)', () => {
     const result = estimateCampaignCost(100, 'UTILITY');
-    expect(result.estimatedCostInr).toBe(35);
+    expect(result.estimatedCostInr).toBe(30);
   });
 
   it('calculates AUTHENTICATION rate (₹0.35 per recipient)', () => {
     const result = estimateCampaignCost(100, 'AUTHENTICATION');
-    expect(result.estimatedCostInr).toBe(35);
+    expect(result.estimatedCostInr).toBe(30);
   });
 
   it('calculates SERVICE rate (₹0)', () => {

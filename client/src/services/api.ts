@@ -680,6 +680,7 @@ export const analyticsApi = {
 export const billingApi = {
   get: () => api.get('/billing'),
   usage: () => api.get('/billing/usage'),
+  current: () => api.get('/billing/current'),
   updatePlan: (plan: string) => api.patch('/billing/plan', { plan }),
   createOrder: (planId: string, cadence: 'monthly' | 'quarterly' | 'yearly' = 'monthly') =>
     api.post('/billing/create-order', { planId, cadence }),

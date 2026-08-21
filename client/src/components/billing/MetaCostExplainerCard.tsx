@@ -39,7 +39,7 @@ export default function MetaCostExplainerCard() {
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-neutral-800 dark:text-slate-200">Marketing</span>
             <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-bold text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">
-              ~₹0.86 / msg
+              ~INR 0.78 / msg
             </span>
           </div>
           <p className="mt-1 text-[11px] text-neutral-500 dark:text-slate-400">
@@ -52,7 +52,7 @@ export default function MetaCostExplainerCard() {
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-neutral-800 dark:text-slate-200">Utility</span>
             <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-              ~₹0.115 / msg
+              ~INR 0.30 / msg
             </span>
           </div>
           <p className="mt-1 text-[11px] text-neutral-500 dark:text-slate-400">
@@ -65,7 +65,7 @@ export default function MetaCostExplainerCard() {
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-neutral-800 dark:text-slate-200">Authentication</span>
             <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-bold text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">
-              ~₹0.115 / msg
+              ~INR 0.30 / msg
             </span>
           </div>
           <p className="mt-1 text-[11px] text-neutral-500 dark:text-slate-400">

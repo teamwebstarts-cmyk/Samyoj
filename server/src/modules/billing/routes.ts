@@ -370,4 +370,25 @@ router.patch(
   })
 );
 
+router.get(
+  '/current',
+  authenticate,
+  requireOrg,
+  loadPermissions,
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const org = await prisma.organization.findUnique({ where: { id: orgId } });
+    if (!org) throw new AppError(404, 'Organization not found');
+
+    const entitlements = await getOrgEntitlements(orgId);
+    sendSuccess(res, {
+      plan: org.plan,
+      subscriptionStatus: org.subscriptionStatus,
+      planExpiresAt: org.planExpiresAt,
+      trialEndsAt: org.trialEndsAt,
+      entitlements,
+    });
+  })
+);
+
 export default router;
