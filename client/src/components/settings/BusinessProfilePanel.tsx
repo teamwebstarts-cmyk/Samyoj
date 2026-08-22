@@ -95,38 +95,27 @@ export default function BusinessProfilePanel({ canEdit, onSaved }: BusinessProfi
 
   return (
     <div className="space-y-5">
-      {/* Profile Incomplete / Complete Status Banner */}
+      {/* Profile completion status — compact single line */}
       {!completeness.isComplete ? (
-        <div className="flex flex-col gap-3 rounded-2xl border border-amber-200/80 bg-gradient-to-r from-amber-50/90 via-amber-50/40 to-theme-surface p-4 ring-1 ring-amber-100 dark:border-amber-900/40 dark:from-amber-950/30 dark:ring-amber-900/40 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-100/80 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">
-              <AlertCircle size={19} strokeWidth={2.25} />
-            </div>
-            <div>
-              <p className="text-[13px] font-bold text-amber-900 dark:text-amber-200">
-                Complete your business profile
-              </p>
-              <p className="mt-0.5 text-[12px] font-medium text-amber-800/90 dark:text-amber-300/90">
-                Please provide your {missingCore.join(', ')} so your brand identity is configured across customer conversations.
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 self-end sm:self-center">
-            <span className="rounded-lg bg-amber-100/90 px-2.5 py-1 text-[11px] font-bold text-amber-800 dark:bg-amber-900/60 dark:text-amber-200">
-              {completeness.percent}% complete
-            </span>
-          </div>
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-amber-200/70 bg-amber-50/60 px-3.5 py-2.5 ring-1 ring-amber-100 dark:border-amber-900/40 dark:bg-amber-950/20 dark:ring-amber-900/40">
+          <AlertCircle size={15} strokeWidth={2.25} className="shrink-0 text-amber-600" />
+          <p className="min-w-0 flex-1 truncate text-[12px] font-semibold text-amber-900 dark:text-amber-200">
+            Missing: {missingCore.join(', ')}
+          </p>
+          <span className="shrink-0 rounded-md bg-amber-100/90 px-2 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-900/60 dark:text-amber-200">
+            {completeness.percent}%
+          </span>
         </div>
       ) : (
-        <div className="flex items-center justify-between rounded-2xl border border-emerald-200/80 bg-gradient-to-r from-emerald-50/80 to-theme-surface px-4 py-3 ring-1 ring-emerald-100 dark:border-emerald-900/40 dark:from-emerald-950/30 dark:ring-emerald-900/40">
-          <div className="flex items-center gap-2.5">
-            <CheckCircle2 size={18} className="text-whatsapp-600 dark:text-whatsapp-400" />
-            <span className="text-[13px] font-bold text-emerald-950 dark:text-emerald-200">
-              Business Profile 100% Complete
+        <div className="flex items-center justify-between rounded-xl border border-emerald-200/70 bg-emerald-50/60 px-3.5 py-2.5 ring-1 ring-emerald-100 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:ring-emerald-900/40">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 size={15} strokeWidth={2.25} className="text-whatsapp-600 dark:text-whatsapp-400" />
+            <span className="text-[12px] font-semibold text-emerald-900 dark:text-emerald-200">
+              Profile complete
             </span>
           </div>
           <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
-            Brand identity active
+            Brand active
           </span>
         </div>
       )}

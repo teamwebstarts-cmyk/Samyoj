@@ -33,7 +33,7 @@ export function ContactSourceBadge({ source }: { source?: ContactSource }) {
 
 export function ContactTagBadge({ tag }: { tag: string }) {
   return (
-    <span className="inline-flex rounded-full bg-violet-50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-700 ring-1 ring-violet-100 dark:bg-violet-950/50 dark:text-violet-300 dark:ring-violet-800/40">
+    <span className="inline-flex rounded-md bg-violet-50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-700 ring-1 ring-violet-100 dark:bg-violet-950/50 dark:text-violet-300 dark:ring-violet-800/40">
       {tag}
     </span>
   );

@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Building2,
+  CircleDot,
   ClipboardList,
-  Headset,
   Mail,
   Settings2,
   Shield,
   Users,
 } from 'lucide-react';
-import PageHero from '../components/ui/PageHero';
 import PageShell from '../components/ui/PageShell';
+import TeamHero from '../components/team/TeamHero';
 import SegmentedControl from '../components/ui/SegmentedControl';
 import TeamAuditTab from '../components/team/TeamAuditTab';
 import TeamDepartmentsTab from '../components/team/TeamDepartmentsTab';
@@ -82,17 +82,27 @@ export default function TeamPage() {
 
   const heroStats = useMemo(
     () => [
-      { label: 'Members', value: summary.total },
+      { label: 'Members', value: summary.total, hint: 'In this org', icon: Users, tone: 'members' as const },
       {
         label: 'Online',
         value: summary.online,
-        tone: 'text-emerald-700 dark:text-emerald-300',
+        hint: 'Active now',
+        icon: CircleDot,
+        tone: 'online' as const,
       },
-      { label: 'Departments', value: departments.length },
+      {
+        label: 'Departments',
+        value: departments.length,
+        hint: 'Groups',
+        icon: Building2,
+        tone: 'departments' as const,
+      },
       {
         label: 'Roles',
         value: summary.owners + summary.admins + summary.supervisors + summary.agents > 0 ? 4 : 0,
-        tone: 'text-violet-700 dark:text-violet-300',
+        hint: 'Permission sets',
+        icon: Shield,
+        tone: 'roles' as const,
       },
     ],
     [summary, departments],
@@ -101,14 +111,7 @@ export default function TeamPage() {
   return (
     <PageShell>
       <div className="space-y-5 animate-fade-up-delay sm:space-y-6">
-        <PageHero
-          badge="Team"
-          badgeIcon={Headset}
-          title="Team management"
-          description="Invite agents, assign roles, and organize departments."
-          accent="emerald"
-          stats={heroStats}
-        />
+        <TeamHero stats={heroStats} />
 
         <SegmentedControl
           embedded

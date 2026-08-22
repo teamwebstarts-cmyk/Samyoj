@@ -7,7 +7,6 @@ import {
   Plug,
   Palette,
   Shield,
-  SlidersHorizontal,
   PhoneOff,
   Settings2,
 } from 'lucide-react';
@@ -35,7 +34,6 @@ import HoursAndInboxPanel from '../components/settings/HoursAndInboxPanel';
 import IntegrationsPanel from '../components/settings/IntegrationsPanel';
 import AppearanceSettingsPanel from '../components/settings/AppearanceSettingsPanel';
 import SecuritySettingsPanel from '../components/settings/SecuritySettingsPanel';
-import AdminUiTogglesPanel from '../components/settings/AdminUiTogglesPanel';
 
 type SettingsTab =
   | 'profile'
@@ -43,8 +41,7 @@ type SettingsTab =
   | 'inbox'
   | 'integrations'
   | 'appearance'
-  | 'security'
-  | 'admin';
+  | 'security';
 
 const DEFAULT_BUSINESS_HOURS: BusinessHoursSettings = {
   startHour: 9,
@@ -61,13 +58,6 @@ const TAB_DEFS: Array<SettingsNavItem & { id: SettingsTab }> = [
   { id: 'security', label: 'Security & 2FA', icon: Shield, group: 'Advanced' },
   { id: 'integrations', label: 'APIs & webhooks', icon: Plug, group: 'Advanced' },
 ];
-
-const ADMIN_TAB: SettingsNavItem & { id: SettingsTab } = {
-  id: 'admin',
-  label: 'Admin controls',
-  icon: SlidersHorizontal,
-  group: 'Advanced',
-};
 
 function resolveLegacyTab(raw: string | null): SettingsTab | null {
   switch (raw) {
@@ -99,8 +89,8 @@ export default function SettingsPage() {
   }, [organization, isOwnerOrAdmin]);
 
   const tabs = useMemo<SettingsNavItem[]>(
-    () => [...TAB_DEFS, ...(isOwnerOrAdmin ? [ADMIN_TAB] : [])].filter((t) => !hiddenTabs.includes(t.id)),
-    [isOwnerOrAdmin, hiddenTabs]
+    () => TAB_DEFS.filter((t) => !hiddenTabs.includes(t.id)),
+    [hiddenTabs]
   );
 
   // Active Tab
@@ -298,8 +288,6 @@ export default function SettingsPage() {
                   {activeTab === 'appearance' && <AppearanceSettingsPanel />}
 
                   {activeTab === 'security' && <SecuritySettingsPanel />}
-
-                  {activeTab === 'admin' && isOwnerOrAdmin && <AdminUiTogglesPanel />}
                 </TabTransition>
               </div>
             </div>
