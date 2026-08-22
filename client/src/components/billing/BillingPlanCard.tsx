@@ -11,6 +11,7 @@ interface BillingPlanCardProps {
   loading: boolean;
   onSelect: () => void;
   cadence?: 'monthly' | 'quarterly' | 'yearly';
+  isActivePaidSession?: boolean;
 }
 
 type PlanTheme = {
@@ -29,7 +30,7 @@ const planThemes: Record<string, PlanTheme> = {
     icon: Beaker,
     priceTone: 'text-slate-800 dark:text-slate-200',
     ring: 'ring-slate-200 dark:ring-slate-700',
-    badge: 'Trial',
+    badge: 'Free',
   },
   starter: {
     iconBg: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400',
@@ -69,6 +70,7 @@ export default function BillingPlanCard({
   loading,
   onSelect,
   cadence = 'monthly',
+  isActivePaidSession,
 }: BillingPlanCardProps) {
   const theme = planThemes[plan.id] ?? planThemes.starter;
   const Icon = theme.icon;
@@ -77,11 +79,13 @@ export default function BillingPlanCard({
 
   const buttonLabel = isCurrent
     ? 'Current plan'
-    : isEnterprise
-      ? 'Talk to experts'
-      : isPaid
-        ? 'Upgrade'
-        : 'Switch plan';
+    : isActivePaidSession
+      ? 'Restore Plan'
+      : isEnterprise
+        ? 'Talk to experts'
+        : isPaid
+          ? 'Upgrade'
+          : 'Switch plan';
 
   const showBadge = theme.badge || plan.isMostPopular;
   const badgeText = plan.isMostPopular ? 'Most popular' : theme.badge;
@@ -122,90 +126,100 @@ export default function BillingPlanCard({
 
   return (
     <div
-      className={`group relative flex h-full w-full flex-col rounded-2xl border bg-theme-surface transition-shadow duration-200 hover:shadow-lg ${
+      className={`relative flex h-full w-full flex-col justify-between rounded-2xl border bg-theme-surface p-4 sm:p-5 transition-colors ${
         isCurrent
-          ? `border-emerald-300 shadow-[0_4px_20px_rgba(16,185,129,0.1)] dark:border-emerald-700/60`
-          : plan.isMostPopular
-            ? `border-violet-200 dark:border-violet-800/50`
-            : `border-theme-border ${theme.ring}`
+          ? 'border-emerald-500/80 ring-1 ring-emerald-500/30'
+          : isActivePaidSession
+            ? 'border-emerald-400 dark:border-emerald-700'
+            : plan.isMostPopular
+              ? 'border-violet-400 dark:border-violet-700'
+              : 'border-theme-border'
       }`}
     >
-      {/* Badges */}
-      {isCurrent && (
-        <div className="absolute right-4 top-4 rounded-full bg-emerald-500 px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white shadow-sm">
-          Active
-        </div>
-      )}
-      {!isCurrent && showBadge && (
-        <div className={`absolute right-4 top-4 rounded-full px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white shadow-sm ${plan.isMostPopular ? 'bg-violet-600' : 'bg-slate-500'}`}>
-          {badgeText}
-        </div>
-      )}
+      <div className="flex flex-1 flex-col">
+        {/* Top Header: Icon + Name (left) & Badge (right) in a single NON-OVERLAPPING flex row */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${theme.iconBg}`}>
+              <Icon className="h-4.5 w-4.5" strokeWidth={2.25} />
+            </div>
+            <h3 className="truncate text-base font-extrabold tracking-tight text-theme-fg">
+              {plan.name}
+            </h3>
+          </div>
 
-      <div className="relative flex flex-1 flex-col p-5">
-        {/* Icon + Name */}
-        <div className="flex items-center gap-3">
-          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${theme.iconBg}`}>
-            <Icon className="h-5 w-5" strokeWidth={2.25} />
-          </div>
-          <div className="min-w-0">
-            <h3 className="text-[15px] font-extrabold tracking-tight text-theme-fg">{plan.name}</h3>
-          </div>
+          {/* Right badge */}
+          {isCurrent ? (
+            <span className="shrink-0 rounded-full bg-emerald-500 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white">
+              Active
+            </span>
+          ) : isActivePaidSession ? (
+            <span className="shrink-0 rounded-full bg-emerald-600 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white">
+              Purchased
+            </span>
+          ) : showBadge ? (
+            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white ${plan.isMostPopular ? 'bg-violet-600' : 'bg-slate-500'}`}>
+              {badgeText}
+            </span>
+          ) : null}
         </div>
 
         {/* Summary line */}
-        <p className="mt-2 text-[11px] font-medium text-theme-muted">
-          {plan.waNumbers} WhatsApp numbers · {plan.seats} seats · {plan.contacts} contacts
+        <p className="mt-2.5 text-[11px] font-medium text-theme-muted">
+          {plan.waNumbers} WA line · {plan.seats} seats · {typeof plan.contacts === 'number' ? plan.contacts.toLocaleString() : plan.contacts} contacts
         </p>
 
-        {/* Price */}
-        <div className="mt-4">
+        {/* Price Row */}
+        <div className="mt-3.5 min-h-[58px]">
           {!isEnterprise ? (
             <div>
-              <div className="flex items-baseline gap-1">
-                <p className={`text-[1.75rem] font-extrabold leading-none tracking-tight ${theme.priceTone}`}>
+              <div className="flex flex-wrap items-baseline gap-1">
+                <p className={`text-2xl font-black leading-none tracking-tight sm:text-[1.65rem] ${theme.priceTone}`}>
                   {displayPrice}
                 </p>
-                <span className="text-[11px] font-semibold text-theme-muted">+ GST</span>
+                <span className="text-[10.5px] font-semibold text-theme-muted">+ GST</span>
               </div>
-              <p className="mt-1 text-[11px] font-medium text-theme-muted">{billingSummary}</p>
+              <p className="mt-1 text-[10.5px] font-medium text-theme-muted">{billingSummary}</p>
               {isUpiCapExceeded && (
-                <p className="mt-1 text-[10px] font-semibold text-amber-600 dark:text-amber-400">
-                  Card / NetBanking required (exceeds ₹15k UPI Autopay limit)
+                <p className="mt-0.5 text-[9.5px] font-semibold text-amber-600 dark:text-amber-400">
+                  Card / NetBanking required (&gt;₹15k UPI)
                 </p>
               )}
             </div>
           ) : (
             <div>
-              <p className={`text-[1.75rem] font-extrabold leading-none tracking-tight ${theme.priceTone}`}>
+              <p className={`text-2xl font-black leading-none tracking-tight sm:text-[1.65rem] ${theme.priceTone}`}>
                 Custom
               </p>
-              <p className="mt-1 text-[11px] font-medium text-theme-muted">Tailored for large scale</p>
+              <p className="mt-1 text-[10.5px] font-medium text-theme-muted">Tailored for enterprise scale</p>
             </div>
           )}
         </div>
 
         {/* Divider */}
-        <div className="my-4 h-px bg-theme-border" />
+        <div className="my-3.5 h-px bg-theme-border" />
 
         {/* Features */}
         <ul className="flex-1 space-y-2">
           {plan.features.map((feature) => (
-            <li key={feature} className="flex items-start gap-2 text-[12px] text-theme-secondary">
-              <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full ${theme.iconBg}`}>
-                <Check className="h-2.5 w-2.5" strokeWidth={3} />
+            <li key={feature} className="flex items-start gap-2 text-[11.5px] text-theme-secondary">
+              <span className={`mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full ${theme.iconBg}`}>
+                <Check className="h-2 w-2" strokeWidth={3} />
               </span>
               <span className="font-medium leading-snug">{feature}</span>
             </li>
           ))}
         </ul>
+      </div>
 
-        {/* CTA */}
+      {/* CTA Button */}
+      <div className="mt-4 pt-2">
         <AppButton
-          className="mt-5"
-          variant={isCurrent ? 'secondary' : 'primary'}
+          size="sm"
+          variant={isCurrent ? 'secondary' : isActivePaidSession ? 'primary' : 'primary'}
+          className={isActivePaidSession ? '!bg-emerald-600 hover:!bg-emerald-700 text-white' : ''}
           fullWidth
-          disabled={isCurrent || !canManage || (isPaid && !razorpayConfigured && !isEnterprise)}
+          disabled={isCurrent || !canManage || (isPaid && !razorpayConfigured && !isEnterprise && !isActivePaidSession)}
           loading={loading}
           onClick={onSelect}
         >

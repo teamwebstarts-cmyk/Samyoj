@@ -50,7 +50,6 @@ export function pickDefaultSupportBot<T extends { enabled: boolean; isDefault: b
 }
 
 export async function listBots(organizationId: string, channel?: AiBotChannel) {
-  await ensureSystemSupportBots(organizationId);
   return prisma.aiBot.findMany({
     where: { organizationId, ...(channel ? { channel } : {}) },
     orderBy: [{ isSystem: 'desc' }, { isDefault: 'desc' }, { createdAt: 'asc' }],
@@ -77,15 +76,13 @@ export async function findBotNameConflict(
   });
 }
 
-/** Why this bot must stay — Support/system, or the last remaining bot on that channel. */
-export function botDeleteBlockReason(input: {
-  isSystem: boolean;
-  remainingInChannel: number;
-}): string | null {
-  if (input.isSystem) return 'The Support bot cannot be deleted.';
-  if (input.remainingInChannel <= 1) {
-    return 'Keep at least one bot for this channel.';
-  }
+/**
+ * Historically the platform forced "at least one bot" per channel and blocked
+ * deleting the system Support bot. That guard was removed (SAMYOJ): users may
+ * delete every bot, including the Support bot, and reach zero. Routing already
+ * tolerates no bot. Left as a no-op hook in case a future rule is needed.
+ */
+export function botDeleteBlockReason(): string | null {
   return null;
 }
 

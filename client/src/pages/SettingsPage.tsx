@@ -9,25 +9,26 @@ import {
   Shield,
   SlidersHorizontal,
   PhoneOff,
+  Settings2,
 } from 'lucide-react';
 import PageShell from '../components/ui/PageShell';
-import SegmentedControl from '../components/ui/SegmentedControl';
 import { TabTransition } from '../components/ui/TabTransition';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { useAuth } from '../contexts/AuthContext';
 import { settingsApi, whatsappApi } from '../services/api';
 import type {
   WhatsappNumber,
-  CampaignSettings,
   BusinessHoursSettings,
   WebhookStatus,
-  WebhookHealth,
 } from '../types';
 import { toastError, toastSuccess } from '../utils/toast';
 import { formatPhoneDisplay } from '../utils/phone';
 import { startWhatsAppOAuth, subscribeWaOAuthResult } from '../utils/whatsappOAuth';
 
 // Subcomponents
+import SettingsHero from '../components/settings/SettingsHero';
+import SettingsSidebar, { type SettingsNavItem } from '../components/settings/SettingsSidebar';
+import SettingsSkeleton from '../components/settings/SettingsSkeleton';
 import BusinessProfilePanel from '../components/settings/BusinessProfilePanel';
 import WhatsAppChannelsPanel from '../components/settings/WhatsAppChannelsPanel';
 import HoursAndInboxPanel from '../components/settings/HoursAndInboxPanel';
@@ -45,14 +46,6 @@ type SettingsTab =
   | 'security'
   | 'admin';
 
-const DEFAULT_CAMPAIGN_SETTINGS: CampaignSettings = {
-  dailySendLimit: 1000,
-  dailyBudgetInr: 5000,
-  batchSize: 50,
-  batchDelayMs: 1000,
-  mapFirstBodyVariableToName: true,
-};
-
 const DEFAULT_BUSINESS_HOURS: BusinessHoursSettings = {
   startHour: 9,
   endHour: 18,
@@ -60,39 +53,73 @@ const DEFAULT_BUSINESS_HOURS: BusinessHoursSettings = {
   timezone: 'Asia/Kolkata',
 };
 
+const TAB_DEFS: Array<SettingsNavItem & { id: SettingsTab }> = [
+  { id: 'profile', label: 'Business profile', icon: Building2, group: 'Workspace' },
+  { id: 'appearance', label: 'Appearance', icon: Palette, group: 'Workspace' },
+  { id: 'whatsapp', label: 'WhatsApp', icon: Smartphone, group: 'Channels' },
+  { id: 'inbox', label: 'Hours & replies', icon: Clock, group: 'Channels' },
+  { id: 'security', label: 'Security & 2FA', icon: Shield, group: 'Advanced' },
+  { id: 'integrations', label: 'APIs & webhooks', icon: Plug, group: 'Advanced' },
+];
+
+const ADMIN_TAB: SettingsNavItem & { id: SettingsTab } = {
+  id: 'admin',
+  label: 'Admin controls',
+  icon: SlidersHorizontal,
+  group: 'Advanced',
+};
+
+function resolveLegacyTab(raw: string | null): SettingsTab | null {
+  switch (raw) {
+    case 'general':
+    case 'setup':
+      return 'profile';
+    case 'campaigns':
+      return 'whatsapp';
+    case 'automation':
+    case 'ai':
+      return 'inbox';
+    default:
+      return null;
+  }
+}
+
 export default function SettingsPage() {
-  const { orgRole, organization } = useAuth();
+  const { orgRole, organization, twoFactorEnabled } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
+
+  const isOwnerOrAdmin = orgRole === 'OWNER' || orgRole === 'ADMIN';
+
+  const hiddenTabs = useMemo(() => {
+    if (isOwnerOrAdmin) return [] as string[];
+    const settings = organization?.settings as Record<string, unknown> | undefined;
+    const toggles = settings?.uiToggles as { hiddenSettingsTabs?: unknown } | undefined;
+    return Array.isArray(toggles?.hiddenSettingsTabs) ? (toggles!.hiddenSettingsTabs as string[]) : [];
+  }, [organization, isOwnerOrAdmin]);
+
+  const tabs = useMemo<SettingsNavItem[]>(
+    () => [...TAB_DEFS, ...(isOwnerOrAdmin ? [ADMIN_TAB] : [])].filter((t) => !hiddenTabs.includes(t.id)),
+    [isOwnerOrAdmin, hiddenTabs]
+  );
 
   // Active Tab
   const activeTab = useMemo<SettingsTab>(() => {
     const raw = searchParams.get('tab');
-    if (
-      raw === 'profile' ||
-      raw === 'whatsapp' ||
-      raw === 'inbox' ||
-      raw === 'integrations' ||
-      raw === 'appearance' ||
-      raw === 'security' ||
-      raw === 'admin'
-    ) {
-      return raw;
-    }
-    // Backward compatibility mappings
-    if (raw === 'general') return 'appearance';
-    if (raw === 'automation') return 'inbox';
-    if (raw === 'campaigns') return 'whatsapp';
-    if (raw === 'ai') return 'inbox';
-    if (raw === 'setup') return 'profile';
-    return 'profile';
-  }, [searchParams]);
+    const legacy = resolveLegacyTab(raw);
+    const candidate = (
+      legacy ||
+      (['profile', 'whatsapp', 'inbox', 'integrations', 'appearance', 'security', 'admin'].includes(raw || '')
+        ? (raw as SettingsTab)
+        : null)
+    ) as SettingsTab | null;
+    if (candidate && tabs.some((t) => t.id === candidate)) return candidate;
+    return (tabs[0]?.id ?? 'profile') as SettingsTab;
+  }, [searchParams, tabs]);
 
   const setActiveTab = (tab: SettingsTab) => {
     setSearchParams({ tab }, { replace: true });
   };
-
-  const isOwnerOrAdmin = orgRole === 'OWNER' || orgRole === 'ADMIN';
 
   // WhatsApp State
   const [numbers, setNumbers] = useState<WhatsappNumber[]>([]);
@@ -100,14 +127,10 @@ export default function SettingsPage() {
   const [disconnectTarget, setDisconnectTarget] = useState<{ id: string; phone: string } | null>(null);
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
   const [webhookStatus, setWebhookStatus] = useState<WebhookStatus | null>(null);
-  const [webhookHealth, setWebhookHealth] = useState<WebhookHealth | null>(null);
-  const [refreshingWebhook, setRefreshingWebhook] = useState(false);
 
-  // Business Hours & Campaign Settings
+  // Business Hours
   const [businessHours, setBusinessHours] = useState<BusinessHoursSettings>(DEFAULT_BUSINESS_HOURS);
   const [savingHours, setSavingHours] = useState(false);
-  const [campaignSettings, setCampaignSettings] = useState<CampaignSettings>(DEFAULT_CAMPAIGN_SETTINGS);
-  const [savingCampaigns, setSavingCampaigns] = useState(false);
 
   // Initial Data Fetch
   const loadData = () => {
@@ -116,22 +139,17 @@ export default function SettingsPage() {
       settingsApi.get(),
       whatsappApi.numbers(),
       whatsappApi.webhookStatus(),
-      whatsappApi.webhookHealth().catch(() => null),
     ])
-      .then(([settingsRes, numbersRes, webhookRes, healthRes]) => {
+      .then(([settingsRes, numbersRes, webhookRes]) => {
         if (settingsRes.status === 'fulfilled') {
           const s = settingsRes.value.data.data;
           if (s.businessHours) setBusinessHours(s.businessHours);
-          if (s.campaigns) setCampaignSettings(s.campaigns);
         }
         if (numbersRes.status === 'fulfilled') {
           setNumbers(numbersRes.value.data.data.numbers || []);
         }
         if (webhookRes.status === 'fulfilled') {
           setWebhookStatus(webhookRes.value.data.data);
-        }
-        if (healthRes.status === 'fulfilled' && healthRes.value?.data?.data) {
-          setWebhookHealth(healthRes.value.data.data);
         }
       })
       .finally(() => setLoading(false));
@@ -186,25 +204,6 @@ export default function SettingsPage() {
     }
   };
 
-  // Handle Webhook Diagnostic Refresh
-  const handleRefreshWebhook = async () => {
-    setRefreshingWebhook(true);
-    try {
-      await whatsappApi.setupWebhook();
-      const [statusRes, healthRes] = await Promise.all([
-        whatsappApi.webhookStatus(),
-        whatsappApi.webhookHealth().catch(() => null),
-      ]);
-      setWebhookStatus(statusRes.data.data);
-      if (healthRes?.data?.data) setWebhookHealth(healthRes.data.data);
-      toastSuccess('Live connection sync refreshed successfully');
-    } catch {
-      toastError('Failed to refresh connection sync');
-    } finally {
-      setRefreshingWebhook(false);
-    }
-  };
-
   // Handle Business Hours Save
   const handleSaveBusinessHours = async (hours: {
     startHour: number;
@@ -215,148 +214,100 @@ export default function SettingsPage() {
     try {
       await settingsApi.updateBusinessHours(hours);
       setBusinessHours((prev: BusinessHoursSettings) => ({ ...prev, ...hours }));
-      toastSuccess('Operating hours updated successfully');
+      toastSuccess('Operating hours saved');
     } catch {
-      toastError('Failed to update operating hours');
+      toastError('Could not save operating hours');
     } finally {
       setSavingHours(false);
     }
   };
 
-  // Handle Campaign Throttling Save
-  const handleSaveCampaignSettings = async (settings: CampaignSettings) => {
-    setSavingCampaigns(true);
-    try {
-      await settingsApi.updateCampaigns(settings);
-      setCampaignSettings(settings);
-      toastSuccess('Velocity limits updated successfully');
-    } catch {
-      toastError('Failed to update velocity limits');
-    } finally {
-      setSavingCampaigns(false);
-    }
-  };
+  const syncActive = Boolean(webhookStatus?.subscribed);
 
-  // Tab definitions for SegmentedControl
-  const tabOptions = [
-    {
-      value: 'profile',
-      label: 'Business Profile',
-      icon: Building2,
-    },
-    {
-      value: 'whatsapp',
-      label: 'WhatsApp Channels',
-      icon: Smartphone,
-    },
-    {
-      value: 'inbox',
-      label: 'Hours & Inbox',
-      icon: Clock,
-    },
-    {
-      value: 'integrations',
-      label: 'Developer APIs',
-      icon: Plug,
-    },
-    {
-      value: 'appearance',
-      label: 'Appearance',
-      icon: Palette,
-    },
-    {
-      value: 'security',
-      label: 'Security & 2FA',
-      icon: Shield,
-    },
-    ...(isOwnerOrAdmin
-      ? [
-          {
-            value: 'admin',
-            label: 'Admin Toggles',
-            icon: SlidersHorizontal,
-          },
-        ]
-      : []),
-  ];
+  const heroStats = useMemo(
+    () => [
+      {
+        label: 'WhatsApp numbers',
+        value: loading ? '—' : numbers.length,
+        tone: numbers.length > 0 ? ('connected' as const) : ('total' as const),
+      },
+      {
+        label: 'Inbound sync',
+        value: loading ? '—' : syncActive ? 'Active' : 'Off',
+        tone: syncActive ? ('connected' as const) : ('hours' as const),
+      },
+      {
+        label: 'Two-factor login',
+        value: twoFactorEnabled ? 'On' : 'Off',
+        tone: twoFactorEnabled ? ('secure' as const) : ('hours' as const),
+      },
+    ],
+    [loading, numbers.length, syncActive, twoFactorEnabled]
+  );
 
   return (
     <PageShell>
-      {/* Sleek, lightweight Header */}
-      <div className="mb-5">
-        <h1 className="text-xl font-bold tracking-tight text-theme-fg sm:text-2xl">
-          Settings & Workspace Configuration
-        </h1>
-        <p className="mt-1 text-[13px] font-medium text-theme-secondary">
-          Manage your official business profile, WhatsApp channels, operating hours, and developer APIs.
-        </p>
-      </div>
-
-      {/* Stationary Top Tab Navigation Bar */}
-      <div className="mb-6 overflow-x-auto pb-1">
-        <SegmentedControl
-          embedded
-          value={activeTab}
-          onChange={(val) => setActiveTab(val as SettingsTab)}
-          options={tabOptions}
-          ariaLabel="Settings sections"
-        />
-      </div>
-
-      {/* Active Panel Content */}
-      <div className="max-w-5xl">
+      <div className="min-w-0 space-y-4 sm:space-y-5">
         {loading ? (
-          <div className="space-y-4">
-            <div className="h-24 animate-pulse rounded-2xl bg-theme-subtle/60" />
-            <div className="h-72 animate-pulse rounded-2xl bg-theme-subtle/60" />
-          </div>
+          <SettingsSkeleton />
         ) : (
           <>
-            <TabTransition tabKey={activeTab}>
-            {activeTab === 'profile' && (
-              <BusinessProfilePanel canEdit={isOwnerOrAdmin} onSaved={loadData} />
-            )}
+            <SettingsHero
+              badge="Settings"
+              badgeIcon={Settings2}
+              title="Workspace settings"
+              description="Business profile, WhatsApp numbers, hours, and account security."
+              stats={heroStats}
+            />
 
-            {activeTab === 'whatsapp' && (
-              <WhatsAppChannelsPanel
-                numbers={numbers}
-                connecting={connecting}
-                onConnect={handleConnect}
-                onDisconnect={(id, phone) => setDisconnectTarget({ id, phone })}
-                disconnectingId={disconnectingId}
-                webhookStatus={webhookStatus}
-                webhookHealth={webhookHealth}
-                onRefreshWebhook={handleRefreshWebhook}
-                refreshingWebhook={refreshingWebhook}
-                campaignSettings={campaignSettings}
-                onSaveCampaignSettings={handleSaveCampaignSettings}
-                savingCampaigns={savingCampaigns}
-                canEdit={isOwnerOrAdmin}
+            <div className="flex flex-col gap-5 lg:flex-row lg:gap-8">
+              <SettingsSidebar
+                tabs={tabs}
+                activeTab={activeTab}
+                onTabChange={(id) => setActiveTab(id as SettingsTab)}
               />
-            )}
 
-            {activeTab === 'inbox' && (
-              <HoursAndInboxPanel
-                businessHours={businessHours}
-                onSaveBusinessHours={handleSaveBusinessHours}
-                savingHours={savingHours}
-                canEdit={isOwnerOrAdmin}
-              />
-            )}
+              <div className="min-w-0 flex-1 lg:max-w-4xl">
+                <TabTransition tabKey={activeTab}>
+                  {activeTab === 'profile' && (
+                    <BusinessProfilePanel canEdit={isOwnerOrAdmin} onSaved={loadData} />
+                  )}
 
-            {activeTab === 'integrations' && <IntegrationsPanel />}
+                  {activeTab === 'whatsapp' && (
+                    <WhatsAppChannelsPanel
+                      numbers={numbers}
+                      connecting={connecting}
+                      onConnect={handleConnect}
+                      onDisconnect={(id, phone) => setDisconnectTarget({ id, phone })}
+                      disconnectingId={disconnectingId}
+                      canEdit={isOwnerOrAdmin}
+                    />
+                  )}
 
-            {activeTab === 'appearance' && <AppearanceSettingsPanel />}
+                  {activeTab === 'inbox' && (
+                    <HoursAndInboxPanel
+                      businessHours={businessHours}
+                      onSaveBusinessHours={handleSaveBusinessHours}
+                      savingHours={savingHours}
+                      canEdit={isOwnerOrAdmin}
+                    />
+                  )}
 
-            {activeTab === 'security' && <SecuritySettingsPanel />}
+                  {activeTab === 'integrations' && <IntegrationsPanel />}
 
-            {activeTab === 'admin' && isOwnerOrAdmin && <AdminUiTogglesPanel />}
-            </TabTransition>
+                  {activeTab === 'appearance' && <AppearanceSettingsPanel />}
+
+                  {activeTab === 'security' && <SecuritySettingsPanel />}
+
+                  {activeTab === 'admin' && isOwnerOrAdmin && <AdminUiTogglesPanel />}
+                </TabTransition>
+              </div>
+            </div>
           </>
         )}
       </div>
 
-      {/* Disconnect Safety Confirmation Modal */}
+      {/* Disconnect confirmation */}
       <ConfirmDialog
         open={Boolean(disconnectTarget)}
         onClose={() => setDisconnectTarget(null)}

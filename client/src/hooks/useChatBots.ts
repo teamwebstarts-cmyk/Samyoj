@@ -83,24 +83,49 @@ export function useChatBots() {
     [assigning, defaultChatBotId]
   );
 
-  const disableChatBot = useCallback(async () => {
-    if (assigning) return;
-    setAssigning(true);
-    try {
-      const botIdForRemove = defaultChatBotId;
-      if (!botIdForRemove) return;
-      await aiBotApi.removeFromAllChats(botIdForRemove);
-      setDefaultChatBotId(null);
-      setChatBots((prev) => prev.map((bot) => ({ ...bot, isDefault: false })));
-      toastSuccess('Chat AI bot removed from all conversations', {
-        id: 'chat-bot-off',
-      });
-    } catch {
-      toastError('Could not turn off chat AI.', { id: 'chat-bot-off' });
-    } finally {
-      setAssigning(false);
-    }
-  }, [assigning]);
+  /** Toggle org-wide chat AI on/off. On = assign an enabled chat bot; off = remove. */
+  const setChatAiEnabled = useCallback(
+    async (next: boolean) => {
+      if (assigning) return;
+      if (next === chatAiEnabled) return;
+      setAssigning(true);
+      try {
+        if (next) {
+          const botId =
+            defaultChatBotId ??
+            enabledChatBots.find((bot) => bot.isDefault)?.id ??
+            enabledChatBots[0]?.id ??
+            null;
+          if (!botId) {
+            toastError('Create and enable a chat agent first.', { id: 'chat-bot-on' });
+            return;
+          }
+          await aiBotApi.applyToAllChats(botId);
+          setDefaultChatBotId(botId);
+          setChatBots((prev) =>
+            prev.map((bot) => ({ ...bot, isDefault: bot.id === botId }))
+          );
+          toastSuccess('Chat AI enabled for all conversations', { id: 'chat-bot-on' });
+        } else {
+          const botIdForRemove = defaultChatBotId;
+          if (!botIdForRemove) return;
+          await aiBotApi.removeFromAllChats(botIdForRemove);
+          setDefaultChatBotId(null);
+          setChatBots((prev) => prev.map((bot) => ({ ...bot, isDefault: false })));
+          toastSuccess('Chat AI removed from all conversations', {
+            id: 'chat-bot-off',
+          });
+        }
+      } catch {
+        toastError(next ? 'Could not enable chat AI.' : 'Could not turn off chat AI.', {
+          id: next ? 'chat-bot-on' : 'chat-bot-off',
+        });
+      } finally {
+        setAssigning(false);
+      }
+    },
+    [assigning, chatAiEnabled, defaultChatBotId, enabledChatBots]
+  );
 
   return {
     chatBots,
@@ -112,6 +137,7 @@ export function useChatBots() {
     assigning,
     load,
     selectChatBot,
-    disableChatBot,
+    setChatAiEnabled,
+    disableChatBot: () => void setChatAiEnabled(false),
   };
 }

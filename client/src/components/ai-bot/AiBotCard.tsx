@@ -19,7 +19,6 @@ interface AiBotCardProps {
   onEdit: () => void;
   onToggle: () => void;
   onDelete?: () => void;
-  onToggleAllChats?: () => void;
 }
 
 function relativeTime(dateStr: string): string {
@@ -45,49 +44,6 @@ function successRateBadge(rate: number): { text: string; bg: string } {
   return { text: 'text-red-700 dark:text-red-300', bg: 'bg-red-50 dark:bg-red-950/40' };
 }
 
-export function AllChatsSwitch({
-  applied,
-  onClick,
-}: {
-  applied: boolean;
-  onClick: () => void;
-}) {
-  const aria = applied
-    ? 'Remove this bot as default'
-    : 'Set this bot as default';
-  const title = applied
-    ? 'On as default — turn off to remove'
-    : 'Off — turn on to set as default';
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={applied}
-      aria-label={aria}
-      title={title}
-      onClick={onClick}
-      className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2 text-[11px] font-bold transition sm:px-2.5 ${
-        applied
-          ? 'border-sky-200/80 bg-sky-50 text-sky-800 dark:border-sky-500/30 dark:bg-sky-950/40 dark:text-sky-300'
-          : 'border-theme-border bg-theme-surface text-theme-secondary hover:bg-theme-subtle hover:text-theme-fg'
-      }`}
-    >
-      <span className="hidden sm:inline">Default</span>
-      <span
-        className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition ${
-          applied ? 'bg-sky-500' : 'bg-neutral-300 dark:bg-neutral-600'
-        }`}
-      >
-        <span
-          className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition ${
-            applied ? 'left-[18px]' : 'left-0.5'
-          }`}
-        />
-      </span>
-    </button>
-  );
-}
-
 /** Compact mobile/tablet bot row — fits more bots on screen. */
 export default function AiBotCard({
   bot,
@@ -97,7 +53,6 @@ export default function AiBotCard({
   onEdit,
   onToggle,
   onDelete,
-  onToggleAllChats,
 }: AiBotCardProps) {
   const faqCount = bot._count?.knowledgeItems ?? 0;
   const isChat = (bot.channel ?? 'CHAT') === 'CHAT';
@@ -196,9 +151,6 @@ export default function AiBotCard({
             {bot.enabled ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
             <span className="hidden sm:inline">{bot.enabled ? 'Pause' : 'On'}</span>
           </button>
-          {isChat && onToggleAllChats && (
-            <AllChatsSwitch applied={Boolean(bot.appliedToAll)} onClick={onToggleAllChats} />
-          )}
           <button
             type="button"
             onClick={onEdit}

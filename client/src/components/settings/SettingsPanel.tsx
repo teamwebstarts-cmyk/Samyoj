@@ -1,6 +1,14 @@
 import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { settingsAccentBar } from './settingsUi';
+
+const settingsAccentBar = {
+  emerald: 'from-whatsapp-500 via-emerald-500 to-emerald-600',
+  violet: 'from-violet-500 via-purple-500 to-purple-600',
+  sky: 'from-sky-400 via-sky-500 to-blue-500',
+  amber: 'from-amber-400 via-amber-500 to-orange-500',
+  indigo: 'from-indigo-400 via-indigo-500 to-violet-500',
+  rose: 'from-rose-400 via-rose-500 to-pink-500',
+} as const;
 
 interface SettingsPanelProps {
   title: string;

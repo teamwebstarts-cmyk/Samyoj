@@ -782,6 +782,7 @@ export default function CallsPage() {
               botsLoading={callBotsLoading}
               botAssigning={callBotAssigning}
               onSelectBot={(botId) => void selectCallBot(botId)}
+              hasBots={callBots.length > 0}
             />
           </div>
         ) : null}

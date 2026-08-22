@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Shield, KeyRound, Smartphone } from 'lucide-react';
+import QRCode from 'qrcode';
 import SettingsPanel from './SettingsPanel';
 import AppButton from '../ui/AppButton';
 import AppInput from '../ui/AppInput';
@@ -11,7 +12,7 @@ export default function SecuritySettingsPanel() {
   const { twoFactorEnabled: initial2FA } = useAuth();
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(initial2FA);
   const [twoFactorStep, setTwoFactorStep] = useState<'idle' | 'setup' | 'verify'>('idle');
-  const [otpauthUrl, setOtpauthUrl] = useState('');
+  const [qrDataUrl, setQrDataUrl] = useState('');
   const [secret, setSecret] = useState('');
   const [verifyCode, setVerifyCode] = useState('');
   const [disableCode, setDisableCode] = useState('');
@@ -28,7 +29,7 @@ export default function SecuritySettingsPanel() {
     try {
       const { data } = await teamApi.twoFactor.setup();
       setSecret(data.data.secret);
-      setOtpauthUrl(data.data.otpauthUrl);
+      setQrDataUrl(await QRCode.toDataURL(data.data.otpauthUrl, { margin: 1, width: 160 }));
       setTwoFactorStep('setup');
     } catch {
       toastError('Failed to start 2FA setup');
@@ -196,16 +197,10 @@ export default function SecuritySettingsPanel() {
                 Use Google Authenticator, Microsoft Authenticator, or Authy to scan this code:
               </p>
 
-              {otpauthUrl && (
+              {qrDataUrl && (
                 <div className="flex flex-col items-center gap-3 py-2 sm:flex-row">
                   <div className="rounded-xl border border-theme-border bg-white p-3 shadow-sm">
-                    <img
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(
-                        otpauthUrl
-                      )}`}
-                      alt="2FA QR Code"
-                      className="h-36 w-36"
-                    />
+                    <img src={qrDataUrl} alt="2FA QR code" className="h-36 w-36" />
                   </div>
                   <div className="space-y-1.5 text-[12px]">
                     <p className="font-medium text-theme-secondary">Manual entry secret key:</p>

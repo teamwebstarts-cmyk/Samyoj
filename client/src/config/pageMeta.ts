@@ -65,8 +65,8 @@ export const PAGE_META: Record<string, PageMeta> = {
     description: 'Analytics and team performance',
   },
   '/billing': {
-    title: 'Billing',
-    description: 'Plans and seat limits',
+    title: 'Billing & Usage',
+    description: 'Plans, quotas & usage statistics',
   },
   '/settings': {
     title: 'Settings',

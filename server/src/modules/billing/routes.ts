@@ -80,9 +80,24 @@ router.get(
     const planTier = legacyPlanToTier(org.plan);
     const currentPlan = tierToClientPlan(planTier);
 
-    // Infer current cadence from the most recent captured order's amount.
+    // Infer current cadence and check for unexpired active paid order
     const lastPaid = recentPayments[0];
     const lastSku = lastPaid ? skuForPaymentOrder(lastPaid.planId, lastPaid.amountPaise) : undefined;
+
+    const now = new Date();
+    const activePayment = recentPayments.find((p) => {
+      if (!p.paidAt) return false;
+      const sku = skuForPaymentOrder(p.planId, p.amountPaise);
+      const periodDays = sku?.periodDays || 30;
+      const expiresAt = new Date(p.paidAt.getTime() + periodDays * 24 * 60 * 60 * 1000);
+      return expiresAt > now;
+    });
+
+    const activePaidPlan = activePayment ? activePayment.planId : null;
+    const activePaidSku = activePayment ? skuForPaymentOrder(activePayment.planId, activePayment.amountPaise) : undefined;
+    const activePaidExpiresAt = activePayment && activePaidSku
+      ? new Date(activePayment.paidAt!.getTime() + (activePaidSku.periodDays || 30) * 24 * 60 * 60 * 1000).toISOString()
+      : null;
 
     sendSuccess(res, {
       plan: org.plan,
@@ -99,6 +114,8 @@ router.get(
       cadence: org.subscriptionStatus === 'trial' ? 'trial' : lastSku?.cadence ?? null,
       trialEndsAt: org.subscriptionStatus === 'trial' ? org.planExpiresAt : null,
       currentPeriodEnd: org.planExpiresAt,
+      activePaidPlan,
+      activePaidExpiresAt,
       recentPayments: recentPayments.map((p) => ({
         planId: p.planId,
         amountPaise: p.amountPaise,
@@ -156,6 +173,49 @@ router.post(
 
     const org = await prisma.organization.findUnique({ where: { id: orgId } });
     if (!org) throw new AppError(404, 'Organization not found');
+
+    // Check if the organization already has an active, unexpired paid order for this plan
+    const capturedOrders = await prisma.paymentOrder.findMany({
+      where: { organizationId: orgId, planId, status: 'CAPTURED' },
+      orderBy: { paidAt: 'desc' },
+      take: 5,
+    });
+
+    const now = new Date();
+    const activeOrder = capturedOrders.find((p) => {
+      if (!p.paidAt) return false;
+      const orderSku = skuForPaymentOrder(p.planId, p.amountPaise);
+      const periodDays = orderSku?.periodDays || 30;
+      const expiresAt = new Date(p.paidAt.getTime() + periodDays * 24 * 60 * 60 * 1000);
+      return expiresAt > now;
+    });
+
+    if (activeOrder) {
+      const orderSku = skuForPaymentOrder(activeOrder.planId, activeOrder.amountPaise);
+      const periodDays = orderSku?.periodDays || 30;
+      const expiresAt = new Date(activeOrder.paidAt!.getTime() + periodDays * 24 * 60 * 60 * 1000);
+      await prisma.organization.update({
+        where: { id: orgId },
+        data: {
+          plan: planId,
+          planExpiresAt: expiresAt,
+          subscriptionStatus: 'active',
+        },
+      });
+      return sendSuccess(res, {
+        alreadyActive: true,
+        orderId: null,
+        amount: 0,
+        currency: 'INR',
+        keyId: config.razorpay.keyId,
+        planName: orderSku?.name || sku.name,
+        skuId: sku.id,
+        cadence: sku.cadence,
+        amountLabel: sku.effectiveMonthlyLabel,
+        planExpiresAt: expiresAt,
+        message: `Your ${orderSku?.name || sku.name} subscription is already active and has been restored.`,
+      });
+    }
 
     const receipt = `plan_${sku.id}_${orgId.slice(0, 8)}_${Date.now()}`;
     const order = await createRazorpayOrder({
@@ -354,6 +414,41 @@ router.patch(
       throw new AppError(400, 'Contact sales to upgrade to Enterprise');
     }
 
+    // Check if organization has an unexpired captured payment order for this plan
+    const capturedOrders = await prisma.paymentOrder.findMany({
+      where: { organizationId: orgId, planId: plan, status: 'CAPTURED' },
+      orderBy: { paidAt: 'desc' },
+      take: 5,
+    });
+
+    const now = new Date();
+    const activeOrder = capturedOrders.find((p) => {
+      if (!p.paidAt) return false;
+      const orderSku = skuForPaymentOrder(p.planId, p.amountPaise);
+      const periodDays = orderSku?.periodDays || 30;
+      const expiresAt = new Date(p.paidAt.getTime() + periodDays * 24 * 60 * 60 * 1000);
+      return expiresAt > now;
+    });
+
+    if (activeOrder) {
+      const orderSku = skuForPaymentOrder(activeOrder.planId, activeOrder.amountPaise);
+      const periodDays = orderSku?.periodDays || 30;
+      const expiresAt = new Date(activeOrder.paidAt!.getTime() + periodDays * 24 * 60 * 60 * 1000);
+      const org = await prisma.organization.update({
+        where: { id: orgId },
+        data: {
+          plan,
+          planExpiresAt: expiresAt,
+          subscriptionStatus: 'active',
+        },
+      });
+      return sendSuccess(res, {
+        plan: org.plan,
+        planExpiresAt: org.planExpiresAt,
+        message: `Your ${orderSku?.name || plan} plan has been restored.`,
+      });
+    }
+
     const planDef = getPlan(plan);
     if (planDef && planDef.pricePaise > 0 && !isRazorpayConfigured()) {
       throw new AppError(400, 'Paid plans require Razorpay — use checkout');
@@ -364,7 +459,7 @@ router.patch(
 
     const org = await prisma.organization.update({
       where: { id: orgId },
-      data: { plan, planExpiresAt: null },
+      data: { plan },
     });
 
     sendSuccess(res, { plan: org.plan });

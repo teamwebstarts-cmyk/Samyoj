@@ -68,7 +68,7 @@ export default function PriorityBadge({
   return (
     <span
       aria-label={config.aria}
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-wide ring-1 ring-inset ${config.chip} ${className}`}
+      className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-wide ring-1 ring-inset ${config.chip} ${className}`}
     >
       {showIcon && <Icon className="h-3 w-3" strokeWidth={2.5} aria-hidden />}
       <span>{config.label}</span>

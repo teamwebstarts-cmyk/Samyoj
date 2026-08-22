@@ -6,7 +6,7 @@ import { messagingConsent, conversationStatusLabel } from '../../utils/plainLang
 export function ContactOptInBadge({ optedIn, compact }: { optedIn?: boolean; compact?: boolean }) {
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full font-bold uppercase tracking-wide ring-1 ring-inset ${
+      className={`inline-flex items-center gap-1 rounded-md font-bold uppercase tracking-wide ring-1 ring-inset ${
         compact ? 'px-1.5 py-0.5 text-[8px]' : 'px-2.5 py-1 text-[10px]'
       } ${
         optedIn
@@ -24,7 +24,7 @@ export function ContactSourceBadge({ source }: { source?: ContactSource }) {
   const meta = getContactSourceMeta(source);
   return (
     <span
-      className={`inline-flex rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ring-1 ring-inset ${meta.bg} ${meta.tone}`}
+      className={`inline-flex rounded-md px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ring-1 ring-inset ${meta.bg} ${meta.tone}`}
     >
       {meta.label}
     </span>
@@ -48,7 +48,7 @@ export function ContactConversationBadge({ status }: { status: string }) {
 
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ring-1 ring-inset ${
+      className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ring-1 ring-inset ${
         tones[status] || tones.CLOSED
       }`}
     >

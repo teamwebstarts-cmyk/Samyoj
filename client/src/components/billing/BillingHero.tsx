@@ -133,55 +133,46 @@ export default function BillingHero({ info }: BillingHeroProps) {
   return (
     <section
       aria-label="Billing overview"
-      className="relative overflow-hidden rounded-xl border border-sky-200/70 bg-[linear-gradient(100deg,#f0f9ff_0%,#f5fbff_42%,#ffffff_100%)] p-2.5 shadow-[0_8px_24px_rgba(2,132,199,0.05)] dark:border-sky-900/50 dark:bg-[linear-gradient(100deg,#0b1526_0%,#0f1d33_45%,#0b1424_100%)] sm:rounded-[22px] sm:p-5 md:p-6"
+      className="rounded-2xl border border-theme-border bg-theme-surface p-4 sm:p-5 md:p-6"
     >
-      <div
-        className="pointer-events-none absolute -left-20 -top-24 h-56 w-56 rounded-full bg-emerald-200/30 blur-3xl dark:bg-emerald-500/10 max-sm:hidden"
-        aria-hidden="true"
-      />
-      <div
-        className="pointer-events-none absolute -right-12 -bottom-14 h-48 w-48 rounded-full bg-sky-200/20 blur-3xl dark:bg-sky-500/10 max-sm:hidden"
-        aria-hidden="true"
-      />
-
-      <div className="relative flex flex-col gap-2.5 sm:gap-5 xl:flex-row xl:items-center xl:justify-between xl:gap-8">
+      <div className="flex flex-col gap-4 sm:gap-5 xl:flex-row xl:items-center xl:justify-between xl:gap-8">
         <div className="min-w-0 max-w-xl">
-          <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.1em] text-sky-700 ring-1 ring-sky-200/70 dark:bg-sky-950/40 dark:text-sky-300 dark:ring-sky-800/50 sm:gap-1.5 sm:px-2.5 sm:py-1 sm:text-[10px] sm:tracking-[0.12em]">
-            <CreditCard className="h-2.5 w-2.5 sm:h-3 sm:w-3" strokeWidth={2.5} />
-            Billing
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-50 px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-sky-700 dark:bg-sky-950/50 dark:text-sky-300">
+            <CreditCard className="h-3 w-3" strokeWidth={2.5} />
+            Billing & Subscriptions
           </span>
-          <h1 className="mt-1.5 text-[1.05rem] font-extrabold leading-snug tracking-tight text-[#0f172a] dark:text-white sm:mt-3 sm:text-[1.5rem] md:text-[1.65rem] xl:whitespace-nowrap">
+          <h1 className="mt-2 text-xl font-extrabold tracking-tight text-theme-fg sm:text-2xl">
             {title}
           </h1>
-          <p className="mt-0.5 hidden max-w-md text-[12px] font-medium leading-relaxed text-[#64748b] dark:text-slate-300 sm:mt-1.5 sm:block sm:text-[13px]">
+          <p className="mt-1 text-xs font-medium text-theme-secondary sm:text-[13px]">
             {description}
           </p>
         </div>
 
-        <div className="grid w-full grid-cols-2 gap-1.5 sm:gap-2.5 md:grid-cols-3 xl:w-auto xl:min-w-0 xl:max-w-none xl:shrink-0">
+        <div className="grid w-full grid-cols-2 gap-2.5 sm:grid-cols-3 xl:w-auto xl:min-w-0 xl:shrink-0">
           {stats.map((stat) => {
             const config = toneStyles[stat.tone] || toneStyles.emerald;
             const Icon = stat.icon || config.icon;
             return (
               <div
                 key={stat.label}
-                className="flex min-w-0 items-center gap-1.5 rounded-lg border border-neutral-200/80 bg-white px-2 py-1.5 shadow-[0_1px_2px_rgba(15,23,42,0.03)] dark:border-slate-700/70 dark:bg-slate-900/70 sm:gap-2.5 sm:rounded-2xl sm:px-3 sm:py-3 xl:w-[150px] 2xl:w-[160px]"
+                className="flex min-w-0 items-center gap-2.5 rounded-xl border border-theme-border bg-theme-subtle/30 p-2.5 sm:p-3 xl:w-[155px] 2xl:w-[165px]"
               >
                 <span
-                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full sm:h-9 sm:w-9 ${config.chip}`}
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${config.chip}`}
                 >
-                  <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={2.25} />
+                  <Icon className="h-4 w-4" strokeWidth={2.25} />
                 </span>
-                <div className="min-w-0">
-                  <p className="truncate text-[9px] font-semibold leading-tight text-neutral-800 dark:text-slate-200 sm:text-[12px]">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[11px] font-bold text-theme-muted">
                     {stat.label}
                   </p>
                   <p
-                    className={`mt-0.5 text-[1rem] font-extrabold leading-none tracking-tight tabular-nums sm:text-[1.35rem] ${config.valueClass}`}
+                    className={`mt-0.5 truncate text-base font-extrabold leading-none tracking-tight tabular-nums sm:text-lg ${config.valueClass}`}
                   >
                     {typeof stat.value === 'number' ? stat.value.toLocaleString() : stat.value}
                   </p>
-                  <p className="mt-1 hidden truncate text-[11px] font-medium leading-snug text-neutral-400 dark:text-slate-400 sm:block">
+                  <p className="mt-1 hidden truncate text-[10.5px] font-medium text-theme-muted sm:block">
                     {stat.hint}
                   </p>
                 </div>

@@ -695,16 +695,19 @@ export default function InboxPage() {
   return (
     <InboxGlassTipProvider>
     <PageShell inbox>
-      <ChatAiToggleBanner
-        enabled={chatBots.chatAiEnabled}
-        saving={chatBots.assigning}
-        defaultChatBotId={chatBots.defaultChatBotId}
-        chatBots={chatBots.enabledChatBots}
-        botsLoading={chatBots.loading}
-        botAssigning={chatBots.assigning}
-        onSelectBot={chatBots.selectChatBot}
-        onChange={chatBots.disableChatBot}
-      />
+      <div className="mb-2 sm:mb-3">
+        <ChatAiToggleBanner
+          enabled={chatBots.chatAiEnabled}
+          saving={chatBots.assigning}
+          defaultChatBotId={chatBots.defaultChatBotId}
+          chatBots={chatBots.enabledChatBots}
+          botsLoading={chatBots.loading}
+          botAssigning={chatBots.assigning}
+          onSelectBot={chatBots.selectChatBot}
+          onChange={chatBots.setChatAiEnabled}
+          hasBots={chatBots.chatBots.length > 0}
+        />
+      </div>
       <a
         href="#inbox-thread"
         className="skip-to-content focus:not-sr-only"

@@ -81,7 +81,7 @@ export const NAV_SECTIONS: NavSection[] = [
       {
         to: '/billing',
         icon: CreditCard,
-        label: 'Billing',
+        label: 'Billing & Usage',
         showForRoles: ADMIN_ROLES,
       },
       { to: '/settings', icon: Settings2, label: 'Settings' },
@@ -104,7 +104,7 @@ export const MOBILE_MORE_ITEMS: NavItem[] = [
   { to: '/tickets', icon: Ticket, label: 'Tickets' },
   { to: '/commerce', icon: Package, label: 'Orders', hidden: true },
   { to: '/team', icon: UsersRound, label: 'Team', showForRoles: SUPERVISOR_PLUS },
-  { to: '/billing', icon: CreditCard, label: 'Billing', showForRoles: ADMIN_ROLES },
+  { to: '/billing', icon: CreditCard, label: 'Billing & Usage', showForRoles: ADMIN_ROLES },
   { to: '/settings', icon: Settings2, label: 'Settings' },
 ];
 

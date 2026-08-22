@@ -414,6 +414,8 @@ export interface BillingInfo {
   subscriptionStatus?: SubscriptionStatus | string;
   cadence?: BillingCadence;
   currentPeriodEnd?: string | null;
+  activePaidPlan?: string | null;
+  activePaidExpiresAt?: string | null;
   recentPayments?: Array<{ planId: string; amountPaise: number; paidAt: string | null }>;
 }
 

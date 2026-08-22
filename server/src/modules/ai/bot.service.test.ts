@@ -29,20 +29,8 @@ describe('pickDefaultSupportBot', () => {
 });
 
 describe('botDeleteBlockReason', () => {
-  it('blocks the Support / system bot', () => {
-    expect(botDeleteBlockReason({ isSystem: true, remainingInChannel: 3 })).toBe(
-      'The Support bot cannot be deleted.'
-    );
-  });
-
-  it('blocks deleting the last remaining bot on a channel', () => {
-    expect(botDeleteBlockReason({ isSystem: false, remainingInChannel: 1 })).toBe(
-      'Keep at least one bot for this channel.'
-    );
-  });
-
-  it('allows deleting an extra non-system bot', () => {
-    expect(botDeleteBlockReason({ isSystem: false, remainingInChannel: 2 })).toBeNull();
+  it('never blocks deletion — users may delete all bots (incl. Support)', () => {
+    expect(botDeleteBlockReason()).toBeNull();
   });
 });
 

@@ -3,14 +3,11 @@ import { useSearchParams } from 'react-router-dom';
 import {
   BarChart3,
   CreditCard,
-  LayoutGrid,
   Receipt,
   ShieldAlert,
 } from 'lucide-react';
 import AppAlert from '../components/ui/AppAlert';
 import AppButton from '../components/ui/AppButton';
-import BillingCurrentPlanHero from '../components/billing/BillingCurrentPlanHero';
-import { TabTransition } from '../components/ui/TabTransition';
 import BillingHero from '../components/billing/BillingHero';
 import BillingCadenceToggle from '../components/billing/BillingCadenceToggle';
 import BillingPlanCard from '../components/billing/BillingPlanCard';
@@ -21,19 +18,17 @@ import BillingUsageStatsTab from '../components/billing/BillingUsageStatsTab';
 import EmptyState from '../components/ui/EmptyState';
 import PageShell from '../components/ui/PageShell';
 import SectionCard from '../components/ui/SectionCard';
-import SegmentedControl from '../components/ui/SegmentedControl';
 import { analyticsApi, billingApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import type { BillingInfo, BillingPlan, BillingUsage, ReportsOverviewFullData } from '../types';
 import { openRazorpayCheckout } from '../utils/razorpay';
 import { toastError, toastSuccess } from '../utils/toast';
 
-type BillingTab = 'overview' | 'usage' | 'plans' | 'history';
+type BillingTab = 'usage' | 'plans' | 'history';
 type CadenceTab = 'monthly' | 'quarterly' | 'yearly';
 
 const tabMeta = {
-  overview: { label: 'Overview', shortLabel: 'Overview', icon: LayoutGrid },
-  usage: { label: 'Usage & Stats', shortLabel: 'Usage', icon: BarChart3 },
+  usage: { label: 'Usage & Statistics', shortLabel: 'Usage & Stats', icon: BarChart3 },
   plans: { label: 'Plans & Pricing', shortLabel: 'Plans', icon: CreditCard },
   history: { label: 'Invoices & History', shortLabel: 'History', icon: Receipt },
 } as const;
@@ -41,12 +36,9 @@ const tabMeta = {
 export default function BillingPage() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const tabParam = searchParams.get('tab') as BillingTab;
-  const initialTab: BillingTab = ['overview', 'usage', 'plans', 'history'].includes(tabParam)
-    ? tabParam
-    : 'overview';
+  const rawTab = searchParams.get('tab');
+  const activeTab: BillingTab = rawTab === 'plans' || rawTab === 'history' ? rawTab : 'usage';
 
-  const [tab, setTab] = useState<BillingTab>(initialTab);
   const [cadence, setCadence] = useState<CadenceTab>('monthly');
   const [info, setInfo] = useState<BillingInfo | null>(null);
   const [usage, setUsage] = useState<BillingUsage | null>(null);
@@ -55,27 +47,23 @@ export default function BillingPage() {
   const [loadFailed, setLoadFailed] = useState(false);
   const [upgrading, setUpgrading] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (tabParam && ['overview', 'usage', 'plans', 'history'].includes(tabParam) && tabParam !== tab) {
-      setTab(tabParam);
-    }
-  }, [tabParam, tab]);
-
-  const handleTabChange = (newTab: BillingTab) => {
-    setTab(newTab);
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        if (newTab === 'overview') {
-          next.delete('tab');
-        } else {
-          next.set('tab', newTab);
-        }
-        return next;
-      },
-      { replace: true }
-    );
-  };
+  const handleTabChange = useCallback(
+    (newTab: BillingTab) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (newTab === 'usage') {
+            next.delete('tab');
+          } else {
+            next.set('tab', newTab);
+          }
+          return next;
+        },
+        { replace: true }
+      );
+    },
+    [setSearchParams]
+  );
 
   const load = useCallback(() => {
     setLoadFailed(false);
@@ -125,6 +113,14 @@ export default function BillingPage() {
     setUpgrading(plan.id);
     try {
       const res = await billingApi.createOrder(plan.id, cadence);
+      // If server returned alreadyActive: true, plan was restored with no additional charge!
+      if (res.data?.data?.alreadyActive) {
+        toastSuccess(res.data.data.message || `Switched to your active ${plan.name} plan!`);
+        setUpgrading(null);
+        load();
+        return;
+      }
+
       const { orderId, amount, currency, keyId } = res.data.data;
       openRazorpayCheckout({
         keyId,
@@ -157,7 +153,8 @@ export default function BillingPage() {
   };
 
   const handleUpgrade = (plan: BillingPlan) => {
-    if (plan.pricePaise === 0) {
+    // If the plan is already paid and active in session, restore without Razorpay popup
+    if (plan.id === info?.activePaidPlan || plan.pricePaise === 0) {
       handleFreePlan(plan);
     } else {
       handlePaidPlan(plan);
@@ -203,19 +200,37 @@ export default function BillingPage() {
             {/* Hero — always visible at top */}
             <BillingHero info={info} usage={usage} />
 
-            {/* Tab bar */}
-            <SegmentedControl
-              embedded
-              value={tab}
-              onChange={(v) => handleTabChange(v as BillingTab)}
-              options={[
-                { value: 'overview', ...tabMeta.overview },
-                { value: 'usage', ...tabMeta.usage },
-                { value: 'plans', ...tabMeta.plans },
-                { value: 'history', ...tabMeta.history },
-              ]}
-              ariaLabel="Billing sections"
-            />
+            {/* Redesigned Instant Single-Click Tab Navigation */}
+            <div className="flex rounded-xl border border-theme-border bg-theme-subtle/50 p-1">
+              {(['usage', 'plans', 'history'] as const).map((key) => {
+                const meta = tabMeta[key];
+                const Icon = meta.icon;
+                const isActive = activeTab === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    role="tab"
+                    aria-selected={isActive}
+                    onClick={() => handleTabChange(key)}
+                    className={`group relative flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-xs font-bold transition-all sm:text-[13px] ${
+                      isActive
+                        ? 'bg-theme-surface text-theme-fg shadow-sm ring-1 ring-theme-border'
+                        : 'text-theme-muted hover:text-theme-fg hover:bg-theme-surface/40'
+                    }`}
+                  >
+                    <Icon
+                      className={`h-4 w-4 shrink-0 transition-transform ${
+                        isActive ? 'text-theme-fg' : 'text-theme-muted group-hover:text-theme-fg'
+                      }`}
+                      strokeWidth={isActive ? 2.5 : 2}
+                    />
+                    <span className="hidden sm:inline">{meta.label}</span>
+                    <span className="sm:hidden">{meta.shortLabel}</span>
+                  </button>
+                );
+              })}
+            </div>
 
             {/* Alerts */}
             {!info.canManageBilling && (
@@ -224,23 +239,15 @@ export default function BillingPage() {
               </AppAlert>
             )}
 
-            {!info.razorpayConfigured && tab === 'plans' && (
+            {!info.razorpayConfigured && activeTab === 'plans' && (
               <AppAlert variant="info">
                 Paid checkout is unavailable — Razorpay is not configured on the server.
               </AppAlert>
             )}
 
-            {/* Tab content */}
-            <div className="min-h-[400px]">
-              {tab === 'overview' && (
-                <div className="space-y-6">
-                  <BillingCurrentPlanHero
-                    info={info}                  />
-                  <MetaCostExplainerCard />
-                </div>
-              )}
-
-              {tab === 'usage' && (
+            {/* Tab content with min-height stability to avoid jumping */}
+            <div className="min-h-[520px] transition-opacity duration-150">
+              {activeTab === 'usage' && (
                 <BillingUsageStatsTab
                   info={info}
                   usage={usage}
@@ -250,8 +257,8 @@ export default function BillingPage() {
                 />
               )}
 
-              {tab === 'plans' && (
-                <div className="space-y-4">
+              {activeTab === 'plans' && (
+                <div className="space-y-5">
                   <div className="flex flex-col items-center gap-3">
                     <BillingCadenceToggle
                       value={cadence}
@@ -264,12 +271,13 @@ export default function BillingPage() {
                     />
                   </div>
 
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 xl:gap-5">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                     {info.plans.map((plan) => (
                       <BillingPlanCard
                         key={plan.id}
                         plan={plan}
                         isCurrent={plan.id === info.plan}
+                        isActivePaidSession={plan.id === info.activePaidPlan && plan.id !== info.plan}
                         canManage={info.canManageBilling}
                         razorpayConfigured={info.razorpayConfigured}
                         loading={upgrading === plan.id}
@@ -285,7 +293,7 @@ export default function BillingPage() {
                 </div>
               )}
 
-              {tab === 'history' && (
+              {activeTab === 'history' && (
                 <SectionCard
                   title="Billing history & invoices"
                   subtitle="Official GST receipts and payment transactions"

@@ -1,14 +1,18 @@
 import { useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
-import { Bot, CheckCircle2, ChevronDown, Loader2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Bot, CheckCircle2, ChevronDown, ExternalLink, Loader2 } from 'lucide-react';
 import { FOCUS_RING_CLASS, useFocusTrap } from '../../hooks/inboxA11y';
 import { computeFixedPopoverPosition, type PopoverCoords } from '../inbox/inboxPopoverPosition';
 import { useGlassTipProps } from '../inbox/ComposerGlassTip';
+import { useAuth } from '../../contexts/AuthContext';
 import type { AiBot } from '../../types';
 
 export interface CallingAiPickerProps {
   enabled: boolean;
   saving?: boolean;
+  /** Disable the toggle (e.g. non-owner/admin cannot change AI calling). */
+  disabled?: boolean;
   /** Fallback label when bot list is loading. */
   botName?: string | null;
   onChange: (enabled: boolean) => void;
@@ -20,6 +24,8 @@ export interface CallingAiPickerProps {
   onSelectBot?: (botId: string) => void;
   /** Hide per-person toggle — use when org toggle lives outside (Calls banner). */
   orgMode?: boolean;
+  /** Show "Train & manage in AI Bots" footer link. */
+  showTrainLink?: boolean;
 }
 
 const PANEL_WIDTH = 280;
@@ -33,6 +39,8 @@ function CallingAiMenu({
   enabled,
   saving,
   orgMode,
+  disabled,
+  showTrainLink,
   enabledBots,
   selectedBotId,
   loading,
@@ -45,6 +53,8 @@ function CallingAiMenu({
   enabled: boolean;
   saving?: boolean;
   orgMode?: boolean;
+  disabled?: boolean;
+  showTrainLink?: boolean;
   enabledBots: AiBot[];
   selectedBotId: string | null;
   loading: boolean;
@@ -54,6 +64,7 @@ function CallingAiMenu({
   onSelectBot: (botId: string) => void;
   onClose: () => void;
 }) {
+  const { canManageTeam } = useAuth();
   const containerRef = useRef<HTMLDivElement>(null);
   const [coords, setCoords] = useState<PopoverCoords | null>(null);
 
@@ -87,7 +98,7 @@ function CallingAiMenu({
       window.removeEventListener('resize', place);
       window.removeEventListener('scroll', place, true);
     };
-  }, [anchorRef, enabled, saving, loading, assigning, enabledBots.length, orgMode]);
+  }, [anchorRef, enabled, saving, loading, assigning, enabledBots.length, orgMode, disabled, showTrainLink]);
 
   useLayoutEffect(() => {
     const onDoc = (e: MouseEvent) => {
@@ -118,33 +129,46 @@ function CallingAiMenu({
         coords ? 'visible' : 'invisible'
       }`}
     >
-      {!orgMode ? (
-        <div className="border-b border-theme-border/60 px-3 py-2.5">
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-[12px] font-semibold text-theme-fg">Calling AI</p>
-              <p className="text-[10px] text-theme-muted">{enabled ? 'On for this person' : 'Paused'}</p>
-            </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={enabled}
-              aria-label={enabled ? 'Pause calling AI' : 'Enable calling AI'}
-              disabled={saving}
-              onClick={onToggle}
-              className={`relative h-7 w-12 shrink-0 rounded-full transition disabled:cursor-not-allowed disabled:opacity-50 ${FOCUS_RING_CLASS} ${
-                enabled ? 'bg-whatsapp-500' : 'bg-neutral-300 dark:bg-neutral-600'
-              }`}
-            >
-              <span
-                className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition ${
-                  enabled ? 'left-[22px]' : 'left-0.5'
-                }`}
-              />
-            </button>
+      <div className="border-b border-theme-border/60 px-3 py-2.5">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[12px] font-semibold text-theme-fg">
+              {orgMode ? 'AI calling' : 'Calling AI'}
+            </p>
+            <p className="text-[10px] text-theme-muted">
+              {orgMode
+                ? enabled
+                  ? 'On — AI answers callers'
+                  : 'Off — calls go to a person'
+                : enabled
+                  ? 'On for this person'
+                  : 'Paused'}
+            </p>
           </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={enabled}
+            aria-label={enabled ? 'Turn off AI calling' : 'Turn on AI calling'}
+            disabled={saving || disabled}
+            onClick={onToggle}
+            className={`relative h-7 w-12 shrink-0 rounded-full transition disabled:cursor-not-allowed disabled:opacity-50 ${FOCUS_RING_CLASS} ${
+              enabled ? 'bg-whatsapp-500' : 'bg-neutral-300 dark:bg-neutral-600'
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition ${
+                enabled ? 'left-[22px]' : 'left-0.5'
+              }`}
+            />
+          </button>
         </div>
-      ) : null}
+        {disabled ? (
+          <p className="mt-1.5 text-[10px] font-medium text-theme-muted">
+            Only an owner or admin can change this
+          </p>
+        ) : null}
+      </div>
 
       <div className="px-3 pb-1 pt-2">
         <p className="text-[10px] font-bold uppercase tracking-wide text-theme-muted">
@@ -203,6 +227,17 @@ function CallingAiMenu({
           })
         )}
       </div>
+
+      {showTrainLink ? (
+        <Link
+          to="/ai-bot"
+          onClick={onClose}
+          className="flex w-full items-center gap-1.5 border-t border-theme-border/60 px-3 py-2.5 text-[12px] font-semibold text-slate-500 transition hover:bg-theme-subtle hover:text-whatsapp-700 dark:text-slate-400 dark:hover:text-whatsapp-400"
+        >
+          {canManageTeam ? 'Train & manage in AI Bots' : 'View AI Bots'}
+          <ExternalLink className="h-3 w-3" strokeWidth={2.25} aria-hidden />
+        </Link>
+      ) : null}
     </div>,
     document.body
   );
@@ -212,6 +247,7 @@ function CallingAiMenu({
 export default function CallingAiPicker({
   enabled,
   saving,
+  disabled = false,
   botName,
   onChange,
   answeringCallBotId = null,
@@ -220,6 +256,7 @@ export default function CallingAiPicker({
   botAssigning = false,
   onSelectBot,
   orgMode = false,
+  showTrainLink = false,
 }: CallingAiPickerProps) {
   const tipFor = useGlassTipProps();
   const [open, setOpen] = useState(false);
@@ -257,7 +294,7 @@ export default function CallingAiPicker({
         ref={btnRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
-        disabled={saving || botAssigning}
+        disabled={saving || botAssigning || disabled}
         aria-label={`${enabled ? 'Calling AI on' : 'Calling AI off'} · ${displayName}. Open calling agent menu`}
         aria-expanded={open}
         aria-haspopup="dialog"
@@ -294,13 +331,15 @@ export default function CallingAiPicker({
           enabled={enabled}
           saving={saving}
           orgMode={orgMode}
+          disabled={disabled}
+          showTrainLink={showTrainLink}
           enabledBots={enabledBots}
           selectedBotId={selectedBotId}
           loading={botsLoading}
           assigning={botAssigning}
           anchorRef={btnRef}
           onToggle={() => {
-            if (saving) return;
+            if (saving || disabled) return;
             onChange(!enabled);
           }}
           onSelectBot={(botId) => onSelectBot?.(botId)}

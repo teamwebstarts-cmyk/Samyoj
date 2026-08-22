@@ -16,7 +16,7 @@ import {
   Star,
   Volume2,
 } from 'lucide-react';
-import AiBotCard, { AllChatsSwitch } from '../components/ai-bot/AiBotCard';
+import AiBotCard from '../components/ai-bot/AiBotCard';
 import AiBotListEmpty from '../components/ai-bot/AiBotListEmpty';
 import AiBotPickupPanel, {
   type AiBotPickupPanelHandle,
@@ -33,7 +33,6 @@ import CallingVoicePreview from '../components/ai-bot/CallingVoicePreview';
 import AiBotAggregateAnalytics from '../components/ai-bot/AiBotAggregateAnalytics';
 import AiBotHero, { type AiBotHeroStat } from '../components/ai-bot/AiBotHero';
 import AppButton from '../components/ui/AppButton';
-import ConfirmDialog from '../components/ui/ConfirmDialog';
 import AppInput from '../components/ui/AppInput';
 import AppSelect from '../components/ui/AppSelect';
 import AppTextarea from '../components/ui/AppTextarea';
@@ -228,10 +227,6 @@ export default function AiBotPage() {
   const [testLoading, setTestLoading] = useState(false);
   const [voicePreviewLoading, setVoicePreviewLoading] = useState(false);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
-  const [bulkAction, setBulkAction] = useState<{ type: 'apply' | 'remove'; bot: AiBot } | null>(
-    null
-  );
-  const [bulkLoading, setBulkLoading] = useState(false);
   const activeNumberIdRef = useRef<string | null>(null);
   activeNumberIdRef.current = activeNumber?.id ?? null;
   const requestGenerationRef = useRef(0);
@@ -554,36 +549,6 @@ export default function AiBotPage() {
     load();
   };
 
-  const confirmBulkBotAction = async () => {
-    if (!bulkAction) return;
-    setBulkLoading(true);
-    try {
-      if (bulkAction.type === 'apply') {
-        const { data } = await aiBotApi.applyToAllChats(bulkAction.bot.id);
-        const updated = Number(data.data?.updated ?? 0);
-        toastSuccess(
-          updated > 0
-            ? `${bulkAction.bot.name} will reply in ${updated} chat${updated === 1 ? '' : 's'} on this number. Inbox picks were left as they are.`
-            : `No chats to update — they already follow this bot, or every chat has an Inbox pick.`
-        );
-      } else {
-        const { data } = await aiBotApi.removeFromAllChats(bulkAction.bot.id);
-        const updated = Number(data.data?.updated ?? 0);
-        toastSuccess(
-          updated > 0
-            ? `Removed ${bulkAction.bot.name} from ${updated} chat${updated === 1 ? '' : 's'}. Chats go back to your default bot. Inbox picks stay.`
-            : `${bulkAction.bot.name} was not applied to all chats on this number.`
-        );
-      }
-      setBulkAction(null);
-      load();
-    } catch (err: unknown) {
-      toastError(getErrorMessage(err, 'Could not update chats'));
-    } finally {
-      setBulkLoading(false);
-    }
-  };
-
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this bot?')) return;
     try {
@@ -873,10 +838,11 @@ export default function AiBotPage() {
   const callingBots = bots.filter((b) => !isChatBot(b));
   const listBotsForFilter = channelFilter === 'CHAT' ? chatBots : callingBots;
   const hasFilters = Boolean(search || statusFilter);
-  const canDeleteBot = (bot: AiBot) => {
-    if (bot.isSystem) return false;
-    const peers = isChatBot(bot) ? chatBots : callingBots;
-    return peers.length > 1;
+  const canDeleteBot = () => {
+    // The server now allows deleting any bot, including the last one and the
+    // system Support bot — a user may run their org with zero agents. No client
+    // guard needed; the API enforces ownership/404.
+    return true;
   };
 
   const botAnalyticsMap = useMemo(() => {
@@ -1024,13 +990,7 @@ export default function AiBotPage() {
                     lastActivityAt={botAnalyticsMap.get(bot.id)?.lastActivityAt ?? null}
                   onEdit={() => openEdit(bot)}
                   onToggle={() => toggleEnabled(bot)}
-                    onDelete={canDeleteBot(bot) ? () => handleDelete(bot.id) : undefined}
-                    onToggleAllChats={
-                      isChatBot(bot)
-                        ? () =>
-                            setBulkAction({ type: bot.appliedToAll ? 'remove' : 'apply', bot })
-                        : undefined
-                    }
+                    onDelete={canDeleteBot() ? () => handleDelete(bot.id) : undefined}
                 />
               )}
               renderTable={() => (
@@ -1108,20 +1068,9 @@ export default function AiBotPage() {
                           >
                             {bot.enabled ? 'Pause' : 'Activate'}
                           </TableTextButton>
-                              {isChatBot(bot) && (
-                                <AllChatsSwitch
-                                  applied={Boolean(bot.appliedToAll)}
-                                  onClick={() =>
-                                    setBulkAction({
-                                      type: bot.appliedToAll ? 'remove' : 'apply',
-                                      bot,
-                                    })
-                                  }
-                                />
-                              )}
                               <RowActions
                                 onEdit={() => openEdit(bot)}
-                                onDelete={canDeleteBot(bot) ? () => handleDelete(bot.id) : undefined}
+                                onDelete={canDeleteBot() ? () => handleDelete(bot.id) : undefined}
                               />
                         </div>
                       </td>
@@ -1171,7 +1120,7 @@ export default function AiBotPage() {
                   : undefined
               }
               primaryDisabled={slideTab === 'pickup' && !pickupFooter.dirty}
-              onDelete={canDeleteBot(editing) ? () => handleDelete(editing.id) : undefined}
+              onDelete={canDeleteBot() ? () => handleDelete(editing.id) : undefined}
               deleteLabel="Delete bot"
             />
           ) : (
@@ -1718,21 +1667,6 @@ export default function AiBotPage() {
         )}
       </SlideOver>
 
-    <ConfirmDialog
-      open={Boolean(bulkAction)}
-      title={
-          bulkAction?.type === 'apply' ? 'Apply to all chats?' : 'Remove from all chats?'
-      }
-      description={
-          bulkAction?.type === 'apply'
-            ? `${bulkAction.bot.name} will be used on this number’s chats that do not already have a personal Inbox pick.`
-            : `${bulkAction?.bot.name} will be removed only where it was applied to all chats. Inbox picks stay.`
-        }
-        confirmLabel={bulkAction?.type === 'apply' ? 'Apply' : 'Remove'}
-        loading={bulkLoading}
-        onConfirm={() => void confirmBulkBotAction()}
-        onClose={() => setBulkAction(null)}
-    />
     </>
   );
 }
