@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { MediaAssetKind, MediaAssetStatus } from '@prisma/client';
+import { MediaAssetKind, MediaAssetStatus, Prisma } from '@prisma/client';
 import { z } from 'zod';
 import prisma from '../../../config/database';
 import { authenticate, requireOrg } from '../../../middleware/auth';
@@ -20,10 +20,10 @@ router.get(
     const limit = Math.min(100, parseInt((req.query.limit as string) || '50', 10));
     const skip = (page - 1) * limit;
 
-    const where = {
+    const where: Prisma.MediaAssetWhereInput = {
       organizationId: orgId,
       ...(kind ? { kind } : {}),
-      ...(status ? { status } : {}),
+      ...(status ? { status } : { status: { not: MediaAssetStatus.ARCHIVED } }),
       ...(search
         ? {
             OR: [

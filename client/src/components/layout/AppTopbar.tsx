@@ -7,6 +7,8 @@ import {
   Headphones,
   LogOut,
   Menu,
+  Moon,
+  Power,
   Search,
   Settings2,
 } from 'lucide-react';
@@ -15,6 +17,7 @@ import {
   getPageMeta,
   getTemplateWizardTopbarLabel,
   isCampaignWizardRoute,
+  isFlowBuilderRoute,
   isTemplateWizardRoute,
 } from '../../config/pageMeta';
 import { useAuth } from '../../contexts/AuthContext';
@@ -26,8 +29,41 @@ import NotificationCenter from './NotificationCenter';
 import NumberSwitcher, { NumberSwitcherMobile } from './NumberSwitcher';
 import SupportBoard from '../support/SupportBoard';
 
-const USER_MENU_WIDTH = 220;
+const USER_MENU_WIDTH = 240;
 const USER_MENU_GAP = 12;
+
+const AVAILABILITY_OPTIONS = [
+  {
+    value: 'ONLINE' as const,
+    label: 'Online',
+    icon: Circle,
+    iconClass: 'text-emerald-500 fill-emerald-500',
+    activeClass:
+      'bg-white text-emerald-700 ring-1 ring-emerald-200 shadow-sm dark:bg-theme-surface dark:text-emerald-300 dark:ring-emerald-500/30',
+  },
+  {
+    value: 'AWAY' as const,
+    label: 'Away',
+    icon: Moon,
+    iconClass: 'text-amber-500',
+    activeClass:
+      'bg-white text-amber-700 ring-1 ring-amber-200 shadow-sm dark:bg-theme-surface dark:text-amber-300 dark:ring-amber-500/30',
+  },
+  {
+    value: 'OFFLINE' as const,
+    label: 'Offline',
+    icon: Power,
+    iconClass: 'text-neutral-400',
+    activeClass:
+      'bg-white text-neutral-700 ring-1 ring-neutral-200 shadow-sm dark:bg-theme-surface dark:text-theme-fg dark:ring-theme-border',
+  },
+];
+
+function availabilityDotClass(status: 'ONLINE' | 'AWAY' | 'OFFLINE') {
+  if (status === 'ONLINE') return 'bg-emerald-500';
+  if (status === 'AWAY') return 'bg-amber-400';
+  return 'bg-neutral-400';
+}
 
 interface AppTopbarProps {
   companyName?: string;
@@ -71,6 +107,7 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
   const { title, description } = getPageMeta(pathname);
   const isCampaignWizard = isCampaignWizardRoute(pathname);
   const isTemplateWizard = isTemplateWizardRoute(pathname);
+  const isFlowBuilder = isFlowBuilderRoute(pathname);
   const templateWizardLabel = getTemplateWizardTopbarLabel(pathname);
   const wizardLabel = pathname === '/campaigns/new' ? 'New campaign' : 'Edit campaign';
   const wizardStatus =
@@ -152,6 +189,18 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
   const titleCurrentClass =
     'truncate text-[15px] font-bold leading-none tracking-tight text-neutral-900 sm:text-[18px] md:text-[20px] dark:text-theme-fg';
 
+  const userAvatar = (
+    <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.625rem] bg-whatsapp-500 text-[12px] font-bold tracking-wide text-white sm:h-10 sm:w-10 sm:text-[13px]">
+      {initials}
+      {availability ? (
+        <span
+          className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-theme-surface ${availabilityDotClass(availability)}`}
+          aria-hidden
+        />
+      ) : null}
+    </span>
+  );
+
   const userMenu =
     userMenuOpen && userMenuPos
       ? createPortal(
@@ -165,49 +214,56 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
             }}
             className="fixed z-[80] overflow-hidden rounded-2xl border border-neutral-200/90 bg-white p-1.5 shadow-lg dark:border-theme-border dark:bg-theme-surface"
           >
-            <div className="border-b border-neutral-100 px-3 py-2.5 dark:border-theme-border sm:hidden">
-              <p className="truncate text-[13px] font-bold text-neutral-900 dark:text-theme-fg">
-                {userName || 'User'}
-              </p>
-              <p className="truncate text-[11.5px] font-medium text-neutral-500">{roleText}</p>
+            <div className="flex items-center gap-2.5 rounded-xl bg-neutral-50/80 px-2.5 py-2.5 dark:bg-theme-subtle/50">
+              {userAvatar}
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[13px] font-bold text-neutral-900 dark:text-theme-fg">
+                  {userName || 'User'}
+                </p>
+                <p className="truncate text-[11px] font-medium text-neutral-500 dark:text-theme-muted">
+                  {roleText}
+                  {companyName ? ` · ${companyName}` : ''}
+                </p>
+              </div>
             </div>
             {availability && (
               <div
                 role="group"
                 aria-label="Availability"
-                className="flex gap-1 border-b border-neutral-100 p-1.5 dark:border-theme-border"
+                className="mt-1.5 border-t border-neutral-100 pt-1.5 dark:border-theme-border"
               >
-                {(['ONLINE', 'AWAY', 'OFFLINE'] as const).map((status) => {
-                  const active = availability === status;
-                  const dotColor =
-                    status === 'ONLINE'
-                      ? 'bg-emerald-500'
-                      : status === 'AWAY'
-                        ? 'bg-amber-400'
-                        : 'bg-neutral-400';
-                  return (
-                    <button
-                      key={status}
-                      type="button"
-                      role="menuitemradio"
-                      aria-checked={active}
-                      onClick={() => {
-                        void setAvailability(status);
-                        setUserMenuOpen(false);
-                      }}
-                      className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-bold transition ${
-                        active
-                          ? 'bg-neutral-100 text-neutral-900 ring-1 ring-neutral-200 dark:bg-theme-subtle dark:text-theme-fg dark:ring-theme-border'
-                          : 'text-neutral-500 hover:bg-neutral-50 dark:text-neutral-400 dark:hover:bg-theme-subtle'
-                      }`}
-                    >
-                      <Circle className={`h-2 w-2 fill-current ${dotColor}`} />
-                      {status === 'ONLINE' ? 'Online' : status === 'AWAY' ? 'Away' : 'Offline'}
-                    </button>
-                  );
-                })}
+                <p className="mb-1.5 px-1 text-[10px] font-bold uppercase tracking-[0.08em] text-neutral-400 dark:text-theme-muted">
+                  Availability
+                </p>
+                <div className="flex gap-1 rounded-xl bg-neutral-100/80 p-1 dark:bg-theme-subtle">
+                  {AVAILABILITY_OPTIONS.map((option) => {
+                    const active = availability === option.value;
+                    const Icon = option.icon;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        role="menuitemradio"
+                        aria-checked={active}
+                        onClick={() => {
+                          void setAvailability(option.value);
+                          setUserMenuOpen(false);
+                        }}
+                        className={`flex flex-1 flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 text-[10px] font-bold leading-none transition ${
+                          active
+                            ? option.activeClass
+                            : 'text-neutral-500 hover:bg-white/70 dark:text-neutral-400 dark:hover:bg-theme-surface/80'
+                        }`}
+                      >
+                        <Icon className={`h-3.5 w-3.5 shrink-0 ${option.iconClass}`} strokeWidth={2.25} />
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             )}
+            <div className="mt-1.5 space-y-0.5 border-t border-neutral-100 pt-1.5 dark:border-theme-border">
             <Link
               to="/settings"
               role="menuitem"
@@ -231,6 +287,7 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
                 Log out
               </button>
             )}
+            </div>
           </div>,
           document.body
         )
@@ -256,18 +313,28 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
           {/* Left — page title/context + live + subtitle */}
           <div className="min-w-0 flex-1">
             {isCampaignWizard ? (
-              <div className="flex min-w-0 items-center gap-1.5 text-[11px] font-semibold text-neutral-600 dark:text-neutral-300">
-                <Link to="/campaigns" className="transition hover:text-emerald-700 dark:hover:text-emerald-300">
-                  Campaigns
-                </Link>
-                <ChevronRight className="h-3 w-3 text-neutral-300 dark:text-slate-600" />
-                <span className="font-extrabold text-neutral-900 dark:text-theme-fg">{wizardLabel}</span>
-                {wizardStatus && (
-                  <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-extrabold capitalize text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
-                    {wizardStatus}
-                  </span>
-                )}
-              </div>
+              <>
+                <div className="flex min-w-0 items-center gap-1.5 sm:flex-wrap sm:gap-2">
+                  <Link to="/campaigns" className={titleLinkClass}>
+                    Campaigns
+                  </Link>
+                  <ChevronRight
+                    className="h-3.5 w-3.5 shrink-0 text-neutral-300 sm:h-4 sm:w-4 dark:text-slate-600"
+                    aria-hidden
+                  />
+                  <h1 className={titleCurrentClass}>{wizardLabel}</h1>
+                  {wizardStatus ? (
+                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
+                      {wizardStatus}
+                    </span>
+                  ) : null}
+                </div>
+                {subtitle ? (
+                  <p className="mt-1 hidden truncate text-[12px] font-semibold leading-snug text-neutral-700 sm:block sm:text-[13px] dark:text-neutral-300">
+                    {subtitle}
+                  </p>
+                ) : null}
+              </>
             ) : isTemplateWizard ? (
               <>
                 <div className="flex min-w-0 items-center gap-1.5 sm:flex-wrap sm:gap-2">
@@ -306,6 +373,17 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
                   </p>
                 ) : null}
               </>
+            ) : isFlowBuilder ? (
+              <>
+                <div className="flex min-w-0 items-center gap-1.5 sm:flex-wrap sm:gap-2">
+                  <Link to="/automations" className={titleCurrentClass}>
+                    Automations
+                  </Link>
+                </div>
+                <p className="mt-1 hidden truncate text-[12px] font-semibold leading-snug text-neutral-700 sm:block sm:text-[13px] dark:text-neutral-300">
+                  Flow builder
+                </p>
+              </>
             ) : (
               <>
                 <div className="flex min-w-0 items-center gap-1.5 sm:flex-wrap sm:gap-2">
@@ -337,8 +415,11 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
             )}
           </div>
 
-          {/* Right — help, search, notifications, profile */}
+          {/* Right — flow actions, help, search, notifications, profile */}
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-3.5 lg:gap-4">
+            {topbarExtras.actions ? (
+              <div className="flex items-center gap-1.5 sm:gap-2">{topbarExtras.actions}</div>
+            ) : null}
             <NumberSwitcherMobile />
             <NumberSwitcher />
 
@@ -402,9 +483,7 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
                 aria-expanded={userMenuOpen}
                 aria-haspopup="menu"
               >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.625rem] bg-whatsapp-500 text-[12px] font-bold tracking-wide text-white sm:h-10 sm:w-10 sm:text-[13px]">
-                  {initials}
-                </span>
+                {userAvatar}
                 <span className="hidden min-w-0 flex-1 text-left sm:block">
                   <span className="block max-w-[160px] truncate text-[13.5px] font-bold leading-tight text-neutral-900 dark:text-theme-fg md:max-w-[190px] lg:max-w-[220px]">
                     {userName || 'User'}

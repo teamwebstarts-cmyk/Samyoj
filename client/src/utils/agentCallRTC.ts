@@ -24,7 +24,7 @@ interface AgentCallRtc {
 }
 
 interface SignalingRes {
-  data?: { sdpAnswer?: string | null };
+  data?: { sdpAnswer?: string | null; ended?: boolean };
 }
 
 function getStored(): AgentCallRtc | undefined {
@@ -38,9 +38,9 @@ function setStored(val: AgentCallRtc | undefined) {
 let applyAnswerChain: Promise<void> = Promise.resolve();
 
 /** Fetch the SDP answer directly (avoids axios interceptor logging 404s on every poll). */
-async function fetchSdpAnswer(callId: string): Promise<string | null> {
+async function fetchSdpAnswer(callId: string): Promise<{ sdp: string | null; ended: boolean }> {
   const numberId = getActiveWhatsappNumberId();
-  if (!numberId) return null;
+  if (!numberId) return { sdp: null, ended: false };
   const res = await fetch(`/api/calling/${callId}/signaling`, {
     credentials: 'include',
     headers: {
@@ -48,10 +48,16 @@ async function fetchSdpAnswer(callId: string): Promise<string | null> {
       'X-WhatsApp-Number-Id': numberId,
     },
   });
-  if (!res.ok) return null;
+  if (res.status === 404) return { sdp: null, ended: true };
+  if (!res.ok) return { sdp: null, ended: false };
   const body = (await res.json()) as SignalingRes;
-  if (!isCurrentNumberRequest(numberId, getActiveWhatsappNumberId())) return null;
-  return body.data?.sdpAnswer || null;
+  if (!isCurrentNumberRequest(numberId, getActiveWhatsappNumberId())) {
+    return { sdp: null, ended: true };
+  }
+  return {
+    sdp: body.data?.sdpAnswer || null,
+    ended: body.data?.ended === true,
+  };
 }
 
 function attachRemoteAudio(pc: RTCPeerConnection): HTMLAudioElement {
@@ -255,13 +261,12 @@ export async function applyAgentOfferAnswer(callId: string, sdpAnswer: string): 
     () => undefined,
     () => undefined
   );
-  return run;
+  return run.catch(() => undefined);
 }
 
 async function applyAgentOfferAnswerNow(callId: string, sdpAnswer: string): Promise<void> {
   const stored = getStored();
   if (!stored) {
-    console.warn('[webrtc] No peer connection to apply SDP answer');
     return;
   }
 
@@ -345,16 +350,25 @@ export async function pollSdpAnswer(callId: string, timeoutMs = 180000): Promise
   while (Date.now() - start < timeoutMs) {
     await new Promise((r) => setTimeout(r, 500));
     const stored = getStored();
-    if (stored?.connected) return;
+    if (!stored) return;
+    if (stored.callId && stored.callId !== callId) return;
+    if (stored.connected) return;
     try {
-      const sdp = await fetchSdpAnswer(callId);
-      if (sdp) {
-        await applyAgentOfferAnswer(callId, sdp);
+      const result = await fetchSdpAnswer(callId);
+      if (result.ended) {
+        cleanupAgentCall();
+        return;
+      }
+      if (result.sdp) {
+        await applyAgentOfferAnswer(callId, result.sdp);
         return;
       }
     } catch {
       /* not yet available — keep polling */
     }
   }
-  console.warn('[webrtc] Timed out waiting for SDP answer', callId);
+  const leftover = getStored();
+  if (leftover && (!leftover.callId || leftover.callId === callId) && !leftover.connected) {
+    console.warn('[webrtc] Timed out waiting for SDP answer', callId);
+  }
 }

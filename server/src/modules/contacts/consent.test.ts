@@ -3,6 +3,8 @@ import {
   contactConsentData,
   contactCreateConsentFields,
   contactListOptedInWhere,
+  inboundReplyConsentFields,
+  shouldGrantInboundReplyConsent,
 } from './consent';
 
 describe('contact consent mutations', () => {
@@ -53,5 +55,40 @@ describe('contact consent mutations', () => {
         optOutAt: null,
       },
     });
+  });
+
+  it('records inbound reply consent for campaign eligibility', () => {
+    const at = new Date('2026-08-14T12:00:00.000Z');
+    expect(inboundReplyConsentFields(at)).toMatchObject({
+      optedIn: true,
+      consentSource: 'INBOUND',
+      consentAt: at,
+      optOutAt: null,
+    });
+  });
+
+  it('skips inbound consent repair after opt-out or when already auditable', () => {
+    expect(
+      shouldGrantInboundReplyConsent({
+        optedIn: true,
+        consentSource: 'INBOUND',
+        consentAt: new Date(),
+        optOutAt: null,
+      })
+    ).toBe(false);
+    expect(
+      shouldGrantInboundReplyConsent({
+        consentSource: 'STOP_KEYWORD',
+        consentAt: new Date(),
+        optOutAt: new Date(),
+      })
+    ).toBe(false);
+    expect(
+      shouldGrantInboundReplyConsent({
+        consentSource: null,
+        consentAt: null,
+        optOutAt: null,
+      })
+    ).toBe(true);
   });
 });

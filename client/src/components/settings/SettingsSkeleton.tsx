@@ -72,8 +72,7 @@ export default function SettingsSkeleton() {
             <Skeleton className="h-7 w-56 rounded-lg sm:w-72" />
             <Skeleton className="hidden h-3.5 w-64 rounded-lg sm:block" />
           </div>
-          <div className="grid w-full grid-cols-3 gap-2 xl:w-auto">
-            <Skeleton className="h-12 rounded-lg xl:w-[140px]" />
+          <div className="grid w-full grid-cols-2 gap-2 xl:w-auto">
             <Skeleton className="h-12 rounded-lg xl:w-[140px]" />
             <Skeleton className="h-12 rounded-lg xl:w-[140px]" />
           </div>
@@ -84,7 +83,7 @@ export default function SettingsSkeleton() {
       <div className="flex flex-col gap-5 lg:flex-row lg:gap-8">
         <div className={`hidden w-[16rem] shrink-0 ${SETTINGS_FLAT_CARD} p-3 lg:block`}>
           <div className="space-y-2">
-            {Array.from({ length: 6 }).map((_, i) => (
+            {Array.from({ length: 5 }).map((_, i) => (
               <Skeleton key={i} className="h-14 rounded-xl" />
             ))}
           </div>

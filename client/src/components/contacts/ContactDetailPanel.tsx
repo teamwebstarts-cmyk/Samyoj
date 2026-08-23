@@ -28,7 +28,7 @@ import {
 } from '../../utils/contactUtils';
 import { beginOutboundDialing } from '../../utils/outboundLiveCallStore';
 import type { Contact, ContactDetail } from '../../types';
-import { contactGetsCampaignMessages } from '../../utils/contactConsent';
+import { contactGetsCampaignMessages, getContactConsentDisplay } from '../../utils/contactConsent';
 import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
 import {
   ContactConversationBadge,
@@ -135,6 +135,13 @@ export default function ContactDetailPanel({
   const current = detail?.contact || contact;
   const primaryConversationId = detail?.conversations?.[0]?.id;
   const getsCampaignMessages = current ? contactGetsCampaignMessages(current) : false;
+  const consentDisplay = getContactConsentDisplay(current);
+  const consentHint =
+    consentDisplay === 'eligible'
+      ? 'Included in WhatsApp campaign audiences.'
+      : consentDisplay === 'stopped'
+        ? 'Opted out of marketing messages. You can still chat in Inbox.'
+        : 'Not on campaign lists yet. Use Allow messages below to add them.';
 
   if (!current) return null;
 
@@ -264,7 +271,7 @@ export default function ContactDetailPanel({
               <div className="min-w-0 flex-1 space-y-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <ContactSourceBadge source={current.source} />
-                  <ContactOptInBadge optedIn={getsCampaignMessages} />
+                  <ContactOptInBadge contact={current} />
                   {current.conversation?.status && (
                     <ContactConversationBadge status={current.conversation.status} />
                   )}
@@ -280,6 +287,8 @@ export default function ContactDetailPanel({
                     />
                   )}
                 </div>
+
+                <p className="text-[11px] font-medium leading-relaxed text-theme-muted">{consentHint}</p>
 
                 {current.tags.length > 0 && (
                   <div className="flex flex-wrap gap-1.5">

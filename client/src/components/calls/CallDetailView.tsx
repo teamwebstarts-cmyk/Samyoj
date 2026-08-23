@@ -84,6 +84,15 @@ function Waveform() {
   );
 }
 
+function CallMetaDivider() {
+  return (
+    <span
+      className="mx-3 hidden h-3.5 w-px shrink-0 bg-neutral-200/90 dark:bg-neutral-700 sm:inline-block"
+      aria-hidden
+    />
+  );
+}
+
 function isAssistantRole(role: string) {
   return role === 'assistant' || role === 'system' || role === 'bot';
 }
@@ -298,7 +307,7 @@ export default function CallDetailView({
         </div>
       </div>
 
-      <div className="hidden shrink-0 border-b border-neutral-200 bg-white px-4 py-3 text-[12px] font-medium text-neutral-500 sm:flex sm:flex-wrap sm:items-center sm:gap-x-5 sm:gap-y-1.5 dark:border-neutral-800 dark:bg-neutral-950">
+      <div className="hidden shrink-0 border-b border-neutral-200 bg-white px-4 py-3 text-[12px] font-medium text-neutral-500 sm:flex sm:flex-wrap sm:items-center sm:gap-y-1.5 dark:border-neutral-800 dark:bg-neutral-950">
         <span className="inline-flex items-center gap-1.5">
           {inbound ? (
             <PhoneIncoming className="h-3.5 w-3.5 text-neutral-700 dark:text-neutral-300" strokeWidth={2.25} />
@@ -313,6 +322,7 @@ export default function CallDetailView({
             </span>
           </span>
         </span>
+        <CallMetaDivider />
         <span className="inline-flex items-center gap-1.5">
           <Clock3 className="h-3.5 w-3.5 text-neutral-700 dark:text-neutral-300" strokeWidth={2.25} />
           <span>
@@ -324,28 +334,32 @@ export default function CallDetailView({
           </span>
         </span>
         {handlerLabel && (
-          <span className="inline-flex items-center gap-1.5">
-            {agentName || handler === 'AGENT' ? (
-              <User className="h-3.5 w-3.5 text-neutral-700 dark:text-neutral-300" strokeWidth={2.25} />
-            ) : (
-              <Bot className="h-3.5 w-3.5 text-neutral-700 dark:text-neutral-300" strokeWidth={2.25} />
-            )}
-            <span>
-              <span className="font-bold text-neutral-900 dark:text-neutral-100">Answered by</span>
-              <span className="text-neutral-300 dark:text-neutral-600">:</span>
-              <span className="inline-flex items-center gap-1.5 font-semibold text-neutral-700 dark:text-neutral-200">
-                {handlerLabel}
-                {handlerTag && (
-                  <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
-                    handler === 'AI' ? 'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-300' : 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300'
-                  }`}>
-                    {handlerTag}
-                  </span>
-                )}
+          <>
+            <CallMetaDivider />
+            <span className="inline-flex items-center gap-1.5">
+              {agentName || handler === 'AGENT' ? (
+                <User className="h-3.5 w-3.5 text-neutral-700 dark:text-neutral-300" strokeWidth={2.25} />
+              ) : (
+                <Bot className="h-3.5 w-3.5 text-neutral-700 dark:text-neutral-300" strokeWidth={2.25} />
+              )}
+              <span>
+                <span className="font-bold text-neutral-900 dark:text-neutral-100">Answered by</span>
+                <span className="text-neutral-300 dark:text-neutral-600">:</span>
+                <span className="inline-flex items-center gap-1.5 font-semibold text-neutral-700 dark:text-neutral-200">
+                  {handlerLabel}
+                  {handlerTag && (
+                    <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
+                      handler === 'AI' ? 'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-300' : 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300'
+                    }`}>
+                      {handlerTag}
+                    </span>
+                  )}
+                </span>
               </span>
             </span>
-          </span>
+          </>
         )}
+        <CallMetaDivider />
         <span className="inline-flex items-center gap-1.5">
           <Timer className="h-3.5 w-3.5 text-neutral-700 dark:text-neutral-300" strokeWidth={2.25} />
           <span>

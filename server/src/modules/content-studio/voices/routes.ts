@@ -54,6 +54,23 @@ router.post(
 );
 
 router.get(
+  '/',
+  authenticate,
+  requireOrg,
+  asyncHandler(async (_req: Request, res: Response) => {
+    sendSuccess(res, {
+      provider: 'elevenlabs',
+      configured: false,
+      voices: [
+        { id: 'default', name: 'Default Voice', language: 'en' },
+        { id: 'professional', name: 'Professional', language: 'en' },
+      ],
+      message: 'ElevenLabs integration is a stub — configure ELEVENLABS_API_KEY to enable.',
+    });
+  })
+);
+
+router.get(
   '/voices',
   authenticate,
   requireOrg,

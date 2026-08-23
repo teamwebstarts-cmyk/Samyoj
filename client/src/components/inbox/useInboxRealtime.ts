@@ -68,6 +68,7 @@ export function useInboxRealtime({
         operatorMessage?: string;
         whatsappNumberId?: string;
         numberId?: string;
+        messageIds?: string[];
       };
       if (!resolved || !activeNumber) return;
       const eventNumberId = payload.whatsappNumberId ?? payload.numberId;
@@ -199,6 +200,19 @@ export function useInboxRealtime({
             .then(({ data: res }) => upsertConversation(res.data as Conversation))
             .catch(softCatch('realtime.conversationUpdated', payload.conversationId));
         }
+        return;
+      }
+
+      if (event === 'messages:deleted' && payload.conversationId && payload.messageIds?.length) {
+        const removed = new Set(payload.messageIds);
+        if (openId === payload.conversationId) {
+          setMessages((prev) => prev.filter((m) => !removed.has(m.id)));
+        }
+        return;
+      }
+
+      if (event === 'messages:cleared' && payload.conversationId) {
+        if (openId === payload.conversationId) setMessages([]);
         return;
       }
 

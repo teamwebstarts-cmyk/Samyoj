@@ -439,7 +439,9 @@ router.post(
 
 router.patch(
   '/calling-ai',
-  ...adminGuard,
+  authenticate,
+  requireOrg,
+  ...withPermission('manageCalls', 'manageAiBots'),
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const { enabled } = z.object({ enabled: z.boolean() }).parse(req.body);

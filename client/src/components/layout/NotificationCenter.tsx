@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Bell, LifeBuoy, MessageSquare } from 'lucide-react';
+import { Bell, MessageSquare, Ticket } from 'lucide-react';
 import { ticketApi } from '../../services/api';
 import { isOverdue, type TicketItem } from '../tickets/ticketUi';
 import { useSocket } from '../../hooks/useSocket';
@@ -192,7 +192,7 @@ export default function NotificationCenter({ unreadInbox = 0 }: NotificationCent
                 onClick={() => setOpen(false)}
                 className="flex items-start gap-3 rounded-xl px-3 py-2.5 transition hover:bg-theme-subtle"
               >
-                <LifeBuoy className="mt-0.5 h-4 w-4 shrink-0 text-rose-500" />
+                <Ticket className="mt-0.5 h-4 w-4 shrink-0 text-rose-500" strokeWidth={2.1} />
                 <div>
                   <p className="text-[13px] font-bold text-theme-fg">{ticket.title}</p>
                   <p className="text-caption text-rose-600 dark:text-rose-400">Reply overdue</p>

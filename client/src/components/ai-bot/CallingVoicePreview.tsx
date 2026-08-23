@@ -121,9 +121,11 @@ export default function CallingVoicePreview({
     try {
       await ensureFreshAccessToken();
       const socket = io(socketBaseUrl, {
-        auth: {
-          token: getAccessToken() || '',
-          whatsappNumberId: getActiveWhatsappNumberId() || undefined,
+        auth: (cb) => {
+          cb({
+            token: getAccessToken() || '',
+            whatsappNumberId: getActiveWhatsappNumberId() || undefined,
+          });
         },
         withCredentials: true,
         transports: import.meta.env.DEV ? ['polling', 'websocket'] : ['websocket', 'polling'],

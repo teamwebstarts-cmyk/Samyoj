@@ -2,7 +2,6 @@ import { MessageSquare, Pencil, Trash2 } from 'lucide-react';
 import ContactAvatar from '../inbox/ContactAvatar';
 import AppButton from '../ui/AppButton';
 import type { Contact } from '../../types';
-import { contactGetsCampaignMessages } from '../../utils/contactConsent';
 import {
   ContactOptInBadge,
   ContactSourceBadge,
@@ -49,7 +48,7 @@ export default function ContactCard({
               <p className="truncate text-[11px] text-theme-muted">{contact.phone}</p>
             )}
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              <ContactOptInBadge optedIn={contactGetsCampaignMessages(contact)} />
+              <ContactOptInBadge contact={contact} />
               <ContactSourceBadge source={contact.source} />
             </div>
             {contact.tags.length > 0 && (

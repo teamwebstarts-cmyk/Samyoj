@@ -24,7 +24,7 @@ router.post(
     const orgId = req.user!.organizationId!;
     const data = generateSchema.parse(req.body);
 
-    await assertBudget(orgId, GenerationJobKind.VIDEO, 1);
+    await assertBudget(orgId, GenerationJobKind.VIDEO, data.durationSeconds);
 
     const job = await prisma.generationJob.create({
       data: {
@@ -108,7 +108,8 @@ export async function processVideoGenerationJob(jobId: string, organizationId: s
     });
 
     const { recordUsage } = await import('../shared/cost-guard');
-    await recordUsage(organizationId, GenerationJobKind.VIDEO, 1);
+    const durationSeconds = Number((job.params as { durationSeconds?: number } | null)?.durationSeconds) || 1;
+    await recordUsage(organizationId, GenerationJobKind.VIDEO, durationSeconds);
   } catch (err) {
     await prisma.generationJob.update({
       where: { id: jobId },

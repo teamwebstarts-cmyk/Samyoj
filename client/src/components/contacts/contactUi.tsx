@@ -1,21 +1,45 @@
 import { CheckCircle2, MessageSquare, Shield, XCircle } from 'lucide-react';
 import type { Contact, ContactSource } from '../../types';
 import { formatContactPhone, formatContactRelativeTime, getContactSourceMeta } from '../../utils/contactUtils';
+import {
+  getContactConsentDisplay,
+  type ContactConsentInput,
+} from '../../utils/contactConsent';
 import { messagingConsent, conversationStatusLabel } from '../../utils/plainLanguage';
 
-export function ContactOptInBadge({ optedIn, compact }: { optedIn?: boolean; compact?: boolean }) {
+const consentBadgeStyles = {
+  eligible:
+    'bg-emerald-50 text-emerald-700 ring-emerald-200/70 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-800/50',
+  stopped:
+    'bg-rose-50 text-rose-700 ring-rose-200/70 dark:bg-rose-950/40 dark:text-rose-300 dark:ring-rose-800/50',
+  not_on_list:
+    'bg-amber-50 text-amber-800 ring-amber-200/70 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-800/50',
+} as const;
+
+export function ContactOptInBadge({
+  contact,
+  compact,
+}: {
+  contact: ContactConsentInput;
+  compact?: boolean;
+}) {
+  const status = getContactConsentDisplay(contact);
+  const label =
+    status === 'eligible'
+      ? messagingConsent.badgeYes
+      : status === 'stopped'
+        ? messagingConsent.badgeStopped
+        : messagingConsent.badgeNotOnList;
+  const Icon = status === 'eligible' ? CheckCircle2 : status === 'stopped' ? XCircle : Shield;
+
   return (
     <span
       className={`inline-flex items-center gap-1 rounded-md font-bold uppercase tracking-wide ring-1 ring-inset ${
         compact ? 'px-1.5 py-0.5 text-[8px]' : 'px-2.5 py-1 text-[10px]'
-      } ${
-        optedIn
-          ? 'bg-emerald-50 text-emerald-700 ring-emerald-200/70 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-800/50'
-          : 'bg-neutral-100 text-neutral-500 ring-neutral-200/70 dark:bg-slate-800/80 dark:text-slate-400 dark:ring-slate-700/50'
-      }`}
+      } ${consentBadgeStyles[status]}`}
     >
-      {optedIn ? <CheckCircle2 className="h-3 w-3" /> : <Shield className="h-3 w-3" />}
-      {optedIn ? messagingConsent.badgeYes : messagingConsent.badgeNo}
+      <Icon className="h-3 w-3" />
+      {label}
     </span>
   );
 }

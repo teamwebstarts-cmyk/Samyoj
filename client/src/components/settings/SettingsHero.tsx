@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
-import { CheckCircle2, Clock, ShieldCheck, Smartphone } from 'lucide-react';
+import { CheckCircle2, Clock, Link2, ShieldCheck, Webhook } from 'lucide-react';
 import Skeleton from '../ui/Skeleton';
 import { SETTINGS_FLAT_CARD } from './SettingsSkeleton';
 
@@ -37,7 +37,7 @@ const toneStyles: Record<
   },
   connected: {
     chip: 'bg-emerald-50 text-emerald-600 ring-1 ring-emerald-500/20 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-400/25',
-    icon: Smartphone,
+    icon: Link2,
     valueClass: 'text-emerald-700 dark:text-emerald-300',
   },
   hours: {
@@ -106,10 +106,10 @@ export default function SettingsHero({
                 className="flex min-w-0 items-center gap-1.5 rounded-xl border border-theme-border bg-theme-surface/80 px-2 py-1.5 sm:gap-2.5 sm:px-3 sm:py-3 xl:w-[150px] 2xl:w-[160px]"
               >
                 <div
-                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full sm:h-9 sm:w-9 ${config.chip}`}
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl sm:h-9 sm:w-9 ${config.chip}`}
                   aria-hidden="true"
                 >
-                  <IconComponent className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={2.2} />
+                  <IconComponent className="h-4 w-4 sm:h-[17px] sm:w-[17px]" strokeWidth={2.25} />
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[9px] font-semibold leading-tight text-theme-secondary sm:text-[12px]">

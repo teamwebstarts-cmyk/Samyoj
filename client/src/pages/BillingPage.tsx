@@ -138,7 +138,7 @@ export default function BillingPage() {
       }
 
       const { orderId, amount, currency, keyId } = res.data.data;
-      openRazorpayCheckout({
+      await openRazorpayCheckout({
         keyId,
         amount,
         currency,
@@ -170,9 +170,15 @@ export default function BillingPage() {
       });
     } catch (err: unknown) {
       setUpgrading(null);
+      const apiMessage = (err as { response?: { data?: { error?: { message?: string } } } })
+        ?.response?.data?.error?.message;
       toastError(
-        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
-          ?.message || 'Failed to initiate upgrade'
+        apiMessage ||
+          (err instanceof Error && err.message === 'Failed to load Razorpay'
+            ? 'Could not open payment checkout. Refresh the page and try again.'
+            : err instanceof Error
+              ? err.message
+              : 'Failed to initiate upgrade')
       );
     }
   };

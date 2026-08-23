@@ -683,48 +683,53 @@ export default function InboxDetailsPanel({
       'relative flex h-9 w-9 items-center justify-center rounded-xl transition';
     const railBadge =
       'absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold text-white';
+    const railDivider = 'my-1 h-px w-5 shrink-0 bg-theme-border/55 dark:bg-white/10';
 
     return (
       <aside
-        className="inbox-composer-scroll hidden w-11 shrink-0 flex-col items-center gap-1 overflow-y-auto overscroll-contain border-l border-white/40 bg-white/55 py-3 backdrop-blur-md md:flex dark:border-neutral-800/80 dark:bg-neutral-950/70"
+        className="inbox-composer-scroll hidden w-11 shrink-0 flex-col items-center gap-0 overflow-y-auto overscroll-contain border-l border-white/40 bg-white/55 py-3 backdrop-blur-md md:flex dark:border-neutral-800/80 dark:bg-neutral-950/70"
         aria-label="Conversation details shortcuts"
       >
-        <button
-          type="button"
-          aria-label={labels.length > 0 ? `Labels, ${labels.length}` : 'Labels'}
-          onClick={() => openPanel('labels')}
-          className={`${railBtn} text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-950/40`}
-          {...tipFor('Labels', 'left')}
-        >
-          <Tag className="h-4 w-4" strokeWidth={iconStroke} />
-          {labels.length > 0 && (
-            <span className={`${railBadge} bg-violet-600`}>{labels.length}</span>
-          )}
-        </button>
-        <button
-          type="button"
-          aria-label={notes.length > 0 ? `Notes, ${notes.length}` : 'Notes'}
-          onClick={() => openPanel('notes')}
-          className={`${railBtn} text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40`}
-          {...tipFor('Notes', 'left')}
-        >
-          <StickyNote className="h-4 w-4" strokeWidth={iconStroke} />
-          {notes.length > 0 && (
-            <span className={`${railBadge} bg-amber-600`}>{notes.length}</span>
-          )}
-        </button>
-        <button
-          type="button"
-          aria-label={tagCount > 0 ? `Contact tags, ${tagCount}` : 'Contact tags'}
-          onClick={() => openPanel('tags')}
-          className={`${railBtn} text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-950/40`}
-          {...tipFor('Contact tags', 'left')}
-        >
-          <Hash className="h-4 w-4" strokeWidth={iconStroke} />
-          {tagCount > 0 && <span className={`${railBadge} bg-sky-600`}>{tagCount}</span>}
-        </button>
+        <div className="flex flex-col items-center">
+          <button
+            type="button"
+            aria-label={labels.length > 0 ? `Labels, ${labels.length}` : 'Labels'}
+            onClick={() => openPanel('labels')}
+            className={`${railBtn} text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-950/40`}
+            {...tipFor('Labels', 'left')}
+          >
+            <Tag className="h-4 w-4" strokeWidth={iconStroke} />
+            {labels.length > 0 && (
+              <span className={`${railBadge} bg-violet-600`}>{labels.length}</span>
+            )}
+          </button>
+          <span className={railDivider} aria-hidden />
+          <button
+            type="button"
+            aria-label={notes.length > 0 ? `Notes, ${notes.length}` : 'Notes'}
+            onClick={() => openPanel('notes')}
+            className={`${railBtn} text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40`}
+            {...tipFor('Notes', 'left')}
+          >
+            <StickyNote className="h-4 w-4" strokeWidth={iconStroke} />
+            {notes.length > 0 && (
+              <span className={`${railBadge} bg-amber-600`}>{notes.length}</span>
+            )}
+          </button>
+          <span className={railDivider} aria-hidden />
+          <button
+            type="button"
+            aria-label={tagCount > 0 ? `Contact tags, ${tagCount}` : 'Contact tags'}
+            onClick={() => openPanel('tags')}
+            className={`${railBtn} text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-950/40`}
+            {...tipFor('Contact tags', 'left')}
+          >
+            <Hash className="h-4 w-4" strokeWidth={iconStroke} />
+            {tagCount > 0 && <span className={`${railBadge} bg-sky-600`}>{tagCount}</span>}
+          </button>
+        </div>
 
-        <span className="my-1.5 h-px w-6 shrink-0 bg-theme-border/80" aria-hidden />
+        <span className="my-1.5 h-px w-6 shrink-0 bg-theme-border/80 dark:bg-white/12" aria-hidden />
 
         <div className="flex flex-col items-center gap-1">
           {renderQuickActions({ tipSide: 'left' })}

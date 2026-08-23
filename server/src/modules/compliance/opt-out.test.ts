@@ -7,7 +7,7 @@ describe('consent message safety', () => {
     expect(isOptOutMessage('stop!')).toBe(true);
     expect(isOptOutMessage('unsubscribe')).toBe(true);
     expect(isOptOutMessage('STOPALL')).toBe(true);
-    expect(isOptOutMessage('cancel')).toBe(true);
+    expect(isOptOutMessage('cancel')).toBe(false);
     expect(isOptInMessage('START')).toBe(true);
     expect(isOptInMessage('please start')).toBe(false);
   });

@@ -9,6 +9,7 @@ interface SegmentedControlProps<T extends string> {
   bare?: boolean;
   compact?: boolean;
   fit?: boolean;
+  scroll?: boolean;
 }
 
 export default function SegmentedControl<T extends string>({
@@ -20,10 +21,13 @@ export default function SegmentedControl<T extends string>({
   bare = false,
   compact = false,
   fit = false,
+  scroll = false,
 }: SegmentedControlProps<T>) {
   const slots = (
     <div
-      className={`flex rounded-xl border border-theme-border bg-theme-subtle p-1 ${fit ? 'w-full md:w-auto' : 'w-full'}`}
+      className={`flex rounded-xl border border-theme-border bg-theme-subtle p-1 ${
+        scroll ? 'w-max min-w-full flex-nowrap overflow-x-auto' : fit ? 'w-full md:w-auto' : 'w-full'
+      }`}
       role="tablist"
       aria-label={ariaLabel}
     >
@@ -38,7 +42,9 @@ export default function SegmentedControl<T extends string>({
             role="tab"
             aria-selected={isActive}
             onClick={() => onChange(option.value)}
-            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg font-semibold transition sm:gap-2 ${isActive
+            className={`flex items-center justify-center gap-1.5 rounded-lg font-semibold transition sm:gap-2 ${
+              scroll ? 'shrink-0' : 'flex-1'
+            } ${isActive
               ? 'bg-theme-surface text-theme-fg ring-1 ring-theme-border'
               : 'text-theme-muted hover:text-theme-secondary'} ${compact ? 'min-h-[34px] px-3 py-1.5 text-[12px] sm:min-h-[36px] sm:px-4 sm:py-2' : 'min-h-[42px] px-2 py-2 text-[13px] sm:px-3'}`}
           >

@@ -596,59 +596,42 @@ export default function BillingUsageStatsTab({
         </div>
 
         {/* WhatsApp number quality */}
-        <div className="flex flex-col justify-between rounded-2xl border border-theme-border bg-theme-surface p-4 sm:p-5">
-          <div>
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-theme-muted">
-                Number Quality
-              </span>
-              <span className="inline-flex rounded-md bg-emerald-50 px-2 py-0.5 text-[9.5px] font-extrabold uppercase text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300">
-                Connected
-              </span>
-            </div>
-
-            <div className="mt-3 flex items-center gap-2.5">
-              <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-                qualityRating === 'GREEN'
-                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
-                  : qualityRating === 'YELLOW'
-                    ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300'
-                    : 'bg-neutral-100 text-neutral-500 dark:bg-slate-800 dark:text-slate-400'
-              }`}>
-                <ShieldCheck className="h-5 w-5" />
-              </span>
-              <div>
-                <p className={`text-base font-black ${qualityColor}`}>
-                  {qualityRating === 'UNKNOWN'
-                    ? 'Not rated yet'
-                    : qualityRating === 'GREEN'
-                      ? 'Green — Good'
-                      : qualityRating === 'YELLOW'
-                        ? 'Yellow — Watch'
-                        : qualityRating === 'RED'
-                          ? 'Red — Action needed'
-                          : qualityRating}
-                </p>
-                <p className="text-[10.5px] font-medium text-theme-muted">
-                  Rating from Meta
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-3.5 space-y-2 border-t border-theme-border pt-3 text-[12px]">
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-theme-muted">Connected numbers</span>
-                <span className="font-extrabold tabular-nums text-theme-fg">{usage?.qualityRatings?.length ?? 1}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-theme-muted">Message type</span>
-                <span className="font-extrabold text-theme-fg">WhatsApp Cloud</span>
-              </div>
-            </div>
+        <div className="rounded-2xl border border-theme-border bg-theme-surface p-4 sm:p-5">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-theme-muted">
+              Number Quality
+            </span>
+            <span className="inline-flex rounded-md bg-emerald-50 px-2 py-0.5 text-[9.5px] font-extrabold uppercase text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300">
+              Connected
+            </span>
           </div>
 
-          <div className="mt-3 rounded-lg bg-theme-subtle/50 p-2.5 text-[10.5px] font-medium text-theme-secondary">
-            Updated daily from Meta.
+          <div className="mt-3 flex items-center gap-2.5">
+            <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+              qualityRating === 'GREEN'
+                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
+                : qualityRating === 'YELLOW'
+                  ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300'
+                  : 'bg-neutral-100 text-neutral-500 dark:bg-slate-800 dark:text-slate-400'
+            }`}>
+              <ShieldCheck className="h-5 w-5" />
+            </span>
+            <div>
+              <p className={`text-base font-black ${qualityColor}`}>
+                {qualityRating === 'UNKNOWN'
+                  ? 'Not rated yet'
+                  : qualityRating === 'GREEN'
+                    ? 'Green — Good'
+                    : qualityRating === 'YELLOW'
+                      ? 'Yellow — Watch'
+                      : qualityRating === 'RED'
+                        ? 'Red — Action needed'
+                        : qualityRating}
+              </p>
+              <p className="text-[10.5px] font-medium text-theme-muted">
+                Rating from Meta
+              </p>
+            </div>
           </div>
         </div>
       </div>

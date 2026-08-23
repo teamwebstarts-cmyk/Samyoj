@@ -95,11 +95,17 @@ export function getPageMeta(pathname: string): PageMeta {
   return match?.[1] ?? { title: 'Workspace' };
 }
 
+export function isFlowBuilderRoute(pathname: string): boolean {
+  return pathname.startsWith('/automations/flows/');
+}
+
+export function getFlowBuilderTopbarLabel(pathname: string): string {
+  if (pathname.endsWith('/new')) return 'New flow';
+  return 'Edit flow';
+}
+
 export function isBuilderRoute(pathname: string): boolean {
-  return (
-    pathname.startsWith('/automations/flows/') ||
-    pathname.startsWith('/automations/meta-flows/')
-  );
+  return isFlowBuilderRoute(pathname) || pathname.startsWith('/automations/meta-flows/');
 }
 
 /** Inbox fills the viewport under the topbar — main must not page-scroll. */

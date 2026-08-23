@@ -163,24 +163,15 @@ export default function TemplateLibraryBrowseStep({
             Add a template in one click
           </p>
           <InfoTip
-            label="About Meta library templates"
+            label="About library templates"
             content={
               <>
                 Meta already reviewed Utility and Authentication copy. Adding it as-is is usually{' '}
                 <span className="font-semibold text-emerald-700">approved immediately</span> — you
                 can send from Campaigns and Inbox right away. Marketing messages are not in this
-                library; those still go through WhatsApp review.
-              </>
-            }
-          />
-          <InfoTip
-            label="Marketing templates"
-            content={
-              <>
-                Need an offer, festival, or cart reminder? Those are Marketing messages — not
-                pre-approved in this library.{' '}
+                library; for offers, festivals, or cart reminders,{' '}
                 <Link to="/templates/new" className="font-semibold text-violet-700 underline">
-                  Create one in the editor
+                  create one in the editor
                 </Link>
                 .
               </>

@@ -14,7 +14,6 @@ const OPT_OUT_KEYWORDS = new Set([
   'stop',
   'stopall',
   'unsubscribe',
-  'cancel',
   'end',
   'quit',
   'opt out',

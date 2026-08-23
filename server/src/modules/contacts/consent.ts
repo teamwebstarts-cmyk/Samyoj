@@ -1,5 +1,8 @@
 import { Prisma } from '@prisma/client';
 
+/** Customer-initiated WhatsApp message — auditable campaign consent. */
+export const INBOUND_CONSENT_SOURCE = 'INBOUND';
+
 /** Same eligibility campaigns use: opted-in with provenance and no later opt-out. */
 export const AUDITABLE_CONSENT_WHERE: Prisma.ContactWhereInput = {
   optedIn: true,
@@ -63,4 +66,27 @@ export function contactCreateConsentFields(
   if (optedIn === true) return contactConsentData(true, source);
   if (optedIn === false) return contactConsentData(false, source);
   return { optedIn: false };
+}
+
+export function hasAuditableCampaignConsent(contact: {
+  optedIn?: boolean | null;
+  consentSource?: string | null;
+  consentAt?: Date | null;
+  optOutAt?: Date | null;
+}): boolean {
+  return Boolean(contact.optedIn && contact.consentSource && contact.consentAt && !contact.optOutAt);
+}
+
+/** Grant campaign consent when a customer messages in (not after STOP / Meta opt-out). */
+export function inboundReplyConsentFields(at: Date): ContactConsentWrite {
+  return contactConsentData(true, INBOUND_CONSENT_SOURCE, at);
+}
+
+export function shouldGrantInboundReplyConsent(contact: {
+  optOutAt?: Date | null;
+  consentSource?: string | null;
+  consentAt?: Date | null;
+}): boolean {
+  if (contact.optOutAt) return false;
+  return !hasAuditableCampaignConsent(contact);
 }

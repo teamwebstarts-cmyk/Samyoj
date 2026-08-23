@@ -54,6 +54,8 @@ import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 type LocationState = {
   form?: TemplateFormState;
   mode?: TemplateWizardMode;
+  studioBody?: string;
+  studioLanguage?: string;
 };
 
 export default function TemplateWizardPage() {
@@ -68,7 +70,18 @@ export default function TemplateWizardPage() {
   const mode: TemplateWizardMode = isResubmit ? 'resubmit' : state.mode || 'create';
 
   const [loading, setLoading] = useState(isResubmit);
-  const [form, setForm] = useState<TemplateFormState>(() => state.form || createEmptyWizardForm());
+  const [form, setForm] = useState<TemplateFormState>(() => {
+    if (state.form) return state.form;
+    if (state.studioBody) {
+      return {
+        ...createEmptyWizardForm(),
+        body: state.studioBody,
+        language: state.studioLanguage || 'en_US',
+        category: 'MARKETING',
+      };
+    }
+    return createEmptyWizardForm();
+  });
   const [activeStep, setActiveStep] = useState(0);
   const [maxReachableStep, setMaxReachableStep] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -163,14 +176,14 @@ export default function TemplateWizardPage() {
   }, [state.form]);
 
   useEffect(() => {
-    if (state.form || isResubmit) return;
+    if (state.form || isResubmit || state.studioBody) return;
     const draft = loadTemplateDraft();
     if (draft) {
       setForm(draft.form);
       setActiveStep(draft.step);
       setMaxReachableStep(draft.step);
     }
-  }, [state.form, isResubmit]);
+  }, [state.form, isResubmit, state.studioBody]);
 
   const previewTemplate: MessageTemplate = useMemo(
     () => ({

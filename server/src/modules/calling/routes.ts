@@ -31,6 +31,7 @@ import { acceptCallWithAgentAnswer, declineCallAsAgent } from './agent-call.serv
 import { publishCallEventMessage } from './call-event-message';
 import { publishCallPermissionMessage } from './call-permission-message';
 import { clearRingTimeout, isTerminalCallStatus, isUsableMetaCallId } from './call.processor';
+import { buildCallSignalingPayload } from './signaling-response';
 import { logTeamAudit } from '../team/audit';
 import { emitToOrg, emitToUser } from '../../realtime';
 import { resolveActiveWhatsappNumber, resolveActiveWhatsappNumberId } from '../whatsapp/active-number';
@@ -813,14 +814,11 @@ router.get(
     if (!call) throw new AppError(404, 'Call not found');
 
     const pending = await getPendingCallByCallId(id);
-    if (!pending) throw new AppError(404, 'Call signaling not available');
-
-    sendSuccess(res, {
+    sendSuccess(res, buildCallSignalingPayload({
       callId: call.id,
-      sdpOffer: pending.sdpOffer,
-      sdpAnswer: pending.sdpAnswer || null,
-      metaCallId: pending.metaCallId,
-    });
+      status: call.status,
+      pending,
+    }));
   })
 );
 

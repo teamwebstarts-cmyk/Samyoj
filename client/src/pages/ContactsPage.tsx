@@ -544,6 +544,7 @@ export default function ContactsPage() {
             refreshToken={pipelineRefresh}
             onStatsChange={setPipelineStats}
             onLeadCreated={handleLeadCreated}
+            onBrowseContacts={() => setViewTab('all')}
           />
         ) : (
           <div className="inbox-shell min-w-0 overflow-hidden">

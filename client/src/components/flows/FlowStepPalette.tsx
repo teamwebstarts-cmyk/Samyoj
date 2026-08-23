@@ -5,9 +5,15 @@ import { NODE_CATEGORIES } from './flowUtils';
 interface FlowStepPaletteProps {
   onAdd: (type: FlowNodeType) => void;
   variant?: 'sidebar' | 'horizontal';
+  /** Hide the intro card when the parent aside already has a section header. */
+  hideIntro?: boolean;
 }
 
-export default function FlowStepPalette({ onAdd, variant = 'sidebar' }: FlowStepPaletteProps) {
+export default function FlowStepPalette({
+  onAdd,
+  variant = 'sidebar',
+  hideIntro = false,
+}: FlowStepPaletteProps) {
   if (variant === 'horizontal') {
     return (
       <div className="rounded-2xl border border-slate-200/60 bg-white px-3 py-3 shadow-sm">
@@ -39,10 +45,12 @@ export default function FlowStepPalette({ onAdd, variant = 'sidebar' }: FlowStep
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl bg-gradient-to-br from-slate-50 to-emerald-50/30 px-3 py-3 ring-1 ring-slate-100">
-        <p className="text-[12px] font-bold text-slate-700">Add a step</p>
-        <p className="mt-0.5 text-[12px] leading-relaxed text-slate-500">Tap one below</p>
-      </div>
+      {!hideIntro ? (
+        <div className="rounded-xl bg-gradient-to-br from-slate-50 to-emerald-50/30 px-3 py-3 ring-1 ring-slate-100">
+          <p className="text-[12px] font-bold text-slate-700">Add a step</p>
+          <p className="mt-0.5 text-[12px] leading-relaxed text-slate-500">Tap one below</p>
+        </div>
+      ) : null}
 
       {NODE_CATEGORIES.map((cat) => (
         <div key={cat.label}>

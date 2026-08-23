@@ -223,7 +223,7 @@ export default function CampaignContactPicker({
                         +{contact.phone}
                       </p>
                     </div>
-                    <ContactOptInBadge optedIn={getsMessages} compact={compact} />
+                    <ContactOptInBadge contact={contact} compact={compact} />
                     {contact.tags?.length > 0 && (
                       <span className={`hidden shrink-0 rounded-full bg-violet-50 px-2 py-0.5 ${compact ? 'text-[8px]' : 'text-[10px]'} font-bold text-violet-700 ring-1 ring-violet-100 sm:inline dark:bg-violet-950/40 dark:text-violet-300`}>
                         {contact.tags[0]}

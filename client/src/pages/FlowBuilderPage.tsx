@@ -1,14 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
-  ArrowLeft,
   BarChart3,
-  Check,
-  Copy,
-  FileEdit,
   FlaskConical,
   History,
-  Save,
   Settings2,
   SlidersHorizontal,
   Smartphone,
@@ -17,6 +12,7 @@ import AppButton from '../components/ui/AppButton';
 import { CanvasPageSkeleton } from '../components/ui/ListLayoutSkeleton';
 import PageShell from '../components/ui/PageShell';
 import FlowAnalyticsPanel from '../components/flows/FlowAnalyticsPanel';
+import FlowBuilderHeader from '../components/flows/FlowBuilderHeader';
 import FlowBuilderSidePanel, { type FlowBuilderPanelTab } from '../components/flows/FlowBuilderSidePanel';
 import FlowValidationWarnings from '../components/flows/FlowValidationWarnings';
 import FlowCanvas from '../components/flows/FlowCanvas';
@@ -34,7 +30,6 @@ import { getErrorMessage, normalizeError } from '../utils/errors';
 import { toastError, toastSuccess, toastValidationErrors } from '../utils/toast';
 import { notifySaveConflicts } from '../utils/automation-conflicts';
 import {
-  flowAudienceBadgeClass,
   flowAudienceLabel,
   flowAudienceState,
   flowSaveSuccessMessage,
@@ -374,6 +369,11 @@ export default function FlowBuilderPage() {
     }
   };
 
+  const builderTitle = isNew ? 'New flow' : name || 'Edit flow';
+  const builderSubtitle =
+    nodes.length === 0 ? 'Add steps to connect your automation' : `${nodes.length} step${nodes.length === 1 ? '' : 's'}`;
+  const builderBadge = flowAudienceLabel(audience);
+
   const handleRestoreVersion = (restoredNodes: FlowNode[], version: number) => {
     const laid = autoLayoutNodes(restoredNodes, restoredNodes[0]?.id);
     setNodes(laid);
@@ -484,72 +484,26 @@ export default function FlowBuilderPage() {
 
   if (loading) {
     return (
-      <PageShell fullBleed className="!max-w-none !px-0">
+      <PageShell fullBleed className="!max-w-none !p-0">
         <CanvasPageSkeleton label="Loading flow builder" />
       </PageShell>
     );
   }
 
   return (
-    <PageShell fullBleed className="!max-w-none !px-0">
+    <PageShell fullBleed className="!max-w-none !p-0">
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-gradient-to-br from-slate-50 via-[#f6f8f7] to-emerald-50/20 pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-0">
-        <header className="sticky top-0 z-30 border-b border-slate-200/50 bg-white/95 backdrop-blur-xl">
-          <div className="mx-auto flex max-w-[1440px] items-center gap-2 px-3 py-2.5 sm:gap-3 sm:px-6 sm:py-3">
-            <button
-              type="button"
-              onClick={() => navigate('/automations')}
-              aria-label="Go back"
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-neutral-200/80 bg-white text-neutral-700 transition hover:border-violet-200 hover:bg-violet-50"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </button>
-            <div className="min-w-0 flex-1">
-              <h1 className="truncate text-[14px] font-extrabold text-neutral-900 sm:text-[15px]">
-                {isNew ? 'New flow' : name || 'Edit flow'}
-              </h1>
-              <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-                <span className="text-[11px] font-medium text-neutral-500 sm:text-[12px]">
-                  {nodes.length === 0 ? 'Add steps to connect' : `${nodes.length} steps`}
-                </span>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ring-1 ${
-                    flowAudienceBadgeClass(audience)
-                  }`}
-                >
-                  {flowAudienceLabel(audience)}
-                </span>
-              </div>
-            </div>
-            {!isNew && (
-              <button
-                type="button"
-                onClick={handleDuplicate}
-                className="hidden h-10 items-center gap-1.5 rounded-xl border border-neutral-200 px-3 text-[12px] font-bold text-neutral-600 transition hover:bg-neutral-50 md:flex"
-              >
-                <Copy className="h-3.5 w-3.5" /> Duplicate
-              </button>
-            )}
-            <AppButton
-              size="sm"
-              variant="secondary"
-              className="hidden shrink-0 md:flex"
-              icon={<FileEdit size={15} />}
-              loading={saving}
-              onClick={() => handleSave(true)}
-            >
-              Save draft
-            </AppButton>
-            <AppButton
-              size="sm"
-              className="shrink-0"
-              icon={saved ? <Check size={15} /> : <Save size={15} />}
-              loading={saving}
-              onClick={() => handleSave(false)}
-            >
-              <span className="sr-only sm:not-sr-only">{saved ? 'Saved' : 'Save'}</span>
-            </AppButton>
-          </div>
-        </header>
+        <FlowBuilderHeader
+          title={builderTitle}
+          subtitle={builderSubtitle}
+          badge={builderBadge}
+          isNew={isNew}
+          saved={saved}
+          saving={saving}
+          onDuplicate={!isNew ? () => void handleDuplicate() : undefined}
+          onSaveDraft={() => void handleSave(true)}
+          onSave={() => void handleSave(false)}
+        />
 
         <FlowValidationWarnings
           warnings={warnings}
@@ -608,8 +562,14 @@ export default function FlowBuilderPage() {
 
         <div className="mx-auto hidden min-h-0 w-full max-w-[1560px] flex-1 gap-4 overflow-hidden px-4 py-4 lg:grid lg:grid-cols-[minmax(220px,248px)_minmax(0,1fr)_minmax(320px,28vw)] lg:items-stretch xl:gap-5 xl:px-5 xl:py-5 xl:grid-cols-[minmax(220px,260px)_minmax(0,1fr)_minmax(340px,26vw)]">
           <aside className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-200/50 bg-white/80 shadow-[0_4px_24px_rgba(15,23,42,0.04)] backdrop-blur-sm">
+            <div className="shrink-0 border-b border-slate-200/60 bg-gradient-to-r from-emerald-50/40 via-white to-slate-50/80 px-4 py-3">
+              <p className="text-[14px] font-extrabold tracking-tight text-slate-900">Steps</p>
+              <p className="mt-0.5 text-[11px] font-medium leading-relaxed text-slate-500">
+                Tap a step type to add it to your flow
+              </p>
+            </div>
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
-              <FlowStepPalette onAdd={addNode} />
+              <FlowStepPalette onAdd={addNode} hideIntro />
             </div>
           </aside>
           <main className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">

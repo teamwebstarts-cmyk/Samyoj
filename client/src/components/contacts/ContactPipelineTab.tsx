@@ -4,6 +4,7 @@ import ContactAvatar from '../inbox/ContactAvatar';
 import LeadCard, { type LeadItem } from '../leads/LeadCard';
 import LeadStageSelect from '../leads/LeadStageSelect';
 import LeadFormSlideOver from './LeadFormSlideOver';
+import PipelineEmptyHero from '../leads/PipelineEmptyHero';
 import {
   computeLeadStats,
   stageFilterOptions,
@@ -36,12 +37,14 @@ interface ContactPipelineTabProps {
   onStatsChange?: (stats: { total: number; active: number; won: number }) => void;
   refreshToken?: number;
   onLeadCreated?: () => void;
+  onBrowseContacts?: () => void;
 }
 
 export default function ContactPipelineTab({
   onStatsChange,
   refreshToken = 0,
   onLeadCreated,
+  onBrowseContacts,
 }: ContactPipelineTabProps) {
   const { activeNumber, resolved } = useWhatsAppNumber();
   const [leads, setLeads] = useState<LeadItem[]>([]);
@@ -275,28 +278,21 @@ export default function ContactPipelineTab({
         />
       ) : filteredLeads.length === 0 ? (
         <div className="p-4 sm:p-6">
-          <EmptyState
-            icon={Target}
-            variant={hasActiveFilters ? 'filter' : 'default'}
-            title={hasActiveFilters ? 'No leads match your filters' : 'No leads in pipeline'}
-            description={
-              hasActiveFilters
-                ? 'Try a different search word or stage.'
-                : 'Convert a contact to a lead to track them through your sales stages.'
-            }
-            steps={
-              hasActiveFilters
-                ? undefined
-                : ['Open any contact', 'Tap Convert to lead', 'Track progress here in the pipeline']
-            }
-            action={
-              hasActiveFilters ? (
+          {hasActiveFilters ? (
+            <EmptyState
+              icon={Target}
+              variant="filter"
+              title="No leads match your filters"
+              description="Try a different search word or stage."
+              action={
                 <AppButton variant="secondary" onClick={clearFilters}>
                   Clear filters
                 </AppButton>
-              ) : undefined
-            }
-          />
+              }
+            />
+          ) : (
+            <PipelineEmptyHero onCreateLead={openCreate} onBrowseContacts={onBrowseContacts} />
+          )}
         </div>
       ) : (
         <ResponsiveDataView

@@ -11,7 +11,6 @@ import { useCallingBots } from '../hooks/useCallingBots';
 import CallDetailView from '../components/calls/CallDetailView';
 import CallDetailsPanel from '../components/calls/CallDetailsPanel';
 import type { CallDetailsSection } from '../components/calls/CallDetailsPanel';
-import { useSinglePaneWidth } from '../hooks/useSinglePaneWidth';
 import { useMobileThreadChrome } from '../hooks/useMobileThreadChrome';
 import CallFiltersBar from '../components/calls/CallFiltersBar';
 import CallListItem from '../components/calls/CallListItem';
@@ -129,11 +128,12 @@ export default function CallsPage() {
   const [callingAiSaving, setCallingAiSaving] = useState(false);
   const [orgCallingAiEnabled, setOrgCallingAiEnabled] = useState<boolean | null>(null);
   const [orgCallingAiSaving, setOrgCallingAiSaving] = useState(false);
+  const orgCallingAiSavingRef = useRef(false);
+  const orgCallingAiSaveGenRef = useRef(0);
   const [callMenu, setCallMenu] = useState<{ x: number; y: number; callId: string } | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [deleteCallTarget, setDeleteCallTarget] = useState<CallRecord | null>(null);
   const [deletingCall, setDeletingCall] = useState(false);
-  const detailsPane = useSinglePaneWidth({ storageKey: 'calls:panel-widths:v1', defaultWidth: 340, minWidth: 280, maxWidth: 520 });
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
@@ -212,6 +212,7 @@ export default function CallsPage() {
         aiBotApi
           .list('CALL')
           .then(({ data }) => {
+            if (orgCallingAiSavingRef.current) return;
             setOrgCallingAiEnabled(Boolean(data.data?.callingAiEnabled ?? true));
           })
           .catch(() => setOrgCallingAiEnabled(null)),
@@ -323,8 +324,6 @@ export default function CallsPage() {
 
   useSocket((event, data) => {
     if (event === 'call:incoming') {
-      const payload = data as { fromPhone: string; contactName?: string };
-      toastSuccess(`Incoming call from ${payload.contactName || payload.fromPhone}`);
       void load();
     }
     if (event === 'call:updated') {
@@ -699,18 +698,29 @@ export default function CallsPage() {
   }
 
   async function handleOrgCallingAiChange(enabled: boolean) {
-    if (orgCallingAiSaving) return;
+    if (orgCallingAiSavingRef.current) return;
+    const saveGen = ++orgCallingAiSaveGenRef.current;
     const previous = orgCallingAiEnabled;
     setOrgCallingAiEnabled(enabled);
     setOrgCallingAiSaving(true);
+    orgCallingAiSavingRef.current = true;
     try {
-      await aiBotApi.setCallingAi(enabled);
+      const { data } = await aiBotApi.setCallingAi(enabled);
+      const saved = data.data?.callingAiEnabled;
+      if (saveGen === orgCallingAiSaveGenRef.current && typeof saved === 'boolean') {
+        setOrgCallingAiEnabled(saved);
+      }
       toastSuccess(enabled ? 'AI calling on' : 'AI calling off', { id: 'org-calling-ai' });
     } catch {
-      setOrgCallingAiEnabled(previous);
+      if (saveGen === orgCallingAiSaveGenRef.current) {
+        setOrgCallingAiEnabled(previous);
+      }
       toastError('Could not update AI calling.', { id: 'org-calling-ai' });
     } finally {
-      setOrgCallingAiSaving(false);
+      if (saveGen === orgCallingAiSaveGenRef.current) {
+        setOrgCallingAiSaving(false);
+        orgCallingAiSavingRef.current = false;
+      }
     }
   }
 
@@ -876,7 +886,7 @@ export default function CallsPage() {
           }`}
         >
           {selectedCall ? (
-            <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden bg-white dark:bg-neutral-950">
+            <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-white dark:bg-neutral-950">
               <CallDetailView
                 name={selectedCall.contact?.name}
                 phone={selectedCall.contact?.phone || selectedCall.fromPhone}
@@ -929,8 +939,6 @@ export default function CallsPage() {
                 overlayOpen={detailsOverlay.open}
                 overlaySection={detailsOverlay.section}
                 onOverlayClose={() => setDetailsOverlay({ open: false })}
-                paneController={detailsPane.controller}
-                panelWidth={detailsPane.width}
               />
             </div>
           ) : (

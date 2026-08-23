@@ -63,7 +63,10 @@ export default function CallRingModal({ ring, onDismiss }: CallRingModalProps) {
     setAccepting(true);
     try {
       const { data } = await callingApi.getSignaling(ring.callId);
-      const sdpOffer = data.data.sdpOffer as string;
+      const sdpOffer = data.data.sdpOffer as string | null | undefined;
+      if (data.data.ended || !sdpOffer) {
+        throw new Error('This call is no longer ringing.');
+      }
       const sdpAnswer = await createAgentAnswer(sdpOffer);
       await callingApi.accept(ring.callId, sdpAnswer);
       setActiveCallId(ring.callId);

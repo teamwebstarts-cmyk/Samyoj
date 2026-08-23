@@ -15,6 +15,10 @@ import {
   inboundConversationSideEffectData,
   needsInboundConversationRepair,
 } from '../modules/whatsapp/inbound-side-effects';
+import {
+  inboundReplyConsentFields,
+  shouldGrantInboundReplyConsent,
+} from '../modules/contacts/consent';
 import { emitProductEvent } from '../modules/platform/events';
 
 const log = createModuleLogger('webhook');
@@ -157,6 +161,8 @@ export async function processWebhookPayload(
           continue;
         }
 
+        const inboundConsent = inboundReplyConsentFields(inboundTimestamp);
+
         let contact = await prisma.contact.upsert({
           where: {
             organizationId_whatsappNumberId_normalizedPhone: {
@@ -171,11 +177,18 @@ export async function processWebhookPayload(
             normalizedPhone: contactPhone,
             whatsappNumberId: whatsappNumber.id,
             name: contactName,
-            optedIn: true,
             source: 'INBOUND',
+            ...inboundConsent,
           },
           update: contactName ? { name: contactName } : {},
         });
+
+        if (shouldGrantInboundReplyConsent(contact)) {
+          contact = await prisma.contact.update({
+            where: { id: contact.id },
+            data: inboundConsent,
+          });
+        }
 
         const priorConversation = await prisma.conversation.findUnique({
           where: {

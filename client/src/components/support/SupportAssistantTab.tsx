@@ -145,7 +145,9 @@ export default function SupportAssistantTab({
         className="inbox-chat-bg min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-3 py-3 sm:px-4"
       >
         {welcomeOnly ? (
-          <SupportWelcome disabled={composerLocked} onAsk={(q) => void sendText(q)} />
+          <div className="flex min-h-full flex-col justify-center py-6">
+            <SupportWelcome disabled={composerLocked} onAsk={(q) => void sendText(q)} />
+          </div>
         ) : (
           visibleMessages.map((msg) =>
             msg.role === 'user' ? (

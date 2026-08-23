@@ -4,8 +4,9 @@ import {
   Building2,
   Smartphone,
   Clock,
-  Palette,
   Shield,
+  PhoneCall,
+  Webhook,
   PhoneOff,
   Settings2,
   Download,
@@ -32,7 +33,6 @@ import BusinessProfilePanel from '../components/settings/BusinessProfilePanel';
 import WhatsAppChannelsPanel from '../components/settings/WhatsAppChannelsPanel';
 import HoursAndInboxPanel from '../components/settings/HoursAndInboxPanel';
 import IntegrationsPanel from '../components/settings/IntegrationsPanel';
-import AppearanceSettingsPanel from '../components/settings/AppearanceSettingsPanel';
 import SecuritySettingsPanel from '../components/settings/SecuritySettingsPanel';
 
 type SettingsTab =
@@ -40,7 +40,6 @@ type SettingsTab =
   | 'whatsapp'
   | 'inbox'
   | 'integrations'
-  | 'appearance'
   | 'security';
 
 const DEFAULT_BUSINESS_HOURS: BusinessHoursSettings = {
@@ -71,8 +70,8 @@ const TAB_DEFS: Array<SettingsNavItem & { id: SettingsTab }> = [
   },
   {
     id: 'security',
-    label: 'Security & 2FA',
-    hint: 'Password & 2FA',
+    label: 'Security',
+    hint: 'Password',
     icon: Shield,
   },
   {
@@ -80,12 +79,6 @@ const TAB_DEFS: Array<SettingsNavItem & { id: SettingsTab }> = [
     label: 'Data & export',
     hint: 'Contacts CSV & backup',
     icon: Download,
-  },
-  {
-    id: 'appearance',
-    label: 'Appearance',
-    hint: 'Theme & spacing',
-    icon: Palette,
   },
 ];
 
@@ -99,13 +92,15 @@ function resolveLegacyTab(raw: string | null): SettingsTab | null {
     case 'automation':
     case 'ai':
       return 'inbox';
+    case 'appearance':
+      return 'profile';
     default:
       return null;
   }
 }
 
 export default function SettingsPage() {
-  const { orgRole, organization, twoFactorEnabled } = useAuth();
+  const { orgRole, organization } = useAuth();
   const { numbers, activeNumber, refreshNumbers, loading: numbersLoading, resolved: numbersResolved } = useWhatsAppNumber();
   const [searchParams, setSearchParams] = useSearchParams();
   const [initialLoading, setInitialLoading] = useState(true);
@@ -136,7 +131,7 @@ export default function SettingsPage() {
     const legacy = resolveLegacyTab(raw);
     const candidate = (
       legacy ||
-      (['profile', 'whatsapp', 'inbox', 'integrations', 'appearance', 'security'].includes(raw || '')
+      (['profile', 'whatsapp', 'inbox', 'integrations', 'security'].includes(raw || '')
         ? (raw as SettingsTab)
         : null)
     ) as SettingsTab | null;
@@ -267,19 +262,16 @@ export default function SettingsPage() {
         label: 'WhatsApp numbers',
         value: initialLoading || refreshing ? '—' : numbers.length,
         tone: numbers.length > 0 ? ('connected' as const) : ('total' as const),
+        icon: PhoneCall,
       },
       {
         label: 'Inbound sync',
         value: initialLoading || refreshing ? '—' : syncActive ? 'Active' : 'Off',
         tone: syncActive ? ('connected' as const) : ('hours' as const),
-      },
-      {
-        label: 'Two-factor login',
-        value: twoFactorEnabled ? 'On' : 'Off',
-        tone: twoFactorEnabled ? ('secure' as const) : ('hours' as const),
+        icon: Webhook,
       },
     ],
-    [initialLoading, refreshing, numbers.length, syncActive, twoFactorEnabled]
+    [initialLoading, refreshing, numbers.length, syncActive]
   );
 
   return (
@@ -293,7 +285,7 @@ export default function SettingsPage() {
               badge="Settings"
               badgeIcon={Settings2}
               title="Workspace settings"
-              description="Business profile, WhatsApp numbers, hours, and account security."
+              description="Business profile, WhatsApp numbers, and business hours."
               stats={heroStats}
               loading={refreshing}
             />
@@ -341,8 +333,6 @@ export default function SettingsPage() {
                   {activeTab === 'integrations' && isOwnerOrAdmin && (
                     <IntegrationsPanel showDeveloperTools />
                   )}
-
-                  {activeTab === 'appearance' && <AppearanceSettingsPanel />}
 
                   {activeTab === 'security' && <SecuritySettingsPanel />}
                 </TabTransition>

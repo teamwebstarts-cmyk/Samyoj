@@ -6,6 +6,13 @@ import { getPlan } from '../../billing/plans';
 import { ledgerKindForJob } from './policy-guard';
 
 const PLAN_LIMITS: Record<string, Record<GenerationCreditKind, bigint>> = {
+  launch: {
+    TEXT_TOKENS: 20_000n,
+    IMAGES: 2n,
+    VIDEO_SECONDS: 0n,
+    VOICE_MINUTES: 0n,
+    STT_MINUTES: 0n,
+  },
   starter: {
     TEXT_TOKENS: 100_000n,
     IMAGES: 10n,
@@ -20,7 +27,7 @@ const PLAN_LIMITS: Record<string, Record<GenerationCreditKind, bigint>> = {
     VOICE_MINUTES: 50n,
     STT_MINUTES: 120n,
   },
-  business: {
+  pro: {
     TEXT_TOKENS: 5_000_000n,
     IMAGES: 1_000n,
     VIDEO_SECONDS: 1_800n,
@@ -35,6 +42,17 @@ const PLAN_LIMITS: Record<string, Record<GenerationCreditKind, bigint>> = {
     STT_MINUTES: 6_000n,
   },
 };
+
+/** Map legacy plan ids (`business`) onto the current catalog. */
+export function resolveContentStudioPlan(planId: string | null | undefined): string {
+  if (!planId) return 'starter';
+  if (planId === 'business') return 'pro';
+  return planId in PLAN_LIMITS ? planId : 'starter';
+}
+
+function limitsForPlan(planId: string | null | undefined) {
+  return PLAN_LIMITS[resolveContentStudioPlan(planId)];
+}
 
 function startOfDay(date = new Date()): Date {
   const d = new Date(date);
@@ -56,8 +74,8 @@ async function getOrCreateLedger(organizationId: string, kind: GenerationCreditK
     where: { id: organizationId },
     select: { plan: true },
   });
-  const planId = org?.plan || 'starter';
-  const limits = PLAN_LIMITS[planId] || PLAN_LIMITS.starter;
+  const planId = resolveContentStudioPlan(org?.plan);
+  const limits = limitsForPlan(planId);
   const hardLimit = limits[kind];
   const softLimit = (hardLimit * 80n) / 100n;
 
@@ -127,8 +145,8 @@ export async function getCreditSummary(organizationId: string) {
     where: { id: organizationId },
     select: { plan: true },
   });
-  const planId = org?.plan || 'starter';
-  const limits = PLAN_LIMITS[planId] || PLAN_LIMITS.starter;
+  const planId = resolveContentStudioPlan(org?.plan);
+  const limits = limitsForPlan(planId);
   const periodStart = startOfDay();
 
   const ledgers = await prisma.generationCreditLedger.findMany({

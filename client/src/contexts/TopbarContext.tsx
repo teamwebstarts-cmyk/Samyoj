@@ -10,6 +10,9 @@ import {
 export type TopbarExtras = {
   badge?: string | null;
   subtitle?: string | null;
+  /** Overrides the current breadcrumb / wizard title segment */
+  title?: string | null;
+  actions?: ReactNode;
 };
 
 type TopbarContextValue = {

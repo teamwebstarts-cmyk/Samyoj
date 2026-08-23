@@ -4,8 +4,6 @@ import ConversationNotesSection, {
   hasVisibleConversationNotes,
 } from '../inbox/ConversationNotesSection';
 import { useGlassTipProps } from '../inbox/ComposerGlassTip';
-import PaneHandle from '../inbox/PaneHandle';
-import type { PaneHandleController } from '../../hooks/useSinglePaneWidth';
 import type { InternalNote } from '../../types';
 import { callingApi } from '../../services/api';
 
@@ -13,6 +11,7 @@ export type CallDetailsSection = 'notes';
 
 /** Matches Inbox docked details width (`usePaneWidths` default right rail). */
 const DEFAULT_CALL_DETAILS_PANEL_WIDTH = 340;
+const CALL_DETAILS_RAIL_WIDTH = 44;
 
 interface CallDetailsPanelProps {
   callId: string;
@@ -26,7 +25,6 @@ interface CallDetailsPanelProps {
   overlayOpen?: boolean;
   overlaySection?: CallDetailsSection;
   onOverlayClose?: () => void;
-  paneController?: PaneHandleController;
   panelWidth?: number;
 }
 
@@ -42,7 +40,6 @@ export default function CallDetailsPanel({
   overlayOpen = false,
   overlaySection,
   onOverlayClose,
-  paneController,
   panelWidth = DEFAULT_CALL_DETAILS_PANEL_WIDTH,
 }: CallDetailsPanelProps) {
   const tipFor = useGlassTipProps();
@@ -74,6 +71,11 @@ export default function CallDetailsPanel({
   const closePanel = () => {
     onPanelOpenChange(false);
     onOverlayClose?.();
+  };
+
+  const togglePanel = () => {
+    if (panelOpen) closePanel();
+    else openPanel();
   };
 
   const handleAddNote = async (content: string): Promise<InternalNote> => {
@@ -120,6 +122,26 @@ export default function CallDetailsPanel({
     </>
   );
 
+  const notesRailButton = (
+    <button
+      type="button"
+      aria-label={hasNotes ? 'Notes, saved' : 'Notes'}
+      aria-pressed={panelOpen}
+      onClick={togglePanel}
+      className={`relative flex h-9 w-9 items-center justify-center rounded-xl transition ${
+        panelOpen
+          ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300'
+          : 'text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40'
+      }`}
+      {...tipFor('Notes', 'left')}
+    >
+      <StickyNote className="h-4 w-4" strokeWidth={iconStroke} />
+      {hasNotes && (
+        <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-amber-600" />
+      )}
+    </button>
+  );
+
   if (overlayOpen) {
     return (
       <>
@@ -139,46 +161,35 @@ export default function CallDetailsPanel({
     );
   }
 
-  if (!panelOpen) {
-    return (
-      <aside
-        className="inbox-composer-scroll hidden w-11 shrink-0 flex-col items-center gap-1 overflow-y-auto overscroll-contain border-l border-white/40 bg-white/55 py-3 backdrop-blur-md md:flex dark:border-neutral-800/80 dark:bg-neutral-950/70"
-        aria-label="Call notes"
-      >
-        <button
-          type="button"
-          aria-label={hasNotes ? 'Notes, saved' : 'Notes'}
-          onClick={openPanel}
-          className="relative flex h-9 w-9 items-center justify-center rounded-xl text-amber-600 transition hover:bg-amber-50 dark:hover:bg-amber-950/40"
-          {...tipFor('Notes', 'left')}
-        >
-          <StickyNote className="h-4 w-4" strokeWidth={iconStroke} />
-          {hasNotes && (
-            <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-amber-600" />
-          )}
-        </button>
-      </aside>
-    );
-  }
-
   return (
     <>
-      {paneController && (
-        <div className="hidden md:flex">
-          <PaneHandle
-            side="right"
-            width={paneController.width}
-            ariaLabel="Resize call notes panel"
-            onResize={paneController.onResize}
-          />
-        </div>
+      {panelOpen && (
+        <button
+          type="button"
+          aria-label="Close details panel"
+          className="absolute inset-0 z-20 hidden bg-neutral-900/10 md:block dark:bg-black/20"
+          onClick={closePanel}
+        />
       )}
+
+      {panelOpen && (
+        <aside
+          className={`absolute top-0 z-30 hidden h-full min-h-0 flex-col overflow-hidden border-l md:flex ${panelShellClass}`}
+          style={{
+            width: panelWidth,
+            right: CALL_DETAILS_RAIL_WIDTH,
+          }}
+          aria-label="Call notes"
+        >
+          {panelBody}
+        </aside>
+      )}
+
       <aside
-        className={`hidden min-w-0 shrink-0 overflow-hidden border-l md:flex ${panelShellClass}`}
-        style={{ width: panelWidth }}
+        className="relative z-40 inbox-composer-scroll hidden w-11 shrink-0 flex-col items-center gap-1 overflow-y-auto overscroll-contain border-l border-white/40 bg-white/55 py-3 backdrop-blur-md md:flex dark:border-neutral-800/80 dark:bg-neutral-950/70"
         aria-label="Call notes"
       >
-        {panelBody}
+        {notesRailButton}
       </aside>
     </>
   );

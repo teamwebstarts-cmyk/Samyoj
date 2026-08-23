@@ -10,6 +10,7 @@ import { corsOriginDelegate, platformCorsOriginDelegate } from './config/cors';
 import { clientBuildExists, getAdminPaths, getClientPaths, adminBuildExists } from './config/paths';
 import { validateConfig } from './config/validate';
 import { isPlatformAdminHost } from './config/admin-host';
+import { helmetContentSecurityPolicyDirectives } from './config/csp';
 import { initSentry } from './config/sentry';
 import { errorHandler, logError, setupGlobalErrorHandlers } from './errors';
 import logger, { requestLogger } from './utils/logger';
@@ -132,14 +133,7 @@ app.use(
     crossOriginResourcePolicy: { policy: 'cross-origin' },
     contentSecurityPolicy: {
       useDefaults: true,
-      directives: {
-        // HTTP deployments (IP-only) break when the browser upgrades asset URLs to HTTPS.
-        upgradeInsecureRequests: useHttps ? [] : null,
-        // Vite index.html includes a small inline theme bootstrap script.
-        scriptSrc: ["'self'", "'unsafe-inline'"],
-        // AI bot voice preview plays `data:audio/...;base64` in the browser.
-        mediaSrc: ["'self'", 'data:', 'blob:'],
-      },
+      directives: helmetContentSecurityPolicyDirectives(useHttps),
     },
   })
 );

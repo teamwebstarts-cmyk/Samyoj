@@ -2296,6 +2296,38 @@
       0 16px 48px rgba(0, 0, 0, 0.35);
   }
 
+  /* Content Studio — paper grain from the studio mock (fine noise over mint wash). */
+  .studio-grain {
+    position: relative;
+    isolation: isolate;
+    background-color: #f6f8f6;
+  }
+
+  .studio-grain::before {
+    content: '';
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    opacity: 0.45;
+    mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.05  0 0 0 0 0.09  0 0 0 0 0.07  0 0 0 0.28 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  }
+
+  .studio-grain > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  .dark .studio-grain {
+    background-color: #0f1614;
+  }
+
+  .dark .studio-grain::before {
+    opacity: 0.22;
+    mix-blend-mode: overlay;
+  }
+
   .campaigns-list-shell,
   .dark .campaigns-list-shell {
     box-shadow: none;

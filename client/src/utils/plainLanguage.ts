@@ -1,7 +1,8 @@
 /** Plain-language labels for messaging consent (avoids opt-in/opt-out jargon). */
 export const messagingConsent = {
   badgeYes: 'Gets messages',
-  badgeNo: 'Stopped',
+  badgeStopped: 'Stopped',
+  badgeNotOnList: 'Not on list',
   filterLabel: 'Gets messages',
   statsLabel: 'Gets messages',
   allowMessages: 'Allow messages',

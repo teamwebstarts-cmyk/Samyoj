@@ -43,7 +43,40 @@ const COMMON_VARIABLE_PRESETS = [
   { key: 'city', label: 'City' },
   { key: 'plan', label: 'Plan' },
   { key: 'amount', label: 'Amount' },
-];
+] as const;
+
+const compactFieldInputClass =
+  'h-9 w-full min-w-0 rounded-lg border border-theme-border bg-theme-surface px-3 text-[12px] text-theme-fg shadow-input transition placeholder:text-theme-muted focus:border-slate-400 focus:outline-none focus:shadow-input-focus dark:focus:border-slate-500';
+
+const fullFieldInputClass =
+  'h-11 w-full min-w-0 rounded-xl border border-theme-border bg-theme-surface px-3.5 text-body text-theme-fg shadow-input transition placeholder:text-theme-muted focus:border-slate-400 focus:outline-none focus:shadow-input-focus dark:focus:border-slate-500';
+
+function parseStoredCustomRows(text: string): Array<{ key: string; value: string }> {
+  if (!text) return [];
+  return text
+    .split(/\r?\n/)
+    .map((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return null;
+      const eq = trimmed.indexOf('=');
+      if (eq <= 0) return { key: trimmed, value: '' };
+      return {
+        key: trimmed.slice(0, eq).trim(),
+        value: trimmed.slice(eq + 1).trim(),
+      };
+    })
+    .filter((row): row is { key: string; value: string } => Boolean(row));
+}
+
+function withTrailingEmptyRow(rows: Array<{ key: string; value: string }>) {
+  if (rows.length === 0) return [{ key: '', value: '' }];
+  const last = rows[rows.length - 1];
+  if (last.key.trim() || last.value.trim()) {
+    return [...rows, { key: '', value: '' }];
+  }
+  return rows;
+}
+
 
 /** Shared rich form for Contacts Add/Edit and Inbox New chat. */
 export default function ContactFieldsForm({
@@ -106,22 +139,15 @@ export default function ContactFieldsForm({
   }, [availableTags, tagList]);
 
   // Custom attributes key-value rows parsing & management
-  const customFieldRows = useMemo(() => {
-    if (!form.customAttributes) return [];
-    return form.customAttributes
-      .split(/\r?\n/)
-      .map((line) => {
-        const trimmed = line.trim();
-        if (!trimmed) return null;
-        const eq = trimmed.indexOf('=');
-        if (eq <= 0) return { key: trimmed, value: '' };
-        return {
-          key: trimmed.slice(0, eq).trim(),
-          value: trimmed.slice(eq + 1).trim(),
-        };
-      })
-      .filter((row): row is { key: string; value: string } => Boolean(row));
-  }, [form.customAttributes]);
+  const storedCustomRows = useMemo(
+    () => parseStoredCustomRows(form.customAttributes),
+    [form.customAttributes],
+  );
+
+  const customFieldRows = useMemo(
+    () => withTrailingEmptyRow(storedCustomRows),
+    [storedCustomRows],
+  );
 
   const updateCustomRows = (rows: Array<{ key: string; value: string }>) => {
     const text = rows
@@ -132,32 +158,41 @@ export default function ContactFieldsForm({
   };
 
   const handleCustomFieldChange = (index: number, field: 'key' | 'value', value: string) => {
-    const next = [...customFieldRows];
-    if (!next[index]) next[index] = { key: '', value: '' };
+    const next = [...storedCustomRows];
+    while (next.length <= index) next.push({ key: '', value: '' });
     if (field === 'key') {
-      const normalized = normalizeCustomKey(value) || value.trim().toLowerCase().replace(/[^a-z0-9_]+/g, '_');
-      next[index].key = normalized;
+      next[index].key = value;
     } else {
       next[index].value = value;
     }
     updateCustomRows(next);
   };
 
+  const handleCustomKeyBlur = (index: number, raw: string) => {
+    const trimmed = raw.trim();
+    if (!trimmed) return;
+    const normalized =
+      normalizeCustomKey(trimmed) ||
+      trimmed.toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '');
+    if (!normalized || normalized === storedCustomRows[index]?.key) return;
+    handleCustomFieldChange(index, 'key', normalized);
+  };
+
   const addCustomField = (initialKey = '', initialValue = '') => {
-    const next = [...customFieldRows, { key: initialKey, value: initialValue }];
+    const next = [...storedCustomRows, { key: initialKey, value: initialValue }];
     updateCustomRows(next);
   };
 
   const removeCustomField = (index: number) => {
-    const next = customFieldRows.filter((_, i) => i !== index);
+    const next = storedCustomRows.filter((_, i) => i !== index);
     updateCustomRows(next);
   };
 
   const availableVariablePresets = useMemo(() => {
     return COMMON_VARIABLE_PRESETS.filter(
-      (preset) => !customFieldRows.some((r) => r.key.toLowerCase() === preset.key.toLowerCase())
+      (preset) => !storedCustomRows.some((r) => r.key.toLowerCase() === preset.key.toLowerCase()),
     );
-  }, [customFieldRows]);
+  }, [storedCustomRows]);
 
   const phoneField =
     phoneMode === 'plain' ? (
@@ -338,7 +373,7 @@ export default function ContactFieldsForm({
     <div
       className={
         isCompact
-          ? 'space-y-2.5'
+          ? 'space-y-2'
           : 'rounded-xl border border-theme-border/70 bg-theme-subtle/30 p-3.5 space-y-3'
       }
     >
@@ -355,71 +390,98 @@ export default function ContactFieldsForm({
       </div>
 
       {isCompact && (
-        <p className="text-[11.5px] text-theme-muted">
-          Save extra info here to reuse in campaign messages later.
+        <p className="text-[11px] leading-snug text-theme-muted">
+          Add field name and value — usable in campaign templates later.
         </p>
       )}
 
-      {customFieldRows.length > 0 ? (
-        <div className="space-y-2">
-          {customFieldRows.map((row, idx) => (
-            <div key={idx} className="flex items-center gap-2">
-              <div className="flex-1">
+      <div className="space-y-1.5">
+        <div
+          className={`grid gap-2 px-0.5 ${
+            isCompact
+              ? 'grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)_1.75rem]'
+              : 'grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_2.25rem]'
+          }`}
+        >
+          <span className="text-[10px] font-bold uppercase tracking-wide text-theme-muted">Field</span>
+          <span className="text-[10px] font-bold uppercase tracking-wide text-theme-muted">Value</span>
+          <span className="sr-only">Remove</span>
+        </div>
+
+        <div className="space-y-1.5">
+          {customFieldRows.map((row, idx) => {
+            const hasContent = Boolean(row.key.trim() || row.value.trim());
+            const inputClass = isCompact ? compactFieldInputClass : fullFieldInputClass;
+            const removeBtnClass = isCompact
+              ? 'flex h-9 w-7 shrink-0 items-center justify-center rounded-lg text-neutral-400 transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40'
+              : 'flex h-11 w-9 shrink-0 items-center justify-center rounded-lg border border-theme-border bg-white text-neutral-400 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 dark:bg-neutral-800 dark:hover:bg-red-950/40';
+
+            return (
+              <div
+                key={`custom-field-${idx}`}
+                className={`grid items-center gap-2 ${
+                  isCompact
+                    ? 'grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)_1.75rem]'
+                    : 'grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_2.25rem]'
+                }`}
+              >
                 <input
                   type="text"
+                  aria-label="Field name"
+                  placeholder={isCompact ? 'order_id' : 'e.g. order_id'}
                   value={row.key}
                   onChange={(e) => handleCustomFieldChange(idx, 'key', e.target.value)}
-                  placeholder={isCompact ? 'Label (e.g. Order ID)' : 'field_name (e.g. order_id)'}
-                  className={`h-9 w-full rounded-lg border border-theme-border bg-theme-surface px-2.5 text-[12px] text-theme-fg shadow-input placeholder:text-theme-muted focus:border-slate-400 focus:outline-none dark:focus:border-slate-500 ${
-                    isCompact ? '' : 'font-mono placeholder:font-sans'
-                  }`}
+                  onBlur={(e) => handleCustomKeyBlur(idx, e.target.value)}
+                  className={inputClass}
                 />
-              </div>
-              {!isCompact && <span className="text-neutral-400 font-bold text-xs">=</span>}
-              <div className="flex-1">
                 <input
                   type="text"
+                  aria-label="Value"
+                  placeholder="Value"
                   value={row.value}
                   onChange={(e) => handleCustomFieldChange(idx, 'value', e.target.value)}
-                  placeholder={isCompact ? 'Value' : 'Value (e.g. ORD-1042)'}
-                  className="h-9 w-full rounded-lg border border-theme-border bg-theme-surface px-2.5 text-[12px] text-theme-fg shadow-input placeholder:text-theme-muted focus:border-slate-400 focus:outline-none dark:focus:border-slate-500"
+                  className={inputClass}
                 />
+                {hasContent ? (
+                  <button
+                    type="button"
+                    onClick={() => removeCustomField(idx)}
+                    className={removeBtnClass}
+                    aria-label="Remove field"
+                  >
+                    <Trash2 className={isCompact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
+                  </button>
+                ) : (
+                  <span aria-hidden className="w-7 shrink-0" />
+                )}
               </div>
-              <button
-                type="button"
-                onClick={() => removeCustomField(idx)}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-theme-border bg-white text-neutral-400 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 dark:bg-neutral-800 dark:hover:bg-red-950/40"
-                aria-label="Remove field"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ))}
+            );
+          })}
         </div>
-      ) : (
-        !isCompact && (
-          <p className="text-[11.5px] font-medium text-neutral-500 dark:text-neutral-400">
-            No custom variables added yet. Add variables to auto-fill customer data in broadcast templates.
-          </p>
-        )
-      )}
 
-      <div className="flex flex-wrap items-center gap-2 pt-1">
+        {isCompact && (
+          <p className="px-0.5 text-[10.5px] text-theme-muted">
+            Type a name or pick a suggestion below.
+          </p>
+        )}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
         <button
           type="button"
           onClick={() => addCustomField()}
           className="inline-flex items-center gap-1 rounded-lg border border-theme-border bg-white px-2.5 py-1.5 text-[11px] font-semibold text-theme-fg shadow-sm transition hover:bg-theme-subtle dark:bg-neutral-800"
         >
           <Plus className="h-3 w-3" />
-          {isCompact ? 'Add detail' : 'Add custom field'}
+          {isCompact ? 'Add field' : 'Add custom field'}
         </button>
 
         {availableVariablePresets.length > 0 && (
           <div className="flex flex-wrap items-center gap-1">
-            {!isCompact && (
-              <span className="text-[10px] font-medium text-theme-muted mr-0.5">Presets:</span>
-            )}
-            {availableVariablePresets.slice(0, isCompact ? 3 : undefined).map((preset) => (
+            <span className="text-[10px] font-medium text-theme-muted">
+              {isCompact ? 'Suggestions:' : 'Presets:'}
+            </span>
+            {availableVariablePresets.map((preset) => (
               <button
                 key={preset.key}
                 type="button"

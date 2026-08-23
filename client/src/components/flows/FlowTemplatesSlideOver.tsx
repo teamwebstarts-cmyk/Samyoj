@@ -71,7 +71,7 @@ export default function FlowTemplatesSlideOver({
     <SlideOver
       open={open}
       onClose={onClose}
-      size="xl"
+      size="2xl"
       icon={LayoutTemplate}
       accent="violet"
       title="Start from a template"

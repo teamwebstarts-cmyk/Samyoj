@@ -27,16 +27,17 @@ interface TemplatesPageToolbarProps {
   onCreate: () => void;
 }
 
-/** Fixed width on sm+ — never w-full in a horizontal flex row (causes 544px overlap). */
+/** Search + both filters: same width and 44px height on md+. */
+const filterControlClass =
+  'w-full min-w-0 shrink-0 md:w-[12rem] md:max-w-[12rem]';
 const filterSelectClass =
-  'w-full min-w-0 shrink-0 sm:w-[10.25rem] sm:max-w-[10.25rem] [&_.app-select__control]:!w-full [&_.app-select__single-value]:!max-w-none';
-
-const mobileIconBtn =
-  'shrink-0 max-sm:!h-9 max-sm:!min-h-9 max-sm:!px-2.5';
+  `${filterControlClass} [&_.app-select__control]:!h-11 [&_.app-select__control]:!min-h-11 [&_.app-select__control]:!w-full [&_.app-select__single-value]:!max-w-none`;
+const filterInputClass = '!h-11 !min-h-11';
+const toolbarActionBtnClass = 'shrink-0 !h-11 !min-h-11';
 
 /**
  * Toolbar: [search][status][category] ——— [library][new]
- * Mobile: search row → filter row → actions row.
+ * Mobile: stacked full-width controls; md+ one aligned filter row.
  */
 export default function TemplatesPageToolbar({
   search,
@@ -51,44 +52,39 @@ export default function TemplatesPageToolbar({
   return (
     <div className="border-b border-theme-border px-2.5 py-2 sm:px-4 sm:py-3.5 lg:px-5">
       <div className="flex min-w-0 flex-col gap-2 sm:gap-3 xl:flex-row xl:items-center xl:justify-between xl:gap-4">
-        {/* Search + filters */}
-        <div className="flex min-w-0 flex-col gap-2 sm:gap-2.5 md:flex-row md:flex-wrap md:items-center lg:flex-nowrap lg:gap-2">
+        <div className="flex min-w-0 flex-1 flex-col gap-2 md:flex-row md:flex-wrap md:items-center md:gap-2 lg:flex-nowrap">
           <SearchInput
             value={search}
             onChange={onSearchChange}
             placeholder="Search templates..."
-            className="w-full shrink-0 md:w-[11rem] md:max-w-[11rem]"
-            compact
+            className={filterControlClass}
+            inputClassName={filterInputClass}
           />
 
-          <div className="grid min-w-0 grid-cols-2 gap-1.5 sm:gap-2 md:flex md:flex-none md:flex-row md:items-center md:gap-2">
-            <AppSelect
-              className={filterSelectClass}
-              size="compact"
-              value={statusFilter}
-              placeholder="Status"
-              ariaLabel="Filter by status"
-              isSearchable={false}
-              options={statusFilterOptions}
-              onChange={(e) => onStatusFilterChange(e.target.value)}
-            />
-            <AppSelect
-              className={`${filterSelectClass} sm:w-[11.5rem] sm:max-w-[11.5rem]`}
-              size="compact"
-              value={categoryFilter}
-              placeholder="Category"
-              ariaLabel="Filter by category"
-              isSearchable={false}
-              options={[{ value: ALL_CATEGORIES, label: 'All categories' }, ...CATEGORY_OPTIONS]}
-              onChange={(e) => onCategoryFilterChange(e.target.value)}
-            />
-          </div>
+          <AppSelect
+            className={filterSelectClass}
+            value={statusFilter}
+            placeholder="All statuses"
+            ariaLabel="Filter by status"
+            isSearchable={false}
+            options={statusFilterOptions}
+            onChange={(e) => onStatusFilterChange(e.target.value)}
+          />
+
+          <AppSelect
+            className={filterSelectClass}
+            value={categoryFilter}
+            placeholder="All categories"
+            ariaLabel="Filter by category"
+            isSearchable={false}
+            options={[{ value: ALL_CATEGORIES, label: 'All categories' }, ...CATEGORY_OPTIONS]}
+            onChange={(e) => onCategoryFilterChange(e.target.value)}
+          />
         </div>
 
-        {/* Actions — icon-only secondary on phone; labels from sm */}
-        <div className="flex shrink-0 items-center gap-1.5 sm:flex-wrap sm:gap-2">
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           <AppButton
-            className={mobileIconBtn}
+            className={`${toolbarActionBtnClass} max-sm:!px-2.5`}
             variant="secondary"
             size="sm"
             icon={<BookOpen size={16} />}
@@ -98,7 +94,7 @@ export default function TemplatesPageToolbar({
             <span className="hidden sm:inline">Library</span>
           </AppButton>
           <AppButton
-            className="shrink-0 max-sm:ml-auto max-sm:!h-9 max-sm:!min-h-9"
+            className={`${toolbarActionBtnClass} max-sm:ml-auto`}
             size="sm"
             icon={<Plus size={16} />}
             onClick={onCreate}
