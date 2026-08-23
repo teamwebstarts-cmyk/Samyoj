@@ -7,18 +7,18 @@ const modes: Array<{ id: DisplayDensity; icon: typeof LayoutGrid; label: string;
   { id: 'compact', icon: Minimize2, label: 'Compact', hint: 'Fits more on screen' },
 ];
 
-export default function DensityToggle() {
+export default function DensityToggle({ flat = false }: { flat?: boolean }) {
   const { density, setDensity } = useDensity();
   const activeIndex = modes.findIndex((m) => m.id === density);
 
   return (
     <div
-      className="relative flex items-center rounded-2xl border border-theme-border bg-theme-subtle p-1 shadow-theme"
+      className={`relative flex items-center rounded-2xl border border-theme-border bg-theme-subtle p-1 ${flat ? '' : 'shadow-theme'}`}
       role="radiogroup"
       aria-label="Display density"
     >
       <span
-        className="pointer-events-none absolute bottom-1 top-1 rounded-xl bg-theme-surface shadow-theme transition-all duration-300 ease-out"
+        className={`pointer-events-none absolute bottom-1 top-1 rounded-xl bg-theme-surface transition-all duration-300 ease-out ${flat ? 'ring-1 ring-theme-border' : 'shadow-theme'}`}
         style={{
           width: 'calc(50% - 4px)',
           left: `calc(${activeIndex * 50}% + 2px)`,

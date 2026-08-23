@@ -9,9 +9,11 @@ const modes: Array<{ id: ThemeMode; icon: typeof Sun; label: string }> = [
 
 interface ThemeToggleProps {
   variant?: 'pill' | 'compact' | 'menu';
+  /** Flat style without inner shadow — better on Settings cards */
+  flat?: boolean;
 }
 
-export default function ThemeToggle({ variant = 'pill' }: ThemeToggleProps) {
+export default function ThemeToggle({ variant = 'pill', flat = false }: ThemeToggleProps) {
   const { mode, resolved, setMode } = useTheme();
 
   if (variant === 'compact') {
@@ -69,12 +71,12 @@ export default function ThemeToggle({ variant = 'pill' }: ThemeToggleProps) {
 
   return (
     <div
-      className="relative flex items-center rounded-2xl border border-theme-border bg-theme-subtle p-1 shadow-theme"
+      className={`relative flex items-center rounded-2xl border border-theme-border bg-theme-subtle p-1 ${flat ? '' : 'shadow-theme'}`}
       role="radiogroup"
       aria-label="Theme"
     >
       <span
-        className="pointer-events-none absolute bottom-1 top-1 rounded-xl bg-theme-surface shadow-theme transition-all duration-300 ease-out"
+        className={`pointer-events-none absolute bottom-1 top-1 rounded-xl bg-theme-surface transition-all duration-300 ease-out ${flat ? 'ring-1 ring-theme-border' : 'shadow-theme'}`}
         style={{
           width: 'calc(33.333% - 4px)',
           left: `calc(${activeIndex * 33.333}% + 2px)`,

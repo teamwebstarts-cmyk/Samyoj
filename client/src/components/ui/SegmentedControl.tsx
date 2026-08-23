@@ -23,7 +23,7 @@ export default function SegmentedControl<T extends string>({
 }: SegmentedControlProps<T>) {
   const slots = (
     <div
-      className={`flex rounded-xl bg-neutral-100 p-1 dark:bg-neutral-900 ${fit ? 'w-full md:w-auto' : 'w-full'}`}
+      className={`flex rounded-xl border border-theme-border bg-theme-subtle p-1 ${fit ? 'w-full md:w-auto' : 'w-full'}`}
       role="tablist"
       aria-label={ariaLabel}
     >
@@ -39,8 +39,8 @@ export default function SegmentedControl<T extends string>({
             aria-selected={isActive}
             onClick={() => onChange(option.value)}
             className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg font-semibold transition sm:gap-2 ${isActive
-              ? 'bg-white text-theme-fg shadow-sm ring-1 ring-black/[0.04] dark:bg-neutral-800 dark:ring-white/10'
-              : 'text-theme-muted hover:text-theme-fg'} ${compact ? 'min-h-[34px] px-3 py-1.5 text-[12px] sm:min-h-[36px] sm:px-4 sm:py-2' : 'min-h-[42px] px-2 py-2 text-[13px] sm:px-3'}`}
+              ? 'bg-theme-surface text-theme-fg ring-1 ring-theme-border'
+              : 'text-theme-muted hover:text-theme-secondary'} ${compact ? 'min-h-[34px] px-3 py-1.5 text-[12px] sm:min-h-[36px] sm:px-4 sm:py-2' : 'min-h-[42px] px-2 py-2 text-[13px] sm:px-3'}`}
           >
             {Icon && <Icon className="h-4 w-4 shrink-0" strokeWidth={2.25} />}
             <span className="hidden sm:inline">{option.label}</span>
@@ -57,7 +57,7 @@ export default function SegmentedControl<T extends string>({
 
   if (embedded) {
     return (
-      <div className="rounded-2xl border border-theme-border bg-theme-surface p-1.5 shadow-sm">
+      <div className="rounded-2xl border border-theme-border bg-theme-surface p-1.5">
         {slots}
       </div>
     );
