@@ -88,11 +88,13 @@ export function ModalPanel({
   icon: Icon,
   children,
   accent = 'neutral',
+  bodyClassName,
 }: {
   title?: string;
   icon?: LucideIcon;
   children: ReactNode;
   accent?: AccentName;
+  bodyClassName?: string;
 }) {
   return (
     <div className={`overflow-hidden rounded-2xl border ${modalCalloutAccents[accent]}`}>
@@ -102,7 +104,7 @@ export function ModalPanel({
           <p className="text-[12px] font-extrabold uppercase tracking-wide text-theme-secondary">{title}</p>
         </div>
       )}
-      <div className="p-4">{children}</div>
+      <div className={bodyClassName ?? 'p-4'}>{children}</div>
     </div>
   );
 }

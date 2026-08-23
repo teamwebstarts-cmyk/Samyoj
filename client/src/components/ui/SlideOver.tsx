@@ -13,6 +13,8 @@ interface SlideOverProps {
   onClose: () => void;
   title: string;
   subtitle?: string;
+  /** When true, subtitle wraps to multiple lines instead of truncating. */
+  multilineSubtitle?: boolean;
   children: ReactNode;
   footer?: ReactNode;
   size?: 'md' | 'lg' | 'xl' | '2xl';
@@ -41,6 +43,7 @@ export default function SlideOver({
   icon: HeaderIcon,
   accent = 'neutral',
   step,
+  multilineSubtitle = false,
 }: SlideOverProps) {
   const theme = slideOverAccents[accent];
   const panelRef = useRef<HTMLDivElement>(null);
@@ -123,7 +126,11 @@ export default function SlideOver({
                   {title}
                 </h2>
                 {subtitle && (
-                  <p className="mt-1 truncate text-[12.5px] font-medium leading-relaxed text-theme-muted">
+                  <p
+                    className={`mt-1 text-[12.5px] font-medium leading-relaxed text-theme-muted ${
+                      multilineSubtitle ? 'max-w-md' : 'truncate'
+                    }`}
+                  >
                     {subtitle}
                   </p>
                 )}

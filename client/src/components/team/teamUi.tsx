@@ -54,19 +54,19 @@ export const roleInfo: Record<
   ADMIN: {
     tagline: 'Operations manager',
     description:
-      'Runs day-to-day operations. Can manage team, campaigns, templates, and most workspace settings.',
-    responsibilities: ['Add members & invites', 'Campaigns & templates', 'Reports & settings'],
+      'Runs day-to-day operations. You choose which areas they can access — inbox, campaigns, AI bots, billing, and more.',
+    responsibilities: ['Configurable per feature', 'Team & invites when enabled', 'Billing & settings when enabled'],
   },
   SUPERVISOR: {
     tagline: 'Team lead',
     description:
-      'Oversees agents and inbox quality. Can reply to chats, view reports, and help route conversations.',
-    responsibilities: ['Monitor agent inbox', 'Reply to customer chats', 'View team reports'],
+      'Oversees agents and inbox quality. You choose whether they can access calls, tickets, usage stats, or growth tools.',
+    responsibilities: ['Inbox & calls by default', 'Usage stats when enabled', 'Growth tools optional'],
   },
   AGENT: {
     tagline: 'Support agent',
     description:
-      'Frontline teammate who handles customer conversations. Focused on inbox replies and assigned chats.',
+      'Frontline teammate who handles customer conversations. Typically inbox, calls, contacts, and tickets.',
     responsibilities: ['Reply in shared inbox', 'Handle assigned chats', 'Update availability status'],
   },
 };
@@ -84,11 +84,15 @@ export const CONFIGURABLE_ROLES: OrgRole[] = ['ADMIN', 'SUPERVISOR', 'AGENT'];
 
 export const PERMISSION_KEYS: (keyof TeamPermissions)[] = [
   'manageInbox',
-  'manageTeam',
+  'manageCalls',
+  'manageAiBots',
+  'manageAutomations',
   'manageCampaigns',
   'manageTemplates',
-  'manageFlows',
-  'viewAnalytics',
+  'manageContacts',
+  'manageTickets',
+  'manageTeam',
+  'manageBilling',
   'manageSettings',
 ];
 
@@ -103,19 +107,19 @@ export interface PermissionGroup {
 
 export const PERMISSION_GROUPS: PermissionGroup[] = [
   {
-    id: 'core',
-    label: 'Core workspace',
-    keys: ['manageInbox', 'manageTeam'],
+    id: 'messaging',
+    label: 'Messaging & support',
+    keys: ['manageInbox', 'manageCalls', 'manageContacts', 'manageTickets'],
   },
   {
-    id: 'messaging',
-    label: 'Messaging & growth',
-    keys: ['manageCampaigns', 'manageTemplates', 'manageFlows'],
+    id: 'growth',
+    label: 'Growth & automation',
+    keys: ['manageAiBots', 'manageAutomations', 'manageCampaigns', 'manageTemplates'],
   },
   {
     id: 'admin',
-    label: 'Insights & administration',
-    keys: ['viewAnalytics', 'manageSettings'],
+    label: 'Workspace administration',
+    keys: ['manageTeam', 'manageBilling', 'manageSettings'],
   },
 ];
 
@@ -124,14 +128,24 @@ export const permissionMeta: Record<
   { label: string; description: string; mapsTo: string }
 > = {
   manageInbox: {
-    label: 'Inbox access',
-    description: 'Open Inbox, reply to chats, labels, canned replies, and tickets.',
-    mapsTo: 'Inbox, Tickets',
+    label: 'Inbox',
+    description: 'Open Inbox, reply to chats, labels, canned replies, and assignments.',
+    mapsTo: 'Inbox',
   },
-  manageTeam: {
-    label: 'Manage team',
-    description: 'Add or remove members, send invites, edit departments, and save role access.',
-    mapsTo: 'Team page (admin actions)',
+  manageCalls: {
+    label: 'Calls',
+    description: 'Place and receive WhatsApp calls, view call history, and call settings.',
+    mapsTo: 'Calls',
+  },
+  manageAiBots: {
+    label: 'AI Bots',
+    description: 'Create, train, and manage AI bots for chat and calling.',
+    mapsTo: 'AI Bots',
+  },
+  manageAutomations: {
+    label: 'Automations',
+    description: 'Build and publish automation workflows and chat flows.',
+    mapsTo: 'Automations',
   },
   manageCampaigns: {
     label: 'Campaigns',
@@ -143,20 +157,30 @@ export const permissionMeta: Record<
     description: 'Sync, create, edit, and send test WhatsApp templates.',
     mapsTo: 'Templates',
   },
-  manageFlows: {
-    label: 'Automations & flows',
-    description: 'Build automations, chat flows, and AI bots.',
-    mapsTo: 'Automations, AI Bots',
+  manageContacts: {
+    label: 'Contacts',
+    description: 'View, import, edit, tag, and export customer contacts.',
+    mapsTo: 'Contacts',
   },
-  viewAnalytics: {
-    label: 'Reports & analytics',
-    description: 'View dashboards and performance reports.',
-    mapsTo: 'Reports',
+  manageTickets: {
+    label: 'Tickets',
+    description: 'Create, assign, update, and resolve support tickets.',
+    mapsTo: 'Tickets',
+  },
+  manageTeam: {
+    label: 'Team',
+    description: 'Add or remove members, send invites, edit departments, and save role access.',
+    mapsTo: 'Team',
+  },
+  manageBilling: {
+    label: 'Billing & usage',
+    description: 'View usage statistics, plans, invoices, and subscription details.',
+    mapsTo: 'Billing & Usage',
   },
   manageSettings: {
-    label: 'Workspace settings',
-    description: 'Billing, integrations, compliance, and workspace configuration.',
-    mapsTo: 'Settings, Billing',
+    label: 'Settings',
+    description: 'Workspace configuration, integrations, compliance, and WhatsApp connect.',
+    mapsTo: 'Settings',
   },
 };
 

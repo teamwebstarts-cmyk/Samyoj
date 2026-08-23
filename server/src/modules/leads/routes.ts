@@ -24,7 +24,7 @@ const leadSchema = z.object({
 router.get(
   '/',
   loadPermissions,
-  requirePermission('manageInbox', 'viewAnalytics'),
+  requirePermission('manageContacts'),
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const numberId = req.activeWhatsappNumberId;
@@ -64,7 +64,7 @@ router.post(
   authenticate,
   requireOrg,
   loadPermissions,
-  requirePermission('manageInbox'),
+  requirePermission('manageContacts'),
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const data = leadSchema.parse(req.body);
@@ -104,7 +104,7 @@ router.patch(
   authenticate,
   requireOrg,
   loadPermissions,
-  requirePermission('manageInbox'),
+  requirePermission('manageContacts'),
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const id = paramId(req);
@@ -147,7 +147,7 @@ router.post(
   authenticate,
   requireOrg,
   loadPermissions,
-  requirePermission('manageInbox'),
+  requirePermission('manageContacts'),
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const contactId = req.params.contactId as string;
@@ -193,7 +193,7 @@ router.post(
   authenticate,
   requireOrg,
   loadPermissions,
-  requirePermission('manageInbox'),
+  requirePermission('manageContacts'),
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const whatsappNumberId = req.activeWhatsappNumberId;

@@ -514,9 +514,8 @@ export default function ContactsPage() {
         ];
 
   return (
-    <PageShell list={viewTab === 'all'} className={selectedIds.length > 0 ? 'pb-28' : undefined}>
-      <div className={viewTab === 'all' ? 'list-page-stack' : 'space-y-[var(--density-stack-gap)]'}>
-        <div className={`space-y-[var(--density-stack-gap)] ${viewTab === 'all' ? 'shrink-0' : ''}`}>
+    <PageShell className={selectedIds.length > 0 ? 'pb-28' : undefined}>
+      <div className="min-w-0 space-y-2 sm:space-y-4 lg:space-y-5">
         <ContactHero
           badge={viewTab === 'pipeline' ? 'Pipeline' : 'Audience'}
           badgeIcon={viewTab === 'pipeline' ? Target : Users}
@@ -539,7 +538,6 @@ export default function ContactsPage() {
           ]}
           ariaLabel="Contact views"
         />
-        </div>
 
         {viewTab === 'pipeline' ? (
           <ContactPipelineTab
@@ -548,7 +546,7 @@ export default function ContactsPage() {
             onLeadCreated={handleLeadCreated}
           />
         ) : (
-          <div className="inbox-shell list-shell-body overflow-hidden">
+          <div className="inbox-shell min-w-0 overflow-hidden">
             <ListToolbar
               embedded
               stackFilters
@@ -722,12 +720,11 @@ export default function ContactsPage() {
               </div>
             ) : (
               <>
-                <div className="list-shell-scroll">
-                  <ResponsiveDataView
-                    items={contacts}
-                    cardClassName="divide-y divide-neutral-200 dark:divide-neutral-800 lg:hidden"
-                    tableClassName="px-4 sm:px-5 pt-4"
-                    renderCard={(contact) => (
+                <ResponsiveDataView
+                  items={contacts}
+                  cardClassName="divide-y divide-neutral-200 dark:divide-neutral-800 lg:hidden"
+                  tableClassName=""
+                  renderCard={(contact) => (
                       <ContactCard
                         key={contact.id}
                         contact={contact}
@@ -759,15 +756,17 @@ export default function ContactsPage() {
                       />
                     )}
                   />
-                </div>
-                <footer className="list-shell-footer shrink-0">
+                <div className="border-t border-theme-border">
                   <Pagination
                     page={page}
                     pageSize={DEFAULT_PAGE_SIZE}
                     total={total}
                     onPageChange={setPage}
+                    variant="numbered"
+                    itemLabel="contacts"
+                    className="!border-t-0"
                   />
-                </footer>
+                </div>
               </>
             )}
           </div>

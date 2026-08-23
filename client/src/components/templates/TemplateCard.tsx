@@ -46,7 +46,7 @@ export default function TemplateCard({ template, onView, onDuplicate }: Template
           </div>
         </div>
       </button>
-      <div className="hidden items-center gap-2 border-t border-neutral-200/80 bg-neutral-50/50 px-3 py-2.5 sm:flex dark:border-neutral-800 dark:bg-neutral-900/30">
+      <div className="flex items-center gap-2 border-t border-neutral-200/80 bg-neutral-50/50 px-3 py-2 dark:border-neutral-800 dark:bg-neutral-900/30 sm:py-2.5">
         <AppButton size="sm" className="flex-1" variant="secondary" icon={<Eye size={14} />} onClick={onView}>
           View
         </AppButton>

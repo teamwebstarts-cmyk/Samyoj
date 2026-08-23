@@ -105,7 +105,7 @@ export default function TemplatesListSkeleton() {
           serialHeader="S.N.O."
           className="templates-data-table"
           headers={['Template', 'Status', 'Category', 'Language', 'Actions']}
-          minTableWidth="min-w-[780px]"
+          minTableWidth="min-w-[680px]"
           tableClassName="text-sm"
         >
           {Array.from({ length: ROW_COUNT }).map((_, index) => (

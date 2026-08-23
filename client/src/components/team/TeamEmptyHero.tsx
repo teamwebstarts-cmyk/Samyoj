@@ -112,21 +112,20 @@ const config: Record<
     ctaIcon: Plus,
   },
   invites: {
-    title: 'Invite teammates by email',
-    description:
-      'Send a secure join link — they set their own password when accepting the invite.',
+    title: 'Send your first invite',
+    description: 'Choose their role and department — they finish setup when they accept.',
     sidebarLabel: 'Invites',
-    sidebarHint: 'Email join links',
-    sidebarIcon: Mail,
+    sidebarHint: 'Grow your workspace',
+    sidebarIcon: Users,
     chips: [
       {
         icon: Shield,
-        label: 'Pick role upfront',
+        label: 'Role picked upfront',
         tone: 'bg-violet-50 text-violet-700 dark:bg-violet-950/30 dark:text-violet-300',
       },
       {
-        icon: Mail,
-        label: 'Secure join link',
+        icon: Building2,
+        label: 'Optional department',
         tone: 'bg-sky-50 text-sky-700 dark:bg-sky-950/30 dark:text-sky-300',
       },
     ],

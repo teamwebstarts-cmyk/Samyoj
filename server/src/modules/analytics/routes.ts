@@ -236,7 +236,7 @@ router.get(
 router.get(
   '/reports',
   loadPermissions,
-  requirePermission('viewAnalytics'),
+  requirePermission('manageBilling'),
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const numberId = req.activeWhatsappNumberId;
@@ -462,7 +462,7 @@ router.get(
 router.get(
   '/team',
   loadPermissions,
-  requirePermission('viewAnalytics'),
+  requirePermission('manageBilling'),
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const numberId = req.activeWhatsappNumberId;
@@ -628,7 +628,7 @@ router.get(
 router.get(
   '/team/heatmap',
   loadPermissions,
-  requirePermission('viewAnalytics'),
+  requirePermission('manageBilling'),
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const numberId = req.activeWhatsappNumberId;
@@ -708,7 +708,7 @@ router.get(
 router.get(
   '/campaigns-templates',
   loadPermissions,
-  requirePermission('viewAnalytics'),
+  requirePermission('manageBilling'),
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const numberId = req.activeWhatsappNumberId;
@@ -860,7 +860,7 @@ router.get(
 router.get(
   '/ai-deflection',
   loadPermissions,
-  requirePermission('viewAnalytics'),
+  requirePermission('manageBilling'),
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const numberId = req.activeWhatsappNumberId;
@@ -992,7 +992,7 @@ router.get(
 router.get(
   '/meta-health',
   loadPermissions,
-  requirePermission('viewAnalytics'),
+  requirePermission('manageBilling'),
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const numberId = req.activeWhatsappNumberId;
@@ -1077,7 +1077,7 @@ router.get(
 router.get(
   '/export',
   loadPermissions,
-  requirePermission('viewAnalytics'),
+  requirePermission('manageBilling'),
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const numberId = req.activeWhatsappNumberId;
@@ -1169,7 +1169,7 @@ router.get(
 router.get(
   '/leaderboard',
   loadPermissions,
-  requirePermission('viewAnalytics'),
+  requirePermission('manageBilling'),
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const numberId = req.activeWhatsappNumberId;
@@ -1215,7 +1215,7 @@ router.get(
 router.get(
   '/templates',
   loadPermissions,
-  requirePermission('viewAnalytics'),
+  requirePermission('manageBilling'),
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const numberId = req.activeWhatsappNumberId;

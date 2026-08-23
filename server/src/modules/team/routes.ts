@@ -46,12 +46,19 @@ const shiftScheduleSchema = z.object({
 });
 
 const permissionsSchema = z.object({
-  manageTeam: z.boolean().optional(),
-  manageSettings: z.boolean().optional(),
+  manageInbox: z.boolean().optional(),
+  manageCalls: z.boolean().optional(),
+  manageAiBots: z.boolean().optional(),
+  manageAutomations: z.boolean().optional(),
   manageCampaigns: z.boolean().optional(),
   manageTemplates: z.boolean().optional(),
+  manageContacts: z.boolean().optional(),
+  manageTickets: z.boolean().optional(),
+  manageTeam: z.boolean().optional(),
+  manageBilling: z.boolean().optional(),
+  manageSettings: z.boolean().optional(),
+  // Legacy keys accepted until matrix is re-saved
   manageFlows: z.boolean().optional(),
-  manageInbox: z.boolean().optional(),
   viewAnalytics: z.boolean().optional(),
 });
 

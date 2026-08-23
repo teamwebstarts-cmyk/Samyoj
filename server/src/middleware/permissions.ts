@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import prisma from '../config/database';
 import { AppError } from '../utils/response';
-import { resolvePermissions, type TeamPermissions } from '../modules/team/types';
+import { resolvePermissions, DEFAULT_PERMISSIONS, type TeamPermissions } from '../modules/team/types';
 
 declare global {
   namespace Express {
@@ -15,6 +15,13 @@ export async function loadPermissions(req: Request, _res: Response, next: NextFu
   try {
     if (!req.user?.organizationId) {
       return next(new AppError(403, 'Organization context required'));
+    }
+
+    // Org API keys are integration credentials — bypass the human role matrix.
+    if (req.user.userId === 'api-key') {
+      req.orgRole = 'ADMIN';
+      req.permissions = { ...DEFAULT_PERMISSIONS.ADMIN };
+      return next();
     }
 
     const membership = await prisma.organizationUser.findUnique({

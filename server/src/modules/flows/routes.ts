@@ -20,7 +20,7 @@ import type { FlowNode } from './types';
 import { emitProductEvent } from '../platform/events';
 
 const router = Router();
-const flowAccessGuard = [authenticate, requireOrg, ...withPermission('manageFlows')] as const;
+const flowAccessGuard = [authenticate, requireOrg, ...withPermission('manageAutomations')] as const;
 const memberGuard = flowAccessGuard;
 const adminGuard = flowAccessGuard;
 

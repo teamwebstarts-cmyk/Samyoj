@@ -104,7 +104,7 @@ export default function TeamPage() {
 
   return (
     <PageShell>
-      <div className="space-y-5 animate-fade-up-delay sm:space-y-6">
+      <div className="min-w-0 space-y-2 sm:space-y-4 lg:space-y-5 animate-fade-up-delay">
         <TeamHero stats={heroStats} />
 
         <SegmentedControl

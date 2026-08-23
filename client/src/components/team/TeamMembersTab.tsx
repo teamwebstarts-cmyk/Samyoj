@@ -184,15 +184,18 @@ export default function TeamMembersTab({
 
   return (
     <>
-      <div className="inbox-shell overflow-hidden">
+      <div className="inbox-shell min-w-0 overflow-hidden">
         <ListToolbar
           embedded
+          compactMobile
+          inlineDesktop
           search={search}
           onSearchChange={setSearch}
           searchPlaceholder="Search name or email..."
           filters={
             <AppSelect
-              className="w-full sm:w-40"
+              className="w-full min-w-0 sm:w-[10.25rem] sm:max-w-[10.25rem]"
+              size="compact"
               value={roleFilter}
               placeholder="All roles"
               isSearchable={false}
@@ -219,8 +222,8 @@ export default function TeamMembersTab({
         ) : (
           <ResponsiveDataView
             items={filteredMembers}
-            tableFrom="xl"
-            cardClassName="divide-y divide-neutral-200 dark:divide-neutral-800 xl:hidden"
+            tableFrom="2xl"
+            cardClassName="divide-y divide-neutral-200 dark:divide-neutral-800 2xl:hidden"
             tableClassName=""
             renderCard={(member) => (
               <TeamMemberCard

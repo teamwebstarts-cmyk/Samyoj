@@ -447,8 +447,8 @@ export default function TemplatesPage() {
             <>
               <ResponsiveDataView
                 items={paginatedTemplates}
-                tableFrom="xl"
-                cardClassName="divide-y divide-neutral-200 dark:divide-neutral-800 xl:hidden"
+                tableFrom="2xl"
+                cardClassName="divide-y divide-neutral-200 dark:divide-neutral-800 2xl:hidden"
                 tableClassName=""
                 renderCard={(template) => (
                   <TemplateCard
@@ -472,7 +472,7 @@ export default function TemplatesPage() {
                   />
                 )}
               />
-              <div className="border-t border-theme-border xl:hidden">
+              <div className="border-t border-theme-border 2xl:hidden">
                 <Pagination
                   page={page}
                   pageSize={DEFAULT_PAGE_SIZE}

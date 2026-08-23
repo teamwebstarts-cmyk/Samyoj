@@ -18,7 +18,7 @@ export default function TeamMemberTable({ members, canManage, onEdit }: TeamMemb
       serialHeader="S.N.O."
       className="templates-data-table"
       headers={canManage ? ['Member', 'Status', 'Role', 'Actions'] : ['Member', 'Status', 'Role']}
-      minTableWidth="min-w-[780px]"
+      minTableWidth="min-w-[680px]"
       tableClassName="text-sm"
     >
       {members.map((member, index) => {
@@ -32,7 +32,7 @@ export default function TeamMemberTable({ members, canManage, onEdit }: TeamMemb
           >
             <TableSerialCell rowIndex={index} />
 
-            <td className="min-w-[220px] max-w-[360px] !py-3.5 sm:!py-4">
+            <td className="min-w-0 max-w-[320px] !py-3.5 sm:!py-4">
               <div className="flex items-start gap-3">
                 <ContactAvatar name={member.name} phone={member.email} size="sm" />
                 <div className="min-w-0 flex-1 pt-0.5">

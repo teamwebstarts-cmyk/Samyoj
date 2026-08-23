@@ -14,7 +14,7 @@ router.post(
   authenticate,
   requireOrg,
   loadPermissions,
-  requirePermission('manageSettings'),
+  requirePermission('manageBilling'),
   asyncHandler(async (req: Request, res: Response) => {
     if (!isRazorpayConfigured()) {
       throw new AppError(400, 'Razorpay is not configured');

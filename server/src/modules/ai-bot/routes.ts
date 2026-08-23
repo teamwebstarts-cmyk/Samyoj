@@ -71,14 +71,14 @@ const faqSchema = z.object({
   content: z.string().min(1).max(2000),
 });
 
-const botAccessGuard = [authenticate, requireOrg, ...withPermission('manageFlows')];
+const botAccessGuard = [authenticate, requireOrg, ...withPermission('manageAiBots')];
 const adminGuard = botAccessGuard;
 const readGuard = botAccessGuard;
 const numberAdminGuard = [
   authenticate,
   requireOrg,
   resolveActiveWhatsappNumber,
-  ...withPermission('manageFlows'),
+  ...withPermission('manageAiBots'),
 ];
 
 router.get(

@@ -3,7 +3,8 @@ import { Router, Request, Response } from 'express';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import prisma from '../../config/database';
-import { authenticate, requireOrg, loadOrgRole, requireOrgRole } from '../../middleware/auth';
+import { authenticate, requireOrg } from '../../middleware/auth';
+import { withPermission } from '../../middleware/permissions';
 import { AppError, sendSuccess, asyncHandler } from '../../utils/response';
 import { MetaWhatsAppService } from '../whatsapp/meta.service';
 import {
@@ -45,8 +46,16 @@ import {
 
 const router = Router();
 
-const adminGuard = [authenticate, requireOrg, resolveActiveWhatsappNumber, loadOrgRole, requireOrgRole('OWNER', 'ADMIN')];
-const memberGuard = [authenticate, requireOrg, resolveActiveWhatsappNumber];
+const callsAccessGuard = [
+  authenticate,
+  requireOrg,
+  resolveActiveWhatsappNumber,
+  ...withPermission('manageCalls'),
+] as const;
+const callsAdminGuard = [...callsAccessGuard] as const;
+
+const adminGuard = callsAdminGuard;
+const memberGuard = callsAccessGuard;
 
 const listQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),

@@ -17,9 +17,8 @@ import {
   type TemplateWizardSubmitResult,
 } from '../components/templates/wizard/templateWizardModel';
 import { getFilledTemplatePreview } from '../components/campaigns/campaignPreviewUtils';
-import AppAlert from '../components/ui/AppAlert';
-import TemplateIssueAlert from '../components/templates/TemplateIssueAlert';
 import AppButton from '../components/ui/AppButton';
+import TemplateIssueAlert from '../components/templates/TemplateIssueAlert';
 import LoadingState from '../components/ui/LoadingState';
 import { invalidateApprovedTemplatesCache } from '../components/inbox/TemplateComposer';
 import { invalidateFlowReferenceData } from '../components/flows/flowReferenceData';
@@ -72,9 +71,8 @@ export default function TemplateLibraryPage() {
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<LibraryCategoryFilter>('ALL');
   const [topicFilter, setTopicFilter] = useState('');
-  const [industryFilter, setIndustryFilter] = useState('');
   const [usecaseFilter, setUsecaseFilter] = useState('');
-  const [language, setLanguage] = useState('en_US');
+  const language = 'en_US';
   const [selectedItem, setSelectedItem] = useState<LibraryListItem | null>(null);
   const [form, setForm] = useState<TemplateFormState>(createEmptyWizardForm);
   const [createName, setCreateName] = useState('');
@@ -97,7 +95,6 @@ export default function TemplateLibraryPage() {
     const params: Record<string, string> = { language, limit: '100' };
     if (debouncedSearch) params.search = debouncedSearch;
     if (topicFilter) params.topic = topicFilter;
-    if (industryFilter) params.industry = industryFilter;
     if (usecaseFilter) params.usecase = usecaseFilter;
 
     templateApi
@@ -116,7 +113,7 @@ export default function TemplateLibraryPage() {
       .finally(() => {
         if (requestNumberId === activeNumberIdRef.current) setLoadingMeta(false);
       });
-  }, [activeNumber, debouncedSearch, industryFilter, language, resolved, topicFilter, usecaseFilter]);
+  }, [activeNumber, debouncedSearch, language, resolved, topicFilter, usecaseFilter]);
 
   const loadAccount = useCallback(() => {
     if (!resolved || !activeNumber) return;
@@ -552,14 +549,7 @@ export default function TemplateLibraryPage() {
       <div className="template-wizard-scroll min-h-0 flex-1">
         {stageError && <TemplateIssueAlert message={stageError} className="mb-4" />}
 
-        {sourceTab === 'meta' && categoryFilter === 'ALL' && activeStep === 0 && (
-          <AppAlert variant="info" className="mb-4">
-            These ready-made templates are for orders, accounts, and login codes. Create promotional
-            messages in the editor instead.
-          </AppAlert>
-        )}
-
-        <div className="template-wizard-split">
+        <div className="template-wizard-split template-wizard-split--library">
           <div className="min-w-0">
             {activeStep === 0 && (
               <TemplateLibraryBrowseStep
@@ -571,15 +561,9 @@ export default function TemplateLibraryPage() {
                 search={search}
                 onSearchChange={setSearch}
                 categoryFilter={categoryFilter}
-                onCategoryFilterChange={setCategoryFilter}
                 topicFilter={topicFilter}
                 onTopicFilterChange={setTopicFilter}
-                industryFilter={industryFilter}
-                onIndustryFilterChange={setIndustryFilter}
                 usecaseFilter={usecaseFilter}
-                onUsecaseFilterChange={setUsecaseFilter}
-                language={language}
-                onLanguageChange={setLanguage}
                 loading={sourceTab === 'meta' ? loadingMeta : loadingAccount}
                 items={listItems}
                 selectedKey={selectedKey}
@@ -632,6 +616,7 @@ export default function TemplateLibraryPage() {
 
           <aside className="min-w-0 xl:sticky xl:top-4 xl:self-start">
             <TemplateWizardPreviewPanel
+              compact
               form={form}
               filledPreview={filledPreview}
               previewButtons={previewButtons}

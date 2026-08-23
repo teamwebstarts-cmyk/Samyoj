@@ -21,6 +21,8 @@ interface TemplateWizardPreviewPanelProps {
   previewTitle?: string;
   showTestButton?: boolean;
   onTestTemplate?: () => void;
+  /** Narrower phone mock — template library split layout */
+  compact?: boolean;
 }
 
 function categoryLabel(value: string) {
@@ -42,7 +44,11 @@ export default function TemplateWizardPreviewPanel({
   previewTitle = 'Live WhatsApp preview',
   showTestButton,
   onTestTemplate,
+  compact = false,
 }: TemplateWizardPreviewPanelProps) {
+  const phoneMaxClass = compact ? 'max-w-[280px]' : 'max-w-[360px]';
+  const framePadClass = compact ? 'p-3' : 'p-5';
+
   return (
     <div className="flex min-h-0 flex-col gap-4">
       <div className="template-wizard-card overflow-hidden">
@@ -84,8 +90,10 @@ export default function TemplateWizardPreviewPanel({
           ) : null}
         </div>
 
-        <div className="template-wizard-phone-frame p-5">
-          <div className="mx-auto w-full max-w-[360px] overflow-hidden rounded-[1.35rem] border border-slate-200/80 bg-[#efeae2] shadow-sm dark:border-slate-700">
+        <div className={`template-wizard-phone-frame ${framePadClass}`}>
+          <div
+            className={`mx-auto w-full ${phoneMaxClass} overflow-hidden rounded-[1.35rem] border border-slate-200/80 bg-[#efeae2] shadow-sm dark:border-slate-700`}
+          >
             <div className="flex items-center gap-2 bg-[#075e54] px-3 py-2.5 text-white">
               <ChevronLeft className="h-4 w-4 opacity-80" />
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/15">
@@ -118,7 +126,7 @@ export default function TemplateWizardPreviewPanel({
             </div>
           </div>
           {(form.name || form.category) && (
-            <div className="mx-auto mt-3 flex w-full max-w-[360px] items-center gap-2 px-0.5">
+            <div className={`mx-auto mt-3 flex w-full ${phoneMaxClass} items-center gap-2 px-0.5`}>
               {form.category ? (
                 <span className="inline-flex shrink-0 rounded-md bg-sky-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-sky-700 dark:bg-sky-950/50 dark:text-sky-300">
                   {categoryLabel(form.category)}

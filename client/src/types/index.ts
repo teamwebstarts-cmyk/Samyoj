@@ -17,13 +17,17 @@ export type OrgRole = 'OWNER' | 'ADMIN' | 'SUPERVISOR' | 'AGENT';
 export type AgentAvailability = 'ONLINE' | 'AWAY' | 'OFFLINE';
 
 export interface TeamPermissions {
-  manageTeam: boolean;
-  manageSettings: boolean;
+  manageInbox: boolean;
+  manageCalls: boolean;
+  manageAiBots: boolean;
+  manageAutomations: boolean;
   manageCampaigns: boolean;
   manageTemplates: boolean;
-  manageFlows: boolean;
-  manageInbox: boolean;
-  viewAnalytics: boolean;
+  manageContacts: boolean;
+  manageTickets: boolean;
+  manageTeam: boolean;
+  manageBilling: boolean;
+  manageSettings: boolean;
 }
 
 export interface ShiftSchedule {

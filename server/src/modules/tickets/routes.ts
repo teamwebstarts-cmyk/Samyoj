@@ -113,7 +113,7 @@ async function saveTicketNote(params: {
 router.get(
   '/',
   loadPermissions,
-  requirePermission('manageInbox'),
+  requirePermission('manageTickets'),
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const numberId = req.activeWhatsappNumberId;
@@ -138,7 +138,7 @@ router.post(
   authenticate,
   requireOrg,
   loadPermissions,
-  requirePermission('manageInbox'),
+  requirePermission('manageTickets'),
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const data = ticketSchema.parse(req.body);
@@ -173,7 +173,7 @@ router.post(
   authenticate,
   requireOrg,
   loadPermissions,
-  requirePermission('manageInbox'),
+  requirePermission('manageTickets'),
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const conversationId = req.params.conversationId as string;
@@ -224,7 +224,7 @@ router.patch(
   authenticate,
   requireOrg,
   loadPermissions,
-  requirePermission('manageInbox'),
+  requirePermission('manageTickets'),
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const id = paramId(req);
@@ -271,7 +271,7 @@ router.delete(
   authenticate,
   requireOrg,
   loadPermissions,
-  requirePermission('manageInbox'),
+  requirePermission('manageTickets'),
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const id = paramId(req);

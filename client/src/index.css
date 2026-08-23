@@ -1200,8 +1200,15 @@
     position: static;
     box-shadow: none;
     background: transparent;
-    min-width: 9.5rem;
+    min-width: 7.5rem;
     white-space: nowrap;
+  }
+
+  @media (min-width: 1536px) {
+    .templates-data-table thead th:last-child,
+    .templates-data-table tbody td:last-child {
+      min-width: 9.5rem;
+    }
   }
 
   .templates-data-table tbody td:nth-last-child(2) {
@@ -1908,6 +1915,10 @@
 
   .template-wizard-split {
     @apply grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(400px,460px)];
+  }
+
+  .template-wizard-split--library {
+    @apply xl:grid-cols-[minmax(0,1.12fr)_minmax(260px,320px)] xl:gap-4;
   }
 
   .template-wizard-header {

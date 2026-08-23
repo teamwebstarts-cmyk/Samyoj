@@ -1,4 +1,7 @@
+import type { ReactNode } from 'react';
 import AppInput from '../../ui/AppInput';
+import AppSelect from '../../ui/AppSelect';
+import InfoTip from '../../ui/InfoTip';
 import type { TemplateButton, TemplateLibraryEntry, MessageTemplate } from '../../../types';
 import type { TemplateFormState } from '../../../utils/templateForm';
 import {
@@ -9,13 +12,13 @@ import {
   normalizeWebsiteUrl,
 } from '../../../utils/templateLibrary';
 
-const SOURCE_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: '', label: 'Type manually (campaign)' },
-  { value: 'contact.name', label: 'Auto: Customer name' },
-  { value: 'contact.phone', label: 'Auto: Phone number' },
-  { value: 'contact.email', label: 'Auto: Email' },
-  { value: 'contact.custom', label: 'Auto: Contact custom field' },
-  { value: 'custom', label: 'Same value for everyone' },
+const FILL_SOURCE_OPTIONS = [
+  { value: '', label: 'Manual (per campaign)' },
+  { value: 'contact.name', label: 'Contact name' },
+  { value: 'contact.phone', label: 'Phone' },
+  { value: 'contact.email', label: 'Email' },
+  { value: 'contact.custom', label: 'Custom field' },
+  { value: 'custom', label: 'Same for everyone' },
 ];
 
 interface TemplateLibraryReviewStepProps {
@@ -30,6 +33,24 @@ interface TemplateLibraryReviewStepProps {
   buttonUrlError?: string | null;
   buttonPhone: string;
   onButtonPhoneChange: (value: string) => void;
+}
+
+function reviewInfoContent(
+  canClone: boolean,
+  source: 'meta' | 'account',
+): ReactNode {
+  if (canClone) {
+    return (
+      <>
+        Meta already reviewed this copy. Add as-is for instant approval in Campaigns and Inbox.
+        Editing the text in the editor sends it through WhatsApp review instead.
+      </>
+    );
+  }
+  if (source === 'meta') {
+    return 'This library template needs a few edits in the editor before you can submit it.';
+  }
+  return 'This template is already on your account. Use it as a starting point in the editor.';
 }
 
 export default function TemplateLibraryReviewStep({
@@ -79,57 +100,60 @@ export default function TemplateLibraryReviewStep({
   };
 
   return (
-    <div className="space-y-4">
-      <div className="template-wizard-card p-4 sm:p-5">
-        <p className="text-[13px] font-bold text-slate-900 dark:text-white">
-          {humanizeLibraryName(item.name)}
-        </p>
-        <p className="mt-0.5 font-mono text-[11px] text-slate-400">{item.name}</p>
-        <p className="mt-2 text-[12px] leading-relaxed text-slate-600 dark:text-slate-400">
-          {canClone
-            ? 'This Meta library copy is already reviewed. Adding it as-is is usually approved immediately — you can send it from Campaigns and Inbox. Customizing the text in the editor sends it through WhatsApp review instead.'
-            : item.source === 'meta'
-              ? 'This library template needs a few edits in the editor before you can submit it.'
-              : 'This is a template already on your account. Use it as a starting point in the editor.'}
-        </p>
-        {isFlow && (
-          <p className="mt-2 rounded-lg border border-sky-200 bg-sky-50/80 px-3 py-2 text-[11px] text-sky-900 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-200">
-            This is an interactive form template (WhatsApp Flow). Submitting from the library keeps
-            the form. Customizing in the editor will drop the form button.
-          </p>
-        )}
+    <div className="space-y-3">
+      <div className="template-wizard-card p-3 sm:p-3.5">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-1">
+              <p className="text-[12px] font-bold text-slate-900 dark:text-white sm:text-[13px]">
+                {humanizeLibraryName(item.name)}
+              </p>
+              <InfoTip label="About this template" content={reviewInfoContent(canClone, item.source)} />
+              {isFlow && (
+                <InfoTip
+                  label="WhatsApp Flow template"
+                  content="Interactive form template. Adding from the library keeps the form. Customizing in the editor removes the form button."
+                />
+              )}
+            </div>
+            <p className="mt-0.5 truncate font-mono text-[10px] text-slate-400">{item.name}</p>
+          </div>
+          {canClone && (
+            <span className="shrink-0 rounded-md bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+              Ready to add
+            </span>
+          )}
+        </div>
       </div>
 
       {canClone && (
-        <div className="template-wizard-card p-4 sm:p-5">
+        <div className="template-wizard-card p-3 sm:p-3.5">
           <AppInput
             id="library-template-name"
-            label="Your template name"
-            placeholder="my_delivery_update"
-                  hint="Lowercase letters, numbers, and _ only — like order_update."
+            label="Template name"
+            placeholder="order_update"
             value={createName}
             onChange={(e) => onCreateNameChange(e.target.value.toLowerCase().replace(/\s/g, '_'))}
             required
             pattern="[a-z0-9_]+"
+            error={nameError || undefined}
+            labelInfo="Lowercase letters, numbers, and underscore only."
           />
-          {nameError && (
-            <p className="mt-1.5 text-[11px] font-semibold text-rose-600">{nameError}</p>
-          )}
 
           {needsButtons && (
-            <div className="mt-4 space-y-3">
-              <p className="text-[12px] font-bold text-slate-800 dark:text-slate-200">
-                Where should the button take customers?
-              </p>
-              <p className="text-[11px] text-slate-500">
-                WhatsApp opens this on their phone. Use a page on your live website.
-              </p>
+            <div className="mt-3 space-y-2.5 border-t border-slate-100 pt-3 dark:border-slate-800">
+              <div className="flex items-center gap-1">
+                <p className="text-[12px] font-bold text-slate-800 dark:text-slate-200">Button links</p>
+                <InfoTip
+                  label="Button link help"
+                  content="WhatsApp opens these on the customer's phone. Use a public https:// page or a phone number with country code."
+                />
+              </div>
               {urlButton && (
                 <AppInput
                   id="library-button-url"
-                  label={`${urlButton.text || 'Website'} URL`}
-                  placeholder="https://yourstore.com/verify"
-                  hint="Customers open this in WhatsApp. Use a public https:// page — not this Samyoj screen."
+                  label={urlButton.text || 'Website URL'}
+                  placeholder="https://yourstore.com/track"
                   value={buttonUrl}
                   error={buttonUrlError || undefined}
                   onChange={(e) => onButtonUrlChange(e.target.value)}
@@ -140,9 +164,8 @@ export default function TemplateLibraryReviewStep({
               {phoneButton && (
                 <AppInput
                   id="library-button-phone"
-                  label={`${phoneButton.text || 'Call'} phone number`}
+                  label={phoneButton.text || 'Call number'}
                   placeholder="+919876543210"
-                  hint="Include country code."
                   value={buttonPhone}
                   onChange={(e) => onButtonPhoneChange(e.target.value)}
                   required
@@ -155,64 +178,71 @@ export default function TemplateLibraryReviewStep({
 
       {bodyVars.length > 0 && (
         <div className="template-wizard-card overflow-hidden">
-          <div className="border-b border-slate-100 px-4 py-3 dark:border-slate-800">
-            <p className="text-[13px] font-bold text-slate-900 dark:text-white">Variables</p>
-            <p className="text-[11px] text-slate-500">
-              Sample values come from WhatsApp. “Filled from” connects each one to a contact so campaigns
-              can fill it automatically.
-            </p>
+          <div className="flex items-center gap-1 border-b border-slate-100 px-3 py-2.5 dark:border-slate-800 sm:px-3.5">
+            <p className="text-[12px] font-bold text-slate-900 dark:text-white">Variables</p>
+            <InfoTip
+              label="Variable mapping help"
+              content="Map each placeholder to a contact field so campaigns and Inbox can auto-fill messages. Sample values come from Meta."
+            />
           </div>
-          <div className="overflow-x-auto px-4 py-3">
-            <table className="w-full min-w-[520px] text-left text-[12px]">
-              <thead>
-                <tr className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
-                  <th className="pb-2 pr-3">Variable</th>
-                  <th className="pb-2 pr-3">Description</th>
-                  <th className="pb-2 pr-3">Filled from</th>
-                  <th className="pb-2">Sample</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {bodyVars.map((meta) => (
-                  <tr key={`body-${meta.index}`}>
-                    <td className="py-2.5 pr-3">
-                      <span className="inline-flex rounded-md bg-emerald-50 px-2 py-0.5 font-mono text-[11px] font-bold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
-                        {`{{${meta.index}}}`}
-                      </span>
-                    </td>
-                    <td className="py-2.5 pr-3 font-medium text-slate-700 dark:text-slate-300">
-                      {meta.description}
-                    </td>
-                    <td className="py-2.5 pr-3">
-                      <select
-                        value={meta.suggestedSource || ''}
-                        onChange={(e) => updateSource(meta.index, e.target.value)}
-                        className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[12px] font-medium dark:border-slate-700 dark:bg-slate-900"
-                      >
-                        {SOURCE_OPTIONS.map((o) => (
-                          <option key={o.value} value={o.value}>
-                            {o.label}
-                          </option>
-                        ))}
-                      </select>
-                      {meta.suggestedSource === 'contact.custom' && (
-                        <input
-                          type="text"
-                          value={meta.customKey || ''}
-                          onChange={(e) => updateCustomKey(meta.index, e.target.value)}
-                          placeholder="order_id"
-                          className="mt-1.5 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 font-mono text-[11px] dark:border-slate-700 dark:bg-slate-900"
-                          aria-label="Custom field key"
+
+          <div className="divide-y divide-slate-100 dark:divide-slate-800" role="list">
+            {bodyVars.map((meta, rowIndex) => {
+              const sample = form.bodyExamples[meta.index - 1] || '—';
+              return (
+                <article
+                  key={`body-${meta.index}`}
+                  role="listitem"
+                  className="px-3 py-3 sm:px-3.5"
+                >
+                  <div className="flex gap-2.5">
+                    <span
+                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-slate-100 text-[10px] font-extrabold tabular-nums text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                      aria-hidden
+                    >
+                      {rowIndex + 1}
+                    </span>
+
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="inline-flex rounded-md bg-emerald-50 px-1.5 py-0.5 font-mono text-[11px] font-bold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
+                            {`{{${meta.index}}}`}
+                          </span>
+                          <span className="text-[12px] font-semibold text-slate-700 dark:text-slate-200">
+                            {meta.description}
+                          </span>
+                        </div>
+                        <p className="text-[10px] font-medium text-slate-400">
+                          Sample:{' '}
+                          <span className="text-slate-600 dark:text-slate-300">{sample}</span>
+                        </p>
+                      </div>
+
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <AppSelect
+                          size="compact"
+                          label="Fill from"
+                          value={meta.suggestedSource || ''}
+                          isSearchable={false}
+                          options={FILL_SOURCE_OPTIONS}
+                          onChange={(e) => updateSource(meta.index, e.target.value)}
                         />
-                      )}
-                    </td>
-                    <td className="py-2.5 font-medium text-slate-600 dark:text-slate-400">
-                      {form.bodyExamples[meta.index - 1] || '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                        {meta.suggestedSource === 'contact.custom' && (
+                          <AppInput
+                            id={`library-var-custom-${meta.index}`}
+                            label="Field key"
+                            placeholder="order_id"
+                            value={meta.customKey || ''}
+                            onChange={(e) => updateCustomKey(meta.index, e.target.value)}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
           </div>
         </div>
       )}

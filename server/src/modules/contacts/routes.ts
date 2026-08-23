@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../../config/database';
 import { authenticate, requireOrg } from '../../middleware/auth';
+import { withPermission } from '../../middleware/permissions';
 import { authenticateJwtOrApiKey } from '../../middleware/authenticate-jwt-or-api-key';
 import { AppError, sendSuccess, asyncHandler, paramId } from '../../utils/response';
 import { phoneFieldSchema, validatePhone } from '../../utils/phone';
@@ -22,7 +23,7 @@ import { checkQuota } from '../billing/entitlements.service';
 
 const router = Router();
 
-router.use(authenticateJwtOrApiKey, requireOrg, resolveActiveWhatsappNumber);
+router.use(authenticateJwtOrApiKey, requireOrg, resolveActiveWhatsappNumber, ...withPermission('manageContacts'));
 
 router.get(
   '/',

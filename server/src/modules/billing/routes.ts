@@ -58,6 +58,7 @@ router.get(
   authenticate,
   requireOrg,
   loadPermissions,
+  requirePermission('manageBilling'),
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
 
@@ -106,7 +107,7 @@ router.get(
       plans: (Object.keys(PLAN_TIERS) as PlanTier[]).map(tierToClientPlan),
       seatsUsed: memberCount,
       seatLimit,
-      canManageBilling: req.permissions?.manageSettings ?? false,
+      canManageBilling: req.permissions?.manageBilling ?? false,
       razorpayConfigured: isRazorpayConfigured(),
       razorpayKeyId: isRazorpayConfigured() ? config.razorpay.keyId : null,
       planExpiresAt: org.planExpiresAt,
@@ -130,6 +131,7 @@ router.get(
   authenticate,
   requireOrg,
   loadPermissions,
+  requirePermission('manageBilling'),
   asyncHandler(async (req: Request, res: Response) => {
     const usage = await getOrgUsage(req.user!.organizationId!);
     sendSuccess(res, usage);
@@ -156,7 +158,7 @@ router.post(
   authenticate,
   requireOrg,
   loadPermissions,
-  requirePermission('manageSettings'),
+  requirePermission('manageBilling'),
   asyncHandler(async (req: Request, res: Response) => {
     const { planId, cadence } = z
       .object({
@@ -259,7 +261,7 @@ router.post(
   authenticate,
   requireOrg,
   loadPermissions,
-  requirePermission('manageSettings'),
+  requirePermission('manageBilling'),
   asyncHandler(async (req: Request, res: Response) => {
     const data = z
       .object({
@@ -403,7 +405,7 @@ router.patch(
   authenticate,
   requireOrg,
   loadPermissions,
-  requirePermission('manageSettings'),
+  requirePermission('manageBilling'),
   asyncHandler(async (req: Request, res: Response) => {
     const { plan } = z
       .object({ plan: z.enum(['launch', 'starter', 'growth', 'pro', 'enterprise']) })

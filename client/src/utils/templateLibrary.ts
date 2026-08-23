@@ -73,6 +73,7 @@ export const libraryWizardStages = [
 export const LIBRARY_QUICK_PICKS: Array<{
   id: string;
   label: string;
+  shortLabel: string;
   hint: string;
   topic?: string;
   usecase?: string;
@@ -81,6 +82,7 @@ export const LIBRARY_QUICK_PICKS: Array<{
   {
     id: 'order',
     label: 'Order updates',
+    shortLabel: 'Orders',
     hint: 'Confirm / delay / cancel',
     topic: 'ORDER_MANAGEMENT',
     usecase: 'ORDER_CONFIRMATION',
@@ -88,6 +90,7 @@ export const LIBRARY_QUICK_PICKS: Array<{
   {
     id: 'shipping',
     label: 'Shipping',
+    shortLabel: 'Ship',
     hint: 'Dispatched & tracking',
     topic: 'ORDER_MANAGEMENT',
     usecase: 'SHIPMENT_CONFIRMATION',
@@ -95,6 +98,7 @@ export const LIBRARY_QUICK_PICKS: Array<{
   {
     id: 'delivery',
     label: 'Delivery',
+    shortLabel: 'Deliver',
     hint: 'Out for delivery / failed',
     topic: 'ORDER_MANAGEMENT',
     usecase: 'DELIVERY_UPDATE',
@@ -102,6 +106,7 @@ export const LIBRARY_QUICK_PICKS: Array<{
   {
     id: 'payment',
     label: 'Payments',
+    shortLabel: 'Pay',
     hint: 'Due, receipt, low balance',
     topic: 'PAYMENTS',
     usecase: 'PAYMENT_DUE_REMINDER',
@@ -109,6 +114,7 @@ export const LIBRARY_QUICK_PICKS: Array<{
   {
     id: 'feedback',
     label: 'Feedback',
+    shortLabel: 'Feedback',
     hint: 'Post-order survey',
     topic: 'CUSTOMER_FEEDBACK',
     usecase: 'FEEDBACK_SURVEY',
@@ -116,6 +122,7 @@ export const LIBRARY_QUICK_PICKS: Array<{
   {
     id: 'account',
     label: 'Account',
+    shortLabel: 'Account',
     hint: 'Signup & welcome',
     topic: 'ACCOUNT_UPDATE',
     usecase: 'ACCOUNT_CREATION_CONFIRMATION',
@@ -123,6 +130,7 @@ export const LIBRARY_QUICK_PICKS: Array<{
   {
     id: 'otp',
     label: 'OTP / login',
+    shortLabel: 'OTP',
     hint: 'Verification codes',
     category: 'AUTHENTICATION',
   },

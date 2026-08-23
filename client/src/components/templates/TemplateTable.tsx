@@ -104,7 +104,7 @@ export default function TemplateTable({
       onPageChange={onPageChange}
       paginationVariant="numbered"
       paginationItemLabel="templates"
-      minTableWidth="min-w-[780px]"
+      minTableWidth="min-w-[680px]"
       tableClassName="text-sm"
     >
       {rows.map((row) => {

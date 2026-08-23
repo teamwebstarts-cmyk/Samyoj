@@ -9,7 +9,17 @@ interface ResponsiveDataViewProps<T> {
   /** Extra classes on the table wrapper (padding, etc.). Visibility uses `tableFrom`. */
   tableClassName?: string;
   /** Show table from this breakpoint; cards hide at the same point. Default lg. */
-  tableFrom?: 'lg' | 'xl';
+  tableFrom?: 'lg' | 'xl' | '2xl';
+}
+
+function tableBreakpointClasses(tableFrom: 'lg' | 'xl' | '2xl') {
+  if (tableFrom === '2xl') {
+    return { cardsHidden: '2xl:hidden', tableVisible: 'hidden 2xl:block' };
+  }
+  if (tableFrom === 'xl') {
+    return { cardsHidden: 'xl:hidden', tableVisible: 'hidden xl:block' };
+  }
+  return { cardsHidden: 'lg:hidden', tableVisible: 'hidden lg:block' };
 }
 
 export default function ResponsiveDataView<T>({
@@ -25,8 +35,7 @@ export default function ResponsiveDataView<T>({
     return <>{emptyState}</>;
   }
 
-  const cardsHidden = tableFrom === 'xl' ? 'xl:hidden' : 'lg:hidden';
-  const tableVisible = tableFrom === 'xl' ? 'hidden xl:block' : 'hidden lg:block';
+  const { cardsHidden, tableVisible } = tableBreakpointClasses(tableFrom);
   const resolvedCardClass =
     cardClassName ?? `space-y-3 ${cardsHidden}`;
 

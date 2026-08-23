@@ -3,14 +3,24 @@ import type { OrgRole } from '@prisma/client';
 export type AssignmentStrategy = 'LEAST_LOAD' | 'ROUND_ROBIN';
 
 export interface TeamPermissions {
-  manageTeam: boolean;
-  manageSettings: boolean;
+  manageInbox: boolean;
+  manageCalls: boolean;
+  manageAiBots: boolean;
+  manageAutomations: boolean;
   manageCampaigns: boolean;
   manageTemplates: boolean;
-  manageFlows: boolean;
-  manageInbox: boolean;
-  viewAnalytics: boolean;
+  manageContacts: boolean;
+  manageTickets: boolean;
+  manageTeam: boolean;
+  manageBilling: boolean;
+  manageSettings: boolean;
 }
+
+/** Stored overrides may still use pre-2026 keys until re-saved from Team → Roles. */
+type LegacyPermissionOverrides = Partial<TeamPermissions> & {
+  manageFlows?: boolean;
+  viewAnalytics?: boolean;
+};
 
 export interface ShiftSchedule {
   enabled: boolean;
@@ -26,7 +36,7 @@ export interface TeamSettings {
   seatLimit: number;
   handoffOnlyOnline: boolean;
   respectShiftSchedule: boolean;
-  rolePermissions?: Partial<Record<OrgRole, Partial<TeamPermissions>>>;
+  rolePermissions?: Partial<Record<OrgRole, LegacyPermissionOverrides>>;
 }
 
 export const DEFAULT_TEAM_SETTINGS: TeamSettings = {
@@ -39,57 +49,100 @@ export const DEFAULT_TEAM_SETTINGS: TeamSettings = {
 
 export const DEFAULT_PERMISSIONS: Record<OrgRole, TeamPermissions> = {
   OWNER: {
-    manageTeam: true,
-    manageSettings: true,
+    manageInbox: true,
+    manageCalls: true,
+    manageAiBots: true,
+    manageAutomations: true,
     manageCampaigns: true,
     manageTemplates: true,
-    manageFlows: true,
-    manageInbox: true,
-    viewAnalytics: true,
+    manageContacts: true,
+    manageTickets: true,
+    manageTeam: true,
+    manageBilling: true,
+    manageSettings: true,
   },
   ADMIN: {
-    manageTeam: true,
-    manageSettings: true,
+    manageInbox: true,
+    manageCalls: true,
+    manageAiBots: true,
+    manageAutomations: true,
     manageCampaigns: true,
     manageTemplates: true,
-    manageFlows: true,
-    manageInbox: true,
-    viewAnalytics: true,
+    manageContacts: true,
+    manageTickets: true,
+    manageTeam: true,
+    manageBilling: true,
+    manageSettings: true,
   },
   SUPERVISOR: {
-    manageTeam: false,
-    manageSettings: false,
+    manageInbox: true,
+    manageCalls: true,
+    manageAiBots: false,
+    manageAutomations: false,
     manageCampaigns: false,
     manageTemplates: false,
-    manageFlows: false,
-    manageInbox: true,
-    viewAnalytics: true,
+    manageContacts: true,
+    manageTickets: true,
+    manageTeam: false,
+    manageBilling: true,
+    manageSettings: false,
   },
   AGENT: {
-    manageTeam: false,
-    manageSettings: false,
+    manageInbox: true,
+    manageCalls: true,
+    manageAiBots: false,
+    manageAutomations: false,
     manageCampaigns: false,
     manageTemplates: false,
-    manageFlows: false,
-    manageInbox: true,
-    viewAnalytics: false,
+    manageContacts: true,
+    manageTickets: true,
+    manageTeam: false,
+    manageBilling: false,
+    manageSettings: false,
   },
 };
 
+function mapLegacyOverrides(
+  overrides?: LegacyPermissionOverrides | null
+): Partial<TeamPermissions> | null | undefined {
+  if (!overrides) return overrides;
+
+  const { manageFlows, viewAnalytics, manageInbox, ...rest } = overrides;
+  const mapped: Partial<TeamPermissions> = { ...rest };
+
+  if (manageFlows !== undefined) {
+    if (mapped.manageAiBots === undefined) mapped.manageAiBots = manageFlows;
+    if (mapped.manageAutomations === undefined) mapped.manageAutomations = manageFlows;
+  }
+  if (viewAnalytics !== undefined && mapped.manageBilling === undefined) {
+    mapped.manageBilling = viewAnalytics;
+  }
+  if (manageInbox !== undefined) {
+    if (mapped.manageInbox === undefined) mapped.manageInbox = manageInbox;
+    if (mapped.manageContacts === undefined) mapped.manageContacts = manageInbox;
+    if (mapped.manageTickets === undefined) mapped.manageTickets = manageInbox;
+    if (mapped.manageCalls === undefined) mapped.manageCalls = manageInbox;
+  }
+
+  return mapped;
+}
+
 export function resolvePermissions(
   role: OrgRole,
-  memberOverrides?: Record<string, boolean> | null,
-  orgRolePermissions?: Partial<Record<OrgRole, Partial<TeamPermissions>>> | null
+  memberOverrides?: LegacyPermissionOverrides | null,
+  orgRolePermissions?: Partial<Record<OrgRole, LegacyPermissionOverrides>> | null
 ): TeamPermissions {
   if (role === 'OWNER') {
     return { ...DEFAULT_PERMISSIONS.OWNER };
   }
 
-  const orgOverrides = orgRolePermissions?.[role];
+  const orgOverrides = mapLegacyOverrides(orgRolePermissions?.[role]);
   const base = { ...DEFAULT_PERMISSIONS[role], ...(orgOverrides || {}) };
 
   if (!memberOverrides) return base as TeamPermissions;
-  return { ...base, ...memberOverrides } as TeamPermissions;
+
+  const memberMapped = mapLegacyOverrides(memberOverrides);
+  return { ...base, ...memberMapped } as TeamPermissions;
 }
 
 export type RolePermissionsMatrix = Record<OrgRole, TeamPermissions>;
@@ -97,7 +150,7 @@ export type RolePermissionsMatrix = Record<OrgRole, TeamPermissions>;
 export const CONFIGURABLE_ROLES: OrgRole[] = ['ADMIN', 'SUPERVISOR', 'AGENT'];
 
 export function buildRolePermissionsMatrix(
-  orgRolePermissions?: Partial<Record<OrgRole, Partial<TeamPermissions>>> | null
+  orgRolePermissions?: Partial<Record<OrgRole, LegacyPermissionOverrides>> | null
 ): RolePermissionsMatrix {
   return {
     OWNER: resolvePermissions('OWNER', null, orgRolePermissions),
@@ -126,4 +179,3 @@ export function getSeatLimit(plan: string, settings?: TeamSettings): number {
   }
   return planMax;
 }
-

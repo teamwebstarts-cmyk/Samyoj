@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Copy, Mail, UserPlus, XCircle } from 'lucide-react';
+import { Copy, UserPlus, XCircle } from 'lucide-react';
 import AppButton from '../ui/AppButton';
 import AppInput from '../ui/AppInput';
 import AppSelect from '../ui/AppSelect';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import ListLayoutSkeleton from '../ui/ListLayoutSkeleton';
 import SlideOver, { SlideOverFooter } from '../ui/SlideOver';
-import { ModalCallout, ModalPanel, ModalSection } from '../ui/modalUi';
+import { ModalPanel } from '../ui/modalUi';
 import { teamApi } from '../../services/api';
 import type { OrgRole, TeamDepartment, TeamInvite } from '../../types';
 import { toastError, toastSuccess } from '../../utils/toast';
@@ -180,10 +180,12 @@ export default function TeamInvitesTab({ departments, canManage, onChanged }: Te
         <SlideOver
           open={slideOpen}
           onClose={() => setSlideOpen(false)}
-          title="Invite team member"
-          subtitle="They'll receive a link to join your workspace"
-          icon={Mail}
+          title="Send team invite"
+          subtitle="They get a secure join link by email, choose their own password, and land in the role you pick. Links expire after 7 days."
+          icon={UserPlus}
           accent="sky"
+          size="lg"
+          multilineSubtitle
           footer={
             <SlideOverFooter
               onCancel={() => setSlideOpen(false)}
@@ -192,60 +194,51 @@ export default function TeamInvitesTab({ departments, canManage, onChanged }: Te
             />
           }
         >
-          <form id="slideover-form" onSubmit={handleInvite} className="space-y-5">
-            <ModalCallout
-              icon={Mail}
-              accent="sky"
-              title="Email invite"
-              description="We'll send a secure join link. They choose their own password when accepting the invite."
-            />
-
-            <ModalSection step={1} title="Invite details" subtitle="Who you're inviting and their role">
-              <ModalPanel accent="sky">
-                <div className="space-y-4">
-                  <AppInput
-                    id="invite-email"
-                    label="Email address"
-                    type="email"
-                    placeholder="agent@company.com"
-                    value={form.email}
-                    onChange={(e) => setForm({ ...form, email: e.target.value })}
-                    required
-                  />
-                  <AppInput
-                    id="invite-name"
-                    label="Name (optional)"
-                    placeholder="Agent name"
-                    value={form.name}
-                    onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  />
+          <form id="slideover-form" onSubmit={handleInvite} className="flex min-h-[min(58vh,26rem)] flex-col">
+            <ModalPanel accent="sky" bodyClassName="flex flex-1 flex-col p-5 sm:p-6">
+              <div className="space-y-5">
+                <AppInput
+                  id="invite-email"
+                  label="Email address"
+                  type="email"
+                  placeholder="agent@company.com"
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  required
+                />
+                <AppInput
+                  id="invite-name"
+                  label="Name (optional)"
+                  placeholder="Agent name"
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                />
+                <AppSelect
+                  id="invite-role"
+                  label="Role"
+                  value={form.orgRole}
+                  isSearchable={false}
+                  options={(['AGENT', 'SUPERVISOR', 'ADMIN'] as OrgRole[]).map((r) => ({
+                    value: r,
+                    label: roleLabels[r],
+                  }))}
+                  onChange={(e) => setForm({ ...form, orgRole: e.target.value as OrgRole })}
+                />
+                {departments.length > 0 && (
                   <AppSelect
-                    id="invite-role"
-                    label="Role"
-                    value={form.orgRole}
+                    id="invite-dept"
+                    label="Department"
+                    value={form.departmentId}
                     isSearchable={false}
-                    options={(['AGENT', 'SUPERVISOR', 'ADMIN'] as OrgRole[]).map((r) => ({
-                      value: r,
-                      label: roleLabels[r],
-                    }))}
-                    onChange={(e) => setForm({ ...form, orgRole: e.target.value as OrgRole })}
+                    options={[
+                      { value: '', label: 'No department' },
+                      ...departments.map((d) => ({ value: d.id, label: d.name })),
+                    ]}
+                    onChange={(e) => setForm({ ...form, departmentId: e.target.value })}
                   />
-                  {departments.length > 0 && (
-                    <AppSelect
-                      id="invite-dept"
-                      label="Department"
-                      value={form.departmentId}
-                      isSearchable={false}
-                      options={[
-                        { value: '', label: 'No department' },
-                        ...departments.map((d) => ({ value: d.id, label: d.name })),
-                      ]}
-                      onChange={(e) => setForm({ ...form, departmentId: e.target.value })}
-                    />
-                  )}
-                </div>
-              </ModalPanel>
-            </ModalSection>
+                )}
+              </div>
+            </ModalPanel>
           </form>
         </SlideOver>
       )}
