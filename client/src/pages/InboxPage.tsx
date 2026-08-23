@@ -932,7 +932,7 @@ export default function InboxPage() {
                 />
               </div>
             ) : (
-              <ChatPlaceholder />
+              <ChatPlaceholder onNewChat={() => setNewChatOpen(true)} />
             )}
           </div>
         </div>
