@@ -14,6 +14,7 @@ import {
   Zap,
 } from 'lucide-react';
 import AppButton from '../ui/AppButton';
+import InfoTip from '../ui/InfoTip';
 import BillingCurrentPlanHero from './BillingCurrentPlanHero';
 import MetaCostExplainerCard from './MetaCostExplainerCard';
 import type { BillingInfo, BillingUsage, ReportsOverviewFullData } from '../../types';
@@ -34,25 +35,25 @@ const CATEGORY_STYLES: Record<
     bg: 'bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300',
     text: 'text-violet-700 dark:text-violet-300',
     bar: 'bg-violet-500',
-    label: 'Marketing (Broadcasts & Offers)',
+    label: 'Marketing (Offers & promos)',
   },
   UTILITY: {
     bg: 'bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300',
     text: 'text-sky-700 dark:text-sky-300',
     bar: 'bg-sky-500',
-    label: 'Utility (Order Alerts & OTPs)',
+    label: 'Utility (Orders & OTPs)',
   },
   SERVICE: {
     bg: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300',
     text: 'text-emerald-700 dark:text-emerald-300',
     bar: 'bg-emerald-500',
-    label: 'Service (24h Inbound Free Tier)',
+    label: 'Service (Customer replies — free)',
   },
   AUTHENTICATION: {
     bg: 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300',
     text: 'text-amber-700 dark:text-amber-300',
     bar: 'bg-amber-500',
-    label: 'Authentication (Security codes)',
+    label: 'Authentication (Login codes)',
   },
 };
 
@@ -158,12 +159,12 @@ export default function BillingUsageStatsTab({
                 <Zap className="h-3.5 w-3.5" />
               </span>
               <h3 className="text-base font-extrabold tracking-tight text-theme-fg">
-                Plan Quotas & Resource Capacity
+                Your Plan Limits
               </h3>
+              <InfoTip
+                content={`Team members, contacts, WhatsApp numbers, and AI features allowed on your ${currentPlan?.name || 'current'} plan.`}
+              />
             </div>
-            <p className="mt-0.5 text-[12px] font-medium text-theme-secondary">
-              Active consumption and limits on your <strong className="text-theme-fg">{currentPlan?.name || 'Current'} Plan</strong>
-            </p>
           </div>
           {onExportCsv && (
             <AppButton size="sm" variant="secondary" icon={<Download size={13} />} onClick={onExportCsv}>
@@ -182,7 +183,7 @@ export default function BillingUsageStatsTab({
                   <Users className="h-3.5 w-3.5" />
                 </span>
                 <span className="truncate text-[11px] font-bold uppercase tracking-wider text-theme-muted">
-                  Team Member Seats
+                  Team Members
                 </span>
               </div>
 
@@ -194,7 +195,7 @@ export default function BillingUsageStatsTab({
                     / {isUnlimitedSeats ? 'Unlimited' : `${seatLimit} seats`}
                   </span>
                 </p>
-                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10.5px] font-black ${
+                <span className={`shrink-0 rounded-md px-2 py-0.5 text-[10.5px] font-black ${
                   isUnlimitedSeats
                     ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300'
                     : seatPct >= 95
@@ -220,8 +221,8 @@ export default function BillingUsageStatsTab({
                 />
               </div>
               <p className="mt-1.5 flex items-center justify-between gap-2 text-[11px] font-medium text-theme-muted">
-                <span className="truncate">{isUnlimitedSeats ? 'Unlimited team seats' : `${Math.max(0, seatLimit - seatsUsed)} seats available`}</span>
-                <span className="shrink-0 font-semibold text-theme-secondary">{seatsUsed} active</span>
+                <span className="truncate">{isUnlimitedSeats ? 'No member limit' : `${Math.max(0, seatLimit - seatsUsed)} members left`}</span>
+                <span className="shrink-0 font-semibold text-theme-secondary">{seatsUsed} in use</span>
               </p>
             </div>
           </div>
@@ -234,7 +235,7 @@ export default function BillingUsageStatsTab({
                   <UserCheck className="h-3.5 w-3.5" />
                 </span>
                 <span className="truncate text-[11px] font-bold uppercase tracking-wider text-theme-muted">
-                  Audience Contacts
+                  Contacts
                 </span>
               </div>
 
@@ -246,7 +247,7 @@ export default function BillingUsageStatsTab({
                     / {isUnlimitedContacts ? 'Unlimited' : maxContacts.toLocaleString()}
                   </span>
                 </p>
-                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10.5px] font-black ${
+                <span className={`shrink-0 rounded-md px-2 py-0.5 text-[10.5px] font-black ${
                   isUnlimitedContacts
                     ? 'bg-sky-50 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300'
                     : contactPct >= 95
@@ -272,8 +273,8 @@ export default function BillingUsageStatsTab({
                 />
               </div>
               <p className="mt-1.5 flex items-center justify-between gap-2 text-[11px] font-medium text-theme-muted">
-                <span className="truncate">{isUnlimitedContacts ? 'Unlimited CRM contacts' : `${Math.max(0, (typeof maxContacts === 'number' ? maxContacts : 0) - contactsCount).toLocaleString()} slots left`}</span>
-                <span className="shrink-0 font-semibold text-theme-secondary">CRM Audience</span>
+                <span className="truncate">{isUnlimitedContacts ? 'No contact limit' : `${Math.max(0, (typeof maxContacts === 'number' ? maxContacts : 0) - contactsCount).toLocaleString()} contacts left`}</span>
+                <span className="shrink-0 font-semibold text-theme-secondary">Saved in CRM</span>
               </p>
             </div>
           </div>
@@ -286,7 +287,7 @@ export default function BillingUsageStatsTab({
                   <Phone className="h-3.5 w-3.5" />
                 </span>
                 <span className="truncate text-[11px] font-bold uppercase tracking-wider text-theme-muted">
-                  WhatsApp Phone Lines
+                  WhatsApp Numbers
                 </span>
               </div>
 
@@ -298,7 +299,7 @@ export default function BillingUsageStatsTab({
                     / {isUnlimitedNumbers ? 'Unlimited' : `${maxNumbers} ${maxNumbers === 1 ? 'line' : 'lines'}`}
                   </span>
                 </p>
-                <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[10.5px] font-black text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
+                <span className="shrink-0 rounded-md bg-emerald-50 px-2 py-0.5 text-[10.5px] font-black text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
                   {connectedNumbersCount} / {isUnlimitedNumbers ? '∞' : maxNumbers}
                 </span>
               </div>
@@ -312,8 +313,8 @@ export default function BillingUsageStatsTab({
                 />
               </div>
               <p className="mt-1.5 flex items-center justify-between gap-2 text-[11px] font-medium text-theme-muted">
-                <span className="truncate">Official Meta Cloud API</span>
-                <span className="shrink-0 font-semibold text-emerald-700 dark:text-emerald-400">Verified</span>
+                <span className="truncate">Connected via Meta</span>
+                <span className="shrink-0 font-semibold text-emerald-700 dark:text-emerald-400">Active</span>
               </p>
             </div>
           </div>
@@ -326,21 +327,21 @@ export default function BillingUsageStatsTab({
                   <Bot className="h-3.5 w-3.5" />
                 </span>
                 <span className="truncate text-[11px] font-bold uppercase tracking-wider text-theme-muted">
-                  AI & Voice Intelligence
+                  AI & Calling
                 </span>
               </div>
 
               {/* Metric + Status in the SAME row */}
               <div className="mt-2.5 flex items-baseline justify-between gap-2">
                 <p className="min-w-0 truncate text-lg font-black tracking-tight text-theme-fg sm:text-xl">
-                  {isAiEnabled ? 'AI Bot Active' : 'AI Bot Locked'}
+                  {isAiEnabled ? 'AI enabled' : 'Not included'}
                 </p>
                 {isAiEnabled ? (
-                  <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
+                  <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
                     <Check className="h-3 w-3" /> Included
                   </span>
                 ) : (
-                  <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
+                  <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
                     <Lock className="h-2.5 w-2.5" /> Growth & Pro
                   </span>
                 )}
@@ -355,7 +356,7 @@ export default function BillingUsageStatsTab({
               </div>
               <div className="mt-1.5 flex items-center justify-between gap-2 text-[11px]">
                 <span className="truncate text-theme-muted">
-                  Voice: {isCallingEnabled ? 'Active' : 'Pro only'}
+                  Calling: {isCallingEnabled ? 'On' : 'Pro plan only'}
                 </span>
                 {!isAiEnabled ? (
                   <button
@@ -366,7 +367,7 @@ export default function BillingUsageStatsTab({
                     Unlock AI →
                   </button>
                 ) : (
-                  <span className="shrink-0 font-semibold text-emerald-700 dark:text-emerald-400">24/7 Smart Bot</span>
+                  <span className="shrink-0 font-semibold text-emerald-700 dark:text-emerald-400">Auto-replies on</span>
                 )}
               </div>
             </div>
@@ -374,24 +375,25 @@ export default function BillingUsageStatsTab({
         </div>
       </div>
 
-      {/* 3. MESSAGE DELIVERY & ENGAGEMENT HEALTH (ZERO-SAFE PROGRESS BARS, NO SHADOWS) */}
+      {/* 3. MESSAGE ACTIVITY (LAST 30 DAYS) */}
       <div>
         <div className="mb-2.5 flex items-center gap-2">
           <span className="flex h-5 w-5 items-center justify-center rounded-md bg-sky-50 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300">
             <CheckCheck className="h-3 w-3" />
           </span>
           <h3 className="text-sm font-bold tracking-tight text-theme-fg">
-            Message Delivery & Customer Engagement Health
+            Message Activity
           </h3>
+          <InfoTip content="Messages you sent, how many reached the customer, how many were read, and replies received — all for the last 30 days." />
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {/* Card 1: Outbound Sent */}
+          {/* Card 1: Messages Sent */}
           <div className="flex flex-col justify-between rounded-xl border border-theme-border bg-theme-surface p-3.5">
             <div>
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-theme-muted">
-                  Outbound Sent
+                  Messages Sent
                 </span>
                 <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
                   <Send className="h-3 w-3" />
@@ -401,7 +403,7 @@ export default function BillingUsageStatsTab({
                 <p className="text-xl font-black tabular-nums text-theme-fg">
                   {sentCount.toLocaleString()}
                 </p>
-                <span className="text-[10px] font-semibold text-theme-muted">30d cycle</span>
+                <span className="text-[10px] font-semibold text-theme-muted">Last 30 days</span>
               </div>
             </div>
             <div className="mt-2.5">
@@ -412,17 +414,17 @@ export default function BillingUsageStatsTab({
                 />
               </div>
               <p className="mt-1 text-[10px] font-medium text-theme-muted">
-                {sentCount > 0 ? `${sentCount.toLocaleString()} sent via Cloud API` : '0 messages dispatched'}
+                {sentCount > 0 ? `${sentCount.toLocaleString()} outgoing messages` : 'No messages sent yet'}
               </p>
             </div>
           </div>
 
-          {/* Card 2: Delivery Rate */}
+          {/* Card 2: Delivered */}
           <div className="flex flex-col justify-between rounded-xl border border-theme-border bg-theme-surface p-3.5">
             <div>
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-theme-muted">
-                  Delivery Rate
+                  Delivered
                 </span>
                 <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-teal-50 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300">
                   <CheckCheck className="h-3 w-3" />
@@ -432,7 +434,7 @@ export default function BillingUsageStatsTab({
                 <p className="text-xl font-black tabular-nums text-teal-700 dark:text-teal-300">
                   {sentCount > 0 && deliveryRate != null ? `${deliveryRate}%` : '0%'}
                 </p>
-                <span className="text-[10px] font-semibold text-theme-muted">Handset reach</span>
+                <span className="text-[10px] font-semibold text-theme-muted">Reached phone</span>
               </div>
             </div>
             <div className="mt-2.5">
@@ -443,17 +445,17 @@ export default function BillingUsageStatsTab({
                 />
               </div>
               <p className="mt-1 text-[10px] font-medium text-theme-muted">
-                {deliveredCount != null && deliveredCount > 0 ? `${deliveredCount.toLocaleString()} delivered` : 'No delivery receipts yet'}
+                {deliveredCount != null && deliveredCount > 0 ? `${deliveredCount.toLocaleString()} reached customer` : 'No deliveries yet'}
               </p>
             </div>
           </div>
 
-          {/* Card 3: Read Rate */}
+          {/* Card 3: Read by Customer */}
           <div className="flex flex-col justify-between rounded-xl border border-theme-border bg-theme-surface p-3.5">
             <div>
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-theme-muted">
-                  Read Rate
+                  Read by Customer
                 </span>
                 <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-sky-50 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300">
                   <Eye className="h-3 w-3" />
@@ -463,7 +465,7 @@ export default function BillingUsageStatsTab({
                 <p className="text-xl font-black tabular-nums text-sky-700 dark:text-sky-300">
                   {sentCount > 0 && readRate != null ? `${readRate}%` : '0%'}
                 </p>
-                <span className="text-[10px] font-semibold text-theme-muted">Open rate</span>
+                <span className="text-[10px] font-semibold text-theme-muted">Read %</span>
               </div>
             </div>
             <div className="mt-2.5">
@@ -474,17 +476,17 @@ export default function BillingUsageStatsTab({
                 />
               </div>
               <p className="mt-1 text-[10px] font-medium text-theme-muted">
-                {readCount != null && readCount > 0 ? `${readCount.toLocaleString()} opened` : 'No read receipts yet'}
+                {readCount != null && readCount > 0 ? `${readCount.toLocaleString()} opened by customer` : 'No reads yet'}
               </p>
             </div>
           </div>
 
-          {/* Card 4: Inbound Inquiries */}
+          {/* Card 4: Customer Replies */}
           <div className="flex flex-col justify-between rounded-xl border border-theme-border bg-theme-surface p-3.5">
             <div>
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-theme-muted">
-                  Inbound Inquiries
+                  Customer Replies
                 </span>
                 <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300">
                   <MessageSquare className="h-3 w-3" />
@@ -494,7 +496,7 @@ export default function BillingUsageStatsTab({
                 <p className="text-xl font-black tabular-nums text-theme-fg">
                   {inboundCount != null ? inboundCount.toLocaleString() : '0'}
                 </p>
-                <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400">Free 24h</span>
+                <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400">Free to reply</span>
               </div>
             </div>
             <div className="mt-2.5">
@@ -505,7 +507,7 @@ export default function BillingUsageStatsTab({
                 />
               </div>
               <p className="mt-1 text-[10px] font-medium text-theme-muted">
-                {inboundCount != null && inboundCount > 0 ? `${inboundCount.toLocaleString()} customer queries` : '0 incoming messages'}
+                {inboundCount != null && inboundCount > 0 ? `${inboundCount.toLocaleString()} replies received` : 'No replies yet'}
               </p>
             </div>
           </div>
@@ -518,15 +520,15 @@ export default function BillingUsageStatsTab({
         <div className="rounded-2xl border border-theme-border bg-theme-surface p-4 sm:p-5 lg:col-span-2">
           <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h3 className="text-sm font-extrabold tracking-tight text-theme-fg sm:text-base">
-                Meta Conversation Cost Ledger
-              </h3>
-              <p className="text-[12px] font-medium text-theme-secondary">
-                Estimated Meta Cloud API fees per 24-hour conversation window
-              </p>
+              <div className="flex items-center gap-1.5">
+                <h3 className="text-sm font-extrabold tracking-tight text-theme-fg sm:text-base">
+                  Meta Message Charges
+                </h3>
+                <InfoTip content="Estimated charges from Meta for template messages, by category. You pay Meta directly — this is separate from your Samyoj plan. Shows up after you send marketing or utility templates." />
+              </div>
             </div>
             <div className="rounded-xl border border-theme-border bg-theme-subtle/50 px-3 py-1 text-right">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-theme-muted">Est. Meta Total</span>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-theme-muted">Est. total</span>
               <p className="text-lg font-black tabular-nums text-theme-fg">₹{totalMetaCost.toLocaleString()}</p>
             </div>
           </div>
@@ -583,27 +585,24 @@ export default function BillingUsageStatsTab({
               </div>
 
               <p className="mt-2.5 text-[10.5px] font-medium text-theme-muted">
-                * User-initiated service chats are free within the 24h window. Meta bills template marketing/utility conversations directly.
+                * Customer replies within 24 hours are free. Marketing and utility templates are billed by Meta.
               </p>
             </>
           ) : (
             <div className="mt-3.5 rounded-xl border border-dashed border-theme-border bg-theme-subtle/20 px-4 py-5 text-center">
-              <p className="text-[12.5px] font-bold text-theme-fg">No Meta conversation charges yet</p>
-              <p className="mx-auto mt-0.5 max-w-sm text-[11px] font-medium text-theme-muted">
-                Charges appear here after your number exchanges template conversations with customers.
-              </p>
+              <p className="text-[12.5px] font-bold text-theme-fg">No Meta charges yet</p>
             </div>
           )}
         </div>
 
-        {/* WhatsApp Phone Health & Reputation (1/3 width) */}
+        {/* WhatsApp number quality */}
         <div className="flex flex-col justify-between rounded-2xl border border-theme-border bg-theme-surface p-4 sm:p-5">
           <div>
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold uppercase tracking-wider text-theme-muted">
-                Meta Phone Reputation
+                Number Quality
               </span>
-              <span className="inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-[9.5px] font-extrabold uppercase text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300">
+              <span className="inline-flex rounded-md bg-emerald-50 px-2 py-0.5 text-[9.5px] font-extrabold uppercase text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300">
                 Connected
               </span>
             </div>
@@ -620,28 +619,36 @@ export default function BillingUsageStatsTab({
               </span>
               <div>
                 <p className={`text-base font-black ${qualityColor}`}>
-                  {qualityRating === 'UNKNOWN' ? 'NOT RATED YET' : `${qualityRating} QUALITY`}
+                  {qualityRating === 'UNKNOWN'
+                    ? 'Not rated yet'
+                    : qualityRating === 'GREEN'
+                      ? 'Green — Good'
+                      : qualityRating === 'YELLOW'
+                        ? 'Yellow — Watch'
+                        : qualityRating === 'RED'
+                          ? 'Red — Action needed'
+                          : qualityRating}
                 </p>
                 <p className="text-[10.5px] font-medium text-theme-muted">
-                  Official WhatsApp Tier
+                  Rating from Meta
                 </p>
               </div>
             </div>
 
             <div className="mt-3.5 space-y-2 border-t border-theme-border pt-3 text-[12px]">
               <div className="flex items-center justify-between">
-                <span className="font-semibold text-theme-muted">Connected Numbers</span>
+                <span className="font-semibold text-theme-muted">Connected numbers</span>
                 <span className="font-extrabold tabular-nums text-theme-fg">{usage?.qualityRatings?.length ?? 1}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="font-semibold text-theme-muted">Messaging Category</span>
-                <span className="font-extrabold text-theme-fg">Cloud API</span>
+                <span className="font-semibold text-theme-muted">Message type</span>
+                <span className="font-extrabold text-theme-fg">WhatsApp Cloud</span>
               </div>
             </div>
           </div>
 
           <div className="mt-3 rounded-lg bg-theme-subtle/50 p-2.5 text-[10.5px] font-medium text-theme-secondary">
-            Quality rating is synced from Meta daily.
+            Updated daily from Meta.
           </div>
         </div>
       </div>

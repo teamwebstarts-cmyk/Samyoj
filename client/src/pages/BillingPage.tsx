@@ -265,8 +265,8 @@ export default function BillingPage() {
                       onChange={(v) => setCadence(v as CadenceTab)}
                       options={[
                         { value: 'monthly', label: 'Monthly' },
-                        { value: 'quarterly', label: 'Quarterly', savings: 'Save 5%' },
-                        { value: 'yearly', label: 'Yearly', savings: 'Save 20%' },
+                        { value: 'quarterly', label: 'Quarterly', savings: '5% off' },
+                        { value: 'yearly', label: 'Yearly', savings: '20% off' },
                       ]}
                     />
                   </div>

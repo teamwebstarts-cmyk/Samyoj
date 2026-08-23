@@ -1,4 +1,5 @@
-import { ExternalLink, Info, ShieldCheck } from 'lucide-react';
+import { ExternalLink, ShieldCheck } from 'lucide-react';
+import InfoTip from '../ui/InfoTip';
 
 export default function MetaCostExplainerCard() {
   return (
@@ -11,15 +12,15 @@ export default function MetaCostExplainerCard() {
               Meta Transparency
             </span>
             <span className="text-[11px] font-medium text-theme-muted">
-              Official Tech Provider Model
+              Billed by Meta directly
             </span>
           </div>
-          <h3 className="text-base font-extrabold tracking-tight text-theme-fg sm:text-lg">
-            WhatsApp & Meta Billing (Two Ledgers)
-          </h3>
-          <p className="max-w-2xl text-xs text-theme-secondary">
-            You pay Meta directly for messages. Samyoj charges only for its software on a separate bill.
-          </p>
+          <div className="flex items-center gap-1.5">
+            <h3 className="text-base font-extrabold tracking-tight text-theme-fg sm:text-lg">
+              Message Costs — Meta & Samyoj
+            </h3>
+            <InfoTip content="Meta bills you for WhatsApp messages. Samyoj bills you separately for the software. Samyoj does not add any extra charge on top of Meta's rates." />
+          </div>
         </div>
 
         <a
@@ -43,7 +44,7 @@ export default function MetaCostExplainerCard() {
             </span>
           </div>
           <p className="mt-1 text-[11px] text-theme-muted">
-            Promotions & offers. Billed on delivery.
+            Ads, offers & campaigns.
           </p>
         </div>
 
@@ -56,7 +57,7 @@ export default function MetaCostExplainerCard() {
             </span>
           </div>
           <p className="mt-1 text-[11px] text-theme-muted">
-            Order confirmations & shipping updates. Volume tiers apply.
+            Order updates & alerts.
           </p>
         </div>
 
@@ -69,29 +70,22 @@ export default function MetaCostExplainerCard() {
             </span>
           </div>
           <p className="mt-1 text-[11px] text-theme-muted">
-            OTP & account security codes.
+            OTP & login codes.
           </p>
         </div>
 
         {/* Service */}
         <div className="rounded-xl border border-theme-border bg-theme-subtle/30 p-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-theme-fg">Support Replies</span>
+            <span className="text-xs font-bold text-theme-fg">Customer replies</span>
             <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
               100% Free
             </span>
           </div>
           <p className="mt-1 text-[11px] text-theme-muted">
-            Customer replies within 24-hr service window are free.
+            Free when customer messages first.
           </p>
         </div>
-      </div>
-
-      <div className="mt-3.5 flex items-center gap-2 rounded-xl bg-theme-subtle/50 p-2.5 text-[11px] text-theme-secondary">
-        <Info className="h-4 w-4 shrink-0 text-theme-muted" />
-        <span>
-          <strong>Zero Markup Promise:</strong> Rates above are official Meta Cloud API benchmarks. Samyoj never adds surcharges — you pay Meta the same price directly.
-        </span>
       </div>
     </div>
   );

@@ -1,7 +1,8 @@
-import { Fragment } from 'react';
+import { Fragment, useState } from 'react';
 import {
   Bot,
   Check,
+  ChevronDown,
   Headphones,
   Layers,
   Minus,
@@ -215,29 +216,38 @@ export default function BillingFeatureMatrix({
 }: {
   currentPlan?: string;
 }) {
-  return (
-    <div className="overflow-hidden rounded-2xl border border-neutral-200/80 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 transition-all">
-      {/* Header bar */}
-      <div className="border-b border-neutral-200/80 p-4 sm:p-6 dark:border-slate-800 bg-neutral-50/50 dark:bg-slate-950/30">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-sky-500/10 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400">
-                <Sparkles className="h-4 w-4" />
-              </span>
-              <h2 className="text-base font-bold tracking-tight text-neutral-900 dark:text-white sm:text-lg">
-                Compare All Features & Limits
-              </h2>
-            </div>
-            <p className="mt-1 text-xs text-neutral-500 dark:text-slate-400">
-              Detailed limits, quotas, and entitlements across all platform tiers.
-            </p>
-          </div>
-        </div>
-      </div>
+  const [open, setOpen] = useState(false);
 
-      {/* Comparison Table */}
-      <div className="overflow-x-auto">
+  return (
+    <div className="overflow-hidden rounded-2xl border border-neutral-200/80 bg-white shadow-sm transition-all dark:border-slate-800 dark:bg-slate-900">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className={`flex w-full items-center justify-between gap-3 p-4 text-left transition-colors sm:p-6 ${
+          open
+            ? 'border-b border-neutral-200/80 bg-neutral-50/50 dark:border-slate-800 dark:bg-slate-950/30'
+            : 'bg-neutral-50/30 hover:bg-neutral-50/60 dark:bg-slate-950/20 dark:hover:bg-slate-950/40'
+        }`}
+      >
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-sky-500/10 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400">
+            <Sparkles className="h-4 w-4" />
+          </span>
+          <h2 className="text-base font-bold tracking-tight text-neutral-900 dark:text-white sm:text-lg">
+            Compare All Features & Limits
+          </h2>
+        </div>
+        <ChevronDown
+          className={`h-5 w-5 shrink-0 text-neutral-400 transition-transform duration-200 dark:text-slate-500 ${
+            open ? 'rotate-180' : ''
+          }`}
+          aria-hidden
+        />
+      </button>
+
+      {open && (
+          <div className="overflow-x-auto">
         <table className="w-full min-w-[960px] table-fixed border-collapse text-left text-xs">
           <thead>
             <tr className="border-b border-neutral-200/80 bg-neutral-100/60 dark:border-slate-800 dark:bg-slate-950/60">
@@ -363,7 +373,8 @@ export default function BillingFeatureMatrix({
             })}
           </tbody>
         </table>
-      </div>
+          </div>
+      )}
     </div>
   );
 }
