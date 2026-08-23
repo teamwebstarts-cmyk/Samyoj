@@ -29,7 +29,7 @@ export default function SecuritySettingsPanel() {
     try {
       const { data } = await teamApi.twoFactor.setup();
       setSecret(data.data.secret);
-      setQrDataUrl(await QRCode.toDataURL(data.data.otpauthUrl, { margin: 1, width: 160 }));
+      setQrDataUrl(await QRCode.toDataURL(data.data.otpauthUrl, { margin: 1, width: 140 }));
       setTwoFactorStep('setup');
     } catch {
       toastError('Failed to start 2FA setup');
@@ -45,7 +45,7 @@ export default function SecuritySettingsPanel() {
       setTwoFactorEnabled(true);
       setTwoFactorStep('idle');
       setVerifyCode('');
-      toastSuccess('Two-factor authentication enabled successfully');
+      toastSuccess('Two-factor authentication enabled');
     } catch {
       toastError('Invalid verification code');
     } finally {
@@ -84,7 +84,7 @@ export default function SecuritySettingsPanel() {
     setChangingPassword(true);
     try {
       await teamApi.changePassword(currentPassword, newPassword);
-      toastSuccess('Password changed successfully');
+      toastSuccess('Password changed');
       setCurrentPassword('');
       setNewPassword('');
       setConfirmNewPassword('');
@@ -99,132 +99,113 @@ export default function SecuritySettingsPanel() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Password Change */}
-      <SettingsPanel
-        title="Account Password"
-        description="Update your credentials to maintain strict account security."
-        icon={KeyRound}
-        accent="violet"
-      >
-        <form onSubmit={handleChangePassword} className="space-y-4 max-w-lg">
-          <AppInput
-            id="current-password"
-            label="Current password"
-            type="password"
-            required
-            value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
-          />
-          <AppInput
-            id="new-password"
-            label="New password"
-            type="password"
-            required
-            placeholder="At least 8 characters"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-          />
-          <AppInput
-            id="confirm-new-password"
-            label="Confirm new password"
-            type="password"
-            required
-            value={confirmNewPassword}
-            onChange={(e) => setConfirmNewPassword(e.target.value)}
-          />
-
-          <AppButton
-            type="submit"
-            loading={changingPassword}
-            disabled={!currentPassword || !newPassword || !confirmNewPassword}
-          >
-            Update password
-          </AppButton>
-        </form>
-      </SettingsPanel>
-
-      {/* Two-Factor Authentication (2FA) */}
-      <SettingsPanel
-        title="Two-Factor Authentication (2FA)"
-        description="Require a one-time passcode from Google Authenticator, 1Password, or Authy when signing in."
-        icon={Shield}
-        accent="emerald"
-      >
-        <div className="space-y-4">
-          <div
-            className={`flex items-center justify-between rounded-2xl p-4 ring-1 ${
-              twoFactorEnabled
-                ? 'bg-emerald-50/90 ring-emerald-100 dark:bg-emerald-950/30 dark:ring-emerald-900/40'
-                : 'bg-theme-subtle/50 ring-theme-border'
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <div
-                className={`flex h-10 w-10 items-center justify-center rounded-xl ${
-                  twoFactorEnabled
-                    ? 'bg-emerald-100 text-whatsapp-600 dark:bg-emerald-900/50 dark:text-whatsapp-400'
-                    : 'bg-theme-surface text-theme-muted'
-                }`}
-              >
-                <Smartphone size={20} />
-              </div>
-              <div>
-                <p className="font-extrabold text-theme-fg text-[14px]">
-                  {twoFactorEnabled ? '2FA is Enabled' : '2FA is Disabled'}
-                </p>
-                <p className="text-[12px] font-medium text-theme-secondary">
-                  {twoFactorEnabled
-                    ? 'Your account is protected with two-factor verification.'
-                    : 'Add an extra layer of protection to your workspace.'}
-                </p>
-              </div>
+    <SettingsPanel
+      title="Account security"
+      description="Password and two-factor login for your account."
+      icon={Shield}
+    >
+      <div className="grid gap-5 lg:grid-cols-2 lg:gap-6">
+        {/* Password */}
+        <section className="rounded-xl border border-theme-border/80 bg-theme-subtle/20 p-3.5">
+          <div className="mb-3 flex items-center gap-2">
+            <KeyRound className="h-4 w-4 text-whatsapp-600" strokeWidth={2.25} />
+            <h3 className="text-[13px] font-bold text-theme-fg">Password</h3>
+          </div>
+          <form onSubmit={handleChangePassword} className="space-y-2.5">
+            <AppInput
+              id="current-password"
+              label="Current"
+              type="password"
+              required
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <AppInput
+                id="new-password"
+                label="New"
+                type="password"
+                required
+                placeholder="8+ chars"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+              />
+              <AppInput
+                id="confirm-new-password"
+                label="Confirm"
+                type="password"
+                required
+                value={confirmNewPassword}
+                onChange={(e) => setConfirmNewPassword(e.target.value)}
+              />
             </div>
+            <AppButton
+              type="submit"
+              size="sm"
+              loading={changingPassword}
+              disabled={!currentPassword || !newPassword || !confirmNewPassword}
+            >
+              Update password
+            </AppButton>
+          </form>
+        </section>
 
-            {!twoFactorEnabled && twoFactorStep === 'idle' && (
-              <AppButton onClick={startSetup} loading={busy}>
-                Enable 2FA
-              </AppButton>
-            )}
+        {/* 2FA */}
+        <section className="rounded-xl border border-theme-border/80 bg-theme-subtle/20 p-3.5">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Smartphone className="h-4 w-4 text-whatsapp-600" strokeWidth={2.25} />
+              <h3 className="text-[13px] font-bold text-theme-fg">Two-factor (2FA)</h3>
+            </div>
+            <span
+              className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                twoFactorEnabled
+                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200'
+                  : 'bg-theme-subtle text-theme-muted ring-1 ring-theme-border'
+              }`}
+            >
+              {twoFactorEnabled ? 'On' : 'Off'}
+            </span>
           </div>
 
-          {twoFactorStep === 'setup' && (
-            <div className="rounded-2xl border border-theme-border bg-theme-subtle/30 p-5 space-y-4">
-              <p className="text-[13px] font-bold text-theme-fg">
-                Scan QR Code with Authenticator App
-              </p>
-              <p className="text-[12px] text-theme-secondary">
-                Use Google Authenticator, Microsoft Authenticator, or Authy to scan this code:
-              </p>
+          <p className="mb-3 text-[11px] leading-relaxed text-theme-secondary">
+            {twoFactorEnabled
+              ? 'A code from your authenticator app is required at login.'
+              : 'Add a code from Google Authenticator, Authy, or 1Password at login.'}
+          </p>
 
+          {!twoFactorEnabled && twoFactorStep === 'idle' && (
+            <AppButton size="sm" onClick={startSetup} loading={busy}>
+              Enable 2FA
+            </AppButton>
+          )}
+
+          {twoFactorStep === 'setup' && (
+            <div className="space-y-3">
               {qrDataUrl && (
-                <div className="flex flex-col items-center gap-3 py-2 sm:flex-row">
-                  <div className="rounded-xl border border-theme-border bg-white p-3 shadow-sm">
-                    <img src={qrDataUrl} alt="2FA QR code" className="h-36 w-36" />
+                <div className="flex items-start gap-3">
+                  <div className="rounded-lg border border-theme-border bg-white p-2">
+                    <img src={qrDataUrl} alt="2FA QR code" className="h-28 w-28" />
                   </div>
-                  <div className="space-y-1.5 text-[12px]">
-                    <p className="font-medium text-theme-secondary">Manual entry secret key:</p>
-                    <code className="block rounded-lg bg-theme-surface px-3 py-2 font-mono text-[12px] font-bold text-theme-fg ring-1 ring-theme-border select-all">
-                      {secret}
-                    </code>
-                  </div>
+                  <code className="block flex-1 rounded-lg bg-theme-surface px-2 py-1.5 font-mono text-[10px] text-theme-fg ring-1 ring-theme-border select-all">
+                    {secret}
+                  </code>
                 </div>
               )}
-
-              <div className="flex flex-wrap items-end gap-3 pt-2">
-                <div className="w-48">
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="w-36">
                   <AppInput
-                    label="6-digit verification code"
+                    label="6-digit code"
                     maxLength={6}
                     placeholder="123456"
                     value={verifyCode}
                     onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, ''))}
                   />
                 </div>
-                <AppButton onClick={enable2FA} disabled={verifyCode.length !== 6} loading={busy}>
-                  Verify & Activate 2FA
+                <AppButton size="sm" onClick={enable2FA} disabled={verifyCode.length !== 6} loading={busy}>
+                  Verify
                 </AppButton>
-                <AppButton variant="secondary" onClick={() => setTwoFactorStep('idle')}>
+                <AppButton size="sm" variant="secondary" onClick={() => setTwoFactorStep('idle')}>
                   Cancel
                 </AppButton>
               </div>
@@ -232,20 +213,18 @@ export default function SecuritySettingsPanel() {
           )}
 
           {twoFactorEnabled && (
-            <div className="rounded-2xl border border-rose-200/70 bg-rose-50/40 p-4 dark:border-rose-900/40 dark:bg-rose-950/20 space-y-3">
-              <p className="text-[13px] font-bold text-rose-900 dark:text-rose-200">
-                Disable Two-Factor Authentication
-              </p>
-              <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-2 border-t border-theme-border/60 pt-3">
+              <p className="text-[11px] font-semibold text-theme-secondary">Disable 2FA</p>
+              <div className="grid grid-cols-2 gap-2">
                 <AppInput
-                  label="Current 6-digit code"
+                  label="Code"
                   maxLength={6}
                   placeholder="123456"
                   value={disableCode}
                   onChange={(e) => setDisableCode(e.target.value.replace(/\D/g, ''))}
                 />
                 <AppInput
-                  label="Your account password"
+                  label="Password"
                   type="password"
                   value={disablePassword}
                   onChange={(e) => setDisablePassword(e.target.value)}
@@ -262,8 +241,8 @@ export default function SecuritySettingsPanel() {
               </AppButton>
             </div>
           )}
-        </div>
-      </SettingsPanel>
-    </div>
+        </section>
+      </div>
+    </SettingsPanel>
   );
 }
