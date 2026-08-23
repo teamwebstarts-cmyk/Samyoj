@@ -13,7 +13,6 @@ export default function AppearanceSettingsPanel() {
       title="Appearance"
       description="Theme, text size, font, density, card spacing, and page side space."
       icon={Palette}
-      accent="violet"
     >
       <div className="space-y-6">
         <div>
@@ -22,7 +21,7 @@ export default function AppearanceSettingsPanel() {
             Light, dark, or follow your system setting.
           </p>
           <div className="mt-3 max-w-md">
-            <ThemeToggle />
+            <ThemeToggle flat />
           </div>
         </div>
 
@@ -32,7 +31,7 @@ export default function AppearanceSettingsPanel() {
             One size for the whole app — Small, Default, or Large. Not a different size on each page.
           </p>
           <div className="mt-3 max-w-md">
-            <TextSizeToggle />
+            <TextSizeToggle flat />
           </div>
         </div>
 
@@ -52,7 +51,7 @@ export default function AppearanceSettingsPanel() {
             Compact tightens the sidebar, top bar, and list pages so more rows fit without zooming.
           </p>
           <div className="mt-3 max-w-sm">
-            <DensityToggle />
+            <DensityToggle flat />
           </div>
         </div>
 
