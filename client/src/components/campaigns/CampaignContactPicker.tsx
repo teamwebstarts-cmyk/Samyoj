@@ -7,7 +7,6 @@ import type { Contact } from '../../types';
 import Pagination from '../ui/Pagination';
 import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
 import { ContactOptInBadge } from '../contacts/contactUi';
-import { contactGetsCampaignMessages } from '../../utils/contactConsent';
 import { messagingConsent } from '../../utils/plainLanguage';
 
 interface CampaignContactPickerProps {
@@ -191,7 +190,6 @@ export default function CampaignContactPicker({
           <ul className={`${compact ? 'max-h-44' : 'max-h-56'} divide-y divide-theme-border overflow-auto`}>
             {visibleContacts.map((contact) => {
               const checked = selectedIds.includes(contact.id);
-              const getsMessages = contactGetsCampaignMessages(contact);
               return (
                 <li key={contact.id}>
                   <button

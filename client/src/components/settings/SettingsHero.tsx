@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
-import { CheckCircle2, Clock, Link2, ShieldCheck, Webhook } from 'lucide-react';
+import { CheckCircle2, Clock, Link2, ShieldCheck } from 'lucide-react';
 import Skeleton from '../ui/Skeleton';
 import { SETTINGS_FLAT_CARD } from './SettingsSkeleton';
 
