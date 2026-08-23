@@ -877,7 +877,6 @@ export default function CampaignsPage() {
             { label: 'Drafts', value: lifecycleSummary.drafts, tone: 'drafts' },
             { label: 'Scheduled', value: lifecycleSummary.scheduled, tone: 'scheduled' },
             { label: 'Running', value: lifecycleSummary.running, tone: 'running' },
-            { label: 'Completed', value: lifecycleSummary.completed, tone: 'completed' },
           ]}
         />
 
