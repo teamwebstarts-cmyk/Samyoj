@@ -6,6 +6,7 @@ import {
   type ContactConsentInput,
 } from '../../utils/contactConsent';
 import { messagingConsent, conversationStatusLabel } from '../../utils/plainLanguage';
+import { ContactConsentBadgeInfo } from './ContactConsentInfoTip';
 
 const consentBadgeStyles = {
   eligible:
@@ -19,9 +20,12 @@ const consentBadgeStyles = {
 export function ContactOptInBadge({
   contact,
   compact,
+  showInfo = false,
 }: {
   contact: ContactConsentInput;
   compact?: boolean;
+  /** Show (i) tooltip explaining this contact's campaign consent status. */
+  showInfo?: boolean;
 }) {
   const status = getContactConsentDisplay(contact);
   const label =
@@ -33,13 +37,16 @@ export function ContactOptInBadge({
   const Icon = status === 'eligible' ? CheckCircle2 : status === 'stopped' ? XCircle : Shield;
 
   return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-md font-bold uppercase tracking-wide ring-1 ring-inset ${
-        compact ? 'px-1.5 py-0.5 text-[8px]' : 'px-2.5 py-1 text-[10px]'
-      } ${consentBadgeStyles[status]}`}
-    >
-      <Icon className="h-3 w-3" />
-      {label}
+    <span className="inline-flex items-center gap-0.5">
+      <span
+        className={`inline-flex items-center gap-1 rounded-md font-bold uppercase tracking-wide ring-1 ring-inset ${
+          compact ? 'px-1.5 py-0.5 text-[8px]' : 'px-2.5 py-1 text-[10px]'
+        } ${consentBadgeStyles[status]}`}
+      >
+        <Icon className="h-3 w-3" />
+        {label}
+      </span>
+      {showInfo ? <ContactConsentBadgeInfo status={status} /> : null}
     </span>
   );
 }

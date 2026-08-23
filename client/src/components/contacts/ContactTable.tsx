@@ -3,6 +3,7 @@ import ContactAvatar from '../inbox/ContactAvatar';
 import Pagination from '../ui/Pagination';
 import { TableIconButton } from '../ui/TableActions';
 import type { Contact } from '../../types';
+import { ContactConsentInfoTip } from './ContactConsentInfoTip';
 import {
   ContactActiveIndicator,
   ContactConversationBadge,
@@ -83,7 +84,14 @@ export default function ContactTable({
                     header.key === 'actions' ? 'w-[8.25rem]' : ''
                   } ${header.key === 'status' ? 'w-[7.5rem] xl:w-[8.5rem]' : ''}`}
                 >
-                  {header.label}
+                  {header.key === 'status' ? (
+                    <span className="inline-flex items-center gap-1 normal-case tracking-normal">
+                      <span className="text-[11px] font-bold uppercase tracking-[0.08em]">Campaign</span>
+                      <ContactConsentInfoTip />
+                    </span>
+                  ) : (
+                    header.label
+                  )}
                 </th>
               ))}
             </tr>
@@ -157,7 +165,7 @@ export default function ContactTable({
 
                   <td className={`min-w-0 ${cellPad}`}>
                     <div className="flex flex-wrap items-center gap-1">
-                      <ContactOptInBadge contact={contact} compact />
+                      <ContactOptInBadge contact={contact} compact showInfo />
                       {contact.conversation?.status && (
                         <ContactConversationBadge status={contact.conversation.status} />
                       )}

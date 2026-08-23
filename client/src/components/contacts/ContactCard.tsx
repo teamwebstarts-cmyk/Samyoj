@@ -48,7 +48,7 @@ export default function ContactCard({
               <p className="truncate text-[11px] text-theme-muted">{contact.phone}</p>
             )}
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              <ContactOptInBadge contact={contact} />
+              <ContactOptInBadge contact={contact} showInfo />
               <ContactSourceBadge source={contact.source} />
             </div>
             {contact.tags.length > 0 && (

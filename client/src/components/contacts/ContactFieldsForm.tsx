@@ -20,6 +20,7 @@ import {
 } from '../../utils/phone';
 import { normalizeCustomKey } from '../../utils/customAttributes';
 import type { ContactFormValues } from './contactForm';
+import { ContactConsentInfoTip } from './ContactConsentInfoTip';
 
 interface ContactFieldsFormProps {
   form: ContactFormValues;
@@ -499,16 +500,21 @@ export default function ContactFieldsForm({
   );
 
   const consentField = (
-    <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-theme-border bg-theme-subtle/40 px-4 py-3 transition hover:bg-theme-subtle/60">
+    <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-theme-border bg-theme-subtle/40 px-4 py-3 transition hover:bg-theme-subtle/60">
       <input
         type="checkbox"
         checked={form.optedIn}
         onChange={(e) => set({ optedIn: e.target.checked })}
-        className="h-4 w-4 rounded border-theme-border text-emerald-600 focus:ring-emerald-500/30"
+        className="mt-0.5 h-4 w-4 rounded border-theme-border text-emerald-600 focus:ring-emerald-500/30"
       />
-      <div className="min-w-0">
-        <p className="text-[13px] font-semibold text-theme-fg">{messagingConsent.allowCampaignMessages}</p>
-        <p className="text-[11px] font-medium text-theme-muted">{messagingConsent.allowCampaignHint}</p>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5">
+          <p className="text-[13px] font-semibold text-theme-fg">{messagingConsent.allowCampaignMessages}</p>
+          <ContactConsentInfoTip />
+        </div>
+        <p className="mt-0.5 text-[11px] font-medium leading-relaxed text-theme-muted">
+          {messagingConsent.allowCampaignHint}
+        </p>
       </div>
     </label>
   );
