@@ -6,6 +6,9 @@ import { getEligibleAgents } from '../team/assignment';
 import { getOrgCallingSettings } from './settings.service';
 import type { CallingSettings } from './calling-settings.types';
 import { getOrgActiveCallCount } from './session-store';
+import { createModuleLogger } from '../../utils/logger';
+
+const log = createModuleLogger('call-routing');
 
 export type CallRouteDecision =
   | { mode: 'ai'; reason: string }
@@ -76,6 +79,15 @@ export async function decideCallRoute(
         reason: 'after_hours',
         afterHoursMessage: settings.afterHoursMessage,
       };
+    }
+    if (settings.afterHoursMode === 'ai' && !aiAllowed) {
+      log.info('After-hours AI requested but AI calling is not allowed', {
+        organizationId,
+        aiAutoAnswer: settings.aiAutoAnswer,
+        answeringBotEnabled: answeringOn,
+        contactCallingAiEnabled: contact?.callingAiEnabled,
+      });
+      return { mode: 'missed', reason: 'after_hours_ai_unavailable' };
     }
     return { mode: 'missed', reason: 'after_hours' };
   }
