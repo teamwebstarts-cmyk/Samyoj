@@ -11,6 +11,7 @@ import TemplateWizardCreateStep from '../components/templates/wizard/TemplateWiz
 import TemplateWizardPreviewPanel, {
   TemplateWizardPolicyFooter,
 } from '../components/templates/wizard/TemplateWizardPreviewPanel';
+import TemplateWizardApprovalAside from '../components/templates/wizard/TemplateWizardApprovalAside';
 import TemplateWizardReviewStep from '../components/templates/wizard/TemplateWizardReviewStep';
 import TemplateWizardStepper from '../components/templates/wizard/TemplateWizardStepper';
 import TemplateWizardSubmitStep from '../components/templates/wizard/TemplateWizardSubmitStep';
@@ -212,8 +213,8 @@ export default function TemplateWizardPage() {
   }, [activeStep, mode]);
 
   const stepSubtitle = useMemo(() => {
-    if (activeStep === 0) return 'Sent for review after you create it';
-    if (activeStep === 1) return 'Add sample values for variables and review before submission.';
+    if (activeStep === 0) return 'Connect personal fields while you write, then continue to review.';
+    if (activeStep === 1) return 'Check the live preview, then submit to WhatsApp.';
     return 'Your template will be sent to WhatsApp for approval.';
   }, [activeStep]);
 
@@ -521,6 +522,7 @@ export default function TemplateWizardPage() {
               showTestButton={activeStep === 1}
               onTestTemplate={handleTestTemplate}
             />
+            {activeStep < 2 && <TemplateWizardApprovalAside form={form} />}
             {activeStep === 2 && (
               <div className="mt-4 hidden xl:block">
                 <TemplateWizardPolicyFooter />
@@ -593,7 +595,7 @@ export default function TemplateWizardPage() {
                   ? 'Continue to review'
                   : mode === 'resubmit'
                     ? 'Resubmit for review'
-                    : 'Continue to submit'}
+                    : 'Submit for review'}
               </AppButton>
             </div>
           </div>

@@ -1,20 +1,13 @@
-import { Check, Lightbulb, Wand2, X } from 'lucide-react';
-import { getTemplateApprovalChecklist } from '../../../utils/templateUtils';
-import type { TemplateFormState, TemplateVariableMeta } from '../../../utils/templateForm';
-
-const SOURCE_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: '', label: 'Type manually (campaign)' },
-  { value: 'contact.name', label: 'Auto: Customer name' },
-  { value: 'contact.phone', label: 'Auto: Phone number' },
-  { value: 'contact.email', label: 'Auto: Email' },
-  { value: 'contact.custom', label: 'Auto: Contact custom field' },
-  { value: 'custom', label: 'Same value for everyone' },
-];
+import { Check } from 'lucide-react';
+import { CATEGORY_OPTIONS, LANGUAGE_OPTIONS } from '../../../utils/templateUtils';
+import type { TemplateFormState } from '../../../utils/templateForm';
+import { autoFillTemplateSamples } from './templateWizardModel';
+import TemplateVariableConnect from './TemplateVariableConnect';
 
 interface TemplateWizardReviewStepProps {
   form: TemplateFormState;
   onChange: (form: TemplateFormState) => void;
-  onAutoFill: () => void;
+  onAutoFill?: () => void;
 }
 
 function buttonTypeLabel(type: string) {
@@ -24,13 +17,18 @@ function buttonTypeLabel(type: string) {
   return 'Quick reply';
 }
 
-function formatPhonePreview(phone: string) {
-  const digits = phone.replace(/\D/g, '');
-  if (digits.startsWith('91') && digits.length >= 12) {
-    const local = digits.slice(2);
-    return `+91 ${local.slice(0, 5)} ${local.slice(5)}`.trim();
-  }
-  return phone || '—';
+function categoryLabel(value: string) {
+  return CATEGORY_OPTIONS.find((o) => o.value === value)?.label || value;
+}
+
+function languageLabel(value: string) {
+  return LANGUAGE_OPTIONS.find((o) => o.value === value)?.label || value;
+}
+
+function headerLabel(form: TemplateFormState) {
+  if (form.headerFormat === 'NONE') return 'None';
+  if (form.headerFormat === 'TEXT') return form.header.trim() || 'Text';
+  return form.headerFormat.charAt(0) + form.headerFormat.slice(1).toLowerCase();
 }
 
 export default function TemplateWizardReviewStep({
@@ -38,356 +36,87 @@ export default function TemplateWizardReviewStep({
   onChange,
   onAutoFill,
 }: TemplateWizardReviewStepProps) {
-  const checklist = getTemplateApprovalChecklist(form);
-  const bodyVars = form.variableMeta.filter((m) => m.scope === 'body');
-  const headerVars = form.variableMeta.filter((m) => m.scope === 'header');
   const filledButtons = form.buttons.filter((b) => b.text.trim());
-  const actionableButtons = filledButtons.filter(
-    (b) => b.type === 'PHONE_NUMBER' || b.type === 'URL' || b.type === 'COPY_CODE',
-  );
-
-  const updateMeta = (scope: 'body' | 'header', index: number, description: string) => {
-    onChange({
-      ...form,
-      variableMeta: form.variableMeta.map((m) =>
-        m.scope === scope && m.index === index ? { ...m, description } : m,
-      ),
-    });
-  };
-
-  const updateSource = (scope: 'body' | 'header', index: number, source: string) => {
-    onChange({
-      ...form,
-      variableMeta: form.variableMeta.map((m) =>
-        m.scope === scope && m.index === index
-          ? {
-              ...m,
-              suggestedSource: (source || undefined) as TemplateVariableMeta['suggestedSource'],
-              customKey: source === 'contact.custom' ? m.customKey || '' : undefined,
-            }
-          : m,
-      ),
-    });
-  };
-
-  const updateCustomKey = (scope: 'body' | 'header', index: number, customKey: string) => {
-    onChange({
-      ...form,
-      variableMeta: form.variableMeta.map((m) =>
-        m.scope === scope && m.index === index ? { ...m, customKey } : m,
-      ),
-    });
-  };
-
-  const updateSample = (scope: 'body' | 'header', index: number, value: string) => {
-    if (scope === 'body') {
-      const bodyExamples = [...form.bodyExamples];
-      bodyExamples[index - 1] = value;
-      onChange({ ...form, bodyExamples });
-      return;
-    }
-    const headerExamples = [...form.headerExamples];
-    headerExamples[index - 1] = value;
-    onChange({ ...form, headerExamples });
-  };
-
-  const getSample = (scope: 'body' | 'header', index: number) =>
-    scope === 'body' ? form.bodyExamples[index - 1] || '' : form.headerExamples[index - 1] || '';
+  const varCount = form.variableMeta.length;
 
   return (
     <div className="space-y-4">
-      <div className="template-wizard-card overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3 dark:border-slate-800">
-          <div>
-            <p className="text-[14px] font-bold text-slate-900 dark:text-white">Variable samples</p>
-            <p className="text-[11px] text-slate-500">
-              Add sample values for variables and review before submission.
-            </p>
+      <div className="template-wizard-card p-4">
+        <p className="text-[14px] font-bold text-slate-900 dark:text-white">Check before you submit</p>
+        <p className="mt-0.5 text-[11px] text-slate-500">
+          WhatsApp will review this copy. Variables you connected on Create are ready to send later.
+        </p>
+        <dl className="mt-3 grid grid-cols-2 gap-2 text-[12px] sm:grid-cols-4">
+          <div className="rounded-lg border border-slate-100 bg-slate-50/80 px-2.5 py-2 dark:border-slate-800 dark:bg-slate-900/40">
+            <dt className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Name</dt>
+            <dd className="mt-0.5 truncate font-mono text-[11px] font-semibold text-slate-800 dark:text-slate-200">
+              {form.name || '—'}
+            </dd>
           </div>
-          <button
-            type="button"
-            onClick={onAutoFill}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-[11px] font-bold text-violet-700 transition hover:bg-violet-100 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-300"
-          >
-            <Wand2 className="h-3.5 w-3.5" />
-            Auto-fill samples
-          </button>
-        </div>
-
-        {bodyVars.length === 0 && headerVars.length === 0 && (
-          <div className="border-b border-slate-100 px-4 py-6 text-center dark:border-slate-800">
-            <p className="text-[13px] font-semibold text-slate-700 dark:text-slate-300">
-              No variables in this template
-            </p>
-            <p className="mt-1 text-[11px] text-slate-500">
-              You can continue to submit — examples are only needed when the message has personal fields.
-            </p>
+          <div className="rounded-lg border border-slate-100 bg-slate-50/80 px-2.5 py-2 dark:border-slate-800 dark:bg-slate-900/40">
+            <dt className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Category</dt>
+            <dd className="mt-0.5 font-semibold text-slate-800 dark:text-slate-200">
+              {categoryLabel(form.category)}
+            </dd>
           </div>
-        )}
-
-        {bodyVars.length > 0 && (
-          <div className="border-b border-slate-100 px-4 py-3 dark:border-slate-800">
-            <p className="mb-3 text-[12px] font-bold text-slate-700 dark:text-slate-300">
-              Body variables ({bodyVars.length})
-            </p>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[560px] text-left text-[12px]">
-                <thead>
-                  <tr className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
-                    <th className="pb-2 pr-3">Variable</th>
-                    <th className="pb-2 pr-3">Description</th>
-                    <th className="pb-2 pr-3">Filled from</th>
-                    <th className="pb-2 pr-3">Sample value</th>
-                    <th className="pb-2">Preview</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {bodyVars.map((meta) => (
-                    <tr key={`body-${meta.index}`}>
-                      <td className="py-2.5 pr-3">
-                        <span className="inline-flex rounded-md bg-emerald-50 px-2 py-0.5 font-mono text-[11px] font-bold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
-                          {`{{${meta.index}}}`}
-                        </span>
-                      </td>
-                      <td className="py-2.5 pr-3">
-                        <input
-                          type="text"
-                          value={meta.description}
-                          onChange={(e) => updateMeta('body', meta.index, e.target.value)}
-                          className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[12px] dark:border-slate-700 dark:bg-slate-900"
-                        />
-                      </td>
-                      <td className="py-2.5 pr-3">
-                        <select
-                          value={meta.suggestedSource || ''}
-                          onChange={(e) => updateSource('body', meta.index, e.target.value)}
-                          className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[12px] font-medium dark:border-slate-700 dark:bg-slate-900"
-                          title="How this variable is filled when sending"
-                        >
-                          {SOURCE_OPTIONS.map((o) => (
-                            <option key={o.value} value={o.value}>
-                              {o.label}
-                            </option>
-                          ))}
-                        </select>
-                        {meta.suggestedSource === 'contact.custom' && (
-                          <input
-                            type="text"
-                            value={meta.customKey || ''}
-                            onChange={(e) => updateCustomKey('body', meta.index, e.target.value)}
-                            placeholder="order_id"
-                            className="mt-1.5 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 font-mono text-[11px] dark:border-slate-700 dark:bg-slate-900"
-                            aria-label="Custom field key"
-                          />
-                        )}
-                      </td>
-                      <td className="py-2.5 pr-3">
-                        <input
-                          type="text"
-                          value={getSample('body', meta.index)}
-                          onChange={(e) => updateSample('body', meta.index, e.target.value)}
-                          placeholder={meta.index === 1 ? 'Rahul' : 'Value'}
-                          className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[12px] dark:border-slate-700 dark:bg-slate-900"
-                          required
-                        />
-                      </td>
-                      <td className="py-2.5 font-semibold text-emerald-600">
-                        {getSample('body', meta.index) || '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          <div className="rounded-lg border border-slate-100 bg-slate-50/80 px-2.5 py-2 dark:border-slate-800 dark:bg-slate-900/40">
+            <dt className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Language</dt>
+            <dd className="mt-0.5 font-semibold text-slate-800 dark:text-slate-200">
+              {languageLabel(form.language)}
+            </dd>
           </div>
-        )}
-
-        {headerVars.length > 0 && (
-          <div className="border-b border-slate-100 px-4 py-3 dark:border-slate-800">
-            <p className="mb-3 text-[12px] font-bold text-slate-700 dark:text-slate-300">
-              Header variables ({headerVars.length})
-            </p>
-            <div className="space-y-2">
-              {headerVars.map((meta) => (
-                <div key={`header-${meta.index}`} className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  <span className="inline-flex w-fit rounded-md bg-emerald-50 px-2 py-0.5 font-mono text-[11px] font-bold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
-                    {`{{${meta.index}}}`}
-                  </span>
-                  <select
-                    value={meta.suggestedSource || ''}
-                    onChange={(e) => updateSource('header', meta.index, e.target.value)}
-                    className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[12px] font-medium dark:border-slate-700 dark:bg-slate-900"
-                    title="How this variable is filled when sending"
-                  >
-                    {SOURCE_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                  {meta.suggestedSource === 'contact.custom' && (
-                    <input
-                      type="text"
-                      value={meta.customKey || ''}
-                      onChange={(e) => updateCustomKey('header', meta.index, e.target.value)}
-                      placeholder="order_id"
-                      className="rounded-md border border-slate-200 bg-white px-2 py-1.5 font-mono text-[11px] dark:border-slate-700 dark:bg-slate-900"
-                      aria-label="Custom field key"
-                    />
-                  )}
-                  <input
-                    type="text"
-                    value={getSample('header', meta.index)}
-                    onChange={(e) => updateSample('header', meta.index, e.target.value)}
-                    className="rounded-md border border-slate-200 px-2 py-1.5 text-[12px] dark:border-slate-700 dark:bg-slate-900"
-                  />
-                </div>
-              ))}
-            </div>
+          <div className="rounded-lg border border-slate-100 bg-slate-50/80 px-2.5 py-2 dark:border-slate-800 dark:bg-slate-900/40">
+            <dt className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Header</dt>
+            <dd className="mt-0.5 truncate font-semibold text-slate-800 dark:text-slate-200">
+              {headerLabel(form)}
+            </dd>
           </div>
-        )}
-
-        {actionableButtons.length > 0 && (
-          <div className="border-b border-slate-100 px-4 py-3 dark:border-slate-800">
-            <p className="mb-3 text-[12px] font-bold text-slate-700 dark:text-slate-300">
-              Button variables ({actionableButtons.length})
-            </p>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[480px] text-left text-[12px]">
-                <thead>
-                  <tr className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
-                    <th className="pb-2 pr-3">Variable</th>
-                    <th className="pb-2 pr-3">Type</th>
-                    <th className="pb-2 pr-3">Sample value</th>
-                    <th className="pb-2">Preview</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {actionableButtons.map((btn, i) => {
-                    const btnIndex = form.buttons.indexOf(btn);
-                    const preview =
-                      btn.type === 'PHONE_NUMBER'
-                        ? formatPhonePreview(btn.phone_number)
-                        : btn.type === 'URL'
-                          ? btn.url || '—'
-                          : btn.example || '—';
-                    return (
-                      <tr key={i}>
-                        <td className="py-2.5 pr-3">
-                          <span className="inline-flex rounded-md bg-emerald-50 px-2 py-0.5 font-mono text-[11px] font-bold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
-                            {`{{${i + 1}}}`}
-                          </span>
-                        </td>
-                        <td className="py-2.5 pr-3 text-slate-600">{buttonTypeLabel(btn.type)}</td>
-                        <td className="py-2.5 pr-3">
-                          {btn.type === 'PHONE_NUMBER' ? (
-                            <div className="flex gap-2">
-                              <span className="flex h-9 shrink-0 items-center rounded-md border border-slate-200 bg-slate-50 px-2 text-[11px] font-semibold">
-                                IN +91
-                              </span>
-                              <input
-                                type="tel"
-                                value={btn.phone_number.replace(/^\+91/, '').trim()}
-                                onChange={(e) => {
-                                  const digits = e.target.value.replace(/\D/g, '');
-                                  const buttons = [...form.buttons];
-                                  buttons[btnIndex] = {
-                                    ...btn,
-                                    phone_number: digits ? `+91${digits}` : '',
-                                  };
-                                  onChange({ ...form, buttons });
-                                }}
-                                placeholder="98765 43210"
-                                className="h-9 min-w-0 flex-1 rounded-md border border-slate-200 px-2 text-[12px] dark:border-slate-700 dark:bg-slate-900"
-                              />
-                            </div>
-                          ) : btn.type === 'URL' ? (
-                            <input
-                              type="text"
-                              value={btn.url}
-                              onChange={(e) => {
-                                const buttons = [...form.buttons];
-                                buttons[btnIndex] = { ...btn, url: e.target.value };
-                                onChange({ ...form, buttons });
-                              }}
-                              className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-[12px] dark:border-slate-700 dark:bg-slate-900"
-                            />
-                          ) : btn.type === 'COPY_CODE' ? (
-                            <input
-                              type="text"
-                              value={btn.example}
-                              onChange={(e) => {
-                                const buttons = [...form.buttons];
-                                buttons[btnIndex] = { ...btn, example: e.target.value };
-                                onChange({ ...form, buttons });
-                              }}
-                              className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-[12px] dark:border-slate-700 dark:bg-slate-900"
-                            />
-                          ) : (
-                            <span className="text-slate-500">—</span>
-                          )}
-                        </td>
-                        <td className="py-2.5 font-semibold text-emerald-600">{preview}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        <div className="flex items-start gap-2 border-t border-emerald-200/60 bg-emerald-50/50 px-4 py-3 dark:border-emerald-900/40 dark:bg-emerald-950/20">
-          <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-          <p className="text-[11px] leading-relaxed text-emerald-900 dark:text-emerald-200">
-            Sample values help WhatsApp review your template faster. Make sure all variables are
-            meaningful and follow WhatsApp Policy.
+        </dl>
+        {form.footer ? (
+          <p className="mt-2 text-[11px] text-slate-500">
+            Footer: <span className="font-medium text-slate-700 dark:text-slate-300">{form.footer}</span>
           </p>
-        </div>
+        ) : null}
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_280px]">
+      <TemplateVariableConnect
+        form={form}
+        onChange={onChange}
+        onAutoFill={onAutoFill ?? (() => onChange(autoFillTemplateSamples(form)))}
+        variant="review"
+      />
+
+      {filledButtons.length > 0 && (
         <div className="template-wizard-card p-4">
-          <p className="text-[13px] font-bold text-slate-900 dark:text-white">Approval readiness checklist</p>
-          <ul className="mt-3 space-y-2.5">
-            {checklist.map((item) => (
-              <li key={item.id} className="flex items-start gap-2.5 text-[12px]">
-                <span
-                  className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
-                    item.passed
-                      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400'
-                      : 'bg-rose-100 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400'
-                  }`}
-                >
-                  {item.passed ? (
-                    <Check className="h-3 w-3" strokeWidth={2.75} />
-                  ) : (
-                    <X className="h-3 w-3" strokeWidth={2.75} />
-                  )}
+          <p className="text-[13px] font-bold text-slate-900 dark:text-white">
+            Buttons ({filledButtons.length})
+          </p>
+          <ul className="mt-2 space-y-1.5">
+            {filledButtons.map((btn, i) => (
+              <li key={`${btn.type}-${i}`} className="flex items-center gap-2 text-[12px]">
+                <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-slate-500 dark:bg-slate-800">
+                  {buttonTypeLabel(btn.type)}
                 </span>
-                <span className={item.passed ? 'text-slate-700 dark:text-slate-300' : 'font-semibold text-rose-700 dark:text-rose-300'}>
-                  {item.label}
-                  {item.hint && !item.passed ? (
-                    <span className="mt-0.5 block font-normal text-slate-500">{item.hint}</span>
-                  ) : null}
-                </span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200">{btn.text}</span>
+                {btn.type === 'URL' && btn.url ? (
+                  <span className="min-w-0 truncate text-slate-500">{btn.url}</span>
+                ) : null}
+                {btn.type === 'PHONE_NUMBER' && btn.phone_number ? (
+                  <span className="text-slate-500">{btn.phone_number}</span>
+                ) : null}
               </li>
             ))}
           </ul>
         </div>
+      )}
 
-        <div className="template-wizard-card bg-amber-50/60 p-4 dark:bg-amber-950/20">
-          <p className="flex items-center gap-1.5 text-[12px] font-bold text-amber-900 dark:text-amber-200">
-            <Lightbulb className="h-4 w-4" />
-            Tips for faster approval
-          </p>
-          <ul className="mt-2.5 list-disc space-y-1.5 pl-4 text-[11px] leading-relaxed text-amber-900/90 dark:text-amber-200/90">
-            <li>Avoid emojis in the template body</li>
-            <li>Use clear, professional language</li>
-            <li>Keep variables inside full sentences</li>
-            <li>Match category to message purpose</li>
-          </ul>
-        </div>
+      <div className="flex items-start gap-2 rounded-xl border border-emerald-200/70 bg-emerald-50/60 px-3.5 py-2.5 dark:border-emerald-900/40 dark:bg-emerald-950/20">
+        <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+        <p className="text-[11px] leading-relaxed text-emerald-900 dark:text-emerald-200">
+          {varCount > 0
+            ? 'Sample values help WhatsApp review faster. Submit when the live preview on the right looks right.'
+            : 'Submit when the live preview on the right looks right.'}
+        </p>
       </div>
     </div>
   );

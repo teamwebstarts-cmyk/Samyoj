@@ -15,10 +15,13 @@ import {
 import { HEADER_MEDIA_SIZE_HINT, headerMediaAccept } from '../../../utils/headerMedia';
 import { messagingConsent } from '../../../utils/plainLanguage';
 import {
+  sampleForVariable,
   syncFormExamples,
   type TemplateFormState,
   type TemplateVariableMeta,
 } from '../../../utils/templateForm';
+import { autoFillTemplateSamples } from './templateWizardModel';
+import TemplateVariableConnect from './TemplateVariableConnect';
 import { toastError } from '../../../utils/toast';
 
 /** No-code insert chips: place {{n}} at cursor and pre-map the source in one click. */
@@ -193,13 +196,25 @@ export default function TemplateWizardCreateStep({
           },
         ];
       }
-      onChange(
-        syncFormExamples({
-          ...form,
-          ...(target === 'body' ? { body: nextText } : { header: nextText }),
-          variableMeta,
-        })
-      );
+      const synced = syncFormExamples({
+        ...form,
+        ...(target === 'body' ? { body: nextText } : { header: nextText }),
+        variableMeta,
+      });
+      if (inferredChip) {
+        const examplesKey = target === 'body' ? 'bodyExamples' : 'headerExamples';
+        const examples = [...synced[examplesKey]];
+        if (!examples[nextIndex - 1]?.trim()) {
+          examples[nextIndex - 1] = sampleForVariable(
+            inferredChip.description,
+            nextIndex,
+            inferredChip.source,
+          );
+        }
+        onChange({ ...synced, [examplesKey]: examples });
+        return;
+      }
+      onChange(synced);
     };
 
     if (el) {
@@ -422,7 +437,7 @@ export default function TemplateWizardCreateStep({
               <span>
                 Body text <span className="text-red-500">*</span>
               </span>
-              <FieldInfoTip text="Use the chips below to insert variables. They can map to contact fields." />
+              <FieldInfoTip text="Use the chips below to insert {{n}} fields. Connect each one to a contact field in the panel that appears." />
             </label>
             <div className="flex items-center gap-2">
               <button
@@ -467,6 +482,12 @@ export default function TemplateWizardCreateStep({
           <div className="mt-1 flex justify-end">
             <Smile className="h-4 w-4 text-slate-300" aria-hidden />
           </div>
+          <TemplateVariableConnect
+            form={form}
+            onChange={onChange}
+            onAutoFill={() => onChange(autoFillTemplateSamples(form))}
+            variant="create"
+          />
         </div>
 
         <div className="mt-4 space-y-2">

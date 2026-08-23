@@ -659,8 +659,17 @@ export const TEMPLATE_PURPOSE_PRESETS: TemplatePurposePreset[] = [
 
 const PRESET_NAME_IDS = new Set(TEMPLATE_PURPOSE_PRESETS.map((preset) => preset.id));
 
-function sampleForVariable(description: string, index: number): string {
-  return AUTO_FILL_SAMPLES[description]?.[0] || (description === 'Customer name' ? 'Rahul' : `Sample ${index}`);
+export function sampleForVariable(
+  description: string,
+  index: number,
+  source?: TemplateVariableMeta['suggestedSource'],
+): string {
+  if (AUTO_FILL_SAMPLES[description]?.[0]) return AUTO_FILL_SAMPLES[description][0];
+  if (description === 'Customer name' || source === 'contact.name') return 'Rahul';
+  if (source === 'contact.phone') return '+919876543210';
+  if (source === 'contact.email') return 'rahul@example.com';
+  if (source === 'contact.custom') return 'order_id';
+  return `Sample ${index}`;
 }
 
 export function applyPurposePreset(form: TemplateFormState, preset: TemplatePurposePreset): TemplateFormState {

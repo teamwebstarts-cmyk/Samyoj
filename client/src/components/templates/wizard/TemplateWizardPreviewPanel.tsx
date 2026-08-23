@@ -47,10 +47,10 @@ export default function TemplateWizardPreviewPanel({
   compact = false,
 }: TemplateWizardPreviewPanelProps) {
   const phoneMaxClass = compact ? 'max-w-[280px]' : 'max-w-[360px]';
-  const framePadClass = compact ? 'p-3' : 'p-5';
+  const framePadClass = compact ? 'p-3' : 'p-3.5';
 
   return (
-    <div className="flex min-h-0 flex-col gap-4">
+    <div className="flex min-h-0 flex-col gap-0">
       <div className="template-wizard-card overflow-hidden">
         <div className="border-b border-slate-100 px-4 py-3 dark:border-slate-800">
           <div className="flex items-start justify-between gap-3">
@@ -107,7 +107,7 @@ export default function TemplateWizardPreviewPanel({
                 <p className="text-[10px] text-white/75">Business account</p>
               </div>
             </div>
-            <div className="px-3 py-4">
+            <div className="px-3 py-3">
               <WhatsAppTemplateCard
                 header={filledPreview.header}
                 headerFormat={

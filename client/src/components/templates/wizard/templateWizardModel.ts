@@ -1,7 +1,7 @@
 import {
-  AUTO_FILL_SAMPLES,
   buildCreatePayload,
   emptyTemplateForm,
+  sampleForVariable,
   syncFormExamples,
   type TemplateFormState,
 } from '../../../utils/templateForm';
@@ -12,9 +12,9 @@ import {
 } from '../../../utils/templateUtils';
 
 export const templateWizardStages = [
-  { id: 'create', label: 'Create', description: 'Design your message' },
-  { id: 'review', label: 'Review', description: 'Add sample values' },
-  { id: 'submit', label: 'Submit', description: 'Send for approval' },
+  { id: 'create', label: 'Create', description: 'Write and connect fields' },
+  { id: 'review', label: 'Review', description: 'Check and submit' },
+  { id: 'submit', label: 'Submit', description: 'Sent for approval' },
 ] as const;
 
 export type TemplateWizardMode = 'create' | 'resubmit';
@@ -102,16 +102,12 @@ export function autoFillTemplateSamples(form: TemplateFormState): TemplateFormSt
   const bodyExamples = form.bodyExamples.map((val, i) => {
     if (val.trim()) return val;
     const meta = form.variableMeta.find((m) => m.scope === 'body' && m.index === i + 1);
-    const key = meta?.description || '';
-    const pool = AUTO_FILL_SAMPLES[key];
-    return pool?.[0] || (key === 'Customer name' ? 'Rahul' : `Sample ${i + 1}`);
+    return sampleForVariable(meta?.description || '', i + 1, meta?.suggestedSource);
   });
   const headerExamples = form.headerExamples.map((val, i) => {
     if (val.trim()) return val;
     const meta = form.variableMeta.find((m) => m.scope === 'header' && m.index === i + 1);
-    const key = meta?.description || '';
-    const pool = AUTO_FILL_SAMPLES[key];
-    return pool?.[0] || `Sample ${i + 1}`;
+    return sampleForVariable(meta?.description || '', i + 1, meta?.suggestedSource);
   });
   const buttons = form.buttons.map((btn) => {
     if (!btn.text.trim()) return btn;
