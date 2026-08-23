@@ -4,19 +4,19 @@ import {
   Building2,
   Smartphone,
   Clock,
-  Plug,
   Palette,
   Shield,
   PhoneOff,
   Settings2,
+  Download,
 } from 'lucide-react';
 import PageShell from '../components/ui/PageShell';
 import { TabTransition } from '../components/ui/TabTransition';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { useAuth } from '../contexts/AuthContext';
-import { settingsApi, whatsappApi } from '../services/api';
+import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
+import { settingsApi, whatsappApi, billingApi } from '../services/api';
 import type {
-  WhatsappNumber,
   BusinessHoursSettings,
   WebhookStatus,
 } from '../types';
@@ -51,12 +51,42 @@ const DEFAULT_BUSINESS_HOURS: BusinessHoursSettings = {
 };
 
 const TAB_DEFS: Array<SettingsNavItem & { id: SettingsTab }> = [
-  { id: 'profile', label: 'Business profile', icon: Building2, group: 'Workspace' },
-  { id: 'appearance', label: 'Appearance', icon: Palette, group: 'Workspace' },
-  { id: 'whatsapp', label: 'WhatsApp', icon: Smartphone, group: 'Channels' },
-  { id: 'inbox', label: 'Hours & replies', icon: Clock, group: 'Channels' },
-  { id: 'security', label: 'Security & 2FA', icon: Shield, group: 'Advanced' },
-  { id: 'integrations', label: 'APIs & webhooks', icon: Plug, group: 'Advanced' },
+  {
+    id: 'profile',
+    label: 'Business profile',
+    hint: 'Name, industry & contacts',
+    icon: Building2,
+  },
+  {
+    id: 'whatsapp',
+    label: 'WhatsApp',
+    hint: 'Connect business numbers',
+    icon: Smartphone,
+  },
+  {
+    id: 'inbox',
+    label: 'Business hours',
+    hint: 'When team is open',
+    icon: Clock,
+  },
+  {
+    id: 'security',
+    label: 'Security & 2FA',
+    hint: 'Password & 2FA',
+    icon: Shield,
+  },
+  {
+    id: 'integrations',
+    label: 'Data & export',
+    hint: 'Contacts CSV & backup',
+    icon: Download,
+  },
+  {
+    id: 'appearance',
+    label: 'Appearance',
+    hint: 'Theme & spacing',
+    icon: Palette,
+  },
 ];
 
 function resolveLegacyTab(raw: string | null): SettingsTab | null {
@@ -76,8 +106,12 @@ function resolveLegacyTab(raw: string | null): SettingsTab | null {
 
 export default function SettingsPage() {
   const { orgRole, organization, twoFactorEnabled } = useAuth();
+  const { numbers, activeNumber, refreshNumbers, loading: numbersLoading, resolved: numbersResolved } = useWhatsAppNumber();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [numberLimit, setNumberLimit] = useState<number | 'unlimited' | null>(null);
+  const [planName, setPlanName] = useState<string | null>(null);
 
   const isOwnerOrAdmin = orgRole === 'OWNER' || orgRole === 'ADMIN';
 
@@ -89,8 +123,11 @@ export default function SettingsPage() {
   }, [organization, isOwnerOrAdmin]);
 
   const tabs = useMemo<SettingsNavItem[]>(
-    () => TAB_DEFS.filter((t) => !hiddenTabs.includes(t.id)),
-    [hiddenTabs]
+    () =>
+      TAB_DEFS.filter(
+        (t) => !hiddenTabs.includes(t.id) && (t.id !== 'integrations' || isOwnerOrAdmin)
+      ),
+    [hiddenTabs, isOwnerOrAdmin]
   );
 
   // Active Tab
@@ -99,7 +136,7 @@ export default function SettingsPage() {
     const legacy = resolveLegacyTab(raw);
     const candidate = (
       legacy ||
-      (['profile', 'whatsapp', 'inbox', 'integrations', 'appearance', 'security', 'admin'].includes(raw || '')
+      (['profile', 'whatsapp', 'inbox', 'integrations', 'appearance', 'security'].includes(raw || '')
         ? (raw as SettingsTab)
         : null)
     ) as SettingsTab | null;
@@ -112,7 +149,6 @@ export default function SettingsPage() {
   };
 
   // WhatsApp State
-  const [numbers, setNumbers] = useState<WhatsappNumber[]>([]);
   const [connecting, setConnecting] = useState(false);
   const [disconnectTarget, setDisconnectTarget] = useState<{ id: string; phone: string } | null>(null);
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
@@ -123,26 +159,33 @@ export default function SettingsPage() {
   const [savingHours, setSavingHours] = useState(false);
 
   // Initial Data Fetch
-  const loadData = () => {
-    setLoading(true);
+  const loadData = (options?: { silent?: boolean }) => {
+    if (options?.silent) setRefreshing(true);
+    else setInitialLoading(true);
     Promise.allSettled([
       settingsApi.get(),
-      whatsappApi.numbers(),
+      billingApi.get(),
       whatsappApi.webhookStatus(),
+      refreshNumbers({ silent: true }),
     ])
-      .then(([settingsRes, numbersRes, webhookRes]) => {
+      .then(([settingsRes, billingRes, webhookRes]) => {
         if (settingsRes.status === 'fulfilled') {
           const s = settingsRes.value.data.data;
           if (s.businessHours) setBusinessHours(s.businessHours);
         }
-        if (numbersRes.status === 'fulfilled') {
-          setNumbers(numbersRes.value.data.data.numbers || []);
+        if (billingRes.status === 'fulfilled') {
+          const plan = billingRes.value.data.data.currentPlan;
+          setNumberLimit(plan?.waNumbers ?? null);
+          setPlanName(plan?.name ?? null);
         }
         if (webhookRes.status === 'fulfilled') {
           setWebhookStatus(webhookRes.value.data.data);
         }
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        setInitialLoading(false);
+        setRefreshing(false);
+      });
   };
 
   useEffect(() => {
@@ -161,14 +204,16 @@ export default function SettingsPage() {
       if (mode === 'popup' && popup) {
         const unsubscribe = subscribeWaOAuthResult(() => {
           setConnecting(false);
-          loadData();
+          void refreshNumbers();
+          loadData({ silent: true });
         });
         const timer = setInterval(() => {
           if (popup.closed) {
             clearInterval(timer);
             unsubscribe();
             setConnecting(false);
-            loadData();
+            void refreshNumbers();
+            loadData({ silent: true });
           }
         }, 1000);
       }
@@ -186,7 +231,8 @@ export default function SettingsPage() {
       await whatsappApi.disconnect(disconnectTarget.id);
       toastSuccess('WhatsApp number disconnected');
       setDisconnectTarget(null);
-      loadData();
+      await refreshNumbers();
+      loadData({ silent: true });
     } catch {
       toastError('Failed to disconnect number');
     } finally {
@@ -199,6 +245,7 @@ export default function SettingsPage() {
     startHour: number;
     endHour: number;
     days: number[];
+    timezone?: string;
   }) => {
     setSavingHours(true);
     try {
@@ -218,12 +265,12 @@ export default function SettingsPage() {
     () => [
       {
         label: 'WhatsApp numbers',
-        value: loading ? '—' : numbers.length,
+        value: initialLoading || refreshing ? '—' : numbers.length,
         tone: numbers.length > 0 ? ('connected' as const) : ('total' as const),
       },
       {
         label: 'Inbound sync',
-        value: loading ? '—' : syncActive ? 'Active' : 'Off',
+        value: initialLoading || refreshing ? '—' : syncActive ? 'Active' : 'Off',
         tone: syncActive ? ('connected' as const) : ('hours' as const),
       },
       {
@@ -232,13 +279,13 @@ export default function SettingsPage() {
         tone: twoFactorEnabled ? ('secure' as const) : ('hours' as const),
       },
     ],
-    [loading, numbers.length, syncActive, twoFactorEnabled]
+    [initialLoading, refreshing, numbers.length, syncActive, twoFactorEnabled]
   );
 
   return (
     <PageShell>
       <div className="min-w-0 space-y-4 sm:space-y-5">
-        {loading ? (
+        {initialLoading ? (
           <SettingsSkeleton />
         ) : (
           <>
@@ -248,6 +295,7 @@ export default function SettingsPage() {
               title="Workspace settings"
               description="Business profile, WhatsApp numbers, hours, and account security."
               stats={heroStats}
+              loading={refreshing}
             />
 
             <div className="flex flex-col gap-5 lg:flex-row lg:gap-8">
@@ -257,15 +305,22 @@ export default function SettingsPage() {
                 onTabChange={(id) => setActiveTab(id as SettingsTab)}
               />
 
-              <div className="min-w-0 flex-1 lg:max-w-4xl">
+              <div className="min-w-0 flex-1">
                 <TabTransition tabKey={activeTab}>
                   {activeTab === 'profile' && (
-                    <BusinessProfilePanel canEdit={isOwnerOrAdmin} onSaved={loadData} />
+                    <BusinessProfilePanel
+                      canEdit={isOwnerOrAdmin}
+                      onSaved={() => loadData({ silent: true })}
+                    />
                   )}
 
                   {activeTab === 'whatsapp' && (
                     <WhatsAppChannelsPanel
                       numbers={numbers}
+                      activeNumberId={activeNumber?.id ?? null}
+                      numberLimit={numberLimit}
+                      planName={planName}
+                      loading={!numbersResolved || numbersLoading}
                       connecting={connecting}
                       onConnect={handleConnect}
                       onDisconnect={(id, phone) => setDisconnectTarget({ id, phone })}
@@ -283,7 +338,9 @@ export default function SettingsPage() {
                     />
                   )}
 
-                  {activeTab === 'integrations' && <IntegrationsPanel />}
+                  {activeTab === 'integrations' && isOwnerOrAdmin && (
+                    <IntegrationsPanel showDeveloperTools />
+                  )}
 
                   {activeTab === 'appearance' && <AppearanceSettingsPanel />}
 

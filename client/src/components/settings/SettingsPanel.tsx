@@ -1,51 +1,27 @@
 import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
-
-const settingsAccentBar = {
-  emerald: 'from-whatsapp-500 via-emerald-500 to-emerald-600',
-  violet: 'from-violet-500 via-purple-500 to-purple-600',
-  sky: 'from-sky-400 via-sky-500 to-blue-500',
-  amber: 'from-amber-400 via-amber-500 to-orange-500',
-  indigo: 'from-indigo-400 via-indigo-500 to-violet-500',
-  rose: 'from-rose-400 via-rose-500 to-pink-500',
-} as const;
+import { SETTINGS_FLAT_CARD } from './SettingsSkeleton';
 
 interface SettingsPanelProps {
   title: string;
   description: string;
   icon: LucideIcon;
-  accent?: keyof typeof settingsAccentBar;
   children: ReactNode;
   footer?: ReactNode;
 }
-
-const accentStyles = {
-  emerald: 'from-whatsapp-600 to-emerald-700 shadow-[0_4px_14px_rgba(37,211,102,0.3)]',
-  violet: 'from-violet-600 to-purple-700 shadow-[0_4px_14px_rgba(139,92,246,0.3)]',
-  sky: 'from-sky-500 to-blue-600 shadow-[0_4px_14px_rgba(14,165,233,0.3)]',
-  amber: 'from-amber-500 to-orange-500 shadow-[0_4px_14px_rgba(245,158,11,0.3)]',
-  indigo: 'from-indigo-500 to-violet-600 shadow-[0_4px_14px_rgba(99,102,241,0.3)]',
-  rose: 'from-rose-500 to-pink-600 shadow-[0_4px_14px_rgba(244,63,94,0.3)]',
-};
 
 export default function SettingsPanel({
   title,
   description,
   icon: Icon,
-  accent = 'emerald',
   children,
   footer,
 }: SettingsPanelProps) {
   return (
-    <section className="dashboard-card group/settings-panel overflow-hidden p-0 transition hover:shadow-panel">
-      <div className={`h-0.5 bg-gradient-to-r ${settingsAccentBar[accent]}`} />
-
-      <header className="relative overflow-hidden border-b border-theme-border bg-gradient-to-br from-theme-subtle/80 via-theme-surface to-transparent px-4 py-4 sm:px-5">
-        <div className="pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full bg-theme-subtle opacity-60 blur-2xl" />
-        <div className="relative flex items-start gap-4">
-          <div
-            className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br text-white ${accentStyles[accent as keyof typeof accentStyles]}`}
-          >
+    <section className={`${SETTINGS_FLAT_CARD} group/settings-panel p-0`}>
+      <header className="border-b border-theme-border bg-gradient-to-r from-whatsapp-500/[0.04] via-transparent to-transparent px-4 py-4 sm:px-5">
+        <div className="flex items-start gap-4">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-whatsapp-500/15 to-emerald-500/10 text-whatsapp-600 ring-1 ring-whatsapp-500/20 dark:text-whatsapp-400">
             <Icon className="h-5 w-5" strokeWidth={2.25} />
           </div>
           <div className="min-w-0 flex-1">
