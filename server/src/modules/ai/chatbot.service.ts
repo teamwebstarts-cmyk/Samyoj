@@ -28,6 +28,7 @@ import {
   ensureDefaultBot,
   setConversationBot,
 } from './bot.service';
+import { getChatSettingsForNumber } from '../chat/chat-settings.service';
 import { config } from '../../config';
 import {
   SAFE_CHAT_MAX_TOKENS,
@@ -337,6 +338,24 @@ export async function generateBotReply(
     if (!conversation!.botActive) {
       return { reply: null, handoff: false, skipped: true, skipReason: 'bot_paused' };
     }
+
+    const personalManualOn =
+      conversation!.botAssignmentSource === 'MANUAL' && conversation!.botActive;
+    if (conversation!.whatsappNumberId) {
+      const chatSettings = await getChatSettingsForNumber(
+        input.organizationId,
+        conversation!.whatsappNumberId
+      );
+      if (!chatSettings.aiEnabled && !personalManualOn) {
+        return {
+          reply: null,
+          handoff: false,
+          skipped: true,
+          skipReason: 'global_chat_ai_off',
+        };
+      }
+    }
+
     if (conversation!.assignedAgentId && conversation!.status !== 'OPEN') {
       return { reply: null, handoff: false, skipped: true, skipReason: 'agent_assigned' };
     }

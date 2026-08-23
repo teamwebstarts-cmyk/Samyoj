@@ -505,6 +505,8 @@ export const aiBotApi = {
     data: { intent: string; businessWebsite?: string; businessNotes?: string }
   ) => api.post(`/ai-bot/${botId}/generate-training`, data),
   setCallingAi: (enabled: boolean) => api.patch('/ai-bot/calling-ai', { enabled }),
+  setChatAi: (enabled: boolean, botId?: string) =>
+    api.patch('/ai-bot/chat-ai', { enabled, ...(botId ? { botId } : {}) }),
   addFaq: (botId: string, data: { title: string; content: string }) =>
     api.post(`/ai-bot/${botId}/faq`, data),
   updateFaq: (botId: string, faqId: string, data: { title?: string; content?: string }) =>

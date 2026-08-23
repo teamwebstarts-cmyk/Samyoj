@@ -39,13 +39,13 @@ export function ContactOptInBadge({
   const Icon = status === 'eligible' ? CheckCircle2 : status === 'stopped' ? XCircle : Shield;
 
   return (
-    <span className="inline-flex items-center gap-0.5">
+    <span className="inline-flex max-w-full items-center">
       <span
-        className={`inline-flex items-center gap-1 rounded-md font-bold uppercase tracking-wide ring-1 ring-inset ${
-          compact ? 'px-1.5 py-0.5 text-[8px]' : 'px-2.5 py-1 text-[10px]'
+        className={`inline-flex shrink-0 items-center gap-1 rounded-md font-bold uppercase tracking-wide ring-1 ring-inset leading-none whitespace-nowrap ${
+          compact ? 'px-2 py-1 text-[9px]' : 'px-2.5 py-1 text-[10px]'
         } ${consentBadgeStyles[status]}`}
       >
-        <Icon className="h-3 w-3" />
+        <Icon className={`shrink-0 ${compact ? 'h-2.5 w-2.5' : 'h-3 w-3'}`} />
         {label}
       </span>
       {showInfo ? <ContactConsentBadgeInfo status={status} /> : null}
@@ -72,7 +72,13 @@ export function ContactTagBadge({ tag }: { tag: string }) {
   );
 }
 
-export function ContactConversationBadge({ status }: { status: string }) {
+export function ContactConversationBadge({
+  status,
+  compact,
+}: {
+  status: string;
+  compact?: boolean;
+}) {
   const tones: Record<string, string> = {
     OPEN: 'bg-emerald-50 text-emerald-700 ring-emerald-200/60 dark:bg-emerald-950/40 dark:text-emerald-300',
     PENDING: 'bg-amber-50 text-amber-700 ring-amber-200/60 dark:bg-amber-950/40 dark:text-amber-300',
@@ -81,11 +87,11 @@ export function ContactConversationBadge({ status }: { status: string }) {
 
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ring-1 ring-inset ${
-        tones[status] || tones.CLOSED
-      }`}
+      className={`inline-flex shrink-0 items-center gap-1 rounded-md font-bold uppercase tracking-wide ring-1 ring-inset leading-none whitespace-nowrap ${
+        compact ? 'px-2 py-1 text-[9px]' : 'px-2 py-0.5 text-[9px]'
+      } ${tones[status] || tones.CLOSED}`}
     >
-      <MessageSquare className="h-2.5 w-2.5" />
+      <MessageSquare className={`shrink-0 ${compact ? 'h-2.5 w-2.5' : 'h-2.5 w-2.5'}`} />
       {conversationStatusLabel[status] || status}
     </span>
   );

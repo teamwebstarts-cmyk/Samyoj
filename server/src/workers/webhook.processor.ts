@@ -20,6 +20,8 @@ import {
   shouldGrantInboundReplyConsent,
 } from '../modules/contacts/consent';
 import { emitProductEvent } from '../modules/platform/events';
+import { NEW_CONTACT_CALLING_DEFAULTS } from '../modules/contacts/contact-ai-defaults';
+import { NEW_CONVERSATION_CHAT_DEFAULTS } from '../modules/chat/chat-settings.service';
 
 const log = createModuleLogger('webhook');
 
@@ -178,6 +180,7 @@ export async function processWebhookPayload(
             whatsappNumberId: whatsappNumber.id,
             name: contactName,
             source: 'INBOUND',
+            ...NEW_CONTACT_CALLING_DEFAULTS,
             ...inboundConsent,
           },
           update: contactName ? { name: contactName } : {},
@@ -211,6 +214,7 @@ export async function processWebhookPayload(
             organizationId: orgId,
             contactId: contact.id,
             whatsappNumberId: whatsappNumber.id,
+            ...NEW_CONVERSATION_CHAT_DEFAULTS,
           },
           update: {},
         });

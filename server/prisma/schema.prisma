@@ -803,7 +803,7 @@ model Contact {
   optOutAt         DateTime?     @map("opt_out_at")
   source           ContactSource @default(MANUAL)
   /** When false, inbound calls from this contact skip AI (human ring, then missed). Global AI calling off still wins. */
-  callingAiEnabled Boolean       @default(true) @map("calling_ai_enabled")
+  callingAiEnabled Boolean       @default(false) @map("calling_ai_enabled")
   createdAt        DateTime      @default(now()) @map("created_at")
   updatedAt        DateTime      @updatedAt @map("updated_at")
 
@@ -830,7 +830,7 @@ model Conversation {
   activeBotId         String?              @map("active_bot_id")
   botAssignmentSource BotAssignmentSource? @map("bot_assignment_source")
   status              ConversationStatus   @default(OPEN)
-  botActive           Boolean              @default(true) @map("bot_active")
+  botActive           Boolean              @default(false) @map("bot_active")
   botHandoffAt        DateTime?            @map("bot_handoff_at")
   botHandoffReason    String?              @map("bot_handoff_reason")
   botState            Json?                @map("bot_state")

@@ -8,9 +8,12 @@ import { AppError, asyncHandler, paramId, sendSuccess } from '../../utils/respon
 import { resolveActiveWhatsappNumber, resolveActiveWhatsappNumberId } from '../whatsapp/active-number';
 import {
   appliedBotIdsForNumber,
-  applyBotToAllChats,
-  removeBotFromAllChats,
 } from '../ai/bot-assignment.service';
+import {
+  disableGlobalChatAi,
+  enableGlobalChatAi,
+  getChatSettingsForNumber,
+} from '../chat/chat-settings.service';
 import { redactText } from '../../utils/pii-redaction';
 import {
   clearDefaultFlag,
@@ -161,12 +164,16 @@ router.get(
     const azureConfigured = await isAiConfiguredForOrg(orgId);
     const callingSettings = await getOrgCallingSettings(orgId);
     let appliedIds = new Set<string>();
+    let chatSettings = { aiEnabled: false, botId: null as string | null };
     try {
       const numberId = await resolveActiveWhatsappNumberId(
         orgId,
         req.headers['x-whatsapp-number-id']
       );
-      if (numberId) appliedIds = await appliedBotIdsForNumber(orgId, numberId);
+      if (numberId) {
+        appliedIds = await appliedBotIdsForNumber(orgId, numberId);
+        chatSettings = await getChatSettingsForNumber(orgId, numberId);
+      }
     } catch (err) {
       if (!(err instanceof AppError && (err.statusCode === 409 || err.statusCode === 400))) {
         throw err;
@@ -175,12 +182,14 @@ router.get(
     sendSuccess(res, {
       bots: bots.map((bot) => ({
         ...bot,
-        appliedToAll: appliedIds.has(bot.id),
+        appliedToAll: appliedIds.has(bot.id) || chatSettings.botId === bot.id,
         answersCalls: bot.channel === 'CALL' && callingSettings.defaultBotId === bot.id,
       })),
       azureConfigured,
       callingAiEnabled: callingSettings.aiAutoAnswer,
       answeringCallBotId: callingSettings.defaultBotId,
+      chatAiEnabled: chatSettings.aiEnabled,
+      defaultChatBotId: chatSettings.botId,
     });
   })
 );
@@ -438,6 +447,74 @@ router.post(
 );
 
 router.patch(
+  '/chat-ai',
+  authenticate,
+  requireOrg,
+  resolveActiveWhatsappNumber,
+  ...withPermission('manageInbox', 'manageAiBots'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const numberId = req.activeWhatsappNumberId;
+    if (!numberId) {
+      throw new AppError(400, 'Connect a WhatsApp number before using this feature.');
+    }
+    const { enabled, botId } = z
+      .object({
+        enabled: z.boolean(),
+        botId: z.string().uuid().optional(),
+      })
+      .parse(req.body);
+
+    if (enabled) {
+      const settings = await getChatSettingsForNumber(orgId, numberId);
+      const targetBotId = botId ?? settings.botId;
+      if (!targetBotId) {
+        const fallback = await prisma.aiBot.findFirst({
+          where: { organizationId: orgId, channel: 'CHAT', enabled: true },
+          orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+          select: { id: true },
+        });
+        if (!fallback) {
+          throw new AppError(400, 'Create and enable a chat agent first.');
+        }
+        const result = await enableGlobalChatAi({
+          organizationId: orgId,
+          whatsappNumberId: numberId,
+          botId: fallback.id,
+        });
+        sendSuccess(res, {
+          chatAiEnabled: result.settings.aiEnabled,
+          defaultChatBotId: result.settings.botId,
+          updated: result.updated,
+        });
+        return;
+      }
+      const result = await enableGlobalChatAi({
+        organizationId: orgId,
+        whatsappNumberId: numberId,
+        botId: targetBotId,
+      });
+      sendSuccess(res, {
+        chatAiEnabled: result.settings.aiEnabled,
+        defaultChatBotId: result.settings.botId,
+        updated: result.updated,
+      });
+      return;
+    }
+
+    const result = await disableGlobalChatAi({
+      organizationId: orgId,
+      whatsappNumberId: numberId,
+    });
+    sendSuccess(res, {
+      chatAiEnabled: result.settings.aiEnabled,
+      defaultChatBotId: result.settings.botId,
+      updated: result.updated,
+    });
+  })
+);
+
+router.patch(
   '/calling-ai',
   authenticate,
   requireOrg,
@@ -621,7 +698,7 @@ router.post(
     if (!numberId) {
       throw new AppError(400, 'Connect a WhatsApp number before using this feature.');
     }
-    const result = await applyBotToAllChats({
+    const result = await enableGlobalChatAi({
       organizationId: orgId,
       whatsappNumberId: numberId,
       botId: paramId(req),
@@ -639,10 +716,9 @@ router.post(
     if (!numberId) {
       throw new AppError(400, 'Connect a WhatsApp number before using this feature.');
     }
-    const result = await removeBotFromAllChats({
+    const result = await disableGlobalChatAi({
       organizationId: orgId,
       whatsappNumberId: numberId,
-      botId: paramId(req),
     });
     sendSuccess(res, result);
   })

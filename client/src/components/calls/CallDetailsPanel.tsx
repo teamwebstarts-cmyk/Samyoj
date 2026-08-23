@@ -86,20 +86,20 @@ export default function CallDetailsPanel({
   };
 
   const panelShellClass =
-    '@container flex flex-col border-theme-border/80 bg-white/70 shadow-[-8px_0_32px_rgba(15,23,42,0.06)] backdrop-blur-xl dark:border-neutral-800/70 dark:bg-neutral-950/70 dark:shadow-[-8px_0_32px_rgba(0,0,0,0.35)]';
+    '@container flex flex-col border-l border-theme-border bg-white shadow-[-8px_0_24px_rgba(15,23,42,0.08)] dark:border-neutral-800 dark:bg-neutral-950 dark:shadow-[-8px_0_24px_rgba(0,0,0,0.4)]';
 
   const panelBody = (
     <>
-      <div className="flex min-w-0 shrink-0 items-stretch gap-0 border-b border-white/50 dark:border-white/5">
+      <div className="flex min-w-0 shrink-0 items-stretch gap-0 border-b border-theme-border dark:border-neutral-800">
         <div className="flex min-w-0 flex-1 items-center gap-1.5 px-3 py-2.5">
           <StickyNote className="h-3.5 w-3.5 shrink-0 text-amber-600" strokeWidth={iconStroke} />
           <span className="text-[13px] font-bold tracking-tight text-theme-fg">Notes</span>
         </div>
-        <div className="relative z-10 flex shrink-0 items-center gap-0.5 border-l border-white/50 bg-white/40 px-1.5 dark:border-white/10 dark:bg-neutral-950/40">
+        <div className="relative z-10 flex shrink-0 items-center gap-0.5 border-l border-theme-border bg-white px-1.5 dark:border-neutral-800 dark:bg-neutral-950">
           <button
             type="button"
             onClick={closePanel}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-500 transition hover:bg-white/80 hover:text-neutral-800 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-100"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-800 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-100"
             aria-label="Close details panel"
             {...tipFor('Hide details')}
           >
@@ -148,11 +148,11 @@ export default function CallDetailsPanel({
         <button
           type="button"
           aria-label="Close details panel"
-          className="fixed inset-0 z-40 bg-neutral-900/25 backdrop-blur-[1px] md:hidden dark:bg-black/40"
+          className="fixed inset-0 z-40 bg-neutral-900/20 md:hidden dark:bg-black/35"
           onClick={closePanel}
         />
         <aside
-          className={`fixed inset-x-0 bottom-0 z-50 max-h-[75dvh] overflow-hidden rounded-t-2xl border shadow-2xl md:hidden ${panelShellClass}`}
+          className={`fixed inset-x-0 bottom-0 z-50 max-h-[75dvh] overflow-hidden rounded-t-2xl border border-theme-border shadow-2xl md:hidden ${panelShellClass}`}
         >
           <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-neutral-300/80 dark:bg-neutral-600" />
           {panelBody}
@@ -186,7 +186,7 @@ export default function CallDetailsPanel({
       )}
 
       <aside
-        className="relative z-40 inbox-composer-scroll hidden w-11 shrink-0 flex-col items-center gap-1 overflow-y-auto overscroll-contain border-l border-white/40 bg-white/55 py-3 backdrop-blur-md md:flex dark:border-neutral-800/80 dark:bg-neutral-950/70"
+        className="relative z-40 inbox-composer-scroll hidden w-11 shrink-0 flex-col items-center gap-1 overflow-y-auto overscroll-contain border-l border-theme-border bg-white py-3 md:flex dark:border-neutral-800 dark:bg-neutral-950"
         aria-label="Call notes"
       >
         {notesRailButton}

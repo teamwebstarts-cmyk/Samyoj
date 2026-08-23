@@ -7,6 +7,8 @@ import { deliverOutboundMessage } from './send.service';
 import { emitToOrg } from '../../realtime';
 import type { MessageStatus, MessageType } from '@prisma/client';
 import { emitProductEvent } from '../platform/events';
+import { NEW_CONTACT_CALLING_DEFAULTS } from '../contacts/contact-ai-defaults';
+import { NEW_CONVERSATION_CHAT_DEFAULTS } from '../chat/chat-settings.service';
 
 interface SendDirectMessageInput {
   phone: string;
@@ -51,6 +53,7 @@ export async function recordOutboundInConversation(input: RecordOutboundInput) {
       whatsappNumberId: input.whatsappNumberId,
       name: input.name,
       optedIn: true,
+      ...NEW_CONTACT_CALLING_DEFAULTS,
     },
     update: { name: input.name || undefined },
   });
@@ -69,6 +72,7 @@ export async function recordOutboundInConversation(input: RecordOutboundInput) {
         organizationId: input.organizationId,
         contactId: contact.id,
         whatsappNumberId: input.whatsappNumberId,
+        ...NEW_CONVERSATION_CHAT_DEFAULTS,
       },
     });
   } else if (!conversation.whatsappNumberId) {
@@ -158,6 +162,7 @@ export async function sendDirectMessage(organizationId: string, input: SendDirec
       name: input.name,
       optedIn: true,
       source: 'OUTBOUND',
+      ...NEW_CONTACT_CALLING_DEFAULTS,
     },
     update: { name: input.name || undefined },
   });
@@ -184,6 +189,7 @@ export async function sendDirectMessage(organizationId: string, input: SendDirec
         contactId: contact.id,
         whatsappNumberId: whatsappNumber.id,
         lastMessageAt: new Date(),
+        ...NEW_CONVERSATION_CHAT_DEFAULTS,
       },
       include: {
         messages: {

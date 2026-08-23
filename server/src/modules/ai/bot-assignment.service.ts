@@ -5,12 +5,27 @@ import { AppError } from '../../utils/response';
 /** Chats that follow default or were set by apply-all — never Inbox MANUAL picks. */
 export function applyAllConversationWhere(
   organizationId: string,
+  whatsappNumberId: string,
+  includeManual = true
+): Prisma.ConversationWhereInput {
+  if (includeManual) {
+    return { organizationId, whatsappNumberId };
+  }
+  return {
+    organizationId,
+    whatsappNumberId,
+    OR: [{ botAssignmentSource: null }, { botAssignmentSource: 'APPLIED' }],
+  };
+}
+
+export function nonManualConversationWhere(
+  organizationId: string,
   whatsappNumberId: string
 ): Prisma.ConversationWhereInput {
   return {
     organizationId,
     whatsappNumberId,
-    OR: [{ botAssignmentSource: null }, { botAssignmentSource: 'APPLIED' }],
+    NOT: { botAssignmentSource: 'MANUAL' },
   };
 }
 
@@ -50,8 +65,10 @@ export async function applyBotToAllChats(input: {
   organizationId: string;
   whatsappNumberId: string;
   botId: string;
+  /** When true, global ON overrides personal Inbox picks (product default). */
+  includeManual?: boolean;
 }): Promise<{ updated: number }> {
-  const { organizationId, whatsappNumberId, botId } = input;
+  const { organizationId, whatsappNumberId, botId, includeManual = true } = input;
   if (!whatsappNumberId) {
     throw new AppError(400, 'Connect a WhatsApp number before using this feature.');
   }
@@ -66,11 +83,32 @@ export async function applyBotToAllChats(input: {
   }
 
   const result = await prisma.conversation.updateMany({
-    where: applyAllConversationWhere(organizationId, whatsappNumberId),
+    where: applyAllConversationWhere(organizationId, whatsappNumberId, includeManual),
     data: {
       activeBotId: botId,
       botAssignmentSource: 'APPLIED' satisfies BotAssignmentSource,
       botActive: true,
+    },
+  });
+
+  return { updated: result.count };
+}
+
+/** Turn off global-managed chats; leave MANUAL Inbox picks untouched. */
+export async function disableNonManualChatsForNumber(
+  organizationId: string,
+  whatsappNumberId: string
+): Promise<{ updated: number }> {
+  if (!whatsappNumberId) {
+    throw new AppError(400, 'Connect a WhatsApp number before using this feature.');
+  }
+
+  const result = await prisma.conversation.updateMany({
+    where: nonManualConversationWhere(organizationId, whatsappNumberId),
+    data: {
+      activeBotId: null,
+      botAssignmentSource: null,
+      botActive: false,
     },
   });
 
@@ -98,6 +136,7 @@ export async function removeBotFromAllChats(input: {
     data: {
       activeBotId: null,
       botAssignmentSource: null,
+      botActive: false,
     },
   });
 

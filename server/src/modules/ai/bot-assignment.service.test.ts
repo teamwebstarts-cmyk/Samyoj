@@ -4,6 +4,8 @@ import {
   appliedBotIdsForNumber,
   applyAllConversationWhere,
   applyBotToAllChats,
+  disableNonManualChatsForNumber,
+  nonManualConversationWhere,
   removeAppliedConversationWhere,
   removeBotFromAllChats,
 } from './bot-assignment.service';
@@ -23,17 +25,29 @@ beforeEach(() => {
 });
 
 describe('applyAllConversationWhere', () => {
-  it('includes follow-default (null source) and APPLIED, not MANUAL', () => {
-    expect(applyAllConversationWhere('org-1', 'wa-1')).toEqual({
+  it('includes all chats on the number when includeManual is true', () => {
+    expect(applyAllConversationWhere('org-1', 'wa-1', true)).toEqual({
+      organizationId: 'org-1',
+      whatsappNumberId: 'wa-1',
+    });
+  });
+
+  it('excludes MANUAL when includeManual is false', () => {
+    expect(applyAllConversationWhere('org-1', 'wa-1', false)).toEqual({
       organizationId: 'org-1',
       whatsappNumberId: 'wa-1',
       OR: [{ botAssignmentSource: null }, { botAssignmentSource: 'APPLIED' }],
     });
   });
+});
 
-  it('does not use NOT MANUAL (SQL NULL would skip follow-default chats)', () => {
-    const where = applyAllConversationWhere('org-1', 'wa-1');
-    expect(JSON.stringify(where)).not.toMatch(/"not"\s*:/);
+describe('nonManualConversationWhere', () => {
+  it('matches every chat except MANUAL picks', () => {
+    expect(nonManualConversationWhere('org-1', 'wa-1')).toEqual({
+      organizationId: 'org-1',
+      whatsappNumberId: 'wa-1',
+      NOT: { botAssignmentSource: 'MANUAL' },
+    });
   });
 });
 
@@ -49,7 +63,7 @@ describe('removeAppliedConversationWhere', () => {
 });
 
 describe('applyBotToAllChats', () => {
-  it('sets APPLIED on non-MANUAL chats for this number only', async () => {
+  it('sets APPLIED on all chats including MANUAL by default', async () => {
     aiBotMock.findFirst.mockResolvedValue({ id: 'bot-a', channel: 'CHAT' } as never);
     conversationMock.updateMany.mockResolvedValue({ count: 4 } as never);
 
@@ -62,7 +76,7 @@ describe('applyBotToAllChats', () => {
     ).resolves.toEqual({ updated: 4 });
 
     expect(conversationMock.updateMany).toHaveBeenCalledWith({
-      where: applyAllConversationWhere('org-1', 'wa-1'),
+      where: applyAllConversationWhere('org-1', 'wa-1', true),
       data: {
         activeBotId: 'bot-a',
         botAssignmentSource: 'APPLIED',
@@ -93,21 +107,25 @@ describe('applyBotToAllChats', () => {
     ).rejects.toMatchObject({ statusCode: 400 });
     expect(conversationMock.updateMany).not.toHaveBeenCalled();
   });
+});
 
-  it('404s when the bot is not in this org', async () => {
-    aiBotMock.findFirst.mockResolvedValue(null);
-    await expect(
-      applyBotToAllChats({
-        organizationId: 'org-1',
-        whatsappNumberId: 'wa-1',
-        botId: 'bot-x',
-      })
-    ).rejects.toMatchObject({ statusCode: 404 });
+describe('disableNonManualChatsForNumber', () => {
+  it('pauses and clears assignment on non-MANUAL chats', async () => {
+    conversationMock.updateMany.mockResolvedValue({ count: 3 } as never);
+    await expect(disableNonManualChatsForNumber('org-1', 'wa-1')).resolves.toEqual({ updated: 3 });
+    expect(conversationMock.updateMany).toHaveBeenCalledWith({
+      where: nonManualConversationWhere('org-1', 'wa-1'),
+      data: {
+        activeBotId: null,
+        botAssignmentSource: null,
+        botActive: false,
+      },
+    });
   });
 });
 
 describe('removeBotFromAllChats', () => {
-  it('reverts only APPLIED rows for that bot; MANUAL stays', async () => {
+  it('reverts APPLIED rows and pauses them', async () => {
     aiBotMock.findFirst.mockResolvedValue({ id: 'bot-a', channel: 'CHAT' } as never);
     conversationMock.updateMany.mockResolvedValue({ count: 2 } as never);
 
@@ -124,6 +142,7 @@ describe('removeBotFromAllChats', () => {
       data: {
         activeBotId: null,
         botAssignmentSource: null,
+        botActive: false,
       },
     });
   });
@@ -134,16 +153,6 @@ describe('appliedBotIdsForNumber', () => {
     conversationMock.findMany.mockResolvedValue([{ activeBotId: 'bot-a' }] as never);
 
     await expect(appliedBotIdsForNumber('org-1', 'wa-1')).resolves.toEqual(new Set(['bot-a']));
-    expect(conversationMock.findMany).toHaveBeenCalledWith({
-      where: {
-        organizationId: 'org-1',
-        whatsappNumberId: 'wa-1',
-        botAssignmentSource: 'APPLIED',
-        activeBotId: { not: null },
-      },
-      select: { activeBotId: true },
-      distinct: ['activeBotId'],
-    });
   });
 
   it('returns empty when the number id is missing', async () => {

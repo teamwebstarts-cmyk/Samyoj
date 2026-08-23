@@ -2,14 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { aiBotApi } from '../services/api';
 import { toastError, toastSuccess } from '../utils/toast';
 import type { AiBot } from '../types';
+import { useOnActiveNumberChange } from './useOnActiveNumberChange';
 
 function isChatBot(bot: AiBot): boolean {
   return (bot.channel ?? 'CHAT') === 'CHAT';
 }
 
-function pickChatBotId(bots: AiBot[]): string | null {
-  const applied = bots.find((bot) => bot.appliedToAll && bot.enabled && isChatBot(bot));
-  if (applied) return applied.id;
+function pickFallbackChatBotId(bots: AiBot[]): string | null {
   return (
     bots.find((bot) => bot.isDefault && isChatBot(bot))?.id ??
     bots.find((bot) => bot.isSystem && isChatBot(bot))?.id ??
@@ -20,11 +19,12 @@ function pickChatBotId(bots: AiBot[]): string | null {
 
 /**
  * Chat AI bots for the Inbox page — mirrors useCallingBots for Calls.
- * "AI on" = an org-wide chat bot is applied to all conversations (appliedToAll).
+ * Global on/off is stored per WhatsApp number and bulk-applied to conversations.
  */
-export function useChatBots() {
+export function useChatBots(options?: { onChanged?: () => void }) {
   const [chatBots, setChatBots] = useState<AiBot[]>([]);
   const [defaultChatBotId, setDefaultChatBotId] = useState<string | null>(null);
+  const [chatAiEnabled, setChatAiEnabledState] = useState(false);
   const [loading, setLoading] = useState(true);
   const [assigning, setAssigning] = useState(false);
 
@@ -33,11 +33,18 @@ export function useChatBots() {
     try {
       const { data } = await aiBotApi.list('CHAT');
       const bots = (data.data?.bots ?? []) as AiBot[];
+      const enabled = Boolean(data.data?.chatAiEnabled);
+      const serverBotId =
+        (data.data?.defaultChatBotId as string | null | undefined) ??
+        bots.find((bot) => bot.appliedToAll && bot.enabled && isChatBot(bot))?.id ??
+        pickFallbackChatBotId(bots);
       setChatBots(bots);
-      setDefaultChatBotId(pickChatBotId(bots));
+      setChatAiEnabledState(enabled);
+      setDefaultChatBotId(serverBotId);
     } catch {
       setChatBots([]);
       setDefaultChatBotId(null);
+      setChatAiEnabledState(false);
     } finally {
       setLoading(false);
     }
@@ -47,14 +54,12 @@ export function useChatBots() {
     void load();
   }, [load]);
 
+  useOnActiveNumberChange(() => {
+    void load();
+  });
+
   const enabledChatBots = useMemo(
     () => chatBots.filter((bot) => bot.enabled && isChatBot(bot)),
-    [chatBots]
-  );
-
-  const appliedChatBotId = useMemo(
-    () =>
-      chatBots.find((bot) => bot.appliedToAll && bot.enabled && isChatBot(bot))?.id ?? null,
     [chatBots]
   );
 
@@ -67,26 +72,29 @@ export function useChatBots() {
     [enabledChatBots, defaultChatBotId]
   );
 
-  /** True when a chat bot is actively applied to all conversations on this number. */
-  const chatAiEnabled = appliedChatBotId !== null;
-
-  const selectChatBot = useCallback(
-    async (botId: string) => {
-      if (assigning || botId === appliedChatBotId) return;
-      setAssigning(true);
+  const applyServerState = useCallback(
+    (enabled: boolean, botId: string | null) => {
+      setChatAiEnabledState(enabled);
+      if (botId) setDefaultChatBotId(botId);
       setChatBots((prev) =>
         prev.map((bot) => ({
           ...bot,
-          isDefault: bot.id === botId,
-          appliedToAll: bot.id === botId,
+          appliedToAll: enabled && bot.id === botId,
         }))
       );
+      options?.onChanged?.();
+    },
+    [options]
+  );
+
+  const selectChatBot = useCallback(
+    async (botId: string) => {
+      if (assigning || (chatAiEnabled && botId === defaultChatBotId)) return;
+      setAssigning(true);
       try {
-        await aiBotApi.applyToAllChats(botId);
-        setDefaultChatBotId(botId);
-        toastSuccess('Chat AI bot applied to all conversations', {
-          id: 'chat-bot-pick',
-        });
+        const { data } = await aiBotApi.setChatAi(true, botId);
+        applyServerState(Boolean(data.data?.chatAiEnabled), data.data?.defaultChatBotId ?? botId);
+        toastSuccess('Chat AI enabled for all conversations', { id: 'chat-bot-pick' });
       } catch {
         void load();
         toastError('Could not apply chat AI bot.', { id: 'chat-bot-pick' });
@@ -94,60 +102,34 @@ export function useChatBots() {
         setAssigning(false);
       }
     },
-    [appliedChatBotId, assigning, load]
+    [applyServerState, assigning, chatAiEnabled, defaultChatBotId, load]
   );
 
-  /** Toggle org-wide chat AI on/off. On = assign an enabled chat bot; off = remove. */
   const setChatAiEnabled = useCallback(
     async (next: boolean) => {
-      if (assigning) return;
-      if (next === chatAiEnabled) return;
+      if (assigning || next === chatAiEnabled) return;
 
       const botId =
         defaultChatBotId ??
         enabledChatBots.find((bot) => bot.isDefault)?.id ??
         enabledChatBots[0]?.id ??
         null;
-      const removeId = appliedChatBotId ?? botId;
 
       if (next && !botId) {
         toastError('Create and enable a chat agent first.', { id: 'chat-bot-on' });
         return;
       }
-      if (!next && !removeId) return;
 
       setAssigning(true);
-      setChatBots((prev) =>
-        prev.map((bot) => ({
-          ...bot,
-          appliedToAll: next && bot.id === botId,
-        }))
-      );
-
       try {
-        if (next) {
-          await aiBotApi.applyToAllChats(botId!);
-          setDefaultChatBotId(botId);
-          setChatBots((prev) =>
-            prev.map((bot) => ({
-              ...bot,
-              isDefault: bot.id === botId,
-              appliedToAll: bot.id === botId,
-            }))
-          );
-          toastSuccess('Chat AI enabled for all conversations', { id: 'chat-bot-on' });
-        } else {
-          await aiBotApi.removeFromAllChats(removeId!);
-          setChatBots((prev) =>
-            prev.map((bot) => ({
-              ...bot,
-              appliedToAll: false,
-            }))
-          );
-          toastSuccess('Chat AI removed from all conversations', {
-            id: 'chat-bot-off',
-          });
-        }
+        const { data } = await aiBotApi.setChatAi(next, next ? botId ?? undefined : undefined);
+        applyServerState(
+          Boolean(data.data?.chatAiEnabled),
+          (data.data?.defaultChatBotId as string | null | undefined) ?? botId
+        );
+        toastSuccess(next ? 'Chat AI enabled for all conversations' : 'Chat AI turned off', {
+          id: next ? 'chat-bot-on' : 'chat-bot-off',
+        });
       } catch {
         void load();
         toastError(next ? 'Could not enable chat AI.' : 'Could not turn off chat AI.', {
@@ -157,7 +139,7 @@ export function useChatBots() {
         setAssigning(false);
       }
     },
-    [appliedChatBotId, assigning, chatAiEnabled, defaultChatBotId, enabledChatBots, load]
+    [applyServerState, assigning, chatAiEnabled, defaultChatBotId, enabledChatBots, load]
   );
 
   return {

@@ -690,7 +690,21 @@ export default function InboxPage() {
     setContextMenu({ x: event.clientX, y: event.clientY, conversationId: conversation.id });
   };
 
-  const chatBots = useChatBots();
+  const chatBots = useChatBots({
+    onChanged: async () => {
+      await loadConversations();
+      const id = selectedRef.current?.id;
+      if (!id) return;
+      try {
+        const { data } = await inboxApi.get(id);
+        const fresh = data.data as Conversation;
+        setSelected((prev) => (prev?.id === id ? { ...prev, ...fresh } : prev));
+        upsertConversation(fresh);
+      } catch {
+        /* keep open thread if refresh fails */
+      }
+    },
+  });
 
   return (
     <InboxGlassTipProvider>
@@ -805,7 +819,7 @@ export default function InboxPage() {
             {selected ? (
               <div
                 key={selected.id}
-                className="inbox-thread-enter flex min-h-0 min-w-0 flex-1 overflow-hidden motion-reduce:animate-none"
+                className="inbox-thread-enter relative flex min-h-0 min-w-0 flex-1 overflow-hidden motion-reduce:animate-none"
               >
                 <ChatThread
                   conversation={selected}
@@ -890,16 +904,6 @@ export default function InboxPage() {
                   onOpenTemplateMode={() => setTemplateMode(true)}
                 />
 
-                {/* R4: vertical drag handle between thread and details rail (md+). */}
-                <div className="hidden md:flex">
-                  <PaneHandle
-                    side="right"
-                    width={paneWidths.widths.right}
-                    ariaLabel="Resize details panel"
-                    onResize={paneWidths.rightRailProps.onResize}
-                  />
-                </div>
-
                 <InboxDetailsPanel
                   conversation={selected}
                   notes={selected.internalNotes ?? []}
@@ -925,7 +929,6 @@ export default function InboxPage() {
                   overlayOpen={detailsOverlay.open}
                   overlaySection={detailsOverlay.section}
                   onOverlayClose={() => setDetailsOverlay({ open: false })}
-                  panelWidth={paneWidths.widths.right}
                 />
               </div>
             ) : (

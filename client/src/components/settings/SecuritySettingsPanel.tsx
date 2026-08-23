@@ -56,6 +56,7 @@ export default function SecuritySettingsPanel() {
             label="Current"
             type="password"
             required
+            placeholder="Enter current password"
             value={currentPassword}
             onChange={(e) => setCurrentPassword(e.target.value)}
           />
@@ -65,7 +66,7 @@ export default function SecuritySettingsPanel() {
               label="New"
               type="password"
               required
-              placeholder="8+ chars"
+              placeholder="8+ characters"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
             />
@@ -74,6 +75,7 @@ export default function SecuritySettingsPanel() {
               label="Confirm"
               type="password"
               required
+              placeholder="Repeat password"
               value={confirmNewPassword}
               onChange={(e) => setConfirmNewPassword(e.target.value)}
             />

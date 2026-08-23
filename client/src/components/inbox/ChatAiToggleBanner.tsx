@@ -35,8 +35,8 @@ export default function ChatAiToggleBanner({
   const statusLabel = enabled ? 'On' : 'Off';
   const autoLabel = enabled ? 'AI replies' : 'Human replies';
   const infoText = enabled
-    ? 'AI chat is on — the assigned bot automatically replies to new customer messages on this number. Turn off to have your team reply instead.'
-    : 'AI chat is off — your team replies to customer messages on this number. Turn on to let the assigned bot reply automatically.';
+    ? 'AI chat is on for existing conversations on this number. New chats start with AI off until you turn it on for that person. Turn off to pause AI on non-personal chats.'
+    : 'AI chat is off — your team replies unless you turned AI on for a specific chat. Turn on to apply the selected bot to existing conversations.';
 
   const noBots = !hasBots;
 

@@ -20,6 +20,7 @@ import { Prisma } from '@prisma/client';
 import { contactConsentData, contactCreateConsentFields } from './consent';
 import { emitProductEvent } from '../platform/events';
 import { checkQuota } from '../billing/entitlements.service';
+import { NEW_CONTACT_CALLING_DEFAULTS } from './contact-ai-defaults';
 
 const router = Router();
 
@@ -95,6 +96,7 @@ router.post(
         notes: data.notes,
         customAttributes,
         source: 'MANUAL',
+        ...NEW_CONTACT_CALLING_DEFAULTS,
         ...contactCreateConsentFields(data.optedIn, 'MANUAL'),
       },
       update: {
@@ -186,6 +188,7 @@ router.post(
           notes: c.notes,
           customAttributes,
           source: 'IMPORT',
+          ...NEW_CONTACT_CALLING_DEFAULTS,
         },
         update: { name: c.name, tags: c.tags, notes: c.notes, customAttributes },
       });

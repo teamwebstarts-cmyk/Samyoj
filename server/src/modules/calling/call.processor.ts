@@ -15,6 +15,8 @@ import { getOrgCallingSettings, resolveCallVoiceConfig } from './settings.servic
 import { triggerCallCompletedFlow } from '../flows/engine';
 import { handleMissedCallFollowUp } from './missed-call.service';
 import { publishCallEventMessage } from './call-event-message';
+import { NEW_CONTACT_CALLING_DEFAULTS } from '../contacts/contact-ai-defaults';
+import { NEW_CONVERSATION_CHAT_DEFAULTS } from '../chat/chat-settings.service';
 import {
   clearBicUnanswered,
   getPendingCall,
@@ -111,6 +113,7 @@ async function ensureContactAndConversation(
         consentSource: 'INBOUND_CALL',
         consentAt: new Date(),
         source: 'INBOUND',
+        ...NEW_CONTACT_CALLING_DEFAULTS,
       },
     });
   }
@@ -127,7 +130,7 @@ async function ensureContactAndConversation(
         contactId: contact.id,
         whatsappNumberId,
         status: 'OPEN',
-        botActive: true,
+        ...NEW_CONVERSATION_CHAT_DEFAULTS,
       },
     });
   } else if (!conversation.whatsappNumberId) {

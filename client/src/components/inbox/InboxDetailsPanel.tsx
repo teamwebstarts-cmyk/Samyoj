@@ -41,6 +41,10 @@ const SECTION_TO_TAB: Record<PanelSection, DetailsTab> = {
   tags: 'overview',
 };
 
+/** Overlay panel width — matches Calls details panel. */
+const DEFAULT_DETAILS_PANEL_WIDTH = 340;
+const DETAILS_RAIL_WIDTH = 44;
+
 const DETAILS_TABS: ReadonlyArray<{
   id: DetailsTab;
   label: string;
@@ -109,6 +113,7 @@ export default function InboxDetailsPanel({
   const [addingTag, setAddingTag] = useState(false);
   const [showTagInput, setShowTagInput] = useState(false);
   const [orgTags, setOrgTags] = useState<string[]>([]);
+  const [activeSection, setActiveSection] = useState<PanelSection>('labels');
   const scrollRef = useRef<HTMLDivElement>(null);
   const tabListRef = useRef<HTMLDivElement>(null);
   const labelsSectionRef = useRef<HTMLDivElement>(null);
@@ -207,15 +212,22 @@ export default function InboxDetailsPanel({
   useEffect(() => {
     if (!overlayOpen) return;
     onPanelOpenChange(true);
+    if (overlaySection) setActiveSection(overlaySection);
     switchToTab(overlaySection);
   }, [overlayOpen, overlaySection]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!panelOpen || !focusSection) return;
+    setActiveSection(focusSection);
     switchToTab(focusSection);
   }, [panelOpen, focusSection]);
 
   const openPanel = (section?: PanelSection) => {
+    if (section && panelOpen && activeSection === section) {
+      closePanel();
+      return;
+    }
+    if (section) setActiveSection(section);
     onPanelOpenChange(true);
     switchToTab(section);
   };
@@ -313,7 +325,9 @@ export default function InboxDetailsPanel({
   const iconStroke = 1.9;
 
   const panelShellClass =
-    '@container flex flex-col border-theme-border/80 bg-white/70 shadow-[-8px_0_32px_rgba(15,23,42,0.06)] backdrop-blur-xl dark:border-neutral-800/70 dark:bg-neutral-950/70 dark:shadow-[-8px_0_32px_rgba(0,0,0,0.35)]';
+    '@container flex flex-col border-l border-theme-border bg-white shadow-[-8px_0_24px_rgba(15,23,42,0.08)] dark:border-neutral-800 dark:bg-neutral-950 dark:shadow-[-8px_0_24px_rgba(0,0,0,0.4)]';
+
+  const resolvedPanelWidth = panelWidth ?? DEFAULT_DETAILS_PANEL_WIDTH;
 
   const actionBtnClass =
     'relative flex h-9 w-9 items-center justify-center rounded-xl transition disabled:cursor-not-allowed disabled:opacity-45';
@@ -355,7 +369,7 @@ export default function InboxDetailsPanel({
 
   const panelBody = (
     <>
-      <div className="flex min-w-0 shrink-0 items-stretch gap-0 border-b border-white/50 dark:border-white/5">
+      <div className="flex min-w-0 shrink-0 items-stretch gap-0 border-b border-theme-border dark:border-neutral-800">
         <div
           ref={tabListRef}
           className="inbox-composer-scroll min-w-0 flex-1 overflow-x-auto overscroll-x-contain px-2 pt-2"
@@ -392,13 +406,13 @@ export default function InboxDetailsPanel({
             })}
           </div>
         </div>
-        <div className="relative z-10 flex shrink-0 items-center gap-0.5 border-l border-white/50 bg-white/40 px-1.5 dark:border-white/10 dark:bg-neutral-950/40">
+        <div className="relative z-10 flex shrink-0 items-center gap-0.5 border-l border-theme-border bg-white px-1.5 dark:border-neutral-800 dark:bg-neutral-950">
           {renderQuickActions({ tipSide: 'below', compact: true })}
           <span className="mx-0.5 h-4 w-px shrink-0 bg-theme-border/70" aria-hidden />
           <button
             type="button"
             onClick={closePanel}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-500 transition hover:bg-white/80 hover:text-neutral-800 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-100"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-800 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-100"
             aria-label="Close details panel"
             {...tipFor('Hide details')}
           >
@@ -657,6 +671,84 @@ export default function InboxDetailsPanel({
     </>
   );
 
+  const railBtn =
+    'relative flex h-9 w-9 items-center justify-center rounded-xl transition';
+  const railBadge =
+    'absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold text-white';
+  const railDivider = 'my-1 h-px w-5 shrink-0 bg-theme-border/55 dark:bg-white/10';
+
+  const railSectionClass = (section: PanelSection, tone: string, activeTone: string) =>
+    `${railBtn} ${
+      panelOpen && activeSection === section ? activeTone : `${tone} hover:bg-theme-subtle/80`
+    }`;
+
+  const detailsRail = (
+    <aside
+      className="relative z-40 inbox-composer-scroll hidden w-11 shrink-0 flex-col items-center gap-0 overflow-y-auto overscroll-contain border-l border-theme-border bg-white py-3 md:flex dark:border-neutral-800 dark:bg-neutral-950"
+      aria-label="Conversation details shortcuts"
+    >
+      <div className="flex flex-col items-center">
+        <button
+          type="button"
+          aria-label={labels.length > 0 ? `Labels, ${labels.length}` : 'Labels'}
+          aria-pressed={panelOpen && activeSection === 'labels'}
+          onClick={() => openPanel('labels')}
+          className={railSectionClass(
+            'labels',
+            'text-violet-600 dark:text-violet-400',
+            'bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300'
+          )}
+          {...tipFor('Labels', 'left')}
+        >
+          <Tag className="h-4 w-4" strokeWidth={iconStroke} />
+          {labels.length > 0 && (
+            <span className={`${railBadge} bg-violet-600`}>{labels.length}</span>
+          )}
+        </button>
+        <span className={railDivider} aria-hidden />
+        <button
+          type="button"
+          aria-label={notes.length > 0 ? `Notes, ${notes.length}` : 'Notes'}
+          aria-pressed={panelOpen && activeSection === 'notes'}
+          onClick={() => openPanel('notes')}
+          className={railSectionClass(
+            'notes',
+            'text-amber-600 dark:text-amber-400',
+            'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300'
+          )}
+          {...tipFor('Notes', 'left')}
+        >
+          <StickyNote className="h-4 w-4" strokeWidth={iconStroke} />
+          {notes.length > 0 && (
+            <span className={`${railBadge} bg-amber-600`}>{notes.length}</span>
+          )}
+        </button>
+        <span className={railDivider} aria-hidden />
+        <button
+          type="button"
+          aria-label={tagCount > 0 ? `Contact tags, ${tagCount}` : 'Contact tags'}
+          aria-pressed={panelOpen && activeSection === 'tags'}
+          onClick={() => openPanel('tags')}
+          className={railSectionClass(
+            'tags',
+            'text-sky-600 dark:text-sky-400',
+            'bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300'
+          )}
+          {...tipFor('Contact tags', 'left')}
+        >
+          <Hash className="h-4 w-4" strokeWidth={iconStroke} />
+          {tagCount > 0 && <span className={`${railBadge} bg-sky-600`}>{tagCount}</span>}
+        </button>
+      </div>
+
+      <span className="my-1.5 h-px w-6 shrink-0 bg-theme-border/80 dark:bg-white/12" aria-hidden />
+
+      <div className="flex flex-col items-center gap-1">
+        {renderQuickActions({ tipSide: 'left' })}
+      </div>
+    </aside>
+  );
+
   // Mobile bottom sheet (overlay path). Do not require panelOpen — InboxPage may
   // set overlayOpen a frame before the panel's overlay effect flips panelOpen.
   if (overlayOpen) {
@@ -665,11 +757,11 @@ export default function InboxDetailsPanel({
         <button
           type="button"
           aria-label="Close details panel"
-          className="fixed inset-0 z-40 bg-neutral-900/25 backdrop-blur-[1px] md:hidden dark:bg-black/40"
+          className="fixed inset-0 z-40 bg-neutral-900/20 md:hidden dark:bg-black/35"
           onClick={closePanel}
         />
         <aside
-          className={`fixed inset-x-0 bottom-0 z-50 max-h-[75dvh] overflow-hidden rounded-t-2xl border shadow-2xl md:hidden ${panelShellClass}`}
+          className={`fixed inset-x-0 bottom-0 z-50 max-h-[75dvh] overflow-hidden rounded-t-2xl border border-theme-border shadow-2xl md:hidden ${panelShellClass}`}
         >
           <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-neutral-300/80 dark:bg-neutral-600" />
           {panelBody}
@@ -678,74 +770,32 @@ export default function InboxDetailsPanel({
     );
   }
 
-  if (!panelOpen) {
-    const railBtn =
-      'relative flex h-9 w-9 items-center justify-center rounded-xl transition';
-    const railBadge =
-      'absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold text-white';
-    const railDivider = 'my-1 h-px w-5 shrink-0 bg-theme-border/55 dark:bg-white/10';
-
-    return (
-      <aside
-        className="inbox-composer-scroll hidden w-11 shrink-0 flex-col items-center gap-0 overflow-y-auto overscroll-contain border-l border-white/40 bg-white/55 py-3 backdrop-blur-md md:flex dark:border-neutral-800/80 dark:bg-neutral-950/70"
-        aria-label="Conversation details shortcuts"
-      >
-        <div className="flex flex-col items-center">
-          <button
-            type="button"
-            aria-label={labels.length > 0 ? `Labels, ${labels.length}` : 'Labels'}
-            onClick={() => openPanel('labels')}
-            className={`${railBtn} text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-950/40`}
-            {...tipFor('Labels', 'left')}
-          >
-            <Tag className="h-4 w-4" strokeWidth={iconStroke} />
-            {labels.length > 0 && (
-              <span className={`${railBadge} bg-violet-600`}>{labels.length}</span>
-            )}
-          </button>
-          <span className={railDivider} aria-hidden />
-          <button
-            type="button"
-            aria-label={notes.length > 0 ? `Notes, ${notes.length}` : 'Notes'}
-            onClick={() => openPanel('notes')}
-            className={`${railBtn} text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40`}
-            {...tipFor('Notes', 'left')}
-          >
-            <StickyNote className="h-4 w-4" strokeWidth={iconStroke} />
-            {notes.length > 0 && (
-              <span className={`${railBadge} bg-amber-600`}>{notes.length}</span>
-            )}
-          </button>
-          <span className={railDivider} aria-hidden />
-          <button
-            type="button"
-            aria-label={tagCount > 0 ? `Contact tags, ${tagCount}` : 'Contact tags'}
-            onClick={() => openPanel('tags')}
-            className={`${railBtn} text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-950/40`}
-            {...tipFor('Contact tags', 'left')}
-          >
-            <Hash className="h-4 w-4" strokeWidth={iconStroke} />
-            {tagCount > 0 && <span className={`${railBadge} bg-sky-600`}>{tagCount}</span>}
-          </button>
-        </div>
-
-        <span className="my-1.5 h-px w-6 shrink-0 bg-theme-border/80 dark:bg-white/12" aria-hidden />
-
-        <div className="flex flex-col items-center gap-1">
-          {renderQuickActions({ tipSide: 'left' })}
-        </div>
-      </aside>
-    );
-  }
-
   return (
-    <aside
-      className={`hidden min-w-0 shrink-0 overflow-hidden border-l md:flex ${panelShellClass}`}
-      style={panelWidth ? { width: panelWidth } : undefined}
-      aria-label="Conversation details"
-    >
-      {panelBody}
-    </aside>
+    <>
+      {panelOpen && (
+        <button
+          type="button"
+          aria-label="Close details panel"
+          className="absolute inset-0 z-20 hidden bg-neutral-900/10 md:block dark:bg-black/20"
+          onClick={closePanel}
+        />
+      )}
+
+      {panelOpen && (
+        <aside
+          className={`absolute top-0 z-30 hidden h-full min-h-0 flex-col overflow-hidden md:flex ${panelShellClass}`}
+          style={{
+            width: resolvedPanelWidth,
+            right: DETAILS_RAIL_WIDTH,
+          }}
+          aria-label="Conversation details"
+        >
+          {panelBody}
+        </aside>
+      )}
+
+      {detailsRail}
+    </>
   );
 }
 

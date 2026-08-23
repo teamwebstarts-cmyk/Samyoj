@@ -23,6 +23,8 @@ import { emitToOrg } from '../../realtime';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { parseActiveFlow } from '../flows/flow-state';
+import { NEW_CONVERSATION_CHAT_DEFAULTS } from '../chat/chat-settings.service';
+import { NEW_CONTACT_CALLING_DEFAULTS } from '../contacts/contact-ai-defaults';
 import { pauseConversationAutomations, cancelFlowDelayJob } from '../flows/pause-automation';
 import type { FlowNode } from '../flows/types';
 import { resolveCs24hWindowOpensAt } from './service-window';
@@ -352,6 +354,7 @@ router.post(
         normalizedPhone: phone,
         whatsappNumberId: whatsappNumber.id,
         source: 'OUTBOUND',
+        ...NEW_CONTACT_CALLING_DEFAULTS,
         ...inboxStartCreateData(data),
       },
       update: existingContact ? inboxStartMergeUpdate(existingContact, data) : {},
@@ -380,6 +383,7 @@ router.post(
         organizationId: orgId,
         contactId: contact.id,
         whatsappNumberId: whatsappNumber.id,
+        ...NEW_CONVERSATION_CHAT_DEFAULTS,
       },
       update: {},
     });
@@ -1705,6 +1709,8 @@ router.patch(
         data.botHandoffAt = null;
         data.botHandoffReason = null;
         data.botState = null;
+        // Personal Automations on — survives global off (unlike APPLIED bulk rows).
+        data.botAssignmentSource = 'MANUAL';
       }
     }
     if (resetHandoff) {
@@ -1712,6 +1718,7 @@ router.patch(
       data.botHandoffReason = null;
       data.botState = null;
       data.botActive = true;
+      data.botAssignmentSource = 'MANUAL';
       data.status = 'OPEN';
     }
     if (activeBotId !== undefined) {

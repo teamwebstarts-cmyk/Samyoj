@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client';
 import prisma from '../../config/database';
 import { AppError } from '../../utils/response';
+import { NEW_CONVERSATION_CHAT_DEFAULTS } from '../chat/chat-settings.service';
 
 export const conversationNotesInclude = {
   include: { user: { select: { id: true, name: true } } },
@@ -43,7 +44,7 @@ export async function ensureConversationForCall(call: {
         contactId: call.contactId,
         whatsappNumberId: call.whatsappNumberId,
         status: 'OPEN',
-        botActive: true,
+        ...NEW_CONVERSATION_CHAT_DEFAULTS,
       },
       select: { id: true },
     });

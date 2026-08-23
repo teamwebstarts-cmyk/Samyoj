@@ -82,7 +82,7 @@ export default function ContactTable({
                   key={header.key}
                   className={`${cellPad} text-[11px] font-bold uppercase tracking-[0.08em] text-theme-muted ${header.className} ${
                     header.key === 'actions' ? 'w-[8.25rem]' : ''
-                  } ${header.key === 'status' ? 'w-[7.5rem] xl:w-[8.5rem]' : ''}`}
+                  } ${header.key === 'status' ? 'w-[10.5rem] xl:w-[12rem]' : ''}`}
                 >
                   {header.key === 'status' ? (
                     <span className="inline-flex items-center gap-1 normal-case tracking-normal">
@@ -164,10 +164,13 @@ export default function ContactTable({
                   </td>
 
                   <td className={`min-w-0 ${cellPad}`}>
-                    <div className="flex flex-wrap items-center gap-1">
+                    <div className="flex min-w-0 flex-nowrap items-center gap-2">
                       <ContactOptInBadge contact={contact} compact />
                       {contact.conversation?.status && (
-                        <ContactConversationBadge status={contact.conversation.status} />
+                        <ContactConversationBadge
+                          status={contact.conversation.status}
+                          compact
+                        />
                       )}
                     </div>
                   </td>
