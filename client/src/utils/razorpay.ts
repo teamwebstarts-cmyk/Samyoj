@@ -1,6 +1,9 @@
 declare global {
   interface Window {
-    Razorpay?: new (options: Record<string, unknown>) => { open: () => void };
+    Razorpay?: new (options: Record<string, unknown>) => {
+      open: () => void;
+      on: (event: string, handler: (response: unknown) => void) => void;
+    };
   }
 }
 
@@ -36,6 +39,7 @@ export interface RazorpayCheckoutOptions {
     razorpay_signature: string;
   }) => void;
   onDismiss?: () => void;
+  onFailure?: (response: { error?: { description?: string; reason?: string } }) => void;
 }
 
 export async function openRazorpayCheckout(options: RazorpayCheckoutOptions) {
@@ -55,6 +59,10 @@ export async function openRazorpayCheckout(options: RazorpayCheckoutOptions) {
     modal: {
       ondismiss: options.onDismiss,
     },
+  });
+
+  rzp.on('payment.failed', (response: unknown) => {
+    options.onFailure?.(response as { error?: { description?: string; reason?: string } });
   });
 
   rzp.open();

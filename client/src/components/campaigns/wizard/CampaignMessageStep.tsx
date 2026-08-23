@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react';
-import { CheckCircle2, ExternalLink, Globe2, Info, Link2, MessageCircle } from 'lucide-react';
+import { CheckCircle2, ExternalLink, Globe2, Info, MessageCircle } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import AppInput from '../../ui/AppInput';
@@ -21,10 +21,10 @@ import {
   type CampaignParamSource,
   type TemplateVariableMeta,
 } from '../../../utils/templateForm';
+import TemplateHeaderMediaField from '../../templates/TemplateHeaderMediaField';
 import {
   getFilledTemplatePreview,
   getTemplateHeaderFormat,
-  headerMediaLabel,
   templateNeedsHeaderMedia,
 } from '../campaignPreviewUtils';
 import type { MessageTemplate } from '../../../types';
@@ -362,22 +362,17 @@ export default function CampaignMessageStep({
                       );
                     })}
 
-                    {showHeaderMedia && (
-                      <AppInput
+                    {showHeaderMedia && selectedTemplate && (
+                      <TemplateHeaderMediaField
                         id="header-media-url"
-                        label={headerMediaLabel(
-                          selectedTemplate ? getTemplateHeaderFormat(selectedTemplate) : undefined,
-                        )}
-                        hint="Required"
-                        placeholder="https://example.com/image.jpg"
-                        value={form.headerMediaUrl}
-                        onChange={(event) =>
-                          setForm((previous) => ({ ...previous, headerMediaUrl: event.target.value }))
-                        }
-                        icon={<Link2 className="h-3.5 w-3.5" />}
-                        labelClassName="text-[11px] font-bold text-slate-600 dark:text-slate-300"
-                        className="!h-9 rounded-lg pl-9 text-[12px]"
+                        compact
                         required
+                        format={getTemplateHeaderFormat(selectedTemplate) as 'IMAGE' | 'VIDEO' | 'DOCUMENT'}
+                        value={form.headerMediaUrl}
+                        onChange={(url) =>
+                          setForm((previous) => ({ ...previous, headerMediaUrl: url }))
+                        }
+                        labelClassName="text-[11px] font-bold text-slate-600 dark:text-slate-300"
                       />
                     )}
 

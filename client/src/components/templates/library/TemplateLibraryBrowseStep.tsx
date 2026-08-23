@@ -22,17 +22,16 @@ import InfoTip from '../../ui/InfoTip';
 import SearchInput from '../../ui/SearchInput';
 import SegmentedControl from '../../ui/SegmentedControl';
 import StatusBadge from '../../ui/StatusBadge';
-import LoadingState from '../../ui/LoadingState';
+import Skeleton from '../../ui/Skeleton';
+import TemplateLibraryListSkeleton from './TemplateLibraryListSkeleton';
 import {
-  LIBRARY_QUICK_PICKS,
-  LIBRARY_TOPICS,
+  LIBRARY_QUICK_PICK_OPTIONS,
   canCloneFromMetaLibrary,
+  getActiveLibraryQuickPickId,
   humanizeLibraryName,
   isFlowLibraryTemplate,
-  isLibraryQuickPickActive,
   libraryNeedsButtonInputs,
   type LibraryCategoryFilter,
-  type LibraryQuickPick,
   type LibrarySourceTab,
 } from '../../../utils/templateLibrary';
 import { getTemplateParts } from '../../inbox/WhatsAppPreview';
@@ -46,69 +45,19 @@ interface TemplateLibraryBrowseStepProps {
   search: string;
   onSearchChange: (value: string) => void;
   categoryFilter: LibraryCategoryFilter;
-  topicFilter: string;
-  onTopicFilterChange: (value: string) => void;
   usecaseFilter: string;
   loading: boolean;
   items: LibraryListItem[];
   selectedKey: string | null;
   onSelect: (key: string) => void;
   onQuickAdd?: (item: LibraryListItem) => void;
-  onQuickPick?: (pick: LibraryQuickPick) => void;
+  onQuickPickChange?: (pickId: string) => void;
   addingName?: string | null;
   metaCount: number;
   accountCount: number;
   loadError?: string | null;
   onRetry?: () => void;
 }
-
-const QUICK_PICK_ICONS: Record<string, LucideIcon> = {
-  order: Package,
-  shipping: Truck,
-  delivery: MapPin,
-  payment: CreditCard,
-  feedback: MessageSquare,
-  account: UserRound,
-  otp: ShieldCheck,
-};
-
-const QUICK_PICK_TONES: Record<string, { wrap: string; icon: string; active: string }> = {
-  order: {
-    wrap: 'border-emerald-200/80 bg-emerald-50/90 text-emerald-800 dark:border-emerald-800/50 dark:bg-emerald-950/35 dark:text-emerald-200',
-    icon: 'text-emerald-600 dark:text-emerald-400',
-    active: 'ring-2 ring-emerald-400/70 border-emerald-400',
-  },
-  shipping: {
-    wrap: 'border-sky-200/80 bg-sky-50/90 text-sky-800 dark:border-sky-800/50 dark:bg-sky-950/35 dark:text-sky-200',
-    icon: 'text-sky-600 dark:text-sky-400',
-    active: 'ring-2 ring-sky-400/70 border-sky-400',
-  },
-  delivery: {
-    wrap: 'border-orange-200/80 bg-orange-50/90 text-orange-800 dark:border-orange-800/50 dark:bg-orange-950/35 dark:text-orange-200',
-    icon: 'text-orange-600 dark:text-orange-400',
-    active: 'ring-2 ring-orange-400/70 border-orange-400',
-  },
-  payment: {
-    wrap: 'border-teal-200/80 bg-teal-50/90 text-teal-800 dark:border-teal-800/50 dark:bg-teal-950/35 dark:text-teal-200',
-    icon: 'text-teal-600 dark:text-teal-400',
-    active: 'ring-2 ring-teal-400/70 border-teal-400',
-  },
-  feedback: {
-    wrap: 'border-violet-200/80 bg-violet-50/90 text-violet-800 dark:border-violet-800/50 dark:bg-violet-950/35 dark:text-violet-200',
-    icon: 'text-violet-600 dark:text-violet-400',
-    active: 'ring-2 ring-violet-400/70 border-violet-400',
-  },
-  account: {
-    wrap: 'border-indigo-200/80 bg-indigo-50/90 text-indigo-800 dark:border-indigo-800/50 dark:bg-indigo-950/35 dark:text-indigo-200',
-    icon: 'text-indigo-600 dark:text-indigo-400',
-    active: 'ring-2 ring-indigo-400/70 border-indigo-400',
-  },
-  otp: {
-    wrap: 'border-amber-200/80 bg-amber-50/90 text-amber-800 dark:border-amber-800/50 dark:bg-amber-950/35 dark:text-amber-200',
-    icon: 'text-amber-600 dark:text-amber-400',
-    active: 'ring-2 ring-amber-400/70 border-amber-400',
-  },
-};
 
 type ItemTone = {
   Icon: LucideIcon;
@@ -150,7 +99,7 @@ function libraryItemTone(entry: LibraryListItem): ItemTone {
       bar: 'bg-gradient-to-b from-violet-400 to-fuchsia-500',
     };
   }
-  if (topic === 'ACCOUNT_UPDATE' || /account|address|profile/.test(haystack)) {
+  if (topic === 'ACCOUNT_UPDATES' || /account|address|profile/.test(haystack)) {
     return {
       Icon: UserRound,
       tile: 'bg-gradient-to-br from-sky-400 via-blue-500 to-indigo-600 text-white shadow-sm',
@@ -191,21 +140,21 @@ export default function TemplateLibraryBrowseStep({
   search,
   onSearchChange,
   categoryFilter,
-  topicFilter,
-  onTopicFilterChange,
   usecaseFilter,
   loading,
   items,
   selectedKey,
   onSelect,
   onQuickAdd,
-  onQuickPick,
+  onQuickPickChange,
   addingName,
   metaCount,
   accountCount,
   loadError,
   onRetry,
 }: TemplateLibraryBrowseStepProps) {
+  const activeQuickPickId = getActiveLibraryQuickPickId(usecaseFilter, categoryFilter);
+
   return (
     <div className="space-y-3">
       <div className="template-wizard-card p-3 sm:p-3.5">
@@ -271,62 +220,35 @@ export default function TemplateLibraryBrowseStep({
 
           {sourceTab === 'meta' && (
             <AppSelect
-              className="min-w-0 sm:max-w-[14rem]"
+              className="min-w-0"
               size="compact"
-              label="Topic"
-              value={topicFilter}
+              label="Template type"
+              value={activeQuickPickId}
               isSearchable={false}
-              options={[...LIBRARY_TOPICS]}
-              onChange={(e) => onTopicFilterChange(e.target.value)}
+              options={LIBRARY_QUICK_PICK_OPTIONS}
+              onChange={(e) => onQuickPickChange?.(e.target.value)}
             />
           )}
         </div>
-
-        {sourceTab === 'meta' && (
-          <div className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-800">
-            <div
-              className="grid grid-cols-4 gap-1.5 sm:grid-cols-7"
-              role="group"
-              aria-label="Most used templates"
-            >
-              {LIBRARY_QUICK_PICKS.map((pick) => {
-                const active = isLibraryQuickPickActive(pick, usecaseFilter, categoryFilter);
-                const Icon = QUICK_PICK_ICONS[pick.id] || FileText;
-                const tone = QUICK_PICK_TONES[pick.id] || QUICK_PICK_TONES.order;
-                return (
-                  <button
-                    key={pick.id}
-                    type="button"
-                    onClick={() => onQuickPick?.(pick)}
-                    aria-pressed={active}
-                    aria-label={`${pick.label}. ${pick.hint}`}
-                    title={pick.hint}
-                    className={`flex h-[3.25rem] min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg border px-0.5 py-1 text-center transition sm:h-[3.5rem] ${
-                      tone.wrap
-                    } ${active ? tone.active : 'hover:brightness-[0.98] dark:hover:brightness-110'}`}
-                  >
-                    <Icon className={`h-3.5 w-3.5 shrink-0 ${tone.icon}`} strokeWidth={2.25} />
-                    <span className="line-clamp-1 text-[8px] font-bold leading-tight sm:text-[9px]">
-                      {pick.shortLabel}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </div>
 
       <div className="template-wizard-card overflow-hidden">
         <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2 dark:border-slate-800 sm:px-3.5">
-          <p className="text-[12px] font-bold text-slate-900 dark:text-white sm:text-[13px]">
-            {loading && items.length === 0 && !loadError
-              ? 'Loading templates…'
-              : `${items.length} template${items.length === 1 ? '' : 's'}`}
-          </p>
-          <p className="text-[10px] font-medium text-slate-400">
-            {sourceTab === 'meta' ? 'Ready immediately' : 'Your account'}
-          </p>
+          {loading && items.length === 0 && !loadError ? (
+            <>
+              <Skeleton className="h-3.5 w-28 rounded-md" />
+              <Skeleton className="h-3 w-24 rounded-md" delayMs={60} />
+            </>
+          ) : (
+            <>
+              <p className="text-[12px] font-bold text-slate-900 dark:text-white sm:text-[13px]">
+                {`${items.length} template${items.length === 1 ? '' : 's'}`}
+              </p>
+              <p className="text-[10px] font-medium text-slate-400">
+                {sourceTab === 'meta' ? 'Ready immediately' : 'Your account'}
+              </p>
+            </>
+          )}
         </div>
 
         {loadError && items.length > 0 ? (
@@ -344,7 +266,7 @@ export default function TemplateLibraryBrowseStep({
         ) : null}
 
         {loading && items.length === 0 && !loadError ? (
-          <LoadingState className="py-8" label="Loading templates…" />
+          <TemplateLibraryListSkeleton />
         ) : loadError && items.length === 0 ? (
           <div className="px-3 py-8 text-center sm:px-3.5">
             <p className="text-[13px] font-semibold text-slate-800 dark:text-slate-100">
@@ -364,7 +286,7 @@ export default function TemplateLibraryBrowseStep({
         ) : items.length === 0 ? (
           <p className="px-3 py-8 text-center text-[12px] font-medium text-slate-500 sm:px-3.5">
             {sourceTab === 'meta'
-              ? 'No templates match. Try another topic or shortcut.'
+              ? 'No templates match. Try another type or search.'
               : 'No account templates match your search.'}
           </p>
         ) : (

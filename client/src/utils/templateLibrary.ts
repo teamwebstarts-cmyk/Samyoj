@@ -23,7 +23,7 @@ export const LIBRARY_INDUSTRIES = [
 
 export const LIBRARY_TOPICS = [
   { value: '', label: 'All topics' },
-  { value: 'ACCOUNT_UPDATE', label: 'Account update' },
+  { value: 'ACCOUNT_UPDATES', label: 'Account updates' },
   { value: 'CUSTOMER_FEEDBACK', label: 'Customer feedback' },
   { value: 'ORDER_MANAGEMENT', label: 'Order management' },
   { value: 'PAYMENTS', label: 'Payments' },
@@ -124,7 +124,6 @@ export const LIBRARY_QUICK_PICKS: Array<{
     label: 'Account',
     shortLabel: 'Account',
     hint: 'Signup & welcome',
-    topic: 'ACCOUNT_UPDATE',
     usecase: 'ACCOUNT_CREATION_CONFIRMATION',
   },
   {
@@ -147,6 +146,34 @@ export function isLibraryQuickPickActive(
 ): boolean {
   if (pick.category) return categoryFilter === pick.category && !usecaseFilter;
   return Boolean(pick.usecase) && usecaseFilter === pick.usecase;
+}
+
+export const LIBRARY_QUICK_PICK_OPTIONS = [
+  { value: '', label: 'All types' },
+  ...LIBRARY_QUICK_PICKS.map((pick) => ({ value: pick.id, label: pick.label })),
+];
+
+export function getActiveLibraryQuickPickId(
+  usecaseFilter: string,
+  categoryFilter: string,
+): string {
+  return LIBRARY_QUICK_PICKS.find((pick) => isLibraryQuickPickActive(pick, usecaseFilter, categoryFilter))
+    ?.id ?? '';
+}
+
+export function applyLibraryQuickPick(
+  pick: LibraryQuickPick,
+): {
+  categoryFilter: LibraryCategoryFilter;
+  usecaseFilter: string;
+} {
+  if (pick.category) {
+    return { categoryFilter: pick.category, usecaseFilter: '' };
+  }
+  return {
+    categoryFilter: 'ALL',
+    usecaseFilter: pick.usecase || '',
+  };
 }
 
 export function libraryCloneCategory(
@@ -284,6 +311,17 @@ export function wizardFormFromLibraryItem(
     return applyLibrarySamplesToForm(formFromLibraryEntry(item as TemplateLibraryEntry), item as TemplateLibraryEntry);
   }
   return formFromMessageTemplate(item as MessageTemplate);
+}
+
+/** Variable mapping saved when adding from library — prefers review-step edits over Meta defaults. */
+export function libraryVariableMetaForPersist(
+  item: TemplateLibraryEntry | MessageTemplate,
+  source: LibrarySourceTab,
+  formMeta?: TemplateVariableMeta[],
+): TemplateVariableMeta[] {
+  return formMeta?.length
+    ? formMeta
+    : wizardFormFromLibraryItem(item, source).variableMeta;
 }
 
 export function suggestedTemplateName(libraryName: string): string {

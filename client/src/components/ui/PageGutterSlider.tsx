@@ -7,9 +7,9 @@ export default function PageGutterSlider() {
   return (
     <div className="max-w-md">
       <div className="flex items-center justify-between text-[11px] font-semibold text-theme-muted">
-        <span>Narrower</span>
+        <span>Narrow</span>
         <span className="text-theme-fg">{pageGutterLabel(step)}</span>
-        <span>Much wider</span>
+        <span>Wide</span>
       </div>
       <input
         type="range"

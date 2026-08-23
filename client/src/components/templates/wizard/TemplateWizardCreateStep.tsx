@@ -1,6 +1,7 @@
-import { useRef, useState } from 'react';
-import { AlertCircle, FileText, Image, Info, Loader2, Plus, Smile, Upload } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { AlertCircle, FileText, Image, Info, Loader2, Minus, Plus, Smile, Type, Upload, Video } from 'lucide-react';
 import AppInput from '../../ui/AppInput';
+import AppAlert from '../../ui/AppAlert';
 import AppSelect from '../../ui/AppSelect';
 import AppTextarea from '../../ui/AppTextarea';
 import FieldInfoTip from '../../ui/FieldInfoTip';
@@ -8,11 +9,10 @@ import TemplateButtonEditor from '../TemplateButtonEditor';
 import TemplateGuidanceDisclosure from '../TemplateGuidanceDisclosure';
 import { templateApi } from '../../../services/api';
 import {
-  CATEGORY_OPTIONS,
   HEADER_FORMAT_OPTIONS,
-  LANGUAGE_OPTIONS,
   countTemplateVars,
 } from '../../../utils/templateUtils';
+import { HEADER_MEDIA_SIZE_HINT, headerMediaAccept } from '../../../utils/headerMedia';
 import { messagingConsent } from '../../../utils/plainLanguage';
 import {
   syncFormExamples,
@@ -31,16 +31,99 @@ const INSERT_VARIABLE_CHIPS: Array<{
   { label: 'Customer name', description: 'Customer name', source: 'contact.name' },
   { label: 'Phone number', description: 'Phone number', source: 'contact.phone' },
   { label: 'Email', description: 'Email address', source: 'contact.email' },
-  { label: 'Order number', description: 'Order number', source: 'contact.custom', customKey: 'order_id' },
   { label: 'Date / time', description: 'Date or time', source: 'custom' },
-  { label: 'Amount', description: 'Amount', source: 'custom' },
 ];
+
+const FOOTER_PRESET_STATIC = [
+  { value: '__none__', label: 'No footer' },
+  { value: 'Reply STOP to unsubscribe', label: 'Reply STOP to unsubscribe' },
+  { value: 'Reply STOP to stop messages', label: 'Reply STOP to stop messages' },
+  { value: 'Not interested? Reply STOP', label: 'Not interested? Reply STOP' },
+  { value: '__custom__', label: 'Write your own…' },
+] as const;
+
+function buildFooterPresetOptions(brandName: string) {
+  const brand = brandName.trim() || 'Your brand';
+  return [
+    ...FOOTER_PRESET_STATIC.slice(0, 4),
+    { value: `Powered by ${brand}`, label: `Powered by ${brand}` },
+    { value: `${brand} · Reply STOP to unsubscribe`, label: `${brand} · Reply STOP` },
+    FOOTER_PRESET_STATIC[4],
+  ];
+}
+
+function resolveFooterChoice(
+  footer: string,
+  options: Array<{ value: string; label: string }>,
+): string {
+  if (!footer.trim()) return '__none__';
+  const hit = options.find((p) => p.value === footer);
+  return hit ? hit.value : '__custom__';
+}
+
+const HEADER_TYPE_ICONS: Record<string, typeof Type> = {
+  NONE: Minus,
+  TEXT: Type,
+  IMAGE: Image,
+  VIDEO: Video,
+  DOCUMENT: FileText,
+};
+
+const HEADER_TYPE_STYLES: Record<
+  string,
+  { tile: string; active: string; icon: string }
+> = {
+  NONE: {
+    tile: 'bg-gradient-to-br from-slate-100 to-slate-200 text-slate-600 dark:from-slate-800 dark:to-slate-700 dark:text-slate-200',
+    active: 'border-slate-400 ring-slate-200 dark:border-slate-500',
+    icon: 'text-slate-600 dark:text-slate-200',
+  },
+  TEXT: {
+    tile: 'bg-gradient-to-br from-sky-400 to-blue-600 text-white',
+    active: 'border-sky-400 ring-sky-200 dark:border-sky-500',
+    icon: 'text-white',
+  },
+  IMAGE: {
+    tile: 'bg-gradient-to-br from-emerald-400 to-teal-600 text-white',
+    active: 'border-emerald-400 ring-emerald-200 dark:border-emerald-500',
+    icon: 'text-white',
+  },
+  VIDEO: {
+    tile: 'bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white',
+    active: 'border-violet-400 ring-violet-200 dark:border-violet-500',
+    icon: 'text-white',
+  },
+  DOCUMENT: {
+    tile: 'bg-gradient-to-br from-amber-400 to-orange-500 text-white',
+    active: 'border-amber-400 ring-amber-200 dark:border-amber-500',
+    icon: 'text-white',
+  },
+};
+
+/** WhatsApp image header review looks best near 1.91:1 (e.g. 800×418). */
+const HEADER_MEDIA_ASPECT_HINT = 'Wide image works best — about 1.91:1 (e.g. 800×418 px).';
+
+function headerSampleInfoTip(format: TemplateFormState['headerFormat']): string {
+  if (format === 'IMAGE') {
+    return `${HEADER_MEDIA_SIZE_HINT.IMAGE}. ${HEADER_MEDIA_ASPECT_HINT} Use the live WhatsApp preview on the right. When you send from Campaigns or Inbox, you will upload or paste a separate public link.`;
+  }
+  if (format === 'VIDEO') {
+    return `${HEADER_MEDIA_SIZE_HINT.VIDEO} Use the live WhatsApp preview on the right. When you send from Campaigns or Inbox, you will upload or paste a separate public link.`;
+  }
+  if (format === 'DOCUMENT') {
+    return `${HEADER_MEDIA_SIZE_HINT.DOCUMENT} This PDF is only for WhatsApp approval. When you send from Campaigns or Inbox, you will provide a separate public link.`;
+  }
+  return '';
+}
+
+type UploadPhase = 'idle' | 'processing' | 'uploading' | 'done';
 
 interface TemplateWizardCreateStepProps {
   form: TemplateFormState;
   onChange: (form: TemplateFormState) => void;
   mode: 'create' | 'resubmit';
   onHeaderPreviewUrl?: (url: string | null) => void;
+  brandName?: string;
   mapFirstBodyVariableToName?: boolean;
 }
 
@@ -58,11 +141,23 @@ export default function TemplateWizardCreateStep({
   onChange,
   mode,
   onHeaderPreviewUrl,
+  brandName = '',
   mapFirstBodyVariableToName = true,
 }: TemplateWizardCreateStepProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
-  const [uploading, setUploading] = useState(false);
+  const [uploadPhase, setUploadPhase] = useState<UploadPhase>('idle');
+  const footerOptions = useMemo(() => buildFooterPresetOptions(brandName), [brandName]);
+  const [footerChoice, setFooterChoice] = useState(() => resolveFooterChoice(form.footer, footerOptions));
+
+  useEffect(() => {
+    setFooterChoice((prev) => {
+      if (prev === '__custom__') return prev;
+      return resolveFooterChoice(form.footer, footerOptions);
+    });
+  }, [form.footer, footerOptions]);
+
+  const showFooterEditor = footerChoice !== '__none__';
 
   const setForm = (patch: Partial<TemplateFormState>) => {
     onChange(syncFormExamples({ ...form, ...patch }));
@@ -126,26 +221,32 @@ export default function TemplateWizardCreateStep({
       toastError('File too large. Maximum size is 16 MB.');
       return;
     }
-    setUploading(true);
+    setUploadPhase('processing');
     try {
       const data = await fileToBase64(file);
+      if (file.type.startsWith('image/') || file.type.startsWith('video/')) {
+        onHeaderPreviewUrl?.(URL.createObjectURL(file));
+      } else {
+        onHeaderPreviewUrl?.(null);
+      }
+      setUploadPhase('uploading');
       const { data: res } = await templateApi.uploadHeader({
         data,
         mimeType: file.type || 'application/octet-stream',
       });
       setForm({ headerMediaHandle: res.data.handle });
-      if (file.type.startsWith('image/')) {
-        onHeaderPreviewUrl?.(URL.createObjectURL(file));
-      }
+      setUploadPhase('done');
     } catch (err: unknown) {
+      setUploadPhase('idle');
+      onHeaderPreviewUrl?.(null);
       const msg =
         (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
           ?.message || 'Failed to upload header media';
       toastError(msg);
-    } finally {
-      setUploading(false);
     }
   };
+
+  const uploading = uploadPhase === 'processing' || uploadPhase === 'uploading';
 
   return (
     <div className="space-y-4">
@@ -169,59 +270,75 @@ export default function TemplateWizardCreateStep({
       )}
 
       <div className="template-wizard-card p-4 sm:p-5">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <AppInput
-            id="template-name"
-            label="Template name"
-            labelInfo="Use lowercase letters, numbers, and underscores only."
-            placeholder="order_update"
-            value={form.name}
-            onChange={(e) =>
-              setForm({ name: e.target.value.toLowerCase().replace(/\s/g, '_') })
-            }
-            required
-            pattern="[a-z0-9_]+"
-            disabled={mode === 'resubmit'}
-          />
-          <AppSelect
-            id="template-language"
-            label="Language"
-            value={form.language}
-            options={LANGUAGE_OPTIONS}
-            isSearchable
-            onChange={(e) => setForm({ language: e.target.value })}
-            required
-          />
-        </div>
+        <AppInput
+          id="template-name"
+          label="Template name"
+          labelInfo="Use lowercase letters, numbers, and underscores only."
+          placeholder="order_update"
+          value={form.name}
+          onChange={(e) =>
+            setForm({ name: e.target.value.toLowerCase().replace(/\s/g, '_') })
+          }
+          required
+          pattern="[a-z0-9_]+"
+          disabled={mode === 'resubmit'}
+        />
 
-        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <AppSelect
-            id="template-category"
-            label="Category"
-            value={form.category}
-            options={CATEGORY_OPTIONS}
-            isSearchable={false}
-            onChange={(e) =>
-              setForm({ category: e.target.value as TemplateFormState['category'] })
-            }
-            required
-          />
-          <AppSelect
-            id="template-header-format"
-            label="Header type"
-            value={form.headerFormat}
-            options={HEADER_FORMAT_OPTIONS}
-            isSearchable={false}
-            onChange={(e) =>
-              setForm({
-                headerFormat: e.target.value as TemplateFormState['headerFormat'],
-                header: e.target.value === 'TEXT' ? form.header : '',
-                headerMediaHandle: ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(e.target.value)
-                  ? form.headerMediaHandle
-                  : '',
-              })
-            }
-          />
+        {form.category !== 'UTILITY' && (
+          <p className="mt-3 inline-flex rounded-md bg-sky-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-700 dark:bg-sky-950/50 dark:text-sky-300">
+            {form.category} template
+          </p>
+        )}
+
+        <div className="mt-4">
+          <div className="mb-2 flex items-center gap-1.5">
+            <p className="text-[13px] font-semibold text-theme-secondary">Header</p>
+            <FieldInfoTip text="Optional top section. Media headers need a sample file for WhatsApp approval — when you send later in Inbox or Campaigns, you provide the live image or video link." />
+          </div>
+          <div className="grid grid-cols-5 gap-1" role="radiogroup" aria-label="Header type">
+            {HEADER_FORMAT_OPTIONS.map((option) => {
+              const Icon = HEADER_TYPE_ICONS[option.value] || Minus;
+              const styles = HEADER_TYPE_STYLES[option.value] || HEADER_TYPE_STYLES.NONE;
+              const active = form.headerFormat === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  onClick={() => {
+                    const nextFormat = option.value as TemplateFormState['headerFormat'];
+                    if (!['IMAGE', 'VIDEO', 'DOCUMENT'].includes(nextFormat)) {
+                      onHeaderPreviewUrl?.(null);
+                      setUploadPhase('idle');
+                    }
+                    setForm({
+                      headerFormat: nextFormat,
+                      header: nextFormat === 'TEXT' ? form.header : '',
+                      headerMediaHandle: ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(nextFormat)
+                        ? form.headerMediaHandle
+                        : '',
+                    });
+                  }}
+                  className={`flex min-h-[50px] flex-col items-center justify-center gap-0.5 rounded-lg border px-0.5 py-1.5 text-center transition ${
+                    active
+                      ? `${styles.active} bg-violet-50/80 ring-1 dark:bg-violet-950/30`
+                      : 'border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800/80'
+                  }`}
+                >
+                  <span
+                    className={`flex h-6 w-6 items-center justify-center rounded-md shadow-sm ${styles.tile}`}
+                    aria-hidden
+                  >
+                    <Icon className={`h-3 w-3 shrink-0 ${styles.icon}`} strokeWidth={2.5} />
+                  </span>
+                  <span className="text-[9px] font-bold leading-tight text-slate-700 dark:text-slate-200">
+                    {option.label.replace(' header', '').replace('No header', 'None')}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {form.headerFormat === 'TEXT' && (
@@ -238,47 +355,64 @@ export default function TemplateWizardCreateStep({
         )}
 
         {['IMAGE', 'VIDEO', 'DOCUMENT'].includes(form.headerFormat) && (
-          <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50/80 p-4 dark:border-slate-700 dark:bg-slate-900/40">
-            <div className="flex items-center gap-1.5">
-              <p className="text-[13px] font-semibold text-slate-900 dark:text-white">
-                Sample {form.headerFormat.toLowerCase()} for approval
-              </p>
-              <FieldInfoTip text="Upload a sample file. WhatsApp uses it during template review." />
-            </div>
-            <input
-              ref={fileRef}
-              type="file"
-              className="hidden"
-              accept={
-                form.headerFormat === 'IMAGE'
-                  ? 'image/*'
-                  : form.headerFormat === 'VIDEO'
-                    ? 'video/*'
-                    : '.pdf,application/pdf'
-              }
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) void handleHeaderUpload(file);
-              }}
-            />
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              disabled={uploading}
-              className="mt-3 inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[12px] font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-            >
-              {uploading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : form.headerFormat === 'IMAGE' ? (
-                <Image className="h-4 w-4" />
-              ) : (
-                <Upload className="h-4 w-4" />
-              )}
-              {form.headerMediaHandle ? 'Replace sample file' : 'Upload sample file'}
-            </button>
-            {form.headerMediaHandle && (
-              <p className="mt-2 text-[11px] font-medium text-emerald-700">Sample uploaded successfully</p>
+          <div className="mt-4 space-y-3">
+            {mode === 'resubmit' && !form.headerMediaHandle && (
+              <AppAlert variant="warning" className="!text-[12px]">
+                <p className="font-semibold">Re-upload the sample file</p>
+                <p className="mt-1 font-medium opacity-90">
+                  Meta needs a fresh file handle when you resubmit a media header template.
+                </p>
+              </AppAlert>
             )}
+            <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/80 p-3 dark:border-slate-700 dark:bg-slate-900/40">
+              <p className="text-[12px] font-semibold text-slate-900 dark:text-white">
+                Sample {form.headerFormat.toLowerCase()} for WhatsApp review
+              </p>
+              <input
+                ref={fileRef}
+                type="file"
+                className="hidden"
+                accept={headerMediaAccept(form.headerFormat as 'IMAGE' | 'VIDEO' | 'DOCUMENT')}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void handleHeaderUpload(file);
+                }}
+              />
+              <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={uploading}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                >
+                  {uploading ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : form.headerFormat === 'IMAGE' ? (
+                    <Image className="h-3.5 w-3.5" />
+                  ) : form.headerFormat === 'VIDEO' ? (
+                    <Video className="h-3.5 w-3.5" />
+                  ) : (
+                    <Upload className="h-3.5 w-3.5" />
+                  )}
+                  {uploading
+                    ? uploadPhase === 'processing'
+                      ? 'Reading…'
+                      : 'Uploading…'
+                    : form.headerMediaHandle
+                      ? 'Replace sample'
+                      : 'Upload sample'}
+                </button>
+                <FieldInfoTip
+                  label="Sample file tips"
+                  text={headerSampleInfoTip(form.headerFormat)}
+                />
+                {form.headerMediaHandle && !uploading ? (
+                  <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
+                    Ready for review
+                  </span>
+                ) : null}
+              </div>
+            </div>
           </div>
         )}
 
@@ -338,16 +472,47 @@ export default function TemplateWizardCreateStep({
           </div>
         </div>
 
-        <div className="mt-4">
-          <AppInput
-            id="template-footer"
+        <div className="mt-4 space-y-2">
+          <AppSelect
+            id="template-footer-preset"
             label="Footer"
-            placeholder="Reply STOP to unsubscribe"
-            value={form.footer}
-            onChange={(e) => setForm({ footer: e.target.value })}
-            maxLength={60}
+            size="compact"
+            isSearchable={false}
+            value={footerChoice}
+            options={footerOptions}
+            labelInfo={
+              form.category === 'MARKETING'
+                ? messagingConsent.templateStopHint
+                : 'Optional short line under the message (max 60 characters).'
+            }
+            onChange={(e) => {
+              const next = e.target.value;
+              setFooterChoice(next);
+              if (next === '__none__') {
+                setForm({ footer: '' });
+                return;
+              }
+              if (next === '__custom__') {
+                return;
+              }
+              setForm({ footer: next });
+            }}
           />
-          <p className="mt-1 text-right text-[10px] text-slate-400">{form.footer.length}/60</p>
+          {showFooterEditor ? (
+            <AppInput
+              id="template-footer"
+              label={footerChoice === '__custom__' ? 'Your footer text' : 'Footer text'}
+              placeholder={messagingConsent.templateStopPlaceholder}
+              value={form.footer}
+              onChange={(e) => {
+                setFooterChoice('__custom__');
+                setForm({ footer: e.target.value });
+              }}
+              maxLength={60}
+              autoFocus={footerChoice === '__custom__' && !form.footer.trim()}
+            />
+          ) : null}
+          <p className="text-right text-[10px] text-slate-400">{form.footer.length}/60</p>
         </div>
 
         {form.category === 'AUTHENTICATION' && (

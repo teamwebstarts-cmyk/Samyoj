@@ -34,7 +34,7 @@ const tabMeta = {
 } as const;
 
 export default function BillingPage() {
-  const { user } = useAuth();
+  const { user, refreshSession } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const rawTab = searchParams.get('tab');
   const activeTab: BillingTab = rawTab === 'plans' || rawTab === 'history' ? rawTab : 'usage';
@@ -45,6 +45,7 @@ export default function BillingPage() {
   const [overview, setOverview] = useState<ReportsOverviewFullData | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
+  const [overviewUnavailable, setOverviewUnavailable] = useState(false);
   const [upgrading, setUpgrading] = useState<string | null>(null);
 
   const handleTabChange = useCallback(
@@ -78,6 +79,10 @@ export default function BillingPage() {
         setUsage(usageRes.data.data);
         if (overviewRes?.data?.data) {
           setOverview(overviewRes.data.data);
+          setOverviewUnavailable(false);
+        } else {
+          setOverview(null);
+          setOverviewUnavailable(true);
         }
       })
       .catch(() => {
@@ -90,6 +95,17 @@ export default function BillingPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    const cadenceFromServer = info?.cadence;
+    if (
+      cadenceFromServer &&
+      cadenceFromServer !== 'trial' &&
+      (cadenceFromServer === 'monthly' || cadenceFromServer === 'quarterly' || cadenceFromServer === 'yearly')
+    ) {
+      setCadence(cadenceFromServer);
+    }
+  }, [info?.cadence]);
 
   const handleFreePlan = async (plan: BillingPlan) => {
     if (!info?.canManageBilling || plan.id === info.plan) return;
@@ -134,14 +150,23 @@ export default function BillingPage() {
           try {
             await billingApi.verifyPayment(response);
             toastSuccess(`Welcome to ${plan.name}!`);
+            await refreshSession();
+            window.dispatchEvent(new CustomEvent('billing:updated'));
             load();
           } catch {
-            toastError('Payment verification failed. Please contact support.');
+            toastError('Payment received but verification failed. If money was deducted, contact support with your payment ID.');
           } finally {
             setUpgrading(null);
           }
         },
-        onDismiss: () => setUpgrading(null),
+        onDismiss: () => {
+          setUpgrading(null);
+          toastError('Payment cancelled. No charge was made.');
+        },
+        onFailure: () => {
+          setUpgrading(null);
+          toastError('Payment failed. Please try again or use a different payment method.');
+        },
       });
     } catch (err: unknown) {
       setUpgrading(null);
@@ -153,7 +178,11 @@ export default function BillingPage() {
   };
 
   const handleUpgrade = (plan: BillingPlan) => {
-    // If the plan is already paid and active in session, restore without Razorpay popup
+    if (plan.id === 'enterprise') {
+      window.location.href =
+        'mailto:hello@samyoj.com?subject=Samyoj%20Enterprise%20plan&body=Hi%20Samyoj%20team%2C%20we%20would%20like%20to%20discuss%20Enterprise.';
+      return;
+    }
     if (plan.id === info?.activePaidPlan || plan.pricePaise === 0) {
       handleFreePlan(plan);
     } else {
@@ -248,13 +277,20 @@ export default function BillingPage() {
             {/* Tab content with min-height stability to avoid jumping */}
             <div className="min-h-[520px] transition-opacity duration-150">
               {activeTab === 'usage' && (
-                <BillingUsageStatsTab
-                  info={info}
-                  usage={usage}
-                  overview={overview}
-                  onUpgradeClick={() => handleTabChange('plans')}
-                  onExportCsv={handleExportCsv}
-                />
+                <>
+                  {overviewUnavailable && (
+                    <AppAlert variant="info">
+                      Message delivery stats are temporarily unavailable. Plan limits and Meta usage are still shown below.
+                    </AppAlert>
+                  )}
+                  <BillingUsageStatsTab
+                    info={info}
+                    usage={usage}
+                    overview={overview}
+                    onUpgradeClick={() => handleTabChange('plans')}
+                    onExportCsv={handleExportCsv}
+                  />
+                </>
               )}
 
               {activeTab === 'plans' && (
@@ -287,7 +323,7 @@ export default function BillingPage() {
                     ))}
                   </div>
 
-                  <BillingFeatureMatrix currentPlan={info.plan} />
+                  <BillingFeatureMatrix currentPlan={info.planTier || info.plan} />
 
                   <MetaCostExplainerCard />
                 </div>
@@ -295,14 +331,14 @@ export default function BillingPage() {
 
               {activeTab === 'history' && (
                 <SectionCard
-                  title="Billing history & invoices"
-                  subtitle="Official GST receipts and payment transactions"
+                  title="Payment history"
+                  subtitle="Confirmed Razorpay payments for your Samyoj software plan"
                 >
                   {!info.recentPayments || info.recentPayments.length === 0 ? (
                     <EmptyState
                       icon={Receipt}
                       title="No payments yet"
-                      description="Your payment history and downloadable GST invoices will show up here after you upgrade to a paid plan."
+                      description="Your payment history will appear here after you upgrade to a paid plan."
                       compact
                       action={
                         <AppButton variant="secondary" onClick={() => handleTabChange('plans')}>
@@ -315,8 +351,6 @@ export default function BillingPage() {
                       {info.recentPayments.map((payment, i) => {
                         const planName =
                           info.plans.find((p) => p.id === payment.planId)?.name ?? payment.planId;
-                        const basePaise = Math.round(payment.amountPaise / 1.18);
-                        const gstPaise = payment.amountPaise - basePaise;
                         return (
                           <div
                             key={`${payment.planId}-${payment.paidAt ?? i}`}
@@ -327,18 +361,21 @@ export default function BillingPage() {
                                 <Receipt className="h-4 w-4" />
                               </span>
                               <div>
-                                <p className="font-bold text-theme-fg">{planName}</p>
+                                <p className="font-bold text-theme-fg">
+                                  {planName}
+                                  {payment.cadence ? ` · ${payment.cadence}` : ''}
+                                </p>
                                 <p className="text-[11px] text-theme-muted">
-                                  Paid on {payment.paidAt ? new Date(payment.paidAt).toLocaleDateString() : 'N/A'} · Base: ₹{(basePaise / 100).toLocaleString('en-IN')} + GST (18%): ₹{(gstPaise / 100).toLocaleString('en-IN')}
+                                  Paid on {payment.paidAt ? new Date(payment.paidAt).toLocaleDateString() : 'N/A'} · Base ₹{(payment.exclGstPaise / 100).toLocaleString('en-IN')} + GST ₹{(payment.gstAmountPaise / 100).toLocaleString('en-IN')}
                                 </p>
                               </div>
                             </div>
 
                             <div className="flex items-center gap-3">
                               <span className="text-sm font-black tabular-nums text-theme-fg">
-                                ₹{(payment.amountPaise / 100).toLocaleString('en-IN')}
+                                ₹{(payment.totalAmountPaise / 100).toLocaleString('en-IN')}
                               </span>
-                              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-extrabold uppercase text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300">
+                              <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-[10px] font-extrabold uppercase text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300">
                                 Paid
                               </span>
                             </div>

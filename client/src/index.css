@@ -136,7 +136,7 @@
     --card-gap: clamp(1rem, 0.938rem + 0.078vw, 1.25rem);
     --card-pad: clamp(0.875rem, 0.816rem + 0.059vw, 1.125rem);
     /* Page left/right inset — Appearance “Page side space” overrides on html. */
-    --page-gutter-x: clamp(1.5rem, 1.422rem + 0.078vw, 2.5rem);
+    --page-gutter-x: 4rem;
 
     /* Appearance — Text size + font. html font-size is the only type scale. */
     --app-font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
@@ -169,7 +169,7 @@
     --topbar-gutter-x: 2rem;
     --card-gap: clamp(0.75rem, 0.688rem + 0.078vw, 1rem);
     --card-pad: clamp(0.75rem, 0.688rem + 0.078vw, 1rem);
-    --page-gutter-x: clamp(1.25rem, 1.172rem + 0.078vw, 2rem);
+    --page-gutter-x: 3.5rem;
   }
 
   .dark {
@@ -1226,9 +1226,13 @@
 
   .contact-table tbody td:first-child,
   .contact-table thead th:first-child {
-    width: 3rem;
-    padding-left: 1rem;
-    padding-right: 0.75rem;
+    width: 2.5rem;
+    padding-left: 0.75rem;
+    padding-right: 0.5rem;
+  }
+
+  .contact-table table {
+    table-layout: fixed;
   }
 
   .contact-table tbody tr.group:hover {

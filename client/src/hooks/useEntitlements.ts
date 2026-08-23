@@ -25,7 +25,7 @@ const TIER_FEATURE_THRESHOLDS: Record<
   keyof Entitlements['features'],
   PlanTier
 > = {
-  aiBots: 'pro',
+  aiBots: 'growth',
   calling: 'pro',
   campaigns: 'starter',
 };
@@ -37,7 +37,7 @@ function daysBetween(from: string | null | undefined, to: Date = new Date()): nu
 }
 
 function deriveEntitlements(info: BillingInfo): Entitlements {
-  const tier = (info.plan || 'starter') as PlanTier;
+  const tier = (info.planTier || info.plan || 'starter') as PlanTier;
   const features = {
     aiBots: TIER_ORDER.indexOf(tier) >= TIER_ORDER.indexOf(TIER_FEATURE_THRESHOLDS.aiBots),
     calling:
@@ -70,7 +70,7 @@ export function useEntitlements() {
     try {
       setLoading(true);
       const res = await billingApi.get();
-      const data = res.data as BillingInfo;
+      const data = res.data.data as BillingInfo;
       setEntitlements(deriveEntitlements(data));
       setError(null);
     } catch (e) {
@@ -83,6 +83,11 @@ export function useEntitlements() {
 
   useEffect(() => {
     refresh();
+    const onBillingUpdated = () => {
+      refresh();
+    };
+    window.addEventListener('billing:updated', onBillingUpdated);
+    return () => window.removeEventListener('billing:updated', onBillingUpdated);
   }, [refresh]);
 
   const isPlanAtLeast = useCallback(

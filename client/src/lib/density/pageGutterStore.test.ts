@@ -6,10 +6,10 @@ import {
 } from './pageGutterStore';
 
 describe('page gutter', () => {
-  it('defaults wider than the old lg:px-6 (1.5rem)', () => {
-    expect(PAGE_GUTTER[3]).toBe('2.5rem');
-    expect(defaultPageGutterForDensity('comfortable')).toBe(3);
-    expect(defaultPageGutterForDensity('compact')).toBe(2);
+  it('defaults to step 4 (4rem) for all densities', () => {
+    expect(PAGE_GUTTER[4]).toBe('4rem');
+    expect(defaultPageGutterForDensity('comfortable')).toBe(4);
+    expect(defaultPageGutterForDensity('compact')).toBe(4);
   });
 
   it('accepts 1–7 including much-wider steps', () => {

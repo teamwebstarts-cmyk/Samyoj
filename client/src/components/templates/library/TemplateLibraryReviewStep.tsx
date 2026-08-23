@@ -182,7 +182,7 @@ export default function TemplateLibraryReviewStep({
             <p className="text-[12px] font-bold text-slate-900 dark:text-white">Variables</p>
             <InfoTip
               label="Variable mapping help"
-              content="Map each placeholder to a contact field so campaigns and Inbox can auto-fill messages. Sample values come from Meta."
+              content="Choose where each placeholder comes from. When you add this template, Inbox and Campaigns pre-select the same mapping for every send."
             />
           </div>
 

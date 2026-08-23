@@ -5,7 +5,7 @@ export type PageGutterStep = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 export const PAGE_GUTTER_STORAGE_KEY = 'samyoj:page-gutter:v1';
 export const PAGE_GUTTER_MAX_STEP = 7;
 
-/** Desktop left/right inset. Step 3 is default. Steps 6–7 are much wider edges. */
+/** Desktop left/right inset. Step 4 (4rem) is the app default. */
 export const PAGE_GUTTER: Record<PageGutterStep, string> = {
   1: '1.5rem',
   2: '2rem',
@@ -16,8 +16,8 @@ export const PAGE_GUTTER: Record<PageGutterStep, string> = {
   7: '10rem',
 };
 
-export function defaultPageGutterForDensity(density: DisplayDensity): PageGutterStep {
-  return density === 'compact' ? 2 : 3;
+export function defaultPageGutterForDensity(_density: DisplayDensity): PageGutterStep {
+  return 4;
 }
 
 export function isPageGutterStep(value: unknown): value is PageGutterStep {
@@ -30,10 +30,11 @@ export function isPageGutterStep(value: unknown): value is PageGutterStep {
 }
 
 export function pageGutterLabel(step: PageGutterStep): string {
-  if (step <= 2) return 'Tighter';
-  if (step === 3) return 'Default';
-  if (step <= 5) return 'Wider';
-  return 'Much wider';
+  if (step <= 2) return 'Narrow';
+  if (step === 3) return 'Comfortable';
+  if (step === 4) return 'Default';
+  if (step <= 5) return 'Wide';
+  return 'Widest';
 }
 
 export function getStoredPageGutter(): PageGutterStep | null {

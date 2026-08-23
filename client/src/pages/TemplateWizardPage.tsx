@@ -46,6 +46,7 @@ import { getTemplateRejectedReason } from '../utils/templateUtils';
 import { getTemplateRejectionGuide, getTemplateStatusHelp } from '../utils/templateRejectionGuide';
 import { toastError, toastSuccess, toastWarning } from '../utils/toast';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
+import { useAuth } from '../contexts/AuthContext';
 import { useTopbarExtras } from '../contexts/TopbarContext';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 
@@ -56,6 +57,7 @@ type LocationState = {
 
 export default function TemplateWizardPage() {
   const { activeNumber, resolved, hasConnectedNumber, loading: numbersLoading } = useWhatsAppNumber();
+  const { organization } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { name: resubmitNameParam } = useParams();
@@ -485,6 +487,7 @@ export default function TemplateWizardPage() {
                 onChange={setForm}
                 mode={mode}
                 onHeaderPreviewUrl={setHeaderPreviewUrl}
+                brandName={organization?.companyName ?? ''}
                 mapFirstBodyVariableToName={mapFirstBodyVariableToName}
               />
             )}

@@ -5,11 +5,10 @@ import { authenticate, requireOrg } from '../../middleware/auth';
 import { loadPermissions, requirePermission } from '../../middleware/permissions';
 import { AppError, sendSuccess, asyncHandler } from '../../utils/response';
 import { getSeatLimit, type TeamSettings } from '../team/types';
-import { BILLING_SKUS, PLAN_TIERS, getSku, legacyPlanToTier, getPlan } from './plans';
+import { BILLING_SKUS, PLAN_TIERS, legacyPlanToTier, getPlan } from './plans';
 import { getOrgEntitlements } from './entitlements.service';
-import type { BillingSkuDef, PlanTier } from './plans';
+import type { PlanTier } from './plans';
 import {
-  activatePlan,
   createRazorpayOrder,
   isRazorpayConfigured,
   verifyPaymentSignature,
@@ -19,19 +18,30 @@ import { config } from '../../config';
 import logger from '../../utils/logger';
 import { getOrgUsage, estimateCampaignCost } from './usage.service';
 import paymentLinksRoutes from './payment-links.routes';
+import {
+  paymentAmountBreakdown,
+  pricingByCadenceForTier,
+  resolveSkuForPaymentOrder,
+} from './catalog';
+import {
+  expireStaleCreatedOrders,
+  findReusablePendingOrder,
+  fulfillCapturedPayment,
+} from './fulfillment';
 
 const router = Router();
 
 router.use(paymentLinksRoutes);
 
-/** Client-facing plan shape built from PLAN_TIERS + monthly SKU pricing. */
+/** Client-facing plan shape built from PLAN_TIERS + SKU pricing catalog. */
 function tierToClientPlan(tier: PlanTier) {
   const def = PLAN_TIERS[tier];
   const monthlySku = BILLING_SKUS.find((s) => s.planTier === tier && s.cadence === 'monthly');
+  const pricing = pricingByCadenceForTier(tier);
   return {
     id: def.tier,
     name: def.name,
-    pricePaise: monthlySku?.pricePaise ?? 0,
+    pricePaise: monthlySku?.inclGstPaise ?? 0,
     priceLabel: monthlySku?.effectiveMonthlyLabel ?? 'Custom',
     seats: def.seats === 'custom' ? 999 : def.seats,
     waNumbers: def.waNumbers,
@@ -41,16 +51,14 @@ function tierToClientPlan(tier: PlanTier) {
     callingIncluded: def.callingIncluded,
     features: def.features,
     isMostPopular: monthlySku?.isMostPopular,
+    pricing,
   };
 }
 
-/**
- * Resolve cadence + periodDays for a captured order from its stored
- * tier + amount. Prices are unique per tier+cadence, so the SKU is
- * unambiguous without a schema change.
- */
-function skuForPaymentOrder(planId: string, amountPaise: number): BillingSkuDef | undefined {
-  return BILLING_SKUS.find((s) => s.planTier === planId && s.pricePaise === amountPaise);
+function orderExpiryDate(paidAt: Date, order: { planId: string; amountPaise: number; skuId?: string | null }) {
+  const sku = resolveSkuForPaymentOrder(order);
+  const periodDays = sku?.periodDays || 30;
+  return new Date(paidAt.getTime() + periodDays * 24 * 60 * 60 * 1000);
 }
 
 router.get(
@@ -58,7 +66,6 @@ router.get(
   authenticate,
   requireOrg,
   loadPermissions,
-  requirePermission('manageBilling'),
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
 
@@ -68,7 +75,7 @@ router.get(
       prisma.paymentOrder.findMany({
         where: { organizationId: orgId, status: 'CAPTURED' },
         orderBy: { paidAt: 'desc' },
-        take: 5,
+        take: 10,
       }),
     ]);
 
@@ -76,29 +83,24 @@ router.get(
 
     const teamSettings = (org.settings as { team?: TeamSettings } | null)?.team;
     const seatLimit = getSeatLimit(org.plan, teamSettings);
-
-    // Map legacy plan strings ('business') onto the current tier catalog.
     const planTier = legacyPlanToTier(org.plan);
     const currentPlan = tierToClientPlan(planTier);
 
-    // Infer current cadence and check for unexpired active paid order
     const lastPaid = recentPayments[0];
-    const lastSku = lastPaid ? skuForPaymentOrder(lastPaid.planId, lastPaid.amountPaise) : undefined;
+    const lastSku = lastPaid ? resolveSkuForPaymentOrder(lastPaid) : undefined;
 
     const now = new Date();
     const activePayment = recentPayments.find((p) => {
       if (!p.paidAt) return false;
-      const sku = skuForPaymentOrder(p.planId, p.amountPaise);
-      const periodDays = sku?.periodDays || 30;
-      const expiresAt = new Date(p.paidAt.getTime() + periodDays * 24 * 60 * 60 * 1000);
-      return expiresAt > now;
+      return orderExpiryDate(p.paidAt, p) > now;
     });
 
     const activePaidPlan = activePayment ? activePayment.planId : null;
-    const activePaidSku = activePayment ? skuForPaymentOrder(activePayment.planId, activePayment.amountPaise) : undefined;
-    const activePaidExpiresAt = activePayment && activePaidSku
-      ? new Date(activePayment.paidAt!.getTime() + (activePaidSku.periodDays || 30) * 24 * 60 * 60 * 1000).toISOString()
-      : null;
+    const activePaidSku = activePayment ? resolveSkuForPaymentOrder(activePayment) : undefined;
+    const activePaidExpiresAt =
+      activePayment && activePayment.paidAt
+        ? orderExpiryDate(activePayment.paidAt, activePayment).toISOString()
+        : null;
 
     sendSuccess(res, {
       plan: org.plan,
@@ -112,16 +114,26 @@ router.get(
       razorpayKeyId: isRazorpayConfigured() ? config.razorpay.keyId : null,
       planExpiresAt: org.planExpiresAt,
       subscriptionStatus: org.subscriptionStatus,
-      cadence: org.subscriptionStatus === 'trial' ? 'trial' : lastSku?.cadence ?? null,
+      cadence:
+        org.subscriptionStatus === 'trial'
+          ? 'trial'
+          : (activePaidSku?.cadence ?? lastSku?.cadence ?? null),
       trialEndsAt: org.subscriptionStatus === 'trial' ? org.planExpiresAt : null,
       currentPeriodEnd: org.planExpiresAt,
       activePaidPlan,
       activePaidExpiresAt,
-      recentPayments: recentPayments.map((p) => ({
-        planId: p.planId,
-        amountPaise: p.amountPaise,
-        paidAt: p.paidAt,
-      })),
+      recentPayments: recentPayments.map((p) => {
+        const sku = resolveSkuForPaymentOrder(p);
+        const breakdown = paymentAmountBreakdown(p.amountPaise, sku);
+        return {
+          planId: p.planId,
+          cadence: p.cadence ?? sku?.cadence ?? null,
+          paidAt: p.paidAt,
+          totalAmountPaise: breakdown.totalAmountPaise,
+          exclGstPaise: breakdown.exclGstPaise,
+          gstAmountPaise: breakdown.gstAmountPaise,
+        };
+      }),
     });
   })
 );
@@ -131,7 +143,6 @@ router.get(
   authenticate,
   requireOrg,
   loadPermissions,
-  requirePermission('manageBilling'),
   asyncHandler(async (req: Request, res: Response) => {
     const usage = await getOrgUsage(req.user!.organizationId!);
     sendSuccess(res, usage);
@@ -160,6 +171,10 @@ router.post(
   loadPermissions,
   requirePermission('manageBilling'),
   asyncHandler(async (req: Request, res: Response) => {
+    if (!isRazorpayConfigured()) {
+      throw new AppError(503, 'Payment gateway is not configured');
+    }
+
     const { planId, cadence } = z
       .object({
         planId: z.enum(['starter', 'growth', 'pro']),
@@ -176,7 +191,6 @@ router.post(
     const org = await prisma.organization.findUnique({ where: { id: orgId } });
     if (!org) throw new AppError(404, 'Organization not found');
 
-    // Check if the organization already has an active, unexpired paid order for this plan
     const capturedOrders = await prisma.paymentOrder.findMany({
       where: { organizationId: orgId, planId, status: 'CAPTURED' },
       orderBy: { paidAt: 'desc' },
@@ -186,16 +200,12 @@ router.post(
     const now = new Date();
     const activeOrder = capturedOrders.find((p) => {
       if (!p.paidAt) return false;
-      const orderSku = skuForPaymentOrder(p.planId, p.amountPaise);
-      const periodDays = orderSku?.periodDays || 30;
-      const expiresAt = new Date(p.paidAt.getTime() + periodDays * 24 * 60 * 60 * 1000);
-      return expiresAt > now;
+      return orderExpiryDate(p.paidAt, p) > now;
     });
 
-    if (activeOrder) {
-      const orderSku = skuForPaymentOrder(activeOrder.planId, activeOrder.amountPaise);
-      const periodDays = orderSku?.periodDays || 30;
-      const expiresAt = new Date(activeOrder.paidAt!.getTime() + periodDays * 24 * 60 * 60 * 1000);
+    if (activeOrder && activeOrder.paidAt) {
+      const orderSku = resolveSkuForPaymentOrder(activeOrder);
+      const expiresAt = orderExpiryDate(activeOrder.paidAt, activeOrder);
       await prisma.organization.update({
         where: { id: orgId },
         data: {
@@ -215,13 +225,31 @@ router.post(
         cadence: sku.cadence,
         amountLabel: sku.effectiveMonthlyLabel,
         planExpiresAt: expiresAt,
-        message: `Your ${orderSku?.name || sku.name} subscription is already active and has been restored.`,
+        message: `Your ${orderSku?.name || sku.name} plan is already active.`,
       });
     }
 
+    const reusable = await findReusablePendingOrder(orgId, planId, sku.id);
+    if (reusable) {
+      return sendSuccess(res, {
+        orderId: reusable.razorpayOrderId,
+        amount: reusable.amountPaise,
+        currency: reusable.currency,
+        keyId: config.razorpay.keyId,
+        planName: sku.name,
+        skuId: sku.id,
+        cadence: sku.cadence,
+        amountLabel: sku.effectiveMonthlyLabel,
+        reusedPendingOrder: true,
+      });
+    }
+
+    await expireStaleCreatedOrders(orgId, planId);
+
+    const chargePaise = sku.inclGstPaise;
     const receipt = `plan_${sku.id}_${orgId.slice(0, 8)}_${Date.now()}`;
     const order = await createRazorpayOrder({
-      amountPaise: sku.pricePaise,
+      amountPaise: chargePaise,
       receipt,
       notes: { organizationId: orgId, planId, skuId: sku.id, companyName: org.companyName },
     });
@@ -231,7 +259,9 @@ router.post(
         organizationId: orgId,
         razorpayOrderId: order.id,
         planId,
-        amountPaise: sku.pricePaise,
+        skuId: sku.id,
+        cadence: sku.cadence,
+        amountPaise: chargePaise,
         currency: order.currency,
         status: 'CREATED',
       },
@@ -252,6 +282,9 @@ router.post(
       skuId: sku.id,
       cadence: sku.cadence,
       amountLabel: sku.effectiveMonthlyLabel,
+      inclGstPaise: chargePaise,
+      exclGstPaise: sku.pricePaise,
+      gstPaise: sku.inclGstPaise - sku.pricePaise,
     });
   })
 );
@@ -288,37 +321,25 @@ router.post(
     });
     if (!paymentOrder) throw new AppError(404, 'Payment order not found');
 
-    const org = await prisma.organization.findUnique({ where: { id: orgId } });
-    if (!org) throw new AppError(404, 'Organization not found');
+    const result = await fulfillCapturedPayment({
+      paymentOrderId: paymentOrder.id,
+      paymentId: data.razorpay_payment_id,
+    });
 
-    if (paymentOrder.status === 'CAPTURED') {
-      return sendSuccess(res, { plan: org.plan, message: 'Already activated.' });
+    if (!result.alreadyCaptured) {
+      const { emitProductEvent } = await import('../platform/events');
+      emitProductEvent({
+        organizationId: orgId,
+        name: 'PAYMENT_OK',
+      });
     }
 
-    const planId = paymentOrder.planId;
-    const sku = skuForPaymentOrder(planId, paymentOrder.amountPaise);
-
-    await prisma.paymentOrder.update({
-      where: { id: paymentOrder.id },
-      data: {
-        status: 'CAPTURED',
-        paymentId: data.razorpay_payment_id,
-        paidAt: new Date(),
-      },
-    });
-
-    const updatedOrg = await activatePlan(orgId, planId, sku?.periodDays);
-
-    const { emitProductEvent } = await import('../platform/events');
-    emitProductEvent({
-      organizationId: orgId,
-      name: 'PAYMENT_OK',
-    });
-
     sendSuccess(res, {
-      plan: updatedOrg.plan,
-      planExpiresAt: updatedOrg.planExpiresAt,
-      message: 'Payment successful. Plan upgraded.',
+      plan: result.plan,
+      planExpiresAt: result.planExpiresAt,
+      message: result.alreadyCaptured
+        ? 'Plan already active.'
+        : 'Payment successful. Plan upgraded.',
     });
   })
 );
@@ -327,10 +348,18 @@ router.post(
   '/webhook',
   asyncHandler(async (req: Request, res: Response) => {
     const signature = req.headers['x-razorpay-signature'] as string;
+    const eventId = req.headers['x-razorpay-event-id'] as string | undefined;
     const rawBody = req.rawBody || JSON.stringify(req.body);
 
     if (!signature || !verifyWebhookSignature(rawBody, signature)) {
       throw new AppError(400, 'Invalid webhook signature');
+    }
+
+    if (eventId) {
+      const seen = await prisma.razorpayWebhookEvent.findUnique({ where: { eventId } });
+      if (seen) {
+        return res.json({ status: 'ok', duplicate: true });
+      }
     }
 
     let event: {
@@ -340,9 +369,10 @@ router.post(
       };
     };
     try {
-      event = (typeof req.body === 'object' && req.body !== null && 'event' in req.body)
-        ? (req.body as typeof event)
-        : (JSON.parse(rawBody) as typeof event);
+      event =
+        typeof req.body === 'object' && req.body !== null && 'event' in req.body
+          ? (req.body as typeof event)
+          : (JSON.parse(rawBody) as typeof event);
     } catch {
       throw new AppError(400, 'Invalid webhook payload JSON');
     }
@@ -352,29 +382,28 @@ router.post(
       const orderId = payment?.order_id;
       const paymentId = payment?.id;
 
-      if (orderId) {
+      if (orderId && paymentId) {
         const existing = await prisma.paymentOrder.findFirst({
           where: { razorpayOrderId: orderId },
         });
-        if (existing && existing.status !== 'CAPTURED') {
-          const organizationId = existing.organizationId;
-          const planId = existing.planId;
-          const sku = skuForPaymentOrder(planId, existing.amountPaise);
-          await prisma.paymentOrder.update({
-            where: { id: existing.id },
-            data: { status: 'CAPTURED', paymentId, paidAt: new Date() },
+        if (existing) {
+          const result = await fulfillCapturedPayment({
+            paymentOrderId: existing.id,
+            paymentId,
           });
-          await activatePlan(organizationId, planId, sku?.periodDays);
-          logger.info('Plan activated via Razorpay webhook', {
-            source: 'razorpay',
-            organizationId,
-            planId,
-          });
-          const { emitProductEvent } = await import('../platform/events');
-          emitProductEvent({ organizationId, name: 'PAYMENT_OK' });
+          if (!result.alreadyCaptured) {
+            logger.info('Plan activated via Razorpay webhook', {
+              source: 'razorpay',
+              organizationId: result.organizationId,
+              planId: result.plan,
+            });
+            const { emitProductEvent } = await import('../platform/events');
+            emitProductEvent({ organizationId: result.organizationId, name: 'PAYMENT_OK' });
+          }
         }
       }
     }
+
     if (event.event === 'payment.failed') {
       const orderId = event.payload?.payment?.entity?.order_id;
       if (orderId) {
@@ -396,6 +425,12 @@ router.post(
       }
     }
 
+    if (eventId) {
+      await prisma.razorpayWebhookEvent.create({
+        data: { eventId, eventType: event.event },
+      });
+    }
+
     res.json({ status: 'ok' });
   })
 );
@@ -413,10 +448,9 @@ router.patch(
     const orgId = req.user!.organizationId!;
 
     if (plan === 'enterprise') {
-      throw new AppError(400, 'Contact sales to upgrade to Enterprise');
+      throw new AppError(400, 'Contact sales at hello@samyoj.com to upgrade to Enterprise');
     }
 
-    // Check if organization has an unexpired captured payment order for this plan
     const capturedOrders = await prisma.paymentOrder.findMany({
       where: { organizationId: orgId, planId: plan, status: 'CAPTURED' },
       orderBy: { paidAt: 'desc' },
@@ -426,16 +460,12 @@ router.patch(
     const now = new Date();
     const activeOrder = capturedOrders.find((p) => {
       if (!p.paidAt) return false;
-      const orderSku = skuForPaymentOrder(p.planId, p.amountPaise);
-      const periodDays = orderSku?.periodDays || 30;
-      const expiresAt = new Date(p.paidAt.getTime() + periodDays * 24 * 60 * 60 * 1000);
-      return expiresAt > now;
+      return orderExpiryDate(p.paidAt, p) > now;
     });
 
-    if (activeOrder) {
-      const orderSku = skuForPaymentOrder(activeOrder.planId, activeOrder.amountPaise);
-      const periodDays = orderSku?.periodDays || 30;
-      const expiresAt = new Date(activeOrder.paidAt!.getTime() + periodDays * 24 * 60 * 60 * 1000);
+    if (activeOrder && activeOrder.paidAt) {
+      const orderSku = resolveSkuForPaymentOrder(activeOrder);
+      const expiresAt = orderExpiryDate(activeOrder.paidAt, activeOrder);
       const org = await prisma.organization.update({
         where: { id: orgId },
         data: {

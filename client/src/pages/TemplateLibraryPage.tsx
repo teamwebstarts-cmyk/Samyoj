@@ -28,20 +28,21 @@ import type { MessageTemplate, TemplateLibraryEntry } from '../types';
 import type { TemplateFormState } from '../utils/templateForm';
 import { persistTemplateVariableMeta } from '../utils/templateForm';
 import {
+  applyLibraryQuickPick,
   buildLibraryButtonInputs,
   canCloneFromMetaLibrary,
-  isLibraryQuickPickActive,
   libraryButtonUrlError,
   libraryCloneCategory,
   libraryNeedsButtonInputs,
+  libraryVariableMetaForPersist,
   libraryWizardStages,
+  LIBRARY_QUICK_PICKS,
   matchesLibraryCategoryFilter,
   normalizeWebsiteUrl,
   suggestedTemplateName,
   uniqueLibraryTemplateName,
   wizardFormFromLibraryItem,
   type LibraryCategoryFilter,
-  type LibraryQuickPick,
   type LibrarySourceTab,
 } from '../utils/templateLibrary';
 import { previewParams } from '../utils/templateForm';
@@ -70,7 +71,6 @@ export default function TemplateLibraryPage() {
   const [accountLoadError, setAccountLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<LibraryCategoryFilter>('ALL');
-  const [topicFilter, setTopicFilter] = useState('');
   const [usecaseFilter, setUsecaseFilter] = useState('');
   const language = 'en_US';
   const [selectedItem, setSelectedItem] = useState<LibraryListItem | null>(null);
@@ -94,7 +94,6 @@ export default function TemplateLibraryPage() {
     setLoadingMeta(true);
     const params: Record<string, string> = { language, limit: '100' };
     if (debouncedSearch) params.search = debouncedSearch;
-    if (topicFilter) params.topic = topicFilter;
     if (usecaseFilter) params.usecase = usecaseFilter;
 
     templateApi
@@ -113,7 +112,7 @@ export default function TemplateLibraryPage() {
       .finally(() => {
         if (requestNumberId === activeNumberIdRef.current) setLoadingMeta(false);
       });
-  }, [activeNumber, debouncedSearch, language, resolved, topicFilter, usecaseFilter]);
+  }, [activeNumber, debouncedSearch, language, resolved, usecaseFilter]);
 
   const loadAccount = useCallback(() => {
     if (!resolved || !activeNumber) return;
@@ -287,7 +286,11 @@ export default function TemplateLibraryPage() {
     return null;
   };
 
-  const cloneFromLibrary = async (item: LibraryListItem, nameOverride?: string) => {
+  const cloneFromLibrary = async (
+    item: LibraryListItem,
+    nameOverride?: string,
+    variableMeta?: TemplateFormState['variableMeta'],
+  ) => {
     const name = uniqueLibraryTemplateName(nameOverride || createName || item.name, existingNames);
     if (libraryNeedsButtonInputs(item)) {
       const needsUrl = (item.buttons || []).some((b) => b.type?.toUpperCase() === 'URL');
@@ -309,8 +312,8 @@ export default function TemplateLibraryPage() {
       category: libraryCloneCategory(item),
     });
     const status = String((data as { data?: { status?: string } })?.data?.status || 'APPROVED').toUpperCase();
-    const mapped = wizardFormFromLibraryItem(item, item.source);
-    const mappingSynced = await persistTemplateVariableMeta(name, mapped.variableMeta, item.language || language);
+    const metaToPersist = libraryVariableMetaForPersist(item, item.source, variableMeta);
+    const mappingSynced = await persistTemplateVariableMeta(name, metaToPersist, item.language || language);
     if (!mappingSynced) {
       toastWarning(
         'Template added, but the variable mapping could not sync for the team. Auto-fill may only work on this device.',
@@ -373,7 +376,7 @@ export default function TemplateLibraryPage() {
       }
       setSaving(true);
       try {
-        await cloneFromLibrary(selected, createName.trim());
+        await cloneFromLibrary(selected, createName.trim(), form.variableMeta);
       } catch (err: unknown) {
         setStageError(
           mapTemplateApiError(getErrorMessage(err, 'Failed to add template from library.')),
@@ -384,23 +387,18 @@ export default function TemplateLibraryPage() {
     }
   };
 
-  const handleQuickPick = (pick: LibraryQuickPick) => {
-    if (isLibraryQuickPickActive(pick, usecaseFilter, categoryFilter)) {
+  const handleQuickPickChange = (pickId: string) => {
+    if (!pickId) {
       setCategoryFilter('ALL');
-      setTopicFilter('');
       setUsecaseFilter('');
       return;
     }
+    const pick = LIBRARY_QUICK_PICKS.find((p) => p.id === pickId);
+    if (!pick) return;
     setSourceTab('meta');
-    if (pick.category) {
-      setCategoryFilter(pick.category);
-      setTopicFilter('');
-      setUsecaseFilter('');
-      return;
-    }
-    setCategoryFilter('ALL');
-    setTopicFilter(pick.topic || '');
-    setUsecaseFilter(pick.usecase || '');
+    const next = applyLibraryQuickPick(pick);
+    setCategoryFilter(next.categoryFilter);
+    setUsecaseFilter(next.usecaseFilter);
   };
 
   const handleQuickAdd = async (item: LibraryListItem) => {
@@ -414,7 +412,11 @@ export default function TemplateLibraryPage() {
     setAddingName(item.name);
     setSaving(true);
     try {
-      await cloneFromLibrary(item, suggestedTemplateName(item.name));
+      await cloneFromLibrary(
+        item,
+        suggestedTemplateName(item.name),
+        wizardFormFromLibraryItem(item, item.source).variableMeta,
+      );
     } catch (err: unknown) {
       setStageError(
         mapTemplateApiError(getErrorMessage(err, 'Failed to add template from library.')),
@@ -445,6 +447,37 @@ export default function TemplateLibraryPage() {
     setStageError(null);
   };
 
+  const { setExtras, clearExtras } = useTopbarExtras();
+
+  const stepTitle = useMemo(
+    () =>
+      activeStep === 0
+        ? 'Browse template library'
+        : activeStep === 1
+          ? 'Review library template'
+          : submittedStatus === 'APPROVED'
+            ? 'Template ready to use'
+            : 'Template submitted',
+    [activeStep, submittedStatus],
+  );
+
+  const stepSubtitle = useMemo(
+    () =>
+      activeStep === 0
+        ? 'Add Meta’s Utility and Authentication templates in one click'
+        : activeStep === 1
+          ? 'Confirm name, buttons, and how variables fill from contacts'
+          : submittedStatus === 'APPROVED'
+            ? 'You can send this from Campaigns and Inbox now'
+            : 'WhatsApp is reviewing this template',
+    [activeStep, submittedStatus],
+  );
+
+  useEffect(() => {
+    setExtras({ subtitle: stepSubtitle });
+    return () => clearExtras();
+  }, [stepSubtitle, setExtras, clearExtras]);
+
   if (numbersLoading && !hasConnectedNumber) {
     return (
       <div className="template-wizard-page">
@@ -468,30 +501,6 @@ export default function TemplateLibraryPage() {
       </div>
     );
   }
-
-  const stepTitle =
-    activeStep === 0
-      ? 'Browse template library'
-      : activeStep === 1
-        ? 'Review library template'
-        : submittedStatus === 'APPROVED'
-          ? 'Template ready to use'
-          : 'Template submitted';
-  const stepSubtitle =
-    activeStep === 0
-      ? 'Add Meta’s Utility and Authentication templates in one click'
-      : activeStep === 1
-        ? 'Confirm name, buttons, and how variables fill from contacts'
-        : submittedStatus === 'APPROVED'
-          ? 'You can send this from Campaigns and Inbox now'
-          : 'WhatsApp is reviewing this template';
-
-  const { setExtras, clearExtras } = useTopbarExtras();
-
-  useEffect(() => {
-    setExtras({ subtitle: stepSubtitle });
-    return () => clearExtras();
-  }, [stepSubtitle, setExtras, clearExtras]);
 
   const nameError =
     createName.trim() && existingNames.has(createName.trim())
@@ -561,8 +570,6 @@ export default function TemplateLibraryPage() {
                 search={search}
                 onSearchChange={setSearch}
                 categoryFilter={categoryFilter}
-                topicFilter={topicFilter}
-                onTopicFilterChange={setTopicFilter}
                 usecaseFilter={usecaseFilter}
                 loading={sourceTab === 'meta' ? loadingMeta : loadingAccount}
                 items={listItems}
@@ -572,7 +579,7 @@ export default function TemplateLibraryPage() {
                   if (match) setSelectedItem(match);
                 }}
                 onQuickAdd={(item) => void handleQuickAdd(item)}
-                onQuickPick={handleQuickPick}
+                onQuickPickChange={handleQuickPickChange}
                 addingName={addingName}
                 metaCount={metaEntries.length}
                 accountCount={accountEntries.length}

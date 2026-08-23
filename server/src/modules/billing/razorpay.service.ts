@@ -102,14 +102,33 @@ export function verifyWebhookSignature(rawBody: string, signature: string): bool
  * never from the client. Caller is responsible for passing PaymentOrder.planId.
  * periodDays comes from the purchased SKU (30/90/365); defaults to 30 for
  * legacy callers that predate cadences.
+ * Stacks renewal on top of any unexpired plan period.
  */
-export async function activatePlan(organizationId: string, planTier: string, periodDays?: number) {
+export async function activatePlan(
+  organizationId: string,
+  planTier: string,
+  periodDays?: number,
+  tx?: import('@prisma/client').Prisma.TransactionClient
+) {
   const days = periodDays && periodDays > 0 ? periodDays : 30;
-  const expiresAt = new Date();
+  const { default: prisma } = await import('../../config/database');
+  const db = tx ?? prisma;
+
+  const org = await db.organization.findUnique({
+    where: { id: organizationId },
+    select: { planExpiresAt: true },
+  });
+  if (!org) {
+    throw new Error('Organization not found');
+  }
+
+  const now = new Date();
+  const base =
+    org.planExpiresAt && org.planExpiresAt > now ? new Date(org.planExpiresAt) : new Date(now);
+  const expiresAt = new Date(base);
   expiresAt.setDate(expiresAt.getDate() + days);
 
-  const { default: prisma } = await import('../../config/database');
-  return prisma.organization.update({
+  return db.organization.update({
     where: { id: organizationId },
     data: {
       plan: planTier,

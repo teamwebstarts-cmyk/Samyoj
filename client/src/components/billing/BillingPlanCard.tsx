@@ -74,55 +74,26 @@ export default function BillingPlanCard({
 }: BillingPlanCardProps) {
   const theme = planThemes[plan.id] ?? planThemes.starter;
   const Icon = theme.icon;
-  const isPaid = plan.pricePaise > 0;
+  const isPaid = plan.pricePaise > 0 || Boolean(plan.pricing?.monthly);
   const isEnterprise = plan.id === 'enterprise';
+
+  const sku = plan.pricing?.[cadence];
+  const displayPrice = sku?.effectiveMonthlyLabel ?? plan.priceLabel;
+  const billingSummary = sku?.billingLabel ?? `Billed ${cadence} · cancel anytime`;
+  const isUpiCapExceeded = sku ? !sku.upiAutopayAllowed : false;
 
   const buttonLabel = isCurrent
     ? 'Current plan'
     : isActivePaidSession
       ? 'Restore Plan'
       : isEnterprise
-        ? 'Talk to experts'
+        ? 'Contact sales'
         : isPaid
           ? 'Upgrade'
           : 'Switch plan';
 
   const showBadge = theme.badge || plan.isMostPopular;
   const badgeText = plan.isMostPopular ? 'Most popular' : theme.badge;
-
-  // Dynamic cadence pricing calculation from catalog
-  let displayPrice = plan.priceLabel;
-  let billingSummary = `Billed ${cadence} · cancel anytime`;
-  let isUpiCapExceeded = false;
-
-  if (plan.id === 'starter') {
-    if (cadence === 'quarterly') {
-      displayPrice = '₹950/mo';
-      billingSummary = 'Billed ₹2,850 quarterly (+ GST)';
-    } else if (cadence === 'yearly') {
-      displayPrice = '₹800/mo';
-      billingSummary = 'Billed ₹9,600 yearly (+ GST)';
-    }
-  } else if (plan.id === 'growth') {
-    if (cadence === 'quarterly') {
-      displayPrice = '₹2,375/mo';
-      billingSummary = 'Billed ₹7,125 quarterly (+ GST)';
-    } else if (cadence === 'yearly') {
-      displayPrice = '₹2,000/mo';
-      billingSummary = 'Billed ₹24,000 yearly (+ GST)';
-      isUpiCapExceeded = true;
-    }
-  } else if (plan.id === 'pro') {
-    if (cadence === 'quarterly') {
-      displayPrice = '₹4,750/mo';
-      billingSummary = 'Billed ₹14,250 quarterly (+ GST)';
-      isUpiCapExceeded = true;
-    } else if (cadence === 'yearly') {
-      displayPrice = '₹4,000/mo';
-      billingSummary = 'Billed ₹48,000 yearly (+ GST)';
-      isUpiCapExceeded = true;
-    }
-  }
 
   return (
     <div
@@ -137,7 +108,6 @@ export default function BillingPlanCard({
       }`}
     >
       <div className="flex flex-1 flex-col">
-        {/* Top Header: Icon + Name (left) & Badge (right) in a single NON-OVERLAPPING flex row */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2.5">
             <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${theme.iconBg}`}>
@@ -148,28 +118,25 @@ export default function BillingPlanCard({
             </h3>
           </div>
 
-          {/* Right badge */}
           {isCurrent ? (
-            <span className="shrink-0 rounded-full bg-emerald-500 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white">
+            <span className="shrink-0 rounded-md bg-emerald-500 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white">
               Active
             </span>
           ) : isActivePaidSession ? (
-            <span className="shrink-0 rounded-full bg-emerald-600 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white">
+            <span className="shrink-0 rounded-md bg-emerald-600 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white">
               Purchased
             </span>
           ) : showBadge ? (
-            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white ${plan.isMostPopular ? 'bg-violet-600' : 'bg-slate-500'}`}>
+            <span className={`shrink-0 rounded-md px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white ${plan.isMostPopular ? 'bg-violet-600' : 'bg-slate-500'}`}>
               {badgeText}
             </span>
           ) : null}
         </div>
 
-        {/* Summary line */}
         <p className="mt-2.5 text-[11px] font-medium text-theme-muted">
           {plan.waNumbers} WA line · {plan.seats} seats · {typeof plan.contacts === 'number' ? plan.contacts.toLocaleString() : plan.contacts} contacts
         </p>
 
-        {/* Price Row */}
         <div className="mt-3.5 min-h-[58px]">
           {!isEnterprise ? (
             <div>
@@ -177,12 +144,14 @@ export default function BillingPlanCard({
                 <p className={`text-2xl font-black leading-none tracking-tight sm:text-[1.65rem] ${theme.priceTone}`}>
                   {displayPrice}
                 </p>
-                <span className="text-[10.5px] font-semibold text-theme-muted">+ GST</span>
+                {sku && (
+                  <span className="text-[10.5px] font-semibold text-theme-muted">incl. GST</span>
+                )}
               </div>
               <p className="mt-1 text-[10.5px] font-medium text-theme-muted">{billingSummary}</p>
               {isUpiCapExceeded && (
                 <p className="mt-0.5 text-[9.5px] font-semibold text-amber-600 dark:text-amber-400">
-                  Card / NetBanking required (&gt;₹15k UPI)
+                  Card / NetBanking required (&gt;₹15k UPI limit)
                 </p>
               )}
             </div>
@@ -196,10 +165,8 @@ export default function BillingPlanCard({
           )}
         </div>
 
-        {/* Divider */}
         <div className="my-3.5 h-px bg-theme-border" />
 
-        {/* Features */}
         <ul className="flex-1 space-y-2">
           {plan.features.map((feature) => (
             <li key={feature} className="flex items-start gap-2 text-[11.5px] text-theme-secondary">
@@ -212,11 +179,10 @@ export default function BillingPlanCard({
         </ul>
       </div>
 
-      {/* CTA Button */}
       <div className="mt-4 pt-2">
         <AppButton
           size="sm"
-          variant={isCurrent ? 'secondary' : isActivePaidSession ? 'primary' : 'primary'}
+          variant={isCurrent ? 'secondary' : 'primary'}
           className={isActivePaidSession ? '!bg-emerald-600 hover:!bg-emerald-700 text-white' : ''}
           fullWidth
           disabled={isCurrent || !canManage || (isPaid && !razorpayConfigured && !isEnterprise && !isActivePaidSession)}

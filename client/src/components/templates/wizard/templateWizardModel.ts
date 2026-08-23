@@ -87,7 +87,7 @@ export function validateTemplateWizardStep(
       'headerMediaHandle',
       'buttons',
     ]);
-    return all.filter((issue) => createFields.has(issue.field));
+    return all.filter((issue) => createFields.has(issue.field) && issue.severity === 'error');
   }
   return all.filter((issue) => issue.severity === 'error');
 }

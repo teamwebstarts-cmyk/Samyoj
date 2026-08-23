@@ -80,6 +80,14 @@ export function validateConfig(): void {
     if (!process.env.PLATFORM_ADMIN_URL) {
       errors.push('PLATFORM_ADMIN_URL is required in production');
     }
+    const hasRazorpayKey = Boolean(config.razorpay.keyId && config.razorpay.keySecret);
+    const hasRazorpayWebhook = Boolean(config.razorpay.webhookSecret);
+    if (!hasRazorpayKey) {
+      warnings.push('RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET not set — paid checkout will be disabled');
+    }
+    if (hasRazorpayKey && !hasRazorpayWebhook) {
+      errors.push('RAZORPAY_WEBHOOK_SECRET is required in production when Razorpay keys are configured');
+    }
     if (!config.encryptionKey || !isValidEncryptionKey(config.encryptionKey)) {
       errors.push('ENCRYPTION_KEY must be a 64-character hex string in production');
     }

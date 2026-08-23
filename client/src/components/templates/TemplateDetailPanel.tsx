@@ -7,7 +7,8 @@ import AppButton from '../ui/AppButton';
 import AppInput from '../ui/AppInput';
 import StatusBadge from '../ui/StatusBadge';
 import { WhatsAppTemplatePreview, getTemplateParts } from '../inbox/WhatsAppPreview';
-import { getFilledTemplatePreview, templateNeedsHeaderMedia } from '../campaigns/campaignPreviewUtils';
+import TemplateHeaderMediaField from './TemplateHeaderMediaField';
+import { getFilledTemplatePreview, getTemplateHeaderFormat, templateNeedsHeaderMedia } from '../campaigns/campaignPreviewUtils';
 import { templateApi } from '../../services/api';
 import { getTemplateRejectedReason, getQualityLabel, countTemplateVars, getTemplateBodyText, getTemplateHeaderText } from '../../utils/templateUtils';
 import { getTemplateRejectionGuide, getTemplateStatusHelp } from '../../utils/templateRejectionGuide';
@@ -235,13 +236,14 @@ export default function TemplateDetailPanel({
               </div>
             ))}
             {needsMedia && (
-              <AppInput
-                className="mt-3"
-                label="Header media URL"
-                placeholder="https://..."
-                value={headerMediaUrl}
-                onChange={(e) => setHeaderMediaUrl(e.target.value)}
-              />
+              <div className="mt-3">
+                <TemplateHeaderMediaField
+                  format={getTemplateHeaderFormat(template) as 'IMAGE' | 'VIDEO' | 'DOCUMENT'}
+                  value={headerMediaUrl}
+                  onChange={setHeaderMediaUrl}
+                  required
+                />
+              </div>
             )}
             <div className="mt-3 space-y-3">
               <TemplateButtonExtras

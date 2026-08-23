@@ -1,5 +1,5 @@
 import { BadgeCheck, ChevronLeft, Pencil, Send, Store } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import AppAlert from '../../ui/AppAlert';
 import { WhatsAppTemplateCard } from '../../inbox/WhatsAppPreview';
 import { CATEGORY_OPTIONS, LANGUAGE_OPTIONS } from '../../../utils/templateUtils';
 import type { TemplateFormState } from '../../../utils/templateForm';
@@ -147,20 +147,20 @@ export default function TemplateWizardPreviewPanel({
 
 export function TemplateWizardPolicyFooter() {
   return (
-    <div className="template-wizard-policy flex items-start gap-2 rounded-xl border border-sky-200/80 bg-sky-50/80 px-4 py-3 text-[11px] leading-relaxed text-sky-900 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-200">
-      <span className="mt-0.5 font-bold">Important</span>
-      <p>
+    <AppAlert variant="warning" className="!px-3.5 !py-2.5 !text-[11px] leading-relaxed">
+      <p className="font-bold">Important</p>
+      <p className="mt-1 font-medium opacity-95">
         Do not create the same or very similar templates multiple times. Repeated rejections may affect
         your WhatsApp account quality.{' '}
-        <Link
-          to="https://developers.facebook.com/docs/whatsapp/message-templates/guidelines/"
+        <a
+          href="https://developers.facebook.com/docs/whatsapp/message-templates/guidelines/"
           target="_blank"
           rel="noreferrer"
-          className="font-semibold underline"
+          className="font-semibold underline underline-offset-2 hover:opacity-80"
         >
           Learn more about WhatsApp template policies
-        </Link>
+        </a>
       </p>
-    </div>
+    </AppAlert>
   );
 }

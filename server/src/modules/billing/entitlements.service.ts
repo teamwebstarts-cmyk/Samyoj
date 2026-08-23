@@ -93,7 +93,7 @@ export async function getOrgEntitlements(organizationId: string): Promise<OrgEnt
       }),
     ]);
 
-  const isLocked = ['trial_expired', 'locked', 'expired', 'cancelled'].includes(
+  const isLocked = ['trial_expired', 'locked', 'expired', 'cancelled', 'past_due'].includes(
     org.subscriptionStatus
   );
 

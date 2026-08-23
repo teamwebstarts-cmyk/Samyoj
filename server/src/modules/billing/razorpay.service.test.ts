@@ -20,7 +20,7 @@ vi.mock('../../utils/logger', () => ({
 
 vi.mock('../../config/database', () => ({
   default: {
-    organization: { update: vi.fn() },
+    organization: { update: vi.fn(), findUnique: vi.fn() },
   },
 }));
 
@@ -34,6 +34,7 @@ import {
 import prisma from '../../config/database';
 
 const orgUpdate = vi.mocked(prisma.organization.update);
+const orgFindUnique = vi.mocked(prisma.organization.findUnique);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -192,6 +193,7 @@ describe('createRazorpayOrder', () => {
 
 describe('activatePlan', () => {
   it('updates organization with plan, expiry ~30 days out, and active status', async () => {
+    orgFindUnique.mockResolvedValue({ planExpiresAt: null } as never);
     orgUpdate.mockResolvedValue({} as never);
 
     await activatePlan('org-1', 'growth');
@@ -210,6 +212,7 @@ describe('activatePlan', () => {
   });
 
   it('works with different plan IDs', async () => {
+    orgFindUnique.mockResolvedValue({ planExpiresAt: null } as never);
     orgUpdate.mockResolvedValue({} as never);
 
     await activatePlan('org-2', 'business');
@@ -220,6 +223,7 @@ describe('activatePlan', () => {
   });
 
   it('propagates Prisma errors', async () => {
+    orgFindUnique.mockResolvedValue({ planExpiresAt: null } as never);
     orgUpdate.mockRejectedValue(new Error('DB connection lost'));
 
     await expect(activatePlan('org-1', 'starter')).rejects.toThrow('DB connection lost');

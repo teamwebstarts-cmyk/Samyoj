@@ -548,6 +548,8 @@ model PaymentOrder {
   organizationId  String        @map("organization_id")
   razorpayOrderId String        @unique @map("razorpay_order_id")
   planId          String        @map("plan_id")
+  skuId           String?       @map("sku_id")
+  cadence         String?       @map("cadence")
   amountPaise     Int           @map("amount_paise")
   currency        String        @default("INR")
   status          PaymentStatus @default(CREATED)
@@ -558,7 +560,17 @@ model PaymentOrder {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId, createdAt])
+  @@index([organizationId, status, createdAt])
   @@map("payment_orders")
+}
+
+model RazorpayWebhookEvent {
+  id          String   @id @default(uuid())
+  eventId     String   @unique @map("event_id")
+  eventType   String   @map("event_type")
+  processedAt DateTime @default(now()) @map("processed_at")
+
+  @@map("razorpay_webhook_events")
 }
 
 model ApiKey {

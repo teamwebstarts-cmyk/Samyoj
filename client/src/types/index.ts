@@ -389,11 +389,23 @@ export type PlanTier = 'launch' | 'starter' | 'growth' | 'pro' | 'enterprise';
 export type BillingCadence = 'trial' | 'monthly' | 'quarterly' | 'yearly' | 'custom';
 export type SubscriptionStatus = 'trial' | 'trial_expired' | 'active' | 'past_due' | 'grace' | 'locked' | 'cancelled' | 'expired';
 
+export interface BillingSkuPricing {
+  skuId: string;
+  cadence: BillingCadence;
+  effectiveMonthlyLabel: string;
+  exclGstPaise: number;
+  inclGstPaise: number;
+  gstPaise: number;
+  billingLabel: string;
+  upiAutopayAllowed: boolean;
+  periodDays: number;
+}
+
 export interface BillingPlan {
-  id: string;           // e.g. 'growth' (tier ID for display)
+  id: string;
   name: string;
-  pricePaise: number;   // monthly base paise (excl GST)
-  priceLabel: string;   // e.g. '₹2,499/mo'
+  pricePaise: number;
+  priceLabel: string;
   seats: number;
   waNumbers: number | string;
   contacts: number | string;
@@ -402,10 +414,12 @@ export interface BillingPlan {
   callingIncluded: boolean;
   features: string[];
   isMostPopular?: boolean;
+  pricing?: Partial<Record<'monthly' | 'quarterly' | 'yearly', BillingSkuPricing>>;
 }
 
 export interface BillingInfo {
-  plan: string;             // current org plan tier string
+  plan: string;
+  planTier?: PlanTier;
   currentPlan: BillingPlan;
   plans: BillingPlan[];
   seatsUsed: number;
@@ -420,7 +434,14 @@ export interface BillingInfo {
   currentPeriodEnd?: string | null;
   activePaidPlan?: string | null;
   activePaidExpiresAt?: string | null;
-  recentPayments?: Array<{ planId: string; amountPaise: number; paidAt: string | null }>;
+  recentPayments?: Array<{
+    planId: string;
+    cadence?: BillingCadence | string | null;
+    paidAt: string | null;
+    totalAmountPaise: number;
+    exclGstPaise: number;
+    gstAmountPaise: number;
+  }>;
 }
 
 export interface BillingUsage {

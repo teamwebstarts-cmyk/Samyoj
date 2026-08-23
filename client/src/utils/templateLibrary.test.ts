@@ -1,10 +1,72 @@
 import { describe, expect, it } from 'vitest';
 import {
+  applyLibraryQuickPick,
   buildLibraryButtonInputs,
   buildLibraryUrlInput,
+  libraryVariableMetaForPersist,
+  LIBRARY_QUICK_PICKS,
   libraryButtonUrlError,
   normalizeWebsiteUrl,
 } from './templateLibrary';
+
+describe('libraryVariableMetaForPersist', () => {
+  it('prefers review-step mappings over Meta defaults', () => {
+    const item = {
+      id: 'feedback_collection',
+      name: 'feedback_collection',
+      category: 'UTILITY',
+      language: 'en_US',
+      body: 'Hi {{1}}, thanks for your order on {{2}}.',
+      body_params: ['John', '2025-12-31'],
+      body_param_types: ['TEXT', 'DATE'],
+    };
+    const reviewMeta = [
+      {
+        scope: 'body' as const,
+        index: 1,
+        description: 'Customer name',
+        suggestedSource: 'contact.email' as const,
+      },
+      {
+        scope: 'body' as const,
+        index: 2,
+        description: 'Date or time',
+        suggestedSource: 'contact.name' as const,
+      },
+    ];
+    const persisted = libraryVariableMetaForPersist(item, 'meta', reviewMeta);
+    expect(persisted[0]?.suggestedSource).toBe('contact.email');
+    expect(persisted[1]?.suggestedSource).toBe('contact.name');
+  });
+
+  it('falls back to Meta defaults when review meta is empty', () => {
+    const item = {
+      id: 'feedback_collection',
+      name: 'feedback_collection',
+      category: 'UTILITY',
+      language: 'en_US',
+      body: 'Hi {{1}}, thanks for your order on {{2}}.',
+      body_params: ['John', '2025-12-31'],
+      body_param_types: ['TEXT', 'DATE'],
+    };
+    const persisted = libraryVariableMetaForPersist(item, 'meta', []);
+    expect(persisted[0]?.suggestedSource).toBe('contact.name');
+    expect(persisted[1]?.suggestedSource).toBe('custom');
+  });
+});
+
+describe('applyLibraryQuickPick', () => {
+  it('uses usecase only for account templates (no invalid Meta topic enum)', () => {
+    const pick = LIBRARY_QUICK_PICKS.find((p) => p.id === 'account');
+    expect(pick).toBeDefined();
+    const result = applyLibraryQuickPick(pick!);
+    expect(result).toEqual({
+      categoryFilter: 'ALL',
+      usecaseFilter: 'ACCOUNT_CREATION_CONFIRMATION',
+    });
+    expect(result).not.toHaveProperty('topicFilter');
+  });
+});
 
 describe('normalizeWebsiteUrl', () => {
   it('upgrades http to https', () => {
@@ -158,53 +220,5 @@ describe('buildLibraryButtonInputs', () => {
       { type: 'PHONE_NUMBER', phone_number: '+919876543210' },
       { type: 'OTP', otp_type: 'COPY_CODE' },
     ]);
-  });
-});
-
-
-describe('normalizeWebsiteUrl', () => {
-  it('upgrades http to https', () => {
-    expect(normalizeWebsiteUrl('http://shop.example/verify')).toBe('https://shop.example/verify');
-  });
-
-  it('adds https to a bare domain', () => {
-    expect(normalizeWebsiteUrl('yourstore.com/verify')).toBe('https://yourstore.com/verify');
-  });
-});
-
-describe('libraryButtonUrlError', () => {
-  it('rejects the local Samyoj page', () => {
-    const message = libraryButtonUrlError(
-      'http://localhost:3000/templates/library',
-      'http://localhost:3000',
-    );
-    expect(message).toMatch(/live website|computer|Samyoj/i);
-  });
-
-  it('rejects http that is not a public site even after upgrade when host is local', () => {
-    expect(libraryButtonUrlError('http://127.0.0.1:8000')).toMatch(/computer|live website/i);
-  });
-
-  it('accepts a public https store URL', () => {
-    expect(libraryButtonUrlError('https://yourstore.com/verify-account')).toBeNull();
-  });
-
-  it('accepts http public URLs after https upgrade', () => {
-    expect(libraryButtonUrlError('http://yourstore.com/verify')).toBeNull();
-  });
-
-  it('allows a store page on the same public host as the app', () => {
-    expect(
-      libraryButtonUrlError('https://app.samyoj.test/verify-account', 'https://app.samyoj.test'),
-    ).toBeNull();
-  });
-
-  it('still rejects a Samyoj path on the same host', () => {
-    expect(
-      libraryButtonUrlError(
-        'https://app.samyoj.test/templates/library',
-        'https://app.samyoj.test',
-      ),
-    ).toMatch(/Samyoj screen/i);
   });
 });

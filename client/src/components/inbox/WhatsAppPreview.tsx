@@ -224,6 +224,14 @@ export function WhatsAppTemplateCard({
         {hasMediaHeader && (
           headerMediaUrl && headerFormat === 'IMAGE' ? (
             <img src={headerMediaUrl} alt="" className={`w-full object-cover ${compact ? 'h-28' : 'h-36'}`} />
+          ) : headerMediaUrl && headerFormat === 'VIDEO' ? (
+            <video
+              src={headerMediaUrl}
+              className={`w-full object-cover ${compact ? 'h-28' : 'h-36'}`}
+              controls
+              muted
+              playsInline
+            />
           ) : (
             <MediaHeaderPlaceholder format={headerFormat!} compact={compact} />
           )

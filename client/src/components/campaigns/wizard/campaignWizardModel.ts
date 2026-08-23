@@ -1,6 +1,7 @@
 import type { Campaign, CampaignRecipient, MessageTemplate } from '../../../types';
 import { validatePhoneLines } from '../../../utils/phone';
 import { templateNeedsHeaderMedia } from '../campaignPreviewUtils';
+import { isLikelyPublicHttpsUrl } from '../../../utils/headerMedia';
 import { templateDynamicUrlButtons, templateNeedsCoupon } from '../../../utils/templateForm';
 
 export type CampaignAudienceType = 'MANUAL' | 'TAGS' | 'CONTACTS' | 'ALL_OPTED_IN';
@@ -288,8 +289,13 @@ export function validateCampaignWizardStage(
     if (form.bodyParams.some((value) => !value.trim()) || form.headerParams.some((value) => !value.trim())) {
       return 'Fill in every template variable before continuing.';
     }
-    if (selectedTemplate && templateNeedsHeaderMedia(selectedTemplate) && !form.headerMediaUrl.trim()) {
-      return 'Add the required header media URL before continuing.';
+    if (selectedTemplate && templateNeedsHeaderMedia(selectedTemplate)) {
+      if (!form.headerMediaUrl.trim()) {
+        return 'Upload or paste the header media link before continuing.';
+      }
+      if (!isLikelyPublicHttpsUrl(form.headerMediaUrl)) {
+        return 'Header media must be a public https:// link.';
+      }
     }
     if (selectedTemplate && templateNeedsCoupon(selectedTemplate) && !form.couponCode.trim()) {
       return 'Add the copy-code / coupon for this template.';

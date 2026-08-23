@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Send } from 'lucide-react';
 import AppButton from '../ui/AppButton';
-import AppInput from '../ui/AppInput';
+import TemplateHeaderMediaField from '../templates/TemplateHeaderMediaField';
 import TemplatePicker from './TemplatePicker';
 import TemplateParamField from '../templates/TemplateParamField';
 import { ComposerPreviewPane, WhatsAppTemplatePreview, getTemplateParts } from './WhatsAppPreview';
@@ -23,6 +23,7 @@ import {
   variableDescription,
   type TemplateVariableMeta,
 } from '../../utils/templateForm';
+import { isLikelyPublicHttpsUrl } from '../../utils/headerMedia';
 import type { MessageTemplate, TemplateParams } from '../../types';
 import { asCustomAttributes } from '../../utils/customAttributes';
 
@@ -183,8 +184,12 @@ export default function TemplateComposer({
   const missingUrls = selected
     ? templateDynamicUrlButtons(selected).some((_, index) => !buttonUrlSuffixes[index]?.trim())
     : false;
-  const canSendTemplate = Boolean(selected) && !missingVars && !missingCoupon && !missingUrls
-    && (!selected || !templateNeedsHeaderMedia(selected) || Boolean(headerMediaUrl.trim()));
+  const headerMediaReady =
+    !selected ||
+    !templateNeedsHeaderMedia(selected) ||
+    (Boolean(headerMediaUrl.trim()) && isLikelyPublicHttpsUrl(headerMediaUrl));
+  const canSendTemplate =
+    Boolean(selected) && !missingVars && !missingCoupon && !missingUrls && headerMediaReady;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -329,14 +334,22 @@ export default function TemplateComposer({
                       />
                     ))}
                     {selected && templateNeedsHeaderMedia(selected) && (
-                      <AppInput
-                        className={`!h-9 text-[13px] ${headerParams.length % 2 === 1 ? '' : 'sm:col-span-2'}`}
-                        label="Header media URL"
-                        placeholder="https://..."
-                        value={headerMediaUrl}
-                        labelClassName="text-[11px] font-semibold text-theme-secondary"
-                        onChange={(e) => setHeaderMediaUrl(e.target.value)}
-                      />
+                      <div className={headerParams.length % 2 === 1 ? '' : 'sm:col-span-2'}>
+                        <TemplateHeaderMediaField
+                          id="inbox-header-media-url"
+                          compact
+                          required
+                          format={
+                            (getTemplateParts(selected).headerFormat || 'IMAGE') as
+                              | 'IMAGE'
+                              | 'VIDEO'
+                              | 'DOCUMENT'
+                          }
+                          value={headerMediaUrl}
+                          onChange={setHeaderMediaUrl}
+                          labelClassName="text-[11px] font-semibold text-theme-secondary"
+                        />
+                      </div>
                     )}
                   </div>
                 )}
