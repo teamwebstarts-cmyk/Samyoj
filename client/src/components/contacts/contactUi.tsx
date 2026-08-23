@@ -22,11 +22,13 @@ export function ContactOptInBadge({
   compact,
   showInfo = false,
 }: {
-  contact: ContactConsentInput;
+  contact: ContactConsentInput | null | undefined;
   compact?: boolean;
   /** Show (i) tooltip explaining this contact's campaign consent status. */
   showInfo?: boolean;
 }) {
+  if (!contact) return null;
+
   const status = getContactConsentDisplay(contact);
   const label =
     status === 'eligible'

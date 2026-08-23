@@ -165,7 +165,7 @@ export default function ContactTable({
 
                   <td className={`min-w-0 ${cellPad}`}>
                     <div className="flex flex-wrap items-center gap-1">
-                      <ContactOptInBadge contact={contact} compact showInfo />
+                      <ContactOptInBadge contact={contact} compact />
                       {contact.conversation?.status && (
                         <ContactConversationBadge status={contact.conversation.status} />
                       )}

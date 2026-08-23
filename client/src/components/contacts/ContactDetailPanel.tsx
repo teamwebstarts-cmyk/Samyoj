@@ -134,7 +134,10 @@ export default function ContactDetailPanel({
 
   const current = detail?.contact || contact;
   const primaryConversationId = detail?.conversations?.[0]?.id;
-  const getsCampaignMessages = current ? contactGetsCampaignMessages(current) : false;
+
+  if (!current) return null;
+
+  const getsCampaignMessages = contactGetsCampaignMessages(current);
   const consentDisplay = getContactConsentDisplay(current);
   const consentHint =
     consentDisplay === 'eligible'
@@ -142,8 +145,6 @@ export default function ContactDetailPanel({
       : consentDisplay === 'stopped'
         ? 'Opted out of marketing messages. You can still chat in Inbox.'
         : 'Not on campaign lists yet. Use Allow messages below to add them.';
-
-  if (!current) return null;
 
   const handleToggleOptIn = async () => {
     if (!current.id) return;
@@ -271,7 +272,7 @@ export default function ContactDetailPanel({
               <div className="min-w-0 flex-1 space-y-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <ContactSourceBadge source={current.source} />
-                  <ContactOptInBadge contact={current} showInfo />
+                  <ContactOptInBadge contact={current} />
                   {current.conversation?.status && (
                     <ContactConversationBadge status={current.conversation.status} />
                   )}

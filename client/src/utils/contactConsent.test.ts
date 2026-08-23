@@ -33,6 +33,12 @@ describe('contactGetsCampaignMessages', () => {
 });
 
 describe('getContactConsentDisplay', () => {
+  it('returns not_on_list for missing contact', () => {
+    expect(getContactConsentDisplay(null)).toBe('not_on_list');
+    expect(getContactConsentDisplay(undefined)).toBe('not_on_list');
+    expect(contactGetsCampaignMessages(null)).toBe(false);
+  });
+
   it('shows stopped only for real opt-outs', () => {
     expect(
       getContactConsentDisplay({
