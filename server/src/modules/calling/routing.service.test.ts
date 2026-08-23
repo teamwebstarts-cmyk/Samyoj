@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   pickCallBotId,
+  routeWhenClosed,
   shouldAiAnswerAfterAgentTimeout,
   shouldRouteCallToAi,
 } from './routing.service';
@@ -78,6 +79,61 @@ describe('shouldAiAnswerAfterAgentTimeout', () => {
         contactCallingAiEnabled: true,
       })
     ).toBe(true);
+  });
+});
+
+describe('routeWhenClosed', () => {
+  const msg = 'We are closed.';
+
+  it('lets the assigned calling bot answer after hours even if in-hours AI calling is off', () => {
+    expect(
+      routeWhenClosed({
+        afterHoursMode: 'ai',
+        answeringBotEnabled: true,
+        afterHoursMessage: msg,
+      })
+    ).toEqual({ mode: 'ai', reason: 'after_hours_ai' });
+  });
+
+  it('does not send a person-only contact to after-hours AI', () => {
+    expect(
+      routeWhenClosed({
+        afterHoursMode: 'ai',
+        answeringBotEnabled: true,
+        contactCallingAiEnabled: false,
+        afterHoursMessage: msg,
+      })
+    ).toEqual({ mode: 'missed', reason: 'after_hours_ai_unavailable' });
+  });
+
+  it('misses when after-hours AI is selected but no calling bot is assigned', () => {
+    expect(
+      routeWhenClosed({
+        afterHoursMode: 'ai',
+        answeringBotEnabled: false,
+        afterHoursMessage: msg,
+      })
+    ).toEqual({ mode: 'missed', reason: 'after_hours_ai_unavailable' });
+  });
+
+  it('sends the after-hours chat message when that mode is selected', () => {
+    expect(
+      routeWhenClosed({
+        afterHoursMode: 'message',
+        answeringBotEnabled: true,
+        afterHoursMessage: msg,
+      })
+    ).toEqual({ mode: 'missed', reason: 'after_hours', afterHoursMessage: msg });
+  });
+
+  it('misses when after-hours mode is missed', () => {
+    expect(
+      routeWhenClosed({
+        afterHoursMode: 'missed',
+        answeringBotEnabled: true,
+        afterHoursMessage: msg,
+      })
+    ).toEqual({ mode: 'missed', reason: 'after_hours' });
   });
 });
 

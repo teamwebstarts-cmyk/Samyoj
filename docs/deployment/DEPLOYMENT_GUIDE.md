@@ -175,7 +175,9 @@ gcloud compute ssh samyoj-server --zone=asia-south1-c --command="whoami"
 
 ## 5. How to Deploy / Redeploy (Step-by-Step)
 
-> ⚠️ **Do these in order.** Steps 1–3 are critical and must happen before a build.
+Preferred path on `samyoj-server` (as user `samyoj`): `bash /home/samyoj/Samyoj/scripts/vps-deploy.sh`. That script pulls `phase-5-billing`, builds server/client/admin, pins `META_WEBHOOK_URL` to `https://app.samyoj.com/api/whatsapp/webhook`, re-registers the Meta app callback, then restarts `whatsapp-api` only.
+
+> ⚠️ **Do these in order** if you are not using `vps-deploy.sh`. Steps 1–3 are critical and must happen before a build.
 
 ### Step 1 — Free up disk space (CRITICAL: disk is 84% full)
 
@@ -305,12 +307,15 @@ sudo -u samyoj pm2 logs whatsapp-api --lines 30 --nostream
 curl -s https://app.samyoj.com/health
 ```
 
-### Webhook setup (after deploy)
+### Webhook setup (required after every deploy)
+
+`.env` can say `https://app.samyoj.com/api/whatsapp/webhook` while Meta still points at an old **ngrok** URL. Inbound messages and calls then never reach the VPS (outbound still works). Always re-register:
 
 ```bash
-# Run the webhook setup script (register with Meta)
 sudo -u samyoj bash -c 'cd /home/samyoj/Samyoj/server && npx tsx scripts/setup-webhook.ts'
 ```
+
+`scripts/vps-deploy.sh` does this automatically after the build.
 
 ---
 

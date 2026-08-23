@@ -128,7 +128,7 @@ export async function getOrgProfile(organizationId: string): Promise<OrgProfileR
     audience: brandKit.audience,
     valueProps: Array.isArray(brandKit.valueProps) ? brandKit.valueProps : [],
     defaultLocale: brandKit.defaultLocale || 'en-IN',
-    timezone: hours.timezone || DEFAULT_BUSINESS_HOURS.timezone || 'UTC',
+    timezone: hours.timezone || DEFAULT_BUSINESS_HOURS.timezone || 'Asia/Kolkata',
     completeness: computeProfileCompleteness(companyName, profile),
   };
 }

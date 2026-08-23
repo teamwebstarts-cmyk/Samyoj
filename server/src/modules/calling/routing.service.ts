@@ -35,6 +35,37 @@ export function shouldAiAnswerAfterAgentTimeout(input: {
   return input.aiAutoAnswer && input.hasBot;
 }
 
+/**
+ * After-hours pickup is independent of the in-hours "AI calling" toggle.
+ * Pickup "AI answers" + an assigned calling bot should still pick up on Sunday/nights.
+ */
+export function routeWhenClosed(input: {
+  afterHoursMode: CallingSettings['afterHoursMode'];
+  answeringBotEnabled: boolean;
+  contactCallingAiEnabled?: boolean | null;
+  afterHoursMessage: string;
+}): CallRouteDecision {
+  const afterHoursAi =
+    input.afterHoursMode === 'ai' &&
+    input.answeringBotEnabled &&
+    input.contactCallingAiEnabled !== false;
+
+  if (afterHoursAi) {
+    return { mode: 'ai', reason: 'after_hours_ai' };
+  }
+  if (input.afterHoursMode === 'message') {
+    return {
+      mode: 'missed',
+      reason: 'after_hours',
+      afterHoursMessage: input.afterHoursMessage,
+    };
+  }
+  if (input.afterHoursMode === 'ai') {
+    return { mode: 'missed', reason: 'after_hours_ai_unavailable' };
+  }
+  return { mode: 'missed', reason: 'after_hours' };
+}
+
 async function answeringCallBotEnabled(
   organizationId: string,
   defaultBotId: string | null
@@ -70,26 +101,21 @@ export async function decideCallRoute(
   });
 
   if (!withinHours) {
-    if (settings.afterHoursMode === 'ai' && aiAllowed) {
-      return { mode: 'ai', reason: 'after_hours_ai' };
-    }
-    if (settings.afterHoursMode === 'message') {
-      return {
-        mode: 'missed',
-        reason: 'after_hours',
-        afterHoursMessage: settings.afterHoursMessage,
-      };
-    }
-    if (settings.afterHoursMode === 'ai' && !aiAllowed) {
-      log.info('After-hours AI requested but AI calling is not allowed', {
+    const closed = routeWhenClosed({
+      afterHoursMode: settings.afterHoursMode,
+      answeringBotEnabled: answeringOn,
+      contactCallingAiEnabled: contact?.callingAiEnabled,
+      afterHoursMessage: settings.afterHoursMessage,
+    });
+    if (closed.reason === 'after_hours_ai_unavailable') {
+      log.info('After-hours AI requested but no calling bot is assigned', {
         organizationId,
         aiAutoAnswer: settings.aiAutoAnswer,
         answeringBotEnabled: answeringOn,
         contactCallingAiEnabled: contact?.callingAiEnabled,
       });
-      return { mode: 'missed', reason: 'after_hours_ai_unavailable' };
     }
-    return { mode: 'missed', reason: 'after_hours' };
+    return closed;
   }
 
   if (settings.routingMode === 'ai_only' && aiAllowed) {

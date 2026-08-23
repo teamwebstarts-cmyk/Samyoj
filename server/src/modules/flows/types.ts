@@ -161,7 +161,7 @@ export const DEFAULT_BUSINESS_HOURS: OrgBusinessHours = {
   startHour: 9,
   endHour: 18,
   days: [1, 2, 3, 4, 5],
-  timezone: 'UTC',
+  timezone: 'Asia/Kolkata',
 };
 
 export const FLOW_NODE_LABELS: Partial<Record<FlowNodeType, string>> = {

@@ -37,7 +37,7 @@ function getZonedParts(date: Date, timezone: string): { day: number; hour: numbe
 }
 
 export function isWithinBusinessHours(hours: OrgBusinessHours): boolean {
-  const tz = hours.timezone || 'UTC';
+  const tz = hours.timezone || DEFAULT_BUSINESS_HOURS.timezone || 'Asia/Kolkata';
   const { day, hour } = getZonedParts(new Date(), tz);
   if (!hours.days.includes(day)) return false;
   return hour >= hours.startHour && hour < hours.endHour;
