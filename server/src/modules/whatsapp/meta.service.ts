@@ -1407,11 +1407,11 @@ export class MetaWhatsAppService {
       cost?: number;
     }>
   > {
-    const params = new URLSearchParams({
-      start: String(start),
-      end: String(end),
-      granularity: 'DAILY',
-    });
+    // Nested field expansion — Graph rejects query-string args inside .data(...).
+    // See https://developers.facebook.com/docs/whatsapp/business-management-api/analytics/
+    const fields =
+      `conversation_analytics.start(${start}).end(${end})` +
+      `.granularity(DAILY).dimensions(["CONVERSATION_CATEGORY"])`;
 
     const data = await this.graphGet<{
       conversation_analytics?: {
@@ -1423,7 +1423,7 @@ export class MetaWhatsAppService {
           }>;
         }>;
       };
-    }>(`/${wabaId}?fields=conversation_analytics.data(${params})`, accessToken);
+    }>(`/${wabaId}?fields=${encodeURIComponent(fields)}`, accessToken);
 
     const points: Array<{
       conversation_category?: string;

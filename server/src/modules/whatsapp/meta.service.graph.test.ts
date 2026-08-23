@@ -87,3 +87,36 @@ describe('Meta Graph GET auth', () => {
     expect(init.headers?.Authorization).toBe('Bearer 111111111111|app-secret');
   });
 });
+
+describe('getConversationAnalytics', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('uses nested field expansion, not conversation_analytics.data(querystring)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        conversation_analytics: {
+          data: [{ data_points: [{ conversation_category: 'SERVICE', conversation: 2, cost: 0 }] }],
+        },
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const points = await MetaWhatsAppService.getConversationAnalytics(
+      'waba-1',
+      'user-token',
+      1787356800,
+      1787443200
+    );
+
+    expect(points).toEqual([{ conversation_category: 'SERVICE', conversation: 2, cost: 0 }]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const url = decodeURIComponent(String(fetchMock.mock.calls[0][0]));
+    expect(url).toContain('conversation_analytics.start(1787356800).end(1787443200).granularity(DAILY)');
+    expect(url).toContain('dimensions(["CONVERSATION_CATEGORY"])');
+    expect(url).not.toContain('conversation_analytics.data(');
+    expect(url).not.toMatch(/start=\d/);
+  });
+});
