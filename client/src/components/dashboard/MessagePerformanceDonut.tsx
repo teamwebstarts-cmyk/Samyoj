@@ -1,8 +1,9 @@
 import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
-import { ArrowRight, Info, LineChart } from 'lucide-react';
+import { ArrowRight, LineChart } from 'lucide-react';
 import IconWell from './icons/IconWell';
+import InfoTip from '../ui/InfoTip';
 import { MessagePerformanceEmptyIllustrationSvg } from './icons/CardIllustrations';
 
 interface MessagePerformanceDonutProps {
@@ -181,11 +182,8 @@ export default function MessagePerformanceDonut({
               Message performance
             </h2>
             {!isEmpty && (
-              <span
-                className="hidden text-neutral-400 @[360px]:inline"
-                title="Each color is the latest status: Delivered (unread), Read, Failed, Pending."
-              >
-                <Info className="h-3.5 w-3.5 shrink-0 stroke-[1.8]" aria-hidden />
+              <span className="hidden @[360px]:inline">
+                <InfoTip content="Each color is the latest status: Delivered (unread), Read, Failed, Pending." />
               </span>
             )}
           </div>

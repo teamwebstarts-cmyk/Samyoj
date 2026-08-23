@@ -578,6 +578,12 @@
   }
 
   /* Inbox glass tip — polished light surface (replaces native black title tooltips) */
+  .app-info-tooltip {
+    background: #ffffff !important;
+    color: #0a0a0a !important;
+    -webkit-font-smoothing: antialiased;
+  }
+
   .inbox-glass-tip,
   .composer-glass-tip {
     position: fixed;

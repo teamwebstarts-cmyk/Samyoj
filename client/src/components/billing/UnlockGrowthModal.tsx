@@ -90,10 +90,10 @@ export default function UnlockGrowthModal({
           <div className="flex items-baseline justify-between">
             <div>
               <span className="text-2xl font-extrabold text-violet-700 dark:text-violet-300">
-                {isGrowth ? '₹2,499' : '₹4,999'}
+                {isGrowth ? '₹2,949' : '₹5,899'}
               </span>
               <span className="text-xs font-semibold text-neutral-500 dark:text-slate-400">
-                /month + GST
+                /month incl. GST
               </span>
             </div>
             <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-bold text-violet-700 dark:bg-violet-900/60 dark:text-violet-300">

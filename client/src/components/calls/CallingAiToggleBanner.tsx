@@ -1,7 +1,7 @@
-import { Info, PhoneCall } from 'lucide-react';
+import { PhoneCall } from 'lucide-react';
 import type { AiBot } from '../../types';
 import CallingAiPicker from './CallingAiPicker';
-import { useGlassTipProps } from '../inbox/ComposerGlassTip';
+import InfoTip from '../ui/InfoTip';
 
 interface CallingAiToggleBannerProps {
   enabled: boolean;
@@ -39,7 +39,6 @@ export default function CallingAiToggleBanner({
     : 'AI calling is off — calls go to a person on this number. Turn on to let the assigned agent answer calls.';
 
   const noBots = !hasBots;
-  const tip = useGlassTipProps();
 
   return (
     <section
@@ -65,16 +64,7 @@ export default function CallingAiToggleBanner({
               <p className="text-[12px] font-extrabold leading-tight text-[#0f172a] dark:text-white sm:text-[13px]">
                 AI calling
               </p>
-              {!noBots && (
-                <button
-                  type="button"
-                  aria-label={infoText}
-                  className="inline-flex shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/30 dark:hover:text-slate-300"
-                  {...tip(infoText, 'above')}
-                >
-                  <Info className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
-                </button>
-              )}
+              {!noBots && <InfoTip content={infoText} />}
             </div>
             {noBots ? (
               <p className="mt-0.5 text-[11px] font-medium leading-snug text-[#94a3b8] dark:text-slate-400 sm:text-[12px]">

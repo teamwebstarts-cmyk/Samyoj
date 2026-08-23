@@ -402,10 +402,7 @@ export default function TemplateWizardCreateStep({
                       ? 'Replace sample'
                       : 'Upload sample'}
                 </button>
-                <FieldInfoTip
-                  label="Sample file tips"
-                  text={headerSampleInfoTip(form.headerFormat)}
-                />
+                <FieldInfoTip text={headerSampleInfoTip(form.headerFormat)} />
                 {form.headerMediaHandle && !uploading ? (
                   <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
                     Ready for review
