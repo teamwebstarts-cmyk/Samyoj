@@ -107,8 +107,8 @@ function ChatAiMenu({
       if (anchorRef.current?.contains(target)) return;
       onClose();
     };
-    document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
+    document.addEventListener('click', onDoc);
+    return () => document.removeEventListener('click', onDoc);
   }, [anchorRef, onClose]);
 
   const busy = assigning || loading;
@@ -151,13 +151,21 @@ function ChatAiMenu({
             aria-checked={enabled}
             aria-label={enabled ? 'Turn off AI chat' : 'Turn on AI chat'}
             disabled={saving || disabled}
-            onClick={onToggle}
+            onMouseDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (saving || disabled) return;
+              onToggle();
+            }}
             className={`relative h-7 w-12 shrink-0 rounded-full transition disabled:cursor-not-allowed disabled:opacity-50 ${FOCUS_RING_CLASS} ${
               enabled ? 'bg-whatsapp-500' : 'bg-neutral-300 dark:bg-neutral-600'
             }`}
           >
             <span
-              className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition ${
+              className={`pointer-events-none absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition ${
                 enabled ? 'left-[22px]' : 'left-0.5'
               }`}
             />
