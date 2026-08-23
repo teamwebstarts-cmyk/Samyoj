@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../../config/database';
-import { authenticate, requireOrg, loadOrgRole, requireOrgRole } from '../../middleware/auth';
+import { requireOrg } from '../../middleware/auth';
+import { withPermission } from '../../middleware/permissions';
 import { authenticateJwtOrApiKey } from '../../middleware/authenticate-jwt-or-api-key';
 import { AppError, sendSuccess, asyncHandler, paramId } from '../../utils/response';
 import { Prisma } from '@prisma/client';
@@ -39,8 +40,14 @@ import { isAbsoluteInstant } from './safety';
 import { emitProductEvent } from '../platform/events';
 
 const router = Router();
-const adminGuard = [authenticateJwtOrApiKey, requireOrg, resolveActiveWhatsappNumber, loadOrgRole, requireOrgRole('OWNER', 'ADMIN')];
-const readGuard = [authenticateJwtOrApiKey, requireOrg, resolveActiveWhatsappNumber];
+const campaignAccessGuard = [
+  authenticateJwtOrApiKey,
+  requireOrg,
+  resolveActiveWhatsappNumber,
+  ...withPermission('manageCampaigns'),
+];
+const readGuard = campaignAccessGuard;
+const adminGuard = campaignAccessGuard;
 
 async function validateCampaignNumber(
   organizationId: string,

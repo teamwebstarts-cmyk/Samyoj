@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import prisma from '../../config/database';
 import { config } from '../../config';
 import { authenticate, requireOrg, loadOrgRole } from '../../middleware/auth';
-import { loadPermissions, requirePermission } from '../../middleware/permissions';
+import { loadPermissions, requirePermission, withPermission } from '../../middleware/permissions';
 import { AppError, sendSuccess, asyncHandler, paramId } from '../../utils/response';
 import logger from '../../utils/logger';
 import { phoneFieldSchema } from '../../utils/phone';
@@ -138,7 +138,7 @@ router.get(
   })
 );
 
-router.use(authenticate, requireOrg, resolveActiveWhatsappNumber);
+router.use(authenticate, requireOrg, resolveActiveWhatsappNumber, ...withPermission('manageInbox'));
 
 router.get(
   '/unread-total',

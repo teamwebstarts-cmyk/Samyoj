@@ -3,6 +3,7 @@ import { z } from 'zod';
 import prisma from '../../config/database';
 import { config } from '../../config';
 import { authenticate, requireOrg, loadOrgRole, requireOrgRole } from '../../middleware/auth';
+import { withPermission } from '../../middleware/permissions';
 import { AppError, asyncHandler, paramId, sendSuccess } from '../../utils/response';
 import { resolveActiveWhatsappNumber, resolveActiveWhatsappNumberId } from '../whatsapp/active-number';
 import {
@@ -70,14 +71,14 @@ const faqSchema = z.object({
   content: z.string().min(1).max(2000),
 });
 
-const adminGuard = [authenticate, requireOrg, loadOrgRole, requireOrgRole('OWNER', 'ADMIN')];
-const readGuard = [authenticate, requireOrg];
+const botAccessGuard = [authenticate, requireOrg, ...withPermission('manageFlows')];
+const adminGuard = botAccessGuard;
+const readGuard = botAccessGuard;
 const numberAdminGuard = [
   authenticate,
   requireOrg,
   resolveActiveWhatsappNumber,
-  loadOrgRole,
-  requireOrgRole('OWNER', 'ADMIN'),
+  ...withPermission('manageFlows'),
 ];
 
 router.get(

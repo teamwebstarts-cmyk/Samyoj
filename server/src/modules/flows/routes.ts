@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../../config/database';
-import { authenticate, requireOrg, loadOrgRole, requireOrgRole } from '../../middleware/auth';
+import { authenticate, requireOrg } from '../../middleware/auth';
+import { withPermission } from '../../middleware/permissions';
 import { AppError, sendSuccess, asyncHandler, paramId } from '../../utils/response';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
@@ -19,8 +20,9 @@ import type { FlowNode } from './types';
 import { emitProductEvent } from '../platform/events';
 
 const router = Router();
-const memberGuard = [authenticate, requireOrg] as const;
-const adminGuard = [authenticate, requireOrg, loadOrgRole, requireOrgRole('OWNER', 'ADMIN')] as const;
+const flowAccessGuard = [authenticate, requireOrg, ...withPermission('manageFlows')] as const;
+const memberGuard = flowAccessGuard;
+const adminGuard = flowAccessGuard;
 
 const nodeTypes = [
   'message', 'buttons', 'list', 'question', 'tag', 'remove_tag', 'handoff', 'ai', 'assign', 'condition', 'end',

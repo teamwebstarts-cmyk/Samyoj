@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import prisma from '../../config/database';
 import { authenticate, requireOrg, loadOrgRole, requireOrgRole } from '../../middleware/auth';
+import { withPermission } from '../../middleware/permissions';
 import { passwordSchema } from '../auth/password-policy';
 import { AppError, sendSuccess, asyncHandler, paramId } from '../../utils/response';
 import { config } from '../../config';
@@ -26,7 +27,7 @@ import { revokeRefreshSessionsForUser } from '../auth/session';
 
 const router = Router();
 
-const adminGuard = [authenticate, requireOrg, loadOrgRole, requireOrgRole('OWNER', 'ADMIN')];
+const adminGuard = [authenticate, requireOrg, ...withPermission('manageTeam')];
 
 const memberSelect = {
   id: true,

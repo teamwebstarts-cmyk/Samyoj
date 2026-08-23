@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { authenticate, requireOrg } from '../../middleware/auth';
+import { withPermission } from '../../middleware/permissions';
 import { AppError, sendSuccess, asyncHandler } from '../../utils/response';
 import { MetaWhatsAppService } from '../whatsapp/meta.service';
 import { getOrgWhatsappContext } from '../whatsapp/context';
@@ -23,7 +24,7 @@ import { emitProductEvent } from '../platform/events';
 
 const router = Router();
 
-router.use(authenticate, requireOrg, resolveActiveWhatsappNumber);
+router.use(authenticate, requireOrg, resolveActiveWhatsappNumber, ...withPermission('manageTemplates'));
 
 function emitTemplateSyncTelemetry(
   organizationId: string,
