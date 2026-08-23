@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Building2, CheckCircle2, AlertCircle } from 'lucide-react';
 import SettingsPanel from './SettingsPanel';
+import { SettingsTabSkeleton } from './SettingsSkeleton';
 import AppButton from '../ui/AppButton';
 import AppInput from '../ui/AppInput';
 import AppSelect from '../ui/AppSelect';
@@ -85,12 +86,7 @@ export default function BusinessProfilePanel({ canEdit, onSaved }: BusinessProfi
   };
 
   if (loading) {
-    return (
-      <div className="space-y-4">
-        <div className="h-20 animate-pulse rounded-2xl bg-theme-subtle/60" />
-        <div className="h-64 animate-pulse rounded-2xl bg-theme-subtle/60" />
-      </div>
-    );
+    return <SettingsTabSkeleton variant="form" />;
   }
 
   return (
@@ -124,7 +120,6 @@ export default function BusinessProfilePanel({ canEdit, onSaved }: BusinessProfi
         title="Business details"
         description="Official company information and customer support credentials."
         icon={Building2}
-        accent="emerald"
         footer={
           canEdit ? (
             <div className="flex items-center justify-between gap-4">
