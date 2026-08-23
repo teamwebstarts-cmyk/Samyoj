@@ -15,6 +15,7 @@ import {
   Users,
 } from 'lucide-react';
 import AppButton from '../ui/AppButton';
+import InfoTip from '../ui/InfoTip';
 import { FormPageSkeleton } from '../ui/ListLayoutSkeleton';
 import { teamApi } from '../../services/api';
 import { toastError, toastSuccess } from '../../utils/toast';
@@ -22,14 +23,13 @@ import type { OrgRole, RolePermissionsMatrix, TeamPermissions } from '../../type
 import { RoleBadge } from './AvailabilityBadge';
 import {
   CONFIGURABLE_ROLES,
-  ENFORCED_PERMISSION_KEYS,
   PERMISSION_GROUPS,
   PERMISSION_KEYS,
   ROLE_COLUMNS,
   permissionMeta,
   roleAccentStyles,
+  roleInfo,
   roleLabels,
-  roleSummaries,
 } from './teamUi';
 
 interface TeamRolesTabProps {
@@ -106,6 +106,23 @@ function PermissionToggle({
   );
 }
 
+function RoleInfoTooltipContent({ role }: { role: OrgRole }) {
+  const info = roleInfo[role];
+  return (
+    <span className="block space-y-2">
+      <span className="block font-bold text-slate-900">{info.tagline}</span>
+      <span className="block text-slate-700">{info.description}</span>
+      <span className="block space-y-1">
+        {info.responsibilities.map((item) => (
+          <span key={item} className="block text-slate-600">
+            · {item}
+          </span>
+        ))}
+      </span>
+    </span>
+  );
+}
+
 export default function TeamRolesTab({ canManage }: TeamRolesTabProps) {
   const [matrix, setMatrix] = useState<RolePermissionsMatrix | null>(null);
   const [savedMatrix, setSavedMatrix] = useState<RolePermissionsMatrix | null>(null);
@@ -154,9 +171,9 @@ export default function TeamRolesTab({ canManage }: TeamRolesTabProps) {
       const roles = data.data.roles as RolePermissionsMatrix;
       setMatrix(cloneMatrix(roles));
       setSavedMatrix(cloneMatrix(roles));
-      toastSuccess('Role permissions saved');
+      toastSuccess('Role access saved');
     } catch {
-      toastError('Failed to save role permissions');
+      toastError('Failed to save role access');
     } finally {
       setSaving(false);
     }
@@ -171,7 +188,7 @@ export default function TeamRolesTab({ canManage }: TeamRolesTabProps) {
     return <FormPageSkeleton label="Loading roles and permissions" blocks={5} />;
   }
 
-  let serialNo = 0;
+  const permissionTotal = PERMISSION_KEYS.length;
 
   return (
     <div className="inbox-shell overflow-hidden">
@@ -182,13 +199,15 @@ export default function TeamRolesTab({ canManage }: TeamRolesTabProps) {
               <Shield className="h-3.5 w-3.5" />
               Access control
             </div>
-            <h3 className="mt-3 text-lg font-extrabold tracking-tight text-theme-fg sm:text-xl">
-              Roles & responsibilities
-            </h3>
-            <p className="mt-1 max-w-2xl text-[13px] leading-relaxed text-theme-secondary">
-              Define what each role can do across your workspace. Toggle permissions below — changes
-              apply to every member assigned that role.
-            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <h3 className="text-lg font-extrabold tracking-tight text-theme-fg sm:text-xl">
+                Roles & responsibilities
+              </h3>
+              <InfoTip
+                label="About roles and access"
+                content="You decide what Admin, Supervisor, and Agent can access. Owner always has full access — use the toggles below for everyone else."
+              />
+            </div>
           </div>
           {canManage && (
             <div className="flex flex-wrap items-center gap-2">
@@ -214,78 +233,110 @@ export default function TeamRolesTab({ canManage }: TeamRolesTabProps) {
           )}
         </div>
 
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-5 grid grid-cols-2 gap-4">
           {ROLE_COLUMNS.map((role) => {
             const accent = roleAccentStyles[role];
             const Icon = roleIcons[role];
+            const info = roleInfo[role];
             const enabled = countEnabled(matrix, role);
+            const pct = Math.round((enabled / permissionTotal) * 100);
 
             return (
               <div
                 key={role}
-                className={`rounded-2xl border bg-theme-surface/80 p-4 shadow-sm backdrop-blur-sm ${accent.border}`}
+                className={`flex min-h-[168px] flex-col justify-between rounded-2xl border bg-theme-surface/90 p-4 sm:min-h-[188px] sm:p-5 ${accent.border}`}
               >
                 <div className="flex items-start justify-between gap-3">
-                  <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${accent.bg}`}>
-                    <Icon className={`h-5 w-5 ${accent.icon}`} strokeWidth={2.25} />
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl sm:h-12 sm:w-12 ${accent.bg}`}
+                    >
+                      <Icon className={`h-5 w-5 sm:h-[22px] sm:w-[22px] ${accent.icon}`} strokeWidth={2.25} />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-[14px] font-bold text-theme-fg sm:text-[15px]">{roleLabels[role]}</p>
+                        <InfoTip
+                          label={`About ${roleLabels[role]}`}
+                          content={<RoleInfoTooltipContent role={role} />}
+                        />
+                      </div>
+                      <p className="mt-0.5 text-[11px] font-semibold text-theme-muted sm:text-[12px]">
+                        {info.tagline}
+                      </p>
+                    </div>
                   </div>
                   <RoleBadge role={role} />
                 </div>
-                <p className="mt-3 text-[14px] font-bold text-theme-fg">{roleLabels[role]}</p>
-                <p className="mt-0.5 text-[11px] leading-snug text-theme-secondary">
-                  {roleSummaries[role]}
-                </p>
-                <p className="mt-3 text-[12px] font-semibold tabular-nums text-theme-muted">
-                  <span className="text-[18px] font-extrabold text-theme-fg">{enabled}</span>
-                  <span className="mx-1">/</span>
-                  {PERMISSION_KEYS.length} permissions
-                </p>
+
+                {role === 'OWNER' ? (
+                  <p className="text-[11px] font-semibold text-violet-600 dark:text-violet-300 sm:text-[12px]">
+                    Full access · always on
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-theme-muted sm:text-[12px]">You control access below</p>
+                )}
+
+                <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-semibold text-theme-muted sm:text-[12px]">
+                      {enabled}/{permissionTotal} enabled
+                    </span>
+                    <span className="text-[11px] font-bold tabular-nums text-theme-fg sm:text-[12px]">{pct}%</span>
+                  </div>
+                  <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-neutral-200/80 dark:bg-neutral-800">
+                    <div
+                      className={`h-full rounded-full transition-all duration-300 ${
+                        role === 'OWNER'
+                          ? 'bg-violet-500'
+                          : role === 'ADMIN'
+                            ? 'bg-sky-500'
+                            : role === 'SUPERVISOR'
+                              ? 'bg-amber-500'
+                              : 'bg-emerald-500'
+                      }`}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </div>
               </div>
             );
           })}
         </div>
       </div>
 
+      <div className="border-b border-theme-border px-4 py-3.5 sm:px-6">
+        <div className="flex flex-wrap items-center gap-2">
+          <h4 className="text-[13px] font-bold text-theme-fg">Feature access</h4>
+          <InfoTip
+            label="How feature access works"
+            content="Each toggle is enforced on the server. Off = that role gets 403 on the matching APIs (Inbox, Campaigns, Templates, etc.). Owner always has full access. Sidebar visibility may still show links until the next session — API calls will be blocked."
+          />
+        </div>
+        <p className="mt-0.5 text-[11px] text-theme-secondary">
+          Turn each area on or off per role. Changes apply to every member on that role.
+        </p>
+      </div>
+
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[840px] border-collapse text-sm">
+        <table className="w-full min-w-[760px] border-collapse text-sm">
           <thead>
             <tr className="border-b border-theme-border bg-theme-subtle/60">
               <th
                 scope="col"
-                className="sticky left-0 z-30 w-14 bg-theme-subtle/95 px-3 py-4 text-center backdrop-blur-sm"
+                className="min-w-[200px] px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-[0.08em] text-theme-muted"
               >
-                <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-theme-muted">
-                  S.No.
-                </span>
+                Feature
               </th>
-              <th
-                scope="col"
-                className="sticky left-14 z-20 min-w-[220px] bg-theme-subtle/95 px-5 py-4 text-left backdrop-blur-sm"
-              >
-                <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-theme-muted">
-                  Capability
-                </span>
-              </th>
-              {ROLE_COLUMNS.map((role) => {
-                const accent = roleAccentStyles[role];
-                return (
-                  <th
-                    key={role}
-                    scope="col"
-                    className={`min-w-[120px] border-l border-theme-border/60 px-3 py-4 text-center ${accent.column}`}
-                  >
-                    <div className="flex flex-col items-center gap-1.5">
-                      <span className="text-[12px] font-extrabold text-theme-fg">{roleLabels[role]}</span>
-                      {role === 'OWNER' && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/10 px-2 py-0.5 text-[10px] font-bold text-violet-700 dark:text-violet-300">
-                          <Lock className="h-3 w-3" />
-                          Locked
-                        </span>
-                      )}
-                    </div>
-                  </th>
-                );
-              })}
+              {ROLE_COLUMNS.map((role) => (
+                <th
+                  key={role}
+                  scope="col"
+                  className={`min-w-[100px] border-l border-theme-border/60 px-3 py-3.5 text-center ${roleAccentStyles[role].column}`}
+                >
+                  <span className="text-[12px] font-extrabold text-theme-fg">{roleLabels[role]}</span>
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
@@ -293,27 +344,15 @@ export default function TeamRolesTab({ canManage }: TeamRolesTabProps) {
               <Fragment key={group.id}>
                 <tr className="bg-theme-subtle/40">
                   <td
-                    colSpan={ROLE_COLUMNS.length + 2}
-                    className="sticky left-0 z-10 border-y border-theme-border/70 px-5 py-3"
+                    colSpan={ROLE_COLUMNS.length + 1}
+                    className="border-y border-theme-border/70 px-5 py-2.5"
                   >
-                    <p className="text-[12px] font-extrabold uppercase tracking-[0.08em] text-theme-fg">
+                    <p className="text-[11px] font-extrabold uppercase tracking-[0.08em] text-theme-fg">
                       {group.label}
-                      {group.id === 'messaging' && (
-                        <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-bold normal-case tracking-normal text-neutral-600 ring-1 ring-inset ring-neutral-200/70 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700/50">
-                          <Lock className="h-3 w-3" />
-                          Follows Admin role
-                        </span>
-                      )}
-                    </p>
-                    <p className="mt-0.5 text-[11px] text-theme-secondary">
-                      {group.id === 'messaging'
-                        ? 'These areas are managed by role (Owner/Admin) — per-role toggles are not available yet.'
-                        : group.description}
                     </p>
                   </td>
                 </tr>
                 {group.keys.map((key, rowIndex) => {
-                  serialNo += 1;
                   const Icon = permissionIcons[key];
                   const meta = permissionMeta[key];
 
@@ -324,36 +363,45 @@ export default function TeamRolesTab({ canManage }: TeamRolesTabProps) {
                         rowIndex % 2 === 0 ? 'bg-theme-surface' : 'bg-theme-subtle/15'
                       }`}
                     >
-                      <td className="sticky left-0 z-10 w-14 bg-inherit px-3 py-4 text-center tabular-nums text-[12px] font-semibold text-theme-muted">
-                        {serialNo}
-                      </td>
-                      <td className="sticky left-14 z-10 bg-inherit px-5 py-4">
-                        <div className="flex items-start gap-3">
-                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-theme-border bg-theme-surface text-theme-secondary shadow-sm">
-                            <Icon className="h-4 w-4" strokeWidth={2.25} />
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-theme-border bg-theme-surface text-theme-secondary">
+                            <Icon className="h-3.5 w-3.5" strokeWidth={2.25} />
                           </div>
-                          <div className="min-w-0 pt-0.5">
-                            <p className="text-[13px] font-bold text-theme-fg">{meta.label}</p>
-                            <p className="mt-0.5 text-[11px] leading-snug text-theme-secondary">
-                              {meta.description}
-                            </p>
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <p className="text-[13px] font-bold text-theme-fg">{meta.label}</p>
+                              <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+                                Live
+                              </span>
+                              <InfoTip
+                                content={
+                                  <span className="block space-y-1.5">
+                                    <span className="block">{meta.description}</span>
+                                    <span className="block text-[10px] font-semibold text-slate-600">
+                                      Applies to: {meta.mapsTo}
+                                    </span>
+                                  </span>
+                                }
+                                label={meta.label}
+                              />
+                            </div>
                           </div>
                         </div>
                       </td>
                       {ROLE_COLUMNS.map((role) => {
                         const checked = matrix[role][key];
-                        const enforced = ENFORCED_PERMISSION_KEYS.includes(key);
-                        const locked = role === 'OWNER' || !canManage || !enforced;
+                        const locked = role === 'OWNER' || !canManage;
 
                         return (
                           <td
                             key={role}
-                            className={`border-l border-theme-border/50 px-3 py-4 text-center ${roleAccentStyles[role].column}`}
+                            className={`border-l border-theme-border/50 px-3 py-3.5 text-center ${roleAccentStyles[role].column}`}
                           >
                             <PermissionToggle
                               checked={checked}
                               locked={locked}
-                              label={`${meta.label} for ${roleLabels[role]}${enforced ? '' : ' (managed by role)'}`}
+                              label={`${meta.label} for ${roleLabels[role]}`}
                               onToggle={() => togglePermission(role, key)}
                             />
                           </td>
@@ -372,7 +420,7 @@ export default function TeamRolesTab({ canManage }: TeamRolesTabProps) {
         <div className="sticky bottom-0 z-30 border-t border-emerald-200/80 bg-emerald-50/95 px-4 py-3 backdrop-blur-md dark:border-emerald-500/25 dark:bg-emerald-950/90 sm:px-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-[13px] font-semibold text-emerald-800 dark:text-emerald-200">
-              You have unsaved permission changes
+              You have unsaved access changes
             </p>
             <div className="flex flex-wrap items-center gap-2">
               <AppButton size="sm" variant="secondary" onClick={handleReset} disabled={saving}>

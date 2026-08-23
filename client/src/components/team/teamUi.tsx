@@ -41,6 +41,36 @@ export const roleSummaries: Record<OrgRole, string> = {
   AGENT: 'Frontline support and customer chats',
 };
 
+export const roleInfo: Record<
+  OrgRole,
+  { tagline: string; description: string; responsibilities: string[] }
+> = {
+  OWNER: {
+    tagline: 'Workspace owner',
+    description:
+      'The account holder with full control. Billing, team, settings, and every feature — permissions cannot be changed.',
+    responsibilities: ['Billing & subscription', 'Team & role management', 'All features unlocked'],
+  },
+  ADMIN: {
+    tagline: 'Operations manager',
+    description:
+      'Runs day-to-day operations. Can manage team, campaigns, templates, and most workspace settings.',
+    responsibilities: ['Add members & invites', 'Campaigns & templates', 'Reports & settings'],
+  },
+  SUPERVISOR: {
+    tagline: 'Team lead',
+    description:
+      'Oversees agents and inbox quality. Can reply to chats, view reports, and help route conversations.',
+    responsibilities: ['Monitor agent inbox', 'Reply to customer chats', 'View team reports'],
+  },
+  AGENT: {
+    tagline: 'Support agent',
+    description:
+      'Frontline teammate who handles customer conversations. Focused on inbox replies and assigned chats.',
+    responsibilities: ['Reply in shared inbox', 'Handle assigned chats', 'Update availability status'],
+  },
+};
+
 export const roleLabels: Record<OrgRole, string> = {
   OWNER: 'Owner',
   ADMIN: 'Admin',
@@ -62,21 +92,12 @@ export const PERMISSION_KEYS: (keyof TeamPermissions)[] = [
   'manageSettings',
 ];
 
-/**
- * Keys with real server-side requirePermission gates today. The rest are
- * role-gated (OWNER/ADMIN) regardless of this matrix — shown read-only in the
- * Roles UI so admins don't toggle switches that have no effect.
- */
-export const ENFORCED_PERMISSION_KEYS: (keyof TeamPermissions)[] = [
-  'manageInbox',
-  'viewAnalytics',
-  'manageSettings',
-];
+/** All keys are enforced on the API when toggled off (Owner always passes). */
+export const ENFORCED_PERMISSION_KEYS: (keyof TeamPermissions)[] = [...PERMISSION_KEYS];
 
 export interface PermissionGroup {
   id: string;
   label: string;
-  description: string;
   keys: (keyof TeamPermissions)[];
 }
 
@@ -84,54 +105,58 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
   {
     id: 'core',
     label: 'Core workspace',
-    description: 'Day-to-day collaboration tools',
     keys: ['manageInbox', 'manageTeam'],
   },
   {
     id: 'messaging',
     label: 'Messaging & growth',
-    description: 'Outbound and automation capabilities',
     keys: ['manageCampaigns', 'manageTemplates', 'manageFlows'],
   },
   {
     id: 'admin',
     label: 'Insights & administration',
-    description: 'Reporting and workspace configuration',
     keys: ['viewAnalytics', 'manageSettings'],
   },
 ];
 
 export const permissionMeta: Record<
   keyof TeamPermissions,
-  { label: string; description: string }
+  { label: string; description: string; mapsTo: string }
 > = {
   manageInbox: {
     label: 'Inbox access',
-    description: 'Reply to chats and manage conversations',
+    description: 'Open Inbox, reply to chats, labels, canned replies, and tickets.',
+    mapsTo: 'Inbox, Tickets',
   },
   manageTeam: {
     label: 'Manage team',
-    description: 'Add members, invites, and departments',
+    description: 'Add or remove members, send invites, edit departments, and save role access.',
+    mapsTo: 'Team page (admin actions)',
   },
   manageCampaigns: {
     label: 'Campaigns',
-    description: 'Create and send WhatsApp campaigns',
+    description: 'Create, schedule, send, and manage WhatsApp campaigns.',
+    mapsTo: 'Campaigns',
   },
   manageTemplates: {
     label: 'Templates',
-    description: 'Create and manage message templates',
+    description: 'Sync, create, edit, and send test WhatsApp templates.',
+    mapsTo: 'Templates',
   },
   manageFlows: {
     label: 'Automations & flows',
-    description: 'Build bots, automations, and chat flows',
+    description: 'Build automations, chat flows, and AI bots.',
+    mapsTo: 'Automations, AI Bots',
   },
   viewAnalytics: {
     label: 'Reports & analytics',
-    description: 'View performance reports and dashboards',
+    description: 'View dashboards and performance reports.',
+    mapsTo: 'Reports',
   },
   manageSettings: {
     label: 'Workspace settings',
-    description: 'Billing, integrations, and workspace config',
+    description: 'Billing, integrations, compliance, and workspace configuration.',
+    mapsTo: 'Settings, Billing',
   },
 };
 

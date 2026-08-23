@@ -3,13 +3,13 @@ import { Building2, Pencil, Plus, Trash2, Users } from 'lucide-react';
 import AppButton from '../ui/AppButton';
 import AppInput from '../ui/AppInput';
 import ConfirmDialog from '../ui/ConfirmDialog';
-import EmptyState from '../ui/EmptyState';
 import ListLayoutSkeleton from '../ui/ListLayoutSkeleton';
 import SlideOver, { SlideOverFooter } from '../ui/SlideOver';
 import { ModalCallout, ModalPanel, ModalSection } from '../ui/modalUi';
 import { teamApi } from '../../services/api';
 import type { TeamDepartment } from '../../types';
 import { toastError, toastSuccess } from '../../utils/toast';
+import TeamEmptyHero from './TeamEmptyHero';
 
 const PRESET_COLORS = ['#10b981', '#0ea5e9', '#8b5cf6', '#f59e0b', '#ef4444', '#ec4899'];
 
@@ -109,46 +109,33 @@ export default function TeamDepartmentsTab({ canManage, onChanged }: TeamDepartm
         <ListLayoutSkeleton label="Loading departments" rows={6} tableHeaders={['Department', 'Members', 'Actions']} />
       ) : departments.length === 0 ? (
         <div className="p-4 sm:p-6">
-          <EmptyState
-            icon={Building2}
-            title="No departments yet"
-            description="Group your team into departments like Sales, Support, or Billing."
-            steps={['Tap Create department', 'Give it a name like "Support"', 'Assign team members to it']}
-            action={
-              canManage ? (
-                <AppButton icon={<Plus size={16} />} onClick={openCreate}>
-                  Create department
-                </AppButton>
-              ) : undefined
-            }
-          />
+          <TeamEmptyHero variant="departments" canManage={canManage} onAction={openCreate} />
         </div>
       ) : (
-        <div className="grid gap-3 p-4 sm:grid-cols-2 sm:p-5 lg:grid-cols-3">
+        <div className="divide-y divide-neutral-200 dark:divide-neutral-800">
           {departments.map((dept) => (
-            <div
+            <article
               key={dept.id}
-              className="overflow-hidden rounded-2xl border border-theme-border bg-theme-surface transition hover:shadow-md"
+              className="min-w-0 overflow-hidden bg-white transition-colors hover:bg-neutral-50/80 dark:bg-neutral-950 dark:hover:bg-neutral-900/50"
             >
-              <div className="h-1.5" style={{ backgroundColor: dept.color }} />
-              <div className="flex items-start justify-between gap-2 p-4">
-                <div className="flex items-start gap-3">
-                  <div
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white shadow-sm"
-                    style={{ backgroundColor: dept.color }}
-                  >
-                    <Building2 className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <p className="font-bold text-theme-fg">{dept.name}</p>
-                    <p className="mt-1 flex items-center gap-1.5 text-[12px] text-theme-secondary">
-                      <Users className="h-3.5 w-3.5" />
-                      {dept.memberCount ?? 0} member{(dept.memberCount ?? 0) !== 1 ? 's' : ''}
-                    </p>
-                  </div>
+              <div className="flex items-start gap-2.5 px-3 py-2.5 sm:gap-3 sm:px-4 sm:py-3.5">
+                <div
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white shadow-sm sm:h-10 sm:w-10 sm:rounded-xl"
+                  style={{ backgroundColor: dept.color }}
+                >
+                  <Building2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[12.5px] font-bold text-neutral-900 sm:text-[13px] dark:text-neutral-100">
+                    {dept.name}
+                  </p>
+                  <p className="mt-0.5 flex items-center gap-1.5 text-[12px] text-neutral-500 dark:text-neutral-400">
+                    <Users className="h-3.5 w-3.5" />
+                    {dept.memberCount ?? 0} member{(dept.memberCount ?? 0) !== 1 ? 's' : ''}
+                  </p>
                 </div>
                 {canManage && (
-                  <div className="flex items-center gap-1">
+                  <div className="flex shrink-0 items-center gap-1">
                     <button
                       type="button"
                       onClick={() => openEdit(dept)}
@@ -168,7 +155,7 @@ export default function TeamDepartmentsTab({ canManage, onChanged }: TeamDepartm
                   </div>
                 )}
               </div>
-            </div>
+            </article>
           ))}
         </div>
       )}

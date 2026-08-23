@@ -12,18 +12,18 @@ interface TeamMemberCardProps {
 
 export default function TeamMemberCard({ member, canEdit, onEdit }: TeamMemberCardProps) {
   return (
-    <article className="bg-white transition-colors hover:bg-neutral-50/80 dark:bg-neutral-950 dark:hover:bg-neutral-900/50">
+    <article className="min-w-0 overflow-hidden bg-white transition-colors hover:bg-neutral-50/80 dark:bg-neutral-950 dark:hover:bg-neutral-900/50">
       <button
         type="button"
         onClick={() => canEdit && onEdit()}
         disabled={!canEdit}
-        className={`flex w-full items-start gap-3 px-4 py-3.5 text-left ${
+        className={`flex w-full items-start gap-2.5 px-3 py-2.5 text-left sm:gap-3 sm:px-4 sm:py-3.5 ${
           canEdit ? 'cursor-pointer' : 'cursor-default'
         }`}
       >
-        <ContactAvatar name={member.name} phone={member.email} size="md" />
+        <ContactAvatar name={member.name} phone={member.email} size="sm" />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[13px] font-bold text-theme-fg">
+          <p className="truncate text-[12.5px] font-bold text-neutral-900 sm:text-[13px] dark:text-neutral-100">
             {member.name}
             {member.isCurrentUser && (
               <span className="ml-2 text-[11px] font-medium text-whatsapp-700 dark:text-whatsapp-300">
@@ -31,11 +31,13 @@ export default function TeamMemberCard({ member, canEdit, onEdit }: TeamMemberCa
               </span>
             )}
           </p>
-          <p className="truncate text-[11px] text-theme-muted">{member.email}</p>
+          <p className="truncate text-[12px] text-neutral-500 dark:text-neutral-400">{member.email}</p>
           {member.department && (
-            <p className="mt-0.5 truncate text-[11px] text-theme-secondary">{member.department.name}</p>
+            <p className="mt-0.5 truncate text-[11px] text-neutral-500 dark:text-neutral-400">
+              {member.department.name}
+            </p>
           )}
-          <div className="mt-2 flex flex-wrap items-center gap-2">
+          <div className="mt-1.5 flex flex-wrap items-center gap-2 sm:mt-2">
             <AvailabilityBadge status={member.availability} />
             <RoleBadge role={member.orgRole} />
           </div>
@@ -43,10 +45,10 @@ export default function TeamMemberCard({ member, canEdit, onEdit }: TeamMemberCa
       </button>
 
       {canEdit && (
-        <div className="border-t border-theme-border/60 bg-theme-subtle/20 px-3 py-2.5">
+        <div className="hidden items-center gap-2 border-t border-neutral-200/80 bg-neutral-50/50 px-3 py-2.5 sm:flex dark:border-neutral-800 dark:bg-neutral-900/30">
           <AppButton
             size="sm"
-            fullWidth
+            className="flex-1"
             variant="secondary"
             icon={<Pencil size={14} />}
             onClick={(e) => {

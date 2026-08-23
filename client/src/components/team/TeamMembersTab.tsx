@@ -1,23 +1,21 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Headset, Pencil, Plus, UserPlus } from 'lucide-react';
-import ContactAvatar from '../inbox/ContactAvatar';
+import { Headset, Plus, UserPlus } from 'lucide-react';
 import AppButton from '../ui/AppButton';
 import AppInput from '../ui/AppInput';
 import AppSelect from '../ui/AppSelect';
 import ConfirmDialog from '../ui/ConfirmDialog';
-import DataTable, { TableSerialCell } from '../ui/DataTable';
 import EmptyState from '../ui/EmptyState';
 import ListToolbar from '../ui/ListToolbar';
 import ListLayoutSkeleton from '../ui/ListLayoutSkeleton';
 import ResponsiveDataView from '../ui/ResponsiveDataView';
-import { TableIconButton } from '../ui/TableActions';
 import SlideOver, { SlideOverFooter } from '../ui/SlideOver';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { teamApi } from '../../services/api';
 import { toastError, toastSuccess } from '../../utils/toast';
 import type { OrgRole, TeamDepartment, TeamMember, TeamSummary } from '../../types';
-import AvailabilityBadge, { RoleBadge } from './AvailabilityBadge';
+import TeamEmptyHero from './TeamEmptyHero';
 import TeamMemberCard from './TeamMemberCard';
+import TeamMemberTable from './TeamMemberTable';
 import { roleLabels } from './teamUi';
 
 const ALL_ROLES = '';
@@ -172,91 +170,16 @@ export default function TeamMembersTab({
 
   const hasActiveFilters = Boolean(search || roleFilter);
 
-  const emptyState = (
+  const emptyState = hasActiveFilters ? (
     <EmptyState
       icon={Headset}
-      variant={hasActiveFilters ? 'filter' : 'default'}
-      title={hasActiveFilters ? 'No members match your search' : 'No team members yet'}
-      description={
-        hasActiveFilters
-          ? 'Try a different name or role filter.'
-          : canManage
-            ? 'Add teammates so they can reply to customer chats.'
-            : 'Team members will appear here.'
-      }
-      action={
-        canManage && !hasActiveFilters ? (
-          <AppButton icon={<Plus size={16} />} onClick={openCreate}>
-            Add member
-          </AppButton>
-        ) : undefined
-      }
+      variant="filter"
+      compact
+      title="No members match your search"
+      description="Try a different name or role filter."
     />
-  );
-
-  const renderTable = () => (
-    <DataTable
-      headers={canManage ? ['Member', 'Status', 'Role', 'Actions'] : ['Member', 'Status', 'Role']}
-      className="border-0 bg-transparent shadow-none"
-    >
-      {filteredMembers.map((member, index) => {
-        const editable = canManage && member.orgRole !== 'OWNER';
-
-        return (
-          <tr
-            key={member.id}
-            className={`border-t border-theme-border transition-colors ${
-              editable ? 'cursor-pointer hover:bg-theme-subtle/40' : ''
-            }`}
-            onClick={() => editable && openEdit(member)}
-          >
-            <TableSerialCell rowIndex={index} />
-            <td className="px-5 py-3.5">
-              <div className="flex items-center gap-3">
-                <ContactAvatar name={member.name} phone={member.email} size="sm" />
-                <div className="min-w-0">
-                  <p className="truncate font-semibold text-theme-fg">
-                    {member.name}
-                    {member.isCurrentUser && (
-                      <span className="ml-2 text-[11px] font-medium text-whatsapp-700 dark:text-whatsapp-300">
-                        You
-                      </span>
-                    )}
-                  </p>
-                  <p className="truncate text-[12px] text-theme-muted">{member.email}</p>
-                  {member.department && (
-                    <p className="mt-0.5 truncate text-[11px] text-theme-secondary">
-                      {member.department.name}
-                    </p>
-                  )}
-                </div>
-              </div>
-            </td>
-            <td className="px-5 py-3.5">
-              <AvailabilityBadge status={member.availability} />
-            </td>
-            <td className="px-5 py-3.5">
-              <RoleBadge role={member.orgRole} />
-            </td>
-            {canManage && (
-              <td className="px-5 py-3.5" onClick={(e) => e.stopPropagation()}>
-                <div className="flex items-center justify-end gap-1.5">
-                  {editable ? (
-                    <TableIconButton
-                      onClick={() => openEdit(member)}
-                      icon={Pencil}
-                      label="Edit member"
-                    />
-                  ) : (
-                    <span className="text-[12px] text-theme-muted">—</span>
-                  )}
-                </div>
-              </td>
-            )}
-          </tr>
-        );
-      })}
-    </DataTable>
+  ) : (
+    <TeamEmptyHero variant="members" canManage={canManage} onAction={openCreate} />
   );
 
   return (
@@ -296,8 +219,9 @@ export default function TeamMembersTab({
         ) : (
           <ResponsiveDataView
             items={filteredMembers}
-            cardClassName="divide-y divide-neutral-200 dark:divide-neutral-800 lg:hidden"
-            tableClassName="px-4 sm:px-5 pt-4 sm:pb-5"
+            tableFrom="xl"
+            cardClassName="divide-y divide-neutral-200 dark:divide-neutral-800 xl:hidden"
+            tableClassName=""
             renderCard={(member) => (
               <TeamMemberCard
                 member={member}
@@ -305,7 +229,13 @@ export default function TeamMembersTab({
                 onEdit={() => openEdit(member)}
               />
             )}
-            renderTable={renderTable}
+            renderTable={() => (
+              <TeamMemberTable
+                members={filteredMembers}
+                canManage={canManage}
+                onEdit={openEdit}
+              />
+            )}
           />
         )}
       </div>

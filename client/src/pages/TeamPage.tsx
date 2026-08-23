@@ -1,27 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  Building2,
-  CircleDot,
-  ClipboardList,
-  Mail,
-  Settings2,
-  Shield,
-  Users,
-} from 'lucide-react';
+import { Building2, CircleDot, Mail, Shield, Users } from 'lucide-react';
 import PageShell from '../components/ui/PageShell';
 import TeamHero from '../components/team/TeamHero';
 import SegmentedControl from '../components/ui/SegmentedControl';
-import TeamAuditTab from '../components/team/TeamAuditTab';
 import TeamDepartmentsTab from '../components/team/TeamDepartmentsTab';
 import TeamInvitesTab from '../components/team/TeamInvitesTab';
 import TeamMembersTab from '../components/team/TeamMembersTab';
 import TeamRolesTab from '../components/team/TeamRolesTab';
-import TeamSettingsTab from '../components/team/TeamSettingsTab';
 import { useAuth } from '../contexts/AuthContext';
 import { teamApi } from '../services/api';
 import type { TeamDepartment, TeamSummary } from '../types';
 
-type TeamTab = 'members' | 'invites' | 'departments' | 'roles' | 'settings' | 'audit';
+type TeamTab = 'members' | 'invites' | 'departments' | 'roles';
 
 const tabMeta: Record<
   TeamTab,
@@ -31,8 +21,6 @@ const tabMeta: Record<
   invites: { label: 'Invites', shortLabel: 'Invites', icon: Mail, adminOnly: true },
   departments: { label: 'Departments', shortLabel: 'Depts', icon: Building2 },
   roles: { label: 'Roles', shortLabel: 'Roles', icon: Shield, adminOnly: true },
-  settings: { label: 'Settings', shortLabel: 'Settings', icon: Settings2, adminOnly: true },
-  audit: { label: 'Audit log', shortLabel: 'Audit', icon: ClipboardList, adminOnly: true },
 };
 
 export default function TeamPage() {
@@ -62,16 +50,22 @@ export default function TeamPage() {
       .catch(console.error);
   }, []);
 
-  useEffect(() => {
-    loadDepartments();
-    loadSummary();
-  }, [loadDepartments, loadSummary]);
-
   const visibleTabIds = useMemo(
     () =>
       (Object.keys(tabMeta) as TeamTab[]).filter((id) => !tabMeta[id].adminOnly || canManageTeam),
     [canManageTeam],
   );
+
+  useEffect(() => {
+    loadDepartments();
+    loadSummary();
+  }, [loadDepartments, loadSummary]);
+
+  useEffect(() => {
+    if (!visibleTabIds.includes(activeTab)) {
+      setActiveTab(visibleTabIds[0] ?? 'members');
+    }
+  }, [activeTab, visibleTabIds]);
 
   const tabOptions = visibleTabIds.map((id) => ({
     value: id,
@@ -99,7 +93,7 @@ export default function TeamPage() {
       },
       {
         label: 'Roles',
-        value: summary.owners + summary.admins + summary.supervisors + summary.agents > 0 ? 4 : 0,
+        value: 4,
         hint: 'Permission sets',
         icon: Shield,
         tone: 'roles' as const,
@@ -137,10 +131,6 @@ export default function TeamPage() {
             <TeamDepartmentsTab canManage={canManageTeam} onChanged={loadDepartments} />
           )}
           {activeTab === 'roles' && canManageTeam && <TeamRolesTab canManage={canManageTeam} />}
-          {activeTab === 'settings' && canManageTeam && (
-            <TeamSettingsTab canManage={canManageTeam} />
-          )}
-          {activeTab === 'audit' && canManageTeam && <TeamAuditTab />}
         </div>
       </div>
     </PageShell>

@@ -4,7 +4,6 @@ import AppButton from '../ui/AppButton';
 import AppInput from '../ui/AppInput';
 import AppSelect from '../ui/AppSelect';
 import ConfirmDialog from '../ui/ConfirmDialog';
-import EmptyState from '../ui/EmptyState';
 import ListLayoutSkeleton from '../ui/ListLayoutSkeleton';
 import SlideOver, { SlideOverFooter } from '../ui/SlideOver';
 import { ModalCallout, ModalPanel, ModalSection } from '../ui/modalUi';
@@ -12,18 +11,20 @@ import { teamApi } from '../../services/api';
 import type { OrgRole, TeamDepartment, TeamInvite } from '../../types';
 import { toastError, toastSuccess } from '../../utils/toast';
 import { RoleBadge } from './AvailabilityBadge';
+import TeamEmptyHero from './TeamEmptyHero';
 import { formatJoinedDate, roleLabels } from './teamUi';
 
 interface TeamInvitesTabProps {
   departments: TeamDepartment[];
   canManage: boolean;
+  onChanged?: () => void;
 }
 
 function inviteInitials(email: string) {
   return email.slice(0, 2).toUpperCase();
 }
 
-export default function TeamInvitesTab({ departments, canManage }: TeamInvitesTabProps) {
+export default function TeamInvitesTab({ departments, canManage, onChanged }: TeamInvitesTabProps) {
   const [invites, setInvites] = useState<TeamInvite[]>([]);
   const [loading, setLoading] = useState(true);
   const [slideOpen, setSlideOpen] = useState(false);
@@ -61,6 +62,7 @@ export default function TeamInvitesTab({ departments, canManage }: TeamInvitesTa
       setSlideOpen(false);
       setForm({ email: '', name: '', orgRole: 'AGENT', departmentId: '' });
       load();
+      onChanged?.();
       if (data.data.inviteUrl) {
         await navigator.clipboard.writeText(data.data.inviteUrl);
         toastSuccess('Invite link copied to clipboard');
@@ -83,6 +85,7 @@ export default function TeamInvitesTab({ departments, canManage }: TeamInvitesTa
       toastSuccess('Invite revoked');
       setRevokeTarget(null);
       load();
+      onChanged?.();
     } catch {
       toastError('Failed to revoke invite');
     } finally {
@@ -110,34 +113,29 @@ export default function TeamInvitesTab({ departments, canManage }: TeamInvitesTa
         <ListLayoutSkeleton label="Loading invites" tableHeaders={['Invite', 'Role', 'Status', 'Actions']} />
       ) : invites.length === 0 ? (
         <div className="p-4 sm:p-6">
-          <EmptyState
-            icon={Mail}
-            title="No pending invites"
-            description="Invite teammates by email — they will set their own password when joining."
-            steps={['Tap Send invite', 'Enter their email address', 'They receive a link to join your team']}
-            action={
-              canManage ? (
-                <AppButton icon={<UserPlus size={16} />} onClick={() => setSlideOpen(true)}>
-                  Send invite
-                </AppButton>
-              ) : undefined
-            }
+          <TeamEmptyHero
+            variant="invites"
+            canManage={canManage}
+            onAction={() => setSlideOpen(true)}
           />
         </div>
       ) : (
         <div className="divide-y divide-neutral-200 dark:divide-neutral-800">
           {invites.map((invite) => (
-            <div
+            <article
               key={invite.id}
-              className="flex flex-col gap-3 bg-white px-4 py-3.5 transition-colors hover:bg-neutral-50/80 dark:bg-neutral-950 dark:hover:bg-neutral-900/50 sm:flex-row sm:items-center sm:justify-between sm:px-5"
+              className="min-w-0 overflow-hidden bg-white transition-colors hover:bg-neutral-50/80 dark:bg-neutral-950 dark:hover:bg-neutral-900/50"
             >
-              <div className="flex min-w-0 items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-sky-100 to-blue-100 text-[11px] font-extrabold text-sky-800 dark:from-sky-900/50 dark:to-blue-900/40 dark:text-sky-200">
-                  {inviteInitials(invite.email)}
-                </div>
+              <div className="flex flex-col gap-3 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:px-4 sm:py-3.5">
+                <div className="flex min-w-0 items-start gap-2.5 sm:gap-3">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-sky-100 to-blue-100 text-[10px] font-extrabold text-sky-800 sm:h-10 sm:w-10 sm:rounded-xl dark:from-sky-900/50 dark:to-blue-900/40 dark:text-sky-200">
+                    {inviteInitials(invite.email)}
+                  </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="truncate font-semibold text-theme-fg">{invite.email}</p>
+                    <p className="truncate text-[12.5px] font-bold text-neutral-900 sm:text-[13px] dark:text-neutral-100">
+                      {invite.email}
+                    </p>
                     <RoleBadge role={invite.orgRole} />
                     {invite.status === 'EXPIRED' && (
                       <span className="rounded-full bg-rose-500/10 px-2 py-0.5 text-[10px] font-bold uppercase text-rose-600 dark:text-rose-400">
@@ -173,6 +171,7 @@ export default function TeamInvitesTab({ departments, canManage }: TeamInvitesTa
                 </div>
               )}
             </div>
+            </article>
           ))}
         </div>
       )}
