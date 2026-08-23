@@ -52,6 +52,9 @@ export async function loadPermissions(req: Request, _res: Response, next: NextFu
 
 export function requirePermission(...keys: (keyof TeamPermissions)[]) {
   return (req: Request, _res: Response, next: NextFunction) => {
+    if (req.orgRole === 'OWNER') {
+      return next();
+    }
     if (!req.permissions) {
       return next(new AppError(403, 'Permissions not loaded'));
     }
@@ -61,4 +64,9 @@ export function requirePermission(...keys: (keyof TeamPermissions)[]) {
     }
     next();
   };
+}
+
+/** Load org permissions and enforce one or more feature keys (Owner always passes). */
+export function withPermission(...keys: (keyof TeamPermissions)[]) {
+  return [loadPermissions, requirePermission(...keys)];
 }
