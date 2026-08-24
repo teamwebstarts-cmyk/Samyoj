@@ -808,9 +808,14 @@ export async function queueCampaignSend(
     campaign = refreshed;
   }
 
-  const sendRecipients = campaign.recipients.filter((row) => row.status === 'PENDING');
+  const latestGeneration = campaign.recipients.reduce(
+    (max, row) => Math.max(max, row.runGeneration ?? 0),
+    0
+  );
+  const sendRecipients = campaign.recipients.filter(
+    (row) => row.status === 'PENDING' && (row.runGeneration ?? 0) === latestGeneration
+  );
   if (!sendRecipients.length) {
-    await prisma.campaign.update({ where: { id: campaign.id }, data: { status: 'COMPLETED' } });
     throw new AppError(400, 'Campaign has no recipients');
   }
 
@@ -932,7 +937,6 @@ export async function queueCampaignSend(
         organizationId: campaign.organizationId,
         whatsappNumberDbId: whatsappNumber.id,
         phoneNumberId: whatsappNumber.phoneNumberId,
-        encryptedToken: whatsappNumber.accessToken,
         wabaId,
         templateName: campaign.templateName,
         templateLanguage,
@@ -1152,7 +1156,13 @@ export async function resumeCampaign(
     });
     if (!current) throw new AppError(404, 'Campaign not found');
     campaign = current;
-    const pending = campaign.recipients.filter((r) => r.status === 'PENDING');
+    const latestGeneration = campaign.recipients.reduce(
+      (max, row) => Math.max(max, row.runGeneration ?? 0),
+      0
+    );
+    const pending = campaign.recipients.filter(
+      (r) => r.status === 'PENDING' && (r.runGeneration ?? 0) === latestGeneration
+    );
     if (!pending.length) {
       await finalizeCampaignIfDone(campaign.id);
       throw new AppError(400, 'No pending recipients to resume');
@@ -1206,7 +1216,6 @@ export async function resumeCampaign(
           organizationId: campaign.organizationId,
           whatsappNumberDbId: whatsappNumber.id,
           phoneNumberId: whatsappNumber.phoneNumberId,
-          encryptedToken: whatsappNumber.accessToken,
           wabaId,
           templateName: campaign.templateName,
           templateLanguage,
@@ -1280,7 +1289,13 @@ export async function retryFailedRecipients(
   if (!campaign.whatsappNumberId) {
     throw new AppError(409, 'Campaign has unresolved WhatsApp number ownership');
   }
-  const failed = campaign.recipients.filter((r) => r.status === 'FAILED');
+  const latestGeneration = campaign.recipients.reduce(
+    (max, row) => Math.max(max, row.runGeneration ?? 0),
+    0
+  );
+  const failed = campaign.recipients.filter(
+    (r) => r.status === 'FAILED' && (r.runGeneration ?? 0) === latestGeneration
+  );
   if (!failed.length) throw new AppError(400, 'No failed recipients to retry');
 
   const settings = await getCampaignSettings(campaign.organizationId);
@@ -1345,7 +1360,11 @@ export async function retryFailedRecipients(
       billingCategory
     );
     const reset = await prisma.campaignRecipient.updateMany({
-      where: { id: { in: failed.map((r) => r.id) }, status: 'FAILED' },
+      where: {
+        campaignId: campaign.id,
+        id: { in: failed.map((r) => r.id) },
+        status: 'FAILED',
+      },
       data: {
         status: 'PENDING',
         errorMessage: null,
@@ -1375,7 +1394,6 @@ export async function retryFailedRecipients(
         organizationId: campaign.organizationId,
         whatsappNumberDbId: whatsappNumber.id,
         phoneNumberId: whatsappNumber.phoneNumberId,
-        encryptedToken: whatsappNumber.accessToken,
         wabaId,
         templateName: campaign.templateName,
         templateLanguage,
@@ -1459,6 +1477,11 @@ export async function duplicateCampaign(
 
 export async function getCampaignAnalytics(campaignId: string, orgId: string, whatsappNumberId?: string) {
   if (!whatsappNumberId) return null;
+  const latestGeneration = await prisma.campaignRecipient.aggregate({
+    where: { campaignId },
+    _max: { runGeneration: true },
+  });
+  const runGeneration = latestGeneration._max.runGeneration ?? 0;
   const campaign = await prisma.campaign.findFirst({
     where: {
       id: campaignId,
@@ -1467,6 +1490,7 @@ export async function getCampaignAnalytics(campaignId: string, orgId: string, wh
     },
     include: {
       recipients: {
+        where: { runGeneration },
         select: { status: true, errorMessage: true, sentAt: true, deliveredAt: true, readAt: true },
       },
     },
