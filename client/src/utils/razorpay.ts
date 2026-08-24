@@ -71,3 +71,44 @@ export async function openRazorpayCheckout(options: RazorpayCheckoutOptions) {
 
   rzp.open();
 }
+
+export interface RazorpaySubscriptionCheckoutOptions {
+  keyId: string;
+  subscriptionId: string;
+  name: string;
+  description: string;
+  prefillEmail?: string;
+  onSuccess: (response: {
+    razorpay_subscription_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+  }) => void;
+  onDismiss?: () => void;
+  onFailure?: (response: { error?: { description?: string; reason?: string } }) => void;
+}
+
+export async function openRazorpaySubscriptionCheckout(
+  options: RazorpaySubscriptionCheckoutOptions
+) {
+  await loadRazorpayScript();
+  if (!window.Razorpay) throw new Error('Razorpay unavailable');
+
+  const rzp = new window.Razorpay({
+    key: options.keyId,
+    subscription_id: options.subscriptionId,
+    name: options.name,
+    description: options.description,
+    prefill: options.prefillEmail ? { email: options.prefillEmail } : undefined,
+    theme: { color: '#25D366' },
+    handler: options.onSuccess,
+    modal: {
+      ondismiss: options.onDismiss,
+    },
+  });
+
+  rzp.on('payment.failed', (response: unknown) => {
+    options.onFailure?.(response as { error?: { description?: string; reason?: string } });
+  });
+
+  rzp.open();
+}

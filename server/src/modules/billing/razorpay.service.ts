@@ -45,6 +45,105 @@ export async function createRazorpayOrder(params: {
   return res.json() as Promise<{ id: string; amount: number; currency: string }>;
 }
 
+export async function razorpayApi<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${RAZORPAY_API}${path}`, {
+    ...init,
+    headers: {
+      Authorization: authHeader(),
+      'Content-Type': 'application/json',
+      ...(init?.headers || {}),
+    },
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    logger.error('Razorpay API error', { source: 'razorpay', path, error: err });
+    throw new AppError(502, 'Payment gateway request failed');
+  }
+  return res.json() as Promise<T>;
+}
+
+export async function createRazorpayPlan(params: {
+  name: string;
+  amountPaise: number;
+  description: string;
+  notes?: Record<string, string>;
+}): Promise<{ id: string }> {
+  return razorpayApi<{ id: string }>('/plans', {
+    method: 'POST',
+    body: JSON.stringify({
+      period: 'monthly',
+      interval: 1,
+      item: {
+        name: params.name,
+        amount: params.amountPaise,
+        currency: 'INR',
+        description: params.description,
+      },
+      notes: params.notes,
+    }),
+  });
+}
+
+export async function createRazorpaySubscription(params: {
+  planId: string;
+  notes?: Record<string, string>;
+}): Promise<{ id: string; status: string; short_url?: string }> {
+  return razorpayApi<{ id: string; status: string; short_url?: string }>('/subscriptions', {
+    method: 'POST',
+    body: JSON.stringify({
+      plan_id: params.planId,
+      customer_notify: 1,
+      notes: params.notes,
+    }),
+  });
+}
+
+export async function cancelRazorpaySubscription(
+  subscriptionId: string,
+  cancelAtCycleEnd = true
+): Promise<{ id: string; status: string }> {
+  return razorpayApi<{ id: string; status: string }>(
+    `/subscriptions/${subscriptionId}/cancel`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ cancel_at_cycle_end: cancelAtCycleEnd ? 1 : 0 }),
+    }
+  );
+}
+
+export async function fetchRazorpaySubscription(subscriptionId: string): Promise<{
+  id: string;
+  status: string;
+  current_end?: number;
+  notes?: Record<string, string>;
+}> {
+  return razorpayApi(`/subscriptions/${subscriptionId}`);
+}
+
+/**
+ * Razorpay subscription checkout signature: payment_id|subscription_id
+ */
+export function verifySubscriptionPaymentSignature(
+  subscriptionId: string,
+  paymentId: string,
+  signature: string
+): boolean {
+  if (!signature) return false;
+  const body = `${paymentId}|${subscriptionId}`;
+  const expected = crypto
+    .createHmac('sha256', config.razorpay.keySecret)
+    .update(body)
+    .digest('hex');
+  try {
+    return crypto.timingSafeEqual(
+      Buffer.from(expected, 'hex'),
+      Buffer.from(signature, 'hex')
+    );
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Phase 0 fix: use timing-safe comparison to prevent timing attacks.
  */

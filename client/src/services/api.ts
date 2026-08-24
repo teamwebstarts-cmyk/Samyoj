@@ -716,8 +716,16 @@ export const billingApi = {
     razorpay_order_id: string;
     razorpay_payment_id: string;
     razorpay_signature: string;
-    quantity?: number;
   }) => api.post('/billing/ai-credits/verify', data),
+  subscribeAiRecurringAddon: (skuId: string) =>
+    api.post('/billing/ai-credits/recurring/subscribe', { skuId }),
+  verifyAiRecurringAddon: (data: {
+    razorpay_subscription_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+  }) => api.post('/billing/ai-credits/recurring/verify', data),
+  cancelAiRecurringAddon: (skuId: string) =>
+    api.post('/billing/ai-credits/recurring/cancel', { skuId }),
   createPaymentLink: (data: {
     amountPaise: number;
     description: string;

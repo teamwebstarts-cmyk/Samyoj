@@ -476,7 +476,19 @@ export interface AiTopupSkuClient {
   description: string;
   purchaseType: 'topup' | 'recurring_addon';
   available?: boolean;
+  active?: boolean;
   note?: string;
+}
+
+export interface ActiveRecurringAddonView {
+  skuId: string;
+  pool: 'chat' | 'calling';
+  label: string;
+  units: number;
+  inclGstPaise: number;
+  status: 'CREATED' | 'ACTIVE' | 'CANCELLED' | 'HALTED' | 'COMPLETED';
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
 }
 
 export interface AiCreditsResponse {
@@ -485,6 +497,7 @@ export interface AiCreditsResponse {
   periodEnd: string | null;
   topupSkus: AiTopupSkuClient[];
   recurringAddonSkus: AiTopupSkuClient[];
+  activeRecurringAddons?: ActiveRecurringAddonView[];
 }
 
 export interface WhatsappNumber {

@@ -370,6 +370,14 @@ router.post(
       event: string;
       payload?: {
         payment?: { entity?: { order_id?: string; id?: string; notes?: Record<string, string> } };
+        subscription?: {
+          entity?: {
+            id?: string;
+            status?: string;
+            current_end?: number;
+            notes?: Record<string, string>;
+          };
+        };
       };
     };
     try {
@@ -379,6 +387,13 @@ router.post(
           : (JSON.parse(rawBody) as typeof event);
     } catch {
       throw new AppError(400, 'Invalid webhook payload JSON');
+    }
+
+    if (event.event?.startsWith('subscription.')) {
+      const { handleRecurringSubscriptionWebhook } = await import(
+        './ai-credits/recurring.service'
+      );
+      await handleRecurringSubscriptionWebhook(event);
     }
 
     if (event.event === 'payment.captured') {

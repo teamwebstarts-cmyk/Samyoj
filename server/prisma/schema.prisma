@@ -373,6 +373,7 @@ model Organization {
   outreachLogs                   OutreachLog[]
   aiCreditBalances               OrgAiCreditBalance[]
   aiCreditPurchases              AiCreditPurchase[]
+  aiRecurringAddons              OrgAiRecurringAddon[]
 
   planExpiresAt      DateTime? @map("plan_expires_at")
   subscriptionStatus String    @default("active") @map("subscription_status")
@@ -1276,6 +1277,7 @@ model AiCreditPurchase {
   creditsGranted  Int      @map("credits_granted")
   amountPaise     Int      @map("amount_paise")
   paymentOrderId  String?  @map("payment_order_id")
+  razorpayPaymentId String? @unique @map("razorpay_payment_id")
   razorpayAddonId String?  @map("razorpay_addon_id")
   createdAt       DateTime @default(now()) @map("created_at")
 
@@ -1296,6 +1298,35 @@ model AiCreditDeduction {
 
   @@index([organizationId, createdAt])
   @@map("ai_credit_deductions")
+}
+
+model OrgAiRecurringAddon {
+  id                     String    @id @default(uuid())
+  organizationId         String    @map("organization_id")
+  skuId                  String    @map("sku_id")
+  pool                   String
+  razorpaySubscriptionId String    @unique @map("razorpay_subscription_id")
+  razorpayPlanId         String    @map("razorpay_plan_id")
+  status                 String    @default("CREATED")
+  currentPeriodEnd       DateTime? @map("current_period_end")
+  cancelledAt            DateTime? @map("cancelled_at")
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, skuId])
+  @@index([organizationId, status])
+  @@map("org_ai_recurring_addons")
+}
+
+model RazorpayPlanCache {
+  skuId          String   @id @map("sku_id")
+  razorpayPlanId String   @map("razorpay_plan_id")
+  amountPaise    Int      @map("amount_paise")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@map("razorpay_plan_cache")
 }
 
 model KnowledgeBaseItem {

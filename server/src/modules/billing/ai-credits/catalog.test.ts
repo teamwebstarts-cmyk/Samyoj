@@ -4,6 +4,7 @@ import {
   callingSecondsToMinutes,
   CHAT_CREDITS_PER_UNIT,
   getAiTopupSku,
+  AI_RECURRING_ADDON_SKUS,
 } from './catalog';
 
 describe('ai-credits catalog', () => {
@@ -23,5 +24,11 @@ describe('ai-credits catalog', () => {
   it('resolves top-up SKUs', () => {
     expect(getAiTopupSku('ai_chat_topup_5k')?.units).toBe(5000);
     expect(getAiTopupSku('ai_calling_topup_120')?.pool).toBe('calling');
+  });
+
+  it('recurring-addon-skus-ok: exposes two monthly recurring add-ons', () => {
+    expect(AI_RECURRING_ADDON_SKUS).toHaveLength(2);
+    expect(AI_RECURRING_ADDON_SKUS[0].purchaseType).toBe('recurring_addon');
+    expect(AI_RECURRING_ADDON_SKUS[1].purchaseType).toBe('recurring_addon');
   });
 });

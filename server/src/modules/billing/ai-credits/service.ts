@@ -282,6 +282,8 @@ export async function grantTopUp(params: {
   sku: AiTopupSku;
   quantity?: number;
   paymentOrderId?: string;
+  razorpayPaymentId?: string;
+  razorpaySubscriptionId?: string;
 }): Promise<{ creditsGranted: number; addonBalance: number }> {
   const quantity = Math.max(1, params.quantity ?? 1);
   const creditsGranted = params.sku.units * quantity;
@@ -289,6 +291,26 @@ export async function grantTopUp(params: {
   if (params.paymentOrderId) {
     const existing = await prisma.aiCreditPurchase.findFirst({
       where: { paymentOrderId: params.paymentOrderId },
+    });
+    if (existing) {
+      const row = await prisma.orgAiCreditBalance.findUnique({
+        where: {
+          organizationId_pool: {
+            organizationId: params.organizationId,
+            pool: params.sku.pool,
+          },
+        },
+      });
+      return {
+        creditsGranted: existing.creditsGranted,
+        addonBalance: row?.addonBalance ?? 0,
+      };
+    }
+  }
+
+  if (params.razorpayPaymentId) {
+    const existing = await prisma.aiCreditPurchase.findUnique({
+      where: { razorpayPaymentId: params.razorpayPaymentId },
     });
     if (existing) {
       const row = await prisma.orgAiCreditBalance.findUnique({
@@ -330,6 +352,8 @@ export async function grantTopUp(params: {
         creditsGranted,
         amountPaise: params.sku.pricePaise * quantity,
         paymentOrderId: params.paymentOrderId,
+        razorpayPaymentId: params.razorpayPaymentId,
+        razorpayAddonId: params.razorpaySubscriptionId,
       },
     });
 

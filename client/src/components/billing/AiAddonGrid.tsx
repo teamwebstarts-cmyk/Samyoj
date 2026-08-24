@@ -1,14 +1,17 @@
 import { useState } from 'react';
-import { Bot, Clock, ImageIcon, Phone, Sparkles } from 'lucide-react';
+import { Bot, Clock, ImageIcon, Phone, RefreshCw, Sparkles } from 'lucide-react';
 import AppButton from '../ui/AppButton';
-import type { AiCreditsResponse, AiTopupSkuClient } from '../../types';
+import type { ActiveRecurringAddonView, AiCreditsResponse, AiTopupSkuClient } from '../../types';
 
 interface AiAddonGridProps {
   aiCredits: AiCreditsResponse | null;
   canManage: boolean;
   razorpayConfigured: boolean;
   purchasingSku: string | null;
+  recurringSku: string | null;
   onPurchase: (sku: AiTopupSkuClient, quantity?: number) => void;
+  onSubscribeRecurring: (sku: AiTopupSkuClient) => void;
+  onCancelRecurring: (skuId: string) => void;
 }
 
 function formatInr(paise: number): string {
@@ -98,16 +101,120 @@ function AddonCard({
   );
 }
 
+function RecurringAddonCard({
+  sku,
+  active,
+  canManage,
+  razorpayConfigured,
+  loading,
+  onSubscribe,
+  onCancel,
+}: {
+  sku: AiTopupSkuClient;
+  active?: ActiveRecurringAddonView;
+  canManage: boolean;
+  razorpayConfigured: boolean;
+  loading: boolean;
+  onSubscribe: () => void;
+  onCancel: () => void;
+}) {
+  const isCalling = sku.pool === 'calling';
+  const Icon = isCalling ? Phone : Bot;
+  const isActive = active && ['CREATED', 'ACTIVE', 'CANCELLED'].includes(active.status);
+  const isCancelling = active?.status === 'CANCELLED';
+
+  return (
+    <div className="flex h-full flex-col justify-between rounded-2xl border border-theme-border bg-theme-surface p-4">
+      <div>
+        <div className="flex items-center gap-2">
+          <span
+            className={`flex h-8 w-8 items-center justify-center rounded-lg ${
+              isCalling
+                ? 'bg-sky-50 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300'
+                : 'bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300'
+            }`}
+          >
+            <Icon className="h-4 w-4" />
+          </span>
+          <div>
+            <p className="text-sm font-extrabold text-theme-fg">{sku.label}</p>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-theme-muted">
+              Monthly subscription
+            </p>
+          </div>
+        </div>
+        <p className="mt-3 text-2xl font-black tabular-nums text-theme-fg">
+          +{sku.units.toLocaleString()}
+          <span className="ml-1 text-xs font-semibold text-theme-muted">
+            {isCalling ? 'min/mo' : 'credits/mo'}
+          </span>
+        </p>
+        <p className="mt-1 text-[11px] font-medium text-theme-muted">{sku.description}</p>
+        <p className="mt-2 text-sm font-bold text-theme-fg">
+          {formatInr(sku.inclGstPaise)}{' '}
+          <span className="text-[10px] font-medium text-theme-muted">/ month incl. GST</span>
+        </p>
+        {isActive ? (
+          <p className="mt-2 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
+            {isCancelling
+              ? `Cancels ${active.currentPeriodEnd ? new Date(active.currentPeriodEnd).toLocaleDateString() : 'at period end'}`
+              : `Renews ${active.currentPeriodEnd ? new Date(active.currentPeriodEnd).toLocaleDateString() : 'monthly'}`}
+          </p>
+        ) : (
+          <p className="mt-2 text-[11px] font-medium text-theme-muted">
+            Credits grant into your add-on pool each billing cycle.
+          </p>
+        )}
+      </div>
+      <div className="mt-4">
+        {isActive && !isCancelling ? (
+          <AppButton
+            size="sm"
+            variant="secondary"
+            fullWidth
+            disabled={!canManage}
+            loading={loading}
+            onClick={onCancel}
+          >
+            Cancel monthly add-on
+          </AppButton>
+        ) : isCancelling ? (
+          <AppButton size="sm" variant="secondary" fullWidth disabled>
+            Cancellation scheduled
+          </AppButton>
+        ) : (
+          <AppButton
+            size="sm"
+            variant="primary"
+            fullWidth
+            disabled={!canManage || !razorpayConfigured || !sku.available}
+            loading={loading}
+            onClick={onSubscribe}
+          >
+            Subscribe monthly
+          </AppButton>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function AiAddonGrid({
   aiCredits,
   canManage,
   razorpayConfigured,
   purchasingSku,
+  recurringSku,
   onPurchase,
+  onSubscribeRecurring,
+  onCancelRecurring,
 }: AiAddonGridProps) {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const chatSkus = aiCredits?.topupSkus.filter((s) => s.pool === 'chat') ?? [];
   const callingSkus = aiCredits?.topupSkus.filter((s) => s.pool === 'calling') ?? [];
+  const recurringSkus = aiCredits?.recurringAddonSkus ?? [];
+  const activeRecurring = aiCredits?.activeRecurringAddons ?? [];
+  const activeBySku = new Map(activeRecurring.map((a) => [a.skuId, a]));
 
   const getQty = (skuId: string) => quantities[skuId] ?? 1;
   const setQty = (skuId: string, value: number) =>
@@ -162,6 +269,31 @@ export default function AiAddonGrid({
               quantity={getQty(sku.id)}
               onQuantityChange={(value) => setQty(sku.id, value)}
               onPurchase={() => onPurchase(sku, getQty(sku.id))}
+            />
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <div className="mb-2 flex items-center gap-2">
+          <RefreshCw className="h-4 w-4 text-emerald-600" />
+          <h4 className="text-sm font-bold text-theme-fg">Monthly recurring add-ons</h4>
+        </div>
+        <p className="mb-3 text-[11px] font-medium text-theme-muted">
+          Auto-add credits every month via Razorpay subscription. Cancel anytime — access continues
+          until the current period ends.
+        </p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {recurringSkus.map((sku) => (
+            <RecurringAddonCard
+              key={sku.id}
+              sku={sku}
+              active={activeBySku.get(sku.id)}
+              canManage={canManage}
+              razorpayConfigured={razorpayConfigured}
+              loading={recurringSku === sku.id}
+              onSubscribe={() => onSubscribeRecurring(sku)}
+              onCancel={() => onCancelRecurring(sku.id)}
             />
           ))}
         </div>

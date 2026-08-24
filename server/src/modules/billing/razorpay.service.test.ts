@@ -27,6 +27,7 @@ vi.mock('../../config/database', () => ({
 import {
   isRazorpayConfigured,
   verifyPaymentSignature,
+  verifySubscriptionPaymentSignature,
   verifyWebhookSignature,
   createRazorpayOrder,
   activatePlan,
@@ -94,6 +95,21 @@ describe('verifyPaymentSignature', () => {
   it('returns false for wrong-length signature (timing safe buffer check)', () => {
     const wrongLength = 'abcd';
     expect(verifyPaymentSignature('order_ABC', 'pay_XYZ', wrongLength)).toBe(false);
+  });
+});
+
+describe('verifySubscriptionPaymentSignature', () => {
+  it('subscription-signature-ok: validates payment_id|subscription_id HMAC', () => {
+    const subscriptionId = 'sub_ABC';
+    const paymentId = 'pay_XYZ';
+    const body = `${paymentId}|${subscriptionId}`;
+    const expected = crypto.createHmac('sha256', 'secret_123').update(body).digest('hex');
+
+    expect(verifySubscriptionPaymentSignature(subscriptionId, paymentId, expected)).toBe(true);
+  });
+
+  it('returns false for invalid subscription signature', () => {
+    expect(verifySubscriptionPaymentSignature('sub_ABC', 'pay_XYZ', 'bad')).toBe(false);
   });
 });
 

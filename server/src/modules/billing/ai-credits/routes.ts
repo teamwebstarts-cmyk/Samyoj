@@ -14,9 +14,16 @@ import {
 } from './catalog';
 import { getAiCreditBalances } from './service';
 import {
+  createRecurringAddonSubscription,
+  cancelRecurringAddon,
+  verifyAndGrantRecurringCheckout,
+  listActiveRecurringAddons,
+} from './recurring.service';
+import {
   createRazorpayOrder,
   isRazorpayConfigured,
   verifyPaymentSignature,
+  verifySubscriptionPaymentSignature,
 } from '../razorpay.service';
 import {
   expireStaleCreatedOrders,
@@ -34,7 +41,11 @@ router.get(
   requireOrg,
   loadPermissions,
   asyncHandler(async (req: Request, res: Response) => {
-    const balances = await getAiCreditBalances(req.user!.organizationId!);
+    const orgId = req.user!.organizationId!;
+    const balances = await getAiCreditBalances(orgId);
+    const activeRecurringAddons = await listActiveRecurringAddons(orgId);
+    const activeSkuIds = new Set(activeRecurringAddons.map((a) => a.skuId));
+
     sendSuccess(res, {
       ...balances,
       topupSkus: AI_TOPUP_SKUS.map((sku) => ({
@@ -56,9 +67,10 @@ router.get(
         inclGstPaise: inclGstPaise(sku.pricePaise),
         description: sku.description,
         purchaseType: sku.purchaseType,
-        available: false,
-        note: 'Recurring add-ons ship with Razorpay Subscriptions — use top-up packs for now.',
+        available: isRazorpayConfigured(),
+        active: activeSkuIds.has(sku.id),
       })),
+      activeRecurringAddons,
     });
   })
 );
@@ -205,6 +217,118 @@ router.post(
         : 'AI add-on purchased successfully.',
       creditsGranted: result.creditsGranted,
       balances,
+    });
+  })
+);
+
+router.post(
+  '/recurring/subscribe',
+  authenticate,
+  requireOrg,
+  loadPermissions,
+  requirePermission('manageBilling'),
+  asyncHandler(async (req: Request, res: Response) => {
+    if (!isRazorpayConfigured()) {
+      throw new AppError(503, 'Payment gateway is not configured');
+    }
+
+    const { skuId } = z.object({ skuId: z.string() }).parse(req.body);
+    const orgId = req.user!.organizationId!;
+
+    const sku = getAiTopupSku(skuId);
+    if (!sku || sku.purchaseType !== 'recurring_addon') {
+      throw new AppError(400, 'Invalid recurring AI add-on SKU');
+    }
+
+    const entitlement =
+      sku.pool === 'calling' ? await checkQuota(orgId, 'calling') : await checkQuota(orgId, 'ai');
+    if (!entitlement.allowed) {
+      throw new AppError(
+        403,
+        entitlement.reason || 'Upgrade your plan before subscribing to this add-on.',
+        entitlement.code
+      );
+    }
+
+    const checkout = await createRecurringAddonSubscription({ organizationId: orgId, skuId });
+
+    sendSuccess(res, {
+      subscriptionId: checkout.subscriptionId,
+      keyId: checkout.keyId,
+      skuId: checkout.skuId,
+      label: checkout.label,
+      amountPaise: checkout.amountPaise,
+      currency: 'INR',
+    });
+  })
+);
+
+router.post(
+  '/recurring/verify',
+  authenticate,
+  requireOrg,
+  loadPermissions,
+  requirePermission('manageBilling'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const data = z
+      .object({
+        razorpay_subscription_id: z.string(),
+        razorpay_payment_id: z.string(),
+        razorpay_signature: z.string(),
+      })
+      .parse(req.body);
+
+    const orgId = req.user!.organizationId!;
+
+    if (
+      !verifySubscriptionPaymentSignature(
+        data.razorpay_subscription_id,
+        data.razorpay_payment_id,
+        data.razorpay_signature
+      )
+    ) {
+      throw new AppError(400, 'Invalid subscription payment signature');
+    }
+
+    const grant = await verifyAndGrantRecurringCheckout({
+      organizationId: orgId,
+      subscriptionId: data.razorpay_subscription_id,
+      paymentId: data.razorpay_payment_id,
+    });
+
+    const balances = await getAiCreditBalances(orgId);
+    const activeRecurringAddons = await listActiveRecurringAddons(orgId);
+
+    sendSuccess(res, {
+      message: grant.alreadyGranted
+        ? 'Monthly add-on already applied.'
+        : 'Monthly AI add-on activated.',
+      creditsGranted: grant.creditsGranted,
+      balances,
+      activeRecurringAddons,
+    });
+  })
+);
+
+router.post(
+  '/recurring/cancel',
+  authenticate,
+  requireOrg,
+  loadPermissions,
+  requirePermission('manageBilling'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { skuId } = z.object({ skuId: z.string() }).parse(req.body);
+    const orgId = req.user!.organizationId!;
+
+    const result = await cancelRecurringAddon({ organizationId: orgId, skuId });
+    const balances = await getAiCreditBalances(orgId);
+    const activeRecurringAddons = await listActiveRecurringAddons(orgId);
+
+    sendSuccess(res, {
+      message: 'Monthly add-on will cancel at the end of this billing period.',
+      ...result,
+      balances,
+      activeRecurringAddons,
     });
   })
 );

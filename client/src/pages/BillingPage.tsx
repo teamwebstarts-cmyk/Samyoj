@@ -22,7 +22,7 @@ import SectionCard from '../components/ui/SectionCard';
 import { analyticsApi, billingApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import type { AiCreditsResponse, AiTopupSkuClient, BillingInfo, BillingPlan, BillingUsage, ReportsOverviewFullData } from '../types';
-import { openRazorpayCheckout } from '../utils/razorpay';
+import { openRazorpayCheckout, openRazorpaySubscriptionCheckout } from '../utils/razorpay';
 import { toastError, toastSuccess } from '../utils/toast';
 
 type BillingTab = 'usage' | 'plans' | 'history';
@@ -50,6 +50,7 @@ export default function BillingPage() {
   const [overviewUnavailable, setOverviewUnavailable] = useState(false);
   const [upgrading, setUpgrading] = useState<string | null>(null);
   const [purchasingSku, setPurchasingSku] = useState<string | null>(null);
+  const [recurringSku, setRecurringSku] = useState<string | null>(null);
 
   const handleTabChange = useCallback(
     (newTab: BillingTab) => {
@@ -265,6 +266,68 @@ export default function BillingPage() {
     }
   };
 
+  const handleSubscribeRecurring = async (sku: AiTopupSkuClient) => {
+    if (!info?.canManageBilling || !info.razorpayKeyId) {
+      toastError('Only admins can subscribe to monthly add-ons.');
+      return;
+    }
+    setRecurringSku(sku.id);
+    try {
+      const res = await billingApi.subscribeAiRecurringAddon(sku.id);
+      const payload = res.data.data;
+      await openRazorpaySubscriptionCheckout({
+        keyId: payload.keyId,
+        subscriptionId: payload.subscriptionId,
+        name: 'Samyoj AI Monthly Add-on',
+        description: `${payload.label} — billed monthly`,
+        prefillEmail: user?.email,
+        onSuccess: async (response) => {
+          try {
+            const verifyRes = await billingApi.verifyAiRecurringAddon(response);
+            toastSuccess(verifyRes.data.data.message || 'Monthly add-on activated');
+            await reloadAiCredits();
+          } catch {
+            toastError(
+              'Payment received but verification failed. Credits will apply when the webhook confirms.'
+            );
+            await reloadAiCredits();
+          } finally {
+            setRecurringSku(null);
+          }
+        },
+        onDismiss: () => {
+          setRecurringSku(null);
+          toastError('Subscription checkout cancelled.');
+        },
+        onFailure: () => {
+          setRecurringSku(null);
+          toastError('Subscription payment failed. Please try again.');
+        },
+      });
+    } catch (err: unknown) {
+      setRecurringSku(null);
+      const apiMessage = (err as { response?: { data?: { error?: { message?: string } } } })
+        ?.response?.data?.error?.message;
+      toastError(apiMessage || 'Could not start monthly add-on checkout');
+    }
+  };
+
+  const handleCancelRecurring = async (skuId: string) => {
+    if (!info?.canManageBilling) return;
+    setRecurringSku(skuId);
+    try {
+      const res = await billingApi.cancelAiRecurringAddon(skuId);
+      toastSuccess(res.data.data.message || 'Monthly add-on cancelled');
+      await reloadAiCredits();
+    } catch (err: unknown) {
+      const apiMessage = (err as { response?: { data?: { error?: { message?: string } } } })
+        ?.response?.data?.error?.message;
+      toastError(apiMessage || 'Could not cancel monthly add-on');
+    } finally {
+      setRecurringSku(null);
+    }
+  };
+
   const handleExportCsv = async () => {
     try {
       const response = await analyticsApi.exportCsv({ type: 'overview', days: '30' });
@@ -407,7 +470,10 @@ export default function BillingPage() {
                     canManage={info.canManageBilling}
                     razorpayConfigured={info.razorpayConfigured}
                     purchasingSku={purchasingSku}
+                    recurringSku={recurringSku}
                     onPurchase={handlePurchaseAddon}
+                    onSubscribeRecurring={handleSubscribeRecurring}
+                    onCancelRecurring={handleCancelRecurring}
                   />
 
                   <MetaCostExplainerCard />
