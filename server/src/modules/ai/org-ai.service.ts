@@ -10,6 +10,10 @@ import {
   canonicalAiUsageAction,
   type RecordableAiAction,
 } from './ai-usage-actions';
+import {
+  deductChatCreditsFromUsageLog,
+} from '../billing/ai-credits/service';
+import { shouldDeductOnUsageLog } from '../billing/ai-credits/pool-map';
 
 const log = createModuleLogger('org-ai');
 
@@ -180,7 +184,7 @@ export async function recordAiUsage(data: {
   usage: TokenUsage;
 }): Promise<void> {
   try {
-    await prisma.aiUsageLog.create({
+    const row = await prisma.aiUsageLog.create({
       data: {
         organizationId: data.organizationId,
         botId: data.botId,
@@ -194,6 +198,15 @@ export async function recordAiUsage(data: {
     });
     const { emitAiUsageProductEvent } = await import('../platform/events');
     emitAiUsageProductEvent(data.organizationId, canonicalAiUsageAction(data.action));
+
+    if (shouldDeductOnUsageLog(data.action)) {
+      void deductChatCreditsFromUsageLog({
+        organizationId: data.organizationId,
+        usageLogId: row.id,
+        promptTokens: data.usage.promptTokens,
+        completionTokens: data.usage.completionTokens,
+      });
+    }
   } catch (err) {
     log.warn('Failed to record AI usage', {
       organizationId: data.organizationId,
