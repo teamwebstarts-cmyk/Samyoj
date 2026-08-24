@@ -5,6 +5,7 @@ import {
   getOrgUsageSummary,
   saveOrgAiSettings,
 } from '../ai/org-ai.service';
+import { getAiCreditBalances, grantAdminAddonBalance } from '../billing/ai-credits/service';
 import { getOrgFeatureFlags, KNOWN_FEATURE_FLAGS, setFeatureFlag } from '../settings/feature-flags';
 import { AppError } from '../../utils/response';
 import { maskBusinessPhone, utcDay } from './privacy';
@@ -306,7 +307,7 @@ export async function getPlatformOrg(organizationId: string, now = new Date()) {
   if (!metrics) throw new AppError(404, 'Organization not found');
 
   const owner = org.users.find((row) => row.role === 'OWNER');
-  const [ai, flags, payments, events, snapshots, messageCounts] = await Promise.all([
+  const [ai, flags, payments, events, snapshots, messageCounts, creditBalances] = await Promise.all([
     getOrgUsageSummary(organizationId, 30),
     getOrgFeatureFlags(organizationId),
     prisma.paymentOrder.findMany({
@@ -353,6 +354,7 @@ export async function getPlatformOrg(organizationId: string, now = new Date()) {
         return { id: number.id, inboundCount, outboundCount };
       })
     ),
+    getAiCreditBalances(organizationId),
   ]);
   const countsByNumber = new Map(messageCounts.map((row) => [row.id, row]));
 
@@ -409,6 +411,7 @@ export async function getPlatformOrg(organizationId: string, now = new Date()) {
     ai: {
       ...publicAiControls(await getOrgAiSettings(organizationId)),
       usage: ai,
+      credits: creditBalances,
       coverageNote: PLATFORM_AI_COVERAGE_NOTE,
     },
     flagsCatalog: flags,
@@ -422,8 +425,13 @@ export async function patchPlatformOrgAi(input: {
   monthlyTokenLimit?: number | null;
   chatEnabled?: boolean;
   callingEnabled?: boolean;
+  grantChatAddon?: number;
+  grantCallingAddon?: number;
 }) {
-  const before = publicAiControls(await getOrgAiSettings(input.organizationId));
+  const before = {
+    ...publicAiControls(await getOrgAiSettings(input.organizationId)),
+    credits: await getAiCreditBalances(input.organizationId),
+  };
   const saved = await saveOrgAiSettings(input.organizationId, {
     ...(input.monthlyTokenLimit !== undefined
       ? { monthlyTokenLimit: input.monthlyTokenLimit ?? undefined }
@@ -431,7 +439,24 @@ export async function patchPlatformOrgAi(input: {
     ...(input.chatEnabled !== undefined ? { chatEnabled: input.chatEnabled } : {}),
     ...(input.callingEnabled !== undefined ? { callingEnabled: input.callingEnabled } : {}),
   });
-  const after = publicAiControls(saved);
+  if (input.grantChatAddon && input.grantChatAddon > 0) {
+    await grantAdminAddonBalance({
+      organizationId: input.organizationId,
+      pool: 'chat',
+      amount: input.grantChatAddon,
+    });
+  }
+  if (input.grantCallingAddon && input.grantCallingAddon > 0) {
+    await grantAdminAddonBalance({
+      organizationId: input.organizationId,
+      pool: 'calling',
+      amount: input.grantCallingAddon,
+    });
+  }
+  const after = {
+    ...publicAiControls(saved),
+    credits: await getAiCreditBalances(input.organizationId),
+  };
   await writePlatformAudit({
     operatorId: input.operatorId,
     action: 'PLATFORM_ORG_AI_UPDATED',
