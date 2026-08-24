@@ -144,6 +144,14 @@ export default function BillingPlanCard({
 
         <p className="mt-2.5 text-[11px] font-medium text-theme-muted">
           {plan.waNumbers} WA line · {plan.seats} seats · {typeof plan.contacts === 'number' ? plan.contacts.toLocaleString() : plan.contacts} contacts
+          {(plan.chatCreditsIncluded ?? 0) > 0
+            ? ` · ${plan.chatCreditsIncluded!.toLocaleString()} AI credits/mo`
+            : plan.aiIncluded === 'off'
+              ? ' · Upgrade for AI credits'
+              : ''}
+          {(plan.callingMinutesIncluded ?? 0) > 0
+            ? ` · ${plan.callingMinutesIncluded} calling min/mo`
+            : ''}
         </p>
 
         <div className="mt-3.5 min-h-[58px]">
