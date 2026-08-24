@@ -6,6 +6,10 @@ import { computeSlaDueAt } from '../sla/service';
 import { emitTicketEvent } from '../tickets/events';
 import { createChatCompletion } from '../ai/chat-completion.service';
 import { recordAiUsage, getOrgAiSettings, isCallingAiEnabled } from '../ai/org-ai.service';
+import {
+  assertAiCreditsAvailable,
+  deductCallingMinutesForCall,
+} from '../billing/ai-credits/service';
 import { charUsage } from '../ai/ai-usage-actions';
 import { SAFE_CHAT_TEMPERATURE } from '../ai/ai-constants';
 import { performHandoff, streamVoiceBotReply } from '../ai/chatbot.service';
@@ -155,6 +159,7 @@ export class AiVoiceCallSession {
     if (!isCallingAiEnabled(aiSettings)) {
       throw new Error('Calling AI is disabled for this organization');
     }
+    await assertAiCreditsAvailable(this.ctx.organizationId, 'calling', 1);
     if (!isSarvamSttConfigured() || !isSarvamTtsConfigured()) {
       throw new Error('Sarvam voice is not configured. Set SARVAM_API_KEY in server/.env.');
     }
@@ -1164,6 +1169,19 @@ export class AiVoiceCallSession {
         },
       },
     });
+
+    const billableSeconds =
+      durationSeconds ??
+      (priorCall?.startedAt
+        ? Math.max(0, Math.round((Date.now() - priorCall.startedAt.getTime()) / 1000))
+        : 0);
+    if (billableSeconds > 0) {
+      void deductCallingMinutesForCall({
+        organizationId: this.ctx.organizationId,
+        callId: this.ctx.callId,
+        durationSeconds: billableSeconds,
+      });
+    }
 
     void publishCallEventMessage(this.ctx.callId);
 
