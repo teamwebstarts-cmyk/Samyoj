@@ -709,6 +709,15 @@ export const billingApi = {
   }) => api.post('/billing/verify', data),
   estimateCost: (recipientCount: number, category?: string) =>
     api.post('/billing/estimate', { recipientCount, category }),
+  aiCredits: () => api.get<{ data: import('../types').AiCreditsResponse }>('/billing/ai-credits'),
+  purchaseAiAddon: (skuId: string, quantity = 1) =>
+    api.post('/billing/ai-credits/purchase', { skuId, quantity }),
+  verifyAiAddon: (data: {
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+    quantity?: number;
+  }) => api.post('/billing/ai-credits/verify', data),
   createPaymentLink: (data: {
     amountPaise: number;
     description: string;
