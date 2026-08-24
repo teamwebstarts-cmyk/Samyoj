@@ -412,6 +412,8 @@ export interface BillingPlan {
   publishedWorkflows: number | string;
   aiIncluded: 'off' | 'included' | 'advanced' | 'dedicated';
   callingIncluded: boolean;
+  chatCreditsIncluded?: number;
+  callingMinutesIncluded?: number;
   features: string[];
   isMostPopular?: boolean;
   pricing?: Partial<Record<'monthly' | 'quarterly' | 'yearly', BillingSkuPricing>>;
@@ -451,6 +453,38 @@ export interface BillingUsage {
   byCategory: Record<string, { count: number; costInr: number }>;
   qualityRatings: Array<{ phoneNumber: string; qualityRating: string; wabaId: string }>;
   messagesWithPricing: number;
+}
+
+export interface AiCreditBalanceView {
+  pool: 'chat' | 'calling';
+  includedLimit: number;
+  includedUsed: number;
+  includedRemaining: number;
+  addonBalance: number;
+  totalRemaining: number;
+  periodStart: string;
+  periodEnd: string;
+}
+
+export interface AiTopupSkuClient {
+  id: string;
+  pool: 'chat' | 'calling';
+  label: string;
+  units: number;
+  pricePaise: number;
+  inclGstPaise: number;
+  description: string;
+  purchaseType: 'topup' | 'recurring_addon';
+  available?: boolean;
+  note?: string;
+}
+
+export interface AiCreditsResponse {
+  chat: AiCreditBalanceView;
+  calling: AiCreditBalanceView;
+  periodEnd: string | null;
+  topupSkus: AiTopupSkuClient[];
+  recurringAddonSkus: AiTopupSkuClient[];
 }
 
 export interface WhatsappNumber {
