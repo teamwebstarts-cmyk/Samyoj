@@ -1,3 +1,5 @@
+> **Pricing update (Aug 2026):** Sarvam raised `sarvam-105b` to **₹29.28 / ₹10.98 / ₹73.20 per 1M tokens** (input / cached / output). STT remains **₹30/hour**; TTS Bulbul v3 **₹30/10K chars**. Samyoj AI billing credits use an internal rate card in `server/src/modules/billing/ai-credits/catalog.ts` — do not copy the old ₹4/₹16 figures below for new pack pricing.
+
 # Sarvam as the AI brain for BOTH WhatsApp Chat and Voice Calls — Research POC
 
 > **Type:** Code-verified research + recommendation (not shipped feature)  
