@@ -23,6 +23,8 @@ export default function GettingStartedCard({
   completedCount,
   totalSteps,
 }: GettingStartedCardProps) {
+  const allDone = totalSteps > 0 && completedCount >= totalSteps;
+
   return (
     <section className="dashboard-card flex h-full flex-col justify-between rounded-2xl border border-neutral-100/90 bg-white p-[var(--card-pad)] shadow-xs sm:rounded-2xl">
       {/* Card Header: Icon + Title + Progress Badge */}
@@ -35,8 +37,14 @@ export default function GettingStartedCard({
             Getting started checklist
           </h2>
         </div>
-        <span className="rounded-full bg-emerald-50 px-2 sm:px-2.5 py-0.5 text-[11px] sm:text-[11.5px] font-bold tabular-nums text-emerald-700 border border-emerald-200/60">
-          {completedCount}/{totalSteps} completed
+        <span
+          className={`rounded-full px-2 sm:px-2.5 py-0.5 text-[11px] sm:text-[11.5px] font-bold tabular-nums border ${
+            allDone
+              ? 'bg-emerald-100 text-emerald-800 border-emerald-300/70'
+              : 'bg-emerald-50 text-emerald-700 border-emerald-200/60'
+          }`}
+        >
+          {allDone ? 'All done' : `${completedCount}/${totalSteps} completed`}
         </span>
       </div>
 
@@ -63,7 +71,7 @@ export default function GettingStartedCard({
               </div>
             );
 
-            if (step.href && !step.completed) {
+            if (step.href) {
               return (
                 <li key={step.id}>
                   <Link to={step.href} className="group block">

@@ -207,8 +207,7 @@ export default function DashboardPage() {
     loadSideData();
   });
 
-  const showChecklist =
-    onboarding && onboarding.totalSteps > 0 && onboarding.completedCount < onboarding.totalSteps;
+  const hasOnboarding = Boolean(onboarding && onboarding.totalSteps > 0);
 
   if (!connectionReady) {
     return (
@@ -284,13 +283,11 @@ export default function DashboardPage() {
               />
             </div>
 
-            <div
-              className={`card-grid mt-[var(--card-gap)] grid grid-cols-1 md:grid-cols-3 ${showChecklist || onboardingError ? 'lg:grid-cols-5 lg:items-stretch md:items-stretch' : ''}`}
-            >
-              <div className={`min-w-0 ${showChecklist || onboardingError ? 'md:col-span-2 lg:col-span-3 lg:h-full' : ''}`}>
+            <div className="card-grid mt-[var(--card-gap)] grid grid-cols-1 md:grid-cols-3 md:items-stretch lg:grid-cols-5 lg:items-stretch">
+              <div className="min-w-0 md:col-span-2 lg:col-span-3 lg:h-full">
                 <DashboardQuickActions />
               </div>
-              {showChecklist && onboarding && (
+              {hasOnboarding && onboarding && (
                 <div className="min-w-0 md:col-span-1 lg:col-span-2 lg:h-full">
                   <GettingStartedCard
                     steps={onboarding.steps}
@@ -299,7 +296,7 @@ export default function DashboardPage() {
                   />
                 </div>
               )}
-              {onboardingError && !showChecklist && (
+              {onboardingError && !hasOnboarding && (
                 <div className="min-w-0 md:col-span-1 lg:col-span-2 lg:h-full">
                   <div className="dashboard-card flex h-full flex-col justify-center rounded-2xl border-amber-100 bg-amber-50/40 p-[var(--card-pad)]">
                     <p className="text-[13px] font-bold text-neutral-900">Couldn&apos;t load checklist</p>
