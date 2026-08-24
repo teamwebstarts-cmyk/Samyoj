@@ -28,9 +28,11 @@ import {
   findReusablePendingOrder,
   fulfillCapturedPayment,
 } from './fulfillment';
+import aiCreditsRoutes from './ai-credits/routes';
 
 const router = Router();
 
+router.use('/ai-credits', aiCreditsRoutes);
 router.use(paymentLinksRoutes);
 
 /** Client-facing plan shape built from PLAN_TIERS + SKU pricing catalog. */
@@ -49,6 +51,8 @@ function tierToClientPlan(tier: PlanTier) {
     publishedWorkflows: def.publishedWorkflows,
     aiIncluded: def.aiIncluded,
     callingIncluded: def.callingIncluded,
+    chatCreditsIncluded: def.chatCreditsIncluded,
+    callingMinutesIncluded: def.callingMinutesIncluded,
     features: def.features,
     isMostPopular: monthlySku?.isMostPopular,
     pricing,
