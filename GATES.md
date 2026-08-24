@@ -1,25 +1,29 @@
-# Gates: Campaign consent UX + subscribe-all
+# Gates: AI billing credits & add-ons
 
-OWNS: client/src/components/campaigns/**, client/src/components/contacts/ContactConsentInfoTip.tsx, client/src/utils/plainLanguage.ts, client/src/utils/contactConsent.test.ts, client/src/services/api.ts, server/src/modules/contacts/**, scripts/verify-campaign-ux.mjs
+OWNS: server/src/modules/billing/ai-credits/**, server/prisma/schema.prisma, client/src/components/billing/**, client/src/pages/BillingPage.tsx, admin/src/pages/AccountDetailPage.tsx
 
-Scope: Fix misleading campaign audience copy, show excluded subscriber counts, add subscribe-all for unsubscribed contacts, align contact badge language, and verify with automated checks.
+Scope: Subscription included AI credits + stackable add-on top-ups wired to Sarvam usage, Billing UI, and platform admin grants.
 
-- [x] G1: Campaign UX copy uses subscribed-audience language (not misleading "All contacts" for ALL_OPTED_IN)
-  CHECK: node scripts/verify-campaign-ux.mjs
-  EXPECT: campaign-ux-verification-passed
-  EVIDENCE: exit 0 — campaign-ux-verification-passed
+- [x] G1: Included allowance deducts before add-on balance
+  CHECK: cd server && npm test -- ai-credits/service.test.ts -t deduction-order-ok --reporter=verbose
+  EXPECT: deduction-order-ok
 
-- [x] G2: New contacts default to auditable campaign consent when optedIn omitted
-  CHECK: cd server && npm test -- consent.test.ts
-  EXPECT: Tests  6 passed
-  EVIDENCE: 6 passed consent.test.ts
+- [x] G2: Renewal resets included only, add-on balance unchanged
+  CHECK: cd server && npm test -- ai-credits/service.test.ts -t renewal-reset-ok --reporter=verbose
+  EXPECT: renewal-reset-ok
 
-- [x] G3: Client consent + campaign wizard unit tests pass
-  CHECK: cd client && npm test -- contactConsent.test.ts campaignWizardModel.test.ts
-  EXPECT: Tests  2 passed
-  EVIDENCE: 2 files 11 passed
+- [x] G3: Stacking top-ups increases addonBalance sum
+  CHECK: cd server && npm test -- ai-credits/service.test.ts -t topup-stack-ok --reporter=verbose
+  EXPECT: topup-stack-ok
 
-- [x] G4: Subscribe-all-unsubscribed contacts API returns updated count
-  CHECK: cd server && npm test -- subscribe-unsubscribed.test.ts
-  EXPECT: Tests  3 passed
-  EVIDENCE: 3 passed subscribe-unsubscribed.test.ts
+- [x] G4: Billing catalog exposes allowances and six SKUs
+  CHECK: cd server && node scripts/verify-ai-credits-api.mjs
+  EXPECT: balances-ok
+
+- [x] G5: Billing UI wires split meters, add-on grid, and Content Studio placeholder
+  CHECK: node server/scripts/verify-ai-credits-ui.mjs
+  EXPECT: billing-ui-ok
+
+- [x] G6: Top-up quantity cadence parser
+  CHECK: cd server && npm test -- fulfillment.test.ts --reporter=verbose
+  EXPECT: parses topup:N cadence
