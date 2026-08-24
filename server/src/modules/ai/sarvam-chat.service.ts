@@ -110,6 +110,8 @@ export interface ChatCompletionOptions {
   toolChoice?: 'auto' | 'none';
   /** Stream mode — returns SSE reader instead of full response. */
   stream?: boolean;
+  /** Voice LLM turns bill per-call minutes — skip pre-flight chat credit check. */
+  skipCreditCheck?: boolean;
   /** Optional per-call provider overrides (used when an org uses a custom endpoint/key). */
   endpoint?: string;
   apiKey?: string;
