@@ -18,7 +18,6 @@ export async function getCampaignSettings(organizationId: string): Promise<Campa
 
 export async function getDailySendUsage(organizationId: string) {
   const settings = await getCampaignSettings(organizationId);
-  const limit = settings.dailySendLimit ?? DEFAULT_CAMPAIGN_SETTINGS.dailySendLimit!;
 
   const startOfDay = utcDayStart();
 
@@ -32,8 +31,6 @@ export async function getDailySendUsage(organizationId: string) {
 
   return {
     sentToday,
-    limit,
-    remaining: Math.max(0, limit - sentToday),
     batchSize: settings.batchSize ?? DEFAULT_CAMPAIGN_SETTINGS.batchSize!,
     batchDelayMs: settings.batchDelayMs ?? DEFAULT_CAMPAIGN_SETTINGS.batchDelayMs!,
   };
