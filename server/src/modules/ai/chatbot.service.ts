@@ -528,6 +528,7 @@ export async function generateBotReply(
       whatsappNumberId: numberId,
       usageAction: isVoice ? 'calling_llm' : 'chat_bot',
       tools: input.testMode ? undefined : input.tools,
+      skipCreditCheck: isVoice,
     });
 
     // Function calling: brain asked for a tool — return it so callers can act.
@@ -747,6 +748,7 @@ export async function* streamVoiceBotReply(
       conversationId: input.conversationId,
       whatsappNumberId: conversation.whatsappNumberId || undefined,
       usageAction: 'calling_llm',
+      skipCreditCheck: true,
     })) {
       if (chunk.content) {
         full += chunk.content;
