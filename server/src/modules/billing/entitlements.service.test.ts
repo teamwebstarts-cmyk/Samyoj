@@ -118,6 +118,29 @@ describe('entitlements.service', () => {
       expect(workflowCheck.limit).toBe('unlimited');
     });
 
+    it('treats stored plan "pro" as Pro entitlements (not Kickstart)', async () => {
+      vi.mocked(prisma.organization.findUnique).mockResolvedValue({
+        id: 'org-pro',
+        plan: 'pro',
+        subscriptionStatus: 'active',
+        planExpiresAt: new Date('2027-09-23T00:00:00.000Z'),
+      } as never);
+      vi.mocked(prisma.whatsappNumber.count).mockResolvedValue(1);
+      vi.mocked(prisma.organizationUser.count).mockResolvedValue(1);
+      vi.mocked(prisma.teamInvite.count).mockResolvedValue(0);
+      vi.mocked(prisma.contact.count).mockResolvedValue(5);
+      vi.mocked(prisma.automation.count).mockResolvedValue(0);
+
+      const ent = await getOrgEntitlements('org-pro');
+      expect(ent.planTier).toBe('pro');
+      expect(ent.planName).toBe('Pro');
+      expect(ent.quotas.aiIncluded).not.toBe('off');
+      expect(ent.quotas.callingIncluded).toBe(true);
+
+      await expect(checkQuota('org-pro', 'ai')).resolves.toMatchObject({ allowed: true });
+      await expect(checkQuota('org-pro', 'calling')).resolves.toMatchObject({ allowed: true });
+    });
+
     it('blocks actions when subscription is locked or expired', async () => {
       vi.mocked(prisma.organization.findUnique).mockResolvedValue({
         id: 'org-3',

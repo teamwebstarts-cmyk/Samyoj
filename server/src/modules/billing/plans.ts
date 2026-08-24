@@ -291,12 +291,21 @@ export function getPlanTier(tier: PlanTier): PlanTierDef {
  * Used during transition to not strand existing paying orgs.
  */
 export function legacyPlanToTier(legacyPlan: string): PlanTier {
-  switch (legacyPlan) {
-    case 'starter': return 'starter';
-    case 'growth': return 'growth';
-    case 'business': return 'pro'; // ₹11,999 → Pro ₹4,999 (price drop, honor)
-    case 'enterprise': return 'enterprise';
-    default: return 'launch';
+  switch ((legacyPlan || '').trim().toLowerCase()) {
+    case 'launch':
+    case 'kickstart':
+      return 'launch';
+    case 'starter':
+      return 'starter';
+    case 'growth':
+      return 'growth';
+    case 'pro':
+    case 'business':
+      return 'pro';
+    case 'enterprise':
+      return 'enterprise';
+    default:
+      return 'launch';
   }
 }
 

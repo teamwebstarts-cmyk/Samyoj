@@ -78,6 +78,10 @@ describe('plans.ts', () => {
       expect(legacyPlanToTier('starter')).toBe('starter');
       expect(legacyPlanToTier('growth')).toBe('growth');
       expect(legacyPlanToTier('business')).toBe('pro');
+      expect(legacyPlanToTier('pro')).toBe('pro');
+      expect(legacyPlanToTier('PRO')).toBe('pro');
+      expect(legacyPlanToTier('launch')).toBe('launch');
+      expect(legacyPlanToTier('kickstart')).toBe('launch');
       expect(legacyPlanToTier('enterprise')).toBe('enterprise');
       expect(legacyPlanToTier('random')).toBe('launch');
     });

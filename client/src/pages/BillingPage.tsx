@@ -128,7 +128,7 @@ export default function BillingPage() {
   }, [info?.cadence]);
 
   const handleFreePlan = async (plan: BillingPlan) => {
-    if (!info?.canManageBilling || plan.id === info.plan) return;
+    if (!info?.canManageBilling || plan.id === (info.planTier || info.plan)) return;
     setUpgrading(plan.id);
     try {
       await billingApi.updatePlan(plan.id);
@@ -452,8 +452,8 @@ export default function BillingPage() {
                       <BillingPlanCard
                         key={plan.id}
                         plan={plan}
-                        isCurrent={plan.id === info.plan}
-                        isActivePaidSession={plan.id === info.activePaidPlan && plan.id !== info.plan}
+                        isCurrent={plan.id === (info.planTier || info.plan)}
+                        isActivePaidSession={plan.id === info.activePaidPlan && plan.id !== (info.planTier || info.plan)}
                         canManage={info.canManageBilling}
                         razorpayConfigured={info.razorpayConfigured}
                         loading={upgrading === plan.id}

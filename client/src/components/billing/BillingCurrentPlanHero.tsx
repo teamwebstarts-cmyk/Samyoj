@@ -60,9 +60,10 @@ function getStatusInfo(status?: string | null) {
 export default function BillingCurrentPlanHero({ info, onUnlockGrowth, isNearLimit }: BillingCurrentPlanHeroProps) {
   const status = getStatusInfo(info.subscriptionStatus);
   const StatusIcon = status.icon;
-  const accent = tierAccents[info.plan] || tierAccents.launch;
+  const planTier = info.planTier || info.plan;
+  const accent = tierAccents[planTier] || tierAccents.launch;
 
-  const isBasePlan = info.plan === 'launch' || info.plan === 'starter';
+  const isBasePlan = planTier === 'launch' || planTier === 'starter';
   const plan = info.currentPlan;
 
   const expiryDate = info.currentPeriodEnd || info.planExpiresAt;
@@ -80,7 +81,7 @@ export default function BillingCurrentPlanHero({ info, onUnlockGrowth, isNearLim
               {plan.name} Plan
             </h2>
             <span className={`inline-flex items-center rounded-md px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider ring-1 ring-inset ${accent.bg} ${accent.text} ${accent.ring}`}>
-              {info.plan}
+              {planTier}
             </span>
             <span className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold ring-1 ring-inset ${status.bg} ${status.color} ring-transparent`}>
               <StatusIcon className="h-3 w-3" />

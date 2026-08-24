@@ -73,8 +73,9 @@ export default function BillingUsageStatsTab({
   onBuyAddons,
   onExportCsv,
 }: BillingUsageStatsTabProps) {
-  const currentPlan = info.plans.find((p) => p.id === info.plan) || info.currentPlan;
-  const tier = (info.plan || 'starter').toLowerCase();
+  const currentPlan =
+    info.plans.find((p) => p.id === info.planTier || p.id === info.plan) || info.currentPlan;
+  const tier = (info.planTier || info.plan || 'starter').toLowerCase();
 
   const isEnterprise = tier === 'enterprise';
 
