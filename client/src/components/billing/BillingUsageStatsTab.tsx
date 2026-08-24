@@ -1,10 +1,8 @@
 import {
   Bot,
-  Check,
   CheckCheck,
   Download,
   Eye,
-  Lock,
   MessageSquare,
   Phone,
   Send,
@@ -17,13 +15,16 @@ import AppButton from '../ui/AppButton';
 import InfoTip from '../ui/InfoTip';
 import BillingCurrentPlanHero from './BillingCurrentPlanHero';
 import MetaCostExplainerCard from './MetaCostExplainerCard';
-import type { BillingInfo, BillingUsage, ReportsOverviewFullData } from '../../types';
+import BillingAiCreditMeter from './BillingAiCreditMeter';
+import type { AiCreditsResponse, BillingInfo, BillingUsage, ReportsOverviewFullData } from '../../types';
 
 interface BillingUsageStatsTabProps {
   info: BillingInfo;
   usage: BillingUsage | null;
   overview: ReportsOverviewFullData | null;
+  aiCredits: AiCreditsResponse | null;
   onUpgradeClick: () => void;
+  onBuyAddons?: () => void;
   onExportCsv?: () => void;
 }
 
@@ -67,7 +68,9 @@ export default function BillingUsageStatsTab({
   info,
   usage,
   overview,
+  aiCredits,
   onUpgradeClick,
+  onBuyAddons,
   onExportCsv,
 }: BillingUsageStatsTabProps) {
   const currentPlan = info.plans.find((p) => p.id === info.plan) || info.currentPlan;
@@ -319,57 +322,32 @@ export default function BillingUsageStatsTab({
             </div>
           </div>
 
-          {/* Card 4: AI & Voice Intelligence Access */}
-          <div className="flex flex-col justify-between rounded-xl border border-theme-border bg-theme-subtle/30 p-4 transition-colors">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300">
-                  <Bot className="h-3.5 w-3.5" />
-                </span>
-                <span className="truncate text-[11px] font-bold uppercase tracking-wider text-theme-muted">
-                  AI & Calling
-                </span>
-              </div>
-
-              {/* Metric + Status in the SAME row */}
-              <div className="mt-2.5 flex items-baseline justify-between gap-2">
-                <p className="min-w-0 truncate text-lg font-black tracking-tight text-theme-fg sm:text-xl">
-                  {isAiEnabled ? 'AI enabled' : 'Not included'}
-                </p>
-                {isAiEnabled ? (
-                  <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
-                    <Check className="h-3 w-3" /> Included
-                  </span>
-                ) : (
-                  <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
-                    <Lock className="h-2.5 w-2.5" /> Growth & Pro
-                  </span>
-                )}
-              </div>
+          {/* Card 4: AI credit meters (plan included + add-on balance) */}
+          <div className="flex flex-col justify-between rounded-xl border border-theme-border bg-theme-subtle/30 p-4 transition-colors md:col-span-2">
+            <div className="mb-3 flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300">
+                <Bot className="h-3.5 w-3.5" />
+              </span>
+              <h4 className="text-sm font-bold text-theme-fg">AI Credits & Usage</h4>
+              <InfoTip content="Included credits reset each billing cycle. Add-on packs stack and do not expire." />
             </div>
-
-            <div className="mt-3">
-              <div className="h-2 overflow-hidden rounded-full bg-theme-subtle">
-                <div
-                  className={`h-full rounded-full transition-all duration-500 ${isAiEnabled ? 'bg-violet-500 w-full' : 'w-0'}`}
-                />
-              </div>
-              <div className="mt-1.5 flex items-center justify-between gap-2 text-[11px]">
-                <span className="truncate text-theme-muted">
-                  Calling: {isCallingEnabled ? 'On' : 'Pro plan only'}
-                </span>
-                {!isAiEnabled ? (
-                  <button
-                    type="button"
-                    onClick={onUpgradeClick}
-                    className="shrink-0 font-bold text-whatsapp-700 hover:underline"
-                  >
-                    Unlock AI →
-                  </button>
-                ) : (
-                  <span className="shrink-0 font-semibold text-emerald-700 dark:text-emerald-400">Auto-replies on</span>
-                )}
-              </div>
+            <div className="grid grid-cols-1 gap-3.5 md:grid-cols-2">
+              <BillingAiCreditMeter
+                title="AI Chat Agent"
+                unitLabel="credits"
+                balance={aiCredits?.chat ?? null}
+                icon="chat"
+                isEntitled={!!isAiEnabled}
+                onBuyMore={onBuyAddons ?? onUpgradeClick}
+              />
+              <BillingAiCreditMeter
+                title="AI Calling"
+                unitLabel="min"
+                balance={aiCredits?.calling ?? null}
+                icon="calling"
+                isEntitled={isCallingEnabled}
+                onBuyMore={onBuyAddons ?? onUpgradeClick}
+              />
             </div>
           </div>
         </div>
