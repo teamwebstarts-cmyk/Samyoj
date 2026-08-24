@@ -234,7 +234,13 @@ export default function CampaignWizardPage() {
     }
 
     initializedFromQuery.current = true;
-    const audienceType = contactIds.length ? 'CONTACTS' : tags.length ? 'TAGS' : 'MANUAL';
+    const audienceType = contactIds.length
+      ? 'CONTACTS'
+      : tags.length
+        ? 'TAGS'
+        : templateName
+          ? 'ALL_OPTED_IN'
+          : 'MANUAL';
     const name = contactIds.length
       ? `Campaign — ${contactIds.length} contact${contactIds.length === 1 ? '' : 's'}`
       : tags.length
@@ -319,7 +325,7 @@ export default function CampaignWizardPage() {
       }
       payload = buildCampaignPayload(form, {
         draft: action === 'draft',
-        clearSchedule: action === 'draft' || !form.scheduleEnabled,
+        clearSchedule: !form.scheduleEnabled,
         isUpdate: Boolean(editing),
       });
     } catch (error) {
@@ -344,8 +350,8 @@ export default function CampaignWizardPage() {
         const sendConfirm = buildCampaignSendConfirm({
           campaignName: full.name,
           templateName: full.templateName,
-          recipientCount: full.totalContacts,
-          excludedCount: audienceMetrics?.notOptedIn,
+          recipientCount: full.totalContacts ?? 0,
+          excludedCount: excludedSelectedContacts > 0 ? excludedSelectedContacts : undefined,
         });
         setConfirmState({
           ...sendConfirm,
@@ -643,7 +649,12 @@ export default function CampaignWizardPage() {
                         disabled={saving || finalActionBlocked}
                         onClick={() => {
                           setStageError(null);
-                          setForm((previous) => ({ ...previous, scheduleEnabled: true }));
+                          const min = getCampaignScheduleMinimum();
+                          setForm((previous) => ({
+                            ...previous,
+                            scheduleEnabled: true,
+                            scheduledAt: previous.scheduledAt || min,
+                          }));
                         }}
                       >
                         Schedule for later
