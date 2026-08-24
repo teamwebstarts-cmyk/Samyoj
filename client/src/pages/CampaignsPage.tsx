@@ -62,7 +62,7 @@ import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 import { useSocket } from '../hooks/useSocket';
 import { campaignApi, contactApi, templateApi, whatsappApi } from '../services/api';
 import { toastError, toastSuccess } from '../utils/toast';
-import { PHONE_PLACEHOLDER, validatePhoneLines } from '../utils/phone';
+import { validatePhoneLines } from '../utils/phone';
 import { messagingConsent } from '../utils/plainLanguage';
 import type {
   Campaign,
@@ -626,7 +626,8 @@ export default function CampaignsPage() {
         const sendConfirm = buildCampaignSendConfirm({
           campaignName: full.name,
           templateName: full.templateName,
-          recipientCount: full.totalContacts,
+          recipientCount: full.totalContacts ?? 0,
+          excludedCount: excludedSelectedContacts > 0 ? excludedSelectedContacts : undefined,
         });
         setConfirmState({
           ...sendConfirm,
@@ -656,7 +657,6 @@ export default function CampaignsPage() {
       return null;
     } finally {
       setSaving(false);
-      setConfirmState(null);
     }
   };
 
