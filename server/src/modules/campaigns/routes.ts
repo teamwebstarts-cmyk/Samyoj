@@ -80,6 +80,52 @@ function validateCampaignTimezone(timezone: string | undefined, scheduledAt: str
   }
 }
 
+function rejectSubscriptionLocked(
+  res: Response,
+  entitlements: Awaited<ReturnType<typeof getOrgEntitlements>>
+): boolean {
+  if (!entitlements.isLocked) return false;
+  res.status(402).json({
+    success: false,
+    error: {
+      code: 'SUBSCRIPTION_LOCKED',
+      message: 'Your subscription or trial has expired. Upgrade to send campaigns.',
+      upgradeCta: 'growth',
+    },
+  });
+  return true;
+}
+
+async function latestRunGeneration(campaignId: string) {
+  const latestGeneration = await prisma.campaignRecipient.aggregate({
+    where: { campaignId },
+    _max: { runGeneration: true },
+  });
+  return latestGeneration._max.runGeneration ?? 0;
+}
+
+async function fetchLatestRecipients(campaignId: string) {
+  const runGeneration = await latestRunGeneration(campaignId);
+  return prisma.campaignRecipient.findMany({
+    where: { campaignId, runGeneration },
+    orderBy: { createdAt: 'asc' },
+    take: 500,
+  });
+}
+
+function parseCampaignPagination(
+  page: unknown,
+  limit: unknown,
+  defaults: { page?: number; limit?: number; maxLimit?: number } = {}
+) {
+  const defaultPage = defaults.page ?? 1;
+  const defaultLimit = defaults.limit ?? 10;
+  const maxLimit = defaults.maxLimit ?? 100;
+  const pageNum = Math.max(1, Number.parseInt(String(page), 10) || defaultPage);
+  const limitNum = Math.min(maxLimit, Math.max(1, Number.parseInt(String(limit), 10) || defaultLimit));
+  return { pageNum, limitNum, skip: (pageNum - 1) * limitNum };
+}
+
 router.get(
   '/',
   ...readGuard,
@@ -118,9 +164,11 @@ router.get(
       where.createdAt = { gte: start, lt: end };
     }
 
-    const pageNum = parseInt(page as string);
-    const limitNum = parseInt(limit as string);
-    const skip = (pageNum - 1) * limitNum;
+    const { pageNum, limitNum, skip } = parseCampaignPagination(page, limit, {
+      page: 1,
+      limit: 10,
+      maxLimit: 100,
+    });
     const direction = sortDir === 'asc' ? 'asc' : 'desc';
     const sortKey = String(sortBy);
     const orderBy: Prisma.CampaignOrderByWithRelationInput =
@@ -350,14 +398,17 @@ router.get(
     };
     if (status) where.status = status as Prisma.EnumMessageStatusFilter['equals'];
 
-    const pageNum = parseInt(page as string);
-    const limitNum = parseInt(limit as string);
+    const { pageNum, limitNum, skip } = parseCampaignPagination(page, limit, {
+      page: 1,
+      limit: 50,
+      maxLimit: 200,
+    });
 
     const [recipients, total] = await Promise.all([
       prisma.campaignRecipient.findMany({
         where,
         orderBy: { createdAt: 'asc' },
-        skip: (pageNum - 1) * limitNum,
+        skip,
         take: limitNum,
       }),
       prisma.campaignRecipient.count({ where }),
@@ -472,14 +523,12 @@ router.patch(
     if (updated.count !== 1) {
       throw new AppError(409, 'Campaign changed while it was being edited; try again');
     }
-    const campaign = await prisma.campaign.findUnique({
-      where: { id },
-      include: { recipients: true },
-    });
+    const campaign = await prisma.campaign.findUnique({ where: { id } });
     if (!campaign) throw new AppError(404, 'Campaign not found');
+    const recipients = await fetchLatestRecipients(id);
 
     await logCampaignAudit(orgId, req.user!.userId, 'campaign.update', { campaignId: id });
-    sendSuccess(res, campaign);
+    sendSuccess(res, { ...campaign, recipients });
   })
 );
 
@@ -586,6 +635,8 @@ router.post(
   asyncHandler(async (req: Request, res: Response) => {
     const { phone } = testSendSchema.parse(req.body);
     const orgId = req.user!.organizationId!;
+    const entitlements = await getOrgEntitlements(orgId);
+    if (rejectSubscriptionLocked(res, entitlements)) return;
 
     const campaign = await prisma.campaign.findFirst({
       where: {
@@ -623,6 +674,10 @@ router.post(
   '/:id/resume',
   ...adminGuard,
   asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const entitlements = await getOrgEntitlements(orgId);
+    if (rejectSubscriptionLocked(res, entitlements)) return;
+
     const campaign = await prisma.campaign.findFirst({
       where: {
         id: paramId(req),
@@ -659,6 +714,10 @@ router.post(
   '/:id/retry-failed',
   ...adminGuard,
   asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const entitlements = await getOrgEntitlements(orgId);
+    if (rejectSubscriptionLocked(res, entitlements)) return;
+
     const campaign = await prisma.campaign.findFirst({
       where: {
         id: paramId(req),
@@ -728,8 +787,9 @@ router.get(
     });
     if (!campaign) throw new AppError(404, 'Campaign not found');
 
+    const runGeneration = await latestRunGeneration(id);
     const recipients = await prisma.campaignRecipient.findMany({
-      where: { campaignId: id },
+      where: { campaignId: id, runGeneration },
       orderBy: { createdAt: 'asc' },
     });
 
