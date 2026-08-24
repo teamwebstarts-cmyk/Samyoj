@@ -371,6 +371,8 @@ model Organization {
   metaErrorStats                 MetaErrorStat[]
   platformAuditLogs              PlatformAuditLog[]
   outreachLogs                   OutreachLog[]
+  aiCreditBalances               OrgAiCreditBalance[]
+  aiCreditPurchases              AiCreditPurchase[]
 
   planExpiresAt      DateTime? @map("plan_expires_at")
   subscriptionStatus String    @default("active") @map("subscription_status")
@@ -1244,6 +1246,56 @@ model AiUsageLog {
   @@index([organizationId, createdAt])
   @@index([organizationId, whatsappNumberId, createdAt])
   @@map("ai_usage_logs")
+}
+
+model OrgAiCreditBalance {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  pool           String
+  includedUsed   Int      @default(0) @map("included_used")
+  addonBalance   Int      @default(0) @map("addon_balance")
+  periodStart    DateTime @map("period_start")
+  periodEnd      DateTime @map("period_end")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, pool])
+  @@index([organizationId])
+  @@map("org_ai_credit_balances")
+}
+
+model AiCreditPurchase {
+  id              String   @id @default(uuid())
+  organizationId  String   @map("organization_id")
+  pool            String
+  skuId           String   @map("sku_id")
+  purchaseType    String   @map("purchase_type")
+  quantity        Int      @default(1)
+  creditsGranted  Int      @map("credits_granted")
+  amountPaise     Int      @map("amount_paise")
+  paymentOrderId  String?  @map("payment_order_id")
+  razorpayAddonId String?  @map("razorpay_addon_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@map("ai_credit_purchases")
+}
+
+model AiCreditDeduction {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  pool           String
+  amount         Int
+  usageLogId     String?  @unique @map("usage_log_id")
+  callId         String?  @unique @map("call_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, createdAt])
+  @@map("ai_credit_deductions")
 }
 
 model KnowledgeBaseItem {
