@@ -43,6 +43,10 @@ export async function createChatCompletion(
   }
 
   await checkOrgTokenQuota(options.organizationId);
+  if (!options.skipCreditCheck) {
+    const { assertAiCreditsAvailable } = await import('../billing/ai-credits/service');
+    await assertAiCreditsAvailable(options.organizationId, 'chat', 1);
+  }
 
   const cfg = await resolveAiConfig(options.organizationId);
   if (!cfg) {
@@ -86,6 +90,10 @@ export async function* streamChatCompletion(
   }
 
   await checkOrgTokenQuota(options.organizationId);
+  if (!options.skipCreditCheck) {
+    const { assertAiCreditsAvailable } = await import('../billing/ai-credits/service');
+    await assertAiCreditsAvailable(options.organizationId, 'chat', 1);
+  }
 
   const cfg = await resolveAiConfig(options.organizationId);
   if (!cfg || cfg.provider !== 'sarvam') {

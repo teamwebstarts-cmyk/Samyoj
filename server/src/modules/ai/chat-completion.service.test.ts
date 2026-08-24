@@ -33,6 +33,10 @@ vi.mock('./sarvam-chat.service', () => ({
   streamSarvamChatCompletion: vi.fn(),
 }));
 
+vi.mock('../billing/ai-credits/service', () => ({
+  assertAiCreditsAvailable: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('../../utils/logger', () => ({
   default: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
   createModuleLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
