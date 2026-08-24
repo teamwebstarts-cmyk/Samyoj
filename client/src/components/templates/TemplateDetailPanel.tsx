@@ -109,11 +109,11 @@ export default function TemplateDetailPanel({
   const handleTestSend = async () => {
     if (!testPhone.trim()) return;
     if (templateNeedsCoupon(template) && !couponCode.trim()) {
-      toastError('Add the copy-code / coupon for this template.');
+      toastError('Add the coupon code.');
       return;
     }
     if (templateDynamicUrlButtons(template).some((_, index) => !buttonUrlSuffixes[index]?.trim())) {
-      toastError('Add the website link suffix for each trackable button.');
+      toastError('Add the unique ending for the button link.');
       return;
     }
     setTesting(true);

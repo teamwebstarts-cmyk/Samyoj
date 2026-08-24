@@ -1797,6 +1797,10 @@
     grid-row: 2;
   }
 
+  .campaign-review-audience-card--collapsed .campaign-review-section-header {
+    border-bottom: 0;
+  }
+
   .campaign-review-schedule-card {
     grid-column: 1;
     grid-row: 3;
@@ -2346,6 +2350,31 @@
   .campaigns-list-shell,
   .dark .campaigns-list-shell {
     box-shadow: none;
+  }
+
+  .campaign-table .campaign-col-name {
+    width: 32%;
+  }
+
+  .campaign-table .campaign-col-status {
+    width: 14%;
+  }
+
+  .campaign-table .campaign-col-audience {
+    width: 16%;
+  }
+
+  .campaign-table .campaign-col-progress {
+    width: 16%;
+  }
+
+  .campaign-table .campaign-col-actions {
+    width: 11.5rem;
+  }
+
+  .campaign-table .campaign-table-actions {
+    flex-wrap: nowrap;
+    white-space: nowrap;
   }
 
   @media (max-width: 767px) {

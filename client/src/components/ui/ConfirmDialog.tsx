@@ -1,7 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { LucideIcon } from 'lucide-react';
-import { AlertTriangle, CheckCircle2, Info, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Info, Send, XCircle } from 'lucide-react';
 import AppButton from './AppButton';
 
 interface ConfirmDialogProps {
@@ -10,13 +10,15 @@ interface ConfirmDialogProps {
   onConfirm: () => void;
   title: string;
   description?: string;
-  /** Prominent value shown in a card — e.g. a phone number */
+  /** Prominent value shown in a card — e.g. a phone number or template name */
   highlight?: string;
+  /** Label above the highlight card */
+  highlightLabel?: string;
   /** Short impact bullets shown below the description */
   details?: string[];
   confirmLabel?: string;
   cancelLabel?: string;
-  variant?: 'danger' | 'default';
+  variant?: 'danger' | 'default' | 'send';
   loading?: boolean;
   icon?: LucideIcon;
   children?: ReactNode;
@@ -34,6 +36,7 @@ const variantStyles = {
     detailBg: 'border-red-200/50 bg-red-50/40 dark:border-red-500/15 dark:bg-red-950/20',
     highlightBg: 'border-red-200/60 bg-red-50/50 dark:border-red-500/20 dark:bg-red-950/25',
     defaultIcon: XCircle,
+    badgeText: 'Confirm action',
   },
   default: {
     orb: 'from-amber-400/12 via-orange-300/8 to-transparent',
@@ -46,6 +49,20 @@ const variantStyles = {
     detailBg: 'border-amber-200/50 bg-amber-50/40 dark:border-amber-500/15 dark:bg-amber-950/20',
     highlightBg: 'border-amber-200/60 bg-amber-50/50 dark:border-amber-500/20 dark:bg-amber-950/25',
     defaultIcon: AlertTriangle,
+    badgeText: 'Please confirm',
+  },
+  send: {
+    orb: 'from-emerald-400/12 via-teal-300/8 to-transparent',
+    mesh: 'from-emerald-400/[0.03] via-transparent to-transparent',
+    iconGradient: 'from-emerald-500 via-teal-500 to-emerald-600',
+    iconGlow: 'from-emerald-400/20 to-transparent',
+    iconRing: 'ring-emerald-200/60 dark:ring-emerald-500/20',
+    badge: 'bg-emerald-500/10 text-emerald-800 ring-emerald-500/20 dark:bg-emerald-500/15 dark:text-emerald-300',
+    detailIcon: 'text-emerald-600 dark:text-emerald-400',
+    detailBg: 'border-emerald-200/50 bg-emerald-50/40 dark:border-emerald-500/15 dark:bg-emerald-950/20',
+    highlightBg: 'border-emerald-200/60 bg-emerald-50/50 dark:border-emerald-500/20 dark:bg-emerald-950/25',
+    defaultIcon: Send,
+    badgeText: 'Start broadcast',
   },
 } as const;
 
@@ -56,6 +73,7 @@ export default function ConfirmDialog({
   title,
   description,
   highlight,
+  highlightLabel = 'Selected number',
   details,
   confirmLabel = 'Confirm',
   cancelLabel = 'Cancel',
@@ -111,7 +129,9 @@ export default function ConfirmDialog({
 
       <div
         ref={dialogRef}
-        className="relative w-full max-w-[420px] overflow-hidden rounded-[1.35rem] border border-theme-border bg-theme-surface shadow-[0_24px_80px_rgba(15,23,42,0.18)] dark:shadow-[0_24px_80px_rgba(0,0,0,0.45)]"
+        className={`relative w-full overflow-hidden rounded-[1.35rem] border border-theme-border bg-theme-surface shadow-[0_24px_80px_rgba(15,23,42,0.18)] dark:shadow-[0_24px_80px_rgba(0,0,0,0.45)] ${
+          details && details.length > 0 ? 'max-w-[460px]' : 'max-w-[420px]'
+        }`}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="confirm-dialog-title"
@@ -144,7 +164,7 @@ export default function ConfirmDialog({
             <span
               className={`mt-4 inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.12em] ring-1 ${styles.badge}`}
             >
-              {variant === 'danger' ? 'Confirm action' : 'Please confirm'}
+              {styles.badgeText}
             </span>
 
             <h2 id="confirm-dialog-title" className="mt-3 text-lg font-extrabold tracking-tight text-theme-fg sm:text-xl">
@@ -162,8 +182,8 @@ export default function ConfirmDialog({
             <div
               className={`mt-5 rounded-2xl border px-4 py-3.5 text-center ${styles.highlightBg}`}
             >
-              <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-theme-muted">Selected number</p>
-              <p className="mt-1 font-mono text-[17px] font-extrabold tracking-tight text-theme-fg sm:text-[18px]">
+              <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-theme-muted">{highlightLabel}</p>
+              <p className="mt-1 break-words text-[15px] font-extrabold tracking-tight text-theme-fg sm:text-[16px]">
                 {highlight}
               </p>
             </div>
@@ -203,6 +223,7 @@ export default function ConfirmDialog({
               variant={variant === 'danger' ? 'danger' : 'primary'}
               onClick={onConfirm}
               loading={loading}
+              disabled={loading}
               fullWidth
               className="sm:min-w-[108px] sm:flex-none"
             >

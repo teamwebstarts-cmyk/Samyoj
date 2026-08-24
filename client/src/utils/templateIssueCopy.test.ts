@@ -35,32 +35,31 @@ describe('explainTemplateIssue', () => {
     const unresolved = explainTemplateIssue(
       'body contains unresolved placeholders; provide recipient data before sending',
     );
-    expect(unresolved.title).not.toMatch(/personal field/i);
-    expect(unresolved.detail).toMatch(/unresolved placeholders/i);
+    expect(unresolved.title).toMatch(/message fields are still empty/i);
+    expect(unresolved.detail.toLowerCase()).not.toMatch(/placeholder/i);
 
     const campaignSample = explainTemplateIssue(
       'Could not start campaign: missing sample value for audience preview',
     );
-    expect(campaignSample.title).not.toMatch(/personal field/i);
-    expect(campaignSample.detail).toMatch(/sample value/i);
+    expect(campaignSample.title).toMatch(/example value/i);
 
     const campaignSite = explainTemplateIssue(
       'Campaign landing page must be a real website on your domain',
     );
-    expect(campaignSite.title).not.toMatch(/real website/i);
-    expect(campaignSite.detail).toMatch(/landing page/i);
+    expect(campaignSite.title).toMatch(/live website/i);
+    expect(campaignSite.detail.toLowerCase()).not.toMatch(/domain/i);
 
     const campaignPhone = explainTemplateIssue('Add at least one valid phone number');
-    expect(campaignPhone.title).not.toMatch(/call button/i);
-    expect(campaignPhone.detail).toMatch(/valid phone/i);
+    expect(campaignPhone.title).toBe('Add at least one valid phone number');
+    expect(campaignPhone.detail).toBe('');
 
     const campaignExists = explainTemplateIssue('A campaign with this name already exists');
-    expect(campaignExists.title).not.toMatch(/already in use/i);
-    expect(campaignExists.detail).toMatch(/campaign/i);
+    expect(campaignExists.title).toBe('A campaign with this name already exists');
+    expect(campaignExists.detail).toBe('');
 
     const genericHttp = explainTemplateIssue('Webhook URL is not http compatible');
-    expect(genericHttp.title).not.toMatch(/website link/i);
-    expect(genericHttp.detail).toMatch(/not http/i);
+    expect(genericHttp.title).toMatch(/isn.?t ready/i);
+    expect(genericHttp.detail.toLowerCase()).not.toMatch(/webhook/i);
   });
 
   it('still explains template library phone, name, and http button errors', () => {
@@ -78,5 +77,17 @@ describe('explainTemplateIssue', () => {
       'This website link isn’t secure enough. Use an address that starts with https://, not http://',
     );
     expect(http.title).toMatch(/website link/i);
+  });
+
+  it('explains campaign button-link and coupon messages without jargon', () => {
+    const uniqueEnding = explainTemplateIssue('Add the unique ending for the button link.');
+    expect(uniqueEnding.title).toMatch(/button link/i);
+    expect(uniqueEnding.example).toBe('order-123');
+    expect(uniqueEnding.detail.toLowerCase()).not.toContain('localhost');
+    expect(uniqueEnding.detail.toLowerCase()).not.toContain('suffix');
+
+    const coupon = explainTemplateIssue('Add the coupon code.');
+    expect(coupon.title).toMatch(/coupon code/i);
+    expect(coupon.example).toBe('SAVE20');
   });
 });

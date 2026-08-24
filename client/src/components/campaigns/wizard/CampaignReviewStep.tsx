@@ -1,11 +1,12 @@
 import type { Dispatch, SetStateAction } from 'react';
+import { useState } from 'react';
 import {
   CalendarClock,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   Edit3,
   Gift,
-  Globe2,
   MessageCircle,
   MoreVertical,
   Users,
@@ -14,7 +15,7 @@ import AppButton from '../../ui/AppButton';
 import { Link } from 'react-router-dom';
 import { WhatsAppTemplatePreview } from '../../inbox/WhatsAppPreview';
 import { getFilledTemplatePreview } from '../campaignPreviewUtils';
-import { humanizeParamValue, previewParams } from '../../../utils/templateForm';
+import { humanizeParamValue, previewParams, templateDynamicUrlButtons } from '../../../utils/templateForm';
 import { messagingConsent } from '../../../utils/plainLanguage';
 import type { MessageTemplate } from '../../../types';
 import type { CampaignWizardForm } from './campaignWizardModel';
@@ -47,6 +48,7 @@ export default function CampaignReviewStep({
   onEditMessage,
   onEditAudience,
 }: CampaignReviewStepProps) {
+  const [audienceOpen, setAudienceOpen] = useState(false);
   const filledPreview = selectedTemplate
     ? {
         ...getFilledTemplatePreview(selectedTemplate, {
@@ -71,18 +73,24 @@ export default function CampaignReviewStep({
   const subscribedCount = audienceMetrics?.optedIn ?? includedCount;
   const estimatedFailed = audienceMetrics?.estimatedFailed;
   const estimatedReach = audienceMetrics?.estimatedReach ?? subscribedCount;
+  const audienceTotal = audienceMetrics?.total ?? includedCount;
+  const dynamicUrlButtons = selectedTemplate ? templateDynamicUrlButtons(selectedTemplate) : [];
+  const bodyOffset = form.headerParams.length;
   const variableRows = [
     ...form.headerParams.map((value, index) => ({
-      label: `Header variable ${index + 1}`,
+      label: `Variable ${index + 1}`,
       value: humanizeParamValue(value),
     })),
     ...form.bodyParams.map((value, index) => ({
-      label: `Body variable ${index + 1}`,
+      label: `Variable ${bodyOffset + index + 1}`,
       value: humanizeParamValue(value),
     })),
-    ...(form.couponCode.trim() ? [{ label: 'Copy code', value: form.couponCode.trim() }] : []),
+    ...(form.couponCode.trim() ? [{ label: 'Coupon', value: form.couponCode.trim() }] : []),
     ...form.buttonUrlSuffixes
-      .map((value, index) => ({ label: `Link suffix ${index + 1}`, value: value.trim() }))
+      .map((value, index) => ({
+        label: dynamicUrlButtons[index]?.text?.trim() || 'Button link',
+        value: value.trim(),
+      }))
       .filter((row) => row.value),
   ];
 
@@ -142,20 +150,7 @@ export default function CampaignReviewStep({
                             <span className="campaign-review-category-badge">{selectedTemplate.category}</span>
                           )}
                         </div>
-                        <p className="mt-0.5 truncate text-[9px] font-medium text-slate-400">
-                          {selectedTemplate?.name || 'Choose an approved template'}
-                        </p>
                       </div>
-                    </div>
-                    <div className="mt-3 flex items-center gap-3 text-[9px] font-semibold text-slate-500 dark:text-slate-400">
-                      <span className="inline-flex items-center gap-1">
-                        <Globe2 className="h-3 w-3 text-slate-400" />
-                        {selectedTemplate?.language || '—'}
-                      </span>
-                      <span className="inline-flex items-center gap-1">
-                        <CheckCircle2 className="h-3 w-3 text-emerald-500" />
-                        Approved
-                      </span>
                     </div>
                   </div>
 
@@ -163,8 +158,8 @@ export default function CampaignReviewStep({
                     <p className="campaign-review-eyebrow">Template variables</p>
                     {variableRows.length ? (
                       <div className="mt-2 space-y-1.5">
-                        {variableRows.map((row) => (
-                          <div key={row.label} className="flex items-center justify-between gap-2 text-[9px]">
+                        {variableRows.map((row, index) => (
+                          <div key={`${row.label}-${index}`} className="flex items-center justify-between gap-2 text-[9px]">
                             <span className="truncate font-medium text-slate-500">{row.label}</span>
                             <span className="max-w-[52%] truncate text-right font-extrabold text-slate-800 dark:text-slate-200">
                               {row.value || 'Not filled'}
@@ -219,55 +214,70 @@ export default function CampaignReviewStep({
                 </div>
               </section>
 
-              <section className="campaign-review-section campaign-review-audience-card">
+              <section className={`campaign-review-section campaign-review-audience-card ${audienceOpen ? '' : 'campaign-review-audience-card--collapsed'}`}>
                 <div className="campaign-review-section-header">
-                  <div className="flex items-center gap-2">
+                  <div className="flex min-w-0 items-center gap-2">
                     <span className="campaign-review-icon campaign-review-icon--emerald">
                       <Users className="h-3.5 w-3.5" strokeWidth={2.25} />
                     </span>
                     <h3>Audience</h3>
-                  </div>
-                  <button type="button" onClick={onEditAudience} className="campaign-review-link">
-                    View details <span aria-hidden="true">⌄</span>
-                  </button>
-                </div>
-                <div className="campaign-review-audience-grid">
-                  <div className="space-y-1.5">
-                    <p className="text-[10px] font-extrabold text-slate-800 dark:text-slate-200">{audienceLabel}</p>
-                    <p className="text-[9px] font-medium text-slate-500">Subscribed contacts</p>
-                    <p className="text-[9px] font-medium text-slate-500">Estimated failed</p>
-                    <p className="text-[9px] font-medium text-slate-500">Estimated to reach</p>
-                  </div>
-                  <div className="space-y-1.5 text-right">
-                    <span className="campaign-review-count-badge">
-                      {(audienceMetrics?.total ?? includedCount) == null
-                        ? '—'
-                        : (audienceMetrics?.total ?? includedCount)?.toLocaleString()}
+                    <span className="truncate text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                      {audienceLabel}
+                      {subscribedCount != null ? ` · ${subscribedCount.toLocaleString()}` : ''}
                     </span>
-                    <p className="text-[10px] font-extrabold text-slate-700 dark:text-slate-200">
-                      {subscribedCount == null ? 'Checking…' : subscribedCount.toLocaleString()}
-                    </p>
-                    <p className="text-[10px] font-extrabold text-slate-600 dark:text-slate-300">
-                      {estimatedFailed == null ? '—' : `~${estimatedFailed.toLocaleString()} (1%)`}
-                    </p>
-                    <p className="text-[10px] font-extrabold text-emerald-600 dark:text-emerald-300">
-                      {estimatedReach == null ? '—' : `~${estimatedReach.toLocaleString()}`}
-                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button type="button" onClick={onEditAudience} className="campaign-review-link">
+                      Change
+                    </button>
+                    <button
+                      type="button"
+                      aria-expanded={audienceOpen}
+                      aria-controls="campaign-review-audience-details"
+                      onClick={() => setAudienceOpen((open) => !open)}
+                      className="campaign-review-link"
+                    >
+                      {audienceOpen ? 'Hide' : 'Details'}
+                      <ChevronDown className={`h-3 w-3 transition ${audienceOpen ? 'rotate-180' : ''}`} />
+                    </button>
                   </div>
                 </div>
-                {excludedCount > 0 && (
-                  <p className="mt-2 text-[9px] font-semibold leading-relaxed text-amber-700 dark:text-amber-300">
-                    {excludedCount.toLocaleString()} contact{excludedCount === 1 ? '' : 's'}{' '}
-                    {excludedCount === 1 ? 'is' : 'are'} not subscribed to campaigns. Inbox chat
-                    alone does not subscribe someone.{' '}
-                    <Link to="/contacts" className="font-extrabold underline underline-offset-2">
-                      Open Contacts
-                    </Link>{' '}
-                    and turn on {messagingConsent.allowCampaignMessages}.
-                    {includedCount != null && includedCount > 0
-                      ? ' The others will still be sent.'
-                      : ''}
-                  </p>
+                {audienceOpen && (
+                  <>
+                    <div id="campaign-review-audience-details" className="campaign-review-audience-grid">
+                      <div className="space-y-1.5">
+                        <p className="text-[9px] font-medium text-slate-500">Contacts</p>
+                        <p className="text-[9px] font-medium text-slate-500">Subscribed</p>
+                        <p className="text-[9px] font-medium text-slate-500">Estimated failed</p>
+                        <p className="text-[9px] font-medium text-slate-500">Estimated to reach</p>
+                      </div>
+                      <div className="space-y-1.5 text-right">
+                        <span className="campaign-review-count-badge">
+                          {audienceTotal == null ? '—' : audienceTotal.toLocaleString()}
+                        </span>
+                        <p className="text-[10px] font-extrabold text-slate-700 dark:text-slate-200">
+                          {subscribedCount == null ? 'Checking…' : subscribedCount.toLocaleString()}
+                        </p>
+                        <p className="text-[10px] font-extrabold text-slate-600 dark:text-slate-300">
+                          {estimatedFailed == null ? '—' : `~${estimatedFailed.toLocaleString()} (1%)`}
+                        </p>
+                        <p className="text-[10px] font-extrabold text-emerald-600 dark:text-emerald-300">
+                          {estimatedReach == null ? '—' : `~${estimatedReach.toLocaleString()}`}
+                        </p>
+                      </div>
+                    </div>
+                    {excludedCount > 0 && (
+                      <p className="px-3 pb-3 text-[9px] font-semibold leading-relaxed text-amber-700 dark:text-amber-300">
+                        {excludedCount.toLocaleString()} contact{excludedCount === 1 ? '' : 's'}{' '}
+                        {excludedCount === 1 ? 'is' : 'are'} not subscribed to campaigns.{' '}
+                        <Link to="/contacts" className="font-extrabold underline underline-offset-2">
+                          Open Contacts
+                        </Link>{' '}
+                        to subscribe them.
+                        {includedCount != null && includedCount > 0 ? ' The others will still be sent.' : ''}
+                      </p>
+                    )}
+                  </>
                 )}
               </section>
 
@@ -282,8 +292,8 @@ export default function CampaignReviewStep({
               </div>
               <div className="space-y-1.5">
                   {[
-                    { value: false, title: 'Send now', description: 'Campaign will start sending immediately.' },
-                    { value: true, title: 'Schedule for later', description: 'Choose a date and time to schedule your campaign.' },
+                    { value: false, title: 'Send now', description: 'Starts immediately.' },
+                    { value: true, title: 'Schedule', description: 'Pick a date and time.' },
                   ].map((option) => (
                     <label
                       key={option.title}
@@ -295,7 +305,15 @@ export default function CampaignReviewStep({
                         type="radio"
                         name="send-timing"
                         checked={form.scheduleEnabled === option.value}
-                        onChange={() => setForm((previous) => ({ ...previous, scheduleEnabled: option.value }))}
+                        onChange={() =>
+                          setForm((previous) => ({
+                            ...previous,
+                            scheduleEnabled: option.value,
+                            scheduledAt: option.value
+                              ? previous.scheduledAt || minScheduleDateTime
+                              : previous.scheduledAt,
+                          }))
+                        }
                         className="mt-0.5 h-3.5 w-3.5 border-slate-300 text-emerald-600 focus:ring-emerald-500/25"
                       />
                       <span>

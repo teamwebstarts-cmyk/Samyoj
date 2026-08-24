@@ -12,7 +12,6 @@ import {
   RefreshCw,
   Send,
   Square,
-  TestTube2,
   Users,
 } from 'lucide-react';
 import CampaignAnalyticsPanel from '../components/campaigns/CampaignAnalyticsPanel';
@@ -22,7 +21,6 @@ import CampaignHero from '../components/campaigns/CampaignHero';
 import CampaignTable, { CampaignListPagination, type CampaignSortKey } from '../components/campaigns/CampaignTable';
 import CampaignCard from '../components/campaigns/CampaignCard';
 import CampaignDetailHeader from '../components/campaigns/CampaignDetailHeader';
-import CampaignQuotaBanner from '../components/campaigns/CampaignQuotaBanner';
 import CampaignRecipientTable from '../components/campaigns/CampaignRecipientTable';
 import CampaignRescheduleDialog from '../components/campaigns/CampaignRescheduleDialog';
 import type { CampaignReschedulePayload } from '../components/campaigns/CampaignRescheduleDialog';
@@ -36,7 +34,6 @@ import {
 } from '../components/campaigns/campaignPreviewUtils';
 import {
   ModalCallout,
-  ModalPanel,
   ModalPreviewCard,
   ModalSection,
 } from '../components/ui/modalUi';
@@ -45,6 +42,10 @@ import AppInput from '../components/ui/AppInput';
 import AppSelect from '../components/ui/AppSelect';
 import EmptyState from '../components/ui/EmptyState';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
+import {
+  buildCampaignSendConfirm,
+  getCampaignSendErrorMessage,
+} from '../components/campaigns/campaignSendConfirm';
 import ListToolbar from '../components/ui/ListToolbar';
 import ListLayoutSkeleton from '../components/ui/ListLayoutSkeleton';
 import PageShell from '../components/ui/PageShell';
@@ -262,15 +263,19 @@ export default function CampaignsPage() {
   activeNumberIdRef.current = activeNumber?.id ?? null;
   const [activeStep, setActiveStep] = useState(0);
   const [stageError, setStageError] = useState<string | null>(null);
-  const [detailSection, setDetailSection] = useState<'overview' | 'recipients' | 'errors'>('overview');
+  const [detailSection, setDetailSection] = useState<'overview' | 'failed'>('overview');
   const [audiencePreviewCount, setAudiencePreviewCount] = useState<number | null>(null);
   const [confirmState, setConfirmState] = useState<{
     title: string;
     description: string;
     confirmLabel: string;
-    variant: 'danger' | 'default';
+    variant: 'danger' | 'default' | 'send';
+    highlight?: string;
+    highlightLabel?: string;
+    details?: string[];
     onConfirm: () => void | Promise<void>;
   } | null>(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
   const [rescheduleTarget, setRescheduleTarget] = useState<Campaign | null>(null);
   const [rescheduleSaving, setRescheduleSaving] = useState(false);
 
@@ -497,6 +502,16 @@ export default function CampaignsPage() {
   }, [viewOnly, editing?.id, loadDetailExtras]);
 
   useEffect(() => {
+    if (!viewOnly) return;
+    if (detailSection === 'failed') {
+      setRecipientStatusFilter('FAILED');
+      setRecipientPage(1);
+    } else {
+      setRecipientStatusFilter('');
+    }
+  }, [detailSection, viewOnly]);
+
+  useEffect(() => {
     if (!selectedTemplate || viewOnly) return;
     const bodyText = selectedTemplate.body || selectedTemplate.components?.find((c) => c.type === 'BODY')?.text;
     const headerText = selectedTemplate.header || selectedTemplate.components?.find((c) => c.type === 'HEADER')?.text;
@@ -608,21 +623,25 @@ export default function CampaignsPage() {
         setEditing(full);
         setForm(campaignToForm(full, templates));
         setViewOnly(true);
+        const sendConfirm = buildCampaignSendConfirm({
+          campaignName: full.name,
+          templateName: full.templateName,
+          recipientCount: full.totalContacts,
+        });
         setConfirmState({
-          title: `Send “${full.name}” to ${full.totalContacts.toLocaleString()} recipients?`,
-          description: `This will start sending “${full.name}” to the selected audience. This action cannot be undone.`,
-          confirmLabel: `Send to ${full.totalContacts.toLocaleString()}`,
-          variant: 'default',
+          ...sendConfirm,
           onConfirm: async () => {
+            setConfirmLoading(true);
             try {
               await campaignApi.send(campaignId as string);
-              toastSuccess('Campaign sent');
+              toastSuccess('Campaign queued — track delivery on the Campaigns page');
               setSlideOpen(false);
               loadCampaigns(false);
-            } catch (err: unknown) {
-              toastError(getErrMsg(err, 'Campaign could not be sent. Check the campaign and try again.'));
-            } finally {
               setConfirmState(null);
+            } catch (err: unknown) {
+              toastError(getCampaignSendErrorMessage(err, 'Campaign could not be sent. Check the campaign and try again.'));
+            } finally {
+              setConfirmLoading(false);
             }
           },
         });
@@ -652,10 +671,10 @@ export default function CampaignsPage() {
       if (!form.name.trim()) return 'Add a campaign name.';
       if (!form.templateName) return 'Choose an approved template.';
       if (form.bodyParams.some((value) => !value.trim()) || form.headerParams.some((value) => !value.trim())) {
-        return 'Fill in every template variable before continuing.';
+        return 'Fill in every message variable.';
       }
       if (selectedTemplate && templateNeedsHeaderMedia(selectedTemplate) && !form.headerMediaUrl.trim()) {
-        return 'Add the required header media URL before continuing.';
+        return 'Add a photo, video, or file for the header.';
       }
     }
 
@@ -761,21 +780,25 @@ export default function CampaignsPage() {
   const handleSend = async (id: string) => {
     if (!canManageTeam) return;
     const campaign = campaigns.find((c) => c.id === id) || (editing?.id === id ? editing : null);
-    const count = campaign?.totalContacts ?? 0;
+    if (!campaign) return;
+    const sendConfirm = buildCampaignSendConfirm({
+      campaignName: campaign.name,
+      templateName: campaign.templateName,
+      recipientCount: campaign.totalContacts ?? 0,
+    });
     setConfirmState({
-      title: `Send “${campaign?.name || 'this campaign'}” to ${count.toLocaleString()} recipients?`,
-      description: `This will start sending “${campaign?.name || 'this campaign'}” to the selected audience. This action cannot be undone.`,
-      confirmLabel: `Send to ${count.toLocaleString()}`,
-      variant: 'default',
+      ...sendConfirm,
       onConfirm: async () => {
+        setConfirmLoading(true);
         try {
           await campaignApi.send(id);
           loadCampaigns(false);
-          toastSuccess('Campaign sent');
-        } catch (err: unknown) {
-          toastError(getErrMsg(err, 'Campaign could not be sent. Check the campaign and try again.'));
-        } finally {
+          toastSuccess('Campaign queued — track delivery on the Campaigns page');
           setConfirmState(null);
+        } catch (err: unknown) {
+          toastError(getCampaignSendErrorMessage(err, 'Campaign could not be sent. Check the campaign and try again.'));
+        } finally {
+          setConfirmLoading(false);
         }
       },
     });
@@ -804,19 +827,6 @@ export default function CampaignsPage() {
     } catch (err: unknown) {
       toastError(getErrMsg(err, fallback));
     }
-  };
-
-  const handleTestSend = async () => {
-    if (!editing?.id) return;
-    const lines = validatePhoneLines([form.testPhone]);
-    if (!lines.ok) {
-      toastError(lines.errors.join('\n'));
-      return;
-    }
-    await handleAction(
-      () => campaignApi.test(editing.id, lines.phones[0]),
-      'Test message sent'
-    );
   };
 
   const handleExport = async (id: string, name: string) => {
@@ -881,8 +891,6 @@ export default function CampaignsPage() {
             { label: 'Running', value: lifecycleSummary.running, tone: 'running' },
           ]}
         />
-
-        <CampaignQuotaBanner />
 
         {!canManageTeam && (
           <div className="rounded-xl border border-amber-200/70 bg-amber-50/80 px-3.5 py-2.5 text-[12px] font-medium text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
@@ -1130,7 +1138,7 @@ export default function CampaignsPage() {
         title={viewOnly ? editing?.name || 'Campaign details' : editing ? 'Edit campaign' : 'New campaign'}
         subtitle={
           viewOnly
-          ? 'Track delivery and manage this campaign'
+            ? 'Delivery summary'
             : 'Message, audience, timing, and review'
         }
         size="xl"
@@ -1246,45 +1254,81 @@ export default function CampaignsPage() {
         }
       >
         {viewOnly && editing ? (
-          <div className="space-y-5">
+          <div className="space-y-4">
             <CampaignDetailHeader campaign={editing} />
             <div className="sr-only" aria-live="polite" aria-atomic="true">
               {editing.name} is {editing.status.toLowerCase()}: {editing.sentCount.toLocaleString()} of {editing.totalContacts.toLocaleString()} recipients sent.
             </div>
 
-            <nav aria-label="Campaign detail sections" role="tablist" className="grid grid-cols-3 gap-1 rounded-xl border border-theme-border bg-theme-subtle/70 p-1">
-              {[
-                ['overview', 'Overview'],
-                ['recipients', `Recipients (${editing.totalContacts.toLocaleString()})`],
-                ['errors', `Errors (${editing.failedCount.toLocaleString()})`],
-              ].map(([value, label]) => (
-                <button key={value} type="button" role="tab" aria-selected={detailSection === value} onClick={() => setDetailSection(value as typeof detailSection)} className={`min-h-11 rounded-lg px-2 py-2 text-[11px] font-bold transition focus:outline-none focus:ring-2 focus:ring-violet-500/40 ${detailSection === value ? 'bg-theme-surface text-theme-fg shadow-sm' : 'text-theme-muted hover:text-theme-secondary'}`}>
-                  {label}
-                </button>
-              ))}
-            </nav>
+            {editing.failedCount > 0 && (
+              <nav
+                aria-label="Campaign detail sections"
+                role="tablist"
+                className="grid grid-cols-2 gap-1 rounded-xl border border-slate-200 bg-slate-50/80 p-1 dark:border-slate-800 dark:bg-slate-900/50"
+              >
+                {[
+                  ['overview', 'Summary'],
+                  ['failed', `Failed (${editing.failedCount.toLocaleString()})`],
+                ].map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="tab"
+                    aria-selected={detailSection === value}
+                    onClick={() => setDetailSection(value as typeof detailSection)}
+                    className={`min-h-10 rounded-lg px-2 py-2 text-[11px] font-bold transition focus:outline-none focus:ring-2 focus:ring-emerald-500/30 ${
+                      detailSection === value
+                        ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-950 dark:text-white'
+                        : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </nav>
+            )}
 
             {detailSection === 'overview' && (
+              <CampaignAnalyticsPanel
+                analytics={analytics}
+                loading={analyticsLoading}
+                error={analyticsError}
+                onRetryFailed={() =>
+                  editing &&
+                  handleAction(
+                    () => campaignApi.retryFailed(editing.id),
+                    'Failed messages queued for retry',
+                    'Could not retry failed messages. Refresh and try again.',
+                  )
+                }
+              />
+            )}
+            {detailSection === 'failed' && editing.failedCount > 0 && (
               <>
                 <CampaignAnalyticsPanel
                   analytics={analytics}
                   loading={analyticsLoading}
                   error={analyticsError}
-                  onViewFailures={() => setDetailSection('errors')}
+                  section="errors"
+                  onRetryFailed={() =>
+                    editing &&
+                    handleAction(
+                      () => campaignApi.retryFailed(editing.id),
+                      'Failed messages queued for retry',
+                      'Could not retry failed messages. Refresh and try again.',
+                    )
+                  }
                 />
-                <ModalPanel title="Preview and test send" icon={TestTube2} accent="emerald">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-                    <AppInput id="test-phone" label="Phone number" placeholder={PHONE_PLACEHOLDER} value={form.testPhone} onChange={(e) => setForm({ ...form, testPhone: e.target.value })} className="flex-1" />
-                <AppButton type="button" variant="secondary" icon={<TestTube2 size={14} />} onClick={handleTestSend}>Send test message</AppButton>
-                  </div>
-                </ModalPanel>
+                <CampaignRecipientTable
+                  recipients={recipients}
+                  total={recipientTotal}
+                  page={recipientPage}
+                  pageSize={50}
+                  onPageChange={setRecipientPage}
+                  statusFilter="FAILED"
+                  compact
+                />
               </>
-            )}
-            {detailSection === 'recipients' && (
-              <CampaignRecipientTable recipients={recipients} total={recipientTotal} page={recipientPage} pageSize={50} onPageChange={setRecipientPage} statusFilter={recipientStatusFilter} onStatusFilterChange={(s) => { setRecipientStatusFilter(s); setRecipientPage(1); }} />
-            )}
-            {detailSection === 'errors' && (
-              <CampaignAnalyticsPanel analytics={analytics} loading={analyticsLoading} error={analyticsError} section="errors" onViewFailures={() => setDetailSection('recipients')} onRetryFailed={() => editing && handleAction(() => campaignApi.retryFailed(editing.id), 'Failed campaign messages queued for retry', 'Could not retry failed messages. Refresh and try again.')} />
             )}
           </div>
         ) : (
@@ -1547,13 +1591,19 @@ export default function CampaignsPage() {
       />
       <ConfirmDialog
         open={Boolean(confirmState)}
-        onClose={() => setConfirmState(null)}
+        onClose={() => {
+          if (!confirmLoading) setConfirmState(null);
+        }}
         onConfirm={() => void confirmState?.onConfirm()}
         title={confirmState?.title || ''}
         description={confirmState?.description}
+        highlight={confirmState?.highlight}
+        highlightLabel={confirmState?.highlightLabel}
+        details={confirmState?.details}
         confirmLabel={confirmState?.confirmLabel}
         variant={confirmState?.variant}
-        loading={saving}
+        loading={confirmLoading}
+        cancelLabel={confirmState?.variant === 'send' ? 'Not yet' : 'Cancel'}
       />
     </PageShell>
     </InboxGlassTipProvider>

@@ -2,27 +2,16 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
-  CalendarClock,
-  Download,
-  Eye,
-  Pause,
-  Pencil,
-  Play,
-  RefreshCw,
-  Trash2,
   Users,
 } from 'lucide-react';
 import type { Campaign } from '../../types';
-import CampaignActionsMenu from './CampaignActionsMenu';
+import CampaignTableActions from './CampaignTableActions';
 import {
   formatCampaignTimestamp,
-  getCampaignPrimaryAction,
-  getCampaignPrimaryLabel,
   getCampaignProgressDisplay,
   getCampaignRelativeLabel,
   getAudienceLabel,
   getStatusMeta,
-  canRescheduleCampaign,
 } from './campaignUi';
 
 export type CampaignSortKey = 'name' | 'status' | 'totalContacts' | 'progress' | 'createdAt';
@@ -81,9 +70,16 @@ export default function CampaignTable({
   showPagination = true,
 }: CampaignTableProps) {
   return (
-    <div className="overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-0 table-fixed text-sm">
+    <div className="campaign-table overflow-hidden">
+      <div className="min-w-0 overflow-x-auto">
+        <table className="w-full min-w-[52rem] table-fixed text-sm">
+          <colgroup>
+            <col className="campaign-col-name" />
+            <col className="campaign-col-status" />
+            <col className="campaign-col-audience" />
+            <col className="campaign-col-progress" />
+            <col className="campaign-col-actions" />
+          </colgroup>
           <thead>
             <tr className="border-b border-slate-200/80 bg-white dark:border-slate-800 dark:bg-slate-950">
               {sortableHeaders.map((header) => {
@@ -128,26 +124,10 @@ export default function CampaignTable({
               const progress = getCampaignProgressDisplay(campaign);
               const relative = getCampaignRelativeLabel(campaign);
               const timestamp = formatCampaignTimestamp(campaign.createdAt);
-              const editable = campaign.status === 'DRAFT' || campaign.status === 'SCHEDULED';
-              const requestedAction = getCampaignPrimaryAction(campaign.status);
-              const primaryAction =
-                requestedAction === 'edit' && !onEdit
-                  ? 'view'
-                  : requestedAction === 'pause' && !onPause
-                    ? 'view'
-                    : requestedAction === 'resume' && !onResume
-                      ? 'view'
-                      : requestedAction;
-              const primaryLabel = getCampaignPrimaryLabel(campaign, primaryAction);
-              const showDelete = Boolean(onDelete && campaign.status === 'DRAFT');
-              const showExport = Boolean(onExport && (campaign.status === 'COMPLETED' || campaign.status === 'FAILED' || campaign.sentCount > 0));
-              const showRetry = Boolean(onRetry && campaign.status === 'FAILED' && campaign.failedCount > 0);
-              const showSend = Boolean(onSend && editable);
-              const showReschedule = Boolean(onReschedule && canRescheduleCampaign(campaign.status));
 
               return (
                 <tr key={campaign.id} className="border-b border-slate-100 transition hover:bg-slate-50/70 dark:border-slate-800/80 dark:hover:bg-slate-900/40">
-                  <td className="px-4 py-4 align-top">
+                  <td className="px-4 py-3 align-middle">
                     <div className="flex min-w-0 items-start gap-3">
                       <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${meta.tile}`}>
                         <TileIcon className="h-4 w-4" strokeWidth={2.25} />
@@ -164,7 +144,7 @@ export default function CampaignTable({
                     </div>
                   </td>
 
-                  <td className="px-4 py-4 align-top">
+                  <td className="px-4 py-3 align-middle">
                     <span className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[10px] font-bold ring-1 ${meta.badge}`}>
                       <StatusIcon className={`h-3 w-3 ${meta.pulse ? 'animate-pulse' : ''}`} strokeWidth={2.5} />
                       {meta.label}
@@ -172,7 +152,7 @@ export default function CampaignTable({
                     {relative && <p className="mt-1.5 text-[11px] font-medium text-slate-400">{relative}</p>}
                   </td>
 
-                  <td className="px-4 py-4 align-top">
+                  <td className="px-4 py-3 align-middle">
                     <div className="flex items-start gap-1.5">
                       <Users className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" />
                       <div className="min-w-0">
@@ -187,14 +167,14 @@ export default function CampaignTable({
                     </div>
                   </td>
 
-                  <td className="px-4 py-4 align-top">
+                  <td className="px-4 py-3 align-middle">
                     {progress.kind === 'empty' ? (
                       <div className="space-y-2">
                         <p className="text-[13px] font-bold text-slate-400">—</p>
                         <div className="h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800" />
                       </div>
                     ) : (
-                      <div className="min-w-[140px] space-y-1.5">
+                      <div className="space-y-1.5">
                         <div className="flex items-center justify-between gap-2 text-[12px] font-semibold tabular-nums">
                           <span className="font-extrabold text-slate-900 dark:text-white">{progress.percent}%</span>
                           <span className="text-slate-400">{progress.fraction}</span>
@@ -214,121 +194,19 @@ export default function CampaignTable({
                     )}
                   </td>
 
-                  <td className="px-4 py-4 align-top">
-                    <div className="flex items-center justify-end gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          primaryAction === 'edit'
-                            ? onEdit?.(campaign)
-                            : primaryAction === 'pause'
-                              ? onPause?.(campaign)
-                              : primaryAction === 'resume'
-                                ? onResume?.(campaign)
-                                : onView(campaign)
-                        }
-                        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-emerald-200 bg-white px-2.5 text-[11px] font-bold text-emerald-700 shadow-sm transition hover:bg-emerald-50 dark:border-emerald-800 dark:bg-slate-950 dark:text-emerald-300"
-                      >
-                        {primaryAction === 'edit' ? (
-                          <Pencil className="h-3.5 w-3.5" />
-                        ) : primaryAction === 'pause' ? (
-                          <Pause className="h-3.5 w-3.5" />
-                        ) : primaryAction === 'resume' ? (
-                          <Play className="h-3.5 w-3.5" />
-                        ) : (
-                          <Eye className="h-3.5 w-3.5" />
-                        )}
-                        {primaryLabel}
-                      </button>
-
-                      {primaryAction !== 'view' && (
-                        <button
-                          type="button"
-                          onClick={() => onView(campaign)}
-                          aria-label="View campaign"
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"
-                        >
-                          <Eye className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-
-                      {showSend && (
-                        <button
-                          type="button"
-                          onClick={() => onSend?.(campaign)}
-                          aria-label="Send now"
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
-                        >
-                          <Play className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-
-                      {showExport && (
-                        <button
-                          type="button"
-                          onClick={() => onExport?.(campaign)}
-                          aria-label="Download results"
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"
-                        >
-                          <Download className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-
-                      {showRetry && (
-                        <button
-                          type="button"
-                          onClick={() => onRetry?.(campaign)}
-                          aria-label="Retry failed sends"
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"
-                        >
-                          <RefreshCw className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-
-                      {showDelete && (
-                        <button
-                          type="button"
-                          onClick={() => onDelete?.(campaign)}
-                          aria-label="Delete campaign"
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 bg-white text-red-500 transition hover:bg-red-50 dark:border-red-900/50 dark:bg-slate-950"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-
-                      <CampaignActionsMenu>
-                        {editable && onEdit && primaryAction !== 'edit' && (
-                          <button type="button" onClick={() => onEdit(campaign)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-fg hover:bg-theme-subtle">
-                            <Pencil className="h-3.5 w-3.5" /> Edit campaign
-                          </button>
-                        )}
-                        {onPause && campaign.status === 'RUNNING' && primaryAction !== 'pause' && (
-                          <button type="button" onClick={() => onPause(campaign)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-fg hover:bg-theme-subtle">
-                            <Pause className="h-3.5 w-3.5" /> Pause
-                          </button>
-                        )}
-                        {onResume && campaign.status === 'PAUSED' && primaryAction !== 'resume' && (
-                          <button type="button" onClick={() => onResume(campaign)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-fg hover:bg-theme-subtle">
-                            <Play className="h-3.5 w-3.5" /> Resume
-                          </button>
-                        )}
-                        {showExport && (
-                          <button type="button" onClick={() => onExport?.(campaign)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-fg hover:bg-theme-subtle">
-                            <Download className="h-3.5 w-3.5" /> Export results
-                          </button>
-                        )}
-                        {showReschedule && (
-                          <button type="button" onClick={() => onReschedule?.(campaign)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-fg hover:bg-theme-subtle">
-                            <CalendarClock className="h-3.5 w-3.5" /> Reschedule
-                          </button>
-                        )}
-                        {editable && onDelete && !showDelete && (
-                          <button type="button" onClick={() => onDelete(campaign)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30">
-                            <Trash2 className="h-3.5 w-3.5" /> Delete campaign
-                          </button>
-                        )}
-                      </CampaignActionsMenu>
-                    </div>
+                  <td className="px-4 py-3 align-middle">
+                    <CampaignTableActions
+                      campaign={campaign}
+                      onView={onView}
+                      onEdit={onEdit}
+                      onSend={onSend}
+                      onPause={onPause}
+                      onResume={onResume}
+                      onDelete={onDelete}
+                      onExport={onExport}
+                      onRetry={onRetry}
+                      onReschedule={onReschedule}
+                    />
                   </td>
                 </tr>
               );

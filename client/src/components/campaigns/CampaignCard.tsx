@@ -1,26 +1,12 @@
-import {
-  CalendarClock,
-  Download,
-  Eye,
-  Pause,
-  Pencil,
-  Play,
-  RefreshCw,
-  Trash2,
-  Users,
-} from 'lucide-react';
-import AppButton from '../ui/AppButton';
-import CampaignActionsMenu from './CampaignActionsMenu';
+import { Users } from 'lucide-react';
+import CampaignTableActions from './CampaignTableActions';
 import type { Campaign } from '../../types';
 import {
   formatCampaignTimestamp,
-  getCampaignPrimaryAction,
-  getCampaignPrimaryLabel,
   getCampaignProgressDisplay,
   getCampaignRelativeLabel,
   getAudienceLabel,
   getStatusMeta,
-  canRescheduleCampaign,
 } from './campaignUi';
 
 interface CampaignCardProps {
@@ -54,21 +40,6 @@ export default function CampaignCard({
   const progress = getCampaignProgressDisplay(campaign);
   const relative = getCampaignRelativeLabel(campaign);
   const timestamp = formatCampaignTimestamp(campaign.createdAt);
-  const editable = campaign.status === 'DRAFT' || campaign.status === 'SCHEDULED';
-  const requestedAction = getCampaignPrimaryAction(campaign.status);
-  const primaryAction =
-    requestedAction === 'edit' && !onEdit
-      ? 'view'
-      : requestedAction === 'pause' && !onPause
-        ? 'view'
-        : requestedAction === 'resume' && !onResume
-          ? 'view'
-          : requestedAction;
-  const primaryLabel = getCampaignPrimaryLabel(campaign, primaryAction);
-  const showDelete = Boolean(onDelete && campaign.status === 'DRAFT');
-  const showExport = Boolean(onExport && (campaign.status === 'COMPLETED' || campaign.status === 'FAILED' || campaign.sentCount > 0));
-  const showRetry = Boolean(onRetry && campaign.status === 'FAILED' && campaign.failedCount > 0);
-  const showReschedule = Boolean(onReschedule && canRescheduleCampaign(campaign.status));
 
   return (
     <article className="bg-white transition-colors hover:bg-slate-50/80 dark:bg-neutral-950 dark:hover:bg-neutral-900/50">
@@ -134,75 +105,21 @@ export default function CampaignCard({
         </div>
       </div>
 
-      <div className="flex items-center gap-2 border-t border-slate-100 bg-slate-50/40 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-900/30">
-        <AppButton
-          size="sm"
-          className="flex-1"
-          variant="secondary"
-          icon={
-            primaryAction === 'edit' ? (
-              <Pencil size={14} />
-            ) : primaryAction === 'pause' ? (
-              <Pause size={14} />
-            ) : primaryAction === 'resume' ? (
-              <Play size={14} />
-            ) : (
-              <Eye size={14} />
-            )
-          }
-          onClick={
-            primaryAction === 'edit'
-              ? onEdit
-              : primaryAction === 'pause'
-                ? onPause
-                : primaryAction === 'resume'
-                  ? onResume
-                  : onView
-          }
-        >
-          {primaryLabel}
-        </AppButton>
-        {primaryAction !== 'view' && (
-          <AppButton size="sm" variant="secondary" icon={<Eye size={14} />} onClick={onView} />
-        )}
-        {onSend && editable && (
-          <AppButton size="sm" variant="secondary" icon={<Play size={14} />} onClick={onSend} />
-        )}
-        {showExport && (
-          <AppButton size="sm" variant="secondary" icon={<Download size={14} />} onClick={onExport} />
-        )}
-        {showRetry && (
-          <AppButton size="sm" variant="secondary" icon={<RefreshCw size={14} />} onClick={onRetry} />
-        )}
-        {showReschedule && (
-          <AppButton
-            size="sm"
-            variant="secondary"
-            icon={<CalendarClock size={14} />}
-            onClick={onReschedule}
-            aria-label="Reschedule campaign"
+      <div className="flex items-center border-t border-slate-100 bg-slate-50/40 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-900/30">
+        <div className="w-full">
+          <CampaignTableActions
+            campaign={campaign}
+            onView={() => onView()}
+            onEdit={onEdit ? () => onEdit() : undefined}
+            onSend={onSend ? () => onSend() : undefined}
+            onPause={onPause ? () => onPause() : undefined}
+            onResume={onResume ? () => onResume() : undefined}
+            onDelete={onDelete ? () => onDelete() : undefined}
+            onExport={onExport ? () => onExport() : undefined}
+            onRetry={onRetry ? () => onRetry() : undefined}
+            onReschedule={onReschedule ? () => onReschedule() : undefined}
           />
-        )}
-        {showDelete && (
-          <AppButton size="sm" variant="secondary" icon={<Trash2 size={14} />} onClick={onDelete} />
-        )}
-        <CampaignActionsMenu>
-          {showReschedule && (
-            <button type="button" onClick={onReschedule} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-fg hover:bg-theme-subtle">
-              <CalendarClock className="h-3.5 w-3.5" /> Reschedule
-            </button>
-          )}
-          {editable && onEdit && primaryAction !== 'edit' && (
-            <button type="button" onClick={onEdit} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-fg hover:bg-theme-subtle">
-              <Pencil className="h-3.5 w-3.5" /> Edit campaign
-            </button>
-          )}
-          {onDelete && editable && !showDelete && (
-            <button type="button" onClick={onDelete} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30">
-              <Trash2 className="h-3.5 w-3.5" /> Delete campaign
-            </button>
-          )}
-        </CampaignActionsMenu>
+        </div>
       </div>
     </article>
   );

@@ -88,10 +88,69 @@ const KNOWN_ISSUES: Array<{ match: RegExp; issue: FriendlyIssue }> = [
     },
   },
   {
+    match: /website link suffix|trackable button|unique ending for the button link/i,
+    issue: {
+      title: 'Add the button link',
+      detail: 'Type only the unique ending, like order-123 — not a full website address.',
+      example: 'order-123',
+    },
+  },
+  {
+    match: /fill in every (template|message) variable/i,
+    issue: {
+      title: 'Fill in every message variable',
+      detail: 'Each numbered field needs a value — a contact’s details, or the same text for everyone.',
+    },
+  },
+  {
     match: /add sample values for all .+ header variable|add an example for each personal field/i,
     issue: {
       title: 'Add an example for each personal field',
       detail: 'WhatsApp reviews a filled-in example, like a real name or order number, before they approve the message.',
+    },
+  },
+  {
+    match: /unresolved placeholders|recipient data before sending/i,
+    issue: {
+      title: 'Some message fields are still empty',
+      detail: 'Fill in every numbered field before sending this campaign.',
+    },
+  },
+  {
+    match: /missing sample value for audience preview/i,
+    issue: {
+      title: 'We need an example value',
+      detail: 'Add a sample for this field so we can preview the audience.',
+    },
+  },
+  {
+    match: /landing page must be a real website/i,
+    issue: {
+      title: 'Use your live website',
+      detail: 'Customers open this on their phone. Paste a page on your real site, not a test page.',
+      example: 'https://yourstore.com/verify',
+    },
+  },
+  {
+    match: /header (media|file) (must be a public|needs a public)|header media must be a public https/i,
+    issue: {
+      title: 'The header file needs a public link',
+      detail: 'Use a web address that anyone can open, starting with https://',
+    },
+  },
+  {
+    match: /add the (copy-code \/ coupon|coupon code)|copy-code button requires a couponcode|sample code is required for copy-code/i,
+    issue: {
+      title: 'Add the coupon code',
+      detail: 'This template includes a copy-code button. Enter the code customers should copy.',
+      example: 'SAVE20',
+    },
+  },
+  {
+    match: /webhook url is not http compatible/i,
+    issue: {
+      title: 'This web address isn’t ready',
+      detail: 'Use a normal website link that starts with https://',
     },
   },
 ];
@@ -111,7 +170,7 @@ export function explainTemplateIssue(message: string): FriendlyIssue {
     };
   }
   return {
-    title: 'A quick fix is needed',
-    detail: trimmed,
+    title: trimmed,
+    detail: '',
   };
 }

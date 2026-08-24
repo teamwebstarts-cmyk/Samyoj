@@ -23,6 +23,8 @@ interface TemplateParamFieldProps {
   placeholder?: string;
   required?: boolean;
   compact?: boolean;
+  /** Hide per-field auto-mapping hint (show once at section level instead). */
+  suppressMappedHint?: boolean;
   /** When set, show contact-aware suggestions (Inbox composer). */
   contact?: ContactParamPreview;
   labelClassName?: string;
@@ -37,6 +39,7 @@ export default function TemplateParamField({
   placeholder = 'Enter a value',
   required,
   compact,
+  suppressMappedHint = false,
   contact,
   labelClassName,
 }: TemplateParamFieldProps) {
@@ -72,12 +75,12 @@ export default function TemplateParamField({
         labelClassName={labelClassName}
         onChange={(event) => handleSourceChange(event.target.value)}
       />
-      {mappedHint ? (
+      {mappedHint && !suppressMappedHint ? (
         <p className="flex items-center gap-1.5 text-[10px] font-medium text-emerald-800 dark:text-emerald-300">
           <Sparkles className="h-3.5 w-3.5 shrink-0" />
           {mappedHint}
         </p>
-      ) : (
+      ) : source === 'custom' ? (
         <AppInput
           id={id}
           placeholder={placeholder}
@@ -90,7 +93,7 @@ export default function TemplateParamField({
           className={compact ? '!h-9 rounded-lg text-[12px]' : undefined}
           aria-label={`${label} — custom value`}
         />
-      )}
+      ) : null}
     </div>
   );
 }

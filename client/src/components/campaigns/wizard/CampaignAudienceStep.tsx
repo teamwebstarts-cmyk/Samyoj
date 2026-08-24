@@ -5,7 +5,6 @@ import CampaignAudienceSection from '../CampaignAudienceSection';
 import type { MessageTemplate } from '../../../types';
 import type { AudiencePreviewMetrics } from '../CampaignAudiencePreview';
 import type { CampaignWizardForm } from './campaignWizardModel';
-import type { CampaignQuotaData } from './CampaignWizardSummaryRail';
 import CampaignWizardSummaryRail from './CampaignWizardSummaryRail';
 import { messagingConsent } from '../../../utils/plainLanguage';
 
@@ -22,7 +21,6 @@ interface CampaignAudienceStepProps {
   onPreviewMetricsChange: (metrics: AudiencePreviewMetrics | null) => void;
   audienceMetrics: AudiencePreviewMetrics | null;
   estimatedCost: number | null;
-  quota: CampaignQuotaData | null;
 }
 
 export default function CampaignAudienceStep({
@@ -38,7 +36,6 @@ export default function CampaignAudienceStep({
   onPreviewMetricsChange,
   audienceMetrics,
   estimatedCost,
-  quota,
 }: CampaignAudienceStepProps) {
   return (
     <div
@@ -113,7 +110,6 @@ export default function CampaignAudienceStep({
           includedCount={audiencePreviewCount}
           audienceMetrics={audienceMetrics}
           estimatedCost={estimatedCost}
-          quota={quota}
         />
       </div>
 

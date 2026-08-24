@@ -8,7 +8,6 @@ import type { AudiencePreviewMetrics } from '../components/campaigns/CampaignAud
 import CampaignWizardStepper, {
   campaignWizardStages,
 } from '../components/campaigns/wizard/CampaignWizardStepper';
-import type { CampaignQuotaData } from '../components/campaigns/wizard/CampaignWizardSummaryRail';
 import {
   buildCampaignPayload,
   campaignToWizardForm,
@@ -24,6 +23,10 @@ import { templateDynamicUrlButtons, templateNeedsCoupon } from '../utils/templat
 import AppButton from '../components/ui/AppButton';
 import TemplateIssueAlert from '../components/templates/TemplateIssueAlert';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
+import {
+  buildCampaignSendConfirm,
+  getCampaignSendErrorMessage,
+} from '../components/campaigns/campaignSendConfirm';
 import { WizardPageSkeleton } from '../components/ui/ListLayoutSkeleton';
 import { useAuth } from '../contexts/AuthContext';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
@@ -37,7 +40,10 @@ type ConfirmState = {
   title: string;
   description: string;
   confirmLabel: string;
-  variant: 'danger' | 'default';
+  variant: 'danger' | 'default' | 'send';
+  highlight?: string;
+  highlightLabel?: string;
+  details?: string[];
   onConfirm: () => void | Promise<void>;
 };
 
@@ -66,7 +72,6 @@ export default function CampaignWizardPage() {
   const [templatesLoadError, setTemplatesLoadError] = useState<string | null>(null);
   const [whatsappNumbers, setWhatsappNumbers] = useState<Array<{ id: string; phoneNumber: string }>>([]);
   const [availableTags, setAvailableTags] = useState<string[]>([]);
-  const [quota, setQuota] = useState<CampaignQuotaData | null>(null);
   const [editing, setEditing] = useState<CampaignWizardDetail | null>(null);
   const [form, setForm] = useState<CampaignWizardForm>(createEmptyCampaignWizardForm);
   const [activeStep, setActiveStep] = useState(0);
@@ -75,6 +80,7 @@ export default function CampaignWizardPage() {
   const [audienceMetrics, setAudienceMetrics] = useState<AudiencePreviewMetrics | null>(null);
   const [estimatedCost, setEstimatedCost] = useState<number | null>(null);
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
   const initializedFromQuery = useRef(false);
   const activeNumberIdRef = useRef<string | null>(null);
   activeNumberIdRef.current = activeNumber?.id ?? null;
@@ -162,14 +168,6 @@ export default function CampaignWizardPage() {
       .catch(() => {
         if (requestNumberId === activeNumberIdRef.current) setAvailableTags([]);
       });
-    campaignApi
-      .quota()
-      .then(({ data }) => {
-        if (requestNumberId === activeNumberIdRef.current) setQuota(data.data as CampaignQuotaData);
-      })
-      .catch(() => {
-        if (requestNumberId === activeNumberIdRef.current) setQuota(null);
-      });
   }, [activeNumber, canManageTeam, loadTemplates, navigate, resolved]);
 
   useOnActiveNumberChange(({ isInitial }) => {
@@ -178,7 +176,6 @@ export default function CampaignWizardPage() {
     setTemplatesLoadError(null);
     setWhatsappNumbers([]);
     setAvailableTags([]);
-    setQuota(null);
     setEditing(null);
     setForm(createEmptyCampaignWizardForm());
     setActiveStep(0);
@@ -344,22 +341,25 @@ export default function CampaignWizardPage() {
 
       if (action === 'send') {
         const full = (await campaignApi.get(campaignId)).data.data as CampaignWizardDetail;
+        const sendConfirm = buildCampaignSendConfirm({
+          campaignName: full.name,
+          templateName: full.templateName,
+          recipientCount: full.totalContacts,
+          excludedCount: audienceMetrics?.notOptedIn,
+        });
         setConfirmState({
-          title: `Send “${full.name}” to ${full.totalContacts.toLocaleString()} recipients?`,
-          description: `This will start sending “${full.name}” to the selected audience. This action cannot be undone.`,
-          confirmLabel: `Send to ${full.totalContacts.toLocaleString()}`,
-          variant: 'default',
+          ...sendConfirm,
           onConfirm: async () => {
-            setSaving(true);
+            setConfirmLoading(true);
             try {
               await campaignApi.send(campaignId as string);
-              toastSuccess('Campaign sent');
+              toastSuccess('Campaign queued — track delivery on the Campaigns page');
               setConfirmState(null);
               navigate('/campaigns');
             } catch (error) {
-              toastError(getErrorMessage(error, 'Campaign could not be sent. Check the campaign and try again.'));
+              toastError(getCampaignSendErrorMessage(error, 'Campaign could not be sent. Check the campaign and try again.'));
             } finally {
-              setSaving(false);
+              setConfirmLoading(false);
             }
           },
         });
@@ -460,7 +460,6 @@ export default function CampaignWizardPage() {
           onPreviewMetricsChange={setAudienceMetrics}
           audienceMetrics={audienceMetrics}
           estimatedCost={estimatedCost}
-          quota={quota}
         />
       );
     }
@@ -685,13 +684,19 @@ export default function CampaignWizardPage() {
 
       <ConfirmDialog
         open={Boolean(confirmState)}
-        onClose={() => setConfirmState(null)}
+        onClose={() => {
+          if (!confirmLoading) setConfirmState(null);
+        }}
         onConfirm={() => void confirmState?.onConfirm()}
         title={confirmState?.title || ''}
         description={confirmState?.description}
+        highlight={confirmState?.highlight}
+        highlightLabel={confirmState?.highlightLabel}
+        details={confirmState?.details}
         confirmLabel={confirmState?.confirmLabel}
         variant={confirmState?.variant}
-        loading={saving}
+        loading={confirmLoading}
+        cancelLabel="Not yet"
       />
     </div>
   );

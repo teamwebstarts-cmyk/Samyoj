@@ -286,22 +286,22 @@ export function validateCampaignWizardStage(
     if (!form.name.trim()) return 'Add a campaign name.';
     if (!form.templateName) return 'Choose an approved template.';
     if (form.bodyParams.some((value) => !value.trim()) || form.headerParams.some((value) => !value.trim())) {
-      return 'Fill in every template variable before continuing.';
+      return 'Fill in every message variable.';
     }
     if (selectedTemplate && templateNeedsHeaderMedia(selectedTemplate)) {
       if (!form.headerMediaUrl.trim()) {
-        return 'Upload or paste the header media link before continuing.';
+        return 'Add a photo, video, or file for the header.';
       }
       if (!isLikelyPublicHttpsUrl(form.headerMediaUrl)) {
-        return 'Header media must be a public https:// link.';
+        return 'The header file needs a public web link.';
       }
     }
     if (selectedTemplate && templateNeedsCoupon(selectedTemplate) && !form.couponCode.trim()) {
-      return 'Add the copy-code / coupon for this template.';
+      return 'Add the coupon code.';
     }
     const dynamicUrls = selectedTemplate ? templateDynamicUrlButtons(selectedTemplate) : [];
     if (dynamicUrls.some((_, index) => !form.buttonUrlSuffixes[index]?.trim())) {
-      return 'Add the website link suffix for each trackable button.';
+      return 'Add the unique ending for the button link.';
     }
   }
 

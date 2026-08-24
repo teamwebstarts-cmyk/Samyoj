@@ -68,13 +68,24 @@ export function materializedCampaignRunVersion(runVersion: number, bumpRunVersio
   return runVersion + (bumpRunVersion ? 1 : 0);
 }
 
+/** BullMQ rejects custom job IDs containing ":" (and some other chars). */
+const BULLMQ_JOB_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
+
+export function isValidBullMqJobId(jobId: string) {
+  return jobId.length > 0 && jobId.length <= 128 && BULLMQ_JOB_ID_PATTERN.test(jobId);
+}
+
 export function buildCampaignJobId(
   campaignId: string,
   runVersion: number,
   kind: 'batch' | 'retry',
   firstRecipientId: string
 ) {
-  return `campaign:${campaignId}:run:${runVersion}:${kind}:${firstRecipientId}`;
+  const jobId = `campaign__${campaignId}__run__${runVersion}__${kind}__${firstRecipientId}`;
+  if (!isValidBullMqJobId(jobId)) {
+    throw new Error(`Invalid BullMQ job id: ${jobId}`);
+  }
+  return jobId;
 }
 
 export function campaignJobClaimPrefix(jobId: string | number) {

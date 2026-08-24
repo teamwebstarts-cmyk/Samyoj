@@ -1,7 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react';
-import { CheckCircle2, ExternalLink, Globe2, Info, MessageCircle } from 'lucide-react';
+import { CheckCircle2, MessageCircle, Sparkles } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import AppInput from '../../ui/AppInput';
 import AppSelect from '../../ui/AppSelect';
 import { WhatsAppTemplatePreview } from '../../inbox/WhatsAppPreview';
@@ -28,7 +27,6 @@ import {
   templateNeedsHeaderMedia,
 } from '../campaignPreviewUtils';
 import type { MessageTemplate } from '../../../types';
-import { getQualityLabel } from '../../../utils/templateUtils';
 import type { CampaignWizardForm } from './campaignWizardModel';
 import CampaignTemplatePicker from './CampaignTemplatePicker';
 
@@ -52,15 +50,6 @@ function getVariableLabel(template: MessageTemplate, index: number, meta: Templa
   return variableDescription(meta, 'body', index, named);
 }
 
-function getLastUpdatedLabel(template: MessageTemplate) {
-  const timestamp = template.quality_score?.date;
-  if (!timestamp) return '—';
-  const date = new Date(timestamp > 10_000_000_000 ? timestamp : timestamp * 1000);
-  if (Number.isNaN(date.getTime())) return '—';
-  const days = Math.max(0, Math.floor((Date.now() - date.getTime()) / 86_400_000));
-  return days === 0 ? 'Today' : `${days} day${days === 1 ? '' : 's'} ago`;
-}
-
 export default function CampaignMessageStep({
   form,
   setForm,
@@ -71,7 +60,6 @@ export default function CampaignMessageStep({
   selectedTemplate,
   whatsappNumbers,
 }: CampaignMessageStepProps) {
-  const [previewLanguage, setPreviewLanguage] = useState(form.templateLanguage || selectedTemplate?.language || '');
   const [templateMeta, setTemplateMeta] = useState<TemplateVariableMeta[]>([]);
   const filledPreview = selectedTemplate
     ? {
@@ -87,6 +75,8 @@ export default function CampaignMessageStep({
   const needsCoupon = selectedTemplate ? templateNeedsCoupon(selectedTemplate) : false;
   const dynamicUrls = selectedTemplate ? templateDynamicUrlButtons(selectedTemplate) : [];
   const hasSendExtras = needsCoupon || dynamicUrls.length > 0;
+  const hasMappedContactParams = paramsIncludeMappedContact([...form.bodyParams, ...form.headerParams]);
+  const hasBodyOrHeaderParams = form.bodyParams.length > 0 || form.headerParams.length > 0;
 
   useEffect(() => {
     if (!selectedTemplate) {
@@ -139,17 +129,6 @@ export default function CampaignMessageStep({
       return changed ? { ...previous, bodyParams, headerParams } : previous;
     });
   }, [selectedTemplate, bodyMetaByIndex, headerMetaByIndex, setForm]);
-  const previewLanguages = useMemo(
-    () =>
-      selectedTemplate
-        ? [...new Set(templates.filter((template) => template.name === selectedTemplate.name).map((template) => template.language))]
-        : [],
-    [selectedTemplate, templates],
-  );
-
-  useEffect(() => {
-    setPreviewLanguage(selectedTemplate?.language || form.templateLanguage || '');
-  }, [form.templateLanguage, selectedTemplate?.language, selectedTemplate?.name]);
 
   const selectTemplate = (template: MessageTemplate) => {
     setForm((previous) => ({
@@ -275,44 +254,6 @@ export default function CampaignMessageStep({
               )
             ) : (
               <>
-                <div className="flex items-center gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
-                  <div className="min-w-0">
-                    <p className="truncate text-[11px] font-extrabold text-slate-800 dark:text-slate-200">
-                      {selectedTemplate.name}
-                    </p>
-                    <p className="text-[9px] font-medium text-slate-400">
-                      {selectedTemplate.language} · Approved template
-                    </p>
-                  </div>
-                </div>
-
-                {(selectedTemplate.category || '').toUpperCase() === 'UTILITY' && (
-                  <div className="flex items-start gap-2 rounded-lg border border-amber-100 bg-amber-50/70 px-2.5 py-2 dark:border-amber-900/50 dark:bg-amber-950/20">
-                    <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-300" />
-                    <p className="text-[10px] font-medium leading-relaxed text-amber-800 dark:text-amber-200">
-                      This is a Utility template for order updates and confirmations — not promotions.
-                    </p>
-                  </div>
-                )}
-                {(selectedTemplate.category || '').toUpperCase() === 'AUTHENTICATION' && (
-                  <div className="flex items-start gap-2 rounded-lg border border-amber-100 bg-amber-50/70 px-2.5 py-2 dark:border-amber-900/50 dark:bg-amber-950/20">
-                    <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-300" />
-                    <p className="text-[10px] font-medium leading-relaxed text-amber-800 dark:text-amber-200">
-                      Authentication templates are for one-time passwords and verification codes.
-                    </p>
-                  </div>
-                )}
-                {(getQualityLabel(selectedTemplate.quality_score?.score)?.label === 'Medium quality' ||
-                  getQualityLabel(selectedTemplate.quality_score?.score)?.label === 'Low quality') && (
-                  <div className="flex items-start gap-2 rounded-lg border border-amber-100 bg-amber-50/70 px-2.5 py-2 dark:border-amber-900/50 dark:bg-amber-950/20">
-                    <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-300" />
-                    <p className="text-[10px] font-medium leading-relaxed text-amber-800 dark:text-amber-200">
-                      WhatsApp rates this template as {getQualityLabel(selectedTemplate.quality_score?.score)?.label.toLowerCase()}.
-                      Delivery can pause if quality drops further.
-                    </p>
-                  </div>
-                )}
-
                 {form.bodyParams.length === 0 && form.headerParams.length === 0 && !showHeaderMedia && !hasSendExtras ? (
                   <div className="flex min-h-[150px] flex-1 flex-col items-center justify-center rounded-lg border border-dashed border-emerald-200 bg-emerald-50/45 px-4 text-center dark:border-emerald-900/50 dark:bg-emerald-950/15">
                     <CheckCircle2 className="h-6 w-6 text-emerald-600 dark:text-emerald-300" />
@@ -325,12 +266,31 @@ export default function CampaignMessageStep({
                   </div>
                 ) : (
                   <>
+                    {hasBodyOrHeaderParams && (
+                      <div className="flex items-center gap-2.5 border-t border-slate-100 pt-3 dark:border-slate-800">
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
+                          <Sparkles className="h-3.5 w-3.5" strokeWidth={2.25} />
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-[11px] font-extrabold text-slate-800 dark:text-slate-200">
+                            Message variables
+                          </p>
+                          <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400">
+                            {hasMappedContactParams
+                              ? 'Each person gets their own name, phone, or email'
+                              : 'Contact data, or the same text for everyone'}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
                     {form.bodyParams.map((value, index) => (
                       <TemplateParamField
                         key={`body-param-${index}`}
                         id={`body-param-${index}`}
                         compact
                         required
+                        suppressMappedHint
                         label={`${index + 1}. ${getVariableLabel(selectedTemplate, index, templateMeta)}`}
                         placeholder={index === 0 ? 'Name or other value' : 'Enter a value'}
                         value={value}
@@ -354,6 +314,7 @@ export default function CampaignMessageStep({
                           id={`header-param-${index}`}
                           compact
                           required
+                          suppressMappedHint
                           label={`${index + 1}. ${headerLabel}`}
                           value={value}
                           onChange={(next) => updateHeaderParam(index, next)}
@@ -378,6 +339,7 @@ export default function CampaignMessageStep({
 
                     <TemplateButtonExtras
                       template={selectedTemplate}
+                      compact
                       couponCode={form.couponCode}
                       buttonUrlSuffixes={form.buttonUrlSuffixes}
                       onCouponChange={(value) => setForm((previous) => ({ ...previous, couponCode: value }))}
@@ -411,34 +373,6 @@ export default function CampaignMessageStep({
           </div>
 
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3.5 sm:p-4">
-            {selectedTemplate && (
-              <div className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50/70 px-2.5 py-1.5 dark:border-slate-800 dark:bg-slate-900/35">
-                <span className="text-[10px] font-bold text-slate-500">Preview in</span>
-                <div className="flex items-center gap-1.5">
-                  <Globe2 className="h-3 w-3 text-slate-400" />
-                  <AppSelect
-                    ariaLabel="Preview language"
-                    size="micro"
-                    className="min-w-[92px]"
-                    value={previewLanguage}
-                    options={(previewLanguages.length ? previewLanguages : [selectedTemplate.language]).map((language) => ({
-                      value: language,
-                      label: language,
-                    }))}
-                    isSearchable={false}
-                    onChange={(event) => {
-                      const nextLanguage = event.target.value;
-                      setPreviewLanguage(nextLanguage);
-                      const translatedTemplate = templates.find(
-                        (template) =>
-                          template.name === selectedTemplate.name && template.language === nextLanguage,
-                      );
-                      if (translatedTemplate) selectTemplate(translatedTemplate);
-                    }}
-                  />
-                </div>
-              </div>
-            )}
             {filledPreview ? (
               <>
                 <WhatsAppTemplatePreview
@@ -446,9 +380,9 @@ export default function CampaignMessageStep({
                   variant="compact"
                   className="campaign-message-preview-surface min-h-[260px] overflow-hidden rounded-xl"
                 />
-                {paramsIncludeMappedContact([...form.bodyParams, ...form.headerParams]) && (
+                {hasMappedContactParams && (
                   <p className="text-[10px] font-medium leading-relaxed text-slate-500 dark:text-slate-400">
-                    Name is a sample. Each person gets their own.
+                    Preview uses sample data. Each person gets their own at send time.
                   </p>
                 )}
               </>
@@ -471,45 +405,6 @@ export default function CampaignMessageStep({
                 <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
                   Select a template to preview the final WhatsApp message.
                 </p>
-              </div>
-            )}
-
-            {selectedTemplate && (
-              <div className="border-t border-slate-100 pt-3 dark:border-slate-800">
-                <p className="mb-2 text-[11px] font-extrabold text-slate-700 dark:text-slate-300">
-                  Template details
-                </p>
-                <div className="flex items-center justify-between gap-3 text-[10px]">
-                  <span className="font-semibold text-slate-500">Category</span>
-                  <span className="font-bold text-slate-800 dark:text-slate-200">
-                    {selectedTemplate.category}
-                  </span>
-                </div>
-                <div className="mt-2 flex items-center justify-between gap-3 text-[10px]">
-                  <span className="font-semibold text-slate-500">Language</span>
-                  <span className="font-bold text-slate-800 dark:text-slate-200">
-                    {selectedTemplate.language}
-                  </span>
-                </div>
-                <div className="mt-2 flex items-center justify-between gap-3 text-[10px]">
-                  <span className="font-semibold text-slate-500">Status</span>
-                  <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-bold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
-                    {selectedTemplate.status}
-                  </span>
-                </div>
-                <div className="mt-2 flex items-center justify-between gap-3 text-[10px]">
-                  <span className="font-semibold text-slate-500">Last updated</span>
-                  <span className="font-bold text-slate-800 dark:text-slate-200">
-                    {getLastUpdatedLabel(selectedTemplate)}
-                  </span>
-                </div>
-                <Link
-                  to={`/templates?search=${encodeURIComponent(selectedTemplate.name)}`}
-                  className="mt-3 inline-flex items-center gap-1 text-[10px] font-extrabold text-emerald-700 hover:underline dark:text-emerald-300"
-                >
-                  View template details
-                  <ExternalLink className="h-3 w-3" />
-                </Link>
               </div>
             )}
           </div>

@@ -1,16 +1,8 @@
-import { MessageCircle, ShieldCheck } from 'lucide-react';
+import { MessageCircle } from 'lucide-react';
 import type { MessageTemplate } from '../../../types';
 import type { CampaignWizardForm } from './campaignWizardModel';
 import type { AudiencePreviewMetrics } from '../CampaignAudiencePreview';
 import { messagingConsent } from '../../../utils/plainLanguage';
-
-export interface CampaignQuotaData {
-  sentToday: number;
-  limit: number;
-  remaining: number;
-  batchSize: number;
-  batchDelayMs: number;
-}
 
 interface CampaignWizardSummaryRailProps {
   form: CampaignWizardForm;
@@ -19,7 +11,6 @@ interface CampaignWizardSummaryRailProps {
   includedCount: number | null;
   audienceMetrics?: AudiencePreviewMetrics | null;
   estimatedCost?: number | null;
-  quota: CampaignQuotaData | null;
 }
 
 function audienceLabel(form: CampaignWizardForm) {
@@ -51,42 +42,6 @@ function NumberValue({ value }: { value: number | null }) {
   );
 }
 
-function QuotaCard({ quota }: { quota: CampaignQuotaData | null }) {
-  const usedPct = quota ? Math.min(100, Math.round((quota.sentToday / Math.max(quota.limit, 1)) * 100)) : 0;
-  return (
-    <section className="campaign-wizard-card overflow-hidden">
-      <div className="flex items-center gap-2 border-b border-slate-100 px-3.5 py-3 dark:border-slate-800">
-        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-300">
-          <ShieldCheck className="h-3.5 w-3.5" strokeWidth={2.25} />
-        </span>
-        <p className="text-[12px] font-extrabold text-slate-900 dark:text-white">Daily campaign limit</p>
-      </div>
-      <div className="space-y-2.5 p-3.5">
-        <div className="flex items-center justify-between gap-2 text-[10px]">
-          <span className="font-medium text-slate-500">
-            {quota ? `${quota.sentToday.toLocaleString()} of ${quota.limit.toLocaleString()} used` : 'Checking limit…'}
-          </span>
-          <span className="font-extrabold text-emerald-600">{quota ? `${usedPct}%` : '—'}</span>
-        </div>
-        <div className="h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-          <div
-            className="h-full rounded-full bg-emerald-500 transition-all"
-            style={{ width: `${usedPct}%` }}
-          />
-        </div>
-        <div className="flex items-center gap-2 rounded-lg bg-emerald-50/70 px-2.5 py-2 dark:bg-emerald-950/25">
-          <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-300" />
-          <p className="text-[10px] font-semibold leading-relaxed text-emerald-800 dark:text-emerald-200">
-            {quota
-              ? `${quota.remaining.toLocaleString()} messages remain today.`
-              : 'Your daily sending limit will appear here.'}
-          </p>
-        </div>
-      </div>
-    </section>
-  );
-}
-
 export default function CampaignWizardSummaryRail({
   form,
   selectedTemplate,
@@ -94,7 +49,6 @@ export default function CampaignWizardSummaryRail({
   includedCount,
   audienceMetrics,
   estimatedCost,
-  quota,
 }: CampaignWizardSummaryRailProps) {
   return (
     <aside className="space-y-3">
@@ -182,8 +136,6 @@ export default function CampaignWizardSummaryRail({
           )}
         </div>
       </section>
-
-      <QuotaCard quota={quota} />
     </aside>
   );
 }

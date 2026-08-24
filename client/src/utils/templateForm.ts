@@ -161,7 +161,10 @@ export function applySendExtrasToButtons(
 
 export function humanizeParamValue(value: string): string {
   const source = sourceFromParamValue(value);
-  if (source) return `Auto: ${sourceLabel(source, customKeyFromParamValue(value))}`;
+  if (source) {
+    const label = sourceLabel(source, customKeyFromParamValue(value));
+    return label.replace(/^\w/, (character) => character.toUpperCase());
+  }
   return value;
 }
 

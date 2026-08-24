@@ -96,12 +96,22 @@ export default function BillingPlanCard({
             : 'Switch plan';
 
   const showStatusBadge =
-    isCurrent || isActivePaidSession || (theme.badge && !plan.isMostPopular);
+    isCurrent || isActivePaidSession || plan.isMostPopular || Boolean(theme.badge);
   const statusBadgeText = isCurrent
     ? 'Active'
     : isActivePaidSession
       ? 'Purchased'
-      : theme.badge;
+      : plan.isMostPopular
+        ? 'Most popular'
+        : theme.badge;
+
+  const statusBadgeClass = isCurrent
+    ? 'bg-emerald-500 text-white'
+    : isActivePaidSession
+      ? 'bg-emerald-600 text-white'
+      : plan.isMostPopular
+        ? 'bg-violet-600 text-white'
+        : 'bg-slate-500 text-white';
 
   return (
     <div
@@ -110,19 +120,9 @@ export default function BillingPlanCard({
           ? 'border-emerald-500/80 ring-1 ring-emerald-500/30'
           : isActivePaidSession
             ? 'border-emerald-400 dark:border-emerald-700'
-            : plan.isMostPopular
-              ? 'border-violet-400 pt-1 dark:border-violet-700'
-              : 'border-theme-border'
+            : 'border-theme-border'
       }`}
     >
-      {plan.isMostPopular && !isCurrent ? (
-        <div className="mb-3 flex justify-center">
-          <span className="rounded-full bg-violet-600 px-3 py-1 text-[9px] font-bold uppercase tracking-wider text-white shadow-sm">
-            Most popular
-          </span>
-        </div>
-      ) : null}
-
       <div className="flex flex-1 flex-col">
         <div className="flex items-start gap-2.5">
           <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${theme.iconBg}`}>
@@ -133,13 +133,7 @@ export default function BillingPlanCard({
               <h3 className="text-base font-extrabold tracking-tight text-theme-fg">{plan.name}</h3>
               {showStatusBadge ? (
                 <span
-                  className={`shrink-0 rounded-md px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white ${
-                    isCurrent
-                      ? 'bg-emerald-500'
-                      : isActivePaidSession
-                        ? 'bg-emerald-600'
-                        : 'bg-slate-500'
-                  }`}
+                  className={`shrink-0 rounded-md px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${statusBadgeClass}`}
                 >
                   {statusBadgeText}
                 </span>

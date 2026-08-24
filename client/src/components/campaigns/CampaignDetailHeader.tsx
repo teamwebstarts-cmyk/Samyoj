@@ -1,93 +1,92 @@
-import { Calendar, LayoutTemplate, Repeat, Users } from 'lucide-react';
-import { ModalPanel } from '../ui/modalUi';
+import { LayoutTemplate } from 'lucide-react';
 import StatusBadge from '../ui/StatusBadge';
 import type { Campaign } from '../../types';
-import { campaignProgress, formatCampaignDate, formatCampaignRepeatLabel, getAudienceLabel, getStatusMeta } from './campaignUi';
+import { campaignProgress, getStatusMeta } from './campaignUi';
 
 interface CampaignDetailHeaderProps {
   campaign: Campaign;
 }
 
 export default function CampaignDetailHeader({ campaign }: CampaignDetailHeaderProps) {
-  const scheduledLabel = formatCampaignDate(campaign.scheduledAt, campaign.timezone);
-  const repeatLabel = formatCampaignRepeatLabel(campaign);
+  const meta = getStatusMeta(campaign.status);
   const progress = campaignProgress(campaign.sentCount, campaign.totalContacts);
+  const delivered = campaign.deliveredCount ?? 0;
+  const read = campaign.readCount ?? 0;
+  const failed = campaign.failedCount ?? 0;
+
+  const stats = [
+    {
+      label: 'Delivered',
+      value: delivered,
+      tone: 'text-emerald-700 dark:text-emerald-400',
+      bg: 'bg-emerald-50/80 dark:bg-emerald-950/30',
+    },
+    {
+      label: 'Read',
+      value: read,
+      tone: 'text-violet-700 dark:text-violet-400',
+      bg: 'bg-violet-50/80 dark:bg-violet-950/30',
+    },
+    {
+      label: 'Failed',
+      value: failed,
+      tone: failed > 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-500 dark:text-slate-400',
+      bg: failed > 0 ? 'bg-red-50/80 dark:bg-red-950/30' : 'bg-slate-50/80 dark:bg-slate-900/40',
+    },
+  ];
 
   return (
-    <ModalPanel title="Campaign details" accent="violet">
-      <div className="flex flex-wrap items-center gap-2">
-        <StatusBadge
-          status={campaign.status}
-          label={getStatusMeta(campaign.status).label}
-          className="normal-case tracking-normal"
-        />
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-theme-subtle px-2.5 py-0.5 font-mono text-[11px] font-semibold text-theme-fg ring-1 ring-theme-border">
-          <LayoutTemplate className="h-3 w-3 text-violet-500" />
-          {campaign.templateName}
-        </span>
-        {campaign.audienceType && (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-theme-subtle px-2.5 py-0.5 text-[11px] font-semibold text-theme-secondary ring-1 ring-theme-border">
-            <Users className="h-3 w-3" />
-            {getAudienceLabel(campaign.audienceType)}
+    <section className="overflow-hidden rounded-2xl border border-slate-200/90 bg-gradient-to-br from-white via-white to-slate-50/90 shadow-sm dark:border-slate-800 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900/80">
+      <div className="border-b border-slate-100 px-4 py-4 dark:border-slate-800 sm:px-5">
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusBadge
+            status={campaign.status}
+            label={meta.label}
+            className="normal-case tracking-normal"
+          />
+          <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100/90 px-2 py-0.5 font-mono text-[11px] font-semibold text-slate-600 ring-1 ring-slate-200/80 dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700">
+            <LayoutTemplate className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+            {campaign.templateName}
           </span>
-        )}
-        {scheduledLabel && (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800 ring-1 ring-amber-100 dark:bg-amber-950/40 dark:text-amber-300">
-            <Calendar className="h-3 w-3" />
-            {scheduledLabel}
-          </span>
-        )}
-        {repeatLabel && (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-50 px-2.5 py-0.5 text-[11px] font-semibold text-violet-800 ring-1 ring-violet-100 dark:bg-violet-950/40 dark:text-violet-300">
-            <Repeat className="h-3 w-3" />
-            {repeatLabel}
-          </span>
-        )}
+        </div>
+        <h2 className="mt-3 text-[1.15rem] font-extrabold leading-snug tracking-tight text-slate-900 dark:text-white">
+          {campaign.name}
+        </h2>
+        <p className="mt-1 text-[12px] font-medium text-slate-500 dark:text-slate-400">
+          {campaign.sentCount.toLocaleString()} of {campaign.totalContacts.toLocaleString()} sent
+          {progress >= 100 ? ' · Complete' : campaign.status === 'RUNNING' ? ' · Sending' : ''}
+        </p>
       </div>
 
-      <p className="mt-3 text-lg font-extrabold tracking-tight text-theme-fg">{campaign.name}</p>
-
-      <div className="mt-4 rounded-xl bg-theme-subtle/60 px-3 py-2.5 ring-1 ring-theme-border">
-        <div className="flex items-center justify-between gap-2 text-[11px] font-semibold tabular-nums">
-          <span className="text-theme-muted">Delivery progress</span>
-          <span className="text-theme-secondary">{progress}% · {campaign.sentCount.toLocaleString()} of {campaign.totalContacts.toLocaleString()}</span>
-        </div>
-        <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-theme-surface">
+      <div className="px-4 py-4 sm:px-5">
+        <div className="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
           <div
-            className="h-full rounded-full bg-gradient-to-r from-violet-500 to-whatsapp-600 transition-all duration-500"
+            className={`h-full rounded-full transition-all duration-500 ${meta.bar}`}
             style={{ width: `${progress}%` }}
             role="progressbar"
             aria-valuenow={progress}
             aria-valuemin={0}
             aria-valuemax={100}
-            aria-label={`${campaign.name}: ${progress}% sent, ${campaign.sentCount} of ${campaign.totalContacts} recipients`}
+            aria-label={`${progress}% delivered`}
           />
         </div>
-      </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
-        {[
-          { label: 'Recipients', value: campaign.totalContacts },
-          { label: 'Sent', value: campaign.sentCount, tone: 'text-sky-700 dark:text-sky-400' },
-          {
-            label: 'Delivered',
-            value: campaign.deliveredCount,
-            tone: 'text-emerald-700 dark:text-emerald-400',
-          },
-          { label: 'Read', value: campaign.readCount, tone: 'text-violet-700 dark:text-violet-400' },
-          { label: 'Failed', value: campaign.failedCount, tone: 'text-red-600 dark:text-red-400' },
-        ].map((stat) => (
-          <div
-            key={stat.label}
-            className="rounded-xl bg-theme-subtle/60 px-3 py-2.5 ring-1 ring-theme-border"
-          >
-            <p className="text-[10px] font-bold text-theme-muted">{stat.label}</p>
-            <p className={`mt-0.5 text-lg font-extrabold tabular-nums ${stat.tone || 'text-theme-fg'}`}>
-              {stat.value}
-            </p>
-          </div>
-        ))}
+        <div className="mt-4 grid grid-cols-3 gap-2">
+          {stats.map((stat) => (
+            <div
+              key={stat.label}
+              className={`rounded-xl px-3 py-2.5 text-center ring-1 ring-slate-200/70 dark:ring-slate-800 ${stat.bg}`}
+            >
+              <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                {stat.label}
+              </p>
+              <p className={`mt-0.5 text-xl font-extrabold tabular-nums ${stat.tone}`}>
+                {stat.value.toLocaleString()}
+              </p>
+            </div>
+          ))}
+        </div>
       </div>
-    </ModalPanel>
+    </section>
   );
 }

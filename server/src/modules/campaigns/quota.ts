@@ -3,7 +3,7 @@ import { AppError } from '../../utils/response';
 import { DEFAULT_CAMPAIGN_SETTINGS, type CampaignSettings } from './types';
 import { estimateCampaignCost } from '../billing/usage.service';
 import { randomUUID } from 'node:crypto';
-import { fitsReservedQuota, ownsCampaignQuotaReservation, utcDayStart } from './safety';
+import { ownsCampaignQuotaReservation, utcDayStart } from './safety';
 import type { Prisma } from '@prisma/client';
 
 export async function getCampaignSettings(organizationId: string): Promise<CampaignSettings> {
@@ -39,29 +39,15 @@ export async function getDailySendUsage(organizationId: string) {
   };
 }
 
-export async function assertDailySendQuota(organizationId: string, recipientCount: number) {
-  const settings = await getCampaignSettings(organizationId);
-  const limit = settings.dailySendLimit ?? DEFAULT_CAMPAIGN_SETTINGS.dailySendLimit!;
-
-  const startOfDay = utcDayStart();
-
-  const sentToday = await prisma.campaignRecipient.count({
-    where: {
-      campaign: { organizationId },
-      status: { in: ['SENT', 'DELIVERED', 'READ'] },
-      sentAt: { gte: startOfDay },
-    },
-  });
-
-  if (sentToday + recipientCount > limit) {
-    throw new AppError(
-      429,
-      `Daily campaign send limit exceeded (${sentToday}/${limit} sent today, ${recipientCount} requested).`
-    );
-  }
+export async function assertDailySendQuota(_organizationId: string, _recipientCount: number) {
+  // Campaign send volume is not plan-gated yet. Meta bills the connected WABA directly.
 }
 
-export async function assertDailyBudget(organizationId: string, recipientCount: number, category = 'MARKETING') {
+export async function assertDailyBudget(
+  organizationId: string,
+  recipientCount: number,
+  category = 'MARKETING',
+) {
   const settings = await getCampaignSettings(organizationId);
   const budget = settings.dailyBudgetInr ?? DEFAULT_CAMPAIGN_SETTINGS.dailyBudgetInr!;
 
@@ -78,12 +64,8 @@ export async function assertDailyBudget(organizationId: string, recipientCount: 
   const spentEstimate = estimateCampaignCost(sentToday, category).estimatedCostInr;
   const sendEstimate = estimateCampaignCost(recipientCount, category).estimatedCostInr;
 
-  if (spentEstimate + sendEstimate > budget) {
-    throw new AppError(
-      429,
-      `Daily Meta budget exceeded. Estimated spend today: ₹${spentEstimate.toFixed(2)} + ₹${sendEstimate.toFixed(2)} requested exceeds ₹${budget} daily cap.`
-    );
-  }
+  // Daily Meta budget caps are not enforced until plan-based campaign limits ship.
+  void budget;
 
   return {
     budgetInr: budget,
@@ -104,8 +86,6 @@ export async function reserveCampaignQuota(
   recipientCount: number,
   category = 'MARKETING'
 ) {
-  const settings = await getCampaignSettings(organizationId);
-  const sendLimit = settings.dailySendLimit ?? DEFAULT_CAMPAIGN_SETTINGS.dailySendLimit!;
   const budgetCents = Math.round(estimateCampaignCost(recipientCount, category).estimatedCostInr * 100);
   const day = utcDayStart();
   return prisma.$transaction(async (tx) => {
@@ -132,38 +112,24 @@ export async function reserveCampaignQuota(
       return existing;
     }
 
-    const sentToday = await tx.campaignRecipient.count({
-      where: {
-        campaign: { organizationId },
-        status: { in: ['SENT', 'DELIVERED', 'READ'] },
-        sentAt: { gte: day },
-      },
-    });
-    const spentEstimateCents = Math.round(estimateCampaignCost(sentToday, category).estimatedCostInr * 100);
-    const budgetLimitCents = Math.round(
-      (settings.dailyBudgetInr ?? DEFAULT_CAMPAIGN_SETTINGS.dailyBudgetInr!) * 100
-    );
-    const fitsQuota = fitsReservedQuota({
-      sentCount: sentToday,
-      reservedSendCount: lockedLedger.reservedSendCount,
-      requestedSendCount: recipientCount,
-      sendLimit,
-      spentBudgetCents: spentEstimateCents,
-      reservedBudgetCents: lockedLedger.reservedBudgetCents,
-      requestedBudgetCents: budgetCents,
-      budgetLimitCents,
-    });
-    if (sentToday + lockedLedger.reservedSendCount + recipientCount > sendLimit) {
-      throw new AppError(429, `Daily campaign send limit exceeded (${sendLimit} recipients/day).`);
-    }
-    if (!fitsQuota) {
-      throw new AppError(429, `Daily Meta budget exceeded (₹${(budgetLimitCents / 100).toFixed(2)} daily cap).`);
-    }
     const updated = await tx.campaignQuotaLedger.updateMany({
       where: { id: ledger.id },
       data: { reservedSendCount: { increment: recipientCount }, reservedBudgetCents: { increment: budgetCents } },
     });
     if (updated.count !== 1) throw new AppError(409, 'Campaign quota changed; try again');
+    if (existing) {
+      return tx.campaignQuotaReservation.update({
+        where: { id: existing.id },
+        data: {
+          runVersion,
+          ledgerId: ledger.id,
+          sendCount: recipientCount,
+          budgetCents,
+          status: 'ACTIVE',
+          releasedAt: null,
+        },
+      });
+    }
     return tx.campaignQuotaReservation.create({
       data: {
         id: randomUUID(),

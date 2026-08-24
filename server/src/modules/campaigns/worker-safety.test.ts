@@ -4,6 +4,7 @@ import {
   canClaimManualCampaignRun,
   canRollbackQueuedCampaign,
   isBroadcastJobContextValid,
+  isValidBullMqJobId,
   manualCampaignRunClaimWhere,
   materializedCampaignRunVersion,
 } from './worker-safety';
@@ -71,7 +72,17 @@ describe('campaign worker safety', () => {
   it('fences deterministic jobs by run so stale jobs cannot collide', () => {
     expect(buildCampaignJobId('campaign-1', 7, 'retry', 'recipient-1'))
       .not.toBe(buildCampaignJobId('campaign-1', 8, 'retry', 'recipient-1'));
-    expect(buildCampaignJobId('campaign-1', 7, 'batch', 'recipient-1'))
-      .toBe('campaign:campaign-1:run:7:batch:recipient-1');
+    const jobId = buildCampaignJobId('campaign-1', 7, 'batch', 'recipient-1');
+    expect(jobId).toBe('campaign__campaign-1__run__7__batch__recipient-1');
+    expect(jobId).not.toContain(':');
+    expect(isValidBullMqJobId(jobId)).toBe(true);
+  });
+
+  it('builds BullMQ-safe job ids for real UUID campaign and recipient ids', () => {
+    const campaignId = 'b69832e8-eea6-47ca-99d9-96f8c0aecd3c';
+    const recipientId = '0272f8ed-2425-4e35-91c9-f993a94f4177';
+    const jobId = buildCampaignJobId(campaignId, 3, 'batch', recipientId);
+    expect(isValidBullMqJobId(jobId)).toBe(true);
+    expect(jobId).not.toContain(':');
   });
 });
