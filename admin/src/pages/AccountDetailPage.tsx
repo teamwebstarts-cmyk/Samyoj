@@ -66,6 +66,25 @@ type Detail = {
     callingEnabled: boolean;
     monthlyTokenLimit: number | null;
     coverageNote?: string;
+    credits?: {
+      chat: {
+        includedLimit: number;
+        includedUsed: number;
+        includedRemaining: number;
+        addonBalance: number;
+        totalRemaining: number;
+        periodEnd: string;
+      };
+      calling: {
+        includedLimit: number;
+        includedUsed: number;
+        includedRemaining: number;
+        addonBalance: number;
+        totalRemaining: number;
+        periodEnd: string;
+      };
+      periodEnd: string | null;
+    };
     usage: {
       monthTokens: number;
       surfaces: Array<{ action: string; label: string; totalTokens: number }>;
@@ -111,6 +130,8 @@ export function AccountDetailPage() {
   const [drawer, setDrawer] = useState<'ai' | 'flags' | 'billing' | 'outreach' | null>(null);
   const [reason, setReason] = useState('');
   const [limit, setLimit] = useState('');
+  const [grantChatAddon, setGrantChatAddon] = useState('');
+  const [grantCallingAddon, setGrantCallingAddon] = useState('');
   const [selectedFlag, setSelectedFlag] = useState('');
   const [flagEnabled, setFlagEnabled] = useState(false);
   const [templateId, setTemplateId] = useState('connect_whatsapp');
@@ -402,9 +423,37 @@ export function AccountDetailPage() {
             }
             padded
           >
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <div className="rounded-xl border border-slate-200 p-4 bg-slate-50/50">
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Monthly Token Cap</p>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Chat credits</p>
+                <p className="mt-1 text-xl font-bold font-mono text-slate-900">
+                  {detail.ai.credits
+                    ? `${formatCount(detail.ai.credits.chat.totalRemaining)} left`
+                    : '—'}
+                </p>
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Plan: {detail.ai.credits ? formatCount(detail.ai.credits.chat.includedUsed) : '0'} /{' '}
+                  {detail.ai.credits ? formatCount(detail.ai.credits.chat.includedLimit) : '0'} · Add-on:{' '}
+                  {detail.ai.credits ? formatCount(detail.ai.credits.chat.addonBalance) : '0'}
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 p-4 bg-slate-50/50">
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Calling minutes</p>
+                <p className="mt-1 text-xl font-bold font-mono text-slate-900">
+                  {detail.ai.credits
+                    ? `${formatCount(detail.ai.credits.calling.totalRemaining)} left`
+                    : '—'}
+                </p>
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Plan: {detail.ai.credits ? formatCount(detail.ai.credits.calling.includedUsed) : '0'} /{' '}
+                  {detail.ai.credits ? formatCount(detail.ai.credits.calling.includedLimit) : '0'} · Add-on:{' '}
+                  {detail.ai.credits ? formatCount(detail.ai.credits.calling.addonBalance) : '0'}
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 p-4 bg-slate-50/50">
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Legacy token cap</p>
                 <p className="mt-1 text-xl font-bold font-mono text-slate-900">
                   {detail.ai.monthlyTokenLimit ? formatCount(detail.ai.monthlyTokenLimit) : 'Uncapped'}
                 </p>
@@ -414,19 +463,12 @@ export function AccountDetailPage() {
               </div>
 
               <div className="rounded-xl border border-slate-200 p-4 bg-slate-50/50">
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-500">AI Chatbot Agent</p>
-                <div className="mt-2">
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-500">AI modules</p>
+                <div className="mt-2 flex flex-wrap gap-2">
                   <StatusBadge status={detail.ai.chatEnabled ? 'ACTIVE' : 'DISABLED'} />
-                </div>
-                <p className="mt-1 text-[11px] text-slate-500">Rag FAQ & Knowledge Base</p>
-              </div>
-
-              <div className="rounded-xl border border-slate-200 p-4 bg-slate-50/50">
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Voice Calling Module</p>
-                <div className="mt-2">
                   <StatusBadge status={detail.ai.callingEnabled ? 'ACTIVE' : 'DISABLED'} />
                 </div>
-                <p className="mt-1 text-[11px] text-slate-500">STT/TTS Realtime Call Bridge</p>
+                <p className="mt-1 text-[11px] text-slate-500">Chat bot · Voice calling</p>
               </div>
             </div>
 
@@ -720,6 +762,12 @@ export function AccountDetailPage() {
               body: JSON.stringify({
                 reason,
                 monthlyTokenLimit: limit.trim() ? Number(limit) : null,
+                ...(grantChatAddon.trim()
+                  ? { grantChatAddon: Number(grantChatAddon) }
+                  : {}),
+                ...(grantCallingAddon.trim()
+                  ? { grantCallingAddon: Number(grantCallingAddon) }
+                  : {}),
               }),
             })
               .then(() => {
@@ -735,6 +783,20 @@ export function AccountDetailPage() {
             type="number"
             value={limit}
             onChange={(e) => setLimit(e.target.value)}
+          />
+          <Input
+            label="Grant chat add-on credits (optional)"
+            type="number"
+            value={grantChatAddon}
+            onChange={(e) => setGrantChatAddon(e.target.value)}
+            placeholder="e.g. 5000"
+          />
+          <Input
+            label="Grant calling add-on minutes (optional)"
+            type="number"
+            value={grantCallingAddon}
+            onChange={(e) => setGrantCallingAddon(e.target.value)}
+            placeholder="e.g. 120"
           />
           <Input
             label="Operator Reason (Required for audit log)"
