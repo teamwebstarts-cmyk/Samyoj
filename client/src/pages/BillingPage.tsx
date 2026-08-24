@@ -15,12 +15,13 @@ import BillingFeatureMatrix from '../components/billing/BillingFeatureMatrix';
 import MetaCostExplainerCard from '../components/billing/MetaCostExplainerCard';
 import BillingSkeleton from '../components/billing/BillingSkeleton';
 import BillingUsageStatsTab from '../components/billing/BillingUsageStatsTab';
+import AiAddonGrid from '../components/billing/AiAddonGrid';
 import EmptyState from '../components/ui/EmptyState';
 import PageShell from '../components/ui/PageShell';
 import SectionCard from '../components/ui/SectionCard';
 import { analyticsApi, billingApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
-import type { BillingInfo, BillingPlan, BillingUsage, ReportsOverviewFullData } from '../types';
+import type { AiCreditsResponse, AiTopupSkuClient, BillingInfo, BillingPlan, BillingUsage, ReportsOverviewFullData } from '../types';
 import { openRazorpayCheckout } from '../utils/razorpay';
 import { toastError, toastSuccess } from '../utils/toast';
 
@@ -43,10 +44,12 @@ export default function BillingPage() {
   const [info, setInfo] = useState<BillingInfo | null>(null);
   const [usage, setUsage] = useState<BillingUsage | null>(null);
   const [overview, setOverview] = useState<ReportsOverviewFullData | null>(null);
+  const [aiCredits, setAiCredits] = useState<AiCreditsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
   const [overviewUnavailable, setOverviewUnavailable] = useState(false);
   const [upgrading, setUpgrading] = useState<string | null>(null);
+  const [purchasingSku, setPurchasingSku] = useState<string | null>(null);
 
   const handleTabChange = useCallback(
     (newTab: BillingTab) => {
@@ -66,17 +69,33 @@ export default function BillingPage() {
     [setSearchParams]
   );
 
+  const scrollToAddons = useCallback(() => {
+    handleTabChange('plans');
+    window.setTimeout(() => {
+      document.getElementById('ai-addons')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 150);
+  }, [handleTabChange]);
+
+  const reloadAiCredits = useCallback(() => {
+    return billingApi
+      .aiCredits()
+      .then((res) => setAiCredits(res.data.data))
+      .catch(() => setAiCredits(null));
+  }, []);
+
   const load = useCallback(() => {
     setLoadFailed(false);
     setLoading(true);
     Promise.all([
       billingApi.get(),
       billingApi.usage(),
+      billingApi.aiCredits().catch(() => null),
       analyticsApi.overview({ days: '30' }).catch(() => null),
     ])
-      .then(([billingRes, usageRes, overviewRes]) => {
+      .then(([billingRes, usageRes, aiCreditsRes, overviewRes]) => {
         setInfo(billingRes.data.data);
         setUsage(usageRes.data.data);
+        setAiCredits(aiCreditsRes?.data?.data ?? null);
         if (overviewRes?.data?.data) {
           setOverview(overviewRes.data.data);
           setOverviewUnavailable(false);
@@ -196,6 +215,56 @@ export default function BillingPage() {
     }
   };
 
+  const handlePurchaseAddon = async (sku: AiTopupSkuClient, quantity = 1) => {
+    if (!info?.canManageBilling || !info.razorpayKeyId) {
+      toastError('Only admins can purchase add-ons.');
+      return;
+    }
+    setPurchasingSku(sku.id);
+    try {
+      const res = await billingApi.purchaseAiAddon(sku.id, quantity);
+      const payload = res.data.data;
+      await openRazorpayCheckout({
+        keyId: payload.keyId,
+        amount: payload.amount,
+        currency: payload.currency,
+        orderId: payload.orderId,
+        name: 'Samyoj AI Add-on',
+        description: `${payload.label} — ${sku.units * quantity} ${sku.pool === 'calling' ? 'minutes' : 'credits'}`,
+        prefillEmail: user?.email,
+        onSuccess: async (response) => {
+          try {
+            const verifyRes = await billingApi.verifyAiAddon(response);
+            toastSuccess(
+              verifyRes.data.data.message ||
+                `Added ${verifyRes.data.data.creditsGranted?.toLocaleString() ?? ''} ${sku.pool === 'calling' ? 'minutes' : 'credits'}`
+            );
+            await reloadAiCredits();
+          } catch {
+            toastError(
+              'Payment received but verification failed. Contact support with your payment ID if credits are missing.'
+            );
+          } finally {
+            setPurchasingSku(null);
+          }
+        },
+        onDismiss: () => {
+          setPurchasingSku(null);
+          toastError('Payment cancelled. No charge was made.');
+        },
+        onFailure: () => {
+          setPurchasingSku(null);
+          toastError('Payment failed. Please try again.');
+        },
+      });
+    } catch (err: unknown) {
+      setPurchasingSku(null);
+      const apiMessage = (err as { response?: { data?: { error?: { message?: string } } } })
+        ?.response?.data?.error?.message;
+      toastError(apiMessage || 'Could not start add-on checkout');
+    }
+  };
+
   const handleExportCsv = async () => {
     try {
       const response = await analyticsApi.exportCsv({ type: 'overview', days: '30' });
@@ -293,7 +362,9 @@ export default function BillingPage() {
                     info={info}
                     usage={usage}
                     overview={overview}
+                    aiCredits={aiCredits}
                     onUpgradeClick={() => handleTabChange('plans')}
+                    onBuyAddons={scrollToAddons}
                     onExportCsv={handleExportCsv}
                   />
                 </>
@@ -330,6 +401,14 @@ export default function BillingPage() {
                   </div>
 
                   <BillingFeatureMatrix currentPlan={info.planTier || info.plan} />
+
+                  <AiAddonGrid
+                    aiCredits={aiCredits}
+                    canManage={info.canManageBilling}
+                    razorpayConfigured={info.razorpayConfigured}
+                    purchasingSku={purchasingSku}
+                    onPurchase={handlePurchaseAddon}
+                  />
 
                   <MetaCostExplainerCard />
                 </div>
