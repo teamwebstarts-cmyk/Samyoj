@@ -42,6 +42,7 @@ describe('campaign consent', () => {
     expect(() => createCampaignSchema.parse({ ...base, scheduledAt: '2026-08-09T12:00:00' })).toThrow();
     expect(isAbsoluteInstant('2026-02-31T12:00:00.000Z')).toBe(false);
     expect(() => createCampaignSchema.parse({ ...base, scheduledAt: '2026-08-09T12:00:00.000Z' })).not.toThrow();
+    expect(() => createCampaignSchema.parse({ ...base, scheduledAt: null })).not.toThrow();
   });
 
   it('rejects malformed provider timestamps instead of persisting them', () => {

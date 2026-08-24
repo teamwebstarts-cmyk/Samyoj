@@ -13,6 +13,7 @@ export interface BotPickerPopoverProps {
   /** Conversation's assigned bot id; null follows the AI Bot page default. */
   activeBotId: string | null;
   botIsLive: boolean;
+  globalChatLocked?: boolean;
   botToggling?: boolean;
   botAssigning?: boolean;
   anchorRef: RefObject<HTMLElement | null>;
@@ -32,6 +33,7 @@ export default function BotPickerPopover({
   loading = false,
   activeBotId,
   botIsLive,
+  globalChatLocked = false,
   botToggling = false,
   botAssigning = false,
   anchorRef,
@@ -138,15 +140,25 @@ export default function BotPickerPopover({
           <div className="min-w-0">
             <p className="text-[12px] font-semibold text-theme-fg">Automations</p>
             <p className="text-[10px] text-theme-muted">
-              {botIsLive ? 'On for this chat' : 'Paused'}
+              {globalChatLocked
+                ? 'Global AI on — all chats'
+                : botIsLive
+                  ? 'On for this chat'
+                  : 'Paused'}
             </p>
           </div>
           <button
             type="button"
             role="switch"
             aria-checked={botIsLive}
-            aria-label={botIsLive ? 'Pause automations' : 'Enable automations'}
-            disabled={toggleBusy}
+            aria-label={
+              globalChatLocked
+                ? 'Global AI chat is on for all chats'
+                : botIsLive
+                  ? 'Pause automations'
+                  : 'Enable automations'
+            }
+            disabled={toggleBusy || globalChatLocked}
             onClick={onToggleBot}
             className={`relative h-7 w-12 shrink-0 rounded-full transition disabled:cursor-not-allowed disabled:opacity-50 ${FOCUS_RING_CLASS} ${
               botIsLive ? 'bg-whatsapp-500' : 'bg-neutral-300 dark:bg-neutral-600'
@@ -180,7 +192,7 @@ export default function BotPickerPopover({
                   type="button"
                   role="option"
                   aria-selected={selected}
-                  disabled={busy}
+                  disabled={busy || globalChatLocked}
                   onClick={() => pick(bot.id)}
                   className={`flex w-full items-center gap-2 px-3 py-2 text-left transition hover:bg-theme-subtle disabled:opacity-50 ${FOCUS_RING_CLASS} ${
                     selected ? 'bg-whatsapp-500/8' : ''

@@ -143,8 +143,8 @@ export default function ContactDetailPanel({
     consentDisplay === 'eligible'
       ? 'Included in WhatsApp campaign audiences.'
       : consentDisplay === 'stopped'
-        ? 'Opted out of marketing messages. You can still chat in Inbox.'
-        : 'Not on campaign lists yet. Use Allow messages below to add them.';
+        ? 'Unsubscribed from marketing messages. You can still chat in Inbox.'
+        : 'Not subscribed to campaigns yet. Use Subscribe to campaigns below.';
 
   const handleToggleOptIn = async () => {
     if (!current.id) return;

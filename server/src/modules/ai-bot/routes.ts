@@ -32,6 +32,10 @@ import { assertCanAddKnowledge, upsertKnowledgeEmbedding } from '../ai/knowledge
 import { ingestUrlKnowledge, ingestPdfKnowledge } from '../ai/knowledge-ingest.service';
 import { generatePersonalityInstructions } from '../ai/generate-personality.service';
 import { generateTrainingFaqs } from '../ai/generate-training.service';
+import {
+  disableGlobalCallingAi,
+  enableGlobalCallingAi,
+} from '../calling/calling-ai-global.service';
 import { getOrgCallingSettings, saveOrgCallingSettings } from '../calling/settings.service';
 import { DEFAULT_CALLING_SETTINGS } from '../calling/calling-settings.types';
 import {
@@ -522,16 +526,21 @@ router.patch(
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const { enabled } = z.object({ enabled: z.boolean() }).parse(req.body);
-    const current = await getOrgCallingSettings(orgId);
-    const saved = await saveOrgCallingSettings(orgId, {
-      aiAutoAnswer: enabled,
-      // After Who answers left Customize, turning AI off must not leave ai_only
-      // with nowhere to ring the team.
-      ...(!enabled && current.routingMode === 'ai_only'
-        ? { routingMode: 'ai_then_agents' as const }
-        : {}),
+    if (enabled) {
+      const result = await enableGlobalCallingAi(orgId);
+      sendSuccess(res, {
+        callingAiEnabled: result.settings.aiAutoAnswer,
+        contactsUpdated: result.contactsUpdated,
+        remembered: result.remembered,
+      });
+      return;
+    }
+    const result = await disableGlobalCallingAi(orgId);
+    sendSuccess(res, {
+      callingAiEnabled: result.settings.aiAutoAnswer,
+      contactsUpdated: result.contactsUpdated,
+      restored: result.restored,
     });
-    sendSuccess(res, { callingAiEnabled: saved.settings.aiAutoAnswer });
   })
 );
 

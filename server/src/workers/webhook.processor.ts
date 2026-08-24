@@ -21,7 +21,8 @@ import {
 } from '../modules/contacts/consent';
 import { emitProductEvent } from '../modules/platform/events';
 import { NEW_CONTACT_CALLING_DEFAULTS } from '../modules/contacts/contact-ai-defaults';
-import { NEW_CONVERSATION_CHAT_DEFAULTS } from '../modules/chat/chat-settings.service';
+import { NEW_CONVERSATION_CHAT_DEFAULTS, applyGlobalChatToConversation } from '../modules/chat/chat-settings.service';
+import { applyGlobalCallingToContactIfEnabled } from '../modules/calling/calling-ai-global.service';
 
 const log = createModuleLogger('webhook');
 
@@ -165,6 +166,17 @@ export async function processWebhookPayload(
 
         const inboundConsent = inboundReplyConsentFields(inboundTimestamp);
 
+        const priorContact = await prisma.contact.findUnique({
+          where: {
+            organizationId_whatsappNumberId_normalizedPhone: {
+              organizationId: orgId,
+              whatsappNumberId: whatsappNumber.id,
+              normalizedPhone: contactPhone,
+            },
+          },
+          select: { id: true },
+        });
+
         let contact = await prisma.contact.upsert({
           where: {
             organizationId_whatsappNumberId_normalizedPhone: {
@@ -191,6 +203,10 @@ export async function processWebhookPayload(
             where: { id: contact.id },
             data: inboundConsent,
           });
+        }
+
+        if (!priorContact) {
+          await applyGlobalCallingToContactIfEnabled(orgId, contact.id);
         }
 
         const priorConversation = await prisma.conversation.findUnique({
@@ -220,6 +236,8 @@ export async function processWebhookPayload(
         });
 
         const isNew = !priorConversation;
+
+        await applyGlobalChatToConversation(orgId, conversation.id, whatsappNumber.id);
 
         const inboundType = mapInboundMessageType(msg.type as string | undefined);
         let inboundMetadata: Record<string, unknown> | undefined = parsed.waFlowResponse

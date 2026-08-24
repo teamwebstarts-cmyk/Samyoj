@@ -67,10 +67,10 @@ export default function CampaignReviewStep({
           ? 'Selected contacts'
           : selectedAudienceTypes.includes('MANUAL')
             ? 'Phone numbers'
-            : 'All contacts';
-  const optedInCount = audienceMetrics?.optedIn ?? includedCount;
+            : messagingConsent.allAudienceWizardLabel;
+  const subscribedCount = audienceMetrics?.optedIn ?? includedCount;
   const estimatedFailed = audienceMetrics?.estimatedFailed;
-  const estimatedReach = audienceMetrics?.estimatedReach ?? optedInCount;
+  const estimatedReach = audienceMetrics?.estimatedReach ?? subscribedCount;
   const variableRows = [
     ...form.headerParams.map((value, index) => ({
       label: `Header variable ${index + 1}`,
@@ -234,7 +234,7 @@ export default function CampaignReviewStep({
                 <div className="campaign-review-audience-grid">
                   <div className="space-y-1.5">
                     <p className="text-[10px] font-extrabold text-slate-800 dark:text-slate-200">{audienceLabel}</p>
-                    <p className="text-[9px] font-medium text-slate-500">Opted-in contacts</p>
+                    <p className="text-[9px] font-medium text-slate-500">Subscribed contacts</p>
                     <p className="text-[9px] font-medium text-slate-500">Estimated failed</p>
                     <p className="text-[9px] font-medium text-slate-500">Estimated to reach</p>
                   </div>
@@ -245,7 +245,7 @@ export default function CampaignReviewStep({
                         : (audienceMetrics?.total ?? includedCount)?.toLocaleString()}
                     </span>
                     <p className="text-[10px] font-extrabold text-slate-700 dark:text-slate-200">
-                      {optedInCount == null ? 'Checking…' : optedInCount.toLocaleString()}
+                      {subscribedCount == null ? 'Checking…' : subscribedCount.toLocaleString()}
                     </p>
                     <p className="text-[10px] font-extrabold text-slate-600 dark:text-slate-300">
                       {estimatedFailed == null ? '—' : `~${estimatedFailed.toLocaleString()} (1%)`}
@@ -257,9 +257,9 @@ export default function CampaignReviewStep({
                 </div>
                 {excludedCount > 0 && (
                   <p className="mt-2 text-[9px] font-semibold leading-relaxed text-amber-700 dark:text-amber-300">
-                    {excludedCount.toLocaleString()} selected{' '}
-                    {excludedCount === 1 ? 'contact has' : 'contacts have'} not agreed to campaign
-                    messages. Inbox chat is not enough.{' '}
+                    {excludedCount.toLocaleString()} contact{excludedCount === 1 ? '' : 's'}{' '}
+                    {excludedCount === 1 ? 'is' : 'are'} not subscribed to campaigns. Inbox chat
+                    alone does not subscribe someone.{' '}
                     <Link to="/contacts" className="font-extrabold underline underline-offset-2">
                       Open Contacts
                     </Link>{' '}

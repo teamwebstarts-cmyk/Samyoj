@@ -784,7 +784,7 @@ export function AccountDetailPage() {
           }}
         >
           <Select name="plan" label="Plan Tier" defaultValue={detail.billing.plan}>
-            <option value="launch">Launch</option>
+            <option value="launch">Kickstart</option>
             <option value="starter">Starter</option>
             <option value="growth">Growth</option>
             <option value="pro">Pro</option>

@@ -28,6 +28,7 @@ interface CampaignAudiencePreviewProps {
   variant?: 'default' | 'wizard';
   showMetrics?: boolean;
   templateCategory?: string;
+  refreshNonce?: number;
 }
 
 function formatMetric(value: number | null | undefined) {
@@ -48,6 +49,7 @@ export default function CampaignAudiencePreview({
   variant = 'default',
   showMetrics = true,
   templateCategory,
+  refreshNonce = 0,
 }: CampaignAudiencePreviewProps) {
   const [count, setCount] = useState<number | null>(null);
   const [costInr, setCostInr] = useState<number | null>(null);
@@ -258,6 +260,7 @@ export default function CampaignAudiencePreview({
     onCountChange,
     onCostChange,
     onMetricsChange,
+    refreshNonce,
   ]);
 
   useEffect(() => {
@@ -296,13 +299,31 @@ export default function CampaignAudiencePreview({
         ) : count !== null ? (
           <div className="space-y-2.5 p-3">
             <div className="flex items-start gap-2">
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" />
+              {count > 0 ? (
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" />
+              ) : (
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-300" />
+              )}
               <div>
-                <p className="text-[11px] font-extrabold text-emerald-900 dark:text-emerald-200">
-                  Audience looks good
+                <p
+                  className={`text-[11px] font-extrabold ${
+                    count > 0
+                      ? 'text-emerald-900 dark:text-emerald-200'
+                      : 'text-amber-900 dark:text-amber-200'
+                  }`}
+                >
+                  {count > 0 ? 'Ready to send' : 'No subscribed recipients'}
                 </p>
-                <p className="mt-0.5 text-[10px] font-medium text-emerald-800 dark:text-emerald-300">
-                  Your campaign will be sent to opted-in contacts only.
+                <p
+                  className={`mt-0.5 text-[10px] font-medium ${
+                    count > 0
+                      ? 'text-emerald-800 dark:text-emerald-300'
+                      : 'text-amber-800 dark:text-amber-300'
+                  }`}
+                >
+                  {count > 0
+                    ? messagingConsent.willReceiveCount(count)
+                    : messagingConsent.noMatchingAudience}
                 </p>
               </div>
             </div>
@@ -310,9 +331,9 @@ export default function CampaignAudiencePreview({
               <>
                 <div className="grid grid-cols-3 gap-1.5">
                   {[
-                    { label: 'Opted-in recipients', value: formatMetric(metrics?.optedIn ?? count) },
-                    { label: 'Estimated failed', value: formatMetric(metrics?.estimatedFailed) },
-                    { label: 'Estimated to reach', value: formatMetric(metrics?.estimatedReach) },
+                    { label: 'Subscribed', value: formatMetric(metrics?.optedIn ?? count) },
+                    { label: 'Est. failed', value: formatMetric(metrics?.estimatedFailed) },
+                    { label: 'Est. reach', value: formatMetric(metrics?.estimatedReach) },
                   ].map((item) => (
                     <div key={item.label} className="rounded-lg border border-emerald-100 bg-white/70 px-2 py-2 dark:border-emerald-900/40 dark:bg-slate-950/30">
                       <p className="text-[9px] font-semibold text-theme-muted">{item.label}</p>
@@ -324,7 +345,7 @@ export default function CampaignAudiencePreview({
                 </div>
                 <div className="flex items-center gap-1.5 border-t border-emerald-100 pt-2 text-[9px] font-semibold text-theme-muted dark:border-emerald-900/40">
                   <Info className="h-3 w-3 shrink-0 text-sky-600" />
-                  Only opted-in contacts will receive this campaign.
+                  {messagingConsent.campaignNotice}
                 </div>
               </>
             )}

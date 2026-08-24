@@ -579,6 +579,8 @@ export const contactApi = {
     tags?: string[];
     optedIn?: boolean;
   }) => api.post('/contacts/bulk', data),
+  subscribeUnsubscribed: () =>
+    api.post<{ data: { updated: number } }>('/contacts/subscribe-unsubscribed'),
   renameTag: (from: string, to: string) => api.post('/contacts/tags/rename', { from, to }),
   deleteTag: (tag: string) => api.delete(`/contacts/tags/${encodeURIComponent(tag)}`),
   export: (params?: Record<string, string>) =>

@@ -13,6 +13,8 @@ export interface CallingAiPickerProps {
   saving?: boolean;
   /** Disable the toggle (e.g. non-owner/admin cannot change AI calling). */
   disabled?: boolean;
+  /** Global AI calling is on — per-person toggle is locked. */
+  globalCallingLocked?: boolean;
   /** Fallback label when bot list is loading. */
   botName?: string | null;
   onChange: (enabled: boolean) => void;
@@ -40,6 +42,7 @@ function CallingAiMenu({
   saving,
   orgMode,
   disabled,
+  globalCallingLocked = false,
   showTrainLink,
   enabledBots,
   selectedBotId,
@@ -54,6 +57,7 @@ function CallingAiMenu({
   saving?: boolean;
   orgMode?: boolean;
   disabled?: boolean;
+  globalCallingLocked?: boolean;
   showTrainLink?: boolean;
   enabledBots: AiBot[];
   selectedBotId: string | null;
@@ -136,28 +140,36 @@ function CallingAiMenu({
               {orgMode ? 'AI calling' : 'Calling AI'}
             </p>
             <p className="text-[10px] text-theme-muted">
-              {orgMode
-                ? enabled
-                  ? 'On — AI answers callers'
-                  : 'Off — calls go to a person'
-                : enabled
-                  ? 'On for this person'
-                  : 'Paused'}
+              {globalCallingLocked
+                ? 'Global AI on — everyone'
+                : orgMode
+                  ? enabled
+                    ? 'On — AI answers callers'
+                    : 'Off — calls go to a person'
+                  : enabled
+                    ? 'On for this person'
+                    : 'Paused'}
             </p>
           </div>
           <button
             type="button"
             role="switch"
             aria-checked={enabled}
-            aria-label={enabled ? 'Turn off AI calling' : 'Turn on AI calling'}
-            disabled={saving || disabled}
+            aria-label={
+              globalCallingLocked
+                ? 'Global AI calling is on for everyone'
+                : enabled
+                  ? 'Turn off AI calling'
+                  : 'Turn on AI calling'
+            }
+            disabled={saving || disabled || globalCallingLocked}
             onMouseDown={(e) => {
               e.preventDefault();
               e.stopPropagation();
             }}
             onClick={(e) => {
               e.stopPropagation();
-              if (saving || disabled) return;
+              if (saving || disabled || globalCallingLocked) return;
               onToggle();
             }}
             className={`relative h-7 w-12 shrink-0 rounded-full transition disabled:cursor-not-allowed disabled:opacity-50 ${FOCUS_RING_CLASS} ${
@@ -171,7 +183,11 @@ function CallingAiMenu({
             />
           </button>
         </div>
-        {disabled ? (
+        {globalCallingLocked ? (
+          <p className="mt-1.5 text-[10px] font-medium text-theme-muted">
+            Turn off global AI calling to change pickup for this person
+          </p>
+        ) : disabled ? (
           <p className="mt-1.5 text-[10px] font-medium text-theme-muted">
             Only an owner or admin can change this
           </p>
@@ -256,6 +272,7 @@ export default function CallingAiPicker({
   enabled,
   saving,
   disabled = false,
+  globalCallingLocked = false,
   botName,
   onChange,
   answeringCallBotId = null,
@@ -302,7 +319,7 @@ export default function CallingAiPicker({
         ref={btnRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
-        disabled={saving || botAssigning || disabled}
+        disabled={saving || botAssigning || disabled || globalCallingLocked}
         aria-label={`${enabled ? 'Calling AI on' : 'Calling AI off'} · ${displayName}. Open calling agent menu`}
         aria-expanded={open}
         aria-haspopup="dialog"
@@ -340,6 +357,7 @@ export default function CallingAiPicker({
           saving={saving}
           orgMode={orgMode}
           disabled={disabled}
+          globalCallingLocked={globalCallingLocked}
           showTrainLink={showTrainLink}
           enabledBots={enabledBots}
           selectedBotId={selectedBotId}

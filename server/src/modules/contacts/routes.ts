@@ -6,6 +6,8 @@ import { authenticateJwtOrApiKey } from '../../middleware/authenticate-jwt-or-ap
 import { AppError, sendSuccess, asyncHandler, paramId } from '../../utils/response';
 import { phoneFieldSchema, validatePhone } from '../../utils/phone';
 import { z } from 'zod';
+import { getOrgCallingSettings } from '../calling/settings.service';
+import { applyGlobalCallingToContactIfEnabled } from '../calling/calling-ai-global.service';
 import {
   bulkUpdateContacts,
   deleteTag,
@@ -13,6 +15,7 @@ import {
   getContactDetail,
   listContacts,
   renameTag,
+  subscribeUnsubscribedContacts,
 } from './service';
 import { resolveActiveWhatsappNumber } from '../whatsapp/active-number';
 import { asCustomAttributes } from '../../utils/custom-attributes';
@@ -108,6 +111,9 @@ router.post(
         ...(data.optedIn !== undefined ? contactConsentData(data.optedIn, 'MANUAL') : {}),
       },
     });
+    if (!existing) {
+      await applyGlobalCallingToContactIfEnabled(req.user!.organizationId!, contact.id);
+    }
     emitProductEvent({
       organizationId: req.user!.organizationId!,
       name: 'CONTACT_CREATED',
@@ -189,6 +195,7 @@ router.post(
           customAttributes,
           source: 'IMPORT',
           ...NEW_CONTACT_CALLING_DEFAULTS,
+          ...contactCreateConsentFields(undefined, 'IMPORT'),
         },
         update: { name: c.name, tags: c.tags, notes: c.notes, customAttributes },
       });
@@ -203,6 +210,15 @@ router.post(
     }
 
     sendSuccess(res, { imported });
+  })
+);
+
+router.post(
+  '/subscribe-unsubscribed',
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const result = await subscribeUnsubscribedContacts(orgId, req.activeWhatsappNumberId);
+    sendSuccess(res, result);
   })
 );
 
@@ -371,6 +387,16 @@ router.patch(
       },
     });
     if (!existing) throw new AppError(404, 'Contact not found');
+
+    if (data.callingAiEnabled !== undefined) {
+      const calling = await getOrgCallingSettings(req.user!.organizationId!);
+      if (calling.aiAutoAnswer) {
+        throw new AppError(
+          400,
+          'Global AI calling is on — turn it off from Calls to change pickup for this person.'
+        );
+      }
+    }
 
     const { customAttributes, optedIn, ...rest } = data;
     const contact = await prisma.contact.update({

@@ -1,4 +1,4 @@
-import { Check, Crown, Sparkles, Zap, Building2, Beaker } from 'lucide-react';
+import { Check, Crown, Sparkles, Zap, Building2, Rocket } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import AppButton from '../ui/AppButton';
 import type { BillingPlan } from '../../types';
@@ -25,12 +25,13 @@ type PlanTheme = {
 
 const planThemes: Record<string, PlanTheme> = {
   launch: {
-    iconBg: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
-    accent: 'text-slate-600 dark:text-slate-400',
-    icon: Beaker,
-    priceTone: 'text-slate-800 dark:text-slate-200',
-    ring: 'ring-slate-200 dark:ring-slate-700',
-    badge: 'Free',
+    iconBg:
+      'bg-gradient-to-br from-emerald-50 to-sky-50 text-emerald-600 shadow-sm ring-1 ring-emerald-100/80 dark:from-emerald-950/50 dark:to-sky-950/40 dark:text-emerald-300 dark:ring-emerald-800/40',
+    accent: 'text-emerald-600 dark:text-emerald-400',
+    icon: Rocket,
+    priceTone: 'text-emerald-700 dark:text-emerald-300',
+    ring: 'ring-emerald-200 dark:ring-emerald-800/50',
+    badge: '14 days free',
   },
   starter: {
     iconBg: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400',
@@ -90,10 +91,17 @@ export default function BillingPlanCard({
         ? 'Contact sales'
         : isPaid
           ? 'Upgrade'
-          : 'Switch plan';
+          : plan.id === 'launch'
+            ? 'Start free trial'
+            : 'Switch plan';
 
-  const showBadge = theme.badge || plan.isMostPopular;
-  const badgeText = plan.isMostPopular ? 'Most popular' : theme.badge;
+  const showStatusBadge =
+    isCurrent || isActivePaidSession || (theme.badge && !plan.isMostPopular);
+  const statusBadgeText = isCurrent
+    ? 'Active'
+    : isActivePaidSession
+      ? 'Purchased'
+      : theme.badge;
 
   return (
     <div
@@ -103,34 +111,41 @@ export default function BillingPlanCard({
           : isActivePaidSession
             ? 'border-emerald-400 dark:border-emerald-700'
             : plan.isMostPopular
-              ? 'border-violet-400 dark:border-violet-700'
+              ? 'border-violet-400 pt-1 dark:border-violet-700'
               : 'border-theme-border'
       }`}
     >
-      <div className="flex flex-1 flex-col">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${theme.iconBg}`}>
-              <Icon className="h-4.5 w-4.5" strokeWidth={2.25} />
-            </div>
-            <h3 className="truncate text-base font-extrabold tracking-tight text-theme-fg">
-              {plan.name}
-            </h3>
-          </div>
+      {plan.isMostPopular && !isCurrent ? (
+        <div className="mb-3 flex justify-center">
+          <span className="rounded-full bg-violet-600 px-3 py-1 text-[9px] font-bold uppercase tracking-wider text-white shadow-sm">
+            Most popular
+          </span>
+        </div>
+      ) : null}
 
-          {isCurrent ? (
-            <span className="shrink-0 rounded-md bg-emerald-500 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white">
-              Active
-            </span>
-          ) : isActivePaidSession ? (
-            <span className="shrink-0 rounded-md bg-emerald-600 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white">
-              Purchased
-            </span>
-          ) : showBadge ? (
-            <span className={`shrink-0 rounded-md px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white ${plan.isMostPopular ? 'bg-violet-600' : 'bg-slate-500'}`}>
-              {badgeText}
-            </span>
-          ) : null}
+      <div className="flex flex-1 flex-col">
+        <div className="flex items-start gap-2.5">
+          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${theme.iconBg}`}>
+            <Icon className="h-4.5 w-4.5" strokeWidth={2.25} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <h3 className="text-base font-extrabold tracking-tight text-theme-fg">{plan.name}</h3>
+              {showStatusBadge ? (
+                <span
+                  className={`shrink-0 rounded-md px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white ${
+                    isCurrent
+                      ? 'bg-emerald-500'
+                      : isActivePaidSession
+                        ? 'bg-emerald-600'
+                        : 'bg-slate-500'
+                  }`}
+                >
+                  {statusBadgeText}
+                </span>
+              ) : null}
+            </div>
+          </div>
         </div>
 
         <p className="mt-2.5 text-[11px] font-medium text-theme-muted">

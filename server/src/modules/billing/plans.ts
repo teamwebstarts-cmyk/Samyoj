@@ -41,7 +41,7 @@ export interface PlanTierDef {
 export const PLAN_TIERS: Record<PlanTier, PlanTierDef> = {
   launch: {
     tier: 'launch',
-    name: 'Launch',
+    name: 'Kickstart',
     waNumbers: 1,
     seats: 1,
     contacts: 100,
@@ -123,13 +123,13 @@ export const BILLING_SKUS: BillingSkuDef[] = [
     id: 'launch_trial',
     planTier: 'launch',
     cadence: 'trial',
-    name: 'Launch',
+    name: 'Kickstart',
     cadenceLabel: 'trial',
     pricePaise: 0,
     inclGstPaise: 0,
     periodDays: 14,
     effectiveMonthlyLabel: '₹0',
-    invoiceLabel: 'Launch — 14-day free trial',
+    invoiceLabel: 'Kickstart — 14-day free trial',
     upiAutopayAllowed: false,
   },
   // Starter
@@ -306,7 +306,7 @@ export interface BillingPlanDef {
 export const BILLING_PLANS: BillingPlanDef[] = [
   {
     id: 'launch',
-    name: 'Launch',
+    name: 'Kickstart',
     pricePaise: 0,
     priceLabel: '₹0 / 14 days',
     seats: 1,

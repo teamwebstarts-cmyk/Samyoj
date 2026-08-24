@@ -11,6 +11,7 @@ import {
   Users,
   XCircle,
 } from 'lucide-react';
+import AppButton from '../ui/AppButton';
 import AppInput from '../ui/AppInput';
 import AppTextarea from '../ui/AppTextarea';
 import { ModalCallout } from '../ui/modalUi';
@@ -19,6 +20,8 @@ import CampaignContactPicker from './CampaignContactPicker';
 import CampaignPhoneCsvImport from './CampaignPhoneCsvImport';
 import { PHONE_HINT, PHONE_PLACEHOLDER, validatePhone, validatePhoneLines } from '../../utils/phone';
 import { messagingConsent } from '../../utils/plainLanguage';
+import { contactApi } from '../../services/api';
+import { toastError, toastSuccess } from '../../utils/toast';
 import type { CampaignRecipientDetail } from './wizard/campaignWizardModel';
 import type { ContactImportRow } from '../../utils/contactImport';
 
@@ -56,8 +59,8 @@ const audienceTypes = [
     id: 'ALL_OPTED_IN' as const,
     label: messagingConsent.allAudienceLabel,
     description: messagingConsent.allAudienceDescription,
-    wizardLabel: 'All contacts',
-    wizardDescription: 'Send to opted-in saved contacts',
+    wizardLabel: messagingConsent.allAudienceWizardLabel,
+    wizardDescription: messagingConsent.allAudienceWizardDescription,
     icon: Users,
     tone: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-300',
   },
@@ -124,6 +127,8 @@ export default function CampaignAudienceSection({
   templateCategory,
 }: CampaignAudienceSectionProps) {
   const [manualInputOpen, setManualInputOpen] = useState(Boolean(phones.trim()));
+  const [previewRefreshNonce, setPreviewRefreshNonce] = useState(0);
+  const [subscribingAll, setSubscribingAll] = useState(false);
   const selectedTags = useMemo(() => parseTags(audienceTags), [audienceTags]);
   const activeAudienceTypes = useMemo(
     () =>
@@ -135,6 +140,25 @@ export default function CampaignAudienceSection({
   const isTagsSelected = activeAudienceTypes.includes('TAGS');
   const isContactsSelected = activeAudienceTypes.includes('CONTACTS');
   const isAllSelected = activeAudienceTypes.includes('ALL_OPTED_IN');
+
+  const handleSubscribeAllRemaining = async () => {
+    setSubscribingAll(true);
+    try {
+      const { data } = await contactApi.subscribeUnsubscribed();
+      const updated = data.data?.updated ?? 0;
+      if (updated > 0) {
+        toastSuccess(`Subscribed ${updated} contact${updated === 1 ? '' : 's'} to campaigns`);
+        setPreviewRefreshNonce((value) => value + 1);
+      } else {
+        toastSuccess('Everyone on this number is already subscribed');
+        setPreviewRefreshNonce((value) => value + 1);
+      }
+    } catch {
+      toastError('Could not subscribe remaining contacts');
+    } finally {
+      setSubscribingAll(false);
+    }
+  };
 
   const toggleAudienceType = (type: AudienceType) => {
     if (variant !== 'wizard' || !onAudienceTypesChange) {
@@ -481,9 +505,9 @@ export default function CampaignAudienceSection({
               <div className="space-y-2.5">
                 <div className="grid grid-cols-3 gap-1.5">
                   {[
-                    { label: 'Total contacts', value: previewMetrics?.total },
-                    { label: 'Opted-in', value: previewMetrics?.optedIn },
-                    { label: 'Not opted-in', value: previewMetrics?.notOptedIn },
+                    { label: 'On this number', value: previewMetrics?.total },
+                    { label: 'Subscribed', value: previewMetrics?.optedIn },
+                    { label: 'Not subscribed', value: previewMetrics?.notOptedIn },
                   ].map((item) => (
                     <div
                       key={item.label}
@@ -496,18 +520,40 @@ export default function CampaignAudienceSection({
                     </div>
                   ))}
                 </div>
+                {previewMetrics?.total != null &&
+                  previewMetrics.optedIn != null &&
+                  previewMetrics.notOptedIn != null &&
+                  previewMetrics.notOptedIn > 0 && (
+                    <div className="rounded-lg border border-amber-200/80 bg-amber-50/70 px-2.5 py-2.5 dark:border-amber-900/40 dark:bg-amber-950/20">
+                      <p className="text-[10px] font-semibold leading-relaxed text-amber-900 dark:text-amber-200">
+                        {messagingConsent.excludedFromCampaign(
+                          previewMetrics.notOptedIn,
+                          previewMetrics.total,
+                        )}
+                      </p>
+                      <AppButton
+                        size="sm"
+                        variant="secondary"
+                        className="mt-2"
+                        loading={subscribingAll}
+                        onClick={() => void handleSubscribeAllRemaining()}
+                      >
+                        {messagingConsent.subscribeAllUnsubscribed}
+                      </AppButton>
+                    </div>
+                  )}
                 <div className="flex items-start gap-2 rounded-lg border border-sky-100 bg-sky-50/70 px-2.5 py-2 dark:border-sky-900/40 dark:bg-sky-950/20">
                   <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-sky-600 dark:text-sky-300" />
                   <p className="text-[9px] font-semibold leading-relaxed text-sky-800 dark:text-sky-200">
-                    Only opted-in contacts will receive this campaign.
+                    {messagingConsent.campaignNotice} Inbox chat does not subscribe someone automatically.
                   </p>
                 </div>
               </div>
             ) : (
               <ModalCallout
                 icon={Sparkles}
-                title="Consent-based audience"
-                description="Use everyone in your contact list who agreed to receive WhatsApp campaign messages."
+                title={messagingConsent.allAudienceTitle}
+                description={messagingConsent.allAudienceDetail}
                 accent="emerald"
               />
             )
@@ -539,6 +585,7 @@ export default function CampaignAudienceSection({
           onCostChange={onPreviewCostChange}
           onMetricsChange={onPreviewMetricsChange}
           templateCategory={templateCategory}
+          refreshNonce={previewRefreshNonce}
         />
       </div>
       </div>

@@ -1,24 +1,39 @@
 /** Plain-language labels for messaging consent (avoids opt-in/opt-out jargon). */
 export const messagingConsent = {
-  badgeYes: 'Gets messages',
-  badgeStopped: 'Stopped',
-  badgeNotOnList: 'Not on list',
-  filterLabel: 'Gets messages',
-  statsLabel: 'Gets messages',
-  allowMessages: 'Allow messages',
-  stopMessages: 'Stop messages',
-  allowCampaignMessages: 'Allow campaign messages',
-  allowCampaignHint: 'Turn on for people who agreed to receive WhatsApp campaign messages.',
-  allAudienceLabel: 'Consented contacts',
-  allAudienceDescription: 'Everyone who agreed to receive WhatsApp campaign messages',
-  allAudienceTitle: 'Message your full list',
+  badgeYes: 'Subscribed',
+  badgeYesShort: 'Subscribed',
+  badgeStopped: 'Unsubscribed',
+  badgeNotOnList: 'Not subscribed',
+  badgeNotOnListShort: 'Not sub.',
+  filterLabel: 'Subscribed',
+  statsLabel: 'Subscribed',
+  allowMessages: 'Subscribe to campaigns',
+  stopMessages: 'Unsubscribe',
+  allowCampaignMessages: 'Subscribe to campaign messages',
+  allowCampaignHint:
+    'On by default for new contacts. Uncheck only if they have not agreed to WhatsApp campaign messages.',
+  allAudienceLabel: 'All subscribed',
+  allAudienceDescription: 'Everyone subscribed to WhatsApp campaign messages on this number',
+  allAudienceTitle: 'All subscribed contacts',
   allAudienceDetail:
-    'Every contact who agreed to receive WhatsApp campaign messages will be included when you save. Good for announcements and updates.',
-  campaignNotice: 'This campaign will go only to people who agreed to receive WhatsApp campaign messages.',
+    'Every contact subscribed to campaign messages on this number will be included. Inbox chat alone does not subscribe someone.',
+  allAudienceWizardLabel: 'All subscribed',
+  allAudienceWizardDescription: 'Send to every subscribed contact on this number',
+  campaignExplainerTitle: 'Campaigns send approved templates in bulk',
+  campaignExplainerBody:
+    'No prior chat is required. Only subscribed contacts receive the message. If someone replies, use Inbox for free-form chat within 24 hours.',
+  campaignNotice: 'Only subscribed contacts receive this campaign. Others are skipped automatically.',
   importNotice:
-    'Only add people who agreed to receive WhatsApp campaign messages. You can change this later from Contacts.',
-  noMatchingAudience: 'No people who agreed to receive WhatsApp campaign messages match this audience',
-  contactPickerNotice: 'Campaigns go only to people who agreed to receive WhatsApp campaign messages.',
+    'New imports are subscribed by default. Uncheck during import only if someone has not agreed to campaign messages.',
+  noMatchingAudience: 'No subscribed contacts match this audience',
+  contactPickerNotice: 'Campaigns only go to subscribed contacts. Filter or subscribe contacts before sending.',
+  subscribeAllUnsubscribed: 'Subscribe all remaining',
+  subscribeAllUnsubscribedHint: (count: number) =>
+    `${count} contact${count === 1 ? '' : 's'} on this number ${count === 1 ? 'is' : 'are'} not subscribed yet.`,
+  excludedFromCampaign: (excluded: number, total: number) =>
+    `${total} contact${total === 1 ? '' : 's'} on this number · ${excluded} not subscribed (skipped)`,
+  willReceiveCount: (count: number) =>
+    `${count} subscribed contact${count === 1 ? '' : 's'} will receive this campaign`,
   templateStopHint: 'Add a way to stop messages in the footer (e.g. Reply STOP to unsubscribe).',
   templateStopPlaceholder: 'Reply STOP to stop messages',
 } as const;

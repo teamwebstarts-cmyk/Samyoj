@@ -8,7 +8,13 @@ import {
 
 describe('shouldRouteCallToAi', () => {
   it('is fail-closed when the user turned AI calling off', () => {
-    expect(shouldRouteCallToAi({ aiAutoAnswer: false, answeringBotEnabled: true })).toBe(false);
+    expect(
+      shouldRouteCallToAi({
+        aiAutoAnswer: false,
+        answeringBotEnabled: true,
+        contactCallingAiEnabled: false,
+      })
+    ).toBe(false);
   });
 
   it('is fail-closed when no calling bot is set to answer all calls', () => {
@@ -19,14 +25,14 @@ describe('shouldRouteCallToAi', () => {
     expect(shouldRouteCallToAi({ aiAutoAnswer: true, answeringBotEnabled: true })).toBe(true);
   });
 
-  it('never sends a person-only contact to AI even if org All-calls is on', () => {
+  it('routes to AI when org All-calls is on even if this contact personal calling is off', () => {
     expect(
       shouldRouteCallToAi({
         aiAutoAnswer: true,
         answeringBotEnabled: true,
         contactCallingAiEnabled: false,
       })
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it('sends a contact flagged for AI when global calling and an answering bot are on', () => {
@@ -39,14 +45,14 @@ describe('shouldRouteCallToAi', () => {
     ).toBe(true);
   });
 
-  it('never sends AI when the global calling switch is off, even if this person is flagged always-AI', () => {
+  it('routes to AI when global calling is off but this contact personal calling is on', () => {
     expect(
       shouldRouteCallToAi({
         aiAutoAnswer: false,
         answeringBotEnabled: true,
         contactCallingAiEnabled: true,
       })
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it('does not fight All-calls off: no answering bot means no AI even for an always-AI contact', () => {
@@ -61,14 +67,14 @@ describe('shouldRouteCallToAi', () => {
 });
 
 describe('shouldAiAnswerAfterAgentTimeout', () => {
-  it('does not take a person-only caller with AI after humans miss', () => {
+  it('may fall back to AI after timeout when org All-calls is on', () => {
     expect(
       shouldAiAnswerAfterAgentTimeout({
         aiAutoAnswer: true,
         hasBot: true,
         contactCallingAiEnabled: false,
       })
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it('may fall back to AI when this person allows it and calling is on', () => {
@@ -95,11 +101,24 @@ describe('routeWhenClosed', () => {
     ).toEqual({ mode: 'ai', reason: 'after_hours_ai' });
   });
 
-  it('does not send a person-only contact to after-hours AI', () => {
+  it('lets after-hours AI answer when org calling is on even if contact personal is off', () => {
     expect(
       routeWhenClosed({
         afterHoursMode: 'ai',
         answeringBotEnabled: true,
+        aiAutoAnswer: true,
+        contactCallingAiEnabled: false,
+        afterHoursMessage: msg,
+      })
+    ).toEqual({ mode: 'ai', reason: 'after_hours_ai' });
+  });
+
+  it('does not send a person-only contact to after-hours AI when org calling is off', () => {
+    expect(
+      routeWhenClosed({
+        afterHoursMode: 'ai',
+        answeringBotEnabled: true,
+        aiAutoAnswer: false,
         contactCallingAiEnabled: false,
         afterHoursMessage: msg,
       })

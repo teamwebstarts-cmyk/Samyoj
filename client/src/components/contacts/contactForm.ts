@@ -15,7 +15,7 @@ export const emptyContactForm: ContactFormValues = {
   tags: '',
   notes: '',
   customAttributes: '',
-  optedIn: false,
+  optedIn: true,
 };
 
 export function parseContactTagList(tags: string): string[] {

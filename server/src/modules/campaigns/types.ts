@@ -112,7 +112,7 @@ export const createCampaignSchema = z.object({
   // Scheduled instants are UTC ISO values. `timezone` is retained as display metadata.
   scheduledAt: z.string().datetime({ offset: false }).refine((value) => value.endsWith('Z'), {
     message: 'scheduledAt must be an absolute UTC ISO instant ending in Z',
-  }).optional(),
+  }).nullable().optional(),
   timezone: z.string().optional(),
   repeatIntervalDays: repeatIntervalSchema,
   repeatUntil: repeatUntilSchema,

@@ -354,6 +354,27 @@ export default function InboxPage() {
     currentUserId: user?.id,
   });
 
+  const chatBots = useChatBots({
+    onChanged: async () => {
+      await loadConversations();
+      const id = selectedRef.current?.id;
+      if (!id) return;
+      try {
+        const { data } = await inboxApi.get(id);
+        const fresh = data.data as Conversation;
+        setSelected((prev) => (prev?.id === id ? { ...prev, ...fresh } : prev));
+        upsertConversation(fresh);
+      } catch {
+        /* keep open thread if refresh fails */
+      }
+    },
+  });
+
+  const globalChatLocked = chatBots.chatAiEnabled;
+  const botIsLive = globalChatLocked
+    ? !selected?.botHandoffAt
+    : selected?.botActive !== false && !selected?.botHandoffAt;
+
   const {
     assigning,
     botToggling,
@@ -369,7 +390,14 @@ export default function InboxPage() {
     handleBulk,
     handleDeleteConversation,
     deleting,
-  } = useConversationActions({ conversations, selected, setSelected, upsertConversation, removeConversation });
+  } = useConversationActions({
+    conversations,
+    selected,
+    setSelected,
+    upsertConversation,
+    removeConversation,
+    globalChatLocked,
+  });
 
   useEffect(() => {
     if (!resolved || !activeNumber) return;
@@ -641,7 +669,6 @@ export default function InboxPage() {
     setBulkDeleteOpen(false);
   }, [runBulk]);
 
-  const botIsLive = selected?.botActive !== false;
   const contextMenuConversation = useMemo(
     () => conversations.find((c) => c.id === contextMenu?.conversationId) ?? null,
     [contextMenu, conversations]
@@ -689,22 +716,6 @@ export default function InboxPage() {
     event.stopPropagation();
     setContextMenu({ x: event.clientX, y: event.clientY, conversationId: conversation.id });
   };
-
-  const chatBots = useChatBots({
-    onChanged: async () => {
-      await loadConversations();
-      const id = selectedRef.current?.id;
-      if (!id) return;
-      try {
-        const { data } = await inboxApi.get(id);
-        const fresh = data.data as Conversation;
-        setSelected((prev) => (prev?.id === id ? { ...prev, ...fresh } : prev));
-        upsertConversation(fresh);
-      } catch {
-        /* keep open thread if refresh fails */
-      }
-    },
-  });
 
   return (
     <InboxGlassTipProvider>
@@ -831,6 +842,7 @@ export default function InboxPage() {
                   loadingEarlier={loadingEarlier}
                   retryingId={retryingId}
                   botIsLive={botIsLive}
+                  globalChatLocked={globalChatLocked}
                   botToggling={botToggling}
                   botAssigning={botAssigning}
                   bots={aiBots}

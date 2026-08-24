@@ -63,9 +63,9 @@ export function contactCreateConsentFields(
   optedIn: boolean | undefined,
   source: string
 ): ContactConsentWrite {
-  if (optedIn === true) return contactConsentData(true, source);
   if (optedIn === false) return contactConsentData(false, source);
-  return { optedIn: false };
+  // Default on: new contacts are campaign-eligible unless explicitly opted out.
+  return contactConsentData(true, source);
 }
 
 export function hasAuditableCampaignConsent(contact: {

@@ -150,7 +150,7 @@ export default function CampaignContactPicker({
                 : 'border-theme-border text-theme-secondary hover:bg-theme-subtle'
             }`}
           >
-            Only people who get messages
+            Only subscribed contacts
           </button>
           <button
             type="button"

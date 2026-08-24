@@ -204,7 +204,7 @@ const COMPARISON_CATEGORIES: MatrixCategory[] = [
 ];
 
 const TIERS: { id: PlanTier; name: string; tag?: string }[] = [
-  { id: 'launch', name: 'Launch', tag: 'Trial' },
+  { id: 'launch', name: 'Kickstart', tag: '14-day trial' },
   { id: 'starter', name: 'Starter' },
   { id: 'growth', name: 'Growth', tag: 'Popular' },
   { id: 'pro', name: 'Pro' },

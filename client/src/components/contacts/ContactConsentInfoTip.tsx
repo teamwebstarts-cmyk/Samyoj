@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import InfoTip from '../ui/InfoTip';
 import type { ContactConsentDisplay } from '../../utils/contactConsent';
+import { messagingConsent } from '../../utils/plainLanguage';
 
 function ConsentTipBody({ children }: { children: ReactNode }) {
   return (
@@ -15,29 +16,29 @@ export function ContactConsentInfoTip({ className = '' }: { className?: string }
   return (
     <InfoTip
       className={className}
-      label="Campaign message consent"
+      label="Campaign subscription"
       content={
         <ConsentTipBody>
-          <p className="font-bold text-neutral-900">Campaign consent (not Inbox chat)</p>
+          <p className="font-bold text-neutral-900">Campaign subscription (not Inbox chat)</p>
           <p>
-            This badge shows who can be added to <strong>WhatsApp campaigns</strong> and bulk
-            marketing templates. You can always reply to anyone in Inbox — that is separate.
+            This shows who can receive <strong>WhatsApp campaign</strong> templates. You can always
+            reply in Inbox — that is separate.
           </p>
           <ul className="list-disc space-y-1 pl-4">
             <li>
-              <strong>Gets messages</strong> — included in campaign audiences.
+              <strong>{messagingConsent.badgeYes}</strong> — included in campaign audiences.
             </li>
             <li>
-              <strong>Not on list</strong> — may be chatting with you, but not on bulk lists until
-              you allow messages or they message you first.
+              <strong>{messagingConsent.badgeNotOnList}</strong> — may be chatting with you, but not
+              on campaign lists until you subscribe them or they message you first.
             </li>
             <li>
-              <strong>Stopped</strong> — opted out of marketing (STOP, unsubscribe, or you turned it
-              off). Inbox chat still works.
+              <strong>{messagingConsent.badgeStopped}</strong> — opted out (STOP, unsubscribe, or you
+              unsubscribed them). Inbox chat still works.
             </li>
           </ul>
           <p className="text-[11px] text-neutral-600">
-            To add someone: open their contact → <strong>Allow messages</strong>, or they can reply{' '}
+            To subscribe someone: open their contact → <strong>{messagingConsent.allowCampaignMessages}</strong>, or they can reply{' '}
             <strong>START</strong> on WhatsApp.
           </p>
         </ConsentTipBody>
@@ -50,10 +51,10 @@ export function contactConsentStatusTip(status: ContactConsentDisplay): ReactNod
   if (status === 'eligible') {
     return (
       <ConsentTipBody>
-        <p className="font-bold text-neutral-900">Gets messages</p>
+        <p className="font-bold text-neutral-900">{messagingConsent.badgeYes}</p>
         <p>
-          This contact is on your campaign list. Bulk templates and campaigns can include them.
-          Regular Inbox replies are always allowed.
+          This contact is subscribed to campaigns. Bulk templates can include them. Inbox replies are
+          always allowed.
         </p>
       </ConsentTipBody>
     );
@@ -62,26 +63,24 @@ export function contactConsentStatusTip(status: ContactConsentDisplay): ReactNod
   if (status === 'stopped') {
     return (
       <ConsentTipBody>
-        <p className="font-bold text-neutral-900">Stopped</p>
+        <p className="font-bold text-neutral-900">{messagingConsent.badgeStopped}</p>
         <p>
-          They opted out of <strong>marketing</strong> messages — for example STOP, unsubscribe, or
-          you chose Stop messages. Campaigns will skip them.
+          They opted out of marketing messages. Campaigns will skip them. Inbox chat still works. They
+          can reply START to subscribe again.
         </p>
-        <p>You can still chat with them in Inbox. They can reply START to opt back in.</p>
       </ConsentTipBody>
     );
   }
 
   return (
     <ConsentTipBody>
-      <p className="font-bold text-neutral-900">Not on list</p>
+      <p className="font-bold text-neutral-900">{messagingConsent.badgeNotOnList}</p>
       <p>
-        They are <strong>not</strong> on campaign bulk lists yet. This does not block Inbox chat —
-        you may already be talking to them.
+        Not on campaign lists yet. This does not block Inbox chat — you may already be talking to them.
       </p>
       <p>
-        Use <strong>Allow messages</strong> on their contact, or wait for them to message your
-        WhatsApp number first.
+        Use <strong>{messagingConsent.allowCampaignMessages}</strong> on their contact, or wait for them
+        to message your WhatsApp number first.
       </p>
     </ConsentTipBody>
   );
@@ -98,7 +97,7 @@ export function ContactConsentBadgeInfo({
   return (
     <InfoTip
       className={className}
-      label="Campaign consent for this contact"
+      label="Campaign subscription for this contact"
       content={contactConsentStatusTip(status)}
     />
   );

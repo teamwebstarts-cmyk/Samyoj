@@ -35,8 +35,8 @@ export default function CallingAiToggleBanner({
   const statusLabel = enabled ? 'On' : 'Off';
   const pickupLabel = enabled ? 'AI pickup' : 'Team pickup';
   const infoText = enabled
-    ? 'AI calling is on for this number. New contacts start as person-only until you enable AI for that contact. Turn off to route all calls to your team.'
-    : 'AI calling is off — calls go to a person unless you enabled AI for a specific contact. Turn on to allow AI pickup where contacts are opted in.';
+    ? 'AI calling is on for everyone — all contacts get AI pickup unless you turn global off. Per-person toggles are locked while global is on.'
+    : 'AI calling is off — calls go to your team unless you enabled AI for a specific contact. Personal picks are restored when you turn global back off.';
 
   const noBots = !hasBots;
 

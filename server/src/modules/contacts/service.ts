@@ -551,3 +551,34 @@ export async function exportContacts(
     body: JSON.stringify(contacts, null, 2),
   };
 }
+
+/** Subscribe contacts on this number who are not stopped and lack auditable campaign consent. */
+export async function subscribeUnsubscribedContacts(
+  organizationId: string,
+  whatsappNumberId?: string
+) {
+  if (!whatsappNumberId) {
+    throw new AppError(400, 'Connect a WhatsApp number before updating contacts');
+  }
+
+  const pending = await prisma.contact.findMany({
+    where: {
+      organizationId,
+      whatsappNumberId,
+      optOutAt: null,
+      NOT: { ...AUDITABLE_CONSENT_WHERE },
+    },
+    select: { id: true },
+  });
+
+  if (!pending.length) {
+    return { updated: 0 };
+  }
+
+  await prisma.contact.updateMany({
+    where: { id: { in: pending.map((contact) => contact.id) } },
+    data: contactConsentData(true, 'MANUAL_BULK'),
+  });
+
+  return { updated: pending.length };
+}

@@ -13,6 +13,8 @@ interface ActionsDeps {
   setSelected: Dispatch<SetStateAction<Conversation | null>>;
   upsertConversation: (conv: Conversation, toTop?: boolean) => void;
   removeConversation: (conversationId: string) => void;
+  /** When global AI chat is on, per-chat pause is locked. */
+  globalChatLocked?: boolean;
 }
 
 /** Assign / status / bot / call-back / snooze / favorite / delete / bulk actions for conversations. */
@@ -22,6 +24,7 @@ export function useConversationActions({
   setSelected,
   upsertConversation,
   removeConversation,
+  globalChatLocked = false,
 }: ActionsDeps) {
   const navigate = useNavigate();
   const [assigning, setAssigning] = useState(false);
@@ -73,6 +76,10 @@ export function useConversationActions({
     const { id: targetId, conversation: target } = findTarget(conversationId);
     if (!target || !targetId) return;
     const turningOn = target.botActive === false || Boolean(target.botHandoffAt);
+    if (!turningOn && globalChatLocked) {
+      toastError('Global AI chat is on — turn it off from the banner above to pause this chat.');
+      return;
+    }
     setBotToggling(true);
     try {
       const { data } = await inboxApi.setBot(
@@ -110,6 +117,10 @@ export function useConversationActions({
   const handleSetActiveBot = async (activeBotId: string | null, conversationId?: string) => {
     const { id: targetId, conversation: target } = findTarget(conversationId);
     if (!target || !targetId) return;
+    if (globalChatLocked) {
+      toastError('Global AI chat is on — all chats use the org bot until you turn global off.');
+      return;
+    }
     const sameBot = (target.activeBot?.id ?? null) === activeBotId;
     const needsEnable = target.botActive === false || Boolean(target.botHandoffAt);
     if (sameBot && !needsEnable) return;

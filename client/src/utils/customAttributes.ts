@@ -44,3 +44,20 @@ export function stringifyCustomAttributes(attrs: Record<string, string> | null |
     .map(([key, value]) => `${key}=${value}`)
     .join('\n');
 }
+
+export function humanizeCustomKey(key: string): string {
+  return key.replace(/[_-]+/g, ' ').replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+/** Sorted key/value rows for read-only contact detail panels. */
+export function listCustomAttributeEntries(
+  attrs: Record<string, string> | null | undefined,
+): Array<{ key: string; label: string; value: string }> {
+  return Object.entries(asCustomAttributes(attrs))
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, value]) => ({
+      key,
+      label: humanizeCustomKey(key),
+      value,
+    }));
+}

@@ -710,6 +710,7 @@ export default function CallsPage() {
       if (saveGen === orgCallingAiSaveGenRef.current && typeof saved === 'boolean') {
         setOrgCallingAiEnabled(saved);
       }
+      void loadCalls();
       toastSuccess(enabled ? 'AI calling on' : 'AI calling off', { id: 'org-calling-ai' });
     } catch {
       if (saveGen === orgCallingAiSaveGenRef.current) {
@@ -727,6 +728,10 @@ export default function CallsPage() {
   async function handleCallingAiChange(enabled: boolean) {
     const contactId = selectedCall?.contact?.id;
     if (!contactId || !selectedCall || callingAiSaving) return;
+    if (orgCallingAiEnabled) {
+      toastError('Global AI calling is on — turn it off from the banner above to change pickup for this person.');
+      return;
+    }
     const previous = selectedCall.contact?.callingAiEnabled !== false;
     setCallingAiSaving(true);
     setCalls((prev) =>
@@ -898,7 +903,10 @@ export default function CallsPage() {
                 agentName={selectedCall.assignedAgent?.name}
                 conversationId={selectedCall.conversation?.id}
                 contactId={selectedCall.contact?.id}
-                callingAiEnabled={selectedCall.contact?.callingAiEnabled !== false}
+                callingAiEnabled={
+                  orgCallingAiEnabled || selectedCall.contact?.callingAiEnabled === true
+                }
+                globalCallingLocked={Boolean(orgCallingAiEnabled)}
                 onCallingAiChange={(enabled) => void handleCallingAiChange(enabled)}
                 callingAiSaving={callingAiSaving}
                 answeringCallBotId={answeringCallBotId}

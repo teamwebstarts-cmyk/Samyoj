@@ -176,7 +176,7 @@ export function campaignToWizardForm(
 
 export function buildCampaignPayload(
   form: CampaignWizardForm,
-  options?: { clearSchedule?: boolean; draft?: boolean },
+  options?: { clearSchedule?: boolean; draft?: boolean; isUpdate?: boolean },
 ) {
   const payload: Record<string, unknown> = {
     name: form.name,
@@ -255,11 +255,10 @@ export function buildCampaignPayload(
     payload.audienceConfig = { requireOptIn: true };
   }
 
-  if (options?.draft) {
-    if (options.clearSchedule) payload.scheduledAt = null;
-  } else if (form.scheduleEnabled && form.scheduledAt) {
+  if (form.scheduleEnabled && form.scheduledAt) {
     payload.scheduledAt = new Date(form.scheduledAt).toISOString();
-  } else if (options?.clearSchedule) {
+  } else if (options?.clearSchedule && options?.isUpdate) {
+    // Updates may clear an existing schedule; creates should omit scheduledAt.
     payload.scheduledAt = null;
   }
 

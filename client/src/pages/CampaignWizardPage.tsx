@@ -94,7 +94,9 @@ export default function CampaignWizardPage() {
   const excludedSelectedContacts =
     form.audienceType === 'CONTACTS' && audiencePreviewCount !== null
       ? Math.max(0, form.selectedContactIds.length - audiencePreviewCount)
-      : 0;
+      : form.audienceType === 'ALL_OPTED_IN' && audienceMetrics?.notOptedIn != null
+        ? audienceMetrics.notOptedIn
+        : 0;
   const finalActionBlocked =
     audiencePreviewCount === null ||
     audiencePreviewCount === 0 ||
@@ -321,6 +323,7 @@ export default function CampaignWizardPage() {
       payload = buildCampaignPayload(form, {
         draft: action === 'draft',
         clearSchedule: action === 'draft' || !form.scheduleEnabled,
+        isUpdate: Boolean(editing),
       });
     } catch (error) {
       toastError(error instanceof Error ? error.message : 'Campaign details could not be saved.');

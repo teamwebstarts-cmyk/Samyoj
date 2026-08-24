@@ -27,6 +27,11 @@ export interface CallingSettings {
   transferMode: TransferMode;
   /** Auto hang-up so AI calls cannot burn credits forever. */
   maxCallDurationSec: number;
+  /**
+   * Per-contact calling AI remembered before global ON overwrote them.
+   * Restored when global turns OFF. Internal — not shown in Customize UI.
+   */
+  personalCallingSnapshot?: Record<string, Record<string, true>>;
 }
 
 export const DEFAULT_CALLING_SETTINGS: CallingSettings = {

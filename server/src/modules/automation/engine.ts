@@ -15,9 +15,37 @@ import { keywordMatches } from '../flows/trigger-match';
 import { getOrgBusinessHours, isWithinBusinessHours } from '../settings/business-hours';
 import { createModuleLogger } from '../../utils/logger';
 import { emitProductEvent } from '../platform/events';
+import {
+  resolveChatAiEffectivelyOn,
+  syncConversationChatAiFromGlobal,
+} from '../chat/chat-ai-live';
 
 const log = createModuleLogger('automation-engine');
 const AI_BOT_DEBOUNCE_MS = 1500;
+
+const CONVERSATION_AI_SELECT = {
+  id: true,
+  botActive: true,
+  whatsappNumberId: true,
+  activeBotId: true,
+  botAssignmentSource: true,
+  botHandoffAt: true,
+  assignedAgentId: true,
+  status: true,
+} as const;
+
+async function loadConversationForChatAi(organizationId: string, conversationId: string) {
+  const row = await prisma.conversation.findFirst({
+    where: { id: conversationId, organizationId },
+    select: CONVERSATION_AI_SELECT,
+  });
+  if (!row) return null;
+  const synced = await syncConversationChatAiFromGlobal(organizationId, row);
+  const { live } = await resolveChatAiEffectivelyOn(organizationId, synced);
+  const botActiveForAutomation =
+    synced.botActive === true ? live : live && !synced.botHandoffAt;
+  return { ...row, ...synced, botActiveForAutomation };
+}
 
 /** BullMQ refuses Job.remove() while the worker holds the lock. */
 export function isUnremovableQueueState(state: string): boolean {
@@ -233,10 +261,11 @@ export async function sendAutomationReply(
 export async function queueAiBotProcessing(payload: InboundAutomationPayload): Promise<void> {
   if (!(await hasEnabledBots(payload.organizationId))) return;
 
-  const conversation = await prisma.conversation.findFirst({
-    where: { id: payload.conversationId, organizationId: payload.organizationId },
-  });
-  if (!conversation?.botActive) {
+  const conversation = await loadConversationForChatAi(
+    payload.organizationId,
+    payload.conversationId
+  );
+  if (!conversation?.botActiveForAutomation) {
     log.info('AI bot skipped for conversation', {
       conversationId: payload.conversationId,
       botActive: conversation?.botActive,
@@ -397,11 +426,13 @@ export async function processAiChatbotJob(payload: InboundAutomationPayload): Pr
 }
 
 export async function handleInboundAutomations(payload: InboundAutomationPayload): Promise<void> {
-  const conversation = await prisma.conversation.findFirst({
-    where: { id: payload.conversationId, organizationId: payload.organizationId },
-    select: { botActive: true },
+  const conversation = await loadConversationForChatAi(
+    payload.organizationId,
+    payload.conversationId
+  );
+  const paused = decideInboundFunnel({
+    botActive: conversation?.botActiveForAutomation,
   });
-  const paused = decideInboundFunnel({ botActive: conversation?.botActive });
   if (paused.type === 'skip' && paused.reason === 'paused') {
     await logAutomationRun({
       organizationId: payload.organizationId,
@@ -430,7 +461,7 @@ export async function handleInboundAutomations(payload: InboundAutomationPayload
   });
 
   const afterFlow = decideInboundFunnel({
-    botActive: conversation?.botActive,
+    botActive: conversation?.botActiveForAutomation,
     flowHandled,
     lockRetry: payload.lockRetry,
   });
@@ -486,7 +517,7 @@ export async function handleInboundAutomations(payload: InboundAutomationPayload
     select: { optedIn: true },
   });
   const afterOptOut = decideInboundFunnel({
-    botActive: conversation?.botActive,
+    botActive: conversation?.botActiveForAutomation,
     flowHandled: false,
     optedIn: optedOut?.optedIn,
   });

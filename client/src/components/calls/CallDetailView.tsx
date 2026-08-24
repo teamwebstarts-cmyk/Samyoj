@@ -53,6 +53,7 @@ interface CallDetailViewProps {
   conversationId?: string | null;
   contactId?: string | null;
   callingAiEnabled?: boolean;
+  globalCallingLocked?: boolean;
   onCallingAiChange?: (enabled: boolean) => void;
   callingAiSaving?: boolean;
   answeringCallBotId?: string | null;
@@ -109,7 +110,8 @@ export default function CallDetailView({
   agentName,
   conversationId,
   contactId,
-  callingAiEnabled = true,
+  callingAiEnabled = false,
+  globalCallingLocked = false,
   onCallingAiChange,
   callingAiSaving,
   answeringCallBotId = null,
@@ -218,8 +220,10 @@ export default function CallDetailView({
           {contactId && onCallingAiChange ? (
             <span className="hidden sm:inline-flex">
               <CallingAiPicker
-                enabled={callingAiEnabled !== false}
+                enabled={callingAiEnabled}
                 saving={callingAiSaving}
+                disabled={globalCallingLocked}
+                globalCallingLocked={globalCallingLocked}
                 botName={botName}
                 onChange={onCallingAiChange}
                 answeringCallBotId={answeringCallBotId}

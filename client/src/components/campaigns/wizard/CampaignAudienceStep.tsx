@@ -7,6 +7,7 @@ import type { AudiencePreviewMetrics } from '../CampaignAudiencePreview';
 import type { CampaignWizardForm } from './campaignWizardModel';
 import type { CampaignQuotaData } from './CampaignWizardSummaryRail';
 import CampaignWizardSummaryRail from './CampaignWizardSummaryRail';
+import { messagingConsent } from '../../../utils/plainLanguage';
 
 interface CampaignAudienceStepProps {
   form: CampaignWizardForm;
@@ -46,6 +47,15 @@ export default function CampaignAudienceStep({
       aria-labelledby="campaign-wizard-step-1"
       className="campaign-audience-step space-y-3"
     >
+      <div className="rounded-xl border border-sky-100 bg-sky-50/80 px-3.5 py-3 dark:border-sky-900/50 dark:bg-sky-950/25">
+        <p className="text-[11px] font-extrabold text-sky-900 dark:text-sky-200">
+          {messagingConsent.campaignExplainerTitle}
+        </p>
+        <p className="mt-1 text-[10px] font-medium leading-relaxed text-sky-800/90 dark:text-sky-300/90">
+          {messagingConsent.campaignExplainerBody}
+        </p>
+      </div>
+
       <div>
         <h2 className="text-[15px] font-extrabold tracking-tight text-slate-900 dark:text-white">
           Choose your audience

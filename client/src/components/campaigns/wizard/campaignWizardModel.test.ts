@@ -119,6 +119,30 @@ describe('campaignWizardModel', () => {
     ]);
   });
 
+  it('omits scheduledAt when sending immediately on create', () => {
+    const form = {
+      ...createEmptyCampaignWizardForm(),
+      name: 'Pay reminder',
+      templateName: template.name,
+      scheduleEnabled: false,
+    };
+
+    const payload = buildCampaignPayload(form, { clearSchedule: true, isUpdate: false });
+    expect(payload).not.toHaveProperty('scheduledAt');
+  });
+
+  it('clears scheduledAt on update when schedule is disabled', () => {
+    const form = {
+      ...createEmptyCampaignWizardForm(),
+      name: 'Pay reminder',
+      templateName: template.name,
+      scheduleEnabled: false,
+    };
+
+    const payload = buildCampaignPayload(form, { clearSchedule: true, isUpdate: true });
+    expect(payload.scheduledAt).toBeNull();
+  });
+
   it('keeps {{name}} contact tokens in template params', () => {
     const form = {
       ...createEmptyCampaignWizardForm(),

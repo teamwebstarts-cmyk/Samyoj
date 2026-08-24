@@ -25,6 +25,7 @@ interface ChatHeaderProps {
   /** undefined until the server responds — renders a skeleton pill (tri-state). */
   serviceWindow: ServiceWindowInfo | undefined;
   botIsLive: boolean;
+  globalChatLocked?: boolean;
   botToggling: boolean;
   botAssigning?: boolean;
   bots?: AiBot[];
@@ -108,6 +109,7 @@ export default function ChatHeader({
   conversation,
   serviceWindow,
   botIsLive,
+  globalChatLocked = false,
   botToggling,
   botAssigning = false,
   bots = [],
@@ -138,18 +140,28 @@ export default function ChatHeader({
   const assignedId = conversation.assignedAgent?.id;
 
   const botDisplayName = useMemo(() => {
+    if (globalChatLocked) {
+      const globalBot =
+        bots.find((b) => b.appliedToAll && b.enabled) ??
+        bots.find((b) => b.isDefault && b.enabled) ??
+        bots.find((b) => b.enabled);
+      if (globalBot?.name) return globalBot.name;
+    }
     if (conversation.activeBot?.name) return conversation.activeBot.name;
     const enabled = bots.filter((b) => b.enabled && (b.channel ?? 'CHAT') === 'CHAT');
     const defaultBot = enabled.find((b) => b.isDefault) ?? enabled[0];
     return defaultBot?.name || 'AI Bot';
-  }, [conversation.activeBot?.name, bots]);
+  }, [conversation.activeBot?.name, bots, globalChatLocked]);
 
   const botTipDetail = useMemo(() => {
+    if (globalChatLocked) {
+      return 'Global AI on for all chats';
+    }
     if (conversation.activeBot?.name) return conversation.activeBot.name;
     const enabled = bots.filter((b) => b.enabled && (b.channel ?? 'CHAT') === 'CHAT');
     const defaultBot = enabled.find((b) => b.isDefault) ?? enabled[0];
     return defaultBot?.name || 'Choose chatbot';
-  }, [conversation.activeBot?.name, bots]);
+  }, [conversation.activeBot?.name, bots, globalChatLocked]);
 
   const avatarPresence =
     status === 'OPEN' || status === 'PENDING' || status === 'CLOSED' || status === 'SNOOZED'
@@ -326,6 +338,7 @@ export default function ChatHeader({
               loading={botsLoading}
               activeBotId={conversation.activeBot?.id ?? null}
               botIsLive={botIsLive}
+              globalChatLocked={globalChatLocked}
               botToggling={botToggling}
               botAssigning={botAssigning}
               anchorRef={botBtnRef}

@@ -54,6 +54,7 @@ interface ChatThreadProps {
   loadingEarlier: boolean;
   retryingId: string | null;
   botIsLive: boolean;
+  globalChatLocked?: boolean;
   botToggling: boolean;
   botAssigning?: boolean;
   bots?: AiBot[];
@@ -126,6 +127,7 @@ export default function ChatThread({
   loadingEarlier,
   retryingId,
   botIsLive,
+  globalChatLocked = false,
   botToggling,
   botAssigning = false,
   bots = [],
@@ -578,6 +580,7 @@ export default function ChatThread({
         conversation={conversation}
         serviceWindow={serviceWindow}
         botIsLive={botIsLive}
+        globalChatLocked={globalChatLocked}
         botToggling={botToggling}
         botAssigning={botAssigning}
         bots={bots}

@@ -1241,6 +1241,21 @@
     table-layout: fixed;
   }
 
+  /* Sticky actions overlap Campaign/Inbox badges — same fix as templates table */
+  .contact-table thead th:last-child,
+  .contact-table tbody td:last-child {
+    position: static;
+    box-shadow: none;
+    background: transparent;
+    min-width: 9rem;
+    white-space: nowrap;
+  }
+
+  .contact-table tbody tr:nth-child(even) td:last-child,
+  .contact-table tbody tr:hover td:last-child {
+    background: transparent;
+  }
+
   .contact-table tbody tr.group:hover {
     background: var(--table-row-hover);
   }

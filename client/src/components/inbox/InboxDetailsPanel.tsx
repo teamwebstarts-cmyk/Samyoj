@@ -21,6 +21,7 @@ import {
 import { useGlassTipProps } from './ComposerGlassTip';
 import { labelsApi, contactApi } from '../../services/api';
 import ConversationNotesSection from './ConversationNotesSection';
+import ContactSavedAnswersSection from './details/ContactSavedAnswersSection';
 import { useTheme } from '../../contexts/ThemeContext';
 import type {
   Contact,
@@ -434,6 +435,8 @@ export default function InboxDetailsPanel({
           </div>
         ) : (
           <div className="space-y-2.5 px-3 py-3">
+            <ContactSavedAnswersSection contact={contact} />
+
             <DetailsSectionCard data-section="labels">
               <div ref={labelsSectionRef}>
                 <DetailsSectionHeader

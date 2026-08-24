@@ -20,10 +20,13 @@ const consentBadgeStyles = {
 export function ContactOptInBadge({
   contact,
   compact,
+  table,
   showInfo = false,
 }: {
   contact: ContactConsentInput | null | undefined;
   compact?: boolean;
+  /** Shorter labels for fixed-width table cells. */
+  table?: boolean;
   /** Show (i) tooltip explaining this contact's campaign consent status. */
   showInfo?: boolean;
 }) {
@@ -32,21 +35,26 @@ export function ContactOptInBadge({
   const status = getContactConsentDisplay(contact);
   const label =
     status === 'eligible'
-      ? messagingConsent.badgeYes
+      ? table
+        ? messagingConsent.badgeYesShort
+        : messagingConsent.badgeYes
       : status === 'stopped'
         ? messagingConsent.badgeStopped
-        : messagingConsent.badgeNotOnList;
+        : table
+          ? messagingConsent.badgeNotOnListShort
+          : messagingConsent.badgeNotOnList;
   const Icon = status === 'eligible' ? CheckCircle2 : status === 'stopped' ? XCircle : Shield;
+  const sizeClass = table ? 'px-1.5 py-0.5 text-[8px]' : compact ? 'px-2 py-1 text-[9px]' : 'px-2.5 py-1 text-[10px]';
+  const iconClass = table ? 'h-2.5 w-2.5' : compact ? 'h-2.5 w-2.5' : 'h-3 w-3';
 
   return (
-    <span className="inline-flex max-w-full items-center">
+    <span className="inline-flex max-w-full items-center gap-0.5">
       <span
-        className={`inline-flex shrink-0 items-center gap-1 rounded-md font-bold uppercase tracking-wide ring-1 ring-inset leading-none whitespace-nowrap ${
-          compact ? 'px-2 py-1 text-[9px]' : 'px-2.5 py-1 text-[10px]'
-        } ${consentBadgeStyles[status]}`}
+        title={table ? (status === 'eligible' ? messagingConsent.badgeYes : status === 'stopped' ? messagingConsent.badgeStopped : messagingConsent.badgeNotOnList) : undefined}
+        className={`inline-flex max-w-full items-center gap-0.5 rounded-md font-bold uppercase tracking-wide ring-1 ring-inset leading-none ${sizeClass} ${consentBadgeStyles[status]}`}
       >
-        <Icon className={`shrink-0 ${compact ? 'h-2.5 w-2.5' : 'h-3 w-3'}`} />
-        {label}
+        <Icon className={`shrink-0 ${iconClass}`} />
+        <span className="truncate">{label}</span>
       </span>
       {showInfo ? <ContactConsentBadgeInfo status={status} /> : null}
     </span>
@@ -75,26 +83,45 @@ export function ContactTagBadge({ tag }: { tag: string }) {
 export function ContactConversationBadge({
   status,
   compact,
+  table,
 }: {
   status: string;
   compact?: boolean;
+  /** Compact single-column table cell — icon + short label, no wrap. */
+  table?: boolean;
 }) {
   const tones: Record<string, string> = {
     OPEN: 'bg-emerald-50 text-emerald-700 ring-emerald-200/60 dark:bg-emerald-950/40 dark:text-emerald-300',
     PENDING: 'bg-amber-50 text-amber-700 ring-amber-200/60 dark:bg-amber-950/40 dark:text-amber-300',
     CLOSED: 'bg-neutral-100 text-neutral-500 ring-neutral-200/60 dark:bg-slate-800 dark:text-slate-400',
   };
+  const label = conversationStatusLabel[status] || status;
+  const sizeClass = table ? 'px-1.5 py-0.5 text-[8px]' : compact ? 'px-2 py-1 text-[9px]' : 'px-2 py-0.5 text-[9px]';
 
   return (
     <span
-      className={`inline-flex shrink-0 items-center gap-1 rounded-md font-bold uppercase tracking-wide ring-1 ring-inset leading-none whitespace-nowrap ${
-        compact ? 'px-2 py-1 text-[9px]' : 'px-2 py-0.5 text-[9px]'
-      } ${tones[status] || tones.CLOSED}`}
+      title={table ? `Inbox · ${label}` : undefined}
+      className={`inline-flex max-w-full items-center gap-0.5 rounded-md font-bold uppercase tracking-wide ring-1 ring-inset leading-none ${sizeClass} ${tones[status] || tones.CLOSED}`}
     >
-      <MessageSquare className={`shrink-0 ${compact ? 'h-2.5 w-2.5' : 'h-2.5 w-2.5'}`} />
-      {conversationStatusLabel[status] || status}
+      <MessageSquare className="h-2.5 w-2.5 shrink-0" />
+      <span className="truncate">{label}</span>
     </span>
   );
+}
+
+export function ContactInboxStatusCell({
+  status,
+}: {
+  status?: string | null;
+}) {
+  if (!status) {
+    return (
+      <span className="text-[11px] font-medium text-theme-muted" title="No Inbox thread yet">
+        —
+      </span>
+    );
+  }
+  return <ContactConversationBadge status={status} table />;
 }
 
 export function ContactActiveIndicator({ lastActiveAt }: { lastActiveAt?: string | null }) {

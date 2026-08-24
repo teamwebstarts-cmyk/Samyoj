@@ -23,7 +23,11 @@ import { emitToOrg } from '../../realtime';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { parseActiveFlow } from '../flows/flow-state';
-import { NEW_CONVERSATION_CHAT_DEFAULTS } from '../chat/chat-settings.service';
+import {
+  applyGlobalChatToConversation,
+  getChatSettingsForNumber,
+  NEW_CONVERSATION_CHAT_DEFAULTS,
+} from '../chat/chat-settings.service';
 import { NEW_CONTACT_CALLING_DEFAULTS } from '../contacts/contact-ai-defaults';
 import { pauseConversationAutomations, cancelFlowDelayJob } from '../flows/pause-automation';
 import type { FlowNode } from '../flows/types';
@@ -387,6 +391,8 @@ router.post(
       },
       update: {},
     });
+
+    await applyGlobalChatToConversation(orgId, conversation.id, whatsappNumber.id);
 
     const fullConversation = await prisma.conversation.findFirst({
       where: { id: conversation.id, organizationId: orgId },
@@ -1704,6 +1710,13 @@ router.patch(
     } = {};
 
     if (typeof active === 'boolean') {
+      const chatSettings = await getChatSettingsForNumber(orgId, req.activeWhatsappNumberId);
+      if (chatSettings.aiEnabled && active === false) {
+        throw new AppError(
+          400,
+          'Global AI chat is on for this number — turn it off from the banner above to pause this chat.'
+        );
+      }
       data.botActive = active;
       if (active) {
         data.botHandoffAt = null;

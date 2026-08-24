@@ -14,6 +14,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import type { Campaign } from '../../types';
+import { messagingConsent } from '../../utils/plainLanguage';
 
 export function campaignProgress(sent: number, total: number) {
   if (total <= 0) return 0;
@@ -245,7 +246,7 @@ export const audienceLabels: Record<string, string> = {
   MANUAL: 'Phone numbers',
   TAGS: 'Contact tags',
   CONTACTS: 'Select contacts',
-  ALL_OPTED_IN: 'Consented contacts',
+  ALL_OPTED_IN: messagingConsent.allAudienceLabel,
 };
 
 export function getAudienceLabel(audienceType: string) {

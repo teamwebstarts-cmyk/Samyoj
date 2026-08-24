@@ -18,11 +18,12 @@ export type CallRouteDecision =
 export function shouldRouteCallToAi(input: {
   aiAutoAnswer: boolean;
   answeringBotEnabled: boolean;
-  /** Per-contact override. False = this person wants a human. Default / true = eligible for org AI routing. */
+  /** Per-contact override. True = AI for this person when org calling is off. */
   contactCallingAiEnabled?: boolean | null;
 }): boolean {
-  if (input.contactCallingAiEnabled === false) return false;
-  return input.aiAutoAnswer && input.answeringBotEnabled;
+  if (!input.answeringBotEnabled) return false;
+  if (input.aiAutoAnswer) return true;
+  return input.contactCallingAiEnabled === true;
 }
 
 /** Ring-timeout fallback must not pick up a “person only” caller with AI. */
@@ -31,8 +32,9 @@ export function shouldAiAnswerAfterAgentTimeout(input: {
   hasBot: boolean;
   contactCallingAiEnabled?: boolean | null;
 }): boolean {
-  if (input.contactCallingAiEnabled === false) return false;
-  return input.aiAutoAnswer && input.hasBot;
+  if (!input.hasBot) return false;
+  if (input.aiAutoAnswer) return true;
+  return input.contactCallingAiEnabled === true;
 }
 
 /**
@@ -42,13 +44,15 @@ export function shouldAiAnswerAfterAgentTimeout(input: {
 export function routeWhenClosed(input: {
   afterHoursMode: CallingSettings['afterHoursMode'];
   answeringBotEnabled: boolean;
+  /** Org-wide calling AI — when true, per-contact off is overridden (mirrors Inbox global chat). */
+  aiAutoAnswer?: boolean;
   contactCallingAiEnabled?: boolean | null;
   afterHoursMessage: string;
 }): CallRouteDecision {
+  const contactBlocksAi =
+    input.contactCallingAiEnabled === false && input.aiAutoAnswer !== true;
   const afterHoursAi =
-    input.afterHoursMode === 'ai' &&
-    input.answeringBotEnabled &&
-    input.contactCallingAiEnabled !== false;
+    input.afterHoursMode === 'ai' && input.answeringBotEnabled && !contactBlocksAi;
 
   if (afterHoursAi) {
     return { mode: 'ai', reason: 'after_hours_ai' };
@@ -104,6 +108,7 @@ export async function decideCallRoute(
     const closed = routeWhenClosed({
       afterHoursMode: settings.afterHoursMode,
       answeringBotEnabled: answeringOn,
+      aiAutoAnswer: settings.aiAutoAnswer,
       contactCallingAiEnabled: contact?.callingAiEnabled,
       afterHoursMessage: settings.afterHoursMessage,
     });

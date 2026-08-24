@@ -18,10 +18,10 @@ interface BillingCurrentPlanHeroProps {
 
 const tierAccents: Record<string, { bg: string; text: string; ring: string; border: string }> = {
   launch: {
-    bg: 'bg-slate-50 dark:bg-slate-900/40',
-    text: 'text-slate-700 dark:text-slate-300',
-    ring: 'ring-slate-200 dark:ring-slate-700',
-    border: 'border-slate-300 dark:border-slate-700',
+    bg: 'bg-emerald-50 dark:bg-emerald-950/40',
+    text: 'text-emerald-700 dark:text-emerald-300',
+    ring: 'ring-emerald-200 dark:ring-emerald-800',
+    border: 'border-emerald-300 dark:border-emerald-800',
   },
   starter: {
     bg: 'bg-emerald-50 dark:bg-emerald-950/40',

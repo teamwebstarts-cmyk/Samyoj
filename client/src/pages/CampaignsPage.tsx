@@ -158,7 +158,10 @@ function campaignToForm(campaign: CampaignDetail, templates: MessageTemplate[]) 
   };
 }
 
-function buildPayload(form: typeof emptyForm, options?: { clearSchedule?: boolean; draft?: boolean }) {
+function buildPayload(
+  form: typeof emptyForm,
+  options?: { clearSchedule?: boolean; draft?: boolean; isUpdate?: boolean },
+) {
   const payload: Record<string, unknown> = {
     name: form.name,
     templateName: form.templateName,
@@ -210,11 +213,9 @@ function buildPayload(form: typeof emptyForm, options?: { clearSchedule?: boolea
     payload.audienceConfig = { requireOptIn: true };
   }
 
-  if (options?.draft) {
-    if (options.clearSchedule) payload.scheduledAt = null;
-  } else if (form.scheduleEnabled && form.scheduledAt) {
+  if (form.scheduleEnabled && form.scheduledAt) {
     payload.scheduledAt = new Date(form.scheduledAt).toISOString();
-  } else if (options?.clearSchedule) {
+  } else if (options?.clearSchedule && options?.isUpdate) {
     payload.scheduledAt = null;
   }
 
@@ -587,6 +588,7 @@ export default function CampaignsPage() {
     const payload = buildPayload(form, {
       clearSchedule: Boolean(editing && (action === 'draft' || !form.scheduleEnabled)),
       draft: action === 'draft',
+      isUpdate: Boolean(editing),
     });
     setSaving(true);
     try {

@@ -50,6 +50,15 @@ vi.mock('../settings/business-hours', () => ({
   isWithinBusinessHours: vi.fn(() => true),
 }));
 
+const resolveChatAiEffectivelyOnMock = vi.fn();
+const syncConversationChatAiFromGlobalMock = vi.fn();
+
+vi.mock('../chat/chat-ai-live', () => ({
+  resolveChatAiEffectivelyOn: (...args: unknown[]) => resolveChatAiEffectivelyOnMock(...args),
+  syncConversationChatAiFromGlobal: (...args: unknown[]) =>
+    syncConversationChatAiFromGlobalMock(...args),
+}));
+
 import prisma from '../../config/database';
 import { flowQueue, automationQueue } from '../../config/queues';
 import { logAutomationRun } from '../ai/chatbot.service';
@@ -84,7 +93,18 @@ const payload = {
 describe('handleInboundAutomations', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    conversationMock.mockResolvedValue({ botActive: true } as never);
+    conversationMock.mockResolvedValue({
+      id: 'conv-1',
+      botActive: true,
+      whatsappNumberId: 'wa-1',
+      botHandoffAt: null,
+    } as never);
+    syncConversationChatAiFromGlobalMock.mockImplementation(async (_org, conv) => conv);
+    resolveChatAiEffectivelyOnMock.mockImplementation(async (_org, conv) => ({
+      live: conv.botActive === true,
+      globalAiEnabled: false,
+      botId: null,
+    }));
     contactMock.mockResolvedValue({ optedIn: true } as never);
     automationMock.mockResolvedValue([]);
     logFindMock.mockResolvedValue(null);
@@ -96,7 +116,17 @@ describe('handleInboundAutomations', () => {
   });
 
   it('skips flow, static, and AI when Inbox paused the bot', async () => {
-    conversationMock.mockResolvedValue({ botActive: false } as never);
+    conversationMock.mockResolvedValue({
+      id: 'conv-1',
+      botActive: false,
+      whatsappNumberId: 'wa-1',
+      botHandoffAt: null,
+    } as never);
+    resolveChatAiEffectivelyOnMock.mockResolvedValue({
+      live: false,
+      globalAiEnabled: false,
+      botId: null,
+    });
 
     await handleInboundAutomations(payload);
 
@@ -133,6 +163,36 @@ describe('handleInboundAutomations', () => {
 
     expect(automationMock).not.toHaveBeenCalled();
     expect(automationQueueAdd).not.toHaveBeenCalled();
+  });
+
+  it('still queues AI when global chat is on even if personal botActive is false', async () => {
+    flowHandled.mockResolvedValue(false);
+    conversationMock.mockResolvedValue({
+      id: 'conv-1',
+      botActive: false,
+      whatsappNumberId: 'wa-1',
+      botHandoffAt: null,
+      assignedAgentId: null,
+      status: 'OPEN',
+    } as never);
+    syncConversationChatAiFromGlobalMock.mockImplementation(async (_org, conv) => ({
+      ...conv,
+      botActive: true,
+      botAssignmentSource: 'APPLIED',
+    }));
+    resolveChatAiEffectivelyOnMock.mockResolvedValue({
+      live: true,
+      globalAiEnabled: true,
+      botId: 'bot-1',
+    });
+
+    await handleInboundAutomations(payload);
+
+    expect(automationQueueAdd).toHaveBeenCalledWith(
+      'ai-chatbot',
+      expect.objectContaining({ conversationId: 'conv-1' }),
+      expect.objectContaining({ jobId: 'ai-bot-conv-1' })
+    );
   });
 
   it('still queues the AI bot when the contact opted out of marketing', async () => {
@@ -202,10 +262,19 @@ describe('queueAiBotProcessing debounce', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     conversationMock.mockResolvedValue({
+      id: 'conv-1',
       botActive: true,
+      whatsappNumberId: 'wa-1',
+      botHandoffAt: null,
       assignedAgentId: null,
       status: 'OPEN',
     } as never);
+    syncConversationChatAiFromGlobalMock.mockImplementation(async (_org, conv) => conv);
+    resolveChatAiEffectivelyOnMock.mockResolvedValue({
+      live: true,
+      globalAiEnabled: false,
+      botId: null,
+    });
     botsEnabled.mockResolvedValue(true);
     automationQueueAdd.mockResolvedValue({} as never);
   });
@@ -216,7 +285,10 @@ describe('queueAiBotProcessing debounce', () => {
 
   it('queues a follow-up instead of throwing when the debounce job is locked', async () => {
     conversationMock.mockResolvedValue({
+      id: 'conv-1',
       botActive: true,
+      whatsappNumberId: 'wa-1',
+      botHandoffAt: null,
       assignedAgentId: null,
       status: 'OPEN',
     } as never);

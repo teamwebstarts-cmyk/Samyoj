@@ -47,7 +47,7 @@ export default function SubscriptionDunningBanner() {
     icon: Clock,
     iconColor: 'text-amber-600 dark:text-amber-400',
     title: 'Trial Ending Soon',
-    message: `${trialDaysRemaining} days remaining in your Launch trial. Upgrade now to keep premium automation and team features active.`,
+    message: `${trialDaysRemaining} days remaining in your Kickstart trial. Upgrade now to keep premium automation and team features active.`,
     cta: 'Upgrade to Growth',
   };
 
@@ -57,7 +57,7 @@ export default function SubscriptionDunningBanner() {
       icon: AlertCircle,
       iconColor: 'text-rose-600 dark:text-rose-400',
       title: 'Free Trial Expired',
-      message: 'Your 14-day Launch trial has ended. Upgrade your organization plan to restore sending, bots, and campaign automations.',
+      message: 'Your 14-day Kickstart trial has ended. Upgrade your organization plan to restore sending, bots, and campaign automations.',
       cta: 'Choose a Plan',
     };
   } else if (isPastDue) {

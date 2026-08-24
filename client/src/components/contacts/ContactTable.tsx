@@ -6,8 +6,8 @@ import type { Contact } from '../../types';
 import { ContactConsentInfoTip } from './ContactConsentInfoTip';
 import {
   ContactActiveIndicator,
-  ContactConversationBadge,
   ContactEmptyTags,
+  ContactInboxStatusCell,
   ContactOptInBadge,
   ContactRowPreview,
   ContactSourceBadge,
@@ -36,7 +36,8 @@ const headers = [
   { key: 'contact', label: 'Contact', className: 'text-left' },
   { key: 'tags', label: 'Tags', className: 'hidden xl:table-cell text-left' },
   { key: 'lastActive', label: 'Last active', className: 'hidden 2xl:table-cell text-left' },
-  { key: 'status', label: 'Status', className: 'text-left' },
+  { key: 'campaign', label: 'Campaign', className: 'text-left' },
+  { key: 'inbox', label: 'Inbox', className: 'text-left' },
   { key: 'actions', label: 'Actions', className: 'text-right' },
 ] as const;
 
@@ -61,8 +62,8 @@ export default function ContactTable({
 }: ContactTableProps) {
   return (
     <div className="data-table contact-table min-w-0 overflow-hidden p-0">
-      <div className="min-w-0 overflow-x-clip">
-        <table className="w-full table-fixed text-sm">
+      <div className="min-w-0 overflow-x-auto">
+        <table className="w-full min-w-[52rem] table-fixed text-sm">
           <thead>
             <tr className="border-b border-theme-border bg-theme-subtle/80">
               <th className={`w-10 ${cellPad}`}>
@@ -81,10 +82,12 @@ export default function ContactTable({
                 <th
                   key={header.key}
                   className={`${cellPad} text-[11px] font-bold uppercase tracking-[0.08em] text-theme-muted ${header.className} ${
-                    header.key === 'actions' ? 'w-[8.25rem]' : ''
-                  } ${header.key === 'status' ? 'w-[10.5rem] xl:w-[12rem]' : ''}`}
+                    header.key === 'actions' ? 'w-[9rem]' : ''
+                  } ${header.key === 'campaign' ? 'w-[6.75rem] sm:w-[7.25rem]' : ''} ${
+                    header.key === 'inbox' ? 'w-[5.25rem] sm:w-[5.75rem]' : ''
+                  }`}
                 >
-                  {header.key === 'status' ? (
+                  {header.key === 'campaign' ? (
                     <span className="inline-flex items-center gap-1 normal-case tracking-normal">
                       <span className="text-[11px] font-bold uppercase tracking-[0.08em]">Campaign</span>
                       <ContactConsentInfoTip />
@@ -163,16 +166,12 @@ export default function ContactTable({
                     <ContactActiveIndicator lastActiveAt={contact.lastActiveAt} />
                   </td>
 
-                  <td className={`min-w-0 ${cellPad}`}>
-                    <div className="flex min-w-0 flex-nowrap items-center gap-2">
-                      <ContactOptInBadge contact={contact} compact />
-                      {contact.conversation?.status && (
-                        <ContactConversationBadge
-                          status={contact.conversation.status}
-                          compact
-                        />
-                      )}
-                    </div>
+                  <td className={`min-w-0 overflow-hidden ${cellPad}`}>
+                    <ContactOptInBadge contact={contact} table />
+                  </td>
+
+                  <td className={`min-w-0 overflow-hidden ${cellPad}`}>
+                    <ContactInboxStatusCell status={contact.conversation?.status} />
                   </td>
 
                   <td className={cellPad}>

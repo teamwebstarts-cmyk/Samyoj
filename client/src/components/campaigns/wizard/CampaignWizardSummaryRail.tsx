@@ -2,6 +2,7 @@ import { MessageCircle, ShieldCheck } from 'lucide-react';
 import type { MessageTemplate } from '../../../types';
 import type { CampaignWizardForm } from './campaignWizardModel';
 import type { AudiencePreviewMetrics } from '../CampaignAudiencePreview';
+import { messagingConsent } from '../../../utils/plainLanguage';
 
 export interface CampaignQuotaData {
   sentToday: number;
@@ -28,7 +29,7 @@ function audienceLabel(form: CampaignWizardForm) {
   }
   if (selectedTypes.includes('TAGS')) return 'Contact tags';
   if (selectedTypes.includes('CONTACTS')) return 'Selected contacts';
-  if (selectedTypes.includes('ALL_OPTED_IN')) return 'All contacts';
+  if (selectedTypes.includes('ALL_OPTED_IN')) return messagingConsent.allAudienceWizardLabel;
 
   switch (form.audienceType) {
     case 'MANUAL':
@@ -38,7 +39,7 @@ function audienceLabel(form: CampaignWizardForm) {
     case 'CONTACTS':
       return 'Selected contacts';
     default:
-      return 'All contacts';
+      return messagingConsent.allAudienceWizardLabel;
   }
 }
 
@@ -139,7 +140,7 @@ export default function CampaignWizardSummaryRail({
             <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-slate-400">Reach estimate</p>
             <div className="mt-2 space-y-1.5">
               <div className="flex items-center justify-between gap-2 text-[10px]">
-                <span className="font-medium text-slate-500">Opted-in recipients</span>
+                <span className="font-medium text-slate-500">Subscribed recipients</span>
                 <NumberValue value={audienceMetrics?.optedIn ?? includedCount} />
               </div>
               <div className="flex items-center justify-between gap-2 text-[10px]">
