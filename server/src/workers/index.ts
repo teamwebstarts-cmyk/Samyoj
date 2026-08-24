@@ -234,7 +234,7 @@ const broadcastWorker = new Worker(
       organizationId,
       whatsappNumberDbId,
       phoneNumberId,
-      encryptedToken,
+      encryptedToken: legacyEncryptedToken,
       wabaId,
       templateName,
       templateLanguage,
@@ -247,8 +247,8 @@ const broadcastWorker = new Worker(
     if (!Number.isInteger(runVersion)) {
       throw new Error('Campaign job missing runVersion. Legacy jobs must be re-enqueued.');
     }
-    if (!phoneNumberId || !encryptedToken) {
-      throw new Error('Campaign job missing WhatsApp credentials. Re-send the campaign from the UI.');
+    if (!phoneNumberId) {
+      throw new Error('Campaign job missing WhatsApp phone number id. Re-send the campaign from the UI.');
     }
 
     const campaign = await prisma.campaign.findUnique({
@@ -293,7 +293,19 @@ const broadcastWorker = new Worker(
       return;
     }
 
-    const accessToken = MetaWhatsAppService.decryptToken(encryptedToken);
+    let accessToken: string;
+    if (legacyEncryptedToken) {
+      accessToken = MetaWhatsAppService.decryptToken(legacyEncryptedToken);
+    } else {
+      const tokenRow = await prisma.whatsappNumber.findFirst({
+        where: { id: whatsappNumberDbId, organizationId, isActive: true },
+        select: { accessToken: true },
+      });
+      if (!tokenRow?.accessToken) {
+        throw new Error('WhatsApp number is inactive or missing credentials. Reconnect WhatsApp and retry.');
+      }
+      accessToken = MetaWhatsAppService.decryptToken(tokenRow.accessToken);
+    }
     const { emitToOrg } = await import('../realtime');
     if (wabaId) {
       try {
