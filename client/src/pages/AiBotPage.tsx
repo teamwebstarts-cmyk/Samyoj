@@ -58,6 +58,8 @@ import { getErrorMessage, normalizeError } from '../utils/errors';
 import { toastError, toastSuccess } from '../utils/toast';
 import { explainAiSkipReason, httpStatusToAiSkipReason } from '../utils/aiSkipReasons';
 import type { AiBot, BotAnalytics, BotTestResult, KnowledgeBaseItem, OrgProfilePayload } from '../types';
+import { useEntitlements } from '../hooks/useEntitlements';
+import EntitlementNotice from '../components/billing/EntitlementNotice';
 
 type Channel = 'CHAT' | 'CALL';
 type SlideTab = 'setup' | 'train' | 'try' | 'pickup';
@@ -176,6 +178,7 @@ function buildPersonalityIntent(input: {
 export default function AiBotPage() {
   const { organization } = useAuth();
   const { activeNumber, resolved } = useWhatsAppNumber();
+  const { entitlements, loading: entitlementsLoading } = useEntitlements();
   const [bots, setBots] = useState<AiBot[]>([]);
   const [answeringCallBotId, setAnsweringCallBotId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -236,6 +239,16 @@ export default function AiBotPage() {
     Array<{ botName: string; botId: string; analytics: BotAnalytics | null }>
   >([]);
   const analyticsGenerationRef = useRef(0);
+  const canUseChatBots =
+    entitlementsLoading || !entitlements || entitlements.canUseFeature('aiBots');
+  const canUseCalling =
+    entitlementsLoading || !entitlements || entitlements.canUseFeature('calling');
+  const channelEntitled = (channel: Channel) =>
+    channel === 'CHAT' ? canUseChatBots : canUseCalling;
+  const channelGateMessage =
+    !entitlementsLoading && entitlements && !channelEntitled(channelFilter)
+      ? `${channelFilter === 'CHAT' ? 'Chat bots' : 'Calling bots'} are not included on your current plan.`
+      : null;
 
   const load = useCallback(async () => {
     if (!resolved || !activeNumber) return;
@@ -390,6 +403,7 @@ export default function AiBotPage() {
   };
 
   const openCreate = (channel: Channel) => {
+    if (!channelEntitled(channel)) return;
     setEditing(null);
     resetForm(channel);
     setSlideOpen(true);
@@ -477,6 +491,10 @@ export default function AiBotPage() {
   };
 
   const handleGenerate = async () => {
+    if (!channelEntitled(formChannel)) {
+      toastError('This AI feature is not included on your current plan.');
+      return;
+    }
     const generatedIntent = buildPersonalityIntent({
       businessName,
       businessWebsite,
@@ -509,6 +527,10 @@ export default function AiBotPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!channelEntitled(formChannel)) {
+      toastError('This AI feature is not included on your current plan.');
+      return;
+    }
     if (!name.trim()) {
       toastError('Give this bot a name.');
       setSlideTab('setup');
@@ -544,6 +566,7 @@ export default function AiBotPage() {
   };
 
   const toggleEnabled = async (bot: AiBot) => {
+    if (!channelEntitled((bot.channel ?? 'CHAT') as Channel)) return;
     await aiBotApi.update(bot.id, { enabled: !bot.enabled });
     toastSuccess(bot.enabled ? 'Bot paused' : 'Bot is on');
     load();
@@ -665,6 +688,10 @@ export default function AiBotPage() {
   };
 
   const runTest = async () => {
+    if (!channelEntitled(formChannel)) {
+      toastError('This AI feature is not included on your current plan.');
+      return;
+    }
     const message = testMessage.trim();
     if (!message) {
       toastError('Type a message first.');
@@ -736,6 +763,10 @@ export default function AiBotPage() {
   };
 
   const handleVoicePreview = async (speaker = voiceSpeaker) => {
+    if (!canUseCalling) {
+      toastError('Calling is not included on your current plan.');
+      return;
+    }
     setVoicePreviewLoading(true);
     setPreviewingSpeaker(speaker);
     try {
@@ -763,6 +794,10 @@ export default function AiBotPage() {
   };
 
   const handleGenerateFaqs = async () => {
+    if (!channelEntitled(formChannel)) {
+      toastError('This AI feature is not included on your current plan.');
+      return;
+    }
     const note = buildPersonalityIntent({
       businessName,
       businessWebsite,
@@ -914,6 +949,13 @@ export default function AiBotPage() {
             ariaLabel="AI Bot channels"
           />
 
+          {channelGateMessage && (
+            <EntitlementNotice
+              message={channelGateMessage}
+              upgradePlan={channelFilter === 'CALL' ? 'pro' : 'growth'}
+            />
+          )}
+
           {aggregateAnalytics && aggregateAnalytics.totalReplies > 0 && channelFilter === 'CHAT' && (
             <AiBotInsights
               analytics={aggregateAnalytics}
@@ -939,6 +981,7 @@ export default function AiBotPage() {
                   className="max-md:w-full"
                   icon={<Plus size={16} />}
                   onClick={() => openCreate(channelFilter)}
+                  disabled={!channelEntitled(channelFilter)}
                 >
                   {channelFilter === 'CHAT' ? 'New chat bot' : 'New calling bot'}
                 </AppButton>
@@ -957,6 +1000,7 @@ export default function AiBotPage() {
                   hasSearch={Boolean(search.trim())}
                   channel={channelFilter}
                   onCreate={() => openCreate(channelFilter)}
+                  canCreate={channelEntitled(channelFilter)}
                   onClearFilters={() => {
                     setSearch('');
                     setStatusFilter('');
@@ -991,6 +1035,7 @@ export default function AiBotPage() {
                   onEdit={() => openEdit(bot)}
                   onToggle={() => toggleEnabled(bot)}
                     onDelete={canDeleteBot() ? () => handleDelete(bot.id) : undefined}
+                    canManage={channelEntitled((bot.channel ?? 'CHAT') as Channel)}
                 />
               )}
               renderTable={() => (
@@ -1012,6 +1057,7 @@ export default function AiBotPage() {
                         <button
                           type="button"
                           onClick={() => openEdit(bot)}
+                          disabled={!channelEntitled((bot.channel ?? 'CHAT') as Channel)}
                               className="flex w-full items-center gap-3 rounded-xl py-1 text-left"
                         >
                           <div
@@ -1063,6 +1109,7 @@ export default function AiBotPage() {
                         <div className="flex items-center justify-end gap-1.5">
                           <TableTextButton
                             onClick={() => toggleEnabled(bot)}
+                            disabled={!channelEntitled((bot.channel ?? 'CHAT') as Channel)}
                             icon={bot.enabled ? PauseCircle : PlayCircle}
                             variant={bot.enabled ? 'primary' : 'neutral'}
                           >
@@ -1071,6 +1118,7 @@ export default function AiBotPage() {
                               <RowActions
                                 onEdit={() => openEdit(bot)}
                                 onDelete={canDeleteBot() ? () => handleDelete(bot.id) : undefined}
+                                disabled={!channelEntitled((bot.channel ?? 'CHAT') as Channel)}
                               />
                         </div>
                       </td>
@@ -1110,7 +1158,10 @@ export default function AiBotPage() {
               hideSubmit={slideTab === 'pickup'}
               submitLabel={slideTab === 'setup' ? 'Save' : 'Save changes'}
               loading={slideTab === 'pickup' ? pickupFooter.saving : saving}
-              submitDisabled={slideTab === 'pickup' ? !pickupFooter.dirty : false}
+              submitDisabled={
+                !channelEntitled(formChannel) ||
+                (slideTab === 'pickup' ? !pickupFooter.dirty : false)
+              }
               primaryAction={
                 slideTab === 'pickup'
                   ? {
@@ -1119,8 +1170,11 @@ export default function AiBotPage() {
                     }
                   : undefined
               }
-              primaryDisabled={slideTab === 'pickup' && !pickupFooter.dirty}
-              onDelete={canDeleteBot() ? () => handleDelete(editing.id) : undefined}
+              primaryDisabled={
+                !channelEntitled(formChannel) ||
+                (slideTab === 'pickup' && !pickupFooter.dirty)
+              }
+              onDelete={canDeleteBot() && channelEntitled(formChannel) ? () => handleDelete(editing.id) : undefined}
               deleteLabel="Delete bot"
             />
           ) : (
@@ -1183,7 +1237,7 @@ export default function AiBotPage() {
                   <button
                     type="submit"
                     form="slideover-form"
-                    disabled={saving}
+                    disabled={saving || !channelEntitled(formChannel)}
                     className={`btn-primary inline-flex h-10 min-h-[44px] items-center justify-center gap-2 rounded-xl px-5 text-[13px] font-semibold disabled:opacity-50 ${FOCUS_RING_CLASS}`}
                   >
                     {saving && (
