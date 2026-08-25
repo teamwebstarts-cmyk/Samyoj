@@ -36,6 +36,7 @@ interface InteractiveComposerProps {
   onClose: () => void;
   onSend: (payload: ComposerPayload) => Promise<void>;
   sending?: boolean;
+  canSendMessages?: boolean;
   serviceWindow: ServiceWindowInfo;
 }
 
@@ -60,6 +61,7 @@ export default function InteractiveComposer({
   onClose,
   onSend,
   sending,
+  canSendMessages = true,
   serviceWindow: _serviceWindow,
 }: InteractiveComposerProps) {
   void _serviceWindow;
@@ -177,7 +179,7 @@ export default function InteractiveComposer({
   ]);
 
   const handleSend = useCallback(async () => {
-    if (!canSend) return;
+    if (!canSend || !canSendMessages) return;
 
     if (mode === 'copy_code') {
       if (!selectedTemplate || !couponCode.trim()) return;
@@ -248,6 +250,7 @@ export default function InteractiveComposer({
     onClose();
   }, [
     canSend,
+    canSendMessages,
     mode,
     selectedTemplate,
     couponCode,
@@ -623,7 +626,7 @@ export default function InteractiveComposer({
             size="sm"
             icon={<Send size={14} />}
             loading={sending}
-            disabled={!canSend}
+          disabled={!canSend || !canSendMessages}
             onClick={() => void handleSend()}
           >
             Send {activeMode.short.toLowerCase()}
