@@ -4,7 +4,7 @@ import AppButton from '../ui/AppButton';
 import LoadingState from '../ui/LoadingState';
 import { flowApi } from '../../services/api';
 import { getErrorMessage } from '../../utils/errors';
-import { toastError, toastSuccess } from '../../utils/toast';
+import { toastError } from '../../utils/toast';
 import type { FlowNode } from '../../types';
 
 interface FlowVersion {
@@ -46,6 +46,13 @@ export default function FlowVersionsPanel({ flowId, onRestore }: FlowVersionsPan
   useEffect(load, [flowId]);
 
   const handleRestore = async (version: number) => {
+    if (
+      !window.confirm(
+        `Restore version ${version} into your draft? Live customer behavior will not change until you publish.`
+      )
+    ) {
+      return;
+    }
     setRestoring(version);
     try {
       const { data } = await flowApi.restoreVersion(flowId, version);
@@ -58,7 +65,6 @@ export default function FlowVersionsPanel({ flowId, onRestore }: FlowVersionsPan
         priority?: number;
       };
       onRestore({ ...flow, nodes: flow.nodes || [] }, version);
-      toastSuccess(`Restored to version ${version}`);
       load();
     } catch (err) {
       toastError(getErrorMessage(err, 'Failed to restore version'));
