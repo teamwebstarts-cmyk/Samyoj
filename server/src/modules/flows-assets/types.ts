@@ -1,12 +1,15 @@
 import { z } from 'zod';
 
 export const metaFlowFieldSchema = z.object({
-  id: z.string().min(1),
+  id: z.string().trim().min(1).max(64),
   label: z.string().min(1).max(80),
   type: z.enum(['text', 'email', 'phone', 'number', 'textarea', 'dropdown', 'date']),
   required: z.boolean().optional(),
   options: z.array(z.string()).optional(),
 });
+
+const uniqueFieldIds = (fields: Array<{ id: string }>) =>
+  new Set(fields.map((field) => field.id.trim())).size === fields.length;
 
 export const createFlowAssetSchema = z
   .object({
@@ -17,6 +20,18 @@ export const createFlowAssetSchema = z
     title: z.string().min(2).max(80).optional(),
     submitLabel: z.string().min(1).max(20).default('Submit'),
     fields: z.array(metaFlowFieldSchema).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.fields && !uniqueFieldIds(data.fields)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['fields'], message: 'Field IDs must be unique' });
+    }
+    if (data.fields?.some((field) => field.type === 'dropdown' && !field.options?.length)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['fields'],
+        message: 'Dropdown fields need at least one option',
+      });
+    }
   })
   .refine((data) => data.flowJson || (data.title && data.fields && data.fields.length > 0), {
     message: 'Provide flowJson or title with at least one field',
@@ -30,6 +45,17 @@ export const updateFlowAssetSchema = z.object({
   title: z.string().min(2).max(80).optional(),
   submitLabel: z.string().min(1).max(20).optional(),
   fields: z.array(metaFlowFieldSchema).optional(),
+}).superRefine((data, ctx) => {
+  if (data.fields && !uniqueFieldIds(data.fields)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['fields'], message: 'Field IDs must be unique' });
+  }
+  if (data.fields?.some((field) => field.type === 'dropdown' && !field.options?.length)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['fields'],
+      message: 'Dropdown fields need at least one option',
+    });
+  }
 });
 
 export type MetaFlowField = z.infer<typeof metaFlowFieldSchema>;
@@ -89,6 +115,14 @@ function fieldComponent(field: MetaFlowField): Record<string, unknown> {
       required: Boolean(field.required),
     };
   }
+  if (field.type === 'textarea') {
+    return {
+      type: 'TextArea',
+      name: field.id,
+      label: field.label,
+      required: Boolean(field.required),
+    };
+  }
   return {
     type: 'TextInput',
     name: field.id,
@@ -141,14 +175,47 @@ export function buildFlowAssetJson(input: {
   };
 }
 
-export function resolveFlowJson(input: {
-  flowJson?: Record<string, unknown>;
-  title?: string;
-  submitLabel?: string;
-  fields?: MetaFlowField[];
-}): Record<string, unknown> {
+export function isSimpleMetaFlow(flowJson: Record<string, unknown>): boolean {
+  const screens = flowJson.screens;
+  if (!Array.isArray(screens) || screens.length !== 1) return false;
+  const layout = (screens[0] as { layout?: { type?: string; children?: unknown[] } }).layout;
+  if (layout?.type !== 'SingleColumnLayout' || !Array.isArray(layout.children)) return false;
+  return layout.children.some((child) => (child as { type?: string }).type === 'Form');
+}
+
+export function mergeSimpleFlowAssetJson(
+  existing: Record<string, unknown>,
+  input: { title: string; submitLabel: string; fields: MetaFlowField[] }
+): Record<string, unknown> {
+  const built = buildFlowAssetJson(input) as unknown as Record<string, unknown>;
+  const existingScreens = Array.isArray(existing.screens) ? existing.screens : [];
+  const builtScreens = Array.isArray(built.screens) ? built.screens : [];
+  const mergedScreens = builtScreens.map((screen, index) => {
+    const prior = existingScreens[index];
+    if (!prior || typeof prior !== 'object') return screen;
+    return { ...(prior as Record<string, unknown>), ...(screen as Record<string, unknown>) };
+  });
+  return { ...existing, ...built, screens: mergedScreens };
+}
+
+export function resolveFlowJson(
+  input: {
+    flowJson?: Record<string, unknown>;
+    title?: string;
+    submitLabel?: string;
+    fields?: MetaFlowField[];
+  },
+  existing?: Record<string, unknown> | null
+): Record<string, unknown> {
   if (input.flowJson) return input.flowJson;
   if (input.title && input.fields?.length) {
+    if (existing && isSimpleMetaFlow(existing)) {
+      return mergeSimpleFlowAssetJson(existing, {
+        title: input.title,
+        submitLabel: input.submitLabel || 'Submit',
+        fields: input.fields,
+      });
+    }
     return buildFlowAssetJson({
       title: input.title,
       submitLabel: input.submitLabel || 'Submit',
