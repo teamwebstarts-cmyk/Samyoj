@@ -48,15 +48,20 @@ flowchart LR
 
 ```
 Login → Settings → Meta App ID/Secret (org)
-  → GET /api/whatsapp/connect-url?redirectUri={origin}/settings/whatsapp/callback
+  → GET /api/whatsapp/connect-url?redirectUri={origin}/settings/whatsapp/callback/popup
   → Meta OAuth popup
-  → GET /settings/whatsapp/callback?code&state
+  → GET /settings/whatsapp/callback/popup?code&state
   → POST /api/whatsapp/connect/callback {code,state}
   → exchange code with SAME redirect_uri + App Secret
   → save whatsappNumber + encrypted token
 ```
 
 **Rule:** authorize `redirect_uri` === token-exchange `redirect_uri` (byte-identical).
+
+The popup flow uses `/settings/whatsapp/callback/popup` so popup intent survives
+Meta's cross-origin redirect. Keep `/settings/whatsapp/callback` registered as a
+backward-compatible non-popup fallback. Both exact URLs must be allowed in Meta's
+OAuth redirect URI settings for each environment.
 
 ---
 
