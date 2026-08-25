@@ -114,7 +114,7 @@ export default function WhatsappCallbackPage() {
     if (authLoading) return;
 
     if (!user) {
-      const returnTo = `/settings/whatsapp/callback${window.location.search}`;
+      const returnTo = `${window.location.pathname}${window.location.search}`;
       console.info('[wa-oauth] Not signed in — redirecting to login with returnTo');
       navigate(`/login?returnTo=${encodeURIComponent(returnTo)}`, { replace: true });
       return;
