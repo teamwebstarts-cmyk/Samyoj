@@ -23,6 +23,14 @@ interface FlowNodePanelProps {
   canRemove: boolean;
 }
 
+function toDateTimeLocal(value?: string): string {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const pad = (part: number) => String(part).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 function BranchSelect({
   label,
   value,
@@ -558,8 +566,10 @@ function FlowNodePanelForm({
           <AppInput
             label="Send at specific date & time"
             type="datetime-local"
-            value={node.scheduleAt?.slice(0, 16) || ''}
+            value={toDateTimeLocal(node.scheduleAt)}
+            max={toDateTimeLocal(new Date(Date.now() + 7 * 86400000).toISOString())}
             onChange={(e) => onChange({ scheduleAt: e.target.value ? new Date(e.target.value).toISOString() : undefined })}
+            hint="Up to 7 days ahead"
           />
           <AppInput
             label="Or wait this many seconds"
