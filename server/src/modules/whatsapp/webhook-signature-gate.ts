@@ -8,8 +8,14 @@ export function inboundWebhookSignatureGate(opts: {
   nodeEnv: string;
   hasSignature: boolean;
   hasGlobalSecret: boolean;
+  hasRawBody?: boolean;
 }): InboundWebhookSignatureGate {
-  if (opts.hasSignature) return { action: 'verify' };
+  if (opts.hasSignature) {
+    if (opts.nodeEnv === 'production' && opts.hasRawBody === false) {
+      return { action: 'reject', status: 401, reason: 'missing' };
+    }
+    return { action: 'verify' };
+  }
   if (opts.nodeEnv === 'production') {
     if (!opts.hasGlobalSecret) {
       return { action: 'reject', status: 503, reason: 'unconfigured' };

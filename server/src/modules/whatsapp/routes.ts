@@ -658,11 +658,11 @@ router.post('/webhook', async (req: Request, res: Response) => {
 
   // --- 3. Signature validation ---
   const signature = req.headers['x-hub-signature-256'] as string;
-  const rawBody = req.rawBody || JSON.stringify(payload);
   const signatureGate = inboundWebhookSignatureGate({
     nodeEnv: config.nodeEnv,
     hasSignature: Boolean(signature),
     hasGlobalSecret: Boolean(config.meta.appSecret),
+    hasRawBody: Boolean(req.rawBody),
   });
 
   if (signatureGate.action === 'reject') {
@@ -675,6 +675,11 @@ router.post('/webhook', async (req: Request, res: Response) => {
   }
 
   if (signatureGate.action === 'verify') {
+    const rawBody = req.rawBody;
+    if (!rawBody) {
+      log.warn('Webhook missing raw body for HMAC', { requestId, source: 'webhook' });
+      return res.status(401).send('Missing signature body');
+    }
     try {
       const valid = await verifyWebhookSignatureForPayload(signature, rawBody, payload);
       if (!valid) {

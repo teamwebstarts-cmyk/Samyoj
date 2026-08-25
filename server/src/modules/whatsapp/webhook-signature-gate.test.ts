@@ -22,12 +22,24 @@ describe('inboundWebhookSignatureGate', () => {
     ).toEqual({ action: 'reject', status: 503, reason: 'unconfigured' });
   });
 
-  it('verifies whenever a signature header is present', () => {
+  it('rejects production HMAC verification when the raw request body is missing', () => {
     expect(
       inboundWebhookSignatureGate({
         nodeEnv: 'production',
         hasSignature: true,
         hasGlobalSecret: true,
+        hasRawBody: false,
+      })
+    ).toEqual({ action: 'reject', status: 401, reason: 'missing' });
+  });
+
+  it('verifies whenever a signature header is present and the raw body exists', () => {
+    expect(
+      inboundWebhookSignatureGate({
+        nodeEnv: 'production',
+        hasSignature: true,
+        hasGlobalSecret: true,
+        hasRawBody: true,
       })
     ).toEqual({ action: 'verify' });
   });
