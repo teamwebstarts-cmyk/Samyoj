@@ -5,12 +5,21 @@ import prisma from '../../config/database';
 import { authenticate, requireOrg } from '../../middleware/auth';
 import { loadPermissions, requirePermission } from '../../middleware/permissions';
 import { AppError, sendSuccess, asyncHandler, paramId } from '../../utils/response';
+import {
+  requireActiveCommercialOnMutation,
+  requireFeatureOnMutation,
+} from '../../middleware/plan-guard';
 import inboundRoutes from './inbound.routes';
 import openapiRoutes from './openapi';
 import zapierRoutes from './zapier';
 import googleSheetsRoutes from './google-sheets.routes';
+import { assertSafeWebhookUrl } from '../../utils/safe-webhook-url';
 
 const router = Router();
+const integrationMutationGuard = [
+  requireActiveCommercialOnMutation(),
+  requireFeatureOnMutation('integrations'),
+];
 
 router.use(openapiRoutes);
 router.use('/inbound', inboundRoutes);
@@ -54,6 +63,7 @@ router.post(
   '/api-keys',
   authenticate,
   requireOrg,
+  ...integrationMutationGuard,
   loadPermissions,
   requirePermission('manageSettings'),
   asyncHandler(async (req: Request, res: Response) => {
@@ -88,6 +98,7 @@ router.delete(
   '/api-keys/:id',
   authenticate,
   requireOrg,
+  ...integrationMutationGuard,
   loadPermissions,
   requirePermission('manageSettings'),
   asyncHandler(async (req: Request, res: Response) => {
@@ -135,6 +146,7 @@ router.post(
   '/webhooks',
   authenticate,
   requireOrg,
+  ...integrationMutationGuard,
   loadPermissions,
   requirePermission('manageSettings'),
   asyncHandler(async (req: Request, res: Response) => {
@@ -144,6 +156,7 @@ router.post(
         events: z.array(z.enum(WEBHOOK_EVENTS)).min(1),
       })
       .parse(req.body);
+    await assertSafeWebhookUrl(data.url);
 
     const secret = crypto.randomBytes(16).toString('hex');
     const endpoint = await prisma.webhookEndpoint.create({
@@ -173,6 +186,7 @@ router.patch(
   '/webhooks/:id',
   authenticate,
   requireOrg,
+  ...integrationMutationGuard,
   loadPermissions,
   requirePermission('manageSettings'),
   asyncHandler(async (req: Request, res: Response) => {
@@ -183,6 +197,7 @@ router.patch(
         enabled: z.boolean().optional(),
       })
       .parse(req.body);
+    if (data.url) await assertSafeWebhookUrl(data.url);
 
     const orgId = req.user!.organizationId!;
     const id = paramId(req);
@@ -210,6 +225,7 @@ router.delete(
   '/webhooks/:id',
   authenticate,
   requireOrg,
+  ...integrationMutationGuard,
   loadPermissions,
   requirePermission('manageSettings'),
   asyncHandler(async (req: Request, res: Response) => {
@@ -265,6 +281,7 @@ router.post(
   '/webhooks/deliveries/:deliveryId/replay',
   authenticate,
   requireOrg,
+  ...integrationMutationGuard,
   loadPermissions,
   requirePermission('manageSettings'),
   asyncHandler(async (req: Request, res: Response) => {
