@@ -64,11 +64,19 @@ function fieldsFromFlowJson(flowJson: Record<string, unknown>): MetaFlowField[] 
     .map((c) => ({
       id: String(c.name || ''),
       label: String(c.label || ''),
-      type: (c.type === 'Dropdown'
+      type: (c.type === 'TextArea'
+        ? 'textarea'
+        : c.type === 'Dropdown'
         ? 'dropdown'
         : c.type === 'DatePicker'
           ? 'date'
-          : 'text') as FieldType,
+          : c['input-type'] === 'email'
+            ? 'email'
+            : c['input-type'] === 'phone'
+              ? 'phone'
+              : c['input-type'] === 'number'
+                ? 'number'
+                : 'text') as FieldType,
       required: Boolean(c.required),
       options:
         c.type === 'Dropdown'
@@ -116,6 +124,16 @@ export default function MetaFlowBuilder() {
       const flowJson = record.flowJson || {};
       const screens = (flowJson.screens as Array<{ title?: string }>) || [];
       if (screens[0]?.title) setTitle(screens[0].title);
+      const firstLayout = screens[0] as
+        | { layout?: { children?: Array<{ type?: string; label?: string }> } }
+        | undefined;
+      const footer = firstLayout?.layout?.children
+        ?.flatMap((child) => {
+          const formChildren = (child as { children?: Array<{ type?: string; label?: string }> }).children;
+          return formChildren || [];
+        })
+        .find((child) => child.type === 'Footer');
+      if (footer?.label) setSubmitLabel(footer.label);
       setFields(fieldsFromFlowJson(flowJson));
     } catch (err) {
       if (
@@ -219,10 +237,30 @@ export default function MetaFlowBuilder() {
     setFields(fields.filter((_, i) => i !== index));
   };
 
-  const handleSave = async () => {
-    if (!name.trim() || !title.trim() || fields.length === 0) {
+  const handleSave = async (): Promise<boolean> => {
+    const normalizedFields = fields.map((field) => ({
+      ...field,
+      id: field.id.trim(),
+      label: field.label.trim(),
+      options: field.options?.map((option) => option.trim()).filter(Boolean),
+    }));
+    const ids = normalizedFields.map((field) => field.id);
+    const hasDuplicateIds = new Set(ids).size !== ids.length;
+    if (!name.trim() || !title.trim() || normalizedFields.length === 0) {
       toastError('Name, screen title, and at least one field are required');
-      return;
+      return false;
+    }
+    if (normalizedFields.some((field) => !field.id || !field.label)) {
+      toastError('Every field needs an ID and label');
+      return false;
+    }
+    if (hasDuplicateIds) {
+      toastError('Each field ID must be unique');
+      return false;
+    }
+    if (normalizedFields.some((field) => field.type === 'dropdown' && !field.options?.length)) {
+      toastError('Dropdown fields need at least one option');
+      return false;
     }
     setSaving(true);
     try {
@@ -230,8 +268,8 @@ export default function MetaFlowBuilder() {
         name: name.trim(),
         description: description.trim() || undefined,
         title: title.trim(),
-        submitLabel,
-        fields,
+        submitLabel: submitLabel.trim() || 'Submit',
+        fields: normalizedFields,
       };
       if (isNew) {
         const { data } = await flowAssetsApi.create(payload);
@@ -243,8 +281,11 @@ export default function MetaFlowBuilder() {
         setAsset(data.data as FlowAssetRecord);
         toastSuccess('Meta Flow updated');
       }
+      setFields(normalizedFields);
+      return true;
     } catch (err) {
       toastError(getErrorMessage(err, 'Failed to save Meta Flow'));
+      return false;
     } finally {
       setSaving(false);
     }
@@ -257,6 +298,7 @@ export default function MetaFlowBuilder() {
     }
     setPublishing(true);
     try {
+      if (!(await handleSave())) return;
       const { data } = await flowAssetsApi.publish(id!);
       const result = data.data as { asset: FlowAssetRecord; published: boolean };
       setAsset(result.asset);
