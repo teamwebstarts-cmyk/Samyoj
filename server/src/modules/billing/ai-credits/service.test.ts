@@ -72,8 +72,11 @@ describe('ai-credits catalog helpers', () => {
     expect(callingSecondsToMinutes(95)).toBe(2);
   });
 
-  it('balances-ok: growth plan includes 5000 chat credits', () => {
+  it('ai-ledger-ok: plan allowances gate starter, growth chat, and pro calling', () => {
+    expect(includedLimitForPlan('starter', 'chat')).toBe(0);
     expect(includedLimitForPlan('growth', 'chat')).toBe(5000);
+    expect(includedLimitForPlan('growth', 'calling')).toBe(0);
     expect(includedLimitForPlan('pro', 'calling')).toBe(120);
+    console.log('ai-ledger-ok');
   });
 });
