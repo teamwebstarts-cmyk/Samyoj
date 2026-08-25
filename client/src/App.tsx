@@ -65,6 +65,10 @@ export default function App() {
                 {/* Outside ProtectedRoute so Meta's ?code=&state= can be read/stashed
                     even before auth hydrates. Page itself requires a signed-in user. */}
                 <Route path="/settings/whatsapp/callback" element={<WhatsappCallbackPage />} />
+                <Route
+                  path="/settings/whatsapp/callback/popup"
+                  element={<WhatsappCallbackPage />}
+                />
                 <Route element={<ProtectedRoute />}>
                   <Route path="/onboarding" element={<Navigate to="/" replace />} />
                   <Route element={<OnboardingGate />}>
