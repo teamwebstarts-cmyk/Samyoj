@@ -1,0 +1,9 @@
+{
+  "scope": "automation-deep-audit",
+  "leaf": "leaf-research",
+  "globs": [
+    "docs/audit/automation/**",
+    ".cursor/agents/samyoj-automation-audit.md"
+  ],
+  "pid": 32045
+}

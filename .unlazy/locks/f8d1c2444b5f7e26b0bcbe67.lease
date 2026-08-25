@@ -1,0 +1,10 @@
+{
+  "scope": "automation-deep-audit",
+  "leaf": "leaf-backend",
+  "globs": [
+    "server/src/modules/automation/**",
+    "server/src/modules/flows/**",
+    "server/src/workers/**"
+  ],
+  "pid": 32025
+}

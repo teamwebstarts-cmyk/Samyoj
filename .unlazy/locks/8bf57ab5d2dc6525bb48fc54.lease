@@ -1,0 +1,13 @@
+{
+  "scope": "automation-deep-audit",
+  "leaf": "leaf-frontend",
+  "globs": [
+    "client/src/pages/FlowBuilderPage.tsx",
+    "client/src/pages/MetaFlowBuilder.tsx",
+    "client/src/pages/AutomationsPage.tsx",
+    "client/src/components/flows/**",
+    "client/src/components/automations/**",
+    "client/src/utils/flow*.ts"
+  ],
+  "pid": 32039
+}
