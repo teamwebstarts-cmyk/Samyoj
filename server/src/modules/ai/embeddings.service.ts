@@ -2,6 +2,7 @@ import { AppError } from '../../utils/response';
 import { createModuleLogger } from '../../utils/logger';
 import { resolveAiConfig, recordAiUsage } from './org-ai.service';
 import type { ResolvedAiConfig } from './types';
+import { assertAiCreditsAvailable } from '../billing/ai-credits/service';
 
 const log = createModuleLogger('embeddings');
 
@@ -28,11 +29,16 @@ export async function createEmbedding(
   text: string,
   options?: { botId?: string; conversationId?: string; whatsappNumberId?: string }
 ): Promise<number[]> {
-  const cfg = await resolveAiConfig(organizationId);
-  if (!cfg) throw new AppError(503, 'AI is not configured');
-
   const input = text.trim().slice(0, 8000);
   if (!input) return [];
+
+  // Embeddings consume the same chat-credit pool as training and retrieval.
+  // Check entitlement before provider configuration so Starter receives a
+  // plan-feature response even when an add-on balance exists.
+  await assertAiCreditsAvailable(organizationId, 'chat', 1);
+
+  const cfg = await resolveAiConfig(organizationId);
+  if (!cfg) throw new AppError(503, 'AI is not configured');
 
   const url = getEmbeddingsUrl(cfg);
   const start = Date.now();
