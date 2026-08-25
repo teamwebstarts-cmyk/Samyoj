@@ -125,6 +125,17 @@ export default function FlowCanvas({
     (changes) => {
       onNodesChange(changes);
 
+      const removedIds = changes
+        .filter((c) => c.type === 'remove')
+        .map((c) => c.id)
+        .filter((id) => id !== TRIGGER_NODE_ID);
+      if (removedIds.length > 0) {
+        for (const nodeId of removedIds) {
+          onRemove(nodeId);
+        }
+        return;
+      }
+
       for (const change of changes) {
         if (change.type === 'position' && change.position) {
           positionsRef.current.set(change.id, change.position);
@@ -143,13 +154,20 @@ export default function FlowCanvas({
       const withPositions = applyNodePositions(nodes, updatedRfNodes);
       onChange(withPositions, startNodeId);
     },
-    [onNodesChange, rfNodes, nodes, onChange, startNodeId]
+    [onNodesChange, onRemove, rfNodes, nodes, onChange, startNodeId]
   );
 
   const onConnect = useCallback(
     (connection: Connection) => {
       const edge = buildConnectEdge(connection);
-      const newEdges = addEdge(edge, rfEdges);
+      const withoutDuplicate = rfEdges.filter(
+        (e) =>
+          !(
+            e.source === edge.source &&
+            (e.sourceHandle || 'next') === (edge.sourceHandle || 'next')
+          )
+      );
+      const newEdges = addEdge(edge, withoutDuplicate);
       setRfEdges(newEdges);
       const { nodes: updated, startNodeId: newStart } = applyGraphConnections(
         nodes,
@@ -165,8 +183,21 @@ export default function FlowCanvas({
     (deleted: Edge[]) => {
       const remaining = rfEdges.filter((e) => !deleted.some((d) => d.id === e.id));
       setRfEdges(remaining);
+      const clearedNodes = nodes.map((node) => {
+        const updated = { ...node, branches: node.branches ? { ...node.branches } : undefined };
+        for (const edge of deleted) {
+          if (edge.source !== node.id) continue;
+          const handle = edge.sourceHandle || 'next';
+          if (handle === 'next') {
+            updated.next = undefined;
+          } else if (updated.branches) {
+            delete updated.branches[handle];
+          }
+        }
+        return updated;
+      });
       const { nodes: updated, startNodeId: newStart } = applyGraphConnections(
-        nodes,
+        clearedNodes,
         remaining,
         startNodeId
       );
