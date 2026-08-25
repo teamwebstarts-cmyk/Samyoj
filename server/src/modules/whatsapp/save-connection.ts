@@ -98,6 +98,34 @@ export async function saveWhatsappNumberWorkspace(
 
   try {
     const whatsappNumber = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM organizations WHERE id = ${orgId} FOR UPDATE`;
+      const concurrentExisting = await tx.whatsappNumber.findFirst({
+        where: {
+          organizationId: orgId,
+          OR: [{ normalizedPhoneNumber }, { phoneNumberId: connection.phoneNumberId }],
+        },
+      });
+      if (concurrentExisting) {
+        if (concurrentExisting.normalizedPhoneNumber !== normalizedPhoneNumber) {
+          throw new AppError(
+            409,
+            'WhatsApp connection identity mismatch. Reconnect using the verified displayed phone for this number.'
+          );
+        }
+        return tx.whatsappNumber.update({
+          where: { id: concurrentExisting.id },
+          data,
+        });
+      }
+      const lockedQuota = await checkQuota(orgId, 'waNumbers', 1);
+      if (!lockedQuota.allowed) {
+        throw new AppError(
+          402,
+          lockedQuota.reason ||
+            `WhatsApp number slot limit reached (${lockedQuota.used}/${lockedQuota.limit}). Upgrade your plan to connect more numbers.`,
+          lockedQuota.code
+        );
+      }
       if (existing) {
         return tx.whatsappNumber.update({
           where: { id: existing.id },
