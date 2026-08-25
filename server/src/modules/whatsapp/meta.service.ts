@@ -275,6 +275,10 @@ export class MetaWhatsAppService {
     return `https://www.facebook.com/${config.meta.apiVersion}/dialog/oauth?${params}`;
   }
 
+  /**
+   * Exchange auth code for a short-lived user token.
+   * POST + form body keeps `client_secret` out of the request URL (proxy/access logs).
+   */
   static async exchangeCodeForToken(
     code: string,
     credentials?: MetaCredentials,
@@ -282,7 +286,7 @@ export class MetaWhatsAppService {
   ): Promise<string> {
     const creds = requireMetaCredentials(credentials);
 
-    const params = new URLSearchParams({
+    const body = new URLSearchParams({
       client_id: creds.appId,
       client_secret: creds.appSecret,
       // Must be identical to the redirect_uri used when Meta issued this code.
@@ -290,7 +294,11 @@ export class MetaWhatsAppService {
       code,
     });
 
-    const res = await fetch(`${META_BASE}/oauth/access_token?${params}`);
+    const res = await fetch(`${META_BASE}/oauth/access_token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+    });
     const data = (await res.json()) as { access_token?: string } & GraphError;
     if (!res.ok || !data.access_token) {
       throw new Error(data.error?.message || 'Token exchange failed');
@@ -303,14 +311,18 @@ export class MetaWhatsAppService {
     credentials?: MetaCredentials
   ): Promise<string> {
     const creds = requireMetaCredentials(credentials);
-    const params = new URLSearchParams({
+    const body = new URLSearchParams({
       grant_type: 'fb_exchange_token',
       client_id: creds.appId,
       client_secret: creds.appSecret,
       fb_exchange_token: shortLivedToken,
     });
 
-    const res = await fetch(`${META_BASE}/oauth/access_token?${params}`);
+    const res = await fetch(`${META_BASE}/oauth/access_token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+    });
     const data = (await res.json()) as { access_token?: string } & GraphError;
     if (!res.ok || !data.access_token) {
       throw new Error(data.error?.message || 'Long-lived token exchange failed');
