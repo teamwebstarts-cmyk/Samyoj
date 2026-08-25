@@ -15,6 +15,10 @@ import { getOrgCallingSettings } from '../calling/settings.service';
 import { getOrgFeatureFlags, setFeatureFlag } from './feature-flags';
 import { resolveActiveWhatsappNumberId } from '../whatsapp/active-number';
 import { BUSINESS_INDUSTRIES, getOrgProfile, saveOrgProfile } from './org-profile';
+import {
+  requireActiveCommercialOnMutation,
+  requireFeatureOnMutation,
+} from '../../middleware/plan-guard';
 
 const router = Router();
 
@@ -56,9 +60,21 @@ const aiSettingsSchema = z.object({
   embeddingDeployment: z.string().optional(),
   apiVersion: z.string().optional(),
   monthlyTokenLimit: z.number().int().min(0).optional(),
+  customChatCreditsIncluded: z.number().int().min(0).optional(),
+  customCallingMinutesIncluded: z.number().int().min(0).optional(),
 });
 
-const adminGuard = [authenticate, requireOrg, loadOrgRole, requireOrgRole('OWNER', 'ADMIN')];
+const adminGuard = [
+  authenticate,
+  requireOrg,
+  requireActiveCommercialOnMutation(),
+  loadOrgRole,
+  requireOrgRole('OWNER', 'ADMIN'),
+];
+const aiAdminGuard = [
+  ...adminGuard,
+  requireFeatureOnMutation('ai'),
+];
 
 router.get(
   '/',
@@ -105,6 +121,7 @@ router.patch(
   '/business-hours',
   authenticate,
   requireOrg,
+  requireActiveCommercialOnMutation(),
   asyncHandler(async (req: Request, res: Response) => {
     const data = businessHoursSchema.parse(req.body);
     const orgId = req.user!.organizationId!;
@@ -134,7 +151,7 @@ router.patch(
 
 router.patch(
   '/ai',
-  ...adminGuard,
+  ...aiAdminGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const data = aiSettingsSchema.parse(req.body);
