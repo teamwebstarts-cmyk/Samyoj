@@ -78,9 +78,7 @@ export async function handleMissedCallFollowUp(params: {
       organizationId: params.organizationId,
       conversationId,
       contactId: params.contactId,
-      contactPhone: contact.phone,
-      phoneNumberId: whatsappNumber.phoneNumberId,
-      encryptedToken: whatsappNumber.accessToken,
+      whatsappNumberId: whatsappNumber.id,
     });
     if (flowHandled) {
       log.info('Missed call handled by automation flow', { callId: params.callId, conversationId });
