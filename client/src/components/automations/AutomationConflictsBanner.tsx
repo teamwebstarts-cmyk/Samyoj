@@ -11,8 +11,11 @@ export default function AutomationConflictsBanner({ conflicts }: AutomationConfl
 
   return (
     <div className="space-y-2">
-      {conflicts.map((conflict) => (
-        <AppAlert key={conflict.type} variant={conflict.severity === 'error' ? 'error' : 'warning'}>
+      {conflicts.map((conflict, index) => (
+        <AppAlert
+          key={`${conflict.type}-${index}-${conflict.items.join('|')}`}
+          variant={conflict.severity === 'error' ? 'error' : 'warning'}
+        >
           <p className="font-bold">{conflict.message}</p>
           {conflict.links && conflict.links.length > 0 ? (
             <p className="mt-1 text-[12px] opacity-90">
