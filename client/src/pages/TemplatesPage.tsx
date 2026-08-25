@@ -37,6 +37,8 @@ import { toastError, toastSuccess } from '../utils/toast';
 import { invalidateFlowReferenceData } from '../components/flows/flowReferenceData';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
+import { useEntitlements } from '../hooks/useEntitlements';
+import EntitlementNotice from '../components/billing/EntitlementNotice';
 
 const PENDING_POLL_MS = 30_000;
 const EMPTY_GROUP_SET = new Set<string>();
@@ -50,6 +52,7 @@ interface TemplateRejectionAlert {
 
 export default function TemplatesPage() {
   const { activeNumber, resolved, hasConnectedNumber, loading: numbersLoading } = useWhatsAppNumber();
+  const { entitlements, loading: entitlementsLoading } = useEntitlements();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
@@ -64,6 +67,12 @@ export default function TemplatesPage() {
   const [rejectionAlerts, setRejectionAlerts] = useState<TemplateRejectionAlert[]>([]);
   const activeNumberIdRef = useRef<string | null>(null);
   activeNumberIdRef.current = activeNumber?.id ?? null;
+  const canManageTemplates =
+    entitlementsLoading || !entitlements || entitlements.canUseFeature('templates');
+  const templateGateMessage =
+    !entitlementsLoading && entitlements && !entitlements.canUseFeature('templates')
+      ? 'Template management is unavailable while your plan is locked.'
+      : null;
 
   const debouncedSearch = useDebouncedValue(search);
 
@@ -232,6 +241,7 @@ export default function TemplatesPage() {
   );
 
   const openCreate = () => {
+    if (!canManageTemplates) return;
     navigate('/templates/new');
   };
 
@@ -241,11 +251,13 @@ export default function TemplatesPage() {
   };
 
   const openDuplicate = (template: MessageTemplate) => {
+    if (!canManageTemplates) return;
     setViewOpen(false);
     navigate('/templates/new', { state: { form: duplicateTemplateForm(template) } });
   };
 
   const openResubmit = (template: MessageTemplate) => {
+    if (!canManageTemplates) return;
     setViewOpen(false);
     navigate(`/templates/${encodeURIComponent(template.name)}/resubmit`);
   };
@@ -253,6 +265,7 @@ export default function TemplatesPage() {
   const openLibrary = () => navigate('/templates/library');
 
   const handleDelete = async (name: string) => {
+    if (!canManageTemplates) return;
     if (!confirm(`Delete template "${name}"?`)) return;
     try {
       await templateApi.delete(name);
@@ -357,7 +370,14 @@ export default function TemplatesPage() {
             onCategoryFilterChange={setCategoryFilter}
             onOpenLibrary={openLibrary}
             onCreate={openCreate}
+            canCreate={canManageTemplates}
           />
+
+          {templateGateMessage && (
+            <div className="border-b border-theme-border px-4 py-2.5 sm:px-5">
+              <EntitlementNotice message={templateGateMessage} upgradePlan="starter" />
+            </div>
+          )}
 
           {showListSkeleton ? (
             <TemplatesListSkeleton />
@@ -435,7 +455,7 @@ export default function TemplatesPage() {
                       >
                         Browse library
                       </AppButton>
-                      <AppButton icon={<Plus size={16} />} onClick={openCreate}>
+                      <AppButton icon={<Plus size={16} />} onClick={openCreate} disabled={!canManageTemplates}>
                         Create template
                       </AppButton>
                     </div>
@@ -456,6 +476,7 @@ export default function TemplatesPage() {
                     template={template}
                     onView={() => openView(template)}
                     onDuplicate={() => openDuplicate(template)}
+                    canManage={canManageTemplates}
                   />
                 )}
                 renderTable={() => (
@@ -469,6 +490,7 @@ export default function TemplatesPage() {
                     onPageChange={setPage}
                     onView={openView}
                     onDuplicate={openDuplicate}
+                    canManage={canManageTemplates}
                   />
                 )}
               />
@@ -505,6 +527,7 @@ export default function TemplatesPage() {
             onDuplicate={() => openDuplicate(viewing)}
             onResubmit={() => openResubmit(viewing)}
             onDelete={() => handleDelete(viewing.name)}
+            canManage={canManageTemplates}
           />
         )}
       </SlideOver>
