@@ -4,7 +4,7 @@ import { describe, expect, it, beforeEach, vi } from 'vitest';
 
 vi.mock('../../config/database', () => ({
   default: {
-    contact: { upsert: vi.fn() },
+    contact: { upsert: vi.fn(), findUnique: vi.fn() },
     conversation: {
       findFirst: vi.fn(),
       findUnique: vi.fn(),
@@ -17,7 +17,13 @@ vi.mock('../../config/database', () => ({
       findUnique: vi.fn(),
       findFirst: vi.fn(),
     },
+    $transaction: vi.fn(),
   },
+}));
+
+vi.mock('../billing/entitlements.service', () => ({
+  checkQuota: vi.fn().mockResolvedValue({ allowed: true, used: 0, limit: 100 }),
+  getOrgEntitlements: vi.fn().mockResolvedValue({ isLocked: false }),
 }));
 
 vi.mock('../../utils/phone', () => ({
@@ -77,6 +83,7 @@ const mockPhone = vi.mocked(validatePhone);
 const mockContext = vi.mocked(getOrgWhatsappContext);
 const mockWindow = vi.mocked(isWithin24HourWindow);
 const mockDeliver = vi.mocked(deliverOutboundMessage);
+const mockTransaction = prisma.$transaction as unknown as ReturnType<typeof vi.fn>;
 
 /* ── Helpers ────────────────────────────────────────────────────────── */
 
@@ -117,6 +124,16 @@ describe('recordOutboundInConversation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockPhone.mockReturnValue(validPhoneResult());
+    mockTransaction.mockImplementation(
+      async (callback: (tx: unknown) => Promise<unknown>) =>
+        callback({
+          $queryRaw: vi.fn(),
+          contact: {
+            findUnique: vi.fn().mockResolvedValue(null),
+            upsert: prisma.contact.upsert,
+          },
+        })
+    );
   });
 
   it('creates contact + conversation + message and returns them', async () => {
@@ -264,6 +281,16 @@ describe('sendDirectMessage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockPhone.mockReturnValue(validPhoneResult());
+    mockTransaction.mockImplementation(
+      async (callback: (tx: unknown) => Promise<unknown>) =>
+        callback({
+          $queryRaw: vi.fn(),
+          contact: {
+            findUnique: vi.fn().mockResolvedValue(null),
+            upsert: prisma.contact.upsert,
+          },
+        })
+    );
     mockContext.mockResolvedValue({
       whatsappNumber: waNumber,
       wabaId: 'waba-1',
