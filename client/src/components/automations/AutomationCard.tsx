@@ -16,6 +16,7 @@ interface AutomationCardProps {
   onEdit: () => void;
   onToggle: () => void;
   onDelete: () => void;
+  canManage?: boolean;
 }
 
 export default function AutomationCard({
@@ -24,6 +25,7 @@ export default function AutomationCard({
   onEdit,
   onToggle,
   onDelete,
+  canManage = true,
 }: AutomationCardProps) {
   const Icon = meta.icon;
   const config = automation.config as Record<string, string>;
@@ -40,6 +42,7 @@ export default function AutomationCard({
       <button
         type="button"
         onClick={onEdit}
+        disabled={!canManage}
         className="flex w-full items-start gap-3 px-4 py-3.5 text-left"
       >
         <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${meta.iconBg}`}>
@@ -87,13 +90,14 @@ export default function AutomationCard({
           variant={automation.enabled ? 'secondary' : 'primary'}
           icon={automation.enabled ? <PauseCircle size={14} /> : <PlayCircle size={14} />}
           onClick={onToggle}
+          disabled={!canManage}
         >
           {automation.enabled ? 'Turn off' : 'Turn on'}
         </AppButton>
-        <AppButton size="sm" variant="secondary" icon={<Pencil size={14} />} onClick={onEdit}>
+        <AppButton size="sm" variant="secondary" icon={<Pencil size={14} />} onClick={onEdit} disabled={!canManage}>
           Edit
         </AppButton>
-        <AppButton size="sm" variant="danger" icon={<Trash2 size={14} />} onClick={onDelete} aria-label="Delete" />
+        <AppButton size="sm" variant="danger" icon={<Trash2 size={14} />} onClick={onDelete} aria-label="Delete" disabled={!canManage} />
       </div>
     </article>
   );
