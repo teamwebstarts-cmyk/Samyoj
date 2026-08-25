@@ -25,6 +25,7 @@ interface TemplatesPageToolbarProps {
   onCategoryFilterChange: (value: string) => void;
   onOpenLibrary: () => void;
   onCreate: () => void;
+  canCreate?: boolean;
 }
 
 /** Search + both filters: same width and 44px height on md+. */
@@ -48,6 +49,7 @@ export default function TemplatesPageToolbar({
   onCategoryFilterChange,
   onOpenLibrary,
   onCreate,
+  canCreate = true,
 }: TemplatesPageToolbarProps) {
   return (
     <div className="border-b border-theme-border px-2.5 py-2 sm:px-4 sm:py-3.5 lg:px-5">
@@ -98,6 +100,7 @@ export default function TemplatesPageToolbar({
             size="sm"
             icon={<Plus size={16} />}
             onClick={onCreate}
+            disabled={!canCreate}
           >
             New template
           </AppButton>
