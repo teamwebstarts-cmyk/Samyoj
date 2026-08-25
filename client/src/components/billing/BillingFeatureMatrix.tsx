@@ -91,14 +91,14 @@ const COMPARISON_CATEGORIES: MatrixCategory[] = [
         },
       },
       {
-        name: 'Monthly AI Token Allowance',
-        tooltip: 'Tokens for AI replies, embeddings, and chat suggestions',
+        name: 'Included chat credits',
+        tooltip: 'Chat credits included for replies, embeddings, and chat suggestions',
         values: {
           launch: '—',
           starter: '—',
-          growth: '100,000 / mo',
-          pro: '500,000 / mo',
-          enterprise: 'Custom Dedicated Pool',
+          growth: '100,000 credits / period',
+          pro: '500,000 credits / period',
+          enterprise: 'Custom AI allocation',
         },
       },
       {
@@ -132,6 +132,17 @@ const COMPARISON_CATEGORIES: MatrixCategory[] = [
           growth: 'Add-on Available',
           pro: 'Fully Included',
           enterprise: 'High-Throughput Trunking',
+        },
+      },
+      {
+        name: 'Included calling minutes',
+        tooltip: 'Calling minutes included in the plan; additional minutes are manual top-ups',
+        values: {
+          launch: false,
+          starter: false,
+          growth: 'Manual top-up',
+          pro: 'Included minutes',
+          enterprise: 'Custom AI allocation',
         },
       },
       {
