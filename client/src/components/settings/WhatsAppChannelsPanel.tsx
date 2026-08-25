@@ -17,6 +17,7 @@ interface WhatsAppChannelsPanelProps {
   onDisconnect: (id: string, phone: string) => void;
   disconnectingId: string | null;
   canEdit: boolean;
+  canConnect?: boolean;
 }
 
 function limitLabel(limit: number | 'unlimited' | null): string {
@@ -36,12 +37,13 @@ export default function WhatsAppChannelsPanel({
   onDisconnect,
   disconnectingId,
   canEdit,
+  canConnect = true,
 }: WhatsAppChannelsPanelProps) {
   const atLimit =
     numberLimit !== null &&
     numberLimit !== 'unlimited' &&
     numbers.length >= numberLimit;
-  const canConnectMore = canEdit && !atLimit;
+  const canConnectMore = canEdit && canConnect && !atLimit;
 
   if (loading) return <SettingsTabSkeleton variant="compact" />;
 
@@ -146,7 +148,7 @@ export default function WhatsAppChannelsPanel({
           <AppButton
             className="mt-4"
             onClick={onConnect}
-            disabled={connecting || !canEdit}
+            disabled={connecting || !canEdit || !canConnect}
             loading={connecting}
             icon={<Plus className="h-4 w-4" />}
           >
