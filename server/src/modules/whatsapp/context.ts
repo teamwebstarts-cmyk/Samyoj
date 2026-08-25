@@ -80,3 +80,37 @@ export async function getWhatsappContextById(organizationId: string, whatsappNum
 
   return resolveWhatsappContext(whatsappNumber);
 }
+
+/**
+ * Resolve the current active number without calling Meta.
+ *
+ * Queue workers use this lookup immediately before provider I/O so delayed
+ * jobs cannot keep using a disconnected number or a token captured at enqueue
+ * time. The returned token is still encrypted at rest and is never placed in
+ * a queue payload.
+ */
+export async function getActiveWhatsappNumberCredentials(
+  organizationId: string,
+  whatsappNumberId: string
+) {
+  const whatsappNumber = await prisma.whatsappNumber.findFirst({
+    where: { id: whatsappNumberId, organizationId, isActive: true },
+    select: {
+      id: true,
+      phoneNumberId: true,
+      wabaId: true,
+      accessToken: true,
+    },
+  });
+
+  if (!whatsappNumber) {
+    throw new AppError(400, 'WhatsApp number not found or inactive.');
+  }
+
+  return {
+    whatsappNumberId: whatsappNumber.id,
+    phoneNumberId: whatsappNumber.phoneNumberId,
+    wabaId: whatsappNumber.wabaId,
+    encryptedToken: whatsappNumber.accessToken,
+  };
+}
