@@ -184,6 +184,7 @@ export async function recordAiUsage(data: {
   usage: TokenUsage;
 }): Promise<void> {
   try {
+    const shouldMeter = shouldDeductOnUsageLog(data.action);
     const row = await prisma.aiUsageLog.create({
       data: {
         organizationId: data.organizationId,
@@ -194,18 +195,37 @@ export async function recordAiUsage(data: {
         promptTokens: data.usage.promptTokens,
         completionTokens: data.usage.completionTokens,
         totalTokens: data.usage.totalTokens,
+        ...(shouldMeter ? { meteringStatus: 'PROCESSING', meteringAttempts: 1 } : {}),
       },
     });
     const { emitAiUsageProductEvent } = await import('../platform/events');
     emitAiUsageProductEvent(data.organizationId, canonicalAiUsageAction(data.action));
 
-    if (shouldDeductOnUsageLog(data.action)) {
-      void deductChatCreditsFromUsageLog({
-        organizationId: data.organizationId,
-        usageLogId: row.id,
-        promptTokens: data.usage.promptTokens,
-        completionTokens: data.usage.completionTokens,
-      });
+    if (shouldMeter) {
+      try {
+        await deductChatCreditsFromUsageLog({
+          organizationId: data.organizationId,
+          usageLogId: row.id,
+          promptTokens: data.usage.promptTokens,
+          completionTokens: data.usage.completionTokens,
+        });
+        await prisma.aiUsageLog.update({
+          where: { id: row.id },
+          data: { meteringStatus: 'SETTLED', meteredAt: new Date(), meteringError: null },
+        });
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message.slice(0, 500) : String(err).slice(0, 500);
+        await prisma.aiUsageLog.update({
+          where: { id: row.id },
+          data: { meteringStatus: 'PENDING_RETRY', meteringError: errorMessage },
+        });
+        log.error('AI credit deduction pending retry', {
+          organizationId: data.organizationId,
+          usageLogId: row.id,
+          action: data.action,
+          error: errorMessage,
+        });
+      }
     }
   } catch (err) {
     log.warn('Failed to record AI usage', {
@@ -214,6 +234,63 @@ export async function recordAiUsage(data: {
       error: err instanceof Error ? err.message : String(err),
     });
   }
+}
+
+/**
+ * Retry metering rows left behind by a provider success or process crash.
+ * The usage-log id is the deduction idempotency key, so a retry cannot
+ * consume the same credits twice.
+ */
+export async function retryPendingAiCreditDeductions(limit = 100): Promise<number> {
+  const rows = await prisma.aiUsageLog.findMany({
+    where: {
+      OR: [
+        { meteringStatus: 'PENDING_RETRY' },
+        {
+          meteringStatus: 'PROCESSING',
+          createdAt: { lt: new Date(Date.now() - 5 * 60 * 1000) },
+        },
+      ],
+    },
+    orderBy: { createdAt: 'asc' },
+    take: Math.max(1, Math.min(limit, 500)),
+    select: { id: true, organizationId: true, action: true, promptTokens: true, completionTokens: true },
+  });
+  let settled = 0;
+  for (const row of rows) {
+    await prisma.aiUsageLog.update({
+      where: { id: row.id },
+      data: { meteringStatus: 'PROCESSING', meteringAttempts: { increment: 1 } },
+    });
+    try {
+      await deductChatCreditsFromUsageLog({
+        organizationId: row.organizationId,
+        usageLogId: row.id,
+        promptTokens: row.promptTokens,
+        completionTokens: row.completionTokens,
+      });
+      await prisma.aiUsageLog.update({
+        where: { id: row.id },
+        data: { meteringStatus: 'SETTLED', meteredAt: new Date(), meteringError: null },
+      });
+      settled++;
+    } catch (err) {
+      await prisma.aiUsageLog.update({
+        where: { id: row.id },
+        data: {
+          meteringStatus: 'PENDING_RETRY',
+          meteringError: err instanceof Error ? err.message.slice(0, 500) : String(err).slice(0, 500),
+        },
+      });
+      log.error('AI credit retry failed', {
+        organizationId: row.organizationId,
+        usageLogId: row.id,
+        action: row.action,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+  return settled;
 }
 
 export type AiUsageSurfaceRow = {
