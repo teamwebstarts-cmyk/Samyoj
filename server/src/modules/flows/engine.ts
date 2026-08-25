@@ -18,6 +18,7 @@ import { assertSafeWebhookUrl } from '../../utils/safe-webhook-url';
 import { partitionFlowsForMatch } from './match-order';
 import { keywordMatches, wantsHandoff } from './trigger-match';
 import { extractAbSticky } from './ab-sticky';
+import { MAX_CROSS_FLOW_HOPS, blockedGotoFlowReason } from './cross-flow';
 import { LIVE_FLOW_WHERE, isBotPaused } from './live';
 
 function scopedLiveFlowWhere(whatsappNumberId: string) {
@@ -46,7 +47,6 @@ import { MetaWhatsAppService } from '../whatsapp/meta.service';
 import { getActiveWhatsappNumberCredentials } from '../whatsapp/context';
 
 const log = createModuleLogger('flow-engine');
-const MAX_CROSS_FLOW_HOPS = 10;
 
 interface FlowExecutionContext {
   flowPath: Set<string>;
@@ -665,19 +665,15 @@ async function executeNode(
           flowPath: new Set([flowId]),
           flowHops: 0,
         };
-        if (
-          currentContext.flowPath.has(target.id) ||
-          currentContext.flowHops >= MAX_CROSS_FLOW_HOPS
-        ) {
+        const blocked = blockedGotoFlowReason(currentContext.flowPath, currentContext.flowHops, target.id);
+        if (blocked) {
           await logNode(
             flowId,
             payload,
             node,
             'failed',
             { targetFlowId: target.id },
-            currentContext.flowPath.has(target.id)
-              ? 'Cross-flow cycle detected'
-              : 'Cross-flow hop limit exceeded',
+            blocked === 'cycle' ? 'Cross-flow cycle detected' : 'Cross-flow hop limit exceeded',
             Date.now() - start
           );
           return { done: true, nextNodeId: null, waitingFor: null };
@@ -823,8 +819,12 @@ async function executeNode(
 
       case 'ai': {
         if (node.text) await sendFlowMessage(payload, node.text, state.variables, contactName);
-        await prisma.conversation.update({
-          where: { id: payload.conversationId },
+        await prisma.conversation.updateMany({
+          where: {
+            id: payload.conversationId,
+            organizationId: payload.organizationId,
+            whatsappNumberId: payload.whatsappNumberId,
+          },
           data: {
             activeBotId: node.aiBotId || undefined,
             botActive: true,
@@ -953,6 +953,15 @@ async function executeNode(
 
       case 'media': {
         if (node.mediaUrl) {
+          try {
+            if (new URL(node.mediaUrl).protocol !== 'https:') {
+              throw new Error('Media URL must use HTTPS');
+            }
+          } catch (err) {
+            const message = err instanceof Error ? err.message : 'Invalid media URL';
+            await logNode(flowId, payload, node, 'failed', undefined, message, Date.now() - start);
+            return { done: false, nextNodeId: node.next || null, waitingFor: null };
+          }
           const mediaTypeMap = {
             image: 'IMAGE',
             video: 'VIDEO',
@@ -1343,6 +1352,10 @@ async function recoverFlowFromButtonReply(
       direction: 'OUTBOUND',
       type: 'INTERACTIVE',
       createdAt: { gte: new Date(Date.now() - 24 * 3600000) },
+      conversation: {
+        organizationId: payload.organizationId,
+        whatsappNumberId: payload.whatsappNumberId,
+      },
     },
     orderBy: { createdAt: 'desc' },
     select: { metadata: true },
@@ -1360,6 +1373,16 @@ async function recoverFlowFromButtonReply(
     },
   });
   if (!flow) return false;
+
+  if (
+    await skipCappedFlowStart({
+      organizationId: payload.organizationId,
+      conversationId: payload.conversationId,
+      flowId: flow.id,
+    })
+  ) {
+    return false;
+  }
 
   const nodes = parseNodes(flow.nodes);
   const menuNode = nodes.find(
