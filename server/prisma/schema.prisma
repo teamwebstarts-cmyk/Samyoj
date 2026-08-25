@@ -374,6 +374,9 @@ model Organization {
   aiCreditBalances               OrgAiCreditBalance[]
   aiCreditPurchases              AiCreditPurchase[]
   aiRecurringAddons              OrgAiRecurringAddon[]
+  planPeriods                    PlanPeriod[]
+  billingEvents                  BillingEvent[]
+  inboundContactOverflows        InboundContactOverflow[]
 
   planExpiresAt      DateTime? @map("plan_expires_at")
   subscriptionStatus String    @default("active") @map("subscription_status")
@@ -544,26 +547,49 @@ enum PaymentStatus {
   AUTHORIZED
   CAPTURED
   FAILED
+  VERIFICATION_PENDING
+  REVERSED
+  REFUNDED
+}
+
+enum BillingEventStatus {
+  PROCESSING
+  COMPLETED
+  FAILED
 }
 
 model PaymentOrder {
-  id              String        @id @default(uuid())
-  organizationId  String        @map("organization_id")
-  razorpayOrderId String        @unique @map("razorpay_order_id")
-  planId          String        @map("plan_id")
-  skuId           String?       @map("sku_id")
-  cadence         String?       @map("cadence")
-  amountPaise     Int           @map("amount_paise")
-  currency        String        @default("INR")
-  status          PaymentStatus @default(CREATED)
-  paymentId       String?       @map("payment_id")
-  createdAt       DateTime      @default(now()) @map("created_at")
-  paidAt          DateTime?     @map("paid_at")
+  id                    String        @id @default(uuid())
+  organizationId        String        @map("organization_id")
+  razorpayOrderId       String        @unique @map("razorpay_order_id")
+  planId                String        @map("plan_id")
+  skuId                 String?       @map("sku_id")
+  cadence               String?       @map("cadence")
+  amountPaise           Int           @map("amount_paise")
+  currency              String        @default("INR")
+  status                PaymentStatus @default(CREATED)
+  paymentId             String?       @unique @map("payment_id")
+  amountSnapshotPaise   Int?          @map("amount_snapshot_paise")
+  currencySnapshot      String?       @map("currency_snapshot")
+  providerOrderStatus   String?       @map("provider_order_status")
+  providerPaymentStatus String?       @map("provider_payment_status")
+  verificationAt        DateTime?     @map("verification_at")
+  capturedAt            DateTime?     @map("captured_at")
+  failedAt              DateTime?     @map("failed_at")
+  failureCode           String?       @map("failure_code")
+  failureMessage        String?       @map("failure_message")
+  checkoutIntentKey     String?       @map("checkout_intent_key")
+  createdAt             DateTime      @default(now()) @map("created_at")
+  paidAt                DateTime?     @map("paid_at")
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  planPeriods   PlanPeriod[]
+  billingEvents BillingEvent[]
 
+  @@unique([organizationId, skuId, cadence, checkoutIntentKey])
   @@index([organizationId, createdAt])
   @@index([organizationId, status, createdAt])
+  @@index([organizationId, checkoutIntentKey, status])
   @@map("payment_orders")
 }
 
@@ -574,6 +600,57 @@ model RazorpayWebhookEvent {
   processedAt DateTime @default(now()) @map("processed_at")
 
   @@map("razorpay_webhook_events")
+}
+
+model PlanPeriod {
+  id                   String    @id @default(uuid())
+  organizationId       String    @map("organization_id")
+  planTier             String    @map("plan_tier")
+  skuId                String?   @map("sku_id")
+  cadence              String?
+  startsAt             DateTime  @map("starts_at")
+  endsAt               DateTime  @map("ends_at")
+  status               String    @default("ACTIVE")
+  sourcePaymentOrderId String?   @unique @map("source_payment_order_id")
+  amountPaise          Int       @map("amount_paise")
+  currency             String    @default("INR")
+  taxAmountPaise       Int       @default(0) @map("tax_amount_paise")
+  supersedesId         String?   @map("supersedes_id")
+  supersededAt         DateTime? @map("superseded_at")
+  createdAt            DateTime  @default(now()) @map("created_at")
+
+  organization       Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sourcePaymentOrder PaymentOrder? @relation(fields: [sourcePaymentOrderId], references: [id], onDelete: SetNull)
+  supersedes         PlanPeriod?   @relation("PlanPeriodSupersession", fields: [supersedesId], references: [id], onDelete: SetNull)
+  supersededBy       PlanPeriod[]  @relation("PlanPeriodSupersession")
+
+  @@index([organizationId, status, endsAt])
+  @@index([organizationId, startsAt, endsAt])
+  @@map("plan_periods")
+}
+
+model BillingEvent {
+  id               String             @id @default(uuid())
+  organizationId   String?            @map("organization_id")
+  paymentOrderId   String?            @map("payment_order_id")
+  providerEventId  String             @unique @map("provider_event_id")
+  eventType        String             @map("event_type")
+  status           BillingEventStatus @default(PROCESSING)
+  processingAt     DateTime           @default(now()) @map("processing_at")
+  payloadHash      String?            @map("payload_hash")
+  redactedMetadata Json?              @map("redacted_metadata")
+  failureCode      String?            @map("failure_code")
+  failureMessage   String?            @map("failure_message")
+  processedAt      DateTime?          @map("processed_at")
+  createdAt        DateTime           @default(now()) @map("created_at")
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  paymentOrder PaymentOrder? @relation(fields: [paymentOrderId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([paymentOrderId, createdAt])
+  @@index([status, createdAt])
+  @@map("billing_events")
 }
 
 model ApiKey {
@@ -777,6 +854,10 @@ model WhatsappNumber {
   orders                    Order[]
   unmatchedProviderStatuses UnmatchedProviderStatus[]
   metaErrorStats            MetaErrorStat[]
+  inboundContactOverflows   InboundContactOverflow[]
+  flows                     Flow[]
+  automations               Automation[]
+  flowAssets                FlowAsset[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, normalizedPhoneNumber])
@@ -805,7 +886,9 @@ model Contact {
   consentDecision  Json?         @map("consent_decision")
   optOutAt         DateTime?     @map("opt_out_at")
   source           ContactSource @default(MANUAL)
-  /** When false, inbound calls from this contact skip AI (human ring, then missed). Global AI calling off still wins. */
+  /**
+   * When false, inbound calls from this contact skip AI (human ring, then missed). Global AI calling off still wins.
+   */
   callingAiEnabled Boolean       @default(false) @map("calling_ai_enabled")
   createdAt        DateTime      @default(now()) @map("created_at")
   updatedAt        DateTime      @updatedAt @map("updated_at")
@@ -1048,6 +1131,27 @@ model Message {
   @@map("messages")
 }
 
+/// Durable holding area for inbound messages whose sender exceeds the
+/// contact quota. The webhook is acknowledged only after this row is stored.
+model InboundContactOverflow {
+  id               String    @id @default(uuid())
+  organizationId   String    @map("organization_id")
+  whatsappNumberId String    @map("whatsapp_number_id")
+  metaMessageId    String    @unique @map("meta_message_id")
+  contactPhone     String    @map("contact_phone")
+  payload          Json
+  reason           String
+  receivedAt       DateTime  @default(now()) @map("received_at")
+  resolvedAt       DateTime? @map("resolved_at")
+
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  whatsappNumber WhatsappNumber @relation(fields: [whatsappNumberId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, resolvedAt, receivedAt])
+  @@index([whatsappNumberId, receivedAt])
+  @@map("inbound_contact_overflows")
+}
+
 model InternalNote {
   id             String   @id @default(uuid())
   conversationId String   @map("conversation_id")
@@ -1086,42 +1190,47 @@ model ConversationLabel {
 }
 
 model Automation {
-  id             String      @id @default(uuid())
-  organizationId String      @map("organization_id")
-  name           String
-  triggerType    TriggerType @map("trigger_type")
-  config         Json
-  enabled        Boolean     @default(true)
-  createdAt      DateTime    @default(now()) @map("created_at")
-  updatedAt      DateTime    @updatedAt @map("updated_at")
+  id               String      @id @default(uuid())
+  organizationId   String      @map("organization_id")
+  whatsappNumberId String?     @map("whatsapp_number_id")
+  name             String
+  triggerType      TriggerType @map("trigger_type")
+  config           Json
+  enabled          Boolean     @default(true)
+  createdAt        DateTime    @default(now()) @map("created_at")
+  updatedAt        DateTime    @updatedAt @map("updated_at")
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  whatsappNumber WhatsappNumber? @relation(fields: [organizationId, whatsappNumberId], references: [organizationId, id], onDelete: Restrict)
 
+  @@index([organizationId, whatsappNumberId, enabled])
   @@map("automations")
 }
 
 model Flow {
-  id             String          @id @default(uuid())
-  organizationId String          @map("organization_id")
-  name           String
-  description    String?
-  triggerType    FlowTriggerType @map("trigger_type")
-  triggerConfig  Json            @default("{}") @map("trigger_config")
-  nodes          Json            @default("[]")
-  draftNodes     Json?           @map("draft_nodes")
-  startNodeId    String?         @map("start_node_id")
-  status         FlowStatus      @default(PUBLISHED)
-  version        Int             @default(1)
-  stats          Json            @default("{}")
-  enabled        Boolean         @default(true)
-  priority       Int             @default(0)
-  createdAt      DateTime        @default(now()) @map("created_at")
-  updatedAt      DateTime        @updatedAt @map("updated_at")
+  id               String          @id @default(uuid())
+  organizationId   String          @map("organization_id")
+  whatsappNumberId String?         @map("whatsapp_number_id")
+  name             String
+  description      String?
+  triggerType      FlowTriggerType @map("trigger_type")
+  triggerConfig    Json            @default("{}") @map("trigger_config")
+  nodes            Json            @default("[]")
+  draftNodes       Json?           @map("draft_nodes")
+  startNodeId      String?         @map("start_node_id")
+  status           FlowStatus      @default(PUBLISHED)
+  version          Int             @default(1)
+  stats            Json            @default("{}")
+  enabled          Boolean         @default(true)
+  priority         Int             @default(0)
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
 
-  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  versions     FlowVersion[]
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  whatsappNumber WhatsappNumber? @relation(fields: [organizationId, whatsappNumberId], references: [organizationId, id], onDelete: Restrict)
+  versions       FlowVersion[]
 
-  @@index([organizationId, enabled])
+  @@index([organizationId, whatsappNumberId, enabled])
   @@map("flows")
 }
 
@@ -1132,6 +1241,7 @@ model FlowVersion {
   nodes         Json
   triggerType   FlowTriggerType @map("trigger_type")
   triggerConfig Json            @default("{}") @map("trigger_config")
+  startNodeId   String?         @map("start_node_id")
   note          String?
   createdAt     DateTime        @default(now()) @map("created_at")
 
@@ -1144,6 +1254,7 @@ model FlowVersion {
 model FlowAsset {
   id               String          @id @default(uuid())
   organizationId   String          @map("organization_id")
+  whatsappNumberId String?         @map("whatsapp_number_id")
   name             String
   description      String?
   flowJson         Json            @map("flow_json")
@@ -1156,9 +1267,10 @@ model FlowAsset {
   createdAt        DateTime        @default(now()) @map("created_at")
   updatedAt        DateTime        @updatedAt @map("updated_at")
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  whatsappNumber WhatsappNumber? @relation(fields: [organizationId, whatsappNumberId], references: [organizationId, id], onDelete: Restrict)
 
-  @@index([organizationId, status])
+  @@index([organizationId, whatsappNumberId, status])
   @@map("flow_assets")
 }
 
@@ -1231,21 +1343,26 @@ model AiBotAuditLog {
 }
 
 model AiUsageLog {
-  id               String   @id @default(uuid())
-  organizationId   String   @map("organization_id")
-  botId            String?  @map("bot_id")
-  conversationId   String?  @map("conversation_id")
-  whatsappNumberId String?  @map("whatsapp_number_id")
+  id               String    @id @default(uuid())
+  organizationId   String    @map("organization_id")
+  botId            String?   @map("bot_id")
+  conversationId   String?   @map("conversation_id")
+  whatsappNumberId String?   @map("whatsapp_number_id")
   action           String
-  promptTokens     Int      @default(0) @map("prompt_tokens")
-  completionTokens Int      @default(0) @map("completion_tokens")
-  totalTokens      Int      @default(0) @map("total_tokens")
-  createdAt        DateTime @default(now()) @map("created_at")
+  promptTokens     Int       @default(0) @map("prompt_tokens")
+  completionTokens Int       @default(0) @map("completion_tokens")
+  totalTokens      Int       @default(0) @map("total_tokens")
+  meteringStatus   String    @default("NOT_REQUIRED") @map("metering_status")
+  meteringAttempts Int       @default(0) @map("metering_attempts")
+  meteringError    String?   @map("metering_error")
+  meteredAt        DateTime? @map("metered_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId, createdAt])
   @@index([organizationId, whatsappNumberId, createdAt])
+  @@index([meteringStatus, createdAt])
   @@map("ai_usage_logs")
 }
 
@@ -1268,18 +1385,18 @@ model OrgAiCreditBalance {
 }
 
 model AiCreditPurchase {
-  id              String   @id @default(uuid())
-  organizationId  String   @map("organization_id")
-  pool            String
-  skuId           String   @map("sku_id")
-  purchaseType    String   @map("purchase_type")
-  quantity        Int      @default(1)
-  creditsGranted  Int      @map("credits_granted")
-  amountPaise     Int      @map("amount_paise")
-  paymentOrderId  String?  @map("payment_order_id")
-  razorpayPaymentId String? @unique @map("razorpay_payment_id")
-  razorpayAddonId String?  @map("razorpay_addon_id")
-  createdAt       DateTime @default(now()) @map("created_at")
+  id                String   @id @default(uuid())
+  organizationId    String   @map("organization_id")
+  pool              String
+  skuId             String   @map("sku_id")
+  purchaseType      String   @map("purchase_type")
+  quantity          Int      @default(1)
+  creditsGranted    Int      @map("credits_granted")
+  amountPaise       Int      @map("amount_paise")
+  paymentOrderId    String?  @map("payment_order_id")
+  razorpayPaymentId String?  @unique @map("razorpay_payment_id")
+  razorpayAddonId   String?  @map("razorpay_addon_id")
+  createdAt         DateTime @default(now()) @map("created_at")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
