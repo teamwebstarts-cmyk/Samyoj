@@ -106,6 +106,58 @@ export function campaignsForNumberFilter(numberId: string | undefined): Prisma.C
   return { whatsappNumberId: numberId };
 }
 
+export function flowsForNumberFilter(numberId: string | undefined): Prisma.FlowWhereInput {
+  if (!numberId) return EMPTY_ID_FILTER;
+  return { whatsappNumberId: numberId };
+}
+
+export function automationsForNumberFilter(numberId: string | undefined): Prisma.AutomationWhereInput {
+  if (!numberId) return EMPTY_ID_FILTER;
+  return { whatsappNumberId: numberId };
+}
+
+export function flowAssetsForNumberFilter(numberId: string | undefined): Prisma.FlowAssetWhereInput {
+  if (!numberId) return EMPTY_ID_FILTER;
+  return { whatsappNumberId: numberId };
+}
+
+/** Scope flow/automation/asset lookups to org + active number. */
+export function scopedFlowWhere(
+  organizationId: string,
+  activeWhatsappNumberId: string | undefined,
+  flowId?: string
+): Prisma.FlowWhereInput {
+  return {
+    organizationId,
+    ...(flowId ? { id: flowId } : {}),
+    ...flowsForNumberFilter(activeWhatsappNumberId),
+  };
+}
+
+export function scopedAutomationWhere(
+  organizationId: string,
+  activeWhatsappNumberId: string | undefined,
+  automationId?: string
+): Prisma.AutomationWhereInput {
+  return {
+    organizationId,
+    ...(automationId ? { id: automationId } : {}),
+    ...automationsForNumberFilter(activeWhatsappNumberId),
+  };
+}
+
+export function scopedFlowAssetWhere(
+  organizationId: string,
+  activeWhatsappNumberId: string | undefined,
+  assetId?: string
+): Prisma.FlowAssetWhereInput {
+  return {
+    organizationId,
+    ...(assetId ? { id: assetId } : {}),
+    ...flowAssetsForNumberFilter(activeWhatsappNumberId),
+  };
+}
+
 export function messagesForNumberFilter(numberId: string | undefined): Prisma.MessageWhereInput {
   if (!numberId) return EMPTY_ID_FILTER;
   return { conversation: { whatsappNumberId: numberId } };
