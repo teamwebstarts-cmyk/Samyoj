@@ -135,7 +135,15 @@ identity, billing choices, or customer-facing claims.
 - `cd server && npm run build`
 - `cd server && npx vitest run src/modules/automation src/modules/flows
   src/modules/flows-assets src/modules/integrations src/modules/messages`
-  — 18 test files and 91 tests passed.
+  — 146 test files and 971 tests passed (server); 30 files and 140 tests (client).
+
+## Verification (2026-08-25 recheck hardening)
+
+- Server: `146` test files, `971` tests passed.
+- Client: `30` test files, `140` tests passed.
+- `npm run build` passed in `server/` and `client/`.
+
+Customer production readiness is still **not** claimed.
 
 ### Required before claiming closure
 
