@@ -42,6 +42,8 @@ import KeyboardShortcutsOverlay from '../components/inbox/KeyboardShortcutsOverl
 import { InboxGlassTipProvider } from '../components/inbox/ComposerGlassTip';
 import ChatAiToggleBanner from '../components/inbox/ChatAiToggleBanner';
 import { useChatBots } from '../hooks/useChatBots';
+import { useEntitlements } from '../hooks/useEntitlements';
+import EntitlementNotice from '../components/billing/EntitlementNotice';
 import { cannedRepliesApi, aiBotApi, inboxApi, teamApi, ticketApi } from '../services/api';
 import { setOpenConversationId } from '../utils/inboxNotifications';
 import type {
@@ -57,6 +59,23 @@ import type {
 export default function InboxPage() {
   const { user } = useAuth();
   const { hasConnectedNumber, activeNumber, resolved, loading: numbersLoading } = useWhatsAppNumber();
+  const { entitlements, loading: entitlementsLoading } = useEntitlements();
+  const canUseChatAi =
+    entitlementsLoading || !entitlements || entitlements.canUseFeature('aiBots');
+  const canSendMessages =
+    entitlementsLoading || !entitlements || !entitlements.isLocked;
+  const advancedInboxGateMessage =
+    !entitlementsLoading && entitlements && !entitlements.canUseFeature('advancedInbox')
+      ? 'Advanced Inbox tools are not included on your current plan.'
+      : null;
+  const chatAiGateMessage =
+    !entitlementsLoading && entitlements && !entitlements.canUseFeature('aiBots')
+      ? 'AI chat is available on Growth and Pro plans.'
+      : null;
+  const inboxGateMessage =
+    !entitlementsLoading && entitlements?.isLocked
+      ? 'Inbox history remains available, but messaging is read-only until you purchase a valid plan.'
+      : advancedInboxGateMessage;
 
   const [search, setSearch] = useState('');
   const [chip, setChip] = useState<ListChip>('all');
@@ -231,6 +250,7 @@ export default function InboxPage() {
     serviceWindow,
     appendSentMessage,
     setMessages,
+    canSend: canSendMessages,
     onWindowClosed: () => {
       setInteractiveOpen(false);
       setTemplateMode(true);
@@ -721,6 +741,24 @@ export default function InboxPage() {
     <InboxGlassTipProvider>
     <PageShell inbox>
       <div className="mb-2 sm:mb-3">
+        {inboxGateMessage && (
+          <div className="mb-2">
+            <EntitlementNotice
+              message={inboxGateMessage}
+              upgradePlan={
+                entitlements?.isLocked ? 'growth' : entitlements?.getUpgradePlan('advancedInbox')
+              }
+            />
+          </div>
+        )}
+        {chatAiGateMessage && (
+          <div className="mb-2">
+            <EntitlementNotice
+              message={chatAiGateMessage}
+              upgradePlan={entitlements?.getUpgradePlan('aiBots') ?? 'growth'}
+            />
+          </div>
+        )}
         <ChatAiToggleBanner
           enabled={chatBots.chatAiEnabled}
           saving={chatBots.assigning}
@@ -728,8 +766,11 @@ export default function InboxPage() {
           chatBots={chatBots.enabledChatBots}
           botsLoading={chatBots.loading}
           botAssigning={chatBots.assigning}
-          onSelectBot={chatBots.selectChatBot}
-          onChange={chatBots.setChatAiEnabled}
+          onSelectBot={canUseChatAi ? chatBots.selectChatBot : undefined}
+          onChange={(enabled) => {
+            if (canUseChatAi) chatBots.setChatAiEnabled(enabled);
+          }}
+          canToggle={canUseChatAi}
           hasBots={chatBots.chatBots.length > 0}
         />
       </div>
@@ -842,6 +883,8 @@ export default function InboxPage() {
                   loadingEarlier={loadingEarlier}
                   retryingId={retryingId}
                   botIsLive={botIsLive}
+                  canUseAi={canUseChatAi}
+                  canSendMessages={canSendMessages}
                   globalChatLocked={globalChatLocked}
                   botToggling={botToggling}
                   botAssigning={botAssigning}
@@ -864,8 +907,12 @@ export default function InboxPage() {
                   onBack={() => setSelected(null)}
                   onOpenDetails={() => toggleDetails()}
                   onCallBack={() => void handleCallBack()}
-                  onToggleBot={() => void handleToggleBot()}
-                  onSetActiveBot={(botId) => void handleSetActiveBot(botId)}
+                  onToggleBot={() => {
+                    if (canUseChatAi) void handleToggleBot();
+                  }}
+                  onSetActiveBot={(botId) => {
+                    if (canUseChatAi) void handleSetActiveBot(botId);
+                  }}
                   onToggleFavorite={() => void handleToggleFavorite()}
                   onMarkUnread={() => {
                     void handleMarkUnread().then(() => void refreshUnread());
