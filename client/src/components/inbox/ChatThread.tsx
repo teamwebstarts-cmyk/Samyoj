@@ -54,6 +54,8 @@ interface ChatThreadProps {
   loadingEarlier: boolean;
   retryingId: string | null;
   botIsLive: boolean;
+  canUseAi?: boolean;
+  canSendMessages?: boolean;
   globalChatLocked?: boolean;
   botToggling: boolean;
   botAssigning?: boolean;
@@ -127,6 +129,8 @@ export default function ChatThread({
   loadingEarlier,
   retryingId,
   botIsLive,
+  canUseAi = true,
+  canSendMessages = true,
   globalChatLocked = false,
   botToggling,
   botAssigning = false,
@@ -580,6 +584,7 @@ export default function ChatThread({
         conversation={conversation}
         serviceWindow={serviceWindow}
         botIsLive={botIsLive}
+        canUseAi={canUseAi}
         globalChatLocked={globalChatLocked}
         botToggling={botToggling}
         botAssigning={botAssigning}
@@ -833,6 +838,7 @@ export default function ChatThread({
                 onModeChange={setInteractiveMode}
                 onClose={onCloseInteractive}
                 sending={sending}
+                canSendMessages={canSendMessages}
                 serviceWindow={serviceWindow!}
                 onSend={onSendInteractive}
               />
@@ -842,6 +848,7 @@ export default function ChatThread({
               <TemplateComposer
                 onSend={onSendTemplate}
                 sending={sending}
+                canSendMessages={canSendMessages}
                 onCancel={onCancelTemplate}
                 windowClosed={!windowOpen}
                 contactName={conversation.contact?.name}
@@ -860,6 +867,7 @@ export default function ChatThread({
               attachment={attachment}
               onRemoveAttachment={onRemoveAttachment}
               sending={sending}
+              canSendMessages={canSendMessages}
               cannedReplies={cannedReplies}
               onInteractive={onOpenInteractive}
               conversationId={conversation.id}
