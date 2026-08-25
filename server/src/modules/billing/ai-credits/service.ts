@@ -1,8 +1,10 @@
 import type { Prisma } from '@prisma/client';
 import prisma from '../../../config/database';
 import { AppError } from '../../../utils/response';
-import { legacyPlanToTier, type PlanTier } from '../plans';
-import { checkQuota } from '../entitlements.service';
+import { type PlanTier } from '../plans';
+import type { OrgAiSettings } from '../../ai/types';
+import { checkQuota, getOrgEntitlements } from '../entitlements.service';
+import { getCurrentPlanPeriod, tierFromPeriodOrCache } from '../billing-state.service';
 import {
   type AiCreditPool,
   INCLUDED_ALLOWANCES,
@@ -14,11 +16,11 @@ import {
 
 export type AiCreditBalanceView = {
   pool: AiCreditPool;
-  includedLimit: number;
+  includedLimit: number | 'custom';
   includedUsed: number;
-  includedRemaining: number;
+  includedRemaining: number | 'custom';
   addonBalance: number;
-  totalRemaining: number;
+  totalRemaining: number | 'custom';
   periodStart: string;
   periodEnd: string;
 };
@@ -26,12 +28,13 @@ export type AiCreditBalanceView = {
 type Tx = Prisma.TransactionClient;
 
 function defaultPeriodEnd(planExpiresAt: Date | null): Date {
-  if (planExpiresAt && planExpiresAt.getTime() > Date.now()) {
+  if (planExpiresAt) {
     return planExpiresAt;
   }
-  const end = new Date();
-  end.setMonth(end.getMonth() + 1);
-  return end;
+  // Legacy organizations without an expiry still need a stable monthly
+  // bucket; using `now + 1 month` would reset included usage on every read.
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
 }
 
 function defaultPeriodStart(periodEnd: Date): Date {
@@ -40,15 +43,38 @@ function defaultPeriodStart(periodEnd: Date): Date {
   return start;
 }
 
-export function includedLimitForPlan(planTier: PlanTier, pool: AiCreditPool): number {
+export function includedLimitForPlan(
+  planTier: PlanTier,
+  pool: AiCreditPool,
+  settings?: Pick<OrgAiSettings, 'customChatCreditsIncluded' | 'customCallingMinutesIncluded'>
+): number {
   const row = INCLUDED_ALLOWANCES[planTier] || INCLUDED_ALLOWANCES.launch;
-  return pool === 'chat' ? row.chatCreditsIncluded : row.callingMinutesIncluded;
+  const allowance = pool === 'chat' ? row.chatCreditsIncluded : row.callingMinutesIncluded;
+  if (allowance === 'custom') {
+    const configured =
+      pool === 'chat' ? settings?.customChatCreditsIncluded : settings?.customCallingMinutesIncluded;
+    return typeof configured === 'number' && configured >= 0 ? configured : 0;
+  }
+  return allowance;
+}
+
+export function includedAllowanceForPlan(
+  planTier: PlanTier,
+  pool: AiCreditPool,
+  settings?: Pick<OrgAiSettings, 'customChatCreditsIncluded' | 'customCallingMinutesIncluded'>
+): number | 'custom' {
+  const row = INCLUDED_ALLOWANCES[planTier] || INCLUDED_ALLOWANCES.launch;
+  const allowance = pool === 'chat' ? row.chatCreditsIncluded : row.callingMinutesIncluded;
+  if (allowance !== 'custom') return allowance;
+  const configured =
+    pool === 'chat' ? settings?.customChatCreditsIncluded : settings?.customCallingMinutesIncluded;
+  return typeof configured === 'number' && configured >= 0 ? configured : 'custom';
 }
 
 async function loadOrg(orgId: string, tx: Tx = prisma) {
   const org = await tx.organization.findUnique({
     where: { id: orgId },
-    select: { id: true, plan: true, planExpiresAt: true },
+    select: { id: true, plan: true, planExpiresAt: true, settings: true },
   });
   if (!org) throw new AppError(404, 'Organization not found');
   return org;
@@ -57,11 +83,11 @@ async function loadOrg(orgId: string, tx: Tx = prisma) {
 async function ensureBalanceRow(
   organizationId: string,
   pool: AiCreditPool,
-  tx: Tx = prisma
+  tx: Tx = prisma,
+  planExpiresAtOverride?: Date | null
 ) {
   const org = await loadOrg(organizationId, tx);
-  const planTier = legacyPlanToTier(org.plan);
-  const periodEnd = defaultPeriodEnd(org.planExpiresAt);
+  const periodEnd = defaultPeriodEnd(planExpiresAtOverride ?? org.planExpiresAt);
   const periodStart = defaultPeriodStart(periodEnd);
 
   const existing = await tx.orgAiCreditBalance.findUnique({
@@ -103,8 +129,20 @@ function toView(
     periodStart: Date;
     periodEnd: Date;
   },
-  includedLimit: number
+  includedLimit: number | 'custom'
 ): AiCreditBalanceView {
+  if (includedLimit === 'custom') {
+    return {
+      pool,
+      includedLimit,
+      includedUsed: row.includedUsed,
+      includedRemaining: 'custom',
+      addonBalance: row.addonBalance,
+      totalRemaining: 'custom',
+      periodStart: row.periodStart.toISOString(),
+      periodEnd: row.periodEnd.toISOString(),
+    };
+  }
   const includedRemaining = Math.max(0, includedLimit - row.includedUsed);
   const totalRemaining = includedRemaining + Math.max(0, row.addonBalance);
   return {
@@ -125,17 +163,19 @@ export async function getAiCreditBalances(organizationId: string): Promise<{
   periodEnd: string | null;
 }> {
   const org = await loadOrg(organizationId);
-  const planTier = legacyPlanToTier(org.plan);
+  const entitlements = await getOrgEntitlements(organizationId);
+  const planTier = entitlements.planTier;
+  const aiSettings = ((org.settings as Record<string, unknown> | null)?.ai || {}) as OrgAiSettings;
 
   const [chatRow, callingRow] = await Promise.all([
-    ensureBalanceRow(organizationId, 'chat'),
-    ensureBalanceRow(organizationId, 'calling'),
+    ensureBalanceRow(organizationId, 'chat', prisma, entitlements.planExpiresAt),
+    ensureBalanceRow(organizationId, 'calling', prisma, entitlements.planExpiresAt),
   ]);
 
   return {
-    chat: toView('chat', chatRow, includedLimitForPlan(planTier, 'chat')),
-    calling: toView('calling', callingRow, includedLimitForPlan(planTier, 'calling')),
-    periodEnd: org.planExpiresAt?.toISOString() ?? chatRow.periodEnd.toISOString(),
+    chat: toView('chat', chatRow, includedAllowanceForPlan(planTier, 'chat', aiSettings)),
+    calling: toView('calling', callingRow, includedAllowanceForPlan(planTier, 'calling', aiSettings)),
+    periodEnd: entitlements.planExpiresAt?.toISOString() ?? chatRow.periodEnd.toISOString(),
   };
 }
 
@@ -158,6 +198,13 @@ export async function assertAiCreditsAvailable(
 
   const balances = await getAiCreditBalances(organizationId);
   const view = pool === 'chat' ? balances.chat : balances.calling;
+  if (view.totalRemaining === 'custom') {
+    throw new AppError(
+      403,
+      'Your Enterprise AI allowance is administrator-configured. Contact your administrator to enable usage.',
+      'AI_CUSTOM_ALLOWANCE_REQUIRED'
+    );
+  }
   if (view.totalRemaining < amount) {
     throw new AppError(
       429,
@@ -203,10 +250,20 @@ async function deductAmount(
   if (amount <= 0) return;
 
   const org = await loadOrg(organizationId, tx);
-  const planTier = legacyPlanToTier(org.plan);
-  const includedLimit = includedLimitForPlan(planTier, pool);
+  const currentPeriod = await getCurrentPlanPeriod(organizationId, tx);
+  const planTier = tierFromPeriodOrCache(currentPeriod, org.plan);
+  const aiSettings = ((org.settings as Record<string, unknown> | null)?.ai || {}) as OrgAiSettings;
+  const includedLimit = includedLimitForPlan(planTier, pool, aiSettings);
 
-  const row = await ensureBalanceRow(organizationId, pool, tx);
+  const row = await ensureBalanceRow(organizationId, pool, tx, currentPeriod?.endsAt ?? org.planExpiresAt);
+  // Serialize deductions for the same pool. A read-then-write without this
+  // lock lets concurrent AI requests spend the same included/add-on units.
+  await tx.$queryRaw`
+    SELECT id
+    FROM "org_ai_credit_balances"
+    WHERE "organization_id" = ${organizationId} AND "pool" = ${pool}
+    FOR UPDATE
+  `;
 
   const next = computeDeductionSplit({
     includedLimit,
@@ -233,22 +290,34 @@ export async function deductChatCreditsFromUsageLog(params: {
   const amount = tokensToChatCredits(params.promptTokens, params.completionTokens);
   if (amount <= 0) return;
 
-  await prisma.$transaction(async (tx) => {
-    const existing = await tx.aiCreditDeduction.findUnique({
-      where: { usageLogId: params.usageLogId },
-    });
-    if (existing) return;
+  try {
+    await prisma.$transaction(async (tx) => {
+      const existing = await tx.aiCreditDeduction.findUnique({
+        where: { usageLogId: params.usageLogId },
+      });
+      if (existing) return;
 
-    await deductAmount(params.organizationId, 'chat', amount, tx);
-    await tx.aiCreditDeduction.create({
-      data: {
-        organizationId: params.organizationId,
-        pool: 'chat',
-        amount,
-        usageLogId: params.usageLogId,
-      },
+      await deductAmount(params.organizationId, 'chat', amount, tx);
+      await tx.aiCreditDeduction.create({
+        data: {
+          organizationId: params.organizationId,
+          pool: 'chat',
+          amount,
+          usageLogId: params.usageLogId,
+        },
+      });
     });
-  });
+  } catch (err) {
+    // Two retry workers may race on the same usage row. A unique-key winner
+    // means the deduction already committed; treat that retry as successful.
+    if ((err as { code?: string })?.code === 'P2002') {
+      const existing = await prisma.aiCreditDeduction.findUnique({
+        where: { usageLogId: params.usageLogId },
+      });
+      if (existing) return;
+    }
+    throw err;
+  }
 }
 
 export async function deductCallingMinutesForCall(params: {
@@ -259,22 +328,109 @@ export async function deductCallingMinutesForCall(params: {
   const amount = callingSecondsToMinutes(params.durationSeconds);
   if (amount <= 0) return;
 
-  await prisma.$transaction(async (tx) => {
-    const existing = await tx.aiCreditDeduction.findUnique({
-      where: { callId: params.callId },
-    });
-    if (existing) return;
+  try {
+    await prisma.$transaction(async (tx) => {
+      const existing = await tx.aiCreditDeduction.findUnique({
+        where: { callId: params.callId },
+      });
+      if (existing) return;
 
-    await deductAmount(params.organizationId, 'calling', amount, tx);
-    await tx.aiCreditDeduction.create({
-      data: {
-        organizationId: params.organizationId,
-        pool: 'calling',
-        amount,
-        callId: params.callId,
-      },
+      await deductAmount(params.organizationId, 'calling', amount, tx);
+      await tx.aiCreditDeduction.create({
+        data: {
+          organizationId: params.organizationId,
+          pool: 'calling',
+          amount,
+          callId: params.callId,
+        },
+      });
     });
+  } catch (err) {
+    if ((err as { code?: string })?.code === 'P2002') {
+      const existing = await prisma.aiCreditDeduction.findUnique({
+        where: { callId: params.callId },
+      });
+      if (existing) return;
+    }
+    throw err;
+  }
+}
+
+/**
+ * Reconcile call deductions that were durably marked pending after a call
+ * ended. The deduction key is the call ID, so a retry is safe after a worker
+ * crash or a concurrent retry.
+ */
+export async function retryPendingCallingMinuteDeductions(limit = 100): Promise<number> {
+  const rows = await prisma.call.findMany({
+    where: {
+      metadata: {
+        path: ['billingStatus'],
+        equals: 'PENDING_RETRY',
+      },
+    },
+    select: {
+      id: true,
+      organizationId: true,
+      metadata: true,
+    },
+    orderBy: { updatedAt: 'asc' },
+    take: limit,
   });
+
+  let settled = 0;
+  for (const row of rows) {
+    const metadata =
+      row.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata)
+        ? (row.metadata as Record<string, unknown>)
+        : {};
+    const durationSeconds = Number(metadata.billedDurationSeconds);
+    if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
+      await prisma.call.update({
+        where: { id: row.id },
+        data: {
+          metadata: {
+            ...metadata,
+            billingStatus: 'SETTLED',
+            billingError: null,
+          },
+        },
+      });
+      settled += 1;
+      continue;
+    }
+
+    try {
+      await deductCallingMinutesForCall({
+        organizationId: row.organizationId,
+        callId: row.id,
+        durationSeconds,
+      });
+      await prisma.call.update({
+        where: { id: row.id },
+        data: {
+          metadata: {
+            ...metadata,
+            billingStatus: 'SETTLED',
+            billingError: null,
+          },
+        },
+      });
+      settled += 1;
+    } catch (err) {
+      await prisma.call.update({
+        where: { id: row.id },
+        data: {
+          metadata: {
+            ...metadata,
+            billingStatus: 'PENDING_RETRY',
+            billingError: err instanceof Error ? err.message.slice(0, 500) : String(err).slice(0, 500),
+          },
+        },
+      });
+    }
+  }
+  return settled;
 }
 
 export async function grantTopUp(params: {
@@ -286,6 +442,9 @@ export async function grantTopUp(params: {
   razorpaySubscriptionId?: string;
 }): Promise<{ creditsGranted: number; addonBalance: number }> {
   const quantity = Math.max(1, params.quantity ?? 1);
+  if (params.sku.purchaseType === 'topup' && quantity !== 1) {
+    throw new AppError(400, 'Each AI add-on checkout is limited to one fixed pack', 'FIXED_TOPUP_SKU');
+  }
   const creditsGranted = params.sku.units * quantity;
 
   if (params.paymentOrderId) {
@@ -328,9 +487,68 @@ export async function grantTopUp(params: {
     }
   }
 
-  return prisma.$transaction(async (tx) => {
-    await ensureBalanceRow(params.organizationId, params.sku.pool, tx);
-    const row = await tx.orgAiCreditBalance.update({
+  return prisma.$transaction((tx) => grantTopUpInTransaction({ ...params, quantity }, tx));
+}
+
+export async function grantTopUpInTransaction(
+  params: {
+    organizationId: string;
+    sku: AiTopupSku;
+    quantity?: number;
+    paymentOrderId?: string;
+    razorpayPaymentId?: string;
+    razorpaySubscriptionId?: string;
+  },
+  tx: Tx
+): Promise<{ creditsGranted: number; addonBalance: number }> {
+  const quantity = Math.max(1, params.quantity ?? 1);
+  if (params.sku.purchaseType === 'topup' && quantity !== 1) {
+    throw new AppError(400, 'Each AI add-on checkout is limited to one fixed pack', 'FIXED_TOPUP_SKU');
+  }
+  const creditsGranted = params.sku.units * quantity;
+
+  if (params.paymentOrderId) {
+    const existing = await tx.aiCreditPurchase.findFirst({
+      where: { paymentOrderId: params.paymentOrderId },
+    });
+    if (existing) {
+      const row = await tx.orgAiCreditBalance.findUnique({
+        where: {
+          organizationId_pool: {
+            organizationId: params.organizationId,
+            pool: params.sku.pool,
+          },
+        },
+      });
+      return {
+        creditsGranted: existing.creditsGranted,
+        addonBalance: row?.addonBalance ?? 0,
+      };
+    }
+  }
+
+  if (params.razorpayPaymentId) {
+    const existing = await tx.aiCreditPurchase.findUnique({
+      where: { razorpayPaymentId: params.razorpayPaymentId },
+    });
+    if (existing) {
+      const row = await tx.orgAiCreditBalance.findUnique({
+        where: {
+          organizationId_pool: {
+            organizationId: params.organizationId,
+            pool: params.sku.pool,
+          },
+        },
+      });
+      return {
+        creditsGranted: existing.creditsGranted,
+        addonBalance: row?.addonBalance ?? 0,
+      };
+    }
+  }
+
+  await ensureBalanceRow(params.organizationId, params.sku.pool, tx);
+  const row = await tx.orgAiCreditBalance.update({
       where: {
         organizationId_pool: {
           organizationId: params.organizationId,
@@ -340,25 +558,24 @@ export async function grantTopUp(params: {
       data: {
         addonBalance: { increment: creditsGranted },
       },
-    });
-
-    await tx.aiCreditPurchase.create({
-      data: {
-        organizationId: params.organizationId,
-        pool: params.sku.pool,
-        skuId: params.sku.id,
-        purchaseType: params.sku.purchaseType,
-        quantity,
-        creditsGranted,
-        amountPaise: params.sku.pricePaise * quantity,
-        paymentOrderId: params.paymentOrderId,
-        razorpayPaymentId: params.razorpayPaymentId,
-        razorpayAddonId: params.razorpaySubscriptionId,
-      },
-    });
-
-    return { creditsGranted, addonBalance: row.addonBalance };
   });
+
+  await tx.aiCreditPurchase.create({
+    data: {
+      organizationId: params.organizationId,
+      pool: params.sku.pool,
+      skuId: params.sku.id,
+      purchaseType: params.sku.purchaseType,
+      quantity,
+      creditsGranted,
+      amountPaise: params.sku.pricePaise * quantity,
+      paymentOrderId: params.paymentOrderId,
+      razorpayPaymentId: params.razorpayPaymentId,
+      razorpayAddonId: params.razorpaySubscriptionId,
+    },
+  });
+
+  return { creditsGranted, addonBalance: row.addonBalance };
 }
 
 export async function grantTopUpBySkuId(params: {
