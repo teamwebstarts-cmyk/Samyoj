@@ -16,6 +16,7 @@ interface TableIconButtonProps {
   icon: LucideIcon;
   label: string;
   variant?: keyof typeof iconVariants;
+  disabled?: boolean;
 }
 
 export function TableIconButton({
@@ -23,6 +24,7 @@ export function TableIconButton({
   icon: Icon,
   label,
   variant = 'default',
+  disabled = false,
 }: TableIconButtonProps) {
   const getTipProps = useGlassTipProps();
   const glassTipsActive = useInboxGlassTipActive();
@@ -31,10 +33,11 @@ export function TableIconButton({
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       {...getTipProps(label, 'above')}
       title={glassTipsActive ? undefined : label}
       aria-label={label}
-      className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border shadow-sm transition ${iconVariants[variant]}`}
+      className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border shadow-sm transition disabled:cursor-not-allowed disabled:opacity-50 ${iconVariants[variant]}`}
     >
       <Icon size={15} strokeWidth={2.25} />
     </button>
@@ -53,6 +56,7 @@ interface TableTextButtonProps {
   icon?: LucideIcon;
   children: ReactNode;
   variant?: keyof typeof textVariants;
+  disabled?: boolean;
 }
 
 export function TableTextButton({
@@ -60,12 +64,14 @@ export function TableTextButton({
   icon: Icon,
   children,
   variant = 'primary',
+  disabled = false,
 }: TableTextButtonProps) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-[11px] font-bold shadow-sm transition ${textVariants[variant]}`}
+      disabled={disabled}
+      className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-[11px] font-bold shadow-sm transition disabled:cursor-not-allowed disabled:opacity-50 ${textVariants[variant]}`}
     >
       {Icon && <Icon className="h-3.5 w-3.5" strokeWidth={2.25} />}
       {children}
