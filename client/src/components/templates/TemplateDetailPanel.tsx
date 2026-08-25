@@ -32,6 +32,7 @@ interface TemplateDetailPanelProps {
   onDuplicate: () => void;
   onResubmit: () => void;
   onDelete: () => void;
+  canManage?: boolean;
 }
 
 export default function TemplateDetailPanel({
@@ -39,6 +40,7 @@ export default function TemplateDetailPanel({
   onDuplicate,
   onResubmit,
   onDelete,
+  canManage = true,
 }: TemplateDetailPanelProps) {
   const [usage, setUsage] = useState<TemplateUsage | null>(null);
   const [testPhone, setTestPhone] = useState('');
@@ -277,7 +279,7 @@ export default function TemplateDetailPanel({
                 icon={<TestTube2 size={14} />}
                 onClick={handleTestSend}
                 loading={testing}
-                disabled={!testPhone.trim()}
+                disabled={!testPhone.trim() || !canManage}
               >
                 Send test
               </AppButton>
@@ -295,7 +297,7 @@ export default function TemplateDetailPanel({
       )}
 
       {['REJECTED', 'PAUSED', 'DISABLED'].includes(template.status) && (
-        <AppButton variant="secondary" icon={<Pencil size={14} />} onClick={onResubmit}>
+      <AppButton variant="secondary" icon={<Pencil size={14} />} onClick={onResubmit} disabled={!canManage}>
           Edit & resubmit
         </AppButton>
       )}
@@ -328,10 +330,10 @@ export default function TemplateDetailPanel({
       )}
 
       <div className="flex flex-wrap gap-2 border-t border-theme-border pt-4">
-        <AppButton variant="secondary" size="sm" icon={<Copy size={14} />} onClick={onDuplicate}>
+        <AppButton variant="secondary" size="sm" icon={<Copy size={14} />} onClick={onDuplicate} disabled={!canManage}>
           Duplicate
         </AppButton>
-        <AppButton variant="danger" size="sm" icon={<Trash2 size={14} />} onClick={onDelete}>
+        <AppButton variant="danger" size="sm" icon={<Trash2 size={14} />} onClick={onDelete} disabled={!canManage}>
           Delete
         </AppButton>
       </div>
