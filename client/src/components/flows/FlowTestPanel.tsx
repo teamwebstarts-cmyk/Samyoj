@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, FlaskConical, Play, XCircle } from 'lucide-react';
+import { CheckCircle2, FlaskConical, Play, Send, XCircle } from 'lucide-react';
 import AppButton from '../ui/AppButton';
 import AppInput from '../ui/AppInput';
 import { flowApi } from '../../services/api';
@@ -9,6 +9,7 @@ import type { FlowNode, FlowTriggerType } from '../../types';
 import { nodeMeta, triggerMeta } from './flowMeta';
 
 interface FlowTestPanelProps {
+  flowId?: string;
   triggerType: FlowTriggerType;
   triggerConfig: Record<string, unknown>;
   nodes: FlowNode[];
@@ -91,11 +92,13 @@ function friendlyReason(reason: string, triggered: boolean): string {
   return reason || 'This scenario would not start your flow.';
 }
 
-export default function FlowTestPanel({ triggerType, triggerConfig, nodes, startNodeId }: FlowTestPanelProps) {
+export default function FlowTestPanel({ flowId, triggerType, triggerConfig, nodes, startNodeId }: FlowTestPanelProps) {
   const [message, setMessage] = useState(() => defaultMessageForTrigger(triggerType, triggerConfig));
   const [isNew, setIsNew] = useState(() => defaultIsNewForTrigger(triggerType));
   const [tags, setTags] = useState('');
+  const [testPhone, setTestPhone] = useState('');
   const [loading, setLoading] = useState(false);
+  const [sendLoading, setSendLoading] = useState(false);
   const [result, setResult] = useState<SimResult | null>(null);
 
   const triggerInfo = triggerMeta[triggerType];
@@ -149,6 +152,26 @@ export default function FlowTestPanel({ triggerType, triggerConfig, nodes, start
       toastError(getErrorMessage(err, 'Test failed'));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const sendTestToPhone = async () => {
+    if (!flowId) {
+      toastWarning('Save this flow first before sending a live test');
+      return;
+    }
+    if (!testPhone.trim()) {
+      toastWarning('Enter a phone number with country code');
+      return;
+    }
+    setSendLoading(true);
+    try {
+      await flowApi.test(flowId, { phone: testPhone.trim(), nodes, startNodeId });
+      toastSuccess('Test message sent to WhatsApp');
+    } catch (err: unknown) {
+      toastError(getErrorMessage(err, 'Test send failed'));
+    } finally {
+      setSendLoading(false);
     }
   };
 
@@ -233,6 +256,31 @@ export default function FlowTestPanel({ triggerType, triggerConfig, nodes, start
       <AppButton size="sm" className="w-full sm:w-auto" icon={<Play size={14} />} loading={loading} onClick={runTest}>
         Run test
       </AppButton>
+
+      {flowId && (
+        <div className="space-y-2 rounded-xl border border-emerald-100 bg-emerald-50/50 p-3.5">
+          <p className="text-[12px] font-bold text-neutral-900">Send to my WhatsApp</p>
+          <p className="text-[11px] leading-relaxed text-neutral-600">
+            Sends the first customer-visible step from this flow. Contact must exist with opt-in consent.
+          </p>
+          <AppInput
+            label="Phone number"
+            value={testPhone}
+            onChange={(e) => setTestPhone(e.target.value)}
+            placeholder="+91XXXXXXXXXX"
+          />
+          <AppButton
+            size="sm"
+            variant="secondary"
+            className="w-full sm:w-auto"
+            icon={<Send size={14} />}
+            loading={sendLoading}
+            onClick={sendTestToPhone}
+          >
+            Send live test
+          </AppButton>
+        </div>
+      )}
 
       {result && (
         <div

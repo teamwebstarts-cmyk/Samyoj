@@ -64,7 +64,7 @@ Scope: Runnable acceptance gates for manual plan-period billing, fail-closed ent
   EXPECT: server-build-ok
   EVIDENCE: exit=0; shell=/bin/sh; cwd=/workspaces/Samyoj; path=6edb1355a1f7/42 entries; output=> tsc | server-build-ok
 
-- [ ] G13: Client production build passes
+- [x] G13: Client production build passes
   CHECK: cd client && npm run build
   EXPECT: built in
-  EVIDENCE: pending
+  EVIDENCE: exit=0; shell=/bin/sh; cwd=/workspaces/Samyoj; path=6edb1355a1f7/42 entries; output=✓ built in 12.32s

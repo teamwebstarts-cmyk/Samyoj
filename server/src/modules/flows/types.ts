@@ -96,6 +96,8 @@ export interface FlowNode {
   mediaType?: 'image' | 'document' | 'video' | 'audio';
   mediaCaption?: string;
   delaySeconds?: number;
+  /** When false, customer messages during a delay wait do not skip the timer. Default true. */
+  interruptOnInbound?: boolean;
   scheduleAt?: string;
   webhookUrl?: string;
   webhookMethod?: 'GET' | 'POST';

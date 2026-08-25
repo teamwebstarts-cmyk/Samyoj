@@ -10,6 +10,10 @@ describe('shouldInterruptWait', () => {
     expect(shouldInterruptWait('delay', {})).toBe(true);
   });
 
+  it('does not interrupt delay when interruptOnInbound is false', () => {
+    expect(shouldInterruptWait('delay', {}, { interruptOnInbound: false })).toBe(false);
+  });
+
   it('interrupts Meta Form wait when the customer types instead of submitting', () => {
     expect(shouldInterruptWait('wa_flow', {})).toBe(true);
     expect(shouldInterruptWait('wa_flow', { waFlowResponse: {} })).toBe(true);

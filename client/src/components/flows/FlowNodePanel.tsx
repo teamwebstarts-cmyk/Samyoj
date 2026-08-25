@@ -630,15 +630,28 @@ function FlowNodePanelForm({
       )}
 
       {node.type === 'delay' && (
-        <AppInput
-          label="Wait before next step"
-          type="number"
-          min={1}
-          max={86400}
-          value={String(node.delaySeconds || 30)}
-          onChange={(e) => onChange({ delaySeconds: Number(e.target.value) })}
-          hint="Seconds to wait (max 24 hours)"
-        />
+        <>
+          <AppInput
+            label="Wait before next step"
+            type="number"
+            min={1}
+            max={86400}
+            value={String(node.delaySeconds || 30)}
+            onChange={(e) => onChange({ delaySeconds: Number(e.target.value) })}
+            hint="Seconds to wait (max 24 hours)"
+          />
+          <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-neutral-200/80 bg-white px-3.5 py-3">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={node.interruptOnInbound !== false}
+              onChange={(e) => onChange({ interruptOnInbound: e.target.checked })}
+            />
+            <span className="text-[12px] font-medium leading-relaxed text-neutral-700">
+              Let customer messages skip this wait (recommended)
+            </span>
+          </label>
+        </>
       )}
 
       {node.type === 'schedule' && (
@@ -660,6 +673,17 @@ function FlowNodePanelForm({
             onChange={(e) => onChange({ delaySeconds: Number(e.target.value) })}
             hint="Used if no date is set above"
           />
+          <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-neutral-200/80 bg-white px-3.5 py-3">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={node.interruptOnInbound !== false}
+              onChange={(e) => onChange({ interruptOnInbound: e.target.checked })}
+            />
+            <span className="text-[12px] font-medium leading-relaxed text-neutral-700">
+              Let customer messages skip this scheduled wait
+            </span>
+          </label>
         </div>
       )}
 

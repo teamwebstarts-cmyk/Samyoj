@@ -1,4 +1,5 @@
 import type { AutomationConflict } from '../types';
+import { normalizeError } from './errors';
 import { toastError, toastWarning } from './toast';
 
 /** Returns false when save must stop (error-severity conflicts). Warnings still save. */
@@ -13,5 +14,13 @@ export function notifySaveConflicts(conflicts: AutomationConflict[]): boolean {
   const extra =
     conflicts.length > 3 ? `\n+${conflicts.length - 3} more — see Automations after save.` : '';
   toastWarning(shown.join('\n') + extra);
+  return true;
+}
+
+/** Surface server-side conflict blocks (409 AUTOMATION_CONFLICT). Returns true if handled. */
+export function notifySaveConflictError(err: unknown): boolean {
+  const normalized = normalizeError(err);
+  if (normalized.code !== 'AUTOMATION_CONFLICT' && normalized.status !== 409) return false;
+  toastError(normalized.message || 'This automation conflicts with another live rule');
   return true;
 }

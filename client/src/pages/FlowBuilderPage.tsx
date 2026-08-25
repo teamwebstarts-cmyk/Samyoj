@@ -29,7 +29,7 @@ import { prepareNodesForSave, validateFlow } from '../components/flows/flowUtils
 import { flowApi, automationApi } from '../services/api';
 import { getErrorMessage, normalizeError } from '../utils/errors';
 import { toastError, toastSuccess, toastValidationErrors } from '../utils/toast';
-import { notifySaveConflicts } from '../utils/automation-conflicts';
+import { notifySaveConflicts, notifySaveConflictError } from '../utils/automation-conflicts';
 import {
   flowAudienceLabel,
   flowAudienceState,
@@ -387,7 +387,9 @@ export default function FlowBuilderPage() {
         setTimeout(() => setSaved(false), 2000);
       }
     } catch (err: unknown) {
-      toastError(getErrorMessage(err, 'Failed to save flow'));
+      if (!notifySaveConflictError(err)) {
+        toastError(getErrorMessage(err, 'Failed to save flow'));
+      }
     } finally {
       setSaving(false);
     }
@@ -427,7 +429,9 @@ export default function FlowBuilderPage() {
       );
       setTimeout(() => setSaved(false), 2000);
     } catch (err: unknown) {
-      toastError(getErrorMessage(err, 'Failed to publish flow'));
+      if (!notifySaveConflictError(err)) {
+        toastError(getErrorMessage(err, 'Failed to publish flow'));
+      }
     } finally {
       setSaving(false);
     }
@@ -673,7 +677,7 @@ export default function FlowBuilderPage() {
           )}
           {mobileTab === 'test' && (
             <div className="p-4">
-              <FlowTestPanel triggerType={triggerType} triggerConfig={triggerConfig} nodes={linkedNodes} startNodeId={startNodeId} />
+              <FlowTestPanel flowId={isNew ? undefined : id} triggerType={triggerType} triggerConfig={triggerConfig} nodes={linkedNodes} startNodeId={startNodeId} />
             </div>
           )}
           {mobileTab === 'analytics' && !isNew && id && (
@@ -718,6 +722,7 @@ export default function FlowBuilderPage() {
             )}
             {desktopPanel === 'test' && (
               <FlowTestPanel
+                flowId={isNew ? undefined : id}
                 triggerType={triggerType}
                 triggerConfig={triggerConfig}
                 nodes={linkedNodes}

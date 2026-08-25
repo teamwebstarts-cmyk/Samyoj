@@ -24,8 +24,18 @@ function stepLabel(nodes: FlowNode[] | undefined, nodeId: string): string {
 function statusLabel(status: string): string {
   if (status === 'success') return 'Worked';
   if (status === 'failed') return "Didn't work";
+  if (status === 'skipped') return 'Not sent';
   return status;
 }
+
+const SKIP_REASON_LABELS: Record<string, string> = {
+  csw_closed: '24h window closed',
+  frequency_cap: 'Sent recently (24h cap)',
+  inbound_during_wait: 'Customer replied during wait',
+  bot_paused: 'Automations paused',
+  opt_out: 'Customer opted out',
+  other: 'Other skip',
+};
 
 export default function FlowAnalyticsPanel({ flowId, nodes }: FlowAnalyticsPanelProps) {
   const [loading, setLoading] = useState(true);
@@ -34,6 +44,7 @@ export default function FlowAnalyticsPanel({ flowId, nodes }: FlowAnalyticsPanel
     stats: FlowStats;
     completionRate: number;
     nodeRuns: { success: number; failed: number };
+    bySkipReason?: Record<string, number>;
     recentRuns: Array<{ action: string; status: string; createdAt: string }>;
   } | null>(null);
 
@@ -112,6 +123,20 @@ export default function FlowAnalyticsPanel({ flowId, nodes }: FlowAnalyticsPanel
           {data.nodeRuns.success} worked · {data.nodeRuns.failed} didn't work
         </p>
       </div>
+
+      {data.bySkipReason && Object.keys(data.bySkipReason).length > 0 && (
+        <div className="rounded-xl border border-amber-100 bg-amber-50/50 p-3">
+          <p className="text-[12px] font-bold text-neutral-700">Why steps were skipped</p>
+          <div className="mt-2 space-y-1">
+            {Object.entries(data.bySkipReason).map(([reason, count]) => (
+              <div key={reason} className="flex justify-between text-[12px] text-neutral-600">
+                <span>{SKIP_REASON_LABELS[reason] || reason.replace(/_/g, ' ')}</span>
+                <span className="font-bold">{count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {Object.keys(data.stats.dropoffs || {}).length > 0 && (
         <div>

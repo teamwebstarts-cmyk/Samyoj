@@ -243,6 +243,7 @@ export const inboxApi = {
     id: string,
     data: { active?: boolean; resetHandoff?: boolean; activeBotId?: string | null }
   ) => api.patch(`/inbox/${id}/bot`, data),
+  jumpFlow: (id: string, nodeId: string) => api.patch(`/inbox/${id}/flow-jump`, { nodeId }),
   setStatus: (id: string, status: string) => api.patch(`/inbox/${id}/status`, { status }),
   snooze: (id: string, until: string) => api.patch(`/inbox/${id}/snooze`, { until }),
   unsnooze: (id: string) => api.delete(`/inbox/${id}/snooze`),
@@ -352,6 +353,7 @@ export const automationApi = {
     enabled?: boolean;
     status?: 'DRAFT' | 'PUBLISHED';
   }) => api.post('/automations/conflicts/preview', data),
+  test: (id: string, phone: string) => api.post(`/automations/${id}/test`, { phone }),
 };
 
 export const flowApi = {
@@ -371,6 +373,8 @@ export const flowApi = {
   restoreVersion: (id: string, version: number) => api.post(`/flows/${id}/restore/${version}`),
   scheduleStart: (id: string, data: { conversationId: string; delaySeconds?: number }) =>
     api.post(`/flows/${id}/schedule`, data),
+  test: (id: string, data: { phone: string; nodes?: unknown[]; startNodeId?: string }) =>
+    api.post(`/flows/${id}/test`, data),
 };
 
 export const settingsApi = {
@@ -814,8 +818,7 @@ export const teamApi = {
   sessions: {
     list: () => api.get('/team/sessions'),
     revoke: (id: string) => api.delete(`/team/sessions/${id}`),
-    revokeAll: (exceptCurrent?: string) =>
-      api.delete('/team/sessions', { data: { exceptCurrent } }),
+    revokeAll: () => api.delete('/team/sessions'),
   },
   twoFactor: {
     setup: () => api.post('/team/me/2fa/setup'),

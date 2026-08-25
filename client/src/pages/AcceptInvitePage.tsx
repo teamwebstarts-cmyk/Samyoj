@@ -4,6 +4,7 @@ import { Building2, Lock, Mail, UserPlus } from 'lucide-react';
 import AuthButton from '../components/auth/AuthButton';
 import AuthInput from '../components/auth/AuthInput';
 import AuthLayout from '../components/auth/AuthLayout';
+import { useAuth } from '../contexts/AuthContext';
 import { teamApi } from '../services/api';
 import { RoleBadge } from '../components/team/AvailabilityBadge';
 import { roleLabels } from '../components/team/teamUi';
@@ -22,6 +23,7 @@ interface InvitePreview {
 export default function AcceptInvitePage() {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
+  const { refreshSession } = useAuth();
   const [invite, setInvite] = useState<InvitePreview | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -56,10 +58,9 @@ export default function AcceptInvitePage() {
         name: name.trim() || undefined,
         password,
       });
-      setAuthTokens(data.data.accessToken, data.data.refreshToken);
+      await refreshSession();
       toastSuccess(`Welcome to ${data.data.organization.companyName}!`);
-      navigate('/');
-      window.location.reload();
+      navigate('/', { replace: true });
     } catch (err: unknown) {
       const message =
         (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error

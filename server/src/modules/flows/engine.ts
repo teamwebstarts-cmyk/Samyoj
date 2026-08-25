@@ -1462,7 +1462,28 @@ async function processInboundFlow(payload: InboundFlowPayload): Promise<boolean>
 
   let existingState = getFlowState(conversation.botState);
 
-  if (existingState && shouldInterruptWait(existingState.waitingFor, payload)) {
+  let delayInterruptOnInbound: boolean | undefined;
+  if (existingState?.waitingFor === 'delay') {
+    const delayFlow = await prisma.flow.findFirst({
+      where: {
+        id: existingState.flowId,
+        organizationId: payload.organizationId,
+        ...scopedLiveFlowWhere(payload.whatsappNumberId),
+      },
+      select: { nodes: true },
+    });
+    const delayNode = delayFlow
+      ? findNode(parseNodes(delayFlow.nodes), existingState.currentNodeId)
+      : undefined;
+    delayInterruptOnInbound = delayNode?.interruptOnInbound;
+  }
+
+  if (
+    existingState &&
+    shouldInterruptWait(existingState.waitingFor, payload, {
+      interruptOnInbound: delayInterruptOnInbound,
+    })
+  ) {
     if (existingState.waitingFor === 'delay') {
       await cancelFlowDelayJob(payload.conversationId);
     }

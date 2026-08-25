@@ -1,5 +1,6 @@
 import prisma from '../../config/database';
 import { flowsForNumberFilter } from '../whatsapp/active-number';
+import { aggregateSkipReasons } from './skip-reasons';
 
 export async function getAutomationAnalytics(organizationId: string, days = 30, whatsappNumberId?: string) {
   const since = new Date();
@@ -54,6 +55,7 @@ export async function getAutomationAnalytics(organizationId: string, days = 30, 
     flowId: l.flowId,
     conversationId: l.conversationId,
     error: l.error,
+    output: l.output,
     createdAt: l.createdAt,
   }));
 
@@ -66,6 +68,7 @@ export async function getAutomationAnalytics(organizationId: string, days = 30, 
     byTrigger,
     byAction,
     byStatus,
+    bySkipReason: aggregateSkipReasons(logs),
     daily,
     recent,
   };

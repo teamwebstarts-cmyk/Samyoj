@@ -30,6 +30,7 @@ import {
 } from '../chat/chat-settings.service';
 import { NEW_CONTACT_CALLING_DEFAULTS } from '../contacts/contact-ai-defaults';
 import { pauseConversationAutomations, cancelFlowDelayJob } from '../flows/pause-automation';
+import { jumpConversationToFlowNode } from '../flows/jump';
 import type { FlowNode } from '../flows/types';
 import { resolveCs24hWindowOpensAt } from './service-window';
 import { nextUnreadCount } from './unread';
@@ -1828,6 +1829,25 @@ router.patch(
     });
 
     sendSuccess(res, conversation);
+  })
+);
+
+router.patch(
+  '/:id/flow-jump',
+  loadPermissions,
+  requirePermission('manageAutomations'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const numberId = req.activeWhatsappNumberId;
+    if (!numberId) throw new AppError(400, 'Active WhatsApp number required');
+    const { nodeId } = z.object({ nodeId: z.string().min(1) }).parse(req.body);
+    const result = await jumpConversationToFlowNode({
+      organizationId: orgId,
+      whatsappNumberId: numberId,
+      conversationId: paramId(req),
+      nodeId,
+    });
+    sendSuccess(res, result);
   })
 );
 

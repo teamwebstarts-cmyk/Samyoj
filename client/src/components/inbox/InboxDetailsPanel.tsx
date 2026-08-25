@@ -22,6 +22,7 @@ import { useGlassTipProps } from './ComposerGlassTip';
 import { labelsApi, contactApi } from '../../services/api';
 import ConversationNotesSection from './ConversationNotesSection';
 import ContactSavedAnswersSection from './details/ContactSavedAnswersSection';
+import FlowJumpControl from './details/FlowJumpControl';
 import { useTheme } from '../../contexts/ThemeContext';
 import type {
   Contact,
@@ -436,6 +437,13 @@ export default function InboxDetailsPanel({
         ) : (
           <div className="space-y-2.5 px-3 py-3">
             <ContactSavedAnswersSection contact={contact} />
+
+            {conversation.activeFlow && (
+              <FlowJumpControl
+                conversationId={conversation.id}
+                activeFlow={conversation.activeFlow}
+              />
+            )}
 
             <DetailsSectionCard data-section="labels">
               <div ref={labelsSectionRef}>

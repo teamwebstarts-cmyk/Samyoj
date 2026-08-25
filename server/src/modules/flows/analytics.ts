@@ -1,5 +1,6 @@
 import prisma from '../../config/database';
 import type { FlowStats } from './types';
+import { aggregateSkipReasons } from '../automation/skip-reasons';
 
 export async function incrementFlowStat(
   flowId: string,
@@ -31,7 +32,7 @@ export async function getFlowAnalytics(flowId: string, organizationId: string) {
 
   const stats = (flow.stats as unknown as FlowStats) || { starts: 0, completions: 0, handoffs: 0, dropoffs: {} };
 
-  const [recentRuns, successCount, failedCount] = await Promise.all([
+  const [recentRuns, successCount, failedCount, skippedLogs] = await Promise.all([
     prisma.automationLog.findMany({
       where: { flowId, organizationId, triggerType: 'FLOW' },
       orderBy: { createdAt: 'desc' },
@@ -53,6 +54,10 @@ export async function getFlowAnalytics(flowId: string, organizationId: string) {
     prisma.automationLog.count({
       where: { flowId, organizationId, triggerType: 'FLOW', status: 'failed' },
     }),
+    prisma.automationLog.findMany({
+      where: { flowId, organizationId, triggerType: 'FLOW', status: 'skipped' },
+      select: { status: true, action: true, output: true, error: true },
+    }),
   ]);
 
   const completionRate = stats.starts > 0 ? Math.round((stats.completions / stats.starts) * 100) : 0;
@@ -62,6 +67,7 @@ export async function getFlowAnalytics(flowId: string, organizationId: string) {
     stats,
     completionRate,
     nodeRuns: { success: successCount, failed: failedCount },
+    bySkipReason: aggregateSkipReasons(skippedLogs),
     recentRuns,
   };
 }

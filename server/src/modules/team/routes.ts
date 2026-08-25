@@ -24,6 +24,7 @@ import {
 } from './types';
 import type { OrgRole } from '@prisma/client';
 import { revokeRefreshSessionsForUser, issueTenantSession } from '../auth/session';
+import { readTenantRefreshToken } from '../auth/cookies';
 import { revokeOrgMemberSockets, revokeUserSockets } from '../../realtime';
 import { requireActiveCommercialOnMutation } from '../../middleware/plan-guard';
 import { checkQuota, getOrgEntitlements } from '../billing/entitlements.service';
@@ -821,7 +822,8 @@ router.delete(
   requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
     const userId = req.user!.userId;
-    const { exceptCurrent } = z.object({ exceptCurrent: z.string().optional() }).parse(req.body);
+    const body = z.object({ exceptCurrent: z.string().optional() }).parse(req.body ?? {});
+    const exceptCurrent = body.exceptCurrent ?? readTenantRefreshToken(req) ?? undefined;
 
     await prisma.refreshToken.updateMany({
       where: {

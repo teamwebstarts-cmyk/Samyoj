@@ -103,9 +103,8 @@ export default function TeamSecurityPanel() {
   };
 
   const revokeAll = async () => {
-    const current = getRefreshToken() ?? undefined;
     try {
-      await teamApi.sessions.revokeAll(current);
+      await teamApi.sessions.revokeAll();
       toastSuccess('All other sessions revoked');
       loadSessions();
     } catch {

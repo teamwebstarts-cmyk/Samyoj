@@ -4,7 +4,6 @@ import { logError } from '../utils/errors';
 import { socketBaseUrl } from '../services/utils';
 import { ensureFreshAccessToken } from '../services/api';
 import { clearAuthTokens, hasAuthSessionHint } from '../utils/authStorage';
-import { getActiveWhatsappNumberId } from '../services/api';
 
 export type SocketConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 

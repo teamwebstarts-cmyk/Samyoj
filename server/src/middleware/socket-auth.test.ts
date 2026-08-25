@@ -33,9 +33,12 @@ import { socketAuthMiddleware, startMembershipGuard } from './socket-auth';
 const findUnique = vi.mocked(prisma.organizationUser.findUnique);
 const verify = vi.mocked(verifyAccessToken);
 
-function fakeSocket(token: unknown): Socket {
+function fakeSocket(token: unknown, cookie?: string): Socket {
   return {
-    handshake: { auth: { token } },
+    handshake: {
+      auth: { token },
+      headers: cookie ? { cookie } : {},
+    },
     data: {},
   } as unknown as Socket;
 }
@@ -74,6 +77,15 @@ describe('socketAuthMiddleware membership check', () => {
     const err = await invoke(fakeSocket(undefined));
     expect(err?.message).toMatch(/authentication required/i);
     expect(verify).not.toHaveBeenCalled();
+  });
+
+  it('allows auth from samyoj_access cookie when handshake token is missing', async () => {
+    verify.mockReturnValue({ userId: 'u1', email: 'a@b.c' });
+    const socket = fakeSocket(undefined, 'samyoj_access=ok');
+    const err = await invoke(socket);
+    expect(err).toBeUndefined();
+    expect(socket.data.user).toEqual({ userId: 'u1', email: 'a@b.c' });
+    expect(verify).toHaveBeenCalledWith('ok');
   });
 
   it('rejects an invalid token', async () => {
@@ -164,7 +176,7 @@ describe('startMembershipGuard', () => {
     const socket = fakeGuardSocket({ userId: 'u1', organizationId: 'org-1' });
     startMembershipGuard(socket);
 
-    await vi.advanceTimersByTimeAsync(60_000);
+    await vi.advanceTimersByTimeAsync(15_000);
     expect(findUnique).toHaveBeenCalledTimes(1);
     expect(socket.disconnect).not.toHaveBeenCalled();
     expect(socket.emit).not.toHaveBeenCalled();
@@ -175,7 +187,7 @@ describe('startMembershipGuard', () => {
     const socket = fakeGuardSocket({ userId: 'u1', organizationId: 'org-1' });
     startMembershipGuard(socket);
 
-    await vi.advanceTimersByTimeAsync(60_000);
+    await vi.advanceTimersByTimeAsync(15_000);
     expect(findUnique).toHaveBeenCalledTimes(1);
     expect(socket.emit).toHaveBeenCalledWith('session:revoked', { reason: 'membership_revoked' });
     expect(socket.disconnect).toHaveBeenCalledWith(true);
@@ -187,7 +199,7 @@ describe('startMembershipGuard', () => {
     const socket = fakeGuardSocket({ userId: 'u1', organizationId: 'deleted-org' });
     startMembershipGuard(socket);
 
-    await vi.advanceTimersByTimeAsync(60_000);
+    await vi.advanceTimersByTimeAsync(15_000);
     expect(socket.disconnect).toHaveBeenCalledWith(true);
   });
 
@@ -197,45 +209,45 @@ describe('startMembershipGuard', () => {
     startMembershipGuard(socket);
 
     // Simulate socket disconnect after first check
-    await vi.advanceTimersByTimeAsync(60_000);
+    await vi.advanceTimersByTimeAsync(15_000);
     expect(findUnique).toHaveBeenCalledTimes(1);
 
     socket.emit('disconnect');
     findUnique.mockClear();
 
     // Another interval tick — should NOT trigger another query
-    await vi.advanceTimersByTimeAsync(60_000);
+    await vi.advanceTimersByTimeAsync(15_000);
     expect(findUnique).not.toHaveBeenCalled();
   });
 
   it('does not disconnect on transient DB errors', async () => {
     findUnique.mockRejectedValueOnce(new Error('connection refused'));
-    findUnique.mockResolvedValueOnce({ id: 'mem-1' } as never);
-    const socket = fakeGuardSocket({ userId: 'u1', organizationId: 'org-1' });
-    startMembershipGuard(socket);
-
-    // First tick — DB error
-    await vi.advanceTimersByTimeAsync(60_000);
-    expect(socket.disconnect).not.toHaveBeenCalled();
-
-    // Second tick — DB recovers
-    await vi.advanceTimersByTimeAsync(60_000);
-    expect(socket.disconnect).not.toHaveBeenCalled();
-    expect(findUnique).toHaveBeenCalledTimes(2);
-  });
-
-  it('checks at 60-second intervals', async () => {
     findUnique.mockResolvedValue({ id: 'mem-1' } as never);
     const socket = fakeGuardSocket({ userId: 'u1', organizationId: 'org-1' });
     startMembershipGuard(socket);
 
-    await vi.advanceTimersByTimeAsync(59_999);
+    // First tick — DB error
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(socket.disconnect).not.toHaveBeenCalled();
+
+    // Second tick — DB recovers
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(socket.disconnect).not.toHaveBeenCalled();
+    expect(findUnique).toHaveBeenCalledTimes(2);
+  });
+
+  it('checks at 15-second intervals', async () => {
+    findUnique.mockResolvedValue({ id: 'mem-1' } as never);
+    const socket = fakeGuardSocket({ userId: 'u1', organizationId: 'org-1' });
+    startMembershipGuard(socket);
+
+    await vi.advanceTimersByTimeAsync(14_999);
     expect(findUnique).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(1);
     expect(findUnique).toHaveBeenCalledTimes(1);
 
-    await vi.advanceTimersByTimeAsync(60_000);
+    await vi.advanceTimersByTimeAsync(15_000);
     expect(findUnique).toHaveBeenCalledTimes(2);
   });
 });

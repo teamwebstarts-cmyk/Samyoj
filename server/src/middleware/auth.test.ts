@@ -64,7 +64,7 @@ describe('authenticate middleware', () => {
     mockVerify.mockReset();
   });
 
-  it('rejects requests without Authorization header', async () => {
+  it('rejects requests without Authorization header or access cookie', async () => {
     const err = await invokeAuth(mockReq({}));
     expect(err).toBeInstanceOf(AppError);
     expect((err as AppError).statusCode).toBe(401);
@@ -106,11 +106,29 @@ describe('authenticate middleware', () => {
     expect(err).toBeUndefined();
   });
 
-  it('passes token substring to verifyAccessToken', async () => {
+  it('sets req.user from samyoj_access cookie when Authorization is absent', async () => {
+    const payload = { userId: 'u1', email: 'a@b.c', organizationId: 'org-1' };
+    mockVerify.mockReturnValue(payload);
+    const req = mockReq({ headers: { cookie: 'samyoj_access=cookie.jwt.token' } });
+    const err = await new Promise<unknown>((resolve) => {
+      const next: NextFunction = (e?: unknown) => resolve(e);
+      authenticate(req, mockRes(), next);
+    });
+    expect(req.user).toEqual(payload);
+    expect(err).toBeUndefined();
+    expect(mockVerify).toHaveBeenCalledWith('cookie.jwt.token');
+  });
+
+  it('prefers Authorization Bearer over access cookie', async () => {
     const payload = { userId: 'u1', email: 'a@b.c' };
     mockVerify.mockReturnValue(payload);
-    await invokeAuth(mockReq({ headers: { authorization: 'Bearer my.jwt.token' } }));
-    expect(mockVerify).toHaveBeenCalledWith('my.jwt.token');
+    await invokeAuth(mockReq({
+      headers: {
+        authorization: 'Bearer header.jwt.token',
+        cookie: 'samyoj_access=cookie.jwt.token',
+      },
+    }));
+    expect(mockVerify).toHaveBeenCalledWith('header.jwt.token');
   });
 });
 

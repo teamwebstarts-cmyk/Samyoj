@@ -6,7 +6,8 @@ import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { processAutomations, isBusinessHours } from './engine';
 import { getAutomationAnalytics } from './analytics';
-import { detectAutomationConflicts, previewAutomationConflicts } from './conflicts';
+import { detectAutomationConflicts, previewAutomationConflicts, assertNoBlockingConflicts } from './conflicts';
+import { sendAutomationTestToPhone } from './test-send';
 import { checkQuota } from '../billing/entitlements.service';
 import { requireActiveCommercialOnMutation } from '../../middleware/plan-guard';
 import {
@@ -150,6 +151,20 @@ router.post(
       throw new AppError(400, 'Connect a WhatsApp number before using this feature.');
     }
 
+    if (data.enabled) {
+      await assertNoBlockingConflicts(
+        orgId,
+        {
+          kind: 'automation',
+          name: data.name,
+          triggerType: data.triggerType,
+          config: data.config,
+          enabled: true,
+        },
+        numberId
+      );
+    }
+
     const automation = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM organizations WHERE id = ${orgId} FOR UPDATE`;
       if (data.enabled) {
@@ -197,6 +212,22 @@ router.patch(
       });
       if (!existing) throw new AppError(404, 'Automation not found');
 
+      const nextEnabled = data.enabled ?? existing.enabled;
+      if (nextEnabled) {
+        await assertNoBlockingConflicts(
+          orgId,
+          {
+            kind: 'automation',
+            excludeId: id,
+            name: data.name ?? existing.name,
+            triggerType: data.triggerType ?? existing.triggerType,
+            config: data.config ?? existing.config,
+            enabled: true,
+          },
+          numberId
+        );
+      }
+
       if (data.enabled === true && !existing.enabled) {
         const quotaCheck = await checkQuota(orgId, 'publishedWorkflows', 1);
         if (!quotaCheck.allowed) {
@@ -230,6 +261,27 @@ router.delete(
       where: scopedAutomationWhere(req.user!.organizationId!, req.activeWhatsappNumberId, paramId(req)),
     });
     sendSuccess(res, { deleted: true });
+  })
+);
+
+const automationTestSchema = z.object({
+  phone: z.string().min(8),
+});
+
+router.post(
+  '/:id/test',
+  ...adminGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const numberId = req.activeWhatsappNumberId!;
+    const body = automationTestSchema.parse(req.body);
+    const result = await sendAutomationTestToPhone({
+      organizationId: orgId,
+      whatsappNumberId: numberId!,
+      automationId: paramId(req),
+      phone: body.phone,
+    });
+    sendSuccess(res, result);
   })
 );
 

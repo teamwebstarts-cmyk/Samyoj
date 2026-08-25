@@ -29,7 +29,9 @@ describe('findAutomationConflicts', () => {
         { name: 'B', triggerType: 'KEYWORD', triggerConfig: { keyword: 'demo' } },
       ]
     );
-    expect(conflicts.some((c) => c.type === 'duplicate_flow_keyword')).toBe(true);
+    const dup = conflicts.find((c) => c.type === 'duplicate_flow_keyword');
+    expect(dup).toBeTruthy();
+    expect(dup?.severity).toBe('error');
   });
 
   it('attaches builder links when ids are present', () => {
@@ -61,7 +63,8 @@ describe('mergeProposedForConflicts', () => {
       }
     );
     const conflicts = findAutomationConflicts(merged.automations, merged.flows);
-    expect(conflicts.some((c) => c.type === 'duplicate_welcome')).toBe(true);
+    const dup = conflicts.find((c) => c.type === 'duplicate_welcome');
+    expect(dup?.severity).toBe('error');
   });
 
   it('replaces the row being edited instead of duplicating it', () => {

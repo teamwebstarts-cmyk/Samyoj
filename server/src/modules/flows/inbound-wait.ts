@@ -21,9 +21,10 @@ export function hasWaFlowResponse(payload: { waFlowResponse?: Record<string, unk
  */
 export function shouldInterruptWait(
   waitingFor: FlowState['waitingFor'],
-  payload: { waFlowResponse?: Record<string, unknown> }
+  payload: { waFlowResponse?: Record<string, unknown> },
+  options?: { interruptOnInbound?: boolean }
 ): boolean {
-  if (waitingFor === 'delay') return true;
+  if (waitingFor === 'delay') return options?.interruptOnInbound !== false;
   if (waitingFor === 'wa_flow') return !hasWaFlowResponse(payload);
   return false;
 }

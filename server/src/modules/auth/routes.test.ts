@@ -48,6 +48,18 @@ vi.mock('../platform/events', () => ({
 vi.mock('./session', () => ({
   createSession: vi.fn().mockResolvedValue({ accessToken: 'at_test', refreshToken: 'rt_test' }),
   rotateRefreshSession: vi.fn(),
+  issueTenantSession: vi.fn(async (res: import('express').Response) => {
+    res.cookie('samyoj_access', 'at_test', { httpOnly: true });
+    res.cookie('samyoj_refresh', 'rt_test', { httpOnly: true });
+    res.cookie('samyoj_csrf', 'csrf_test', { httpOnly: false });
+    return { accessToken: 'at_test', refreshToken: 'rt_test' };
+  }),
+  rotateTenantSession: vi.fn(async (_old: string, _req: unknown, res: import('express').Response) => {
+    res.cookie('samyoj_access', 'new_at', { httpOnly: true });
+    res.cookie('samyoj_refresh', 'new_rt', { httpOnly: true });
+    res.cookie('samyoj_csrf', 'csrf_new', { httpOnly: false });
+    return { accessToken: 'new_at', refreshToken: 'new_rt' };
+  }),
 }));
 
 vi.mock('../../utils/jwt', () => ({
@@ -82,12 +94,13 @@ vi.mock('../../middleware/auth', () => ({
 import prisma from '../../config/database';
 import { consumeAccountThrottle } from './rate-limit';
 import { emitProductEvent } from '../platform/events';
-import { createSession, rotateRefreshSession } from './session';
+import { createSession, rotateTenantSession } from './session';
 import { verifyRefreshToken } from '../../utils/jwt';
 import { sendPasswordResetEmail, isSmtpConfigured } from '../../services/email.service';
 import { verifyTotp } from '../team/totp';
 import { errorHandler } from '../../errors';
 import authRoutes from './routes';
+import { TENANT_ACCESS_COOKIE, TENANT_CSRF_COOKIE, TENANT_REFRESH_COOKIE } from './cookies';
 
 function createApp() {
   const app = express();
@@ -95,6 +108,17 @@ function createApp() {
   app.use('/api/auth', authRoutes);
   app.use(errorHandler);
   return app;
+}
+
+function expectAuthCookies(res: request.Response) {
+  const cookies = res.headers['set-cookie'] as string[] | undefined;
+  expect(cookies).toBeDefined();
+  const joined = cookies!.join(';');
+  expect(joined).toContain(`${TENANT_ACCESS_COOKIE}=`);
+  expect(joined).toContain(`${TENANT_REFRESH_COOKIE}=`);
+  expect(joined).toContain(`${TENANT_CSRF_COOKIE}=`);
+  expect(res.body.data?.accessToken).toBeUndefined();
+  expect(res.body.data?.refreshToken).toBeUndefined();
 }
 
 const mockUser = {
@@ -138,7 +162,7 @@ describe('POST /api/auth/register', () => {
     );
   });
 
-  it('creates user + org and returns 201 with tokens', async () => {
+  it('creates user + org, sets auth cookies, and returns 201', async () => {
     const res = await request(createApp())
       .post('/api/auth/register')
       .send({
@@ -150,8 +174,7 @@ describe('POST /api/auth/register', () => {
 
     expect(res.status).toBe(201);
     expect(res.body.success).toBe(true);
-    expect(res.body.data.accessToken).toBe('at_test');
-    expect(res.body.data.refreshToken).toBe('rt_test');
+    expectAuthCookies(res);
     expect(res.body.data.user.email).toBe('test@test.com');
     expect(res.body.data.organization.id).toBe('org-1');
     expect(emitProductEvent).toHaveBeenCalledWith(
@@ -207,13 +230,13 @@ describe('POST /api/auth/login', () => {
     (prisma.organizationUser.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
   });
 
-  it('returns tokens on valid credentials', async () => {
+  it('sets auth cookies on valid credentials', async () => {
     const res = await request(createApp())
       .post('/api/auth/login')
       .send({ email: 'test@test.com', password: 'CorrectP4ss!' });
 
     expect(res.status).toBe(200);
-    expect(res.body.data.accessToken).toBe('at_test');
+    expectAuthCookies(res);
     expect(res.body.data.user.email).toBe('test@test.com');
     expect(emitProductEvent).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'LOGIN_OK' })
@@ -276,20 +299,16 @@ describe('POST /api/auth/refresh', () => {
     vi.clearAllMocks();
   });
 
-  it('rotates tokens on valid refresh token', async () => {
+  it('rotates auth cookies on valid refresh token cookie', async () => {
     (verifyRefreshToken as ReturnType<typeof vi.fn>).mockReturnValue({ userId: 'u1' });
-    (rotateRefreshSession as ReturnType<typeof vi.fn>).mockResolvedValue({
-      accessToken: 'new_at',
-      refreshToken: 'new_rt',
-    });
 
     const res = await request(createApp())
       .post('/api/auth/refresh')
-      .send({ refreshToken: 'valid_rt' });
+      .set('Cookie', 'samyoj_refresh=valid_rt');
 
     expect(res.status).toBe(200);
-    expect(res.body.data.accessToken).toBe('new_at');
-    expect(res.body.data.refreshToken).toBe('new_rt');
+    expectAuthCookies(res);
+    expect(res.body.data.message).toMatch(/refreshed/i);
   });
 
   it('returns 401 on invalid/expired refresh token (verify throws)', async () => {
@@ -306,11 +325,11 @@ describe('POST /api/auth/refresh', () => {
 
   it('returns 401 when session rotation fails', async () => {
     (verifyRefreshToken as ReturnType<typeof vi.fn>).mockReturnValue({ userId: 'u1' });
-    (rotateRefreshSession as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    (rotateTenantSession as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null);
 
     const res = await request(createApp())
       .post('/api/auth/refresh')
-      .send({ refreshToken: 'revoked_rt' });
+      .set('Cookie', 'samyoj_refresh=revoked_rt');
 
     expect(res.status).toBe(401);
   });
@@ -322,10 +341,10 @@ describe('POST /api/auth/logout', () => {
     (prisma.refreshToken.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1 });
   });
 
-  it('revokes session and returns success', async () => {
+  it('revokes session from refresh cookie and clears auth cookies', async () => {
     const res = await request(createApp())
       .post('/api/auth/logout')
-      .send({ refreshToken: 'rt_to_revoke' });
+      .set('Cookie', 'samyoj_refresh=rt_to_revoke');
 
     expect(res.status).toBe(200);
     expect(res.body.data.message).toMatch(/logged out/i);
@@ -334,6 +353,8 @@ describe('POST /api/auth/logout', () => {
         where: { token: 'rt_to_revoke', userId: 'user-1' },
       })
     );
+    const cookies = res.headers['set-cookie'] as string[] | undefined;
+    expect(cookies?.join(';')).toMatch(/samyoj_access=;/);
   });
 
   it('returns 200 even without refresh token', async () => {

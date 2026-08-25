@@ -1,4 +1,5 @@
 import type { FlowNode } from './types';
+import { keywordMatches } from './trigger-match';
 import { isLinearCtaButton, nextFromCtaBranches } from './node-kind';
 
 function branchTarget(node: FlowNode, key?: string): string | null {
@@ -136,9 +137,12 @@ export function matchInteractiveTextIntent(node: FlowNode, content: string): str
   if (!text) return null;
 
   if (node.intentRoutes?.length) {
-    const lower = text.toLowerCase();
     for (const route of node.intentRoutes) {
-      if (route.keywords.some((kw) => lower.includes(kw.toLowerCase()))) {
+      if (
+        route.keywords.some((kw) =>
+          keywordMatches(content, { keyword: kw, exactMatch: false, regex: false })
+        )
+      ) {
         const target = branchTarget(node, route.branchKey);
         if (target) return target;
       }

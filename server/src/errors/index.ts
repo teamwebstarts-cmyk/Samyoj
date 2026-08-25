@@ -99,13 +99,14 @@ function getZodError(err: ZodError): NormalizedError {
 }
 
 export function normalizeError(err: unknown): NormalizedError {
-  if (err instanceof AppError) {
+    if (err instanceof AppError) {
     return {
       message: err.message,
       code: err.code,
       statusCode: err.statusCode,
       stack: err.stack,
       isOperational: err.isOperational,
+      details: err.context,
       original: err,
     };
   }

@@ -1,4 +1,5 @@
 import prisma from '../../config/database';
+import { AppError } from '../../utils/response';
 import { automationsForNumberFilter, flowsForNumberFilter } from '../whatsapp/active-number';
 
 export interface AutomationConflictLink {
@@ -100,14 +101,23 @@ export function findAutomationConflicts(
   if (welcomeAutomations.length > 1) {
     conflicts.push({
       type: 'duplicate_welcome',
-      severity: 'warning',
-      message: 'Multiple active welcome quick replies — only the oldest will run',
+      severity: 'error',
+      message: 'Only one active welcome quick reply is allowed — turn off or rename the other first',
       items: welcomeAutomations.map((a) => a.name),
       links: autoLinks(welcomeAutomations),
     });
   }
 
   const welcomeFlows = flows.filter((f) => f.triggerType === 'WELCOME');
+  if (welcomeFlows.length > 1) {
+    conflicts.push({
+      type: 'duplicate_welcome_flow',
+      severity: 'error',
+      message: 'Only one published welcome flow is allowed — turn off or unpublish the other first',
+      items: welcomeFlows.map((f) => f.name),
+      links: flowLinks(welcomeFlows),
+    });
+  }
   if (welcomeFlows.length > 0 && welcomeAutomations.length > 0) {
     conflicts.push({
       type: 'welcome_overlap',
@@ -128,8 +138,8 @@ export function findAutomationConflicts(
     if (rows.length > 1) {
       conflicts.push({
         type: 'duplicate_keyword',
-        severity: 'warning',
-        message: `Keyword "${kw}" used in multiple quick replies`,
+        severity: 'error',
+        message: `Keyword "${kw}" is already used by another quick reply — pick a different keyword`,
         items: rows.map((a) => a.name),
         links: autoLinks(rows),
       });
@@ -260,8 +270,8 @@ export function findAutomationConflicts(
     if (flowRows.length > 1) {
       conflicts.push({
         type: 'duplicate_flow_keyword',
-        severity: 'warning',
-        message: `Keyword "${kw}" used in multiple conversation flows — highest priority wins`,
+        severity: 'error',
+        message: `Keyword "${kw}" is already used by another published flow — pick a different keyword`,
         items: flowRows.map((f) => `Flow: ${f.name}`),
         links: flowLinks(flowRows),
       });
@@ -389,4 +399,21 @@ export async function previewAutomationConflicts(
   const rows = toConflictRows(automations, flows);
   const merged = mergeProposedForConflicts(rows.automations, rows.flows, proposed);
   return findAutomationConflicts(merged.automations, merged.flows);
+}
+
+export function getBlockingConflicts(conflicts: AutomationConflict[]): AutomationConflict[] {
+  return conflicts.filter((c) => c.severity === 'error');
+}
+
+export async function assertNoBlockingConflicts(
+  organizationId: string,
+  proposed: ConflictPreviewInput,
+  whatsappNumberId: string
+): Promise<void> {
+  const conflicts = await previewAutomationConflicts(organizationId, proposed, whatsappNumberId);
+  const blocking = getBlockingConflicts(conflicts);
+  if (!blocking.length) return;
+  throw new AppError(409, blocking.map((c) => c.message).join(' '), 'AUTOMATION_CONFLICT', {
+    conflicts: blocking,
+  });
 }

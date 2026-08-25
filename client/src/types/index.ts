@@ -1127,6 +1127,7 @@ export interface FlowNode {
   mediaType?: 'image' | 'document' | 'video' | 'audio';
   mediaCaption?: string;
   delaySeconds?: number;
+  interruptOnInbound?: boolean;
   scheduleAt?: string;
   webhookUrl?: string;
   webhookMethod?: 'GET' | 'POST';
@@ -1169,6 +1170,7 @@ export interface AutomationAnalytics {
   byTrigger: Record<string, number>;
   byAction: Record<string, number>;
   byStatus: Record<string, number>;
+  bySkipReason?: Record<string, number>;
   daily: Array<{ date: string; total: number; success: number; failed: number }>;
   recent: Array<{
     id: string;

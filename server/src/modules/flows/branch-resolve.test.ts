@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveInteractiveBranch, syncButtonNode } from './branch-resolve';
+import { matchInteractiveTextIntent, resolveInteractiveBranch, syncButtonNode } from './branch-resolve';
 import type { FlowNode } from './types';
 
 describe('resolveInteractiveBranch', () => {
@@ -54,5 +54,20 @@ describe('resolveInteractiveBranch', () => {
     });
     expect(synced.next).toBe('end');
     expect(synced.branches).toEqual({});
+  });
+});
+
+describe('matchInteractiveTextIntent', () => {
+  it('matches intent routes with word boundaries', () => {
+    const node: FlowNode = {
+      id: 'menu',
+      type: 'buttons',
+      text: 'Choose',
+      buttons: [{ id: 'price', title: 'Price' }],
+      branches: { price: 'price-step' },
+      intentRoutes: [{ keywords: ['price'], branchKey: 'price' }],
+    };
+    expect(matchInteractiveTextIntent(node, 'pricey shoes')).toBeNull();
+    expect(matchInteractiveTextIntent(node, 'what is the price')).toBe('price-step');
   });
 });

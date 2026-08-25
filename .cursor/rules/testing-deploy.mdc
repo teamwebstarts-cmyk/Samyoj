@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Testing-deploy vs customer production
 
-**Test-deploy:** yes (`bash start.sh`). **Customer production:** **NO** until HttpOnly cookies (JWT still in `localStorage`). Do not rewrite AUTH to cookies unless the user asks.
+**Test-deploy:** yes (`bash start.sh`). **Customer production:** **NO** — inbound unproven on customer host, restore drill untested on customer host, SAMYOJ-35 TARGET subscriptions, live transfer stub. Do not rewrite AUTH unless the user asks.
 
 ## Workers
 
@@ -13,7 +13,10 @@ Embedded in the API (`startWorkers()` in `server/src/index.ts`). PM2 runs **what
 
 ## Already done — do not redo
 
-- Socket.IO handshake: OrganizationUser check; conversation rooms org+number scoped
+- Tenant auth: HttpOnly `samyoj_access` / `samyoj_refresh` + `samyoj_csrf` (SAMYOJ-3 landed 2026-08-25)
+- Email verification gate: production blocks login until verified
+- Manual plan-period billing + one-pack AI top-ups (G1–G13); not SAMYOJ-35 TARGET subscriptions
+- Socket.IO handshake: OrganizationUser check; cookie auth; conversation rooms org+number scoped
 - Production OAuth redirects: no arbitrary ngrok/localhost wildcards (mirrors CORS)
 - `.env` chmod 600, logs 640 in start/setup
 - socket.io-parser 4.2.7, nodemailer 9.0.5
@@ -22,6 +25,7 @@ Embedded in the API (`startWorkers()` in `server/src/index.ts`). PM2 runs **what
 
 ## Still open — do not claim fixed
 
-- Auth tokens in `sessionStorage` (HttpOnly cookies = SAMYOJ-3)
 - Backup restore drill untested on customer host (local drill done)
-- Inbound unproven until a **new** phone reply increments `totalReceived`
+- Inbound unproven until a **new** phone reply increments `totalReceived` on customer host
+- SAMYOJ-35 TARGET Razorpay Subscriptions / GST invoices
+- Live WebRTC agent transfer (SAMYOJ-12)

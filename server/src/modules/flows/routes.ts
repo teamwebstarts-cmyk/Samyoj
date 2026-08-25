@@ -25,6 +25,9 @@ import {
   scopedFlowWhere,
   flowsForNumberFilter,
 } from '../whatsapp/active-number';
+import { assertNoBlockingConflicts } from '../automation/conflicts';
+import { sendFlowTestToPhone } from '../automation/test-send';
+import { jumpConversationToFlowNode } from './jump';
 
 const router = Router();
 const flowAccessGuard = [
@@ -311,9 +314,21 @@ router.post('/:id/publish', ...adminGuard, asyncHandler(async (req, res) => {
   const flowId = paramId(req);
   const existing = await prisma.flow.findFirst({
     where: scopedFlowWhere(orgId, numberId, flowId),
-    select: { status: true, enabled: true },
   });
   if (!existing) throw new AppError(404, 'Flow not found');
+  await assertNoBlockingConflicts(
+    orgId,
+    {
+      kind: 'flow',
+      excludeId: flowId,
+      name: existing.name,
+      triggerType: existing.triggerType,
+      triggerConfig: existing.triggerConfig as Record<string, unknown>,
+      enabled: true,
+      status: 'PUBLISHED',
+    },
+    numberId
+  );
   if (existing.status !== 'PUBLISHED' || !existing.enabled) {
     await assertFlowPublishQuota(orgId);
   }
@@ -352,7 +367,21 @@ router.post('/', ...adminGuard, asyncHandler(async (req, res) => {
   const data = withLinkedNodes(flowSchema.parse(req.body));
   assertValidFlow(data);
   const isDraft = data.status === 'DRAFT';
-  if (!isDraft) await assertFlowPublishQuota(req.user!.organizationId!);
+  if (!isDraft) {
+    await assertNoBlockingConflicts(
+      req.user!.organizationId!,
+      {
+        kind: 'flow',
+        name: data.name,
+        triggerType: data.triggerType,
+        triggerConfig: data.triggerConfig,
+        enabled: data.enabled ?? true,
+        status: 'PUBLISHED',
+      },
+      req.activeWhatsappNumberId!
+    );
+    await assertFlowPublishQuota(req.user!.organizationId!);
+  }
 
   const flow = await prisma.flow.create({
     data: {
@@ -478,6 +507,21 @@ router.patch('/:id', ...adminGuard, asyncHandler(async (req, res) => {
 
   const nextStatus = data.status ?? existing.status;
   const nextEnabled = data.enabled ?? existing.enabled;
+  if (nextStatus === 'PUBLISHED' && nextEnabled) {
+    await assertNoBlockingConflicts(
+      orgId,
+      {
+        kind: 'flow',
+        excludeId: id,
+        name: data.name ?? existing.name,
+        triggerType: data.triggerType ?? existing.triggerType,
+        triggerConfig: (data.triggerConfig ?? existing.triggerConfig) as Record<string, unknown>,
+        enabled: true,
+        status: 'PUBLISHED',
+      },
+      numberId
+    );
+  }
   if (
     nextStatus === 'PUBLISHED' &&
     (existing.status !== 'PUBLISHED' || (nextEnabled && !existing.enabled))
@@ -524,6 +568,27 @@ router.patch('/:id', ...adminGuard, asyncHandler(async (req, res) => {
   }
 
   sendSuccess(res, flow);
+}));
+
+const flowTestSchema = z.object({
+  phone: z.string().min(8),
+  nodes: z.array(z.record(z.unknown())).optional(),
+  startNodeId: z.string().optional(),
+});
+
+router.post('/:id/test', ...adminGuard, asyncHandler(async (req, res) => {
+  const orgId = req.user!.organizationId!;
+  const numberId = req.activeWhatsappNumberId!;
+  const body = flowTestSchema.parse(req.body);
+  const result = await sendFlowTestToPhone({
+    organizationId: orgId,
+    whatsappNumberId: numberId,
+    flowId: paramId(req),
+    phone: body.phone,
+    nodes: body.nodes as FlowNode[] | undefined,
+    startNodeId: body.startNodeId,
+  });
+  sendSuccess(res, result);
 }));
 
 router.post('/:id/schedule', ...adminGuard, asyncHandler(async (req, res) => {

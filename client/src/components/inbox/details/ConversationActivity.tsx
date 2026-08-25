@@ -6,11 +6,13 @@ import {
 import StatsRow from './StatsRow';
 import { formatHandoffReason } from '../inboxUtils';
 import { waitingForLabel } from '../../../utils/flow-waiting';
+import FlowJumpControl from './FlowJumpControl';
 import type { Conversation } from '../../../types';
 
 interface ConversationActivityProps {
   conversation: Conversation;
   botIsLive: boolean;
+  onConversationRefresh?: () => void;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -61,6 +63,7 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
 export default function ConversationActivity({
   conversation,
   botIsLive,
+  onConversationRefresh,
 }: ConversationActivityProps) {
   const status = STATUS_LABEL[conversation.status] || conversation.status;
   const opened = formatAbsolute(conversation.createdAt);
@@ -154,11 +157,18 @@ export default function ConversationActivity({
             )}
 
             {flow && (
-              <p className="px-1 text-[11.5px] text-theme-muted">
-                Flow: <span className="font-semibold text-theme-fg">{flow.flowName || 'Running'}</span>
-                {flow.currentStepLabel ? ` · ${flow.currentStepLabel}` : ''}
-                {waiting ? ` · ${waiting}` : ''}
-              </p>
+              <div className="space-y-2">
+                <p className="px-1 text-[11.5px] text-theme-muted">
+                  Flow: <span className="font-semibold text-theme-fg">{flow.flowName || 'Running'}</span>
+                  {flow.currentStepLabel ? ` · ${flow.currentStepLabel}` : ''}
+                  {waiting ? ` · ${waiting}` : ''}
+                </p>
+                <FlowJumpControl
+                  conversationId={conversation.id}
+                  activeFlow={flow}
+                  onJumped={onConversationRefresh}
+                />
+              </div>
             )}
           </div>
         </DetailsSectionCard>

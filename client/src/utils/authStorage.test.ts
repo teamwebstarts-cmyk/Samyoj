@@ -1,24 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  accessTokenNeedsRefresh,
   adoptLegacyLocalStorageTokens,
   backupAuthBeforeOAuth,
   clearAuthBackup,
   clearAuthTokens,
+  consumeOAuthReturnPath,
   discardClonedSession,
   getAccessToken,
+  getCsrfToken,
   getRefreshToken,
-  readJwtExpMs,
+  hasAuthSessionHint,
   restoreAuthBackupIfNeeded,
   setAuthTokens,
-  __resetAuthLockForTests,
 } from './authStorage';
-
-function jwtWithExp(expSeconds: number): string {
-  const json = JSON.stringify({ exp: expSeconds });
-  const payload = btoa(json).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
-  return `header.${payload}.sig`;
-}
 
 function memoryStorage(): Storage {
   const map = new Map<string, string>();
@@ -44,46 +38,37 @@ function memoryStorage(): Storage {
   };
 }
 
+function setDocumentCookie(value: string) {
+  (document as { cookie: string }).cookie = value;
+}
+
 beforeEach(() => {
   vi.stubGlobal('sessionStorage', memoryStorage());
   vi.stubGlobal('localStorage', memoryStorage());
-  __resetAuthLockForTests();
+  let cookieValue = '';
+  vi.stubGlobal('document', {
+    get cookie() {
+      return cookieValue;
+    },
+    set cookie(value: string) {
+      cookieValue = value;
+    },
+  });
+  setDocumentCookie('');
 });
 
-describe('accessTokenNeedsRefresh', () => {
-  it('refreshes when there is no access token', () => {
-    expect(accessTokenNeedsRefresh(null)).toBe(true);
-    expect(accessTokenNeedsRefresh('')).toBe(true);
-  });
-
-  it('does not refresh a token that is still valid', () => {
-    const token = jwtWithExp(Math.floor(Date.now() / 1000) + 15 * 60);
-    expect(accessTokenNeedsRefresh(token)).toBe(false);
-    expect(readJwtExpMs(token)).toBeGreaterThan(Date.now());
-  });
-
-  it('refreshes when the token is within the skew window', () => {
-    const token = jwtWithExp(Math.floor(Date.now() / 1000) + 30);
-    expect(accessTokenNeedsRefresh(token, Date.now(), 60_000)).toBe(true);
-  });
-
-  it('does not hammer refresh when the JWT payload cannot be parsed', () => {
-    expect(accessTokenNeedsRefresh('not-a-jwt')).toBe(false);
-  });
-});
-
-describe('tab-scoped sessionStorage JWTs (SAMYOJ-49 Pick A)', () => {
-  it('stores live tokens in sessionStorage, not localStorage', () => {
+describe('HttpOnly cookie auth (SAMYOJ-3)', () => {
+  it('does not store JWTs in browser storage', () => {
     setAuthTokens('access-a', 'refresh-a');
-    expect(sessionStorage.getItem('accessToken')).toBe('access-a');
-    expect(sessionStorage.getItem('refreshToken')).toBe('refresh-a');
+    expect(sessionStorage.getItem('accessToken')).toBeNull();
+    expect(sessionStorage.getItem('refreshToken')).toBeNull();
     expect(localStorage.getItem('accessToken')).toBeNull();
     expect(localStorage.getItem('refreshToken')).toBeNull();
-    expect(getAccessToken()).toBe('access-a');
-    expect(getRefreshToken()).toBe('refresh-a');
+    expect(getAccessToken()).toBeNull();
+    expect(getRefreshToken()).toBeNull();
   });
 
-  it('logout clears this tab sessionStorage and leftover localStorage JWT keys', () => {
+  it('clears legacy JWT keys from sessionStorage and localStorage', () => {
     sessionStorage.setItem('accessToken', 'tab-a');
     localStorage.setItem('accessToken', 'stale-shared');
     localStorage.setItem('refreshToken', 'stale-shared');
@@ -93,14 +78,18 @@ describe('tab-scoped sessionStorage JWTs (SAMYOJ-49 Pick A)', () => {
     expect(localStorage.getItem('refreshToken')).toBeNull();
   });
 
-  it('does not use localStorage as the live JWT source after login', () => {
-    localStorage.setItem('accessToken', 'other-tab-should-not-win');
-    setAuthTokens('this-tab', 'this-tab-refresh');
-    expect(getAccessToken()).toBe('this-tab');
-    expect(localStorage.getItem('accessToken')).toBeNull();
+  it('reads the readable CSRF cookie for session hints', () => {
+    setDocumentCookie('samyoj_csrf=csrf-token-123; Path=/');
+    expect(getCsrfToken()).toBe('csrf-token-123');
+    expect(hasAuthSessionHint()).toBe(true);
   });
 
-  it('strips leftover localStorage JWTs without logging a blank tab in', () => {
+  it('has no session hint when the CSRF cookie is absent', () => {
+    expect(getCsrfToken()).toBeNull();
+    expect(hasAuthSessionHint()).toBe(false);
+  });
+
+  it('strips leftover localStorage JWTs without adopting them', () => {
     localStorage.setItem('accessToken', 'legacy-access');
     localStorage.setItem('refreshToken', 'legacy-refresh');
     expect(adoptLegacyLocalStorageTokens()).toBe(false);
@@ -108,57 +97,36 @@ describe('tab-scoped sessionStorage JWTs (SAMYOJ-49 Pick A)', () => {
     expect(localStorage.getItem('accessToken')).toBeNull();
     expect(localStorage.getItem('refreshToken')).toBeNull();
   });
+});
 
-  it('restores same-tab OAuth backup into sessionStorage', () => {
-    setAuthTokens('pre-oauth', 'pre-oauth-refresh');
+describe('OAuth return path helpers', () => {
+  it('stores and consumes a safe return path', () => {
+    backupAuthBeforeOAuth('/settings?tab=whatsapp');
+    expect(consumeOAuthReturnPath()).toBe('/settings?tab=whatsapp');
+    expect(consumeOAuthReturnPath()).toBeNull();
+  });
+
+  it('rejects unsafe return paths', () => {
+    sessionStorage.setItem('samyoj_oauth_return', '//evil.example');
+    expect(consumeOAuthReturnPath()).toBeNull();
+  });
+
+  it('does not restore JWT backups after OAuth', () => {
     backupAuthBeforeOAuth('/settings?tab=whatsapp');
     clearAuthTokens();
+    expect(restoreAuthBackupIfNeeded()).toBe(false);
     expect(getAccessToken()).toBeNull();
-    expect(restoreAuthBackupIfNeeded({ consumeLocalHandoff: false })).toBe(true);
-    expect(getAccessToken()).toBe('pre-oauth');
-    expect(sessionStorage.getItem('accessToken')).toBe('pre-oauth');
-    expect(localStorage.getItem('accessToken')).toBeNull();
   });
 
-  it('does not let another tab consume the OAuth popup handoff', () => {
-    setAuthTokens('opener', 'opener-refresh');
-    backupAuthBeforeOAuth();
-    clearAuthTokens();
-    expect(restoreAuthBackupIfNeeded({ consumeLocalHandoff: false })).toBe(true);
-    // sessionStorage backup still restored in this tab; a blank tab must not
-    // steal the localStorage handoff.
-    sessionStorage.removeItem('accessToken');
-    sessionStorage.removeItem('refreshToken');
-    sessionStorage.removeItem('samyoj_auth_backup');
-    expect(restoreAuthBackupIfNeeded({ consumeLocalHandoff: false })).toBe(false);
-    expect(localStorage.getItem('samyoj_oauth_auth_handoff')).toBeTruthy();
-  });
-
-  it('OAuth popup may consume the localStorage handoff into this window sessionStorage', () => {
-    localStorage.setItem(
-      'samyoj_oauth_auth_handoff',
-      JSON.stringify({ accessToken: 'popup', refreshToken: 'popup-refresh', savedAt: Date.now() })
-    );
-    expect(restoreAuthBackupIfNeeded({ consumeLocalHandoff: true })).toBe(true);
-    expect(getAccessToken()).toBe('popup');
-    expect(localStorage.getItem('samyoj_oauth_auth_handoff')).toBeNull();
-    expect(localStorage.getItem('accessToken')).toBeNull();
-  });
-
-  it('clearAuthBackup does not wipe another conceptual tab session (only backup keys)', () => {
-    setAuthTokens('stay', 'stay-refresh');
-    backupAuthBeforeOAuth();
+  it('clearAuthBackup removes only the OAuth return key', () => {
+    backupAuthBeforeOAuth('/settings?tab=whatsapp');
     clearAuthBackup();
-    expect(getAccessToken()).toBe('stay');
-    expect(sessionStorage.getItem('samyoj_auth_backup')).toBeNull();
-    expect(localStorage.getItem('samyoj_oauth_auth_handoff')).toBeNull();
+    expect(sessionStorage.getItem('samyoj_oauth_return')).toBeNull();
   });
 });
 
-describe('discardClonedSession', () => {
-  it('keeps tokens when no other tab owns this session', async () => {
-    setAuthTokens('access-a', 'refresh-a');
+describe('deprecated clone-session helpers', () => {
+  it('discardClonedSession is a no-op with cookie auth', async () => {
     await expect(discardClonedSession()).resolves.toBe(false);
-    expect(getAccessToken()).toBe('access-a');
   });
 });

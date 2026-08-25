@@ -11,6 +11,7 @@ import {
   PauseCircle,
   PlayCircle,
   Plus,
+  Send,
   Sparkles,
   Trash2,
   UserPlus,
@@ -24,7 +25,7 @@ import AutomationTipCard, { AiBotLink } from '../components/automations/Automati
 import FlowsTab, { type FlowSummary } from '../components/flows/FlowsTab';
 import { getErrorMessage } from '../utils/errors';
 import { toastError, toastSuccess, toastValidationErrors } from '../utils/toast';
-import { notifySaveConflicts } from '../utils/automation-conflicts';
+import { notifySaveConflicts, notifySaveConflictError } from '../utils/automation-conflicts';
 import SegmentedControl from '../components/ui/SegmentedControl';
 import AppButton from '../components/ui/AppButton';
 import AppInput from '../components/ui/AppInput';
@@ -204,6 +205,8 @@ export default function AutomationsPage() {
   const [editing, setEditing] = useState<Automation | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [testPhone, setTestPhone] = useState('');
+  const [testSending, setTestSending] = useState(false);
   const [search, setSearch] = useState('');
   const [triggerFilter, setTriggerFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -413,7 +416,9 @@ export default function AutomationsPage() {
       load();
       toastSuccess(editing ? 'Automation updated' : 'Automation created');
     } catch (err: unknown) {
-      toastError(getErrorMessage(err, 'Failed to save automation'));
+      if (!notifySaveConflictError(err)) {
+        toastError(getErrorMessage(err, 'Failed to save automation'));
+      }
     } finally {
       setSaving(false);
     }
@@ -426,7 +431,26 @@ export default function AutomationsPage() {
       toastSuccess(automation.enabled ? 'Automation paused' : 'Automation activated');
       load();
     } catch (err: unknown) {
-      toastError(getErrorMessage(err, 'Failed to update automation'));
+      if (!notifySaveConflictError(err)) {
+        toastError(getErrorMessage(err, 'Failed to update automation'));
+      }
+    }
+  };
+
+  const sendTestReply = async () => {
+    if (!editing?.id) return;
+    if (!testPhone.trim()) {
+      toastError('Enter a phone number with country code');
+      return;
+    }
+    setTestSending(true);
+    try {
+      await automationApi.test(editing.id, testPhone.trim());
+      toastSuccess('Test message sent to WhatsApp');
+    } catch (err: unknown) {
+      toastError(getErrorMessage(err, 'Test send failed'));
+    } finally {
+      setTestSending(false);
     }
   };
 
@@ -1123,6 +1147,31 @@ export default function AutomationsPage() {
               ) : (
                 <WhatsAppMessagePreview content={form.message.trim()} direction="outbound" />
               )}
+            </section>
+          )}
+
+          {editing && form.message.trim() && (
+            <section className="space-y-2 rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4">
+              <p className="text-[13px] font-extrabold text-neutral-900">Send to my WhatsApp</p>
+              <p className="text-[11px] leading-relaxed text-neutral-600">
+                Sends this auto-reply to a contact that already exists with opt-in consent on this number.
+              </p>
+              <AppInput
+                label="Phone number"
+                value={testPhone}
+                onChange={(e) => setTestPhone(e.target.value)}
+                placeholder="+91XXXXXXXXXX"
+              />
+              <AppButton
+                type="button"
+                size="sm"
+                variant="secondary"
+                icon={<Send size={14} />}
+                loading={testSending}
+                onClick={sendTestReply}
+              >
+                Send live test
+              </AppButton>
             </section>
           )}
         </form>

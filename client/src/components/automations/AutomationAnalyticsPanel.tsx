@@ -147,6 +147,31 @@ export default function AutomationAnalyticsPanel({ analytics, loading }: Automat
         </SectionCard>
       )}
 
+      {analytics.bySkipReason && Object.keys(analytics.bySkipReason).length > 0 && (
+        <SectionCard title="Why sends were skipped" subtitle="Honest skip reasons from the last 30 days">
+          <div className="space-y-2">
+            {Object.entries(analytics.bySkipReason)
+              .sort((a, b) => b[1] - a[1])
+              .map(([reason, count]) => (
+                <div key={reason} className="flex items-center justify-between text-[13px]">
+                  <span className="font-medium text-theme-fg">
+                    {reason === 'csw_closed'
+                      ? '24h window closed'
+                      : reason === 'frequency_cap'
+                        ? 'Sent recently (24h cap)'
+                        : reason === 'inbound_during_wait'
+                          ? 'Customer replied during wait'
+                          : reason.replace(/_/g, ' ')}
+                  </span>
+                  <span className="font-extrabold tabular-nums text-amber-700 dark:text-amber-300">
+                    {count}
+                  </span>
+                </div>
+              ))}
+          </div>
+        </SectionCard>
+      )}
+
       {analytics.recent.length > 0 && (
         <SectionCard title="Recent activity" subtitle="Latest automation events">
           <div className="relative space-y-0">
