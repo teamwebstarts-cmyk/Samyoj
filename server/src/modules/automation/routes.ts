@@ -8,10 +8,27 @@ import { processAutomations, isBusinessHours } from './engine';
 import { getAutomationAnalytics } from './analytics';
 import { detectAutomationConflicts, previewAutomationConflicts } from './conflicts';
 import { checkQuota } from '../billing/entitlements.service';
+import { requireActiveCommercialOnMutation } from '../../middleware/plan-guard';
+import {
+  resolveActiveWhatsappNumber,
+  automationsForNumberFilter,
+  scopedAutomationWhere,
+} from '../whatsapp/active-number';
 
 const router = Router();
-const memberGuard = [authenticate, requireOrg] as const;
-const adminGuard = [authenticate, requireOrg, loadOrgRole, requireOrgRole('OWNER', 'ADMIN')] as const;
+const memberGuard = [
+  authenticate,
+  requireOrg,
+  resolveActiveWhatsappNumber,
+  requireActiveCommercialOnMutation(),
+] as const;
+const adminGuard = [
+  authenticate,
+  requireOrg,
+  requireActiveCommercialOnMutation(),
+  loadOrgRole,
+  requireOrgRole('OWNER', 'ADMIN'),
+] as const;
 
 const automationSchema = z.object({
   name: z.string().min(1),
@@ -32,8 +49,10 @@ router.get(
   ...memberGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
-    const days = parseInt((req.query.days as string) || '30', 10);
-    const analytics = await getAutomationAnalytics(orgId, days);
+    const numberId = req.activeWhatsappNumberId!;
+    const requestedDays = Number.parseInt((req.query.days as string) || '30', 10);
+    const days = Number.isFinite(requestedDays) ? Math.min(Math.max(1, requestedDays), 3650) : 30;
+    const analytics = await getAutomationAnalytics(orgId, days, numberId);
     sendSuccess(res, analytics);
   })
 );
@@ -43,7 +62,7 @@ router.get(
   ...memberGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
-    const conflicts = await detectAutomationConflicts(orgId);
+    const conflicts = await detectAutomationConflicts(orgId, req.activeWhatsappNumberId!);
     sendSuccess(res, { conflicts });
   })
 );
@@ -65,7 +84,7 @@ router.post(
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const proposed = conflictPreviewSchema.parse(req.body);
-    const conflicts = await previewAutomationConflicts(orgId, proposed);
+    const conflicts = await previewAutomationConflicts(orgId, proposed, req.activeWhatsappNumberId!);
     sendSuccess(res, { conflicts });
   })
 );
@@ -75,9 +94,13 @@ router.get(
   ...memberGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
+    const numberId = req.activeWhatsappNumberId!;
     const { search, triggerType, enabled, page = '1', limit = '10' } = req.query;
 
-    const where: Prisma.AutomationWhereInput = { organizationId: orgId };
+    const where: Prisma.AutomationWhereInput = {
+      organizationId: orgId,
+      ...automationsForNumberFilter(numberId),
+    };
     if (search) {
       where.name = { contains: search as string, mode: 'insensitive' };
     }
@@ -87,8 +110,10 @@ router.get(
     if (enabled === 'true') where.enabled = true;
     if (enabled === 'false') where.enabled = false;
 
-    const pageNum = parseInt(page as string);
-    const limitNum = parseInt(limit as string);
+    const requestedPage = Number.parseInt(page as string, 10);
+    const requestedLimit = Number.parseInt(limit as string, 10);
+    const pageNum = Number.isFinite(requestedPage) ? Math.max(1, requestedPage) : 1;
+    const limitNum = Number.isFinite(requestedLimit) ? Math.min(Math.max(1, requestedLimit), 100) : 10;
     const skip = (pageNum - 1) * limitNum;
 
     const [automations, total, active, paused] = await Promise.all([
@@ -99,8 +124,8 @@ router.get(
         take: limitNum,
       }),
       prisma.automation.count({ where }),
-      prisma.automation.count({ where: { organizationId: orgId, enabled: true } }),
-      prisma.automation.count({ where: { organizationId: orgId, enabled: false } }),
+      prisma.automation.count({ where: { organizationId: orgId, ...automationsForNumberFilter(numberId), enabled: true } }),
+      prisma.automation.count({ where: { organizationId: orgId, ...automationsForNumberFilter(numberId), enabled: false } }),
     ]);
 
     sendSuccess(res, {
@@ -119,26 +144,31 @@ router.post(
   asyncHandler(async (req: Request, res: Response) => {
     const data = automationSchema.parse(req.body);
     const orgId = req.user!.organizationId!;
+    const numberId = req.activeWhatsappNumberId!;
 
-    if (data.enabled) {
-      const quotaCheck = await checkQuota(orgId, 'publishedWorkflows', 1);
-      if (!quotaCheck.allowed) {
-        throw new AppError(
-          402,
-          quotaCheck.reason ||
-            `Active workflow limit reached (${quotaCheck.used}/${quotaCheck.limit}). Upgrade to Growth for unlimited workflows.`
-        );
+    const automation = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM organizations WHERE id = ${orgId} FOR UPDATE`;
+      if (data.enabled) {
+        const quotaCheck = await checkQuota(orgId, 'publishedWorkflows', 1);
+        if (!quotaCheck.allowed) {
+          throw new AppError(
+            402,
+            quotaCheck.reason ||
+              `Active workflow limit reached (${quotaCheck.used}/${quotaCheck.limit}). Upgrade to Growth for unlimited workflows.`,
+            quotaCheck.code
+          );
+        }
       }
-    }
-
-    const automation = await prisma.automation.create({
-      data: {
-        organizationId: orgId,
-        name: data.name,
-        triggerType: data.triggerType,
-        config: data.config as Prisma.InputJsonValue,
-        enabled: data.enabled,
-      },
+      return tx.automation.create({
+        data: {
+          organizationId: orgId,
+          whatsappNumberId: numberId,
+          name: data.name,
+          triggerType: data.triggerType,
+          config: data.config as Prisma.InputJsonValue,
+          enabled: data.enabled,
+        },
+      });
     });
 
     sendSuccess(res, automation, 201);
@@ -153,30 +183,35 @@ router.patch(
   asyncHandler(async (req: Request, res: Response) => {
     const id = paramId(req);
     const orgId = req.user!.organizationId!;
-    const existing = await prisma.automation.findFirst({
-      where: { id, organizationId: orgId },
-    });
-    if (!existing) throw new AppError(404, 'Automation not found');
-
+    const numberId = req.activeWhatsappNumberId!;
     const data = updateAutomationSchema.parse(req.body);
 
-    if (data.enabled === true && !existing.enabled) {
-      const quotaCheck = await checkQuota(orgId, 'publishedWorkflows', 1);
-      if (!quotaCheck.allowed) {
-        throw new AppError(
-          402,
-          quotaCheck.reason ||
-            `Active workflow limit reached (${quotaCheck.used}/${quotaCheck.limit}). Upgrade to Growth for unlimited workflows.`
-        );
-      }
-    }
+    const automation = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM organizations WHERE id = ${orgId} FOR UPDATE`;
+      const existing = await tx.automation.findFirst({
+        where: scopedAutomationWhere(orgId, numberId, id),
+      });
+      if (!existing) throw new AppError(404, 'Automation not found');
 
-    const automation = await prisma.automation.update({
-      where: { id },
-      data: {
-        ...data,
-        config: data.config ? (data.config as Prisma.InputJsonValue) : undefined,
-      },
+      if (data.enabled === true && !existing.enabled) {
+        const quotaCheck = await checkQuota(orgId, 'publishedWorkflows', 1);
+        if (!quotaCheck.allowed) {
+          throw new AppError(
+            402,
+            quotaCheck.reason ||
+              `Active workflow limit reached (${quotaCheck.used}/${quotaCheck.limit}). Upgrade to Growth for unlimited workflows.`,
+            quotaCheck.code
+          );
+        }
+      }
+
+      return tx.automation.update({
+        where: { id },
+        data: {
+          ...data,
+          config: data.config ? (data.config as Prisma.InputJsonValue) : undefined,
+        },
+      });
     });
 
     sendSuccess(res, automation);
@@ -188,7 +223,7 @@ router.delete(
   ...adminGuard,
   asyncHandler(async (req: Request, res: Response) => {
     await prisma.automation.deleteMany({
-      where: { id: paramId(req), organizationId: req.user!.organizationId! },
+      where: scopedAutomationWhere(req.user!.organizationId!, req.activeWhatsappNumberId, paramId(req)),
     });
     sendSuccess(res, { deleted: true });
   })
