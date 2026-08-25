@@ -5,9 +5,10 @@ import { TableTextButton } from '../ui/TableActions';
 interface TemplateRowActionsProps {
   onView: () => void;
   onDuplicate: () => void;
+  canManage?: boolean;
 }
 
-export default function TemplateRowActions({ onView, onDuplicate }: TemplateRowActionsProps) {
+export default function TemplateRowActions({ onView, onDuplicate, canManage = true }: TemplateRowActionsProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -29,12 +30,13 @@ export default function TemplateRowActions({ onView, onDuplicate }: TemplateRowA
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
+          disabled={!canManage}
           aria-label="More actions"
           className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-theme-border bg-theme-surface text-theme-secondary shadow-sm transition hover:border-theme-border-strong hover:bg-theme-subtle"
         >
           <MoreHorizontal className="h-4 w-4" strokeWidth={2.25} />
         </button>
-        {open && (
+        {open && canManage && (
           <div className="absolute right-0 top-full z-30 mt-1 min-w-[9rem] rounded-xl border border-theme-border bg-theme-surface py-1 shadow-lg ring-1 ring-black/5 max-sm:left-auto max-sm:right-0">
             <button
               type="button"
