@@ -33,9 +33,15 @@ export interface PlanTierDef {
   publishedWorkflows: number | 'unlimited';
   aiIncluded: 'off' | 'included' | 'advanced' | 'dedicated';
   callingIncluded: boolean;
-  chatCreditsIncluded: number;
-  callingMinutesIncluded: number;
+  chatCreditsIncluded: number | 'custom';
+  callingMinutesIncluded: number | 'custom';
+  campaigns: boolean;
   analyticsAdvanced: boolean;
+  integrations: boolean;
+  publicApi: boolean;
+  templates: boolean;
+  forms: boolean;
+  advancedInbox: boolean;
   supportLevel: 'community' | 'email' | 'priority' | 'dedicated';
   features: string[];
 }
@@ -52,7 +58,13 @@ export const PLAN_TIERS: Record<PlanTier, PlanTierDef> = {
     callingIncluded: false,
     chatCreditsIncluded: 0,
     callingMinutesIncluded: 0,
+    campaigns: false,
     analyticsAdvanced: false,
+    integrations: false,
+    publicApi: false,
+    templates: true,
+    forms: false,
+    advancedInbox: false,
     supportLevel: 'community',
     features: ['1 WhatsApp number', '1 team member', '100 contacts', '1 workflow', 'Shared inbox', 'Basic analytics'],
   },
@@ -67,7 +79,13 @@ export const PLAN_TIERS: Record<PlanTier, PlanTierDef> = {
     callingIncluded: false,
     chatCreditsIncluded: 0,
     callingMinutesIncluded: 0,
+    campaigns: false,
     analyticsAdvanced: false,
+    integrations: false,
+    publicApi: false,
+    templates: true,
+    forms: true,
+    advancedInbox: false,
     supportLevel: 'email',
     features: ['1 WhatsApp number', '3 team members', '5,000 contacts', '5 workflows', 'Shared inbox', 'Canned replies', 'Email support'],
   },
@@ -82,7 +100,13 @@ export const PLAN_TIERS: Record<PlanTier, PlanTierDef> = {
     callingIncluded: false,
     chatCreditsIncluded: 5_000,
     callingMinutesIncluded: 0,
+    campaigns: true,
     analyticsAdvanced: true,
+    integrations: true,
+    publicApi: true,
+    templates: true,
+    forms: true,
+    advancedInbox: false,
     supportLevel: 'priority',
     features: ['2 WhatsApp numbers', '10 team members', '25,000 contacts', 'Unlimited workflows', '5,000 AI chat credits / month', 'AI assistant included', 'Advanced analytics', 'Priority support', 'Advanced integrations'],
   },
@@ -97,7 +121,13 @@ export const PLAN_TIERS: Record<PlanTier, PlanTierDef> = {
     callingIncluded: true,
     chatCreditsIncluded: 25_000,
     callingMinutesIncluded: 120,
+    campaigns: true,
     analyticsAdvanced: true,
+    integrations: true,
+    publicApi: true,
+    templates: true,
+    forms: true,
+    advancedInbox: true,
     supportLevel: 'priority',
     features: ['5 WhatsApp numbers', '25 team members', '100,000 contacts', 'Unlimited workflows', '25,000 AI chat credits / month', '120 AI calling minutes / month', 'Advanced AI', 'Calling module', 'Advanced analytics', 'Priority support'],
   },
@@ -110,9 +140,15 @@ export const PLAN_TIERS: Record<PlanTier, PlanTierDef> = {
     publishedWorkflows: 'unlimited',
     aiIncluded: 'dedicated',
     callingIncluded: true,
-    chatCreditsIncluded: 0,
-    callingMinutesIncluded: 0,
+    chatCreditsIncluded: 'custom',
+    callingMinutesIncluded: 'custom',
+    campaigns: true,
     analyticsAdvanced: true,
+    integrations: true,
+    publicApi: true,
+    templates: true,
+    forms: true,
+    advancedInbox: true,
     supportLevel: 'dedicated',
     features: ['Unlimited WhatsApp numbers', 'Custom team size', 'Unlimited contacts', 'Unlimited workflows', 'Custom AI credits', 'Dedicated AI', 'Calling module', 'Custom analytics', 'Dedicated support'],
   },
