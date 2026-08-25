@@ -34,6 +34,7 @@ interface TemplateTableProps {
   onPageChange: (page: number) => void;
   onView: (template: MessageTemplate) => void;
   onDuplicate: (template: MessageTemplate) => void;
+  canManage?: boolean;
 }
 
 function TemplateNameCell({
@@ -89,6 +90,7 @@ export default function TemplateTable({
   onPageChange,
   onView,
   onDuplicate,
+  canManage = true,
 }: TemplateTableProps) {
   let templateRowIndex = 0;
 
@@ -201,6 +203,7 @@ export default function TemplateTable({
                 <TemplateRowActions
                   onView={() => onView(template)}
                   onDuplicate={() => onDuplicate(template)}
+                  canManage={canManage}
                 />
               </div>
             </td>
