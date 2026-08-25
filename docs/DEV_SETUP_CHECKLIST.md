@@ -59,7 +59,16 @@ In `server/.env` (never in UI):
 - `META_WEBHOOK_URL` (set by tunnel script)
 - `PLATFORM_ADMIN_URL` (admin origin for `/api/platform` CORS; local `http://localhost:3001`)
 - `PLATFORM_MFA_REQUIRED=false` (local/dev: skip platform-admin TOTP. Production default is true.)
-- `META_REDIRECT_URI=http://localhost:3000/settings/whatsapp/callback`
+- `META_REDIRECT_URI=http://localhost:3000/settings/whatsapp/callback/popup`
+
+**Meta Valid OAuth Redirect URIs (required for Connect):** add the exact origins you use, both paths:
+
+- `{CLIENT_ORIGIN}/settings/whatsapp/callback/popup` ← primary (popup flow)
+- `{CLIENT_ORIGIN}/settings/whatsapp/callback` ← fallback
+
+Local example: `http://localhost:3000/settings/whatsapp/callback/popup`
+
+**Meta App Mode:** Development mode only allows App Roles (Admin/Developer/Tester). For a second Facebook account, add it as Tester, or switch the app Live after Business Verification + App Review. Samyoj cannot override Meta’s “App not active” gate in code.
 
 First platform operator (once): `cd server && PLATFORM_OPERATOR_PASSWORD='ChooseAStrongPass1' npm run platform:bootstrap-operator -- --email you@samyoj.com` then open `http://localhost:3001`.
 
