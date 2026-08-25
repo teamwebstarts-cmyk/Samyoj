@@ -158,11 +158,17 @@ export function validateInteractive(options: InteractiveMessageOptions): void {
           `Reply messages allow at most ${CORE_LIMITS.maxButtons} buttons`
         );
       }
+      const buttonIds = new Set<string>();
       for (const btn of buttons) {
-        if (!btn.id.trim()) {
+        const id = btn.id.trim();
+        if (!id) {
           throw new InteractiveValidationError('Each reply button needs an id');
         }
-        assertMaxLength(btn.id.trim(), CORE_LIMITS.buttonId, 'Button id');
+        if (buttonIds.has(id)) {
+          throw new InteractiveValidationError('Reply button ids must be unique');
+        }
+        buttonIds.add(id);
+        assertMaxLength(id, CORE_LIMITS.buttonId, 'Button id');
         assertMaxLength(btn.title.trim(), CORE_LIMITS.buttonTitle, 'Button title');
       }
       break;
@@ -170,7 +176,13 @@ export function validateInteractive(options: InteractiveMessageOptions): void {
     case 'cta_url': {
       const url = options.ctaUrl?.trim();
       if (!url) throw new InteractiveValidationError('CTA URL is required');
-      if (!url.startsWith('https://')) {
+      let parsedUrl: URL;
+      try {
+        parsedUrl = new URL(url);
+      } catch {
+        throw new InteractiveValidationError('CTA URL must be a valid HTTPS URL');
+      }
+      if (parsedUrl.protocol !== 'https:') {
         throw new InteractiveValidationError('CTA URL must use https://');
       }
       assertMaxLength((options.ctaLabel || 'Open link').trim(), CORE_LIMITS.ctaDisplayText, 'CTA label');
@@ -213,6 +225,7 @@ export function validateInteractive(options: InteractiveMessageOptions): void {
         'List button label'
       );
 
+      const rowIds = new Set<string>();
       for (const section of sections) {
         if (section.title) {
           assertMaxLength(section.title.trim(), CORE_LIMITS.sectionTitle, 'Section title');
@@ -223,9 +236,14 @@ export function validateInteractive(options: InteractiveMessageOptions): void {
           );
         }
         for (const row of section.rows) {
-          if (!row.id.trim()) throw new InteractiveValidationError('Each list row needs an id');
+          const rowId = row.id.trim();
+          if (!rowId) throw new InteractiveValidationError('Each list row needs an id');
+          if (rowIds.has(rowId)) {
+            throw new InteractiveValidationError('List row ids must be unique');
+          }
+          rowIds.add(rowId);
           if (!row.title.trim()) throw new InteractiveValidationError('Each list row needs a title');
-          assertMaxLength(row.id.trim(), CORE_LIMITS.rowId, 'Row id');
+          assertMaxLength(rowId, CORE_LIMITS.rowId, 'Row id');
           assertMaxLength(row.title.trim(), CORE_LIMITS.rowTitle, 'Row title');
           if (row.description?.trim()) {
             assertMaxLength(row.description.trim(), CORE_LIMITS.rowDescription, 'Row description');
