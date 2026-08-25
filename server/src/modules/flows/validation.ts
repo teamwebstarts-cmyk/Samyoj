@@ -27,6 +27,12 @@ function outgoingRefs(node: FlowNode): string[] {
   return refs;
 }
 
+function isValidE164Phone(value?: string): boolean {
+  if (!value?.trim()) return false;
+  const normalized = value.replace(/[^\d+]/g, '');
+  return /^\+?\d{8,15}$/.test(normalized);
+}
+
 function detectFlowCycles(
   nodes: FlowNode[],
   startId: string
@@ -90,6 +96,9 @@ export function validateFlowGraph(
     errors.push('Flow must have at least one step');
     return { valid: false, errors, warnings };
   }
+  if (nodes.length > 100) {
+    errors.push('Flow cannot contain more than 100 steps');
+  }
 
   const ids = new Set<string>();
   for (const node of nodes) {
@@ -98,6 +107,9 @@ export function validateFlowGraph(
   }
 
   const idSet = new Set(nodes.map((n) => n.id));
+  if (startNodeId && !idSet.has(startNodeId)) {
+    errors.push(`Start step "${startNodeId}" does not exist`);
+  }
   const startId = startNodeId && idSet.has(startNodeId) ? startNodeId : nodes[0].id;
 
   if (triggerType === 'KEYWORD' && !String(triggerConfig.keyword || '').trim()) {
@@ -123,14 +135,35 @@ export function validateFlowGraph(
     if (node.type === 'condition') {
       if (!node.branches?.true) warnings.push(`Condition step "${node.id}" has no true branch`);
       if (!node.branches?.false) warnings.push(`Condition step "${node.id}" has no false branch`);
+      if (!node.conditionType) errors.push(`Condition step "${node.id}" needs a rule`);
+      if (node.conditionType === 'has_tag' && !node.conditionTag?.trim()) {
+        errors.push(`Condition step "${node.id}" needs a tag`);
+      }
+      if (node.conditionType === 'language' && !node.languageCode?.trim()) {
+        errors.push(`Condition step "${node.id}" needs a language`);
+      }
+      if (
+        (node.conditionType === 'variable_equals' || node.conditionType === 'variable_contains') &&
+        (!node.conditionVariable?.trim() || node.conditionValue == null)
+      ) {
+        errors.push(`Condition step "${node.id}" needs a variable and value`);
+      }
     }
 
     if (node.type === 'buttons') {
       const mode = node.buttonMode || 'reply';
+      if (!node.text?.trim()) errors.push(`Button step "${node.id}" needs message text`);
       if (mode === 'url' && !node.ctaUrl) errors.push(`URL button step "${node.id}" needs a URL`);
-      if (mode === 'call' && !node.ctaPhone) errors.push(`Call button step "${node.id}" needs a phone number`);
+      if (mode === 'call' && !isValidE164Phone(node.ctaPhone)) {
+        errors.push(`Call button step "${node.id}" needs a valid phone number`);
+      }
       if (mode === 'reply' && node.buttons?.length) {
+        const buttonIds = new Set<string>();
         for (const btn of node.buttons) {
+          if (!btn.id?.trim() || buttonIds.has(btn.id.trim())) {
+            errors.push(`Buttons in step "${node.id}" must have unique IDs`);
+          }
+          buttonIds.add(btn.id.trim());
           if (!btn.title?.trim()) {
             errors.push(`Button in step "${node.id}" needs a label`);
           }
@@ -139,18 +172,42 @@ export function validateFlowGraph(
           }
         }
       }
+      if (mode === 'reply' && !node.buttons?.length) {
+        errors.push(`Reply button step "${node.id}" needs at least one button`);
+      }
+      if (mode === 'url' && node.ctaUrl) {
+        try {
+          if (new URL(node.ctaUrl).protocol !== 'https:') {
+            errors.push(`URL button step "${node.id}" must use HTTPS`);
+          }
+        } catch {
+          errors.push(`URL button step "${node.id}" has an invalid URL`);
+        }
+      }
     }
 
     if (node.type === 'list') {
+      if (!node.text?.trim()) errors.push(`List step "${node.id}" needs message text`);
       if (!node.listSections?.length) errors.push(`List step "${node.id}" needs at least one section`);
       const totalRows = (node.listSections || []).reduce((sum, section) => sum + section.rows.length, 0);
+      if (totalRows === 0) {
+        errors.push(`List step "${node.id}" needs at least one row`);
+      }
       if (totalRows > 10) {
         errors.push(`List step "${node.id}" has ${totalRows} rows; WhatsApp allows at most 10`);
       }
+      const rowIds = new Set<string>();
       for (const section of node.listSections || []) {
         for (const row of section.rows) {
+          if (!row.id?.trim() || rowIds.has(row.id.trim())) {
+            errors.push(`List rows in step "${node.id}" must have unique IDs`);
+          }
+          rowIds.add(row.id.trim());
+          if (!row.title?.trim()) {
+            errors.push(`List row in step "${node.id}" needs a label`);
+          }
           if (!node.branches?.[row.id] && !node.next) {
-            warnings.push(`List item "${row.title}" in step "${node.id}" has no branch target`);
+            errors.push(`List item "${row.title}" in step "${node.id}" has no branch target`);
           }
         }
       }
@@ -167,21 +224,39 @@ export function validateFlowGraph(
     if (node.type === 'location' && (node.latitude == null || node.longitude == null)) {
       errors.push(`Location step "${node.id}" needs latitude and longitude`);
     }
+    if (
+      node.type === 'location' &&
+      (node.latitude != null || node.longitude != null) &&
+      (node.latitude == null ||
+        node.longitude == null ||
+        node.latitude < -90 ||
+        node.latitude > 90 ||
+        node.longitude < -180 ||
+        node.longitude > 180)
+    ) {
+      errors.push(`Location step "${node.id}" has invalid coordinates`);
+    }
 
-    if (node.type === 'contact_card' && (!node.contactName || !node.contactPhone)) {
-      errors.push(`Contact card step "${node.id}" needs name and phone`);
+    if (node.type === 'contact_card' && (!node.contactName?.trim() || !isValidE164Phone(node.contactPhone))) {
+      errors.push(`Contact card step "${node.id}" needs a name and valid phone number`);
     }
 
     if (node.type === 'wa_flow' && !node.waFlowId?.trim()) {
       errors.push(`In-chat form step "${node.id}" needs a form selected`);
     }
 
-    if (node.type === 'condition' && node.conditionType === 'variable_equals' && !node.conditionVariable) {
-      errors.push(`Condition step "${node.id}" needs a variable name`);
-    }
-
     if (node.type === 'schedule' && !node.scheduleAt && !node.delaySeconds) {
       errors.push(`Schedule step "${node.id}" needs a time or delay`);
+    }
+    if (node.type === 'schedule' && node.scheduleAt) {
+      const scheduleTime = new Date(node.scheduleAt).getTime();
+      if (Number.isNaN(scheduleTime)) {
+        errors.push(`Schedule step "${node.id}" has an invalid date and time`);
+      } else if (scheduleTime <= Date.now()) {
+        errors.push(`Schedule step "${node.id}" must be in the future`);
+      } else if (scheduleTime - Date.now() > 7 * 86400000) {
+        errors.push(`Schedule step "${node.id}" cannot be more than 7 days ahead`);
+      }
     }
 
     if (node.type === 'template' && !node.templateName) {
@@ -189,6 +264,16 @@ export function validateFlowGraph(
     }
     if (node.type === 'media' && !node.mediaUrl) {
       errors.push(`Media step "${node.id}" needs a media URL`);
+    }
+    if (node.type === 'media' && node.mediaUrl) {
+      try {
+        const url = new URL(node.mediaUrl);
+        if (url.protocol !== 'https:') {
+          errors.push(`Media step "${node.id}" must use an HTTPS URL`);
+        }
+      } catch {
+        errors.push(`Media step "${node.id}" has an invalid media URL`);
+      }
     }
     if (node.type === 'webhook' && !node.webhookUrl) {
       errors.push(`Webhook step "${node.id}" needs a webhook URL`);
@@ -199,6 +284,12 @@ export function validateFlowGraph(
     }
     if (node.type === 'delay' && (!node.delaySeconds || node.delaySeconds < 1)) {
       errors.push(`Delay step "${node.id}" needs delay of at least 1 second`);
+    }
+    if (node.type === 'delay' && node.delaySeconds && node.delaySeconds > 86400) {
+      errors.push(`Delay step "${node.id}" cannot exceed 24 hours`);
+    }
+    if (node.type === 'schedule' && node.delaySeconds && node.delaySeconds > 604800) {
+      errors.push(`Schedule step "${node.id}" cannot exceed 7 days`);
     }
   }
 
