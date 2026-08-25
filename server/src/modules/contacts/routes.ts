@@ -23,11 +23,13 @@ import { Prisma } from '@prisma/client';
 import { contactConsentData, contactCreateConsentFields } from './consent';
 import { emitProductEvent } from '../platform/events';
 import { checkQuota } from '../billing/entitlements.service';
+import { requireActiveCommercialOnMutation } from '../../middleware/plan-guard';
 import { NEW_CONTACT_CALLING_DEFAULTS } from './contact-ai-defaults';
 
 const router = Router();
 
 router.use(authenticateJwtOrApiKey, requireOrg, resolveActiveWhatsappNumber, ...withPermission('manageContacts'));
+router.use(requireActiveCommercialOnMutation());
 
 router.get(
   '/',
@@ -58,66 +60,71 @@ router.post(
     if (!whatsappNumberId) throw new AppError(400, 'Connect a WhatsApp number before creating contacts');
 
     const orgId = req.user!.organizationId!;
-    const existing = await prisma.contact.findUnique({
-      where: {
-        organizationId_whatsappNumberId_normalizedPhone: {
-          organizationId: orgId,
-          whatsappNumberId,
-          normalizedPhone: data.phone,
-        },
-      },
-    });
-
-    if (!existing) {
-      const quotaCheck = await checkQuota(orgId, 'contacts', 1);
-      if (!quotaCheck.allowed) {
-        throw new AppError(
-          402,
-          quotaCheck.reason ||
-            `Contact limit reached (${quotaCheck.used}/${quotaCheck.limit}). Upgrade your plan to add more contacts.`
-        );
-      }
-    }
-
     const customAttributes = asCustomAttributes(data.customAttributes) as Prisma.InputJsonValue;
-    const contact = await prisma.contact.upsert({
-      where: {
-        organizationId_whatsappNumberId_normalizedPhone: {
-          organizationId: req.user!.organizationId!,
-          whatsappNumberId,
-          normalizedPhone: data.phone,
+    const { contact, created } = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM organizations WHERE id = ${orgId} FOR UPDATE`;
+      const existing = await tx.contact.findUnique({
+        where: {
+          organizationId_whatsappNumberId_normalizedPhone: {
+            organizationId: orgId,
+            whatsappNumberId,
+            normalizedPhone: data.phone,
+          },
         },
-      },
-      create: {
-        organizationId: req.user!.organizationId!,
-        phone: data.phone,
-        normalizedPhone: data.phone,
-        whatsappNumberId,
-        name: data.name,
-        email: data.email || undefined,
-        tags: data.tags || [],
-        notes: data.notes,
-        customAttributes,
-        source: 'MANUAL',
-        ...NEW_CONTACT_CALLING_DEFAULTS,
-        ...contactCreateConsentFields(data.optedIn, 'MANUAL'),
-      },
-      update: {
-        name: data.name,
-        email: data.email || undefined,
-        tags: data.tags,
-        notes: data.notes,
-        customAttributes,
-        ...(data.optedIn !== undefined ? contactConsentData(data.optedIn, 'MANUAL') : {}),
-      },
+      });
+      if (!existing) {
+        const quotaCheck = await checkQuota(orgId, 'contacts', 1);
+        if (!quotaCheck.allowed) {
+          throw new AppError(
+            402,
+            quotaCheck.reason ||
+              `Contact limit reached (${quotaCheck.used}/${quotaCheck.limit}). Upgrade your plan to add more contacts.`,
+            quotaCheck.code
+          );
+        }
+      }
+      const contact = await tx.contact.upsert({
+        where: {
+          organizationId_whatsappNumberId_normalizedPhone: {
+            organizationId: orgId,
+            whatsappNumberId,
+            normalizedPhone: data.phone,
+          },
+        },
+        create: {
+          organizationId: orgId,
+          phone: data.phone,
+          normalizedPhone: data.phone,
+          whatsappNumberId,
+          name: data.name,
+          email: data.email || undefined,
+          tags: data.tags || [],
+          notes: data.notes,
+          customAttributes,
+          source: 'MANUAL',
+          ...NEW_CONTACT_CALLING_DEFAULTS,
+          ...contactCreateConsentFields(data.optedIn, 'MANUAL'),
+        },
+        update: {
+          name: data.name,
+          email: data.email || undefined,
+          tags: data.tags,
+          notes: data.notes,
+          customAttributes,
+          ...(data.optedIn !== undefined ? contactConsentData(data.optedIn, 'MANUAL') : {}),
+        },
+      });
+      return { contact, created: !existing };
     });
-    if (!existing) {
+    if (created) {
       await applyGlobalCallingToContactIfEnabled(req.user!.organizationId!, contact.id);
     }
-    emitProductEvent({
-      organizationId: req.user!.organizationId!,
-      name: 'CONTACT_CREATED',
-    });
+    if (created) {
+      emitProductEvent({
+        organizationId: req.user!.organizationId!,
+        name: 'CONTACT_CREATED',
+      });
+    }
 
     sendSuccess(res, contact, 201);
   })
@@ -144,63 +151,83 @@ router.post(
     const whatsappNumberId = req.activeWhatsappNumberId;
     if (!whatsappNumberId) throw new AppError(400, 'Connect a WhatsApp number before importing contacts');
 
-    const quotaCheck = await checkQuota(orgId, 'contacts', contacts.length);
-    if (!quotaCheck.allowed) {
-      throw new AppError(
-        402,
-        quotaCheck.reason ||
-          `Importing ${contacts.length} contacts exceeds your plan limit (${quotaCheck.used}/${quotaCheck.limit}). Upgrade your plan to import more contacts.`
-      );
-    }
-
-    let imported = 0;
-
-    for (let i = 0; i < contacts.length; i++) {
-      const c = contacts[i];
-      const result = validatePhone(c.phone);
-      if (!result.ok) throw new AppError(400, `Contact ${i + 1}: ${result.error}`);
-
-      const incomingAttrs = asCustomAttributes(c.customAttributes);
-      const existing = await prisma.contact.findUnique({
+    const normalizedPhones = contacts.map((contact, index) => {
+      const result = validatePhone(contact.phone);
+      if (!result.ok) throw new AppError(400, `Contact ${index + 1}: ${result.error}`);
+      return result.phone;
+    });
+    const imported = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM organizations WHERE id = ${orgId} FOR UPDATE`;
+      const existingContacts = await tx.contact.findMany({
         where: {
-          organizationId_whatsappNumberId_normalizedPhone: {
-            organizationId: orgId,
-            whatsappNumberId,
-            normalizedPhone: result.phone,
-          },
-        },
-        select: { customAttributes: true },
-      });
-      const customAttributes = {
-        ...asCustomAttributes(existing?.customAttributes),
-        ...incomingAttrs,
-      } as Prisma.InputJsonValue;
-
-      await prisma.contact.upsert({
-        where: {
-          organizationId_whatsappNumberId_normalizedPhone: {
-            organizationId: orgId,
-            whatsappNumberId,
-            normalizedPhone: result.phone,
-          },
-        },
-        create: {
           organizationId: orgId,
-          phone: result.phone,
-          normalizedPhone: result.phone,
           whatsappNumberId,
-          name: c.name,
-          tags: c.tags || [],
-          notes: c.notes,
-          customAttributes,
-          source: 'IMPORT',
-          ...NEW_CONTACT_CALLING_DEFAULTS,
-          ...contactCreateConsentFields(undefined, 'IMPORT'),
+          normalizedPhone: { in: [...new Set(normalizedPhones)] },
         },
-        update: { name: c.name, tags: c.tags, notes: c.notes, customAttributes },
+        select: { normalizedPhone: true },
       });
-      imported++;
-    }
+      const existingPhones = new Set(existingContacts.map((contact) => contact.normalizedPhone));
+      const newContactCount = new Set(
+        normalizedPhones.filter((phone) => !existingPhones.has(phone))
+      ).size;
+      const quotaCheck = await checkQuota(orgId, 'contacts', newContactCount);
+      if (!quotaCheck.allowed) {
+        throw new AppError(
+          402,
+          quotaCheck.reason ||
+            `Importing ${newContactCount} contacts exceeds your plan limit (${quotaCheck.used}/${quotaCheck.limit}). Upgrade your plan to import more contacts.`,
+          quotaCheck.code
+        );
+      }
+
+      let count = 0;
+      for (let i = 0; i < contacts.length; i++) {
+        const c = contacts[i];
+        const normalizedPhone = normalizedPhones[i];
+        const incomingAttrs = asCustomAttributes(c.customAttributes);
+        const existing = await tx.contact.findUnique({
+          where: {
+            organizationId_whatsappNumberId_normalizedPhone: {
+              organizationId: orgId,
+              whatsappNumberId,
+              normalizedPhone,
+            },
+          },
+          select: { customAttributes: true },
+        });
+        const customAttributes = {
+          ...asCustomAttributes(existing?.customAttributes),
+          ...incomingAttrs,
+        } as Prisma.InputJsonValue;
+
+        await tx.contact.upsert({
+          where: {
+            organizationId_whatsappNumberId_normalizedPhone: {
+              organizationId: orgId,
+              whatsappNumberId,
+              normalizedPhone,
+            },
+          },
+          create: {
+            organizationId: orgId,
+            phone: normalizedPhone,
+            normalizedPhone,
+            whatsappNumberId,
+            name: c.name,
+            email: undefined,
+            tags: c.tags || [],
+            notes: c.notes,
+            customAttributes,
+            source: 'IMPORT',
+            ...NEW_CONTACT_CALLING_DEFAULTS,
+            ...contactCreateConsentFields(undefined, 'IMPORT'),
+          },
+          update: { name: c.name, tags: c.tags, notes: c.notes, customAttributes },
+        });
+        count++;
+      }
+      return count;
+    });
     if (imported > 0) {
       emitProductEvent({
         organizationId: orgId,
@@ -389,6 +416,16 @@ router.patch(
     if (!existing) throw new AppError(404, 'Contact not found');
 
     if (data.callingAiEnabled !== undefined) {
+      if (data.callingAiEnabled) {
+        const callingQuota = await checkQuota(req.user!.organizationId!, 'calling');
+        if (!callingQuota.allowed) {
+          throw new AppError(
+            402,
+            callingQuota.reason || 'Calling is not included in your plan.',
+            callingQuota.code
+          );
+        }
+      }
       const calling = await getOrgCallingSettings(req.user!.organizationId!);
       if (calling.aiAutoAnswer) {
         throw new AppError(
