@@ -905,6 +905,7 @@ export async function performHandoff(
     reason,
     assignedAgent,
     botActive: false,
+    activeFlow: null,
     summary,
   });
 
