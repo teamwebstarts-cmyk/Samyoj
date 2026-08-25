@@ -29,6 +29,7 @@ import {
   verifyPaymentSignature,
   verifySubscriptionPaymentSignature,
   verifyWebhookSignature,
+  verifyCapturedPayment,
   createRazorpayOrder,
   activatePlan,
 } from './razorpay.service';
@@ -68,13 +69,14 @@ describe('isRazorpayConfigured', () => {
 });
 
 describe('verifyPaymentSignature', () => {
-  it('returns true for a valid HMAC-SHA256 signature', () => {
+  it('payment-hmac-integrity-ok: returns true for a valid HMAC-SHA256 signature', () => {
     const orderId = 'order_ABC';
     const paymentId = 'pay_XYZ';
     const body = `${orderId}|${paymentId}`;
     const expected = crypto.createHmac('sha256', 'secret_123').update(body).digest('hex');
 
     expect(verifyPaymentSignature(orderId, paymentId, expected)).toBe(true);
+    console.log('payment-hmac-integrity-ok');
   });
 
   it('returns false for an invalid signature', () => {
@@ -114,11 +116,12 @@ describe('verifySubscriptionPaymentSignature', () => {
 });
 
 describe('verifyWebhookSignature', () => {
-  it('returns true for a valid webhook signature', () => {
+  it('payment-hmac-integrity-ok: returns true for a valid webhook signature', () => {
     const raw = '{"event":"payment.captured"}';
     const expected = crypto.createHmac('sha256', 'whsec_456').update(raw).digest('hex');
 
     expect(verifyWebhookSignature(raw, expected)).toBe(true);
+    console.log('payment-hmac-integrity-ok');
   });
 
   it('returns false for an invalid webhook signature', () => {
@@ -203,6 +206,130 @@ describe('createRazorpayOrder', () => {
 
     const parsed = JSON.parse(fetchSpy.mock.calls[0][1]?.body as string);
     expect(parsed.notes).toBeUndefined();
+    fetchSpy.mockRestore();
+  });
+});
+
+describe('verifyCapturedPayment', () => {
+  it('payment-provider-verify-ok: accepts exact captured provider evidence', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const href = String(url);
+      if (href.endsWith('/orders/order_ABC')) {
+        return {
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              id: 'order_ABC',
+              amount: 249900,
+              currency: 'INR',
+              status: 'paid',
+            }),
+        } as Response;
+      }
+      if (href.endsWith('/payments/pay_XYZ')) {
+        return {
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              id: 'pay_XYZ',
+              order_id: 'order_ABC',
+              amount: 249900,
+              currency: 'INR',
+              status: 'captured',
+            }),
+        } as Response;
+      }
+      throw new Error(`unexpected fetch ${href}`);
+    });
+
+    const result = await verifyCapturedPayment({
+      orderId: 'order_ABC',
+      paymentId: 'pay_XYZ',
+      amountPaise: 249900,
+      currency: 'INR',
+    });
+
+    expect(result.order.status).toBe('paid');
+    expect(result.payment.status).toBe('captured');
+    console.log('payment-provider-verify-ok');
+    fetchSpy.mockRestore();
+  });
+
+  it('rejects amount or currency mismatch before capture', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const href = String(url);
+      if (href.endsWith('/orders/order_ABC')) {
+        return {
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              id: 'order_ABC',
+              amount: 249900,
+              currency: 'INR',
+              status: 'paid',
+            }),
+        } as Response;
+      }
+      return {
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            id: 'pay_XYZ',
+            order_id: 'order_ABC',
+            amount: 100,
+            currency: 'INR',
+            status: 'captured',
+          }),
+      } as Response;
+    });
+
+    await expect(
+      verifyCapturedPayment({
+        orderId: 'order_ABC',
+        paymentId: 'pay_XYZ',
+        amountPaise: 249900,
+        currency: 'INR',
+      })
+    ).rejects.toMatchObject({ code: 'PAYMENT_MISMATCH' });
+    fetchSpy.mockRestore();
+  });
+
+  it('returns verification pending when provider has not captured yet', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const href = String(url);
+      if (href.endsWith('/orders/order_ABC')) {
+        return {
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              id: 'order_ABC',
+              amount: 249900,
+              currency: 'INR',
+              status: 'created',
+            }),
+        } as Response;
+      }
+      return {
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            id: 'pay_XYZ',
+            order_id: 'order_ABC',
+            amount: 249900,
+            currency: 'INR',
+            status: 'authorized',
+          }),
+      } as Response;
+    });
+
+    await expect(
+      verifyCapturedPayment({
+        orderId: 'order_ABC',
+        paymentId: 'pay_XYZ',
+        amountPaise: 249900,
+        currency: 'INR',
+      })
+    ).rejects.toMatchObject({ code: 'VERIFICATION_PENDING' });
     fetchSpy.mockRestore();
   });
 });
