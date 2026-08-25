@@ -52,6 +52,8 @@ import { mapTemplateApiError } from '../components/templates/wizard/templateWiza
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { useTopbarExtras } from '../contexts/TopbarContext';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
+import { useEntitlements } from '../hooks/useEntitlements';
+import EntitlementNotice from '../components/billing/EntitlementNotice';
 
 function itemKey(item: LibraryListItem) {
   return `${item.source}:${item.name}:${item.language || ''}`;
@@ -59,6 +61,7 @@ function itemKey(item: LibraryListItem) {
 
 export default function TemplateLibraryPage() {
   const { activeNumber, resolved, hasConnectedNumber, loading: numbersLoading } = useWhatsAppNumber();
+  const { entitlements, loading: entitlementsLoading } = useEntitlements();
   const navigate = useNavigate();
   const [activeStep, setActiveStep] = useState(0);
   const [maxReachableStep, setMaxReachableStep] = useState(0);
@@ -85,6 +88,12 @@ export default function TemplateLibraryPage() {
   const [submittedStatus, setSubmittedStatus] = useState('PENDING');
   const activeNumberIdRef = useRef<string | null>(null);
   activeNumberIdRef.current = activeNumber?.id ?? null;
+  const canManageTemplates =
+    entitlementsLoading || !entitlements || entitlements.canUseFeature('templates');
+  const templateGateMessage =
+    !entitlementsLoading && entitlements && !entitlements.canUseFeature('templates')
+      ? 'Template library additions are not included on your current plan.'
+      : null;
 
   const debouncedSearch = useDebouncedValue(search);
 
@@ -291,6 +300,11 @@ export default function TemplateLibraryPage() {
     nameOverride?: string,
     variableMeta?: TemplateFormState['variableMeta'],
   ) => {
+    if (!canManageTemplates) {
+      throw new Error(
+        templateGateMessage || 'Template library additions are not included on your current plan.',
+      );
+    }
     const name = uniqueLibraryTemplateName(nameOverride || createName || item.name, existingNames);
     if (libraryNeedsButtonInputs(item)) {
       const needsUrl = (item.buttons || []).some((b) => b.type?.toUpperCase() === 'URL');
@@ -353,6 +367,12 @@ export default function TemplateLibraryPage() {
   };
 
   const handleContinue = async () => {
+    if (!canManageTemplates) {
+      toastError(
+        templateGateMessage || 'Template library additions are not included on your current plan.',
+      );
+      return;
+    }
     setStageError(null);
     if (activeStep === 0) {
       if (!selected) {
@@ -402,6 +422,12 @@ export default function TemplateLibraryPage() {
   };
 
   const handleQuickAdd = async (item: LibraryListItem) => {
+    if (!canManageTemplates) {
+      toastError(
+        templateGateMessage || 'Template library additions are not included on your current plan.',
+      );
+      return;
+    }
     setSelectedItem(item);
     setStageError(null);
     if (libraryNeedsButtonInputs(item)) {
@@ -556,6 +582,9 @@ export default function TemplateLibraryPage() {
       </div>
 
       <div className="template-wizard-scroll min-h-0 flex-1">
+        {templateGateMessage && (
+          <EntitlementNotice className="mb-4" message={templateGateMessage} upgradePlan="starter" />
+        )}
         {stageError && <TemplateIssueAlert message={stageError} className="mb-4" />}
 
         <div className="template-wizard-split template-wizard-split--library">
@@ -579,6 +608,7 @@ export default function TemplateLibraryPage() {
                   if (match) setSelectedItem(match);
                 }}
                 onQuickAdd={(item) => void handleQuickAdd(item)}
+                canCreate={canManageTemplates}
                 onQuickPickChange={handleQuickPickChange}
                 addingName={addingName}
                 metaCount={metaEntries.length}
@@ -673,7 +703,7 @@ export default function TemplateLibraryPage() {
                   variant="secondary"
                   size="sm"
                   onClick={handleCustomize}
-                  disabled={saving || !selected}
+                  disabled={saving || !selected || !canManageTemplates}
                 >
                   Customize in editor
                 </AppButton>
@@ -689,7 +719,7 @@ export default function TemplateLibraryPage() {
                   )
                 }
                 onClick={() => void handleContinue()}
-                disabled={saving || (activeStep === 0 && !selected)}
+                disabled={saving || !canManageTemplates || (activeStep === 0 && !selected)}
                 loading={saving}
               >
                 {activeStep === 0
