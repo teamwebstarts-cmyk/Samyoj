@@ -29,6 +29,7 @@ function statusLabel(status: string): string {
 
 export default function FlowAnalyticsPanel({ flowId, nodes }: FlowAnalyticsPanelProps) {
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<{
     stats: FlowStats;
     completionRate: number;
@@ -36,19 +37,41 @@ export default function FlowAnalyticsPanel({ flowId, nodes }: FlowAnalyticsPanel
     recentRuns: Array<{ action: string; status: string; createdAt: string }>;
   } | null>(null);
 
-  useEffect(() => {
+  const load = () => {
     setLoading(true);
+    setError(null);
     flowApi
       .analytics(flowId)
       .then(({ data: res }) => setData(res.data))
       .catch((err) => {
-        toastError(getErrorMessage(err, 'Failed to load stats'));
+        const message = getErrorMessage(err, 'Failed to load stats');
+        setError(message);
         setData(null);
+        toastError(message);
       })
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    load();
   }, [flowId]);
 
   if (loading) return <LoadingState label="Loading stats..." />;
+  if (error) {
+    return (
+      <div className="space-y-3 rounded-xl border border-red-200 bg-red-50/60 p-4 text-center">
+        <p className="text-sm font-semibold text-red-800">Could not load analytics</p>
+        <p className="text-xs text-red-700">{error}</p>
+        <button
+          type="button"
+          onClick={load}
+          className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
   if (!data) {
     return (
       <EmptyState
