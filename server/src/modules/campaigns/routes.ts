@@ -38,12 +38,18 @@ import {
 import { resolveActiveWhatsappNumber } from '../whatsapp/active-number';
 import { isAbsoluteInstant } from './safety';
 import { emitProductEvent } from '../platform/events';
+import {
+  requireActiveCommercialOnMutation,
+  requireFeatureOnMutation,
+} from '../../middleware/plan-guard';
 
 const router = Router();
 const campaignAccessGuard = [
   authenticateJwtOrApiKey,
   requireOrg,
   resolveActiveWhatsappNumber,
+  requireActiveCommercialOnMutation(),
+  requireFeatureOnMutation('campaigns'),
   ...withPermission('manageCampaigns'),
 ];
 const readGuard = campaignAccessGuard;
@@ -142,7 +148,9 @@ router.get(
       sortDir = 'desc',
       period,
     } = req.query;
-    await syncRunningCampaignStatuses(orgId);
+    if (!(await getOrgEntitlements(orgId)).isLocked) {
+      await syncRunningCampaignStatuses(orgId);
+    }
 
     const where: Prisma.CampaignWhereInput = {
       organizationId: orgId,
