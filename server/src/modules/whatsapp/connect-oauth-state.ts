@@ -10,7 +10,10 @@ export interface WhatsappConnectOAuthState {
   redirectUri: string;
 }
 
-const CALLBACK_PATH = '/settings/whatsapp/callback';
+const CALLBACK_PATHS = new Set([
+  '/settings/whatsapp/callback',
+  '/settings/whatsapp/callback/popup',
+]);
 
 function tryParseOrigin(value: string): URL | null {
   try {
@@ -31,7 +34,7 @@ function tryParseOrigin(value: string): URL | null {
 export function isAllowedOAuthRedirectUri(redirectUri: string): boolean {
   const parsed = tryParseOrigin(redirectUri);
   if (!parsed) return false;
-  if (parsed.pathname.replace(/\/$/, '') !== CALLBACK_PATH) return false;
+  if (!CALLBACK_PATHS.has(parsed.pathname.replace(/\/$/, ''))) return false;
   if (parsed.search || parsed.hash) return false;
 
   const allowedOrigins = new Set<string>();
@@ -67,7 +70,7 @@ export function resolveOAuthRedirectUri(requested?: string | null): string {
   if (!isAllowedOAuthRedirectUri(candidate)) {
     throw new AppError(
       400,
-      `Invalid OAuth redirect URI. Expected an allowed origin ending with ${CALLBACK_PATH}.`
+      'Invalid OAuth redirect URI. Expected an allowed origin ending with /settings/whatsapp/callback.'
     );
   }
   return candidate;
