@@ -21,6 +21,7 @@ interface BillingAiCreditMeterProps {
   balance: AiCreditBalanceView | null;
   icon: 'chat' | 'calling';
   isEntitled: boolean;
+  isEnterpriseCustom?: boolean;
   onBuyMore?: () => void;
 }
 
@@ -30,6 +31,7 @@ export default function BillingAiCreditMeter({
   balance,
   icon,
   isEntitled,
+  isEnterpriseCustom = false,
   onBuyMore,
 }: BillingAiCreditMeterProps) {
   const Icon = icon === 'chat' ? Bot : Phone;
@@ -40,6 +42,25 @@ export default function BillingAiCreditMeter({
   const includedPct =
     includedLimit > 0 ? Math.min(100, Math.round((includedUsed / includedLimit) * 100)) : 0;
   const periodEndLabel = balance?.periodEnd ? formatPeriodEnd(balance.periodEnd) : '';
+
+  if (isEnterpriseCustom && includedLimit === 0 && addonBalance === 0) {
+    return (
+      <div className="flex flex-col justify-between rounded-xl border border-amber-200/70 bg-amber-50/40 p-4 dark:border-amber-800/40 dark:bg-amber-950/20">
+        <div className="flex items-center gap-2">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
+            <Icon className="h-3.5 w-3.5" />
+          </span>
+          <span className="truncate text-[11px] font-bold uppercase tracking-wider text-theme-muted">
+            {title}
+          </span>
+        </div>
+        <p className="mt-2.5 text-sm font-bold text-theme-fg">Custom AI allocation</p>
+        <p className="mt-1 text-[11px] font-medium text-theme-muted">
+          Your Enterprise {unitLabel} allowance is set in your agreement.
+        </p>
+      </div>
+    );
+  }
 
   if (!isEntitled && includedLimit === 0 && addonBalance === 0) {
     return (
@@ -86,11 +107,11 @@ export default function BillingAiCreditMeter({
           {includedLimit > 0 ? (
             <p className="text-[11px] font-medium text-theme-muted">
               From your plan: {includedUsed.toLocaleString()} / {includedLimit.toLocaleString()} used
-              {periodEndLabel ? ` · resets ${periodEndLabel}` : ''}
+              {periodEndLabel ? ` · valid until ${periodEndLabel}` : ''}
             </p>
           ) : null}
           <p className="text-[11px] font-medium text-theme-secondary">
-            Add-on balance: {addonBalance.toLocaleString()} {unitLabel}
+            Manual top-up balance: {addonBalance.toLocaleString()} {unitLabel}
             {addonBalance > 0 ? ' (does not expire)' : ''}
           </p>
         </div>
