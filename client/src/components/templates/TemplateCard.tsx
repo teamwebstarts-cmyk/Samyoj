@@ -9,9 +9,10 @@ interface TemplateCardProps {
   template: MessageTemplate;
   onView: () => void;
   onDuplicate?: () => void;
+  canManage?: boolean;
 }
 
-export default function TemplateCard({ template, onView, onDuplicate }: TemplateCardProps) {
+export default function TemplateCard({ template, onView, onDuplicate, canManage = true }: TemplateCardProps) {
   const preview = getTemplatePreviewSnippet(template);
   const category = getCategoryMeta(template.category);
   const CategoryIcon = category?.icon ?? FileText;
@@ -51,7 +52,14 @@ export default function TemplateCard({ template, onView, onDuplicate }: Template
           View
         </AppButton>
         {onDuplicate && (
-          <AppButton size="sm" variant="secondary" icon={<Copy size={14} />} onClick={onDuplicate} aria-label="Duplicate" />
+          <AppButton
+            size="sm"
+            variant="secondary"
+            icon={<Copy size={14} />}
+            onClick={onDuplicate}
+            disabled={!canManage}
+            aria-label="Duplicate"
+          />
         )}
       </div>
     </article>
