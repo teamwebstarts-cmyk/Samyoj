@@ -151,7 +151,7 @@ describe('handleInboundAutomations', () => {
     expect(flowQueueAdd).toHaveBeenCalledWith(
       'retry-inbound',
       expect.objectContaining({ conversationId: 'conv-1', lockRetry: 1 }),
-      expect.objectContaining({ jobId: 'flow-retry-conv-1' })
+      expect.objectContaining({ jobId: 'flow-retry-conv-1-msg-1' })
     );
     expect(automationMock).not.toHaveBeenCalled();
     expect(automationQueueAdd).not.toHaveBeenCalled();
@@ -164,6 +164,30 @@ describe('handleInboundAutomations', () => {
 
     expect(automationMock).not.toHaveBeenCalled();
     expect(automationQueueAdd).not.toHaveBeenCalled();
+  });
+
+  it('does not run static auto-replies when an agent owns a non-open chat', async () => {
+    flowHandled.mockResolvedValue(false);
+    conversationMock.mockResolvedValue({
+      id: 'conv-1',
+      botActive: true,
+      whatsappNumberId: 'wa-1',
+      botHandoffAt: null,
+      assignedAgentId: 'agent-1',
+      status: 'PENDING',
+    } as never);
+
+    await handleInboundAutomations(payload);
+
+    expect(automationMock).not.toHaveBeenCalled();
+    expect(automationQueueAdd).not.toHaveBeenCalled();
+    expect(logRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: 'conv-1',
+        action: 'agent_assigned',
+        status: 'skipped',
+      })
+    );
   });
 
   it('still queues AI when global chat is on even if personal botActive is false', async () => {

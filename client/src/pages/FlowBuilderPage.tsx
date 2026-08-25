@@ -214,7 +214,7 @@ export default function FlowBuilderPage() {
         setWarnings(normalized.message ? [normalized.message] : []);
       }
     }
-  }, [activeNumber, name, nodes, resolved, startNodeId, triggerConfig, triggerType]);
+  }, [activeNumber, linkedNodes, name, resolved, startNodeId, triggerConfig, triggerType]);
 
   useOnActiveNumberChange(({ isInitial }) => {
     if (isInitial) return;
@@ -316,14 +316,13 @@ export default function FlowBuilderPage() {
   };
 
   const buildPayload = (asDraft = false) => {
-    const preparedNodes = prepareNodesForSave(nodes);
     return {
       name: name.trim(),
       description: description.trim() || undefined,
       triggerType,
       triggerConfig,
-      nodes: preparedNodes,
-      startNodeId: startNodeId || preparedNodes[0]?.id || undefined,
+      nodes: linkedNodes,
+      startNodeId: startNodeId || linkedNodes[0]?.id || undefined,
       enabled,
       priority,
       status: asDraft ? 'DRAFT' : 'PUBLISHED',
@@ -362,8 +361,7 @@ export default function FlowBuilderPage() {
       toastError(flowGateMessage || quotaUpgradeMessage('publishedWorkflows'));
       return;
     }
-    const preparedNodes = prepareNodesForSave(nodes);
-    const clientValidationErrors = validateFlow(name, triggerType, triggerConfig, keyword, preparedNodes);
+    const clientValidationErrors = validateFlow(name, triggerType, triggerConfig, keyword, linkedNodes);
     if (clientValidationErrors.length > 0) {
       toastValidationErrors(clientValidationErrors);
       setMobileTab('settings');

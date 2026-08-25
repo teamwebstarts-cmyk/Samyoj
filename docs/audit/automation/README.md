@@ -37,9 +37,9 @@ Flow builder for data loss, misleading previews, and unnecessary user effort.
   `goto_flow`; runtime hop protection is now present.
 - Add an execution lease/state machine for pause, cancellation, and long-running
   nodes instead of relying only on a conversation lock.
+- Assign leftover `UNSCOPED_*` flow/automation/asset rows (nullable
+  `whatsappNumberId` after multi-number backfill) so they can match inbound.
 - Add atomic flow analytics increments and transactional version allocation.
-- Add number-scoped flow definitions if the product requires different flows
-  for different active numbers in one organization.
 - Pin validated DNS addresses or use an isolated egress proxy for all
   customer-configured HTTP delivery.
 

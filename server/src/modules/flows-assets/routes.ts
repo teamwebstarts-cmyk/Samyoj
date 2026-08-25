@@ -33,6 +33,7 @@ const memberGuard = [
 const adminGuard = [
   authenticate,
   requireOrg,
+  resolveActiveWhatsappNumber,
   requireActiveCommercialOnMutation(),
   requireFeatureOnMutation('forms'),
   loadOrgRole,
@@ -92,12 +93,16 @@ router.post(
   ...adminGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const data = createFlowAssetSchema.parse(req.body);
+    const numberId = req.activeWhatsappNumberId;
+    if (!numberId) {
+      throw new AppError(400, 'Connect a WhatsApp number before using this feature.');
+    }
     const flowJson = resolveFlowJson(data);
 
     const asset = await prisma.flowAsset.create({
       data: {
         organizationId: req.user!.organizationId!,
-        whatsappNumberId: req.activeWhatsappNumberId!,
+        whatsappNumberId: numberId,
         name: data.name,
         description: data.description,
         flowJson: flowJson as Prisma.InputJsonValue,
@@ -166,7 +171,7 @@ router.post(
     });
     if (!asset) throw new AppError(404, 'Flow asset not found');
 
-    const { wabaId, accessToken } = await getOrgWhatsappContext(orgId);
+    const { wabaId, accessToken } = await getOrgWhatsappContext(orgId, req.activeWhatsappNumberId);
     const flowJsonStr = JSON.stringify(asset.flowJson);
 
     let metaFlowId = asset.metaFlowId;

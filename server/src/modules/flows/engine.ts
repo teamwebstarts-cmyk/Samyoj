@@ -1421,7 +1421,7 @@ async function processInboundFlow(payload: InboundFlowPayload): Promise<boolean>
       payload.whatsappNumberId
     )
   ) {
-    return true;
+    return false;
   }
 
   const contactTags = conversation.contact?.tags || [];

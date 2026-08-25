@@ -135,13 +135,30 @@ identity, billing choices, or customer-facing claims.
 - `cd server && npm run build`
 - `cd server && npx vitest run src/modules/automation src/modules/flows
   src/modules/flows-assets src/modules/integrations src/modules/messages`
-  — 146 test files and 971 tests passed (server); 31 files and 145 tests (client).
+  — **scoped** path measured 2026-08-25: **20 files / 102 tests**.
+  Full server and client suites are recorded separately under Verification.
 
 ## Verification (2026-08-25 recheck hardening)
 
-- Server: `146` test files, `971` tests passed.
-- Client: `31` test files, `145` tests passed.
+Full suites (not the scoped automation command):
+
+- Server: `146` test files, `971` tests passed (full `npx vitest run` in `server/`).
+- Client: `31` test files, `145` tests passed (full `npx vitest run` in `client/`).
 - `npm run build` passed in `server/` and `client/`.
+
+### 2026-08-25 backend recheck follow-up
+
+Code (not just docs):
+
+- Automation and FlowAsset **admin writes** require `resolveActiveWhatsappNumber`; create refuses a null number.
+- Meta Flow publish uses the active number’s WABA, not org-latest.
+- Lock-retry jobs are per inbound message.
+- Marketing opt-out no longer counts as “flow handled.”
+- Agent Inbox send sets `botHandoffAt` so global chat AI cannot re-enable the bot.
+- Assigned non-OPEN chats skip static auto-replies (AI already skipped).
+- Saving a draft on a **published** flow no longer flips `status` to `DRAFT`.
+
+Still **not** claimed: exact-once outbound (S8), NFM single-use tokens (S9), per-send pipeline leases, live inbound, customer production.
 
 Customer production readiness is still **not** claimed.
 

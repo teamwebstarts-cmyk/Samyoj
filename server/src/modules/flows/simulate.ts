@@ -1,6 +1,6 @@
 import { getOrgBusinessHours, isWithinBusinessHours } from '../settings/business-hours';
 import { linkFlowNodes } from './link-nodes';
-import { matchInteractiveTextIntent } from './branch-resolve';
+import { matchInteractiveTextIntent, syncButtonNode } from './branch-resolve';
 import { detectMessageLanguage } from './language';
 import { keywordMatches } from './trigger-match';
 import type { FlowNode, FlowTriggerConfig } from './types';
@@ -166,7 +166,7 @@ export async function simulateFlow(input: SimulateInput): Promise<{
       reason = 'Unknown trigger';
   }
 
-  const linkedNodes = linkFlowNodes(input.nodes);
+  const linkedNodes = linkFlowNodes(input.nodes.map(syncButtonNode));
   if (!triggered || !linkedNodes.length) {
     return { triggered, reason, steps: [] };
   }

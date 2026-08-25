@@ -57,10 +57,16 @@ export async function saveFlowDraft(
     priority?: number;
   }
 ) {
+  const existing = await prisma.flow.findFirst({
+    where: { id: flowId, organizationId },
+    select: { status: true },
+  });
+  if (!existing) return { count: 0 };
+
   return prisma.flow.updateMany({
     where: { id: flowId, organizationId },
     data: {
-      status: 'DRAFT',
+      ...(existing.status === 'PUBLISHED' ? {} : { status: 'DRAFT' }),
       draftNodes: draft.nodes as unknown as Prisma.InputJsonValue,
       ...(draft.name !== undefined ? { name: draft.name } : {}),
       ...(draft.description !== undefined ? { description: draft.description } : {}),

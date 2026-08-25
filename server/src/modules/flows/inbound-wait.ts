@@ -7,8 +7,8 @@ export function flowDelayJobId(conversationId: string): string {
   return `flow-delay-${conversationId}`;
 }
 
-export function inboundLockRetryJobId(conversationId: string): string {
-  return `flow-retry-${conversationId}`;
+export function inboundLockRetryJobId(conversationId: string, messageId: string): string {
+  return `flow-retry-${conversationId}-${messageId}`;
 }
 
 export function hasWaFlowResponse(payload: { waFlowResponse?: Record<string, unknown> }): boolean {

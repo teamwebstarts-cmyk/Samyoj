@@ -43,4 +43,16 @@ describe('resolveInteractiveBranch', () => {
     });
     expect(synced.branches?.['btn-new-3']).toBe('step-c');
   });
+
+  it('does not wipe URL/call branches.next when syncing empty buttons', () => {
+    const synced = syncButtonNode({
+      id: 'url',
+      type: 'buttons',
+      buttonMode: 'url',
+      text: 'Visit',
+      branches: { next: 'end' },
+    });
+    expect(synced.next).toBe('end');
+    expect(synced.branches).toEqual({});
+  });
 });

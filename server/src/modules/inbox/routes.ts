@@ -1621,7 +1621,8 @@ router.post(
         data.type !== 'TEMPLATE' ? replyTarget?.metaMessageId || undefined : undefined,
     });
 
-    // Human agent took over — pause the bot so it does not dual-reply (automation/AI paths skip this route).
+    // Human agent took over — pause journeys and mark handoff so global chat AI
+    // cannot re-enable the bot on the next inbound.
     if (conversation.botActive && !conversation.botHandoffAt) {
       const whatsappNumberId = conversation.whatsappNumberId;
       if (!whatsappNumberId) {
@@ -1631,18 +1632,23 @@ router.post(
         organizationId: orgId,
         whatsappNumberId,
       });
+      const handoffAt = new Date();
       await prisma.conversation.update({
         where: { id: conversation.id },
-        data: { botActive: false },
+        data: {
+          botActive: false,
+          botHandoffAt: handoffAt,
+          botHandoffReason: 'AGENT_REPLY',
+        },
       });
       emitToOrg(orgId, 'conversation:bot', {
         conversationId: conversation.id,
         botActive: false,
-        botHandoffAt: conversation.botHandoffAt,
+        botHandoffAt: handoffAt,
       });
       emitToOrg(orgId, 'conversation:updated', {
         conversationId: conversation.id,
-        patch: { botActive: false },
+        patch: { botActive: false, botHandoffAt: handoffAt },
       });
     }
 

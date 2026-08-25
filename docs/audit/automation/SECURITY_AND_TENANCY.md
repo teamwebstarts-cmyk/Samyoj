@@ -111,8 +111,10 @@ Status: **PASS for connect-time tenancy; OPEN for live membership revocation**.
   messages; the current database status transition cannot prove whether Meta
   accepted a timed-out request.
 - **S9 — Deferred P0:** NFM replay and token forgery defenses.
-- **S10 — Open:** webhook signature verification must fail closed when the
-  production secret is missing; verify startup/config behavior in deployment.
+- **S10 — Code fail-closed; deploy residual:** `webhook-signature-gate.ts`
+  rejects production unsigned/unconfigured traffic (unit-tested). Remaining:
+  HMAC must use raw request bytes (`rawBody`), not `JSON.stringify(payload)`,
+  and that behavior needs a production-like deploy check.
 - **S11 — Open:** live socket membership revocation.
 - **S12 — Deferred P1:** DNS rebinding/egress isolation.
 

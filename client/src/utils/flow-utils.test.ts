@@ -36,6 +36,7 @@ describe('flow builder validation', () => {
         ctaUrl: 'https://example.com',
         branches: { next: 'end' },
       },
+      { id: 'other', type: 'message', text: 'Not the target' },
       { id: 'end', type: 'end', text: 'Done' },
     ]);
     expect(node.next).toBe('end');

@@ -99,9 +99,9 @@ The recheck hardening pass landed:
 | Preview is synthetic | **Open** — label/branch selector still deferred |
 | Reply-button “Go to next step” vs required branch | **Open** — implicit `linkNodes` helps runtime; explicit branch validation unchanged |
 | URL/call nodes keep reply handles | **Fixed** — url/call are linear `next` in canvas, save, and engine |
-| Restore destructive + live | **Fixed** — server writes `draftNodes` only; client confirms restore |
+| Restore destructive + live | **Fixed** — restore writes `draftNodes` and sets `status: DRAFT` (live journey goes offline until republish); client confirms |
 | Unsaved work on number switch / no conflict detection | **Fixed** — dirty/unload + number-switch confirm; `expectedUpdatedAt` refreshed after save/publish/restore |
-| Flow APIs ignore selected number | **Fixed** — `resolveActiveWhatsappNumber` on flow/automation/asset routes |
+| Flow APIs ignore selected number | **Fixed** — `resolveActiveWhatsappNumber` on flow/automation/asset **read and write** routes. Leftover: nullable `whatsappNumberId` orphans from multi-number backfill never match inbound |
 | Reference-data cache keyed only by Meta phone id | **Fixed** — cache key is `organizationId:whatsappNumberId` |
 | Draft Meta forms in picker | **Fixed** — published forms only |
 | Template parameter mapping in flow editor | **Open** |
@@ -183,12 +183,13 @@ phone, template, or agent. Priority: **P1**.
 
 ### U6 — Restore and dirty state need a stronger mental model
 
-Restore immediately makes a version live according to the toast, while the
-editor state also changes. A concurrent edit in another tab can overwrite it.
+Restore writes `draftNodes` and sets `status: DRAFT`, then the client toasts
+“Restored version N as draft — publish when ready.” A live flow therefore goes
+**offline until republish**. Concurrent edits in another tab can still 409 on
+`expectedUpdatedAt`.
 
-**Recommendation:** make restore a draft operation followed by an explicit
-publish confirmation, include version/updated-at conflict detection, and show
-“saved draft / live version” separately. Priority: **P1**.
+**Recommendation:** keep restore as draft-only; show “draft saved” vs “live
+version” separately so unpublish is obvious. Priority: **P1**.
 
 ### U7 — Large graphs degrade the canvas
 

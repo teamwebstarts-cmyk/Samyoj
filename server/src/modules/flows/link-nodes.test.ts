@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { linkFlowNodes } from './link-nodes';
+import { syncButtonNode } from './branch-resolve';
 import type { FlowNode } from './types';
 
 describe('linkFlowNodes', () => {
@@ -46,5 +47,39 @@ describe('linkFlowNodes', () => {
     const linked = linkFlowNodes(nodes);
     expect(linked[0].next).toBe('b');
     expect(linked[1].next).toBe('c');
+  });
+
+  it('promotes URL/call branches.next onto next when the target is not the next array item', () => {
+    const nodes: FlowNode[] = [
+      {
+        id: 'url',
+        type: 'buttons',
+        buttonMode: 'url',
+        text: 'Visit',
+        branches: { next: 'end' },
+      },
+      { id: 'other', type: 'message', text: 'Skip me' },
+      { id: 'end', type: 'end', text: 'Done' },
+    ];
+
+    const linked = linkFlowNodes(nodes);
+    expect(linked[0].next).toBe('end');
+    expect(linked[0].branches).toEqual({});
+  });
+
+  it('keeps URL/call next through the same sync+link path the engine uses', () => {
+    const raw: FlowNode[] = [
+      {
+        id: 'url',
+        type: 'buttons',
+        buttonMode: 'url',
+        text: 'Visit',
+        branches: { next: 'end' },
+      },
+      { id: 'other', type: 'message', text: 'Skip me' },
+      { id: 'end', type: 'end', text: 'Done' },
+    ];
+    const linked = linkFlowNodes(raw.map(syncButtonNode));
+    expect(linked[0].next).toBe('end');
   });
 });

@@ -74,4 +74,5 @@ reasoning, severity, proposed fix, and verification. Separate:
 4. intentionally deferred capability.
 
 Status: leaf-backend READY; leaf-frontend READY; leaf-research READY;
-node-integration WAITING.
+node-integration rechecks complete (2026-08-25). Remaining P0s live in
+`docs/audit/automation/FINAL_REVIEW.md` (S8 outbound lease, S9 NFM, live inbound).

@@ -25,6 +25,7 @@ const memberGuard = [
 const adminGuard = [
   authenticate,
   requireOrg,
+  resolveActiveWhatsappNumber,
   requireActiveCommercialOnMutation(),
   loadOrgRole,
   requireOrgRole('OWNER', 'ADMIN'),
@@ -144,7 +145,10 @@ router.post(
   asyncHandler(async (req: Request, res: Response) => {
     const data = automationSchema.parse(req.body);
     const orgId = req.user!.organizationId!;
-    const numberId = req.activeWhatsappNumberId!;
+    const numberId = req.activeWhatsappNumberId;
+    if (!numberId) {
+      throw new AppError(400, 'Connect a WhatsApp number before using this feature.');
+    }
 
     const automation = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM organizations WHERE id = ${orgId} FOR UPDATE`;

@@ -245,7 +245,8 @@ Status: **DEFERRED P1**; no behavior change was invented in this audit.
 
 - `cd server && npm run build`: **PASS**.
 - Automation, flow, NFM, integration, and message focused tests:
-  **PASS — 17 files, 82 tests**.
+  **PASS — 20 files, 102 tests** (measured 2026-08-25). This is **not** the
+  full server suite.
 - Cross-flow cycle runtime test: **TODO** — add a mocked engine test.
 - Pause during a slow node: **TODO** — requires a lock/DB concurrency test.
 - Post-insert retry reconstruction: **TODO** — add a worker/engine unit test.

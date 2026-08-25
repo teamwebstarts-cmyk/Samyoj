@@ -530,7 +530,7 @@ export async function handleInboundAutomations(payload: InboundAutomationPayload
 
   if (afterFlow.type === 'requeue') {
     const attempt = payload.lockRetry ?? 0;
-    const jobId = inboundLockRetryJobId(payload.conversationId);
+    const jobId = inboundLockRetryJobId(payload.conversationId, payload.messageId);
     try {
       const existing = await flowQueue.getJob(jobId);
       if (existing) await existing.remove();
@@ -573,6 +573,17 @@ export async function handleInboundAutomations(payload: InboundAutomationPayload
   }
 
   if (afterFlow.type === 'flow_done') return;
+
+  if (refreshed?.assignedAgentId && refreshed.status !== 'OPEN') {
+    await logAutomationRun({
+      organizationId: payload.organizationId,
+      conversationId: payload.conversationId,
+      triggerType: 'STATIC',
+      action: 'agent_assigned',
+      status: 'skipped',
+    });
+    return;
+  }
 
   const optedOut = await prisma.contact.findFirst({
     where: { id: payload.contactId, organizationId: payload.organizationId },
