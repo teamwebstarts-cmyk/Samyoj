@@ -15,6 +15,7 @@ interface SenderDeps {
   appendSentMessage: (conversationId: string, sent: Message) => void;
   setMessages: Dispatch<SetStateAction<Message[]>>;
   onWindowClosed?: () => void;
+  canSend?: boolean;
 }
 
 function makeOptimisticId() {
@@ -59,6 +60,7 @@ export function useInboxSender({
   appendSentMessage,
   setMessages,
   onWindowClosed,
+  canSend = true,
 }: SenderDeps) {
   const { draft, setDraft, clearDraft } = useDraft(selected?.id);
   const [sending, setSending] = useState(false);
@@ -83,6 +85,10 @@ export function useInboxSender({
 
   const handleAttach = useCallback(
     (file: File) => {
+      if (!canSend) {
+        toastError('Messaging is read-only while your plan is locked.');
+        return;
+      }
       const type = file.type.startsWith('image/')
         ? 'IMAGE'
         : file.type.startsWith('video/')
@@ -112,12 +118,15 @@ export function useInboxSender({
         type === 'IMAGE' || type === 'AUDIO' ? URL.createObjectURL(file) : undefined;
       setAttachment({ file, previewUrl, type });
     },
-    [selected?.id]
+    [canSend, selected?.id]
   );
 
   const sendPayload = useCallback(
     async (payload: SendMessagePayload, optimisticId?: string, options?: SendPayloadOptions) => {
-      if (!selected) return false;
+      if (!selected || !canSend) {
+        if (!canSend) toastError('Messaging is read-only while your plan is locked.');
+        return false;
+      }
       const lockComposer = options?.lockComposer !== false;
       if (lockComposer) setSending(true);
       try {
@@ -187,7 +196,7 @@ export function useInboxSender({
         if (lockComposer) setSending(false);
       }
     },
-    [selected, appendSentMessage, onWindowClosed, setMessages]
+    [canSend, selected, appendSentMessage, onWindowClosed, setMessages]
   );
 
   const uploadAttachment = async (file: File) => {
@@ -224,7 +233,10 @@ export function useInboxSender({
    */
   const handleSend = async (e?: React.FormEvent): Promise<boolean> => {
     e?.preventDefault();
-    if (!selected || !serviceWindow?.open) return false;
+    if (!selected || !canSend || !serviceWindow?.open) {
+      if (!canSend) toastError('Messaging is read-only while your plan is locked.');
+      return false;
+    }
     if (!draft.trim() && !attachment) return false;
 
     const text = draft.trim();
@@ -325,7 +337,10 @@ export function useInboxSender({
     });
 
   const handleReact = async (message: Message, emoji: string) => {
-    if (!selected) return;
+    if (!selected || !canSend) {
+      if (!canSend) toastError('Messaging is read-only while your plan is locked.');
+      return;
+    }
     // Optimistic chip update first — reaction API returns the *target* message,
     // not a new outbound row, so never call appendSentMessage.
     setMessages((prev) =>
@@ -372,7 +387,10 @@ export function useInboxSender({
   };
 
   const handleRetryMessage = async (message: Message) => {
-    if (retryingId) return;
+    if (retryingId || !canSend) {
+      if (!canSend) toastError('Messaging is read-only while your plan is locked.');
+      return;
+    }
     if (message.id.startsWith('optimistic-')) {
       if (message.content && !message.content.startsWith('[')) {
         setDraft(message.content);
