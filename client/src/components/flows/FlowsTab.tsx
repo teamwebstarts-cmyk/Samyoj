@@ -53,6 +53,8 @@ interface FlowsTabProps {
   onTemplatesOpenChange: (open: boolean) => void;
   onSummaryChange?: (summary: FlowSummary) => void;
   onNewFlow?: () => void;
+  canCreate?: boolean;
+  canPublish?: boolean;
 }
 
 export default function FlowsTab({
@@ -60,6 +62,8 @@ export default function FlowsTab({
   onTemplatesOpenChange,
   onSummaryChange,
   onNewFlow,
+  canCreate = true,
+  canPublish = true,
 }: FlowsTabProps) {
   const { activeNumber, resolved } = useWhatsAppNumber();
   const navigate = useNavigate();
@@ -128,6 +132,7 @@ export default function FlowsTab({
   useEffect(load, [load]);
 
   const createFromTemplate = async (templateId: string) => {
+    if (!canCreate) return;
     setCreating(templateId);
     try {
       const { data } = await flowApi.fromTemplate(templateId);
@@ -143,6 +148,7 @@ export default function FlowsTab({
 
   const toggleEnabled = async (flow: Flow) => {
     const turningOn = !flow.enabled;
+    if (turningOn && !canPublish) return;
     if (turningOn && isUnpublishedFlow(flow)) {
       toastWarning(DRAFT_ENABLE_HINT);
       return;
@@ -208,10 +214,14 @@ export default function FlowsTab({
                 variant="secondary"
                 icon={<LayoutTemplate size={16} />}
                 onClick={() => onTemplatesOpenChange(true)}
+                disabled={!canCreate}
               >
                 Template
               </AppButton>
-              <BuildFromScratchButton onClick={onNewFlow ?? (() => navigate('/automations/flows/new'))} />
+              <BuildFromScratchButton
+                onClick={onNewFlow ?? (() => navigate('/automations/flows/new'))}
+                disabled={!canCreate}
+              />
             </div>
           }
         />
