@@ -18,6 +18,7 @@ interface AiBotListEmptyProps {
   hasSearch: boolean;
   channel?: 'CHAT' | 'CALL';
   onCreate: () => void;
+  canCreate?: boolean;
   onClearFilters: () => void;
 }
 
@@ -27,6 +28,7 @@ export default function AiBotListEmpty({
   hasSearch,
   channel = 'CHAT',
   onCreate,
+  canCreate = true,
   onClearFilters,
 }: AiBotListEmptyProps) {
   const calling = channel === 'CALL';
@@ -176,6 +178,7 @@ export default function AiBotListEmpty({
                 size="sm"
                 icon={<Plus className="h-3.5 w-3.5" />}
                 onClick={onCreate}
+                disabled={!canCreate}
               >
                 {calling ? 'New calling bot' : 'New chat bot'}
               </AppButton>
