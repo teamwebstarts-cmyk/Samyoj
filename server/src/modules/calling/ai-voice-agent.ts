@@ -1146,6 +1146,21 @@ export class AiVoiceCallSession {
           )
         : priorCall?.durationSeconds ?? undefined;
 
+    const voiceMetadata = {
+      ...priorMetadata,
+      voiceMetrics: {
+        avgSttLatencyMs: this.sttLatenciesMs.length
+          ? Math.round(this.sttLatenciesMs.reduce((a, b) => a + b, 0) / this.sttLatenciesMs.length)
+          : 0,
+        maxSttLatencyMs: this.sttLatenciesMs.length ? Math.max(...this.sttLatenciesMs) : 0,
+        avgTtsLatencyMs: this.ttsLatenciesMs.length
+          ? Math.round(this.ttsLatenciesMs.reduce((a, b) => a + b, 0) / this.ttsLatenciesMs.length)
+          : 0,
+        maxTtsLatencyMs: this.ttsLatenciesMs.length ? Math.max(...this.ttsLatenciesMs) : 0,
+        utteranceCount: this.ttsLatenciesMs.length,
+      },
+    };
+
     await prisma.call.update({
       where: { id: this.ctx.callId },
       data: {
@@ -1153,20 +1168,7 @@ export class AiVoiceCallSession {
         endedAt: new Date(),
         ...(durationSeconds != null ? { durationSeconds } : {}),
         // Store voice quality metrics in call metadata
-        metadata: {
-          ...priorMetadata,
-          voiceMetrics: {
-            avgSttLatencyMs: this.sttLatenciesMs.length
-              ? Math.round(this.sttLatenciesMs.reduce((a, b) => a + b, 0) / this.sttLatenciesMs.length)
-              : 0,
-            maxSttLatencyMs: this.sttLatenciesMs.length ? Math.max(...this.sttLatenciesMs) : 0,
-            avgTtsLatencyMs: this.ttsLatenciesMs.length
-              ? Math.round(this.ttsLatenciesMs.reduce((a, b) => a + b, 0) / this.ttsLatenciesMs.length)
-              : 0,
-            maxTtsLatencyMs: this.ttsLatenciesMs.length ? Math.max(...this.ttsLatenciesMs) : 0,
-            utteranceCount: this.ttsLatenciesMs.length,
-          },
-        },
+        metadata: voiceMetadata,
       },
     });
 
@@ -1176,11 +1178,44 @@ export class AiVoiceCallSession {
         ? Math.max(0, Math.round((Date.now() - priorCall.startedAt.getTime()) / 1000))
         : 0);
     if (billableSeconds > 0) {
-      void deductCallingMinutesForCall({
-        organizationId: this.ctx.organizationId,
-        callId: this.ctx.callId,
-        durationSeconds: billableSeconds,
-      });
+      try {
+        await deductCallingMinutesForCall({
+          organizationId: this.ctx.organizationId,
+          callId: this.ctx.callId,
+          durationSeconds: billableSeconds,
+        });
+        await prisma.call.update({
+          where: { id: this.ctx.callId },
+          data: {
+            metadata: {
+              ...voiceMetadata,
+              billingStatus: 'SETTLED',
+              billedDurationSeconds: billableSeconds,
+              billingError: null,
+            },
+          },
+        });
+      } catch (err) {
+        // Keep the call complete, but leave a durable retry signal. A failed
+        // deduction must never disappear in an unobserved promise.
+        log.error('AI calling credit deduction pending retry', {
+          callId: this.ctx.callId,
+          organizationId: this.ctx.organizationId,
+          durationSeconds: billableSeconds,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        await prisma.call.update({
+          where: { id: this.ctx.callId },
+          data: {
+            metadata: {
+              ...voiceMetadata,
+              billingStatus: 'PENDING_RETRY',
+              billedDurationSeconds: billableSeconds,
+              billingError: err instanceof Error ? err.message.slice(0, 500) : 'deduction_failed',
+            },
+          },
+        });
+      }
     }
 
     void publishCallEventMessage(this.ctx.callId);
