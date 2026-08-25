@@ -75,7 +75,8 @@ router.post(
             email,
             passwordHash,
             role: 'ADMIN',
-            emailVerifiedAt: new Date(),
+            // Honest: not verified until /verify-email (or Google OAuth). Login still allowed.
+            emailVerifiedAt: null,
           },
         });
 
@@ -107,7 +108,7 @@ router.post(
       throw err;
     }
 
-    // Email verification is disabled: sign the user in immediately on registration.
+    // Sign in immediately (product: do not block on verify). Report verified=false honestly.
     const { accessToken, refreshToken } = await createSession(
       {
         userId: result.user.id,
@@ -121,6 +122,12 @@ router.post(
       name: 'REGISTER',
     });
 
+    try {
+      await issueEmailVerification(result.user.id, result.user.email);
+    } catch {
+      /* SMTP may be unset in local/dev — account still usable */
+    }
+
     sendSuccess(
       res,
       {
@@ -129,7 +136,7 @@ router.post(
           name: result.user.name,
           email: result.user.email,
           role: result.user.role,
-          emailVerified: true,
+          emailVerified: false,
         },
         organization: {
           id: result.org.id,
