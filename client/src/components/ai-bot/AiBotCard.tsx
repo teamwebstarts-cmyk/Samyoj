@@ -19,6 +19,7 @@ interface AiBotCardProps {
   onEdit: () => void;
   onToggle: () => void;
   onDelete?: () => void;
+  canManage?: boolean;
 }
 
 function relativeTime(dateStr: string): string {
@@ -53,6 +54,7 @@ export default function AiBotCard({
   onEdit,
   onToggle,
   onDelete,
+  canManage = true,
 }: AiBotCardProps) {
   const faqCount = bot._count?.knowledgeItems ?? 0;
   const isChat = (bot.channel ?? 'CHAT') === 'CHAT';
@@ -67,6 +69,7 @@ export default function AiBotCard({
         <button
           type="button"
           onClick={onEdit}
+          disabled={!canManage}
           className="flex min-w-0 flex-1 items-center gap-2.5 text-left sm:gap-3"
         >
           <div className="relative shrink-0">
@@ -140,9 +143,10 @@ export default function AiBotCard({
           <button
             type="button"
             onClick={onToggle}
+            disabled={!canManage}
             aria-label={bot.enabled ? 'Pause bot' : 'Activate bot'}
             title={bot.enabled ? 'Pause' : 'Activate'}
-            className={`inline-flex h-8 items-center justify-center gap-1 rounded-lg border px-2 text-[11px] font-bold transition sm:px-2.5 ${
+            className={`inline-flex h-8 items-center justify-center gap-1 rounded-lg border px-2 text-[11px] font-bold transition disabled:cursor-not-allowed disabled:opacity-50 sm:px-2.5 ${
               bot.enabled
                 ? 'border-emerald-200/80 bg-emerald-50 text-whatsapp-700 hover:bg-emerald-100 dark:border-emerald-500/30 dark:bg-emerald-900/30 dark:text-emerald-300'
                 : 'border-theme-border bg-theme-surface text-theme-fg hover:bg-theme-subtle'
@@ -154,8 +158,9 @@ export default function AiBotCard({
           <button
             type="button"
             onClick={onEdit}
+            disabled={!canManage}
             aria-label="Edit bot"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-theme-border bg-theme-surface text-theme-secondary transition hover:bg-theme-subtle hover:text-theme-fg"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-theme-border bg-theme-surface text-theme-secondary transition hover:bg-theme-subtle hover:text-theme-fg disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Pencil className="h-3.5 w-3.5" />
           </button>
@@ -163,8 +168,9 @@ export default function AiBotCard({
             <button
               type="button"
               onClick={onDelete}
+              disabled={!canManage}
               aria-label="Delete bot"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200/80 bg-rose-50/80 text-rose-600 transition hover:bg-rose-100 dark:border-rose-500/30 dark:bg-rose-950/30 dark:text-rose-400"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200/80 bg-rose-50/80 text-rose-600 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-rose-500/30 dark:bg-rose-950/30 dark:text-rose-400"
             >
               <Trash2 className="h-3.5 w-3.5" />
             </button>
