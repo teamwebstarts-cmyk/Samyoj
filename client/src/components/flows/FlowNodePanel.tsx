@@ -466,6 +466,20 @@ function FlowNodePanelForm({
           {node.field === 'custom' && (
             <AppInput label="Field name" value={node.customField || ''} onChange={(e) => onChange({ customField: e.target.value })} placeholder="e.g. company_name" />
           )}
+          <AppInput
+            label="Retry count if the answer is invalid"
+            type="number"
+            min={0}
+            max={5}
+            value={String(node.maxRetries ?? 2)}
+            onChange={(e) => onChange({ maxRetries: Number(e.target.value) })}
+          />
+          <AppInput
+            label="Retry message"
+            value={node.retryMessage || ''}
+            onChange={(e) => onChange({ retryMessage: e.target.value })}
+            placeholder="Please try again."
+          />
         </div>
       )}
 

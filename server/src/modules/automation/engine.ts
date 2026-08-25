@@ -657,10 +657,16 @@ export async function handleInboundAutomations(payload: InboundAutomationPayload
       await markInboundPipelineStage(payload.messageId, { static: true });
 
       if (staticReply.tag) {
-        const contact = await prisma.contact.findUnique({ where: { id: payload.contactId } });
+        const contact = await prisma.contact.findFirst({
+          where: {
+            id: payload.contactId,
+            organizationId: payload.organizationId,
+            whatsappNumberId: payload.whatsappNumberId,
+          },
+        });
         if (contact && !contact.tags.includes(staticReply.tag)) {
           await prisma.contact.update({
-            where: { id: payload.contactId },
+            where: { id: contact.id },
             data: { tags: { push: staticReply.tag } },
           });
         }

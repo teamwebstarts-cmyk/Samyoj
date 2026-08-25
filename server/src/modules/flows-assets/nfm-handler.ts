@@ -1,4 +1,5 @@
 import prisma from '../../config/database';
+import { createHash } from 'crypto';
 import logger from '../../utils/logger';
 import { parseActiveFlow } from '../flows/flow-state';
 import { isSamePhoneIdentity } from '../../utils/phone';
@@ -215,7 +216,7 @@ export async function handleNfmReply(body: NfmWebhookBody): Promise<{
     organizationId: conversation.organizationId,
     conversationId: conversation.id,
     contactId: conversation.contactId,
-    messageId: `nfm-${Date.now()}`,
+    messageId: `nfm-${createHash('sha256').update(flowToken ?? conversationId).digest('hex').slice(0, 32)}`,
     contactPhone: contactPhone || conversation.contact.phone,
     whatsappNumberId,
     content: 'Form submitted',
