@@ -5,6 +5,10 @@ import { MetaWhatsAppService } from '../whatsapp/meta.service';
 import { getOrgWhatsappContext } from '../whatsapp/context';
 import { buildMetaFlowJson } from './builder';
 import { createWaFormSchema } from './types';
+import {
+  requireActiveCommercialOnMutation,
+  requireFeatureOnMutation,
+} from '../../middleware/plan-guard';
 
 const router = Router();
 
@@ -34,6 +38,8 @@ router.post(
   '/',
   authenticate,
   requireOrg,
+  requireActiveCommercialOnMutation(),
+  requireFeatureOnMutation('forms'),
   asyncHandler(async (req: Request, res: Response) => {
     const data = createWaFormSchema.parse(req.body);
     const { wabaId, accessToken } = await getOrgWhatsappContext(req.user!.organizationId!);
@@ -74,6 +80,8 @@ router.post(
   '/:id/publish',
   authenticate,
   requireOrg,
+  requireActiveCommercialOnMutation(),
+  requireFeatureOnMutation('forms'),
   asyncHandler(async (req: Request, res: Response) => {
     const { accessToken } = await getOrgWhatsappContext(req.user!.organizationId!);
     await MetaWhatsAppService.publishWhatsAppFlow(req.params.id as string, accessToken);
