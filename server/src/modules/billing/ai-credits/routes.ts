@@ -8,22 +8,18 @@ import { config } from '../../../config';
 import {
   AI_ADDON_PLAN_ID,
   AI_TOPUP_SKUS,
-  AI_RECURRING_ADDON_SKUS,
   getAiTopupSku,
   inclGstPaise,
 } from './catalog';
 import { getAiCreditBalances } from './service';
 import {
-  createRecurringAddonSubscription,
-  cancelRecurringAddon,
-  verifyAndGrantRecurringCheckout,
   listActiveRecurringAddons,
 } from './recurring.service';
 import {
   createRazorpayOrder,
   isRazorpayConfigured,
   verifyPaymentSignature,
-  verifySubscriptionPaymentSignature,
+  verifyCapturedPayment,
 } from '../razorpay.service';
 import {
   expireStaleCreatedOrders,
@@ -44,7 +40,6 @@ router.get(
     const orgId = req.user!.organizationId!;
     const balances = await getAiCreditBalances(orgId);
     const activeRecurringAddons = await listActiveRecurringAddons(orgId);
-    const activeSkuIds = new Set(activeRecurringAddons.map((a) => a.skuId));
 
     sendSuccess(res, {
       ...balances,
@@ -58,18 +53,7 @@ router.get(
         description: sku.description,
         purchaseType: sku.purchaseType,
       })),
-      recurringAddonSkus: AI_RECURRING_ADDON_SKUS.map((sku) => ({
-        id: sku.id,
-        pool: sku.pool,
-        label: sku.label,
-        units: sku.units,
-        pricePaise: sku.pricePaise,
-        inclGstPaise: inclGstPaise(sku.pricePaise),
-        description: sku.description,
-        purchaseType: sku.purchaseType,
-        available: isRazorpayConfigured(),
-        active: activeSkuIds.has(sku.id),
-      })),
+      recurringAddonSkus: [],
       activeRecurringAddons,
     });
   })
@@ -86,10 +70,11 @@ router.post(
       throw new AppError(503, 'Payment gateway is not configured');
     }
 
-    const { skuId, quantity } = z
+    const { skuId, quantity, checkoutIntentKey } = z
       .object({
         skuId: z.string(),
-        quantity: z.number().int().min(1).max(99).default(1),
+        quantity: z.literal(1).default(1),
+        checkoutIntentKey: z.string().trim().min(8).max(120).optional(),
       })
       .parse(req.body);
 
@@ -113,7 +98,18 @@ router.post(
     if (!org) throw new AppError(404, 'Organization not found');
 
     const chargePaise = inclGstPaise(sku.pricePaise * quantity);
-    const reusable = await findReusablePendingOrder(orgId, AI_ADDON_PLAN_ID, skuId);
+    const intentKey =
+      checkoutIntentKey ||
+      (typeof req.header('Idempotency-Key') === 'string'
+        ? req.header('Idempotency-Key')!.trim()
+        : undefined);
+    const reusable = await findReusablePendingOrder(
+      orgId,
+      AI_ADDON_PLAN_ID,
+      skuId,
+      30 * 60 * 1000,
+      intentKey
+    );
     if (reusable) {
       return sendSuccess(res, {
         orderId: reusable.razorpayOrderId,
@@ -124,6 +120,7 @@ router.post(
         quantity: parseTopupQuantity(reusable.cadence),
         label: sku.label,
         reusedPendingOrder: true,
+        checkoutIntentKey: reusable.checkoutIntentKey,
       });
     }
 
@@ -142,18 +139,47 @@ router.post(
       },
     });
 
-    await prisma.paymentOrder.create({
-      data: {
-        organizationId: orgId,
-        razorpayOrderId: order.id,
-        planId: AI_ADDON_PLAN_ID,
-        skuId: sku.id,
-        cadence: `topup:${quantity}`,
-        amountPaise: chargePaise,
-        currency: order.currency,
-        status: 'CREATED',
-      },
-    });
+    try {
+      await prisma.paymentOrder.create({
+        data: {
+          organizationId: orgId,
+          razorpayOrderId: order.id,
+          planId: AI_ADDON_PLAN_ID,
+          skuId: sku.id,
+          cadence: `topup:${quantity}`,
+          amountPaise: chargePaise,
+          currency: order.currency,
+          status: 'CREATED',
+          amountSnapshotPaise: order.amount,
+          currencySnapshot: order.currency,
+          checkoutIntentKey: intentKey,
+        },
+      });
+    } catch (err) {
+      if (intentKey && (err as { code?: string })?.code === 'P2002') {
+        const raceWinner = await findReusablePendingOrder(
+          orgId,
+          AI_ADDON_PLAN_ID,
+          sku.id,
+          30 * 60 * 1000,
+          intentKey
+        );
+        if (raceWinner) {
+          return sendSuccess(res, {
+            orderId: raceWinner.razorpayOrderId,
+            amount: raceWinner.amountPaise,
+            currency: raceWinner.currency,
+            keyId: config.razorpay.keyId,
+            skuId: sku.id,
+            quantity: parseTopupQuantity(raceWinner.cadence),
+            label: sku.label,
+            reusedPendingOrder: true,
+            checkoutIntentKey: raceWinner.checkoutIntentKey,
+          });
+        }
+      }
+      throw err;
+    }
 
     sendSuccess(res, {
       orderId: order.id,
@@ -165,6 +191,7 @@ router.post(
       label: sku.label,
       units: sku.units * quantity,
       pool: sku.pool,
+      checkoutIntentKey: intentKey,
     });
   })
 );
@@ -204,9 +231,23 @@ router.post(
       throw new AppError(400, 'Not an AI add-on order');
     }
 
+    const provider = await verifyCapturedPayment({
+      orderId: paymentOrder.razorpayOrderId,
+      paymentId: data.razorpay_payment_id,
+      amountPaise: paymentOrder.amountPaise,
+      currency: paymentOrder.currency,
+    });
     const result = await fulfillCapturedPayment({
       paymentOrderId: paymentOrder.id,
       paymentId: data.razorpay_payment_id,
+      providerPayment: {
+        orderId: provider.order.id,
+        paymentId: provider.payment.id,
+        amountPaise: provider.payment.amount,
+        currency: provider.payment.currency,
+        status: provider.payment.status,
+        orderStatus: provider.order.status,
+      },
     });
 
     const balances = await getAiCreditBalances(orgId);
@@ -228,38 +269,11 @@ router.post(
   loadPermissions,
   requirePermission('manageBilling'),
   asyncHandler(async (req: Request, res: Response) => {
-    if (!isRazorpayConfigured()) {
-      throw new AppError(503, 'Payment gateway is not configured');
-    }
-
-    const { skuId } = z.object({ skuId: z.string() }).parse(req.body);
-    const orgId = req.user!.organizationId!;
-
-    const sku = getAiTopupSku(skuId);
-    if (!sku || sku.purchaseType !== 'recurring_addon') {
-      throw new AppError(400, 'Invalid recurring AI add-on SKU');
-    }
-
-    const entitlement =
-      sku.pool === 'calling' ? await checkQuota(orgId, 'calling') : await checkQuota(orgId, 'ai');
-    if (!entitlement.allowed) {
-      throw new AppError(
-        403,
-        entitlement.reason || 'Upgrade your plan before subscribing to this add-on.',
-        entitlement.code
-      );
-    }
-
-    const checkout = await createRecurringAddonSubscription({ organizationId: orgId, skuId });
-
-    sendSuccess(res, {
-      subscriptionId: checkout.subscriptionId,
-      keyId: checkout.keyId,
-      skuId: checkout.skuId,
-      label: checkout.label,
-      amountPaise: checkout.amountPaise,
-      currency: 'INR',
-    });
+    throw new AppError(
+      410,
+      'Recurring AI add-ons are unavailable; purchase one fixed top-up pack instead.',
+      'RECURRING_ADDONS_UNAVAILABLE'
+    );
   })
 );
 
@@ -270,43 +284,11 @@ router.post(
   loadPermissions,
   requirePermission('manageBilling'),
   asyncHandler(async (req: Request, res: Response) => {
-    const data = z
-      .object({
-        razorpay_subscription_id: z.string(),
-        razorpay_payment_id: z.string(),
-        razorpay_signature: z.string(),
-      })
-      .parse(req.body);
-
-    const orgId = req.user!.organizationId!;
-
-    if (
-      !verifySubscriptionPaymentSignature(
-        data.razorpay_subscription_id,
-        data.razorpay_payment_id,
-        data.razorpay_signature
-      )
-    ) {
-      throw new AppError(400, 'Invalid subscription payment signature');
-    }
-
-    const grant = await verifyAndGrantRecurringCheckout({
-      organizationId: orgId,
-      subscriptionId: data.razorpay_subscription_id,
-      paymentId: data.razorpay_payment_id,
-    });
-
-    const balances = await getAiCreditBalances(orgId);
-    const activeRecurringAddons = await listActiveRecurringAddons(orgId);
-
-    sendSuccess(res, {
-      message: grant.alreadyGranted
-        ? 'Monthly add-on already applied.'
-        : 'Monthly AI add-on activated.',
-      creditsGranted: grant.creditsGranted,
-      balances,
-      activeRecurringAddons,
-    });
+    throw new AppError(
+      410,
+      'Recurring AI add-ons are unavailable.',
+      'RECURRING_ADDONS_UNAVAILABLE'
+    );
   })
 );
 
@@ -317,19 +299,11 @@ router.post(
   loadPermissions,
   requirePermission('manageBilling'),
   asyncHandler(async (req: Request, res: Response) => {
-    const { skuId } = z.object({ skuId: z.string() }).parse(req.body);
-    const orgId = req.user!.organizationId!;
-
-    const result = await cancelRecurringAddon({ organizationId: orgId, skuId });
-    const balances = await getAiCreditBalances(orgId);
-    const activeRecurringAddons = await listActiveRecurringAddons(orgId);
-
-    sendSuccess(res, {
-      message: 'Monthly add-on will cancel at the end of this billing period.',
-      ...result,
-      balances,
-      activeRecurringAddons,
-    });
+    throw new AppError(
+      410,
+      'Recurring AI add-ons are unavailable.',
+      'RECURRING_ADDONS_UNAVAILABLE'
+    );
   })
 );
 
