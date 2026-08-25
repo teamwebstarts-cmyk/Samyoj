@@ -31,6 +31,8 @@ import { WizardPageSkeleton } from '../components/ui/ListLayoutSkeleton';
 import { useAuth } from '../contexts/AuthContext';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
+import { useEntitlements } from '../hooks/useEntitlements';
+import EntitlementNotice from '../components/billing/EntitlementNotice';
 import { campaignApi, contactApi, templateApi, whatsappApi } from '../services/api';
 import { toastError, toastSuccess } from '../utils/toast';
 import { validatePhoneLines } from '../utils/phone';
@@ -63,6 +65,7 @@ export default function CampaignWizardPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { canManageTeam } = useAuth();
+  const { entitlements, loading: entitlementsLoading } = useEntitlements();
   const { activeNumber, resolved, hasConnectedNumber, loading: numbersLoading } = useWhatsAppNumber();
   const isEdit = Boolean(id);
   const [loading, setLoading] = useState(isEdit);
@@ -84,6 +87,12 @@ export default function CampaignWizardPage() {
   const initializedFromQuery = useRef(false);
   const activeNumberIdRef = useRef<string | null>(null);
   activeNumberIdRef.current = activeNumber?.id ?? null;
+  const canManageCampaigns =
+    entitlementsLoading || !entitlements || entitlements.canUseFeature('campaigns');
+  const campaignGateMessage =
+    !entitlementsLoading && entitlements && !entitlements.canUseFeature('campaigns')
+      ? 'Campaigns are not included on your current plan.'
+      : null;
 
   const selectedTemplate = useMemo(
     () => templates.find((template) => template.name === form.templateName),
@@ -309,7 +318,10 @@ export default function CampaignWizardPage() {
   };
 
   const saveCampaign = async (action: 'draft' | 'schedule' | 'send') => {
-    if (!canManageTeam) return null;
+    if (!canManageCampaigns) {
+      toastError(campaignGateMessage || 'Campaigns are not included on your current plan.');
+      return null;
+    }
     let payload: Record<string, unknown>;
     try {
       if (action !== 'draft') {
@@ -414,7 +426,7 @@ export default function CampaignWizardPage() {
   };
 
   const handleDelete = () => {
-    if (!editing) return;
+    if (!editing || !canManageCampaigns) return;
     setConfirmState({
       title: 'Delete campaign?',
       description: `“${editing.name}” will be permanently removed.`,
@@ -542,6 +554,13 @@ export default function CampaignWizardPage() {
           }
         }}
       >
+        {campaignGateMessage && (
+          <EntitlementNotice
+            className="mb-3"
+            message={campaignGateMessage}
+            upgradePlan={entitlements?.isLocked ? 'growth' : entitlements?.getUpgradePlan('campaigns')}
+          />
+        )}
         {stageError && <TemplateIssueAlert message={stageError} className="mb-3" />}
         {renderStage()}
       </form>
@@ -557,7 +576,7 @@ export default function CampaignWizardPage() {
                 icon={<Save className="h-3.5 w-3.5" />}
                 className="!min-h-10"
                 loading={saving}
-                disabled={saving}
+                disabled={saving || !canManageCampaigns}
                 onClick={() => void saveCampaign('draft')}
               >
                 Save as draft
@@ -579,6 +598,7 @@ export default function CampaignWizardPage() {
                   <button
                     type="button"
                     onClick={handleDelete}
+                    disabled={!canManageCampaigns || saving}
                     className="inline-flex min-h-10 items-center gap-1.5 rounded-lg px-2.5 text-[10px] font-bold text-red-600 transition hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -621,7 +641,7 @@ export default function CampaignWizardPage() {
                   variant="secondary"
                   className="!min-h-10"
                   loading={saving}
-                  disabled={saving}
+                  disabled={saving || !canManageCampaigns}
                   onClick={() => void saveCampaign('draft')}
                 >
                   <span className="hidden sm:inline">{editing ? 'Save changes' : 'Save as draft'}</span>
@@ -646,7 +666,7 @@ export default function CampaignWizardPage() {
                         size="sm"
                         variant="secondary"
                         className="!h-8 !min-h-8"
-                        disabled={saving || finalActionBlocked}
+                        disabled={saving || !canManageCampaigns || finalActionBlocked}
                         onClick={() => {
                           setStageError(null);
                           const min = getCampaignScheduleMinimum();
@@ -666,7 +686,7 @@ export default function CampaignWizardPage() {
                       icon={<Send className="h-3.5 w-3.5" />}
                       className="!h-8 !min-h-8"
                       loading={saving}
-                      disabled={saving || finalActionBlocked}
+                      disabled={saving || !canManageCampaigns || finalActionBlocked}
                       onClick={handleFinalAction}
                     >
                       {form.scheduleEnabled ? (
