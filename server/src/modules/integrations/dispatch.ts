@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import prisma from '../../config/database';
 import { webhookDispatchQueue } from '../../config/queues';
 import { createModuleLogger } from '../../utils/logger';
+import { assertSafeWebhookUrl } from '../../utils/safe-webhook-url';
 
 const log = createModuleLogger('integrations');
 const MAX_FAILURES_BEFORE_DISABLE = 10;
@@ -57,6 +58,7 @@ export async function executeWebhookDelivery(deliveryId: string): Promise<void> 
     .digest('hex');
 
   try {
+    await assertSafeWebhookUrl(delivery.endpoint.url);
     const res = await fetch(delivery.endpoint.url, {
       method: 'POST',
       headers: {
@@ -114,7 +116,6 @@ export async function executeWebhookDelivery(deliveryId: string): Promise<void> 
     if (shouldDisable) {
       log.warn('Webhook endpoint auto-disabled after consecutive failures', {
         endpointId: delivery.endpointId,
-        url: delivery.endpoint.url,
       });
     }
 
