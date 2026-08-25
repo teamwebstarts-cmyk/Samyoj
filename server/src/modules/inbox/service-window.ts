@@ -14,7 +14,8 @@ export function latestWindowOpenAt(...dates: Array<Date | null | undefined>): Da
 /** Resolve when the customer service window opened (stored field, last inbound, or user call). */
 export async function resolveCs24hWindowOpensAt(
   conversationId: string,
-  cs24hWindowOpensAt: Date | null | undefined
+  cs24hWindowOpensAt: Date | null | undefined,
+  persist = true
 ): Promise<Date | null> {
   const [lastInbound, lastUserCall] = await Promise.all([
     prisma.message.findFirst({
@@ -37,6 +38,7 @@ export async function resolveCs24hWindowOpensAt(
   );
 
   if (
+    persist &&
     resolved &&
     (!cs24hWindowOpensAt || resolved.getTime() > cs24hWindowOpensAt.getTime())
   ) {
