@@ -7,6 +7,8 @@ import { sendSuccess, asyncHandler } from '../../utils/response';
 import { phoneFieldSchema } from '../../utils/phone';
 import { sendDirectMessage } from '../messages/service';
 import { resolveActiveWhatsappNumber } from '../whatsapp/active-number';
+import { assertSafeWebhookUrl } from '../../utils/safe-webhook-url';
+import { requireActiveCommercialOnMutation, requireFeatureOnMutation } from '../../middleware/plan-guard';
 
 const router = Router();
 
@@ -91,6 +93,8 @@ router.post(
   '/subscribe',
   authenticateApiKey,
   requireOrg,
+  requireActiveCommercialOnMutation(),
+  requireFeatureOnMutation('integrations'),
   resolveActiveWhatsappNumber,
   asyncHandler(async (req: Request, res: Response) => {
     const data = z
@@ -102,6 +106,7 @@ router.post(
 
     const orgId = req.user!.organizationId!;
     const event = eventMap[data.trigger];
+    await assertSafeWebhookUrl(data.hookUrl);
 
     const existing = await prisma.webhookEndpoint.findFirst({
       where: { organizationId: orgId, url: data.hookUrl },
@@ -137,6 +142,8 @@ router.delete(
   '/unsubscribe',
   authenticateApiKey,
   requireOrg,
+  requireActiveCommercialOnMutation(),
+  requireFeatureOnMutation('integrations'),
   resolveActiveWhatsappNumber,
   asyncHandler(async (req: Request, res: Response) => {
     const data = z
@@ -182,6 +189,8 @@ router.post(
   '/actions/send-message',
   authenticateApiKey,
   requireOrg,
+  requireActiveCommercialOnMutation(),
+  requireFeatureOnMutation('integrations'),
   resolveActiveWhatsappNumber,
   asyncHandler(async (req: Request, res: Response) => {
     const data = sendActionSchema.parse(req.body);
