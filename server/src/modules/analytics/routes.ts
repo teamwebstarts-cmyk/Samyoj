@@ -15,10 +15,12 @@ import {
   startOfDay,
   endOfDay,
 } from './overview-period';
+import { requireFeature } from '../../middleware/plan-guard';
 
 const router = Router();
 
 router.use(authenticate, requireOrg, resolveActiveWhatsappNumber);
+router.use(requireFeature('analyticsAdvanced'));
 
 function rate(part: number, whole: number): number {
   return whole ? Number(((part / whole) * 100).toFixed(1)) : 0;
