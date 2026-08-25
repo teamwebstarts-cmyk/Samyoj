@@ -1,5 +1,6 @@
 import type { FlowButton, FlowNode, FlowNodeType } from '../../types';
 import { nodeMeta } from './flowMeta';
+import { isLinearCtaButton, nextFromCtaBranches } from './flowNodeKind';
 
 function isValidE164Phone(value?: string): boolean {
   if (!value?.trim()) return false;
@@ -9,6 +10,9 @@ function isValidE164Phone(value?: string): boolean {
 /** Align button ids with branch keys before save (fixes option 3 routing after edits). */
 export function syncButtonNode(node: FlowNode): FlowNode {
   if (node.type !== 'buttons') return node;
+  if (isLinearCtaButton(node)) {
+    return { ...node, branches: {}, next: nextFromCtaBranches(node) };
+  }
 
   const oldButtons = node.buttons || [];
   const branches = { ...(node.branches || {}) };
@@ -64,6 +68,14 @@ export function linkNodes(nodes: FlowNode[]): FlowNode[] {
   return nodes.map((node, index) => {
     const fallbackNext = index < nodes.length - 1 ? nodes[index + 1].id : undefined;
     const linearFallback = branchTargets.has(node.id) ? undefined : fallbackNext;
+
+    if (isLinearCtaButton(node)) {
+      return {
+        ...node,
+        branches: {},
+        next: nextFromCtaBranches(node) || linearFallback,
+      };
+    }
 
     if (node.type === 'buttons' || node.type === 'list') {
       return {
@@ -241,6 +253,37 @@ export function validateFlow(
     if (node.type === 'tag' && !node.tag?.trim()) errors.push('Add Tag needs a tag name');
     if (node.type === 'template' && !node.templateName?.trim()) errors.push('Template Message needs a template');
     if (node.type === 'media' && !node.mediaUrl?.trim()) errors.push('Send Media needs a file link');
+    if (node.type === 'media' && node.mediaUrl?.trim()) {
+      try {
+        if (new URL(node.mediaUrl).protocol !== 'https:') errors.push('Media links must use HTTPS');
+      } catch {
+        errors.push('Enter a valid media link');
+      }
+    }
+    if (node.type === 'webhook' && !node.webhookUrl?.trim()) errors.push('Connect to app needs a URL');
+    if (node.type === 'webhook' && node.webhookUrl?.trim()) {
+      try {
+        const url = new URL(node.webhookUrl);
+        if (url.protocol !== 'https:') errors.push('Connect-to-app links must use HTTPS');
+        if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
+          errors.push('Connect-to-app cannot use a local address');
+        }
+      } catch {
+        errors.push('Enter a valid connect-to-app URL');
+      }
+    }
+    if (node.type === 'goto_flow' && !node.targetFlowId?.trim()) {
+      errors.push('Jump to Flow needs a published flow');
+    }
+    if (node.type === 'goto_step' && !node.targetNodeId?.trim()) {
+      errors.push('Jump to Step needs a target step');
+    }
+    if (node.type === 'goto_step' && node.targetNodeId && !nodes.some((n) => n.id === node.targetNodeId)) {
+      errors.push('Jump to Step points to a missing step');
+    }
+    if ((node.type === 'buttons' || node.type === 'list') && node.intentRoutes?.some((route) => !route.branchKey?.trim())) {
+      errors.push('Typing shortcuts need a path');
+    }
     if (node.type === 'wa_flow' && !node.waFlowId?.trim()) errors.push('WhatsApp Form needs a form selected');
     if (node.type === 'location') {
       if (node.latitude == null || node.longitude == null) {

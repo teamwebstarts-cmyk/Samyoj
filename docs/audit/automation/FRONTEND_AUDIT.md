@@ -98,21 +98,36 @@ The recheck hardening pass landed:
 | Server validation errors ignored | **Fixed** — `validationErrors` block save and appear in the issues banner |
 | Preview is synthetic | **Open** — label/branch selector still deferred |
 | Reply-button “Go to next step” vs required branch | **Open** — implicit `linkNodes` helps runtime; explicit branch validation unchanged |
-| URL/call nodes keep reply handles | **Open** — graph handles still branch-shaped |
+| URL/call nodes keep reply handles | **Fixed** — url/call are linear `next` in canvas, save, and engine |
 | Restore destructive + live | **Fixed** — server writes `draftNodes` only; client confirms restore |
-| Unsaved work on number switch / no conflict detection | **Partial** — `expectedUpdatedAt` 409 + load-error gate; unload guard still open |
+| Unsaved work on number switch / no conflict detection | **Fixed** — dirty/unload + number-switch confirm; `expectedUpdatedAt` refreshed after save/publish/restore |
 | Flow APIs ignore selected number | **Fixed** — `resolveActiveWhatsappNumber` on flow/automation/asset routes |
 | Reference-data cache keyed only by Meta phone id | **Fixed** — cache key is `organizationId:whatsappNumberId` |
-| Draft Meta forms in picker | **Open** |
+| Draft Meta forms in picker | **Fixed** — published forms only |
 | Template parameter mapping in flow editor | **Open** |
 | Stale `intentRoutes` after button delete | **Fixed** |
-| Regex trigger safety | **Open** |
-| Contact/location dangerous defaults | **Open** |
-| Question field falls back to `answer` | **Open** |
-| Meta Flow Publish on new asset only saves | **Open** |
+| Regex trigger safety | **Fixed** — server rejects unsafe regex; exact vs regex are exclusive |
+| Contact/location dangerous defaults | **Fixed** — create defaults are blank; validation still requires a real value |
+| Question field falls back to `answer` | **Partial** — custom field name is required in the editor; engine fallback remains |
+| Meta Flow Publish on new asset only saves | **Fixed** — publish-after-create |
 | Keyboard delete not persisted | **Fixed** |
 
-Deferred for live verification: edge reconnection handler, mobile editor clipping at 375px, stale template reference on publish.
+Deferred for live verification: mobile editor clipping at 375px, stale template reference on publish.
+
+### U0c — UX recheck follow-up (2026-08-25)
+
+Landed after the post-hardening frontend recheck:
+
+- URL/call canvas wires write `node.next` (not `branches.next`); save migrates any leftover `branches.next`.
+- Meta Flow load failure is gated like conversation flows (Retry, save blocked).
+- `expectedUpdatedAt` is refreshed from update, publish, and restore responses.
+- Validate debounce sends prepared nodes; transient network validate errors are warnings, not save blockers.
+- Publish uses the same load/validation gates and OCC token as save.
+- Errors vs warnings are separate in the issues banner.
+- List rows/sections can be removed; A/B handles show `splitRatio`; canvas reconnect updates the flow model.
+- Client validation covers goto targets, media HTTPS, and webhook HTTPS/localhost.
+
+Still open / deferred: preview path picker, dual client+server validation copy, question retry UI, engine `customField || 'answer'` fallback.
 
 ### U1 — Preview behavior is intentionally synthetic but not explicit enough
 

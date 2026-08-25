@@ -179,6 +179,29 @@ export default function FlowCanvas({
     [rfEdges, setRfEdges, nodes, startNodeId, onChange]
   );
 
+  const onReconnect = useCallback(
+    (oldEdge: Edge, connection: Connection) => {
+      const edge = buildConnectEdge(connection);
+      const withoutOld = rfEdges.filter((e) => e.id !== oldEdge.id);
+      const withoutDuplicate = withoutOld.filter(
+        (e) =>
+          !(
+            e.source === edge.source &&
+            (e.sourceHandle || 'next') === (edge.sourceHandle || 'next')
+          )
+      );
+      const newEdges = addEdge({ ...edge, id: oldEdge.id }, withoutDuplicate);
+      setRfEdges(newEdges);
+      const { nodes: updated, startNodeId: newStart } = applyGraphConnections(
+        nodes,
+        newEdges,
+        startNodeId
+      );
+      onChange(updated, newStart);
+    },
+    [rfEdges, setRfEdges, nodes, startNodeId, onChange]
+  );
+
   const onEdgesDelete = useCallback(
     (deleted: Edge[]) => {
       const remaining = rfEdges.filter((e) => !deleted.some((d) => d.id === e.id));
@@ -266,6 +289,7 @@ export default function FlowCanvas({
             onNodesChange={handleNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            onReconnect={onReconnect}
             onEdgesDelete={onEdgesDelete}
             onNodeClick={onNodeClick}
             onPaneClick={onPaneClick}

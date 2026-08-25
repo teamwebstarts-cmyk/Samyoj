@@ -1,4 +1,5 @@
 import type { FlowNode } from './types';
+import { isLinearCtaButton, nextFromCtaBranches } from './node-kind';
 
 function collectBranchTargets(nodes: FlowNode[]): Set<string> {
   const targets = new Set<string>();
@@ -24,6 +25,14 @@ export function linkFlowNodes(nodes: FlowNode[]): FlowNode[] {
   return nodes.map((node, index) => {
     const fallbackNext = index < nodes.length - 1 ? nodes[index + 1].id : undefined;
     const linearFallback = branchTargets.has(node.id) ? undefined : fallbackNext;
+
+    if (isLinearCtaButton(node)) {
+      return {
+        ...node,
+        branches: {},
+        next: nextFromCtaBranches(node) || linearFallback,
+      };
+    }
 
     if (node.type === 'buttons' || node.type === 'list') {
       return {

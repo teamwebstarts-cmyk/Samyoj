@@ -3,6 +3,7 @@ import type { FlowNode, FlowNodeType } from '../../types';
 import { buildStepEdge, buildTriggerEdge } from './flowEdgeUtils';
 import { getNodeSummary } from './flowUtils';
 import { createNode, nodeMeta } from './flowMeta';
+import { isLinearCtaButton } from './flowNodeKind';
 
 export const TRIGGER_NODE_ID = '__trigger__';
 
@@ -14,6 +15,11 @@ export const BRANCHING_NODE_TYPES: FlowNodeType[] = [
   'ab_split',
   'language',
 ];
+
+export function isBranchingFlowNode(node: FlowNode): boolean {
+  if (isLinearCtaButton(node)) return false;
+  return BRANCHING_NODE_TYPES.includes(node.type);
+}
 
 const NODE_WIDTH = 260;
 const NODE_HEIGHT = 120;
@@ -39,7 +45,7 @@ export interface TriggerNodeData {
 export function getNodeHandles(node: FlowNode): Array<{ id: string; label: string }> {
   switch (node.type) {
     case 'buttons':
-      if (node.buttonMode === 'url' || node.buttonMode === 'call') {
+      if (isLinearCtaButton(node)) {
         return [{ id: 'next', label: 'Next' }];
       }
       return (node.buttons || []).map((b) => ({ id: b.id, label: b.title }));
@@ -50,11 +56,13 @@ export function getNodeHandles(node: FlowNode): Array<{ id: string; label: strin
         { id: 'true', label: 'Yes' },
         { id: 'false', label: 'No' },
       ];
-    case 'ab_split':
+    case 'ab_split': {
+      const ratio = node.splitRatio ?? 50;
       return [
-        { id: 'a', label: 'A (50%)' },
-        { id: 'b', label: 'B (50%)' },
+        { id: 'a', label: `A (${ratio}%)` },
+        { id: 'b', label: `B (${100 - ratio}%)` },
       ];
+    }
     case 'language':
       return [
         { id: 'match', label: 'Match' },
@@ -157,7 +165,7 @@ export function flowNodesToGraph(
 
   for (const node of positioned) {
     const handles = getNodeHandles(node);
-    const isBranching = handles.length > 1 || (node.type === 'buttons' && handles.length > 0);
+    const isBranching = isBranchingFlowNode(node);
 
     if (isBranching && node.branches) {
       for (const handle of handles) {
@@ -184,11 +192,12 @@ export function applyGraphConnections(
 
   const updated = nodes.map((node) => {
     const clone = { ...node };
-    if (BRANCHING_NODE_TYPES.includes(node.type)) {
+    if (isBranchingFlowNode(node)) {
       clone.branches = {};
       clone.next = undefined;
     } else {
       clone.next = undefined;
+      clone.branches = undefined;
     }
     return clone;
   });
@@ -207,7 +216,7 @@ export function applyGraphConnections(
     if (!source) continue;
     const handle = edge.sourceHandle || 'next';
 
-    if (BRANCHING_NODE_TYPES.includes(source.type)) {
+    if (isBranchingFlowNode(source)) {
       source.branches = { ...(source.branches || {}), [handle]: edge.target };
       if (!wiredHandles.has(source.id)) wiredHandles.set(source.id, new Set());
       wiredHandles.get(source.id)!.add(handle);
@@ -218,6 +227,7 @@ export function applyGraphConnections(
 
   // Keep panel-configured routes when the canvas has no wire for that button/row.
   for (const node of nodeMap.values()) {
+    if (!isBranchingFlowNode(node)) continue;
     if (node.type !== 'buttons' && node.type !== 'list') continue;
     const preserved = preservedBranches.get(node.id) || {};
     const wired = wiredHandles.get(node.id) || new Set();

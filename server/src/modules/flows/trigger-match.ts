@@ -8,6 +8,7 @@ export function isUnsafeKeywordRegex(pattern: string): boolean {
   if (!trimmed || trimmed.length > MAX_KEYWORD_REGEX_LENGTH) return true;
   if (/\(\?/.test(trimmed)) return true;
   if (/[+*]{2,}|\{\d{3,}/.test(trimmed)) return true;
+  if (/\([^)]*[+*][^)]*\)[+*]/.test(trimmed)) return true;
   const nested = (trimmed.match(/[+]|\*/g) || []).length;
   return nested > 4;
 }

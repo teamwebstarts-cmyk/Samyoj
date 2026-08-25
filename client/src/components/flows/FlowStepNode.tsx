@@ -1,6 +1,6 @@
 import { type NodeProps } from '@xyflow/react';
 import { nodeMeta } from './flowMeta';
-import { getNodeHandles, type FlowStepNodeData } from './flowGraphUtils';
+import { getNodeHandles, isBranchingFlowNode, type FlowStepNodeData } from './flowGraphUtils';
 import { FlowHandle, branchHandleLeft } from './FlowHandle';
 
 function FlowStepNodeComponent({ data, selected }: NodeProps) {
@@ -8,7 +8,7 @@ function FlowStepNodeComponent({ data, selected }: NodeProps) {
   const meta = nodeMeta[flowNode.type];
   const Icon = meta.icon;
   const handles = getNodeHandles(flowNode);
-  const isBranching = handles.length > 1 || flowNode.type === 'buttons';
+  const isBranching = isBranchingFlowNode(flowNode) && handles.length > 0;
 
   return (
     <div

@@ -24,6 +24,7 @@ interface FlowVersionsPanelProps {
       triggerConfig?: Record<string, unknown>;
       enabled?: boolean;
       priority?: number;
+      updatedAt?: string;
     },
     version: number
   ) => void;
@@ -63,6 +64,7 @@ export default function FlowVersionsPanel({ flowId, onRestore }: FlowVersionsPan
         triggerConfig?: Record<string, unknown>;
         enabled?: boolean;
         priority?: number;
+        updatedAt?: string;
       };
       onRestore({ ...flow, nodes: flow.nodes || [] }, version);
       load();

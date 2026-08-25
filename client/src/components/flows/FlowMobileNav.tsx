@@ -1,21 +1,29 @@
-import { BarChart3, FlaskConical, GitBranch, Settings2, SlidersHorizontal, Smartphone } from 'lucide-react';
+import { BarChart3, FlaskConical, GitBranch, History, Settings2, SlidersHorizontal, Smartphone } from 'lucide-react';
 
-export type FlowBuilderTab = 'flow' | 'edit' | 'preview' | 'settings' | 'test' | 'analytics';
+export type FlowBuilderTab = 'flow' | 'edit' | 'preview' | 'settings' | 'test' | 'analytics' | 'versions';
 
 interface FlowMobileNavProps {
   active: FlowBuilderTab;
   onChange: (tab: FlowBuilderTab) => void;
   showTest?: boolean;
   showAnalytics?: boolean;
+  showHistory?: boolean;
 }
 
-export default function FlowMobileNav({ active, onChange, showTest, showAnalytics }: FlowMobileNavProps) {
+export default function FlowMobileNav({
+  active,
+  onChange,
+  showTest,
+  showAnalytics,
+  showHistory,
+}: FlowMobileNavProps) {
   const tabs: Array<{ id: FlowBuilderTab; label: string; icon: typeof GitBranch }> = [
     { id: 'flow', label: 'Steps', icon: GitBranch },
     { id: 'edit', label: 'Edit', icon: SlidersHorizontal },
     { id: 'preview', label: 'Preview', icon: Smartphone },
     ...(showTest ? [{ id: 'test' as const, label: 'Try it', icon: FlaskConical }] : []),
     ...(showAnalytics ? [{ id: 'analytics' as const, label: 'Stats', icon: BarChart3 }] : []),
+    ...(showHistory ? [{ id: 'versions' as const, label: 'History', icon: History }] : []),
     { id: 'settings', label: 'Settings', icon: Settings2 },
   ];
 

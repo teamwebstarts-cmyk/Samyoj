@@ -25,4 +25,33 @@ describe('flow builder validation', () => {
     expect(errors).toContain('Enter a valid schedule date and time');
     expect(errors).toContain('Schedule step cannot exceed 7 days');
   });
+
+  it('migrates URL/call canvas branches.next onto node.next before save', () => {
+    const [node] = prepareNodesForSave([
+      {
+        id: 'url',
+        type: 'buttons',
+        buttonMode: 'url',
+        text: 'Visit',
+        ctaUrl: 'https://example.com',
+        branches: { next: 'end' },
+      },
+      { id: 'end', type: 'end', text: 'Done' },
+    ]);
+    expect(node.next).toBe('end');
+    expect(node.branches).toEqual({});
+  });
+
+  it('catches missing jump targets and non-HTTPS media/webhook URLs', () => {
+    const errors = validateFlow('Demo', 'WELCOME', {}, '', [
+      { id: 'media', type: 'media', mediaUrl: 'http://cdn.example.com/a.png' },
+      { id: 'webhook', type: 'webhook', webhookUrl: 'http://example.com/hook' },
+      { id: 'goto_flow', type: 'goto_flow', targetFlowId: '' },
+      { id: 'goto_step', type: 'goto_step', targetNodeId: 'missing' },
+    ]);
+    expect(errors).toContain('Media links must use HTTPS');
+    expect(errors).toContain('Connect-to-app links must use HTTPS');
+    expect(errors).toContain('Jump to Flow needs a published flow');
+    expect(errors).toContain('Jump to Step points to a missing step');
+  });
 });

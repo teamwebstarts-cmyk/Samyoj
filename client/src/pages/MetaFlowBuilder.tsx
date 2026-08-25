@@ -102,6 +102,7 @@ export default function MetaFlowBuilder() {
   const [submitLabel, setSubmitLabel] = useState('Submit');
   const [fields, setFields] = useState<MetaFlowField[]>(DEFAULT_FIELDS);
   const [asset, setAsset] = useState<FlowAssetRecord | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const activeNumberIdRef = useRef<string | null>(null);
   activeNumberIdRef.current = activeNumber?.id ?? null;
   const loadGenerationRef = useRef(0);
@@ -111,6 +112,7 @@ export default function MetaFlowBuilder() {
     const requestNumberId = activeNumber.id;
     const generation = ++loadGenerationRef.current;
     setLoading(true);
+    setLoadError(null);
     try {
       const { data } = await flowAssetsApi.get(id);
       if (
@@ -135,12 +137,15 @@ export default function MetaFlowBuilder() {
         .find((child) => child.type === 'Footer');
       if (footer?.label) setSubmitLabel(footer.label);
       setFields(fieldsFromFlowJson(flowJson));
+      setLoadError(null);
     } catch (err) {
       if (
         requestNumberId === activeNumberIdRef.current &&
         generation === loadGenerationRef.current
       ) {
-        toastError(getErrorMessage(err, 'Failed to load Meta Flow'));
+        const message = getErrorMessage(err, 'Failed to load Meta Flow');
+        setLoadError(message);
+        toastError(message);
       }
     } finally {
       if (
@@ -167,6 +172,7 @@ export default function MetaFlowBuilder() {
     setSubmitLabel('Submit');
     setFields(DEFAULT_FIELDS);
     setMobileTab('setup');
+    setLoadError(null);
     if (!isNew) load();
   });
 
@@ -188,6 +194,14 @@ export default function MetaFlowBuilder() {
       if (field.type === 'date') {
         return {
           type: 'DatePicker',
+          name: field.id,
+          label: field.label,
+          required: Boolean(field.required),
+        };
+      }
+      if (field.type === 'textarea') {
+        return {
+          type: 'TextArea',
           name: field.id,
           label: field.label,
           required: Boolean(field.required),
@@ -238,6 +252,10 @@ export default function MetaFlowBuilder() {
   };
 
   const handleSave = async (): Promise<string | false> => {
+    if (!isNew && loadError) {
+      toastError('Cannot save until the Meta Flow loads successfully.');
+      return false;
+    }
     const normalizedFields = fields.map((field) => ({
       ...field,
       id: field.id.trim(),
@@ -277,13 +295,12 @@ export default function MetaFlowBuilder() {
         toastSuccess('Meta Flow saved');
         navigate(`/automations/meta-flows/${created.id}`, { replace: true });
         return created.id;
-      } else {
-        const { data } = await flowAssetsApi.update(id!, payload);
-        setAsset(data.data as FlowAssetRecord);
-        toastSuccess('Meta Flow updated');
       }
+      const { data } = await flowAssetsApi.update(id!, payload);
+      setAsset(data.data as FlowAssetRecord);
+      toastSuccess('Meta Flow updated');
       setFields(normalizedFields);
-      return id || true;
+      return id!;
     } catch (err) {
       toastError(getErrorMessage(err, 'Failed to save Meta Flow'));
       return false;
@@ -293,14 +310,11 @@ export default function MetaFlowBuilder() {
   };
 
   const handlePublish = async () => {
-    if (isNew) {
-      await handleSave();
-      return;
-    }
     setPublishing(true);
     try {
-      if (!(await handleSave())) return;
-      const { data } = await flowAssetsApi.publish(id!);
+      const assetId = await handleSave();
+      if (!assetId) return;
+      const { data } = await flowAssetsApi.publish(assetId);
       const result = data.data as { asset: FlowAssetRecord; published: boolean };
       setAsset(result.asset);
       toastSuccess(result.published ? 'Published to Meta' : 'Submitted to Meta (pending review)');
@@ -315,6 +329,18 @@ export default function MetaFlowBuilder() {
     return (
       <PageShell fullBleed>
         <CanvasPageSkeleton label="Loading Meta Flow builder" />
+      </PageShell>
+    );
+  }
+
+  if (!isNew && loadError) {
+    return (
+      <PageShell fullBleed>
+        <div className="flex min-h-[50vh] flex-col items-center justify-center gap-4 p-8 text-center">
+          <p className="text-lg font-semibold text-neutral-900">Could not load this Meta Flow</p>
+          <p className="max-w-md text-sm text-neutral-600">{loadError}</p>
+          <AppButton onClick={() => void load()}>Retry</AppButton>
+        </div>
       </PageShell>
     );
   }

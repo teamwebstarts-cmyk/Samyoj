@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { keywordMatches, wantsHandoff } from './trigger-match';
+import { keywordMatches, wantsHandoff, isUnsafeKeywordRegex } from './trigger-match';
 
 describe('keywordMatches', () => {
   it('matches whole words, not substrings', () => {
@@ -12,6 +12,15 @@ describe('keywordMatches', () => {
     expect(keywordMatches('demo', { keyword: 'demo', exactMatch: true })).toBe(true);
     expect(keywordMatches('demo please', { keyword: 'demo', exactMatch: true })).toBe(false);
     expect(keywordMatches('order-123', { keyword: '^order-\\d+$', regex: true })).toBe(true);
+    expect(keywordMatches('aaaa', { keyword: '(a+)+', regex: true })).toBe(false);
+  });
+});
+
+describe('isUnsafeKeywordRegex', () => {
+  it('rejects nested quantifiers and overlong patterns', () => {
+    expect(isUnsafeKeywordRegex('(a+)+')).toBe(true);
+    expect(isUnsafeKeywordRegex('a'.repeat(81))).toBe(true);
+    expect(isUnsafeKeywordRegex('^order-\\d+$')).toBe(false);
   });
 });
 

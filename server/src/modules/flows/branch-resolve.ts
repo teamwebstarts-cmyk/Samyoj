@@ -1,4 +1,5 @@
 import type { FlowNode } from './types';
+import { isLinearCtaButton, nextFromCtaBranches } from './node-kind';
 
 function branchTarget(node: FlowNode, key?: string): string | null {
   if (!key) return null;
@@ -57,6 +58,9 @@ export function resolveInteractiveBranch(
   if (node.type !== 'buttons' && node.type !== 'list') {
     return node.next?.trim() || null;
   }
+  if (isLinearCtaButton(node)) {
+    return nextFromCtaBranches(node) || null;
+  }
 
   if (replyId) {
     const direct = branchTarget(node, replyId);
@@ -94,6 +98,9 @@ export function resolveInteractiveBranch(
 /** Ensure button ids/titles are valid and branch keys stay aligned by index. */
 export function syncButtonNode(node: FlowNode): FlowNode {
   if (node.type !== 'buttons') return node;
+  if (isLinearCtaButton(node)) {
+    return { ...node, branches: {}, next: nextFromCtaBranches(node) };
+  }
 
   const oldButtons = node.buttons || [];
   const branches = { ...(node.branches || {}) };

@@ -51,8 +51,9 @@ function BranchSelect({
   onChange: (patch: Partial<FlowNode>) => void;
 }) {
   const options = allNodes
-    .filter((n) => n.id !== currentNodeId)
-    .map((n, i) => ({ value: n.id, label: `${i + 1}. ${nodeMeta[n.type].label}` }));
+    .map((n, i) => ({ n, i }))
+    .filter(({ n }) => n.id !== currentNodeId)
+    .map(({ n, i }) => ({ value: n.id, label: `Step ${i + 1} · ${nodeMeta[n.type].label}` }));
 
   return (
     <AppSelect
@@ -157,8 +158,9 @@ function FlowNodePanelForm({
   };
 
   const branchOptions = allNodes
-    .filter((n) => n.id !== node.id)
-    .map((n, i) => ({ value: n.id, label: `${i + 1}. ${nodeMeta[n.type].label}` }));
+    .map((n, i) => ({ n, i }))
+    .filter(({ n }) => n.id !== node.id)
+    .map(({ n, i }) => ({ value: n.id, label: `Step ${i + 1} · ${nodeMeta[n.type].label}` }));
 
   return (
     <div className="min-w-0 space-y-4">
@@ -335,29 +337,70 @@ function FlowNodePanelForm({
           />
           {(node.listSections || []).map((section, sIdx) => (
             <div key={sIdx} className="space-y-2 rounded-xl border border-neutral-100 bg-neutral-50/50 p-3">
-              <AppInput
-                label={`Section ${sIdx + 1} title`}
-                value={section.title || ''}
-                onChange={(e) => {
-                  const listSections = [...(node.listSections || [])];
-                  listSections[sIdx] = { ...listSections[sIdx], title: e.target.value };
-                  onChange({ listSections });
-                }}
-              />
-              {section.rows.map((row, rIdx) => (
-                <div key={row.id} className="space-y-2 rounded-lg border border-neutral-100 bg-white p-2">
+              <div className="flex items-start gap-2">
+                <div className="flex-1">
                   <AppInput
-                    label={`Option ${rIdx + 1} title`}
-                    hint="Max 24 characters"
-                    value={row.title}
+                    label={`Section ${sIdx + 1} title`}
+                    value={section.title || ''}
                     onChange={(e) => {
                       const listSections = [...(node.listSections || [])];
-                      const rows = [...listSections[sIdx].rows];
-                      rows[rIdx] = { ...rows[rIdx], title: e.target.value.slice(0, 24) };
-                      listSections[sIdx] = { ...listSections[sIdx], rows };
+                      listSections[sIdx] = { ...listSections[sIdx], title: e.target.value };
                       onChange({ listSections });
                     }}
                   />
+                </div>
+                {(node.listSections?.length || 0) > 1 && (
+                  <button
+                    type="button"
+                    className="mt-7 text-[11px] font-bold text-red-600"
+                    onClick={() => {
+                      const removedIds = new Set((node.listSections?.[sIdx]?.rows || []).map((row) => row.id));
+                      const listSections = (node.listSections || []).filter((_, i) => i !== sIdx);
+                      const nextBranches = { ...(node.branches || {}) };
+                      for (const id of removedIds) delete nextBranches[id];
+                      const intentRoutes = (node.intentRoutes || []).filter((route) => !removedIds.has(route.branchKey));
+                      onChange({ listSections, branches: nextBranches, intentRoutes });
+                    }}
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+              {section.rows.map((row, rIdx) => (
+                <div key={row.id} className="space-y-2 rounded-lg border border-neutral-100 bg-white p-2">
+                  <div className="flex items-start gap-2">
+                    <div className="flex-1">
+                      <AppInput
+                        label={`Option ${rIdx + 1} title`}
+                        hint="Max 24 characters"
+                        value={row.title}
+                        onChange={(e) => {
+                          const listSections = [...(node.listSections || [])];
+                          const rows = [...listSections[sIdx].rows];
+                          rows[rIdx] = { ...rows[rIdx], title: e.target.value.slice(0, 24) };
+                          listSections[sIdx] = { ...listSections[sIdx], rows };
+                          onChange({ listSections });
+                        }}
+                      />
+                    </div>
+                    {section.rows.length > 1 && (
+                      <button
+                        type="button"
+                        className="mt-7 text-[11px] font-bold text-red-600"
+                        onClick={() => {
+                          const listSections = [...(node.listSections || [])];
+                          const rows = listSections[sIdx].rows.filter((_, i) => i !== rIdx);
+                          listSections[sIdx] = { ...listSections[sIdx], rows };
+                          const nextBranches = { ...(node.branches || {}) };
+                          delete nextBranches[row.id];
+                          const intentRoutes = (node.intentRoutes || []).filter((route) => route.branchKey !== row.id);
+                          onChange({ listSections, branches: nextBranches, intentRoutes });
+                        }}
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
                   <AppInput
                     label="Short description (optional)"
                     hint="Max 72 characters"
@@ -767,11 +810,15 @@ function FlowNodePanelForm({
             variant="secondary"
             size="sm"
             icon={<Plus size={14} />}
-            onClick={() =>
+            onClick={() => {
+              const defaultKey =
+                (node.buttons || [])[0]?.id ||
+                (node.listSections || []).flatMap((s) => s.rows)[0]?.id ||
+                '';
               onChange({
-                intentRoutes: [...(node.intentRoutes || []), { keywords: ['help'], branchKey: '' }],
-              })
-            }
+                intentRoutes: [...(node.intentRoutes || []), { keywords: ['help'], branchKey: defaultKey }],
+              });
+            }}
           >
             Add typing shortcut
           </AppButton>

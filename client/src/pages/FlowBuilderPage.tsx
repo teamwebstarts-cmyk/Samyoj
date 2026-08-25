@@ -52,6 +52,7 @@ export default function FlowBuilderPage() {
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [dirty, setDirty] = useState(false);
   const [mobileTab, setMobileTab] = useState<FlowBuilderTab>(isNew ? 'settings' : 'flow');
   const [desktopPanel, setDesktopPanel] = useState<DesktopPanel>(isNew ? 'setup' : 'edit');
   const [name, setName] = useState('');
@@ -143,6 +144,7 @@ export default function FlowBuilderPage() {
         const laid = autoLayoutNodes(loadedNodes, flow.startNodeId || loadedNodes[0]?.id);
         setNodes(laid);
         setSelectedNodeId(laid[0]?.id || null);
+        setDirty(false);
       })
       .catch((err) => {
         if (
@@ -179,8 +181,8 @@ export default function FlowBuilderPage() {
         name: name.trim() || 'Untitled',
         triggerType,
         triggerConfig,
-        nodes,
-        startNodeId: startNodeId || nodes[0]?.id,
+        nodes: linkedNodes,
+        startNodeId: startNodeId || linkedNodes[0]?.id,
       });
       if (
         requestNumberId === activeNumberIdRef.current &&
@@ -209,14 +211,16 @@ export default function FlowBuilderPage() {
         setValidationErrors(messages);
         setWarnings([]);
       } else {
-        setValidationErrors(normalized.message ? [normalized.message] : []);
-        setWarnings([]);
+        setWarnings(normalized.message ? [normalized.message] : []);
       }
     }
   }, [activeNumber, name, nodes, resolved, startNodeId, triggerConfig, triggerType]);
 
   useOnActiveNumberChange(({ isInitial }) => {
     if (isInitial) return;
+    if (dirty && !window.confirm('Switching numbers discards unsaved flow edits. Continue?')) {
+      return;
+    }
     loadGenerationRef.current += 1;
     validationGenerationRef.current += 1;
     setLoading(!isNew);
@@ -238,6 +242,7 @@ export default function FlowBuilderPage() {
     setFlowStatus('DRAFT');
     setPriority(50);
     setEnabled(false);
+    setDirty(false);
     if (isNew) return;
     load();
   });
@@ -247,15 +252,27 @@ export default function FlowBuilderPage() {
     return () => clearTimeout(timer);
   }, [runServerValidation]);
 
+  useEffect(() => {
+    if (!dirty) return;
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [dirty]);
+
   const updateNode = (nodeId: string, patch: Partial<FlowNode>) => {
     setNodes((prev) => prev.map((n) => (n.id === nodeId ? { ...n, ...patch } : n)));
     setSaved(false);
+    setDirty(true);
   };
 
   const handleGraphChange = (updatedNodes: FlowNode[], newStartNodeId: string) => {
     setNodes(updatedNodes);
     setStartNodeId(newStartNodeId);
     setSaved(false);
+    setDirty(true);
   };
 
   const addNode = (type: FlowNodeType) => {
@@ -272,6 +289,7 @@ export default function FlowBuilderPage() {
     if (!startNodeId && nextNodes.length === 1) setStartNodeId(node.id);
     setSelectedNodeId(node.id);
     setSaved(false);
+    setDirty(true);
     setMobileTab('edit');
     setDesktopPanel('edit');
   };
@@ -294,6 +312,7 @@ export default function FlowBuilderPage() {
     if (startNodeId === nodeId) setStartNodeId(nextNodes[0]?.id || '');
     setSelectedNodeId(nextNodes[0]?.id || null);
     setSaved(false);
+    setDirty(true);
   };
 
   const buildPayload = (asDraft = false) => {
@@ -360,9 +379,12 @@ export default function FlowBuilderPage() {
         toastSuccess(flowSaveSuccessMessage({ asDraft, enabled, isNew: true }));
         navigate(`/automations/flows/${data.data.id}`, { replace: true });
       } else {
-        await flowApi.update(id!, { ...buildPayload(asDraft), expectedUpdatedAt });
-        setFlowStatus(asDraft ? 'DRAFT' : 'PUBLISHED');
+        const { data } = await flowApi.update(id!, { ...buildPayload(asDraft), expectedUpdatedAt });
+        const updated = data.data as { updatedAt?: string; status?: FlowStatus };
+        if (updated.updatedAt) setExpectedUpdatedAt(updated.updatedAt);
+        setFlowStatus(asDraft ? 'DRAFT' : updated.status || 'PUBLISHED');
         setSaved(true);
+        setDirty(false);
         toastSuccess(flowSaveSuccessMessage({ asDraft, enabled, isNew: false }));
         setTimeout(() => setSaved(false), 2000);
       }
@@ -375,6 +397,14 @@ export default function FlowBuilderPage() {
 
   const handlePublish = async () => {
     if (!id || isNew) return;
+    if (loadError) {
+      toastError('Cannot publish until the flow loads successfully.');
+      return;
+    }
+    if (validationErrors.length > 0) {
+      toastValidationErrors(validationErrors);
+      return;
+    }
     if (!canPublishFlow) {
       toastError(flowGateMessage || quotaUpgradeMessage('publishedWorkflows'));
       return;
@@ -382,10 +412,16 @@ export default function FlowBuilderPage() {
     setSaving(true);
     try {
       if (!(await warnLiveConflicts(false))) return;
-      await flowApi.update(id, buildPayload(true));
+      const { data } = await flowApi.update(id, { ...buildPayload(true), expectedUpdatedAt });
+      const updated = data.data as { updatedAt?: string };
+      if (updated.updatedAt) setExpectedUpdatedAt(updated.updatedAt);
       await flowApi.publish(id);
+      const { data: published } = await flowApi.get(id);
+      const publishedAt = (published.data as { updatedAt?: string } | undefined)?.updatedAt;
+      if (publishedAt) setExpectedUpdatedAt(publishedAt);
       setFlowStatus('PUBLISHED');
       setSaved(true);
+      setDirty(false);
       toastSuccess(
         enabled
           ? 'Published and live — customers can get this now.'
@@ -423,6 +459,7 @@ export default function FlowBuilderPage() {
       triggerConfig?: Record<string, unknown>;
       enabled?: boolean;
       priority?: number;
+      updatedAt?: string;
     },
     version: number
   ) => {
@@ -441,8 +478,10 @@ export default function FlowBuilderPage() {
     setWithinHours(typeof config.withinHours === 'number' ? config.withinHours : 168);
     if (typeof restoredFlow.enabled === 'boolean') setEnabled(restoredFlow.enabled);
     if (typeof restoredFlow.priority === 'number') setPriority(restoredFlow.priority);
+    if (restoredFlow.updatedAt) setExpectedUpdatedAt(restoredFlow.updatedAt);
     setFlowStatus('DRAFT');
     setSaved(false);
+    setDirty(true);
     toastSuccess(`Restored version ${version} as draft — publish when ready`);
   };
 
@@ -583,7 +622,8 @@ export default function FlowBuilderPage() {
         />
 
         <FlowValidationWarnings
-          warnings={[...validationErrors, ...warnings]}
+          errors={validationErrors}
+          warnings={warnings}
           nodes={nodes}
           onGoToStep={goToWarningStep}
         />
@@ -641,6 +681,9 @@ export default function FlowBuilderPage() {
           {mobileTab === 'analytics' && !isNew && id && (
             <div className="p-4"><FlowAnalyticsPanel flowId={id} nodes={nodes} /></div>
           )}
+          {mobileTab === 'versions' && !isNew && id && (
+            <div className="p-4"><FlowVersionsPanel flowId={id} onRestore={handleRestoreVersion} /></div>
+          )}
           {mobileTab === 'settings' && <div className="p-4"><div className="rounded-2xl border border-neutral-200/60 bg-white p-5 shadow-sm">{settingsForm}</div></div>}
         </div>
 
@@ -693,7 +736,13 @@ export default function FlowBuilderPage() {
           </div>
         </div>
 
-        <FlowMobileNav active={mobileTab} onChange={setMobileTab} showTest showAnalytics={!isNew} />
+        <FlowMobileNav
+          active={mobileTab}
+          onChange={setMobileTab}
+          showTest
+          showAnalytics={!isNew}
+          showHistory={!isNew}
+        />
       </div>
     </PageShell>
   );
