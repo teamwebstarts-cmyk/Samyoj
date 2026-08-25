@@ -36,6 +36,8 @@ import { nextUnreadCount } from './unread';
 import { buildSignedMediaPath, verifyMediaSignature, MEDIA_URL_TTL_SECONDS } from './media-url';
 import { inboxStartCreateData, inboxStartMergeUpdate } from '../contacts/merge';
 import { deleteConversationKeepingHistory } from './delete-conversation';
+import { requireActiveCommercialOnMutation } from '../../middleware/plan-guard';
+import { checkQuota, getOrgEntitlements } from '../billing/entitlements.service';
 
 const router = Router();
 
@@ -145,6 +147,7 @@ router.get(
 );
 
 router.use(authenticate, requireOrg, resolveActiveWhatsappNumber, ...withPermission('manageInbox'));
+router.use(requireActiveCommercialOnMutation());
 
 router.get(
   '/unread-total',
@@ -333,35 +336,51 @@ router.post(
 
     const { whatsappNumber } = await getOrgWhatsappContext(orgId, req.activeWhatsappNumberId);
 
-    const existingContact = await prisma.contact.findUnique({
-      where: {
-        organizationId_whatsappNumberId_normalizedPhone: {
-          organizationId: orgId,
-          whatsappNumberId: whatsappNumber.id,
-          normalizedPhone: phone,
+    const { contact } = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM organizations WHERE id = ${orgId} FOR UPDATE`;
+      const existingContact = await tx.contact.findUnique({
+        where: {
+          organizationId_whatsappNumberId_normalizedPhone: {
+            organizationId: orgId,
+            whatsappNumberId: whatsappNumber.id,
+            normalizedPhone: phone,
+          },
         },
-      },
-      select: { tags: true, customAttributes: true },
-    });
+        select: { tags: true, customAttributes: true },
+      });
+      if (!existingContact) {
+        const quotaCheck = await checkQuota(orgId, 'contacts', 1);
+        if (!quotaCheck.allowed) {
+          throw new AppError(
+            402,
+            quotaCheck.reason ||
+              `Contact limit reached (${quotaCheck.used}/${quotaCheck.limit}). Upgrade your plan to start a chat.`,
+            quotaCheck.code
+          );
+        }
+      }
 
-    const contact = await prisma.contact.upsert({
-      where: {
-        organizationId_whatsappNumberId_normalizedPhone: {
-          organizationId: orgId,
-          whatsappNumberId: whatsappNumber.id,
-          normalizedPhone: phone,
-        },
-      },
-      create: {
-        organizationId: orgId,
-        phone,
-        normalizedPhone: phone,
-        whatsappNumberId: whatsappNumber.id,
-        source: 'OUTBOUND',
-        ...NEW_CONTACT_CALLING_DEFAULTS,
-        ...inboxStartCreateData(data),
-      },
-      update: existingContact ? inboxStartMergeUpdate(existingContact, data) : {},
+      return {
+        contact: await tx.contact.upsert({
+          where: {
+            organizationId_whatsappNumberId_normalizedPhone: {
+              organizationId: orgId,
+              whatsappNumberId: whatsappNumber.id,
+              normalizedPhone: phone,
+            },
+          },
+          create: {
+            organizationId: orgId,
+            phone,
+            normalizedPhone: phone,
+            whatsappNumberId: whatsappNumber.id,
+            source: 'OUTBOUND',
+            ...NEW_CONTACT_CALLING_DEFAULTS,
+            ...inboxStartCreateData(data),
+          },
+          update: existingContact ? inboxStartMergeUpdate(existingContact, data) : {},
+        }),
+      };
     });
 
     const existingConversation = await prisma.conversation.findUnique({
@@ -755,42 +774,45 @@ router.get(
     });
     if (!conversation) throw new AppError(404, 'Conversation not found');
 
-    // Ensure finished WhatsApp calls appear as centered chat pills (idempotent).
-    try {
-      const { publishCallEventMessage, backfillCallSummaryMessages } = await import(
-        '../calling/call-event-message'
-      );
-      const terminalCalls = await prisma.call.findMany({
-        where: {
-          conversationId: id,
-          status: { in: ['COMPLETED', 'MISSED', 'REJECTED', 'FAILED', 'TERMINATED'] },
-        },
-        select: { id: true },
-        take: 100,
-        orderBy: { createdAt: 'desc' },
-      });
-      if (terminalCalls.length > 0) {
-        const existing = await prisma.message.findMany({
+    // Preserve expired-account reads without backfilling derived chat rows.
+    if (!(await getOrgEntitlements(req.user!.organizationId!)).isLocked) {
+      // Ensure finished WhatsApp calls appear as centered chat pills (idempotent).
+      try {
+        const { publishCallEventMessage, backfillCallSummaryMessages } = await import(
+          '../calling/call-event-message'
+        );
+        const terminalCalls = await prisma.call.findMany({
           where: {
             conversationId: id,
-            metaMessageId: { in: terminalCalls.map((c) => `call:${c.id}`) },
+            status: { in: ['COMPLETED', 'MISSED', 'REJECTED', 'FAILED', 'TERMINATED'] },
           },
-          select: { metaMessageId: true },
+          select: { id: true },
+          take: 100,
+          orderBy: { createdAt: 'desc' },
         });
-        const have = new Set(existing.map((m) => m.metaMessageId));
-        await Promise.all(
-          terminalCalls
-            .filter((c) => !have.has(`call:${c.id}`))
-            .map((c) => publishCallEventMessage(c.id))
-        );
+        if (terminalCalls.length > 0) {
+          const existing = await prisma.message.findMany({
+            where: {
+              conversationId: id,
+              metaMessageId: { in: terminalCalls.map((c) => `call:${c.id}`) },
+            },
+            select: { metaMessageId: true },
+          });
+          const have = new Set(existing.map((m) => m.metaMessageId));
+          await Promise.all(
+            terminalCalls
+              .filter((c) => !have.has(`call:${c.id}`))
+              .map((c) => publishCallEventMessage(c.id))
+          );
+        }
+        await backfillCallSummaryMessages({
+          conversationId: id,
+          organizationId: req.user!.organizationId!,
+          whatsappNumberId: conversation.whatsappNumberId,
+        });
+      } catch {
+        /* call pills / summary cards are best-effort */
       }
-      await backfillCallSummaryMessages({
-        conversationId: id,
-        organizationId: req.user!.organizationId!,
-        whatsappNumberId: conversation.whatsappNumberId,
-      });
-    } catch {
-      /* call pills / summary cards are best-effort */
     }
 
     const limitNum = parseInt(limit as string, 10);
@@ -854,7 +876,7 @@ router.get(
       }
     }
 
-    const windowOpensAt = await resolveCs24hWindowOpensAt(id, conversation.cs24hWindowOpensAt);
+    const windowOpensAt = await resolveCs24hWindowOpensAt(id, conversation.cs24hWindowOpensAt, false);
     const serviceWindowOpen = isWithin24HourWindow(windowOpensAt);
     const expiresAt = windowOpensAt
       ? new Date(windowOpensAt.getTime() + 24 * 60 * 60 * 1000)
@@ -1601,7 +1623,14 @@ router.post(
 
     // Human agent took over — pause the bot so it does not dual-reply (automation/AI paths skip this route).
     if (conversation.botActive && !conversation.botHandoffAt) {
-      await pauseConversationAutomations(conversation.id);
+      const whatsappNumberId = conversation.whatsappNumberId;
+      if (!whatsappNumberId) {
+        throw new AppError(400, 'Conversation WhatsApp number required to pause automations');
+      }
+      await pauseConversationAutomations(conversation.id, {
+        organizationId: orgId,
+        whatsappNumberId,
+      });
       await prisma.conversation.update({
         where: { id: conversation.id },
         data: { botActive: false },
@@ -1756,7 +1785,9 @@ router.patch(
     if (!owned) throw new AppError(404, 'Conversation not found');
 
     if (active === false) {
-      await pauseConversationAutomations(id);
+      const numberId = req.activeWhatsappNumberId;
+      if (!numberId) throw new AppError(400, 'Active WhatsApp number required');
+      await pauseConversationAutomations(id, { organizationId: orgId, whatsappNumberId: numberId });
     } else if (resetHandoff) {
       await cancelFlowDelayJob(id);
     }
