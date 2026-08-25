@@ -3,7 +3,11 @@ import { backupAuthBeforeOAuth } from './authStorage';
 export const WA_OAUTH_MESSAGE = 'samyoj:wa-oauth';
 export const WA_OAUTH_POPUP_NAME = 'samyoj_meta_whatsapp_oauth';
 export const WA_OAUTH_CHANNEL = 'samyoj:wa-oauth';
+export const WA_OAUTH_CALLBACK_PATH = '/settings/whatsapp/callback';
+export const WA_OAUTH_POPUP_CALLBACK_PATH = '/settings/whatsapp/callback/popup';
+const WA_OAUTH_POPUP_MARKER_KEY = 'samyoj_wa_oauth_popup_marker';
 const WA_OAUTH_RESULT_KEY = 'samyoj_wa_oauth_result';
+const WA_OAUTH_POPUP_MARKER_MAX_AGE_MS = 15 * 60 * 1000;
 
 export type WaOAuthMessage = {
   type: typeof WA_OAUTH_MESSAGE;
@@ -16,11 +20,45 @@ export type WaOAuthResultHandler = (message: WaOAuthMessage) => void;
 
 /** True when this window was opened as the Meta OAuth popup (opener may be null after Facebook redirect). */
 export function isOAuthPopupWindow(): boolean {
-  return window.name === WA_OAUTH_POPUP_NAME;
+  return (
+    window.name === WA_OAUTH_POPUP_NAME ||
+    (window.location.pathname === WA_OAUTH_POPUP_CALLBACK_PATH && hasPopupMarker())
+  );
 }
 
 export function isOAuthPopupContext(): boolean {
   return isOAuthPopupWindow() || Boolean(window.opener && !window.opener.closed);
+}
+
+/** Use a dedicated callback path so popup intent survives Meta's cross-origin redirect. */
+export function getWhatsAppOAuthRedirectUri(): string {
+  return `${window.location.origin}${WA_OAUTH_POPUP_CALLBACK_PATH}`;
+}
+
+function setPopupMarker() {
+  try {
+    localStorage.setItem(WA_OAUTH_POPUP_MARKER_KEY, String(Date.now()));
+  } catch {
+    // Private mode / quota; window.name remains the fallback signal.
+  }
+}
+
+function clearPopupMarker() {
+  try {
+    localStorage.removeItem(WA_OAUTH_POPUP_MARKER_KEY);
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+function hasPopupMarker(): boolean {
+  try {
+    const raw = localStorage.getItem(WA_OAUTH_POPUP_MARKER_KEY);
+    const startedAt = raw ? Number(raw) : NaN;
+    return Number.isFinite(startedAt) && Date.now() - startedAt <= WA_OAUTH_POPUP_MARKER_MAX_AGE_MS;
+  } catch {
+    return false;
+  }
 }
 
 /** Open Meta OAuth in a popup so the dashboard (and JWT) stay loaded. */
@@ -29,6 +67,7 @@ export function startWhatsAppOAuth(
   options?: { returnPath?: string }
 ): { mode: 'popup' | 'redirect'; popup: Window | null } {
   backupAuthBeforeOAuth(options?.returnPath || '/settings?tab=whatsapp');
+  setPopupMarker();
 
   const width = 620;
   const height = 740;
@@ -39,6 +78,7 @@ export function startWhatsAppOAuth(
   const popup = window.open(url, WA_OAUTH_POPUP_NAME, features);
 
   if (!popup || popup.closed) {
+    clearPopupMarker();
     console.warn('[wa-oauth] Popup blocked — falling back to full-page redirect');
     window.location.href = url;
     return { mode: 'redirect', popup: null };
@@ -138,6 +178,7 @@ export function subscribeWaOAuthResult(handler: WaOAuthResultHandler): () => voi
 export function completeOAuthPopupFlow(payload: Omit<WaOAuthMessage, 'type'>): boolean {
   if (!isOAuthPopupContext()) return false;
   publishWaOAuthResult(payload);
+  clearPopupMarker();
   window.close();
   return true;
 }
@@ -159,6 +200,7 @@ export function handleWaOAuthPopupClosed(
   onResult: WaOAuthResultHandler,
   options?: { onClosedWithoutResult?: () => void }
 ): void {
+  clearPopupMarker();
   const recent = readRecentWaOAuthResult();
   if (recent) {
     clearWaOAuthResult();
