@@ -23,7 +23,11 @@ import type {
 } from '../types';
 import { toastError, toastSuccess } from '../utils/toast';
 import { formatPhoneDisplay } from '../utils/phone';
-import { startWhatsAppOAuth, subscribeWaOAuthResult } from '../utils/whatsappOAuth';
+import {
+  getWhatsAppOAuthRedirectUri,
+  startWhatsAppOAuth,
+  subscribeWaOAuthResult,
+} from '../utils/whatsappOAuth';
 
 // Subcomponents
 import SettingsHero from '../components/settings/SettingsHero';
@@ -34,6 +38,8 @@ import WhatsAppChannelsPanel from '../components/settings/WhatsAppChannelsPanel'
 import HoursAndInboxPanel from '../components/settings/HoursAndInboxPanel';
 import IntegrationsPanel from '../components/settings/IntegrationsPanel';
 import SecuritySettingsPanel from '../components/settings/SecuritySettingsPanel';
+import EntitlementNotice, { quotaUpgradeMessage } from '../components/billing/EntitlementNotice';
+import { useEntitlements } from '../hooks/useEntitlements';
 
 type SettingsTab =
   | 'profile'
@@ -101,6 +107,7 @@ function resolveLegacyTab(raw: string | null): SettingsTab | null {
 
 export default function SettingsPage() {
   const { orgRole, organization } = useAuth();
+  const { entitlements, loading: entitlementsLoading } = useEntitlements();
   const { numbers, activeNumber, refreshNumbers, loading: numbersLoading, resolved: numbersResolved } = useWhatsAppNumber();
   const [searchParams, setSearchParams] = useSearchParams();
   const [initialLoading, setInitialLoading] = useState(true);
@@ -109,6 +116,24 @@ export default function SettingsPage() {
   const [planName, setPlanName] = useState<string | null>(null);
 
   const isOwnerOrAdmin = orgRole === 'OWNER' || orgRole === 'ADMIN';
+  const canConnectWhatsApp =
+    !isOwnerOrAdmin
+      ? false
+      : entitlementsLoading || !entitlements
+        ? true
+        : entitlements.canUseFeature('whatsapp') && entitlements.canAddToQuota('waNumbers');
+  const whatsappGateMessage =
+    !entitlementsLoading && entitlements && !entitlements.canUseFeature('whatsapp')
+      ? 'WhatsApp connection is unavailable while your plan is locked.'
+      : entitlements && !entitlements.canAddToQuota('waNumbers')
+        ? quotaUpgradeMessage('waNumbers')
+        : null;
+  const canUseIntegrations =
+    entitlementsLoading || !entitlements || entitlements.canUseFeature('integrations');
+  const integrationsGateMessage =
+    !entitlementsLoading && entitlements && !entitlements.canUseFeature('integrations')
+      ? 'Developer integrations are not included on your current plan.'
+      : null;
 
   const hiddenTabs = useMemo(() => {
     if (isOwnerOrAdmin) return [] as string[];
@@ -189,28 +214,50 @@ export default function SettingsPage() {
 
   // Handle WhatsApp Connect
   const handleConnect = async () => {
-    if (!isOwnerOrAdmin) return;
+    if (!isOwnerOrAdmin || !canConnectWhatsApp) return;
     setConnecting(true);
     try {
-      const redirectUri = `${window.location.origin}/settings/whatsapp/callback`;
+      const redirectUri = getWhatsAppOAuthRedirectUri();
       const { data } = await whatsappApi.connectUrl(redirectUri);
       const url = data.data.url;
+      let timer: number | undefined;
+      let unsubscribe = () => {};
+      let settled = false;
+      const finish = (event?: { status?: string; message?: string }) => {
+        if (settled) return;
+        settled = true;
+        if (timer) window.clearInterval(timer);
+        unsubscribe();
+        setConnecting(false);
+        if (event?.status === 'error') {
+          toastError(event.message || 'WhatsApp connection failed');
+        } else if (event?.status === 'success') {
+          toastSuccess(event.message || 'WhatsApp connected');
+        }
+        void refreshNumbers();
+        loadData({ silent: true });
+      };
+
+      // Subscribe before opening the popup so a fast/cached Meta callback cannot
+      // publish before this page starts listening.
+      unsubscribe = subscribeWaOAuthResult((event) => {
+        if (event.status === 'cancel') {
+          finish(event);
+          return;
+        }
+        finish(event);
+      });
+
       const { mode, popup } = startWhatsAppOAuth(url, { returnPath: '/settings?tab=whatsapp' });
       if (mode === 'popup' && popup) {
-        const unsubscribe = subscribeWaOAuthResult(() => {
-          setConnecting(false);
-          void refreshNumbers();
-          loadData({ silent: true });
-        });
-        const timer = setInterval(() => {
+        timer = window.setInterval(() => {
           if (popup.closed) {
-            clearInterval(timer);
-            unsubscribe();
-            setConnecting(false);
-            void refreshNumbers();
-            loadData({ silent: true });
+            finish();
           }
-        }, 1000);
+        }, 500);
+      } else {
+        unsubscribe();
+        unsubscribe = () => {};
       }
     } catch {
       toastError('Could not start WhatsApp connection');
@@ -273,6 +320,11 @@ export default function SettingsPage() {
     ],
     [initialLoading, refreshing, numbers.length, syncActive]
   );
+  const entitlementNumberLimit =
+    entitlements?.quotas.waNumbers.limit === 'custom'
+      ? numberLimit
+      : entitlements?.quotas.waNumbers.limit ?? numberLimit;
+  const entitlementPlanName = entitlements?.planName || planName;
 
   return (
     <PageShell>
@@ -307,18 +359,32 @@ export default function SettingsPage() {
                   )}
 
                   {activeTab === 'whatsapp' && (
-                    <WhatsAppChannelsPanel
-                      numbers={numbers}
-                      activeNumberId={activeNumber?.id ?? null}
-                      numberLimit={numberLimit}
-                      planName={planName}
-                      loading={!numbersResolved || numbersLoading}
-                      connecting={connecting}
-                      onConnect={handleConnect}
-                      onDisconnect={(id, phone) => setDisconnectTarget({ id, phone })}
-                      disconnectingId={disconnectingId}
-                      canEdit={isOwnerOrAdmin}
-                    />
+                    <>
+                      {whatsappGateMessage && (
+                        <EntitlementNotice
+                          className="mb-4"
+                          message={whatsappGateMessage}
+                          upgradePlan={
+                            entitlements?.isLocked
+                              ? 'growth'
+                              : entitlements?.getUpgradePlan('waNumbers')
+                          }
+                        />
+                      )}
+                      <WhatsAppChannelsPanel
+                        numbers={numbers}
+                        activeNumberId={activeNumber?.id ?? null}
+                        numberLimit={entitlementNumberLimit}
+                        planName={entitlementPlanName}
+                        loading={!numbersResolved || numbersLoading}
+                        connecting={connecting}
+                        onConnect={handleConnect}
+                        onDisconnect={(id, phone) => setDisconnectTarget({ id, phone })}
+                        disconnectingId={disconnectingId}
+                        canEdit={isOwnerOrAdmin}
+                        canConnect={canConnectWhatsApp}
+                      />
+                    </>
                   )}
 
                   {activeTab === 'inbox' && (
@@ -331,7 +397,12 @@ export default function SettingsPage() {
                   )}
 
                   {activeTab === 'integrations' && isOwnerOrAdmin && (
-                    <IntegrationsPanel showDeveloperTools />
+                    <>
+                      {integrationsGateMessage && (
+                        <EntitlementNotice className="mb-4" message={integrationsGateMessage} upgradePlan="growth" />
+                      )}
+                      <IntegrationsPanel showDeveloperTools={canUseIntegrations} />
+                    </>
                   )}
 
                   {activeTab === 'security' && <SecuritySettingsPanel />}
