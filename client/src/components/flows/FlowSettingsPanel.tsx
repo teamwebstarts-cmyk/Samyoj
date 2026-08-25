@@ -58,6 +58,7 @@ interface FlowSettingsPanelProps {
   onStartNodeIdChange: (value: string) => void;
   onPriorityChange: (value: number) => void;
   onPublish: () => void;
+  canPublish?: boolean;
   onDirty?: () => void;
 }
 
@@ -159,6 +160,7 @@ export default function FlowSettingsPanel({
   onStartNodeIdChange,
   onPriorityChange,
   onPublish,
+  canPublish = true,
   onDirty,
 }: FlowSettingsPanelProps) {
   const [showMoreTriggers, setShowMoreTriggers] = useState(false);
@@ -499,6 +501,7 @@ export default function FlowSettingsPanel({
             type="button"
             role="switch"
             aria-checked={enabled}
+            disabled={!canPublish && !enabled}
             onClick={() => {
               onEnabledChange(!enabled);
               markDirty();
@@ -520,7 +523,19 @@ export default function FlowSettingsPanel({
         <div className="rounded-xl border border-amber-100 bg-amber-50 px-3.5 py-3 text-[12px] leading-relaxed text-amber-900">
           <p className="font-semibold">Saved as draft</p>
           <p className="mt-1">Customers won't see this until you publish it.</p>
-          <AppButton className="mt-3" size="sm" icon={<Rocket size={14} />} loading={saving} onClick={onPublish}>
+          {!canPublish && (
+            <p className="mt-2 font-semibold text-amber-800">
+              Publishing is unavailable on your current plan.
+            </p>
+          )}
+          <AppButton
+            className="mt-3"
+            size="sm"
+            icon={<Rocket size={14} />}
+            loading={saving}
+            disabled={!canPublish}
+            onClick={onPublish}
+          >
             Publish now
           </AppButton>
         </div>
