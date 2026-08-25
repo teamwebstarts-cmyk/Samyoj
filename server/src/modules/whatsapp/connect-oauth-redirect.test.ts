@@ -29,6 +29,7 @@ describe('isAllowedOAuthRedirectUri', () => {
     expect(isAllowedOAuthRedirectUri(`http://127.0.0.1:4173${CALLBACK}`)).toBe(true);
     expect(isAllowedOAuthRedirectUri(`https://abc-3000.app.github.dev${CALLBACK}`)).toBe(true);
     expect(isAllowedOAuthRedirectUri(`https://abc.ngrok-free.app${CALLBACK}`)).toBe(true);
+    expect(isAllowedOAuthRedirectUri(`http://localhost:5173${CALLBACK}/popup`)).toBe(true);
   });
 
   it('does not allow unlisted localhost, Codespace, or ngrok origins in production', () => {
@@ -42,6 +43,7 @@ describe('isAllowedOAuthRedirectUri', () => {
     expect(isAllowedOAuthRedirectUri(`https://random-3000.app.github.dev${CALLBACK}`)).toBe(false);
     expect(isAllowedOAuthRedirectUri(`https://random.ngrok-free.app${CALLBACK}`)).toBe(false);
     expect(isAllowedOAuthRedirectUri(`https://app.example.com${CALLBACK}`)).toBe(true);
+    expect(isAllowedOAuthRedirectUri(`https://app.example.com${CALLBACK}/popup`)).toBe(true);
   });
 
   it('still rejects the wrong path even on an allowed production origin', () => {
@@ -51,5 +53,6 @@ describe('isAllowedOAuthRedirectUri', () => {
 
     expect(isAllowedOAuthRedirectUri('https://app.example.com/settings')).toBe(false);
     expect(isAllowedOAuthRedirectUri(`https://app.example.com${CALLBACK}?x=1`)).toBe(false);
+    expect(isAllowedOAuthRedirectUri(`https://app.example.com${CALLBACK}/unexpected`)).toBe(false);
   });
 });
