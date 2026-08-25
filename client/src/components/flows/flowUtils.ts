@@ -1,5 +1,10 @@
-import type { FlowNode, FlowNodeType } from '../../types';
+import type { FlowButton, FlowNode, FlowNodeType } from '../../types';
 import { nodeMeta } from './flowMeta';
+
+function isValidE164Phone(value?: string): boolean {
+  if (!value?.trim()) return false;
+  return /^\+?\d{8,15}$/.test(value.replace(/[^\d+]/g, ''));
+}
 
 /** Align button ids with branch keys before save (fixes option 3 routing after edits). */
 export function syncButtonNode(node: FlowNode): FlowNode {
@@ -34,7 +39,14 @@ export function syncButtonNode(node: FlowNode): FlowNode {
 }
 
 export function prepareNodesForSave(nodes: FlowNode[]): FlowNode[] {
-  return nodes.map((node) => syncButtonNode(node));
+  const normalized = nodes.map((node) => {
+    const withCondition =
+      node.type === 'condition' && !node.conditionType
+        ? { ...node, conditionType: 'business_hours' as const }
+        : node;
+    return syncButtonNode(withCondition);
+  });
+  return linkNodes(normalized);
 }
 
 export function linkNodes(nodes: FlowNode[]): FlowNode[] {
@@ -163,6 +175,7 @@ export function validateFlow(
     if (!tags?.length) errors.push('Add at least one contact tag');
   }
   if (nodes.length === 0) errors.push('Add at least one step');
+  if (nodes.length > 100) errors.push('Keep the flow under 100 steps');
 
   for (const node of nodes) {
     const stepLabel = nodeMeta[node.type]?.label || node.type;
@@ -174,29 +187,108 @@ export function validateFlow(
       const mode = node.buttonMode || 'reply';
       if (mode === 'reply' && !node.buttons?.length) errors.push('Add at least one reply button');
       if (mode === 'reply' && node.buttons?.length) {
+        const buttonIds = new Set<string>();
         for (let i = 0; i < node.buttons.length; i++) {
-          const btn = node.buttons[i];
+          const btn: FlowButton = node.buttons[i];
+          const buttonId = btn.id?.trim() || '';
+          if (!buttonId || buttonIds.has(buttonId)) errors.push('Reply buttons need unique IDs');
+          buttonIds.add(buttonId);
           if (!btn.title?.trim()) errors.push(`Button ${i + 1} needs a label`);
-          if (!node.branches?.[btn.id]) {
+          if (!node.branches?.[buttonId]) {
             errors.push(`Button "${btn.title || i + 1}" needs a connected next step`);
           }
         }
       }
       if (mode === 'url' && !node.ctaUrl?.trim()) errors.push('Add a website link for the URL button');
       if (mode === 'call' && !node.ctaPhone?.trim()) errors.push('Add a phone number for the call button');
+      if (mode === 'url' && node.ctaUrl?.trim()) {
+        try {
+          if (new URL(node.ctaUrl).protocol !== 'https:') errors.push('Website links must use HTTPS');
+        } catch {
+          errors.push('Enter a valid website link');
+        }
+      }
     }
     if (node.type === 'list') {
       if (!node.text?.trim()) errors.push('List Menu needs a message');
       const rows = node.listSections?.flatMap((s) => s.rows) || [];
       if (!rows.length) errors.push('List Menu needs at least one option');
+      const rowIds = new Set<string>();
+      for (const row of rows) {
+        if (!row.id?.trim() || rowIds.has(row.id.trim())) errors.push('List options need unique IDs');
+        rowIds.add(row.id.trim());
+        if (!row.title?.trim()) errors.push('List options need a label');
+        if (!node.branches?.[row.id?.trim() || ''] && !node.next) {
+          errors.push(`List option "${row.title || 'item'}" needs a connected next step`);
+        }
+      }
+    }
+    if (node.type === 'condition') {
+      const conditionType = node.conditionType || 'business_hours';
+      if (conditionType === 'has_tag' && !node.conditionTag?.trim()) errors.push('Enter the tag to check');
+      if (conditionType === 'language' && !node.languageCode?.trim()) errors.push('Enter the language to check');
+      if (
+        (conditionType === 'variable_equals' || conditionType === 'variable_contains') &&
+        (!node.conditionVariable?.trim() || node.conditionValue == null)
+      ) {
+        errors.push('Enter both a saved answer name and value');
+      }
     }
     if (node.type === 'question' && !node.prompt?.trim()) errors.push('Ask Question needs a question');
     if (node.type === 'tag' && !node.tag?.trim()) errors.push('Add Tag needs a tag name');
     if (node.type === 'template' && !node.templateName?.trim()) errors.push('Template Message needs a template');
     if (node.type === 'media' && !node.mediaUrl?.trim()) errors.push('Send Media needs a file link');
     if (node.type === 'wa_flow' && !node.waFlowId?.trim()) errors.push('WhatsApp Form needs a form selected');
+    if (node.type === 'location') {
+      if (node.latitude == null || node.longitude == null) {
+        errors.push('Send Location needs latitude and longitude');
+      } else if (
+        node.latitude < -90 ||
+        node.latitude > 90 ||
+        node.longitude < -180 ||
+        node.longitude > 180
+      ) {
+        errors.push('Enter valid map coordinates');
+      }
+    }
+    if (
+      node.type === 'contact_card' &&
+      (!node.contactName?.trim() || !isValidE164Phone(node.contactPhone))
+    ) {
+      errors.push('Contact Card needs a name and valid phone number');
+    }
+    if (node.type === 'buttons' && node.buttonMode === 'call' && !isValidE164Phone(node.ctaPhone)) {
+      errors.push('Enter a valid phone number for the call button');
+    }
     if (node.type === 'delay' && (!node.delaySeconds || node.delaySeconds < 1)) {
       errors.push('Wait step needs at least 1 second');
+    }
+    if (node.type === 'delay' && node.delaySeconds && node.delaySeconds > 86400) {
+      errors.push('Wait step cannot exceed 24 hours');
+    }
+    if (node.type === 'schedule') {
+      if (!node.scheduleAt && (!node.delaySeconds || node.delaySeconds < 1)) {
+        errors.push('Schedule step needs a date or a delay');
+      }
+      if (node.scheduleAt && Number.isNaN(new Date(node.scheduleAt).getTime())) {
+        errors.push('Enter a valid schedule date and time');
+      }
+      if (
+        node.scheduleAt &&
+        !Number.isNaN(new Date(node.scheduleAt).getTime()) &&
+        new Date(node.scheduleAt).getTime() <= Date.now()
+      ) {
+        errors.push('Schedule step must be in the future');
+      } else if (
+        node.scheduleAt &&
+        !Number.isNaN(new Date(node.scheduleAt).getTime()) &&
+        new Date(node.scheduleAt).getTime() - Date.now() > 7 * 86400000
+      ) {
+        errors.push('Schedule step cannot be more than 7 days ahead');
+      }
+      if (node.delaySeconds && node.delaySeconds > 604800) {
+        errors.push('Schedule step cannot exceed 7 days');
+      }
     }
   }
 
