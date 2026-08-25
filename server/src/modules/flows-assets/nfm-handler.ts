@@ -1,6 +1,7 @@
 import prisma from '../../config/database';
 import logger from '../../utils/logger';
 import { parseActiveFlow } from '../flows/flow-state';
+import { isSamePhoneIdentity } from '../../utils/phone';
 
 export interface NfmReplyPayload {
   flow_token?: string;
@@ -82,7 +83,13 @@ function parseNfmReply(body: NfmWebhookBody): {
 function conversationIdFromToken(flowToken?: string): string | null {
   if (!flowToken) return null;
   const parts = flowToken.split(':');
-  return parts[0] || null;
+  return parts.length >= 3 && parts[0] && parts[1] && parts[2] ? parts[0] : null;
+}
+
+function nodeIdFromToken(flowToken?: string): string | null {
+  if (!flowToken) return null;
+  const parts = flowToken.split(':');
+  return parts.length >= 3 && parts[1] ? parts[1] : null;
 }
 
 export async function handleNfmReply(body: NfmWebhookBody): Promise<{
@@ -95,16 +102,10 @@ export async function handleNfmReply(body: NfmWebhookBody): Promise<{
 
   const { flowToken, waFlowResponse, contactPhone, phoneNumberId } = parsed;
   const conversationId = conversationIdFromToken(flowToken);
+  const tokenNodeId = nodeIdFromToken(flowToken);
 
   let flowAssetId: string | undefined;
   const metaFlowId = (waFlowResponse.flow_id || waFlowResponse.flowId) as string | undefined;
-  if (metaFlowId) {
-    const asset = await prisma.flowAsset.findFirst({
-      where: { metaFlowId },
-      select: { id: true },
-    });
-    if (asset) flowAssetId = asset.id;
-  }
 
   if (!conversationId) {
     logger.info('NFM reply received without resolvable conversation', {
@@ -129,6 +130,30 @@ export async function handleNfmReply(body: NfmWebhookBody): Promise<{
     return { handled: false, conversationId };
   }
 
+  if (
+    !conversation.whatsappNumber.isActive ||
+    (phoneNumberId && phoneNumberId !== conversation.whatsappNumber.phoneNumberId) ||
+    (contactPhone && !isSamePhoneIdentity(conversation.contact.normalizedPhone, contactPhone))
+  ) {
+    logger.warn('NFM reply rejected — sender or WhatsApp number mismatch', {
+      source: 'flows-assets',
+      conversationId,
+    });
+    return { handled: true, conversationId };
+  }
+
+  if (metaFlowId) {
+    const asset = await prisma.flowAsset.findFirst({
+      where: {
+        metaFlowId,
+        organizationId: conversation.organizationId,
+        whatsappNumberId: conversation.whatsappNumberId,
+      },
+      select: { id: true },
+    });
+    if (asset) flowAssetId = asset.id;
+  }
+
   if (conversation.contact.optedIn === false) {
     logger.info('NFM reply skipped — contact opted out', {
       source: 'flows-assets',
@@ -147,6 +172,44 @@ export async function handleNfmReply(body: NfmWebhookBody): Promise<{
     return { handled: true, conversationId, flowAssetId };
   }
 
+  if (!tokenNodeId || waiting.currentNodeId !== tokenNodeId) {
+    logger.warn('NFM reply rejected — flow token does not match active form step', {
+      source: 'flows-assets',
+      conversationId,
+      waitingNodeId: waiting.currentNodeId,
+    });
+    return { handled: true, conversationId, flowAssetId };
+  }
+
+  const flow = await prisma.flow.findFirst({
+    where: {
+      id: waiting.flowId,
+      organizationId: conversation.organizationId,
+      status: 'PUBLISHED',
+      enabled: true,
+    },
+    select: { nodes: true },
+  });
+  const flowNodes = Array.isArray(flow?.nodes) ? flow.nodes as Array<Record<string, unknown>> : [];
+  const waitingNode = flowNodes.find((node) => node.id === waiting.currentNodeId);
+  const expectedMetaFlowId = typeof waitingNode?.waFlowId === 'string' ? waitingNode.waFlowId : undefined;
+  if (!expectedMetaFlowId || (metaFlowId && metaFlowId !== expectedMetaFlowId)) {
+    logger.warn('NFM reply rejected — form id does not match active flow step', {
+      source: 'flows-assets',
+      conversationId,
+    });
+    return { handled: true, conversationId, flowAssetId };
+  }
+
+  if (!conversation.whatsappNumberId) {
+    logger.warn('NFM reply rejected — conversation has no WhatsApp workspace', {
+      source: 'flows-assets',
+      conversationId,
+    });
+    return { handled: true, conversationId, flowAssetId };
+  }
+  const whatsappNumberId = conversation.whatsappNumberId;
+
   const { handleInboundAutomations } = await import('../automation/engine');
   await handleInboundAutomations({
     organizationId: conversation.organizationId,
@@ -154,8 +217,7 @@ export async function handleNfmReply(body: NfmWebhookBody): Promise<{
     contactId: conversation.contactId,
     messageId: `nfm-${Date.now()}`,
     contactPhone: contactPhone || conversation.contact.phone,
-    phoneNumberId: phoneNumberId || conversation.whatsappNumber.phoneNumberId,
-    encryptedToken: conversation.whatsappNumber.accessToken,
+    whatsappNumberId,
     content: 'Form submitted',
     isNewConversation: false,
     messageType: 'interactive',
