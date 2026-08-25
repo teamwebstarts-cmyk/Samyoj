@@ -16,7 +16,10 @@ export const webhookQueue = new Queue('webhook-queue', { connection });
 export const messageQueue = new Queue('message-queue', { connection });
 export const broadcastQueue = new Queue('broadcast-queue', { connection, defaultJobOptions });
 export const automationQueue = new Queue('automation-queue', { connection });
-export const flowQueue = new Queue('flow-queue', { connection });
+// Flow continuations are durable work, not fire-and-forget timers. Individual
+// lock-retry jobs override this with one attempt because they reschedule
+// themselves explicitly.
+export const flowQueue = new Queue('flow-queue', { connection, defaultJobOptions });
 export const retryQueue = new Queue('retry-queue', { connection });
 export const notificationQueue = new Queue('notification-queue', { connection });
 export const webhookDispatchQueue = new Queue('webhook-dispatch', { connection });
