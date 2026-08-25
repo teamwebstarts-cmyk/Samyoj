@@ -22,6 +22,10 @@ export async function createRazorpayOrder(params: {
   receipt: string;
   notes?: Record<string, string>;
 }): Promise<{ id: string; amount: number; currency: string }> {
+  if (!Number.isSafeInteger(params.amountPaise) || params.amountPaise <= 0) {
+    throw new AppError(400, 'Payment amount must be a positive integer');
+  }
+
   const res = await fetch(`${RAZORPAY_API}/orders`, {
     method: 'POST',
     headers: {
@@ -42,7 +46,21 @@ export async function createRazorpayOrder(params: {
     throw new AppError(502, 'Failed to create payment order');
   }
 
-  return res.json() as Promise<{ id: string; amount: number; currency: string }>;
+  const order = (await res.json()) as { id?: string; amount?: number; currency?: string };
+  if (
+    !order.id ||
+    order.amount !== params.amountPaise ||
+    order.currency !== 'INR'
+  ) {
+    logger.error('Razorpay returned an unexpected order amount or currency', {
+      source: 'razorpay',
+      expectedAmount: params.amountPaise,
+      returnedAmount: order.amount,
+      returnedCurrency: order.currency,
+    });
+    throw new AppError(502, 'Payment gateway returned an invalid order');
+  }
+  return { id: order.id, amount: order.amount, currency: order.currency };
 }
 
 export async function razorpayApi<T>(path: string, init?: RequestInit): Promise<T> {
@@ -120,6 +138,86 @@ export async function fetchRazorpaySubscription(subscriptionId: string): Promise
   return razorpayApi(`/subscriptions/${subscriptionId}`);
 }
 
+export type RazorpayOrder = {
+  id: string;
+  amount: number;
+  currency: string;
+  status?: string;
+};
+
+export type RazorpayPayment = {
+  id: string;
+  order_id: string;
+  amount: number;
+  currency: string;
+  status: string;
+  error_code?: string | null;
+  error_description?: string | null;
+};
+
+export async function fetchRazorpayOrder(orderId: string): Promise<RazorpayOrder> {
+  return razorpayApi<RazorpayOrder>(`/orders/${encodeURIComponent(orderId)}`);
+}
+
+export async function fetchRazorpayPayment(paymentId: string): Promise<RazorpayPayment> {
+  return razorpayApi<RazorpayPayment>(`/payments/${encodeURIComponent(paymentId)}`);
+}
+
+export async function fetchRazorpayOrderPayments(orderId: string): Promise<RazorpayPayment[]> {
+  const response = await razorpayApi<{ items?: RazorpayPayment[] }>(
+    `/orders/${encodeURIComponent(orderId)}/payments`
+  );
+  return response.items || [];
+}
+
+/**
+ * Entitlement is granted only after both provider resources agree exactly
+ * with the immutable local order snapshot.
+ */
+export async function verifyCapturedPayment(params: {
+  orderId: string;
+  paymentId: string;
+  amountPaise: number;
+  currency: string;
+}): Promise<{ order: RazorpayOrder; payment: RazorpayPayment }> {
+  const [order, payment] = await Promise.all([
+    fetchRazorpayOrder(params.orderId),
+    fetchRazorpayPayment(params.paymentId),
+  ]);
+
+  if (
+    order.id !== params.orderId ||
+    order.amount !== params.amountPaise ||
+    order.currency !== params.currency ||
+    payment.id !== params.paymentId ||
+    payment.order_id !== params.orderId ||
+    payment.amount !== params.amountPaise ||
+    payment.currency !== params.currency
+  ) {
+    throw new AppError(409, 'Payment amount, currency, or order does not match', 'PAYMENT_MISMATCH');
+  }
+
+  if (payment.status === 'failed') {
+    throw new AppError(409, 'Provider reported that this payment failed', 'PAYMENT_FAILED');
+  }
+  if (payment.status === 'refunded') {
+    throw new AppError(409, 'Provider reported that this payment was refunded', 'PAYMENT_REFUNDED');
+  }
+  if (payment.status === 'reversed') {
+    throw new AppError(409, 'Provider reported that this payment was reversed', 'PAYMENT_REVERSED');
+  }
+
+  if (payment.status !== 'captured' || order.status !== 'paid') {
+    throw new AppError(
+      202,
+      'Payment verification is pending provider confirmation',
+      'VERIFICATION_PENDING'
+    );
+  }
+
+  return { order, payment };
+}
+
 /**
  * Razorpay subscription checkout signature: payment_id|subscription_id
  */
@@ -128,17 +226,16 @@ export function verifySubscriptionPaymentSignature(
   paymentId: string,
   signature: string
 ): boolean {
-  if (!signature) return false;
+  if (!signature || !config.razorpay.keySecret) return false;
   const body = `${paymentId}|${subscriptionId}`;
   const expected = crypto
     .createHmac('sha256', config.razorpay.keySecret)
     .update(body)
     .digest('hex');
   try {
-    return crypto.timingSafeEqual(
-      Buffer.from(expected, 'hex'),
-      Buffer.from(signature, 'hex')
-    );
+    const actual = Buffer.from(signature, 'hex');
+    const expectedBuffer = Buffer.from(expected, 'hex');
+    return actual.length === expectedBuffer.length && crypto.timingSafeEqual(expectedBuffer, actual);
   } catch {
     return false;
   }
@@ -152,17 +249,16 @@ export function verifyPaymentSignature(
   paymentId: string,
   signature: string
 ): boolean {
-  if (!signature) return false;
+  if (!signature || !config.razorpay.keySecret) return false;
   const body = `${orderId}|${paymentId}`;
   const expected = crypto
     .createHmac('sha256', config.razorpay.keySecret)
     .update(body)
     .digest('hex');
   try {
-    return crypto.timingSafeEqual(
-      Buffer.from(expected, 'hex'),
-      Buffer.from(signature, 'hex')
-    );
+    const actual = Buffer.from(signature, 'hex');
+    const expectedBuffer = Buffer.from(expected, 'hex');
+    return actual.length === expectedBuffer.length && crypto.timingSafeEqual(expectedBuffer, actual);
   } catch {
     // Buffer.from throws if signature is not valid hex — treat as invalid
     return false;
@@ -187,10 +283,9 @@ export function verifyWebhookSignature(rawBody: string, signature: string): bool
     .update(rawBody)
     .digest('hex');
   try {
-    return crypto.timingSafeEqual(
-      Buffer.from(expected, 'hex'),
-      Buffer.from(signature, 'hex')
-    );
+    const actual = Buffer.from(signature, 'hex');
+    const expectedBuffer = Buffer.from(expected, 'hex');
+    return actual.length === expectedBuffer.length && crypto.timingSafeEqual(expectedBuffer, actual);
   } catch {
     return false;
   }
