@@ -105,6 +105,7 @@ describe('plans.ts', () => {
       expect(getPlan('starter')?.id).toBe('starter');
       expect(getPlan('growth')?.id).toBe('growth');
       expect(getPlan('pro')?.id).toBe('pro');
+      console.log('plan-catalog-ok');
     });
   });
 });
