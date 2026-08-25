@@ -78,6 +78,21 @@ describe('validateFlowGraph', () => {
     );
   });
 
+  it('warns when a goto_flow step targets the same flow id', () => {
+    const result = validateFlowGraph(
+      [
+        { id: 'a', type: 'message', text: 'Hi', next: 'jump' },
+        { id: 'jump', type: 'goto_flow', targetFlowId: 'flow-self' },
+      ],
+      'WELCOME',
+      {},
+      'a',
+      { currentFlowId: 'flow-self' },
+    );
+    expect(result.valid).toBe(true);
+    expect(result.warnings.some((w) => w.includes('same flow'))).toBe(true);
+  });
+
   it('rejects incomplete conditions and duplicate button IDs', () => {
     const result = validateFlowGraph(
       [

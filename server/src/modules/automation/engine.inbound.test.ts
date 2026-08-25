@@ -5,7 +5,7 @@ vi.mock('../../config/database', () => ({
     conversation: { findFirst: vi.fn() },
     contact: { findFirst: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
     automation: { findMany: vi.fn() },
-    message: { create: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
+    message: { create: vi.fn(), findUnique: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
     automationLog: { findFirst: vi.fn(), create: vi.fn() },
   },
 }));
@@ -65,7 +65,7 @@ import { logAutomationRun } from '../ai/chatbot.service';
 import { hasEnabledBots } from '../ai/bot.service';
 import { handleInboundFlow } from '../flows/engine';
 import { FLOW_LOCK_BUSY } from '../flows/inbound-wait';
-import { handleInboundAutomations, isUnremovableQueueState, queueAiBotProcessing } from './engine';
+import { handleInboundAutomations, isUnremovableQueueState, queueAiBotProcessing, retryInboundAutomations } from './engine';
 
 const conversationMock = vi.mocked(prisma.conversation.findFirst);
 const contactMock = vi.mocked(prisma.contact.findFirst);
@@ -75,6 +75,7 @@ const flowHandled = vi.mocked(handleInboundFlow);
 const flowQueueAdd = vi.mocked(flowQueue.add);
 const flowQueueGetJob = vi.mocked(flowQueue.getJob);
 const automationQueueAdd = vi.mocked(automationQueue.add);
+const messageFindFirst = vi.mocked(prisma.message.findFirst);
 const logRun = vi.mocked(logAutomationRun);
 const botsEnabled = vi.mocked(hasEnabledBots);
 
@@ -329,6 +330,61 @@ describe('queueAiBotProcessing debounce', () => {
       'ai-chatbot',
       expect.objectContaining({ messageId: 'msg-1' }),
       expect.objectContaining({ jobId: 'ai-bot-conv-1-msg-1' })
+    );
+  });
+});
+
+describe('retryInboundAutomations', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    conversationMock.mockResolvedValue({
+      id: 'conv-1',
+      botActive: true,
+      whatsappNumberId: 'wa-1',
+      botHandoffAt: null,
+    } as never);
+    syncConversationChatAiFromGlobalMock.mockImplementation(async (_org, conv) => conv);
+    resolveChatAiEffectivelyOnMock.mockResolvedValue({
+      live: true,
+      globalAiEnabled: false,
+      botId: null,
+    });
+    contactMock.mockResolvedValue({ optedIn: true } as never);
+    automationMock.mockResolvedValue([]);
+    logFindMock.mockResolvedValue(null);
+    flowHandled.mockResolvedValue(false);
+    flowQueueGetJob.mockResolvedValue(undefined);
+    flowQueueAdd.mockResolvedValue({} as never);
+    automationQueueAdd.mockResolvedValue({} as never);
+    botsEnabled.mockResolvedValue(false);
+    vi.mocked(automationQueue.getJob).mockResolvedValue(undefined);
+    vi.mocked(prisma.message.findUnique).mockResolvedValue({ metadata: {} } as never);
+    vi.mocked(prisma.message.update).mockResolvedValue({} as never);
+    messageFindFirst.mockResolvedValue({
+      content: 'Need help with order 8821',
+      type: 'TEXT',
+      metadata: { buttonReplyId: 'track', waFlowResponse: { order_id: '8821' } },
+    } as never);
+  });
+
+  it('rebuilds inbound automation payload from the durable message row', async () => {
+    await retryInboundAutomations({
+      organizationId: 'org-1',
+      conversationId: 'conv-1',
+      contactId: 'contact-1',
+      messageId: 'msg-1',
+      whatsappNumberId: 'wa-1',
+      isNewConversation: false,
+    });
+
+    expect(messageFindFirst).toHaveBeenCalled();
+    expect(flowHandled).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messageId: 'msg-1',
+        content: 'Need help with order 8821',
+        buttonReplyId: 'track',
+        waFlowResponse: { order_id: '8821' },
+      }),
     );
   });
 });

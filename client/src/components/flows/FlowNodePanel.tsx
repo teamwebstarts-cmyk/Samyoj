@@ -499,16 +499,23 @@ function FlowNodePanelForm({
       )}
 
       {node.type === 'goto_flow' && (
-        <AppSelect
-          label="Other auto-reply to switch to"
-          value={node.targetFlowId || ''}
-          options={[
-            { value: '', label: 'Select a flow...' },
-            ...gotoFlowOptions.map((f) => ({ value: f.id, label: f.name })),
-          ]}
-          isSearchable
-          onChange={(e) => onChange({ targetFlowId: e.target.value || undefined })}
-        />
+        <div className="space-y-2">
+          <AppSelect
+            label="Other auto-reply to switch to"
+            value={node.targetFlowId || ''}
+            options={[
+              { value: '', label: 'Select a flow...' },
+              ...gotoFlowOptions.map((f) => ({ value: f.id, label: f.name })),
+            ]}
+            isSearchable
+            onChange={(e) => onChange({ targetFlowId: e.target.value || undefined })}
+          />
+          {node.targetFlowId ? (
+            <p className="text-[11px] font-medium leading-snug text-amber-800 dark:text-amber-200">
+              Cross-flow jumps are limited to 10 hops. Avoid loops between auto-replies or customers may get stuck.
+            </p>
+          ) : null}
+        </div>
       )}
 
       {node.type === 'request_callback' && (

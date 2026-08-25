@@ -84,11 +84,17 @@ function detectFlowCycles(
   return { dangerous, looping };
 }
 
+export interface FlowValidationOptions {
+  /** When saving an existing flow, warn if a goto_flow targets this same flow id. */
+  currentFlowId?: string;
+}
+
 export function validateFlowGraph(
   nodes: FlowNode[],
   triggerType: string,
   triggerConfig: Record<string, unknown>,
-  startNodeId?: string | null
+  startNodeId?: string | null,
+  options?: FlowValidationOptions
 ): FlowValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -222,6 +228,16 @@ export function validateFlowGraph(
 
     if (node.type === 'goto_flow' && !node.targetFlowId) {
       errors.push(`Go to flow step "${node.id}" needs a target flow`);
+    }
+    if (
+      node.type === 'goto_flow' &&
+      node.targetFlowId &&
+      options?.currentFlowId &&
+      node.targetFlowId === options.currentFlowId
+    ) {
+      warnings.push(
+        `Go to flow step "${node.id}" jumps back into this same flow — avoid cycles that never end`,
+      );
     }
 
     if (node.type === 'goto_step' && !node.targetNodeId) {

@@ -163,12 +163,13 @@ function withLinkedNodes<T extends { nodes: FlowNode[]; startNodeId?: string | n
   };
 }
 
-function assertValidFlow(data: z.infer<typeof flowSchema>) {
+function assertValidFlow(data: z.infer<typeof flowSchema>, currentFlowId?: string) {
   const result = validateFlowGraph(
     data.nodes,
     data.triggerType,
     data.triggerConfig as Record<string, unknown>,
-    data.startNodeId
+    data.startNodeId,
+    currentFlowId ? { currentFlowId } : undefined,
   );
   if (!result.valid) {
     throw new AppError(400, result.errors.join('; '));
@@ -228,11 +229,14 @@ router.get('/', ...memberGuard, asyncHandler(async (req, res) => {
 
 router.post('/validate', ...memberGuard, asyncHandler(async (req, res) => {
   const data = withLinkedNodes(flowSchema.parse(req.body));
+  const currentFlowId =
+    typeof req.body?.flowId === 'string' && req.body.flowId.trim() ? req.body.flowId.trim() : undefined;
   const result = validateFlowGraph(
     data.nodes,
     data.triggerType,
     data.triggerConfig as Record<string, unknown>,
-    data.startNodeId
+    data.startNodeId,
+    currentFlowId ? { currentFlowId } : undefined,
   );
   sendSuccess(res, result);
 }));
@@ -446,7 +450,7 @@ router.patch('/:id', ...adminGuard, asyncHandler(async (req, res) => {
       startNodeId: draftStartNodeId ?? undefined,
       enabled: data.enabled ?? existing.enabled,
       priority: data.priority ?? existing.priority,
-    });
+    }, id);
     await saveFlowDraft(id, orgId, {
       nodes: draftNodes,
       name: draftName,
@@ -490,7 +494,7 @@ router.patch('/:id', ...adminGuard, asyncHandler(async (req, res) => {
       startNodeId: merged.startNodeId ?? undefined,
       enabled: data.enabled ?? existing.enabled,
       priority: data.priority ?? existing.priority,
-    });
+    }, id);
   }
 
   const flow = await prisma.flow.update({
