@@ -6,6 +6,7 @@ import { loadPermissions, requirePermission } from '../../middleware/permissions
 import { sendSuccess, asyncHandler, AppError } from '../../utils/response';
 import { isRazorpayConfigured } from './razorpay.service';
 import { config } from '../../config';
+import { requireActiveCommercialOnMutation } from '../../middleware/plan-guard';
 
 const router = Router();
 
@@ -15,6 +16,7 @@ router.post(
   requireOrg,
   loadPermissions,
   requirePermission('manageBilling'),
+  requireActiveCommercialOnMutation(),
   asyncHandler(async (req: Request, res: Response) => {
     if (!isRazorpayConfigured()) {
       throw new AppError(400, 'Razorpay is not configured');
