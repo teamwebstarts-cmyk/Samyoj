@@ -21,10 +21,15 @@ import { getTemplateVariableMeta, saveTemplateVariableMeta } from './variable-me
 import prisma from '../../config/database';
 import { normalizePhoneIdentity } from '../../utils/phone';
 import { emitProductEvent } from '../platform/events';
+import {
+  requireActiveCommercialOnMutation,
+  requireFeatureOnMutation,
+} from '../../middleware/plan-guard';
 
 const router = Router();
 
 router.use(authenticate, requireOrg, resolveActiveWhatsappNumber, ...withPermission('manageTemplates'));
+router.use(requireActiveCommercialOnMutation(), requireFeatureOnMutation('templates'));
 
 function emitTemplateSyncTelemetry(
   organizationId: string,
