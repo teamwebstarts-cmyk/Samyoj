@@ -1,4 +1,5 @@
 import prisma from '../../config/database';
+import { automationsForNumberFilter, flowsForNumberFilter } from '../whatsapp/active-number';
 
 export interface AutomationConflictLink {
   label: string;
@@ -38,8 +39,8 @@ export interface ConflictPreviewInput {
   status?: string;
 }
 
-function autoHref(): string {
-  return '/automations?tab=quick';
+function autoHref(id?: string): string {
+  return id ? `/automations?tab=quick&automationId=${id}` : '/automations?tab=quick';
 }
 
 function flowHref(id?: string): string {
@@ -47,7 +48,7 @@ function flowHref(id?: string): string {
 }
 
 function autoLinks(items: ConflictAutomation[]): AutomationConflictLink[] {
-  return items.map((a) => ({ label: a.name, href: autoHref() }));
+  return items.map((a) => ({ label: a.name, href: autoHref(a.id) }));
 }
 
 function flowLinks(items: ConflictFlow[]): AutomationConflictLink[] {
@@ -141,7 +142,7 @@ export function findAutomationConflicts(
   const businessHoursFlows = flows.filter((f) => f.triggerType === 'BUSINESS_HOURS');
 
   const awayCount = awayAutomations.length + businessHoursAutomations.length;
-  if (awayCount > 2) {
+  if (awayCount >= 2) {
     const awayRows = [...awayAutomations, ...businessHoursAutomations];
     conflicts.push({
       type: 'away_overlap',
@@ -267,6 +268,58 @@ export function findAutomationConflicts(
     }
   }
 
+  const campaignReplyFlows = flows.filter((f) => f.triggerType === 'CAMPAIGN_REPLY');
+  if (campaignReplyFlows.length > 1) {
+    conflicts.push({
+      type: 'duplicate_campaign_reply',
+      severity: 'warning',
+      message: 'Multiple campaign-reply flows — highest priority runs',
+      items: campaignReplyFlows.map((f) => f.name),
+      links: flowLinks(campaignReplyFlows),
+    });
+  }
+
+  const callCompletedFlows = flows.filter((f) => f.triggerType === 'CALL_COMPLETED');
+  if (callCompletedFlows.length > 1) {
+    conflicts.push({
+      type: 'duplicate_call_completed',
+      severity: 'warning',
+      message: 'Multiple call-completed flows — highest priority runs',
+      items: callCompletedFlows.map((f) => f.name),
+      links: flowLinks(callCompletedFlows),
+    });
+  }
+
+  const contactTagFlows = flows.filter((f) => f.triggerType === 'CONTACT_TAG');
+  const tagMap = new Map<string, ConflictFlow[]>();
+  for (const f of contactTagFlows) {
+    const tag = String((f.triggerConfig as Record<string, unknown>).tag || '').toLowerCase();
+    if (!tag) continue;
+    tagMap.set(tag, [...(tagMap.get(tag) || []), f]);
+  }
+  for (const [tag, flowRows] of tagMap) {
+    if (flowRows.length > 1) {
+      conflicts.push({
+        type: 'duplicate_contact_tag',
+        severity: 'warning',
+        message: `Contact tag "${tag}" used in multiple flows — highest priority wins`,
+        items: flowRows.map((f) => f.name),
+        links: flowLinks(flowRows),
+      });
+    }
+  }
+
+  const segmentFlows = flows.filter((f) => f.triggerType === 'SEGMENT');
+  if (segmentFlows.length > 1) {
+    conflicts.push({
+      type: 'duplicate_segment',
+      severity: 'warning',
+      message: 'Multiple segment flows may overlap — highest priority wins',
+      items: segmentFlows.map((f) => f.name),
+      links: flowLinks(segmentFlows),
+    });
+  }
+
   return conflicts;
 }
 
@@ -292,10 +345,22 @@ function toConflictRows(automations: Array<{ id: string; name: string; triggerTy
   };
 }
 
-export async function detectAutomationConflicts(organizationId: string): Promise<AutomationConflict[]> {
+export async function detectAutomationConflicts(
+  organizationId: string,
+  whatsappNumberId: string
+): Promise<AutomationConflict[]> {
   const [automations, flows] = await Promise.all([
-    prisma.automation.findMany({ where: { organizationId, enabled: true } }),
-    prisma.flow.findMany({ where: { organizationId, enabled: true, status: 'PUBLISHED' } }),
+    prisma.automation.findMany({
+      where: { organizationId, ...automationsForNumberFilter(whatsappNumberId), enabled: true },
+    }),
+    prisma.flow.findMany({
+      where: {
+        organizationId,
+        ...flowsForNumberFilter(whatsappNumberId),
+        enabled: true,
+        status: 'PUBLISHED',
+      },
+    }),
   ]);
 
   const rows = toConflictRows(automations, flows);
@@ -304,11 +369,21 @@ export async function detectAutomationConflicts(organizationId: string): Promise
 
 export async function previewAutomationConflicts(
   organizationId: string,
-  proposed: ConflictPreviewInput
+  proposed: ConflictPreviewInput,
+  whatsappNumberId: string
 ): Promise<AutomationConflict[]> {
   const [automations, flows] = await Promise.all([
-    prisma.automation.findMany({ where: { organizationId, enabled: true } }),
-    prisma.flow.findMany({ where: { organizationId, enabled: true, status: 'PUBLISHED' } }),
+    prisma.automation.findMany({
+      where: { organizationId, ...automationsForNumberFilter(whatsappNumberId), enabled: true },
+    }),
+    prisma.flow.findMany({
+      where: {
+        organizationId,
+        ...flowsForNumberFilter(whatsappNumberId),
+        enabled: true,
+        status: 'PUBLISHED',
+      },
+    }),
   ]);
 
   const rows = toConflictRows(automations, flows);
