@@ -10,6 +10,8 @@ import TeamRolesTab from '../components/team/TeamRolesTab';
 import { useAuth } from '../contexts/AuthContext';
 import { teamApi } from '../services/api';
 import type { TeamDepartment, TeamSummary } from '../types';
+import { useEntitlements } from '../hooks/useEntitlements';
+import EntitlementNotice, { quotaUpgradeMessage } from '../components/billing/EntitlementNotice';
 
 type TeamTab = 'members' | 'invites' | 'departments' | 'roles';
 
@@ -25,6 +27,7 @@ const tabMeta: Record<
 
 export default function TeamPage() {
   const { canManageTeam, orgRole } = useAuth();
+  const { entitlements, loading: entitlementsLoading } = useEntitlements();
   const [activeTab, setActiveTab] = useState<TeamTab>('members');
   const [departments, setDepartments] = useState<TeamDepartment[]>([]);
   const [summary, setSummary] = useState<TeamSummary>({
@@ -35,6 +38,17 @@ export default function TeamPage() {
     agents: 0,
     online: 0,
   });
+  const teamPlanAllowsManagement =
+    entitlementsLoading ||
+    !entitlements ||
+    (entitlements.canUseFeature('team') && entitlements.canAddToQuota('seats'));
+  const teamGateMessage =
+    !entitlementsLoading && entitlements && !entitlements.canUseFeature('team')
+      ? 'Team management is unavailable while your plan is locked.'
+      : entitlements && !entitlements.canAddToQuota('seats')
+        ? quotaUpgradeMessage('seats')
+        : null;
+  const canManageTeamOnPlan = canManageTeam && teamPlanAllowsManagement;
 
   const loadDepartments = useCallback(() => {
     teamApi.departments
@@ -52,8 +66,10 @@ export default function TeamPage() {
 
   const visibleTabIds = useMemo(
     () =>
-      (Object.keys(tabMeta) as TeamTab[]).filter((id) => !tabMeta[id].adminOnly || canManageTeam),
-    [canManageTeam],
+      (Object.keys(tabMeta) as TeamTab[]).filter(
+        (id) => !tabMeta[id].adminOnly || canManageTeamOnPlan,
+      ),
+    [canManageTeamOnPlan],
   );
 
   useEffect(() => {
@@ -115,22 +131,29 @@ export default function TeamPage() {
           ariaLabel="Team sections"
         />
 
+        {teamGateMessage && (
+          <EntitlementNotice
+            message={teamGateMessage}
+            upgradePlan={entitlements?.isLocked ? 'growth' : entitlements?.getUpgradePlan('seats')}
+          />
+        )}
+
         <div className="space-y-4">
           {activeTab === 'members' && (
             <TeamMembersTab
-              canManage={canManageTeam}
+              canManage={canManageTeamOnPlan}
               orgRole={orgRole}
               departments={departments}
               onSummaryChange={setSummary}
             />
           )}
-          {activeTab === 'invites' && canManageTeam && (
-            <TeamInvitesTab departments={departments} canManage={canManageTeam} />
+          {activeTab === 'invites' && canManageTeamOnPlan && (
+            <TeamInvitesTab departments={departments} canManage={canManageTeamOnPlan} />
           )}
           {activeTab === 'departments' && (
-            <TeamDepartmentsTab canManage={canManageTeam} onChanged={loadDepartments} />
+            <TeamDepartmentsTab canManage={canManageTeamOnPlan} onChanged={loadDepartments} />
           )}
-          {activeTab === 'roles' && canManageTeam && <TeamRolesTab canManage={canManageTeam} />}
+          {activeTab === 'roles' && canManageTeamOnPlan && <TeamRolesTab canManage={canManageTeamOnPlan} />}
         </div>
       </div>
     </PageShell>
