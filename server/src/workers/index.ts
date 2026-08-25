@@ -168,7 +168,6 @@ const messageWorker = new Worker(
       organizationId,
       whatsappNumberId,
       phoneNumberId,
-      encryptedToken,
       to,
       content,
       type,
@@ -199,7 +198,6 @@ const messageWorker = new Worker(
       whatsappNumberId,
       messageId,
       phoneNumberId,
-      encryptedToken,
       to,
       content,
       type: type || 'TEXT',
@@ -789,6 +787,10 @@ const flowWorker = new Worker(
       const { handleInboundAutomations } = await import('../modules/automation/engine');
       await handleInboundAutomations(job.data);
     }
+    if (job.name === 'retry-inbound-message') {
+      const { retryInboundAutomations } = await import('../modules/automation/engine');
+      await retryInboundAutomations(job.data);
+    }
   },
   {
     connection,
@@ -912,6 +914,21 @@ setInterval(() => {
   import('../modules/campaigns/service')
     .then(({ processScheduledCampaigns }) => processScheduledCampaigns())
     .catch((err) => logError(err, { source: 'worker', action: 'processScheduledCampaigns' }));
+}, 60_000);
+
+// Retry AI credit deductions that were durably marked after a provider
+// response but could not be settled immediately.
+setInterval(() => {
+  import('../modules/ai/org-ai.service')
+    .then(({ retryPendingAiCreditDeductions }) => retryPendingAiCreditDeductions())
+    .catch((err) => logError(err, { source: 'worker', action: 'retryAiCreditDeductions' }));
+}, 60_000);
+
+// Retry calling-minute deductions that were durably marked after a call ended.
+setInterval(() => {
+  import('../modules/billing/ai-credits/service')
+    .then(({ retryPendingCallingMinuteDeductions }) => retryPendingCallingMinuteDeductions())
+    .catch((err) => logError(err, { source: 'worker', action: 'retryCallingMinuteDeductions' }));
 }, 60_000);
 
 }
