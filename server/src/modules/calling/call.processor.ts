@@ -32,6 +32,8 @@ import {
   unregisterActiveCall,
 } from './session-store';
 import type { CallWebhookEntry } from './types';
+import { checkQuota } from '../billing/entitlements.service';
+import { AppError } from '../../utils/response';
 
 const log = createModuleLogger('call-processor');
 
@@ -101,20 +103,44 @@ async function ensureContactAndConversation(
   });
 
   if (!contact) {
-    // Inbound call is user-initiated engagement → allow service-window messaging consent.
-    // Do not force optedIn on existing contacts (STOP / opt-out must stick).
-    contact = await prisma.contact.create({
-      data: {
-        organizationId: orgId,
-        phone: contactPhone,
-        normalizedPhone: contactPhone,
-        whatsappNumberId,
-        optedIn: true,
-        consentSource: 'INBOUND_CALL',
-        consentAt: new Date(),
-        source: 'INBOUND',
-        ...NEW_CONTACT_CALLING_DEFAULTS,
-      },
+    contact = await prisma.$transaction(async (tx) => {
+      // Serialize inbound call creation with manual/import/webhook contact
+      // paths that use the same organization row as their quota lock.
+      await tx.$queryRaw`SELECT id FROM organizations WHERE id = ${orgId} FOR UPDATE`;
+      const existing = await tx.contact.findUnique({
+        where: {
+          organizationId_whatsappNumberId_normalizedPhone: {
+            organizationId: orgId,
+            whatsappNumberId,
+            normalizedPhone: contactPhone,
+          },
+        },
+      });
+      if (existing) return existing;
+
+      const quota = await checkQuota(orgId, 'contacts', 1);
+      if (!quota.allowed) {
+        throw new AppError(
+          402,
+          quota.reason || `Contact limit reached (${quota.used}/${quota.limit})`,
+          quota.code || 'PLAN_LIMIT_CONTACTS'
+        );
+      }
+      // Inbound call is user-initiated engagement → allow service-window messaging consent.
+      // Do not force optedIn on existing contacts (STOP / opt-out must stick).
+      return tx.contact.create({
+        data: {
+          organizationId: orgId,
+          phone: contactPhone,
+          normalizedPhone: contactPhone,
+          whatsappNumberId,
+          optedIn: true,
+          consentSource: 'INBOUND_CALL',
+          consentAt: new Date(),
+          source: 'INBOUND',
+          ...NEW_CONTACT_CALLING_DEFAULTS,
+        },
+      });
     });
   }
 
@@ -597,6 +623,28 @@ async function handleCallConnect(
     });
   }
 
+  const callingQuota = await checkQuota(orgId, 'calling');
+  if (!callingQuota.allowed) {
+    log.info('Inbound call rejected by calling entitlement', {
+      metaCallId,
+      organizationId: orgId,
+      code: callingQuota.code,
+    });
+    try {
+      await MetaCallingService.reject(phoneNumberId, accessToken, metaCallId);
+    } catch {
+      // The durable local call state below is still the source of truth.
+    }
+    await markCallMissed(
+      orgId,
+      callRecord.id,
+      conversation.id,
+      contact.id,
+      callingQuota.code || 'CALLING_NOT_INCLUDED'
+    );
+    return;
+  }
+
   emitToOrg(orgId, 'call:incoming', {
     callId: callRecord.id,
     metaCallId,
@@ -802,9 +850,7 @@ async function handleCallTerminate(
         organizationId: orgId,
         conversationId: existing.conversationId,
         contactId: existing.contactId,
-        contactPhone: contact.phone,
-        phoneNumberId: whatsappNumber.phoneNumberId,
-        encryptedToken: whatsappNumber.accessToken,
+        whatsappNumberId: whatsappNumber.id,
       });
     }
   }
