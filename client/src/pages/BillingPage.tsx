@@ -21,18 +21,57 @@ import PageShell from '../components/ui/PageShell';
 import SectionCard from '../components/ui/SectionCard';
 import { analyticsApi, billingApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
-import type { AiCreditsResponse, AiTopupSkuClient, BillingInfo, BillingPlan, BillingUsage, ReportsOverviewFullData } from '../types';
-import { openRazorpayCheckout, openRazorpaySubscriptionCheckout } from '../utils/razorpay';
+import type {
+  AiCreditsResponse,
+  AiTopupSkuClient,
+  BillingInfo,
+  BillingPaymentAttempt,
+  BillingPlan,
+  BillingUsage,
+  ReportsOverviewFullData,
+} from '../types';
+import { openRazorpayCheckout } from '../utils/razorpay';
 import { toastError, toastSuccess } from '../utils/toast';
 
 type BillingTab = 'usage' | 'plans' | 'history';
 type CadenceTab = 'monthly' | 'quarterly' | 'yearly';
+type PaymentNotice = {
+  variant: 'warning' | 'error' | 'info';
+  message: string;
+  planId?: string;
+};
+
+const PLAN_TIER_ORDER: Record<string, number> = {
+  launch: 0,
+  starter: 1,
+  growth: 2,
+  pro: 3,
+  enterprise: 4,
+};
 
 const tabMeta = {
   usage: { label: 'Usage & Statistics', shortLabel: 'Usage & Stats', icon: BarChart3 },
   plans: { label: 'Plans & Pricing', shortLabel: 'Plans', icon: CreditCard },
   history: { label: 'Invoices & History', shortLabel: 'History', icon: Receipt },
 } as const;
+
+function paymentStatusLabel(payment: BillingPaymentAttempt): string {
+  const status = payment.status?.toUpperCase();
+  if (status === 'CAPTURED' || status === 'PAID') return 'Captured';
+  if (status === 'FAILED' || status === 'REVERSED' || status === 'REFUNDED') return 'Failed';
+  return 'Pending';
+}
+
+function paymentStatusClass(payment: BillingPaymentAttempt): string {
+  const label = paymentStatusLabel(payment);
+  if (label === 'Captured') {
+    return 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300';
+  }
+  if (label === 'Failed') {
+    return 'bg-rose-50 text-rose-800 dark:bg-rose-950/50 dark:text-rose-300';
+  }
+  return 'bg-amber-50 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300';
+}
 
 export default function BillingPage() {
   const { user, refreshSession } = useAuth();
@@ -50,7 +89,7 @@ export default function BillingPage() {
   const [overviewUnavailable, setOverviewUnavailable] = useState(false);
   const [upgrading, setUpgrading] = useState<string | null>(null);
   const [purchasingSku, setPurchasingSku] = useState<string | null>(null);
-  const [recurringSku, setRecurringSku] = useState<string | null>(null);
+  const [paymentNotice, setPaymentNotice] = useState<PaymentNotice | null>(null);
 
   const handleTabChange = useCallback(
     (newTab: BillingTab) => {
@@ -89,12 +128,37 @@ export default function BillingPage() {
     setLoading(true);
     Promise.all([
       billingApi.get(),
+      billingApi.current().catch(() => null),
       billingApi.usage(),
       billingApi.aiCredits().catch(() => null),
       analyticsApi.overview({ days: '30' }).catch(() => null),
     ])
-      .then(([billingRes, usageRes, aiCreditsRes, overviewRes]) => {
-        setInfo(billingRes.data.data);
+      .then(([billingRes, currentRes, usageRes, aiCreditsRes, overviewRes]) => {
+        const baseInfo = billingRes.data.data as BillingInfo;
+        const currentData = currentRes?.data?.data as
+          | {
+              plan?: string;
+              planTier?: string;
+              subscriptionStatus?: string;
+              planExpiresAt?: string | null;
+              entitlements?: BillingInfo['entitlements'];
+            }
+          | undefined;
+        setInfo({
+          ...baseInfo,
+          plan: currentData?.plan || baseInfo.plan,
+          planTier: (currentData?.entitlements?.planTier ||
+            currentData?.planTier ||
+            baseInfo.planTier) as BillingInfo['planTier'],
+          subscriptionStatus:
+            currentData?.entitlements?.subscriptionStatus ||
+            currentData?.subscriptionStatus ||
+            baseInfo.subscriptionStatus,
+          planExpiresAt:
+            currentData?.entitlements?.planExpiresAt ||
+            currentData?.planExpiresAt,
+          entitlements: currentData?.entitlements || baseInfo.entitlements,
+        });
         setUsage(usageRes.data.data);
         setAiCredits(aiCreditsRes?.data?.data ?? null);
         if (overviewRes?.data?.data) {
@@ -127,8 +191,57 @@ export default function BillingPage() {
     }
   }, [info?.cadence]);
 
+  const displayedPlanId = info?.planTier || info?.plan;
+  const displayedPlanExpiry =
+    info?.entitlements?.planExpiresAt || info?.planExpiresAt || info?.currentPeriodEnd;
+  const billingStatusLocked = ['trial_expired', 'locked', 'expired', 'cancelled', 'past_due'].includes(
+    info?.subscriptionStatus || '',
+  );
+  const currentPlanIsActive = Boolean(
+    displayedPlanId &&
+      !info?.entitlements?.isLocked &&
+      !billingStatusLocked &&
+      (!displayedPlanExpiry || new Date(displayedPlanExpiry).getTime() > Date.now()),
+  );
+  // Keep the expired tier for display, but do not mark it as the current
+  // selectable plan: post-expiry users may manually repurchase any tier.
+  const currentPlanId = currentPlanIsActive ? displayedPlanId : undefined;
+  const activePaidPlanId = info?.activePaidPlan;
+  const activePaidPlanIsValid = Boolean(
+    activePaidPlanId &&
+      (!info?.activePaidExpiresAt || new Date(info.activePaidExpiresAt).getTime() > Date.now()),
+  );
+  const activePaidPlan = info?.plans.find((plan) => plan.id === activePaidPlanId);
+  const currentPlan = info?.plans.find((plan) => plan.id === currentPlanId) || info?.currentPlan;
+  const chatIncluded =
+    info?.entitlements?.quotas?.aiIncluded !== undefined
+      ? info.entitlements.quotas.aiIncluded !== 'off'
+      : currentPlan?.aiIncluded !== undefined
+        ? currentPlan.aiIncluded !== 'off'
+        : ['growth', 'pro', 'enterprise'].includes(String(currentPlanId || '').toLowerCase());
+  const callingIncluded =
+    info?.entitlements?.quotas?.callingIncluded !== undefined
+      ? info.entitlements.quotas.callingIncluded
+      : currentPlan?.callingIncluded ??
+        ['pro', 'enterprise'].includes(String(currentPlanId || '').toLowerCase());
+  const canPurchaseAiAddons = Boolean(
+    info?.canManageBilling && !info?.entitlements?.isLocked && !billingStatusLocked,
+  );
+  const isBlockedByActiveHigherPlan = (planId: string) =>
+    Boolean(
+      activePaidPlanIsValid &&
+        activePaidPlanId &&
+        PLAN_TIER_ORDER[activePaidPlanId] > PLAN_TIER_ORDER[planId],
+    );
+
   const handleFreePlan = async (plan: BillingPlan) => {
-    if (!info?.canManageBilling || plan.id === (info.planTier || info.plan)) return;
+    if (
+      !info?.canManageBilling ||
+      plan.id === currentPlanId ||
+      isBlockedByActiveHigherPlan(plan.id)
+    ) {
+      return;
+    }
     setUpgrading(plan.id);
     try {
       await billingApi.updatePlan(plan.id);
@@ -145,7 +258,15 @@ export default function BillingPage() {
   };
 
   const handlePaidPlan = async (plan: BillingPlan) => {
-    if (!info?.canManageBilling || !info.razorpayKeyId) return;
+    if (
+      !info?.canManageBilling ||
+      !info.razorpayKeyId ||
+      plan.id === currentPlanId ||
+      isBlockedByActiveHigherPlan(plan.id)
+    ) {
+      return;
+    }
+    setPaymentNotice(null);
     setUpgrading(plan.id);
     try {
       const res = await billingApi.createOrder(plan.id, cadence);
@@ -164,16 +285,23 @@ export default function BillingPage() {
         currency,
         orderId,
         name: 'Samyoj Platform',
-        description: `Upgrade to ${plan.name} — ${cadence} billing`,
+        description: `Manual purchase of ${plan.name} — valid until the purchased period ends`,
         prefillEmail: user?.email,
         onSuccess: async (response) => {
           try {
             await billingApi.verifyPayment(response);
             toastSuccess(`Welcome to ${plan.name}!`);
+            setPaymentNotice(null);
             await refreshSession();
             window.dispatchEvent(new CustomEvent('billing:updated'));
             load();
           } catch {
+            setPaymentNotice({
+              variant: 'error',
+              planId: plan.id,
+              message:
+                'Payment received, but verification is still pending. Retry from this plan card later or contact support with your payment ID.',
+            });
             toastError('Payment received but verification failed. If money was deducted, contact support with your payment ID.');
           } finally {
             setUpgrading(null);
@@ -181,15 +309,32 @@ export default function BillingPage() {
         },
         onDismiss: () => {
           setUpgrading(null);
-          toastError('Payment cancelled. No charge was made.');
+          setPaymentNotice({
+            variant: 'warning',
+            planId: plan.id,
+            message:
+              'Payment was not confirmed in checkout. Check payment history before retrying; no entitlement was granted.',
+          });
+          toastError('Payment was not completed. Check payment history before retrying.');
         },
         onFailure: () => {
           setUpgrading(null);
+          setPaymentNotice({
+            variant: 'error',
+            planId: plan.id,
+            message:
+              'Payment failed. Retry from this plan card or use a different payment method.',
+          });
           toastError('Payment failed. Please try again or use a different payment method.');
         },
       });
     } catch (err: unknown) {
       setUpgrading(null);
+      setPaymentNotice({
+        variant: 'error',
+        planId: plan.id,
+        message: 'Could not start checkout. Retry from this plan card.',
+      });
       const apiMessage = (err as { response?: { data?: { error?: { message?: string } } } })
         ?.response?.data?.error?.message;
       toastError(
@@ -204,6 +349,7 @@ export default function BillingPage() {
   };
 
   const handleUpgrade = (plan: BillingPlan) => {
+    if (plan.id === currentPlanId || isBlockedByActiveHigherPlan(plan.id)) return;
     if (plan.id === 'enterprise') {
       window.location.href =
         'mailto:hello@samyoj.com?subject=Samyoj%20Enterprise%20plan&body=Hi%20Samyoj%20team%2C%20we%20would%20like%20to%20discuss%20Enterprise.';
@@ -216,14 +362,27 @@ export default function BillingPage() {
     }
   };
 
-  const handlePurchaseAddon = async (sku: AiTopupSkuClient, quantity = 1) => {
-    if (!info?.canManageBilling || !info.razorpayKeyId) {
-      toastError('Only admins can purchase add-ons.');
+  const handlePurchaseAddon = async (sku: AiTopupSkuClient) => {
+    const capabilityEnabled = sku.pool === 'calling' ? callingIncluded : chatIncluded;
+    if (
+      !info?.canManageBilling ||
+      !info.razorpayKeyId ||
+      !capabilityEnabled ||
+      info.entitlements?.isLocked ||
+      billingStatusLocked
+    ) {
+      toastError(
+        !info?.canManageBilling
+          ? 'Only admins can purchase add-ons.'
+          : billingStatusLocked
+            ? 'Add-ons are unavailable while the current plan is locked.'
+          : 'This AI capability is not included on your current plan.'
+      );
       return;
     }
     setPurchasingSku(sku.id);
     try {
-      const res = await billingApi.purchaseAiAddon(sku.id, quantity);
+      const res = await billingApi.purchaseAiAddon(sku.id);
       const payload = res.data.data;
       await openRazorpayCheckout({
         keyId: payload.keyId,
@@ -231,7 +390,7 @@ export default function BillingPage() {
         currency: payload.currency,
         orderId: payload.orderId,
         name: 'Samyoj AI Add-on',
-        description: `${payload.label} — ${sku.units * quantity} ${sku.pool === 'calling' ? 'minutes' : 'credits'}`,
+        description: `${payload.label} — ${sku.units} ${sku.pool === 'calling' ? 'minutes' : 'credits'}`,
         prefillEmail: user?.email,
         onSuccess: async (response) => {
           try {
@@ -251,7 +410,7 @@ export default function BillingPage() {
         },
         onDismiss: () => {
           setPurchasingSku(null);
-          toastError('Payment cancelled. No charge was made.');
+          toastError('Payment was not completed. Check payment history before retrying.');
         },
         onFailure: () => {
           setPurchasingSku(null);
@@ -263,68 +422,6 @@ export default function BillingPage() {
       const apiMessage = (err as { response?: { data?: { error?: { message?: string } } } })
         ?.response?.data?.error?.message;
       toastError(apiMessage || 'Could not start add-on checkout');
-    }
-  };
-
-  const handleSubscribeRecurring = async (sku: AiTopupSkuClient) => {
-    if (!info?.canManageBilling || !info.razorpayKeyId) {
-      toastError('Only admins can subscribe to monthly add-ons.');
-      return;
-    }
-    setRecurringSku(sku.id);
-    try {
-      const res = await billingApi.subscribeAiRecurringAddon(sku.id);
-      const payload = res.data.data;
-      await openRazorpaySubscriptionCheckout({
-        keyId: payload.keyId,
-        subscriptionId: payload.subscriptionId,
-        name: 'Samyoj AI Monthly Add-on',
-        description: `${payload.label} — billed monthly`,
-        prefillEmail: user?.email,
-        onSuccess: async (response) => {
-          try {
-            const verifyRes = await billingApi.verifyAiRecurringAddon(response);
-            toastSuccess(verifyRes.data.data.message || 'Monthly add-on activated');
-            await reloadAiCredits();
-          } catch {
-            toastError(
-              'Payment received but verification failed. Credits will apply when the webhook confirms.'
-            );
-            await reloadAiCredits();
-          } finally {
-            setRecurringSku(null);
-          }
-        },
-        onDismiss: () => {
-          setRecurringSku(null);
-          toastError('Subscription checkout cancelled.');
-        },
-        onFailure: () => {
-          setRecurringSku(null);
-          toastError('Subscription payment failed. Please try again.');
-        },
-      });
-    } catch (err: unknown) {
-      setRecurringSku(null);
-      const apiMessage = (err as { response?: { data?: { error?: { message?: string } } } })
-        ?.response?.data?.error?.message;
-      toastError(apiMessage || 'Could not start monthly add-on checkout');
-    }
-  };
-
-  const handleCancelRecurring = async (skuId: string) => {
-    if (!info?.canManageBilling) return;
-    setRecurringSku(skuId);
-    try {
-      const res = await billingApi.cancelAiRecurringAddon(skuId);
-      toastSuccess(res.data.data.message || 'Monthly add-on cancelled');
-      await reloadAiCredits();
-    } catch (err: unknown) {
-      const apiMessage = (err as { response?: { data?: { error?: { message?: string } } } })
-        ?.response?.data?.error?.message;
-      toastError(apiMessage || 'Could not cancel monthly add-on');
-    } finally {
-      setRecurringSku(null);
     }
   };
 
@@ -344,6 +441,20 @@ export default function BillingPage() {
       toastError('Failed to export CSV');
     }
   };
+
+  const paymentHistory = info
+    ? [
+        ...(info.pendingPayment ? [info.pendingPayment] : []),
+        ...(info.recentPayments || []),
+      ].filter(
+        (payment, index, payments) =>
+          index ===
+          payments.findIndex(
+            (candidate) =>
+              candidate.orderId && payment.orderId && candidate.orderId === payment.orderId,
+          ),
+      )
+    : [];
 
   return (
     <PageShell>
@@ -412,6 +523,41 @@ export default function BillingPage() {
               </AppAlert>
             )}
 
+            {info.pendingPayment && paymentStatusLabel(info.pendingPayment) === 'Pending' && (
+              <AppAlert variant="warning">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span>
+                    A recent payment is still being verified. Do not pay again until you review its
+                    status.
+                  </span>
+                  <button
+                    type="button"
+                    className="shrink-0 font-bold underline underline-offset-2"
+                    onClick={() => handleTabChange('history')}
+                  >
+                    View payment history
+                  </button>
+                </div>
+              </AppAlert>
+            )}
+
+            {paymentNotice && (
+              <AppAlert variant={paymentNotice.variant}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span>{paymentNotice.message}</span>
+                  {paymentNotice.planId && (
+                    <button
+                      type="button"
+                      className="shrink-0 font-bold underline underline-offset-2"
+                      onClick={() => setPaymentNotice(null)}
+                    >
+                      Dismiss
+                    </button>
+                  )}
+                </div>
+              </AppAlert>
+            )}
+
             {/* Tab content with min-height stability to avoid jumping */}
             <div className="min-h-[520px] transition-opacity duration-150">
               {activeTab === 'usage' && (
@@ -428,7 +574,16 @@ export default function BillingPage() {
                     aiCredits={aiCredits}
                     onUpgradeClick={() => handleTabChange('plans')}
                     onBuyAddons={scrollToAddons}
-                    onExportCsv={handleExportCsv}
+                    onExportCsv={
+                      info.entitlements?.quotas?.analyticsAdvanced === false ||
+                      info.entitlements?.features?.analytics === false
+                        ? undefined
+                        : handleExportCsv
+                    }
+                    analyticsAvailable={
+                      info.entitlements?.quotas?.analyticsAdvanced !== false &&
+                      info.entitlements?.features?.analytics !== false
+                    }
                   />
                 </>
               )}
@@ -452,8 +607,12 @@ export default function BillingPage() {
                       <BillingPlanCard
                         key={plan.id}
                         plan={plan}
-                        isCurrent={plan.id === (info.planTier || info.plan)}
-                        isActivePaidSession={plan.id === info.activePaidPlan && plan.id !== (info.planTier || info.plan)}
+                        isCurrent={plan.id === currentPlanId}
+                        isActivePaidSession={plan.id === info.activePaidPlan && plan.id !== displayedPlanId}
+                        isBlockedByActiveHigherPlan={
+                          plan.id !== currentPlanId && isBlockedByActiveHigherPlan(plan.id)
+                        }
+                        activeHigherPlanName={activePaidPlan?.name}
                         canManage={info.canManageBilling}
                         razorpayConfigured={info.razorpayConfigured}
                         loading={upgrading === plan.id}
@@ -463,17 +622,16 @@ export default function BillingPage() {
                     ))}
                   </div>
 
-                  <BillingFeatureMatrix currentPlan={info.planTier || info.plan} />
+                  <BillingFeatureMatrix currentPlan={displayedPlanId} />
 
                   <AiAddonGrid
                     aiCredits={aiCredits}
                     canManage={info.canManageBilling}
                     razorpayConfigured={info.razorpayConfigured}
                     purchasingSku={purchasingSku}
-                    recurringSku={recurringSku}
                     onPurchase={handlePurchaseAddon}
-                    onSubscribeRecurring={handleSubscribeRecurring}
-                    onCancelRecurring={handleCancelRecurring}
+                    canPurchaseChat={Boolean(canPurchaseAiAddons && chatIncluded)}
+                    canPurchaseCalling={Boolean(canPurchaseAiAddons && callingIncluded)}
                   />
 
                   <MetaCostExplainerCard />
@@ -483,9 +641,9 @@ export default function BillingPage() {
               {activeTab === 'history' && (
                 <SectionCard
                   title="Payment history"
-                  subtitle="Confirmed Razorpay payments for your Samyoj software plan"
+                  subtitle="Manual plan purchases and their verification status"
                 >
-                  {!info.recentPayments || info.recentPayments.length === 0 ? (
+                  {paymentHistory.length === 0 ? (
                     <EmptyState
                       icon={Receipt}
                       title="No payments yet"
@@ -499,9 +657,11 @@ export default function BillingPage() {
                     />
                   ) : (
                     <div className="space-y-3">
-                      {info.recentPayments.map((payment, i) => {
+                      {paymentHistory.map((payment, i) => {
                         const planName =
                           info.plans.find((p) => p.id === payment.planId)?.name ?? payment.planId;
+                        const statusLabel = paymentStatusLabel(payment);
+                        const retryPlan = info.plans.find((plan) => plan.id === payment.planId);
                         return (
                           <div
                             key={`${payment.planId}-${payment.paidAt ?? i}`}
@@ -517,8 +677,21 @@ export default function BillingPage() {
                                   {payment.cadence ? ` · ${payment.cadence}` : ''}
                                 </p>
                                 <p className="text-[11px] text-theme-muted">
-                                  Paid on {payment.paidAt ? new Date(payment.paidAt).toLocaleDateString() : 'N/A'} · Base ₹{(payment.exclGstPaise / 100).toLocaleString('en-IN')} + GST ₹{(payment.gstAmountPaise / 100).toLocaleString('en-IN')}
+                                  {statusLabel === 'Captured'
+                                    ? `Captured on ${payment.paidAt ? new Date(payment.paidAt).toLocaleDateString() : 'N/A'}`
+                                    : `Created on ${payment.createdAt ? new Date(payment.createdAt).toLocaleDateString() : 'N/A'}`}
+                                  {' · '}Base ₹{(payment.exclGstPaise / 100).toLocaleString('en-IN')} + GST ₹{(payment.gstAmountPaise / 100).toLocaleString('en-IN')}
                                 </p>
+                                {statusLabel === 'Captured' && payment.periodEnd && (
+                                  <p className="text-[11px] font-semibold text-theme-secondary">
+                                    Valid until {new Date(payment.periodEnd).toLocaleDateString()}
+                                  </p>
+                                )}
+                                {statusLabel === 'Failed' && payment.failureMessage && (
+                                  <p className="text-[11px] font-medium text-rose-700 dark:text-rose-300">
+                                    {payment.failureMessage}
+                                  </p>
+                                )}
                               </div>
                             </div>
 
@@ -526,9 +699,28 @@ export default function BillingPage() {
                               <span className="text-sm font-black tabular-nums text-theme-fg">
                                 ₹{(payment.totalAmountPaise / 100).toLocaleString('en-IN')}
                               </span>
-                              <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-[10px] font-extrabold uppercase text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300">
-                                Paid
+                              <span className={`rounded-md px-2 py-0.5 text-[10px] font-extrabold uppercase ${paymentStatusClass(payment)}`}>
+                                {statusLabel}
                               </span>
+                              {statusLabel !== 'Captured' && retryPlan && (
+                                <button
+                                  type="button"
+                                  className="text-[11px] font-bold text-whatsapp-700 underline underline-offset-2 dark:text-whatsapp-400"
+                                  onClick={() => handleUpgrade(retryPlan)}
+                                >
+                                  Retry
+                                </button>
+                              )}
+                              {payment.receiptUrl && (
+                                <a
+                                  href={payment.receiptUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-[11px] font-bold text-theme-secondary underline underline-offset-2"
+                                >
+                                  Receipt
+                                </a>
+                              )}
                             </div>
                           </div>
                         );
