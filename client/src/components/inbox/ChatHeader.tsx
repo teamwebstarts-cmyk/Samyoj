@@ -25,6 +25,7 @@ interface ChatHeaderProps {
   /** undefined until the server responds — renders a skeleton pill (tri-state). */
   serviceWindow: ServiceWindowInfo | undefined;
   botIsLive: boolean;
+  canUseAi?: boolean;
   globalChatLocked?: boolean;
   botToggling: boolean;
   botAssigning?: boolean;
@@ -109,6 +110,7 @@ export default function ChatHeader({
   conversation,
   serviceWindow,
   botIsLive,
+  canUseAi = true,
   globalChatLocked = false,
   botToggling,
   botAssigning = false,
@@ -296,7 +298,7 @@ export default function ChatHeader({
               setAssignOpen(false);
               setBotMenuOpen((v) => !v);
             }}
-            disabled={botToggling || botAssigning}
+            disabled={!canUseAi || botToggling || botAssigning}
             aria-label={`${botIsLive ? 'Automations live' : 'Automations off'} · ${botTipDetail}. Open bot menu`}
             aria-expanded={botMenuOpen}
             aria-haspopup="dialog"
