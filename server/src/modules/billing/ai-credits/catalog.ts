@@ -28,13 +28,13 @@ export const AI_ADDON_PLAN_ID = 'ai_addon';
 
 export const INCLUDED_ALLOWANCES: Record<
   PlanTier,
-  { chatCreditsIncluded: number; callingMinutesIncluded: number }
+  { chatCreditsIncluded: number | 'custom'; callingMinutesIncluded: number | 'custom' }
 > = {
   launch: { chatCreditsIncluded: 0, callingMinutesIncluded: 0 },
   starter: { chatCreditsIncluded: 0, callingMinutesIncluded: 0 },
   growth: { chatCreditsIncluded: 5_000, callingMinutesIncluded: 0 },
   pro: { chatCreditsIncluded: 25_000, callingMinutesIncluded: 120 },
-  enterprise: { chatCreditsIncluded: 0, callingMinutesIncluded: 0 },
+  enterprise: { chatCreditsIncluded: 'custom', callingMinutesIncluded: 'custom' },
 };
 
 export const AI_TOPUP_SKUS: AiTopupSku[] = [
