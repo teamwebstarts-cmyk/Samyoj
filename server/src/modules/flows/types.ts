@@ -141,6 +141,9 @@ export interface FlowState {
   resumeAt?: string;
   /** Sticky A/B assignments, keyed by `${flowId}:${nodeId}`. Survives flow end. */
   abSticky?: Record<string, 'a' | 'b'>;
+  /** Persisted cross-flow guard so a delayed hop cannot reset the cycle check. */
+  flowPath?: string[];
+  flowHops?: number;
 }
 
 export interface FlowStats {
@@ -174,8 +177,8 @@ export interface InboundFlowPayload {
   contactId: string;
   messageId: string;
   contactPhone: string;
-  phoneNumberId: string;
-  encryptedToken: string;
+  /** Stable DB workspace id; credentials are resolved immediately before send. */
+  whatsappNumberId: string;
   content: string;
   buttonReplyId?: string;
   isNewConversation: boolean;
