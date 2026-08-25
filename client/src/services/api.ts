@@ -710,8 +710,8 @@ export const billingApi = {
   estimateCost: (recipientCount: number, category?: string) =>
     api.post('/billing/estimate', { recipientCount, category }),
   aiCredits: () => api.get<{ data: import('../types').AiCreditsResponse }>('/billing/ai-credits'),
-  purchaseAiAddon: (skuId: string, quantity = 1) =>
-    api.post('/billing/ai-credits/purchase', { skuId, quantity }),
+  purchaseAiAddon: (skuId: string) =>
+    api.post('/billing/ai-credits/purchase', { skuId }),
   verifyAiAddon: (data: {
     razorpay_order_id: string;
     razorpay_payment_id: string;
