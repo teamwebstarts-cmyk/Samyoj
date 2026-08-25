@@ -394,6 +394,8 @@ router.patch(
         monthlyTokenLimit: z.number().int().min(0).max(1_000_000_000).nullable().optional(),
         chatEnabled: z.boolean().optional(),
         callingEnabled: z.boolean().optional(),
+        customChatCreditsIncluded: z.number().int().min(0).max(1_000_000_000).optional(),
+        customCallingMinutesIncluded: z.number().int().min(0).max(1_000_000).optional(),
         grantChatAddon: z.number().int().min(0).max(100_000_000).optional(),
         grantCallingAddon: z.number().int().min(0).max(1_000_000).optional(),
       })
