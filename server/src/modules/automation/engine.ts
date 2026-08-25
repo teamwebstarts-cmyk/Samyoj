@@ -7,10 +7,16 @@ import { hasEnabledBots } from '../ai/bot.service';
 import { withAiBotConversationLock } from '../ai/lock';
 import { deliverOutboundMessage, isCswClosedError } from '../messages/send.service';
 import { MetaWhatsAppService } from '../whatsapp/meta.service';
+import { getActiveWhatsappNumberCredentials } from '../whatsapp/context';
 import { handleInboundFlow } from '../flows/engine';
-import { inboundLockRetryJobId } from '../flows/inbound-wait';
+import { FLOW_LOCK_BUSY, inboundLockRetryJobId, type HandleInboundFlowResult } from '../flows/inbound-wait';
 import { decideInboundFunnel } from './inbound-funnel';
 import { hasRecentStaticReply } from './frequency';
+import {
+  getInboundPipeline,
+  isInboundStageComplete,
+  markInboundPipelineStage,
+} from './inbound-pipeline';
 import { keywordMatches } from '../flows/trigger-match';
 import { getOrgBusinessHours, isWithinBusinessHours } from '../settings/business-hours';
 import { createModuleLogger } from '../../utils/logger';
@@ -34,9 +40,17 @@ const CONVERSATION_AI_SELECT = {
   status: true,
 } as const;
 
-async function loadConversationForChatAi(organizationId: string, conversationId: string) {
+async function loadConversationForChatAi(
+  organizationId: string,
+  conversationId: string,
+  whatsappNumberId?: string
+) {
   const row = await prisma.conversation.findFirst({
-    where: { id: conversationId, organizationId },
+    where: {
+      id: conversationId,
+      organizationId,
+      ...(whatsappNumberId ? { whatsappNumberId } : {}),
+    },
     select: CONVERSATION_AI_SELECT,
   });
   if (!row) return null;
@@ -64,8 +78,8 @@ export interface InboundAutomationPayload {
   contactId: string;
   messageId: string;
   contactPhone: string;
-  phoneNumberId: string;
-  encryptedToken: string;
+  /** Stable DB workspace id; credentials are resolved immediately before send. */
+  whatsappNumberId: string;
   content: string;
   buttonReplyId?: string;
   isNewConversation: boolean;
@@ -92,11 +106,17 @@ interface MatchedAutomation {
 
 export async function processRuleAutomations(
   organizationId: string,
+  whatsappNumberId: string,
   triggerType: string,
   context: AutomationContext
 ): Promise<MatchedAutomation | null> {
   const automations = await prisma.automation.findMany({
-    where: { organizationId, triggerType: triggerType as never, enabled: true },
+    where: {
+      organizationId,
+      whatsappNumberId,
+      triggerType: triggerType as never,
+      enabled: true,
+    },
     orderBy: { createdAt: 'asc' },
   });
 
@@ -157,6 +177,7 @@ export async function processRuleAutomations(
 
 export async function resolveStaticAutoReply(
   organizationId: string,
+  whatsappNumberId: string,
   context: AutomationContext
 ): Promise<MatchedAutomation | null> {
   const withinHours = await checkBusinessHours(organizationId);
@@ -164,18 +185,18 @@ export async function resolveStaticAutoReply(
 
   return (
     (context.message
-      ? await processRuleAutomations(organizationId, 'KEYWORD', { message: context.message })
+      ? await processRuleAutomations(organizationId, whatsappNumberId, 'KEYWORD', { message: context.message })
       : null) ||
     (context.isNewConversation
-      ? await processRuleAutomations(organizationId, 'WELCOME', { isNewConversation: true })
+      ? await processRuleAutomations(organizationId, whatsappNumberId, 'WELCOME', { isNewConversation: true })
       : null) ||
     (context.message
-      ? await processRuleAutomations(organizationId, 'LEAD_CAPTURE', { message: context.message })
+      ? await processRuleAutomations(organizationId, whatsappNumberId, 'LEAD_CAPTURE', { message: context.message })
       : null) ||
     (!withinHours
-      ? await processRuleAutomations(organizationId, 'AWAY', hoursContext)
+      ? await processRuleAutomations(organizationId, whatsappNumberId, 'AWAY', hoursContext)
       : null) ||
-    (await processRuleAutomations(organizationId, 'BUSINESS_HOURS', hoursContext))
+    (await processRuleAutomations(organizationId, whatsappNumberId, 'BUSINESS_HOURS', hoursContext))
   );
 }
 
@@ -191,6 +212,22 @@ export async function sendAutomationReply(
 ): Promise<void> {
   const start = Date.now();
   const hasButtons = Boolean(options?.buttons?.length);
+  const credentials = await getActiveWhatsappNumberCredentials(
+    payload.organizationId,
+    payload.whatsappNumberId
+  );
+  const conversation = await prisma.conversation.findFirst({
+    where: {
+      id: payload.conversationId,
+      organizationId: payload.organizationId,
+      whatsappNumberId: credentials.whatsappNumberId,
+      contactId: payload.contactId,
+    },
+    select: { contact: { select: { phone: true } } },
+  });
+  if (!conversation?.contact) {
+    throw new Error('Automation message context does not belong to the active WhatsApp number');
+  }
   const autoMsg = await prisma.message.create({
     data: {
       conversationId: payload.conversationId,
@@ -211,10 +248,9 @@ export async function sendAutomationReply(
   try {
     await deliverOutboundMessage({
       organizationId: payload.organizationId,
+      whatsappNumberId: credentials.whatsappNumberId,
       messageId: autoMsg.id,
-      phoneNumberId: payload.phoneNumberId,
-      encryptedToken: payload.encryptedToken,
-      to: payload.contactPhone,
+      to: conversation.contact.phone,
       content,
       type: hasButtons ? 'INTERACTIVE' : 'TEXT',
       buttons: options?.buttons,
@@ -263,7 +299,8 @@ export async function queueAiBotProcessing(payload: InboundAutomationPayload): P
 
   const conversation = await loadConversationForChatAi(
     payload.organizationId,
-    payload.conversationId
+    payload.conversationId,
+    payload.whatsappNumberId
   );
   if (!conversation?.botActiveForAutomation) {
     log.info('AI bot skipped for conversation', {
@@ -343,11 +380,23 @@ export async function queueAiBotProcessing(payload: InboundAutomationPayload): P
 export async function processAiChatbotJob(payload: InboundAutomationPayload): Promise<void> {
   const result = await withAiBotConversationLock(payload.conversationId, async () => {
     try {
-      const accessToken = MetaWhatsAppService.decryptToken(payload.encryptedToken);
+      const credentials = await getActiveWhatsappNumberCredentials(
+        payload.organizationId,
+        payload.whatsappNumberId
+      );
+      const accessToken = MetaWhatsAppService.decryptToken(credentials.encryptedToken);
+      const conversation = await prisma.conversation.findFirst({
+        where: {
+          id: payload.conversationId,
+          organizationId: payload.organizationId,
+          whatsappNumberId: payload.whatsappNumberId,
+        },
+        select: { contact: { select: { phone: true } } },
+      });
       await MetaWhatsAppService.sendTypingIndicator(
-        payload.phoneNumberId,
+        credentials.phoneNumberId,
         accessToken,
-        payload.contactPhone
+        conversation?.contact?.phone || payload.contactPhone
       );
     } catch {
       /* best-effort typing indicator */
@@ -419,16 +468,18 @@ export async function processAiChatbotJob(payload: InboundAutomationPayload): Pr
     await performHandoff(
       payload.organizationId,
       payload.conversationId,
-      result.handoffReason || 'USER_REQUEST',
-      { phoneNumberId: payload.phoneNumberId, encryptedToken: payload.encryptedToken, contactPhone: payload.contactPhone }
+      result.handoffReason || 'USER_REQUEST'
     );
   }
 }
 
 export async function handleInboundAutomations(payload: InboundAutomationPayload): Promise<void> {
+  const pipeline = await getInboundPipeline(payload.messageId);
+
   const conversation = await loadConversationForChatAi(
     payload.organizationId,
-    payload.conversationId
+    payload.conversationId,
+    payload.whatsappNumberId
   );
   const paused = decideInboundFunnel({
     botActive: conversation?.botActiveForAutomation,
@@ -444,24 +495,35 @@ export async function handleInboundAutomations(payload: InboundAutomationPayload
     return;
   }
 
-  const flowHandled = await handleInboundFlow({
-    organizationId: payload.organizationId,
-    conversationId: payload.conversationId,
-    contactId: payload.contactId,
-    messageId: payload.messageId,
-    contactPhone: payload.contactPhone,
-    phoneNumberId: payload.phoneNumberId,
-    encryptedToken: payload.encryptedToken,
-    content: payload.content,
-    buttonReplyId: payload.buttonReplyId,
-    isNewConversation: payload.isNewConversation,
-    messageType: payload.messageType,
-    hasMedia: payload.hasMedia,
-    waFlowResponse: payload.waFlowResponse,
-  });
+  let flowHandled: HandleInboundFlowResult = pipeline.flowHandled ?? false;
+  if (!isInboundStageComplete(pipeline, 'flow')) {
+    flowHandled = await handleInboundFlow({
+      organizationId: payload.organizationId,
+      conversationId: payload.conversationId,
+      contactId: payload.contactId,
+      messageId: payload.messageId,
+      contactPhone: payload.contactPhone,
+      whatsappNumberId: payload.whatsappNumberId,
+      content: payload.content,
+      buttonReplyId: payload.buttonReplyId,
+      isNewConversation: payload.isNewConversation,
+      messageType: payload.messageType,
+      hasMedia: payload.hasMedia,
+      waFlowResponse: payload.waFlowResponse,
+    });
+    if (flowHandled !== FLOW_LOCK_BUSY) {
+      await markInboundPipelineStage(payload.messageId, { flow: true, flowHandled });
+    }
+  }
+
+  const refreshed = await loadConversationForChatAi(
+    payload.organizationId,
+    payload.conversationId,
+    payload.whatsappNumberId
+  );
 
   const afterFlow = decideInboundFunnel({
-    botActive: conversation?.botActiveForAutomation,
+    botActive: refreshed?.botActiveForAutomation,
     flowHandled,
     lockRetry: payload.lockRetry,
   });
@@ -517,7 +579,7 @@ export async function handleInboundAutomations(payload: InboundAutomationPayload
     select: { optedIn: true },
   });
   const afterOptOut = decideInboundFunnel({
-    botActive: conversation?.botActiveForAutomation,
+    botActive: refreshed?.botActiveForAutomation,
     flowHandled: false,
     optedIn: optedOut?.optedIn,
   });
@@ -532,13 +594,30 @@ export async function handleInboundAutomations(payload: InboundAutomationPayload
     return;
   }
 
-  const staticReply = await resolveStaticAutoReply(payload.organizationId, {
+  const pauseBeforeStatic = decideInboundFunnel({
+    botActive: refreshed?.botActiveForAutomation,
+  });
+  if (pauseBeforeStatic.type === 'skip' && pauseBeforeStatic.reason === 'paused') {
+    await logAutomationRun({
+      organizationId: payload.organizationId,
+      conversationId: payload.conversationId,
+      triggerType: 'STATIC',
+      action: 'bot_paused',
+      status: 'skipped',
+    });
+    return;
+  }
+
+  const staticReply = await resolveStaticAutoReply(payload.organizationId, payload.whatsappNumberId, {
     message: payload.content,
     isNewConversation: payload.isNewConversation,
     isBusinessHours: await checkBusinessHours(payload.organizationId),
   });
 
   if (staticReply) {
+    if (isInboundStageComplete(pipeline, 'static')) {
+      return;
+    }
     if (
       await hasRecentStaticReply({
         organizationId: payload.organizationId,
@@ -564,6 +643,7 @@ export async function handleInboundAutomations(payload: InboundAutomationPayload
         automationId: staticReply.id,
         automationName: staticReply.name,
       });
+      await markInboundPipelineStage(payload.messageId, { static: true });
 
       if (staticReply.tag) {
         const contact = await prisma.contact.findUnique({ where: { id: payload.contactId } });
@@ -581,15 +661,76 @@ export async function handleInboundAutomations(payload: InboundAutomationPayload
     }
   }
 
-  await queueAiBotProcessing(payload);
+  if (!isInboundStageComplete(pipeline, 'ai')) {
+    await queueAiBotProcessing(payload);
+    await markInboundPipelineStage(payload.messageId, { ai: true });
+  }
+}
+
+/**
+ * Rebuild an inbound automation payload from the durable Inbox message.
+ *
+ * Webhook processing acknowledges Meta after persisting the message. If the
+ * process fails after that commit, this lets a queue retry the automation
+ * without copying message content, phone data, or credentials into the job.
+ */
+export async function retryInboundAutomations(jobData: {
+  organizationId: string;
+  conversationId: string;
+  contactId: string;
+  messageId: string;
+  whatsappNumberId: string;
+  isNewConversation: boolean;
+  lockRetry?: number;
+}): Promise<void> {
+  const message = await prisma.message.findFirst({
+    where: {
+      id: jobData.messageId,
+      direction: 'INBOUND',
+      conversation: {
+        id: jobData.conversationId,
+        organizationId: jobData.organizationId,
+        whatsappNumberId: jobData.whatsappNumberId,
+        contactId: jobData.contactId,
+      },
+    },
+    select: { content: true, type: true, metadata: true },
+  });
+  if (!message) return;
+
+  const metadata =
+    message.metadata && typeof message.metadata === 'object' && !Array.isArray(message.metadata)
+      ? (message.metadata as Record<string, unknown>)
+      : {};
+  const waFlowResponse =
+    metadata.waFlowResponse && typeof metadata.waFlowResponse === 'object'
+      ? (metadata.waFlowResponse as Record<string, unknown>)
+      : undefined;
+
+  await handleInboundAutomations({
+    organizationId: jobData.organizationId,
+    conversationId: jobData.conversationId,
+    contactId: jobData.contactId,
+    messageId: jobData.messageId,
+    contactPhone: '',
+    whatsappNumberId: jobData.whatsappNumberId,
+    content: message.content || '',
+    buttonReplyId: typeof metadata.buttonReplyId === 'string' ? metadata.buttonReplyId : undefined,
+    isNewConversation: jobData.isNewConversation,
+    messageType: message.type.toLowerCase(),
+    hasMedia: ['IMAGE', 'VIDEO', 'AUDIO', 'DOCUMENT'].includes(message.type),
+    waFlowResponse,
+    lockRetry: jobData.lockRetry,
+  });
 }
 
 export async function processAutomations(
   organizationId: string,
+  whatsappNumberId: string,
   triggerType: string,
   context: AutomationContext
 ): Promise<MatchedAutomation | null> {
-  return processRuleAutomations(organizationId, triggerType, context);
+  return processRuleAutomations(organizationId, whatsappNumberId, triggerType, context);
 }
 
 export function isBusinessHours(config: Record<string, unknown>): boolean {
