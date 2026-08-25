@@ -88,29 +88,36 @@ export default function BillingHero({ info }: BillingHeroProps) {
     statusText = 'Payment due';
     statusTone = 'amber';
     statusIcon = AlertCircle;
-    description = 'Your last payment failed. Please update your payment method.';
+    description = 'Your latest manual plan payment failed. Retry the purchase to restore access.';
   } else if (info.subscriptionStatus === 'grace') {
     statusText = 'Grace period';
     statusTone = 'amber';
     statusIcon = Clock;
-    description = 'Your payment is past due. Please update your payment method to avoid suspension.';
+    description = 'Your latest plan payment needs attention. Review billing to restore access.';
   } else if (info.subscriptionStatus === 'locked') {
     statusText = 'Account locked';
     statusTone = 'rose';
     statusIcon = Lock;
-    description = 'Your account has been locked due to failed payments. Please contact support.';
+    description = 'Your account is restricted because the plan is no longer valid. Purchase a valid plan to restore access.';
   } else if (info.subscriptionStatus === 'cancelled') {
     statusText = 'Cancelled';
     statusTone = 'slate';
     statusIcon = XCircle;
-    description = 'Your subscription has been cancelled.';
+    description = 'Your plan period is no longer active. Purchase a valid plan to restore access.';
+  } else if (info.subscriptionStatus === 'expired') {
+    statusText = 'Plan expired';
+    statusTone = 'rose';
+    statusIcon = Lock;
+    description = 'Your plan period has ended. Purchase a valid plan to restore access.';
   }
 
   const stats: BillingHeroStat[] = [
     {
       label: 'Current plan',
       value: info.currentPlan.name,
-      hint: info.planExpiresAt || info.currentPeriodEnd ? `Renews ${new Date(info.planExpiresAt || info.currentPeriodEnd || '').toLocaleDateString()}` : 'No expiry',
+      hint: info.planExpiresAt || info.currentPeriodEnd
+        ? `Valid until ${new Date(info.planExpiresAt || info.currentPeriodEnd || '').toLocaleDateString()}`
+        : 'No expiry',
       tone: 'emerald',
       icon: CreditCard,
     },
