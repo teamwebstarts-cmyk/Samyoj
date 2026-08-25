@@ -39,6 +39,7 @@ import {
   webhookHealth,
 } from './webhook-health';
 import { emitProductEvent } from '../platform/events';
+import { requireActiveCommercial, requireActiveCommercialOnMutation } from '../../middleware/plan-guard';
 
 const log = createModuleLogger('whatsapp');
 
@@ -102,7 +103,13 @@ async function saveWhatsappConnection(
   return { whatsappNumber, webhookConfigured };
 }
 
-const metaAdminGuard = [authenticate, requireOrg, loadOrgRole, requireOrgRole('OWNER', 'ADMIN')];
+const metaAdminGuard = [
+  authenticate,
+  requireOrg,
+  requireActiveCommercialOnMutation(),
+  loadOrgRole,
+  requireOrgRole('OWNER', 'ADMIN'),
+];
 
 router.get(
   '/meta-config',
@@ -131,6 +138,7 @@ router.patch(
 router.get(
   '/connect-url',
   ...metaAdminGuard,
+  requireActiveCommercial(),
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const userId = req.user!.userId;
