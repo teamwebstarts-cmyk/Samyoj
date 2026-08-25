@@ -419,6 +419,61 @@ export interface BillingPlan {
   pricing?: Partial<Record<'monthly' | 'quarterly' | 'yearly', BillingSkuPricing>>;
 }
 
+export type EntitlementLimit = number | 'unlimited' | 'custom';
+
+export interface BillingQuota {
+  used: number;
+  limit: EntitlementLimit;
+}
+
+export interface BillingEntitlementSnapshot {
+  orgId?: string;
+  planTier?: PlanTier;
+  planName?: string;
+  subscriptionStatus?: SubscriptionStatus | string;
+  isLocked?: boolean;
+  planExpiresAt?: string | null;
+  quotas?: {
+    waNumbers?: BillingQuota;
+    seats?: BillingQuota;
+    contacts?: BillingQuota;
+    publishedWorkflows?: BillingQuota;
+    aiIncluded?: BillingPlan['aiIncluded'];
+    callingIncluded?: boolean;
+    analyticsAdvanced?: boolean;
+    campaigns?: boolean;
+    integrations?: boolean;
+    publicApi?: boolean;
+    templates?: boolean;
+    forms?: boolean;
+    advancedInbox?: boolean;
+    [key: string]: unknown;
+  };
+  features?: Record<string, boolean | undefined>;
+  limits?: Record<string, EntitlementLimit | BillingQuota | undefined>;
+  usage?: Record<string, number | undefined>;
+}
+
+export type BillingPaymentStatus = 'CREATED' | 'AUTHORIZED' | 'CAPTURED' | 'FAILED' | string;
+
+export interface BillingPaymentAttempt {
+  orderId?: string | null;
+  planId: string;
+  skuId?: string | null;
+  cadence?: BillingCadence | string | null;
+  status?: BillingPaymentStatus;
+  paidAt?: string | null;
+  createdAt?: string | null;
+  failureCode?: string | null;
+  failureMessage?: string | null;
+  totalAmountPaise: number;
+  exclGstPaise: number;
+  gstAmountPaise: number;
+  periodStart?: string | null;
+  periodEnd?: string | null;
+  receiptUrl?: string | null;
+}
+
 export interface BillingInfo {
   plan: string;
   planTier?: PlanTier;
@@ -436,14 +491,9 @@ export interface BillingInfo {
   currentPeriodEnd?: string | null;
   activePaidPlan?: string | null;
   activePaidExpiresAt?: string | null;
-  recentPayments?: Array<{
-    planId: string;
-    cadence?: BillingCadence | string | null;
-    paidAt: string | null;
-    totalAmountPaise: number;
-    exclGstPaise: number;
-    gstAmountPaise: number;
-  }>;
+  entitlements?: BillingEntitlementSnapshot;
+  pendingPayment?: BillingPaymentAttempt | null;
+  recentPayments?: BillingPaymentAttempt[];
 }
 
 export interface BillingUsage {
