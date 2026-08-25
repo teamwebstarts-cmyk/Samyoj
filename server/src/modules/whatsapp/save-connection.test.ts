@@ -32,7 +32,9 @@ vi.mock('../../config/database', () => ({
 
 const numberMock = vi.mocked(prisma.whatsappNumber);
 const txMock = {
+  $queryRaw: vi.fn().mockResolvedValue([{ id: 'org-b' }]),
   whatsappNumber: {
+    findFirst: vi.fn().mockResolvedValue(null),
     create: vi.fn(),
     update: vi.fn(),
   },
