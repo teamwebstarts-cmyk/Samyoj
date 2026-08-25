@@ -3,6 +3,7 @@ import prisma from '../../config/database';
 import { flowQueue } from '../../config/queues';
 import { extractAbSticky } from './ab-sticky';
 import { flowDelayJobId } from './inbound-wait';
+import { withConversationLock } from './lock';
 
 export async function cancelFlowDelayJob(conversationId: string): Promise<void> {
   try {
@@ -14,14 +15,21 @@ export async function cancelFlowDelayJob(conversationId: string): Promise<void> 
 }
 
 /** Drop in-flight journey state but keep A/B sticky assignments. */
-export async function clearFlowWaitState(conversationId: string): Promise<void> {
-  const current = await prisma.conversation.findUnique({
-    where: { id: conversationId },
+export async function clearFlowWaitState(
+  conversationId: string,
+  scope?: { organizationId: string; whatsappNumberId: string }
+): Promise<void> {
+  const current = await prisma.conversation.findFirst({
+    where: scope
+      ? { id: conversationId, organizationId: scope.organizationId, whatsappNumberId: scope.whatsappNumberId }
+      : { id: conversationId },
     select: { botState: true },
   });
   const sticky = extractAbSticky(current?.botState);
-  await prisma.conversation.update({
-    where: { id: conversationId },
+  await prisma.conversation.updateMany({
+    where: scope
+      ? { id: conversationId, organizationId: scope.organizationId, whatsappNumberId: scope.whatsappNumberId }
+      : { id: conversationId },
     data: {
       botState: Object.keys(sticky).length
         ? ({ abSticky: sticky } as Prisma.InputJsonValue)
@@ -31,7 +39,13 @@ export async function clearFlowWaitState(conversationId: string): Promise<void> 
 }
 
 /** Stop queued delay + in-progress tree. Caller still sets `botActive: false`. */
-export async function pauseConversationAutomations(conversationId: string): Promise<void> {
+export async function pauseConversationAutomations(
+  conversationId: string,
+  scope: { organizationId: string; whatsappNumberId: string }
+): Promise<boolean> {
   await cancelFlowDelayJob(conversationId);
-  await clearFlowWaitState(conversationId);
+  const cleared = await withConversationLock(conversationId, () =>
+    clearFlowWaitState(conversationId, scope)
+  );
+  return cleared !== null;
 }
