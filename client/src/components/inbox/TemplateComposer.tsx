@@ -34,6 +34,7 @@ interface TemplateComposerProps {
     templateParams?: TemplateParams;
   }) => void;
   sending: boolean;
+  canSendMessages?: boolean;
   onCancel: () => void;
   /** Show a compact 24h-window hint inside the form body (not a duplicate page title). */
   windowClosed?: boolean;
@@ -53,6 +54,7 @@ export function invalidateApprovedTemplatesCache() {
 export default function TemplateComposer({
   onSend,
   sending,
+  canSendMessages = true,
   onCancel,
   windowClosed,
   contactName,
@@ -193,7 +195,7 @@ export default function TemplateComposer({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selected || !canSendTemplate) return;
+    if (!selected || !canSendTemplate || !canSendMessages) return;
     onSend({
       templateName: selected.name,
       templateLanguage: selected.language,
@@ -428,7 +430,7 @@ export default function TemplateComposer({
           size="sm"
           icon={<Send size={14} />}
           loading={sending}
-          disabled={!canSendTemplate}
+          disabled={!canSendTemplate || !canSendMessages}
         >
           Send template
         </AppButton>
