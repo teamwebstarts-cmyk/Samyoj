@@ -15,6 +15,10 @@ export interface OrgAiSettings {
   chatEnabled?: boolean;
   /** Platform-admin kill switch for calling AI. Default true. */
   callingEnabled?: boolean;
+  /** Enterprise-only explicit allowance; unset means administrator-configured. */
+  customChatCreditsIncluded?: number;
+  /** Enterprise-only explicit allowance; unset means administrator-configured. */
+  customCallingMinutesIncluded?: number;
 }
 
 export interface ResolvedAiConfig {
