@@ -237,7 +237,7 @@ export default function MetaFlowBuilder() {
     setFields(fields.filter((_, i) => i !== index));
   };
 
-  const handleSave = async (): Promise<boolean> => {
+  const handleSave = async (): Promise<string | false> => {
     const normalizedFields = fields.map((field) => ({
       ...field,
       id: field.id.trim(),
@@ -276,13 +276,14 @@ export default function MetaFlowBuilder() {
         const created = data.data as FlowAssetRecord;
         toastSuccess('Meta Flow saved');
         navigate(`/automations/meta-flows/${created.id}`, { replace: true });
+        return created.id;
       } else {
         const { data } = await flowAssetsApi.update(id!, payload);
         setAsset(data.data as FlowAssetRecord);
         toastSuccess('Meta Flow updated');
       }
       setFields(normalizedFields);
-      return true;
+      return id || true;
     } catch (err) {
       toastError(getErrorMessage(err, 'Failed to save Meta Flow'));
       return false;

@@ -89,11 +89,8 @@ export default function WaFormPicker({ value, onChange }: WaFormPickerProps) {
 
   const publishedForms = forms.filter((f) => f.status === 'PUBLISHED');
   const options = [
-    { value: '', label: 'Select a form...' },
+    { value: '', label: publishedForms.length ? 'Select a form...' : 'No published forms yet' },
     ...publishedForms.map((f) => ({ value: f.id, label: f.name })),
-    ...forms
-      .filter((f) => f.status !== 'PUBLISHED')
-      .map((f) => ({ value: f.id, label: `${f.name} (${statusLabel(f.status)})` })),
   ];
 
   const selected = forms.find((f) => f.id === value);

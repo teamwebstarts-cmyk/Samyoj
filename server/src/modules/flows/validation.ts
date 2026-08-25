@@ -1,5 +1,6 @@
 import type { FlowNode } from './types';
 import { describeUnsafeWebhookUrl } from '../../utils/safe-webhook-url';
+import { isUnsafeKeywordRegex } from './trigger-match';
 
 const WAIT_OR_STOP_NODE_TYPES = new Set([
   'buttons',
@@ -114,6 +115,12 @@ export function validateFlowGraph(
 
   if (triggerType === 'KEYWORD' && !String(triggerConfig.keyword || '').trim()) {
     errors.push('Keyword is required for keyword trigger');
+  }
+  if (triggerType === 'KEYWORD' && triggerConfig.regex && triggerConfig.exactMatch) {
+    errors.push('Keyword cannot use both exact match and regex');
+  }
+  if (triggerType === 'KEYWORD' && triggerConfig.regex && isUnsafeKeywordRegex(String(triggerConfig.keyword || ''))) {
+    errors.push('Keyword regex is too complex or invalid');
   }
   if (triggerType === 'CONTACT_TAG' && !String(triggerConfig.tag || '').trim()) {
     errors.push('Tag is required for contact tag trigger');
@@ -239,6 +246,9 @@ export function validateFlowGraph(
 
     if (node.type === 'contact_card' && (!node.contactName?.trim() || !isValidE164Phone(node.contactPhone))) {
       errors.push(`Contact card step "${node.id}" needs a name and valid phone number`);
+    }
+    if (node.type === 'question' && node.field === 'custom' && !node.customField?.trim()) {
+      errors.push(`Question step "${node.id}" needs a custom field name`);
     }
 
     if (node.type === 'wa_flow' && !node.waFlowId?.trim()) {

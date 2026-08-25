@@ -384,9 +384,9 @@ export function createNode(type: FlowNodeType, index: number): import('../../typ
     case 'goto_step':
       return { ...base, targetNodeId: '' };
     case 'location':
-      return { ...base, text: 'Here is our location:', latitude: 0, longitude: 0, locationName: 'Our office' };
+      return { ...base, text: 'Here is our location:', locationName: '' };
     case 'contact_card':
-      return { ...base, text: 'Save our contact:', contactName: 'Support Team', contactPhone: '+919876543210' };
+      return { ...base, text: 'Save our contact:', contactName: '', contactPhone: '' };
     case 'wa_flow':
       return { ...base, text: 'Please fill out this form:', waFlowId: '', waFlowCta: 'Open form' };
     case 'media':

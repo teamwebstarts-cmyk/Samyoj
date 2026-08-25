@@ -32,10 +32,10 @@ export default function FlowPreviewPanel({ nodes, startNodeId, flowName }: FlowP
           </div>
           <div className="min-w-0">
             <p className="text-[12px] font-bold text-neutral-900">
-              {flowName?.trim() ? `"${flowName.trim()}" on WhatsApp` : 'How customers will see it'}
+              Example path{flowName?.trim() ? ` · "${flowName.trim()}"` : ''}
             </p>
             <p className="mt-0.5 text-[11px] font-medium leading-relaxed text-neutral-500">
-              This walks through your flow from start to finish. Buttons and menus auto-pick the first option.
+              This is a sample walkthrough, not a live customer session. Buttons and menus auto-pick the first option.
             </p>
           </div>
         </div>

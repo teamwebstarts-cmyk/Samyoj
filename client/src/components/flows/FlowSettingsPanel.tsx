@@ -323,6 +323,7 @@ export default function FlowSettingsPanel({
               checked={exactMatch}
               onChange={(e) => {
                 onExactMatchChange(e.target.checked);
+                if (e.target.checked) onRegexMatchChange(false);
                 markDirty();
               }}
             />
@@ -470,6 +471,7 @@ export default function FlowSettingsPanel({
                   checked={regexMatch}
                   onChange={(e) => {
                     onRegexMatchChange(e.target.checked);
+                    if (e.target.checked) onExactMatchChange(false);
                     markDirty();
                   }}
                 />

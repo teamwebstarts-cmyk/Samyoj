@@ -39,6 +39,9 @@ export interface TriggerNodeData {
 export function getNodeHandles(node: FlowNode): Array<{ id: string; label: string }> {
   switch (node.type) {
     case 'buttons':
+      if (node.buttonMode === 'url' || node.buttonMode === 'call') {
+        return [{ id: 'next', label: 'Next' }];
+      }
       return (node.buttons || []).map((b) => ({ id: b.id, label: b.title }));
     case 'list':
       return (node.listSections || []).flatMap((s) => s.rows).map((r) => ({ id: r.id, label: r.title }));

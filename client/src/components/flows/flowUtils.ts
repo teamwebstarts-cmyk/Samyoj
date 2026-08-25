@@ -235,6 +235,9 @@ export function validateFlow(
       }
     }
     if (node.type === 'question' && !node.prompt?.trim()) errors.push('Ask Question needs a question');
+    if (node.type === 'question' && node.field === 'custom' && !node.customField?.trim()) {
+      errors.push('Custom question needs a field name');
+    }
     if (node.type === 'tag' && !node.tag?.trim()) errors.push('Add Tag needs a tag name');
     if (node.type === 'template' && !node.templateName?.trim()) errors.push('Template Message needs a template');
     if (node.type === 'media' && !node.mediaUrl?.trim()) errors.push('Send Media needs a file link');

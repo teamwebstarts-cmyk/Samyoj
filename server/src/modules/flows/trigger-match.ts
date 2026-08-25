@@ -1,11 +1,23 @@
 import type { FlowTriggerConfig } from './types';
 import { HANDOFF_KEYWORDS } from './types';
 
+const MAX_KEYWORD_REGEX_LENGTH = 80;
+
+export function isUnsafeKeywordRegex(pattern: string): boolean {
+  const trimmed = pattern.trim();
+  if (!trimmed || trimmed.length > MAX_KEYWORD_REGEX_LENGTH) return true;
+  if (/\(\?/.test(trimmed)) return true;
+  if (/[+*]{2,}|\{\d{3,}/.test(trimmed)) return true;
+  const nested = (trimmed.match(/[+]|\*/g) || []).length;
+  return nested > 4;
+}
+
 export function keywordMatches(content: string, config: FlowTriggerConfig): boolean {
   const keyword = config.keyword?.toLowerCase().trim();
   if (!keyword) return false;
   const lower = content.toLowerCase();
   if (config.regex) {
+    if (isUnsafeKeywordRegex(keyword)) return false;
     try {
       return new RegExp(keyword, 'i').test(content);
     } catch {
