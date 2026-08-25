@@ -23,6 +23,7 @@ import FlowStepPalette from '../components/flows/FlowStepPalette';
 import FlowTestPanel from '../components/flows/FlowTestPanel';
 import FlowSettingsPanel from '../components/flows/FlowSettingsPanel';
 import FlowVersionsPanel from '../components/flows/FlowVersionsPanel';
+import EntitlementNotice, { quotaUpgradeMessage } from '../components/billing/EntitlementNotice';
 import { autoLayoutNodes, createNodeAtPosition } from '../components/flows/flowGraphUtils';
 import { prepareNodesForSave, validateFlow } from '../components/flows/flowUtils';
 import { flowApi, automationApi } from '../services/api';
@@ -37,11 +38,13 @@ import {
 import type { FlowNode, FlowNodeType, FlowStatus, FlowTriggerType } from '../types';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
+import { useEntitlements } from '../hooks/useEntitlements';
 
 type DesktopPanel = 'edit' | 'setup' | 'preview' | 'test' | 'analytics' | 'versions';
 
 export default function FlowBuilderPage() {
   const { activeNumber, resolved } = useWhatsAppNumber();
+  const { entitlements, loading: entitlementsLoading } = useEntitlements();
   const { id } = useParams();
   const navigate = useNavigate();
   const isNew = id === 'new';
@@ -68,6 +71,9 @@ export default function FlowBuilderPage() {
   const [nodes, setNodes] = useState<FlowNode[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [expectedUpdatedAt, setExpectedUpdatedAt] = useState<string | null>(null);
   const activeNumberIdRef = useRef<string | null>(null);
   activeNumberIdRef.current = activeNumber?.id ?? null;
   const loadGenerationRef = useRef(0);
@@ -92,12 +98,24 @@ export default function FlowBuilderPage() {
     () => flowAudienceState({ status: flowStatus, enabled, isNew }),
     [enabled, flowStatus, isNew]
   );
+  const canPublishFlow =
+    entitlementsLoading ||
+    !entitlements ||
+    (entitlements.canUseFeature('flowPublish') &&
+      entitlements.canAddToQuota('publishedWorkflows'));
+  const flowGateMessage =
+    !entitlementsLoading && entitlements && !entitlements.canUseFeature('flowPublish')
+      ? 'Flow publishing is unavailable while your plan is locked.'
+      : entitlements && !entitlements.canAddToQuota('publishedWorkflows')
+        ? quotaUpgradeMessage('publishedWorkflows')
+        : null;
 
   const load = useCallback(() => {
     if (!id || isNew || !resolved || !activeNumber) return;
     const requestNumberId = activeNumber.id;
     const generation = ++loadGenerationRef.current;
     setLoading(true);
+    setLoadError(null);
     flowApi
       .get(id)
       .then(({ data }) => {
@@ -106,6 +124,7 @@ export default function FlowBuilderPage() {
           generation !== loadGenerationRef.current
         ) return;
         const flow = data.data;
+        setExpectedUpdatedAt(flow.updatedAt || null);
         setName(flow.name);
         setDescription(flow.description || '');
         setTriggerType(flow.triggerType);
@@ -130,7 +149,9 @@ export default function FlowBuilderPage() {
           requestNumberId === activeNumberIdRef.current &&
           generation === loadGenerationRef.current
         ) {
-          toastError(getErrorMessage(err, 'Failed to load flow'));
+          const message = getErrorMessage(err, 'Failed to load flow');
+          setLoadError(message);
+          toastError(message);
         }
       })
       .finally(() => {
@@ -148,6 +169,7 @@ export default function FlowBuilderPage() {
   const runServerValidation = useCallback(async () => {
     if (nodes.length === 0 || !resolved || !activeNumber) {
       setWarnings([]);
+      setValidationErrors([]);
       return;
     }
     const validationGeneration = ++validationGenerationRef.current;
@@ -164,6 +186,7 @@ export default function FlowBuilderPage() {
         requestNumberId === activeNumberIdRef.current &&
         validationGeneration === validationGenerationRef.current
       ) {
+        setValidationErrors(data.data.errors || []);
         setWarnings(data.data.warnings || []);
       }
     } catch (err) {
@@ -176,17 +199,18 @@ export default function FlowBuilderPage() {
       const normalized = normalizeError(err);
       const details = normalized.details;
       if (Array.isArray(details) && details.length > 0) {
-        setWarnings(
-          details.map((detail) => {
-            if (typeof detail === 'object' && detail !== null && 'message' in detail) {
-              const path = 'path' in detail && detail.path ? `${String(detail.path)}: ` : '';
-              return `${path}${String((detail as { message: string }).message)}`;
-            }
-            return getErrorMessage(detail, 'Validation failed');
-          })
-        );
+        const messages = details.map((detail) => {
+          if (typeof detail === 'object' && detail !== null && 'message' in detail) {
+            const path = 'path' in detail && detail.path ? `${String(detail.path)}: ` : '';
+            return `${path}${String((detail as { message: string }).message)}`;
+          }
+          return getErrorMessage(detail, 'Validation failed');
+        });
+        setValidationErrors(messages);
+        setWarnings([]);
       } else {
-        setWarnings(normalized.message ? [normalized.message] : []);
+        setValidationErrors(normalized.message ? [normalized.message] : []);
+        setWarnings([]);
       }
     }
   }, [activeNumber, name, nodes, resolved, startNodeId, triggerConfig, triggerType]);
@@ -258,6 +282,7 @@ export default function FlowBuilderPage() {
       .map((n) => {
         const updated = { ...n };
         if (updated.next === nodeId) updated.next = undefined;
+        if (updated.targetNodeId === nodeId) updated.targetNodeId = undefined;
         if (updated.branches) {
           updated.branches = Object.fromEntries(
             Object.entries(updated.branches).filter(([, v]) => v && v !== nodeId)
@@ -306,10 +331,22 @@ export default function FlowBuilderPage() {
   };
 
   const handleSave = async (asDraft = false) => {
-    const preparedNodes = prepareNodesForSave(nodes);
-    const validationErrors = validateFlow(name, triggerType, triggerConfig, keyword, preparedNodes);
+    if (!isNew && loadError) {
+      toastError('Cannot save until the flow loads successfully.');
+      return;
+    }
     if (validationErrors.length > 0) {
       toastValidationErrors(validationErrors);
+      return;
+    }
+    if (!asDraft && !canPublishFlow) {
+      toastError(flowGateMessage || quotaUpgradeMessage('publishedWorkflows'));
+      return;
+    }
+    const preparedNodes = prepareNodesForSave(nodes);
+    const clientValidationErrors = validateFlow(name, triggerType, triggerConfig, keyword, preparedNodes);
+    if (clientValidationErrors.length > 0) {
+      toastValidationErrors(clientValidationErrors);
       setMobileTab('settings');
       setDesktopPanel('setup');
       return;
@@ -323,7 +360,7 @@ export default function FlowBuilderPage() {
         toastSuccess(flowSaveSuccessMessage({ asDraft, enabled, isNew: true }));
         navigate(`/automations/flows/${data.data.id}`, { replace: true });
       } else {
-        await flowApi.update(id!, buildPayload(asDraft));
+        await flowApi.update(id!, { ...buildPayload(asDraft), expectedUpdatedAt });
         setFlowStatus(asDraft ? 'DRAFT' : 'PUBLISHED');
         setSaved(true);
         toastSuccess(flowSaveSuccessMessage({ asDraft, enabled, isNew: false }));
@@ -338,10 +375,14 @@ export default function FlowBuilderPage() {
 
   const handlePublish = async () => {
     if (!id || isNew) return;
+    if (!canPublishFlow) {
+      toastError(flowGateMessage || quotaUpgradeMessage('publishedWorkflows'));
+      return;
+    }
     setSaving(true);
     try {
       if (!(await warnLiveConflicts(false))) return;
-      await flowApi.update(id, buildPayload());
+      await flowApi.update(id, buildPayload(true));
       await flowApi.publish(id);
       setFlowStatus('PUBLISHED');
       setSaved(true);
@@ -374,13 +415,35 @@ export default function FlowBuilderPage() {
     nodes.length === 0 ? 'Add steps to connect your automation' : `${nodes.length} step${nodes.length === 1 ? '' : 's'}`;
   const builderBadge = flowAudienceLabel(audience);
 
-  const handleRestoreVersion = (restoredNodes: FlowNode[], version: number) => {
-    const laid = autoLayoutNodes(restoredNodes, restoredNodes[0]?.id);
+  const handleRestoreVersion = (
+    restoredFlow: {
+      nodes: FlowNode[];
+      startNodeId?: string | null;
+      triggerType?: string;
+      triggerConfig?: Record<string, unknown>;
+      enabled?: boolean;
+      priority?: number;
+    },
+    version: number
+  ) => {
+    const laid = autoLayoutNodes(restoredFlow.nodes, restoredFlow.startNodeId || restoredFlow.nodes[0]?.id);
     setNodes(laid);
-    setStartNodeId(laid[0]?.id || '');
+    setStartNodeId(restoredFlow.startNodeId || laid[0]?.id || '');
     setSelectedNodeId(laid[0]?.id || null);
+    if (restoredFlow.triggerType) setTriggerType(restoredFlow.triggerType as FlowTriggerType);
+    const config = restoredFlow.triggerConfig || {};
+    setKeyword(String(config.keyword || ''));
+    setExactMatch(Boolean(config.exactMatch));
+    setRegexMatch(Boolean(config.regex));
+    setContactTag(String(config.tag || ''));
+    setSegmentTags(Array.isArray(config.tags) ? config.tags.join(', ') : '');
+    setCampaignId(String(config.campaignId || ''));
+    setWithinHours(typeof config.withinHours === 'number' ? config.withinHours : 168);
+    if (typeof restoredFlow.enabled === 'boolean') setEnabled(restoredFlow.enabled);
+    if (typeof restoredFlow.priority === 'number') setPriority(restoredFlow.priority);
     setFlowStatus('DRAFT');
-    toastSuccess(`Loaded version ${version} — save to apply`);
+    setSaved(false);
+    toastSuccess(`Restored version ${version} as draft — publish when ready`);
   };
 
   const settingsForm = (
@@ -416,6 +479,7 @@ export default function FlowBuilderPage() {
       onStartNodeIdChange={setStartNodeId}
       onPriorityChange={setPriority}
       onPublish={handlePublish}
+      canPublish={canPublishFlow}
       onDirty={() => setSaved(false)}
     />
   );
@@ -490,6 +554,18 @@ export default function FlowBuilderPage() {
     );
   }
 
+  if (!isNew && loadError) {
+    return (
+      <PageShell fullBleed className="!max-w-none !p-0">
+        <div className="flex min-h-[50vh] flex-col items-center justify-center gap-4 p-8 text-center">
+          <p className="text-lg font-semibold text-neutral-900">Could not load this flow</p>
+          <p className="max-w-md text-sm text-neutral-600">{loadError}</p>
+          <AppButton onClick={() => void load()}>Retry</AppButton>
+        </div>
+      </PageShell>
+    );
+  }
+
   return (
     <PageShell fullBleed className="!max-w-none !p-0">
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-gradient-to-br from-slate-50 via-[#f6f8f7] to-emerald-50/20 pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-0">
@@ -500,16 +576,24 @@ export default function FlowBuilderPage() {
           isNew={isNew}
           saved={saved}
           saving={saving}
+          enabled={enabled}
           onDuplicate={!isNew ? () => void handleDuplicate() : undefined}
           onSaveDraft={() => void handleSave(true)}
           onSave={() => void handleSave(false)}
         />
 
         <FlowValidationWarnings
-          warnings={warnings}
+          warnings={[...validationErrors, ...warnings]}
           nodes={nodes}
           onGoToStep={goToWarningStep}
         />
+        {flowGateMessage && (
+          <EntitlementNotice
+            className="mx-4 mt-3 lg:mx-6"
+            message={flowGateMessage}
+            upgradePlan={entitlements?.isLocked ? 'growth' : entitlements?.getUpgradePlan('publishedWorkflows')}
+          />
+        )}
 
         <div className="mx-auto w-full max-w-[1440px] flex-1 lg:hidden">
           {mobileTab === 'flow' && (
