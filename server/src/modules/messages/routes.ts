@@ -6,6 +6,7 @@ import { phoneFieldSchema } from '../../utils/phone';
 import { sendDirectMessage } from './service';
 import { z } from 'zod';
 import { resolveActiveWhatsappNumber } from '../whatsapp/active-number';
+import { requireActiveCommercialOnMutation } from '../../middleware/plan-guard';
 
 const router = Router();
 
@@ -23,6 +24,7 @@ router.post(
   authenticateJwtOrApiKey,
   requireOrg,
   resolveActiveWhatsappNumber,
+  requireActiveCommercialOnMutation(),
   asyncHandler(async (req: Request, res: Response) => {
     const data = sendSchema.parse(req.body);
     const result = await sendDirectMessage(req.user!.organizationId!, {
