@@ -3,10 +3,16 @@ import { authenticate, requireOrg } from '../../middleware/auth';
 import { sendSuccess, asyncHandler } from '../../utils/response';
 import { isAiConfigured } from '../ai/chat-completion.service';
 import { answerSupportQuestion, parseSupportChatBody } from './chat.service';
+import {
+  requireActiveCommercialOnMutation,
+  requireFeatureOnMutation,
+} from '../../middleware/plan-guard';
 
 const router = Router();
 
 router.use(authenticate, requireOrg);
+router.use(requireActiveCommercialOnMutation());
+router.use(requireFeatureOnMutation('support'));
 
 router.get(
   '/status',
