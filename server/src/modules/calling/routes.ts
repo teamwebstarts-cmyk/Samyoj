@@ -35,10 +35,14 @@ import { buildCallSignalingPayload } from './signaling-response';
 import { logTeamAudit } from '../team/audit';
 import { emitToOrg, emitToUser } from '../../realtime';
 import { resolveActiveWhatsappNumber, resolveActiveWhatsappNumberId } from '../whatsapp/active-number';
-import { checkQuota } from '../billing/entitlements.service';
+import { checkQuota, getOrgEntitlements } from '../billing/entitlements.service';
 import { recordAiUsage } from '../ai/org-ai.service';
 import { charUsage } from '../ai/ai-usage-actions';
 import { deleteCallLogs } from './delete-call-logs';
+import {
+  requireActiveCommercialOnMutation,
+  requireFeatureOnMutation,
+} from '../../middleware/plan-guard';
 import {
   addInternalNoteToCall,
   loadCallInternalNotes,
@@ -51,6 +55,8 @@ const callsAccessGuard = [
   authenticate,
   requireOrg,
   resolveActiveWhatsappNumber,
+  requireActiveCommercialOnMutation(),
+  requireFeatureOnMutation('calling'),
   ...withPermission('manageCalls'),
 ] as const;
 const callsAdminGuard = [...callsAccessGuard] as const;
@@ -353,6 +359,8 @@ router.post(
   '/voice/preview',
   authenticate,
   requireOrg,
+  requireActiveCommercialOnMutation(),
+  requireFeatureOnMutation('calling'),
   asyncHandler(async (req: Request, res: Response) => {
     if (!isSarvamTtsConfigured()) {
       throw new AppError(400, 'Sarvam voice is not configured on this server yet.');
@@ -879,8 +887,9 @@ router.get(
     });
     if (!call) throw new AppError(404, 'Call not found');
 
+    const canBackfill = !(await getOrgEntitlements(orgId)).isLocked;
     let conversationId = call.conversationId;
-    if (!conversationId && call.contactId && call.whatsappNumberId) {
+    if (canBackfill && !conversationId && call.contactId && call.whatsappNumberId) {
       const linked = await prisma.conversation.findFirst({
         where: {
           organizationId: orgId,
@@ -899,7 +908,7 @@ router.get(
       }
     }
 
-    if (conversationId) {
+    if (canBackfill && conversationId) {
       await migrateLegacyCallNotes({
         callId: call.id,
         conversationId,
