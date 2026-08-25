@@ -25,8 +25,12 @@ import {
   listBots,
 } from '../ai/bot.service';
 import { generateBotReply } from '../ai/chatbot.service';
-import { checkQuota } from '../billing/entitlements.service';
+import { checkQuota, getOrgEntitlements } from '../billing/entitlements.service';
 import { getBotAnalytics } from '../ai/analytics';
+import {
+  requireActiveCommercialOnMutation,
+  requireFeatureOnMutation,
+} from '../../middleware/plan-guard';
 import { isAiConfiguredForOrg, getOrgAiSettings, resolveAiConfig } from '../ai/org-ai.service';
 import { assertCanAddKnowledge, upsertKnowledgeEmbedding } from '../ai/knowledge.service';
 import { ingestUrlKnowledge, ingestPdfKnowledge } from '../ai/knowledge-ingest.service';
@@ -78,13 +82,25 @@ const faqSchema = z.object({
   content: z.string().min(1).max(2000),
 });
 
-const botAccessGuard = [authenticate, requireOrg, ...withPermission('manageAiBots')];
+const botAccessGuard = [
+  authenticate,
+  requireOrg,
+  requireActiveCommercialOnMutation(),
+  requireFeatureOnMutation('ai'),
+  ...withPermission('manageAiBots'),
+];
 const adminGuard = botAccessGuard;
-const readGuard = botAccessGuard;
+const readGuard = [
+  authenticate,
+  requireOrg,
+  ...withPermission('manageAiBots'),
+];
 const numberAdminGuard = [
   authenticate,
   requireOrg,
   resolveActiveWhatsappNumber,
+  requireActiveCommercialOnMutation(),
+  requireFeatureOnMutation('ai'),
   ...withPermission('manageAiBots'),
 ];
 
@@ -94,7 +110,9 @@ router.get(
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
 
-    await ensureSystemSupportBots(orgId);
+    if (!(await getOrgEntitlements(orgId)).isLocked) {
+      await ensureSystemSupportBots(orgId);
+    }
 
     const [bots, whatsappCount, azureOk, knowledgeItems] = await Promise.all([
       prisma.aiBot.findMany({ where: { organizationId: orgId } }),
@@ -354,7 +372,7 @@ router.post(
 
 router.post(
   '/preview/test',
-  ...readGuard,
+  ...botAccessGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const body = z
@@ -455,6 +473,8 @@ router.patch(
   authenticate,
   requireOrg,
   resolveActiveWhatsappNumber,
+  requireActiveCommercialOnMutation(),
+  requireFeatureOnMutation('ai'),
   ...withPermission('manageInbox', 'manageAiBots'),
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
@@ -522,6 +542,8 @@ router.patch(
   '/calling-ai',
   authenticate,
   requireOrg,
+  requireActiveCommercialOnMutation(),
+  requireFeatureOnMutation('calling'),
   ...withPermission('manageCalls', 'manageAiBots'),
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
@@ -585,6 +607,16 @@ router.patch(
 
     const existing = await prisma.aiBot.findFirst({ where: { id, organizationId: orgId } });
     if (!existing) throw new AppError(404, 'Bot not found');
+    if (existing.channel === 'CALL') {
+      const callingQuota = await checkQuota(orgId, 'calling');
+      if (!callingQuota.allowed) {
+        throw new AppError(
+          402,
+          callingQuota.reason || 'Calling is not included in your plan.',
+          callingQuota.code || 'PLAN_FEATURE_CALLING'
+        );
+      }
+    }
 
     if (data.name && (await findBotNameConflict(orgId, data.name, existing.channel, id))) {
       throw new AppError(409, 'Another bot already uses this name. Pick a different name.');
@@ -982,7 +1014,7 @@ router.post(
 
 router.post(
   '/:id/test',
-  ...readGuard,
+  ...botAccessGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const botId = paramId(req);
