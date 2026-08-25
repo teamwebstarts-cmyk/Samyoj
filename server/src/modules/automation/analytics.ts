@@ -1,11 +1,25 @@
 import prisma from '../../config/database';
+import { flowsForNumberFilter } from '../whatsapp/active-number';
 
-export async function getAutomationAnalytics(organizationId: string, days = 30) {
+export async function getAutomationAnalytics(organizationId: string, days = 30, whatsappNumberId?: string) {
   const since = new Date();
   since.setDate(since.getDate() - days);
 
+  const flowIds = whatsappNumberId
+    ? (
+        await prisma.flow.findMany({
+          where: { organizationId, ...flowsForNumberFilter(whatsappNumberId) },
+          select: { id: true },
+        })
+      ).map((f) => f.id)
+    : undefined;
+
   const logs = await prisma.automationLog.findMany({
-    where: { organizationId, createdAt: { gte: since } },
+    where: {
+      organizationId,
+      createdAt: { gte: since },
+      ...(flowIds ? { OR: [{ flowId: { in: flowIds } }, { flowId: null }] } : {}),
+    },
     orderBy: { createdAt: 'desc' },
     take: 5000,
   });
