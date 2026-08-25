@@ -9,6 +9,7 @@ interface FlowBuilderHeaderProps {
   isNew: boolean;
   saved: boolean;
   saving: boolean;
+  enabled?: boolean;
   onDuplicate?: () => void;
   onSaveDraft: () => void;
   onSave: () => void;
@@ -36,6 +37,7 @@ export default function FlowBuilderHeader({
   isNew,
   saved,
   saving,
+  enabled = false,
   onDuplicate,
   onSaveDraft,
   onSave,
@@ -95,7 +97,7 @@ export default function FlowBuilderHeader({
             loading={saving}
             onClick={onSave}
           >
-            {saved ? 'Saved' : 'Save'}
+            {saved ? 'Saved' : enabled ? 'Publish' : 'Save'}
           </AppButton>
         </div>
       </div>
