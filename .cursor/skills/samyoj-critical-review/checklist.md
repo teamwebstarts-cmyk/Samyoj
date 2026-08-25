@@ -36,7 +36,7 @@ Use as a working sheet. Mark only after evidence.
 - [ ] `phoneNumberId` unique in Prisma (landed — re-verify)
 - [ ] Webhook lookup cannot cross tenants on duplicates
 - [ ] Pending OAuth token is opaque server-side (landed — re-verify)
-- [ ] Meta `client_secret` not in URL query if avoidable (**still query** as of 2026-08-15)
+- [ ] Meta `client_secret` not in URL query if avoidable (**POST body as of 2026-08-25**)
 - [ ] Connect/disconnect require OWNER/ADMIN (landed — re-verify)
 - [ ] Unauthenticated `/webhook/health` does not over-expose internals (or is restricted)
 

@@ -68,10 +68,10 @@ curl -s http://localhost:8000/api/whatsapp/webhook/health
 
 Treat as **Critical/High** until code proves removed:
 
-1. Auth tokens in `localStorage` (XSS). Refresh rotation exists; cookie migration does not. `AUTH_DEEP_REVIEW.md` is stale on rotation.
-2. Meta token-exchange still puts `client_secret` in the query string
-3. Socket membership is connect-time (live sockets until reconnect)
-4. Email verification theater (`emailVerifiedAt` set on register)
+1. Auth tokens in `sessionStorage` (XSS). Refresh rotation exists; cookie migration does not. `AUTH_DEEP_REVIEW.md` is stale on rotation.
+2. ~~Meta token-exchange `client_secret` in query~~ — **Fixed 2026-08-25** (POST form body).
+3. ~~Socket membership connect-time only~~ — **Fixed 2026-08-18** (`startMembershipGuard` 60s re-check).
+4. ~~Email verification theater on register~~ — **Fixed 2026-08-25** (`emailVerifiedAt: null`; login still allowed).
 5. Leftover PM2 `whatsapp-worker` on old hosts (delete it). `npm run start:worker` / standalone `workers/index.js` now exit 1.
 
 ## Scoring rules

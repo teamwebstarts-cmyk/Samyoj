@@ -12,6 +12,7 @@ import { resolveCs24hWindowOpensAt } from '../inbox/service-window';
 import { isAgentOnlyChatMetadata } from './agent-only';
 import { emitProductEvent } from '../platform/events';
 import { getOrgEntitlements } from '../billing/entitlements.service';
+import { outboundStatusAfterProviderCallError } from './send-lease';
 
 const log = createModuleLogger('messages');
 
@@ -322,6 +323,36 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
       }
     }
 
+    const leased = await prisma.message.updateMany({
+      where: {
+        id: input.messageId,
+        status: 'PENDING',
+        providerCallStartedAt: null,
+      },
+      data: { providerCallStartedAt: new Date() },
+    });
+    if (leased.count !== 1) {
+      const existingLease = await prisma.message.findUnique({
+        where: { id: input.messageId },
+      });
+      if (!existingLease) {
+        throw new AppError(404, 'Message not found');
+      }
+      if (
+        existingLease.status === 'SENT' ||
+        existingLease.status === 'DELIVERED' ||
+        existingLease.status === 'READ'
+      ) {
+        return existingLease;
+      }
+      log.warn('Skipped duplicate Meta send — provider lease already held', {
+        organizationId: input.organizationId,
+        messageId: input.messageId,
+        status: existingLease.status,
+      });
+      return existingLease;
+    }
+
     let result;
     const context = input.contextMessageId
       ? { context: { message_id: input.contextMessageId } }
@@ -537,7 +568,7 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
     // templateName, interactive, …) survive for POST /inbox/messages/:id/retry.
     const existing = await prisma.message.findUnique({
       where: { id: input.messageId },
-      select: { metadata: true, conversationId: true },
+      select: { metadata: true, conversationId: true, providerCallStartedAt: true },
     });
 
     log.error('Outbound Meta send failed', {
@@ -560,13 +591,21 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
       sampleTitle: errorMessage,
     });
 
+    const nextStatus = existing?.providerCallStartedAt
+      ? outboundStatusAfterProviderCallError(error)
+      : 'FAILED';
+
     const message = await prisma.message.update({
       where: { id: input.messageId },
       data: {
-        status: 'FAILED',
+        status: nextStatus,
+        ...(nextStatus === 'FAILED' ? { providerCallStartedAt: null } : {}),
         metadata: {
           ...((existing?.metadata as Record<string, unknown>) || {}),
           error: errorMessage,
+          ...(nextStatus === 'AMBIGUOUS'
+            ? { providerOutcomeUnknown: true }
+            : {}),
           ...(metaCode !== undefined ? { metaCode } : {}),
           ...(metaSubcode !== undefined ? { metaSubcode } : {}),
           ...(fbtraceId ? { fbtraceId } : {}),
@@ -576,12 +615,16 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
 
     emitToOrg(input.organizationId, 'message:status', {
       messageId: input.messageId,
-      status: 'FAILED',
+      status: nextStatus,
       error: errorMessage,
       metaCode,
       fbtraceId,
       conversationId: message.conversationId,
     });
+
+    if (nextStatus === 'AMBIGUOUS') {
+      return message;
+    }
 
     throw metaCode === META_CSW_ERROR_CODE
       ? new AppError(400, errorMessage, CSW_CLOSED_CODE)

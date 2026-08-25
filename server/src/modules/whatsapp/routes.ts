@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from 'crypto';
 import { Router, Request, Response } from 'express';
 import prisma from '../../config/database';
 import { config } from '../../config';
@@ -40,6 +41,13 @@ import {
 } from './webhook-health';
 import { emitProductEvent } from '../platform/events';
 import { requireActiveCommercial, requireActiveCommercialOnMutation } from '../../middleware/plan-guard';
+
+/** Constant-time string compare (length-agnostic via SHA-256 digests). */
+function safeTokenEquals(a: string, b: string): boolean {
+  const digA = createHash('sha256').update(a, 'utf8').digest();
+  const digB = createHash('sha256').update(b, 'utf8').digest();
+  return timingSafeEqual(digA, digB);
+}
 
 const log = createModuleLogger('whatsapp');
 
@@ -569,7 +577,7 @@ router.get('/webhook', (req: Request, res: Response) => {
     return res.status(400).send(`Unsupported mode: ${mode}`);
   }
 
-  if (token !== expectedToken) {
+  if (!safeTokenEquals(token, expectedToken)) {
     log.warn('Webhook verification token mismatch', {
       expectedTokenPrefix: `${expectedToken.slice(0, 6)}…`,
       receivedTokenPrefix: `${token.slice(0, 6)}…`,

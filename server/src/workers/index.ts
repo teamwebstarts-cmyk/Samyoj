@@ -6,6 +6,7 @@ import { config } from '../config';
 import { MetaWhatsAppService } from '../modules/whatsapp/meta.service';
 import { resolveMetaCredentials } from '../modules/whatsapp/org-meta.service';
 import { deliverOutboundMessage } from '../modules/messages/send.service';
+import { shouldSkipOutboundProviderRetry } from '../modules/messages/send-lease';
 import { retryDelays } from '../config/queues';
 import { processWebhookFields } from '../modules/calling/call.processor';
 import { processWebhookPayload } from './webhook.processor';
@@ -187,9 +188,9 @@ const messageWorker = new Worker(
 
     const existing = await prisma.message.findUnique({
       where: { id: messageId },
-      select: { status: true },
+      select: { status: true, providerCallStartedAt: true },
     });
-    if (!existing || existing.status === 'SENT' || existing.status === 'FAILED') {
+    if (!existing || shouldSkipOutboundProviderRetry(existing)) {
       return;
     }
 

@@ -107,13 +107,11 @@ Already done (do not redo): unique `phoneNumberId`; opaque Redis `pendingToken` 
 
 Still open (do not claim customer production):
 
-1. Auth tokens in `localStorage` (XSS) — HttpOnly cookies not started
-2. Socket membership is connect-time; live sockets until reconnect
-3. Email verification disabled/theater
-4. Backup restore drill untested
-5. Inbound unproven until a **new** phone reply (`totalReceived`)
-6. Meta token-exchange still puts `client_secret` in the query string
-7. Do not re-add App ID/Secret UI unless the user explicitly asks
+1. Auth tokens in `sessionStorage` (XSS) — HttpOnly cookies not started (SAMYOJ-3)
+2. Inbound unproven until a **new** phone reply (`totalReceived`)
+3. Do not re-add App ID/Secret UI unless the user explicitly asks
+
+Closed (do not reopen): Meta token-exchange POST body (2026-08-25); register email honesty (2026-08-25); socket membership guard (2026-08-18); backup restore drill (2026-08-18); `start:worker` exit 1.
 
 ## Setup script expectations
 

@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import prisma from '../../config/database';
 import { webhookDispatchQueue } from '../../config/queues';
 import { createModuleLogger } from '../../utils/logger';
-import { assertSafeWebhookUrl } from '../../utils/safe-webhook-url';
+import { fetchPinnedWebhook } from '../../utils/safe-webhook-url';
 
 const log = createModuleLogger('integrations');
 const MAX_FAILURES_BEFORE_DISABLE = 10;
@@ -58,8 +58,7 @@ export async function executeWebhookDelivery(deliveryId: string): Promise<void> 
     .digest('hex');
 
   try {
-    await assertSafeWebhookUrl(delivery.endpoint.url);
-    const res = await fetch(delivery.endpoint.url, {
+    const res = await fetchPinnedWebhook(delivery.endpoint.url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -67,7 +66,7 @@ export async function executeWebhookDelivery(deliveryId: string): Promise<void> 
         'X-Webhook-Signature': signature,
       },
       body,
-      signal: AbortSignal.timeout(30_000),
+      timeoutMs: 30_000,
     });
 
     if (res.ok) {

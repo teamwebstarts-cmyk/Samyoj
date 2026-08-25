@@ -120,12 +120,15 @@ Single VPS recommended (8GB RAM, 4 CPU):
 - PM2 for API + workers
 - PostgreSQL + Redis on same server or managed services
 
-Run workers separately in production:
+Workers are **embedded in the API** (`startWorkers()`). Do **not** run a second worker process:
 
 ```bash
+# These exit 1 on purpose — do not use in production
+cd server && npm run start:worker
 cd server && npm run dev:worker
 ```
 
+PM2 should run **whatsapp-api only**.
 ## License
 
 Private — All rights reserved.

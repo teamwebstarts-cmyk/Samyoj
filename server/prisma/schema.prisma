@@ -1122,6 +1122,8 @@ model Message {
   content        String
   status         MessageStatus    @default(PENDING)
   metadata       Json?
+  /** Set immediately before the Meta HTTP call. Retry must not send again. */
+  providerCallStartedAt DateTime? @map("provider_call_started_at")
   createdAt      DateTime         @default(now()) @map("created_at")
   updatedAt      DateTime         @updatedAt @map("updated_at")
 

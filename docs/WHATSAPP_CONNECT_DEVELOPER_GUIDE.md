@@ -197,7 +197,7 @@ The current supported local workflow uses ngrok. Cloudflare is not part of the s
 - Inbox header connection dot — Socket status
 
 ### Health API
-`GET /api/whatsapp/webhook/health` → `totalReceived`, `queueDepth`, `webhookConfigured` (boolean), last error. The live tunnel URL is not returned (use `server/.env` `META_WEBHOOK_URL`).
+`GET /api/whatsapp/webhook/health` → `totalReceived`, `queueDepth`, `webhookConfigured` (boolean). No `webhookUrl` / `lastError` / Facebook trace in that JSON — use `server/.env` `META_WEBHOOK_URL`.
 
 ### Browser myth
 Opening `https://<tunnel>/api/whatsapp/webhook` in Chrome →  

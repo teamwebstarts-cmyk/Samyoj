@@ -93,7 +93,7 @@ export function validateConfig(): void {
     }
     if (!config.meta.appSecret) {
       logger.warn(
-        'META_APP_SECRET is not set globally — each organization must configure Meta credentials in Settings',
+        'META_APP_SECRET is not set — put META_APP_ID / META_APP_SECRET in server/.env (platform credentials only; Settings UI never collects them)',
         { source: 'startup' }
       );
     }

@@ -96,16 +96,17 @@ Full map: `docs/memory/RESEARCH_MAP.md`. Short version:
 | Live Graph proof of library clone | Clone `account_creation_confirmation` with real `https://yourstore.com/verify` (not localhost). If Graph rejects suffix sample, next smallest change is full reconstructed URL as `url_suffix_example` -- **don't guess now**. |
 | Live agent on the **same phone call** | WebRTC media transfer not production-ready; settings force `message_only`. Copy is honest. Do not promise "please hold". |
 | Access + refresh in `sessionStorage` (per tab) | XSS can still read them. HttpOnly cookies = **SAMYOJ-3**, deferred to Phase 2. Refresh **does** rotate (`rotateRefreshSession`). |
-| `GET /oauth/access_token?client_secret=` | Meta token-exchange URL; not the Graph GET helper. POST would be a contract change. |
+| Meta token exchange POST (no `client_secret` on URL) | **Done 2026-08-25:** `exchangeCodeForToken` / long-lived use POST form body. |
 | Leftover org App Secret in DB | Stripped on Connect + GET `/meta-config` when platform `.env` is set (`stripLeftoverOrgMetaCredentials`). **No** one-shot migration of every org. PATCH is 410. Do not re-add UI. |
+| Email verification honesty | **Done 2026-08-25:** Register sets `emailVerifiedAt: null`; login still allowed. Hard gate + cookies remain Phase 2 / SAMYOJ-3. |
 | Interrupt **while** TTS is playing | **DONE (2026-08-18):** RMS-based barge-in (`stopBotSpeechForBargeIn`), VAD speech_start, STT final all stop bot playback. Echo guard 700ms + RMS threshold 1800. See `ai-voice-agent.ts:290-299`, `spoken-text.ts:74-79,109-125`. |
 | Inbox pause does not stop **flows** | **VERIFIED (2026-08-18):** AI path honors `botActive`, journeys also honor `botActive` via `isBotPaused` double-guard in `resumeFlowAfterDelay` (lines 1457, 1477) and `startFlowFromJob` (line 1758). `pauseConversationAutomations` proactively removes delay jobs from queue. CSW enforcement on non-template outbound also verified. |
 | Billing | Docs only: `docs/audit/BILLING_SYSTEM_REVIEW.md`, `docs/billing/14-IMPLEMENTATION-BLUEPRINT.md`. Razorpay checkout is demo-grade. **Deferred to Phase 2.** |
 | Phase C automations | User said do not start: tickets/SLA, catalog, NL generate-flow, form-builder merge, `goto_flow` stack, wait-for-media. |
 | Invent Meta marketing template library | Do not. Use Meta's library + the 3 Create starters. |
 | Public health `totalReceived: 0` after restart | Not proof inbound is dead. Prove with a **new** phone message. Public JSON has **no** `webhookUrl` / `lastError` / Facebook trace -- use `.env`. |
-| Socket membership is connect-time | Live sockets stay until reconnect; membership is not re-checked per event. Phase 1 item. |
-| Email verification theater | Register sets `emailVerifiedAt` immediately. Do not claim verified-email auth. **Deferred to Phase 2.** |
+| Socket membership re-check | **Done 2026-08-18:** `startMembershipGuard` re-checks org membership every 60s; emits `session:revoked` + disconnect on revoke. |
+| ~~Email verification theater~~ | **Done 2026-08-25:** Register no longer auto-sets `emailVerifiedAt`. |
 | Backup restore drill | **Done 2026-08-18:** `server/scripts/restore-database.ts` + `npm run db:restore` + documented in `docs/DEV_SETUP_CHECKLIST.md`. Roundtrip tested. Relates SAMYOJ-6. |
 | Train Ready needs Azure embeddings | Vector Ready is Azure-only. No embeddings key then training stays Learning. Not a new Jira. |
 | Speaker outside the four voices | Calling UI offers Shubh / Ratan / Priya / Ishita. Other Sarvam speakers are not in that picker. |

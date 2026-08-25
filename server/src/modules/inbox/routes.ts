@@ -565,7 +565,11 @@ router.post(
 
     await prisma.message.update({
       where: { id: message.id },
-      data: { status: 'PENDING', metadata: sendMetadata as Prisma.InputJsonValue },
+      data: {
+        status: 'PENDING',
+        providerCallStartedAt: null,
+        metadata: sendMetadata as Prisma.InputJsonValue,
+      },
     });
     emitToOrg(orgId, 'message:status', {
       messageId: message.id,

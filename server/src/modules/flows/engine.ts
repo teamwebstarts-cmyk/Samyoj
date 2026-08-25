@@ -14,7 +14,7 @@ import { linkFlowNodes } from './link-nodes';
 import { matchInteractiveTextIntent, resolveInteractiveBranch, syncButtonNode } from './branch-resolve';
 import type { InteractiveMessageOptions } from '../messages/interactive';
 import type { TemplateParams } from '../campaigns/types';
-import { assertSafeWebhookUrl } from '../../utils/safe-webhook-url';
+import { fetchPinnedWebhook } from '../../utils/safe-webhook-url';
 import { partitionFlowsForMatch } from './match-order';
 import { keywordMatches, wantsHandoff } from './trigger-match';
 import { extractAbSticky } from './ab-sticky';
@@ -494,13 +494,11 @@ async function callWebhook(
   };
 
   try {
-    await assertSafeWebhookUrl(node.webhookUrl);
-    const res = await fetch(node.webhookUrl, {
+    const res = await fetchPinnedWebhook(node.webhookUrl, {
       method,
       headers: { 'Content-Type': 'application/json' },
       body: method === 'POST' ? JSON.stringify(body) : undefined,
-      signal: AbortSignal.timeout(10000),
-      redirect: 'error',
+      timeoutMs: 10_000,
     });
     const text = await res.text().catch(() => '');
     variables.webhook_status = String(res.status);
@@ -1090,8 +1088,11 @@ async function executeNode(
 
       case 'wa_flow': {
         if (node.waFlowId) {
-          const { randomUUID } = await import('crypto');
-          const flowToken = `${payload.conversationId}:${node.id}:${randomUUID()}`;
+          const { mintNfmFlowToken } = await import('../flows-assets/nfm-token');
+          const flowToken = mintNfmFlowToken({
+            conversationId: payload.conversationId,
+            nodeId: node.id,
+          });
           await sendFlowMessage(payload, node.text || 'Please complete the form', state.variables, contactName, 'INTERACTIVE', {
             flowId,
             waFlow: {

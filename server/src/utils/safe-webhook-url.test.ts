@@ -1,5 +1,13 @@
-import { describe, expect, it } from 'vitest';
-import { describeUnsafeWebhookUrl, isPrivateOrReservedIp } from './safe-webhook-url';
+import { describe, expect, it, vi } from 'vitest';
+import { lookup } from 'node:dns/promises';
+import { describeUnsafeWebhookUrl, isPrivateOrReservedIp, resolveWebhookPin } from './safe-webhook-url';
+import { AppError } from './response';
+
+vi.mock('node:dns/promises', () => ({
+  lookup: vi.fn(),
+}));
+
+const mockedLookup = vi.mocked(lookup);
 
 describe('isPrivateOrReservedIp', () => {
   it('blocks loopback, RFC1918, link-local, and metadata ranges', () => {
@@ -32,5 +40,21 @@ describe('describeUnsafeWebhookUrl', () => {
 
   it('allows a public HTTPS URL at the sync layer', () => {
     expect(describeUnsafeWebhookUrl('https://example.com/webhooks/samyoj')).toBeNull();
+  });
+});
+
+describe('resolveWebhookPin', () => {
+  it('pins TCP to the resolved public IP while keeping TLS SNI on the hostname', async () => {
+    mockedLookup.mockResolvedValue([{ address: '1.1.1.1', family: 4 }] as never);
+    const pin = await resolveWebhookPin('https://hooks.example.com/samyoj?x=1');
+    expect(pin.connectIp).toBe('1.1.1.1');
+    expect(pin.servername).toBe('hooks.example.com');
+    expect(pin.hostHeader).toBe('hooks.example.com');
+    expect(pin.path).toBe('/samyoj?x=1');
+  });
+
+  it('rejects when DNS returns a private address', async () => {
+    mockedLookup.mockResolvedValue([{ address: '127.0.0.1', family: 4 }] as never);
+    await expect(resolveWebhookPin('https://evil.example.com/hook')).rejects.toBeInstanceOf(AppError);
   });
 });

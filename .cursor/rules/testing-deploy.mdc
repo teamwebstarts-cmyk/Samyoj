@@ -22,7 +22,6 @@ Embedded in the API (`startWorkers()` in `server/src/index.ts`). PM2 runs **what
 
 ## Still open — do not claim fixed
 
-- Socket membership is connect-time (live sockets until reconnect)
-- Email verification disabled/theater
-- Backup restore drill untested
+- Auth tokens in `sessionStorage` (HttpOnly cookies = SAMYOJ-3)
+- Backup restore drill untested on customer host (local drill done)
 - Inbound unproven until a **new** phone reply increments `totalReceived`

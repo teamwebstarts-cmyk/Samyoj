@@ -1,4 +1,5 @@
 import { lookup } from 'node:dns/promises';
+import https from 'node:https';
 import { isIP } from 'node:net';
 import { AppError } from './response';
 
@@ -106,7 +107,21 @@ export function describeUnsafeWebhookUrl(rawUrl: string): string | null {
   return null;
 }
 
-export async function assertSafeWebhookUrl(rawUrl: string): Promise<URL> {
+export interface PinnedWebhookTarget {
+  original: URL;
+  connectIp: string;
+  servername: string;
+  hostHeader: string;
+  path: string;
+  port: number;
+}
+
+/**
+ * Resolve and pin the TCP destination to a public IP already checked as
+ * non-private. TLS SNI stays on the original hostname so DNS rebinding
+ * after lookup cannot retarget the socket at connect time.
+ */
+export async function resolveWebhookPin(rawUrl: string): Promise<PinnedWebhookTarget> {
   const syncError = describeUnsafeWebhookUrl(rawUrl);
   if (syncError) {
     throw new AppError(400, syncError, 'UNSAFE_WEBHOOK_URL');
@@ -114,9 +129,18 @@ export async function assertSafeWebhookUrl(rawUrl: string): Promise<URL> {
 
   const url = new URL(rawUrl);
   const hostname = url.hostname.replace(/^\[|\]$/g, '');
+  const port = url.port ? Number(url.port) : 443;
+  const path = `${url.pathname}${url.search}`;
 
   if (isIP(hostname)) {
-    return url;
+    return {
+      original: url,
+      connectIp: hostname,
+      servername: hostname,
+      hostHeader: url.host,
+      path,
+      port,
+    };
   }
 
   let addresses: Array<{ address: string }>;
@@ -140,5 +164,76 @@ export async function assertSafeWebhookUrl(rawUrl: string): Promise<URL> {
     }
   }
 
-  return url;
+  return {
+    original: url,
+    connectIp: addresses[0].address,
+    servername: hostname,
+    hostHeader: url.host,
+    path,
+    port,
+  };
+}
+
+export async function assertSafeWebhookUrl(rawUrl: string): Promise<URL> {
+  const pin = await resolveWebhookPin(rawUrl);
+  return pin.original;
+}
+
+export async function fetchPinnedWebhook(
+  rawUrl: string,
+  init: {
+    method?: string;
+    headers?: Record<string, string>;
+    body?: string;
+    timeoutMs?: number;
+  } = {}
+): Promise<{ ok: boolean; status: number; text: () => Promise<string> }> {
+  const pin = await resolveWebhookPin(rawUrl);
+  const method = (init.method || 'GET').toUpperCase();
+  const timeoutMs = init.timeoutMs ?? 30_000;
+  const headers: Record<string, string> = {
+    ...(init.headers || {}),
+    Host: pin.hostHeader,
+  };
+
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      {
+        protocol: 'https:',
+        hostname: pin.connectIp,
+        servername: pin.servername,
+        port: pin.port,
+        path: pin.path,
+        method,
+        headers,
+        timeout: timeoutMs,
+      },
+      (res) => {
+        const status = res.statusCode || 0;
+        if (status >= 300 && status < 400) {
+          res.resume();
+          reject(new Error('Webhook redirects are not allowed'));
+          return;
+        }
+        const chunks: Buffer[] = [];
+        res.on('data', (chunk) => chunks.push(chunk as Buffer));
+        res.on('end', () => {
+          const body = Buffer.concat(chunks).toString('utf8');
+          resolve({
+            ok: status >= 200 && status < 300,
+            status,
+            text: async () => body,
+          });
+        });
+      }
+    );
+    req.on('timeout', () => {
+      req.destroy(new Error('Webhook request timed out'));
+    });
+    req.on('error', reject);
+    if (init.body && method !== 'GET' && method !== 'HEAD') {
+      req.write(init.body);
+    }
+    req.end();
+  });
 }
