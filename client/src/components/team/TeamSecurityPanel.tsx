@@ -14,7 +14,6 @@ import { useAuth } from '../../contexts/AuthContext';
 import { teamApi } from '../../services/api';
 import type { UserSession } from '../../types';
 import { toastError, toastSuccess } from '../../utils/toast';
-import { getRefreshToken } from '../../utils/authStorage';
 import { formatJoinedDate } from './teamUi';
 
 export default function TeamSecurityPanel() {

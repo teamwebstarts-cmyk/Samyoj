@@ -66,3 +66,43 @@ export function emitToUsers(userIds: string[], event: string, data: unknown): vo
     emitToUser(userId, event, data);
   }
 }
+
+/** Disconnect live sockets for a user (session revoke, membership removal). */
+export function revokeUserSockets(
+  userId: string,
+  reason: 'session_revoked' | 'membership_revoked' = 'session_revoked'
+): void {
+  if (!io) return;
+  void io
+    .in(`user:${userId}`)
+    .fetchSockets()
+    .then((sockets) => {
+      for (const socket of sockets) {
+        socket.emit('session:revoked', { reason });
+        socket.disconnect(true);
+      }
+    })
+    .catch(() => {
+      // Best-effort — periodic membership guard still covers missed disconnects.
+    });
+}
+
+/** Disconnect sockets scoped to one org when membership is removed. */
+export function revokeOrgMemberSockets(userId: string, organizationId: string): void {
+  if (!io) return;
+  void io
+    .in(`user:${userId}`)
+    .fetchSockets()
+    .then((sockets) => {
+      for (const socket of sockets) {
+        const user = socket.data.user as { organizationId?: string } | undefined;
+        if (user?.organizationId === organizationId) {
+          socket.emit('session:revoked', { reason: 'membership_revoked' });
+          socket.disconnect(true);
+        }
+      }
+    })
+    .catch(() => {
+      // Best-effort
+    });
+}

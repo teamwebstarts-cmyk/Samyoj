@@ -39,6 +39,13 @@ export const config = {
     expiresIn: process.env.JWT_EXPIRES_IN || '15m',
     refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
   },
+  auth: {
+    /** Production default: block login until email is verified. Dev default: allow unless ALLOW_UNVERIFIED_LOGIN=false. */
+    allowUnverifiedLogin:
+      process.env.NODE_ENV !== 'production'
+        ? process.env.ALLOW_UNVERIFIED_LOGIN !== 'false'
+        : /^(1|true|yes)$/i.test(process.env.ALLOW_UNVERIFIED_LOGIN || ''),
+  },
   meta: {
     appId: process.env.META_APP_ID || '',
     appSecret: process.env.META_APP_SECRET || '',

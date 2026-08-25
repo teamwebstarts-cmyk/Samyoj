@@ -3,6 +3,7 @@ import { OrgRole } from '@prisma/client';
 import prisma from '../config/database';
 import { verifyAccessToken, JwtPayload } from '../utils/jwt';
 import { AppError } from '../utils/response';
+import { readTenantAccessToken } from '../modules/auth/cookies';
 
 declare global {
   namespace Express {
@@ -13,14 +14,22 @@ declare global {
   }
 }
 
-export function authenticate(req: Request, _res: Response, next: NextFunction) {
+export function extractAccessToken(req: Request): string | null {
   const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer ')) {
+  if (authHeader?.startsWith('Bearer ')) {
+    const token = authHeader.slice(7).trim();
+    if (token) return token;
+  }
+  return readTenantAccessToken(req);
+}
+
+export function authenticate(req: Request, _res: Response, next: NextFunction) {
+  const token = extractAccessToken(req);
+  if (!token) {
     return next(new AppError(401, 'Authentication required'));
   }
 
   try {
-    const token = authHeader.slice(7);
     req.user = verifyAccessToken(token);
     next();
   } catch {

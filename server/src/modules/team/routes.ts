@@ -23,7 +23,8 @@ import {
   type TeamSettings,
 } from './types';
 import type { OrgRole } from '@prisma/client';
-import { revokeRefreshSessionsForUser } from '../auth/session';
+import { revokeRefreshSessionsForUser, issueTenantSession } from '../auth/session';
+import { revokeOrgMemberSockets, revokeUserSockets } from '../../realtime';
 import { requireActiveCommercialOnMutation } from '../../middleware/plan-guard';
 import { checkQuota, getOrgEntitlements } from '../billing/entitlements.service';
 
@@ -721,17 +722,11 @@ router.post(
       organizationId: invite.organizationId,
     };
 
-    const { signAccessToken, signRefreshToken } = await import('../../utils/jwt');
-    const accessToken = signAccessToken(payload);
-    const refreshToken = signRefreshToken(payload);
-
-    await prisma.refreshToken.create({
-      data: {
-        token: refreshToken,
-        userId: result.user.id,
-        expiresAt: (await import('../../utils/jwt')).parseExpiry(config.jwt.refreshExpiresIn),
-      },
-    });
+    await issueTenantSession(
+      res,
+      payload,
+      req
+    );
 
     sendSuccess(res, {
       user: { id: result.user.id, name: result.user.name, email: result.user.email },
@@ -740,8 +735,6 @@ router.post(
         companyName: invite.organization.companyName,
         role: invite.orgRole,
       },
-      accessToken,
-      refreshToken,
     });
   })
 );
@@ -807,6 +800,8 @@ router.delete(
     if (!session) throw new AppError(404, 'Session not found');
 
     await prisma.refreshToken.update({ where: { id }, data: { revokedAt: new Date() } });
+
+    revokeUserSockets(userId, 'session_revoked');
 
     const orgId = req.user!.organizationId!;
     await logTeamAudit({
@@ -1341,6 +1336,8 @@ router.delete(
       targetUserId: userId,
       metadata: { reassignToId: reassignToId ?? null },
     });
+
+    revokeOrgMemberSockets(userId, orgId);
 
     sendSuccess(res, { message: 'Team member removed' });
   })

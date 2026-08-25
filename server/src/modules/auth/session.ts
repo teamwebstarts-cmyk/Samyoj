@@ -1,10 +1,11 @@
 import { randomBytes } from 'crypto';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import prisma from '../../config/database';
 import { config } from '../../config';
 import { signAccessToken, signRefreshToken, parseExpiry, type JwtPayload } from '../../utils/jwt';
 import getRedis from '../../config/redis';
 import logger from '../../utils/logger';
+import { newCsrfToken, setTenantAuthCookies } from './cookies';
 
 export function clientMeta(req: Request) {
   return {
@@ -40,6 +41,25 @@ export async function createSession(payload: JwtPayload, req: Request) {
   });
 
   return { accessToken, refreshToken };
+}
+
+/** Create a refresh session and set HttpOnly auth cookies on the response. */
+export async function issueTenantSession(res: Response, payload: JwtPayload, req: Request) {
+  const tokens = await createSession(payload, req);
+  setTenantAuthCookies(res, tokens.accessToken, tokens.refreshToken, newCsrfToken());
+  return tokens;
+}
+
+/** Rotate refresh session and refresh HttpOnly auth cookies. */
+export async function rotateTenantSession(
+  oldRefreshToken: string,
+  req: Request,
+  res: Response
+) {
+  const rotated = await rotateRefreshSession(oldRefreshToken, req);
+  if (!rotated) return null;
+  setTenantAuthCookies(res, rotated.accessToken, rotated.refreshToken, newCsrfToken());
+  return rotated;
 }
 
 /** Rotate refresh token; revoke old; detect reuse by revoked token. */

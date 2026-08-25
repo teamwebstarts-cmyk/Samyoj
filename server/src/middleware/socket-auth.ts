@@ -3,16 +3,23 @@ import { logError } from '../errors';
 import logger from '../utils/logger';
 import { verifyAccessToken } from '../utils/jwt';
 import { hasActiveOrgMembership } from './auth';
+import { parseCookieHeader } from '../modules/platform/security';
+import { TENANT_ACCESS_COOKIE } from '../modules/auth/cookies';
 
-const MEMBERSHIP_CHECK_INTERVAL_MS = 60_000;
+const MEMBERSHIP_CHECK_INTERVAL_MS = 15_000;
 
 /**
  * Socket.IO handshake auth: JWT plus the same OrganizationUser check as HTTP requireOrg.
  * Revoked / removed members must not join org:{jwtOrgId}.
  */
 export async function socketAuthMiddleware(socket: Socket, next: (err?: Error) => void): Promise<void> {
-  const token = socket.handshake.auth?.token;
-  if (!token || typeof token !== 'string') {
+  const handshakeToken = socket.handshake.auth?.token;
+  const cookieToken = parseCookieHeader(socket.handshake.headers.cookie)[TENANT_ACCESS_COOKIE];
+  const token =
+    typeof handshakeToken === 'string' && handshakeToken.trim()
+      ? handshakeToken.trim()
+      : cookieToken;
+  if (!token) {
     logError(new Error('Authentication required'), { source: 'socket', path: '/connect' });
     return next(new Error('Authentication required'));
   }

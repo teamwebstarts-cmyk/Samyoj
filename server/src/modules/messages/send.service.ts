@@ -591,9 +591,11 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
       sampleTitle: errorMessage,
     });
 
-    const nextStatus = existing?.providerCallStartedAt
-      ? outboundStatusAfterProviderCallError(error)
-      : 'FAILED';
+    const nextStatus =
+      existing?.providerCallStartedAt &&
+      !(error instanceof AppError && error.statusCode < 500)
+        ? outboundStatusAfterProviderCallError(error)
+        : 'FAILED';
 
     const message = await prisma.message.update({
       where: { id: input.messageId },

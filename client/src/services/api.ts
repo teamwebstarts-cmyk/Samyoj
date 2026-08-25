@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { getErrorMessage, logError } from '../utils/errors';
-import { accessTokenNeedsRefresh, clearAuthTokens, getAccessToken, getRefreshToken, setAuthTokens } from '../utils/authStorage';
+import { clearAuthTokens, getCsrfToken, hasAuthSessionHint } from '../utils/authStorage';
 import type { AgentAvailability, OrgRole, TeamPermissions, TeamSettings } from '../types';
 import { apiBaseUrl } from './utils';
 
@@ -48,6 +48,15 @@ function isExpectedApiNoise(error: unknown): boolean {
   return false;
 }
 
+function attachCsrfHeader(config: import('axios').InternalAxiosRequestConfig) {
+  const method = (config.method || 'get').toUpperCase();
+  if (['GET', 'HEAD', 'OPTIONS'].includes(method)) return;
+  const csrf = getCsrfToken();
+  if (csrf) {
+    config.headers['x-csrf-token'] = csrf;
+  }
+}
+
 const api = axios.create({
   baseURL: API_URL,
   withCredentials: true,
@@ -64,22 +73,7 @@ api.interceptors.request.use(async (config) => {
     (config as typeof config & { __whatsappNumberId?: string }).__whatsappNumberId =
       activeWhatsappNumberId;
   }
-  const isRefreshCall = /\/auth\/refresh(?:\?|$)/.test(config.url || '');
-  let token = getAccessToken();
-  if (!isRefreshCall && accessTokenNeedsRefresh(token)) {
-    const refreshToken = getRefreshToken();
-    if (refreshToken) {
-      try {
-        const tokens = await refreshAccessTokenSingleFlight(refreshToken);
-        token = tokens.accessToken;
-      } catch {
-        // 401 response interceptor handles logout if refresh is dead
-      }
-    }
-  }
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
+  attachCsrfHeader(config);
   if (activeWhatsappNumberId) {
     config.headers['X-WhatsApp-Number-Id'] = activeWhatsappNumberId;
   }
@@ -112,26 +106,23 @@ api.interceptors.response.use(
     if (aborted) {
       return Promise.reject(error);
     }
-    if (error.response?.status === 401 && original && !original._retry) {
+    const isRefreshCall = /\/auth\/refresh(?:\?|$)/.test(original?.url || '');
+    if (error.response?.status === 401 && original && !original._retry && !isRefreshCall) {
       original._retry = true;
-      const refreshToken = getRefreshToken();
-      if (refreshToken) {
-        try {
-          const tokens = await refreshAccessTokenSingleFlight(refreshToken);
-          original.headers.Authorization = `Bearer ${tokens.accessToken}`;
-          return api(original);
-        } catch (refreshError) {
-          logError(refreshError, {
-            source: 'auth',
-            action: 'Token refresh failed',
-            method: original.method?.toUpperCase(),
-            url: original.url,
-          });
-          clearAuthTokens();
-          const returnTo = `${window.location.pathname}${window.location.search}`;
-          if (!window.location.pathname.startsWith('/login')) {
-            window.location.href = `/login?returnTo=${encodeURIComponent(returnTo)}`;
-          }
+      try {
+        await refreshSessionSingleFlight();
+        return api(original);
+      } catch (refreshError) {
+        logError(refreshError, {
+          source: 'auth',
+          action: 'Session refresh failed',
+          method: original.method?.toUpperCase(),
+          url: original.url,
+        });
+        clearAuthTokens();
+        const returnTo = `${window.location.pathname}${window.location.search}`;
+        if (!window.location.pathname.startsWith('/login')) {
+          window.location.href = `/login?returnTo=${encodeURIComponent(returnTo)}`;
         }
       }
     }
@@ -163,40 +154,28 @@ api.interceptors.response.use(
   }
 );
 
-let refreshPromise: Promise<{ accessToken: string; refreshToken: string }> | null = null;
+let refreshPromise: Promise<void> | null = null;
 
-async function refreshAccessTokenSingleFlight(refreshToken: string) {
+async function refreshSessionSingleFlight() {
   if (!refreshPromise) {
     refreshPromise = axios
-    .post(`${API_URL}/auth/refresh`, { refreshToken })
-    .then(({ data }) => {
-      const accessToken = data.data.accessToken as string;
-      const nextRefresh = (data.data.refreshToken as string) || refreshToken;
-      setAuthTokens(accessToken, nextRefresh);
-      return { accessToken, refreshToken: nextRefresh };
-    })
-    .finally(() => {
-      refreshPromise = null;
-    });
+      .post(`${API_URL}/auth/refresh`, {}, { withCredentials: true })
+      .then(() => undefined)
+      .finally(() => {
+        refreshPromise = null;
+      });
   }
   return refreshPromise;
 }
 
-/**
- * Refresh the access JWT (single-flight). Used by Socket.IO when the 15m
- * access token expires — HTTP already refreshes via the axios interceptor,
- * but the socket must refresh explicitly or realtime dies until page reload.
- */
-export async function ensureFreshAccessToken(): Promise<string | null> {
-  const accessToken = getAccessToken();
-  if (!accessTokenNeedsRefresh(accessToken)) return accessToken;
-  const refreshToken = getRefreshToken();
-  if (!refreshToken) return accessToken;
+/** Refresh the cookie session (single-flight). Used by Socket.IO on auth errors. */
+export async function ensureFreshAccessToken(): Promise<boolean> {
+  if (!hasAuthSessionHint()) return false;
   try {
-    const tokens = await refreshAccessTokenSingleFlight(refreshToken);
-    return tokens.accessToken;
+    await refreshSessionSingleFlight();
+    return true;
   } catch {
-    return null;
+    return false;
   }
 }
 
@@ -214,7 +193,7 @@ export const authApi = {
   googleStatus: () => api.get('/auth/oauth/google/status'),
   exchangeOAuthCode: (code: string) => api.post('/auth/oauth/exchange', { code }),
   me: () => api.get('/auth/me'),
-  logout: (refreshToken: string) => api.post('/auth/logout', { refreshToken }),
+  logout: () => api.post('/auth/logout', {}),
   forgotPassword: (email: string) => api.post('/auth/forgot-password', { email }),
   resetPassword: (token: string, password: string) =>
     api.post('/auth/reset-password', { token, password }),

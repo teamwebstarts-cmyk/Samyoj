@@ -9,7 +9,6 @@ import { RoleBadge } from '../components/team/AvailabilityBadge';
 import { roleLabels } from '../components/team/teamUi';
 import type { OrgRole } from '../types';
 import { toastError, toastSuccess } from '../utils/toast';
-import { setAuthTokens } from '../utils/authStorage';
 
 interface InvitePreview {
   email: string;

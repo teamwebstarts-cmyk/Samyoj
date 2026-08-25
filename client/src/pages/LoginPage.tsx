@@ -10,7 +10,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { useGoogleAuth } from '../hooks/useGoogleAuth';
 import { authApi } from '../services/api';
 import { getErrorMessage } from '../utils/errors';
-import { setAuthTokens } from '../utils/authStorage';
 import { toastError, toastSuccess } from '../utils/toast';
 
 export default function LoginPage() {
@@ -58,8 +57,7 @@ export default function LoginPage() {
       setOauthLoading(true);
       void authApi
         .exchangeOAuthCode(code)
-        .then(async ({ data }) => {
-          setAuthTokens(data.data.accessToken, data.data.refreshToken);
+        .then(async () => {
           await refreshSession();
           navigate(safeReturnTo(searchParams.get('returnTo')) || '/', { replace: true });
         })

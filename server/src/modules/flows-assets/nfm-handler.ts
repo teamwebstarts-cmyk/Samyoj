@@ -3,6 +3,7 @@ import { createHash } from 'crypto';
 import logger from '../../utils/logger';
 import { parseActiveFlow } from '../flows/flow-state';
 import { isSamePhoneIdentity } from '../../utils/phone';
+import { consumeNfmFlowTokenOnce, parseNfmFlowToken } from './nfm-token';
 
 export interface NfmReplyPayload {
   flow_token?: string;
@@ -26,10 +27,6 @@ export interface NfmWebhookBody {
       };
     }>;
   }>;
-  // Direct payload for testing
-  nfm_reply?: NfmReplyPayload;
-  flow_token?: string;
-  response_json?: string;
 }
 
 function parseNfmReply(body: NfmWebhookBody): {
@@ -38,20 +35,6 @@ function parseNfmReply(body: NfmWebhookBody): {
   contactPhone?: string;
   phoneNumberId?: string;
 } | null {
-  if (body.nfm_reply || body.flow_token || body.response_json) {
-    const reply = body.nfm_reply || body;
-    let waFlowResponse: Record<string, unknown> = {};
-    try {
-      waFlowResponse = JSON.parse(reply.response_json || '{}') as Record<string, unknown>;
-    } catch {
-      waFlowResponse = {};
-    }
-    const flowToken =
-      (reply.flow_token as string | undefined) ||
-      (waFlowResponse.flow_token as string | undefined);
-    return { flowToken, waFlowResponse, contactPhone: undefined, phoneNumberId: undefined };
-  }
-
   for (const entry of body.entry || []) {
     for (const change of entry.changes || []) {
       const value = change.value;
@@ -81,18 +64,6 @@ function parseNfmReply(body: NfmWebhookBody): {
   return null;
 }
 
-function conversationIdFromToken(flowToken?: string): string | null {
-  if (!flowToken) return null;
-  const parts = flowToken.split(':');
-  return parts.length >= 3 && parts[0] && parts[1] && parts[2] ? parts[0] : null;
-}
-
-function nodeIdFromToken(flowToken?: string): string | null {
-  if (!flowToken) return null;
-  const parts = flowToken.split(':');
-  return parts.length >= 3 && parts[1] ? parts[1] : null;
-}
-
 export async function handleNfmReply(body: NfmWebhookBody): Promise<{
   handled: boolean;
   conversationId?: string;
@@ -102,20 +73,27 @@ export async function handleNfmReply(body: NfmWebhookBody): Promise<{
   if (!parsed) return { handled: false };
 
   const { flowToken, waFlowResponse, contactPhone, phoneNumberId } = parsed;
-  const conversationId = conversationIdFromToken(flowToken);
-  const tokenNodeId = nodeIdFromToken(flowToken);
+  const claims = parseNfmFlowToken(flowToken);
+  if (!claims) {
+    logger.warn('NFM reply rejected — invalid, forged, or expired flow token', {
+      source: 'flows-assets',
+    });
+    return { handled: true };
+  }
+
+  const conversationId = claims.conversationId;
+  const tokenNodeId = claims.nodeId;
+
+  if (!contactPhone || !phoneNumberId) {
+    logger.warn('NFM reply rejected — missing sender or WhatsApp number identity', {
+      source: 'flows-assets',
+      conversationId,
+    });
+    return { handled: true, conversationId };
+  }
 
   let flowAssetId: string | undefined;
   const metaFlowId = (waFlowResponse.flow_id || waFlowResponse.flowId) as string | undefined;
-
-  if (!conversationId) {
-    logger.info('NFM reply received without resolvable conversation', {
-      source: 'flows-assets',
-      flowToken,
-      flowAssetId,
-    });
-    return { handled: true, flowAssetId };
-  }
 
   const conversation = await prisma.conversation.findUnique({
     where: { id: conversationId },
@@ -126,15 +104,14 @@ export async function handleNfmReply(body: NfmWebhookBody): Promise<{
     logger.warn('NFM reply conversation not found', {
       source: 'flows-assets',
       conversationId,
-      flowToken,
     });
     return { handled: false, conversationId };
   }
 
   if (
     !conversation.whatsappNumber.isActive ||
-    (phoneNumberId && phoneNumberId !== conversation.whatsappNumber.phoneNumberId) ||
-    (contactPhone && !isSamePhoneIdentity(conversation.contact.normalizedPhone, contactPhone))
+    phoneNumberId !== conversation.whatsappNumber.phoneNumberId ||
+    !isSamePhoneIdentity(conversation.contact.normalizedPhone, contactPhone)
   ) {
     logger.warn('NFM reply rejected — sender or WhatsApp number mismatch', {
       source: 'flows-assets',
@@ -173,7 +150,7 @@ export async function handleNfmReply(body: NfmWebhookBody): Promise<{
     return { handled: true, conversationId, flowAssetId };
   }
 
-  if (!tokenNodeId || waiting.currentNodeId !== tokenNodeId) {
+  if (waiting.currentNodeId !== tokenNodeId) {
     logger.warn('NFM reply rejected — flow token does not match active form step', {
       source: 'flows-assets',
       conversationId,
@@ -211,6 +188,21 @@ export async function handleNfmReply(body: NfmWebhookBody): Promise<{
   }
   const whatsappNumberId = conversation.whatsappNumberId;
 
+  const consumed = await consumeNfmFlowTokenOnce({
+    conversationId: conversation.id,
+    organizationId: conversation.organizationId,
+    whatsappNumberId,
+    flowToken: flowToken!,
+    nonce: claims.nonce,
+  });
+  if (!consumed) {
+    logger.info('NFM reply ignored — flow token already consumed or no longer active', {
+      source: 'flows-assets',
+      conversationId,
+    });
+    return { handled: true, conversationId, flowAssetId };
+  }
+
   const { handleInboundAutomations } = await import('../automation/engine');
   await handleInboundAutomations({
     organizationId: conversation.organizationId,
@@ -230,7 +222,6 @@ export async function handleNfmReply(body: NfmWebhookBody): Promise<{
     source: 'flows-assets',
     conversationId,
     flowAssetId,
-    flowToken,
   });
 
   return { handled: true, conversationId, flowAssetId };

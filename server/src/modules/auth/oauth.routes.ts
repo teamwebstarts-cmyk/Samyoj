@@ -281,7 +281,7 @@ router.get(
   })
 );
 
-/** One-time exchange — never puts JWTs in the browser URL */
+/** One-time exchange — sets HttpOnly session cookies (never puts JWTs in the browser URL). */
 router.post(
   '/exchange',
   authOAuthLimiter,
@@ -289,7 +289,20 @@ router.post(
     const { code } = z.object({ code: z.string().min(16).max(128) }).parse(req.body);
     const tokens = await consumeOAuthExchangeCode(code);
     if (!tokens) throw new AppError(400, 'Invalid or expired OAuth code');
-    sendSuccess(res, tokens);
+    const { verifyRefreshToken } = await import('../../utils/jwt');
+    try {
+      verifyRefreshToken(tokens.refreshToken);
+    } catch {
+      throw new AppError(400, 'Invalid or expired OAuth code');
+    }
+    const { newCsrfToken, setTenantAuthCookies } = await import('./cookies');
+    setTenantAuthCookies(
+      res,
+      tokens.accessToken,
+      tokens.refreshToken,
+      newCsrfToken()
+    );
+    sendSuccess(res, { message: 'Signed in with Google' });
   })
 );
 

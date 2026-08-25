@@ -1,16 +1,12 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback } from 'react';
-import axios from 'axios';
 import { authApi, teamApi } from '../services/api';
 import type { AgentAvailability, User, Organization, OrgRole } from '../types';
-import { apiBaseUrl } from '../services/utils';
 import {
   clearAuthBackup,
   clearAuthTokens,
-  getAccessToken,
-  getRefreshToken,
+  hasAuthSessionHint,
   isRequestAborted,
   restoreAuthBackupIfNeeded,
-  setAuthTokens,
   adoptLegacyLocalStorageTokens,
   discardClonedSession,
 } from '../utils/authStorage';
@@ -64,17 +60,6 @@ function applySession(
   setTwoFactorEnabled(twoFactorEnabled ?? false);
 }
 
-async function refreshAccessToken(): Promise<string | null> {
-  const refreshToken = getRefreshToken();
-  if (!refreshToken) return null;
-  const { data } = await axios.post(`${apiBaseUrl}/auth/refresh`, { refreshToken });
-  const accessToken = data?.data?.accessToken as string | undefined;
-  const nextRefresh = (data?.data?.refreshToken as string | undefined) || refreshToken;
-  if (!accessToken) return null;
-  setAuthTokens(accessToken, nextRefresh);
-  return accessToken;
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [organization, setOrganization] = useState<Organization | null>(null);
@@ -83,7 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const heartbeat = useCallback(() => {
-    if (!getAccessToken()) return;
+    if (!user) return;
     teamApi.heartbeat().then(({ data }) => {
       setAvailabilityState(data.data.availability);
     }).catch((err) => {
@@ -91,6 +76,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // keep session; transient heartbeat failures must not log the user out
       }
     });
+  }, [user]);
+
+  const hydrateFromMe = useCallback(async () => {
+    const { data } = await authApi.me();
+    const org = data.data.organizations?.[0];
+    applySession(
+      setUser,
+      setOrganization,
+      setAvailabilityState,
+      setTwoFactorEnabled,
+      data.data,
+      org
+        ? {
+            id: org.id,
+            companyName: org.companyName,
+            role: org.role,
+          }
+        : null,
+      data.data.availability,
+      data.data.twoFactorEnabled
+    );
+    clearAuthBackup();
+    return true;
   }, []);
 
   useEffect(() => {
@@ -98,77 +106,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       restoreAuthBackupIfNeeded();
       adoptLegacyLocalStorageTokens();
       await discardClonedSession();
+      clearAuthTokens();
 
-      const token = getAccessToken();
-      const refreshToken = getRefreshToken();
-      if (!token && !refreshToken) {
+      if (!hasAuthSessionHint()) {
         setLoading(false);
         return;
       }
 
       try {
-        const { data } = await authApi.me();
-        const org = data.data.organizations?.[0];
-        applySession(
-          setUser,
-          setOrganization,
-          setAvailabilityState,
-          setTwoFactorEnabled,
-          data.data,
-          org
-            ? {
-                id: org.id,
-                companyName: org.companyName,
-                role: org.role,
-              }
-            : null,
-          data.data.availability,
-          data.data.twoFactorEnabled
-        );
-        clearAuthBackup();
+        await hydrateFromMe();
         heartbeat();
       } catch (err) {
         if (isRequestAborted(err)) {
           setLoading(false);
           return;
         }
-        try {
-          const access = await refreshAccessToken();
-          if (!access) throw err;
-          const { data } = await authApi.me();
-          const org = data.data.organizations?.[0];
-          applySession(
-            setUser,
-            setOrganization,
-            setAvailabilityState,
-            setTwoFactorEnabled,
-            data.data,
-            org
-              ? {
-                  id: org.id,
-                  companyName: org.companyName,
-                  role: org.role,
-                }
-              : null,
-            data.data.availability,
-            data.data.twoFactorEnabled
-          );
-          clearAuthBackup();
-          heartbeat();
-        } catch (refreshErr) {
-          if (!isRequestAborted(refreshErr)) {
-            clearAuthTokens();
-            clearAuthBackup();
-            applySession(setUser, setOrganization, setAvailabilityState, setTwoFactorEnabled, null, null);
-          }
-        }
+        clearAuthTokens();
+        clearAuthBackup();
+        applySession(setUser, setOrganization, setAvailabilityState, setTwoFactorEnabled, null, null);
       } finally {
         setLoading(false);
       }
     };
 
     void boot();
-  }, [heartbeat]);
+  }, [heartbeat, hydrateFromMe]);
 
   useEffect(() => {
     if (!user) return;
@@ -177,38 +139,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(interval);
   }, [user, heartbeat]);
 
-  // Coming back from Facebook via Back/bfcache — re-hydrate session if needed
   useEffect(() => {
     const onPageShow = (event: PageTransitionEvent) => {
       if (!event.persisted) return;
       restoreAuthBackupIfNeeded();
       adoptLegacyLocalStorageTokens();
       void discardClonedSession().then(() => {
-        if (!user && (getAccessToken() || getRefreshToken())) {
-          void authApi
-            .me()
-            .then(({ data }) => {
-              const org = data.data.organizations?.[0];
-              applySession(
-                setUser,
-                setOrganization,
-                setAvailabilityState,
-                setTwoFactorEnabled,
-                data.data,
-                org
-                  ? { id: org.id, companyName: org.companyName, role: org.role }
-                  : null,
-                data.data.availability,
-                data.data.twoFactorEnabled
-              );
-            })
-            .catch(() => {});
+        if (!user && hasAuthSessionHint()) {
+          void hydrateFromMe().catch(() => {});
         }
       });
     };
     window.addEventListener('pageshow', onPageShow);
     return () => window.removeEventListener('pageshow', onPageShow);
-  }, [user]);
+  }, [user, hydrateFromMe]);
 
   const login = async (email: string, password: string, totpCode?: string) => {
     const { data } = await authApi.login({ email, password, totpCode });
@@ -218,7 +162,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (data.data.requiresEmailVerification) {
       return { requiresEmailVerification: true };
     }
-    setAuthTokens(data.data.accessToken, data.data.refreshToken);
     clearAuthBackup();
     applySession(
       setUser,
@@ -236,31 +179,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshSession = useCallback(async () => {
     try {
-      const { data } = await authApi.me();
-      const org = data.data.organizations?.[0];
-      applySession(
-        setUser,
-        setOrganization,
-        setAvailabilityState,
-        setTwoFactorEnabled,
-        data.data,
-        org
-          ? {
-              id: org.id,
-              companyName: org.companyName,
-              role: org.role,
-            }
-          : null,
-        data.data.availability,
-        data.data.twoFactorEnabled
-      );
-      clearAuthBackup();
+      await hydrateFromMe();
       heartbeat();
       return true;
     } catch {
       return false;
     }
-  }, [heartbeat]);
+  }, [heartbeat, hydrateFromMe]);
 
   const register = async (formData: {
     name: string;
@@ -269,8 +194,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     companyName: string;
   }) => {
     const { data } = await authApi.register(formData);
-    // New accounts must verify email before a session is issued
-    if (data.data.emailVerificationRequired || !data.data.accessToken) {
+    if (data.data.emailVerificationRequired) {
       return {
         emailVerificationRequired: true as const,
         email: data.data.user?.email as string,
@@ -278,7 +202,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         message: data.data.message as string | undefined,
       };
     }
-    setAuthTokens(data.data.accessToken, data.data.refreshToken);
     clearAuthBackup();
     applySession(
       setUser,
@@ -294,8 +217,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
-    const refreshToken = getRefreshToken();
-    if (refreshToken) authApi.logout(refreshToken);
+    void authApi.logout();
     clearAuthTokens();
     clearAuthBackup();
     applySession(setUser, setOrganization, setAvailabilityState, setTwoFactorEnabled, null, null);

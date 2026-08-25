@@ -42,13 +42,16 @@ export function ComposerPreviewPane({
 
 export type WhatsAppBubbleDirection = 'inbound' | 'outbound';
 
-type MessageStatus = 'pending' | 'sent' | 'delivered' | 'read' | 'failed';
+type MessageStatus = 'pending' | 'sent' | 'delivered' | 'read' | 'failed' | 'ambiguous';
 
 export function StatusIcon({ status, compact }: { status?: MessageStatus; compact?: boolean }) {
   const size = compact ? 'h-2.5 w-2.5' : 'h-3 w-3';
 
   if (status === 'failed') {
     return <AlertCircle className={`${size} text-red-500`} strokeWidth={2.5} />;
+  }
+  if (status === 'ambiguous') {
+    return <AlertCircle className={`${size} text-amber-500`} strokeWidth={2.5} />;
   }
   if (status === 'pending') {
     return <Clock className={`${size} wa-tick`} strokeWidth={2.5} />;

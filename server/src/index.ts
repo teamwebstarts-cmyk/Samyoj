@@ -15,6 +15,7 @@ import { initSentry } from './config/sentry';
 import { errorHandler, logError, setupGlobalErrorHandlers } from './errors';
 import logger, { requestLogger } from './utils/logger';
 import { socketAuthMiddleware, startMembershipGuard } from './middleware/socket-auth';
+import { requireTenantCsrf } from './middleware/tenant-csrf';
 import prisma from './config/database';
 import Redis from 'ioredis';
 
@@ -62,6 +63,7 @@ const httpServer = createServer(app);
 const customerCors = cors({
   origin: corsOriginDelegate,
   credentials: true,
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-WhatsApp-Number-Id', 'x-csrf-token'],
 });
 const platformCors = cors({
   origin: platformCorsOriginDelegate,
@@ -195,6 +197,8 @@ app.use(
 );
 
 app.use(express.json({ limit: '10mb' }));
+
+app.use(requireTenantCsrf);
 
 app.use(requestLogger);
 

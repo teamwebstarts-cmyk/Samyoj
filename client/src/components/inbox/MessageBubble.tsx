@@ -194,11 +194,12 @@ function CollapsibleMessageText({
   );
 }
 
-type TickStatus = 'pending' | 'sent' | 'delivered' | 'read' | 'failed';
+type TickStatus = 'pending' | 'sent' | 'delivered' | 'read' | 'failed' | 'ambiguous';
 
 function mapStatus(status: string): TickStatus {
   const normalized = status.toUpperCase();
   if (normalized === 'FAILED') return 'failed';
+  if (normalized === 'AMBIGUOUS') return 'ambiguous';
   if (normalized === 'READ') return 'read';
   if (normalized === 'DELIVERED') return 'delivered';
   if (normalized === 'PENDING' || normalized === 'QUEUED') return 'pending';
@@ -208,6 +209,15 @@ function mapStatus(status: string): TickStatus {
 export function MessageTicks({ status, className = '' }: { status: TickStatus; className?: string }) {
   if (status === 'failed') {
     return <AlertCircle className={`h-3 w-3 text-red-500 ${className}`} strokeWidth={2.5} />;
+  }
+  if (status === 'ambiguous') {
+    return (
+      <AlertCircle
+        className={`h-3 w-3 text-amber-500 ${className}`}
+        strokeWidth={2.5}
+        aria-label="Send status unknown"
+      />
+    );
   }
   if (status === 'pending') {
     return <Clock className={`h-3 w-3 wa-tick ${className}`} strokeWidth={2.5} aria-label="Pending" />;
@@ -409,6 +419,7 @@ export default function MessageBubble({
       : null;
   const tickStatus = mapStatus(message.status);
   const isFailed = isOutbound && tickStatus === 'failed';
+  const isAmbiguous = isOutbound && tickStatus === 'ambiguous';
   const time = grouping.last ? formatMessageTime(message.createdAt) : undefined;
   const replyPreview = message.metadata?.replyPreview;
   const reactions = message.metadata?.reactions || [];
@@ -990,6 +1001,7 @@ export default function MessageBubble({
               retrying={retrying}
               onRetry={() => onRetry?.(message)}
             />
+            <AmbiguousStatusRow show={isAmbiguous} />
             </div>
           </div>
         </div>
@@ -1026,8 +1038,20 @@ export default function MessageBubble({
           </div>
           {reactionChips}
           <FailedRetryRow show={isFailed} retrying={retrying} onRetry={() => onRetry?.(message)} />
+          <AmbiguousStatusRow show={isAmbiguous} />
         </div>
       </div>
+    </div>
+  );
+}
+
+function AmbiguousStatusRow({ show }: { show: boolean }) {
+  if (!show) return null;
+  return (
+    <div className="mt-1 flex items-center justify-end">
+      <span className="text-[11px] font-semibold text-amber-700 dark:text-amber-400">
+        Send status unknown
+      </span>
     </div>
   );
 }

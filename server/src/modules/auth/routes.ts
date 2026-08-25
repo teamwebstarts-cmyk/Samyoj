@@ -16,7 +16,11 @@ import {
 } from '../../services/email.service';
 import oauthRoutes from './oauth.routes';
 import { passwordSchema } from './password-policy';
-import { createSession, rotateRefreshSession } from './session';
+import { issueTenantSession, rotateTenantSession } from './session';
+import {
+  clearTenantAuthCookies,
+  readTenantRefreshToken,
+} from './cookies';
 import {
   authLoginLimiter,
   authRegisterLimiter,
@@ -108,15 +112,20 @@ router.post(
       throw err;
     }
 
-    // Sign in immediately (product: do not block on verify). Report verified=false honestly.
-    const { accessToken, refreshToken } = await createSession(
-      {
-        userId: result.user.id,
-        email: result.user.email,
-        organizationId: result.org.id,
-      },
-      req
-    );
+    // Sign in when verification gate allows it (dev default on; production requires verify).
+    let sessionIssued = false;
+    if (config.auth.allowUnverifiedLogin) {
+      await issueTenantSession(
+        res,
+        {
+          userId: result.user.id,
+          email: result.user.email,
+          organizationId: result.org.id,
+        },
+        req
+      );
+      sessionIssued = true;
+    }
     emitProductEvent({
       organizationId: result.org.id,
       name: 'REGISTER',
@@ -125,7 +134,7 @@ router.post(
     try {
       await issueEmailVerification(result.user.id, result.user.email);
     } catch {
-      /* SMTP may be unset in local/dev — account still usable */
+      /* SMTP may be unset in local/dev — account still usable when gate allows */
     }
 
     sendSuccess(
@@ -143,10 +152,11 @@ router.post(
           companyName: result.org.companyName,
           role: 'OWNER',
         },
-        emailVerificationRequired: false,
-        accessToken,
-        refreshToken,
-        message: 'Account created. You are now signed in.',
+        emailVerificationRequired: !sessionIssued,
+        smtpConfigured: isSmtpConfigured(),
+        message: sessionIssued
+          ? 'Account created. You are now signed in.'
+          : 'Account created. Verify your email before signing in.',
       },
       201
     );
@@ -187,7 +197,10 @@ router.post(
       throw new AppError(401, 'Invalid email or password');
     }
 
-    // Email verification is disabled: allow sign-in with email + password only.
+    // Email verification gate (production default: block until verified).
+    if (!user.emailVerifiedAt && !config.auth.allowUnverifiedLogin) {
+      throw new AppError(403, 'Verify your email before signing in', 'EMAIL_NOT_VERIFIED');
+    }
 
     const orgMembership = user.organizations[0];
 
@@ -219,7 +232,8 @@ router.post(
       }
     }
 
-    const { accessToken, refreshToken } = await createSession(
+    await issueTenantSession(
+      res,
       {
         userId: user.id,
         email: user.email,
@@ -250,8 +264,6 @@ router.post(
           }
         : null,
       mustResetPassword: Boolean(orgMembership?.mustResetPassword),
-      accessToken,
-      refreshToken,
     });
   })
 );
@@ -260,7 +272,9 @@ router.post(
   '/refresh',
   authLoginLimiter,
   asyncHandler(async (req: Request, res: Response) => {
-    const { refreshToken } = z.object({ refreshToken: z.string().min(1) }).parse(req.body);
+    const body = z.object({ refreshToken: z.string().min(1).optional() }).parse(req.body ?? {});
+    const refreshToken = body.refreshToken ?? readTenantRefreshToken(req);
+    if (!refreshToken) throw new AppError(401, 'Invalid refresh token');
 
     try {
       verifyRefreshToken(refreshToken);
@@ -268,13 +282,10 @@ router.post(
       throw new AppError(401, 'Invalid refresh token');
     }
 
-    const rotated = await rotateRefreshSession(refreshToken, req);
+    const rotated = await rotateTenantSession(refreshToken, req, res);
     if (!rotated) throw new AppError(401, 'Invalid refresh token');
 
-    sendSuccess(res, {
-      accessToken: rotated.accessToken,
-      refreshToken: rotated.refreshToken,
-    });
+    sendSuccess(res, { message: 'Session refreshed' });
   })
 );
 
@@ -323,13 +334,15 @@ router.get(
 );
 
 router.post('/logout', authenticate, async (req: Request, res: Response) => {
-  const { refreshToken } = req.body as { refreshToken?: string };
+  const body = (req.body ?? {}) as { refreshToken?: string };
+  const refreshToken = body.refreshToken ?? readTenantRefreshToken(req);
   if (refreshToken) {
     await prisma.refreshToken.updateMany({
       where: { token: refreshToken, userId: req.user!.userId },
       data: { revokedAt: new Date() },
     });
   }
+  clearTenantAuthCookies(res);
   sendSuccess(res, { message: 'Logged out' });
 });
 

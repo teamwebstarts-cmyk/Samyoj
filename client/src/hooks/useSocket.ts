@@ -3,7 +3,7 @@ import { io, Socket } from 'socket.io-client';
 import { logError } from '../utils/errors';
 import { socketBaseUrl } from '../services/utils';
 import { ensureFreshAccessToken } from '../services/api';
-import { clearAuthTokens, getAccessToken, getRefreshToken } from '../utils/authStorage';
+import { clearAuthTokens, hasAuthSessionHint } from '../utils/authStorage';
 import { getActiveWhatsappNumberId } from '../services/api';
 
 export type SocketConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
@@ -124,8 +124,8 @@ function attachSharedSocket(socket: Socket) {
 
     authRefreshInFlight = true;
     void ensureFreshAccessToken()
-      .then((fresh) => {
-        if (!fresh || !sharedSocket) return;
+      .then((refreshed) => {
+        if (!refreshed || !sharedSocket) return;
         if (!sharedSocket.connected) sharedSocket.connect();
       })
       .catch((refreshErr) => {
@@ -161,12 +161,6 @@ function acquireSharedSocket(): Socket {
 
   publishState({ status: 'connecting' });
   const socket = io(socketBaseUrl, {
-    auth: (cb) => {
-      cb({
-        token: getAccessToken() || '',
-        whatsappNumberId: getActiveWhatsappNumberId() || undefined,
-      });
-    },
     withCredentials: true,
     transports: import.meta.env.DEV ? ['polling', 'websocket'] : ['websocket', 'polling'],
     reconnection: true,
@@ -207,7 +201,7 @@ export function useSocket(onEvent?: (event: string, data: unknown) => void) {
   }, []);
 
   useEffect(() => {
-    if (!getAccessToken() && !getRefreshToken()) return;
+    if (!hasAuthSessionHint()) return;
 
     subscriberCount += 1;
     const socket = acquireSharedSocket();

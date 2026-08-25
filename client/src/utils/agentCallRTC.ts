@@ -9,7 +9,6 @@
  */
 
 import { getActiveWhatsappNumberId } from '../services/api';
-import { getAccessToken } from './authStorage';
 import { isCurrentNumberRequest } from './whatsappWorkspace';
 import { canApplyRemoteAnswer } from './webrtcSignaling';
 
@@ -44,7 +43,6 @@ async function fetchSdpAnswer(callId: string): Promise<{ sdp: string | null; end
   const res = await fetch(`/api/calling/${callId}/signaling`, {
     credentials: 'include',
     headers: {
-      Authorization: `Bearer ${getAccessToken() || ''}`,
       'X-WhatsApp-Number-Id': numberId,
     },
   });
