@@ -80,6 +80,40 @@ The API accepts schedule delay up to seven days and enforces delay nodes at
 
 ## Remaining usability and contract findings
 
+### U0 — Hardening pass (2026-08-25)
+
+The recheck hardening pass landed:
+
+- Per-WhatsApp-number scoping for flows, legacy auto-replies, and Meta flow assets (`whatsappNumberId` + migration `20260825170000_flow_automation_number_scope`).
+- Durable inbound pipeline stages on message metadata to prevent duplicate static/AI on webhook retries.
+- Fresh `botActive` re-check before static replies; pause cleanup returns success/failure with tenant scope.
+- Handoff emits `activeFlow: null` for Inbox.
+- Builder: `linkNodes()` in save path, keyboard delete propagation, load-error gate, `expectedUpdatedAt` conflict (409), draft-only version restore, server validation errors surfaced, edge delete clears branches, duplicate-edge rejection, analytics error/refresh, automation activity panel mounted.
+
+### U0b — Recheck audit reconciliation (subagent `ab5d056e`, read-only)
+
+| Finding | Status after hardening |
+|--------|-------------------------|
+| Save can publish without clear label | **Partially addressed** — header shows **Publish** when enabled; draft path remains separate |
+| Server validation errors ignored | **Fixed** — `validationErrors` block save and appear in the issues banner |
+| Preview is synthetic | **Open** — label/branch selector still deferred |
+| Reply-button “Go to next step” vs required branch | **Open** — implicit `linkNodes` helps runtime; explicit branch validation unchanged |
+| URL/call nodes keep reply handles | **Open** — graph handles still branch-shaped |
+| Restore destructive + live | **Fixed** — server writes `draftNodes` only; client confirms restore |
+| Unsaved work on number switch / no conflict detection | **Partial** — `expectedUpdatedAt` 409 + load-error gate; unload guard still open |
+| Flow APIs ignore selected number | **Fixed** — `resolveActiveWhatsappNumber` on flow/automation/asset routes |
+| Reference-data cache keyed only by Meta phone id | **Fixed** — cache key is `organizationId:whatsappNumberId` |
+| Draft Meta forms in picker | **Open** |
+| Template parameter mapping in flow editor | **Open** |
+| Stale `intentRoutes` after button delete | **Fixed** |
+| Regex trigger safety | **Open** |
+| Contact/location dangerous defaults | **Open** |
+| Question field falls back to `answer` | **Open** |
+| Meta Flow Publish on new asset only saves | **Open** |
+| Keyboard delete not persisted | **Fixed** |
+
+Deferred for live verification: edge reconnection handler, mobile editor clipping at 375px, stale template reference on publish.
+
 ### U1 — Preview behavior is intentionally synthetic but not explicit enough
 
 The builder has multiple preview paths that automatically choose the first
