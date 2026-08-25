@@ -59,6 +59,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
+import { useEntitlements } from '../hooks/useEntitlements';
+import EntitlementNotice from '../components/billing/EntitlementNotice';
 import { useSocket } from '../hooks/useSocket';
 import { campaignApi, contactApi, templateApi, whatsappApi } from '../services/api';
 import { toastError, toastSuccess } from '../utils/toast';
@@ -225,6 +227,7 @@ function buildPayload(
 
 export default function CampaignsPage() {
   const { canManageTeam } = useAuth();
+  const { entitlements, loading: entitlementsLoading } = useEntitlements();
   const { activeNumber, resolved } = useWhatsAppNumber();
   const navigate = useNavigate();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -278,6 +281,13 @@ export default function CampaignsPage() {
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [rescheduleTarget, setRescheduleTarget] = useState<Campaign | null>(null);
   const [rescheduleSaving, setRescheduleSaving] = useState(false);
+  const canUseCampaigns =
+    entitlementsLoading || !entitlements || entitlements.canUseFeature('campaigns');
+  const canManageCampaigns = canManageTeam && canUseCampaigns;
+  const campaignGateMessage =
+    !entitlementsLoading && entitlements && !entitlements.canUseFeature('campaigns')
+      ? 'Campaigns are not included on your current plan.'
+      : null;
 
   const debouncedSearch = useDebouncedValue(search);
   const hasFilters = Boolean(search || statusFilter || period);
@@ -467,7 +477,7 @@ export default function CampaignsPage() {
   });
 
   useEffect(() => {
-    if (!canManageTeam) return;
+    if (!canManageCampaigns) return;
 
     const templateName = searchParams.get('template') || '';
     const templateLanguage = searchParams.get('language') || '';
@@ -484,7 +494,7 @@ export default function CampaignsPage() {
     if (contactIds.length) params.set('contacts', contactIds.join(','));
     if (tags.length) params.set('tags', tags.join(','));
     navigate(`/campaigns/new?${params.toString()}`);
-  }, [searchParams, navigate, canManageTeam]);
+  }, [searchParams, navigate, canManageCampaigns]);
 
   useEffect(() => {
     loadCampaigns(true);
@@ -538,7 +548,7 @@ export default function CampaignsPage() {
   useSocket(handleSocketEvent);
 
   const openCreate = () => {
-    if (!canManageTeam) return;
+    if (!canManageCampaigns) return;
     navigate('/campaigns/new');
   };
 
@@ -594,6 +604,10 @@ export default function CampaignsPage() {
   };
 
   const saveCampaign = async (action: 'draft' | 'schedule' | 'send' = 'draft') => {
+    if (!canManageCampaigns) {
+      toastError(campaignGateMessage || 'Campaigns are not included on your current plan.');
+      return null;
+    }
     const andSend = action === 'send';
     if (selectedTemplate && templateNeedsHeaderMedia(selectedTemplate) && !form.headerMediaUrl.trim()) {
       toastError('Header media URL is required for this template');
@@ -778,7 +792,7 @@ export default function CampaignsPage() {
   };
 
   const handleSend = async (id: string) => {
-    if (!canManageTeam) return;
+    if (!canManageCampaigns) return;
     const campaign = campaigns.find((c) => c.id === id) || (editing?.id === id ? editing : null);
     if (!campaign) return;
     const sendConfirm = buildCampaignSendConfirm({
@@ -805,12 +819,12 @@ export default function CampaignsPage() {
   };
 
   const handlePause = async (id: string) => {
-    if (!canManageTeam) return;
+    if (!canManageCampaigns) return;
     await handleAction(() => campaignApi.pause(id), 'Campaign paused', 'Could not pause this campaign. Refresh and try again.');
   };
 
   const handleResume = async (id: string) => {
-    if (!canManageTeam) return;
+    if (!canManageCampaigns) return;
     await handleAction(() => campaignApi.resume(id), 'Campaign resumed', 'Could not resume this campaign. Refresh and try again.');
   };
 
@@ -892,10 +906,16 @@ export default function CampaignsPage() {
           ]}
         />
 
-        {!canManageTeam && (
+        {!canManageTeam && !campaignGateMessage && (
           <div className="rounded-xl border border-amber-200/70 bg-amber-50/80 px-3.5 py-2.5 text-[12px] font-medium text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
-            You have read-only access to campaigns. Ask an admin to create or send campaigns.
+            {campaignGateMessage || 'You have read-only access to campaigns. Ask an admin to create or send campaigns.'}
           </div>
+        )}
+        {campaignGateMessage && (
+          <EntitlementNotice
+            message={campaignGateMessage}
+            upgradePlan={entitlements?.isLocked ? 'growth' : entitlements?.getUpgradePlan('campaigns')}
+          />
         )}
         </div>
 
@@ -921,7 +941,7 @@ export default function CampaignsPage() {
               </>
             }
             actions={
-              canManageTeam ? (
+              canManageCampaigns ? (
                 <div className="flex w-full items-stretch gap-1.5 sm:w-auto sm:gap-2">
                   <AppButton
                     size="sm"
@@ -1038,7 +1058,7 @@ export default function CampaignsPage() {
                         ))}
                       </div>
 
-                      {canManageTeam && (
+                      {canManageCampaigns && (
                         <AppButton
                           className="mt-4 !min-h-9"
                           size="sm"
@@ -1069,15 +1089,15 @@ export default function CampaignsPage() {
                       key={c.id}
                       campaign={c}
                       onView={() => openView(c)}
-                      onEdit={canManageTeam ? () => openEdit(c) : undefined}
-                      onSend={canManageTeam ? () => handleSend(c.id) : undefined}
-                      onPause={canManageTeam ? () => handlePause(c.id) : undefined}
-                      onResume={canManageTeam ? () => handleResume(c.id) : undefined}
-                      onDelete={canManageTeam ? () => handleDeleteItem(c) : undefined}
+                      onEdit={canManageCampaigns ? () => openEdit(c) : undefined}
+                      onSend={canManageCampaigns ? () => handleSend(c.id) : undefined}
+                      onPause={canManageCampaigns ? () => handlePause(c.id) : undefined}
+                      onResume={canManageCampaigns ? () => handleResume(c.id) : undefined}
+                      onDelete={canManageCampaigns ? () => handleDeleteItem(c) : undefined}
                       onExport={() => handleExport(c.id, c.name)}
-                      onRetry={canManageTeam ? () => handleRetry(c.id) : undefined}
+                      onRetry={canManageCampaigns ? () => handleRetry(c.id) : undefined}
                       onReschedule={
-                        canManageTeam && canRescheduleCampaign(c.status)
+                        canManageCampaigns && canRescheduleCampaign(c.status)
                           ? () => setRescheduleTarget(c)
                           : undefined
                       }
@@ -1094,17 +1114,17 @@ export default function CampaignsPage() {
                       sortBy={sortBy}
                       sortDir={sortDir}
                       onSort={handleSort}
-                      canManageTeam={canManageTeam}
+                      canManageTeam={canManageCampaigns}
                       showPagination={false}
                       onView={openView}
-                      onEdit={canManageTeam ? openEdit : undefined}
-                      onSend={canManageTeam ? (c) => handleSend(c.id) : undefined}
-                      onPause={canManageTeam ? (c) => handlePause(c.id) : undefined}
-                      onResume={canManageTeam ? (c) => handleResume(c.id) : undefined}
-                      onDelete={canManageTeam ? handleDeleteItem : undefined}
+                      onEdit={canManageCampaigns ? openEdit : undefined}
+                      onSend={canManageCampaigns ? (c) => handleSend(c.id) : undefined}
+                      onPause={canManageCampaigns ? (c) => handlePause(c.id) : undefined}
+                      onResume={canManageCampaigns ? (c) => handleResume(c.id) : undefined}
+                      onDelete={canManageCampaigns ? handleDeleteItem : undefined}
                       onExport={(c) => handleExport(c.id, c.name)}
-                      onRetry={canManageTeam ? (c) => handleRetry(c.id) : undefined}
-                      onReschedule={canManageTeam ? setRescheduleTarget : undefined}
+                      onRetry={canManageCampaigns ? (c) => handleRetry(c.id) : undefined}
+                      onReschedule={canManageCampaigns ? setRescheduleTarget : undefined}
                     />
                   )}
                 />
@@ -1148,7 +1168,7 @@ export default function CampaignsPage() {
           viewOnly ? (
             <div className="flex w-full flex-col gap-2.5">
               <div className="flex flex-wrap items-center justify-end gap-2">
-                {canManageTeam && editing && canRescheduleCampaign(editing.status) && (
+                {canManageCampaigns && editing && canRescheduleCampaign(editing.status) && (
                   <AppButton
                     size="sm"
                     variant="secondary"
@@ -1158,7 +1178,7 @@ export default function CampaignsPage() {
                     Reschedule
                   </AppButton>
                 )}
-                {canManageTeam && editing && canEditCampaign(editing.status) && (
+                {canManageCampaigns && editing && canEditCampaign(editing.status) && (
                   <>
                     <AppButton size="sm" icon={<Play size={14} />} onClick={() => handleSend(editing.id)}>
                       Send now
@@ -1177,7 +1197,7 @@ export default function CampaignsPage() {
                     </AppButton>
                   </>
                 )}
-                {canManageTeam && editing?.status === 'RUNNING' && (
+                {canManageCampaigns && editing?.status === 'RUNNING' && (
                   <AppButton
                     size="sm"
                     variant="secondary"
@@ -1187,7 +1207,7 @@ export default function CampaignsPage() {
                     Pause
                   </AppButton>
                 )}
-                {canManageTeam && editing?.status === 'PAUSED' && (
+                {canManageCampaigns && editing?.status === 'PAUSED' && (
                   <AppButton
                     size="sm"
                     variant="secondary"
@@ -1201,17 +1221,17 @@ export default function CampaignsPage() {
               <div className="flex flex-wrap items-center justify-end gap-2 border-t border-theme-border pt-2.5">
                 {editing && (
                   <CampaignActionsMenu>
-                    {canManageTeam && ['RUNNING', 'PAUSED', 'SCHEDULED'].includes(editing.status) && (
+                    {canManageCampaigns && ['RUNNING', 'PAUSED', 'SCHEDULED'].includes(editing.status) && (
                       <button type="button" role="menuitem" className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-secondary hover:bg-theme-subtle hover:text-theme-fg" onClick={() => handleAction(() => campaignApi.cancel(editing.id), 'Campaign cancelled')}>
                         <Square size={14} /> Cancel campaign
                       </button>
                     )}
-                    {canManageTeam && editing.failedCount > 0 && (
+                    {canManageCampaigns && editing.failedCount > 0 && (
                       <button type="button" role="menuitem" className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-secondary hover:bg-theme-subtle hover:text-theme-fg" onClick={() => handleAction(() => campaignApi.retryFailed(editing.id), 'Failed campaign messages queued for retry', 'Could not retry failed messages. Refresh and try again.')}>
                         <RefreshCw size={14} /> Retry failed sends
                       </button>
                     )}
-                    {canManageTeam && (
+                    {canManageCampaigns && (
                       <button type="button" role="menuitem" className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-secondary hover:bg-theme-subtle hover:text-theme-fg" onClick={handleDuplicate}>
                         <Copy size={14} /> Duplicate campaign
                       </button>
