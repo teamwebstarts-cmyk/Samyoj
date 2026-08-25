@@ -1,4 +1,5 @@
 import type { OrgRole } from '@prisma/client';
+import { legacyPlanToTier, PLAN_TIERS } from '../billing/plans';
 
 export type AssignmentStrategy = 'LEAST_LOAD' | 'ROUND_ROBIN';
 
@@ -161,16 +162,10 @@ export function buildRolePermissionsMatrix(
 }
 
 export function getSeatLimit(plan: string, settings?: TeamSettings): number {
-  const planLimits: Record<string, number> = {
-    launch: 1,
-    starter: 3,
-    growth: 10,
-    pro: 25,
-    business: 25, // legacy mapped to Pro
-    enterprise: 999,
-  };
-  const planMax = planLimits[plan] ?? 3;
-  if (plan === 'enterprise') {
+  const tier = legacyPlanToTier(plan);
+  const tierSeats = PLAN_TIERS[tier].seats;
+  const planMax = tierSeats === 'custom' ? 999 : tierSeats;
+  if (tier === 'enterprise') {
     return settings?.seatLimit && settings.seatLimit > 0 ? settings.seatLimit : 999;
   }
   // Clamp settings.seatLimit so it cannot exceed the plan maximum
