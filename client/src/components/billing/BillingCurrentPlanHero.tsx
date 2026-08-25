@@ -53,6 +53,7 @@ function getStatusInfo(status?: string | null) {
   if (status === 'trial') return { text: 'Trial', color: 'text-amber-700 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950/40', icon: Clock };
   if (status === 'trial_expired') return { text: 'Trial Expired', color: 'text-rose-700 dark:text-rose-400', bg: 'bg-rose-50 dark:bg-rose-950/40', icon: AlertCircle };
   if (status === 'past_due' || status === 'grace' || status === 'locked') return { text: 'Payment Issue', color: 'text-rose-700 dark:text-rose-400', bg: 'bg-rose-50 dark:bg-rose-950/40', icon: AlertCircle };
+  if (status === 'expired') return { text: 'Plan Expired', color: 'text-rose-700 dark:text-rose-400', bg: 'bg-rose-50 dark:bg-rose-950/40', icon: AlertCircle };
   if (status === 'cancelled') return { text: 'Cancelled', color: 'text-slate-600 dark:text-slate-400', bg: 'bg-slate-50 dark:bg-slate-900/40', icon: AlertCircle };
   return { text: 'Active', color: 'text-emerald-700 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/40', icon: CheckCircle2 };
 }
@@ -89,7 +90,7 @@ export default function BillingCurrentPlanHero({ info, onUnlockGrowth, isNearLim
             </span>
             {info.cadence && info.cadence !== 'trial' && (
               <span className="rounded-md bg-theme-subtle px-2 py-0.5 text-[10.5px] font-semibold text-theme-secondary">
-                {info.cadence.charAt(0).toUpperCase() + info.cadence.slice(1)} billing
+                {info.cadence.charAt(0).toUpperCase() + info.cadence.slice(1)} term
               </span>
             )}
           </div>
@@ -99,7 +100,7 @@ export default function BillingCurrentPlanHero({ info, onUnlockGrowth, isNearLim
             {expiryDate && (
               <span className="inline-flex items-center gap-1.5 font-medium text-theme-secondary">
                 <CalendarDays className="h-3.5 w-3.5 text-theme-muted" />
-                {info.subscriptionStatus === 'trial' ? 'Trial ends' : 'Renews'}{' '}
+                {info.subscriptionStatus === 'trial' ? 'Trial valid until' : 'Valid until'}{' '}
                 <span className="font-semibold text-theme-fg">
                   {new Date(expiryDate).toLocaleDateString(undefined, {
                     month: 'short',
@@ -147,7 +148,7 @@ export default function BillingCurrentPlanHero({ info, onUnlockGrowth, isNearLim
             </AppButton>
           )}
           <span className="text-[10px] font-medium text-theme-muted">
-            Cancel or switch anytime
+            Manual purchase · no auto-renew
           </span>
         </div>
       </div>
