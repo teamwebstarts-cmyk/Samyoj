@@ -16,7 +16,17 @@ interface FlowVersion {
 
 interface FlowVersionsPanelProps {
   flowId: string;
-  onRestore: (nodes: FlowNode[], version: number) => void;
+  onRestore: (
+    flow: {
+      nodes: FlowNode[];
+      startNodeId?: string | null;
+      triggerType?: string;
+      triggerConfig?: Record<string, unknown>;
+      enabled?: boolean;
+      priority?: number;
+    },
+    version: number
+  ) => void;
 }
 
 export default function FlowVersionsPanel({ flowId, onRestore }: FlowVersionsPanelProps) {
@@ -39,8 +49,15 @@ export default function FlowVersionsPanel({ flowId, onRestore }: FlowVersionsPan
     setRestoring(version);
     try {
       const { data } = await flowApi.restoreVersion(flowId, version);
-      const flow = data.data;
-      onRestore(flow.nodes || flow.draftNodes || [], version);
+      const flow = (data.data.flow || data.data) as {
+        nodes?: FlowNode[];
+        startNodeId?: string | null;
+        triggerType?: string;
+        triggerConfig?: Record<string, unknown>;
+        enabled?: boolean;
+        priority?: number;
+      };
+      onRestore({ ...flow, nodes: flow.nodes || [] }, version);
       toastSuccess(`Restored to version ${version}`);
       load();
     } catch (err) {
