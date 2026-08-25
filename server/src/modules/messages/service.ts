@@ -9,6 +9,7 @@ import type { MessageStatus, MessageType } from '@prisma/client';
 import { emitProductEvent } from '../platform/events';
 import { NEW_CONTACT_CALLING_DEFAULTS } from '../contacts/contact-ai-defaults';
 import { NEW_CONVERSATION_CHAT_DEFAULTS } from '../chat/chat-settings.service';
+import { checkQuota, getOrgEntitlements } from '../billing/entitlements.service';
 
 interface SendDirectMessageInput {
   phone: string;
@@ -34,28 +35,66 @@ export interface RecordOutboundInput {
 
 /** Persist an outbound WhatsApp message so it appears in the inbox. */
 export async function recordOutboundInConversation(input: RecordOutboundInput) {
+  const entitlements = await getOrgEntitlements(input.organizationId);
+  if (entitlements.isLocked) {
+    throw new AppError(
+      402,
+      'Your paid period has expired. Purchase a plan before sending messages.',
+      'SUBSCRIPTION_LOCKED'
+    );
+  }
+
   const phoneResult = validatePhone(input.phone);
   if (!phoneResult.ok) throw new AppError(400, phoneResult.error);
   const phone = phoneResult.phone;
 
-  const contact = await prisma.contact.upsert({
-    where: {
-      organizationId_whatsappNumberId_normalizedPhone: {
-        organizationId: input.organizationId,
-        whatsappNumberId: input.whatsappNumberId,
-        normalizedPhone: phone,
+  const { contact } = await prisma.$transaction(async (tx) => {
+    // Serialize this direct-service path with manual/import/inbound contact
+    // creation so concurrent sends cannot exceed the contact quota.
+    await tx.$queryRaw`SELECT id FROM organizations WHERE id = ${input.organizationId} FOR UPDATE`;
+    const existing = await tx.contact.findUnique({
+      where: {
+        organizationId_whatsappNumberId_normalizedPhone: {
+          organizationId: input.organizationId,
+          whatsappNumberId: input.whatsappNumberId,
+          normalizedPhone: phone,
+        },
       },
-    },
-    create: {
-      organizationId: input.organizationId,
-      phone,
-      normalizedPhone: phone,
-      whatsappNumberId: input.whatsappNumberId,
-      name: input.name,
-      optedIn: true,
-      ...NEW_CONTACT_CALLING_DEFAULTS,
-    },
-    update: { name: input.name || undefined },
+      select: { id: true },
+    });
+    if (!existing) {
+      const quota = await checkQuota(input.organizationId, 'contacts', 1);
+      if (!quota.allowed) {
+        throw new AppError(
+          402,
+          quota.reason ||
+            `Contact limit reached (${quota.used}/${quota.limit}). Upgrade your plan before sending to a new contact.`,
+          quota.code || 'PLAN_LIMIT_CONTACTS'
+        );
+      }
+    }
+
+    return {
+      contact: await tx.contact.upsert({
+        where: {
+          organizationId_whatsappNumberId_normalizedPhone: {
+            organizationId: input.organizationId,
+            whatsappNumberId: input.whatsappNumberId,
+            normalizedPhone: phone,
+          },
+        },
+        create: {
+          organizationId: input.organizationId,
+          phone,
+          normalizedPhone: phone,
+          whatsappNumberId: input.whatsappNumberId,
+          name: input.name,
+          optedIn: true,
+          ...NEW_CONTACT_CALLING_DEFAULTS,
+        },
+        update: { name: input.name || undefined },
+      }),
+    };
   });
 
   let conversation = await prisma.conversation.findFirst({
@@ -139,6 +178,15 @@ export async function recordOutboundInConversation(input: RecordOutboundInput) {
 }
 
 export async function sendDirectMessage(organizationId: string, input: SendDirectMessageInput) {
+  const entitlements = await getOrgEntitlements(organizationId);
+  if (entitlements.isLocked) {
+    throw new AppError(
+      402,
+      'Your paid period has expired. Purchase a plan before sending messages.',
+      'SUBSCRIPTION_LOCKED'
+    );
+  }
+
   const phoneResult = validatePhone(input.phone);
   if (!phoneResult.ok) throw new AppError(400, phoneResult.error);
   const phone = phoneResult.phone;
@@ -146,25 +194,51 @@ export async function sendDirectMessage(organizationId: string, input: SendDirec
   const { whatsappNumber } = await getOrgWhatsappContext(organizationId, input.whatsappNumberId);
   const type = input.type || 'TEXT';
 
-  const contact = await prisma.contact.upsert({
-    where: {
-      organizationId_whatsappNumberId_normalizedPhone: {
-        organizationId,
-        whatsappNumberId: whatsappNumber.id,
-        normalizedPhone: phone,
+  const { contact } = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM organizations WHERE id = ${organizationId} FOR UPDATE`;
+    const existing = await tx.contact.findUnique({
+      where: {
+        organizationId_whatsappNumberId_normalizedPhone: {
+          organizationId,
+          whatsappNumberId: whatsappNumber.id,
+          normalizedPhone: phone,
+        },
       },
-    },
-    create: {
-      organizationId,
-      phone,
-      normalizedPhone: phone,
-      whatsappNumberId: whatsappNumber.id,
-      name: input.name,
-      optedIn: true,
-      source: 'OUTBOUND',
-      ...NEW_CONTACT_CALLING_DEFAULTS,
-    },
-    update: { name: input.name || undefined },
+      select: { id: true },
+    });
+    if (!existing) {
+      const quota = await checkQuota(organizationId, 'contacts', 1);
+      if (!quota.allowed) {
+        throw new AppError(
+          402,
+          quota.reason ||
+            `Contact limit reached (${quota.used}/${quota.limit}). Upgrade your plan before sending to a new contact.`,
+          quota.code || 'PLAN_LIMIT_CONTACTS'
+        );
+      }
+    }
+    return {
+      contact: await tx.contact.upsert({
+        where: {
+          organizationId_whatsappNumberId_normalizedPhone: {
+            organizationId,
+            whatsappNumberId: whatsappNumber.id,
+            normalizedPhone: phone,
+          },
+        },
+        create: {
+          organizationId,
+          phone,
+          normalizedPhone: phone,
+          whatsappNumberId: whatsappNumber.id,
+          name: input.name,
+          optedIn: true,
+          source: 'OUTBOUND',
+          ...NEW_CONTACT_CALLING_DEFAULTS,
+        },
+        update: { name: input.name || undefined },
+      }),
+    };
   });
 
   let conversation = await prisma.conversation.findFirst({
