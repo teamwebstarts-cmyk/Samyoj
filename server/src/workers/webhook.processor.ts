@@ -23,6 +23,8 @@ import { emitProductEvent } from '../modules/platform/events';
 import { NEW_CONTACT_CALLING_DEFAULTS } from '../modules/contacts/contact-ai-defaults';
 import { NEW_CONVERSATION_CHAT_DEFAULTS, applyGlobalChatToConversation } from '../modules/chat/chat-settings.service';
 import { applyGlobalCallingToContactIfEnabled } from '../modules/calling/calling-ai-global.service';
+import { checkQuota } from '../modules/billing/entitlements.service';
+import { flowQueue } from '../config/queues';
 
 const log = createModuleLogger('webhook');
 
@@ -166,46 +168,95 @@ export async function processWebhookPayload(
 
         const inboundConsent = inboundReplyConsentFields(inboundTimestamp);
 
-        const priorContact = await prisma.contact.findUnique({
-          where: {
-            organizationId_whatsappNumberId_normalizedPhone: {
-              organizationId: orgId,
-              whatsappNumberId: whatsappNumber.id,
-              normalizedPhone: contactPhone,
+        const contactResolution = await prisma.$transaction(async (tx) => {
+          // Serialize all contact creation paths that honor this quota. The
+          // organization row is the shared lock, so concurrent webhook workers
+          // cannot both pass the count check and exceed the plan limit.
+          await tx.$queryRaw`SELECT id FROM organizations WHERE id = ${orgId} FOR UPDATE`;
+          const priorContact = await tx.contact.findUnique({
+            where: {
+              organizationId_whatsappNumberId_normalizedPhone: {
+                organizationId: orgId,
+                whatsappNumberId: whatsappNumber.id,
+                normalizedPhone: contactPhone,
+              },
             },
-          },
-          select: { id: true },
-        });
-
-        let contact = await prisma.contact.upsert({
-          where: {
-            organizationId_whatsappNumberId_normalizedPhone: {
-              organizationId: orgId,
-              whatsappNumberId: whatsappNumber.id,
-              normalizedPhone: contactPhone,
-            },
-          },
-          create: {
-            organizationId: orgId,
-            phone: contactPhone,
-            normalizedPhone: contactPhone,
-            whatsappNumberId: whatsappNumber.id,
-            name: contactName,
-            source: 'INBOUND',
-            ...NEW_CONTACT_CALLING_DEFAULTS,
-            ...inboundConsent,
-          },
-          update: contactName ? { name: contactName } : {},
-        });
-
-        if (shouldGrantInboundReplyConsent(contact)) {
-          contact = await prisma.contact.update({
-            where: { id: contact.id },
-            data: inboundConsent,
+            select: { id: true },
           });
+
+          if (!priorContact) {
+            const quota = await checkQuota(orgId, 'contacts', 1);
+            if (!quota.allowed) {
+              await tx.inboundContactOverflow.upsert({
+                where: { metaMessageId: msg.id as string },
+                create: {
+                  organizationId: orgId,
+                  whatsappNumberId: whatsappNumber.id,
+                  metaMessageId: msg.id as string,
+                  contactPhone,
+                  payload: msg as Prisma.InputJsonValue,
+                  reason: 'CONTACT_QUOTA_EXCEEDED',
+                },
+                update: {},
+              });
+              return {
+                contact: null,
+                created: false,
+                overflow: { used: quota.used, limit: quota.limit },
+              };
+            }
+          }
+
+          let contact = await tx.contact.upsert({
+            where: {
+              organizationId_whatsappNumberId_normalizedPhone: {
+                organizationId: orgId,
+                whatsappNumberId: whatsappNumber.id,
+                normalizedPhone: contactPhone,
+              },
+            },
+            create: {
+              organizationId: orgId,
+              phone: contactPhone,
+              normalizedPhone: contactPhone,
+              whatsappNumberId: whatsappNumber.id,
+              name: contactName,
+              source: 'INBOUND',
+              ...NEW_CONTACT_CALLING_DEFAULTS,
+              ...inboundConsent,
+            },
+            update: contactName ? { name: contactName } : {},
+          });
+
+          if (shouldGrantInboundReplyConsent(contact)) {
+            contact = await tx.contact.update({
+              where: { id: contact.id },
+              data: inboundConsent,
+            });
+          }
+
+          return { contact, created: !priorContact, overflow: null };
+        });
+
+        if (!contactResolution.contact) {
+          emitToOrg(orgId, 'contact:overflow', {
+            whatsappNumberId: whatsappNumber.id,
+            contactPhone,
+            metaMessageId: msg.id,
+            used: contactResolution.overflow?.used ?? 0,
+            limit: contactResolution.overflow?.limit ?? 0,
+          });
+          log.warn('Inbound contact held at quota limit', {
+            organizationId: orgId,
+            whatsappNumberId: whatsappNumber.id,
+            contactPhone,
+            metaMessageId: msg.id,
+          });
+          continue;
         }
 
-        if (!priorContact) {
+        const contact = contactResolution.contact;
+        if (contactResolution.created) {
           await applyGlobalCallingToContactIfEnabled(orgId, contact.id);
         }
 
@@ -520,28 +571,60 @@ export async function processWebhookPayload(
           }
         }
 
-        await handleInboundAutomations({
-          organizationId: orgId,
-          conversationId: conversation.id,
-          contactId: contact.id,
-          messageId: message.id,
-          contactPhone,
-          phoneNumberId: whatsappNumber.phoneNumberId,
-          encryptedToken: whatsappNumber.accessToken,
-          content: content || '',
-          buttonReplyId: parsed.buttonReplyId,
-          isNewConversation: isNew,
-          messageType: msgType,
-          hasMedia,
-          waFlowResponse: parsed.waFlowResponse,
-        }).catch((err) =>
+        try {
+          await handleInboundAutomations({
+            organizationId: orgId,
+            conversationId: conversation.id,
+            contactId: contact.id,
+            messageId: message.id,
+            contactPhone,
+            whatsappNumberId: whatsappNumber.id,
+            content: content || '',
+            buttonReplyId: parsed.buttonReplyId,
+            isNewConversation: isNew,
+            messageType: msgType,
+            hasMedia,
+            waFlowResponse: parsed.waFlowResponse,
+          });
+        } catch (err) {
           logError(err, {
             source: 'webhook',
-            action: 'Automation processing failed',
+            action: 'Automation processing failed; queued durable retry',
             messageId: message.id,
             organizationId: orgId,
-          })
-        );
+          });
+          const retryJobId = `inbound-automation-${message.id}`;
+          try {
+            const existingRetry = await flowQueue.getJob(retryJobId);
+            if (!existingRetry) {
+              await flowQueue.add(
+                'retry-inbound-message',
+                {
+                  organizationId: orgId,
+                  conversationId: conversation.id,
+                  contactId: contact.id,
+                  messageId: message.id,
+                  whatsappNumberId: whatsappNumber.id,
+                  isNewConversation: isNew,
+                },
+                {
+                  jobId: retryJobId,
+                  attempts: 3,
+                  backoff: { type: 'exponential', delay: 2000 },
+                  removeOnComplete: 200,
+                  removeOnFail: 500,
+                }
+              );
+            }
+          } catch (queueError) {
+            logError(queueError, {
+              source: 'webhook',
+              action: 'Could not queue automation retry',
+              messageId: message.id,
+              organizationId: orgId,
+            });
+          }
+        }
 
         log.info('Inbound message processing complete', {
           messageId: message.id,
