@@ -5,7 +5,7 @@ vi.mock('../../config/database', () => ({
     conversation: { findFirst: vi.fn() },
     contact: { findFirst: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
     automation: { findMany: vi.fn() },
-    message: { create: vi.fn() },
+    message: { create: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
     automationLog: { findFirst: vi.fn(), create: vi.fn() },
   },
 }));
@@ -84,8 +84,7 @@ const payload = {
   contactId: 'contact-1',
   messageId: 'msg-1',
   contactPhone: '919999999999',
-  phoneNumberId: 'phone-1',
-  encryptedToken: 'token',
+  whatsappNumberId: 'wa-1',
   content: 'price please',
   isNewConversation: false,
 };
@@ -113,6 +112,8 @@ describe('handleInboundAutomations', () => {
     automationQueueAdd.mockResolvedValue({} as never);
     botsEnabled.mockResolvedValue(true);
     vi.mocked(automationQueue.getJob).mockResolvedValue(undefined);
+    vi.mocked(prisma.message.findUnique).mockResolvedValue({ metadata: {} } as never);
+    vi.mocked(prisma.message.update).mockResolvedValue({} as never);
   });
 
   it('skips flow, static, and AI when Inbox paused the bot', async () => {
