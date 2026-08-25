@@ -11,6 +11,7 @@ import { createModuleLogger } from '../../utils/logger';
 import { resolveCs24hWindowOpensAt } from '../inbox/service-window';
 import { isAgentOnlyChatMetadata } from './agent-only';
 import { emitProductEvent } from '../platform/events';
+import { getOrgEntitlements } from '../billing/entitlements.service';
 
 const log = createModuleLogger('messages');
 
@@ -62,8 +63,11 @@ interface DeliverMessageInput {
   organizationId: string;
   whatsappNumberId?: string;
   messageId: string;
-  phoneNumberId: string;
-  encryptedToken: string;
+  /** @deprecated Provider phone ID is resolved from the active DB workspace. */
+  phoneNumberId?: string;
+  /** @deprecated Queue workers must resolve the encrypted token from the DB. */
+  encryptedToken?: string;
+  /** @deprecated Recipient is resolved from the organization-owned conversation contact. */
   to: string;
   content: string;
   type: DeliverMessageType;
@@ -185,24 +189,66 @@ async function resolveMediaRef(options: {
 }
 
 export async function deliverOutboundMessage(input: DeliverMessageInput) {
-  const phone = input.to.replace(/\D/g, '');
-  const accessToken = MetaWhatsAppService.decryptToken(input.encryptedToken);
+  const entitlements = await getOrgEntitlements(input.organizationId);
+  if (entitlements.isLocked) {
+    throw new AppError(
+      402,
+      'Your paid period has expired. Purchase a plan before sending messages.',
+      'SUBSCRIPTION_LOCKED'
+    );
+  }
+
+  let whatsappNumberId = input.whatsappNumberId;
+  if (!whatsappNumberId) {
+    const messageContext = await prisma.message.findFirst({
+      where: {
+        id: input.messageId,
+        conversation: { organizationId: input.organizationId },
+      },
+      select: { conversation: { select: { whatsappNumberId: true } } },
+    });
+    whatsappNumberId = messageContext?.conversation.whatsappNumberId || undefined;
+  }
+
+  if (!whatsappNumberId) {
+    throw new AppError(400, 'WhatsApp number context is required for this message');
+  }
+
+  const whatsappNumber = await prisma.whatsappNumber.findFirst({
+    where: {
+      id: whatsappNumberId,
+      organizationId: input.organizationId,
+      isActive: true,
+    },
+    select: { id: true, phoneNumberId: true, accessToken: true },
+  });
+  if (!whatsappNumber) {
+    throw new AppError(400, 'WhatsApp number not found or inactive');
+  }
+
+  const phoneNumberId = whatsappNumber.phoneNumberId;
+  const accessToken = MetaWhatsAppService.decryptToken(whatsappNumber.accessToken);
 
   try {
-    if (input.whatsappNumberId) {
-      const ownedMessage = await prisma.message.findFirst({
-        where: {
-          id: input.messageId,
-          conversation: {
-            organizationId: input.organizationId,
-            whatsappNumberId: input.whatsappNumberId,
-          },
+    const ownedMessage = await prisma.message.findFirst({
+      where: {
+        id: input.messageId,
+        conversation: {
+          organizationId: input.organizationId,
+          whatsappNumberId: whatsappNumber.id,
         },
-        select: { id: true },
-      });
-      if (!ownedMessage) {
-        throw new AppError(404, 'Message does not belong to the active WhatsApp number');
-      }
+      },
+      select: {
+        id: true,
+        conversation: { select: { contact: { select: { phone: true } } } },
+      },
+    });
+    if (!ownedMessage) {
+      throw new AppError(404, 'Message does not belong to the active WhatsApp number');
+    }
+    const phone = ownedMessage.conversation.contact.phone.replace(/\D/g, '');
+    if (!phone) {
+      throw new AppError(400, 'Message recipient is missing a valid phone number');
     }
 
     const agentOnlyRow = await prisma.message.findUnique({
@@ -285,7 +331,7 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
       if (input.templateParams) {
         const { wabaId, accessToken: orgToken } = await getOrgWhatsappContext(
           input.organizationId,
-          input.whatsappNumberId
+          whatsappNumberId
         );
         const template = await MetaWhatsAppService.getMessageTemplate(
           wabaId,
@@ -295,7 +341,7 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
         components = buildTemplateComponents(input.templateParams, template);
       }
 
-      result = await MetaWhatsAppService.sendMessage(input.phoneNumberId, accessToken, {
+      result = await MetaWhatsAppService.sendMessage(phoneNumberId, accessToken, {
         to: phone,
         type: 'template',
         template: {
@@ -311,20 +357,20 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
         buttons: input.buttons,
       };
       result = await MetaWhatsAppService.sendMessage(
-        input.phoneNumberId,
+        phoneNumberId,
         accessToken,
         { ...buildInteractivePayload(phone, interactiveOpts), ...context }
       );
     } else if (input.type === 'IMAGE' && (input.mediaUrl || input.mediaPath)) {
       const media = await resolveMediaRef({
-        phoneNumberId: input.phoneNumberId,
+        phoneNumberId,
         accessToken,
         mediaPath: input.mediaPath,
         mediaUrl: input.mediaUrl,
         mimeType: input.mediaMimeType || 'image/jpeg',
         filename: input.mediaFilename,
       });
-      result = await MetaWhatsAppService.sendMessage(input.phoneNumberId, accessToken, {
+      result = await MetaWhatsAppService.sendMessage(phoneNumberId, accessToken, {
         to: phone,
         type: 'image',
         image: { ...media, caption: input.mediaCaption || undefined },
@@ -332,14 +378,14 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
       });
     } else if (input.type === 'DOCUMENT' && (input.mediaUrl || input.mediaPath)) {
       const media = await resolveMediaRef({
-        phoneNumberId: input.phoneNumberId,
+        phoneNumberId,
         accessToken,
         mediaPath: input.mediaPath,
         mediaUrl: input.mediaUrl,
         mimeType: input.mediaMimeType || 'application/pdf',
         filename: input.mediaFilename,
       });
-      result = await MetaWhatsAppService.sendMessage(input.phoneNumberId, accessToken, {
+      result = await MetaWhatsAppService.sendMessage(phoneNumberId, accessToken, {
         to: phone,
         type: 'document',
         document: {
@@ -352,14 +398,14 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
       });
     } else if (input.type === 'VIDEO' && (input.mediaUrl || input.mediaPath)) {
       const media = await resolveMediaRef({
-        phoneNumberId: input.phoneNumberId,
+        phoneNumberId,
         accessToken,
         mediaPath: input.mediaPath,
         mediaUrl: input.mediaUrl,
         mimeType: input.mediaMimeType || 'video/mp4',
         filename: input.mediaFilename,
       });
-      result = await MetaWhatsAppService.sendMessage(input.phoneNumberId, accessToken, {
+      result = await MetaWhatsAppService.sendMessage(phoneNumberId, accessToken, {
         to: phone,
         type: 'video',
         video: { ...media, caption: input.mediaCaption || undefined },
@@ -367,14 +413,14 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
       });
     } else if (input.type === 'AUDIO' && (input.mediaUrl || input.mediaPath)) {
       const media = await resolveMediaRef({
-        phoneNumberId: input.phoneNumberId,
+        phoneNumberId,
         accessToken,
         mediaPath: input.mediaPath,
         mediaUrl: input.mediaUrl,
         mimeType: input.mediaMimeType || 'audio/ogg',
         filename: input.mediaFilename,
       });
-      result = await MetaWhatsAppService.sendMessage(input.phoneNumberId, accessToken, {
+      result = await MetaWhatsAppService.sendMessage(phoneNumberId, accessToken, {
         to: phone,
         type: 'audio',
         audio: {
@@ -384,7 +430,7 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
         ...context,
       });
     } else if (input.type === 'LOCATION' && input.location) {
-      result = await MetaWhatsAppService.sendMessage(input.phoneNumberId, accessToken, {
+      result = await MetaWhatsAppService.sendMessage(phoneNumberId, accessToken, {
         to: phone,
         type: 'location',
         location: input.location,
@@ -396,13 +442,13 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
       if (!contacts.length) {
         throw new AppError(400, 'Contact card needs a valid phone number with country code');
       }
-      result = await MetaWhatsAppService.sendMessage(input.phoneNumberId, accessToken, {
+      result = await MetaWhatsAppService.sendMessage(phoneNumberId, accessToken, {
         to: phone,
         type: 'contacts',
         contacts,
       });
     } else if (input.waFlow) {
-      result = await MetaWhatsAppService.sendMessage(input.phoneNumberId, accessToken, {
+      result = await MetaWhatsAppService.sendMessage(phoneNumberId, accessToken, {
         to: phone,
         type: 'interactive',
         ...context,
@@ -425,7 +471,7 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
         },
       });
     } else {
-      result = await MetaWhatsAppService.sendMessage(input.phoneNumberId, accessToken, {
+      result = await MetaWhatsAppService.sendMessage(phoneNumberId, accessToken, {
         to: phone,
         type: 'text',
         text: { body: input.content },
@@ -443,8 +489,8 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
       await reconcileUnmatchedProviderStatuses({
         organizationId: input.organizationId,
         metaMessageId,
-        whatsappNumberId: input.whatsappNumberId,
-        phoneNumberId: input.phoneNumberId,
+        whatsappNumberId,
+        phoneNumberId,
       });
     }
 
@@ -509,7 +555,7 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
     const { emitMetaErrorStat } = await import('../platform/meta-errors');
     emitMetaErrorStat({
       organizationId: input.organizationId,
-      whatsappNumberId: input.whatsappNumberId,
+      whatsappNumberId,
       code: metaCode,
       sampleTitle: errorMessage,
     });
