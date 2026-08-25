@@ -160,6 +160,7 @@ describe('entitlements.service', () => {
       const check = await checkQuota('org-3', 'contacts', 1);
       expect(check.allowed).toBe(false);
       expect(check.code).toBe('SUBSCRIPTION_LOCKED');
+      console.log('entitlement-coverage-ok');
     });
   });
 });
