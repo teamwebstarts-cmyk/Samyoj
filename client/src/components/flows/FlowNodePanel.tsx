@@ -13,6 +13,8 @@ import { getFlowReferenceData } from './flowReferenceData';
 import { nodeMeta } from './flowMeta';
 import type { AiBot, Flow, FlowNode, MessageTemplate, TeamAgent } from '../../types';
 import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { useParams } from 'react-router-dom';
 
 interface FlowNodePanelProps {
   node: FlowNode | null;
@@ -113,13 +115,16 @@ function FlowNodePanelForm({
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const { activeNumber, resolved } = useWhatsAppNumber();
+  const { organization } = useAuth();
+  const { id: currentFlowId } = useParams();
   const activeNumberIdRef = useRef<string | null>(null);
   activeNumberIdRef.current = activeNumber?.id ?? null;
 
   useEffect(() => {
-    if (!resolved || !activeNumber) return;
+    if (!resolved || !activeNumber || !organization?.id) return;
     const requestNumberId = activeNumber.id;
-    getFlowReferenceData(activeNumber.phoneNumberId)
+    const scopeKey = `${organization.id}:${activeNumber.id}`;
+    getFlowReferenceData(scopeKey)
       .then((data) => {
         if (requestNumberId !== activeNumberIdRef.current) return;
         setBots(data.bots);
@@ -128,7 +133,15 @@ function FlowNodePanelForm({
         setTemplates(data.templates);
       })
       .catch(() => {});
-  }, [activeNumber, resolved]);
+  }, [activeNumber, organization?.id, resolved]);
+
+  const gotoFlowOptions = flows.filter(
+    (f) =>
+      f.id !== currentFlowId &&
+      f.id !== 'new' &&
+      f.status === 'PUBLISHED' &&
+      f.enabled
+  );
 
   const meta = nodeMeta[node.type];
   const Icon = meta.icon;
@@ -261,7 +274,10 @@ function FlowNodePanelForm({
                       const buttons = node.buttons!.filter((_, i) => i !== btnIdx);
                       const nextBranches = { ...(node.branches || {}) };
                       delete nextBranches[removed.id];
-                      onChange({ buttons, branches: nextBranches });
+                      const intentRoutes = (node.intentRoutes || []).filter(
+                        (route) => route.branchKey !== removed.id
+                      );
+                      onChange({ buttons, branches: nextBranches, intentRoutes });
                     }}
                     className="mt-6 rounded-lg p-1.5 text-red-500 hover:bg-red-50"
                   >
@@ -431,7 +447,7 @@ function FlowNodePanelForm({
           value={node.targetFlowId || ''}
           options={[
             { value: '', label: 'Select a flow...' },
-            ...flows.map((f) => ({ value: f.id, label: f.name })),
+            ...gotoFlowOptions.map((f) => ({ value: f.id, label: f.name })),
           ]}
           isSearchable
           onChange={(e) => onChange({ targetFlowId: e.target.value || undefined })}
