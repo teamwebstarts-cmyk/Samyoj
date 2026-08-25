@@ -12,6 +12,8 @@ interface BillingPlanCardProps {
   onSelect: () => void;
   cadence?: 'monthly' | 'quarterly' | 'yearly';
   isActivePaidSession?: boolean;
+  isBlockedByActiveHigherPlan?: boolean;
+  activeHigherPlanName?: string;
 }
 
 type PlanTheme = {
@@ -72,6 +74,8 @@ export default function BillingPlanCard({
   onSelect,
   cadence = 'monthly',
   isActivePaidSession,
+  isBlockedByActiveHigherPlan = false,
+  activeHigherPlanName,
 }: BillingPlanCardProps) {
   const theme = planThemes[plan.id] ?? planThemes.starter;
   const Icon = theme.icon;
@@ -80,11 +84,19 @@ export default function BillingPlanCard({
 
   const sku = plan.pricing?.[cadence];
   const displayPrice = sku?.effectiveMonthlyLabel ?? plan.priceLabel;
-  const billingSummary = sku?.billingLabel ?? `Billed ${cadence} · cancel anytime`;
+  const billingSummary = isEnterprise
+    ? 'Manual quote · valid until agreed term'
+    : sku
+      ? `Manual purchase · valid until period end`
+      : plan.id === 'launch'
+        ? 'Trial access · valid until trial end'
+        : 'Manual purchase · valid until period end';
   const isUpiCapExceeded = sku ? !sku.upiAutopayAllowed : false;
 
   const buttonLabel = isCurrent
     ? 'Current plan'
+    : isBlockedByActiveHigherPlan
+      ? 'Higher plan active'
     : isActivePaidSession
       ? 'Restore Plan'
       : isEnterprise
@@ -96,9 +108,11 @@ export default function BillingPlanCard({
             : 'Switch plan';
 
   const showStatusBadge =
-    isCurrent || isActivePaidSession || plan.isMostPopular || Boolean(theme.badge);
+    isCurrent || isActivePaidSession || isBlockedByActiveHigherPlan || plan.isMostPopular || Boolean(theme.badge);
   const statusBadgeText = isCurrent
     ? 'Active'
+    : isBlockedByActiveHigherPlan
+      ? 'Unavailable'
     : isActivePaidSession
       ? 'Purchased'
       : plan.isMostPopular
@@ -107,6 +121,8 @@ export default function BillingPlanCard({
 
   const statusBadgeClass = isCurrent
     ? 'bg-emerald-500 text-white'
+    : isBlockedByActiveHigherPlan
+      ? 'bg-slate-500 text-white'
     : isActivePaidSession
       ? 'bg-emerald-600 text-white'
       : plan.isMostPopular
@@ -145,12 +161,12 @@ export default function BillingPlanCard({
         <p className="mt-2.5 text-[11px] font-medium text-theme-muted">
           {plan.waNumbers} WA line · {plan.seats} seats · {typeof plan.contacts === 'number' ? plan.contacts.toLocaleString() : plan.contacts} contacts
           {(plan.chatCreditsIncluded ?? 0) > 0
-            ? ` · ${plan.chatCreditsIncluded!.toLocaleString()} AI credits/mo`
+            ? ` · ${plan.chatCreditsIncluded!.toLocaleString()} chat credits / period`
             : plan.aiIncluded === 'off'
-              ? ' · Upgrade for AI credits'
+              ? ' · Upgrade for chat credits'
               : ''}
           {(plan.callingMinutesIncluded ?? 0) > 0
-            ? ` · ${plan.callingMinutesIncluded} calling min/mo`
+            ? ` · ${plan.callingMinutesIncluded} calling minutes / period`
             : ''}
         </p>
 
@@ -202,9 +218,19 @@ export default function BillingPlanCard({
           variant={isCurrent ? 'secondary' : 'primary'}
           className={isActivePaidSession ? '!bg-emerald-600 hover:!bg-emerald-700 text-white' : ''}
           fullWidth
-          disabled={isCurrent || !canManage || (isPaid && !razorpayConfigured && !isEnterprise && !isActivePaidSession)}
+          disabled={
+            isCurrent ||
+            isBlockedByActiveHigherPlan ||
+            !canManage ||
+            (isPaid && !razorpayConfigured && !isEnterprise && !isActivePaidSession)
+          }
           loading={loading}
           onClick={onSelect}
+          title={
+            isBlockedByActiveHigherPlan
+              ? `Your ${activeHigherPlanName || 'higher'} plan is active until its valid-until date.`
+              : undefined
+          }
         >
           {buttonLabel}
         </AppButton>
