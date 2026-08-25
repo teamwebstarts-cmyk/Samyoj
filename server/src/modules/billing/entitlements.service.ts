@@ -14,6 +14,18 @@ export type QuotaType =
   | 'ai'
   | 'calling';
 
+export type FeatureType =
+  | 'ai'
+  | 'calling'
+  | 'campaigns'
+  | 'analyticsAdvanced'
+  | 'integrations'
+  | 'publicApi'
+  | 'templates'
+  | 'forms'
+  | 'advancedInbox'
+  | 'support';
+
 export interface QuotaCheckResult {
   allowed: boolean;
   used: number;
@@ -30,6 +42,9 @@ export interface OrgEntitlements {
   subscriptionStatus: string;
   isLocked: boolean;
   planExpiresAt: Date | null;
+  planPeriodId: string | null;
+  periodStartsAt: Date | null;
+  periodEndsAt: Date | null;
   quotas: {
     waNumbers: { used: number; limit: number | 'unlimited' };
     seats: { used: number; limit: number | 'custom' };
@@ -38,6 +53,13 @@ export interface OrgEntitlements {
     aiIncluded: 'off' | 'included' | 'advanced' | 'dedicated';
     callingIncluded: boolean;
     analyticsAdvanced: boolean;
+    campaigns: boolean;
+    integrations: boolean;
+    publicApi: boolean;
+    templates: boolean;
+    forms: boolean;
+    advancedInbox: boolean;
+    supportLevel: 'community' | 'email' | 'priority' | 'dedicated';
   };
 }
 
@@ -71,10 +93,39 @@ export async function getOrgEntitlements(organizationId: string): Promise<OrgEnt
     throw new AppError(404, 'Organization not found');
   }
 
-  const planTier = legacyPlanToTier(org.plan);
-  const tierDef = PLAN_TIERS[planTier] || PLAN_TIERS.launch;
+  const periodModel = (prisma as typeof prisma & {
+    planPeriod?: {
+      findFirst: (args: unknown) => Promise<{
+        id: string;
+        planTier: string;
+        startsAt: Date;
+        endsAt: Date;
+        status: string;
+      } | null>;
+    };
+  }).planPeriod;
 
-  const [waCount, seatCount, inviteCount, contactCount, automationCount] =
+  // Keep unit tests and old databases readable while the additive migration is
+  // rolling out. Once present, the ledger wins over the compatibility cache.
+  const [currentPeriod, latestPeriod] = periodModel?.findFirst
+    ? await Promise.all([
+        periodModel.findFirst({
+          where: {
+            organizationId,
+            status: 'ACTIVE',
+            startsAt: { lte: new Date() },
+            endsAt: { gt: new Date() },
+          },
+          orderBy: { startsAt: 'desc' },
+        }),
+        periodModel.findFirst({
+          where: { organizationId },
+          orderBy: { startsAt: 'desc' },
+        }),
+      ])
+    : [null, null];
+
+  const [waCount, seatCount, inviteCount, contactCount, automationCount, flowCount] =
     await Promise.all([
       prisma.whatsappNumber.count({
         where: { organizationId, isActive: true },
@@ -91,11 +142,28 @@ export async function getOrgEntitlements(organizationId: string): Promise<OrgEnt
       prisma.automation.count({
         where: { organizationId, enabled: true },
       }),
+      prisma.flow?.count
+        ? prisma.flow.count({
+            where: { organizationId, enabled: true, status: 'PUBLISHED' },
+          })
+        : Promise.resolve(0),
     ]);
 
-  const isLocked = ['trial_expired', 'locked', 'expired', 'cancelled', 'past_due'].includes(
+  const ledgerPeriod = currentPeriod || latestPeriod;
+  const planTier = ledgerPeriod
+    ? legacyPlanToTier(ledgerPeriod.planTier)
+    : legacyPlanToTier(org.plan);
+  const tierDef = PLAN_TIERS[planTier] || PLAN_TIERS.launch;
+  const isLedgerBacked = Boolean(latestPeriod);
+  const statusLocked = ['trial_expired', 'locked', 'expired', 'cancelled', 'past_due'].includes(
     org.subscriptionStatus
   );
+  const isLocked = isLedgerBacked
+    ? !currentPeriod || statusLocked
+    : ['trial_expired', 'locked', 'expired', 'cancelled', 'past_due'].includes(
+        org.subscriptionStatus
+      ) || Boolean(org.planExpiresAt && org.planExpiresAt <= new Date());
+  const planExpiresAt = ledgerPeriod?.endsAt ?? org.planExpiresAt;
 
   return {
     orgId: organizationId,
@@ -103,7 +171,10 @@ export async function getOrgEntitlements(organizationId: string): Promise<OrgEnt
     planName: tierDef.name,
     subscriptionStatus: org.subscriptionStatus,
     isLocked,
-    planExpiresAt: org.planExpiresAt,
+    planExpiresAt,
+    planPeriodId: currentPeriod?.id ?? latestPeriod?.id ?? null,
+    periodStartsAt: ledgerPeriod?.startsAt ?? null,
+    periodEndsAt: ledgerPeriod?.endsAt ?? planExpiresAt,
     quotas: {
       waNumbers: {
         used: waCount,
@@ -118,13 +189,67 @@ export async function getOrgEntitlements(organizationId: string): Promise<OrgEnt
         limit: tierDef.contacts,
       },
       publishedWorkflows: {
-        used: automationCount,
+        used: automationCount + flowCount,
         limit: tierDef.publishedWorkflows,
       },
       aiIncluded: tierDef.aiIncluded,
       callingIncluded: tierDef.callingIncluded,
       analyticsAdvanced: tierDef.analyticsAdvanced,
+      campaigns: tierDef.campaigns,
+      integrations: tierDef.integrations,
+      publicApi: tierDef.publicApi,
+      templates: tierDef.templates,
+      forms: tierDef.forms,
+      advancedInbox: tierDef.advancedInbox,
+      supportLevel: tierDef.supportLevel,
     },
+  };
+}
+
+export async function checkFeature(
+  organizationId: string,
+  feature: FeatureType
+): Promise<{ allowed: boolean; requiredPlan: PlanTier; reason?: string; code?: string }> {
+  const entitlements = await getOrgEntitlements(organizationId);
+  const requiredPlan: PlanTier =
+    feature === 'calling'
+      ? 'pro'
+      : feature === 'ai'
+        ? 'growth'
+        : feature === 'analyticsAdvanced' || feature === 'integrations' || feature === 'publicApi'
+      ? 'growth'
+      : feature === 'advancedInbox'
+        ? 'pro'
+        : feature === 'support'
+          ? 'starter'
+        : feature === 'campaigns'
+          ? 'growth'
+          : 'starter';
+
+  if (entitlements.isLocked) {
+    return {
+      allowed: false,
+      requiredPlan,
+      code: 'SUBSCRIPTION_LOCKED',
+      reason: 'Your paid period has expired. Purchase a plan to continue.',
+    };
+  }
+
+  const allowed =
+    feature === 'ai'
+      ? entitlements.quotas.aiIncluded !== 'off'
+      : feature === 'calling'
+        ? entitlements.quotas.callingIncluded
+        : feature === 'support'
+          ? entitlements.quotas.supportLevel !== 'community'
+        : entitlements.quotas[feature];
+  return {
+    allowed,
+    requiredPlan,
+    code: allowed ? undefined : 'PLAN_FEATURE',
+    reason: allowed
+      ? undefined
+      : `This feature requires the ${requiredPlan.charAt(0).toUpperCase() + requiredPlan.slice(1)} plan or higher.`,
   };
 }
 
