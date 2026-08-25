@@ -36,14 +36,14 @@ describe('contact consent mutations', () => {
     expect(data.consentDecision).toMatchObject({ type: 'OPT_OUT', optedIn: false });
   });
 
-  it('defaults new contacts to auditable campaign consent when optedIn is omitted', () => {
+  it('keeps new contacts out of campaigns when optedIn is omitted', () => {
     const data = contactCreateConsentFields(undefined, 'MANUAL');
     expect(data).toMatchObject({
-      optedIn: true,
-      consentSource: 'MANUAL',
-      optOutAt: null,
+      optedIn: false,
     });
-    expect(data.consentAt).toBeInstanceOf(Date);
+    expect(data.consentSource).toBeUndefined();
+    expect(data.consentAt).toBeUndefined();
+    expect(data.optOutAt).toBeUndefined();
   });
 
   it('filters the contact list with the same auditable consent shape as campaigns', () => {
