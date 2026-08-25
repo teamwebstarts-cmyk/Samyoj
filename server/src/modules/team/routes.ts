@@ -24,10 +24,17 @@ import {
 } from './types';
 import type { OrgRole } from '@prisma/client';
 import { revokeRefreshSessionsForUser } from '../auth/session';
+import { requireActiveCommercialOnMutation } from '../../middleware/plan-guard';
+import { checkQuota, getOrgEntitlements } from '../billing/entitlements.service';
 
 const router = Router();
 
-const adminGuard = [authenticate, requireOrg, ...withPermission('manageTeam')];
+const adminGuard = [
+  authenticate,
+  requireOrg,
+  requireActiveCommercialOnMutation(),
+  ...withPermission('manageTeam'),
+];
 
 const memberSelect = {
   id: true,
@@ -145,18 +152,19 @@ router.get(
   requireOrgRole('OWNER', 'ADMIN'),
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
-    const org = await prisma.organization.findUnique({
-      where: { id: orgId },
-      select: { plan: true, settings: true },
-    });
+    const entitlements = await getOrgEntitlements(orgId);
     const teamSettings = await getTeamSettingsFromOrg(orgId);
     const memberCount = await prisma.organizationUser.count({ where: { organizationId: orgId } });
+    const seatLimit =
+      entitlements.quotas.seats.limit === 'custom'
+        ? getSeatLimit(entitlements.planTier, teamSettings)
+        : entitlements.quotas.seats.limit;
 
     sendSuccess(res, {
       ...teamSettings,
-      seatLimit: getSeatLimit(org?.plan ?? 'starter', teamSettings),
+      seatLimit,
       seatsUsed: memberCount,
-      plan: org?.plan ?? 'starter',
+      plan: entitlements.planTier,
     });
   })
 );
@@ -175,12 +183,12 @@ router.patch(
     const data = schema.parse(req.body);
 
     if (data.seatLimit !== undefined) {
-      const org = await prisma.organization.findUnique({
-        where: { id: orgId },
-        select: { plan: true },
-      });
-      const maxAllowed = getSeatLimit(org?.plan ?? 'starter');
-      if (org?.plan !== 'enterprise' && data.seatLimit > maxAllowed) {
+      const entitlements = await getOrgEntitlements(orgId);
+      const maxAllowed =
+        entitlements.quotas.seats.limit === 'custom'
+          ? getSeatLimit(entitlements.planTier)
+          : entitlements.quotas.seats.limit;
+      if (data.seatLimit > maxAllowed) {
         throw new AppError(
           400,
           `Cannot increase seat limit beyond plan maximum (${maxAllowed} seats). Upgrade plan to add more seats.`
@@ -464,18 +472,8 @@ router.post(
 
     const org = await prisma.organization.findUnique({
       where: { id: orgId },
-      select: { plan: true, settings: true, companyName: true },
+      select: { companyName: true },
     });
-    const teamSettings = await getTeamSettingsFromOrg(orgId);
-    const seatLimit = getSeatLimit(org?.plan ?? 'starter', teamSettings);
-    const [memberCount, pendingInvites] = await Promise.all([
-      prisma.organizationUser.count({ where: { organizationId: orgId } }),
-      prisma.teamInvite.count({ where: { organizationId: orgId, status: 'PENDING' } }),
-    ]);
-
-    if (memberCount + pendingInvites >= seatLimit) {
-      throw new AppError(403, `Seat limit reached (${seatLimit}). Upgrade your plan or remove members.`);
-    }
 
     const existingUser = await prisma.user.findUnique({ where: { email: data.email } });
     if (existingUser) {
@@ -488,22 +486,34 @@ router.post(
     const token = uuidv4();
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
-    const invite = await prisma.teamInvite.create({
-      data: {
-        organizationId: orgId,
-        email: data.email,
-        name: data.name,
-        orgRole: data.orgRole as OrgRole,
-        departmentId: data.departmentId ?? null,
-        permissions: data.permissions ?? undefined,
-        token,
-        invitedById: req.user!.userId,
-        expiresAt,
-      },
-      include: {
-        department: { select: { id: true, name: true, color: true } },
-        invitedBy: { select: { id: true, name: true } },
-      },
+    const invite = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM organizations WHERE id = ${orgId} FOR UPDATE`;
+      const seatQuota = await checkQuota(orgId, 'seats', 1);
+      if (!seatQuota.allowed) {
+        throw new AppError(
+          402,
+          seatQuota.reason ||
+            `Seat limit reached (${seatQuota.used}/${seatQuota.limit}). Upgrade your plan or remove members.`,
+          seatQuota.code || 'PLAN_LIMIT_SEATS'
+        );
+      }
+      return tx.teamInvite.create({
+        data: {
+          organizationId: orgId,
+          email: data.email,
+          name: data.name,
+          orgRole: data.orgRole as OrgRole,
+          departmentId: data.departmentId ?? null,
+          permissions: data.permissions ?? undefined,
+          token,
+          invitedById: req.user!.userId,
+          expiresAt,
+        },
+        include: {
+          department: { select: { id: true, name: true, color: true } },
+          invitedBy: { select: { id: true, name: true } },
+        },
+      });
     });
 
     await logTeamAudit({
@@ -650,6 +660,18 @@ router.post(
     }
 
     const result = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`
+        SELECT id FROM organizations WHERE id = ${invite.organizationId} FOR UPDATE
+      `;
+      const seatQuota = await checkQuota(invite.organizationId, 'seats', 1);
+      if (!seatQuota.allowed) {
+        throw new AppError(
+          402,
+          seatQuota.reason ||
+            `Seat limit reached (${seatQuota.used}/${seatQuota.limit}). Upgrade your plan or remove members.`,
+          seatQuota.code || 'PLAN_LIMIT_SEATS'
+        );
+      }
       const user = await tx.user.create({
         data: {
           name: displayName,
@@ -1068,17 +1090,6 @@ router.post(
     const data = createMemberSchema.parse(req.body);
     const orgId = req.user!.organizationId!;
 
-    const org = await prisma.organization.findUnique({
-      where: { id: orgId },
-      select: { plan: true },
-    });
-    const teamSettings = await getTeamSettingsFromOrg(orgId);
-    const seatLimit = getSeatLimit(org?.plan ?? 'starter', teamSettings);
-    const memberCount = await prisma.organizationUser.count({ where: { organizationId: orgId } });
-    if (memberCount >= seatLimit) {
-      throw new AppError(403, `Seat limit reached (${seatLimit})`);
-    }
-
     const existingUser = await prisma.user.findUnique({ where: { email: data.email } });
     if (existingUser) {
       const existingMembership = await prisma.organizationUser.findUnique({
@@ -1090,6 +1101,16 @@ router.post(
     const passwordHash = await bcrypt.hash(data.password, 12);
 
     const member = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM organizations WHERE id = ${orgId} FOR UPDATE`;
+      const seatQuota = await checkQuota(orgId, 'seats', 1);
+      if (!seatQuota.allowed) {
+        throw new AppError(
+          402,
+          seatQuota.reason ||
+            `Seat limit reached (${seatQuota.used}/${seatQuota.limit}). Upgrade your plan or remove members.`,
+          seatQuota.code || 'PLAN_LIMIT_SEATS'
+        );
+      }
       const user =
         existingUser ??
         (await tx.user.create({
