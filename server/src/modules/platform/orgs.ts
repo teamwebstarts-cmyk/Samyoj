@@ -1,4 +1,5 @@
 import type { PlatformActivationStage } from '@prisma/client';
+import { randomUUID } from 'node:crypto';
 import prisma from '../../config/database';
 import {
   getOrgAiSettings,
@@ -65,6 +66,8 @@ function publicAiControls(settings: Awaited<ReturnType<typeof getOrgAiSettings>>
     chatEnabled: settings.chatEnabled !== false,
     callingEnabled: settings.callingEnabled !== false,
     monthlyTokenLimit: settings.monthlyTokenLimit ?? null,
+    customChatCreditsIncluded: settings.customChatCreditsIncluded ?? null,
+    customCallingMinutesIncluded: settings.customCallingMinutesIncluded ?? null,
   };
 }
 
@@ -425,6 +428,8 @@ export async function patchPlatformOrgAi(input: {
   monthlyTokenLimit?: number | null;
   chatEnabled?: boolean;
   callingEnabled?: boolean;
+  customChatCreditsIncluded?: number;
+  customCallingMinutesIncluded?: number;
   grantChatAddon?: number;
   grantCallingAddon?: number;
 }) {
@@ -438,6 +443,12 @@ export async function patchPlatformOrgAi(input: {
       : {}),
     ...(input.chatEnabled !== undefined ? { chatEnabled: input.chatEnabled } : {}),
     ...(input.callingEnabled !== undefined ? { callingEnabled: input.callingEnabled } : {}),
+    ...(input.customChatCreditsIncluded !== undefined
+      ? { customChatCreditsIncluded: input.customChatCreditsIncluded }
+      : {}),
+    ...(input.customCallingMinutesIncluded !== undefined
+      ? { customCallingMinutesIncluded: input.customCallingMinutesIncluded }
+      : {}),
   });
   if (input.grantChatAddon && input.grantChatAddon > 0) {
     await grantAdminAddonBalance({
@@ -506,7 +517,7 @@ export async function patchPlatformOrgBilling(input: {
 }) {
   const org = await prisma.organization.findUnique({
     where: { id: input.organizationId },
-    select: { planExpiresAt: true, subscriptionStatus: true },
+    select: { plan: true, planExpiresAt: true, subscriptionStatus: true },
   });
   if (!org) throw new AppError(404, 'Organization not found');
 
@@ -518,13 +529,72 @@ export async function patchPlatformOrgBilling(input: {
     throw new AppError(400, 'Unsupported subscription status');
   }
 
-  const updated = await prisma.organization.update({
-    where: { id: input.organizationId },
-    data: {
-      ...(input.planExpiresAt !== undefined ? { planExpiresAt: input.planExpiresAt } : {}),
-      ...(nextStatus ? { subscriptionStatus: nextStatus } : {}),
-    },
-    select: { plan: true, planExpiresAt: true, subscriptionStatus: true },
+  const updated = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`
+      SELECT id FROM organizations WHERE id = ${input.organizationId} FOR UPDATE
+    `;
+    const result = await tx.organization.update({
+      where: { id: input.organizationId },
+      data: {
+        ...(input.planExpiresAt !== undefined ? { planExpiresAt: input.planExpiresAt } : {}),
+        ...(nextStatus ? { subscriptionStatus: nextStatus } : {}),
+      },
+      select: { plan: true, planExpiresAt: true, subscriptionStatus: true },
+    });
+
+    if (input.planExpiresAt !== undefined) {
+      const currentPeriod = await tx.planPeriod.findFirst({
+        where: {
+          organizationId: input.organizationId,
+          status: 'ACTIVE',
+          startsAt: { lte: new Date() },
+          endsAt: { gt: new Date() },
+        },
+        orderBy: { startsAt: 'desc' },
+      });
+      if (currentPeriod && input.planExpiresAt && input.planExpiresAt > new Date()) {
+        await tx.planPeriod.update({
+          where: { id: currentPeriod.id },
+          data: { endsAt: input.planExpiresAt },
+        });
+      } else if (!currentPeriod && input.planExpiresAt && input.planExpiresAt > new Date()) {
+        await tx.planPeriod.create({
+          data: {
+            organizationId: input.organizationId,
+            planTier: org.plan,
+            cadence: 'custom',
+            startsAt: new Date(),
+            endsAt: input.planExpiresAt,
+            status: 'ACTIVE',
+            amountPaise: 0,
+            currency: 'INR',
+            taxAmountPaise: 0,
+          },
+        });
+      } else if (currentPeriod) {
+        await tx.planPeriod.update({
+          where: { id: currentPeriod.id },
+          data: { status: 'EXPIRED', supersededAt: new Date() },
+        });
+      }
+    }
+
+    await tx.billingEvent.create({
+      data: {
+        organizationId: input.organizationId,
+        providerEventId: `operator:${randomUUID()}`,
+        eventType: 'operator.grant',
+        status: 'COMPLETED',
+        processedAt: new Date(),
+        redactedMetadata: {
+          operatorId: input.operatorId,
+          reason: input.reason,
+          planExpiresAt: input.planExpiresAt?.toISOString() ?? null,
+          subscriptionStatus: nextStatus ?? null,
+        },
+      },
+    });
+    return result;
   });
 
   await writePlatformAudit({
