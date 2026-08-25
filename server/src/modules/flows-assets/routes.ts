@@ -13,10 +13,31 @@ import {
 import { handleNfmReply } from './nfm-handler';
 import dataEndpointRoutes from './data-endpoint.routes';
 import { verifyWebhookSignatureForPayload } from '../whatsapp/org-meta.service';
+import {
+  requireActiveCommercialOnMutation,
+  requireFeatureOnMutation,
+} from '../../middleware/plan-guard';
+import {
+  resolveActiveWhatsappNumber,
+  scopedFlowAssetWhere,
+  flowAssetsForNumberFilter,
+} from '../whatsapp/active-number';
 
 const router = Router();
-const memberGuard = [authenticate, requireOrg] as const;
-const adminGuard = [authenticate, requireOrg, loadOrgRole, requireOrgRole('OWNER', 'ADMIN')] as const;
+const memberGuard = [
+  authenticate,
+  requireOrg,
+  resolveActiveWhatsappNumber,
+  requireActiveCommercialOnMutation(),
+] as const;
+const adminGuard = [
+  authenticate,
+  requireOrg,
+  requireActiveCommercialOnMutation(),
+  requireFeatureOnMutation('forms'),
+  loadOrgRole,
+  requireOrgRole('OWNER', 'ADMIN'),
+] as const;
 
 router.use('/data', dataEndpointRoutes);
 
@@ -25,14 +46,20 @@ router.get(
   ...memberGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
+    const numberId = req.activeWhatsappNumberId!;
     const { search, status, page = '1', limit = '20' } = req.query;
-    const where: Prisma.FlowAssetWhereInput = { organizationId: orgId };
+    const where: Prisma.FlowAssetWhereInput = {
+      organizationId: orgId,
+      ...flowAssetsForNumberFilter(numberId),
+    };
 
     if (search) where.name = { contains: search as string, mode: 'insensitive' };
     if (status) where.status = status as Prisma.EnumFlowAssetStatusFilter['equals'];
 
-    const pageNum = parseInt(page as string, 10);
-    const limitNum = parseInt(limit as string, 10);
+    const requestedPage = Number.parseInt(page as string, 10);
+    const requestedLimit = Number.parseInt(limit as string, 10);
+    const pageNum = Number.isFinite(requestedPage) ? Math.max(1, requestedPage) : 1;
+    const limitNum = Number.isFinite(requestedLimit) ? Math.min(Math.max(1, requestedLimit), 100) : 20;
 
     const [assets, total] = await Promise.all([
       prisma.flowAsset.findMany({
@@ -53,7 +80,7 @@ router.get(
   ...memberGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const asset = await prisma.flowAsset.findFirst({
-      where: { id: paramId(req), organizationId: req.user!.organizationId! },
+      where: scopedFlowAssetWhere(req.user!.organizationId!, req.activeWhatsappNumberId, paramId(req)),
     });
     if (!asset) throw new AppError(404, 'Flow asset not found');
     sendSuccess(res, asset);
@@ -70,6 +97,7 @@ router.post(
     const asset = await prisma.flowAsset.create({
       data: {
         organizationId: req.user!.organizationId!,
+        whatsappNumberId: req.activeWhatsappNumberId!,
         name: data.name,
         description: data.description,
         flowJson: flowJson as Prisma.InputJsonValue,
@@ -88,7 +116,7 @@ router.patch(
   asyncHandler(async (req: Request, res: Response) => {
     const id = paramId(req);
     const existing = await prisma.flowAsset.findFirst({
-      where: { id, organizationId: req.user!.organizationId! },
+      where: scopedFlowAssetWhere(req.user!.organizationId!, req.activeWhatsappNumberId, id),
     });
     if (!existing) throw new AppError(404, 'Flow asset not found');
 
@@ -106,7 +134,7 @@ router.patch(
         submitLabel: data.submitLabel,
         fields: data.fields,
       };
-      updateData.flowJson = resolveFlowJson(merged) as Prisma.InputJsonValue;
+      updateData.flowJson = resolveFlowJson(merged, existing.flowJson as Record<string, unknown>) as Prisma.InputJsonValue;
       updateData.version = { increment: 1 };
       updateData.status = 'DRAFT';
     }
@@ -121,7 +149,7 @@ router.delete(
   ...adminGuard,
   asyncHandler(async (req: Request, res: Response) => {
     await prisma.flowAsset.deleteMany({
-      where: { id: paramId(req), organizationId: req.user!.organizationId! },
+      where: scopedFlowAssetWhere(req.user!.organizationId!, req.activeWhatsappNumberId, paramId(req)),
     });
     sendSuccess(res, { deleted: true });
   })
@@ -131,9 +159,11 @@ router.post(
   '/:id/publish',
   ...adminGuard,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = paramId(req);
     const orgId = req.user!.organizationId!;
-    const asset = await prisma.flowAsset.findFirst({ where: { id, organizationId: orgId } });
+    const id = paramId(req);
+    const asset = await prisma.flowAsset.findFirst({
+      where: scopedFlowAssetWhere(orgId, req.activeWhatsappNumberId, id),
+    });
     if (!asset) throw new AppError(404, 'Flow asset not found');
 
     const { wabaId, accessToken } = await getOrgWhatsappContext(orgId);
