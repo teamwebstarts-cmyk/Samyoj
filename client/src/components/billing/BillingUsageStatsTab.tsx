@@ -16,6 +16,7 @@ import InfoTip from '../ui/InfoTip';
 import BillingCurrentPlanHero from './BillingCurrentPlanHero';
 import MetaCostExplainerCard from './MetaCostExplainerCard';
 import BillingAiCreditMeter from './BillingAiCreditMeter';
+import EntitlementNotice from './EntitlementNotice';
 import type { AiCreditsResponse, BillingInfo, BillingUsage, ReportsOverviewFullData } from '../../types';
 
 interface BillingUsageStatsTabProps {
@@ -26,6 +27,7 @@ interface BillingUsageStatsTabProps {
   onUpgradeClick: () => void;
   onBuyAddons?: () => void;
   onExportCsv?: () => void;
+  analyticsAvailable?: boolean;
 }
 
 const CATEGORY_STYLES: Record<
@@ -72,35 +74,53 @@ export default function BillingUsageStatsTab({
   onUpgradeClick,
   onBuyAddons,
   onExportCsv,
+  analyticsAvailable = true,
 }: BillingUsageStatsTabProps) {
   const currentPlan =
     info.plans.find((p) => p.id === info.planTier || p.id === info.plan) || info.currentPlan;
   const tier = (info.planTier || info.plan || 'starter').toLowerCase();
 
   const isEnterprise = tier === 'enterprise';
+  const serverQuotas = info.entitlements?.quotas;
 
   // Feature entitlements
-  const isAiEnabled = currentPlan?.aiIncluded && currentPlan.aiIncluded !== 'off';
-  const isCallingEnabled = !!currentPlan?.callingIncluded;
+  const isAiEnabled =
+    serverQuotas?.aiIncluded !== undefined
+      ? serverQuotas.aiIncluded !== 'off'
+      : currentPlan?.aiIncluded && currentPlan.aiIncluded !== 'off';
+  const isCallingEnabled =
+    serverQuotas?.callingIncluded !== undefined
+      ? serverQuotas.callingIncluded
+      : !!currentPlan?.callingIncluded;
 
-  const maxContacts = typeof currentPlan?.contacts === 'number'
+  const maxContacts = serverQuotas?.contacts?.limit ?? (typeof currentPlan?.contacts === 'number'
     ? currentPlan.contacts
     : isEnterprise
       ? 'unlimited'
-      : 5000;
+      : 5000);
 
-  const maxNumbers = typeof currentPlan?.waNumbers === 'number'
+  const maxNumbers = serverQuotas?.waNumbers?.limit ?? (typeof currentPlan?.waNumbers === 'number'
     ? currentPlan.waNumbers
     : isEnterprise
       ? 'unlimited'
-      : 1;
+      : 1);
 
-  const seatLimit = info.seatLimit > 0 ? info.seatLimit : (typeof currentPlan?.seats === 'number' ? currentPlan.seats : 1);
-  const seatsUsed = info.seatsUsed || 0;
+  const seatLimit = typeof serverQuotas?.seats?.limit === 'number'
+    ? serverQuotas.seats.limit
+    : info.seatLimit > 0
+      ? info.seatLimit
+      : (typeof currentPlan?.seats === 'number' ? currentPlan.seats : 1);
+  const seatsUsed = serverQuotas?.seats?.used ?? info.seatsUsed ?? 0;
 
-  const isUnlimitedSeats = isEnterprise || seatLimit >= 999;
-  const isUnlimitedContacts = maxContacts === 'unlimited' || isEnterprise || (typeof maxContacts === 'number' && maxContacts >= 1000000);
-  const isUnlimitedNumbers = maxNumbers === 'unlimited' || isEnterprise;
+  const isUnlimitedSeats =
+    isEnterprise || serverQuotas?.seats?.limit === 'custom' || seatLimit >= 999;
+  const isUnlimitedContacts =
+    maxContacts === 'unlimited' ||
+    maxContacts === 'custom' ||
+    isEnterprise ||
+    (typeof maxContacts === 'number' && maxContacts >= 1000000);
+  const isUnlimitedNumbers =
+    maxNumbers === 'unlimited' || maxNumbers === 'custom' || isEnterprise;
 
   // Actual consumption
   const sentCount = overview?.messagesSent || usage?.totalConversations || 0;
@@ -110,8 +130,8 @@ export default function BillingUsageStatsTab({
   const deliveryRate = overview?.deliveryRate ?? null;
   const readRate = overview?.readRate ?? null;
 
-  const contactsCount = overview?.totalContacts ?? 0;
-  const connectedNumbersCount = usage?.qualityRatings?.length || 1;
+  const contactsCount = serverQuotas?.contacts?.used ?? overview?.totalContacts ?? 0;
+  const connectedNumbersCount = serverQuotas?.waNumbers?.used ?? usage?.qualityRatings?.length ?? 0;
 
   // Real percentage calculations
   const seatPct = isUnlimitedSeats ? 0 : Math.min(100, Math.round((seatsUsed / seatLimit) * 100));
@@ -153,6 +173,9 @@ export default function BillingUsageStatsTab({
         onUnlockGrowth={onUpgradeClick}
         isNearLimit={isNearLimit}
       />
+      {!analyticsAvailable && (
+        <EntitlementNotice message="Advanced analytics are not included on your current plan." upgradePlan="growth" />
+      )}
 
       {/* 2. PLAN QUOTAS & RESOURCE CAPACITY (2-BY-2 WIDE GRID) */}
       <div className="rounded-2xl border border-theme-border bg-theme-surface p-4 sm:p-5">
@@ -248,7 +271,7 @@ export default function BillingUsageStatsTab({
                 <p className="min-w-0 truncate text-lg font-black tabular-nums text-theme-fg sm:text-xl">
                   {contactsCount.toLocaleString()}{' '}
                   <span className="text-xs font-semibold text-theme-muted">
-                    / {isUnlimitedContacts ? 'Unlimited' : maxContacts.toLocaleString()}
+                    / {isUnlimitedContacts ? 'Unlimited' : typeof maxContacts === 'number' ? maxContacts.toLocaleString() : maxContacts}
                   </span>
                 </p>
                 <span className={`shrink-0 rounded-md px-2 py-0.5 text-[10.5px] font-black ${
@@ -329,24 +352,26 @@ export default function BillingUsageStatsTab({
               <span className="flex h-6 w-6 items-center justify-center rounded-md bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300">
                 <Bot className="h-3.5 w-3.5" />
               </span>
-              <h4 className="text-sm font-bold text-theme-fg">AI Credits & Usage</h4>
+              <h4 className="text-sm font-bold text-theme-fg">Credits & usage</h4>
               <InfoTip content="Included credits reset each billing cycle. Add-on packs stack and do not expire." />
             </div>
             <div className="grid grid-cols-1 gap-3.5 md:grid-cols-2">
               <BillingAiCreditMeter
-                title="AI Chat Agent"
+                title="Chat credits"
                 unitLabel="credits"
                 balance={aiCredits?.chat ?? null}
                 icon="chat"
                 isEntitled={!!isAiEnabled}
+                isEnterpriseCustom={isEnterprise}
                 onBuyMore={onBuyAddons ?? onUpgradeClick}
               />
               <BillingAiCreditMeter
-                title="AI Calling"
-                unitLabel="min"
+                title="Calling minutes"
+                unitLabel="minutes"
                 balance={aiCredits?.calling ?? null}
                 icon="calling"
                 isEntitled={isCallingEnabled}
+                isEnterpriseCustom={isEnterprise}
                 onBuyMore={onBuyAddons ?? onUpgradeClick}
               />
             </div>
