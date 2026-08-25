@@ -36,8 +36,30 @@ export async function getDailySendUsage(organizationId: string) {
   };
 }
 
-export async function assertDailySendQuota(_organizationId: string, _recipientCount: number) {
-  // Campaign send volume is not plan-gated yet. Meta bills the connected WABA directly.
+export async function assertDailySendQuota(organizationId: string, recipientCount: number) {
+  const settings = await getCampaignSettings(organizationId);
+  const limit = settings.dailySendLimit ?? DEFAULT_CAMPAIGN_SETTINGS.dailySendLimit!;
+  const day = utcDayStart();
+  const [sentToday, reserved] = await Promise.all([
+    prisma.campaignRecipient.count({
+      where: {
+        campaign: { organizationId },
+        status: { in: ['SENT', 'DELIVERED', 'READ'] },
+        sentAt: { gte: day },
+      },
+    }),
+    prisma.campaignQuotaLedger.findUnique({
+      where: { organizationId_periodStart: { organizationId, periodStart: day } },
+      select: { reservedSendCount: true },
+    }),
+  ]);
+  if (sentToday + (reserved?.reservedSendCount ?? 0) + recipientCount > limit) {
+    throw new AppError(
+      429,
+      `Daily campaign recipient limit reached (${limit}). Try again tomorrow.`,
+      'CAMPAIGN_DAILY_LIMIT'
+    );
+  }
 }
 
 export async function assertDailyBudget(
@@ -61,8 +83,18 @@ export async function assertDailyBudget(
   const spentEstimate = estimateCampaignCost(sentToday, category).estimatedCostInr;
   const sendEstimate = estimateCampaignCost(recipientCount, category).estimatedCostInr;
 
-  // Daily Meta budget caps are not enforced until plan-based campaign limits ship.
-  void budget;
+  const ledger = await prisma.campaignQuotaLedger.findUnique({
+    where: { organizationId_periodStart: { organizationId, periodStart: startOfDay } },
+    select: { reservedBudgetCents: true },
+  });
+  const reservedEstimateInr = (ledger?.reservedBudgetCents ?? 0) / 100;
+  if (spentEstimate + reservedEstimateInr + sendEstimate > budget) {
+    throw new AppError(
+      429,
+      'The daily campaign budget is reserved. Try again tomorrow.',
+      'CAMPAIGN_DAILY_BUDGET'
+    );
+  }
 
   return {
     budgetInr: budget,
@@ -107,6 +139,33 @@ export async function reserveCampaignQuota(
         });
       }
       return existing;
+    }
+
+    const settings = await getCampaignSettings(organizationId);
+    const dailySendLimit = settings.dailySendLimit ?? DEFAULT_CAMPAIGN_SETTINGS.dailySendLimit!;
+    const dailyBudgetInr = settings.dailyBudgetInr ?? DEFAULT_CAMPAIGN_SETTINGS.dailyBudgetInr!;
+    const sentToday = await tx.campaignRecipient.count({
+      where: {
+        campaign: { organizationId },
+        status: { in: ['SENT', 'DELIVERED', 'READ'] },
+        sentAt: { gte: day },
+      },
+    });
+    if (sentToday + lockedLedger.reservedSendCount + recipientCount > dailySendLimit) {
+      throw new AppError(
+        429,
+        `Daily campaign recipient limit reached (${dailySendLimit}). Try again tomorrow.`,
+        'CAMPAIGN_DAILY_LIMIT'
+      );
+    }
+    const spentEstimateInr = estimateCampaignCost(sentToday, category).estimatedCostInr;
+    const reservedBudgetInr = lockedLedger.reservedBudgetCents / 100;
+    if (spentEstimateInr + reservedBudgetInr + budgetCents / 100 > dailyBudgetInr) {
+      throw new AppError(
+        429,
+        'The daily campaign budget is reserved. Try again tomorrow.',
+        'CAMPAIGN_DAILY_BUDGET'
+      );
     }
 
     const updated = await tx.campaignQuotaLedger.updateMany({
