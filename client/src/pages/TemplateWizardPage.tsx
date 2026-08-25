@@ -50,6 +50,8 @@ import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useTopbarExtras } from '../contexts/TopbarContext';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
+import { useEntitlements } from '../hooks/useEntitlements';
+import EntitlementNotice from '../components/billing/EntitlementNotice';
 
 type LocationState = {
   form?: TemplateFormState;
@@ -61,6 +63,7 @@ type LocationState = {
 export default function TemplateWizardPage() {
   const { activeNumber, resolved, hasConnectedNumber, loading: numbersLoading } = useWhatsAppNumber();
   const { organization } = useAuth();
+  const { entitlements, loading: entitlementsLoading } = useEntitlements();
   const navigate = useNavigate();
   const location = useLocation();
   const { name: resubmitNameParam } = useParams();
@@ -97,6 +100,12 @@ export default function TemplateWizardPage() {
   const errorRef = useRef<HTMLDivElement>(null);
   const activeNumberIdRef = useRef<string | null>(null);
   activeNumberIdRef.current = activeNumber?.id ?? null;
+  const canManageTemplates =
+    entitlementsLoading || !entitlements || entitlements.canUseFeature('templates');
+  const templateGateMessage =
+    !entitlementsLoading && entitlements && !entitlements.canUseFeature('templates')
+      ? 'Template submission is not included on your current plan.'
+      : null;
 
   useEffect(() => {
     if (!resolved || !activeNumber) return;
@@ -322,6 +331,10 @@ export default function TemplateWizardPage() {
   };
 
   const handleContinue = async () => {
+    if (!canManageTemplates) {
+      toastError(templateGateMessage || 'Template submission is not included on your current plan.');
+      return;
+    }
     if (resubmitBlocked) {
       toastError(resubmitBlocked);
       return;
@@ -461,6 +474,9 @@ export default function TemplateWizardPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="template-wizard-scroll min-h-0 flex-1">
+        {templateGateMessage && (
+          <EntitlementNotice className="mb-4" message={templateGateMessage} upgradePlan="starter" />
+        )}
         {resubmitBlocked && (
           <AppAlert variant="error" className="mb-4">
             <p className="font-semibold">Cannot resubmit this template</p>
@@ -603,6 +619,7 @@ export default function TemplateWizardPage() {
                 }
                 className="!bg-violet-600 hover:!bg-violet-700"
                 onClick={() => void handleContinue()}
+                disabled={!canManageTemplates}
               >
                 {activeStep === 0
                   ? 'Continue to review'
