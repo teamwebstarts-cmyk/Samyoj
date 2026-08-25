@@ -40,6 +40,8 @@ const AUDIT_STATE_KEYS = new Set([
   'monthlyTokenLimit',
   'chatEnabled',
   'callingEnabled',
+  'customChatCreditsIncluded',
+  'customCallingMinutesIncluded',
   'flag',
   'enabled',
   'planExpiresAt',
