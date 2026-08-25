@@ -131,6 +131,7 @@ interface ChatComposerProps {
   onAttach?: (file: File) => void;
   attachment?: PendingAttachment | null;
   onRemoveAttachment?: () => void;
+  canSendMessages?: boolean;
   /** Kept for template/interactive parents; reply composer no longer locks on this. */
   sending: boolean;
   cannedReplies?: CannedReply[];
@@ -178,6 +179,7 @@ export default function ChatComposer({
   onAttach,
   attachment,
   onRemoveAttachment,
+  canSendMessages = true,
   sending: _sending,
   cannedReplies = [],
   onInteractive,
@@ -221,7 +223,7 @@ export default function ChatComposer({
     typeof window !== 'undefined' &&
     typeof MediaRecorder !== 'undefined' &&
     !!navigator.mediaDevices?.getUserMedia;
-  const canSend = Boolean(value.trim() || attachment);
+  const canSend = canSendMessages && Boolean(value.trim() || attachment);
   const isVoiceAttachment =
     attachment?.type === 'AUDIO' &&
     (attachment.file.name.startsWith('voice-note-') || attachment.file.type.startsWith('audio/'));
@@ -777,6 +779,7 @@ export default function ChatComposer({
           className={`${toolBtn} md:hidden`}
           aria-label="Attach"
           aria-expanded={attachMenuOpen}
+          disabled={!canSendMessages}
           {...tipFor('Attach')}
           onClick={(e) => {
             e.stopPropagation();
@@ -793,6 +796,7 @@ export default function ChatComposer({
             ref={textareaRef}
             rows={1}
             value={value}
+            disabled={!canSendMessages}
             onChange={(e) => onChange(e.target.value)}
             onKeyDown={onKeyDown}
             placeholder={attachment ? 'Add a caption (optional)...' : 'Type a message...'}
@@ -807,6 +811,7 @@ export default function ChatComposer({
                 className={toolBtn}
                 aria-label="Emoji"
                 aria-expanded={emojiOpen}
+                disabled={!canSendMessages}
                 {...tipFor('Emoji')}
                 onClick={() => {
                   setEmojiOpen((v) => !v);
@@ -823,6 +828,7 @@ export default function ChatComposer({
                   className={toolBtn}
                   aria-label="Attach"
                   aria-expanded={attachMenuOpen}
+                  disabled={!canSendMessages}
                   {...tipFor('Attach')}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -840,7 +846,7 @@ export default function ChatComposer({
                 className={toolBtn}
                 aria-label="Quick replies"
                 aria-expanded={slashMenuOpen}
-                disabled={cannedReplies.length === 0 || recording}
+                disabled={!canSendMessages || cannedReplies.length === 0 || recording}
                 {...tipFor('Quick replies · also in Details')}
                 onClick={toggleSlashMenu}
               >
@@ -851,6 +857,7 @@ export default function ChatComposer({
                   type="button"
                   className={`${toolBtn} ${recording ? 'text-red-600' : ''}`}
                   aria-label={recording ? 'Stop recording' : 'Voice note'}
+                  disabled={!canSendMessages}
                   {...tipFor(recording ? 'Stop' : 'Voice note')}
                   onClick={() => (recording ? stopRecording(false) : void startRecording())}
                 >
@@ -865,7 +872,7 @@ export default function ChatComposer({
                 className={`${toolBtn} text-[13px] font-semibold text-neutral-400 hover:text-neutral-700 dark:text-neutral-500 dark:hover:text-neutral-200`}
                 aria-label="Quick replies"
                 aria-expanded={slashMenuOpen}
-                disabled={recording || cannedReplies.length === 0}
+                disabled={!canSendMessages || recording || cannedReplies.length === 0}
                 {...tipFor('Type / for quick replies')}
                 onClick={toggleSlashMenu}
               >
