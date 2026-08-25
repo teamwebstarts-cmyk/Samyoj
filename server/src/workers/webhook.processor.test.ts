@@ -6,10 +6,12 @@ import { processWebhookPayload } from './webhook.processor';
 vi.mock('../config/database', () => ({
   default: {
     whatsappNumber: { findFirst: vi.fn() },
+    organization: { findUnique: vi.fn() },
     message: { create: vi.fn(), findFirst: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
-    contact: { upsert: vi.fn() },
+    contact: { findUnique: vi.fn(), upsert: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
     conversation: {
       findUnique: vi.fn(),
+      findMany: vi.fn(),
       upsert: vi.fn(),
       update: vi.fn(),
       updateMany: vi.fn(),
@@ -29,6 +31,9 @@ vi.mock('../modules/media/download.service', () => ({ downloadAndStoreMessageMed
 vi.mock('../modules/inbox/message-parser', () => ({
   parseInboundMessage: vi.fn(() => ({ content: 'hello' })),
 }));
+vi.mock('../modules/billing/entitlements.service', () => ({
+  checkQuota: vi.fn().mockResolvedValue({ allowed: true, used: 0, limit: 100 }),
+}));
 vi.mock('../errors', () => ({ logError: vi.fn() }));
 
 const whatsappNumberMock = vi.mocked(prisma.whatsappNumber);
@@ -44,6 +49,10 @@ beforeEach(() => {
     accessToken: 'enc',
     isActive: true,
   } as never);
+  contactMock.findUnique.mockResolvedValue(null as never);
+  contactMock.update.mockResolvedValue({ id: 'contact-1' } as never);
+  contactMock.updateMany.mockResolvedValue({ count: 1 } as never);
+  vi.mocked(prisma.organization.findUnique).mockResolvedValue({ settings: {} } as never);
 });
 
 describe('processWebhookPayload inbound durability', () => {
@@ -53,13 +62,24 @@ describe('processWebhookPayload inbound durability', () => {
     conversationMock.findUnique
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({ lastMessageAt: null, firstResponseAt: null, slaDueAt: null } as never);
+    conversationMock.findMany.mockResolvedValue([] as never);
     conversationMock.upsert.mockResolvedValue({ id: 'conv-1' } as never);
-    vi.mocked(prisma.$transaction as unknown as { mockRejectedValue: (value: unknown) => void }).mockRejectedValue(
-      new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
-        code: 'P2002',
-        clientVersion: '6.0.0',
-      })
-    );
+    const duplicateError = new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+      code: 'P2002',
+      clientVersion: '6.0.0',
+    });
+    vi.mocked(prisma.$transaction)
+      .mockImplementationOnce(async (callback) =>
+        callback({
+          $queryRaw: vi.fn(),
+          contact: {
+            findUnique: vi.fn().mockResolvedValue(null),
+            upsert: contactMock.upsert,
+            update: contactMock.update,
+          },
+        } as never)
+      )
+      .mockRejectedValueOnce(duplicateError);
     vi.mocked(prisma.message.findFirst).mockResolvedValue({ conversationId: 'conv-1' } as never);
     conversationMock.updateMany.mockResolvedValue({ count: 1 } as never);
 
