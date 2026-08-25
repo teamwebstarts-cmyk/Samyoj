@@ -39,6 +39,7 @@ import ResponsiveDataView from '../components/ui/ResponsiveDataView';
 import Pagination from '../components/ui/Pagination';
 import SegmentedControl from '../components/ui/SegmentedControl';
 import SlideOver, { SlideOverFooter } from '../components/ui/SlideOver';
+import EntitlementNotice, { quotaUpgradeMessage } from '../components/billing/EntitlementNotice';
 import { DEFAULT_PAGE_SIZE } from '../constants/pagination';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
@@ -52,6 +53,7 @@ import { readNumberCache, writeNumberCache } from '../utils/whatsappNumberCache'
 import { messagingConsent } from '../utils/plainLanguage';
 import { contactGetsCampaignMessages } from '../utils/contactConsent';
 import type { Contact, ContactSummary, ContactTag } from '../types';
+import { useEntitlements } from '../hooks/useEntitlements';
 
 const emptyForm = emptyContactForm;
 
@@ -68,6 +70,7 @@ type ContactsNumberCache = {
 export default function ContactsPage() {
   const phoneId = useId();
   const { activeNumber, resolved } = useWhatsAppNumber();
+  const { entitlements, loading: entitlementsLoading } = useEntitlements();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const viewTab = searchParams.get('tab') === 'pipeline' ? 'pipeline' : 'all';
@@ -131,6 +134,21 @@ export default function ContactsPage() {
     search,
   };
   const tagNames = useMemo(() => availableTags.map((t) => t.name), [availableTags]);
+  const canUseContacts =
+    entitlementsLoading || !entitlements ? true : entitlements.canUseFeature('contacts');
+  const canAddContact =
+    canUseContacts &&
+    (entitlementsLoading || !entitlements || entitlements.canAddToQuota('contacts'));
+  const canImportContacts =
+    canUseContacts &&
+    (entitlementsLoading || !entitlements || entitlements.canUseFeature('contactImport'));
+  const contactGateMessage = !canUseContacts
+    ? 'Contacts are unavailable while your plan is locked.'
+    : !canImportContacts
+      ? 'Contact imports are not included on your current plan.'
+      : entitlements && !entitlements.canAddToQuota('contacts')
+        ? quotaUpgradeMessage('contacts')
+        : null;
 
   const refreshTags = useCallback(() => {
     if (!resolved || !activeNumber) return;
@@ -260,6 +278,7 @@ export default function ContactsPage() {
   useEffect(load, [load]);
 
   const openCreate = () => {
+    if (!canAddContact) return;
     setEditing(null);
     setForm(emptyForm);
     setPhoneError(null);
@@ -300,6 +319,10 @@ export default function ContactsPage() {
 
     let phone: string | undefined;
     if (!editing) {
+      if (!canAddContact) {
+        toastError(contactGateMessage || quotaUpgradeMessage('contacts'));
+        return;
+      }
       const phoneResult = validateIndiaLocalPhone(form.phone);
       if (!phoneResult.ok) {
         setPhoneError(phoneResult.error);
@@ -380,6 +403,13 @@ export default function ContactsPage() {
   };
 
   const handleImportContacts = async (rows: ContactImportRow[]) => {
+    if (
+      !canImportContacts ||
+      (entitlements && !entitlements.canAddToQuota('contacts', rows.length))
+    ) {
+      toastError(contactGateMessage || quotaUpgradeMessage('contacts'));
+      return;
+    }
     await contactApi.import(rows);
     load();
     refreshTags();
@@ -578,15 +608,24 @@ export default function ContactsPage() {
                     size="sm"
                     icon={<Upload size={15} />}
                     onClick={() => setImportOpen(true)}
+                    disabled={!canImportContacts || !canAddContact}
                   >
                     Import
                   </AppButton>
-                  <AppButton size="sm" icon={<Plus size={15} />} onClick={openCreate}>
+                  <AppButton size="sm" icon={<Plus size={15} />} onClick={openCreate} disabled={!canAddContact}>
                     Add contact
                   </AppButton>
                 </div>
               }
             />
+
+            {contactGateMessage && (
+              <EntitlementNotice
+                className="m-4"
+                message={contactGateMessage}
+                upgradePlan={entitlements?.isLocked ? 'growth' : entitlements?.getUpgradePlan('contacts')}
+              />
+            )}
 
             {loading && contacts.length === 0 ? (
               <ListLayoutSkeleton
@@ -701,6 +740,7 @@ export default function ContactsPage() {
                             size="sm"
                             icon={<Plus className="h-3.5 w-3.5" />}
                             onClick={openCreate}
+                            disabled={!canImportContacts || !canAddContact}
                           >
                             Add contact
                           </AppButton>
@@ -710,6 +750,7 @@ export default function ContactsPage() {
                             size="sm"
                             icon={<Upload className="h-3.5 w-3.5" />}
                             onClick={() => setImportOpen(true)}
+                            disabled={!canAddContact}
                           >
                             Import CSV
                           </AppButton>
