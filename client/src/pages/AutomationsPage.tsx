@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import AutomationCard from '../components/automations/AutomationCard';
 import AutomationConflictsBanner from '../components/automations/AutomationConflictsBanner';
+import AutomationAnalyticsPanel from '../components/automations/AutomationAnalyticsPanel';
 import AutomationTipCard, { AiBotLink } from '../components/automations/AutomationTipCard';
 import FlowsTab, { type FlowSummary } from '../components/flows/FlowsTab';
 import { getErrorMessage } from '../utils/errors';
@@ -48,7 +49,9 @@ import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { automationApi } from '../services/api';
 import { WhatsAppMessagePreview } from '../components/inbox/WhatsAppPreview';
 import InteractiveMessageCard from '../components/inbox/InteractiveMessageCard';
-import type { Automation, AutomationConflict } from '../types';
+import type { Automation, AutomationAnalytics, AutomationConflict } from '../types';
+import { useEntitlements } from '../hooks/useEntitlements';
+import EntitlementNotice from '../components/billing/EntitlementNotice';
 
 const triggerMeta: Record<
   string,
@@ -190,6 +193,7 @@ const heroCopy: Record<AutomationTab, { title: string; description: string }> = 
 
 export default function AutomationsPage() {
   const { activeNumber, resolved } = useWhatsAppNumber();
+  const { entitlements, loading: entitlementsLoading } = useEntitlements();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = (searchParams.get('tab') as AutomationTab) || 'flows';
@@ -209,8 +213,23 @@ export default function AutomationsPage() {
   const [flowSummary, setFlowSummary] = useState<FlowSummary>({ total: 0, active: 0, paused: 0 });
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [conflicts, setConflicts] = useState<AutomationConflict[]>([]);
+  const [analytics, setAnalytics] = useState<AutomationAnalytics | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const activeNumberIdRef = useRef<string | null>(null);
   activeNumberIdRef.current = activeNumber?.id ?? null;
+  const canUseAutomations =
+    entitlementsLoading || !entitlements || entitlements.canUseFeature('automations');
+  const canPublishFlows =
+    entitlementsLoading ||
+    !entitlements ||
+    (entitlements.canUseFeature('flowPublish') &&
+      entitlements.canAddToQuota('publishedWorkflows'));
+  const automationGateMessage =
+    !entitlementsLoading && entitlements && !entitlements.canUseFeature('automations')
+      ? 'Automation tools are unavailable while your plan is locked.'
+      : entitlements && !entitlements.canAddToQuota('publishedWorkflows')
+        ? 'Your published workflow limit has been reached.'
+        : null;
 
   const debouncedSearch = useDebouncedValue(search);
   const hasFilters = Boolean(search || triggerFilter || statusFilter);
@@ -270,7 +289,25 @@ export default function AutomationsPage() {
       .catch(() => {});
   }, [activeNumber, activeTab, flowSummary.active, flowSummary.paused, resolved, summary.active, summary.paused]);
 
+  useEffect(() => {
+    if (!resolved || !activeNumber) return;
+    const requestNumberId = activeNumber.id;
+    setAnalyticsLoading(true);
+    automationApi
+      .analytics(30)
+      .then(({ data }) => {
+        if (requestNumberId === activeNumberIdRef.current) setAnalytics(data.data);
+      })
+      .catch(() => {
+        if (requestNumberId === activeNumberIdRef.current) setAnalytics(null);
+      })
+      .finally(() => {
+        if (requestNumberId === activeNumberIdRef.current) setAnalyticsLoading(false);
+      });
+  }, [activeNumber, flowSummary.active, resolved, summary.active, summary.total]);
+
   const openCreate = (triggerType = 'KEYWORD') => {
+    if (!canUseAutomations) return;
     setEditing(null);
     const defaults = triggerDefaults[triggerType] || {};
     setForm({ ...emptyForm, triggerType, ...defaults });
@@ -302,6 +339,10 @@ export default function AutomationsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canUseAutomations) {
+      toastError(automationGateMessage || 'Automation tools are unavailable on your plan.');
+      return;
+    }
 
     const validationErrors: string[] = [];
     if (!form.name.trim()) validationErrors.push('Automation name is required');
@@ -379,6 +420,7 @@ export default function AutomationsPage() {
   };
 
   const toggleEnabled = async (automation: Automation) => {
+    if (!canUseAutomations) return;
     try {
       await automationApi.update(automation.id, { enabled: !automation.enabled });
       toastSuccess(automation.enabled ? 'Automation paused' : 'Automation activated');
@@ -464,7 +506,18 @@ export default function AutomationsPage() {
           ariaLabel="Automation sections"
         />
 
+        {automationGateMessage && (
+          <EntitlementNotice
+            message={automationGateMessage}
+            upgradePlan={entitlements?.isLocked ? 'growth' : entitlements?.getUpgradePlan('automations')}
+          />
+        )}
+
         <AutomationConflictsBanner conflicts={conflicts} />
+
+        <SectionCard title="Automation activity" subtitle="Last 30 days for this WhatsApp number">
+          <AutomationAnalyticsPanel analytics={analytics} loading={analyticsLoading} />
+        </SectionCard>
 
         {activeTab === 'flows' && (
           <AutomationTipCard icon={GitBranch} title="Conversation flows">
@@ -493,6 +546,8 @@ export default function AutomationsPage() {
             onTemplatesOpenChange={setTemplatesOpen}
             onSummaryChange={setFlowSummary}
             onNewFlow={() => navigate('/automations/flows/new')}
+            canCreate={canUseAutomations}
+            canPublish={canPublishFlows}
           />
         ) : (
           <div className="inbox-shell overflow-hidden">
@@ -526,7 +581,11 @@ export default function AutomationsPage() {
                 </>
               }
               actions={
-                <AppButton icon={<Plus size={16} />} onClick={() => openCreate()}>
+                <AppButton
+                  icon={<Plus size={16} />}
+                  onClick={() => openCreate()}
+                  disabled={!canUseAutomations}
+                >
                   New auto-reply
                 </AppButton>
               }
@@ -640,6 +699,7 @@ export default function AutomationsPage() {
                             size="sm"
                             icon={<Plus className="h-3.5 w-3.5" />}
                             onClick={() => openCreate()}
+                            disabled={!canUseAutomations}
                           >
                             Create auto-reply
                           </AppButton>
@@ -660,7 +720,8 @@ export default function AutomationsPage() {
                             key={type}
                             type="button"
                             onClick={() => openCreate(type)}
-                            className="dashboard-card group flex h-full items-start gap-3 p-4 text-left transition hover:border-violet-500/25 hover:shadow-md active:scale-[0.99]"
+                            disabled={!canUseAutomations}
+                            className="dashboard-card group flex h-full items-start gap-3 p-4 text-left transition hover:border-violet-500/25 hover:shadow-md active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             <div
                               className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition group-hover:scale-105 ${meta.iconBg}`}
@@ -695,6 +756,7 @@ export default function AutomationsPage() {
                       onEdit={() => openEdit(automation)}
                       onToggle={() => toggleEnabled(automation)}
                       onDelete={() => handleDeleteItem(automation.id)}
+                      canManage={canUseAutomations}
                     />
                   );
                 }}
@@ -722,6 +784,7 @@ export default function AutomationsPage() {
                             <button
                               type="button"
                               onClick={() => openEdit(automation)}
+                              disabled={!canUseAutomations}
                               className="flex w-full items-center gap-3 text-left"
                             >
                               <div
@@ -771,6 +834,7 @@ export default function AutomationsPage() {
                             <div className="flex items-center justify-end gap-1.5">
                               <TableTextButton
                                 onClick={() => toggleEnabled(automation)}
+                                disabled={!canUseAutomations}
                                 icon={automation.enabled ? PauseCircle : PlayCircle}
                                 variant={automation.enabled ? 'primary' : 'neutral'}
                               >
@@ -779,6 +843,7 @@ export default function AutomationsPage() {
                               <RowActions
                                 onEdit={() => openEdit(automation)}
                                 onDelete={() => handleDeleteItem(automation.id)}
+                                disabled={!canUseAutomations}
                               />
                             </div>
                           </td>
