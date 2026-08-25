@@ -42,6 +42,8 @@ import { FOCUS_RING_CLASS } from '../hooks/inboxA11y';
 import { readNumberCache, writeNumberCache } from '../utils/whatsappNumberCache';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { InboxGlassTipProvider } from '../components/inbox/ComposerGlassTip';
+import EntitlementNotice from '../components/billing/EntitlementNotice';
+import { useEntitlements } from '../hooks/useEntitlements';
 
 interface CallRecord {
   id: string;
@@ -103,6 +105,7 @@ function parseCall(raw: CallRecord): CallRecord {
 export default function CallsPage() {
   const { user, canManageTeam } = useAuth();
   const { activeNumber, resolved } = useWhatsAppNumber();
+  const { entitlements, loading: entitlementsLoading } = useEntitlements();
   const {
     callBots,
     answeringCallBotId,
@@ -142,6 +145,12 @@ export default function CallsPage() {
     open: false,
   });
   const [detailsPanelOpen, setDetailsPanelOpen] = useState(false);
+  const canUseCalling =
+    entitlementsLoading || !entitlements || entitlements.canUseFeature('calling');
+  const callingGateMessage =
+    !entitlementsLoading && entitlements && !entitlements.canUseFeature('calling')
+      ? 'Calling is not included on your current plan.'
+      : null;
   const [detailsFocusSection, setDetailsFocusSection] = useState<CallDetailsSection | undefined>();
   const loadRef = useRef<() => Promise<void>>(async () => {});
   const callsSnapshotRef = useRef<CallsNumberCache>({
@@ -601,7 +610,7 @@ export default function CallsPage() {
   }
 
   async function handleCallBack() {
-    if (!selectedCall) return;
+    if (!selectedCall || !canUseCalling) return;
     const contactId = selectedCall.contact?.id;
     const phone = selectedCall.contact?.phone || selectedCall.fromPhone;
     const conversationId = selectedCall.conversation?.id;
@@ -650,6 +659,7 @@ export default function CallsPage() {
   }
 
   async function handleCallListItemCallBack(call: CallRecord) {
+    if (!canUseCalling) return;
     const contactId = call.contact?.id;
     const phone = call.contact?.phone || call.fromPhone;
     const conversationId = call.conversation?.id;
@@ -698,6 +708,7 @@ export default function CallsPage() {
   }
 
   async function handleOrgCallingAiChange(enabled: boolean) {
+    if (!canUseCalling) return;
     if (orgCallingAiSavingRef.current) return;
     const saveGen = ++orgCallingAiSaveGenRef.current;
     const previous = orgCallingAiEnabled;
@@ -726,6 +737,7 @@ export default function CallsPage() {
   }
 
   async function handleCallingAiChange(enabled: boolean) {
+    if (!canUseCalling) return;
     const contactId = selectedCall?.contact?.id;
     if (!contactId || !selectedCall || callingAiSaving) return;
     if (orgCallingAiEnabled) {
@@ -785,12 +797,17 @@ export default function CallsPage() {
     <InboxGlassTipProvider>
     <PageShell inbox>
       <div className="flex h-full min-h-0 flex-1 flex-col gap-2 overflow-hidden sm:gap-[var(--density-stack-gap)]">
+        {callingGateMessage && (
+          <div className="shrink-0 max-md:px-3 max-md:pt-3">
+            <EntitlementNotice message={callingGateMessage} upgradePlan="pro" />
+          </div>
+        )}
         {orgCallingAiEnabled !== null ? (
           <div className="shrink-0 max-md:px-3 max-md:pt-3">
             <CallingAiToggleBanner
               enabled={orgCallingAiEnabled}
               saving={orgCallingAiSaving}
-              canToggle={canManageTeam}
+              canToggle={canManageTeam && canUseCalling}
               onChange={(next) => void handleOrgCallingAiChange(next)}
               answeringCallBotId={answeringCallBotId}
               callBots={callBots}
@@ -857,7 +874,7 @@ export default function CallsPage() {
                           }
                           onContextMenu={(e) => openCallContextMenu(e, call)}
                           onCallBack={
-                            !selectionMode && !isActiveCallStatus(call.status)
+                            canUseCalling && !selectionMode && !isActiveCallStatus(call.status)
                               ? () => void handleCallListItemCallBack(call)
                               : undefined
                           }
@@ -922,7 +939,11 @@ export default function CallsPage() {
                 }}
                 onOpenDetails={() => toggleDetails('notes')}
                 onEndCall={isActiveCallStatus(selectedCall.status) ? () => void handleTerminate() : undefined}
-                onCallBack={!isActiveCallStatus(selectedCall.status) ? () => void handleCallBack() : undefined}
+                onCallBack={
+                  canUseCalling && !isActiveCallStatus(selectedCall.status)
+                    ? () => void handleCallBack()
+                    : undefined
+                }
                 callingBack={callingBack}
                 ending={ending}
                 direction={selectedCall.direction}
