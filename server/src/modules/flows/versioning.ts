@@ -1,13 +1,16 @@
 import prisma from '../../config/database';
 import { Prisma } from '@prisma/client';
 import type { FlowNode } from './types';
+import { AppError } from '../../utils/response';
+import { validateFlowGraph } from './validation';
 
 export async function saveFlowVersion(
   flowId: string,
   nodes: FlowNode[],
   triggerType: string,
   triggerConfig: Record<string, unknown>,
-  note?: string
+  note?: string,
+  startNodeId?: string | null
 ) {
   const flow = await prisma.flow.findUnique({ where: { id: flowId } });
   if (!flow) return null;
@@ -22,6 +25,7 @@ export async function saveFlowVersion(
         nodes: nodes as unknown as Prisma.InputJsonValue,
         triggerType: triggerType as never,
         triggerConfig: triggerConfig as Prisma.InputJsonValue,
+        startNodeId,
         note,
       },
     }),
@@ -44,9 +48,13 @@ export async function saveFlowDraft(
   organizationId: string,
   draft: {
     nodes: FlowNode[];
+    name?: string;
+    description?: string | null;
     triggerType?: string;
     triggerConfig?: Record<string, unknown>;
     startNodeId?: string;
+    enabled?: boolean;
+    priority?: number;
   }
 ) {
   return prisma.flow.updateMany({
@@ -54,9 +62,13 @@ export async function saveFlowDraft(
     data: {
       status: 'DRAFT',
       draftNodes: draft.nodes as unknown as Prisma.InputJsonValue,
+      ...(draft.name !== undefined ? { name: draft.name } : {}),
+      ...(draft.description !== undefined ? { description: draft.description } : {}),
       ...(draft.triggerType ? { triggerType: draft.triggerType as never } : {}),
       ...(draft.triggerConfig ? { triggerConfig: draft.triggerConfig as Prisma.InputJsonValue } : {}),
       ...(draft.startNodeId !== undefined ? { startNodeId: draft.startNodeId } : {}),
+      ...(draft.enabled !== undefined ? { enabled: draft.enabled } : {}),
+      ...(draft.priority !== undefined ? { priority: draft.priority } : {}),
     },
   });
 }
@@ -66,7 +78,14 @@ export async function publishFlowDraft(flowId: string, organizationId: string, n
   if (!flow || !flow.draftNodes) return null;
 
   const nodes = flow.draftNodes as unknown as FlowNode[];
-  return saveFlowVersion(flowId, nodes, flow.triggerType, flow.triggerConfig as Record<string, unknown>, note);
+  return saveFlowVersion(
+    flowId,
+    nodes,
+    flow.triggerType,
+    flow.triggerConfig as Record<string, unknown>,
+    note,
+    flow.startNodeId
+  );
 }
 
 export async function getFlowVersions(flowId: string, organizationId: string) {
@@ -85,16 +104,28 @@ export async function restoreFlowVersion(flowId: string, organizationId: string,
   const ver = await prisma.flowVersion.findUnique({ where: { flowId_version: { flowId, version } } });
   if (!flow || !ver) return null;
 
+  const nodes = Array.isArray(ver.nodes) ? (ver.nodes as unknown as FlowNode[]) : [];
+  const startNodeId = ver.startNodeId || nodes[0]?.id;
+  const validation = validateFlowGraph(
+    nodes,
+    ver.triggerType,
+    ver.triggerConfig as Record<string, unknown>,
+    startNodeId
+  );
+  if (!validation.valid) {
+    throw new AppError(400, `Cannot restore invalid flow version: ${validation.errors.join('; ')}`);
+  }
+
   await prisma.flow.update({
     where: { id: flowId },
     data: {
-      nodes: ver.nodes as Prisma.InputJsonValue,
+      draftNodes: nodes as unknown as Prisma.InputJsonValue,
       triggerType: ver.triggerType,
       triggerConfig: ver.triggerConfig as Prisma.InputJsonValue,
-      draftNodes: Prisma.JsonNull,
-      status: 'PUBLISHED',
+      startNodeId,
+      status: 'DRAFT',
     },
   });
 
-  return ver;
+  return { ...ver, startNodeId };
 }
