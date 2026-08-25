@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AlertCircle,
   CheckCircle2,
@@ -11,7 +11,11 @@ import { Link } from 'react-router-dom';
 import AppButton from '../ui/AppButton';
 import { toastError, toastSuccess } from '../../utils/toast';
 import { billingApi, whatsappApi } from '../../services/api';
-import { handleWaOAuthPopupClosed, startWhatsAppOAuth } from '../../utils/whatsappOAuth';
+import {
+  getWhatsAppOAuthRedirectUri,
+  handleWaOAuthPopupClosed,
+  startWhatsAppOAuth,
+} from '../../utils/whatsappOAuth';
 import { useWaOAuthPopupListener } from '../../hooks/useWaOAuthPopupListener';
 import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
 import { formatPhoneDisplay } from '../../utils/formatPhone';
@@ -95,6 +99,14 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
   const [connecting, setConnecting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [enablingIncoming, setEnablingIncoming] = useState(false);
+  const popupPollRef = useRef<number | null>(null);
+
+  const clearPopupPoll = useCallback(() => {
+    if (popupPollRef.current !== null) {
+      window.clearInterval(popupPollRef.current);
+      popupPollRef.current = null;
+    }
+  }, []);
 
   const emitStatus = useCallback(
     (
@@ -113,7 +125,7 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
 
   const loadConnectUrl = async () => {
     try {
-      const redirectUri = `${window.location.origin}/settings/whatsapp/callback`;
+      const redirectUri = getWhatsAppOAuthRedirectUri();
       const urlRes = await whatsappApi.connectUrl(redirectUri);
       setConnectUrl(pickConnectUrl(urlRes.data?.data));
     } catch {
@@ -200,6 +212,7 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
   }, [load]);
 
   useWaOAuthPopupListener((event) => {
+    clearPopupPoll();
     setConnecting(false);
     if (event.status === 'success') {
       toastSuccess(event.message || 'WhatsApp connected');
@@ -214,14 +227,17 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
     toastError(event.message || 'WhatsApp connection failed');
   });
 
+  useEffect(() => clearPopupPoll, [clearPopupPoll]);
+
   const handleConnect = () => {
     const start = (url: string) => {
       setConnecting(true);
       const { mode, popup } = startWhatsAppOAuth(url);
       if (mode === 'redirect') return;
-      const poll = window.setInterval(() => {
+      clearPopupPoll();
+      popupPollRef.current = window.setInterval(() => {
         if (popup && popup.closed) {
-          window.clearInterval(poll);
+          clearPopupPoll();
           handleWaOAuthPopupClosed(
             (event) => {
               setConnecting(false);
@@ -255,7 +271,7 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
 
     void (async () => {
       try {
-        const redirectUri = `${window.location.origin}/settings/whatsapp/callback`;
+        const redirectUri = getWhatsAppOAuthRedirectUri();
         const { data } = await whatsappApi.connectUrl(redirectUri);
         const url = pickConnectUrl(data?.data);
         if (!url) {
