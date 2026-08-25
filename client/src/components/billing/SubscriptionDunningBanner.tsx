@@ -66,8 +66,8 @@ export default function SubscriptionDunningBanner() {
       icon: AlertCircle,
       iconColor: 'text-amber-600 dark:text-amber-400',
       title: 'Payment Action Required',
-      message: 'Your latest subscription renewal payment could not be processed. Please update your payment method to prevent account suspension.',
-      cta: 'Update Payment',
+      message: 'Your latest manual plan payment could not be confirmed. Retry the purchase to keep access active.',
+      cta: 'Review Payment',
     };
   } else if (isLocked) {
     bannerConfig = {
@@ -75,8 +75,8 @@ export default function SubscriptionDunningBanner() {
       icon: Lock,
       iconColor: 'text-rose-600 dark:text-rose-400',
       title: 'Account Restricted',
-      message: 'Your organization access is restricted due to an expired subscription. Upgrade or renew to re-enable full platform capabilities.',
-      cta: 'Reactivate Plan',
+      message: 'Your organization access is restricted because the plan is no longer valid. Purchase a valid plan to re-enable full platform capabilities.',
+      cta: 'Choose a Plan',
     };
   }
 
