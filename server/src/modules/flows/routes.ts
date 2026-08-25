@@ -18,11 +18,35 @@ import {
 } from './versioning';
 import type { FlowNode } from './types';
 import { emitProductEvent } from '../platform/events';
+import { requireActiveCommercialOnMutation } from '../../middleware/plan-guard';
+import { checkQuota } from '../billing/entitlements.service';
+import {
+  resolveActiveWhatsappNumber,
+  scopedFlowWhere,
+  flowsForNumberFilter,
+} from '../whatsapp/active-number';
 
 const router = Router();
-const flowAccessGuard = [authenticate, requireOrg, ...withPermission('manageAutomations')] as const;
+const flowAccessGuard = [
+  authenticate,
+  requireOrg,
+  resolveActiveWhatsappNumber,
+  requireActiveCommercialOnMutation(),
+  ...withPermission('manageAutomations'),
+] as const;
 const memberGuard = flowAccessGuard;
 const adminGuard = flowAccessGuard;
+
+async function assertFlowPublishQuota(organizationId: string): Promise<void> {
+  const check = await checkQuota(organizationId, 'publishedWorkflows', 1);
+  if (!check.allowed) {
+    throw new AppError(
+      402,
+      check.reason || 'Published workflow limit reached. Upgrade your plan to continue.',
+      check.code || 'PLAN_LIMIT_WORKFLOWS'
+    );
+  }
+}
 
 const nodeTypes = [
   'message', 'buttons', 'list', 'question', 'tag', 'remove_tag', 'handoff', 'ai', 'assign', 'condition', 'end',
@@ -88,10 +112,13 @@ const flowNodeSchema = z.object({
   branches: z.record(z.string()).optional(),
   templateName: z.string().optional(),
   templateLanguage: z.string().optional(),
+  templateCouponCode: z.string().max(100).optional(),
+  templateButtonUrlSuffixes: z.array(z.string().max(200)).max(10).optional(),
+  templateHeaderMediaUrl: optionalUrl(),
   mediaUrl: optionalUrl(),
   mediaType: z.enum(['image', 'document', 'video', 'audio']).optional(),
   mediaCaption: z.string().optional(),
-  delaySeconds: z.number().int().min(1).max(86400).optional(),
+  delaySeconds: z.number().int().min(1).max(604800).optional(),
   scheduleAt: z.string().optional(),
   webhookUrl: optionalUrl(),
   webhookMethod: z.enum(['GET', 'POST']).optional(),
@@ -122,7 +149,7 @@ const flowSchema = z.object({
   description: z.string().optional(),
   triggerType: z.enum(triggerTypes),
   triggerConfig: z.record(z.unknown()).default({}),
-  nodes: z.array(flowNodeSchema).min(1),
+  nodes: z.array(flowNodeSchema).min(1).max(100),
   startNodeId: z.string().optional(),
   enabled: z.boolean().default(true),
   priority: z.number().int().min(0).max(100).default(0),
@@ -155,8 +182,9 @@ router.get('/templates', ...memberGuard, asyncHandler(async (_req, res) => {
 
 router.get('/', ...memberGuard, asyncHandler(async (req, res) => {
   const orgId = req.user!.organizationId!;
+  const numberId = req.activeWhatsappNumberId!;
   const { search, enabled, page = '1', limit = '10' } = req.query;
-  const where: Prisma.FlowWhereInput = { organizationId: orgId };
+  const where: Prisma.FlowWhereInput = { organizationId: orgId, ...flowsForNumberFilter(numberId) };
     if (search) where.name = { contains: search as string, mode: 'insensitive' };
     if (enabled === 'true') {
       where.enabled = true;
@@ -166,8 +194,10 @@ router.get('/', ...memberGuard, asyncHandler(async (req, res) => {
       where.OR = [{ enabled: false }, { status: 'DRAFT' }];
     }
 
-  const pageNum = parseInt(page as string);
-  const limitNum = parseInt(limit as string);
+  const requestedPage = Number.parseInt(page as string, 10);
+  const requestedLimit = Number.parseInt(limit as string, 10);
+  const pageNum = Number.isFinite(requestedPage) ? Math.max(1, requestedPage) : 1;
+  const limitNum = Number.isFinite(requestedLimit) ? Math.min(Math.max(1, requestedLimit), 100) : 10;
 
   const [flows, total, active, paused] = await Promise.all([
     prisma.flow.findMany({
@@ -177,10 +207,11 @@ router.get('/', ...memberGuard, asyncHandler(async (req, res) => {
       take: limitNum,
     }),
     prisma.flow.count({ where }),
-    prisma.flow.count({ where: { organizationId: orgId, enabled: true, status: 'PUBLISHED' } }),
+    prisma.flow.count({ where: { organizationId: orgId, ...flowsForNumberFilter(numberId), enabled: true, status: 'PUBLISHED' } }),
     prisma.flow.count({
       where: {
         organizationId: orgId,
+        ...flowsForNumberFilter(numberId),
         NOT: { enabled: true, status: 'PUBLISHED' },
       },
     }),
@@ -210,7 +241,7 @@ router.post('/simulate', ...memberGuard, asyncHandler(async (req, res) => {
   const body = z.object({
     triggerType: z.string(),
     triggerConfig: z.record(z.unknown()).default({}),
-    nodes: z.array(flowNodeSchema),
+    nodes: z.array(flowNodeSchema).max(100),
     startNodeId: z.string().optional(),
     message: z.string().default('hello'),
     isNewConversation: z.boolean().default(false),
@@ -227,7 +258,7 @@ router.post('/simulate', ...memberGuard, asyncHandler(async (req, res) => {
 
 router.get('/:id', ...memberGuard, asyncHandler(async (req, res) => {
   const flow = await prisma.flow.findFirst({
-    where: { id: paramId(req), organizationId: req.user!.organizationId! },
+    where: scopedFlowWhere(req.user!.organizationId!, req.activeWhatsappNumberId, paramId(req)),
   });
   if (!flow) throw new AppError(404, 'Flow not found');
   sendSuccess(res, flow);
@@ -247,18 +278,20 @@ router.get('/:id/versions', ...memberGuard, asyncHandler(async (req, res) => {
 
 router.post('/:id/duplicate', ...adminGuard, asyncHandler(async (req, res) => {
   const source = await prisma.flow.findFirst({
-    where: { id: paramId(req), organizationId: req.user!.organizationId! },
+    where: scopedFlowWhere(req.user!.organizationId!, req.activeWhatsappNumberId, paramId(req)),
   });
   if (!source) throw new AppError(404, 'Flow not found');
 
   const flow = await prisma.flow.create({
     data: {
       organizationId: req.user!.organizationId!,
+      whatsappNumberId: req.activeWhatsappNumberId!,
       name: `${source.name} (copy)`,
       description: source.description,
       triggerType: source.triggerType,
       triggerConfig: source.triggerConfig as Prisma.InputJsonValue,
       nodes: source.nodes as Prisma.InputJsonValue,
+      draftNodes: (source.draftNodes ?? source.nodes) as Prisma.InputJsonValue,
       startNodeId: source.startNodeId,
       enabled: false,
       priority: source.priority,
@@ -269,11 +302,22 @@ router.post('/:id/duplicate', ...adminGuard, asyncHandler(async (req, res) => {
 }));
 
 router.post('/:id/publish', ...adminGuard, asyncHandler(async (req, res) => {
+  const orgId = req.user!.organizationId!;
+  const numberId = req.activeWhatsappNumberId!;
+  const flowId = paramId(req);
+  const existing = await prisma.flow.findFirst({
+    where: scopedFlowWhere(orgId, numberId, flowId),
+    select: { status: true, enabled: true },
+  });
+  if (!existing) throw new AppError(404, 'Flow not found');
+  if (existing.status !== 'PUBLISHED' || !existing.enabled) {
+    await assertFlowPublishQuota(orgId);
+  }
   const note = (req.body as { note?: string }).note;
-  const version = await publishFlowDraft(paramId(req), req.user!.organizationId!, note);
+  const version = await publishFlowDraft(flowId, orgId, note);
   if (!version) throw new AppError(400, 'No draft to publish');
   emitProductEvent({
-    organizationId: req.user!.organizationId!,
+    organizationId: orgId,
     name: 'FLOW_PUBLISHED',
   });
   sendSuccess(res, { version });
@@ -281,32 +325,57 @@ router.post('/:id/publish', ...adminGuard, asyncHandler(async (req, res) => {
 
 router.post('/:id/restore/:version', ...adminGuard, asyncHandler(async (req, res) => {
   const version = parseInt(String(req.params.version));
-  const restored = await restoreFlowVersion(paramId(req), req.user!.organizationId!, version);
+  const orgId = req.user!.organizationId!;
+  const numberId = req.activeWhatsappNumberId!;
+  const flowId = paramId(req);
+  const existing = await prisma.flow.findFirst({
+    where: scopedFlowWhere(orgId, numberId, flowId),
+    select: { status: true, enabled: true },
+  });
+  if (!existing) throw new AppError(404, 'Flow not found');
+  if (existing.status !== 'PUBLISHED' || !existing.enabled) {
+    await assertFlowPublishQuota(req.user!.organizationId!);
+  }
+  const restored = await restoreFlowVersion(flowId, orgId, version);
   if (!restored) throw new AppError(404, 'Version not found');
-  sendSuccess(res, { restored: true, version });
+  const flow = await prisma.flow.findFirst({
+    where: scopedFlowWhere(orgId, numberId, flowId),
+  });
+  sendSuccess(res, { restored: true, version, flow });
 }));
 
 router.post('/', ...adminGuard, asyncHandler(async (req, res) => {
   const data = withLinkedNodes(flowSchema.parse(req.body));
   assertValidFlow(data);
+  const isDraft = data.status === 'DRAFT';
+  if (!isDraft) await assertFlowPublishQuota(req.user!.organizationId!);
 
   const flow = await prisma.flow.create({
     data: {
       organizationId: req.user!.organizationId!,
+      whatsappNumberId: req.activeWhatsappNumberId!,
       name: data.name,
       description: data.description,
       triggerType: data.triggerType,
       triggerConfig: data.triggerConfig as Prisma.InputJsonValue,
       nodes: data.nodes as Prisma.InputJsonValue,
+      ...(isDraft ? { draftNodes: data.nodes as Prisma.InputJsonValue } : {}),
       startNodeId: data.startNodeId,
       enabled: data.enabled,
       priority: data.priority,
-      status: data.status || 'PUBLISHED',
+      status: isDraft ? 'DRAFT' : 'PUBLISHED',
     },
   });
 
-  await saveFlowVersion(flow.id, data.nodes, data.triggerType, data.triggerConfig as Record<string, unknown>, 'Initial version');
-  if (flow.status === 'PUBLISHED') {
+  if (!isDraft) {
+    await saveFlowVersion(
+      flow.id,
+      data.nodes,
+      data.triggerType,
+      data.triggerConfig as Record<string, unknown>,
+      'Initial version',
+      data.startNodeId
+    );
     emitProductEvent({
       organizationId: req.user!.organizationId!,
       name: 'FLOW_PUBLISHED',
@@ -323,11 +392,13 @@ router.post('/from-template/:templateId', ...adminGuard, asyncHandler(async (req
   const flow = await prisma.flow.create({
     data: {
       organizationId: req.user!.organizationId!,
+      whatsappNumberId: req.activeWhatsappNumberId!,
       name: template.name,
       description: template.description,
       triggerType: template.triggerType,
       triggerConfig: template.triggerConfig as Prisma.InputJsonValue,
       nodes: template.nodes as unknown as Prisma.InputJsonValue,
+      draftNodes: template.nodes as unknown as Prisma.InputJsonValue,
       enabled: false,
       status: 'DRAFT',
     },
@@ -337,25 +408,58 @@ router.post('/from-template/:templateId', ...adminGuard, asyncHandler(async (req
 
 const updateFlowSchema = flowSchema.partial().extend({
   saveAsDraft: z.boolean().optional(),
+  expectedUpdatedAt: z.string().datetime().optional(),
 });
 
 router.patch('/:id', ...adminGuard, asyncHandler(async (req, res) => {
   const id = paramId(req);
+  const orgId = req.user!.organizationId!;
+  const numberId = req.activeWhatsappNumberId!;
   const existing = await prisma.flow.findFirst({
-    where: { id, organizationId: req.user!.organizationId! },
+    where: scopedFlowWhere(orgId, numberId, id),
   });
   if (!existing) throw new AppError(404, 'Flow not found');
 
   const data = updateFlowSchema.parse(req.body);
 
-  if (data.saveAsDraft && data.nodes) {
-    await saveFlowDraft(id, req.user!.organizationId!, {
-      nodes: data.nodes,
-      triggerType: data.triggerType,
-      triggerConfig: data.triggerConfig as Record<string, unknown>,
-      startNodeId: data.startNodeId ?? data.nodes[0]?.id,
+  if (
+    data.expectedUpdatedAt &&
+    existing.updatedAt.toISOString() !== new Date(data.expectedUpdatedAt).toISOString()
+  ) {
+    throw new AppError(
+      409,
+      'This flow was updated in another tab. Reload to get the latest version before saving.'
+    );
+  }
+
+  if (data.saveAsDraft) {
+    const draftNodes = (data.nodes ?? existing.draftNodes ?? existing.nodes) as unknown as FlowNode[];
+    const draftName = data.name ?? existing.name;
+    const draftTriggerType = data.triggerType ?? existing.triggerType;
+    const draftTriggerConfig = (data.triggerConfig ?? existing.triggerConfig) as Record<string, unknown>;
+    const draftStartNodeId = data.startNodeId ?? existing.startNodeId ?? draftNodes[0]?.id;
+    assertValidFlow({
+      name: draftName,
+      triggerType: draftTriggerType,
+      triggerConfig: draftTriggerConfig,
+      nodes: draftNodes,
+      startNodeId: draftStartNodeId ?? undefined,
+      enabled: data.enabled ?? existing.enabled,
+      priority: data.priority ?? existing.priority,
     });
-    const updated = await prisma.flow.findUnique({ where: { id } });
+    await saveFlowDraft(id, orgId, {
+      nodes: draftNodes,
+      name: draftName,
+      description: data.description ?? existing.description,
+      triggerType: draftTriggerType,
+      triggerConfig: draftTriggerConfig,
+      startNodeId: draftStartNodeId ?? undefined,
+      enabled: data.enabled ?? existing.enabled,
+      priority: data.priority ?? existing.priority,
+    });
+    const updated = await prisma.flow.findFirst({
+      where: scopedFlowWhere(orgId, numberId, id),
+    });
     sendSuccess(res, updated);
     return;
   }
@@ -367,6 +471,15 @@ router.patch('/:id', ...adminGuard, asyncHandler(async (req, res) => {
     nodes: (data.nodes ?? existing.nodes) as FlowNode[],
     startNodeId: data.startNodeId ?? existing.startNodeId,
   });
+
+  const nextStatus = data.status ?? existing.status;
+  const nextEnabled = data.enabled ?? existing.enabled;
+  if (
+    nextStatus === 'PUBLISHED' &&
+    (existing.status !== 'PUBLISHED' || (nextEnabled && !existing.enabled))
+  ) {
+    await assertFlowPublishQuota(req.user!.organizationId!);
+  }
 
   if (data.nodes) {
     assertValidFlow({
@@ -396,7 +509,14 @@ router.patch('/:id', ...adminGuard, asyncHandler(async (req, res) => {
   });
 
   if (data.nodes && data.status !== 'DRAFT') {
-    await saveFlowVersion(id, data.nodes, flow.triggerType, flow.triggerConfig as Record<string, unknown>);
+    await saveFlowVersion(
+      id,
+      data.nodes,
+      flow.triggerType,
+      flow.triggerConfig as Record<string, unknown>,
+      undefined,
+      flow.startNodeId
+    );
   }
 
   sendSuccess(res, flow);
@@ -409,11 +529,11 @@ router.post('/:id/schedule', ...adminGuard, asyncHandler(async (req, res) => {
 
   if (!conversationId) throw new AppError(400, 'conversationId is required');
 
-  const flow = await prisma.flow.findFirst({ where: { id: flowId, organizationId: orgId, enabled: true } });
+  const flow = await prisma.flow.findFirst({ where: { id: flowId, organizationId: orgId, ...flowsForNumberFilter(req.activeWhatsappNumberId), enabled: true } });
   if (!flow) throw new AppError(404, 'Flow not found');
 
   const conversation = await prisma.conversation.findFirst({
-    where: { id: conversationId, organizationId: orgId },
+    where: { id: conversationId, organizationId: orgId, whatsappNumberId: req.activeWhatsappNumberId },
     include: { contact: true, whatsappNumber: true },
   });
   if (!conversation?.contact || !conversation.whatsappNumber) {
@@ -426,9 +546,7 @@ router.post('/:id/schedule', ...adminGuard, asyncHandler(async (req, res) => {
     flowId,
     conversationId,
     contactId: conversation.contactId,
-    contactPhone: conversation.contact.phone,
-    phoneNumberId: conversation.whatsappNumber.phoneNumberId,
-    encryptedToken: conversation.whatsappNumber.accessToken,
+    whatsappNumberId: conversation.whatsappNumber.id,
     delayMs: Math.min(Math.max(Number(delaySeconds) * 1000, 1000), 7 * 86400000),
   });
 
@@ -437,7 +555,7 @@ router.post('/:id/schedule', ...adminGuard, asyncHandler(async (req, res) => {
 
 router.delete('/:id', ...adminGuard, asyncHandler(async (req, res) => {
   await prisma.flow.deleteMany({
-    where: { id: paramId(req), organizationId: req.user!.organizationId! },
+    where: scopedFlowWhere(req.user!.organizationId!, req.activeWhatsappNumberId, paramId(req)),
   });
   sendSuccess(res, { deleted: true });
 }));
