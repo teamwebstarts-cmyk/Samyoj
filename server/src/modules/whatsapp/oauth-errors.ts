@@ -24,7 +24,7 @@ export function mapWhatsAppOAuthError(err: unknown): AppError {
   if (lower.includes('redirect_uri') || lower.includes('redirect uri')) {
     return new AppError(
       400,
-      'OAuth redirect URI mismatch. Add the exact callback URL to Meta → Facebook Login → Valid OAuth Redirect URIs (e.g. http://localhost:3000/settings/whatsapp/callback).'
+      'OAuth redirect URI mismatch. Add the exact callback URL to Meta → Facebook Login → Valid OAuth Redirect URIs (e.g. http://localhost:3000/settings/whatsapp/callback/popup).'
     );
   }
 
