@@ -9,6 +9,7 @@ import { sendDirectMessage } from '../messages/service';
 import { getOrgUsage } from '../billing/usage.service';
 import { getOrgFeatureFlags } from '../settings/feature-flags';
 import { resolveActiveWhatsappNumber, conversationFilter, contactsForNumberFilter } from '../whatsapp/active-number';
+import { requireActiveCommercialOnMutation, requireFeatureOnMutation } from '../../middleware/plan-guard';
 
 const router = Router();
 
@@ -33,6 +34,8 @@ router.post(
   authenticateApiKey,
   requireOrg,
   resolveActiveWhatsappNumber,
+  requireActiveCommercialOnMutation(),
+  requireFeatureOnMutation('publicApi'),
   asyncHandler(async (req: Request, res: Response) => {
     const data = sendSchema.parse(req.body);
     const orgId = req.user!.organizationId!;
