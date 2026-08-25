@@ -52,6 +52,7 @@ interface TemplateLibraryBrowseStepProps {
   onSelect: (key: string) => void;
   onQuickAdd?: (item: LibraryListItem) => void;
   onQuickPickChange?: (pickId: string) => void;
+  canCreate?: boolean;
   addingName?: string | null;
   metaCount: number;
   accountCount: number;
@@ -147,6 +148,7 @@ export default function TemplateLibraryBrowseStep({
   onSelect,
   onQuickAdd,
   onQuickPickChange,
+  canCreate = true,
   addingName,
   metaCount,
   accountCount,
@@ -291,7 +293,7 @@ export default function TemplateLibraryBrowseStep({
               const parts = getTemplateParts(entry);
               const selected = selectedKey === key;
               const flow = isFlowLibraryTemplate(entry);
-              const canAdd = canCloneFromMetaLibrary(entry);
+              const canAdd = canCreate && canCloneFromMetaLibrary(entry);
               const adding = addingName === entry.name;
               const tone = libraryItemTone(entry);
               const ItemIcon = tone.Icon;
