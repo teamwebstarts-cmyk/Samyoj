@@ -108,14 +108,24 @@ export async function pollQualityRatings(): Promise<void> {
   for (const number of numbers) {
     try {
       const accessToken = MetaWhatsAppService.decryptToken(number.accessToken);
-      const quality = await MetaWhatsAppService.getPhoneNumberQuality(
+      const health = await MetaWhatsAppService.getPhoneNumberHealth(
         number.phoneNumberId,
         accessToken
       );
-      if (quality) {
+      const data: {
+        qualityRating?: string;
+        officialBusinessAccount?: boolean;
+        messagingLimitTier?: string;
+      } = {};
+      if (health.qualityRating) data.qualityRating = health.qualityRating;
+      if (health.officialBusinessAccount !== null) {
+        data.officialBusinessAccount = health.officialBusinessAccount;
+      }
+      if (health.messagingLimitTier) data.messagingLimitTier = health.messagingLimitTier;
+      if (Object.keys(data).length) {
         await prisma.whatsappNumber.update({
           where: { id: number.id },
-          data: { qualityRating: quality },
+          data,
         });
       }
     } catch (err) {

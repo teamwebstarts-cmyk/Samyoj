@@ -221,7 +221,7 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
       organizationId: input.organizationId,
       isActive: true,
     },
-    select: { id: true, phoneNumberId: true, accessToken: true },
+    select: { id: true, phoneNumberId: true, accessToken: true, isOnBizApp: true },
   });
   if (!whatsappNumber) {
     throw new AppError(400, 'WhatsApp number not found or inactive');
@@ -229,6 +229,13 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
 
   const phoneNumberId = whatsappNumber.phoneNumberId;
   const accessToken = MetaWhatsAppService.decryptToken(whatsappNumber.accessToken);
+  const sendOpts = {
+    whatsappNumberId: whatsappNumber.id,
+    isOnBizApp: Boolean(whatsappNumber.isOnBizApp),
+  };
+  const sendViaMeta = (
+    payload: Parameters<typeof MetaWhatsAppService.sendMessage>[2]
+  ) => MetaWhatsAppService.sendMessage(phoneNumberId, accessToken, payload, sendOpts);
 
   try {
     const ownedMessage = await prisma.message.findFirst({
@@ -372,7 +379,7 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
         components = buildTemplateComponents(input.templateParams, template);
       }
 
-      result = await MetaWhatsAppService.sendMessage(phoneNumberId, accessToken, {
+      result = await sendViaMeta( {
         to: phone,
         type: 'template',
         template: {
@@ -387,11 +394,7 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
         body: input.content,
         buttons: input.buttons,
       };
-      result = await MetaWhatsAppService.sendMessage(
-        phoneNumberId,
-        accessToken,
-        { ...buildInteractivePayload(phone, interactiveOpts), ...context }
-      );
+      result = await sendViaMeta({ ...buildInteractivePayload(phone, interactiveOpts), ...context });
     } else if (input.type === 'IMAGE' && (input.mediaUrl || input.mediaPath)) {
       const media = await resolveMediaRef({
         phoneNumberId,
@@ -401,7 +404,7 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
         mimeType: input.mediaMimeType || 'image/jpeg',
         filename: input.mediaFilename,
       });
-      result = await MetaWhatsAppService.sendMessage(phoneNumberId, accessToken, {
+      result = await sendViaMeta( {
         to: phone,
         type: 'image',
         image: { ...media, caption: input.mediaCaption || undefined },
@@ -416,7 +419,7 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
         mimeType: input.mediaMimeType || 'application/pdf',
         filename: input.mediaFilename,
       });
-      result = await MetaWhatsAppService.sendMessage(phoneNumberId, accessToken, {
+      result = await sendViaMeta( {
         to: phone,
         type: 'document',
         document: {
@@ -436,7 +439,7 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
         mimeType: input.mediaMimeType || 'video/mp4',
         filename: input.mediaFilename,
       });
-      result = await MetaWhatsAppService.sendMessage(phoneNumberId, accessToken, {
+      result = await sendViaMeta( {
         to: phone,
         type: 'video',
         video: { ...media, caption: input.mediaCaption || undefined },
@@ -451,7 +454,7 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
         mimeType: input.mediaMimeType || 'audio/ogg',
         filename: input.mediaFilename,
       });
-      result = await MetaWhatsAppService.sendMessage(phoneNumberId, accessToken, {
+      result = await sendViaMeta( {
         to: phone,
         type: 'audio',
         audio: {
@@ -461,7 +464,7 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
         ...context,
       });
     } else if (input.type === 'LOCATION' && input.location) {
-      result = await MetaWhatsAppService.sendMessage(phoneNumberId, accessToken, {
+      result = await sendViaMeta( {
         to: phone,
         type: 'location',
         location: input.location,
@@ -473,13 +476,13 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
       if (!contacts.length) {
         throw new AppError(400, 'Contact card needs a valid phone number with country code');
       }
-      result = await MetaWhatsAppService.sendMessage(phoneNumberId, accessToken, {
+      result = await sendViaMeta( {
         to: phone,
         type: 'contacts',
         contacts,
       });
     } else if (input.waFlow) {
-      result = await MetaWhatsAppService.sendMessage(phoneNumberId, accessToken, {
+      result = await sendViaMeta( {
         to: phone,
         type: 'interactive',
         ...context,
@@ -502,7 +505,7 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
         },
       });
     } else {
-      result = await MetaWhatsAppService.sendMessage(phoneNumberId, accessToken, {
+      result = await sendViaMeta( {
         to: phone,
         type: 'text',
         text: { body: input.content },

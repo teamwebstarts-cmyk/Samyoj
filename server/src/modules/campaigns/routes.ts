@@ -25,6 +25,12 @@ import {
   syncRunningCampaignStatuses,
 } from './service';
 import { getDailySendUsage } from './quota';
+import {
+  getCampaignCohortAudience,
+  getCampaignCohortCounts,
+  isCohortKind,
+  listCampaignCohort,
+} from './cohorts';
 import { getOrgEntitlements } from '../billing/entitlements.service';
 import {
   createCampaignSchema,
@@ -775,6 +781,58 @@ router.get(
     const analytics = await getCampaignAnalytics(paramId(req), req.user!.organizationId!, req.activeWhatsappNumberId);
     if (!analytics) throw new AppError(404, 'Campaign not found');
     sendSuccess(res, analytics);
+  })
+);
+
+router.get(
+  '/:id/cohorts',
+  ...readGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const counts = await getCampaignCohortCounts(
+      paramId(req),
+      req.user!.organizationId!,
+      req.activeWhatsappNumberId
+    );
+    if (!counts) throw new AppError(404, 'Campaign not found');
+    sendSuccess(res, counts);
+  })
+);
+
+router.get(
+  '/:id/cohorts/:kind/audience',
+  ...readGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const kind = String(req.params.kind || '');
+    if (!isCohortKind(kind)) throw new AppError(400, 'Unknown campaign cohort');
+    const audience = await getCampaignCohortAudience(
+      paramId(req),
+      req.user!.organizationId!,
+      kind,
+      req.activeWhatsappNumberId
+    );
+    if (!audience) throw new AppError(404, 'Campaign not found');
+    sendSuccess(res, audience);
+  })
+);
+
+router.get(
+  '/:id/cohorts/:kind',
+  ...readGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const kind = String(req.params.kind || '');
+    if (!isCohortKind(kind)) throw new AppError(400, 'Unknown campaign cohort');
+    const page = parseInt(String(req.query.page || '1'), 10) || 1;
+    const limit = parseInt(String(req.query.limit || '50'), 10) || 50;
+    const list = await listCampaignCohort(
+      paramId(req),
+      req.user!.organizationId!,
+      kind,
+      req.activeWhatsappNumberId,
+      page,
+      limit
+    );
+    if (!list) throw new AppError(404, 'Campaign not found');
+    sendSuccess(res, list);
   })
 );
 

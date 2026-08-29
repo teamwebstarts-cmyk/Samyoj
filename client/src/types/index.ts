@@ -237,7 +237,7 @@ export interface MessageMetadata {
   templateName?: string;
   templateLanguage?: string;
   templateParams?: TemplateParams;
-  source?: 'flow' | 'automation';
+  source?: 'flow' | 'automation' | 'biz_app';
   triggerType?: string;
   flowId?: string;
   flowName?: string;
@@ -732,8 +732,8 @@ export interface UniversalTemplateMetric {
   failed: number;
   deliveryRate: number;
   readRate: number;
-  clickThroughRate: number;
-  replyRate: number;
+  clickThroughRate: number | null;
+  replyRate: number | null;
   qualityScore: 'HIGH' | 'MEDIUM' | 'LOW';
 }
 
@@ -753,7 +753,7 @@ export interface ReportsCampaignsData {
     totalFailed: number;
     overallDeliveryRate: number;
     overallReadRate: number;
-    estimatedCtr: number;
+    estimatedCtr: number | null;
   };
   universalTemplates: UniversalTemplateMetric[];
   campaigns: Array<{
@@ -811,11 +811,13 @@ export interface ReportsMetaHealthData {
     to?: string;
   };
   quality: {
-    rating: 'GREEN' | 'YELLOW' | 'RED';
+    rating: string;
     status: string;
-    tierLimit: number;
-    tierUsageToday: number;
-    tierUsagePct: number;
+    messagingLimitTier?: string | null;
+    remainingKnown?: boolean;
+    tierLimit?: number;
+    tierUsageToday?: number;
+    tierUsagePct?: number;
   };
   optOuts: {
     count: number;
@@ -1354,6 +1356,10 @@ export interface AnalyticsOverview {
   messagesPending?: number;
   deliveryRate: string;
   readRate: string;
+  qualityRating?: string | null;
+  messagingLimitTier?: string | null;
+  promoConversations?: number | null;
+  serviceConversations?: number | null;
   failedMessages: number;
   activeConversations: number;
   totalContacts: number;

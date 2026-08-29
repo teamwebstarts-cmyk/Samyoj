@@ -14,6 +14,7 @@ vi.mock('../whatsapp/meta.service', () => ({
     decryptToken: vi.fn(),
     getConversationAnalytics: vi.fn(),
     getPhoneNumberQuality: vi.fn(),
+    getPhoneNumberHealth: vi.fn(),
     syncWhatsappConnection: vi.fn(),
     listMessageTemplates: vi.fn(),
   },

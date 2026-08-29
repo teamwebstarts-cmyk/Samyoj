@@ -26,7 +26,12 @@ import type {
 } from './types';
 import { billingCategoryForTemplate, campaignRepeatWrite } from './types';
 import { nextRepeatInstant, shouldScheduleRepeat } from './timezone';
-import { dedupeRecipients, hasAuditableCampaignConsent, type ResolvedRecipient } from './recipients';
+import {
+  dedupeRecipients,
+  filterConsentedManualRecipients,
+  hasAuditableCampaignConsent,
+  type ResolvedRecipient,
+} from './recipients';
 import { AUDITABLE_CONSENT_WHERE } from '../contacts/consent';
 import { Prisma } from '@prisma/client';
 import type { Campaign, CampaignRecipient, CampaignStatus } from '@prisma/client';
@@ -331,20 +336,24 @@ export async function resolveAudienceRecipients(
   if (audienceType === 'MANUAL') {
     const deduped = dedupeRecipients(manualRecipients);
     if (!deduped.length) return deduped;
+    const phones = deduped.map((recipient) => recipient.phone);
+    const identities = [...new Set(phones.map((phone) => normalizePhoneIdentity(phone)).filter(Boolean))];
     const contacts = await prisma.contact.findMany({
       where: {
         organizationId,
         whatsappNumberId,
-        phone: { in: deduped.map((recipient) => recipient.phone) },
-        optedIn: true,
-        consentSource: { not: null },
-        consentAt: { not: null },
-        optOutAt: null,
+        OR: [{ phone: { in: phones } }, { normalizedPhone: { in: identities } }],
       },
-      select: { phone: true },
+      select: {
+        phone: true,
+        normalizedPhone: true,
+        optedIn: true,
+        consentSource: true,
+        consentAt: true,
+        optOutAt: true,
+      },
     });
-    const optedIn = new Set(contacts.map((contact) => contact.phone));
-    return deduped.filter((recipient) => optedIn.has(recipient.phone));
+    return filterConsentedManualRecipients(deduped, contacts);
   }
 
   const contactWhere: Prisma.ContactWhereInput = { organizationId, whatsappNumberId };
@@ -419,24 +428,24 @@ export async function previewAudienceMetrics(
     const recipients = dedupeRecipients(manualRecipients);
     total = recipients.length;
     if (recipients.length) {
+      const phones = recipients.map((recipient) => recipient.phone);
+      const identities = [...new Set(phones.map((phone) => normalizePhoneIdentity(phone)).filter(Boolean))];
       const contacts = await prisma.contact.findMany({
         where: {
           organizationId,
           whatsappNumberId,
-          phone: { in: recipients.map((recipient) => recipient.phone) },
+          OR: [{ phone: { in: phones } }, { normalizedPhone: { in: identities } }],
         },
         select: {
           phone: true,
+          normalizedPhone: true,
           optedIn: true,
           consentSource: true,
           consentAt: true,
           optOutAt: true,
         },
       });
-      const eligiblePhones = new Set(
-        contacts.filter(hasAuditableCampaignConsent).map((contact) => contact.phone),
-      );
-      optedIn = recipients.filter((recipient) => eligiblePhones.has(recipient.phone)).length;
+      optedIn = filterConsentedManualRecipients(recipients, contacts).length;
     }
   } else {
     const scope: Prisma.ContactWhereInput = { organizationId, whatsappNumberId };
@@ -1019,15 +1028,23 @@ export async function sendTestMessage(
     throw new AppError(400, error instanceof Error ? error.message : String(error));
   }
 
-  const result = await MetaWhatsAppService.sendMessage(whatsappNumber.phoneNumberId, accessToken, {
-    to: phone,
-    type: 'template',
-    template: {
-      name: campaign.templateName,
-      language: { code: templateLanguage },
-      ...(components.length ? { components } : {}),
+  const result = await MetaWhatsAppService.sendMessage(
+    whatsappNumber.phoneNumberId,
+    accessToken,
+    {
+      to: phone,
+      type: 'template',
+      template: {
+        name: campaign.templateName,
+        language: { code: templateLanguage },
+        ...(components.length ? { components } : {}),
+      },
     },
-  });
+    {
+      whatsappNumberId: whatsappNumber.id,
+      isOnBizApp: Boolean(whatsappNumber.isOnBizApp),
+    }
+  );
 
   await logCampaignAudit(campaign.organizationId, userId, 'campaign.test_send', {
     campaignId: campaign.id,

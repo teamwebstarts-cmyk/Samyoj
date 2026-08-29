@@ -952,6 +952,12 @@ export async function processWebhookFields(payload: Record<string, unknown>): Pr
     const { dispatchNonMessageWebhookFields } = await import('../whatsapp/webhook-dispatcher');
     await dispatchNonMessageWebhookFields(payload);
   }
+
+  const COEXISTENCE_FIELDS = ['history', 'smb_message_echoes', 'smb_app_state_sync', 'account_update'];
+  if (COEXISTENCE_FIELDS.some((f) => fields.has(f))) {
+    const { processCoexistenceWebhookFields } = await import('../whatsapp/coexistence');
+    await processCoexistenceWebhookFields(payload);
+  }
 }
 
 export { clearRingTimeout };

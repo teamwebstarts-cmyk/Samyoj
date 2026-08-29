@@ -23,11 +23,8 @@ import type {
 } from '../types';
 import { toastError, toastSuccess } from '../utils/toast';
 import { formatPhoneDisplay } from '../utils/phone';
-import {
-  getWhatsAppOAuthRedirectUri,
-  startWhatsAppOAuth,
-  subscribeWaOAuthResult,
-} from '../utils/whatsappOAuth';
+import { useWhatsAppConnectPicker } from '../hooks/useWhatsAppConnectPicker';
+import WhatsAppConnectModeModal from '../components/whatsapp/WhatsAppConnectModeModal';
 
 // Subcomponents
 import SettingsHero from '../components/settings/SettingsHero';
@@ -169,9 +166,23 @@ export default function SettingsPage() {
   };
 
   // WhatsApp State
-  const [connecting, setConnecting] = useState(false);
   const [disconnectTarget, setDisconnectTarget] = useState<{ id: string; phone: string } | null>(null);
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
+
+  const {
+    pickerOpen,
+    openPicker,
+    closePicker,
+    connectStandard,
+    connectCoexistence,
+    connecting,
+  } = useWhatsAppConnectPicker({
+    returnPath: '/settings?tab=whatsapp',
+    onConnected: () => {
+      void refreshNumbers();
+      loadData({ silent: true });
+    },
+  });
   const [webhookStatus, setWebhookStatus] = useState<WebhookStatus | null>(null);
 
   // Business Hours
@@ -212,57 +223,9 @@ export default function SettingsPage() {
     loadData();
   }, [organization?.id]);
 
-  // Handle WhatsApp Connect
-  const handleConnect = async () => {
+  const handleConnect = () => {
     if (!isOwnerOrAdmin || !canConnectWhatsApp) return;
-    setConnecting(true);
-    try {
-      const redirectUri = getWhatsAppOAuthRedirectUri();
-      const { data } = await whatsappApi.connectUrl(redirectUri);
-      const url = data.data.url;
-      let timer: number | undefined;
-      let unsubscribe = () => {};
-      let settled = false;
-      const finish = (event?: { status?: string; message?: string }) => {
-        if (settled) return;
-        settled = true;
-        if (timer) window.clearInterval(timer);
-        unsubscribe();
-        setConnecting(false);
-        if (event?.status === 'error') {
-          toastError(event.message || 'WhatsApp connection failed');
-        } else if (event?.status === 'success') {
-          toastSuccess(event.message || 'WhatsApp connected');
-        }
-        void refreshNumbers();
-        loadData({ silent: true });
-      };
-
-      // Subscribe before opening the popup so a fast/cached Meta callback cannot
-      // publish before this page starts listening.
-      unsubscribe = subscribeWaOAuthResult((event) => {
-        if (event.status === 'cancel') {
-          finish(event);
-          return;
-        }
-        finish(event);
-      });
-
-      const { mode, popup } = startWhatsAppOAuth(url, { returnPath: '/settings?tab=whatsapp' });
-      if (mode === 'popup' && popup) {
-        timer = window.setInterval(() => {
-          if (popup.closed) {
-            finish();
-          }
-        }, 500);
-      } else {
-        unsubscribe();
-        unsubscribe = () => {};
-      }
-    } catch {
-      toastError('Could not start WhatsApp connection');
-      setConnecting(false);
-    }
+    openPicker();
   };
 
   // Handle WhatsApp Disconnect
@@ -412,6 +375,14 @@ export default function SettingsPage() {
           </>
         )}
       </div>
+
+      <WhatsAppConnectModeModal
+        open={pickerOpen}
+        onClose={closePicker}
+        onConnectStandard={connectStandard}
+        onConnectCoexistence={connectCoexistence}
+        connecting={connecting}
+      />
 
       {/* Disconnect confirmation */}
       <ConfirmDialog

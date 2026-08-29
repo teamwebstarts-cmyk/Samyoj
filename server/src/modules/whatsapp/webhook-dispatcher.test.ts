@@ -33,6 +33,7 @@ describe('non-message webhook dispatch wiring', () => {
       'messages',
       'calls',
       'account_alerts',
+      'account_update',
       'business_capability_update',
       'phone_number_quality_update',
       'phone_number_name_update',
@@ -41,6 +42,9 @@ describe('non-message webhook dispatch wiring', () => {
       'message_template_components_update',
       'template_category_update',
       'user_preferences',
+      'history',
+      'smb_message_echoes',
+      'smb_app_state_sync',
     ]);
     expect(META_WEBHOOK_FIELDS.join(',')).not.toMatch(/secret|token|access_key|app_id/i);
   });

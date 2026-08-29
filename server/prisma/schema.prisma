@@ -840,6 +840,19 @@ model WhatsappNumber {
   accessToken           String   @map("access_token")
   webhookSecret         String?  @map("webhook_secret")
   qualityRating         String?  @map("quality_rating")
+  /** Graph official_business_account on the phone number, when Meta returns it. */
+  officialBusinessAccount Boolean? @map("official_business_account")
+  /** Graph whatsapp_business_manager_messaging_limit enum (TIER_250…), not remaining count. */
+  messagingLimitTier    String?  @map("messaging_limit_tier")
+  /** Long-lived token expiry from debug_token (monitoring). */
+  tokenExpiresAt        DateTime? @map("token_expires_at")
+  /** Coexistence: number also active on WhatsApp Business app. */
+  isOnBizApp            Boolean  @default(false) @map("is_on_biz_app")
+  /** Coexistence lifecycle: active | pending | offboarded */
+  coexistenceStatus     String?  @map("coexistence_status")
+  /** History sync progress 0–100 from history webhook chunks. */
+  historySyncProgress   Int?     @map("history_sync_progress")
+  coexistenceOffboardedAt DateTime? @map("coexistence_offboarded_at")
   isActive              Boolean  @default(true) @map("is_active")
   createdAt             DateTime @default(now()) @map("created_at")
   updatedAt             DateTime @updatedAt @map("updated_at")

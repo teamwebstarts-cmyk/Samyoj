@@ -4,7 +4,7 @@ import {
   extractMetaErrorFields,
   isWithin24HourWindow,
 } from '../whatsapp/meta.service';
-import { latestWindowOpenAt } from './service-window';
+import { conversationServiceWindowWhere, latestWindowOpenAt } from './service-window';
 import { nextUnreadCount } from './unread';
 
 describe('latestWindowOpenAt', () => {
@@ -30,6 +30,25 @@ describe('isWithin24HourWindow', () => {
   it('is closed after 24h', () => {
     const opensAt = new Date(Date.now() - 25 * 60 * 60 * 1000);
     expect(isWithin24HourWindow(opensAt)).toBe(false);
+  });
+});
+
+describe('conversationServiceWindowWhere', () => {
+  it('treats a missing window as inactive', () => {
+    const now = new Date('2026-08-29T12:00:00.000Z');
+    expect(conversationServiceWindowWhere('closed', now)).toEqual({
+      OR: [
+        { cs24hWindowOpensAt: null },
+        { cs24hWindowOpensAt: { lt: new Date('2026-08-28T12:00:00.000Z') } },
+      ],
+    });
+  });
+
+  it('requires opensAt within 24h for active', () => {
+    const now = new Date('2026-08-29T12:00:00.000Z');
+    expect(conversationServiceWindowWhere('open', now)).toEqual({
+      cs24hWindowOpensAt: { gte: new Date('2026-08-28T12:00:00.000Z') },
+    });
   });
 });
 

@@ -8,6 +8,10 @@ export interface WhatsappConnectOAuthState {
   userId: string;
   /** Exact redirect_uri used in the Meta OAuth dialog — must match token exchange. */
   redirectUri: string;
+  /** standard Cloud API vs coexistence (Business app onboarding). */
+  connectMode?: 'standard' | 'coexistence';
+  /** Optional WABA id from WA_EMBEDDED_SIGNUP postMessage (coexistence). */
+  wabaIdHint?: string;
 }
 
 const CALLBACK_PATHS = new Set([
@@ -80,7 +84,11 @@ export function signConnectOAuthState(
   payload: Omit<WhatsappConnectOAuthState, 'type'>
 ): string {
   return jwt.sign(
-    { ...payload, type: 'whatsapp_connect_oauth' as const },
+    {
+      ...payload,
+      type: 'whatsapp_connect_oauth' as const,
+      connectMode: payload.connectMode || 'standard',
+    },
     config.jwt.secret,
     { algorithm: 'HS256', expiresIn: '30m' }
   );

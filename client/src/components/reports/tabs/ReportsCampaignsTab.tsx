@@ -2,7 +2,6 @@ import {
   CheckCheck,
   Eye,
   Megaphone,
-  MousePointerClick,
   Send,
 } from 'lucide-react';
 import UniversalTemplateTable from '../tables/UniversalTemplateTable';
@@ -48,19 +47,12 @@ export default function ReportsCampaignsTab({
       icon: Eye,
       bg: 'bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300',
     },
-    {
-      title: 'Est. Button Click Rate',
-      value: `${summary.estimatedCtr}%`,
-      sub: 'Interactive CTA button engagement',
-      icon: MousePointerClick,
-      bg: 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300',
-    },
   ];
 
   return (
     <div className="space-y-6">
       {/* Broadcast Summary Strip */}
-      <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
         {kpis.map((kpi) => {
           const Icon = kpi.icon;
           return (

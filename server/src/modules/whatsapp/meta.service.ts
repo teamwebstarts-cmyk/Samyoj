@@ -1,4 +1,5 @@
 import { config } from '../../config';
+import { classifyMetaError, metaBackoffDelayMs } from '../../errors/meta';
 import { decrypt, encrypt } from '../../utils/crypto';
 import { createModuleLogger } from '../../utils/logger';
 import {
@@ -7,6 +8,7 @@ import {
   shouldReplaceAppWebhookCallback,
   webhookUrlHost,
 } from './webhook-url';
+import { acquireCoexistenceSendSlot } from './coexistence/send-throttle';
 
 const log = createModuleLogger('meta-whatsapp');
 
@@ -15,6 +17,7 @@ export const META_WEBHOOK_FIELDS = [
   'messages',
   'calls',
   'account_alerts',
+  'account_update',
   'business_capability_update',
   'phone_number_quality_update',
   'phone_number_name_update',
@@ -23,6 +26,9 @@ export const META_WEBHOOK_FIELDS = [
   'message_template_components_update',
   'template_category_update',
   'user_preferences',
+  'history',
+  'smb_message_echoes',
+  'smb_app_state_sync',
 ] as const;
 
 export interface InteractiveButton {
@@ -258,21 +264,111 @@ function extensionForMime(mimeType: string): string {
   return map[mimeType.split(';')[0].trim().toLowerCase()] || '';
 }
 
+export type EmbeddedSignupMode = 'standard' | 'coexistence';
+
+export interface EmbeddedSignupClientConfig {
+  mode: 'ES_V4_SDK';
+  appId: string;
+  configId: string;
+  apiVersion: string;
+  state: string;
+  redirectUri: string;
+  connectMode: EmbeddedSignupMode;
+}
+
+export interface SendMessageOpts {
+  maxAttempts?: number;
+  whatsappNumberId?: string;
+  isOnBizApp?: boolean;
+}
+
 export class MetaWhatsAppService {
-  static getEmbeddedSignupUrl(
+  /** ES v4: client launches FB.login with config_id — no legacy OAuth redirect URL. */
+  static getEmbeddedSignupConfig(
     state: string,
     credentials?: MetaCredentials,
-    redirectUri?: string
-  ): string {
+    redirectUri?: string,
+    connectMode: EmbeddedSignupMode = 'standard'
+  ): EmbeddedSignupClientConfig {
     const creds = requireMetaCredentials(credentials);
-    const params = new URLSearchParams({
-      client_id: creds.appId,
-      redirect_uri: redirectUri || config.meta.redirectUri,
+    const configId =
+      connectMode === 'coexistence'
+        ? config.meta.esCoexConfigId || config.meta.esConfigId
+        : config.meta.esConfigId;
+    if (!configId) {
+      throw new Error(
+        connectMode === 'coexistence'
+          ? 'META_ES_COEX_CONFIG_ID or META_ES_CONFIG_ID is not configured on the server.'
+          : 'META_ES_CONFIG_ID is not configured on the server.'
+      );
+    }
+    return {
+      mode: 'ES_V4_SDK',
+      appId: creds.appId,
+      configId,
+      apiVersion: config.meta.apiVersion,
       state,
-      scope: 'whatsapp_business_management,whatsapp_business_messaging',
-      response_type: 'code',
-    });
-    return `https://www.facebook.com/${config.meta.apiVersion}/dialog/oauth?${params}`;
+      redirectUri: redirectUri || config.meta.redirectUri,
+      connectMode,
+    };
+  }
+
+  /** Best-effort WABA payment method probe — Graph may not expose this for all partners. */
+  static async fetchWabaPaymentHint(
+    wabaId: string,
+    accessToken: string
+  ): Promise<{ detected: boolean; hasPaymentMethod: boolean | null }> {
+    try {
+      const data = await this.graphGet<{ primary_funding_id?: string | null }>(
+        `/${wabaId}?fields=primary_funding_id`,
+        accessToken
+      );
+      return {
+        detected: true,
+        hasPaymentMethod: Boolean(data.primary_funding_id),
+      };
+    } catch {
+      return { detected: false, hasPaymentMethod: null };
+    }
+  }
+
+  /** Graph: coexistence numbers expose is_on_biz_app + platform_type. */
+  static async fetchCoexistenceFlags(
+    phoneNumberId: string,
+    accessToken: string
+  ): Promise<{ isOnBizApp: boolean; platformType?: string }> {
+    const data = await this.graphGet<{ is_on_biz_app?: boolean; platform_type?: string }>(
+      `/${phoneNumberId}?fields=is_on_biz_app,platform_type`,
+      accessToken
+    );
+    return {
+      isOnBizApp: Boolean(data.is_on_biz_app),
+      platformType: data.platform_type,
+    };
+  }
+
+  /** debug_token expires_at for token health monitoring. */
+  static async inspectAccessTokenExpiry(
+    accessToken: string,
+    credentials?: MetaCredentials
+  ): Promise<{ expiresAt: Date | null; isValid: boolean }> {
+    const creds = requireMetaCredentials(credentials);
+    const appToken = `${creds.appId}|${creds.appSecret}`;
+    const res = await fetch(
+      `${META_BASE}/debug_token?input_token=${encodeURIComponent(accessToken)}`,
+      { headers: { Authorization: `Bearer ${appToken}` } }
+    );
+    const data = (await res.json()) as {
+      data?: { is_valid?: boolean; expires_at?: number };
+    } & GraphError;
+    if (!res.ok || !data.data) {
+      return { expiresAt: null, isValid: false };
+    }
+    const expiresAt =
+      typeof data.data.expires_at === 'number' && data.data.expires_at > 0
+        ? new Date(data.data.expires_at * 1000)
+        : null;
+    return { expiresAt, isValid: Boolean(data.data.is_valid) };
   }
 
   /**
@@ -805,34 +901,47 @@ export class MetaWhatsAppService {
   static async sendMessage(
     phoneNumberId: string,
     accessToken: string,
-    payload: SendMessagePayload
+    payload: SendMessagePayload,
+    opts?: SendMessageOpts
   ): Promise<{ messages: { id: string }[] }> {
-    const res = await fetch(`${META_BASE}/${phoneNumberId}/messages`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        messaging_product: 'whatsapp',
-        recipient_type: 'individual',
-        to: payload.to,
-        type: payload.type,
-        ...(payload.context && { context: payload.context }),
-        ...(payload.reaction && { reaction: payload.reaction }),
-        ...(payload.text && { text: payload.text }),
-        ...(payload.template && { template: payload.template }),
-        ...(payload.image && { image: payload.image }),
-        ...(payload.document && { document: payload.document }),
-        ...(payload.video && { video: payload.video }),
-        ...(payload.audio && { audio: payload.audio }),
-        ...(payload.location && { location: payload.location }),
-        ...(payload.contacts && { contacts: payload.contacts }),
-        ...(payload.interactive && { interactive: payload.interactive }),
-      }),
+    if (opts?.isOnBizApp && opts.whatsappNumberId) {
+      await acquireCoexistenceSendSlot(opts.whatsappNumberId);
+    }
+    const maxAttempts = opts?.maxAttempts ?? 4;
+    const body = JSON.stringify({
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to: payload.to,
+      type: payload.type,
+      ...(payload.context && { context: payload.context }),
+      ...(payload.reaction && { reaction: payload.reaction }),
+      ...(payload.text && { text: payload.text }),
+      ...(payload.template && { template: payload.template }),
+      ...(payload.image && { image: payload.image }),
+      ...(payload.document && { document: payload.document }),
+      ...(payload.video && { video: payload.video }),
+      ...(payload.audio && { audio: payload.audio }),
+      ...(payload.location && { location: payload.location }),
+      ...(payload.contacts && { contacts: payload.contacts }),
+      ...(payload.interactive && { interactive: payload.interactive }),
     });
 
-    if (!res.ok) {
+    let lastError: MetaApiError | null = null;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const res = await fetch(`${META_BASE}/${phoneNumberId}/messages`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body,
+      });
+
+      if (res.ok) {
+        return res.json() as Promise<{ messages: { id: string }[] }>;
+      }
+
       const errBody = await res.text();
       let message = `Send message failed: ${errBody}`;
       let metaCode: number | undefined;
@@ -853,15 +962,35 @@ export class MetaWhatsAppService {
       } catch {
         /* use raw body */
       }
-      throw new MetaApiError(message, {
+
+      lastError = new MetaApiError(message, {
         metaCode,
         metaSubcode,
         fbtraceId,
         status: res.status,
         statusCode: res.status,
       });
+
+      const classified = classifyMetaError(
+        metaCode !== undefined ? { error: { message, code: metaCode } } : {}
+      );
+      if (!classified.retryable || attempt >= maxAttempts) {
+        throw lastError;
+      }
+
+      const delayMs = metaBackoffDelayMs(classified.backoff, attempt);
+      if (delayMs > 0) {
+        log.warn('Meta send rate-limited — backing off', {
+          phoneNumberId,
+          metaCode,
+          attempt,
+          delayMs,
+        });
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
     }
-    return res.json() as Promise<{ messages: { id: string }[] }>;
+
+    throw lastError || new MetaApiError('Send message failed after retries');
   }
 
   static async getMediaMetadata(
@@ -1451,16 +1580,37 @@ export class MetaWhatsAppService {
     return points;
   }
 
+  static async getPhoneNumberHealth(
+    phoneNumberId: string,
+    accessToken: string
+  ): Promise<{
+    qualityRating: string | null;
+    officialBusinessAccount: boolean | null;
+    messagingLimitTier: string | null;
+  }> {
+    const data = await this.graphGet<{
+      quality_rating?: string;
+      official_business_account?: boolean;
+      whatsapp_business_manager_messaging_limit?: string;
+    }>(
+      `/${phoneNumberId}?fields=quality_rating,official_business_account,whatsapp_business_manager_messaging_limit`,
+      accessToken
+    );
+
+    return {
+      qualityRating: data.quality_rating || null,
+      officialBusinessAccount:
+        typeof data.official_business_account === 'boolean' ? data.official_business_account : null,
+      messagingLimitTier: data.whatsapp_business_manager_messaging_limit || null,
+    };
+  }
+
   static async getPhoneNumberQuality(
     phoneNumberId: string,
     accessToken: string
   ): Promise<string | null> {
-    const data = await this.graphGet<{
-      quality_rating?: string;
-      quality_score?: { score?: string };
-    }>(`/${phoneNumberId}?fields=quality_rating,quality_score`, accessToken);
-
-    return data.quality_rating || data.quality_score?.score || null;
+    const health = await this.getPhoneNumberHealth(phoneNumberId, accessToken);
+    return health.qualityRating;
   }
 }
 

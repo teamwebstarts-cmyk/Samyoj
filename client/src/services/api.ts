@@ -127,18 +127,8 @@ api.interceptors.response.use(
       }
     }
 
-    if (error.response?.status === 402) {
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(
-          new CustomEvent('billing:paywall', {
-            detail: error.response?.data?.error || {
-              code: 'PLAN_LIMIT',
-              message: 'Plan limit reached. Upgrade to continue.',
-            },
-          })
-        );
-      }
-    }
+    // 402 plan limits: do not open global upgrade modals on login/dashboard.
+    // Callers can still read the error; Billing page remains the upgrade surface.
 
     if (!isExpectedApiNoise(error)) {
       logError(error, {
@@ -314,12 +304,19 @@ export const whatsappApi = {
   metaConfig: () => api.get<{ data: import('../types').OrgMetaSettings }>('/whatsapp/meta-config'),
   updateMetaConfig: (data: { appId: string; appSecret?: string }) =>
     api.patch<{ data: import('../types').OrgMetaSettings }>('/whatsapp/meta-config', data),
-  connectUrl: (redirectUri?: string) =>
+  connectUrl: (redirectUri?: string, mode?: 'standard' | 'coexistence') =>
     api.get('/whatsapp/connect-url', {
-      params: redirectUri ? { redirectUri } : undefined,
+      params: {
+        ...(redirectUri ? { redirectUri } : {}),
+        ...(mode === 'coexistence' ? { mode: 'coexistence' } : {}),
+      },
     }),
-  completeConnect: (code: string, state: string) =>
-    api.post<{ data: WhatsappConnectResult }>('/whatsapp/connect/callback', { code, state }),
+  completeConnect: (code: string, state: string, wabaIdHint?: string) =>
+    api.post<{ data: WhatsappConnectResult }>('/whatsapp/connect/callback', {
+      code,
+      state,
+      ...(wabaIdHint ? { wabaIdHint } : {}),
+    }),
   selectConnect: (pendingToken: string, phoneNumberId: string, wabaId: string) =>
     api.post<{ data: WhatsappConnectResult }>('/whatsapp/connect/select', {
       pendingToken,
@@ -334,6 +331,16 @@ export const whatsappApi = {
   webhookHealth: () =>
     api.get<{ data: import('../types').WebhookHealth }>('/whatsapp/webhook/health'),
   setupWebhook: () => api.post('/whatsapp/setup-webhook'),
+  paymentHint: () =>
+    api.get<{
+      data: {
+        connected?: boolean;
+        hasPaymentMethod?: boolean | null;
+        detected?: boolean;
+        guidanceUrl?: string;
+        message?: string;
+      };
+    }>('/whatsapp/payment-hint'),
 };
 
 export const automationApi = {
@@ -533,6 +540,10 @@ export const campaignApi = {
   duplicate: (id: string) => api.post(`/campaigns/${id}/duplicate`),
   stats: (id: string) => api.get(`/campaigns/${id}/stats`),
   analytics: (id: string) => api.get(`/campaigns/${id}/analytics`),
+  cohorts: (id: string) => api.get(`/campaigns/${id}/cohorts`),
+  cohort: (id: string, kind: string, params?: Record<string, string>) =>
+    api.get(`/campaigns/${id}/cohorts/${kind}`, { params }),
+  cohortAudience: (id: string, kind: string) => api.get(`/campaigns/${id}/cohorts/${kind}/audience`),
   recipients: (id: string, params?: Record<string, string>) =>
     api.get(`/campaigns/${id}/recipients`, { params }),
   exportUrl: (id: string) => `${api.defaults.baseURL}/campaigns/${id}/export`,
@@ -603,6 +614,7 @@ export const flowAssetsApi = {
 export const templateApi = {
   list: (params?: Record<string, string>) => api.get('/templates', { params }),
   library: (params?: Record<string, string>) => api.get('/templates/library', { params }),
+  starters: () => api.get('/templates/starters'),
   get: (name: string) => api.get(`/templates/${name}`),
   usage: (name: string) => api.get(`/templates/${name}/usage`),
   getVariableMeta: (name: string, language?: string) =>

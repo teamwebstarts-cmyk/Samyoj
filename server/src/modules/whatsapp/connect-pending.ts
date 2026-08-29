@@ -19,12 +19,14 @@ interface StoredWhatsappConnectPending {
   organizationId: string;
   userId: string;
   accessToken: string;
+  connectMode?: 'standard' | 'coexistence';
 }
 
 export interface WhatsappConnectPendingSession {
   organizationId: string;
   userId: string;
   accessToken: string;
+  connectMode?: 'standard' | 'coexistence';
 }
 
 const memorySessions = new Map<
@@ -45,12 +47,14 @@ export async function createConnectPending(payload: {
   organizationId: string;
   userId: string;
   accessToken: string;
+  connectMode?: 'standard' | 'coexistence';
 }): Promise<string> {
   const token = randomBytes(32).toString('base64url');
   const session: StoredWhatsappConnectPending = {
     organizationId: payload.organizationId,
     userId: payload.userId,
     accessToken: payload.accessToken,
+    connectMode: payload.connectMode,
   };
 
   try {

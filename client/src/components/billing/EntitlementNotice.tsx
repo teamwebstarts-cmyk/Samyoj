@@ -1,5 +1,3 @@
-import { ArrowUpRight, LockKeyhole } from 'lucide-react';
-import { Link } from 'react-router-dom';
 import type { EntitlementFeature, EntitlementQuota, PlanTier } from '../../hooks/useEntitlements';
 
 interface EntitlementNoticeProps {
@@ -9,34 +7,9 @@ interface EntitlementNoticeProps {
   className?: string;
 }
 
-export default function EntitlementNotice({
-  message,
-  upgradePlan,
-  compact = false,
-  className = '',
-}: EntitlementNoticeProps) {
-  return (
-    <div
-      role="status"
-      className={`flex items-start gap-2 rounded-xl border border-amber-200/80 bg-amber-50/80 text-amber-900 dark:border-amber-700/40 dark:bg-amber-950/25 dark:text-amber-200 ${
-        compact ? 'px-3 py-2 text-[11px]' : 'px-3.5 py-3 text-[12px]'
-      } ${className}`}
-    >
-      <LockKeyhole className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-      <div className="min-w-0 flex-1">
-        <p className="font-semibold">{message}</p>
-        {upgradePlan && (
-          <Link
-            to="/billing?tab=plans"
-            className="mt-1 inline-flex items-center gap-1 font-bold underline underline-offset-2"
-          >
-            View {upgradePlan[0].toUpperCase() + upgradePlan.slice(1)} options
-            <ArrowUpRight className="h-3 w-3" aria-hidden />
-          </Link>
-        )}
-      </div>
-    </div>
-  );
+/** Plan upsell banners are disabled — Billing page remains the upgrade surface. */
+export default function EntitlementNotice(_props: EntitlementNoticeProps) {
+  return null;
 }
 
 export function featureUpgradeMessage(

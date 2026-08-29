@@ -1,4 +1,25 @@
+import type { Prisma } from '@prisma/client';
 import prisma from '../../config/database';
+
+export const CUSTOMER_SERVICE_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+export function serviceWindowOpenSince(now = new Date()): Date {
+  return new Date(now.getTime() - CUSTOMER_SERVICE_WINDOW_MS);
+}
+
+/** List-filter for 24h CSW. Missing opensAt is inactive (fail closed for free-form). */
+export function conversationServiceWindowWhere(
+  kind: 'open' | 'closed',
+  now = new Date()
+): Prisma.ConversationWhereInput {
+  const since = serviceWindowOpenSince(now);
+  if (kind === 'open') {
+    return { cs24hWindowOpensAt: { gte: since } };
+  }
+  return {
+    OR: [{ cs24hWindowOpensAt: null }, { cs24hWindowOpensAt: { lt: since } }],
+  };
+}
 
 /** Latest of inbound message / user-initiated call / stored CSW open timestamps. */
 export function latestWindowOpenAt(...dates: Array<Date | null | undefined>): Date | null {

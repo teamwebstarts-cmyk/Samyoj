@@ -29,8 +29,19 @@ export async function getDailySendUsage(organizationId: string) {
     },
   });
 
+  const dailySendLimit = settings.dailySendLimit ?? DEFAULT_CAMPAIGN_SETTINGS.dailySendLimit!;
+  const ledger = await prisma.campaignQuotaLedger.findUnique({
+    where: { organizationId_periodStart: { organizationId, periodStart: startOfDay } },
+    select: { reservedSendCount: true },
+  });
+  const reservedSendCount = ledger?.reservedSendCount ?? 0;
+  const remaining = Math.max(0, dailySendLimit - sentToday - reservedSendCount);
+
   return {
     sentToday,
+    dailySendLimit,
+    reservedSendCount,
+    remaining,
     batchSize: settings.batchSize ?? DEFAULT_CAMPAIGN_SETTINGS.batchSize!,
     batchDelayMs: settings.batchDelayMs ?? DEFAULT_CAMPAIGN_SETTINGS.batchDelayMs!,
   };

@@ -26,6 +26,14 @@ export interface WhatsappNumberOption {
   phoneNumberId: string;
   wabaId: string;
   isActive: boolean;
+  isOnBizApp?: boolean;
+  coexistenceStatus?: string | null;
+  historySyncProgress?: number | null;
+  coexistenceOffboardedAt?: string | null;
+  tokenExpiresAt?: string | null;
+  qualityRating?: string | null;
+  officialBusinessAccount?: boolean | null;
+  messagingLimitTier?: string | null;
 }
 
 interface WhatsAppNumberContextType {

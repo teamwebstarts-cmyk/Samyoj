@@ -293,17 +293,26 @@ const broadcastWorker = new Worker(
     }
 
     let accessToken: string;
+    let isOnBizApp = false;
     if (legacyEncryptedToken) {
       accessToken = MetaWhatsAppService.decryptToken(legacyEncryptedToken);
+      if (whatsappNumberDbId) {
+        const flagRow = await prisma.whatsappNumber.findFirst({
+          where: { id: whatsappNumberDbId, organizationId, isActive: true },
+          select: { isOnBizApp: true },
+        });
+        isOnBizApp = Boolean(flagRow?.isOnBizApp);
+      }
     } else {
       const tokenRow = await prisma.whatsappNumber.findFirst({
         where: { id: whatsappNumberDbId, organizationId, isActive: true },
-        select: { accessToken: true },
+        select: { accessToken: true, isOnBizApp: true },
       });
       if (!tokenRow?.accessToken) {
         throw new Error('WhatsApp number is inactive or missing credentials. Reconnect WhatsApp and retry.');
       }
       accessToken = MetaWhatsAppService.decryptToken(tokenRow.accessToken);
+      isOnBizApp = Boolean(tokenRow.isOnBizApp);
     }
     const { emitToOrg } = await import('../realtime');
     if (wabaId) {
@@ -595,15 +604,20 @@ const broadcastWorker = new Worker(
       const components = buildTemplateComponents(mergedParams, templateMeta);
 
       try {
-        const result = await MetaWhatsAppService.sendMessage(phoneNumberId, accessToken, {
-          to: recipient.phone,
-          type: 'template',
-          template: {
-            name: templateName,
-            language: { code: lang },
-            ...(components.length ? { components } : {}),
+        const result = await MetaWhatsAppService.sendMessage(
+          phoneNumberId,
+          accessToken,
+          {
+            to: recipient.phone,
+            type: 'template',
+            template: {
+              name: templateName,
+              language: { code: lang },
+              ...(components.length ? { components } : {}),
+            },
           },
-        });
+          { whatsappNumberId: whatsappNumberDbId, isOnBizApp }
+        );
 
         const metaMessageId = result.messages?.[0]?.id;
         if (whatsappNumberDbId) {

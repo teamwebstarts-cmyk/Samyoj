@@ -11,6 +11,9 @@ export type WhatsappWorkspaceConnection = {
   wabaId: string;
   businessId?: string | null;
   encryptedToken: string;
+  isOnBizApp?: boolean;
+  coexistenceStatus?: string | null;
+  tokenExpiresAt?: Date | null;
 };
 
 const CROSS_ORG_CONNECTED =
@@ -94,6 +97,11 @@ export async function saveWhatsappNumberWorkspace(
     businessId: connection.businessId ?? null,
     accessToken: connection.encryptedToken,
     isActive: true,
+    ...(connection.isOnBizApp !== undefined ? { isOnBizApp: connection.isOnBizApp } : {}),
+    ...(connection.coexistenceStatus !== undefined
+      ? { coexistenceStatus: connection.coexistenceStatus }
+      : {}),
+    ...(connection.tokenExpiresAt !== undefined ? { tokenExpiresAt: connection.tokenExpiresAt } : {}),
   };
 
   try {

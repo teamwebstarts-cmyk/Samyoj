@@ -14,14 +14,14 @@ import {
   Square,
   Users,
 } from 'lucide-react';
-import CampaignAnalyticsPanel from '../components/campaigns/CampaignAnalyticsPanel';
+import CampaignHero from '../components/campaigns/CampaignHero';
+import CampaignRetargetPanel from '../components/campaigns/CampaignRetargetPanel';
 import CampaignAudienceSection from '../components/campaigns/CampaignAudienceSection';
 import { recipientsFromPhones, type CampaignRecipientDetail } from '../components/campaigns/wizard/campaignWizardModel';
-import CampaignHero from '../components/campaigns/CampaignHero';
+import CampaignQuotaBar from '../components/campaigns/CampaignQuotaBar';
 import CampaignTable, { CampaignListPagination, type CampaignSortKey } from '../components/campaigns/CampaignTable';
 import CampaignCard from '../components/campaigns/CampaignCard';
 import CampaignDetailHeader from '../components/campaigns/CampaignDetailHeader';
-import CampaignRecipientTable from '../components/campaigns/CampaignRecipientTable';
 import CampaignRescheduleDialog from '../components/campaigns/CampaignRescheduleDialog';
 import type { CampaignReschedulePayload } from '../components/campaigns/CampaignRescheduleDialog';
 import CampaignActionsMenu from '../components/campaigns/CampaignActionsMenu';
@@ -258,15 +258,10 @@ export default function CampaignsPage() {
   const [analytics, setAnalytics] = useState<CampaignAnalytics | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [analyticsError, setAnalyticsError] = useState<string | null>(null);
-  const [recipients, setRecipients] = useState<CampaignRecipient[]>([]);
-  const [recipientTotal, setRecipientTotal] = useState(0);
-  const [recipientPage, setRecipientPage] = useState(1);
-  const [recipientStatusFilter, setRecipientStatusFilter] = useState('');
   const activeNumberIdRef = useRef<string | null>(null);
   activeNumberIdRef.current = activeNumber?.id ?? null;
   const [activeStep, setActiveStep] = useState(0);
   const [stageError, setStageError] = useState<string | null>(null);
-  const [detailSection, setDetailSection] = useState<'overview' | 'failed'>('overview');
   const [audiencePreviewCount, setAudiencePreviewCount] = useState<number | null>(null);
   const [confirmState, setConfirmState] = useState<{
     title: string;
@@ -420,18 +415,9 @@ export default function CampaignsPage() {
     setAnalyticsLoading(true);
     setAnalyticsError(null);
     try {
-      const [analyticsRes, recipientsRes] = await Promise.all([
-        campaignApi.analytics(campaignId),
-        campaignApi.recipients(campaignId, {
-          page: String(recipientPage),
-          limit: '50',
-          ...(recipientStatusFilter ? { status: recipientStatusFilter } : {}),
-        }),
-      ]);
+      const analyticsRes = await campaignApi.analytics(campaignId);
       if (requestNumberId !== activeNumberIdRef.current) return;
       setAnalytics(analyticsRes.data.data as CampaignAnalytics);
-      setRecipients(recipientsRes.data.data.recipients);
-      setRecipientTotal(recipientsRes.data.data.total);
     } catch {
       if (requestNumberId === activeNumberIdRef.current) {
         setAnalyticsError('Details unavailable. Refresh the campaign and try again.');
@@ -440,7 +426,7 @@ export default function CampaignsPage() {
     } finally {
       if (requestNumberId === activeNumberIdRef.current) setAnalyticsLoading(false);
     }
-  }, [activeNumber, recipientPage, recipientStatusFilter, resolved]);
+  }, [activeNumber, resolved]);
 
   useEffect(() => {
     setPage(1);
@@ -464,8 +450,6 @@ export default function CampaignsPage() {
     setForm(emptyForm);
     setAnalytics(null);
     setAnalyticsError(null);
-    setRecipients([]);
-    setRecipientTotal(0);
     setAudiencePreviewCount(null);
     setConfirmState(null);
     setRescheduleTarget(null);
@@ -510,16 +494,6 @@ export default function CampaignsPage() {
       void loadDetailExtras(editing.id);
     }
   }, [viewOnly, editing?.id, loadDetailExtras]);
-
-  useEffect(() => {
-    if (!viewOnly) return;
-    if (detailSection === 'failed') {
-      setRecipientStatusFilter('FAILED');
-      setRecipientPage(1);
-    } else {
-      setRecipientStatusFilter('');
-    }
-  }, [detailSection, viewOnly]);
 
   useEffect(() => {
     if (!selectedTemplate || viewOnly) return;
@@ -577,9 +551,7 @@ export default function CampaignsPage() {
       setForm(campaignToForm(full, templates));
       setAudiencePreviewCount(null);
       setActiveStep(0);
-      setDetailSection('overview');
       setStageError(null);
-      setRecipientPage(1);
       setSlideOpen(true);
     } catch {
       toastError('Campaign details could not load. Refresh the page and try again.');
@@ -600,7 +572,6 @@ export default function CampaignsPage() {
     setStageError(null);
     setAnalytics(null);
     setAnalyticsError(null);
-    setRecipients([]);
   };
 
   const saveCampaign = async (action: 'draft' | 'schedule' | 'send' = 'draft') => {
@@ -928,6 +899,7 @@ export default function CampaignsPage() {
             searchPlaceholder="Search campaigns or templates"
             filters={
               <>
+                <CampaignQuotaBar compact />
                 <CampaignStatusFilter value={statusFilter} onChange={setStatusFilter} />
                 <AppSelect
                   className="w-full min-w-0 shrink-0 sm:w-[10.25rem] sm:max-w-[10.25rem] [&_.app-select__control]:!w-full [&_.app-select__single-value]:!max-w-none"
@@ -1280,76 +1252,20 @@ export default function CampaignsPage() {
               {editing.name} is {editing.status.toLowerCase()}: {editing.sentCount.toLocaleString()} of {editing.totalContacts.toLocaleString()} recipients sent.
             </div>
 
-            {editing.failedCount > 0 && (
-              <nav
-                aria-label="Campaign detail sections"
-                role="tablist"
-                className="grid grid-cols-2 gap-1 rounded-xl border border-slate-200 bg-slate-50/80 p-1 dark:border-slate-800 dark:bg-slate-900/50"
-              >
-                {[
-                  ['overview', 'Summary'],
-                  ['failed', `Failed (${editing.failedCount.toLocaleString()})`],
-                ].map(([value, label]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    role="tab"
-                    aria-selected={detailSection === value}
-                    onClick={() => setDetailSection(value as typeof detailSection)}
-                    className={`min-h-10 rounded-lg px-2 py-2 text-[11px] font-bold transition focus:outline-none focus:ring-2 focus:ring-emerald-500/30 ${
-                      detailSection === value
-                        ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-950 dark:text-white'
-                        : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </nav>
-            )}
-
-            {detailSection === 'overview' && (
-              <CampaignAnalyticsPanel
-                analytics={analytics}
-                loading={analyticsLoading}
-                error={analyticsError}
-                onRetryFailed={() =>
-                  editing &&
-                  handleAction(
-                    () => campaignApi.retryFailed(editing.id),
-                    'Failed messages queued for retry',
-                    'Could not retry failed messages. Refresh and try again.',
-                  )
-                }
-              />
-            )}
-            {detailSection === 'failed' && editing.failedCount > 0 && (
-              <>
-                <CampaignAnalyticsPanel
-                  analytics={analytics}
-                  loading={analyticsLoading}
-                  error={analyticsError}
-                  section="errors"
-                  onRetryFailed={() =>
-                    editing &&
-                    handleAction(
-                      () => campaignApi.retryFailed(editing.id),
-                      'Failed messages queued for retry',
-                      'Could not retry failed messages. Refresh and try again.',
-                    )
-                  }
-                />
-                <CampaignRecipientTable
-                  recipients={recipients}
-                  total={recipientTotal}
-                  page={recipientPage}
-                  pageSize={50}
-                  onPageChange={setRecipientPage}
-                  statusFilter="FAILED"
-                  compact
-                />
-              </>
-            )}
+            <CampaignRetargetPanel
+              campaignId={editing.id}
+              campaignName={editing.name}
+              analytics={analytics}
+              analyticsLoading={analyticsLoading}
+              analyticsError={analyticsError}
+              onRetryFailed={() =>
+                handleAction(
+                  () => campaignApi.retryFailed(editing.id),
+                  'Failed messages queued for retry',
+                  'Could not retry failed messages. Refresh and try again.',
+                )
+              }
+            />
           </div>
         ) : (
           <form id="slideover-form" onSubmit={handleSubmit} className="space-y-6">

@@ -60,7 +60,7 @@ export default function ReportsMetaHealthTab({ data }: ReportsMetaHealthTabProps
         <div className="dashboard-card p-5">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-theme-muted uppercase tracking-wider">
-              Daily Messaging Tier Limit
+              Meta messaging limit
             </span>
             <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-sky-50 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300">
               <Gauge className="h-3.5 w-3.5" />
@@ -68,24 +68,14 @@ export default function ReportsMetaHealthTab({ data }: ReportsMetaHealthTabProps
           </div>
 
           <div className="mt-3">
-            <div className="flex items-baseline justify-between">
-              <p className="text-xl font-black tabular-nums text-theme-fg">
-                {quality.tierUsageToday.toLocaleString()}{' '}
-                <span className="text-[13px] font-semibold text-theme-muted">
-                  / {quality.tierLimit.toLocaleString()} contacts
-                </span>
-              </p>
-              <span className="text-[11px] font-black text-sky-700 dark:text-sky-300">
-                {quality.tierUsagePct}%
-              </span>
-            </div>
-
-            <div className="mt-2 h-2 overflow-hidden rounded-full bg-theme-subtle">
-              <div
-                className="h-full rounded-full bg-sky-500 transition-all duration-700"
-                style={{ width: `${quality.tierUsagePct}%` }}
-              />
-            </div>
+            <p className="text-xl font-black tabular-nums text-theme-fg">
+              {quality.messagingLimitTier
+                ? quality.messagingLimitTier.replace(/_/g, ' ')
+                : 'Not polled yet'}
+            </p>
+            <p className="mt-1 text-[11px] font-medium text-theme-muted">
+              Exact remaining unique users is in WhatsApp Manager. Graph does not give that integer.
+            </p>
           </div>
         </div>
 

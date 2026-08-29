@@ -49,6 +49,10 @@ export const config = {
   meta: {
     appId: process.env.META_APP_ID || '',
     appSecret: process.env.META_APP_SECRET || '',
+    /** Embedded Signup v4 configuration ID (Facebook Login for Business → Configurations). */
+    esConfigId: process.env.META_ES_CONFIG_ID || '',
+    /** Optional ES v4 config with whatsapp_business_app_onboarding (coexistence). */
+    esCoexConfigId: process.env.META_ES_COEX_CONFIG_ID || '',
     verifyToken: process.env.META_VERIFY_TOKEN || 'whatsapp_verify_token',
     apiVersion: process.env.META_API_VERSION || 'v21.0',
     redirectUri: process.env.META_REDIRECT_URI || 'http://localhost:3000/settings/whatsapp/callback',

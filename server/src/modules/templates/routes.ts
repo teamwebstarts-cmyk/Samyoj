@@ -18,6 +18,7 @@ import {
   testSendSchema,
 } from './types';
 import { getTemplateVariableMeta, saveTemplateVariableMeta } from './variable-meta';
+import { listSamyojStarters } from './starters';
 import prisma from '../../config/database';
 import { normalizePhoneIdentity } from '../../utils/phone';
 import { emitProductEvent } from '../platform/events';
@@ -103,6 +104,15 @@ router.get(
     });
 
     sendSuccess(res, templates);
+  })
+);
+
+router.get(
+  '/starters',
+  authenticate,
+  requireOrg,
+  asyncHandler(async (_req: Request, res: Response) => {
+    sendSuccess(res, listSamyojStarters());
   })
 );
 

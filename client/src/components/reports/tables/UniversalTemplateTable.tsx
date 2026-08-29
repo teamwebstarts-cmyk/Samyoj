@@ -18,9 +18,9 @@ const CATEGORY_BADGES: Record<string, string> = {
 };
 
 const QUALITY_BADGES: Record<string, { label: string; style: string }> = {
-  HIGH: { label: 'High Quality', style: 'bg-emerald-50 text-emerald-700 ring-emerald-200/70 dark:bg-emerald-950/40 dark:text-emerald-300' },
-  MEDIUM: { label: 'Medium', style: 'bg-amber-50 text-amber-700 ring-amber-200/70 dark:bg-amber-950/40 dark:text-amber-300' },
-  LOW: { label: 'Needs Attention', style: 'bg-rose-50 text-rose-700 ring-rose-200/70 dark:bg-rose-950/40 dark:text-rose-300' },
+  HIGH: { label: 'High (Samyoj mix)', style: 'bg-emerald-50 text-emerald-700 ring-emerald-200/70 dark:bg-emerald-950/40 dark:text-emerald-300' },
+  MEDIUM: { label: 'Medium (Samyoj mix)', style: 'bg-amber-50 text-amber-700 ring-amber-200/70 dark:bg-amber-950/40 dark:text-amber-300' },
+  LOW: { label: 'Needs attention (Samyoj mix)', style: 'bg-rose-50 text-rose-700 ring-rose-200/70 dark:bg-rose-950/40 dark:text-rose-300' },
 };
 
 export type TemplateSortField =
@@ -30,7 +30,6 @@ export type TemplateSortField =
   | 'read'
   | 'deliveryRate'
   | 'readRate'
-  | 'clickThroughRate'
   | 'templateName';
 
 export default function UniversalTemplateTable({
@@ -177,12 +176,11 @@ export default function UniversalTemplateTable({
                   Read % {sortField === 'readRate' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
                 </th>
                 <th
-                  className="cursor-pointer px-5 py-3 hover:text-theme-fg"
-                  onClick={() => handleSort('clickThroughRate')}
+                  className="px-5 py-3 text-right"
+                  title="From your fail and read rates in Samyoj. Not Meta template quality_score."
                 >
-                  Est. CTR {sortField === 'clickThroughRate' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+                  Samyoj mix
                 </th>
-                <th className="px-5 py-3 text-right">Meta Quality</th>
               </tr>
             </thead>
             <tbody>
@@ -231,9 +229,6 @@ export default function UniversalTemplateTable({
                       <span className="inline-flex min-w-[2.75rem] items-center justify-center rounded-lg bg-sky-50 px-2 py-0.5 text-[11px] font-bold tabular-nums text-sky-800 dark:bg-sky-950/40 dark:text-sky-300">
                         {t.readRate}%
                       </span>
-                    </td>
-                    <td className="px-5 py-3.5 font-semibold tabular-nums text-violet-700 dark:text-violet-300">
-                      {t.clickThroughRate}%
                     </td>
                     <td className="px-5 py-3.5 text-right">
                       <span className={`inline-flex items-center rounded-lg px-2 py-0.5 text-[10px] font-extrabold ring-1 ${quality.style}`}>

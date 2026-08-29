@@ -4,6 +4,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import CampaignAudienceStep from '../components/campaigns/wizard/CampaignAudienceStep';
 import CampaignMessageStep from '../components/campaigns/wizard/CampaignMessageStep';
 import CampaignReviewStep from '../components/campaigns/wizard/CampaignReviewStep';
+import CampaignQuotaBar from '../components/campaigns/CampaignQuotaBar';
 import type { AudiencePreviewMetrics } from '../components/campaigns/CampaignAudiencePreview';
 import CampaignWizardStepper, {
   campaignWizardStages,
@@ -34,7 +35,7 @@ import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 import { useEntitlements } from '../hooks/useEntitlements';
 import EntitlementNotice from '../components/billing/EntitlementNotice';
 import { campaignApi, contactApi, templateApi, whatsappApi } from '../services/api';
-import { toastError, toastSuccess } from '../utils/toast';
+import { toastError, toastSuccess, toastWarning } from '../utils/toast';
 import { validatePhoneLines } from '../utils/phone';
 import type { MessageTemplate } from '../types';
 
@@ -230,6 +231,8 @@ export default function CampaignWizardPage() {
 
   useEffect(() => {
     if (id || initializedFromQuery.current) return;
+    const fromCampaign = searchParams.get('fromCampaign') || '';
+    const cohort = searchParams.get('cohort') || '';
     const templateName = searchParams.get('template') || '';
     const templateLanguage = searchParams.get('language') || '';
     const contactIds = (searchParams.get('contacts') || '').split(',').filter(Boolean);
@@ -237,7 +240,37 @@ export default function CampaignWizardPage() {
       .split(',')
       .map((tag) => tag.trim())
       .filter(Boolean);
-    if (!templateName && !contactIds.length && !tags.length) {
+    const phones = (searchParams.get('phones') || '').replace(/\\n/g, '\n');
+    const fromName = searchParams.get('name') || '';
+    if (fromCampaign && cohort) {
+      initializedFromQuery.current = true;
+      campaignApi
+        .cohortAudience(fromCampaign, cohort)
+        .then(({ data }) => {
+          const payload = data?.data as {
+            contactIds?: string[];
+            skippedNoConsent?: number;
+            skippedNoContact?: number;
+          } | undefined;
+          const ids = payload?.contactIds || [];
+          setForm((previous) => ({
+            ...previous,
+            audienceType: 'CONTACTS',
+            selectedContactIds: ids,
+            name: fromName || previous.name,
+          }));
+          if (!ids.length) {
+            toastError('No consented contacts in this follow-up list.');
+          } else if ((payload?.skippedNoConsent || 0) + (payload?.skippedNoContact || 0) > 0) {
+            toastWarning(
+              'Some numbers were skipped because they are missing a contact or campaign consent.',
+            );
+          }
+        })
+        .catch(() => toastError('Could not load this campaign list.'));
+      return;
+    }
+    if (!templateName && !contactIds.length && !tags.length && !phones) {
       initializedFromQuery.current = true;
       return;
     }
@@ -247,14 +280,20 @@ export default function CampaignWizardPage() {
       ? 'CONTACTS'
       : tags.length
         ? 'TAGS'
-        : templateName
-          ? 'ALL_OPTED_IN'
-          : 'MANUAL';
-    const name = contactIds.length
-      ? `Campaign — ${contactIds.length} contact${contactIds.length === 1 ? '' : 's'}`
-      : tags.length
-        ? `Campaign — ${tags.join(', ')}`
-        : '';
+        : phones
+          ? 'MANUAL'
+          : templateName
+            ? 'ALL_OPTED_IN'
+            : 'MANUAL';
+    const name = fromName
+      ? fromName
+      : contactIds.length
+        ? `Campaign — ${contactIds.length} contact${contactIds.length === 1 ? '' : 's'}`
+        : tags.length
+          ? `Campaign — ${tags.join(', ')}`
+          : phones
+            ? 'Follow-up campaign'
+            : '';
     setForm((previous) => ({
       ...previous,
       templateName,
@@ -262,14 +301,18 @@ export default function CampaignWizardPage() {
       audienceType,
       audienceTags: tags.join(', '),
       selectedContactIds: contactIds,
+      phones,
       name,
     }));
   }, [id, searchParams]);
 
   useEffect(() => {
     const prefilledTemplateName = searchParams.get('template') || '';
+    const fromCampaign = searchParams.get('fromCampaign') || '';
     if (id || prefilledTemplateName || !templates.length || form.templateName) return;
-    const firstTemplate = templates[0];
+    const utility = templates.find((template) => (template.category || '').toUpperCase() === 'UTILITY');
+    const auth = templates.find((template) => (template.category || '').toUpperCase() === 'AUTHENTICATION');
+    const firstTemplate = fromCampaign ? utility || auth || templates[0] : templates[0];
     setForm((previous) => ({
       ...previous,
       templateName: firstTemplate.name,
@@ -451,6 +494,7 @@ export default function CampaignWizardPage() {
   const renderStage = () => {
     if (activeStep === 0) {
       return (
+        <>
         <CampaignMessageStep
           form={form}
           setForm={setForm}
@@ -461,6 +505,13 @@ export default function CampaignWizardPage() {
           selectedTemplate={selectedTemplate}
           whatsappNumbers={whatsappNumbers}
         />
+        {searchParams.get('fromCampaign') &&
+          (selectedTemplate?.category || '').toUpperCase() === 'MARKETING' && (
+            <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] font-semibold text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+              Follow-ups default to Utility. Marketing templates can hurt your quality rating.
+            </p>
+          )}
+        </>
       );
     }
     if (activeStep === 1) {
@@ -482,7 +533,9 @@ export default function CampaignWizardPage() {
       );
     }
     return (
-      <CampaignReviewStep
+      <div className="space-y-3">
+        <CampaignQuotaBar />
+        <CampaignReviewStep
         form={form}
         setForm={setForm}
         selectedTemplate={selectedTemplate}
@@ -494,6 +547,7 @@ export default function CampaignWizardPage() {
         onEditMessage={() => navigateToStep(0)}
         onEditAudience={() => navigateToStep(1)}
       />
+      </div>
     );
   };
 

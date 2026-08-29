@@ -27,6 +27,12 @@ export function buildInboxListParams(input: InboxListQueryInput): Record<string,
     case 'unreplied':
       params.unreplied = 'true';
       break;
+    case 'canReply':
+      params.window = 'open';
+      break;
+    case 'needsTemplate':
+      params.window = 'closed';
+      break;
     case 'open':
       params.status = 'OPEN';
       break;

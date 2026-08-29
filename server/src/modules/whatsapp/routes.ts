@@ -55,13 +55,18 @@ const router = Router();
 
 async function saveWhatsappConnection(
   orgId: string,
-  connection: Awaited<ReturnType<typeof MetaWhatsAppService.buildConnectionDetails>>
+  connection: Awaited<ReturnType<typeof MetaWhatsAppService.buildConnectionDetails>>,
+  opts?: {
+    connectMode?: 'standard' | 'coexistence';
+    skipRegister?: boolean;
+    metaCredentials?: Awaited<ReturnType<typeof resolveMetaCredentials>>;
+  }
 ) {
   const encryptedToken = MetaWhatsAppService.encryptToken(connection.accessToken);
   if (!normalizePhoneIdentity(connection.phoneNumber)) {
     throw new AppError(400, 'Connected WhatsApp number has no usable phone identity');
   }
-  const metaCredentials = await resolveMetaCredentials(orgId);
+  const metaCredentials = opts?.metaCredentials ?? (await resolveMetaCredentials(orgId));
 
   try {
     await MetaWhatsAppService.ensureWabaSubscribed(
@@ -94,14 +99,50 @@ async function saveWhatsappConnection(
     }
   }
 
-  // In-org: same displayed phone reuses the workspace. Cross-org: 409 while the
-  // other org is active; after soft-disconnect, B gets a new empty row (SAMYOJ-49).
+  let isOnBizApp = false;
+  let coexistenceStatus: string | null = null;
+  if (opts?.connectMode === 'coexistence' || opts?.skipRegister) {
+    try {
+      const flags = await MetaWhatsAppService.fetchCoexistenceFlags(
+        connection.phoneNumberId,
+        connection.accessToken
+      );
+      isOnBizApp = flags.isOnBizApp;
+      coexistenceStatus = flags.isOnBizApp ? 'active' : 'pending';
+    } catch (err) {
+      log.warn('Coexistence flag check failed after connect', {
+        organizationId: orgId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      if (opts?.connectMode === 'coexistence') {
+        coexistenceStatus = 'pending';
+      }
+    }
+  }
+
+  let tokenExpiresAt: Date | null = null;
+  try {
+    const tokenHealth = await MetaWhatsAppService.inspectAccessTokenExpiry(
+      connection.accessToken,
+      metaCredentials
+    );
+    tokenExpiresAt = tokenHealth.expiresAt;
+    if (!tokenHealth.isValid) {
+      log.warn('Connected access token reported invalid by debug_token', { organizationId: orgId });
+    }
+  } catch {
+    /* best-effort */
+  }
+
   const { whatsappNumber } = await saveWhatsappNumberWorkspace(orgId, {
     phoneNumber: connection.phoneNumber,
     phoneNumberId: connection.phoneNumberId,
     wabaId: connection.wabaId,
     businessId: connection.businessId,
     encryptedToken,
+    isOnBizApp: opts?.connectMode === 'coexistence' ? isOnBizApp : undefined,
+    coexistenceStatus: opts?.connectMode === 'coexistence' ? coexistenceStatus : undefined,
+    tokenExpiresAt,
   });
   emitProductEvent({
     organizationId: orgId,
@@ -168,18 +209,27 @@ router.get(
     const redirectUri = resolveOAuthRedirectUri(
       typeof req.query.redirectUri === 'string' ? req.query.redirectUri : null
     );
+    const connectMode =
+      req.query.mode === 'coexistence' ? ('coexistence' as const) : ('standard' as const);
 
     const state = signConnectOAuthState({
       organizationId: orgId,
       userId,
       redirectUri,
+      connectMode,
     });
-    const url = MetaWhatsAppService.getEmbeddedSignupUrl(state, metaCredentials, redirectUri);
+    const signupConfig = MetaWhatsAppService.getEmbeddedSignupConfig(
+      state,
+      metaCredentials,
+      redirectUri,
+      connectMode
+    );
 
-    log.info('WhatsApp OAuth URL issued', {
+    log.info('WhatsApp ES v4 config issued', {
       organizationId: orgId,
       userId,
       redirectUri,
+      connectMode,
       appId: metaCredentials.appId,
     });
     emitProductEvent({
@@ -187,7 +237,7 @@ router.get(
       name: 'WHATSAPP_OAUTH_START',
     });
 
-    sendSuccess(res, { url, state, redirectUri });
+    sendSuccess(res, signupConfig);
   })
 );
 
@@ -195,7 +245,11 @@ router.post(
   '/connect/callback',
   ...metaAdminGuard,
   asyncHandler(async (req: Request, res: Response) => {
-    const { code, state } = req.body as { code?: string; state?: string };
+    const { code, state, wabaIdHint } = req.body as {
+      code?: string;
+      state?: string;
+      wabaIdHint?: string;
+    };
     if (!code) throw new AppError(400, 'Authorization code required');
     if (!state) throw new AppError(400, 'OAuth state is required');
 
@@ -227,10 +281,16 @@ router.post(
       throw new AppError(403, 'OAuth state does not match the signed-in user');
     }
 
+    const connectMode = oauthState.connectMode || 'standard';
+    if (wabaIdHint && !oauthState.wabaIdHint) {
+      oauthState.wabaIdHint = wabaIdHint;
+    }
+
     log.info('WhatsApp OAuth callback started', {
       organizationId: orgId,
       userId,
       redirectUri: oauthState.redirectUri,
+      connectMode,
       codePrefix: `${code.slice(0, 8)}…`,
     });
 
@@ -277,7 +337,11 @@ router.post(
         phones[0].phoneNumberId,
         phones[0].wabaId
       );
-      const { whatsappNumber, webhookConfigured } = await saveWhatsappConnection(orgId, connection);
+      const { whatsappNumber, webhookConfigured } = await saveWhatsappConnection(orgId, connection, {
+        connectMode,
+        skipRegister: connectMode === 'coexistence',
+        metaCredentials,
+      });
 
       log.info('WhatsApp number connected via OAuth', {
         organizationId: orgId,
@@ -302,6 +366,7 @@ router.post(
       organizationId: orgId,
       userId,
       accessToken,
+      connectMode,
     });
 
     log.info('WhatsApp OAuth requires phone selection', {
@@ -361,7 +426,11 @@ router.post(
       selected.phoneNumberId,
       selected.wabaId
     );
-    const { whatsappNumber, webhookConfigured } = await saveWhatsappConnection(orgId, connection);
+    const { whatsappNumber, webhookConfigured } = await saveWhatsappConnection(orgId, connection, {
+      connectMode: pending.connectMode || 'standard',
+      skipRegister: pending.connectMode === 'coexistence',
+      metaCredentials,
+    });
 
     sendSuccess(res, {
       requiresSelection: false,
@@ -433,6 +502,14 @@ router.get(
         phoneNumberId: true,
         wabaId: true,
         isActive: true,
+        isOnBizApp: true,
+        coexistenceStatus: true,
+        historySyncProgress: true,
+        coexistenceOffboardedAt: true,
+        tokenExpiresAt: true,
+        qualityRating: true,
+        officialBusinessAccount: true,
+        messagingLimitTier: true,
         createdAt: true,
       },
     });
@@ -468,6 +545,30 @@ router.get(
     const accessToken = MetaWhatsAppService.decryptToken(number.accessToken);
     let subscribed: boolean | null = null;
     let statusCheckFailed = false;
+    let tokenExpiresAt: string | null = number.tokenExpiresAt?.toISOString() ?? null;
+    let tokenExpiringSoon = false;
+
+    try {
+      const tokenHealth = await MetaWhatsAppService.inspectAccessTokenExpiry(
+        accessToken,
+        metaCredentials
+      );
+      if (tokenHealth.expiresAt) {
+        tokenExpiresAt = tokenHealth.expiresAt.toISOString();
+        const daysLeft =
+          (tokenHealth.expiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+        tokenExpiringSoon = daysLeft <= 7;
+        if (tokenHealth.expiresAt.getTime() !== number.tokenExpiresAt?.getTime()) {
+          await prisma.whatsappNumber.update({
+            where: { id: number.id },
+            data: { tokenExpiresAt: tokenHealth.expiresAt },
+          });
+        }
+      }
+    } catch {
+      /* best-effort */
+    }
+
     try {
       const status = await MetaWhatsAppService.getWebhookStatus(
         number.wabaId,
@@ -487,6 +588,55 @@ router.get(
       webhookUrl: config.meta.webhookUrl || null,
       subscribed,
       statusCheckFailed,
+      tokenExpiresAt,
+      tokenExpiringSoon,
+    });
+  })
+);
+
+router.get(
+  '/payment-hint',
+  authenticate,
+  requireOrg,
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const numberId = await resolveActiveWhatsappNumberId(
+      orgId,
+      req.headers['x-whatsapp-number-id']
+    );
+    const number = numberId
+      ? await prisma.whatsappNumber.findFirst({
+          where: { id: numberId, organizationId: orgId, isActive: true },
+          select: { wabaId: true, accessToken: true },
+        })
+      : null;
+
+    const guidanceUrl =
+      'https://www.facebook.com/business/help/488291839463771';
+
+    if (!number?.wabaId) {
+      return sendSuccess(res, {
+        connected: false,
+        hasPaymentMethod: null,
+        detected: false,
+        guidanceUrl,
+        message:
+          'After connecting WhatsApp, add a payment method in Meta Business Suite so templates and Cloud API messages can send.',
+      });
+    }
+
+    const accessToken = MetaWhatsAppService.decryptToken(number.accessToken);
+    const hint = await MetaWhatsAppService.fetchWabaPaymentHint(number.wabaId, accessToken);
+
+    sendSuccess(res, {
+      connected: true,
+      hasPaymentMethod: hint.hasPaymentMethod,
+      detected: hint.detected,
+      guidanceUrl,
+      message:
+        hint.hasPaymentMethod === false
+          ? 'Add a payment method in Meta Business Suite (WhatsApp Manager) to send templates and paid messages.'
+          : 'Meta bills WhatsApp Cloud API usage on your WhatsApp Business Account. Keep a valid payment method in Meta Business Suite.',
     });
   })
 );

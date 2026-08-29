@@ -1,8 +1,11 @@
 import { Link } from 'react-router-dom';
-import { Smartphone, LogOut, Plus, CheckCircle2 } from 'lucide-react';
+import { Smartphone, LogOut, Plus, CheckCircle2, AlertTriangle } from 'lucide-react';
 import SettingsPanel from './SettingsPanel';
+import OfficialCheckCard from './OfficialCheckCard';
 import AppButton from '../ui/AppButton';
 import { SettingsTabSkeleton } from './SettingsSkeleton';
+import MetaPolicyDeadlinesCard from '../whatsapp/MetaPolicyDeadlinesCard';
+import MetaPaymentCallout from '../whatsapp/MetaPaymentCallout';
 import type { WhatsappNumberOption } from '../../contexts/WhatsAppNumberContext';
 import { formatPhoneDisplay } from '../../utils/phone';
 
@@ -24,6 +27,22 @@ function limitLabel(limit: number | 'unlimited' | null): string {
   if (limit === 'unlimited') return 'Unlimited';
   if (typeof limit === 'number') return String(limit);
   return '—';
+}
+
+function coexistenceBadge(number: WhatsappNumberOption): string | null {
+  if (!number.isOnBizApp && number.coexistenceStatus !== 'active') return null;
+  if (number.coexistenceStatus === 'offboarded' || number.coexistenceStatus === 'partner_removed') {
+    return 'Coexistence paused';
+  }
+  return 'Business app + Cloud API';
+}
+
+function showKeepAliveReminder(number: WhatsappNumberOption): boolean {
+  return Boolean(
+    number.isOnBizApp &&
+      number.coexistenceStatus !== 'offboarded' &&
+      number.coexistenceStatus !== 'partner_removed'
+  );
 }
 
 export default function WhatsAppChannelsPanel({
@@ -55,13 +74,19 @@ export default function WhatsAppChannelsPanel({
         : `${numbers.length} of ${numberLimit} on ${planName || 'your plan'}`;
 
   return (
+    <div className="space-y-4">
+    <MetaPolicyDeadlinesCard />
+    {numbers.length > 0 ? <MetaPaymentCallout showWhenConnected /> : null}
+    <OfficialCheckCard
+      activeNumber={numbers.find((number) => number.id === activeNumberId) || numbers[0] || null}
+    />
     <SettingsPanel
       title="WhatsApp numbers"
       description="Business lines linked to this workspace."
       icon={Smartphone}
       footer={
         numbers.length > 0 ? (
-          <div className="flex w-full items-center justify-between gap-3">
+          <div className="flex w-full flex-wrap items-center justify-between gap-3">
             <p className="text-[12px] font-medium text-theme-muted">{quotaLine}</p>
             {canConnectMore ? (
               <AppButton
@@ -90,6 +115,11 @@ export default function WhatsAppChannelsPanel({
         <div className="space-y-2.5">
           {numbers.map((number) => {
             const isPrimary = number.id === activeNumberId;
+            const coexLabel = coexistenceBadge(number);
+            const keepAlive = showKeepAliveReminder(number);
+            const offboarded =
+              number.coexistenceStatus === 'offboarded' ||
+              number.coexistenceStatus === 'partner_removed';
             return (
               <div
                 key={number.id}
@@ -100,7 +130,7 @@ export default function WhatsAppChannelsPanel({
                     <Smartphone className="h-[18px] w-[18px]" strokeWidth={2.25} />
                   </div>
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <p className="truncate font-bold text-[14px] text-theme-fg">
                         {formatPhoneDisplay(number.phoneNumber)}
                       </p>
@@ -109,11 +139,32 @@ export default function WhatsAppChannelsPanel({
                           Active
                         </span>
                       )}
+                      {coexLabel ? (
+                        <span className="shrink-0 rounded bg-sky-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-sky-800 dark:text-sky-300">
+                          {coexLabel}
+                        </span>
+                      ) : null}
                     </div>
                     <p className="mt-0.5 flex items-center gap-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
                       <CheckCircle2 className="h-3 w-3 shrink-0" />
                       Connected · Meta Cloud API
                     </p>
+                    {keepAlive && !offboarded ? (
+                      <p className="mt-1 flex items-start gap-1 text-[11px] text-amber-800 dark:text-amber-300">
+                        <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+                        Open WhatsApp Business app at least every ~13 days to keep coexistence active.
+                      </p>
+                    ) : null}
+                    {offboarded ? (
+                      <p className="mt-1 text-[11px] font-medium text-amber-800 dark:text-amber-300">
+                        Coexistence ended — open the Business app or reconnect to restore phone + API sync.
+                      </p>
+                    ) : null}
+                    {typeof number.historySyncProgress === 'number' && number.historySyncProgress < 100 ? (
+                      <p className="mt-0.5 text-[10px] text-theme-muted">
+                        History sync {number.historySyncProgress}% — past chats are importing into Inbox
+                      </p>
+                    ) : null}
                   </div>
                 </div>
                 <AppButton
@@ -138,24 +189,26 @@ export default function WhatsAppChannelsPanel({
           </div>
           <p className="mt-3 text-[14px] font-semibold text-theme-fg">No number connected</p>
           <p className="mt-1 text-[12px] text-theme-secondary">
-            Sign in with Facebook and pick your business line.
+            Choose standard Cloud API or connect your existing Business app number.
           </p>
           {numberLimit !== null && (
             <p className="mt-1.5 text-[11px] text-theme-muted">
               Plan includes {limitLabel(numberLimit)} number{numberLimit === 1 ? '' : 's'}.
             </p>
           )}
-          <AppButton
-            className="mt-4"
-            onClick={onConnect}
-            disabled={connecting || !canEdit || !canConnect}
-            loading={connecting}
-            icon={<Plus className="h-4 w-4" />}
-          >
-            Connect WhatsApp
-          </AppButton>
+          <div className="mt-4 flex flex-col items-center gap-2 sm:flex-row sm:justify-center">
+            <AppButton
+              onClick={onConnect}
+              disabled={connecting || !canEdit || !canConnect}
+              loading={connecting}
+              icon={<Plus className="h-4 w-4" />}
+            >
+              Connect WhatsApp
+            </AppButton>
+          </div>
         </div>
       )}
     </SettingsPanel>
+    </div>
   );
 }

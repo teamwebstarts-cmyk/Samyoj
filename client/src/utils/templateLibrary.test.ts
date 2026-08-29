@@ -7,6 +7,8 @@ import {
   LIBRARY_QUICK_PICKS,
   libraryButtonUrlError,
   normalizeWebsiteUrl,
+  pickStarterLibraryMatch,
+  statusFromTemplateCreate,
 } from './templateLibrary';
 
 describe('libraryVariableMetaForPersist', () => {
@@ -220,5 +222,23 @@ describe('buildLibraryButtonInputs', () => {
       { type: 'PHONE_NUMBER', phone_number: '+919876543210' },
       { type: 'OTP', otp_type: 'COPY_CODE' },
     ]);
+  });
+});
+
+describe('starter library match and create status', () => {
+  it('picks ORDER_CONFIRMATION over other utility rows', () => {
+    const match = pickStarterLibraryMatch(
+      { category: 'UTILITY', usecase: 'ORDER_CONFIRMATION', libraryHint: 'order confirmation' },
+      [
+        { name: 'delivery_update_1', category: 'UTILITY', usecase: 'DELIVERY_UPDATE' },
+        { name: 'order_confirmation_1', category: 'UTILITY', usecase: 'ORDER_CONFIRMATION' },
+      ],
+    );
+    expect(match?.name).toBe('order_confirmation_1');
+  });
+
+  it('defaults missing Meta status to PENDING instead of APPROVED', () => {
+    expect(statusFromTemplateCreate({})).toBe('PENDING');
+    expect(statusFromTemplateCreate({ data: { status: 'rejected' } })).toBe('REJECTED');
   });
 });

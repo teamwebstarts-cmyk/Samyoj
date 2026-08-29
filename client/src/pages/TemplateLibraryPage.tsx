@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import TemplateLibraryBrowseStep, {
   type LibraryListItem,
 } from '../components/templates/library/TemplateLibraryBrowseStep';
+import TemplateStarterPack, { type SamyojStarter } from '../components/templates/library/TemplateStarterPack';
 import TemplateLibraryReviewStep from '../components/templates/library/TemplateLibraryReviewStep';
 import TemplateWizardPreviewPanel, {
   TemplateWizardPolicyFooter,
@@ -39,6 +40,9 @@ import {
   LIBRARY_QUICK_PICKS,
   matchesLibraryCategoryFilter,
   normalizeWebsiteUrl,
+  pickStarterLibraryMatch,
+  statusFromTemplateCreate,
+  starterCreatePayload,
   suggestedTemplateName,
   uniqueLibraryTemplateName,
   wizardFormFromLibraryItem,
@@ -75,7 +79,9 @@ export default function TemplateLibraryPage() {
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<LibraryCategoryFilter>('ALL');
   const [usecaseFilter, setUsecaseFilter] = useState('');
-  const language = 'en_US';
+  const [language, setLanguage] = useState('en_US');
+  const [starters, setStarters] = useState<SamyojStarter[]>([]);
+  const [usingStarterId, setUsingStarterId] = useState<string | null>(null);
   const [selectedItem, setSelectedItem] = useState<LibraryListItem | null>(null);
   const [form, setForm] = useState<TemplateFormState>(createEmptyWizardForm);
   const [createName, setCreateName] = useState('');
@@ -146,6 +152,16 @@ export default function TemplateLibraryPage() {
         if (requestNumberId === activeNumberIdRef.current) setLoadingAccount(false);
       });
   }, [activeNumber, resolved]);
+
+  useEffect(() => {
+    templateApi
+      .starters()
+      .then(({ data }) => {
+        const list = Array.isArray(data?.data) ? data.data : [];
+        setStarters(list as SamyojStarter[]);
+      })
+      .catch(() => setStarters([]));
+  }, []);
 
   useEffect(() => {
     loadMeta();
@@ -325,7 +341,7 @@ export default function TemplateLibraryPage() {
       libraryTemplateButtonInputs: buttonInputs.length ? buttonInputs : undefined,
       category: libraryCloneCategory(item),
     });
-    const status = String((data as { data?: { status?: string } })?.data?.status || 'APPROVED').toUpperCase();
+    const status = statusFromTemplateCreate(data);
     const metaToPersist = libraryVariableMetaForPersist(item, item.source, variableMeta);
     const mappingSynced = await persistTemplateVariableMeta(name, metaToPersist, item.language || language);
     if (!mappingSynced) {
@@ -362,8 +378,98 @@ export default function TemplateLibraryPage() {
     toastSuccess(
       status === 'APPROVED'
         ? 'Template added and ready to use in campaigns and inbox.'
-        : 'Template added. WhatsApp usually approves library templates within minutes.',
+        : 'Template submitted. Meta still reviews this number. Usually minutes for utility and authentication.',
     );
+  };
+
+  const submitStarterCreate = async (starter: SamyojStarter, nextLanguage: string) => {
+    const name = uniqueLibraryTemplateName(`samyoj_${starter.id}`, existingNames);
+    const { data } = await templateApi.create(starterCreatePayload(starter, nextLanguage, name));
+    const status = statusFromTemplateCreate(data);
+    setAccountEntries((prev) =>
+      prev.some((t) => t.name === name)
+        ? prev
+        : [
+            {
+              id: name,
+              name,
+              status,
+              category: starter.category,
+              language: nextLanguage,
+              body: starter.body,
+            },
+            ...prev,
+          ],
+    );
+    invalidateFlowReferenceData();
+    invalidateApprovedTemplatesCache();
+    setSubmitResult({
+      submissionId: buildSubmissionId(),
+      submittedAt: new Date().toISOString(),
+      templateName: name,
+    });
+    setSubmittedStatus(status === 'APPROVED' ? 'APPROVED' : 'PENDING');
+    setActiveStep(2);
+    setMaxReachableStep(2);
+    toastSuccess(
+      status === 'APPROVED'
+        ? 'Template added and ready to use in campaigns and inbox.'
+        : 'Template submitted. Meta still reviews this number. Usually minutes for utility and authentication.',
+    );
+  };
+
+  const handleUseStarter = async (starter: SamyojStarter, nextLanguage: string) => {
+    if (!canManageTemplates) {
+      toastError(
+        templateGateMessage || 'Template library additions are not included on your current plan.',
+      );
+      return;
+    }
+    if (!activeNumber) {
+      toastError('Connect WhatsApp first.');
+      return;
+    }
+    setUsingStarterId(`${starter.id}:${nextLanguage}`);
+    setLanguage(nextLanguage);
+    setSourceTab('meta');
+    setCategoryFilter(starter.category);
+    setUsecaseFilter(starter.usecase);
+    setSearch(starter.libraryHint);
+    setStageError(null);
+    try {
+      const params: Record<string, string> = { language: nextLanguage, limit: '50' };
+      if (starter.usecase) params.usecase = starter.usecase;
+      else if (starter.libraryHint) params.search = starter.libraryHint;
+      const { data } = await templateApi.library(params);
+      const entries = (Array.isArray(data.data) ? data.data : []) as LibraryListItem[];
+      const match = pickStarterLibraryMatch(starter, entries);
+      if (match && canCloneFromMetaLibrary(match)) {
+        const item: LibraryListItem = { ...match, source: 'meta' };
+        setSelectedItem(item);
+        setForm(wizardFormFromLibraryItem(item, 'meta'));
+        setCreateName(uniqueLibraryTemplateName(suggestedTemplateName(item.name), existingNames));
+        if (libraryNeedsButtonInputs(item)) {
+          setActiveStep(1);
+          setMaxReachableStep(1);
+          toastWarning('This Meta template needs a button URL or phone before it can be submitted.');
+          return;
+        }
+        await cloneFromLibrary(item, suggestedTemplateName(item.name));
+        return;
+      }
+      if (starter.submitMode === 'library') {
+        toastWarning(
+          'No matching Meta library template on this number. Submitting the Samyoj starter instead — Meta still reviews it.',
+        );
+      }
+      await submitStarterCreate(starter, nextLanguage);
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err, 'Could not add this starter to the number.');
+      toastError(mapTemplateApiError(msg));
+      setStageError(mapTemplateApiError(msg));
+    } finally {
+      setUsingStarterId(null);
+    }
   };
 
   const handleContinue = async () => {
@@ -586,6 +692,12 @@ export default function TemplateLibraryPage() {
           <EntitlementNotice className="mb-4" message={templateGateMessage} upgradePlan="starter" />
         )}
         {stageError && <TemplateIssueAlert message={stageError} className="mb-4" />}
+
+        {activeStep === 0 && starters.length > 0 && (
+          <div className="mb-4">
+            <TemplateStarterPack starters={starters} onUse={handleUseStarter} usingId={usingStarterId} />
+          </div>
+        )}
 
         <div className="template-wizard-split template-wizard-split--library">
           <div className="min-w-0">

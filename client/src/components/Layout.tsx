@@ -18,8 +18,6 @@ import MobileBottomNav from './layout/MobileBottomNav';
 import MobileMoreSheet from './layout/MobileMoreSheet';
 import CallNotificationProvider from './calls/CallNotificationProvider';
 import QualityRatingBanner from './billing/QualityRatingBanner';
-import SubscriptionDunningBanner from './billing/SubscriptionDunningBanner';
-import UnlockGrowthModal from './billing/UnlockGrowthModal';
 import { TopbarProvider } from '../contexts/TopbarContext';
 
 export default function Layout() {
@@ -28,11 +26,6 @@ export default function Layout() {
   const { pathname, search } = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
-  const [paywallModalOpen, setPaywallModalOpen] = useState(false);
-  const [paywallDetail, setPaywallDetail] = useState<{
-    message?: string;
-    upgradeCta?: 'growth' | 'pro';
-  } | null>(null);
   const { collapsed, toggle } = useSidebarCollapsed();
   const breakpoint = useBreakpoint();
   const { total: inboxUnread, refresh: refreshInboxUnread } = useInboxUnreadTotal();
@@ -53,20 +46,6 @@ export default function Layout() {
     logout();
     navigate('/login');
   };
-
-  useEffect(() => {
-    const handlePaywall = (e: Event) => {
-      const customEvent = e as CustomEvent<{
-        message?: string;
-        upgradeCta?: 'growth' | 'pro';
-      }>;
-      setPaywallDetail(customEvent.detail || null);
-      setPaywallModalOpen(true);
-    };
-
-    window.addEventListener('billing:paywall', handlePaywall);
-    return () => window.removeEventListener('billing:paywall', handlePaywall);
-  }, []);
 
   useEffect(() => {
     document.body.style.overflow = mobileOpen ? 'hidden' : '';
@@ -139,7 +118,6 @@ export default function Layout() {
 
           {!hideTopbar && (
             <div className="mobile-chrome-hide">
-              <SubscriptionDunningBanner />
               <QualityRatingBanner />
             </div>
           )}
@@ -161,16 +139,6 @@ export default function Layout() {
         </div>
       </div>
 
-      <UnlockGrowthModal
-        isOpen={paywallModalOpen}
-        onClose={() => setPaywallModalOpen(false)}
-        onUpgrade={() => {
-          setPaywallModalOpen(false);
-          navigate('/billing');
-        }}
-        description={paywallDetail?.message}
-        targetTier={paywallDetail?.upgradeCta || 'growth'}
-      />
       </TopbarProvider>
     </CallNotificationProvider>
   );

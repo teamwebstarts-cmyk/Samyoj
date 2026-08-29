@@ -14,12 +14,14 @@ const AGENT_MENU_WIDTH = 240;
 const AGENT_MENU_GAP = 8;
 const AGENT_VISIBLE_COUNT = 3;
 
-export type ListChip = 'all' | 'unread' | 'unreplied' | 'open' | 'favourites' | 'pending' | 'hasTicket' | 'botActive';
+export type ListChip = 'all' | 'unread' | 'unreplied' | 'canReply' | 'needsTemplate' | 'open' | 'favourites' | 'pending' | 'hasTicket' | 'botActive';
 
 const FILTER_CHIPS: Array<{ chip: ListChip; label: string }> = [
   { chip: 'all', label: 'All' },
   { chip: 'unread', label: 'Unread' },
   { chip: 'unreplied', label: 'Unreplied' },
+  { chip: 'canReply', label: 'Can reply' },
+  { chip: 'needsTemplate', label: 'Needs template' },
   { chip: 'open', label: 'Open' },
   { chip: 'favourites', label: 'Favorites' },
   { chip: 'pending', label: 'Pending' },

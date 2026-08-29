@@ -233,13 +233,44 @@ export function libraryNeedsOtpButton(entry: { buttons?: TemplateButton[]; categ
 }
 
 /**
- * Meta library clones skip content review when the body is not customized.
- * Utility and Authentication library templates can be added to the WABA via library_template_name.
+ * Utility and Authentication library templates are submitted per WABA via library_template_name.
+ * Meta still reviews that number; approval is not copied from another WABA.
  */
 export function canCloneFromMetaLibrary(entry: { category?: string; source?: string }): boolean {
   if ((entry.source || 'meta') !== 'meta') return false;
   const cat = (entry.category || 'UTILITY').toUpperCase();
   return cat === 'UTILITY' || cat === 'AUTHENTICATION';
+}
+
+export function statusFromTemplateCreate(data: unknown): string {
+  const payload = data as { data?: { status?: string }; status?: string };
+  const raw = payload?.data?.status || payload?.status;
+  return raw ? String(raw).toUpperCase() : 'PENDING';
+}
+
+export function pickStarterLibraryMatch(
+  starter: { category: string; usecase?: string; libraryHint: string },
+  entries: Array<{ name: string; category?: string; usecase?: string; body?: string; source?: string }>,
+) {
+  const cloneable = entries.filter((entry) => canCloneFromMetaLibrary(entry));
+  if (!cloneable.length) return null;
+  const usecase = (starter.usecase || '').toUpperCase();
+  if (usecase) {
+    const byUsecase = cloneable.find((entry) => (entry.usecase || '').toUpperCase() === usecase);
+    if (byUsecase) return byUsecase;
+  }
+  const hint = starter.libraryHint.toLowerCase().split(/\s+/)[0] || '';
+  if (hint) {
+    const byHint = cloneable.find((entry) =>
+      `${entry.name} ${entry.body || ''}`.toLowerCase().includes(hint),
+    );
+    if (byHint) return byHint;
+  }
+  if (starter.category === 'AUTHENTICATION') {
+    const auth = cloneable.find((entry) => (entry.category || '').toUpperCase() === 'AUTHENTICATION');
+    if (auth) return auth;
+  }
+  return cloneable[0];
 }
 
 export function uniqueLibraryTemplateName(base: string, existing: Set<string>): string {
@@ -301,6 +332,34 @@ export function applyLibrarySamplesToForm(
   });
   const bodyExamples = form.bodyExamples.map((val, i) => val.trim() || samples[i] || val);
   return syncFormExamples({ ...form, variableMeta, bodyExamples });
+}
+
+export function starterCreatePayload(
+  starter: {
+    id: string;
+    category: 'UTILITY' | 'AUTHENTICATION';
+    body: string;
+  },
+  language: string,
+  name: string,
+) {
+  const examples =
+    starter.category === 'AUTHENTICATION'
+      ? ['123456']
+      : starter.id === 'order_update'
+        ? ['Rahul', 'A-1024', 'shipped']
+        : ['Rahul', 'Tue 4pm', 'Clinic'];
+  return {
+    name,
+    language,
+    category: starter.category,
+    headerFormat: 'NONE' as const,
+    body: starter.body,
+    bodyExamples: examples,
+    ...(starter.category === 'AUTHENTICATION'
+      ? { authType: 'OTP' as const, addSecurityRecommendation: true }
+      : {}),
+  };
 }
 
 export function wizardFormFromLibraryItem(

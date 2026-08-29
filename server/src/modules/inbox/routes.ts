@@ -32,7 +32,7 @@ import { NEW_CONTACT_CALLING_DEFAULTS } from '../contacts/contact-ai-defaults';
 import { pauseConversationAutomations, cancelFlowDelayJob } from '../flows/pause-automation';
 import { jumpConversationToFlowNode } from '../flows/jump';
 import type { FlowNode } from '../flows/types';
-import { resolveCs24hWindowOpensAt } from './service-window';
+import { resolveCs24hWindowOpensAt, conversationServiceWindowWhere } from './service-window';
 import { nextUnreadCount } from './unread';
 import { buildSignedMediaPath, verifyMediaSignature, MEDIA_URL_TTL_SECONDS } from './media-url';
 import { inboxStartCreateData, inboxStartMergeUpdate } from '../contacts/merge';
@@ -193,6 +193,7 @@ router.get(
       unreplied,
       hasOpenTicket,
       botActive,
+      window: windowFilter,
     } = req.query;
 
     const where: Record<string, unknown> = { organizationId: orgId, ...conversationFilter(numberId) };
@@ -215,6 +216,11 @@ router.get(
     }
     if (botActive === 'true') where.botActive = true;
     if (botActive === 'false') where.botActive = false;
+    if (windowFilter === 'open' || windowFilter === 'closed') {
+      const windowWhere = conversationServiceWindowWhere(windowFilter);
+      const existingAnd = Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : [];
+      where.AND = [...existingAnd, windowWhere];
+    }
     if (hasOpenTicket === 'true') {
       where.contact = {
         ...((where.contact as Record<string, unknown>) ?? {}),
@@ -1359,6 +1365,10 @@ router.post(
           to: conversation.contact.phone.replace(/\D/g, ''),
           type: 'reaction',
           reaction: { message_id: target.metaMessageId, emoji: data.reaction.emoji },
+        },
+        {
+          whatsappNumberId: conversation.whatsappNumber.id,
+          isOnBizApp: Boolean(conversation.whatsappNumber.isOnBizApp),
         }
       );
 

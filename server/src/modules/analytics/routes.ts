@@ -3,24 +3,24 @@ import prisma from '../../config/database';
 import { authenticate, requireOrg } from '../../middleware/auth';
 import { loadPermissions, requirePermission } from '../../middleware/permissions';
 import { sendSuccess, asyncHandler } from '../../utils/response';
-import { META_CATEGORY_RATES_INR } from '../billing/usage.service';
 import {
   resolveActiveWhatsappNumber,
   analyticsConversationFilter,
   contactsForNumberFilter,
 } from '../whatsapp/active-number';
+import { mixConversationCharges } from './conversation-mix';
 import {
   buildDailySeriesBuckets,
   resolveOverviewPeriod,
   startOfDay,
   endOfDay,
 } from './overview-period';
-import { requireFeature } from '../../middleware/plan-guard';
-
 const router = Router();
 
+// Dashboard + Reports overview must work for every connected org.
+// Do not gate the whole analytics router on analyticsAdvanced (that only
+// blocked Starter/Growth and broke the live dashboard with a paywall).
 router.use(authenticate, requireOrg, resolveActiveWhatsappNumber);
-router.use(requireFeature('analyticsAdvanced'));
 
 function rate(part: number, whole: number): number {
   return whole ? Number(((part / whole) * 100).toFixed(1)) : 0;
@@ -84,6 +84,7 @@ router.get(
       totalContacts,
       periodMessages,
       cswConversations,
+      activePhone,
     ] = await Promise.all([
       prisma.message.count({ where: outboundIn(since, until) }),
       prisma.message.count({
@@ -154,7 +155,31 @@ router.get(
           cs24hWindowOpensAt: { not: null, gte: since, lte: until },
         },
       }),
+      numberId
+        ? prisma.whatsappNumber.findUnique({
+            where: { id: numberId },
+            select: {
+              qualityRating: true,
+              messagingLimitTier: true,
+              wabaId: true,
+              phoneNumberId: true,
+            },
+          })
+        : Promise.resolve(null),
     ]);
+
+    const chargeRows = activePhone
+      ? await prisma.conversationCharge.findMany({
+          where: {
+            organizationId: orgId,
+            wabaId: activePhone.wabaId,
+            phoneNumberId: activePhone.phoneNumberId,
+            periodStart: { gte: since, lte: until },
+          },
+          select: { category: true, conversationCount: true },
+        })
+      : [];
+    const mix = mixConversationCharges(chargeRows);
 
     const messagesDelivered = messagesDeliveredOnly + messagesRead;
     const deliveryRate = rate(messagesDelivered, messagesSent);
@@ -228,6 +253,10 @@ router.get(
         failedMessages: compareEnabled ? pctDelta(messagesFailed, messagesFailedPrev) : null,
       },
       dailySeries,
+      qualityRating: activePhone?.qualityRating || 'UNKNOWN',
+      messagingLimitTier: activePhone?.messagingLimitTier || null,
+      promoConversations: mix.promoConversations,
+      serviceConversations: mix.serviceConversations,
     });
   })
 );
@@ -829,8 +858,8 @@ router.get(
         ...t,
         deliveryRate,
         readRate,
-        clickThroughRate: Number((Math.min(readRate * 0.4, 25)).toFixed(1)),
-        replyRate: Number((Math.min(readRate * 0.2, 15)).toFixed(1)),
+        clickThroughRate: null as number | null,
+        replyRate: null as number | null,
         qualityScore: (t.failed / (t.sent || 1) > 0.15 ? 'LOW' : readRate > 40 ? 'HIGH' : 'MEDIUM') as 'HIGH' | 'MEDIUM' | 'LOW',
       };
     });
@@ -848,7 +877,7 @@ router.get(
         totalFailed,
         overallDeliveryRate,
         overallReadRate,
-        estimatedCtr: Number((overallReadRate * 0.35).toFixed(1)),
+        estimatedCtr: null as number | null,
       },
       universalTemplates,
       campaigns: campaigns.slice(0, 20),
@@ -1002,18 +1031,21 @@ router.get(
     const { since, until } = periodWindow;
     const convScope = analyticsConversationFilter(orgId, numberId);
 
-    const [activeNumber, totalMessages, failedMessages, optedOutContacts] = await Promise.all([
+    const [activeNumber, totalMessages, optedOutContacts] = await Promise.all([
       numberId
         ? prisma.whatsappNumber.findUnique({
             where: { id: numberId },
-            select: { phoneNumber: true, qualityRating: true },
+            select: {
+              phoneNumber: true,
+              qualityRating: true,
+              messagingLimitTier: true,
+              wabaId: true,
+              phoneNumberId: true,
+            },
           })
         : null,
       prisma.message.count({
         where: { createdAt: { gte: since, lte: until }, conversation: convScope },
-      }),
-      prisma.message.count({
-        where: { status: 'FAILED', createdAt: { gte: since, lte: until }, conversation: convScope },
       }),
       prisma.contact.count({
         where: {
@@ -1025,50 +1057,60 @@ router.get(
     ]);
 
     const qualityRating = activeNumber?.qualityRating || 'UNKNOWN';
-
-    // Real breakdown only — derive category costs from canonical Meta rates.
-    // Splits use the actual conversation row counts when available, otherwise
-    // the analytics conversation summary.
-    const analyticsConvSummary = await prisma.conversation.aggregate({
-      where: { ...convScope, status: { not: 'CLOSED' } },
-      _count: { _all: true },
-    });
-    const totalConversations = analyticsConvSummary._count._all;
-    const categoryBreakdown = totalConversations > 0
-      ? [
-          { category: 'MARKETING', label: 'Marketing Conversations', count: Math.round(totalConversations * 0.52), estimatedCostINR: Math.round(totalConversations * 0.52 * META_CATEGORY_RATES_INR.MARKETING) },
-          { category: 'UTILITY', label: 'Utility Conversations', count: Math.round(totalConversations * 0.26), estimatedCostINR: Math.round(totalConversations * 0.26 * META_CATEGORY_RATES_INR.UTILITY) },
-          { category: 'SERVICE', label: 'Service Conversations (24h Free/User-Initiated)', count: Math.round(totalConversations * 0.18), estimatedCostINR: 0 },
-          { category: 'AUTHENTICATION', label: 'Authentication / OTP', count: Math.round(totalConversations * 0.04), estimatedCostINR: Math.round(totalConversations * 0.04 * META_CATEGORY_RATES_INR.AUTHENTICATION) },
-        ]
+    const chargeRows = activeNumber
+      ? await prisma.conversationCharge.findMany({
+          where: {
+            organizationId: orgId,
+            wabaId: activeNumber.wabaId,
+            phoneNumberId: activeNumber.phoneNumberId,
+            periodStart: { gte: since, lte: until },
+          },
+          select: { category: true, conversationCount: true, costInr: true },
+        })
       : [];
 
-    const tierLimit = 10000;
-    const tierUsageToday = Math.min(tierLimit, totalConversations);
-    const tierUsagePct = tierLimit > 0 ? Number(((tierUsageToday / tierLimit) * 100).toFixed(1)) : 0;
-
-    const failureCodes = [
-      { code: 131047, title: '24-hour service window closed', count: Math.round(failedMessages * 0.55), suggestion: 'Send an approved message template to re-engage.' },
-      { code: 131026, title: 'Message undeliverable to number', count: Math.round(failedMessages * 0.25), suggestion: 'Validate phone number format before broadcast.' },
-      { code: 131051, title: 'Meta template rate limit exceeded', count: Math.round(failedMessages * 0.12), suggestion: 'Stagger batch broadcast dispatches.' },
-      { code: 132001, title: 'Template parameter missing', count: Math.round(failedMessages * 0.08), suggestion: 'Ensure all body and header variables are populated.' },
-    ];
+    const categoryMap = new Map<string, { count: number; estimatedCostINR: number }>();
+    for (const row of chargeRows) {
+      const category = String(row.category || 'UNKNOWN').toUpperCase();
+      const current = categoryMap.get(category) || { count: 0, estimatedCostINR: 0 };
+      current.count += row.conversationCount;
+      current.estimatedCostINR += row.costInr;
+      categoryMap.set(category, current);
+    }
+    const categoryLabels: Record<string, string> = {
+      MARKETING: 'Marketing conversations',
+      UTILITY: 'Utility conversations',
+      SERVICE: 'Service conversations',
+      AUTHENTICATION: 'Authentication / OTP',
+    };
+    const categoryBreakdown = Array.from(categoryMap.entries()).map(([category, value]) => ({
+      category,
+      label: categoryLabels[category] || category,
+      count: value.count,
+      estimatedCostINR: Math.round(value.estimatedCostINR),
+    }));
 
     sendSuccess(res, {
       period: periodWindow.period,
       quality: {
         rating: qualityRating,
-        status: qualityRating === 'GREEN' ? 'High Quality' : qualityRating === 'YELLOW' ? 'Medium' : 'Needs Attention',
-        tierLimit,
-        tierUsageToday,
-        tierUsagePct,
+        status:
+          qualityRating === 'GREEN'
+            ? 'High Quality'
+            : qualityRating === 'YELLOW'
+              ? 'Medium'
+              : qualityRating === 'RED'
+                ? 'Needs Attention'
+                : 'Waiting for Meta',
+        messagingLimitTier: activeNumber?.messagingLimitTier || null,
+        remainingKnown: false,
       },
       optOuts: {
         count: optedOutContacts,
         ratePct: totalMessages > 0 ? Number(((optedOutContacts / totalMessages) * 100).toFixed(2)) : 0,
       },
       categoryBreakdown,
-      failureCodes,
+      failureCodes: [] as Array<{ code: number; title: string; count: number; suggestion: string }>,
     });
   })
 );

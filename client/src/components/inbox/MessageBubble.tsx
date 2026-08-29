@@ -413,6 +413,7 @@ export default function MessageBubble({
   const buttons = message.metadata?.buttons;
   const isButtonReply = message.metadata?.isButtonReply;
   const isAutomation = isOutbound && Boolean(getAutomationDividerLabel(message.metadata));
+  const isBizAppEcho = isOutbound && message.metadata?.source === 'biz_app';
   const templateLabel =
     type === 'TEMPLATE' && message.metadata?.templateName
       ? formatTemplateLabel(message.metadata.templateName)
@@ -1029,6 +1030,11 @@ export default function MessageBubble({
             {templateLabel ? (
               <p className="mb-1 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-chat-timestamp">
                 Template · {templateLabel}
+              </p>
+            ) : null}
+            {isBizAppEcho ? (
+              <p className="mb-1 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-sky-700 dark:text-sky-300">
+                Sent from phone
               </p>
             ) : null}
             {quoteStrip}
