@@ -10,13 +10,20 @@ describe('formatMessagingLimitTier', () => {
     expect(formatMessagingLimitTier('TIER_100K').cap).toBe('100,000');
     expect(formatMessagingLimitTier('TIER_UNLIMITED')).toEqual({
       cap: 'Unlimited',
+      capNumber: null,
       known: true,
       unlimited: true,
     });
+    expect(formatMessagingLimitTier('TIER_250').capNumber).toBe(250);
   });
 
   it('does not invent remaining quota when Meta has not sent a tier', () => {
-    expect(formatMessagingLimitTier(null)).toEqual({ cap: '—', known: false, unlimited: false });
+    expect(formatMessagingLimitTier(null)).toEqual({
+      cap: '—',
+      capNumber: null,
+      known: false,
+      unlimited: false,
+    });
     expect(formatMessagingLimitTier('UNTIERED').known).toBe(false);
   });
 });

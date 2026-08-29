@@ -1,6 +1,8 @@
 # Status, leftovers, do not redo
 
-Last updated: **2026-08-25** (SAMYOJ-3 HttpOnly cookies, email verification gate, manual billing G1–G13, **Automations Phase B**).
+Last updated: **2026-08-29** (Samyoj template catalog in Postgres + Platform Admin publisher).
+
+**2026-08-29 template catalog (test-deploy):** Tenant Template Library reads published `PlatformLibraryTemplate` rows (seeded from 30 bilingual drafts). Users pick, review, and submit to **this** WABA via `POST /templates/catalog/:slug/submit`. Platform Admin `/library` CRUD publishes drafts to that catalog. **Honest limit:** Samyoj cannot pre-approve Meta on a customer number. Utility/Auth are usually faster; Marketing is slower. Additive migration `20260829220000_platform_library_templates`. Comment on [SAMYOJ-11](https://teamwebstarts.atlassian.net/browse/SAMYOJ-11) / [SAMYOJ-57](https://teamwebstarts.atlassian.net/browse/SAMYOJ-57); no sibling ticket.
 
 **2026-08-25 Automations Phase B (test-deploy):** Conflict-at-save **server-enforced** (duplicate welcome/keyword blocks with 409). Keyword word-boundary on flow intent routes. Per-node `interruptOnInbound` on delay/schedule steps. **Send-test-to-phone** on flows + auto-replies (`POST /flows/:id/test`, `POST /automations/:id/test`). Inbox **jump-to-node** (`PATCH /inbox/:id/flow-jump`). Honest skip-reason analytics (`bySkipReason`: CSW closed, 24h cap, inbound during wait). Frequency cap, campaign picker, default flows tab, inbox waiting UI were already in code. **Phase C still deferred** (SAMYOJ-26).
 
@@ -107,7 +109,7 @@ Full map: `docs/memory/RESEARCH_MAP.md`. Short version:
 | Inbox pause does not stop **flows** | **VERIFIED (2026-08-18):** AI path honors `botActive`, journeys also honor `botActive` via `isBotPaused` double-guard in `resumeFlowAfterDelay` (lines 1457, 1477) and `startFlowFromJob` (line 1758). `pauseConversationAutomations` proactively removes delay jobs from queue. CSW enforcement on non-template outbound also verified. |
 | Billing | **Manual plan-period billing shipped 2026-08-25** (G1–G13). TARGET Razorpay Subscriptions + GST invoices = SAMYOJ-35, still deferred. |
 | Phase C automations | User said do not start: tickets/SLA, catalog, NL generate-flow, form-builder merge, `goto_flow` stack, wait-for-media. |
-| Invent Meta marketing template library | Do not. Use Meta's library + the 3 Create starters. |
+| Invent Meta marketing template library | **Superseded 2026-08-29:** Samyoj-owned catalog in Postgres (includes Marketing drafts). Still not Meta pre-approval. Do not clone Meta's library as the product. |
 | Public health `totalReceived: 0` after restart | Not proof inbound is dead. Prove with a **new** phone message. Public JSON has **no** `webhookUrl` / `lastError` / Facebook trace -- use `.env`. |
 | Socket membership re-check | **Done 2026-08-18:** `startMembershipGuard` re-checks org membership every 60s; emits `session:revoked` + disconnect on revoke. |
 | ~~Email verification theater~~ | **Done 2026-08-25:** Register no longer auto-sets `emailVerifiedAt`. |

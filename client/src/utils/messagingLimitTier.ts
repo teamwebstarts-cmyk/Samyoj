@@ -15,27 +15,41 @@ const TIER_CAPS: Record<string, string> = {
 
 export type MessagingLimitDisplay = {
   cap: string;
+  capNumber: number | null;
   known: boolean;
   unlimited: boolean;
 };
+
+function display(
+  cap: string,
+  capNumber: number | null,
+  known: boolean,
+  unlimited = false
+): MessagingLimitDisplay {
+  return { cap, capNumber, known, unlimited };
+}
 
 export function formatMessagingLimitTier(raw: string | null | undefined): MessagingLimitDisplay {
   const key = String(raw || '')
     .trim()
     .toUpperCase()
     .replace(/[\s-]+/g, '_');
-  if (!key) return { cap: '—', known: false, unlimited: false };
-  if (key === 'TIER_UNLIMITED') return { cap: 'Unlimited', known: true, unlimited: true };
+  if (!key) return display('—', null, false);
+  if (key === 'TIER_UNLIMITED') return display('Unlimited', null, true, true);
   if (TIER_CAPS[key]) {
-    return { cap: TIER_CAPS[key], known: TIER_CAPS[key] !== '—', unlimited: false };
+    const known = TIER_CAPS[key] !== '—';
+    const capNumber = known ? Number(TIER_CAPS[key].replace(/,/g, '')) : null;
+    return display(TIER_CAPS[key], Number.isFinite(capNumber) ? capNumber : null, known);
   }
   const thousands = key.match(/^TIER_(\d+)K$/);
   if (thousands) {
-    return { cap: Number(thousands[1] + '000').toLocaleString(), known: true, unlimited: false };
+    const capNumber = Number(thousands[1] + '000');
+    return display(capNumber.toLocaleString(), capNumber, true);
   }
   const digits = key.match(/^TIER_(\d+)$/);
   if (digits) {
-    return { cap: Number(digits[1]).toLocaleString(), known: true, unlimited: false };
+    const capNumber = Number(digits[1]);
+    return display(capNumber.toLocaleString(), capNumber, true);
   }
-  return { cap: '—', known: false, unlimited: false };
+  return display('—', null, false);
 }

@@ -16,24 +16,43 @@ export async function getCampaignSettings(organizationId: string): Promise<Campa
   return { ...DEFAULT_CAMPAIGN_SETTINGS, ...campaigns };
 }
 
-export async function getDailySendUsage(organizationId: string) {
+export async function getDailySendUsage(organizationId: string, whatsappNumberId?: string) {
   const settings = await getCampaignSettings(organizationId);
 
   const startOfDay = utcDayStart();
+  const rolling24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const numberFilter = whatsappNumberId ? { whatsappNumberId } : {};
 
-  const sentToday = await prisma.campaignRecipient.count({
-    where: {
-      campaign: { organizationId },
-      status: { in: ['SENT', 'DELIVERED', 'READ'] },
-      sentAt: { gte: startOfDay },
-    },
-  });
+  const [sentToday, uniquePhones, ledger, number] = await Promise.all([
+    prisma.campaignRecipient.count({
+      where: {
+        campaign: { organizationId, ...numberFilter },
+        status: { in: ['SENT', 'DELIVERED', 'READ'] },
+        sentAt: { gte: startOfDay },
+      },
+    }),
+    prisma.campaignRecipient.findMany({
+      where: {
+        campaign: { organizationId, ...numberFilter },
+        status: { in: ['SENT', 'DELIVERED', 'READ'] },
+        sentAt: { gte: rolling24h },
+      },
+      distinct: ['phone'],
+      select: { phone: true },
+    }),
+    prisma.campaignQuotaLedger.findUnique({
+      where: { organizationId_periodStart: { organizationId, periodStart: startOfDay } },
+      select: { reservedSendCount: true },
+    }),
+    whatsappNumberId
+      ? prisma.whatsappNumber.findFirst({
+          where: { id: whatsappNumberId, organizationId, isActive: true },
+          select: { messagingLimitTier: true },
+        })
+      : Promise.resolve(null),
+  ]);
 
   const dailySendLimit = settings.dailySendLimit ?? DEFAULT_CAMPAIGN_SETTINGS.dailySendLimit!;
-  const ledger = await prisma.campaignQuotaLedger.findUnique({
-    where: { organizationId_periodStart: { organizationId, periodStart: startOfDay } },
-    select: { reservedSendCount: true },
-  });
   const reservedSendCount = ledger?.reservedSendCount ?? 0;
   const remaining = Math.max(0, dailySendLimit - sentToday - reservedSendCount);
 
@@ -42,6 +61,8 @@ export async function getDailySendUsage(organizationId: string) {
     dailySendLimit,
     reservedSendCount,
     remaining,
+    uniqueUsed24h: uniquePhones.length,
+    messagingLimitTier: number?.messagingLimitTier || null,
     batchSize: settings.batchSize ?? DEFAULT_CAMPAIGN_SETTINGS.batchSize!,
     batchDelayMs: settings.batchDelayMs ?? DEFAULT_CAMPAIGN_SETTINGS.batchDelayMs!,
   };

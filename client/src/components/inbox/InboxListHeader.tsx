@@ -121,45 +121,31 @@ function WindowModeToggle({
   tipFor,
 }: {
   windowMode: InboxWindowMode;
-  onToggle: (mode: Exclude<InboxWindowMode, 'all'>) => void;
+  onToggle: () => void;
   className: string;
   tipFor: (label: string) => Record<string, unknown>;
 }) {
+  const inactive = windowMode === 'inactive';
   return (
-    <div
-      role="group"
-      aria-label="Chat window"
-      className={`inline-flex h-9 shrink-0 items-center rounded-lg border border-theme-border bg-white p-0.5 dark:bg-theme-surface ${className}`}
+    <button
+      type="button"
+      aria-pressed={windowMode !== 'all'}
+      aria-label={inactive ? 'Inactive chats. Click for Active.' : 'Active chats. Click for Inactive.'}
+      data-testid="inbox-window-toggle"
+      onClick={onToggle}
+      {...tipFor(
+        inactive
+          ? 'Inactive: 24h window closed. Click to show Active chats.'
+          : 'Active: 24h chat is open. Click to show Inactive chats.'
+      )}
+      className={`inline-flex h-9 shrink-0 items-center rounded-lg px-3 text-[12.5px] font-bold transition hover:brightness-105 active:scale-[0.98] ${FOCUS_RING_CLASS} ${
+        inactive
+          ? 'bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900'
+          : 'bg-gradient-to-br from-whatsapp-500 to-whatsapp-600 text-white shadow-[0_2px_8px_rgba(37,211,102,0.35)]'
+      } ${className}`}
     >
-      <button
-        type="button"
-        aria-pressed={windowMode === 'active'}
-        data-testid="inbox-window-active"
-        onClick={() => onToggle('active')}
-        {...tipFor('Active: 24h chat is open — reply without a template')}
-        className={`inline-flex h-8 items-center rounded-md px-2.5 text-[12.5px] font-bold transition ${FOCUS_RING_CLASS} ${
-          windowMode === 'active'
-            ? 'bg-whatsapp-600 text-white shadow-[0_1px_2px_rgba(37,211,102,0.28)]'
-            : 'text-neutral-800 hover:bg-neutral-100 dark:text-neutral-200 dark:hover:bg-neutral-800'
-        }`}
-      >
-        Active
-      </button>
-      <button
-        type="button"
-        aria-pressed={windowMode === 'inactive'}
-        data-testid="inbox-window-inactive"
-        onClick={() => onToggle('inactive')}
-        {...tipFor('Inactive: 24h window closed — history, send a template to write again')}
-        className={`inline-flex h-8 items-center rounded-md px-2.5 text-[12.5px] font-bold transition ${FOCUS_RING_CLASS} ${
-          windowMode === 'inactive'
-            ? 'bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900'
-            : 'text-neutral-800 hover:bg-neutral-100 dark:text-neutral-200 dark:hover:bg-neutral-800'
-        }`}
-      >
-        Inactive
-      </button>
-    </div>
+      {inactive ? 'Inactive' : 'Active'}
+    </button>
   );
 }
 
@@ -242,8 +228,9 @@ export default function InboxListHeader({
     setAgentsMenuOpen(false);
   };
 
-  const toggleWindowMode = (mode: Exclude<InboxWindowMode, 'all'>) => {
-    onWindowModeChange(windowMode === mode ? 'all' : mode);
+  const toggleWindowMode = () => {
+    if (windowMode === 'inactive') onWindowModeChange('active');
+    else onWindowModeChange('inactive');
   };
 
   return (

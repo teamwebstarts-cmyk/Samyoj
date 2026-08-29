@@ -7,6 +7,7 @@ export const NAV_ITEMS = [
   { to: '/', label: 'Overview', permission: 'platform.read' as const, group: 'work' as const },
   { to: '/accounts', label: 'Accounts', permission: 'organization.read' as const, group: 'work' as const },
   { to: '/billing', label: 'Billing', permission: 'operators.manage' as const, group: 'work' as const },
+  { to: '/library', label: 'Templates', permission: 'platform.read' as const, group: 'work' as const },
   { to: '/errors', label: 'Errors', permission: 'errors.read' as const, group: 'work' as const },
   { to: '/outreach', label: 'Outreach', permission: 'outreach.send' as const, group: 'work' as const },
   { to: '/operators', label: 'Operators', permission: 'operators.manage' as const, group: 'staff' as const },

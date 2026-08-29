@@ -136,7 +136,7 @@ export default function LiveMetricsHero({
                 </div>
               }
             >
-              <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[13px] font-extrabold sm:text-[15px] ${quality.chip}`}>
+              <span className={`inline-flex rounded-lg px-2.5 py-0.5 text-[13px] font-extrabold sm:text-[15px] ${quality.chip}`}>
                 {quality.label}
               </span>
             </MiniCard>

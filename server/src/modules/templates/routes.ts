@@ -18,7 +18,11 @@ import {
   testSendSchema,
 } from './types';
 import { getTemplateVariableMeta, saveTemplateVariableMeta } from './variable-meta';
-import { listSamyojStarters } from './starters';
+import {
+  buildCatalogSubmitPayload,
+  getPublishedLibraryTemplate,
+  listPublishedLibraryTemplates,
+} from './catalog-store';
 import prisma from '../../config/database';
 import { normalizePhoneIdentity } from '../../utils/phone';
 import { emitProductEvent } from '../platform/events';
@@ -112,7 +116,55 @@ router.get(
   authenticate,
   requireOrg,
   asyncHandler(async (_req: Request, res: Response) => {
-    sendSuccess(res, listSamyojStarters());
+    sendSuccess(res, await listPublishedLibraryTemplates());
+  })
+);
+
+const catalogSubmitSchema = z.object({
+  name: z
+    .string()
+    .min(1)
+    .max(512)
+    .regex(/^[a-z0-9_]+$/, 'Name must be lowercase letters, numbers, and underscores only'),
+  language: z.string().min(2).default('en_US'),
+  buttonUrl: z.string().max(2000).optional(),
+  buttonPhone: z.string().max(20).optional(),
+});
+
+router.post(
+  '/catalog/:slug/submit',
+  authenticate,
+  requireOrg,
+  asyncHandler(async (req: Request, res: Response) => {
+    const slug = z
+      .string()
+      .regex(/^[a-z0-9_]{3,64}$/)
+      .parse(req.params.slug);
+    const body = catalogSubmitSchema.parse(req.body);
+    const row = await getPublishedLibraryTemplate(slug);
+    const data = createTemplateSchema.parse(
+      buildCatalogSubmitPayload(row, {
+        name: body.name,
+        language: body.language,
+        buttonUrl: body.buttonUrl,
+        buttonPhone: body.buttonPhone,
+      })
+    );
+    const { wabaId, accessToken } = await getOrgWhatsappContext(
+      req.user!.organizationId!,
+      req.activeWhatsappNumberId
+    );
+
+    const result = await MetaWhatsAppService.createMessageTemplate(wabaId, accessToken, {
+      name: data.name,
+      language: data.language,
+      category: data.category,
+      components: buildCreateComponents(data),
+      allow_category_change: true,
+    });
+
+    await invalidateTemplateCache(req.user!.organizationId!, wabaId, data.name);
+    sendSuccess(res, result, 201);
   })
 );
 

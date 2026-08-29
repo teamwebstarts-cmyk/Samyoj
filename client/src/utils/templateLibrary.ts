@@ -1,9 +1,11 @@
 import type { TemplateButton, TemplateLibraryEntry, MessageTemplate } from '../types';
 import {
+  emptyTemplateForm,
   formFromLibraryEntry,
   formFromMessageTemplate,
   inferVariableDescription,
   syncFormExamples,
+  type TemplateButtonType,
   type TemplateFormState,
   type TemplateVariableMeta,
 } from './templateForm';
@@ -65,9 +67,9 @@ export const LIBRARY_CATEGORIES = [
 ] as const;
 
 export const libraryWizardStages = [
-  { id: 'browse', label: 'Browse', description: 'Pick a proven template' },
-  { id: 'review', label: 'Review', description: 'Name, buttons, variables' },
-  { id: 'submit', label: 'Done', description: 'Ready to send' },
+  { id: 'browse', label: 'Browse', description: 'Pick a Samyoj draft' },
+  { id: 'review', label: 'Review', description: 'Name, language, buttons' },
+  { id: 'submit', label: 'Submit', description: 'Send to Meta for this number' },
 ] as const;
 
 export const LIBRARY_QUICK_PICKS: Array<{
@@ -334,32 +336,62 @@ export function applyLibrarySamplesToForm(
   return syncFormExamples({ ...form, variableMeta, bodyExamples });
 }
 
-export function starterCreatePayload(
-  starter: {
-    id: string;
-    category: 'UTILITY' | 'AUTHENTICATION';
-    body: string;
-  },
-  language: string,
-  name: string,
-) {
-  const examples =
-    starter.category === 'AUTHENTICATION'
-      ? ['123456']
-      : starter.id === 'order_update'
-        ? ['Rahul', 'A-1024', 'shipped']
-        : ['Rahul', 'Tue 4pm', 'Clinic'];
-  return {
-    name,
-    language,
-    category: starter.category,
-    headerFormat: 'NONE' as const,
-    body: starter.body,
-    bodyExamples: examples,
-    ...(starter.category === 'AUTHENTICATION'
-      ? { authType: 'OTP' as const, addSecurityRecommendation: true }
-      : {}),
-  };
+export type CatalogTemplate = {
+  id: string;
+  title: string;
+  category: 'UTILITY' | 'MARKETING' | 'AUTHENTICATION';
+  tags: string[];
+  icon?: string;
+  header?: string | null;
+  body: string;
+  bodyHi: string;
+  footer?: string | null;
+  footerHi?: string | null;
+  buttons?: Array<{
+    type: string;
+    text: string;
+    url?: string;
+    phone_number?: string;
+    example?: string;
+  }>;
+  bodyExamples?: string[];
+  copy?: string;
+  languages?: readonly string[];
+};
+
+export type CatalogListItem = CatalogTemplate & { source: 'catalog'; name: string };
+
+export function formFromCatalogEntry(entry: CatalogTemplate, language = 'en_US'): TemplateFormState {
+  const hindi = language === 'hi_IN' || language === 'hi';
+  const body = hindi ? entry.bodyHi : entry.body;
+  const footer = (hindi ? entry.footerHi || entry.footer : entry.footer) || '';
+  const header = entry.header || '';
+  const allowed: TemplateButtonType[] = ['QUICK_REPLY', 'URL', 'PHONE_NUMBER', 'COPY_CODE'];
+  const buttons = (entry.buttons || [])
+    .filter((button): button is typeof button & { type: TemplateButtonType } =>
+      allowed.includes(button.type as TemplateButtonType)
+    )
+    .map((button) => ({
+      type: button.type,
+      text: button.text || '',
+      url: button.url || '',
+      phone_number: button.phone_number || '',
+      example: button.example || '',
+    }));
+  return syncFormExamples({
+    ...emptyTemplateForm,
+    name: suggestedTemplateName(entry.id),
+    language: hindi ? 'hi_IN' : 'en_US',
+    category: entry.category,
+    body,
+    header,
+    headerFormat: header ? 'TEXT' : 'NONE',
+    footer,
+    buttons,
+    bodyExamples: entry.bodyExamples || [],
+    addSecurityRecommendation: true,
+    authType: 'OTP',
+  });
 }
 
 export function wizardFormFromLibraryItem(

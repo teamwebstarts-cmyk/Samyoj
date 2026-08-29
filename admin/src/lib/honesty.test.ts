@@ -19,4 +19,10 @@ describe('admin in-release honesty', () => {
     expect(page).not.toMatch(/AI-429|131048 spike/);
     expect(page).toContain('topAiOrgs');
   });
+
+  it('does not claim Meta pre-approval for the platform template library', () => {
+    const page = readFileSync(join(__dirname, '../pages/TemplateCatalogPage.tsx'), 'utf8');
+    expect(page).toContain('cannot pre-approve');
+    expect(page).not.toMatch(/already approved on Meta|skip Meta review/i);
+  });
 });

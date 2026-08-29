@@ -4,7 +4,6 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import CampaignAudienceStep from '../components/campaigns/wizard/CampaignAudienceStep';
 import CampaignMessageStep from '../components/campaigns/wizard/CampaignMessageStep';
 import CampaignReviewStep from '../components/campaigns/wizard/CampaignReviewStep';
-import CampaignQuotaBar from '../components/campaigns/CampaignQuotaBar';
 import type { AudiencePreviewMetrics } from '../components/campaigns/CampaignAudiencePreview';
 import CampaignWizardStepper, {
   campaignWizardStages,
@@ -536,9 +535,7 @@ export default function CampaignWizardPage() {
       );
     }
     return (
-      <div className="space-y-3">
-        <CampaignQuotaBar />
-        <CampaignReviewStep
+      <CampaignReviewStep
         form={form}
         setForm={setForm}
         selectedTemplate={selectedTemplate}
@@ -550,7 +547,6 @@ export default function CampaignWizardPage() {
         onEditMessage={() => navigateToStep(0)}
         onEditAudience={() => navigateToStep(1)}
       />
-      </div>
     );
   };
 

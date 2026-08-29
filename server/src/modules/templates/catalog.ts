@@ -501,11 +501,14 @@ export function starterCreatePayload(
   const { body, footer } = localized(starter, language);
   const url = buttonOverrides?.url?.trim();
   const phone = buttonOverrides?.phone?.trim();
-  const buttons = (starter.buttons || []).map((btn) => {
-    if (btn.type === 'URL') return { ...btn, url: url || btn.url || SAMPLE_URL };
-    if (btn.type === 'PHONE_NUMBER') return { ...btn, phone_number: phone || btn.phone_number };
-    return btn;
-  });
+  const allowed = new Set(['QUICK_REPLY', 'URL', 'PHONE_NUMBER', 'COPY_CODE']);
+  const buttons = (starter.buttons || [])
+    .filter((btn) => allowed.has(btn.type))
+    .map((btn) => {
+      if (btn.type === 'URL') return { ...btn, url: url || btn.url || SAMPLE_URL };
+      if (btn.type === 'PHONE_NUMBER') return { ...btn, phone_number: phone || btn.phone_number };
+      return btn;
+    });
   return {
     name,
     language: language === 'hi' ? 'hi_IN' : language,

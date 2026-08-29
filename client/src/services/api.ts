@@ -649,6 +649,10 @@ export const templateApi = {
   list: (params?: Record<string, string>) => api.get('/templates', { params }),
   library: (params?: Record<string, string>) => api.get('/templates/library', { params }),
   starters: () => api.get('/templates/starters'),
+  submitCatalog: (
+    slug: string,
+    data: { name: string; language: string; buttonUrl?: string; buttonPhone?: string }
+  ) => api.post(`/templates/catalog/${encodeURIComponent(slug)}/submit`, data),
   get: (name: string) => api.get(`/templates/${name}`),
   usage: (name: string) => api.get(`/templates/${name}/usage`),
   getVariableMeta: (name: string, language?: string) =>

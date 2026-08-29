@@ -38,6 +38,13 @@ import {
 } from './session';
 import { getPlatformOrg, getPlatformOverview, listPlatformOrgs, patchPlatformOrgAi, patchPlatformOrgBilling, patchPlatformOrgFlags } from './orgs';
 import { getPlatformSettings, patchPlatformSettings } from './settings';
+import {
+  createAdminLibraryTemplate,
+  deleteAdminLibraryTemplate,
+  listAdminLibraryTemplates,
+  patchAdminLibraryTemplate,
+  type LibraryTemplateWriteInput,
+} from '../templates/catalog-store';
 import { listPlatformAudit, listPlatformErrors } from './errors';
 import { listOutreachQueues, sendOrgOutreach } from './outreach';
 import {
@@ -644,6 +651,118 @@ router.get(
 
 router.get('/settings', getPlatformSettings);
 router.put('/settings', patchPlatformSettings);
+
+const catalogButtonSchema = z.object({
+  type: z.enum(['URL', 'PHONE_NUMBER', 'COPY_CODE', 'QUICK_REPLY']),
+  text: z.string().min(1).max(25),
+  url: z.string().max(2000).optional(),
+  phone_number: z.string().max(20).optional(),
+  example: z.string().max(15).optional(),
+});
+
+const libraryTemplateFields = {
+  slug: z
+    .string()
+    .regex(/^[a-z0-9_]{3,64}$/, 'Slug must be lowercase letters, numbers, and underscores'),
+  title: z.string().trim().min(1).max(80),
+  category: z.enum(['UTILITY', 'MARKETING', 'AUTHENTICATION']),
+  tags: z.array(z.string().trim().min(1).max(32)).max(20).default([]),
+  icon: z.string().trim().min(1).max(32).default('file'),
+  header: z.string().max(60).nullable().optional(),
+  body: z.string().min(1).max(1024),
+  bodyHi: z.string().min(1).max(1024),
+  footer: z.string().max(60).nullable().optional(),
+  footerHi: z.string().max(60).nullable().optional(),
+  buttons: z.array(catalogButtonSchema).max(10).default([]),
+  bodyExamples: z.array(z.string().max(200)).max(10).default([]),
+  copy: z.string().max(240).default(''),
+  published: z.boolean().default(true),
+  sortOrder: z.number().int().min(0).max(9999).default(0),
+};
+
+router.get(
+  '/library-templates',
+  requirePlatformPermission('platform.read'),
+  asyncHandler(async (_req: Request, res: Response) => {
+    sendSuccess(res, { templates: await listAdminLibraryTemplates() });
+  })
+);
+
+router.post(
+  '/library-templates',
+  requirePlatformPermission('organization.write'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const body = z
+      .object({
+        reason: reasonSchema,
+        ...libraryTemplateFields,
+      })
+      .parse(req.body);
+    const { reason, ...data } = body;
+    sendSuccess(
+      res,
+      await createAdminLibraryTemplate({
+        actorId: req.platformOperator!.id,
+        reason,
+        data: data as LibraryTemplateWriteInput,
+      }),
+      201
+    );
+  })
+);
+
+router.patch(
+  '/library-templates/:id',
+  requirePlatformPermission('organization.write'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const body = z
+      .object({
+        reason: reasonSchema,
+        slug: libraryTemplateFields.slug.optional(),
+        title: libraryTemplateFields.title.optional(),
+        category: libraryTemplateFields.category.optional(),
+        tags: libraryTemplateFields.tags.optional(),
+        icon: libraryTemplateFields.icon.optional(),
+        header: libraryTemplateFields.header,
+        body: libraryTemplateFields.body.optional(),
+        bodyHi: libraryTemplateFields.bodyHi.optional(),
+        footer: libraryTemplateFields.footer,
+        footerHi: libraryTemplateFields.footerHi,
+        buttons: libraryTemplateFields.buttons.optional(),
+        bodyExamples: libraryTemplateFields.bodyExamples.optional(),
+        copy: libraryTemplateFields.copy.optional(),
+        published: libraryTemplateFields.published.optional(),
+        sortOrder: libraryTemplateFields.sortOrder.optional(),
+      })
+      .parse(req.body);
+    const { reason, ...data } = body;
+    sendSuccess(
+      res,
+      await patchAdminLibraryTemplate({
+        actorId: req.platformOperator!.id,
+        reason,
+        id: z.string().uuid().parse(req.params.id),
+        data: data as Partial<LibraryTemplateWriteInput>,
+      })
+    );
+  })
+);
+
+router.delete(
+  '/library-templates/:id',
+  requirePlatformPermission('organization.write'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const body = z.object({ reason: reasonSchema }).parse(req.body ?? {});
+    sendSuccess(
+      res,
+      await deleteAdminLibraryTemplate({
+        actorId: req.platformOperator!.id,
+        reason: body.reason,
+        id: z.string().uuid().parse(req.params.id),
+      })
+    );
+  })
+);
 
 export default router;
 

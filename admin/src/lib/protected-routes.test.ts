@@ -15,7 +15,8 @@ describe('protected routes', () => {
   });
 
   it('hides outreach from ANALYST and operators from SUPPORT', () => {
-    expect(canAccessPath('ANALYST', '/')).toBe(true);
+    expect(canAccessPath('ANALYST', '/library')).toBe(true);
+    expect(canAccessPath('SUPPORT', '/library')).toBe(true);
     expect(canAccessPath('ANALYST', '/outreach')).toBe(false);
     expect(canAccessPath('ANALYST', '/operators')).toBe(false);
     expect(canAccessPath('SUPPORT', '/outreach')).toBe(true);

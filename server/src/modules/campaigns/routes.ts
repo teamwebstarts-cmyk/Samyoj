@@ -243,7 +243,7 @@ router.get(
   '/quota',
   ...readGuard,
   asyncHandler(async (req: Request, res: Response) => {
-    const usage = await getDailySendUsage(req.user!.organizationId!);
+    const usage = await getDailySendUsage(req.user!.organizationId!, req.activeWhatsappNumberId);
     sendSuccess(res, usage);
   })
 );

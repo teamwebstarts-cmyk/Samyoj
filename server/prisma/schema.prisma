@@ -2007,3 +2007,29 @@ model PlatformSetting {
 
   @@map("platform_settings")
 }
+
+/// Samyoj-owned WhatsApp template drafts. Published rows appear in the tenant library.
+/// Submitting still sends a copy to Meta for that org's WABA — this table is not Meta approval.
+model PlatformLibraryTemplate {
+  id           String   @id @default(uuid())
+  slug         String   @unique
+  title        String
+  category     String
+  tags         String[] @default([])
+  icon         String   @default("file")
+  header       String?
+  body         String
+  bodyHi       String   @map("body_hi")
+  footer       String?
+  footerHi     String?  @map("footer_hi")
+  buttons      Json     @default("[]")
+  bodyExamples Json     @default("[]") @map("body_examples")
+  copy         String   @default("")
+  published    Boolean  @default(true)
+  sortOrder    Int      @default(0) @map("sort_order")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@index([published, sortOrder])
+  @@map("platform_library_templates")
+}

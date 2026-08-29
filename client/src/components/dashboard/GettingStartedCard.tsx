@@ -38,7 +38,7 @@ export default function GettingStartedCard({
           </h2>
         </div>
         <span
-          className={`rounded-full px-2 sm:px-2.5 py-0.5 text-[11px] sm:text-[11.5px] font-bold tabular-nums border ${
+          className={`rounded-lg px-2 sm:px-2.5 py-0.5 text-[11px] sm:text-[11.5px] font-bold tabular-nums border ${
             allDone
               ? 'bg-emerald-100 text-emerald-800 border-emerald-300/70'
               : 'bg-emerald-50 text-emerald-700 border-emerald-200/60'

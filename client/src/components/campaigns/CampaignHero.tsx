@@ -1,9 +1,10 @@
 import { Send } from 'lucide-react';
+import MetaDailyLimitCard from './MetaDailyLimitCard';
 
 interface CampaignHeroStat {
   label: string;
   value: number;
-  tone: 'drafts' | 'scheduled' | 'running';
+  tone: 'drafts' | 'scheduled';
 }
 
 interface CampaignHeroProps {
@@ -13,13 +14,11 @@ interface CampaignHeroProps {
 const iconChip = {
   drafts: 'bg-teal-50 text-[#0d9488] dark:bg-teal-950/50 dark:text-teal-300',
   scheduled: 'bg-orange-50 text-[#ea580c] dark:bg-orange-950/45 dark:text-orange-300',
-  running: 'bg-violet-50 text-[#7c3aed] dark:bg-violet-950/45 dark:text-violet-300',
 } as const;
 
 const statHints = {
   drafts: 'Not sent yet',
   scheduled: 'Waiting to send',
-  running: 'Sending now',
 } as const;
 
 function DraftsIcon() {
@@ -74,20 +73,9 @@ function ScheduledIcon() {
   );
 }
 
-function RunningIcon() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-3.5 w-3.5 sm:h-5 sm:w-5" fill="none">
-      <circle cx="12" cy="12" r="8.4" fill="currentColor" opacity="0.14" />
-      <circle cx="12" cy="12" r="8.4" stroke="currentColor" strokeWidth="1.7" />
-      <path d="M10 8.75v6.5L16.2 12 10 8.75Z" fill="currentColor" />
-    </svg>
-  );
-}
-
 const statIcons = {
   drafts: DraftsIcon,
   scheduled: ScheduledIcon,
-  running: RunningIcon,
 } as const;
 
 export default function CampaignHero({ stats }: CampaignHeroProps) {
@@ -136,6 +124,7 @@ export default function CampaignHero({ stats }: CampaignHeroProps) {
               </div>
             );
           })}
+          <MetaDailyLimitCard className="lg:min-w-[9.5rem] lg:max-w-[12rem] xl:min-w-[10.5rem] xl:max-w-[13rem]" />
         </div>
       </div>
     </section>

@@ -1,4 +1,5 @@
 import {
+  BookOpen,
   Building2,
   CreditCard,
   LayoutDashboard,
@@ -18,6 +19,7 @@ const ICONS: Record<string, typeof LayoutDashboard> = {
   '/': LayoutDashboard,
   '/accounts': Building2,
   '/billing': CreditCard,
+  '/library': BookOpen,
   '/errors': TriangleAlert,
   '/outreach': Mail,
   '/operators': Users,
@@ -28,6 +30,7 @@ const PATH_TITLES: Record<string, string> = {
   '/': 'Overview',
   '/accounts': 'Organizations',
   '/billing': 'Billing Studio',
+  '/library': 'Template library',
   '/errors': 'Meta Telemetry',
   '/outreach': 'Email Outreach',
   '/operators': 'Staff & Access',

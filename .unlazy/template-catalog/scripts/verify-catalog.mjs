@@ -4,7 +4,13 @@ import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
 const root = resolve(process.cwd());
-const mode = process.argv.includes('--ui') ? 'ui' : process.argv.includes('--unit') ? 'unit' : 'catalog';
+const mode = process.argv.includes('--ui')
+  ? 'ui'
+  : process.argv.includes('--unit')
+    ? 'unit'
+    : process.argv.includes('--admin')
+      ? 'admin'
+      : 'catalog';
 
 function read(rel) {
   const path = resolve(root, rel);
@@ -21,15 +27,41 @@ if (mode === 'ui') {
   if (/Meta \(\$\{metaCount\}\)|\bMeta \(100\)/.test(browse)) {
     throw new Error('Browse UI still shows Meta source tab');
   }
-  if (!/templateApi\.starters|listSamyojStarters|catalog/.test(page) && !/samyojCatalog|starters\(/.test(page)) {
-    if (!/templateApi\s*\.[\s\S]*starters/.test(page)) {
-      throw new Error('Library page no longer loads Samyoj catalog');
-    }
+  if (!/templateApi\.starters/.test(page)) {
+    throw new Error('Library page no longer loads Samyoj catalog');
   }
   if (/templateApi\.library\(/.test(page)) {
     throw new Error('Library page still fetches Meta template library');
   }
+  if (!/cannot pre-approve/.test(page) && !/cannot pre-approve/.test(browse)) {
+    throw new Error('Library UI missing honesty that Samyoj cannot pre-approve Meta');
+  }
   console.log('catalog UI verification passed');
+  process.exit(0);
+}
+
+if (mode === 'admin') {
+  const schema = read('server/prisma/schema.prisma');
+  const adminPage = read('admin/src/pages/TemplateCatalogPage.tsx');
+  const adminApp = read('admin/src/App.tsx');
+  const routes = read('admin/src/lib/routes.ts');
+  const platformRoutes = read('server/src/modules/platform/routes.ts');
+  if (!schema.includes('model PlatformLibraryTemplate')) {
+    throw new Error('Prisma model PlatformLibraryTemplate missing');
+  }
+  if (!adminPage.includes('cannot pre-approve')) {
+    throw new Error('Admin catalog page missing honesty copy');
+  }
+  if (!adminApp.includes('TemplateCatalogPage') || !adminApp.includes('path="/library"')) {
+    throw new Error('Admin app does not mount /library');
+  }
+  if (!routes.includes("to: '/library'")) {
+    throw new Error('Admin nav missing Templates item');
+  }
+  if (!platformRoutes.includes('/library-templates')) {
+    throw new Error('Platform API missing library-templates routes');
+  }
+  console.log('catalog admin verification passed');
   process.exit(0);
 }
 

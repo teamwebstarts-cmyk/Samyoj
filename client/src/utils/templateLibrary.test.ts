@@ -3,6 +3,7 @@ import {
   applyLibraryQuickPick,
   buildLibraryButtonInputs,
   buildLibraryUrlInput,
+  formFromCatalogEntry,
   libraryVariableMetaForPersist,
   LIBRARY_QUICK_PICKS,
   libraryButtonUrlError,
@@ -248,5 +249,30 @@ describe('starter library match and create status', () => {
   it('defaults missing Meta status to PENDING instead of APPROVED', () => {
     expect(statusFromTemplateCreate({})).toBe('PENDING');
     expect(statusFromTemplateCreate({ data: { status: 'rejected' } })).toBe('REJECTED');
+  });
+});
+
+describe('formFromCatalogEntry', () => {
+  it('uses Hindi body and keeps marketing category', () => {
+    const form = formFromCatalogEntry(
+      {
+        id: 'festival_offer',
+        title: 'Festival offer',
+        category: 'MARKETING',
+        tags: ['MARKETING'],
+        body: 'Hi {{1}}, save {{2}} this week.',
+        bodyHi: 'Namaste {{1}}, is hafte {{2}} bachayein.',
+        bodyExamples: ['Rahul', '20%'],
+        footer: 'Reply STOP to unsubscribe',
+        footerHi: 'Unsubscribe ke liye STOP likhein',
+        buttons: [{ type: 'URL', text: 'Shop', url: 'https://www.yourbrand.com/' }],
+      },
+      'hi_IN',
+    );
+    expect(form.language).toBe('hi_IN');
+    expect(form.category).toBe('MARKETING');
+    expect(form.body).toContain('Namaste');
+    expect(form.footer).toMatch(/STOP/);
+    expect(form.buttons[0]?.url).toContain('https://');
   });
 });

@@ -1,10 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, BookOpen, CheckCircle2, LayoutGrid, Sparkles } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import TemplateLibraryBrowseStep, {
-  type LibraryListItem,
-} from '../components/templates/library/TemplateLibraryBrowseStep';
-import TemplateStarterPack, { type SamyojStarter } from '../components/templates/library/TemplateStarterPack';
+import TemplateLibraryBrowseStep from '../components/templates/library/TemplateLibraryBrowseStep';
 import TemplateLibraryReviewStep from '../components/templates/library/TemplateLibraryReviewStep';
 import TemplateWizardPreviewPanel, {
   TemplateWizardPolicyFooter,
@@ -25,33 +22,21 @@ import { invalidateApprovedTemplatesCache } from '../components/inbox/TemplateCo
 import { invalidateFlowReferenceData } from '../components/flows/flowReferenceData';
 import { templateApi } from '../services/api';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
-import type { MessageTemplate, TemplateLibraryEntry } from '../types';
+import type { MessageTemplate } from '../types';
 import type { TemplateFormState } from '../utils/templateForm';
-import { persistTemplateVariableMeta } from '../utils/templateForm';
+import { persistTemplateVariableMeta, previewParams } from '../utils/templateForm';
 import {
-  applyLibraryQuickPick,
-  buildLibraryButtonInputs,
-  canCloneFromMetaLibrary,
+  formFromCatalogEntry,
   libraryButtonUrlError,
-  libraryCloneCategory,
   libraryNeedsButtonInputs,
-  libraryVariableMetaForPersist,
   libraryWizardStages,
-  LIBRARY_QUICK_PICKS,
-  matchesLibraryCategoryFilter,
-  normalizeWebsiteUrl,
-  pickStarterLibraryMatch,
   statusFromTemplateCreate,
-  starterCreatePayload,
-  suggestedTemplateName,
   uniqueLibraryTemplateName,
-  wizardFormFromLibraryItem,
-  type LibraryCategoryFilter,
-  type LibrarySourceTab,
+  type CatalogListItem,
+  type CatalogTemplate,
 } from '../utils/templateLibrary';
-import { previewParams } from '../utils/templateForm';
 import { getErrorMessage } from '../utils/errors';
-import { toastError, toastSuccess, toastWarning } from '../utils/toast';
+import { toastError, toastSuccess } from '../utils/toast';
 import { mapTemplateApiError } from '../components/templates/wizard/templateWizardModel';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { useTopbarExtras } from '../contexts/TopbarContext';
@@ -59,8 +44,14 @@ import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 import { useEntitlements } from '../hooks/useEntitlements';
 import EntitlementNotice from '../components/billing/EntitlementNotice';
 
-function itemKey(item: LibraryListItem) {
-  return `${item.source}:${item.name}:${item.language || ''}`;
+const DEFAULT_HONESTY =
+  'These drafts live in Samyoj. Submitting still sends this copy to Meta for YOUR WhatsApp number. Utility and authentication are usually faster. Marketing is slower. Samyoj cannot pre-approve Meta on your number.';
+
+function asCatalogItems(raw: unknown): CatalogListItem[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((row): row is CatalogTemplate => Boolean(row && typeof row === 'object' && 'id' in row && 'body' in row))
+    .map((row) => ({ ...row, source: 'catalog' as const, name: row.id, tags: row.tags || [] }));
 }
 
 export default function TemplateLibraryPage() {
@@ -69,27 +60,22 @@ export default function TemplateLibraryPage() {
   const navigate = useNavigate();
   const [activeStep, setActiveStep] = useState(0);
   const [maxReachableStep, setMaxReachableStep] = useState(0);
-  const [sourceTab, setSourceTab] = useState<LibrarySourceTab>('meta');
-  const [metaEntries, setMetaEntries] = useState<TemplateLibraryEntry[]>([]);
-  const [accountEntries, setAccountEntries] = useState<MessageTemplate[]>([]);
-  const [loadingMeta, setLoadingMeta] = useState(true);
-  const [loadingAccount, setLoadingAccount] = useState(true);
-  const [metaLoadError, setMetaLoadError] = useState<string | null>(null);
-  const [accountLoadError, setAccountLoadError] = useState<string | null>(null);
+  const [catalog, setCatalog] = useState<CatalogListItem[]>([]);
+  const [filters, setFilters] = useState<Array<{ id: string; label: string }>>([]);
+  const [honesty, setHonesty] = useState(DEFAULT_HONESTY);
+  const [loadingCatalog, setLoadingCatalog] = useState(true);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [accountNames, setAccountNames] = useState<string[]>([]);
   const [search, setSearch] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState<LibraryCategoryFilter>('ALL');
-  const [usecaseFilter, setUsecaseFilter] = useState('');
+  const [filterId, setFilterId] = useState('all');
   const [language, setLanguage] = useState('en_US');
-  const [starters, setStarters] = useState<SamyojStarter[]>([]);
-  const [usingStarterId, setUsingStarterId] = useState<string | null>(null);
-  const [selectedItem, setSelectedItem] = useState<LibraryListItem | null>(null);
+  const [selectedItem, setSelectedItem] = useState<CatalogListItem | null>(null);
   const [form, setForm] = useState<TemplateFormState>(createEmptyWizardForm);
   const [createName, setCreateName] = useState('');
   const [buttonUrl, setButtonUrl] = useState('');
   const [buttonPhone, setButtonPhone] = useState('');
   const [stageError, setStageError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [addingName, setAddingName] = useState<string | null>(null);
   const [submitResult, setSubmitResult] = useState<TemplateWizardSubmitResult | null>(null);
   const [submittedStatus, setSubmittedStatus] = useState('PENDING');
   const activeNumberIdRef = useRef<string | null>(null);
@@ -103,83 +89,58 @@ export default function TemplateLibraryPage() {
 
   const debouncedSearch = useDebouncedValue(search);
 
-  const loadMeta = useCallback(() => {
+  const loadCatalog = useCallback(() => {
     if (!resolved || !activeNumber) return;
     const requestNumberId = activeNumber.id;
-    setLoadingMeta(true);
-    const params: Record<string, string> = { language, limit: '100' };
-    if (debouncedSearch) params.search = debouncedSearch;
-    if (usecaseFilter) params.usecase = usecaseFilter;
-
+    setLoadingCatalog(true);
     templateApi
-      .library(params)
+      .starters()
       .then(({ data }) => {
         if (requestNumberId !== activeNumberIdRef.current) return;
-        setMetaEntries(Array.isArray(data.data) ? data.data : []);
-        setMetaLoadError(null);
+        const payload = data?.data;
+        setCatalog(asCatalogItems(payload?.templates));
+        setFilters(Array.isArray(payload?.filters) ? payload.filters : []);
+        if (typeof payload?.honesty === 'string' && payload.honesty.trim()) setHonesty(payload.honesty);
+        setCatalogError(null);
       })
       .catch((err: unknown) => {
         if (requestNumberId !== activeNumberIdRef.current) return;
-        const msg = getErrorMessage(err, 'Couldn’t load ready-made templates. Refresh and try again.');
+        const msg = getErrorMessage(err, 'Couldn’t load the Samyoj library. Refresh and try again.');
         toastError(msg);
-        setMetaLoadError(msg);
+        setCatalogError(msg);
       })
       .finally(() => {
-        if (requestNumberId === activeNumberIdRef.current) setLoadingMeta(false);
+        if (requestNumberId === activeNumberIdRef.current) setLoadingCatalog(false);
       });
-  }, [activeNumber, debouncedSearch, language, resolved, usecaseFilter]);
+  }, [activeNumber, resolved]);
 
-  const loadAccount = useCallback(() => {
+  const loadAccountNames = useCallback(() => {
     if (!resolved || !activeNumber) return;
     const requestNumberId = activeNumber.id;
-    setLoadingAccount(true);
     templateApi
       .list({ all: 'true' })
       .then(({ data }) => {
         if (requestNumberId !== activeNumberIdRef.current) return;
         const payload = data.data;
         const list = Array.isArray(payload) ? payload : payload?.templates || [];
-        setAccountEntries(list);
-        setAccountLoadError(null);
+        setAccountNames(list.map((row: { name?: string }) => String(row.name || '')).filter(Boolean));
       })
-      .catch((err: unknown) => {
-        if (requestNumberId !== activeNumberIdRef.current) return;
-        setAccountLoadError(
-          getErrorMessage(err, 'Couldn’t load account templates. Refresh and try again.'),
-        );
-      })
-      .finally(() => {
-        if (requestNumberId === activeNumberIdRef.current) setLoadingAccount(false);
+      .catch(() => {
+        /* names only used to avoid collisions */
       });
   }, [activeNumber, resolved]);
 
   useEffect(() => {
-    templateApi
-      .starters()
-      .then(({ data }) => {
-        const list = Array.isArray(data?.data) ? data.data : [];
-        setStarters(list as SamyojStarter[]);
-      })
-      .catch(() => {
-        setStarters([]);
-        toastError('Could not load Samyoj starters.');
-      });
-  }, []);
+    loadCatalog();
+  }, [loadCatalog, resolved, activeNumber?.id]);
 
   useEffect(() => {
-    loadMeta();
-  }, [loadMeta, resolved, activeNumber?.id]);
-
-  useEffect(() => {
-    loadAccount();
-  }, [loadAccount, resolved, activeNumber?.id]);
+    loadAccountNames();
+  }, [loadAccountNames, resolved, activeNumber?.id]);
 
   useOnActiveNumberChange(({ isInitial }) => {
     if (isInitial) return;
-    setMetaEntries([]);
-    setAccountEntries([]);
-    setMetaLoadError(null);
-    setAccountLoadError(null);
+    setCatalog([]);
     setSelectedItem(null);
     setForm(createEmptyWizardForm());
     setCreateName('');
@@ -190,43 +151,34 @@ export default function TemplateLibraryPage() {
     setSubmittedStatus('PENDING');
     setActiveStep(0);
     setMaxReachableStep(0);
-    setLoadingMeta(true);
-    setLoadingAccount(true);
-    loadMeta();
-    loadAccount();
+    setLoadingCatalog(true);
+    loadCatalog();
+    loadAccountNames();
   });
 
-  const existingNames = useMemo(
-    () => new Set(accountEntries.map((t) => t.name)),
-    [accountEntries],
-  );
+  const existingNames = useMemo(() => new Set(accountNames), [accountNames]);
 
-  const listItems: LibraryListItem[] = useMemo(() => {
-    const raw: LibraryListItem[] =
-      sourceTab === 'meta'
-        ? metaEntries.map((e) => ({ ...e, source: 'meta' as const }))
-        : accountEntries.map((e) => ({ ...e, source: 'account' as const }));
+  const listItems = useMemo(() => {
     const q = debouncedSearch.trim().toLowerCase();
-    return raw.filter((item) => {
-      if (!matchesLibraryCategoryFilter(item, categoryFilter)) return false;
-      if (sourceTab === 'meta') return true;
+    return catalog.filter((item) => {
+      if (filterId && filterId !== 'all') {
+        const matchesCategory = item.category === filterId;
+        const matchesTag = (item.tags || []).includes(filterId);
+        if (!matchesCategory && !matchesTag) return false;
+      }
       if (!q) return true;
-      const cat = (item.category || '').toLowerCase();
-      return (
-        item.name.toLowerCase().includes(q) ||
-        (item.body || '').toLowerCase().includes(q) ||
-        cat.includes(q)
-      );
+      const haystack = `${item.title} ${item.id} ${item.body} ${item.bodyHi} ${item.copy || ''}`.toLowerCase();
+      return haystack.includes(q);
     });
-  }, [sourceTab, metaEntries, accountEntries, categoryFilter, debouncedSearch]);
+  }, [catalog, filterId, debouncedSearch]);
 
-  const selectedKey = selectedItem ? itemKey(selectedItem) : null;
+  const selectedKey = selectedItem?.id || null;
   const selected = selectedItem;
 
   useEffect(() => {
     if (activeStep !== 0) return;
     if (!listItems.length) return;
-    if (selectedItem && listItems.some((i) => itemKey(i) === itemKey(selectedItem))) return;
+    if (selectedItem && listItems.some((item) => item.id === selectedItem.id)) return;
     setSelectedItem(listItems[0]);
   }, [listItems, selectedItem, activeStep]);
 
@@ -238,23 +190,23 @@ export default function TemplateLibraryPage() {
       setButtonPhone('');
       return;
     }
-    const next = wizardFormFromLibraryItem(selectedItem, selectedItem.source);
-    const name = suggestedTemplateName(selectedItem.name);
+    const next = formFromCatalogEntry(selectedItem, language);
+    const name = uniqueLibraryTemplateName(selectedItem.id, existingNames);
     setForm({ ...next, name });
     setCreateName(name);
-    const urlBtn = (selectedItem.buttons || []).find((b) => b.type?.toUpperCase() === 'URL');
-    const phoneBtn = (selectedItem.buttons || []).find((b) => b.type?.toUpperCase() === 'PHONE_NUMBER');
-    setButtonUrl(urlBtn?.url && !urlBtn.url.includes('example.com') ? urlBtn.url : '');
+    const urlBtn = (selectedItem.buttons || []).find((button) => button.type?.toUpperCase() === 'URL');
+    const phoneBtn = (selectedItem.buttons || []).find((button) => button.type?.toUpperCase() === 'PHONE_NUMBER');
+    setButtonUrl(urlBtn?.url || '');
     setButtonPhone(phoneBtn?.phone_number || '');
     setStageError(null);
-    // Only re-seed when the picked template identity changes — not when the filtered list refreshes.
+    // Re-seed when the picked draft or preview language changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedKey]);
+  }, [selectedKey, language]);
 
   const previewTemplate: MessageTemplate = useMemo(
     () => ({
       id: 'preview',
-      name: form.name || selected?.name || 'preview',
+      name: form.name || selected?.id || 'preview',
       status: 'PENDING',
       category: form.category,
       language: form.language,
@@ -266,7 +218,7 @@ export default function TemplateLibraryPage() {
         ...(form.footer ? [{ type: 'FOOTER', text: form.footer }] : []),
       ],
     }),
-    [form, selected?.name],
+    [form, selected?.id],
   );
 
   const sampleParams = getPreviewSampleParams(form);
@@ -274,17 +226,16 @@ export default function TemplateLibraryPage() {
     bodyParams: previewParams(sampleParams.bodyParams),
     headerParams: previewParams(sampleParams.headerParams),
   });
-  const previewButtons =
-    selected?.buttons?.length
-      ? selected.buttons
-      : form.buttons
-          .filter((b) => b.text.trim())
-          .map((b) => ({
-            type: b.type,
-            text: b.text,
-            ...(b.type === 'URL' && b.url ? { url: b.url } : {}),
-            ...(b.type === 'PHONE_NUMBER' && b.phone_number ? { phone_number: b.phone_number } : {}),
-          }));
+  const previewButtons = form.buttons
+    .filter((button) => button.text.trim())
+    .map((button) => ({
+      type: button.type,
+      text: button.text,
+      ...(button.type === 'URL' && (buttonUrl || button.url) ? { url: buttonUrl || button.url } : {}),
+      ...(button.type === 'PHONE_NUMBER' && (buttonPhone || button.phone_number)
+        ? { phone_number: buttonPhone || button.phone_number }
+        : {}),
+    }));
 
   const goToStep = (step: number) => {
     if (step > maxReachableStep) return;
@@ -293,16 +244,15 @@ export default function TemplateLibraryPage() {
 
   const validateReview = (): string | null => {
     if (!selected) return 'Select a template first.';
-    if (!canCloneFromMetaLibrary(selected)) return null;
     if (!/^[a-z0-9_]+$/.test(createName.trim())) {
-      return 'Use a simple name like order_update — only small letters, numbers, and _';
+      return 'Use a simple name like order_confirmed — only small letters, numbers, and _';
     }
     if (existingNames.has(createName.trim())) {
       return 'A template with this name already exists. Choose a different name.';
     }
     if (libraryNeedsButtonInputs(selected)) {
-      const needsUrl = (selected.buttons || []).some((b) => b.type?.toUpperCase() === 'URL');
-      const needsPhone = (selected.buttons || []).some((b) => b.type?.toUpperCase() === 'PHONE_NUMBER');
+      const needsUrl = (selected.buttons || []).some((button) => button.type?.toUpperCase() === 'URL');
+      const needsPhone = (selected.buttons || []).some((button) => button.type?.toUpperCase() === 'PHONE_NUMBER');
       if (needsUrl) {
         const urlError = libraryButtonUrlError(buttonUrl, window.location.origin);
         if (urlError) return urlError;
@@ -314,96 +264,22 @@ export default function TemplateLibraryPage() {
     return null;
   };
 
-  const cloneFromLibrary = async (
-    item: LibraryListItem,
-    nameOverride?: string,
-    variableMeta?: TemplateFormState['variableMeta'],
-  ) => {
+  const submitCatalog = async (item: CatalogListItem, nameOverride?: string) => {
     if (!canManageTemplates) {
       throw new Error(
         templateGateMessage || 'Template library additions are not included on your current plan.',
       );
     }
-    const name = uniqueLibraryTemplateName(nameOverride || createName || item.name, existingNames);
-    if (libraryNeedsButtonInputs(item)) {
-      const needsUrl = (item.buttons || []).some((b) => b.type?.toUpperCase() === 'URL');
-      const needsPhone = (item.buttons || []).some((b) => b.type?.toUpperCase() === 'PHONE_NUMBER');
-      if (needsUrl) {
-        const urlError = libraryButtonUrlError(buttonUrl, window.location.origin);
-        if (urlError) throw new Error(urlError);
-      }
-      if (needsPhone && buttonPhone.replace(/\D/g, '').length < 8) {
-        throw new Error('Enter a valid phone number with country code for the call button.');
-      }
-    }
-    const buttonInputs = buildLibraryButtonInputs(item, normalizeWebsiteUrl(buttonUrl), buttonPhone);
-    const { data } = await templateApi.createFromLibrary({
+    const name = uniqueLibraryTemplateName(nameOverride || createName || item.id, existingNames);
+    const { data } = await templateApi.submitCatalog(item.id, {
       name,
-      language: item.language || language || 'en_US',
-      libraryTemplateName: item.name,
-      libraryTemplateButtonInputs: buttonInputs.length ? buttonInputs : undefined,
-      category: libraryCloneCategory(item),
+      language,
+      ...(buttonUrl.trim() ? { buttonUrl: buttonUrl.trim() } : {}),
+      ...(buttonPhone.trim() ? { buttonPhone: buttonPhone.trim() } : {}),
     });
     const status = statusFromTemplateCreate(data);
-    const metaToPersist = libraryVariableMetaForPersist(item, item.source, variableMeta);
-    const mappingSynced = await persistTemplateVariableMeta(name, metaToPersist, item.language || language);
-    if (!mappingSynced) {
-      toastWarning(
-        'Template added, but the variable mapping could not sync for the team. Auto-fill may only work on this device.',
-      );
-    }
-    setAccountEntries((prev) =>
-      prev.some((t) => t.name === name)
-        ? prev
-        : [
-            {
-              id: name,
-              name,
-              status,
-              category: libraryCloneCategory(item),
-              language: item.language || language || 'en_US',
-              body: 'body' in item ? item.body : undefined,
-              buttons: item.buttons,
-            },
-            ...prev,
-          ],
-    );
-    invalidateFlowReferenceData();
-    invalidateApprovedTemplatesCache();
-    setSubmitResult({
-      submissionId: buildSubmissionId(),
-      submittedAt: new Date().toISOString(),
-      templateName: name,
-    });
-    setSubmittedStatus(status === 'PENDING' ? 'PENDING' : status);
-    setActiveStep(2);
-    setMaxReachableStep(2);
-    toastSuccess(
-      status === 'APPROVED'
-        ? 'Template added and ready to use in campaigns and inbox.'
-        : 'Template submitted. Meta still reviews this number. Usually minutes for utility and authentication.',
-    );
-  };
-
-  const submitStarterCreate = async (starter: SamyojStarter, nextLanguage: string) => {
-    const name = uniqueLibraryTemplateName(`samyoj_${starter.id}`, existingNames);
-    const { data } = await templateApi.create(starterCreatePayload(starter, nextLanguage, name));
-    const status = statusFromTemplateCreate(data);
-    setAccountEntries((prev) =>
-      prev.some((t) => t.name === name)
-        ? prev
-        : [
-            {
-              id: name,
-              name,
-              status,
-              category: starter.category,
-              language: nextLanguage,
-              body: starter.body,
-            },
-            ...prev,
-          ],
-    );
+    persistTemplateVariableMeta(name, form.variableMeta);
+    setAccountNames((prev) => (prev.includes(name) ? prev : [name, ...prev]));
     invalidateFlowReferenceData();
     invalidateApprovedTemplatesCache();
     setSubmitResult({
@@ -421,69 +297,6 @@ export default function TemplateLibraryPage() {
     );
   };
 
-  const handleUseStarter = async (starter: SamyojStarter, nextLanguage: string) => {
-    if (!canManageTemplates) {
-      toastError(
-        templateGateMessage || 'Template library additions are not included on your current plan.',
-      );
-      return;
-    }
-    if (!activeNumber) {
-      toastError('Connect WhatsApp first.');
-      return;
-    }
-    setUsingStarterId(`${starter.id}:${nextLanguage}`);
-    setLanguage(nextLanguage);
-    setSourceTab('meta');
-    setCategoryFilter(starter.category);
-    setUsecaseFilter(starter.usecase);
-    setSearch(starter.libraryHint);
-    setStageError(null);
-    try {
-      let entries: LibraryListItem[] = [];
-      try {
-        const params: Record<string, string> = { language: nextLanguage, limit: '50' };
-        if (starter.usecase) params.usecase = starter.usecase;
-        else if (starter.libraryHint) params.search = starter.libraryHint;
-        const { data } = await templateApi.library(params);
-        entries = (Array.isArray(data.data) ? data.data : []) as LibraryListItem[];
-      } catch {
-        toastWarning(
-          'Meta catalog unavailable. Submitting the Samyoj starter instead — Meta still reviews it.',
-        );
-        await submitStarterCreate(starter, nextLanguage);
-        return;
-      }
-      const match = pickStarterLibraryMatch(starter, entries);
-      if (match && canCloneFromMetaLibrary(match)) {
-        const item: LibraryListItem = { ...match, source: 'meta' };
-        setSelectedItem(item);
-        setForm(wizardFormFromLibraryItem(item, 'meta'));
-        setCreateName(uniqueLibraryTemplateName(suggestedTemplateName(item.name), existingNames));
-        if (libraryNeedsButtonInputs(item)) {
-          setActiveStep(1);
-          setMaxReachableStep(1);
-          toastWarning('This Meta template needs a button URL or phone before it can be submitted.');
-          return;
-        }
-        await cloneFromLibrary(item, suggestedTemplateName(item.name));
-        return;
-      }
-      if (starter.submitMode === 'library') {
-        toastWarning(
-          'No matching Meta library template on this number. Submitting the Samyoj starter instead — Meta still reviews it.',
-        );
-      }
-      await submitStarterCreate(starter, nextLanguage);
-    } catch (err: unknown) {
-      const msg = getErrorMessage(err, 'Could not add this starter to the number.');
-      toastError(mapTemplateApiError(msg));
-      setStageError(mapTemplateApiError(msg));
-    } finally {
-      setUsingStarterId(null);
-    }
-  };
-
   const handleContinue = async () => {
     if (!canManageTemplates) {
       toastError(
@@ -494,7 +307,7 @@ export default function TemplateLibraryPage() {
     setStageError(null);
     if (activeStep === 0) {
       if (!selected) {
-        setStageError('Pick a template from the list to continue.');
+        setStageError('Pick a template from the library to continue.');
         return;
       }
       setActiveStep(1);
@@ -503,10 +316,6 @@ export default function TemplateLibraryPage() {
     }
     if (activeStep === 1) {
       if (!selected) return;
-      if (!canCloneFromMetaLibrary(selected)) {
-        navigate('/templates/new', { state: { form: { ...form, name: createName || form.name } } });
-        return;
-      }
       const error = validateReview();
       if (error) {
         setStageError(error);
@@ -514,62 +323,12 @@ export default function TemplateLibraryPage() {
       }
       setSaving(true);
       try {
-        await cloneFromLibrary(selected, createName.trim(), form.variableMeta);
+        await submitCatalog(selected, createName.trim());
       } catch (err: unknown) {
-        setStageError(
-          mapTemplateApiError(getErrorMessage(err, 'Failed to add template from library.')),
-        );
+        setStageError(mapTemplateApiError(getErrorMessage(err, 'Failed to submit this template to Meta.')));
       } finally {
         setSaving(false);
       }
-    }
-  };
-
-  const handleQuickPickChange = (pickId: string) => {
-    if (!pickId) {
-      setCategoryFilter('ALL');
-      setUsecaseFilter('');
-      return;
-    }
-    const pick = LIBRARY_QUICK_PICKS.find((p) => p.id === pickId);
-    if (!pick) return;
-    setSourceTab('meta');
-    const next = applyLibraryQuickPick(pick);
-    setCategoryFilter(next.categoryFilter);
-    setUsecaseFilter(next.usecaseFilter);
-  };
-
-  const handleQuickAdd = async (item: LibraryListItem) => {
-    if (!canManageTemplates) {
-      toastError(
-        templateGateMessage || 'Template library additions are not included on your current plan.',
-      );
-      return;
-    }
-    setSelectedItem(item);
-    setStageError(null);
-    if (libraryNeedsButtonInputs(item)) {
-      setActiveStep(1);
-      setMaxReachableStep((prev) => Math.max(prev, 1));
-      return;
-    }
-    setAddingName(item.name);
-    setSaving(true);
-    try {
-      await cloneFromLibrary(
-        item,
-        suggestedTemplateName(item.name),
-        wizardFormFromLibraryItem(item, item.source).variableMeta,
-      );
-    } catch (err: unknown) {
-      setStageError(
-        mapTemplateApiError(getErrorMessage(err, 'Failed to add template from library.')),
-      );
-      setActiveStep(1);
-      setMaxReachableStep((prev) => Math.max(prev, 1));
-    } finally {
-      setSaving(false);
-      setAddingName(null);
     }
   };
 
@@ -579,7 +338,7 @@ export default function TemplateLibraryPage() {
       return;
     }
     navigate('/templates/new', {
-      state: { form: { ...form, name: createName || suggestedTemplateName(selected.name) } },
+      state: { form: { ...form, name: createName || selected.id } },
     });
   };
 
@@ -608,12 +367,12 @@ export default function TemplateLibraryPage() {
   const stepSubtitle = useMemo(
     () =>
       activeStep === 0
-        ? 'Add Meta’s Utility and Authentication templates in one click'
+        ? 'Pick a Samyoj draft, then submit it to this WhatsApp number'
         : activeStep === 1
-          ? 'Confirm name, buttons, and how variables fill from contacts'
+          ? 'Confirm name, language, and buttons. Meta still reviews this number.'
           : submittedStatus === 'APPROVED'
             ? 'You can send this from Campaigns and Inbox now'
-            : 'WhatsApp is reviewing this template',
+            : 'WhatsApp is reviewing this template on this number',
     [activeStep, submittedStatus],
   );
 
@@ -636,7 +395,7 @@ export default function TemplateLibraryPage() {
         <div className="template-wizard-card mx-auto max-w-lg p-6 text-center">
           <p className="text-[15px] font-bold text-slate-900 dark:text-white">Connect WhatsApp first</p>
           <p className="mt-2 text-[13px] text-slate-600">
-            You need to link your WhatsApp Business number before browsing Meta&apos;s template library.
+            You need to link your WhatsApp Business number before submitting a library template to Meta.
           </p>
           <Link to="/settings" className="mt-4 inline-block text-[13px] font-semibold text-violet-600">
             Go to Settings
@@ -705,40 +464,27 @@ export default function TemplateLibraryPage() {
         )}
         {stageError && <TemplateIssueAlert message={stageError} className="mb-4" />}
 
-        {activeStep === 0 && starters.length > 0 && (
-          <div className="mb-4">
-            <TemplateStarterPack starters={starters} onUse={handleUseStarter} usingId={usingStarterId} />
-          </div>
-        )}
-
         <div className="template-wizard-split template-wizard-split--library">
           <div className="min-w-0">
             {activeStep === 0 && (
               <TemplateLibraryBrowseStep
-                sourceTab={sourceTab}
-                onSourceTabChange={(tab) => {
-                  setSourceTab(tab);
-                  setSelectedItem(null);
-                }}
                 search={search}
                 onSearchChange={setSearch}
-                categoryFilter={categoryFilter}
-                usecaseFilter={usecaseFilter}
-                loading={sourceTab === 'meta' ? loadingMeta : loadingAccount}
+                filterId={filterId}
+                onFilterChange={setFilterId}
+                filters={filters.length ? filters : [{ id: 'all', label: 'All' }]}
+                language={language}
+                onLanguageChange={setLanguage}
+                loading={loadingCatalog}
                 items={listItems}
                 selectedKey={selectedKey}
                 onSelect={(key) => {
-                  const match = listItems.find((item) => itemKey(item) === key);
+                  const match = listItems.find((item) => item.id === key);
                   if (match) setSelectedItem(match);
                 }}
-                onQuickAdd={(item) => void handleQuickAdd(item)}
-                canCreate={canManageTemplates}
-                onQuickPickChange={handleQuickPickChange}
-                addingName={addingName}
-                metaCount={metaEntries.length}
-                accountCount={accountEntries.length}
-                loadError={sourceTab === 'meta' ? metaLoadError : accountLoadError}
-                onRetry={sourceTab === 'meta' ? loadMeta : loadAccount}
+                honesty={honesty}
+                loadError={catalogError}
+                onRetry={loadCatalog}
               />
             )}
             {activeStep === 1 && selected && (
@@ -752,10 +498,12 @@ export default function TemplateLibraryPage() {
                   setForm((prev) => ({ ...prev, name: value }));
                 }}
                 nameError={nameError}
+                language={language}
+                onLanguageChange={setLanguage}
                 buttonUrl={buttonUrl}
                 onButtonUrlChange={setButtonUrl}
                 buttonUrlError={
-                  (selected.buttons || []).some((b) => b.type?.toUpperCase() === 'URL') &&
+                  (selected.buttons || []).some((button) => button.type?.toUpperCase() === 'URL') &&
                   buttonUrl.trim()
                     ? libraryButtonUrlError(buttonUrl, window.location.origin)
                     : null
@@ -835,22 +583,12 @@ export default function TemplateLibraryPage() {
               <AppButton
                 type="button"
                 size="sm"
-                icon={
-                  activeStep === 1 && selected && canCloneFromMetaLibrary(selected) ? (
-                    <Sparkles className="h-3.5 w-3.5" />
-                  ) : (
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  )
-                }
+                icon={activeStep === 1 ? <Sparkles className="h-3.5 w-3.5" /> : <ArrowRight className="h-3.5 w-3.5" />}
                 onClick={() => void handleContinue()}
                 disabled={saving || !canManageTemplates || (activeStep === 0 && !selected)}
                 loading={saving}
               >
-                {activeStep === 0
-                  ? 'Continue'
-                  : selected && canCloneFromMetaLibrary(selected)
-                    ? 'Add to my account'
-                    : 'Open in editor'}
+                {activeStep === 0 ? 'Continue' : 'Submit to this number'}
               </AppButton>
             </div>
           </div>

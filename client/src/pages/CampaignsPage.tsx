@@ -18,7 +18,6 @@ import CampaignHero from '../components/campaigns/CampaignHero';
 import CampaignRetargetPanel from '../components/campaigns/CampaignRetargetPanel';
 import CampaignAudienceSection from '../components/campaigns/CampaignAudienceSection';
 import { recipientsFromPhones, type CampaignRecipientDetail } from '../components/campaigns/wizard/campaignWizardModel';
-import CampaignQuotaBar from '../components/campaigns/CampaignQuotaBar';
 import CampaignTable, { CampaignListPagination, type CampaignSortKey } from '../components/campaigns/CampaignTable';
 import CampaignCard from '../components/campaigns/CampaignCard';
 import CampaignDetailHeader from '../components/campaigns/CampaignDetailHeader';
@@ -873,7 +872,6 @@ export default function CampaignsPage() {
           stats={[
             { label: 'Drafts', value: lifecycleSummary.drafts, tone: 'drafts' },
             { label: 'Scheduled', value: lifecycleSummary.scheduled, tone: 'scheduled' },
-            { label: 'Running', value: lifecycleSummary.running, tone: 'running' },
           ]}
         />
 
@@ -899,7 +897,6 @@ export default function CampaignsPage() {
             searchPlaceholder="Search campaigns or templates"
             filters={
               <>
-                <CampaignQuotaBar compact />
                 <CampaignStatusFilter value={statusFilter} onChange={setStatusFilter} />
                 <AppSelect
                   className="w-full min-w-0 shrink-0 sm:w-[10.25rem] sm:max-w-[10.25rem] [&_.app-select__control]:!w-full [&_.app-select__single-value]:!max-w-none"

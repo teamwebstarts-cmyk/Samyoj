@@ -258,7 +258,7 @@ export default function MetricsPeriodPicker({
 
   if (!onPeriodChange) {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200/80 bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-neutral-600 shadow-xs">
+      <span className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-200/80 bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-neutral-600 shadow-xs">
         <Calendar className="h-3.5 w-3.5 text-neutral-400 stroke-[2]" aria-hidden />
         {label}
       </span>
@@ -274,7 +274,7 @@ export default function MetricsPeriodPicker({
         aria-expanded={open}
         aria-label="Metrics period"
         onClick={() => setOpen((value) => !value)}
-        className="inline-flex max-w-[min(100vw-2rem,16rem)] items-center gap-1.5 rounded-full border border-neutral-200/80 bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-neutral-600 shadow-xs transition-colors hover:border-neutral-300 hover:bg-white"
+        className="inline-flex max-w-[min(100vw-2rem,16rem)] items-center gap-1.5 rounded-lg border border-neutral-200/80 bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-neutral-600 shadow-xs transition-colors hover:border-neutral-300 hover:bg-white"
       >
         <Calendar className="h-3.5 w-3.5 shrink-0 text-neutral-400 stroke-[2]" aria-hidden />
         <span className="truncate">{label}</span>

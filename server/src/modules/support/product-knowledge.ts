@@ -129,7 +129,7 @@ Create a template, review it, then submit to Meta. Statuses: Draft, Pending, App
 
 From Inbox: if the window is open, type a normal reply. If it is closed, tap Template, pick an approved template, fill variables, and send.
 
-The Template library lists Meta's pre-approved templates you can add. Do not invent extra marketing templates that are not in Meta's library or the Create starters.
+The Template library shows Samyoj-saved drafts (English + Hindi). Pick one, review name/language/buttons, then submit to THIS WhatsApp number. Meta still reviews that number. Utility and authentication are usually faster. Marketing is slower. Samyoj cannot pre-approve Meta on a customer WABA. Platform Admin can add or unpublish drafts; published rows appear for tenants.
 
 Variables like {{1}} must match the sample values you submitted. Test send from an approved template when you need a one-off check.`,
   },

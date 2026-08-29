@@ -84,21 +84,22 @@ const LEAVES = {
   },
   '1.1.3': () => {
     mustInclude('server/src/modules/campaigns/quota.ts', [
-      'dailySendLimit',
-      'remaining',
+      'uniqueUsed24h',
+      'messagingLimitTier',
     ]);
-    mustInclude('client/src/pages/CampaignsPage.tsx', ['CampaignQuotaBar']);
-    mustInclude('client/src/components/campaigns/CampaignQuotaBar.tsx', [
-      'Samyoj daily send cap',
-      'sentToday',
+    mustInclude('client/src/pages/CampaignsPage.tsx', ['CampaignHero']);
+    mustInclude('client/src/components/campaigns/CampaignHero.tsx', ['MetaDailyLimitCard']);
+    mustInclude('client/src/components/campaigns/MetaDailyLimitCard.tsx', [
+      'Meta daily limit',
+      'uniqueUsed24h',
       'campaignApi.quota',
     ]);
-    mustInclude('client/src/pages/CampaignWizardPage.tsx', ['CampaignQuotaBar']);
+    mustNotInclude('client/src/pages/CampaignsPage.tsx', ['CampaignQuotaBar']);
+    mustNotInclude('client/src/pages/CampaignWizardPage.tsx', ['CampaignQuotaBar']);
   },
   '1.1.4': () => {
     mustInclude('client/src/components/inbox/InboxListHeader.tsx', [
-      "'active'",
-      "'inactive'",
+      'inbox-window-toggle',
       'Active',
       'Inactive',
     ]);
